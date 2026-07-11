@@ -1,5 +1,29 @@
 [project]
 name = "gitapex-scripts"
-version = "0.1.0"
-requires-python = ">=3.11"
+version = "0"
+description = "Internal tooling and tests for gitapex's CI scripts."
+requires-python = ">=3.12"
 dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+]
+
+[tool.uv]
+# Non-package project: uv manages the environment and dev tools only.
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["scripts"]
+addopts = "--cov=scripts --cov-report=term-missing"
+
+[tool.coverage.run]
+source = ["scripts"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "if __name__ == .__main__.:",
+]
