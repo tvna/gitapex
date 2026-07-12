@@ -1,0 +1,17 @@
+{
+  "name": "gitapex",
+  "description": "Marketplace for the gitapex plugin.",
+  "owner": {
+    "name": "tvna"
+  },
+  "plugins": [
+    {
+      "name": "gitapex",
+      "description": "A distributable skills collection for gitapex.",
+      "source": "./",
+      "author": {
+        "name": "tvna"
+      }
+    }
+  ]
+}
