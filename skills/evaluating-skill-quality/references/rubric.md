@@ -1,16 +1,26 @@
 # Skill quality rubric
 
 Portable evaluation reference for judging whether a `SKILL.md` (and its
-`references/`) is good, originally adapted for gitapex from
-`tvna/clairvoyance`'s skill-quality-knowledge and skill-maturity-checklist
-documents (themselves a distillation of the [Agent Skills best
-practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices)).
+`references/`) is good. Grounded directly in Anthropic's primary Agent
+Skills documentation -- the [Skill authoring best
+practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices),
+the [Agent Skills
+overview](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview),
+and, for the Claude-Code-specific rules (gitapex's actual target product),
+[Claude Code skills](https://code.claude.com/docs/en/skills) -- not in
+`tvna/clairvoyance`, which is a third-party derivative and not treated as
+authoritative here. Where the generic Agent Skills spec (used by the
+Claude API and claude.ai) and Claude Code's own rules diverge, this file
+says which is which rather than blending them into one claim; dimension 1
+and the deterministic-shape note in `SKILL.md` cover the specific
+divergence around the `name` field.
+
 This skill travels with any repo it is vendored into: where a target
-repository lacks a piece of clairvoyance-style tooling (a deterministic
-checker script, an eval suite, a battle harness), dimensions 1-9 below say
-to check the target repository directly and state the gap explicitly,
-rather than assuming a specific repo's tooling state or citing a file
-outside this skill's own folder.
+repository lacks a piece of tooling (a deterministic checker script, an
+eval suite, a benchmarking harness), dimensions 1-9 below say to check the
+target repository directly and state the gap explicitly, rather than
+assuming a specific repo's tooling state or citing a file outside this
+skill's own folder.
 
 ## Table of contents
 
@@ -38,19 +48,37 @@ level that still makes it available the moment it is needed.
 
 ## 1. Discovery -- name and description
 
-`SKILL.md`'s deterministic checklist confirms a trigger *exists* (third
-person, no XML tags, single line). This dimension judges whether it is the
-*right* trigger -- whether the skill would win its intended request and
-lose a neighbour's.
+`SKILL.md`'s deterministic checklist confirms a trigger *exists* (present,
+no XML tags, under the length cap). This dimension judges whether it is
+the *right* trigger -- whether the skill would win its intended request
+and lose a neighbour's. Per Anthropic's best-practices doc, `name` and
+`description` "are particularly critical. Claude uses these when deciding
+whether to trigger the skill" -- this is the highest-leverage text in the
+whole skill, not a formality.
 
 - **States both what and when, in terms a real request would contain** --
   not just any capability statement plus any trigger clause, but specific
   enough that a router would not confuse this skill with a sibling's.
 - **Specific key terms, no filler** ("helps with documents" matches
   everything and therefore nothing).
-- **`name` reads as an activity** (gerund preferred) and is **distinct from
-  every sibling skill** -- no overlap that makes routing ambiguous. Neither
-  of these is a shape check a script can decide.
+- **`name` reads as an activity** (gerund preferred, e.g.
+  `processing-pdfs`; noun phrases and action forms are acceptable, e.g.
+  `pdf-processing`, `process-pdfs`) and is **distinct from every sibling
+  skill** -- no overlap that makes routing ambiguous. Neither of these is
+  a shape check a script can decide.
+- **Avoid vague or overly generic names** -- `helper`, `utils`, `tools`,
+  `documents`, `data`, `files` name nothing specific and match everything.
+  Also flag inconsistent naming patterns across a skill collection.
+- **`name` is a display label, not an invocation key, for a plugin
+  skill.** Per Claude Code's own docs, `name` is optional and, when
+  omitted, defaults to the directory name; for a skill under a plugin's
+  `skills/` subdirectory (gitapex's layout), Claude Code derives the
+  actual `/plugin:skill-name` invocation command from the *directory*
+  name, not from frontmatter `name`, regardless of what `name` says. Do
+  not fail a skill merely for `name` differing from its directory --
+  that mismatch does not break invocation. It is still worth flagging as
+  a readability/consistency nit (a human skimming the directory listing
+  benefits from the two agreeing), just not as a shape violation.
 - **Fail example:** a description that only says what the skill does, with
   no trigger, or a trigger so generic it would also match a sibling's
   request.
@@ -124,7 +152,14 @@ one read.
 
 - No time-sensitive content ("before August 2025 use the old API"). Any
   historical content is explicitly marked as such, not left to silently rot.
-- No assumption that a tool or package is installed without saying so.
+- No assumption that a tool or package is installed without saying so, and
+  no assumption that installing one is even possible: package-install
+  capability differs by surface -- Claude Code allows local installs but
+  discourages global ones (to avoid interfering with the user's machine);
+  the Claude API surface has no network access and no runtime package
+  installation at all (pre-configured dependencies only); claude.ai varies
+  by admin/user network settings. A skill instructing `pip install X` with
+  no fallback is a durability risk on API-surface targets.
 - MCP tools named fully qualified as `Server:tool` (e.g. `GitHub:create_issue`),
   never a bare tool name.
 - Forward slashes in every path (`references/rubric.md`), never backslashes.
@@ -138,47 +173,76 @@ one read.
 - **No voodoo constants** -- every configuration value is justified in a
   comment. A constant the author cannot justify, the model cannot either.
 - **Dependencies listed; execution intent stated** -- required packages
-  named, and it is explicit whether the model should execute the script or
-  read it as reference.
+  named and verified available on the target surface (see dimension 6),
+  and it is explicit whether the model should execute the script ("Run
+  `analyze_form.py`") or read it as reference ("See `analyze_form.py` for
+  the algorithm").
+- **Scripts have clear documentation** -- what the script does, its
+  inputs/outputs, and how to invoke it, not left for the model to infer
+  from source.
 - **Verifiable intermediate outputs** for high-stakes batch work -- a
   plan -> validate -> execute pattern with a machine-checkable plan file.
 
 ## 8. Behavioural evidence
 
-The upstream standard: a suite that exercises the skill's real trigger,
-asserts the structural markers it reliably emits, includes
-`output_not_contains` guardrails, and covers at least three representative
-scenarios including the failure/guardrail case.
+Anthropic's standard is evaluation-*driven* development, not evaluation as
+an afterthought: build evaluations **before** writing extensive
+documentation. Run the skill's candidate task without the skill first,
+document the specific gaps, then write just enough content to close those
+gaps and pass at least three scenarios (including the failure/guardrail
+case the skill exists to prevent) measured against a documented baseline
+of "without the skill." A skill that passes every other dimension but was
+never checked against a no-skill baseline may be solving an imagined
+problem.
 
-**Check the target repository for an `evals/` directory or `waza`-equivalent
-runner before scoring this dimension.** If gitapex itself is the target, it
-has none today. Whatever the target, never silently skip this dimension:
-state plainly that behavioural evidence is unmeasured for the reviewed
-skill when no suite exists, rather than scoring it pass or fail without one
-to back the score.
+**Check the target repository for an eval mechanism before scoring this
+dimension** -- for a Claude Code target, that's an `evals/evals.json` file
+usable with the official `skill-creator` plugin
+(`/plugin install skill-creator@claude-plugins-official`, per
+[Claude Code's own eval-and-iterate
+docs](https://code.claude.com/docs/en/skills#evaluate-and-iterate-on-a-skill));
+for other targets, an `evals/` directory or a third-party runner such as
+`waza` (`microsoft/waza`) if the repo already uses one. If gitapex itself
+is the target, it has none today. Whatever the target, never silently skip
+this dimension: state plainly that behavioural evidence is unmeasured for
+the reviewed skill when no mechanism exists, rather than scoring it pass or
+fail without one to back the score. Do not install missing eval tooling
+yourself as part of a review -- propose it to the operator instead;
+installing new software (even first-party) is an irreversible,
+outward-facing action outside a review's scope, and a forced install of an
+unfamiliar third-party tool carries supply-chain risk.
 
 ## 9. Cross-model robustness
 
-A skill's effect depends on the model running it. Judge -- or state that you
-cannot yet judge -- against every tier the skill is likely to run under:
+A skill's effect depends on the model running it. Anthropic's own
+best-practices doc names the concrete tier spread to test against:
 
 - **Haiku (fast, economical):** does the skill give *enough* guidance?
-- **Sonnet (balanced):** is it clear and efficient?
-- **Opus / Fable (strong reasoning, and above):** does it avoid
-  *over*-explaining? On the Fable tier specifically, over-prescribed,
-  low-freedom scaffolding written for a weaker model can measurably reduce
-  output quality rather than merely waste context -- a low-freedom skill
-  that helps Haiku or Sonnet can legitimately be a regression on Fable.
+- **Sonnet (balanced):** is the skill clear and efficient?
+- **Opus (powerful reasoning):** does the skill avoid *over*-explaining?
+
+"What works perfectly for Opus might need more detail for Haiku." Judge --
+or state that you cannot yet judge -- against every tier in this spread
+that the skill is likely to run under.
+
+If the skill targets a tier beyond this documented spread (a newer or
+stronger model), the same over-prescription-risk *reasoning* still applies
+by extension -- a low-freedom skill tuned for a weaker model can plausibly
+over-constrain a stronger one -- but treat any claim specific to a named
+tier beyond Haiku/Sonnet/Opus as unverified against Anthropic's current
+public docs unless you can cite a primary source for that tier
+specifically. Label it as a read, not measured evidence, and say so.
 
 Behaviour observed on one model is not evidence for another. **Check the
-target repository for a battle harness or per-model eval runner before
-scoring this dimension** (same check as dimension 8, against a different
-kind of harness). When this dimension cannot be measured, say so explicitly
-rather than asserting robustness from a single-model read. A qualitative
-read is
-still allowed (e.g. "this skill is a fixed low-freedom policy, so
-over-prescription risk is probably low, but this is a read, not measured
-evidence") as long as it is labeled as such.
+target repository for a per-model eval runner before scoring this
+dimension** (same check as dimension 8, against a different kind of
+harness -- e.g. `skill-creator`'s version-comparison mode, or a
+third-party benchmarking tool if the repo already has one). When this
+dimension cannot be measured, say so explicitly rather than asserting
+robustness from a single-model read. A qualitative read is still allowed
+(e.g. "this skill is a fixed low-freedom policy, so over-prescription risk
+is probably low, but this is a read, not measured evidence") as long as it
+is labeled as such.
 
 ## Verdicts
 

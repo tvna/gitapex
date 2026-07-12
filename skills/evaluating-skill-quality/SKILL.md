@@ -13,12 +13,18 @@ skill artifact itself is good, not whether a change is correct.
 
 - **Deterministic shape** -- fixed rules a checker script would decide if
   the target repository has one (e.g. `scripts/check_skills.py`). Check for
-  such a script first; if none exists, check these by hand every time:
-  frontmatter present; `name` lowercase-hyphenated, <= 64 chars, matches the
-  skill's directory; no reserved word (`anthropic`, `claude`); `description`
-  single-line, third person, no XML tags, carries a "Use when ..." trigger;
-  `SKILL.md` body <= 500 lines; any `references/` file stays one level deep
-  from `SKILL.md` and carries a table of contents past 100 lines.
+  such a script first; if none exists, check these by hand every time, per
+  Anthropic's primary Agent Skills docs (not a third-party derivative --
+  see `references/rubric.md` for the exact sources and where Claude Code's
+  own rules diverge from the generic spec): `description` non-empty, no
+  XML tags, <= 1024 chars, states what and when; `name`, when present, is
+  lowercase-hyphenated, <= 64 chars, no XML tags, no reserved word
+  (`anthropic`, `claude`) -- `name` is optional in Claude Code and does
+  NOT have to match the skill's directory (Claude Code derives a plugin
+  skill's actual invocation command from the directory, not the
+  frontmatter `name`); `SKILL.md` body <= 500 lines; any `references/`
+  file stays one level deep from `SKILL.md` and carries a table of
+  contents past 100 lines.
 - **Probabilistic maturity** -- nine dimensions of judgment that need a model
   or human, not a script. Full rubric with pass/fail evidence:
   [references/rubric.md](references/rubric.md).
@@ -62,3 +68,9 @@ general-purpose linter or add checks beyond what the rubric in
 - Never claim a violation the reviewed `SKILL.md` (or its `references/`)
   text does not actually show. If a dimension cannot be assessed (no eval
   suite, no cross-model data), say that explicitly instead of guessing.
+- Never cite a third-party derivative (e.g. a vendored or forked rubric)
+  as the authoritative source for a claim about Agent Skills or Claude
+  Code platform behavior. Ground platform claims in Anthropic's primary
+  docs (`platform.claude.com`, `code.claude.com`) or in the target
+  repository's own observed state -- re-fetch the primary source when in
+  doubt rather than trusting a memorized or secondary summary.

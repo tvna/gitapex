@@ -17,10 +17,10 @@ progressive-disclosure dimension it demonstrates.
 | Check | Result | Evidence |
 |---|---|---|
 | Frontmatter present | Pass | Frontmatter block at lines 1-4; `name:` at line 2, `description:` at line 3 |
-| `name` lowercase-hyphenated, <= 64 chars, matches directory | Pass | `explaining-the-work` (19 chars) equals the directory name |
+| `name`, present, lowercase-hyphenated, <= 64 chars, no XML tags | Pass | `explaining-the-work` (19 chars); no XML tags. (Not required to match the directory -- see rubric.md dimension 1 -- but it does here, which is a readability nit-pass, not a shape requirement.) |
 | No reserved word | Pass | Contains neither `anthropic` nor `claude` |
-| `description` single-line, third person, no XML tags | Pass | Line 3 is one line, uses "Routes explanation responsibility..." -- no first/second person pronoun, no `<tag>` |
-| `description` carries a "Use when ..." trigger | Pass | Line 3 opens "Use when writing or editing code comments, docstrings, or finalizing commit/PR messages." |
+| `description` non-empty, no XML tags, <= 1024 chars | Pass | Line 3 is one line (203 chars), no `<tag>` |
+| `description` states both what and when | Pass | "Routes explanation responsibility..." (what) + "Use when writing or editing code comments, docstrings, or finalizing commit/PR messages." (when) |
 | Body <= 500 lines | Pass | 45 lines total |
 | `references/` one level deep, TOC past 100 lines | N/A | No `references/` directory exists for this skill |
 
@@ -115,22 +115,29 @@ N/A. The skill ships no code.
 
 ### 8. Behavioural evidence
 
-Unmeasured, not skipped: gitapex has no `evals/` directory or
-`waza`-equivalent runner today (confirmed absent from the repository tree).
-There is no suite exercising this skill's trigger or asserting its output
-contract, so this dimension cannot be scored pass or fail -- it is an open
-gap in the repository's tooling, not a defect specific to this skill.
+Unmeasured, not skipped: gitapex has neither an `evals/evals.json` (the
+Claude Code `skill-creator` format) nor a third-party runner today
+(confirmed absent from the repository tree; `skill-creator` and `waza` are
+both absent from this environment too). There is no suite exercising this
+skill's trigger against a documented no-skill baseline, so this dimension
+cannot be scored pass or fail -- it is an open gap in the repository's
+tooling, not a defect specific to this skill. Per rubric.md dimension 8,
+this review does not install eval tooling to close that gap; that is a
+separate, operator-approved decision.
 
 ### 9. Cross-model robustness
 
 Unmeasured, not skipped, for the same reason as dimension 8: gitapex runs
-no cross-model differential (no battle harness, no per-tier eval pass).
-Qualitative read only: the skill's rules are a fixed low-freedom policy
-(exact templates, fixed routing table) rather than an open-ended
-judgment task, so the over-prescription regression risk that
-`rubric.md` names for the Fable tier is plausibly low here -- but this is a
-read of the skill's shape, not measured evidence, and should not be
-reported as if it were.
+no cross-model differential (no `skill-creator` version comparison, no
+third-party benchmarking pass) across the Haiku/Sonnet/Opus spread
+Anthropic's docs name for this dimension. Qualitative read only: the
+skill's rules are a fixed low-freedom policy (exact templates, fixed
+routing table) rather than an open-ended judgment task, so the general
+over-prescription-risk reasoning (a low-freedom skill tuned for a weaker
+model can over-constrain a stronger one) plausibly applies less here than
+to a high-freedom skill -- but this is a read of the skill's shape, not
+measured evidence against any specific tier, and should not be reported as
+if it were.
 
 ## Verdict
 
