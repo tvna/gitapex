@@ -62,18 +62,29 @@ which in turn outranks "external decision."
    human reviewer or a CI run.
 3. **Classify each repair** using the taxonomy above. State the
    classification explicitly; do not leave it implicit in prose.
-4. **File the retrospective issue** via `mcp__github__issue_write`,
-   matching whatever posting conventions the repository already
-   enforces (for example, an ASCII-only body is common practice; check
-   the repo's own instruction file or recent PR/issue history if
-   unsure). For every "missing
-   deterministic gate" repair, propose a durable gate in the issue body
-   -- proposing, not implementing, in this cycle (implementing gates is
-   separate follow-on work). For "unclear agent instruction" and
-   "external/human decision" repairs, record the classification and a
-   one-line rationale; noting what instruction would have helped is
-   useful context but not a required deliverable the way the gate
-   proposal is.
+4. **File the retrospective issue** via `mcp__github__issue_write`.
+   - **Template and title take precedence over this skill's own
+     defaults.** If the repo has an issue template (for example
+     `.github/ISSUE_TEMPLATE/`, a root `ISSUE_TEMPLATE.md`, or a
+     `.github/ISSUE_TEMPLATE/config.yml`-driven chooser) or its own
+     title convention (a required prefix, a title-policy hook, a
+     documented naming rule), fill that template and follow that title
+     convention. The shape in the worked example below (including its
+     `Title: Merge retrospective: PR #NN` line) is only a fallback for
+     repos that have neither.
+   - Otherwise, match whatever posting conventions the repository
+     already enforces (for example, an ASCII-only body is common
+     practice; check the repo's own instruction file or recent
+     PR/issue history if unsure).
+   - Content requirements below apply regardless of which shape the
+     body ends up in: for every "missing deterministic gate" repair,
+     propose a durable gate in the issue body -- proposing, not
+     implementing, in this cycle (implementing gates is separate
+     follow-on work). For "unclear agent instruction" and
+     "external/human decision" repairs, record the classification and
+     a one-line rationale; noting what instruction would have helped
+     is useful context but not a required deliverable the way the gate
+     proposal is.
 5. **Cross-link**: reference the merged PR number in the retrospective
    issue body (e.g. "Refs #<merged PR number>").
 
@@ -106,7 +117,9 @@ Hypothetical merge history for a PR with two repairs:
   changes applied, see below"). The author pushed a follow-up commit
   rewording the message to match.
 
-Retrospective issue this produces:
+Retrospective issue this produces, assuming the repo has no issue
+template or title convention of its own (if it did, that template and
+title convention would be filled with the same repair content instead):
 
 ```
 Title: Merge retrospective: PR #42
