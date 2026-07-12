@@ -146,7 +146,7 @@ Expected output: `SKILL.md frontmatter OK`
 - [ ] **Step 3: Verify the required content markers are all present**
 
 ```bash
-for phrase in "interim measure" "does not substitute for one" "Undisclosed provenance markers" "ASCII-only" "Stop boundary" "Never push or post an artifact this checklist has flagged"; do
+for phrase in "interim measure" "never present it as the permanent solution" "Undisclosed provenance markers" "ASCII-only" "Stop boundary" "Never push or post an artifact this checklist has flagged"; do
   grep -qF "$phrase" skills/outward-artifact-preflight/SKILL.md && echo "found: $phrase" || { echo "MISSING: $phrase"; exit 1; }
 done
 ```
