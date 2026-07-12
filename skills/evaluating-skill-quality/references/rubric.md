@@ -5,14 +5,13 @@ Portable evaluation reference for judging whether a `SKILL.md` (and its
 Skills documentation -- the [Skill authoring best practices][ab], the
 [Agent Skills overview][ao], and, for the Claude-Code-specific rules
 (the product a `skills/<name>/` plugin layout, as reviewed here, actually
-targets), [Claude Code skills][cc] -- not in `tvna/clairvoyance`, which is
-a third-party derivative and not treated as authoritative here. Where the
-generic Agent Skills spec (used by the Claude API and claude.ai) and
-Claude Code's own rules diverge, this file says which is which rather
-than blending them into one claim; dimension 1 and the deterministic-shape
-note in `SKILL.md` cover the specific divergence around the `name` field.
-All reference URLs are collected under [References](#references) at the
-end of this file.
+targets), [Claude Code skills][cc]. Where the generic Agent Skills spec
+(used by the Claude API and claude.ai) and Claude Code's own rules
+diverge, this file says which is which rather than blending them into
+one claim; dimension 1 and the deterministic-shape note in `SKILL.md`
+cover the specific divergence around the `name` field. All reference
+URLs are collected under [References](#references) at the end of this
+file.
 
 This skill travels with any repo it is vendored into: where a target
 repository lacks a piece of tooling (a deterministic checker script, an
