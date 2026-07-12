@@ -58,7 +58,7 @@ all deferred). The CLAUDE.md bullet itself names the sanctioned interim:
 
 Matches the existing `skills/explaining-the-work/` precedent: one skill
 directory, one `SKILL.md`, no `references/` subdirectory (content fits well
-within the informal 500-line/token budget).
+within clairvoyance's informal 500-token `SKILL.md` budget).
 
 ```
 skills/
@@ -87,22 +87,32 @@ Body covers, in order:
    - Undisclosed provenance markers: build/runtime model or agent
      identifiers, session URLs/IDs, internal tooling fingerprints not
      already covered by this repo's disclosed convention (the
-     "Generated with Claude Code" trailer PR #2 already uses is disclosed;
-     a bare model ID or session link is not).
+     "Generated with Claude Code" trailer PR #2 already uses is disclosed
+     for PR bodies specifically, not commit messages; a bare model ID or
+     session link is never disclosed). This check is independent of the
+     ASCII check below -- PR #2's own trailer contains a non-ASCII robot
+     emoji, so disclosure does not exempt a marker from also being ASCII.
    - ASCII-only: no em/en dashes, curly quotes, full-width punctuation, or
      other non-ASCII characters in the artifact text.
 3. **Worked example** -- one flagged sample (non-ASCII em dash + an
-   undisclosed model/session mention) and its corrected form, so the
-   checklist's catch is concrete rather than abstract.
-4. **Stop boundary** -- never publish an artifact this checklist has flagged
+   undisclosed model/session mention), built reproducibly with `printf` so
+   the check actually catches real bytes when run, and its corrected form.
+4. **Relationship to other skills** -- states explicitly that this skill and
+   `explaining-the-work` are expected to both fire on the same commit/PR
+   text (routing vs. safety-check are different jobs), rather than leaving
+   that inferred.
+5. **Stop boundary** -- never publish an artifact this checklist has flagged
    without fixing it first or getting the owner's explicit sign-off to
    proceed anyway; this skill does not authorize skipping the check, only
    applying it.
 
-Trigger is scoped to "about to push, post, or publish" so it does not overlap
-`explaining-the-work` (which triggers on *writing/editing* comments, or
-*finalizing* commit/PR text for routing purposes, not on the pre-publish
-safety check itself).
+Trigger is scoped to "about to push, post, or publish" and could plausibly
+read as overlapping `explaining-the-work`'s "finalizing commit/PR messages"
+trigger in a router's eyes -- both fire at the same practical moment. Rather
+than relying on the trigger text alone to prevent confusion, the skill body
+states explicitly (see item 4 above) that both are meant to apply together:
+`explaining-the-work` routes what the text should say, this skill checks
+whether the text is safe to publish.
 
 ## Verification
 

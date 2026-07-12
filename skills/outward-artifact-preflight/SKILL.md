@@ -23,10 +23,17 @@ a public sink.
    build/runtime model, agent, or session that produced the artifact, and
    any internal tooling fingerprint, that the owner has not chosen to
    disclose. In this repository the "Generated with Claude Code" trailer
-   (see PR #2's body) is the disclosed convention -- keep it where it
-   already appears. A bare model identifier (e.g. a `claude-*` model ID),
-   a session URL, or an internal tool name is not disclosed and must be
-   removed.
+   (see PR #2's body) is the disclosed convention for PR bodies -- keep
+   the disclosure there. This check is independent of check 2, though:
+   PR #2's own trailer contains a non-ASCII robot emoji, so keeping it
+   disclosed still means replacing any non-ASCII glyph in it with an
+   ASCII equivalent, same as anywhere else in the artifact. Commit
+   messages follow a separate, narrower rule (skills/explaining-the-work
+   routes commit-log content to one line plus a `Refs #N` pointer,
+   nothing more) -- do not add this trailer to a commit message just
+   because it is disclosed in PR bodies. A bare model identifier (e.g. a
+   `claude-*` model ID), a session URL, or an internal tool name is not
+   disclosed and must be removed regardless of artifact type.
 2. **ASCII-only.** No em dashes, en dashes, curly quotes, full-width
    punctuation, or any other non-ASCII character. Check with (`-P` enables
    Perl-regex mode so `\t` is read as a tab escape, not two literal
@@ -46,7 +53,7 @@ with `printf`, not a pasted glyph -- run both commands yourself to see the
 checklist catch real bytes instead of a description:
 
 ```bash
-printf 'feat(plugin): add outward-artifact-preflight skill \xe2\x80\x94 built by\nclaude-sonnet-5 during session https://claude.ai/code/session_01Abc23dEf\n\nRefs #8\n' > /tmp/flagged-commit-msg.txt
+printf 'feat(plugin): add outward-artifact-preflight skill \xe2\x80\x94 built by\nclaude-example-model during session https://claude.ai/code/session_01Abc23dEf\n\nRefs #8\n' > /tmp/flagged-commit-msg.txt
 LC_ALL=C grep -nP '[^ -~\t]' /tmp/flagged-commit-msg.txt
 ```
 
@@ -54,7 +61,7 @@ Applying the checklist:
 
 - Check 2 fires: `grep` prints line 1 (exit status 0) -- the `\xe2\x80\x94`
   bytes (an em dash) are non-ASCII.
-- Check 1 fires: `claude-sonnet-5` and the session URL are an undisclosed
+- Check 1 fires: `claude-example-model` and the session URL are an undisclosed
   provenance marker, not the repository's disclosed "Generated with Claude
   Code" convention -- keeping neither is required to pass.
 
@@ -65,6 +72,14 @@ feat(plugin): add outward-artifact-preflight skill
 
 Refs #8
 ```
+
+## Relationship to other skills
+
+Finalizing a commit or PR message can trigger both this skill and
+skills/explaining-the-work at once -- that is expected, not a conflict.
+explaining-the-work routes what the text should say (How/What/Why); this
+skill checks whether the text, once written, is safe to publish
+(provenance, ASCII). Apply both; neither substitutes for the other.
 
 ## Stop boundary
 
