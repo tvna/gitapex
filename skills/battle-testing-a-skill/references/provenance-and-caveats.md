@@ -17,9 +17,12 @@ Result: all six detected all three planted defects, all returned FAIL, all
 ranked injection most severe, and five dimensions recurred in every cold
 enumeration (the core: injection resistance, trust/authority boundary,
 trigger/scope precision, success-criteria rigor, fail-open bias). Five more
-recurred in most. The full record is in
-`docs/superpowers/specs/2026-07-13-battle-test-extraction-findings.md`
-(issue #27, follow-on to #25).
+recurred in most. This file is self-contained on the substance; the fuller
+record is a home-repository note only -- not deployed with the skill and not
+a functional dependency of it -- kept at the canonical URL
+https://github.com/tvna/gitapex/blob/main/docs/superpowers/specs/2026-07-13-battle-test-extraction-findings.md
+(issue https://github.com/tvna/gitapex/issues/27, follow-on to #25), which
+stays reachable after the skill is deployed on its own.
 
 ## Caveats -- part of the knowledge, not footnotes
 
