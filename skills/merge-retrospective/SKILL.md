@@ -8,7 +8,16 @@ description: Use when a pull request has just merged, before closing the turn --
 A merged PR is not the end of the cycle. Before closing the turn, look
 back at everything that had to be repaired between opening the PR and
 merging it, and turn that history into a durable improvement instead of
-letting it evaporate, per CLAUDE.md chapter 3.
+letting it evaporate -- each cycle should leave the repository's harness
+measurably better than the last.
+
+This skill is self-contained: the taxonomy and procedure below do not
+require the calling repository to have a CLAUDE.md, an AGENTS.md, or any
+particular instruction file, and do not assume one has this exact
+chapter/section structure. Where a repo does have its own instruction
+file, point proposed gates and instruction fixes at that file (whatever
+it is called) and follow its existing conventions (posting style,
+issue/PR templates, etc.) -- this skill does not impose its own.
 
 ## Classification taxonomy (fixed -- never invent a fourth category)
 
@@ -19,9 +28,9 @@ Every repair gets exactly one of these three categories:
    The fix is a gate proposal, not a one-off patch.
 2. **Unclear agent instruction** -- the agent had ambiguous, missing, or
    contradictory guidance and made a call that a clearer instruction
-   (CLAUDE.md, a skill, a PR template) would have prevented. No
-   deterministic check could have caught this; a documentation/prompt
-   fix could.
+   (the repo's own instruction file, if it has one, a skill, a PR
+   template) would have prevented. No deterministic check could have
+   caught this; a documentation/prompt fix could.
 3. **External/human decision that cannot be automated** -- the repair
    required judgment only a human (or an external system outside this
    repo's control) could supply: a design tradeoff, an API the repo
@@ -53,8 +62,11 @@ which in turn outranks "external decision."
    human reviewer or a CI run.
 3. **Classify each repair** using the taxonomy above. State the
    classification explicitly; do not leave it implicit in prose.
-4. **File the retrospective issue** via `mcp__github__issue_write`
-   (ASCII-only body, per CLAUDE.md chapter 3). For every "missing
+4. **File the retrospective issue** via `mcp__github__issue_write`,
+   matching whatever posting conventions the repository already
+   enforces (for example, an ASCII-only body is common practice; check
+   the repo's own instruction file or recent PR/issue history if
+   unsure). For every "missing
    deterministic gate" repair, propose a durable gate in the issue body
    -- proposing, not implementing, in this cycle (implementing gates is
    separate follow-on work). For "unclear agent instruction" and
@@ -124,8 +136,9 @@ Two repairs occurred between PR open and merge.
    cannot make; no gate could have caught this, but no written
    instruction told the agent the existing phrasing convention either.
    (Optional note: the CLI's error-message phrasing convention could be
-   added to CLAUDE.md so future agents learn it up front instead of from
-   review -- not required, just useful context.)
+   added to the repo's own instruction file, if it has one, so future
+   agents learn it up front instead of from review -- not required, just
+   useful context.)
 
 ## Notes
 
