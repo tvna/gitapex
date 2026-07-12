@@ -79,19 +79,23 @@ description: Use when about to push, post, or publish any outward-facing artifac
 
 Body covers, in order:
 
-1. **Why this exists / interim-measure notice** -- cites CLAUDE.md chapter 3
-   and the PR #2 ASCII incident as the concrete gap; states plainly this
-   skill is a stand-in for a deterministic gate gitapex has not built yet,
+1. **Why this exists / interim-measure notice** -- states plainly, in its
+   own portable terms (no citation to this repository's `CLAUDE.md` or any
+   specific chapter of it, so the rationale still holds if the skill is
+   installed somewhere without a matching `CLAUDE.md`), that this skill is
+   a stand-in for a deterministic gate this repository has not built yet,
    and stops being needed the day that gate lands.
-2. **Checklist** -- two items, matching CLAUDE.md chapter 3 exactly:
+2. **Checklist** -- two items, matching CLAUDE.md chapter 3's substance
+   without depending on the document itself:
    - Undisclosed provenance markers: build/runtime model or agent
      identifiers, session URLs/IDs, internal tooling fingerprints not
-     already covered by this repo's disclosed convention (the
-     "Generated with Claude Code" trailer PR #2 already uses is disclosed
-     for PR bodies specifically, not commit messages; a bare model ID or
-     session link is never disclosed). This check is independent of the
-     ASCII check below -- PR #2's own trailer contains a non-ASCII robot
-     emoji, so disclosure does not exempt a marker from also being ASCII.
+     already covered by an agreed disclosure convention -- phrased
+     conditionally ("if this repository already has..."), not anchored to
+     gitapex's specific PR #2 trailer, so it reads correctly wherever the
+     skill lands. This check is independent of the ASCII check below --
+     PR #2's own trailer happens to contain a non-ASCII robot emoji (used
+     in this spec's Context as the motivating example), so disclosure does
+     not exempt a marker from also being ASCII.
    - ASCII-only: no em/en dashes, curly quotes, full-width punctuation, or
      other non-ASCII characters in the artifact text.
 3. **Worked example** -- one flagged sample (non-ASCII em dash + an
@@ -129,12 +133,15 @@ the distribution-foundation spec:
 - Interim-measure statement present in the body (not just implied).
 - Stop section present.
 - Self-contained: `SKILL.md` references no backtick-styled local path
-  outside `skills/outward-artifact-preflight/` itself. A skill can be
-  installed on its own, so a reference to a repo doc under `docs/` or to
-  a sibling skill's file under `skills/other-skill/` would 404 for anyone
-  who installs this skill without the rest of gitapex -- named citations
-  that are not local paths (CLAUDE.md by name, `PR #2`, a sibling skill
-  by name) are fine, a path is not.
+  outside `skills/outward-artifact-preflight/` itself, and does not treat
+  `CLAUDE.md` (or a specific chapter of it) as the required source of its
+  own rationale. A skill can be installed on its own, so a reference to a
+  repo doc under `docs/`, a sibling skill's file under `skills/other-skill/`,
+  or this repository's specific `CLAUDE.md` would all leave the skill's
+  own text unverifiable or unmotivated for anyone who installs it without
+  the rest of gitapex. Naming a sibling skill defensively ("where
+  installed, ...") is fine, since it does not require the sibling to
+  exist for this skill to make sense on its own.
 
 ## Open items carried forward (not blocking this spec)
 

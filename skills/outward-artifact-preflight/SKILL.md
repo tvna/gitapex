@@ -5,11 +5,11 @@ description: Use when about to push, post, or publish any outward-facing artifac
 
 # Outward Artifact Preflight
 
-This is an interim measure. CLAUDE.md chapter 3 requires a deterministic
-preflight or CI gate for both checks below; gitapex has not built one yet.
-Until that gate exists, run this checklist by hand before every push or
-post. Retire or narrow this skill the day the real gate lands -- it does
-not substitute for one, and never present it as the permanent solution.
+This is an interim measure: a manual stand-in for the deterministic
+preflight or CI gate this repository has not built yet. Run this
+checklist by hand before every push or post until that gate exists.
+Retire or narrow this skill the day the real gate lands -- it does not
+substitute for one, and never present it as the permanent solution.
 
 ## Checklist
 
@@ -20,19 +20,19 @@ a public sink.
 1. **Undisclosed provenance markers.** Scan for anything identifying the
    build/runtime model, agent, or session that produced the artifact, and
    any internal tooling fingerprint, that the owner has not chosen to
-   disclose. In this repository the "Generated with Claude Code" trailer
-   (see PR #2's body) is the disclosed convention for PR bodies -- keep
-   the disclosure there. This check is independent of check 2, though:
-   PR #2's own trailer contains a non-ASCII robot emoji, so keeping it
-   disclosed still means replacing any non-ASCII glyph in it with an
-   ASCII equivalent, same as anywhere else in the artifact. Commit
-   messages follow a separate, narrower rule (where installed, the
-   explaining-the-work skill routes commit-log content to one line plus
-   a `Refs #N` pointer, nothing more) -- do not add this trailer to a
-   commit message just because it is disclosed in PR bodies. A bare
-   model identifier (e.g. a `claude-*` model ID), a session URL, or an
-   internal tool name is not disclosed and must be removed regardless of
-   artifact type.
+   disclose. If this repository already has an agreed disclosure
+   convention for PR bodies (for example a fixed "Generated with X"
+   trailer), keep it there. That is independent of check 2, though: a
+   disclosed trailer still has to pass check 2, so replace any
+   non-ASCII glyph in it (an emoji, for instance) with an ASCII
+   equivalent -- disclosure does not exempt something from the ASCII
+   rule. Commit messages follow a separate, narrower rule (where
+   installed, the explaining-the-work skill routes commit-log content to
+   one line plus a `Refs #N` pointer, nothing more) -- do not add a
+   PR-body trailer to a commit message just because it is disclosed
+   there. A bare model identifier (e.g. a `claude-*` model ID), a
+   session URL, or an internal tool name is not disclosed and must be
+   removed, unless this repository has explicitly agreed to disclose it.
 2. **ASCII-only.** No em dashes, en dashes, curly quotes, full-width
    punctuation, or any other non-ASCII character. Check with (`-P` enables
    Perl-regex mode so `\t` is read as a tab escape, not two literal
@@ -60,9 +60,9 @@ Applying the checklist:
 
 - Check 2 fires: `grep` prints line 1 (exit status 0) -- the `\xe2\x80\x94`
   bytes (an em dash) are non-ASCII.
-- Check 1 fires: `claude-example-model` and the session URL are an undisclosed
-  provenance marker, not the repository's disclosed "Generated with Claude
-  Code" convention -- keeping neither is required to pass.
+- Check 1 fires: `claude-example-model` and the session URL are a bare
+  model identifier and a session URL -- neither is an agreed disclosure
+  convention, so both must be removed to pass.
 
 Fixed:
 
