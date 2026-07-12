@@ -122,12 +122,19 @@ the distribution-foundation spec:
 - `SKILL.md` frontmatter: `name: outward-artifact-preflight` (kebab-case,
   matches directory name), single-line third-person `description` with an
   explicit "Use when ..." trigger, no XML tags.
-- Body stays well under the 500-line budget.
+- Body stays well under the 500-token budget.
 - Manual dry run (per issue acceptance criteria): given a sample commit
   message/PR body containing one stray non-ASCII character and one
   undisclosed tooling fingerprint, applying the checklist catches both.
 - Interim-measure statement present in the body (not just implied).
 - Stop section present.
+- Self-contained: `SKILL.md` references no backtick-styled local path
+  outside `skills/outward-artifact-preflight/` itself. A skill can be
+  installed on its own, so a reference to a repo doc under `docs/` or to
+  a sibling skill's file under `skills/other-skill/` would 404 for anyone
+  who installs this skill without the rest of gitapex -- named citations
+  that are not local paths (CLAUDE.md by name, `PR #2`, a sibling skill
+  by name) are fine, a path is not.
 
 ## Open items carried forward (not blocking this spec)
 

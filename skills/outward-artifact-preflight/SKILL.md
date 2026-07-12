@@ -6,9 +6,7 @@ description: Use when about to push, post, or publish any outward-facing artifac
 # Outward Artifact Preflight
 
 This is an interim measure. CLAUDE.md chapter 3 requires a deterministic
-preflight or CI gate for both checks below; gitapex has not built one yet
-(see the Non-goals in
-`docs/superpowers/specs/2026-07-12-skill-distribution-foundation-design.md`).
+preflight or CI gate for both checks below; gitapex has not built one yet.
 Until that gate exists, run this checklist by hand before every push or
 post. Retire or narrow this skill the day the real gate lands -- it does
 not substitute for one, and never present it as the permanent solution.
@@ -28,12 +26,13 @@ a public sink.
    PR #2's own trailer contains a non-ASCII robot emoji, so keeping it
    disclosed still means replacing any non-ASCII glyph in it with an
    ASCII equivalent, same as anywhere else in the artifact. Commit
-   messages follow a separate, narrower rule (skills/explaining-the-work
-   routes commit-log content to one line plus a `Refs #N` pointer,
-   nothing more) -- do not add this trailer to a commit message just
-   because it is disclosed in PR bodies. A bare model identifier (e.g. a
-   `claude-*` model ID), a session URL, or an internal tool name is not
-   disclosed and must be removed regardless of artifact type.
+   messages follow a separate, narrower rule (where installed, the
+   explaining-the-work skill routes commit-log content to one line plus
+   a `Refs #N` pointer, nothing more) -- do not add this trailer to a
+   commit message just because it is disclosed in PR bodies. A bare
+   model identifier (e.g. a `claude-*` model ID), a session URL, or an
+   internal tool name is not disclosed and must be removed regardless of
+   artifact type.
 2. **ASCII-only.** No em dashes, en dashes, curly quotes, full-width
    punctuation, or any other non-ASCII character. Check with (`-P` enables
    Perl-regex mode so `\t` is read as a tab escape, not two literal
@@ -75,11 +74,12 @@ Refs #8
 
 ## Relationship to other skills
 
-Finalizing a commit or PR message can trigger both this skill and
-skills/explaining-the-work at once -- that is expected, not a conflict.
-explaining-the-work routes what the text should say (How/What/Why); this
-skill checks whether the text, once written, is safe to publish
-(provenance, ASCII). Apply both; neither substitutes for the other.
+Finalizing a commit or PR message can trigger both this skill and the
+explaining-the-work skill at once, where both are installed -- that is
+expected, not a conflict. explaining-the-work routes what the text
+should say (How/What/Why); this skill checks whether the text, once
+written, is safe to publish (provenance, ASCII). Apply both; neither
+substitutes for the other.
 
 ## Stop boundary
 
