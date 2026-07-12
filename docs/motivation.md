@@ -53,8 +53,9 @@ sequenceDiagram
 
 ## The fix (to-be)
 
-Once a dedicated skill lane (`issue-to-branch`, vendored from the
-`clairvoyance` plugin) drives the pre-implementation steps in the main
+Once a dedicated skill lane (`issue-to-branch`, implemented directly in
+gitapex from a design migrated from `tvna/clairvoyance#128`) drives the
+pre-implementation steps in the main
 thread -- no subagent -- and Section 6 (handoff / quiz / verdict) is
 routed explicitly to the specific `clairvoyance` skill responsible for
 each step, the same flow produces a machine-readable Acceptance Criteria
@@ -140,10 +141,11 @@ adjacent thread from the same design session -- routing comment, commit,
 and test explanation responsibility to the right artifact -- not the
 contract-join gate shown above directly.
 
-The to-be diagram's `issue-to-branch` skill lane and the contract-join
-gate + criteria-freeze CI work it depends on are a separate, larger
-initiative, tracked as a 1 tracking-issue + 5 children plan. See the "Open
-items carried forward" section of
+The to-be diagram's `issue-to-branch` skill lane is now implemented
+(`skills/issue-to-branch/`, tvna/gitapex#4). The contract-join gate +
+criteria-freeze CI work it depends on is not: that remains a separate,
+larger initiative, tracked as a 1 tracking-issue + 5 children plan (not
+yet filed). See the "Open items carried forward" section of
 [`docs/superpowers/specs/2026-07-12-skill-distribution-foundation-design.md`](superpowers/specs/2026-07-12-skill-distribution-foundation-design.md).
 This document exists so that initiative's motivation is preserved in-repo
 rather than living only in a private, unpublished artifact.

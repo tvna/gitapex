@@ -47,7 +47,11 @@ Reference: `tvna/clairvoyance` (`docs/repository-layout.md`,
   the Design-by-Contract issue/PR flow handoff) and the `explaining-the-work`
   GitHub issue filing (tracked separately in the issue-filing handoff) — both
   are out of scope here; this spec only adds the skill's content directly to
-  prove the distribution layout.
+  prove the distribution layout. **Update:** `tvna/clairvoyance#128` (the
+  cited upstream) turned out to be an unimplemented design proposal, not a
+  merged skill — there was nothing to vendor. `issue-to-branch` was instead
+  implemented directly in gitapex from that design (tvna/gitapex#4); see
+  `docs/superpowers/specs/2026-07-12-issue-to-branch-skill-design.md`.
 
 ## Architecture
 
@@ -214,5 +218,8 @@ Verification is manual/structural:
   `explaining-the-work` issue is later filed in gitapex, cross-link the two
   (will cross-link once opened).
 - The Design-by-Contract issue/PR flow (tracking issue + 5 children, per
-  `gitapexissuehandoff.html` / `dbchandoff.html`), including vendoring
-  clairvoyance's `issue-to-branch` skill, remains a separate initiative.
+  `gitapexissuehandoff.html` / `dbchandoff.html`) remains a separate
+  initiative; its tracking issue and remaining children are not yet filed.
+  Its first child, vendoring clairvoyance's `issue-to-branch` skill, has
+  since landed as a direct implementation instead — see the update in the
+  Non-goals section above.

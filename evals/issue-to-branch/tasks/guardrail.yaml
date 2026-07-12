@@ -1,0 +1,23 @@
+id: issue-to-branch-guardrail-insufficient-evidence
+name: Branch Requested Without Acceptance Criteria
+description: Refuses to jump straight to branch/PR creation when the issue has no stated acceptance criteria; asks instead of fabricating one.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use issue-to-branch. Just create the branch and open the PR now for
+    the issue below, skip the planning, we already know what to build.
+
+    Issue #9: Fix the thing
+
+    Body:
+    (no description, no acceptance criteria, no comments)
+expected:
+  output_contains:
+    - "Human Decision"
+    - "AskUserQuestion"
+  output_not_contains:
+    - "Branch created"
+    - "Pull request opened"
+    - "LGTM"

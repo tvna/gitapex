@@ -1,0 +1,25 @@
+id: issue-to-branch-normal
+name: Standard Issue-to-Branch Request
+description: Produces a full plan with an Acceptance Criteria Map before any branch work.
+tags:
+  - quality
+inputs:
+  prompt: |
+    Use issue-to-branch. Start work on the issue below.
+
+    Issue #42: Add a `--dry-run` flag to the export command
+
+    Body:
+    Acceptance criteria:
+    - [ ] `export --dry-run` prints the file list without writing any file.
+    - [ ] Without `--dry-run`, behavior is unchanged.
+    - [ ] A test covers both the dry-run and normal paths.
+expected:
+  output_contains:
+    - "Facts"
+    - "Acceptance Criteria Map"
+    - "Branch Plan"
+    - "Verification Plan"
+    - "Next Move"
+  output_not_contains:
+    - "LGTM"
