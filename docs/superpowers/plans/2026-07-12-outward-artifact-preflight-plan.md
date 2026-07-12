@@ -77,11 +77,13 @@ a public sink.
    a session URL, or an internal tool name is not disclosed and must be
    removed.
 2. **ASCII-only.** No em dashes, en dashes, curly quotes, full-width
-   punctuation, or any other non-ASCII character. Check with (`\t` is
-   excluded so ordinary tab characters do not false-flag):
+   punctuation, or any other non-ASCII character. Check with (`-P` enables
+   Perl-regex mode so `\t` is read as a tab escape, not two literal
+   characters -- a plain bracket expression would still flag ordinary
+   tabs):
 
    ```bash
-   LC_ALL=C grep -n '[^ -~\t]' <file>
+   LC_ALL=C grep -nP '[^ -~\t]' <file>
    ```
 
    No output means the file is ASCII-only.
@@ -94,7 +96,7 @@ checklist catch real bytes instead of a description:
 
 ```bash
 printf 'feat(plugin): add outward-artifact-preflight skill \xe2\x80\x94 built by\nclaude-sonnet-5 during session https://claude.ai/code/session_01Abc23dEf\n\nRefs #8\n' > /tmp/flagged-commit-msg.txt
-LC_ALL=C grep -n '[^ -~\t]' /tmp/flagged-commit-msg.txt
+LC_ALL=C grep -nP '[^ -~\t]' /tmp/flagged-commit-msg.txt
 ```
 
 Applying the checklist:
@@ -154,7 +156,7 @@ Expected output: six `found: ...` lines, no `MISSING` line.
 - [ ] **Step 4: Verify the skill file itself is ASCII-only**
 
 ```bash
-LC_ALL=C grep -n '[^ -~\t]' skills/outward-artifact-preflight/SKILL.md && { echo "FAIL: non-ASCII found"; exit 1; } || echo "ASCII-only: OK"
+LC_ALL=C grep -nP '[^ -~\t]' skills/outward-artifact-preflight/SKILL.md && { echo "FAIL: non-ASCII found"; exit 1; } || echo "ASCII-only: OK"
 ```
 
 Expected output: `ASCII-only: OK` (grep finds nothing, so its non-zero exit
