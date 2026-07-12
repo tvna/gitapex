@@ -24,6 +24,28 @@ skill artifact itself is good, not whether a change is correct.
   or human, not a script. Full rubric with pass/fail evidence:
   [references/rubric.md](references/rubric.md).
 
+## Portability level
+
+Establish this (declared, or read from actual content) before walking
+the nine dimensions -- it changes how dimensions 1, 5, 6, and 8 grade.
+Checkable from this file alone; no need to open `references/rubric.md`
+just to classify it.
+
+- **Portable**: every instruction controlling the skill's behavior (a
+  check run, a path read, a command executed) resolves inside the
+  skill's own folder, or cites only general product-level docs.
+  References to the origin repo as *context*/example are fine;
+  references the *procedure* depends on to function are not.
+- **Repository-scoped**: intentionally depends on the origin repo's own
+  tooling or conventions. Legitimate, but must say so explicitly, near
+  the top of `SKILL.md` -- undeclared-but-repository-scoped is itself a
+  finding.
+- **Mixed**: a portable core plus repo-specific detail should split the
+  two into a clearly named reference file, not blend them.
+
+Full rationale and per-dimension grading detail:
+[references/rubric.md](references/rubric.md)'s Portability level section.
+
 ## Procedure
 
 Steps 1-3 are this review's precondition, step 5 its postcondition --
@@ -33,9 +55,7 @@ see `references/rubric.md`'s Contract discipline section.
    directory (not only linked ones -- an unlinked file is itself a
    dimension-5 finding).
 2. Check the deterministic shape list above; cite the exact violation.
-3. Establish the skill's portability level (declared, or read from its
-   actual content) per `references/rubric.md`'s Portability level
-   section -- it changes how dimensions 1, 5, 6, and 8 grade below.
+3. Establish the skill's portability level per the section above.
 4. Walk all nine dimensions in `references/rubric.md`, in order (including
    8-9), quoting the specific text that earns each verdict; assume steps
    1-3 hold rather than re-deriving them. No cited evidence means no

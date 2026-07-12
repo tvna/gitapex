@@ -17,9 +17,11 @@ under [References](#references) at the end of this file.
 ## Portability level
 
 Not explicitly declared inline (`SKILL.md` never states "this skill is
-Portable"), so this review reads the actual content against
-[rubric.md's Portability level](rubric.md#portability-level) section, the
-same way it read `explaining-the-work` in the other worked example.
+Portable"), so this review reads the actual content against the
+Portable / Repository-scoped / Mixed definitions in `SKILL.md` itself
+(see also [rubric.md's Portability level](rubric.md#portability-level)
+for the per-dimension elaboration), the same way it read
+`explaining-the-work` in the other worked example.
 
 Read as: **Portable**, after two fixes made during this same review pass
 (both real findings, not hypothetical -- see below). Every procedural
@@ -156,14 +158,26 @@ reviews.
 
 ### 5. Progressive disclosure
 
-Pass. `references/rubric.md` (the every-review-needs-it content) and the
-two worked examples (concrete illustrations, read on demand rather than
-inlined) are correctly split -- the common case (do a review) requires
-opening `SKILL.md` plus `rubric.md`; the worked examples are optional,
-consistent with rubric.md's own "splits must not force several reads for
-the common case" rule. Both worked examples are linked directly from
-`SKILL.md` (one level deep). Both carry a table of contents past 100
-lines, including this file.
+Pass, strengthened during this review. `references/rubric.md` (the
+every-review-needs-it content) and the two worked examples (concrete
+illustrations, read on demand rather than inlined) are correctly split,
+and the worked examples are optional, consistent with rubric.md's own
+"splits must not force several reads for the common case" rule. Both are
+linked directly from `SKILL.md` (one level deep) and both carry a table
+of contents past 100 lines.
+
+Improvement made this pass, not just a pass/fail read: the Portability
+level classification (Procedure step 3, a precondition) originally lived
+only in `rubric.md`, meaning even establishing the precondition required
+opening the expensive reference file. Moved the actual Portable /
+Repository-scoped / Mixed definitions into `SKILL.md` itself, leaving
+`rubric.md`'s Portability level section as pure elaboration (why it
+matters per dimension). Now steps 1-3 -- the whole precondition, per
+Contract discipline -- are checkable from `SKILL.md` alone; only step 4
+(the actual nine-dimension walk) requires opening `rubric.md`. This is
+the same "cheapest level that still makes it available" test dimension 5
+itself states, applied to the precondition/postcondition split from
+Contract discipline rather than only to dimension content.
 
 ### 6. Durability
 

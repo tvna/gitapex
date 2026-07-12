@@ -97,40 +97,29 @@ Two operational rules follow directly, quoted from the same source:
 ## Portability level
 
 One of this review's own preconditions (see [Contract
-discipline](#contract-discipline) above). Before walking dimensions 1-9,
-establish what the skill's author is
-actually building -- a design decision, not a quality defect by default,
-but one that changes how several dimensions below are graded.
+discipline](#contract-discipline) above) -- the three-level definition
+(Portable / Repository-scoped / Mixed) lives in `SKILL.md`, checkable
+without opening this file, precisely because establishing it is a cheap
+precondition step, not part of the expensive dimension walk. This
+section is the elaboration: why the classification is a design decision
+rather than a quality defect by default, and how each level changes
+grading below.
 
-- **Portable**: every instruction that controls the skill's behavior (a
-  check the model runs, a path it reads, a command it executes) resolves
-  inside the skill's own deployed folder, or cites only general,
-  product-level primary sources (Anthropic's own docs, a language/tool's
-  own docs). No dependency on the origin repository's internal paths,
-  scripts, or business rules. References to the origin repository as
-  *context* or a *worked example* are fine; references the skill's
-  *procedure* depends on to function are not. Grade dimension 6
-  (durability) at full strictness: any behavior-controlling reference
-  outside the skill's own folder is a real defect, not a style nit.
-- **Repository-scoped**: the skill intentionally depends on its origin
-  repository's own tooling or conventions (e.g. "run
-  `scripts/our_internal_linter.py`", or a company-specific policy). This
-  is a legitimate choice when the skill is never meant to leave that
-  repository. It must say so, explicitly and near the top of `SKILL.md`
-  -- a repository-scoped skill that reads as if it were portable is a
-  dimension-1/6 defect (it misleads a future vendoring decision), not the
-  scoping choice itself.
-- **Mixed**: a skill with a portable core plus some repository-specific
-  detail should *split* the two (dimension 5) rather than blend them --
-  the repository-specific part in a clearly named reference file (e.g.
-  `references/this-repo-only.md`), so a consumer vendoring the skill can
-  identify and drop exactly that file.
-
-State which level the reviewed skill declares (or, if undeclared, which
-level its actual content matches) before scoring dimensions 1, 5, 6, and
-8, which read differently depending on the answer. An undeclared level
-that turns out to be repository-scoped is itself a finding, not something
-to silently infer and move past.
+- **Portable** -- grade dimension 6 (durability) at full strictness: any
+  behavior-controlling reference outside the skill's own folder is a real
+  defect, not a style nit. References to the origin repository as
+  *context* or a *worked example* remain fine; only references the
+  *procedure* depends on to function are graded this strictly.
+- **Repository-scoped** -- a repository-scoped skill that reads as if it
+  were portable is a dimension-1/6 defect (it misleads a future vendoring
+  decision), not the scoping choice itself. An undeclared level that
+  turns out to be repository-scoped is itself a finding, not something to
+  silently infer and move past.
+- **Mixed** -- dimension 5 (progressive disclosure) requires the actual
+  split, not just the intent to split: the repository-specific part
+  belongs in a clearly named reference file (e.g.
+  `references/this-repo-only.md`) a consumer can identify and drop, not
+  blended into the portable core.
 
 ## 1. Discovery -- name and description
 

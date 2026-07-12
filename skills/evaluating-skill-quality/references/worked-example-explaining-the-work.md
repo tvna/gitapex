@@ -18,8 +18,10 @@ collected under [References](#references) at the end of this file.
 
 Undeclared in the reviewed skill -- `explaining-the-work`'s `SKILL.md`
 never states whether it targets portability or is scoped to gitapex, so
-this review reads the actual content per rubric.md's [Portability
-level](rubric.md#portability-level) section.
+this review reads the actual content against the Portable /
+Repository-scoped / Mixed definitions in `evaluating-skill-quality`'s
+own `SKILL.md` (see also [rubric.md's Portability
+level](rubric.md#portability-level) for the per-dimension elaboration).
 
 Read as: mostly **Portable**, with one borderline point. The routing
 rules (How/What/Why/Why-not, the why-not template's `<=120` char and
