@@ -26,15 +26,43 @@ mirroring the `merge-retrospective` precedent (issue #6 / PR for #6).
 
 ## Scope
 
-- `skills/establishing-ubiquitous-language/SKILL.md` -- one file, no
-  `references/` subdirectory (content fits the informal 500-line budget).
-- `docs/glossary.md` -- a scaffold, per issue #10's acceptance criteria
-  ("even a header plus a placeholder" is acceptable minimal scope). Seeded
+- `skills/establishing-ubiquitous-language/SKILL.md` -- the skill body.
+- `skills/establishing-ubiquitous-language/references/glossary.md` -- a
+  scaffold satisfying issue #10's acceptance criteria ("even a header plus
+  a placeholder... alongside SKILL.md" is acceptable minimal scope; see
+  "Post-review correction" below for why this lives alongside `SKILL.md`
+  rather than at the issue's illustrative `docs/glossary.md` path). Seeded
   with the one real, already-resolved term from the worked example
   (Contributor, superseding Owner per PR #2) so the scaffold demonstrates
   the skill's own output rather than shipping empty.
-- No hooks, no CI gate, no `references/` -- none of these are asked for and
-  none exist as a pattern in this repo yet.
+- `skills/establishing-ubiquitous-language/references/worked-example.md` --
+  the full commit-level detail of the worked example, per progressive
+  disclosure (issue #10's skill-quality-knowledge.md citation: push detail
+  that is only sometimes needed into `references/`, not inline).
+- No hooks, no CI gate -- neither is asked for and neither exists as a
+  pattern in this repo yet.
+
+## Post-review correction: self-contained skill folder (distribution bug)
+
+The first version of this change put the glossary at `docs/glossary.md`
+and cited `docs/motivation.md` by path directly in `SKILL.md`'s main body.
+Per `docs/repository-layout.md`, only `skills/` (and, later, `hooks/`) are
+deployed when this repo is installed as a plugin; `docs/` is explicitly
+"not deployed." A skill's own body must not depend on repo-root `docs/`
+paths that will not exist for a consumer who installs only this one skill
+directory elsewhere -- that is a real distribution bug, not a style
+preference, caught after the initial push and corrected before merge:
+
+- The glossary file moved to `references/glossary.md`, alongside
+  `SKILL.md`, and `SKILL.md`'s Procedure step 4 now points there (falling
+  back to a repo's own existing glossary convention if it has one) instead
+  of a fixed `docs/` path.
+- The worked example's full commit-level detail moved to
+  `references/worked-example.md`; `SKILL.md` keeps only a condensed,
+  self-contained summary. The one remaining `docs/motivation.md` mention
+  lives in a section of `worked-example.md` explicitly labeled as
+  provenance for this skill's home repository only -- attribution, not a
+  functional dependency.
 
 ## Deferred: a deterministic glossary drift gate (explicit non-goal)
 
@@ -80,9 +108,11 @@ scanning the whole repo for terminology drift) is worth building.
 - Procedure has exactly the four steps issue #10 names: elicit candidate
   terms (code identifiers, docs, issue/PR history), detect synonyms/near-
   duplicates, ask the owner which term wins on conflict (never pick
-  silently), maintain `docs/glossary.md` as the single source of truth.
-- Worked example is the real `docs/motivation.md` owner -> contributor
-  case, not a fictitious one -- issue #10 requires "at least the
+  silently), maintain a glossary as the single source of truth (see
+  "Post-review correction" above for why that glossary lives in
+  `references/`, not at the issue's illustrative `docs/glossary.md` path).
+- Worked example is the real owner -> contributor case from this repo's
+  own history, not a fictitious one -- issue #10 requires "at least the
   contributor/owner/author case above" as the worked example.
 - Stop boundary, verbatim intent from issue #10's acceptance criteria:
   never unilaterally rename existing code or identifiers to match the
@@ -109,11 +139,15 @@ Verification is manual/structural, mirroring PR #2 and the
 - Procedure names all four steps from issue #10 (elicit, detect, ask,
   maintain glossary).
 - The worked example reproduces the real owner/contributor/author case
-  from `docs/motivation.md` and PR #2, not a fictitious substitute.
+  from this repo's own history and PR #2, not a fictitious substitute.
 - Stop boundaries section states both required rules: no unilateral
   renames, no new term without checking for an existing synonym first.
-- `docs/glossary.md` exists, is non-empty (header + the Contributor
-  entry), and does not attempt to bulk-rename any existing repo
-  terminology as a side effect.
+- `skills/establishing-ubiquitous-language/references/glossary.md` exists,
+  is non-empty (header + the Contributor entry), and does not attempt to
+  bulk-rename any existing repo terminology as a side effect.
+- No file under `skills/establishing-ubiquitous-language/` cites a `docs/`
+  path as something the skill depends on at runtime (the one exception,
+  a provenance note in `worked-example.md`, is explicitly scoped to this
+  skill's home repository only).
 - Existing `scripts/`/`tests/` pytest suite untouched and still passing.
 - Final review pass via the `code-review` skill before pushing.

@@ -38,69 +38,48 @@ present.
 3. **Resolve.** When a conflict is found, ask the owner which term should
    win -- never pick silently. Do not resolve it by fiat, by frequency
    count, or by whichever term you happened to write first.
-4. **Maintain the glossary.** Record the winning term in a single glossary
-   doc (`docs/glossary.md` in this repo) as the source of truth, noting
-   the superseded synonym so it does not resurface unrecognized later.
+4. **Maintain the glossary.** Record the winning term in this skill's own
+   glossary file (`references/glossary.md`, alongside this SKILL.md) as
+   the source of truth, noting the superseded synonym so it does not
+   resurface unrecognized later. If the calling repository already has its
+   own established glossary location, use that instead -- this skill's own
+   `references/glossary.md` is the default when no repo-specific
+   convention exists yet, not a fixed requirement.
 
 ## Worked example: owner vs. author vs. contributor
 
-`docs/motivation.md` (added in gitapex PR #2) is the real precedent this
-skill is built around. Its first draft (commit `241f4392`) named the human
-participant in the Design-by-Contract sequence diagrams `Owner` (with a
-Japanese-language display label meaning roughly "person (owner)" -- this
-draft predates the ASCII-only translation described below), and its prose
-read "an owner instruction flows through Issue authoring...". A later
-commit in the same PR (`ef222b81`, "ascii-only motivation diagrams, split
-skills, contributor wording") renamed that participant and prose from
-"owner" to "contributor" (and translated the whole document to ASCII-only
-English in the same commit), because the flow those diagrams describe is
-not specific to repository owners -- any contributor can drive it. The
-diagrams also name a second,
-lexically similar but conceptually distinct role, `Author` (the AI
-implementer), present unchanged in both the before and after state -- it
-was never a candidate for this conflict.
+A real precedent, condensed here; the full version (with commit-level
+detail) is `references/worked-example.md`, alongside this file.
 
-Applying the procedure to the pre-rename state (before commit `ef222b81`):
+A design document in this skill's home repository's history originally
+named the human participant in a sequence diagram `Owner`, using a term
+borrowed from GitHub's own permission vocabulary (a specific access-control
+role) for a broader concept -- whoever gives the instruction that starts
+the flow, which is not owner-specific. That mismatch was later resolved by
+renaming the participant to `Contributor`. A second, lexically similar but
+conceptually distinct role, `Author` (an AI implementer), was present
+throughout and was never a candidate for this conflict.
 
-- **Elicit:** scanning the diagram source and surrounding prose turns up
-  two role labels in use: `Owner` (the diagram's human participant, and the
-  noun the prose used -- "an owner instruction") and `Author` (the AI
-  implementer participant). No "Contributor" label exists yet at this
-  point -- it is introduced only by the resolution below, not found
-  already coexisting with `Owner`.
-- **Detect:** `Owner` is borrowed from GitHub's own permission vocabulary
-  (a specific access-control role), but the concept it names here --
-  whoever is giving the instruction that starts this flow -- is broader
-  than that: the flow is not owner-specific. A borrowed term that is
-  narrower than the concept it is standing in for is a naming problem
-  worth flagging even when only one term is in use so far -- this is a
+Applying the procedure to the pre-rename state:
+
+- **Elicit:** two role labels in use -- `Owner` (the human participant) and
+  `Author` (the AI implementer). No "Contributor" label exists yet; it is
+  introduced only by the resolution below.
+- **Detect:** `Owner` is narrower than the concept it names here -- a
   term-to-concept mismatch, not two synonyms already colliding. `Author`
-  is not implicated: it names a distinct concept (the AI role), and its
-  lexical similarity to "owner" (both short role nouns) does not make it a
-  candidate.
+  is not implicated: distinct concept, and lexical similarity to "owner"
+  (both short role nouns) is not evidence of synonymy.
 - **Resolve:** rather than silently swapping in a guess, ask which term
-  should actually name the concept. The repo's own commit message records
-  the answer: "contributor," with the stated reason that the flow is not
-  owner-specific.
-- **Maintain the glossary:** the winning term gets an entry in
-  `docs/glossary.md` --
-
-  ```
-  ## Contributor
-  The human giving instructions in the Design-by-Contract issue/PR flow
-  (docs/motivation.md). Not to be conflated with "repository owner" (a
-  GitHub permission role) or "Author" (the AI author/implementer
-  participant in the same diagrams) -- distinct concepts, not synonyms.
-  Superseded terms: "Owner" (used in the initial draft of
-  docs/motivation.md; renamed to Contributor in the same PR (#2), commit
-  ef222b81, because the flow described is not specific to repository
-  owners).
-  ```
+  should actually name the concept. The resolution: "contributor," because
+  the flow is not owner-specific.
+- **Maintain the glossary:** the winning term gets an entry in this
+  skill's `references/glossary.md` (see that file for the actual entry).
 
 Note what this example does *not* do: it does not go back and rename any
 identifier in actual code, and it does not invent "Contributor" from
 nothing -- it surfaces that the resolution already happened in this
-repo's own history and records it, which is exactly the glossary's job.
+skill's home repository's own history and records it, which is exactly the
+glossary's job.
 
 ## Stop boundaries
 
