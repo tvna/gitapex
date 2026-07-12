@@ -37,9 +37,9 @@ skill artifact itself is good, not whether a change is correct.
    quote the specific text that earns the verdict -- the weak description
    line, the two-deep reference chain, the unjustified constant. A dimension
    with no cited evidence has not actually been reviewed.
-4. Issue a verdict: **well-formed** (deterministic shape only) or **mature**
-   (clears the probabilistic dimensions too), naming the specific gaps per
-   dimension that keep it from the higher bar.
+4. Issue a verdict per `references/rubric.md`'s Verdicts section --
+   **well-formed** or **mature** -- naming the specific gaps per dimension
+   that keep it from the higher bar.
 
 See [references/worked-example-explaining-the-work.md](references/worked-example-explaining-the-work.md)
 for a full nine-dimension review applied to a real, already-merged

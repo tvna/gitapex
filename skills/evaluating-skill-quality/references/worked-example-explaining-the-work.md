@@ -16,7 +16,7 @@ progressive-disclosure dimension it demonstrates.
 
 | Check | Result | Evidence |
 |---|---|---|
-| Frontmatter present | Pass | `name: explaining-the-work`, `description: ...` at lines 1-3 |
+| Frontmatter present | Pass | Frontmatter block at lines 1-4; `name:` at line 2, `description:` at line 3 |
 | `name` lowercase-hyphenated, <= 64 chars, matches directory | Pass | `explaining-the-work` (19 chars) equals the directory name |
 | No reserved word | Pass | Contains neither `anthropic` nor `claude` |
 | `description` single-line, third person, no XML tags | Pass | Line 3 is one line, uses "Routes explanation responsibility..." -- no first/second person pronoun, no `<tag>` |
@@ -39,6 +39,15 @@ not a failure: the trigger clause precedes the capability clause, the
 reverse of the rubric's own pass example ("Extract text ... Use when
 ..."). Order is not itself a deterministic-gate requirement and both
 clauses are present, so this stays a note, not a finding.
+
+Sibling-distinctiveness check (rubric.md's current framing for this
+dimension): as of this review, `explaining-the-work`'s siblings in this
+repo include `stop-and-replan` (trigger: a self-correcting phrase already
+present in a PR body or commit message) and `untrusted-input-triage`
+(trigger: about to act on externally authored text). Neither trigger
+overlaps "writing or editing code comments, docstrings, or finalizing
+commit/PR messages" -- the three descriptions pick disjoint terms, so a
+router would not confuse them. Pass on distinctiveness too.
 
 ### 2. Conciseness
 
@@ -79,10 +88,11 @@ quality-critical steps. The why-not rule states a precondition ("Requires a
 citable issue/PR/ADR that actually evaluated the rejected alternative. If
 nothing can be cited, do not write the comment", lines 27-29) but never
 tells the model how to *check* that a citation is valid before writing the
-comment -- there is a prohibition, not a validation step. This is a minor
-gap: the prohibition does functionally suppress the bad case, so this does
-not block a "mature" verdict by itself, but it is a real, citable gap
-against the dimension's stated standard, not a bare "looks fine".
+comment -- there is a prohibition, not a validation step. The prohibition
+functionally suppresses the bad case, so this is a minor gap rather than a
+serious one -- but it is a real, citable gap against the dimension's stated
+standard, not a bare "looks fine", and per rubric.md's Verdicts section a
+named gap in dimension 4 keeps that dimension from clearing cleanly.
 
 ### 5. Progressive disclosure
 
@@ -106,12 +116,10 @@ N/A. The skill ships no code.
 ### 8. Behavioural evidence
 
 Unmeasured, not skipped: gitapex has no `evals/` directory or
-`waza`-equivalent runner today (confirmed absent from the repository tree;
-see `docs/superpowers/specs/2026-07-12-skill-distribution-foundation-design.md`
-Non-goals, which defers `evals/` explicitly). There is no suite exercising
-this skill's trigger or asserting its output contract, so this dimension
-cannot be scored pass or fail -- it is an open gap in the repository's
-tooling, not a defect specific to this skill.
+`waza`-equivalent runner today (confirmed absent from the repository tree).
+There is no suite exercising this skill's trigger or asserting its output
+contract, so this dimension cannot be scored pass or fail -- it is an open
+gap in the repository's tooling, not a defect specific to this skill.
 
 ### 9. Cross-model robustness
 
@@ -126,11 +134,14 @@ reported as if it were.
 
 ## Verdict
 
-**Well-formed**, and close to but not fully **mature**: dimensions 1, 2, 3,
-5, 6 clear cleanly with cited evidence; 7 is not applicable; dimension 4 has
-one named, minor gap (no explicit validate step for the why-not citation
-requirement); dimensions 8 and 9 are explicitly unmeasured because gitapex
-has no eval suite or battle harness yet, not because the skill fails them.
-The gap in 8/9 is a repository-tooling gap shared by every skill in this
-repo today, not something `explaining-the-work` could have done
-differently.
+**Well-formed**, and not yet **mature**. Dimensions 1, 2, 3, 5, 6 clear
+cleanly with cited evidence; 7 is not applicable; dimensions 8 and 9 are
+explicitly named as unmeasured rather than silently assumed, which is what
+rubric.md's Verdicts section requires of 8-9 specifically -- that allowance
+is satisfied, not a blocker. The single thing keeping this skill below
+mature is dimension 4's one named gap (no explicit validate step for the
+why-not citation requirement): real and minor, but per rubric.md's Verdicts
+section a named gap in a dimension 1-7 keeps that dimension from clearing,
+unlike the special allowance dimensions 8-9 get. Closing that one gap --
+and nothing about 8-9, which gitapex's tooling genuinely cannot measure
+yet -- would clear the mature bar.

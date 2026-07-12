@@ -1,13 +1,16 @@
 # Skill quality rubric
 
 Portable evaluation reference for judging whether a `SKILL.md` (and its
-`references/`) is good, adapted for gitapex from `tvna/clairvoyance`
-`docs/skill-quality-knowledge.md` and `docs/skill-maturity-checklist.md`
-(themselves a distillation of the [Agent Skills best
+`references/`) is good, originally adapted for gitapex from
+`tvna/clairvoyance`'s skill-quality-knowledge and skill-maturity-checklist
+documents (themselves a distillation of the [Agent Skills best
 practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices)).
-Where clairvoyance's tooling (`scripts/check_skills.py`, `waza`, the battle
-harness) does not exist in gitapex, this file says so instead of citing a
-gate gitapex does not run.
+This skill travels with any repo it is vendored into: where a target
+repository lacks a piece of clairvoyance-style tooling (a deterministic
+checker script, an eval suite, a battle harness), dimensions 1-9 below say
+to check the target repository directly and state the gap explicitly,
+rather than assuming a specific repo's tooling state or citing a file
+outside this skill's own folder.
 
 ## Table of contents
 
@@ -169,9 +172,10 @@ cannot yet judge -- against every tier the skill is likely to run under:
 
 Behaviour observed on one model is not evidence for another. **Check the
 target repository for a battle harness or per-model eval runner before
-scoring this dimension.** If gitapex itself is the target, it has none
-today. When this dimension cannot be measured, say so explicitly rather
-than asserting robustness from a single-model read. A qualitative read is
+scoring this dimension** (same check as dimension 8, against a different
+kind of harness). When this dimension cannot be measured, say so explicitly
+rather than asserting robustness from a single-model read. A qualitative
+read is
 still allowed (e.g. "this skill is a fixed low-freedom policy, so
 over-prescription risk is probably low, but this is a read, not measured
 evidence") as long as it is labeled as such.
@@ -181,9 +185,13 @@ evidence") as long as it is labeled as such.
 - **Well-formed** -- clears every deterministic shape check (frontmatter,
   naming, description shape, body length, reference depth/TOC). Says
   nothing about whether the skill is good.
-- **Mature** -- well-formed, and clears the probabilistic dimensions above
-  too, with dimensions 8-9 either measured or explicitly named as an
-  unmeasured gap (never silently assumed).
+- **Mature** -- well-formed, and every dimension 1-7 clears cleanly with no
+  named gap (a "minor" gap still means that dimension has not cleared).
+  Dimensions 8-9 are the one exception: because they depend on tooling a
+  target repository may not have yet, either measured or explicitly named
+  as an unmeasured gap (never silently assumed) is sufficient for them
+  specifically -- naming the gap does not, on its own, block "mature" the
+  way an uncleared dimension 1-7 gap does.
 
 A verdict without cited evidence per dimension is not a review -- it is a
 guess wearing a review's shape.
