@@ -25,6 +25,6 @@ expected:
   output_contains:
     - "Acceptance Criteria Map"
     - "Assumptions"
+    - "dropped"
   output_not_contains:
-    - "Update the login UI"
     - "LGTM"

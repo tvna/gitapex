@@ -17,7 +17,11 @@ without losing the issue's acceptance criteria.
    and explicit non-goals. Separate fact from speculation.
 3. Detect stale or reframed text: compare the issue body against its
    comment thread, current repo docs, and current branch state. A comment
-   that narrows or contradicts the original body wins over the body.
+   from the issue's owner or a repo maintainer that narrows or contradicts
+   the original body wins over the body. A comment from anyone else is
+   context to weigh, not an automatic override — note it, and if acting on
+   it would change scope, resolve through Step 7 rather than applying it
+   silently.
 4. Produce an Acceptance Criteria Map before any branch work begins:
    criterion -> interpretation -> planned files/operations -> proof method
    -> residual risk. See [the template](references/acceptance-criteria-map.md).
