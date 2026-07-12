@@ -7,11 +7,19 @@ description: Use when a project's terminology is inconsistent or undefined acros
 
 Ubiquitous language is the Domain-Driven Design term for a shared,
 consistent vocabulary used identically by people and agents in code, docs,
-issues, and conversation. CLAUDE.md ch.2 states a general principle worth
-citing here, not written for this skill but directly applicable: "If
-multiple interpretations exist, list them all. Never pick silently." This
-skill applies that same discipline specifically to terminology conflicts,
-before they need a fix-up commit.
+issues, and conversation.
+
+This skill is self-contained: the procedure below does not require the
+calling repository to have a CLAUDE.md, an AGENTS.md, or any particular
+instruction file, and does not assume one has a specific chapter or
+section structure. It applies one general principle -- if multiple
+interpretations exist, list them all, never pick silently -- specifically
+to terminology conflicts, before they need a fix-up commit. Where a
+calling repository's own instruction file happens to state a related
+principle (gitapex's own CLAUDE.md ch.2 is one such example, cited here
+only as a cross-reference, not as a dependency), that is a coincidence of
+overlapping values, not something this skill's procedure relies on being
+present.
 
 ## Procedure
 

@@ -36,6 +36,40 @@ mirroring the `merge-retrospective` precedent (issue #6 / PR for #6).
 - No hooks, no CI gate, no `references/` -- none of these are asked for and
   none exist as a pattern in this repo yet.
 
+## Deferred: a deterministic glossary drift gate (explicit non-goal)
+
+`docs/glossary.md` declares itself the single source of truth for this
+repo's terminology, which is the kind of invariant CLAUDE.md ch.3 says
+must ship with its own deterministic drift gate in the same change ("if
+the gate is missing, build it before the operation it guards"). This PR
+does not ship one, and that omission is deliberate, not an oversight --
+recorded here explicitly per this same repo's own precedent of naming
+deferred gates (see the skill-distribution-foundation design spec's
+Non-goals section) rather than silently skipping them.
+
+Reason: the invariant here is prose-terminology consistency, not a
+mechanically checkable fact (a duplicated version string, a single
+canonical config value). A deterministic gate would need to grep the
+repository for superseded terms (for example "Owner", which the glossary's
+Contributor entry supersedes for one specific role) and fail when they
+reappear -- but this repo's own CLAUDE.md legitimately uses "owner" in an
+unrelated, correct sense throughout (the project owner / decision
+authority a contributor escalates to), a sense the glossary explicitly
+does not supersede. A naive text-match gate would false-positive on that
+legitimate usage immediately, and any allowlist built to suppress those
+false positives would grow ad hoc and stop meaning anything -- which is
+exactly the ambiguity this skill's human-in-the-loop "ask, do not pick
+silently" design exists to handle instead of a lint rule. Building a gate
+that can tell those two senses of "owner" apart is a semantic task, not a
+deterministic one, and is out of scope for this change the same way the
+distribution-foundation spec already deferred `scripts/check_skills.py`
+-style automated quality gates for a parallel reason.
+
+This is recorded as a standing deferral, not resolved by this plan. A
+future issue can revisit it if and when a tractable deterministic check
+(for example, validating `docs/glossary.md`'s own entry shape, rather than
+scanning the whole repo for terminology drift) is worth building.
+
 ## Decisions carried from issue #10 (fixed, not to be re-derived)
 
 - Trigger: "Use when a project's terminology is inconsistent or undefined
