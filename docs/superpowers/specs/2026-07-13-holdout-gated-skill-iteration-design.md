@@ -117,9 +117,13 @@ Ordered sections:
 7. **LLM-as-judge only with an adversarial verification pass.** If no
    deterministic scorer exists and an LLM judge is used as the weaker
    substitute SkillOpt names, require a separate adversarial verification
-   pass (the pattern `requesting-code-review` uses) to guard against the
-   judge rubber-stamping. A judge's "pass" is never ground truth on its
-   own.
+   pass -- defined inline in the skill so it is actionable in a bare
+   harness with no external plugin: an independent second judgement that
+   tries to break the first verdict with hostile and degenerate inputs and
+   confirms the judge cited concrete evidence. A judge's "pass" is never
+   ground truth on its own. The skill keeps this self-contained (no
+   dependency on a Superpowers-style `requesting-code-review`); it names
+   the shipped `battle-testing-a-skill` only as an optional example.
 
 ### Output contract
 

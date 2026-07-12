@@ -50,9 +50,14 @@ evaluation. Name the gap; never fake a score to proceed.
    done.
 6. **LLM-as-judge only with an adversarial verification pass.** If no
    deterministic scorer exists and an LLM judge is the weaker substitute
-   SkillOpt names, require a separate adversarial verification pass (the
-   pattern `requesting-code-review` uses) against the judge rubber-stamping.
-   A judge's "pass" is never ground truth on its own.
+   SkillOpt names, never take the judge's PASS as ground truth on its own.
+   Run a separate adversarial verification pass first: an independent
+   second judgement whose only goal is to break the first verdict -- feed
+   the candidate hostile and degenerate inputs, and confirm the judge cited
+   concrete evidence for its verdict instead of approving on "looks fine".
+   Keep the edit only if it survives that pass. (`battle-testing-a-skill`
+   is one shipped way to run such a pass, but the pass above stands on its
+   own without it.)
 
 ## Output
 
