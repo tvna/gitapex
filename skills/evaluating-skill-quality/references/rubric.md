@@ -25,6 +25,7 @@ skill's own folder.
 
 - [The mental model](#the-mental-model)
 - [Contract discipline](#contract-discipline)
+- [Mechanism fit](#mechanism-fit)
 - [Portability level](#portability-level)
 - [1. Discovery -- name and description](#1-discovery----name-and-description)
 - [2. Conciseness](#2-conciseness)
@@ -56,31 +57,31 @@ invariants, as formalized for Eiffel and applied generally to reliable
 software construction). Naming the parts precisely matters because it
 fixes where a fault actually lives when a review goes wrong.
 
-- **Precondition** -- what `SKILL.md`'s Procedure steps 1-3 establish
+- **Precondition** -- what `SKILL.md`'s Procedure steps 1-4 establish
   before dimension grading starts: the target has actually been read
-  (step 1), its deterministic shape is checked (step 2), and its
-  portability level is established (step 3, see below). Per Meyer: "the
-  precondition expresses requirements that any call must satisfy if it is
-  to be correct."
-- **Postcondition** -- what step 5 delivers *if the precondition held*: a
+  (step 1), its mechanism fit is checked (step 2, see below), its
+  deterministic shape is checked (step 3), and its portability level is
+  established (step 4, see below). Per Meyer: "the precondition expresses
+  requirements that any call must satisfy if it is to be correct."
+- **Postcondition** -- what step 6 delivers *if the precondition held*: a
   verdict with cited evidence per dimension. Per Meyer: "the postcondition
   expresses properties that are ensured in return for the call."
 - **Invariant** -- properties that hold throughout the *entire* review,
   not just at one step: this skill's Stop boundaries. Per Meyer, an
   invariant "is added to the precondition and postcondition of every"
-  step -- a Stop boundary is not a step-4-only rule; it binds during
-  shape-checking, portability classification, and the dimension walk
-  alike.
+  step -- a Stop boundary is not a step-5-only rule; it binds during
+  mechanism-fit checking, shape-checking, portability classification, and
+  the dimension walk alike.
 
 Two operational rules follow directly, quoted from the same source:
 
 - **Fault attribution.** "A precondition violation indicates a bug in the
   client (caller). ... A postcondition violation is a bug in the supplier
   (the routine)." Applied here: if a verdict turns out wrong because the
-  portability level or deterministic shape was misjudged, that is a bug
-  in how this review established its precondition -- not a flaw in
-  dimensions 1-9 (the "supplier"). Redo the precondition steps; do not
-  patch the rubric to route around a misclassification.
+  mechanism fit, portability level, or deterministic shape was misjudged,
+  that is a bug in how this review established its precondition -- not a
+  flaw in dimensions 1-9 (the "supplier"). Redo the precondition steps; do
+  not patch the rubric to route around a misclassification.
 - **Never both.** Meyer states this as "an absolute rule": a condition is
   checked in exactly one place, "either you have the condition in the
   [precondition], or you have it in an If instruction in the [routine's]
@@ -91,8 +92,65 @@ Two operational rules follow directly, quoted from the same source:
   the deterministic checklist "confirms a trigger *exists*" and then
   asks a *different* question -- whether it is the *right* one -- rather
   than re-checking existence; and why dimension 6's Portable-skill bullet
-  *consumes* the portability level step 3 already produced, rather than
+  *consumes* the portability level step 4 already produced, rather than
   re-classifying it).
+
+## Mechanism fit
+
+One of this review's own preconditions (see [Contract
+discipline](#contract-discipline) above) -- the three-way decision
+(skill vs. subagent, skill vs. hook, skill vs. CLAUDE.md) lives in
+`SKILL.md`, checkable without opening this file. This section is the
+elaboration: the primary source and the reasoning behind each check.
+
+Grounded in Anthropic's own guidance on steering Claude Code
+([Steering Claude Code][steering]): seven methods compete for the same
+job -- CLAUDE.md, rules, skills, subagents, hooks, output styles, and
+appending the system prompt -- and "each method controls: when an
+instruction loads into context; whether it persists through long
+sessions (compaction behavior); and how much authority it carries."
+Skills specifically: "name and description [load] at session start;
+full body loads when the skill is invoked" -- low context cost, but
+model-followed, not deterministic.
+
+Two of the source's own "Quick tips" anti-patterns are the sharpest,
+directly quoted:
+
+- **"'Every time X, always do Y' in CLAUDE.md[, or a skill]. If the
+  behavior should happen reliably ... use a hook ... instead. The model
+  choosing to run a formatter is different from the formatter running
+  automatically."** A skill that reads like a guaranteed-execution rule
+  (not a judgment call, an unconditional action) is asking prose to do a
+  hook's job.
+- **"'Never do this' in CLAUDE.md[, or a skill]. When there's something
+  that absolutely must not happen, an instruction is the wrong tool.
+  Claude will follow the instruction most of the time, but when under
+  pressure, in a long session or an ambiguous situation, or due to a
+  prompt injection in a file accessed as part of the task, the model can
+  fail to follow a prompted rule. A real guardrail needs to be
+  deterministic, and the enforcement methods are hooks and
+  permissions."**
+  A skill's Stop boundaries are exactly this shape -- prose prohibitions.
+  For most, that is fine (a reviewer's judgment calls belong in prose);
+  but a Stop boundary that guards something safety-critical (data
+  exfiltration, destructive commands, secret exposure) and has no hook
+  or permission enforcing it is a real gap this dimension exists to
+  name, not a hypothetical one.
+
+Also directly quoted, on the skill/CLAUDE.md boundary: **"Procedures
+belong in skills. CLAUDE.md is for facts Claude should hold all the
+time: build commands, monorepo layout, team conventions. A deployment
+runbook or a security review checklist should live in `.claude/skills/`,
+where the body loads only when invoked."** And the subagent boundary:
+**"Use a subagent when a side task ... would clutter your main
+conversation with intermediate results you won't reference again. Use a
+skill when you want the procedure to play out inside the main thread so
+you can see and steer each step."**
+
+A wrong-mechanism finding is not one of the nine dimensions and is not
+folded into the well-formed/mature ladder: report it as the review's
+headline finding regardless of how the rest of the review scores, per
+`SKILL.md`'s Procedure step 2 and Stop boundaries.
 
 ## Portability level
 
@@ -421,6 +479,15 @@ acknowledgment a live-proof gate requires -- it does not itself waive any
 live-proof check the reviewing repository applies before landing other
 kinds of changes.
 
+**Well-formed** and **mature** both presuppose mechanism fit. A skill can
+be well-formed or even mature by every dimension below and still be the
+wrong artifact -- content that should be a hook, CLAUDE.md, or a
+subagent, dressed up as a well-written skill. A wrong-mechanism finding
+(see [Mechanism fit](#mechanism-fit)) is reported alongside, not
+replaced by, the well-formed/mature verdict: naming both is more useful
+than picking one, since a reviewer fixing the mechanism still needs to
+know whether the content itself was any good.
+
 ## References
 
 [ab]: https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices "Anthropic -- Skill authoring best practices"
@@ -429,3 +496,4 @@ kinds of changes.
 [cce]: https://code.claude.com/docs/en/skills#evaluate-and-iterate-on-a-skill "Anthropic -- Claude Code skills, Evaluate and iterate on a skill"
 [skillopt]: https://arxiv.org/abs/2605.23904 "Yang et al., SkillOpt: Executive Strategy for Self-Evolving Agent Skills, Microsoft, 2026 (arXiv:2605.23904)"
 [dbc]: https://se.inf.ethz.ch/~meyer/publications/computer/contract.pdf "Bertrand Meyer, Applying \"Design by Contract\", IEEE Computer 25(10):40-51, October 1992"
+[steering]: https://claude.com/blog/steering-claude-code-skills-hooks-rules-subagents-and-more "Anthropic -- Steering Claude Code: skills, hooks, subagents and more"

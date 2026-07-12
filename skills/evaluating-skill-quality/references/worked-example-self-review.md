@@ -8,11 +8,46 @@ under [References](#references) at the end of this file.
 
 ## Table of contents
 
+- [Mechanism fit](#mechanism-fit)
 - [Portability level](#portability-level)
 - [Deterministic shape](#deterministic-shape)
 - [Probabilistic dimensions](#probabilistic-dimensions)
 - [Verdict](#verdict)
 - [References](#references)
+
+## Mechanism fit
+
+Read per [rubric.md's Mechanism fit](rubric.md#mechanism-fit) section
+(itself added this same review pass).
+
+**Skill vs. subagent**: good fit. Reviewing a `SKILL.md` benefits from
+playing out in the main thread -- a human plausibly wants to see the
+per-dimension reasoning, push back on one finding, or ask a follow-up,
+none of which fits a subagent's isolated-summary-only return. Not a side
+task whose intermediate results go unreferenced.
+
+**Skill vs. CLAUDE.md**: good fit. The six-step Procedure (read,
+mechanism fit, shape, portability, nine-dimension walk, verdict) is a
+real procedure invoked situationally, not a fact Claude should hold in
+every session regardless of task -- exactly what belongs in a skill
+rather than always-loaded CLAUDE.md content.
+
+**Skill vs. hook**: mostly good fit, one named gap. The review process
+itself is inherently a judgment call (grading nine dimensions is not a
+deterministic check), so prose is the right mechanism for the bulk of
+this skill. But one Stop boundary is safety-adjacent rather than purely
+judgment: "Never install eval tooling ... without the operator's
+go-ahead." Per the primary source, a "never do this" instruction that
+guards something that actually matters needs deterministic enforcement
+(a hook, a permission rule) because "under pressure, in a long session
+... the model can fail to follow a prompted rule" -- and gitapex has no
+hooks infrastructure at all today (confirmed: `hooks/` is an explicit
+Non-goal in the design spec cited elsewhere in this rubric). This Stop
+boundary is currently prose-only backing for a real supply-chain-risk
+concern (an agent autonomously running an install command). Not
+disqualifying -- the judgment-call parts of this skill are still
+correctly skill-shaped -- but worth naming rather than assuming the
+prose boundary is sufficient on its own.
 
 ## Portability level
 
@@ -241,6 +276,12 @@ Portability level section above is designed to reduce the *risk* of, but
 risk reduction is not the same claim as measured transfer success.
 
 ## Verdict
+
+**Mechanism fit**: good fit overall, with one named gap -- the
+eval-tooling-install Stop boundary is safety-adjacent prose with no
+hook backing, in a repo with no hooks infrastructure yet. Reported here
+as the headline finding per rubric.md's Verdicts section, alongside
+rather than instead of the well-formed/mature verdict below.
 
 **Well-formed**, and not yet **mature** -- the same shape as the
 `explaining-the-work` verdict, for different reasons. Dimensions 1

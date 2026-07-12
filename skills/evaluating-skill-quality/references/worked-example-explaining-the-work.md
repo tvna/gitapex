@@ -8,11 +8,35 @@ collected under [References](#references) at the end of this file.
 
 ## Table of contents
 
+- [Mechanism fit](#mechanism-fit)
 - [Portability level](#portability-level)
 - [Deterministic shape](#deterministic-shape)
 - [Probabilistic dimensions](#probabilistic-dimensions)
 - [Verdict](#verdict)
 - [References](#references)
+
+## Mechanism fit
+
+Read per [rubric.md's Mechanism fit](rubric.md#mechanism-fit) section.
+
+**Skill vs. subagent**: good fit. Routing an explanation to How/What/
+Why/Why-not happens inline while writing code, comments, or a commit --
+main-thread, steerable work, not an isolated side task.
+
+**Skill vs. hook**: good fit, no gap. The Stop boundaries ("Never
+bulk-rewrite existing comments," "Never auto-generate an ADR from a
+threshold") are process/scope discipline, not the safety-critical class
+(data exfiltration, destructive commands, secret exposure) the primary
+source flags as needing hook or permission backing. A model drifting
+from these under pressure is a quality regression, not a security
+incident -- prose is an appropriate mechanism here.
+
+**Skill vs. CLAUDE.md**: defensible as a skill, borderline. The routing
+table is compact (45 lines) and could plausibly live in CLAUDE.md
+instead, always-loaded. Kept as a skill, it costs nothing in sessions
+that never touch comments or commits (research, read-only exploration),
+at the cost of needing to trigger correctly when they do. Not a clear
+miss either way -- named as a judgment call, not a finding.
 
 ## Portability level
 
@@ -212,6 +236,10 @@ repo has been observed, so there is no transfer evidence either for or
 against portability.
 
 ## Verdict
+
+**Mechanism fit**: good fit, no finding -- reported first per rubric.md's
+Verdicts section, alongside rather than instead of the shape/dimension
+verdict below.
 
 **Well-formed**, and not yet **mature**. Dimensions 1, 2, 3, 5, 6 clear
 cleanly with cited evidence; 7 is not applicable; dimensions 8 and 9 are
