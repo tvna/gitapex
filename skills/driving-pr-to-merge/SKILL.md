@@ -37,16 +37,26 @@ a different literal form for the same server/tool pair.
    call, e.g. `github:pull_request_read` method `get`, before treating the
    PR as done. Never infer `mergeable_state` from a green CI badge or an
    "LGTM" alone.
-6. **Loop** back to step 2 whenever a new CI failure, a new review
-   comment, or a genuinely blocked `mergeable_state` (e.g. `"blocked"`,
-   `"dirty"`) appears after steps 3-5. Do not treat `"unstable"` as
-   automatically safe to wait on: per GitHub's API, `unstable` means
-   "mergeable with a non-passing commit status," which covers a check
-   still running as well as one that has already failed. Inspect the
-   actual check-run/status details (e.g. `github:pull_request_read`
-   methods `get_status`/`get_check_runs`) before deciding: pending checks
-   -> wait and re-check step 5; a failed or otherwise non-passing check
-   -> loop back to step 2.
+6. **Dispatch on `mergeable_state`** after steps 3-5. Never act on the
+   state name alone — inspect the actual check-run/status/review details
+   via `github:pull_request_read` methods `get_status`, `get_check_runs`,
+   and/or `get_reviews` (as relevant) first:
+   - `"clean"` -> proceed to step 7.
+   - `"unstable"` or `"blocked"` -> both can mean either a check or
+     required review that is still pending, or one that has already
+     failed or been rejected — the state name alone does not say which.
+     Still pending -> wait and re-check step 5. Already failed or
+     rejected -> loop back to step 2.
+   - `"dirty"` -> a real merge conflict; loop back to step 2 to resolve
+     it (e.g. rebase onto or merge the base branch).
+   - `"behind"` -> the branch is behind its base, not a code or review
+     defect; update the branch (e.g. `github:update_pull_request_branch`)
+     rather than hunting for something to fix, then re-check step 5.
+   - `"unknown"` -> GitHub has not finished computing mergeability yet
+     (common immediately after a push); wait briefly and re-check step 5.
+   - `"draft"` -> the PR itself is a draft, a process state rather than a
+     defect; escalate per step 7 rather than treating it as something to
+     fix.
 7. **Escalate to the owner** only when blocked by access, secrets, or a
    pending human decision the agent cannot resolve itself — not for
    anything the agent can fix on its own.
@@ -74,15 +84,14 @@ Fictitious PR #42, "Add retry to fetch helper," has just been opened.
    `mergeable_state` field. Suppose it now reads `mergeable_state:
    "clean"` and the `lint` check reports success.
 7. Only now, with the review thread resolved via the API and
-   `mergeable_state == "clean"` both confirmed, treat PR #42 as done
-   (merge it or hand it to the owner for the merge decision, per repo
-   policy). If `mergeable_state` had instead read `"blocked"` with an
-   identifiable cause, loop back to step 2. If it had read `"unstable"`,
-   don't assume it's just pending -- call `github:pull_request_read`
-   method `get_check_runs` (or `get_status`) to see which check is
-   non-passing. A still-queued/in-progress check means wait and re-check
-   step 5; an already-failed check means treat it as the spec to fix and
-   loop back to step 2.
+   `mergeable_state == "clean"` confirmed via step 6's dispatch, treat
+   PR #42 as done (merge it or hand it to the owner for the merge
+   decision, per repo policy). Had `mergeable_state` instead read
+   `"unstable"` or `"blocked"`, step 6 requires inspecting the actual
+   check-run/review details rather than assuming a meaning from the
+   state name alone — only a confirmed failure or rejection sends this
+   PR back to step 2; a still-pending check or review means wait and
+   re-check step 5 instead.
 
 ## Stop boundaries
 

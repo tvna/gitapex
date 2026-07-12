@@ -90,8 +90,18 @@ Body, in order:
    `required_review_thread_resolution`.
 5. **Verify `mergeable_state`** directly before treating the PR as done —
    never infer it from a green CI badge or an "LGTM" alone.
-6. **Loop** back to step 2 if a new CI failure, new review comment, or a
-   still-blocked `mergeable_state` appears.
+6. **Dispatch on `mergeable_state`** after inspecting the actual
+   check-run/status/review details, never the state name alone:
+   `clean` -> done; `unstable`/`blocked` -> could be still-pending or
+   already-failed/rejected, so inspect before deciding to wait
+   (re-check) or loop back to step 2; `dirty` -> a real conflict, loop
+   back to step 2; `behind` -> update the branch from base, not a
+   code/review fix; `unknown` -> mergeability not yet computed, wait
+   briefly and re-check; `draft` -> a process state, escalate rather
+   than treat as a defect. (Revised post-review: an initial version
+   special-cased only `unstable`; a Codex bot review on PR #15 caught
+   that `blocked` has the identical still-pending-vs-already-failed
+   ambiguity, which generalized into the full per-state dispatch above.)
 7. **Escalate to the owner** only when blocked by access, secrets, or a
    pending human decision the agent cannot resolve itself — not for
    anything it can fix on its own.
@@ -100,7 +110,9 @@ Worked example: fictitious PR with one failing CI check (a lint error)
 and one open review thread (a naming suggestion) -> fix both -> push ->
 call `github:resolve_review_thread` on the thread's node ID -> call
 `github:pull_request_read` method `get` and check `mergeable_state` ==
-`clean` -> only then treat the PR as done.
+`clean` -> only then treat the PR as done. Exact wording for every
+`mergeable_state` value lives in `SKILL.md` itself (not duplicated here)
+to avoid the two drifting apart again.
 
 Stop section (verbatim from issue #5's acceptance criteria):
 
