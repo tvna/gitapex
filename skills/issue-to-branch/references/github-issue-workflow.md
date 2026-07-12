@@ -1,11 +1,12 @@
 # GitHub Issue Workflow
 
-Prefer platform-integrated tools (a connected GitHub app/MCP, or the
-repository's approved API wrapper) for reading and writing issues,
-comments, branches, and PRs — they reduce token consumption and avoid ad
-hoc credential handling. Fall back to a CLI or raw API call only when no
-connector tool is available for the operation you need, and say so
-explicitly in the plan.
+Prefer platform-integrated tool calls (a connected GitHub app/MCP) for
+writes — issues, comments, branches, PRs — since a write path commonly
+carries a paired safety check that a raw API call bypasses. An approved
+REST API wrapper is for reads only, to reduce token consumption. Never
+shell out to a command-line GitHub tool directly. If no connector or
+approved wrapper covers the operation you need, that is itself a Human
+Decision: say so explicitly and ask, rather than falling back to a CLI.
 
 ## Read path
 
