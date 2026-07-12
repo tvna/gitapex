@@ -1,0 +1,11 @@
+{
+  "name": "gitapex",
+  "description": "A distributable skills collection for gitapex.",
+  "version": "0.1.0",
+  "author": {
+    "name": "tvna"
+  },
+  "homepage": "https://github.com/tvna/gitapex",
+  "repository": "https://github.com/tvna/gitapex",
+  "license": "MIT"
+}
