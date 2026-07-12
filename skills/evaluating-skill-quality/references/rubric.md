@@ -236,6 +236,25 @@ real defect -- confirm which heuristic actually fired (the tool's `check`
 output states the failing check) before rewriting a description to chase
 a third-party tool's score.
 
+**When a skill is being actively iterated, not just reviewed once, require
+a strict held-out gate before keeping a change.** SkillOpt (Yang et al.,
+"SkillOpt: Executive Strategy for Self-Evolving Agent Skills",
+arXiv:2605.23904, Microsoft, 2026) trains skills as bounded text edits
+gated by validation: "a candidate skill is accepted only when its
+selection-split score is strictly greater than the current selection
+score, so ties are rejected, and the deployed skill never silently
+drifts." Two things transfer from that discipline even without SkillOpt's
+automated rollout loop: score on data disjoint from whatever produced the
+candidate edit (not the same cases that motivated it), and require a
+*strict* improvement, not a tie -- "it seems fine" or "it doesn't seem
+worse" is not evidence a change helped. Most of gitapex's skills are
+judgment/process skills with no automatic verifier or exact-match metric,
+so SkillOpt's specific machinery (rollout batches, an optimizer model,
+edit budgets) does not directly apply -- but when reviewing a proposed
+edit to an *existing* skill, still ask what held-out evidence (a fresh
+task run, a previously-failing case, a fresh no-edit baseline) shows the
+change is actually better, not merely different.
+
 ## 9. Cross-model robustness
 
 A skill's effect depends on the model running it. Anthropic's own
@@ -256,6 +275,22 @@ over-constrain a stronger one -- but treat any claim specific to a named
 tier beyond Haiku/Sonnet/Opus as unverified against Anthropic's current
 public docs unless you can cite a primary source for that tier
 specifically. Label it as a read, not measured evidence, and say so.
+
+**Transfer testing** is a concrete technique for this dimension, beyond
+varying which model tier runs the *same* skill: deploy the skill
+*unchanged* on an adjacent target -- a different model, a different
+execution harness (e.g. a direct-chat system prompt vs. an agentic CLI
+loop), or a nearby task -- and check performance does not fall below that
+target's own no-skill baseline. SkillOpt (arXiv:2605.23904, Section 4.3)
+reports this concretely: a skill trained inside one execution harness
+transferred to a different harness with a real positive gain over that
+harness's own no-skill baseline, evidence that "the learned rules are not
+only harness-specific command recipes." A skill that only helps in the
+exact context it was authored in is a weaker artifact than one that
+transfers. Where no transfer data exists (the common case for a
+one-off-authored skill with no formal training loop), name that as an
+additional unmeasured facet of this dimension rather than folding it
+silently into "no cross-model data."
 
 Behaviour observed on one model is not evidence for another. **Check the
 target repository for a per-model eval runner before scoring this

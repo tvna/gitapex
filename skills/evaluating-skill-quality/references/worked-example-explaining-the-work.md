@@ -156,6 +156,12 @@ skill concrete and well-structured) but are `waza`'s own house style, not
 a documented Anthropic requirement -- record them as advisory input, not
 as a rubric-dimension failure.
 
+Held-out-gate discipline (per rubric.md's SkillOpt-derived addition to
+this dimension): also unmeasured. `explaining-the-work` was hand-authored
+once, not iterated through a validation-gated edit loop, so there is no
+held-out-scored acceptance/rejection history to audit -- name this as a
+distinct unmeasured facet, not folded into the eval-suite gap above.
+
 ### 9. Cross-model robustness
 
 Unmeasured, not skipped, for the same reason as dimension 8: gitapex runs
@@ -169,6 +175,12 @@ model can over-constrain a stronger one) plausibly applies less here than
 to a high-freedom skill -- but this is a read of the skill's shape, not
 measured evidence against any specific tier, and should not be reported as
 if it were.
+
+Transfer testing (per rubric.md's SkillOpt-derived addition): also
+unmeasured. This skill has only ever run inside gitapex's own repository
+under Claude Code -- no deployment to a different harness or a sibling
+repo has been observed, so there is no transfer evidence either for or
+against portability.
 
 ## Verdict
 
