@@ -1,6 +1,6 @@
 ---
 name: evaluating-skill-quality
-description: Review a SKILL.md (and its references/) against a nine-dimension quality rubric, separating deterministic shape from probabilistic maturity, citing concrete evidence per dimension. Use when reviewing any SKILL.md -- gitapex's own or one vendored from an upstream plugin -- before merging, vendoring, or shipping it.
+description: Review a SKILL.md (and its references/) against a nine-dimension quality rubric, separating deterministic shape from probabilistic maturity, citing concrete evidence per dimension. Use when reviewing any SKILL.md -- this repository's own or one vendored from elsewhere -- before merging, vendoring, or shipping it.
 ---
 
 # Evaluating Skill Quality
@@ -30,13 +30,18 @@ skill artifact itself is good, not whether a change is correct.
    directory (not only linked ones -- an unlinked file is itself a
    dimension-5 finding).
 2. Check the deterministic shape list above; cite the exact violation.
-3. Walk all nine dimensions in `references/rubric.md`, in order (including
+3. Establish the skill's portability level (declared, or read from its
+   actual content) per `references/rubric.md`'s Portability level
+   section -- it changes how dimensions 1, 5, 6, and 8 grade below.
+4. Walk all nine dimensions in `references/rubric.md`, in order (including
    8-9), quoting the specific text that earns each verdict. No cited
    evidence means no review happened.
-4. Issue a verdict per `references/rubric.md`'s Verdicts section.
+5. Issue a verdict per `references/rubric.md`'s Verdicts section.
 
-Worked example of steps 2-4, applied to a real merged skill:
+Worked example of steps 2-5, applied to a real merged skill:
 [references/worked-example-explaining-the-work.md](references/worked-example-explaining-the-work.md).
+This skill applied to itself, including the portability check:
+[references/worked-example-self-review.md](references/worked-example-self-review.md).
 
 ## Scope
 

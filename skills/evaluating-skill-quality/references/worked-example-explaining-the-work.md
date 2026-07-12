@@ -1,16 +1,43 @@
 # Worked example: reviewing `skills/explaining-the-work/`
 
 A real nine-dimension review, run per [rubric.md](rubric.md), against
-`skills/explaining-the-work/SKILL.md` (merged in
-https://github.com/tvna/gitapex/pull/2) as it stands today.
-Kept as a concrete example, not restated in `SKILL.md`, per the
-progressive-disclosure dimension it demonstrates.
+`skills/explaining-the-work/SKILL.md` (merged in [PR #2][pr2]) as it
+stands today. Kept as a concrete example, not restated in `SKILL.md`, per
+the progressive-disclosure dimension it demonstrates. Reference URLs are
+collected under [References](#references) at the end of this file.
 
 ## Table of contents
 
+- [Portability level](#portability-level)
 - [Deterministic shape](#deterministic-shape)
 - [Probabilistic dimensions](#probabilistic-dimensions)
 - [Verdict](#verdict)
+- [References](#references)
+
+## Portability level
+
+Undeclared in the reviewed skill -- `explaining-the-work`'s `SKILL.md`
+never states whether it targets portability or is scoped to gitapex, so
+this review reads the actual content per rubric.md's [Portability
+level](rubric.md#portability-level) section.
+
+Read as: mostly **Portable**, with one borderline point. The routing
+rules (How/What/Why/Why-not, the why-not template's `<=120` char and
+citable-issue requirements) are generic conventions, not gitapex-specific
+paths or business logic -- they would apply unchanged in any repository.
+The one soft dependency: the why-not template's destination,
+`docs/adr/NNNN-*.md` (line 24), assumes an ADR directory at that path.
+Architecture Decision Records are a common, generic software-engineering
+convention (not gitapex-specific business logic), and the reference is a
+template the model writes into a new comment, not a path it reads to
+decide behavior -- so this does not fail dimension 6's strict Portable
+bar (no behavior-controlling *read* of that path). Worth naming anyway:
+gitapex's own repository does not currently have a `docs/adr/` directory
+(confirmed absent from the repository tree), so the template currently
+points at a location that does not exist yet even in its origin
+repository. A cleaner Portable version would phrase this as "your repo's
+ADR location, e.g. `docs/adr/NNNN-*.md`" rather than a bare example that
+reads as a fixed path.
 
 ## Deterministic shape
 
@@ -195,3 +222,7 @@ section a named gap in a dimension 1-7 keeps that dimension from clearing,
 unlike the special allowance dimensions 8-9 get. Closing that one gap --
 and nothing about 8-9, which gitapex's tooling genuinely cannot measure
 yet -- would clear the mature bar.
+
+## References
+
+[pr2]: https://github.com/tvna/gitapex/pull/2 "gitapex PR #2 -- merged explaining-the-work"

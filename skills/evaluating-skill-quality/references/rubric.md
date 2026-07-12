@@ -2,18 +2,17 @@
 
 Portable evaluation reference for judging whether a `SKILL.md` (and its
 `references/`) is good. Grounded directly in Anthropic's primary Agent
-Skills documentation -- the [Skill authoring best
-practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices),
-the [Agent Skills
-overview](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview),
-and, for the Claude-Code-specific rules (gitapex's actual target product),
-[Claude Code skills](https://code.claude.com/docs/en/skills) -- not in
-`tvna/clairvoyance`, which is a third-party derivative and not treated as
-authoritative here. Where the generic Agent Skills spec (used by the
-Claude API and claude.ai) and Claude Code's own rules diverge, this file
-says which is which rather than blending them into one claim; dimension 1
-and the deterministic-shape note in `SKILL.md` cover the specific
-divergence around the `name` field.
+Skills documentation -- the [Skill authoring best practices][ab], the
+[Agent Skills overview][ao], and, for the Claude-Code-specific rules
+(the product a `skills/<name>/` plugin layout, as reviewed here, actually
+targets), [Claude Code skills][cc] -- not in `tvna/clairvoyance`, which is
+a third-party derivative and not treated as authoritative here. Where the
+generic Agent Skills spec (used by the Claude API and claude.ai) and
+Claude Code's own rules diverge, this file says which is which rather
+than blending them into one claim; dimension 1 and the deterministic-shape
+note in `SKILL.md` cover the specific divergence around the `name` field.
+All reference URLs are collected under [References](#references) at the
+end of this file.
 
 This skill travels with any repo it is vendored into: where a target
 repository lacks a piece of tooling (a deterministic checker script, an
@@ -25,6 +24,7 @@ skill's own folder.
 ## Table of contents
 
 - [The mental model](#the-mental-model)
+- [Portability level](#portability-level)
 - [1. Discovery -- name and description](#1-discovery----name-and-description)
 - [2. Conciseness](#2-conciseness)
 - [3. Degree of freedom](#3-degree-of-freedom)
@@ -35,6 +35,7 @@ skill's own folder.
 - [8. Behavioural evidence](#8-behavioural-evidence)
 - [9. Cross-model robustness](#9-cross-model-robustness)
 - [Verdicts](#verdicts)
+- [References](#references)
 
 ## The mental model
 
@@ -45,6 +46,42 @@ waste. Skills load by progressive disclosure at three costs: `name` +
 `SKILL.md` body loads once triggered, wholesale; `references/` load only on
 demand. Judge each piece of information by whether it lives at the cheapest
 level that still makes it available the moment it is needed.
+
+## Portability level
+
+Before walking dimensions 1-9, establish what the skill's author is
+actually building -- a design decision, not a quality defect by default,
+but one that changes how several dimensions below are graded.
+
+- **Portable**: every instruction that controls the skill's behavior (a
+  check the model runs, a path it reads, a command it executes) resolves
+  inside the skill's own deployed folder, or cites only general,
+  product-level primary sources (Anthropic's own docs, a language/tool's
+  own docs). No dependency on the origin repository's internal paths,
+  scripts, or business rules. References to the origin repository as
+  *context* or a *worked example* are fine; references the skill's
+  *procedure* depends on to function are not. Grade dimension 6
+  (durability) at full strictness: any behavior-controlling reference
+  outside the skill's own folder is a real defect, not a style nit.
+- **Repository-scoped**: the skill intentionally depends on its origin
+  repository's own tooling or conventions (e.g. "run
+  `scripts/our_internal_linter.py`", or a company-specific policy). This
+  is a legitimate choice when the skill is never meant to leave that
+  repository. It must say so, explicitly and near the top of `SKILL.md`
+  -- a repository-scoped skill that reads as if it were portable is a
+  dimension-1/6 defect (it misleads a future vendoring decision), not the
+  scoping choice itself.
+- **Mixed**: a skill with a portable core plus some repository-specific
+  detail should *split* the two (dimension 5) rather than blend them --
+  the repository-specific part in a clearly named reference file (e.g.
+  `references/this-repo-only.md`), so a consumer vendoring the skill can
+  identify and drop exactly that file.
+
+State which level the reviewed skill declares (or, if undeclared, which
+level its actual content matches) before scoring dimensions 1, 5, 6, and
+8, which read differently depending on the answer. An undeclared level
+that turns out to be repository-scoped is itself a finding, not something
+to silently infer and move past.
 
 ## 1. Discovery -- name and description
 
@@ -72,9 +109,10 @@ whole skill, not a formality.
 - **`name` is a display label, not an invocation key, for a plugin
   skill.** Per Claude Code's own docs, `name` is optional and, when
   omitted, defaults to the directory name; for a skill under a plugin's
-  `skills/` subdirectory (gitapex's layout), Claude Code derives the
-  actual `/plugin:skill-name` invocation command from the *directory*
-  name, not from frontmatter `name`, regardless of what `name` says. Do
+  `skills/` subdirectory (the layout used by this skill itself, and by
+  many Claude Code plugins generally), Claude Code derives the actual
+  `/plugin:skill-name` invocation command from the *directory* name, not
+  from frontmatter `name`, regardless of what `name` says. Do
   not fail a skill merely for `name` differing from its directory --
   that mismatch does not break invocation. It is still worth flagging as
   a readability/consistency nit (a human skimming the directory listing
@@ -164,6 +202,14 @@ one read.
   never a bare tool name.
 - Forward slashes in every path (`references/rubric.md`), never backslashes.
 - A default with an escape hatch, not a menu of options.
+- For a skill declared (or read as) **Portable** (see
+  [Portability level](#portability-level)): no procedural step reads,
+  cites as authority, or branches on a path outside the skill's own
+  folder. A citation to the origin repository purely as illustrative
+  context (a worked example, a "here is what this looked like once") is
+  fine; a step that tells the model to go check a repository-specific
+  path to decide what to do next is not -- that path breaks the moment
+  the skill is copied elsewhere.
 
 ## 7. Bundled scripts (only if the skill ships code)
 
@@ -199,9 +245,8 @@ problem.
 dimension** -- for a Claude Code target, that's an `evals/evals.json` file
 usable with the official `skill-creator` plugin
 (`/plugin install skill-creator@claude-plugins-official`, per
-[Claude Code's own eval-and-iterate
-docs](https://code.claude.com/docs/en/skills#evaluate-and-iterate-on-a-skill));
-for other targets, an `evals/` directory or a third-party runner such as
+[Claude Code's own eval-and-iterate docs][cce]); for other targets, an
+`evals/` directory or a third-party runner such as
 `waza` (`microsoft/waza`) if the repo already uses one. gitapex has
 neither an `evals/evals.json` nor an `evals/` directory committed to the
 repo today; `skill-creator` and `waza` are available in some review
@@ -220,8 +265,9 @@ risk.
 **`waza check`'s output is useful evidence, but verify its heuristics
 against the primary spec before trusting a verdict from it** -- do not
 treat a third-party tool's score as equivalent to Anthropic's own bar any
-more than a third-party rubric. Two confirmed divergences (checked against
-`waza`'s own source, `internal/scoring/scoring.go`, `microsoft/waza`):
+more than a third-party rubric. Three confirmed divergences (checked
+against `waza`'s own source, `internal/scoring/scoring.go`,
+`microsoft/waza`, and by cross-checking one of its live link checks):
 `TokenSoftLimit = 500` is an uncommented constant with no cited
 justification -- Anthropic's primary docs say "under 500 *lines*" and
 separately budget "under 5k tokens" for the loaded body, a materially
@@ -234,12 +280,22 @@ PDF files..."). A `waza check` "Compliance Score: Low" driven by that
 specific pattern miss is a false negative against the primary spec, not a
 real defect -- confirm which heuristic actually fired (the tool's `check`
 output states the failing check) before rewriting a description to chase
-a third-party tool's score.
+a third-party tool's score. Third: `waza check`'s link checker performs a
+*live* HTTP fetch of every URL a skill's files reference, which reports a
+false "broken link" for a genuinely valid GitHub PR URL when the
+reviewing session's own network egress is restricted (confirmed: a
+`waza check` run in a session where `github.com` page fetches are
+proxy-blocked reported an authentic, merged PR URL as "HTTP 404," while
+the GitHub API confirmed the PR exists) -- a link failure from this
+checker is evidence about the *reviewing environment's* network access,
+not necessarily about the link itself; cross-check with a
+platform-appropriate tool (e.g. the GitHub API) before treating it as a
+real dead link.
 
 **When a skill is being actively iterated, not just reviewed once, require
-a strict held-out gate before keeping a change.** SkillOpt (Yang et al.,
-"SkillOpt: Executive Strategy for Self-Evolving Agent Skills",
-arXiv:2605.23904, Microsoft, 2026) trains skills as bounded text edits
+a strict held-out gate before keeping a change.** [SkillOpt][skillopt]
+(Yang et al., "SkillOpt: Executive Strategy for Self-Evolving Agent
+Skills", Microsoft, 2026) trains skills as bounded text edits
 gated by validation: "a candidate skill is accepted only when its
 selection-split score is strictly greater than the current selection
 score, so ties are rejected, and the deployed skill never silently
@@ -326,3 +382,11 @@ today," not "proven in behaviour." That named gap is the explicit, recorded
 acknowledgment a live-proof gate requires -- it does not itself waive any
 live-proof check the reviewing repository applies before landing other
 kinds of changes.
+
+## References
+
+[ab]: https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices "Anthropic -- Skill authoring best practices"
+[ao]: https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview "Anthropic -- Agent Skills overview"
+[cc]: https://code.claude.com/docs/en/skills "Anthropic -- Claude Code skills"
+[cce]: https://code.claude.com/docs/en/skills#evaluate-and-iterate-on-a-skill "Anthropic -- Claude Code skills, Evaluate and iterate on a skill"
+[skillopt]: https://arxiv.org/abs/2605.23904 "Yang et al., SkillOpt: Executive Strategy for Self-Evolving Agent Skills, Microsoft, 2026 (arXiv:2605.23904)"
