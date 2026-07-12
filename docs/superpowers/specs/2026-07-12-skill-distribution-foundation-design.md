@@ -205,6 +205,14 @@ Verification is manual/structural:
   `handoffgitapexissuefiling.md`) is a separate, optional follow-up now that
   the skill content already exists in-repo; it is not required to land this
   change.
+- `handoffgitapexissuefiling.md` also calls for a sister issue on the
+  `tvna/claude-md` side (`scan_whynot_shape.py`, plus an `apm.yml` /
+  `apm.lock.yaml` pin update) and asks that, once both issues exist, they
+  cross-link each other. That sister issue is out of scope for gitapex and
+  has not been filed by this session. Recorded here as a placeholder: once
+  the `tvna/claude-md` sister issue is opened, and if an
+  `explaining-the-work` issue is later filed in gitapex, cross-link the two
+  (will cross-link once opened).
 - The Design-by-Contract issue/PR flow (tracking issue + 5 children, per
   `gitapexissuehandoff.html` / `dbchandoff.html`), including vendoring
   clairvoyance's `issue-to-branch` skill, remains a separate initiative.
