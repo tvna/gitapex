@@ -8,6 +8,13 @@ description: Use when a pull request has just been opened, or has an open CI fai
 A fragile, order-dependent sequence, not a matter of prose judgement. Follow
 the exact order below; do not reorder or skip a step.
 
+Tool names below are written as `Server:tool` (portable shorthand, not tied
+to one agent platform). In Claude Code, translate to the literal
+double-underscore form: `Server:tool` -> `mcp__Server__tool` — e.g.
+`github:resolve_review_thread` is `mcp__github__resolve_review_thread`
+(the same tool CLAUDE.md chapter 3 cites literally). Other platforms may use
+a different literal form for the same server/tool pair.
+
 ## Exact sequence
 
 1. **On PR open** — subscribe to CI, review, and comment activity without
@@ -24,14 +31,17 @@ the exact order below; do not reorder or skip a step.
 4. **Explicitly resolve the review thread** via a fully-qualified
    resolve-review-thread tool call, e.g. `github:resolve_review_thread`,
    passing the thread's node ID. A reply comment alone does not resolve
-   `required_review_thread_resolution` — state this explicitly to yourself
-   before moving on; do not rely on a reply comment alone.
+   `required_review_thread_resolution` — the API call is required even
+   when the fix already addresses the comment's substance.
 5. **Verify `mergeable_state` directly** via a fully-qualified PR-read tool
    call, e.g. `github:pull_request_read` method `get`, before treating the
    PR as done. Never infer `mergeable_state` from a green CI badge or an
    "LGTM" alone.
-6. **Loop** back to step 2 if a new CI failure, a new review comment, or a
-   still-blocked `mergeable_state` appears after steps 3-5.
+6. **Loop** back to step 2 only when a new CI failure, a new review
+   comment, or a genuinely blocked `mergeable_state` (e.g. `"blocked"`,
+   `"dirty"`) appears after steps 3-5. If `mergeable_state` merely reads
+   `"unstable"` (checks still running, nothing new to fix), wait and
+   re-check step 5 instead of hunting for something to change.
 7. **Escalate to the owner** only when blocked by access, secrets, or a
    pending human decision the agent cannot resolve itself — not for
    anything the agent can fix on its own.
@@ -61,8 +71,10 @@ Fictitious PR #42, "Add retry to fetch helper," has just been opened.
 7. Only now, with the review thread resolved via the API and
    `mergeable_state == "clean"` both confirmed, treat PR #42 as done
    (merge it or hand it to the owner for the merge decision, per repo
-   policy). If `mergeable_state` had instead read `"blocked"` or
-   `"unstable"`, loop back to step 2 instead of stopping.
+   policy). If `mergeable_state` had instead read `"blocked"` with an
+   identifiable cause, loop back to step 2. If it had read `"unstable"`
+   (checks still running), wait and re-check step 5 instead — there is
+   nothing new to fix.
 
 ## Stop boundaries
 

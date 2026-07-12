@@ -17,7 +17,7 @@ fix (a reply alone does not resolve a thread), and verify
 `mergeable_state` before treating a PR as done. A skill is the shortest
 path to that discipline until a harness exists.
 
-This is the third skill added to the plugin (after `explaining-the-work`
+This is the second skill added to the plugin (after `explaining-the-work`
 in PR #2), following the same repo-root `skills/<name>/SKILL.md` layout
 established by `docs/repository-layout.md`.
 
@@ -37,6 +37,11 @@ established by `docs/repository-layout.md`.
 - Tool references are fully qualified as `Server:tool` per the issue's
   authoring standard, e.g. `github:resolve_review_thread`,
   `github:pull_request_read` (method `get`, field `mergeable_state`).
+  `Server:tool` is a portable shorthand, not a literal invocable name in
+  every agent platform — the skill states once, up front, how to
+  translate it (in Claude Code: `mcp__<server>__<tool>`, e.g.
+  `github:resolve_review_thread` -> `mcp__github__resolve_review_thread`,
+  matching CLAUDE.md chapter 3's own literal citation of that tool).
   Push-subscription is named as an example (`Claude_Code_Remote:subscribe_pr_activity`)
   with an explicit fallback (poll `github:pull_request_read` methods
   `get_status`/`get_check_runs`/`get_reviews`/`get_comments`) since not
