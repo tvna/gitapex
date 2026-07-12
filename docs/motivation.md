@@ -36,7 +36,7 @@ sequenceDiagram
     Contributor-->>Author: approved -> start implementation
     Note over Author: implementation + deviation log in implementation-notes
     Author->>CI: run hermetic verification locally (pytest / scan_*)
-    CI-->>Author: result (CI does not execute body commands; author runs locally)
+    CI-->>Author: result (CI does not execute body commands, author runs locally)
     Note over Author: diff correctness review: requesting-code-review [superpowers, Task subagent] -> findings -> fix [validate -> fix]. Just before PR creation, or just before merge
     Author->>Hooks: mcp__github__create_pull_request (each criterion -> command:result / invariant declaration)
     Note over Hooks: PreToolUse gate: preflight_pr_template_shape [client mirror of body_policy], required_sections, title, retro_issue_link, branch_base, non-ascii, secrets, plus [new] contract-join preflight
@@ -84,7 +84,7 @@ sequenceDiagram
     participant CI as CI (verify-pr.yml / scan_*)
 
     Contributor->>Author: instruction + starting context
-    Author->>IssueToBranch: skill fires (issue/PR contract; matches acceptance-criteria description)
+    Author->>IssueToBranch: skill fires (issue/PR contract, matches acceptance-criteria description)
     Note over IssueToBranch: runs in main thread: blindspot pass / interview / hermetic-criteria authoring (visible, no subagent)
     IssueToBranch-->>Author: output contract: Acceptance Criteria Map (criterion -> interpretation -> planned ops -> proof method -> residual risk) + hermetic criteria
     Author->>Hooks: mcp__github__issue_write (hermetic criteria)
@@ -98,7 +98,7 @@ sequenceDiagram
     Contributor-->>Author: approved -> start implementation
     Note over Author: implementation + deviation log in implementation-notes
     Author->>CI: run hermetic verification locally (pytest / scan_*)
-    CI-->>Author: result (CI does not execute body commands; author runs locally)
+    CI-->>Author: result (CI does not execute body commands, author runs locally)
     Note over Author: diff correctness review: requesting-code-review [superpowers, Task subagent] -> findings -> fix [validate -> fix]. Just before PR creation, or just before merge
     Author->>Hooks: mcp__github__create_pull_request (each criterion -> command:result / invariant declaration)
     Note over Hooks: PreToolUse: pr_template_shape mirror + contract-join preflight -> passes on first try
