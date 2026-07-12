@@ -147,11 +147,12 @@ asserts the structural markers it reliably emits, includes
 `output_not_contains` guardrails, and covers at least three representative
 scenarios including the failure/guardrail case.
 
-**gitapex has no eval suite or `waza`-equivalent today** (see
-`docs/superpowers/specs/2026-07-12-skill-distribution-foundation-design.md`
-Non-goals). Never silently skip this dimension: state plainly that
-behavioural evidence is unmeasured for the reviewed skill, rather than
-scoring it pass or fail without a suite to back the score.
+**Check the target repository for an `evals/` directory or `waza`-equivalent
+runner before scoring this dimension.** If gitapex itself is the target, it
+has none today. Whatever the target, never silently skip this dimension:
+state plainly that behavioural evidence is unmeasured for the reviewed
+skill when no suite exists, rather than scoring it pass or fail without one
+to back the score.
 
 ## 9. Cross-model robustness
 
@@ -166,9 +167,10 @@ cannot yet judge -- against every tier the skill is likely to run under:
   output quality rather than merely waste context -- a low-freedom skill
   that helps Haiku or Sonnet can legitimately be a regression on Fable.
 
-Behaviour observed on one model is not evidence for another. **gitapex has
-no cross-model differential harness** (no battle harness, no per-model eval
-runs) -- when this dimension cannot be measured, say so explicitly rather
+Behaviour observed on one model is not evidence for another. **Check the
+target repository for a battle harness or per-model eval runner before
+scoring this dimension.** If gitapex itself is the target, it has none
+today. When this dimension cannot be measured, say so explicitly rather
 than asserting robustness from a single-model read. A qualitative read is
 still allowed (e.g. "this skill is a fixed low-freedom policy, so
 over-prescription risk is probably low, but this is a read, not measured
@@ -186,9 +188,10 @@ evidence") as long as it is labeled as such.
 A verdict without cited evidence per dimension is not a review -- it is a
 guess wearing a review's shape.
 
-A **mature** verdict is bounded by what gitapex can currently measure: when
-dimensions 8-9 are named as unmeasured rather than passed, "mature" means
-"clears everything this repository's tooling can check today," not "proven
-in behaviour." That named gap is the explicit, recorded acknowledgment a
-live-proof gate requires -- it does not itself waive the live-proof check
-this repository applies before landing other kinds of changes.
+A **mature** verdict is bounded by what the target repository can currently
+measure: when dimensions 8-9 are named as unmeasured rather than passed,
+"mature" means "clears everything that repository's tooling can check
+today," not "proven in behaviour." That named gap is the explicit, recorded
+acknowledgment a live-proof gate requires -- it does not itself waive any
+live-proof check the reviewing repository applies before landing other
+kinds of changes.
