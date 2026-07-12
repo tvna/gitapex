@@ -53,8 +53,9 @@ sequenceDiagram
 
 ## The fix (to-be)
 
-Once a dedicated skill lane (`issue-to-branch`, vendored from the
-`clairvoyance` plugin) drives the pre-implementation steps in the main
+Once a dedicated skill lane (`issue-to-branch`, implemented directly in
+gitapex from a design migrated from `tvna/clairvoyance#128`) drives the
+pre-implementation steps in the main
 thread -- no subagent -- and Section 6 (handoff / quiz / verdict) is
 routed explicitly to the specific `clairvoyance` skill responsible for
 each step, the same flow produces a machine-readable Acceptance Criteria

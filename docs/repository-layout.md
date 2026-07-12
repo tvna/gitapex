@@ -16,6 +16,8 @@ agent.
 ```
 .claude-plugin/    marketplace.json + plugin.json (Claude Code/Codex manifests; plugin.json is the version source of truth)
 skills/            one directory per skill (SKILL.md, optionally references/) — deployed by apm/Claude/Codex
+  explaining-the-work/  routes code-comment/commit/test explanation responsibility to the right artifact
+  issue-to-branch/      turns a GitHub issue into an implementation-ready branch/PR plan with an Acceptance Criteria Map
 docs/              documentation (this file, versioning policy, design specs, motivation.md) — not deployed
 scripts/ tests/    internal CI tooling (e.g. sync_pr_publish.py) and its pytest suite — not deployed
 .github/           CI workflows — not deployed
