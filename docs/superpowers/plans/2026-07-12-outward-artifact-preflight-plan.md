@@ -202,8 +202,10 @@ Refs #8"
 - [ ] Run Steps 2-4's verification commands once more in sequence and
       confirm every one prints its expected "OK"/"found" output with no
       `MISSING`/`FAIL` line.
-- [ ] Confirm `git log --oneline` shows, in order (newest first): the skill
-      commit ("feat(plugin): add outward-artifact-preflight skill"), any
-      fix commits for this plan, the implementation-plan commit, then the
-      design-spec commit -- do not assert a fixed `-N` offset, since an
-      intervening fix commit shifts it.
+- [ ] Confirm every commit unique to this branch (`git log --oneline
+      origin/main..HEAD`) cites "Refs #8", and that a "feat(plugin): add
+      outward-artifact-preflight skill" commit and an "Add design spec for
+      outward-artifact-preflight skill" commit both appear somewhere in
+      that list. Do not assert a specific relative order, count, or `-N`
+      offset between them -- any later fix commit lands on top of (newer
+      than) whatever it fixes, so position shifts every time one is added.
