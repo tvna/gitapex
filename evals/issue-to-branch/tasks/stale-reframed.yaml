@@ -1,0 +1,30 @@
+id: issue-to-branch-stale-reframed
+name: Stale Issue Reframed by Comments
+description: A later comment narrows the issue body's original scope; the plan must follow the comment, not the stale body, while still mapping every still-active criterion.
+tags:
+  - quality
+  - staleness
+inputs:
+  prompt: |
+    Use issue-to-branch. Start work on the issue below.
+
+    Issue #77: Rewrite the auth module
+
+    Body (opened 3 months ago):
+    Acceptance criteria:
+    - [ ] Replace the auth module with a new token scheme.
+    - [ ] Migrate all existing sessions.
+    - [ ] Update the login UI.
+
+    Most recent comment (owner, yesterday):
+    Scope cut down since this was filed: skip the UI change entirely, that
+    shipped separately elsewhere. Also, "migrate all existing sessions" now
+    just means writing a compatibility shim, not a data migration, since
+    session storage became schema-less in the meantime.
+expected:
+  output_contains:
+    - "Acceptance Criteria Map"
+    - "Assumptions"
+  output_not_contains:
+    - "Update the login UI"
+    - "LGTM"
