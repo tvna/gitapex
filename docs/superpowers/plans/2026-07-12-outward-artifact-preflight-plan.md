@@ -77,35 +77,33 @@ a public sink.
    a session URL, or an internal tool name is not disclosed and must be
    removed.
 2. **ASCII-only.** No em dashes, en dashes, curly quotes, full-width
-   punctuation, or any other non-ASCII character. Check with:
+   punctuation, or any other non-ASCII character. Check with (`\t` is
+   excluded so ordinary tab characters do not false-flag):
 
    ```bash
-   LC_ALL=C grep -n '[^ -~]' <file>
+   LC_ALL=C grep -n '[^ -~\t]' <file>
    ```
 
    No output means the file is ASCII-only.
 
 ## Worked example
 
-Flagged commit message (fails both checks). This file is itself ASCII-only,
-so the one character that must fail check 2 is spelled out as `[U+2014]`
-below instead of pasted literally -- a real flagged artifact would contain
-that em dash as a literal character, not this bracketed placeholder:
+This file must itself stay ASCII-only, so the flagged sample below is built
+with `printf`, not a pasted glyph -- run both commands yourself to see the
+checklist catch real bytes instead of a description:
 
-```
-feat(plugin): add outward-artifact-preflight skill [U+2014] built by
-claude-sonnet-5 during session https://claude.ai/code/session_01Abc23dEf
-
-Refs #8
+```bash
+printf 'feat(plugin): add outward-artifact-preflight skill \xe2\x80\x94 built by\nclaude-sonnet-5 during session https://claude.ai/code/session_01Abc23dEf\n\nRefs #8\n' > /tmp/flagged-commit-msg.txt
+LC_ALL=C grep -n '[^ -~\t]' /tmp/flagged-commit-msg.txt
 ```
 
 Applying the checklist:
 
-- `LC_ALL=C grep -n '[^ -~]' <file>` reports the em dash at `[U+2014]` --
-  fails check 2.
-- `claude-sonnet-5` and the session URL are an undisclosed provenance
-  marker, not the repository's disclosed "Generated with Claude Code"
-  convention -- fails check 1.
+- Check 2 fires: `grep` prints line 1 (exit status 0) -- the `\xe2\x80\x94`
+  bytes (an em dash) are non-ASCII.
+- Check 1 fires: `claude-sonnet-5` and the session URL are an undisclosed
+  provenance marker, not the repository's disclosed "Generated with Claude
+  Code" convention -- keeping neither is required to pass.
 
 Fixed:
 
@@ -164,11 +162,12 @@ takes the `||` branch).
 
 - [ ] **Step 5: Manual dry run against the issue's acceptance criteria**
 
-Confirm by inspection: the worked example's flagged sample contains one
-stray non-ASCII character and one undisclosed tooling fingerprint, and the
-checklist as written catches both (Step 3's grep already confirms the
-catching logic is documented; this step confirms the *sample* itself
-exercises both failure modes, per #8's acceptance criteria).
+Run the worked example's two commands yourself (copy them out of the file
+as written). Confirm the `grep` command actually prints line 1 and exits 0
+against the `printf`-built sample, and that the sample separately contains
+an undisclosed tooling fingerprint (`claude-sonnet-5`, the session URL) --
+i.e. both failure modes are demonstrated on real bytes, per #8's acceptance
+criteria, not just described in prose.
 
 - [ ] **Step 6: Commit**
 
@@ -186,5 +185,8 @@ Refs #8"
 - [ ] Run Steps 2-4's verification commands once more in sequence and
       confirm every one prints its expected "OK"/"found" output with no
       `MISSING`/`FAIL` line.
-- [ ] Confirm `git log --oneline -3` shows the skill commit on top of the
-      design-spec commit for this plan.
+- [ ] Confirm `git log --oneline` shows, in order (newest first): the skill
+      commit ("feat(plugin): add outward-artifact-preflight skill"), any
+      fix commits for this plan, the implementation-plan commit, then the
+      design-spec commit -- do not assert a fixed `-N` offset, since an
+      intervening fix commit shifts it.

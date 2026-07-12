@@ -20,7 +20,7 @@ every outward-facing artifact before it is pushed or posted:
 > Keep GitHub posts ASCII.
 
 gitapex has already hit the ASCII half of this in practice: PR #2 needed a
-follow-up fix commit (`e7ba0b3`) after a first pass left non-ASCII characters
+follow-up fix commit (`ef222b8`) after a first pass left non-ASCII characters
 (em dashes, full-width punctuation) in a Mermaid diagram doc. No deterministic
 preflight or CI gate exists yet for either check (see the Non-goals in
 `docs/superpowers/specs/2026-07-12-skill-distribution-foundation-design.md`:
