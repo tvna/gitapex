@@ -60,6 +60,16 @@ for...") with gitapex given only as a worked illustration of applying
 it -- removing gitapex from those sentences entirely would not change
 what the model is instructed to do.
 
+**Fault attribution, per [Contract discipline](rubric.md#contract-discipline)**:
+both fixes above are precondition bugs, not dimension-1/6 rubric flaws.
+Step 3 (establish portability level) is where "Portable" should have
+been asserted correctly from the start; the two leaks slipped through
+because that step did not yet exist when the description and the
+dimension-1 aside were first written, earlier in this same session. The
+fix is exactly what the fault-attribution rule prescribes: redo the
+precondition-establishing content (reword the leaking text), not add a
+special case inside dimension 1 or 6 to route around it.
+
 ## Deterministic shape
 
 | Check | Result | Evidence |

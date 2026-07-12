@@ -26,6 +26,9 @@ skill artifact itself is good, not whether a change is correct.
 
 ## Procedure
 
+Steps 1-3 are this review's precondition, step 5 its postcondition --
+see `references/rubric.md`'s Contract discipline section.
+
 1. Read the target `SKILL.md` and every file in its `references/`
    directory (not only linked ones -- an unlinked file is itself a
    dimension-5 finding).
@@ -34,8 +37,9 @@ skill artifact itself is good, not whether a change is correct.
    actual content) per `references/rubric.md`'s Portability level
    section -- it changes how dimensions 1, 5, 6, and 8 grade below.
 4. Walk all nine dimensions in `references/rubric.md`, in order (including
-   8-9), quoting the specific text that earns each verdict. No cited
-   evidence means no review happened.
+   8-9), quoting the specific text that earns each verdict; assume steps
+   1-3 hold rather than re-deriving them. No cited evidence means no
+   review happened.
 5. Issue a verdict per `references/rubric.md`'s Verdicts section.
 
 Worked example of steps 2-5, applied to a real merged skill:
@@ -65,3 +69,7 @@ what `references/rubric.md` actually specifies.
 - Never install eval tooling (a checker script, `skill-creator`, `waza`,
   etc.) as part of a review without the operator's go-ahead -- propose it
   instead (dimension 8).
+- Never patch a wrong verdict by adjusting step 4 when the real fault was
+  a wrong precondition (steps 1-3). Redo the precondition instead -- the
+  bug lives where the wrong assumption was made (rubric.md, Contract
+  discipline).

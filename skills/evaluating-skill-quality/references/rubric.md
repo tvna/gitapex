@@ -24,6 +24,7 @@ skill's own folder.
 ## Table of contents
 
 - [The mental model](#the-mental-model)
+- [Contract discipline](#contract-discipline)
 - [Portability level](#portability-level)
 - [1. Discovery -- name and description](#1-discovery----name-and-description)
 - [2. Conciseness](#2-conciseness)
@@ -47,9 +48,57 @@ waste. Skills load by progressive disclosure at three costs: `name` +
 demand. Judge each piece of information by whether it lives at the cheapest
 level that still makes it available the moment it is needed.
 
+## Contract discipline
+
+This review's own procedure is itself a contract, in [Meyer's][dbc] sense
+of the term (Design by Contract: preconditions, postconditions, and
+invariants, as formalized for Eiffel and applied generally to reliable
+software construction). Naming the parts precisely matters because it
+fixes where a fault actually lives when a review goes wrong.
+
+- **Precondition** -- what `SKILL.md`'s Procedure steps 1-3 establish
+  before dimension grading starts: the target has actually been read
+  (step 1), its deterministic shape is checked (step 2), and its
+  portability level is established (step 3, see below). Per Meyer: "the
+  precondition expresses requirements that any call must satisfy if it is
+  to be correct."
+- **Postcondition** -- what step 5 delivers *if the precondition held*: a
+  verdict with cited evidence per dimension. Per Meyer: "the postcondition
+  expresses properties that are ensured in return for the call."
+- **Invariant** -- properties that hold throughout the *entire* review,
+  not just at one step: this skill's Stop boundaries. Per Meyer, an
+  invariant "is added to the precondition and postcondition of every"
+  step -- a Stop boundary is not a step-4-only rule; it binds during
+  shape-checking, portability classification, and the dimension walk
+  alike.
+
+Two operational rules follow directly, quoted from the same source:
+
+- **Fault attribution.** "A precondition violation indicates a bug in the
+  client (caller). ... A postcondition violation is a bug in the supplier
+  (the routine)." Applied here: if a verdict turns out wrong because the
+  portability level or deterministic shape was misjudged, that is a bug
+  in how this review established its precondition -- not a flaw in
+  dimensions 1-9 (the "supplier"). Redo the precondition steps; do not
+  patch the rubric to route around a misclassification.
+- **Never both.** Meyer states this as "an absolute rule": a condition is
+  checked in exactly one place, "either you have the condition in the
+  [precondition], or you have it in an If instruction in the [routine's]
+  body ... but never in both" -- redundant re-checking is not extra
+  safety, it is a design smell indicating the responsibility split is
+  unclear. Applied here: dimensions 1-9 must not re-derive facts the
+  precondition steps already established (this is why dimension 1 says
+  the deterministic checklist "confirms a trigger *exists*" and then
+  asks a *different* question -- whether it is the *right* one -- rather
+  than re-checking existence; and why dimension 6's Portable-skill bullet
+  *consumes* the portability level step 3 already produced, rather than
+  re-classifying it).
+
 ## Portability level
 
-Before walking dimensions 1-9, establish what the skill's author is
+One of this review's own preconditions (see [Contract
+discipline](#contract-discipline) above). Before walking dimensions 1-9,
+establish what the skill's author is
 actually building -- a design decision, not a quality defect by default,
 but one that changes how several dimensions below are graded.
 
@@ -390,3 +439,4 @@ kinds of changes.
 [cc]: https://code.claude.com/docs/en/skills "Anthropic -- Claude Code skills"
 [cce]: https://code.claude.com/docs/en/skills#evaluate-and-iterate-on-a-skill "Anthropic -- Claude Code skills, Evaluate and iterate on a skill"
 [skillopt]: https://arxiv.org/abs/2605.23904 "Yang et al., SkillOpt: Executive Strategy for Self-Evolving Agent Skills, Microsoft, 2026 (arXiv:2605.23904)"
+[dbc]: https://se.inf.ethz.ch/~meyer/publications/computer/contract.pdf "Bertrand Meyer, Applying \"Design by Contract\", IEEE Computer 25(10):40-51, October 1992"
