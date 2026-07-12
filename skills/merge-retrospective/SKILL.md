@@ -42,6 +42,12 @@ which in turn outranks "external decision."
    - a CI run that failed and was fixed by a subsequent push
    - a review comment that led to a follow-up commit
    - a force-push made to correct a mistake (not just to rebase cleanly)
+     -- these subcalls only reflect the PR's current commit set, not
+     history that was rewritten away, so a force-push repair is only
+     enumerable if you observed it directly (e.g. it happened during
+     this session, or a `github-webhook-activity` event reported it).
+     Do not claim a force-push repair occurred, or that none did, beyond
+     what the available data actually shows.
 2. **For each repair**, identify the earliest point in the pipeline a
    deterministic gate could have caught it -- before it ever reached a
    human reviewer or a CI run.
