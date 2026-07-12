@@ -12,65 +12,51 @@ skill artifact itself is good, not whether a change is correct.
 ## Two lanes
 
 - **Deterministic shape** -- fixed rules a checker script would decide if
-  the target repository has one (e.g. `scripts/check_skills.py`). Check for
-  such a script first; if none exists, check these by hand every time, per
-  Anthropic's primary Agent Skills docs (not a third-party derivative --
-  see `references/rubric.md` for the exact sources and where Claude Code's
-  own rules diverge from the generic spec): `description` non-empty, no
-  XML tags, <= 1024 chars, states what and when; `name`, when present, is
+  the target repository has one (e.g. `scripts/check_skills.py`); check by
+  hand otherwise. Sources and the Claude-Code-vs-generic-spec split:
+  `references/rubric.md` dimension 1. `description`: non-empty, no XML
+  tags, <= 1024 chars, states what and when. `name`, if present:
   lowercase-hyphenated, <= 64 chars, no XML tags, no reserved word
-  (`anthropic`, `claude`) -- `name` is optional in Claude Code and does
-  NOT have to match the skill's directory (Claude Code derives a plugin
-  skill's actual invocation command from the directory, not the
-  frontmatter `name`); `SKILL.md` body <= 500 lines; any `references/`
-  file stays one level deep from `SKILL.md` and carries a table of
-  contents past 100 lines.
+  (`anthropic`, `claude`); optional in Claude Code and need not match the
+  directory. `SKILL.md` body <= 500 lines. `references/` files: one level
+  deep, table of contents past 100 lines.
 - **Probabilistic maturity** -- nine dimensions of judgment that need a model
   or human, not a script. Full rubric with pass/fail evidence:
   [references/rubric.md](references/rubric.md).
 
 ## Procedure
 
-1. Read the target `SKILL.md`. List every file in its `references/`
-   directory, if one exists, and read all of them -- not only the ones
-   `SKILL.md`'s body links to. A file that is present but unlinked is
-   itself a finding under dimension 5 (dead weight), not something to skip.
-2. Check the deterministic shape list above. A failure here is a fact, not a
-   judgment call -- cite the exact violation (the line, the count).
-3. Walk all nine dimensions in `references/rubric.md`, in order -- including
-   8 and 9, whose own text states exactly how to handle a target repo with
-   no eval suite or battle harness; do not silently skip either. For each,
-   quote the specific text that earns the verdict -- the weak description
-   line, the two-deep reference chain, the unjustified constant. A dimension
-   with no cited evidence has not actually been reviewed.
-4. Issue a verdict per `references/rubric.md`'s Verdicts section --
-   **well-formed** or **mature** -- naming the specific gaps per dimension
-   that keep it from the higher bar.
+1. Read the target `SKILL.md` and every file in its `references/`
+   directory (not only linked ones -- an unlinked file is itself a
+   dimension-5 finding).
+2. Check the deterministic shape list above; cite the exact violation.
+3. Walk all nine dimensions in `references/rubric.md`, in order (including
+   8-9), quoting the specific text that earns each verdict. No cited
+   evidence means no review happened.
+4. Issue a verdict per `references/rubric.md`'s Verdicts section.
 
-See [references/worked-example-explaining-the-work.md](references/worked-example-explaining-the-work.md)
-for a full nine-dimension review applied to a real, already-merged
-`SKILL.md`, as a concrete worked example of steps 2-4.
+Worked example of steps 2-4, applied to a real merged skill:
+[references/worked-example-explaining-the-work.md](references/worked-example-explaining-the-work.md).
 
 ## Scope
 
-This skill carries the rubric; it does not build a deterministic checker
-script, an eval suite, or a battle harness for any target repo -- those
-remain separate, deferred work. Do not expand this skill into a
-general-purpose linter or add checks beyond what the rubric in
-`references/rubric.md` actually specifies.
+This skill carries the rubric; it does not build a checker script, eval
+suite, or benchmarking harness for any target repo -- separate, deferred
+work. Do not expand into a general-purpose linter or add checks beyond
+what `references/rubric.md` actually specifies.
 
 ## Stop boundaries
 
 - Never approve a skill solely because the deterministic shape checks pass
   -- shape proves well-formed, not mature.
-- Never issue a bare "looks fine" / "LGTM" verdict on any dimension without
-  citing the specific evidence (a quote, a line, a count) that earns it.
-- Never claim a violation the reviewed `SKILL.md` (or its `references/`)
-  text does not actually show. If a dimension cannot be assessed (no eval
-  suite, no cross-model data), say that explicitly instead of guessing.
-- Never cite a third-party derivative (e.g. a vendored or forked rubric)
-  as the authoritative source for a claim about Agent Skills or Claude
-  Code platform behavior. Ground platform claims in Anthropic's primary
-  docs (`platform.claude.com`, `code.claude.com`) or in the target
-  repository's own observed state -- re-fetch the primary source when in
-  doubt rather than trusting a memorized or secondary summary.
+- Never issue a bare "looks fine" / "LGTM" verdict without citing evidence
+  (a quote, a line, a count) per dimension.
+- Never claim a violation the reviewed text does not actually show. If a
+  dimension cannot be assessed, say that explicitly instead of guessing.
+- Never cite a third-party derivative as authoritative for a platform-
+  behavior claim. Ground those in Anthropic's primary docs
+  (`platform.claude.com`, `code.claude.com`) or the target's observed
+  state -- re-fetch when in doubt, don't trust a memorized summary.
+- Never install eval tooling (a checker script, `skill-creator`, `waza`,
+  etc.) as part of a review without the operator's go-ahead -- propose it
+  instead (dimension 8).

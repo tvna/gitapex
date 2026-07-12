@@ -115,15 +115,46 @@ N/A. The skill ships no code.
 
 ### 8. Behavioural evidence
 
-Unmeasured, not skipped: gitapex has neither an `evals/evals.json` (the
-Claude Code `skill-creator` format) nor a third-party runner today
-(confirmed absent from the repository tree; `skill-creator` and `waza` are
-both absent from this environment too). There is no suite exercising this
-skill's trigger against a documented no-skill baseline, so this dimension
-cannot be scored pass or fail -- it is an open gap in the repository's
-tooling, not a defect specific to this skill. Per rubric.md dimension 8,
-this review does not install eval tooling to close that gap; that is a
-separate, operator-approved decision.
+Unmeasured for pass/fail, not skipped: gitapex's repo has neither an
+`evals/evals.json` (the Claude Code `skill-creator` format) nor an
+`evals/` directory committed today (confirmed absent from the repository
+tree). There is no suite exercising this skill's trigger against a
+documented no-skill baseline, so this dimension cannot be scored pass or
+fail on behavioural grounds -- an open gap in the repository's committed
+tooling, not a defect specific to this skill.
+
+With the operator's explicit go-ahead, `waza` (built from source,
+`microsoft/waza`) was installed in this review session (not committed to
+the repo) and run against this skill as one input, per rubric.md dimension
+8's guidance to verify a tool's heuristics before trusting its verdict:
+
+```
+$ waza check skills/explaining-the-work
+Compliance Score: Low  (Description too short or missing triggers)
+Spec Compliance: 9/9 checks passed  (Meets agentskills.io specification)
+Links: 0/0 valid  (No links found)
+Token Budget: 418 / 500 tokens  (Within budget, 82 remaining)
+Evaluation Suite: Not Found
+Advisory: negative-delta-risk flagged -- 7 constraint keywords found
+Advisory: body-structure flagged -- no examples section, no error-handling section
+```
+
+The spec-compliance (9/9) and token-budget (418/500, pass) lines are real,
+useful, tool-verified evidence. The "Compliance Score: Low" line is a
+false negative, not a real defect: checked against `waza`'s own source
+(`internal/scoring/scoring.go`), `HasTriggers` only matches the literal
+substrings `when:`, `use for:`, `use this skill`, `triggers:`, `trigger
+phrases include` -- and this skill's description opens "Use when writing
+or editing code comments..." (line 3), which matches none of those five
+strings even though it is exactly Anthropic's own documented trigger
+phrasing. Dimension 1 already confirmed the trigger is well-formed against
+the primary spec; this tool's narrower heuristic missing it is a fact
+about the tool, not the skill. The "negative-delta-risk: 7 constraint
+keywords" and "no examples section" advisories are legitimate style
+opinions worth weighing (dimension 4 already independently found the
+skill concrete and well-structured) but are `waza`'s own house style, not
+a documented Anthropic requirement -- record them as advisory input, not
+as a rubric-dimension failure.
 
 ### 9. Cross-model robustness
 

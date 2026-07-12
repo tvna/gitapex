@@ -202,15 +202,39 @@ usable with the official `skill-creator` plugin
 [Claude Code's own eval-and-iterate
 docs](https://code.claude.com/docs/en/skills#evaluate-and-iterate-on-a-skill));
 for other targets, an `evals/` directory or a third-party runner such as
-`waza` (`microsoft/waza`) if the repo already uses one. If gitapex itself
-is the target, it has none today. Whatever the target, never silently skip
+`waza` (`microsoft/waza`) if the repo already uses one. gitapex has
+neither an `evals/evals.json` nor an `evals/` directory committed to the
+repo today; `skill-creator` and `waza` are available in some review
+sessions but are session-local tooling, not part of the repo -- their
+presence in one session's environment does not make this dimension
+"measured" for the repo itself. Whatever the target, never silently skip
 this dimension: state plainly that behavioural evidence is unmeasured for
-the reviewed skill when no mechanism exists, rather than scoring it pass or
-fail without one to back the score. Do not install missing eval tooling
-yourself as part of a review -- propose it to the operator instead;
-installing new software (even first-party) is an irreversible,
-outward-facing action outside a review's scope, and a forced install of an
-unfamiliar third-party tool carries supply-chain risk.
+the reviewed skill when no mechanism is committed to the repo, rather than
+scoring it pass or fail without one to back the score. Do not install
+missing eval tooling yourself as part of a review -- propose it to the
+operator instead; installing new software (even first-party) is an
+irreversible, outward-facing action outside a review's scope, and a
+forced install of an unfamiliar third-party tool carries supply-chain
+risk.
+
+**`waza check`'s output is useful evidence, but verify its heuristics
+against the primary spec before trusting a verdict from it** -- do not
+treat a third-party tool's score as equivalent to Anthropic's own bar any
+more than a third-party rubric. Two confirmed divergences (checked against
+`waza`'s own source, `internal/scoring/scoring.go`, `microsoft/waza`):
+`TokenSoftLimit = 500` is an uncommented constant with no cited
+justification -- Anthropic's primary docs say "under 500 *lines*" and
+separately budget "under 5k tokens" for the loaded body, a materially
+looser number than waza's 500-token soft limit; and waza's `HasTriggers`
+heuristic only matches the literal substrings `"when:"`, `"use for:"`,
+`"use this skill"`, `"triggers:"`, `"trigger phrases include"` -- it does
+NOT match `"Use when ..."`, the exact phrasing Anthropic's own
+best-practices doc uses in its canonical example ("Use when working with
+PDF files..."). A `waza check` "Compliance Score: Low" driven by that
+specific pattern miss is a false negative against the primary spec, not a
+real defect -- confirm which heuristic actually fired (the tool's `check`
+output states the failing check) before rewriting a description to chase
+a third-party tool's score.
 
 ## 9. Cross-model robustness
 
