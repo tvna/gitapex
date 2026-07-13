@@ -58,13 +58,6 @@ Output:
 - Comment the same rationale on #12 and re-plan from there.
 - Do not push a follow-up commit to the closed PR's branch.
 
-## Known gaps
-
-The committed eval suite (`evals/stop-and-replan/`) runs a single trial
-per task with no committed no-skill baseline. Only `claude-sonnet-4.6` has
-been evaluated; cross-model behavior is a qualitative read (low-freedom
-policy, low over-prescription risk), not measurement.
-
 ## Stop boundaries
 
 - Never treat the detected phrase as "just clean up the wording" -- it

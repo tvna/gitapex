@@ -109,12 +109,6 @@ Fictitious PR #42, "Add retry to fetch helper," has just been opened.
 - Never proceed past an access, secret, or human-decision block without
   escalating.
 
-## Known gaps
-
-The eval suite (`evals/driving-pr-to-merge/`) has no committed no-skill
-baseline run, and only `claude-sonnet-4.6` has been evaluated —
-cross-model behavior is currently unmeasured.
-
 ## Related skills
 
 `stop-and-replan` (see `skills/stop-and-replan/SKILL.md`) is a separate,

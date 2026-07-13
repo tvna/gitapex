@@ -82,12 +82,6 @@ evaluation. Name the gap; never fake a score to proceed.
 - **Transfer check:** the adjacent target and whether it regressed.
 - **Next move:** the concrete next iteration or the ship/stop decision.
 
-## Known gaps
-
-The committed eval suite (`evals/gated-skill-edits/`) has no committed
-with-skill vs. no-skill score comparison, and only `claude-sonnet-4.6` has
-been evaluated -- cross-model behavior is currently unmeasured.
-
 ## Stop boundaries
 
 - Never iterate without a real checkable scorer and a held-out split --

@@ -102,13 +102,6 @@ which in turn outranks "external decision."
    that the PR cross-link from Step 5 resolves to the correct PR. A
    silent write failure or a title-policy rejection is not "filed."
 
-## Known gaps
-
-The committed eval suite (`evals/merge-retrospective/`) has no committed
-no-skill baseline run for the three core scenarios, so it currently
-measures compliance, not gap-closure. Only `claude-sonnet-4.6` has been
-evaluated; cross-model behavior is currently unmeasured.
-
 ## Stop boundary
 
 - **Never skip filing the retrospective because the merge looked

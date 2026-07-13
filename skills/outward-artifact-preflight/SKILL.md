@@ -104,15 +104,6 @@ should say (How/What/Why); this skill checks whether the text, once
 written, is safe to publish (provenance, ASCII). Apply both; neither
 substitutes for the other.
 
-## Known gaps
-
-The eval suite (`evals/outward-artifact-preflight/`) is committed and
-runs the checklist tasks, but no baseline or with-skill-vs-no-skill
-results are committed alongside it -- treat dimension 8 as
-mechanism-present, results-unmeasured until a run is recorded. Only
-`claude-sonnet-4.6` has been evaluated; cross-model behavior is
-currently unmeasured.
-
 ## Stop boundary
 
 - Never push or post an artifact this checklist has flagged. Fix it first,

@@ -422,7 +422,13 @@ the repo; their presence in one session's environment does not make this
 dimension "measured" for the repo itself. Whatever the target, never silently skip
 this dimension: state plainly that behavioural evidence is unmeasured for
 the reviewed skill when no mechanism is committed to the repo, rather than
-scoring it pass or fail without one to back the score. Do not install
+scoring it pass or fail without one to back the score. This gap-naming need
+not sit inline in the `SKILL.md`: a repository may record its per-skill
+eval status (baselines, trials, model coverage) centrally in its own
+documentation -- for example a `docs/` eval-status file -- rather than in
+each skill body, since a vendored skill should not carry the origin repo's
+eval-run bookkeeping. Read that documentation before treating an absent
+inline gap-disclosure (no `## Known gaps` section) as undisclosed. Do not install
 missing eval tooling yourself as part of a review -- propose it to the
 operator instead; installing new software (even first-party) is an
 irreversible, outward-facing action outside a review's scope, and a

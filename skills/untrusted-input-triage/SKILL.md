@@ -91,13 +91,6 @@ injection would try to prevent. Filing or using this skill does not mean
 prompt injection has been "solved"; it is one checklist layered on top of
 an invariant that has to hold independently.
 
-## Known gaps
-
-The committed eval suite (`evals/untrusted-input-triage/`) has no
-documented without-skill baseline and runs a single trial per task. Only
-`claude-sonnet-4.6` has been evaluated; cross-model behavior is currently
-unmeasured.
-
 ## Stop boundaries
 
 The Procedure and Caveat sections above already state the core rules

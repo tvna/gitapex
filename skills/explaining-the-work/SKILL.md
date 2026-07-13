@@ -42,13 +42,6 @@ The calling repository's existing deterministic gates (`Contract:` blocks,
 allowlist justification comments, `noqa` justification, etc.) take
 precedence over this skill. Do not enumerate exceptions to those gates here.
 
-## Known gaps
-
-The committed eval suite (`evals/explaining-the-work/`) runs a single
-trial per task with no committed no-skill baseline, so its metric is not
-yet evidence of gap-closure. Only `claude-sonnet-4.6` has been evaluated;
-cross-model behavior is currently unmeasured.
-
 ## Stop boundaries
 
 - Forward-apply only. Never bulk-rewrite existing comments to match this

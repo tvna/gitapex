@@ -50,15 +50,6 @@ or inventing a term from nothing.
 See [references/worked-example.md](references/worked-example.md) for the
 full walkthrough, step by step.
 
-## Known gaps
-
-The committed eval suite (`evals/establishing-ubiquitous-language/`) runs
-the Elicit/Detect/Resolve/Maintain tasks but has no committed no-skill
-baseline run, so gap-closure is mechanized but unmeasured. Only
-`claude-sonnet-4.6` has been evaluated; cross-model behavior is a
-qualitative read (medium-freedom judgment procedure, low
-over-prescription risk), not measurement.
-
 ## Stop boundaries
 
 - Never unilaterally rename existing code or identifiers to match the

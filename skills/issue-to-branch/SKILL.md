@@ -62,11 +62,6 @@ Pattern: **Facts** -> **Assumptions** -> **Acceptance Criteria Map** ->
 **Branch Plan** -> **Verification Plan** -> **Next Move**. Insert
 **Human Decision** only when needed.
 
-## Known gaps
-
-Only `claude-sonnet-4.6` has been evaluated in `evals/issue-to-branch/`;
-cross-model behavior is currently unmeasured.
-
 ## Stop boundaries
 
 - Do not fabricate or infer acceptance criteria the issue never stated —

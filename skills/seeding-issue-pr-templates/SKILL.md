@@ -97,13 +97,6 @@ repo by interview, self-checked before it is written.
 - Gate Gaps: invariant -> missing gate -> where it lives -> follow-up issue.
 - Next Move: the concrete next action.
 
-## Known gaps
-
-The committed eval suite (`evals/seeding-issue-pr-templates/`) runs a
-single trial per task with no committed without-skill baseline. Only
-`claude-sonnet-4.6` has been evaluated; cross-model behavior is currently
-unmeasured.
-
 ## Stop boundaries
 
 - Never overwrite or "improve" existing templates; their presence ends the
