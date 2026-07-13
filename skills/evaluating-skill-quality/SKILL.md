@@ -38,15 +38,22 @@ have been a different mechanism is not fixed by polishing it further.
 - **Skill vs. hook**: a skill is an instruction the model *chooses* to
   follow; a hook fires *deterministically*. "Every time X, always do Y"
   (a formatter after every edit) or "never do this" (an absolute
-  prohibition) is the wrong tool as a skill/prose instruction alone --
-  under pressure, in a long session, or facing a prompt injection, a
-  model can fail to follow a prompted rule. Flag any safety-critical
-  prohibition in the reviewed skill with no hook or permission backing.
+  prohibition) needs deterministic backing, not prose alone. Flag any
+  safety-critical prohibition in the reviewed skill with no hook or
+  permission backing -- see `references/rubric.md`'s Mechanism fit section
+  for why a prompted rule fails under pressure.
 - **Skill vs. CLAUDE.md**: CLAUDE.md is for facts Claude should hold
   *all the time*; a skill is for a *procedure*, loaded only when
   invoked. Static facts with no real steps probably belong in CLAUDE.md
   instead; a multi-step procedure crammed into CLAUDE.md is the
   mirror-image mistake.
+- **Skill-step vs. bundled script**: a deterministic step *inside* a
+  skill's procedure is not event-bound, so a hook cannot own it; delegate
+  it to a bundled script the skill calls, rather than re-reasoning it in
+  prose each run, when the break-even favours it. A single trivial check
+  stays in-model. This is a step-level finding, not a whole-artifact
+  wrong-mechanism one -- the break-even test and rationale (correctness,
+  consistency, cost) are in `references/rubric.md`'s Mechanism fit section.
 
 Full rationale and citation: [references/rubric.md](references/rubric.md)'s
 Mechanism fit section.

@@ -25,6 +25,7 @@ skill's own folder.
 - [The mental model](#the-mental-model)
 - [Contract discipline](#contract-discipline)
 - [Mechanism fit](#mechanism-fit)
+- [Skill-step vs. bundled script](#skill-step-vs-bundled-script)
 - [Portability level](#portability-level)
 - [1. Discovery -- name and description](#1-discovery----name-and-description)
 - [2. Conciseness](#2-conciseness)
@@ -150,6 +151,64 @@ A wrong-mechanism finding is not one of the nine dimensions and is not
 folded into the well-formed/mature ladder: report it as the review's
 headline finding regardless of how the rest of the review scores, per
 `SKILL.md`'s Procedure step 2 and Stop boundaries.
+
+This describes a *whole-artifact* wrong-mechanism finding (the skill should
+have been a hook, subagent, or CLAUDE.md content). The Skill-step vs.
+bundled script check above is the one exception: its finding is step-level,
+reported for triage, and is neither a headline nor a *mature* blocker.
+
+### Skill-step vs. bundled script
+
+The three checks above ask whether a skill is the right *artifact*. This
+fourth asks, within a correctly-chosen skill, whether a given *step* is
+best done by model reasoning or delegated to a bundled script the skill
+calls. It is distinct from the hook check: a hook is event-bound; a step
+inside a skill's procedure fires when the model reaches it, not on an
+event, so a hook cannot own it -- the mechanism choice for such a step is
+model-reasoning vs. a bundled script.
+
+Delegation is favoured on three converging grounds -- correctness,
+consistency, and cost -- when the step is deterministic:
+
+- **Correctness and consistency.** A model applying a mechanical rule
+  in-head miscounts, misremembers exact limits, and drifts when the rule
+  is restated in several places; a script is deterministic and a single
+  source of truth. Anthropic's best-practices guidance on bundling
+  executable scripts says to "prefer scripts for deterministic
+  operations" because they are "more reliable than generated code" and
+  "ensure consistency across uses" ([ab]) -- the same reliability logic
+  the skill-vs-hook check above rests on, applied to a step rather than a
+  whole skill.
+- **Cost.** The same guidance grounds the cost claim directly: a bundled
+  script "save[s] tokens (no need to include code in context)" and
+  "save[s] time (no code generation required)" ([ab]). As
+  first-principles elaboration of *why* -- labelled a *read* per
+  dimension 9's discipline, not itself a primary-doc claim -- a model
+  doing deterministic work spends a full forward pass per generated
+  token and serialises the computation into context, whose attention
+  cost grows with input size; a script is microseconds of CPU. For
+  repeated, multi-rule, or large-input work the model is worse on unit
+  cost, on scaling, and on reliability at once.
+
+**Break-even.** Delegate when the step is deterministic AND at least one
+of: repeated/looped; multi-rule or non-trivial; error-prone for a model
+(counting, exact limits, strict matching, parsing); or it must emit a
+machine-checkable artifact for a high-stakes step (dimension 7's
+plan -> validate -> execute). Keep the step in-model when it is a single
+trivial deterministic check (the tool-call round-trip costs more than it
+saves) or when it needs judgment or context (then it is not deterministic
+and belongs to the nine dimensions). Cost is never a standalone trigger:
+without one of these conditions, leave the step in prose.
+
+A finding here is a **step-level** mechanism finding -- report it when it
+fires, but it is not the whole-review headline and does not by itself
+block a *mature* verdict; it feeds triage. Because it fires only when the
+break-even clearly favours a script, a capable model is not pushed to
+script trivial work (dimension 2). This check decides *whether* a script
+should exist; dimension 7 grades the quality of one that does. The
+'two lanes' split of this review's own procedure (deterministic shape vs
+probabilistic maturity) is the same idea applied to *this* skill rather
+than a reviewed one -- an intentional parallel, not the same check.
 
 ## Portability level
 
@@ -481,9 +540,13 @@ acknowledgment a live-proof gate requires -- it does not itself waive any
 live-proof check the reviewing repository applies before landing other
 kinds of changes.
 
-**Well-formed** and **mature** both presuppose mechanism fit. A skill can
-be well-formed or even mature by every dimension below and still be the
-wrong artifact -- content that should be a hook, CLAUDE.md, or a
+**Well-formed** and **mature** both presuppose *whole-artifact* mechanism
+fit -- the skill is the right container (not better as a hook, subagent, or
+CLAUDE.md content). A step-level Skill-step vs. bundled script finding is
+reported for triage but does not by itself block either verdict.
+
+A skill can be well-formed or even mature by every dimension below and
+still be the wrong artifact -- content that should be a hook, CLAUDE.md, or a
 subagent, dressed up as a well-written skill. A wrong-mechanism finding
 (see [Mechanism fit](#mechanism-fit)) is reported alongside, not
 replaced by, the well-formed/mature verdict: naming both is more useful
