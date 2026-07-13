@@ -44,6 +44,16 @@ deny() {
   exit 2
 }
 
+# --- Shared boundary: pre-command anchor that also swallows an absolute or
+# relative path prefix -----------------------------------------------------
+# A bare "(^|[[:space:];&|]+)" boundary does not match "/usr/bin/pip" or
+# "./git" because the verb token isn't at the very start of the word -- the
+# path segment is. This optional-path-prefix group lets the boundary land
+# right before the bare verb name regardless of what directory precedes it,
+# so `/usr/bin/pip install`, `/usr/local/bin/git push`, `./pip install`, etc.
+# still match on the verb.
+cmd_boundary='(^|[[:space:];&|]+)([[:alnum:]_.-]*/)*'
+
 # --- Finding 1: package/plugin install verbs -------------------------------
 # Case-insensitive, word/space-boundary anchored so `pipx install`, a path
 # containing "install", or `cargo install-update` do not false-positive.
@@ -52,17 +62,32 @@ deny() {
 # applies uniformly -- duplicating it per-alternative previously caused
 # `npm i <pkg>` to be missed (the inner match already consumed the boundary
 # before the pkg name, leaving nothing for the outer check to see).
-install_re='(^|[[:space:];&|]+)(pip3?[[:space:]]+install|npm[[:space:]]+install|npm[[:space:]]+i|yarn[[:space:]]+add|pnpm[[:space:]]+add|go[[:space:]]+install|brew[[:space:]]+install|apt(-get)?[[:space:]]+install|gem[[:space:]]+install|cargo[[:space:]]+install|uv[[:space:]]+pip[[:space:]]+install|uv[[:space:]]+install|uv[[:space:]]+add|plugin[[:space:]]+install)([[:space:]]|$)'
+install_re="${cmd_boundary}(pip3?[[:space:]]+install|npm[[:space:]]+install|npm[[:space:]]+i|yarn[[:space:]]+add|pnpm[[:space:]]+add|go[[:space:]]+install|brew[[:space:]]+install|apt(-get)?[[:space:]]+install|gem[[:space:]]+install|cargo[[:space:]]+install|uv[[:space:]]+pip[[:space:]]+install|uv[[:space:]]+install|uv[[:space:]]+add|plugin[[:space:]]+install)([[:space:]]|\$)"
 
 if [[ "$lc_command" =~ $install_re ]]; then
   deny "Blocked by hooks/check-bash-safety.sh: command matches a package/plugin install pattern. Per evaluating-skill-quality/SKILL.md's stop boundary, installs require the operator's explicit go-ahead -- propose the install instead of running it."
 fi
 
 # --- Findings 2 & 3: direct CLI GitHub write commands ----------------------
-gh_issue_re='(^|[[:space:];&|]+)gh[[:space:]]+issue[[:space:]]+(create|edit|close|comment)([[:space:]]|$)'
-gh_pr_re='(^|[[:space:];&|]+)gh[[:space:]]+pr[[:space:]]+(create|edit|close|comment|merge)([[:space:]]|$)'
-gh_api_re='(^|[[:space:];&|]+)gh[[:space:]]+api([[:space:]]|$)'
-gh_api_write_method_re='(-x|--method)[[:space:]]+(post|put|patch|delete)([[:space:]]|$)'
+gh_issue_re="${cmd_boundary}gh[[:space:]]+issue[[:space:]]+(create|edit|close|comment)([[:space:]]|\$)"
+gh_pr_re="${cmd_boundary}gh[[:space:]]+pr[[:space:]]+(create|edit|close|comment|merge)([[:space:]]|\$)"
+gh_api_re="${cmd_boundary}gh[[:space:]]+api([[:space:]]|\$)"
+# Matches -X/--method (any case, already lowercased upstream) followed by
+# POST/PUT/PATCH/DELETE in any of the three flag syntaxes gh/getopt accept:
+#   - whitespace-separated:  -X POST      / --method POST
+#   - equals-form long flag:              --method=POST
+#   - attached short flag:   -XPOST
+# The old version only matched the whitespace-separated form, so
+# `--method=POST` and `-XPOST` sailed through undetected.
+gh_api_write_method_re='(-x[[:space:]]*=?[[:space:]]*|--method[[:space:]=]+)(post|put|patch|delete)([[:space:]]|$)'
+# Finding: `gh api graphql` has no -X/--method flag at all (GraphQL uses a
+# single POST endpoint regardless of query vs. mutation), so the method-flag
+# check above can never catch a graphql mutation. Heuristically flag any
+# `gh api graphql` invocation whose argument string contains the literal
+# "mutation" keyword (case-insensitive via lc_command) -- a plain `query{...}`
+# read has no reason to contain that word. This cannot fully parse GraphQL in
+# bash, but it catches the common `-f query='mutation{...}'` write pattern.
+gh_api_graphql_re="${cmd_boundary}gh[[:space:]]+api[[:space:]]+graphql([[:space:]]|\$)"
 
 if [[ "$lc_command" =~ $gh_issue_re ]]; then
   deny "Blocked by hooks/check-bash-safety.sh: direct 'gh issue' write command. Per issue-to-branch/references/github-issue-workflow.md, prefer the platform-integrated tool call (connected GitHub app/MCP) instead of shelling out to the gh CLI for writes."
@@ -76,8 +101,12 @@ if [[ "$lc_command" =~ $gh_api_re ]] && [[ "$lc_command" =~ $gh_api_write_method
   deny "Blocked by hooks/check-bash-safety.sh: 'gh api' write call (-X/--method POST/PUT/PATCH/DELETE). Per issue-to-branch/references/github-issue-workflow.md, never shell out to a command-line GitHub tool directly for writes -- use the platform-integrated tool call or an approved read-only wrapper."
 fi
 
+if [[ "$lc_command" =~ $gh_api_graphql_re ]] && [[ "$lc_command" == *mutation* ]]; then
+  deny "Blocked by hooks/check-bash-safety.sh: 'gh api graphql' call containing a 'mutation' keyword. GraphQL mutations are writes regardless of the missing -X/--method flag. Per issue-to-branch/references/github-issue-workflow.md, never shell out to a command-line GitHub tool directly for writes -- use the platform-integrated tool call or an approved read-only wrapper."
+fi
+
 # --- Finding 4: git push gated on scan_provenance.py -----------------------
-push_re='(^|[[:space:];&|]+)git[[:space:]]+push([[:space:]]|$)'
+push_re="${cmd_boundary}git[[:space:]]+push([[:space:]]|\$)"
 
 if [[ "$lc_command" =~ $push_re ]]; then
   project_dir="${CLAUDE_PROJECT_DIR:-$(pwd)}"
