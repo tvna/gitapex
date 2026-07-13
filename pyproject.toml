@@ -16,12 +16,12 @@ dev = [
 package = false
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
-pythonpath = ["scripts"]
-addopts = "--cov=scripts --cov-report=term-missing"
+testpaths = ["tests", "skills/evaluating-skill-quality/scripts"]
+pythonpath = ["scripts", "skills/evaluating-skill-quality/scripts"]
+addopts = "--cov=scripts --cov=skills/evaluating-skill-quality/scripts --cov-report=term-missing"
 
 [tool.coverage.run]
-source = ["scripts"]
+source = ["scripts", "skills/evaluating-skill-quality/scripts"]
 
 [tool.coverage.report]
 exclude_lines = [
