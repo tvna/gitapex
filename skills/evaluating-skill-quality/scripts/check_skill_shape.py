@@ -20,7 +20,8 @@ Checks (the canonical list -- the manual fallback is to apply these):
 Usage:
   python3 check_skill_shape.py <skill-dir-or-SKILL.md>
 
-Exit code: 0 if every check passes, 1 if any check fails, 2 on bad usage.
+Exit code: 0 if every check passes, 1 if any check fails, 2 on bad usage or
+when no readable SKILL.md is found.
 """
 from __future__ import annotations
 

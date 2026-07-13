@@ -84,7 +84,9 @@ see `references/rubric.md`'s Contract discipline section.
 2. Check mechanism fit per the section above. A wrong-mechanism finding
    is the headline finding of the review -- report it even if the rest
    of the review still completes.
-3. Check the deterministic shape list above; cite the exact violation.
+3. Run the deterministic shape checker per the Two lanes section above (or
+   apply its checks by hand where Python is unavailable); cite the exact
+   violation.
 4. Establish the skill's portability level per the section above.
 5. Walk all nine dimensions in `references/rubric.md`, in order (including
    8-9), quoting the specific text that earns each verdict; assume steps
@@ -100,10 +102,12 @@ portability checks:
 
 ## Scope
 
-This skill carries the rubric; it does not build a checker script, eval
-suite, or benchmarking harness for any target repo -- separate, deferred
-work. Do not expand into a general-purpose linter or add checks beyond
-what `references/rubric.md` actually specifies.
+Beyond the bundled read-only shape checker (`scripts/check_skill_shape.py`),
+this skill carries the rubric; it does not build an eval suite or
+benchmarking harness for any target repo -- separate, deferred work. Do
+not expand the bundled checker into a general-purpose linter or add
+checks beyond the deterministic shape rules and what `references/rubric.md`
+actually specifies.
 
 ## Stop boundaries
 
@@ -117,9 +121,11 @@ what `references/rubric.md` actually specifies.
   behavior claim. Ground those in Anthropic's primary docs
   (`platform.claude.com`, `code.claude.com`) or the target's observed
   state -- re-fetch when in doubt, don't trust a memorized summary.
-- Never install eval tooling (a checker script, `skill-creator`, `waza`,
-  etc.) as part of a review without the operator's go-ahead -- propose it
-  instead (dimension 8).
+- Never install eval tooling for a target repo (`skill-creator`, `waza`, an
+  eval suite, etc.) as part of a review without the operator's go-ahead --
+  propose it instead (dimension 8). The skill's own bundled
+  `scripts/check_skill_shape.py` is not such an install -- it ships with
+  the skill and only reads.
 - Never patch a wrong verdict by adjusting step 5 when the real fault was
   a wrong precondition (steps 1-4). Redo the precondition instead -- the
   bug lives where the wrong assumption was made (rubric.md, Contract
