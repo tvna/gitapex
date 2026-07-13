@@ -1,10 +1,15 @@
 # Worked example: reviewing `skills/explaining-the-work/`
 
 A real nine-dimension review, run per [rubric.md](rubric.md), against
-`skills/explaining-the-work/SKILL.md` (merged in [PR #2][pr2]) as it
-stands today. Kept as a concrete example, not restated in `SKILL.md`, per
-the progressive-disclosure dimension it demonstrates. Reference URLs are
-collected under [References](#references) at the end of this file.
+`skills/explaining-the-work/SKILL.md` (merged in [PR #2][pr2]). Kept as a
+concrete example, not restated in `SKILL.md`, per the progressive-disclosure
+dimension it demonstrates. Reference URLs are collected under
+[References](#references) at the end of this file.
+
+**Dated snapshot:** this review reflects the target skill and the
+repository's committed eval tooling as observed at the time it was
+written, not the current state of either. Re-run the procedure for a live
+verdict.
 
 ## Table of contents
 
@@ -181,13 +186,16 @@ N/A. The skill ships no code.
 
 ### 8. Behavioural evidence
 
-Unmeasured for pass/fail, not skipped: gitapex's repo has neither an
+Unmeasured for pass/fail, not skipped, as of this snapshot: neither an
 `evals/evals.json` (the Claude Code `skill-creator` format) nor an
-`evals/` directory committed today (confirmed absent from the repository
-tree). There is no suite exercising this skill's trigger against a
+`evals/` directory for this skill was committed at review time. Check the
+target repository's current state before relying on this -- gitapex has
+since added `evals/` directories for several skills (e.g.
+`evals/explaining-the-work`), which would change this scoring if re-run
+today. There is no suite exercising this skill's trigger against a
 documented no-skill baseline, so this dimension cannot be scored pass or
 fail on behavioural grounds -- an open gap in the repository's committed
-tooling, not a defect specific to this skill.
+tooling at the time, not a defect specific to this skill.
 
 With the operator's explicit go-ahead, `waza` (built from source,
 `microsoft/waza`) was installed in this review session (not committed to

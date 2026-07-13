@@ -6,6 +6,11 @@ to itself is the standard this skill was built to meet -- it should not
 get a pass it would not give another skill. Reference URLs are collected
 under [References](#references) at the end of this file.
 
+**Dated snapshot:** this review reflects the skill and its siblings as of
+the time it was written; it is a worked illustration of the procedure, not
+a claim that the underlying facts (sibling list, committed eval data) stay
+current. Re-run the procedure for a live verdict.
+
 ## Table of contents
 
 - [Mechanism fit](#mechanism-fit)
@@ -144,13 +149,24 @@ Verdict on shape alone: **well-formed** (exit code 0).
 Pass, with the description fix above now applied. Current sibling skills
 in this repository (`driving-pr-to-merge`, `establishing-ubiquitous-language`,
 `issue-to-branch`, `merge-retrospective`, `outward-artifact-preflight`,
-`stop-and-replan`, `untrusted-input-triage`, `explaining-the-work`) have
-triggers that do not overlap this skill's "reviewing any SKILL.md...
-before merging, vendoring, or shipping it": each targets a different
-artifact type (a PR, a term, an issue, a merged PR's retrospective, any
-outward-facing artifact broadly, a self-correcting phrase, externally
-authored text, a comment/commit) rather than a `SKILL.md`'s own content
-quality.
+`stop-and-replan`, `untrusted-input-triage`, `explaining-the-work`,
+`seeding-issue-pr-templates`) have triggers that do not overlap this
+skill's "reviewing any SKILL.md... before merging, vendoring, or shipping
+it": each targets a different artifact type (a PR, a term, an issue, a
+merged PR's retrospective, any outward-facing artifact broadly, a
+self-correcting phrase, externally authored text, a comment/commit, an
+issue/PR template) rather than a `SKILL.md`'s own content quality.
+
+Two siblings sit closest to this one and need an explicit boundary, not
+just a trigger-string diff:
+
+- `battle-testing-a-skill` -- adversarial-stress lens (does the skill hold
+  up under hostile/degenerate input) vs. this skill's static quality lens
+  (is the skill well-authored). Different question, same artifact type.
+- `gated-skill-edits` -- a measured edit loop (score, edit, re-score against
+  a contract) for *changing* a skill, vs. this skill's one-shot verdict for
+  *reviewing* one. Complementary, not overlapping: this skill can supply
+  the initial verdict that `gated-skill-edits` then iterates against.
 
 One genuine watch-point, not a failure: `outward-artifact-preflight`'s
 trigger ("about to push, post, or publish any outward-facing artifact --
@@ -246,11 +262,11 @@ N/A. This skill ships no code.
 
 ### 8. Behavioural evidence
 
-Unmeasured for pass/fail, not skipped: this skill has no `evals/evals.json`
-or `evals/` directory of its own, the same gap named for
-`explaining-the-work` in the other worked example. No baseline-vs-no-skill
-comparison has been run (per Anthropic's evaluation-driven-development
-standard, dimension 8's primary bar).
+Unmeasured for pass/fail, not skipped: as of this snapshot, `evals/evaluating-skill-quality/eval.yaml`
+is committed, but no baseline-vs-no-skill comparison has been run against
+it (per Anthropic's evaluation-driven-development standard, dimension 8's
+primary bar). Mechanism-present, baseline-unmeasured -- the same gap named
+for `explaining-the-work` in the other worked example.
 
 Partial behavioural evidence does exist, generated as a side effect of
 this session's own work rather than a formal eval suite: `waza check`

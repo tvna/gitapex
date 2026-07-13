@@ -404,13 +404,12 @@ usable with the official `skill-creator` plugin
 (`/plugin install skill-creator@claude-plugins-official`, per
 [Claude Code's own eval-and-iterate docs][cce]); for other targets, an
 `evals/` directory or a third-party runner such as
-`waza` (`microsoft/waza`) if the repo already uses one. gitapex now has
-an `evals/` directory (e.g. `evals/issue-to-branch`) but
-no `evals/evals.json` committed for this skill; `skill-creator` and
-`waza` are available in some review sessions but are session-local
-tooling, not part of the repo -- their presence in one session's
-environment does not make this dimension "measured" for the repo
-itself. Whatever the target, never silently skip
+`waza` (`microsoft/waza`) if the repo already uses one. Check whether the
+target repository has committed eval data (an `evals/` directory or
+`evals/evals.json`) for the specific skill under review -- `skill-creator`
+and `waza` may be available as session-local tooling without being part of
+the repo; their presence in one session's environment does not make this
+dimension "measured" for the repo itself. Whatever the target, never silently skip
 this dimension: state plainly that behavioural evidence is unmeasured for
 the reviewed skill when no mechanism is committed to the repo, rather than
 scoring it pass or fail without one to back the score. Do not install
