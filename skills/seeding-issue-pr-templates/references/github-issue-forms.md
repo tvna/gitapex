@@ -1,6 +1,6 @@
 # GitHub Issue Forms reference (GitHub runs only)
 
-Read this ONLY when Step 0 detected GitHub. Do not open the GitLab
+Read this ONLY when Step 1 detected GitHub. Do not open the GitLab
 reference in the same run.
 
 ## File layout
@@ -18,6 +18,8 @@ Source: SchemaStore github-issue-forms.json (draft-07), verified 2026-07-13.
   (The schema also lists `upload`; this skill does not emit it.)
 - `markdown` elements require `attributes.value`.
 - `input`/`textarea`/`dropdown`/`checkboxes` require `attributes.label`.
+- `dropdown`/`checkboxes` additionally require a non-empty
+  `attributes.options` list.
 
 ## config.yml shape
 - `blank_issues_enabled`: boolean (optional).

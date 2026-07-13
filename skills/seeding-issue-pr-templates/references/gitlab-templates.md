@@ -1,6 +1,6 @@
 # GitLab description templates reference (GitLab runs only)
 
-Read this ONLY when Step 0 detected GitLab. Do not open the GitHub
+Read this ONLY when Step 1 detected GitLab. Do not open the GitHub
 reference in the same run.
 
 ## File layout
