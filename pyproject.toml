@@ -9,6 +9,7 @@ dependencies = []
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
+    "pyyaml>=6.0",
 ]
 
 [tool.uv]
@@ -17,7 +18,7 @@ package = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["scripts"]
+pythonpath = ["scripts", "skills/seeding-issue-pr-templates/scripts"]
 addopts = "--cov=scripts --cov-report=term-missing"
 
 [tool.coverage.run]
