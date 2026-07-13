@@ -20,7 +20,7 @@ skills/            one directory per skill (SKILL.md, optionally references/) �
   issue-to-branch/      turns a GitHub issue into an implementation-ready branch/PR plan with an Acceptance Criteria Map
 docs/              documentation (this file, versioning policy, design specs, motivation.md) — not deployed
 tests/             pytest suite for the internal CI tooling — not deployed
-.github/           CI workflows and their internal tooling (scripts/sync_pr_publish.py) — not deployed
+.github/           CI workflows and their internal tooling (.github/scripts/sync_pr_publish.py) — not deployed
 ```
 
 > **Why the root, not a `plugin/` subdirectory?** apm installs a dependency
