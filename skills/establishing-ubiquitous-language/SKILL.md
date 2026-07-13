@@ -9,17 +9,9 @@ Ubiquitous language is the Domain-Driven Design term for a shared,
 consistent vocabulary used identically by people and agents in code, docs,
 issues, and conversation.
 
-This skill is self-contained: the procedure below does not require the
-calling repository to have a CLAUDE.md, an AGENTS.md, or any particular
-instruction file, and does not assume one has a specific chapter or
-section structure. It applies one general principle -- if multiple
-interpretations exist, list them all, never pick silently -- specifically
-to terminology conflicts, before they need a fix-up commit. Where a
-calling repository's own instruction file happens to state a related
-principle (gitapex's own CLAUDE.md ch.2 is one such example, cited here
-only as a cross-reference, not as a dependency), that is a coincidence of
-overlapping values, not something this skill's procedure relies on being
-present.
+**Portability: Portable.** Self-contained; requires no particular
+instruction file. `references/glossary.md` ships as an empty template, not
+live repository state -- see step 4.
 
 ## Procedure
 
@@ -38,48 +30,35 @@ present.
 3. **Resolve.** When a conflict is found, ask the owner which term should
    win -- never pick silently. Do not resolve it by fiat, by frequency
    count, or by whichever term you happened to write first.
-4. **Maintain the glossary.** Record the winning term in this skill's own
-   glossary file (`references/glossary.md`, alongside this SKILL.md) as
-   the source of truth, noting the superseded synonym so it does not
-   resurface unrecognized later. If the calling repository already has its
-   own established glossary location, use that instead -- this skill's own
-   `references/glossary.md` is the default when no repo-specific
-   convention exists yet, not a fixed requirement.
+4. **Maintain the glossary.** Record the winning term in the calling
+   repository's own glossary doc (e.g. `docs/glossary.md`), creating it
+   there if none exists yet, as the source of truth -- noting the
+   superseded synonym so it does not resurface unrecognized later. Do not
+   write real entries into this skill's own
+   [references/glossary.md](references/glossary.md); that file is a
+   read-only template and rots when the skill is vendored or installed
+   read-only.
 
 ## Worked example: owner vs. author vs. contributor
 
-A real precedent, condensed here; the full version (with commit-level
-detail) is `references/worked-example.md`, alongside this file.
+A real precedent from this skill's own home repository's history: a design
+document once named a role `Owner`, a term narrower than the concept it
+named (whoever gives the instruction that starts a flow, not necessarily a
+repo owner). Applying Elicit/Detect/Resolve/Maintain surfaced the mismatch
+and the already-resolved answer, `Contributor`, without renaming any code
+or inventing a term from nothing.
 
-A design document in this skill's home repository's history originally
-named the human participant in a sequence diagram `Owner`, using a term
-borrowed from GitHub's own permission vocabulary (a specific access-control
-role) for a broader concept -- whoever gives the instruction that starts
-the flow, which is not owner-specific. That mismatch was later resolved by
-renaming the participant to `Contributor`. A second, lexically similar but
-conceptually distinct role, `Author` (an AI implementer), was present
-throughout and was never a candidate for this conflict.
+See [references/worked-example.md](references/worked-example.md) for the
+full walkthrough, step by step.
 
-Applying the procedure to the pre-rename state:
+## Known gaps
 
-- **Elicit:** two role labels in use -- `Owner` (the human participant) and
-  `Author` (the AI implementer). No "Contributor" label exists yet; it is
-  introduced only by the resolution below.
-- **Detect:** `Owner` is narrower than the concept it names here -- a
-  term-to-concept mismatch, not two synonyms already colliding. `Author`
-  is not implicated: distinct concept, and lexical similarity to "owner"
-  (both short role nouns) is not evidence of synonymy.
-- **Resolve:** rather than silently swapping in a guess, ask which term
-  should actually name the concept. The resolution: "contributor," because
-  the flow is not owner-specific.
-- **Maintain the glossary:** the winning term gets an entry in this
-  skill's `references/glossary.md` (see that file for the actual entry).
-
-Note what this example does *not* do: it does not go back and rename any
-identifier in actual code, and it does not invent "Contributor" from
-nothing -- it surfaces that the resolution already happened in this
-skill's home repository's own history and records it, which is exactly the
-glossary's job.
+The committed eval suite (`evals/establishing-ubiquitous-language/`) runs
+the Elicit/Detect/Resolve/Maintain tasks but has no committed no-skill
+baseline run, so gap-closure is mechanized but unmeasured. Only
+`claude-sonnet-4.6` has been evaluated; cross-model behavior is a
+qualitative read (medium-freedom judgment procedure, low
+over-prescription risk), not measurement.
 
 ## Stop boundaries
 
