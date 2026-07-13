@@ -1,6 +1,6 @@
 # Skill Gap Findings — Parallel Fable Analysis (2026-07-13)
 
-Raw aggregated output from 11 parallel Fable (`model: fable`) agent reviews of
+Raw aggregated output from 12 parallel Fable (`model: fable`) agent reviews of
 every skill under `skills/`, each run against the `evaluating-skill-quality`
 rubric. This file is the sole input to Task 2 (triage).
 
