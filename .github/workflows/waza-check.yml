@@ -8,6 +8,7 @@ on:
   pull_request:
     paths:
       - "skills/**"
+  workflow_dispatch: {}
 
 permissions:
   contents: read
@@ -33,13 +34,14 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install Go
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16  # v6.5.0
+      # waza is provisioned from this repo's flake (pinned to 0.38.0 there),
+      # not `go install` -- the flake is the single version source of truth
+      # and waza's `go install` path is unsupported upstream (LFS artifacts).
+      # This removes Go from CI. See flake.nix + #57.
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25  # v22
         with:
-          go-version: "1.26.5"
-
-      - name: Install waza
-        run: go install github.com/microsoft/waza/cmd/waza@6157165282fcd4e39b4335d4aee502610b58cead  # v0.38.0
+          extra-conf: "experimental-features = nix-command flakes"
 
       # waza check has no flag to fail on a non-compliant skill -- verified
       # empirically that it exits 0 regardless of readiness, across every
@@ -55,6 +57,6 @@ jobs:
         run: |
           {
             echo '```'
-            waza check --no-update-check
+            nix develop --command waza check --no-update-check
             echo '```'
           } | tee -a "$GITHUB_STEP_SUMMARY"
