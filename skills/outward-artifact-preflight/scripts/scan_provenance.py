@@ -21,7 +21,7 @@ _PATTERNS = [
     ("model identifier", re.compile(r"\bclaude-[a-z0-9.\-]+\b", re.IGNORECASE)),
     ("session URL", re.compile(r"https?://[^\s]*\bsession[_/][A-Za-z0-9]+", re.IGNORECASE)),
     ("anthropic session domain", re.compile(r"https?://claude\.ai/[^\s]*", re.IGNORECASE)),
-    ("generic build/agent tag", re.compile(r"\b(generated|built)[- ]by[- ][A-Za-z0-9_.\-]+\b", re.IGNORECASE)),
+    ("generic build/agent tag", re.compile(r"\b(generated|built)[- ](by|with|using)[- ][A-Za-z0-9_.\-]+\b", re.IGNORECASE)),
 ]
 
 

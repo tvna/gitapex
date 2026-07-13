@@ -96,7 +96,7 @@ fi
 # --approve` sailed past a gate whose job is to block direct CLI GitHub
 # writes.
 gh_issue_re="${cmd_boundary}gh[[:space:]]+issue[[:space:]]+(create|edit|close|comment|delete|reopen|transfer|pin|unpin|lock|unlock|develop)([[:space:]]|\$)"
-gh_pr_re="${cmd_boundary}gh[[:space:]]+pr[[:space:]]+(create|edit|close|comment|merge|review|ready|reopen|lock|unlock)([[:space:]]|\$)"
+gh_pr_re="${cmd_boundary}gh[[:space:]]+pr[[:space:]]+(create|edit|close|comment|merge|review|ready|reopen|lock|unlock|update-branch)([[:space:]]|\$)"
 gh_api_re="${cmd_boundary}gh[[:space:]]+api([[:space:]]|\$)"
 # Matches -X/--method (any case, already lowercased upstream) followed by
 # POST/PUT/PATCH/DELETE in any of the three flag syntaxes gh/getopt accept:
