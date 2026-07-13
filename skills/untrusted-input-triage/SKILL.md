@@ -117,7 +117,7 @@ Mechanism decision: a skill-quality review flagged this skill as
 whole-artifact mechanism-fit risk: it operationalizes always-on content
 that already lives in CLAUDE.md. The decision, recorded here rather than
 left implicit: keep this skill, but explicitly re-scoped as an optional
-deep-triage aid, not the enforcement layer — see the Caveat above for why
+deep-triage aid, not the enforcement layer -- see the Caveat above for why
 a skill's invocation-dependence limits what it can guarantee on its own.
 The enforcement layer is CLAUDE.md's always-on rule, which needs no
 invocation to hold. This skill exists for the narrower case where writing
