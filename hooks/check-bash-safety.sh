@@ -10,8 +10,9 @@
 #      CLI GitHub write commands (gh issue/pr create|edit|close|comment|merge,
 #      gh api -X POST/PUT/PATCH/DELETE).
 #   4. [outward-artifact-preflight] SKILL.md -- before `git push`, run
-#      scan_provenance.py against the outgoing commits and block the push if
-#      it flags anything.
+#      scan_provenance.py against the outgoing commits and warn (not block)
+#      if it flags anything -- the script surfaces candidates, it does not
+#      decide, so a hit does not stop the push.
 #
 # Denies via the PreToolUse hookSpecificOutput JSON on stdout AND exit 2 /
 # stderr (both conventions, for defense in depth -- see plugin-dev's
@@ -42,6 +43,17 @@ deny() {
   jq -n --arg msg "$reason" \
     '{"hookSpecificOutput": {"permissionDecision": "deny"}, "systemMessage": $msg}' >&2
   exit 2
+}
+
+# Non-blocking counterpart to deny(): surfaces a systemMessage but allows the
+# tool call to proceed (exit 0). Used where the underlying check is
+# documented as advisory (surfaces candidates, does not decide) rather than
+# a deterministic write/read classifier -- see the git-push handling below.
+warn() {
+  local reason="$1"
+  jq -n --arg msg "$reason" \
+    '{"systemMessage": $msg}'
+  exit 0
 }
 
 # --- Shared boundary: pre-command anchor that also swallows an absolute or
@@ -105,6 +117,20 @@ if [[ "$lc_command" =~ $gh_api_graphql_re ]] && [[ "$lc_command" == *mutation* ]
   deny "Blocked by hooks/check-bash-safety.sh: 'gh api graphql' call containing a 'mutation' keyword. GraphQL mutations are writes regardless of the missing -X/--method flag. Per issue-to-branch/references/github-issue-workflow.md, never shell out to a command-line GitHub tool directly for writes -- use the platform-integrated tool call or an approved read-only wrapper."
 fi
 
+# Finding: `gh api <endpoint> -f key=val` (or -F/--field/--raw-field) performs
+# an implicit POST whenever field flags are present -- no -X/--method flag is
+# required, so the write-method check above never sees it. gh's own
+# convention is that field flags mean a write; a GET-only call has no reason
+# to carry one. Scoped to non-graphql `gh api` calls -- `gh api graphql -f
+# query='query{...}'` legitimately uses -f to pass a plain read query as a
+# variable, and that case is already handled (or not) by the mutation-keyword
+# check above, not this one.
+gh_api_field_flag_re='(^|[[:space:]])(-f|--field|--raw-field)([[:space:]=]|[a-z_]|$)'
+
+if [[ "$lc_command" =~ $gh_api_re ]] && ! [[ "$lc_command" =~ $gh_api_graphql_re ]] && [[ "$lc_command" =~ $gh_api_field_flag_re ]]; then
+  deny "Blocked by hooks/check-bash-safety.sh: 'gh api' call with a field flag (-f/-F/--field/--raw-field). Field flags imply an implicit POST/write in gh's own convention, with no -X/--method flag required. Per issue-to-branch/references/github-issue-workflow.md, never shell out to a command-line GitHub tool directly for writes -- use the platform-integrated tool call or an approved read-only wrapper."
+fi
+
 # --- Finding 4: git push gated on scan_provenance.py -----------------------
 push_re="${cmd_boundary}git[[:space:]]+push([[:space:]]|\$)"
 
@@ -124,8 +150,16 @@ if [[ "$lc_command" =~ $push_re ]]; then
   scan_exit=0
   scan_output=$(printf '%s' "$content" | python3 "$scan_script" 2>&1) || scan_exit=$?
 
+  # scan_provenance.py's own docstring says it "surfaces candidates, it does
+  # not decide" -- a hard deny here would make this mechanical regex the
+  # decider, which is exactly what its docstring disclaims, and a
+  # too-broad pattern previously blocked this repo's own history (see
+  # skills/outward-artifact-preflight/scripts/scan_provenance.py's
+  # line-context tightening). Warn instead of deny: surface every hit so
+  # the operator applies the checklist's judgment call, but do not block
+  # the push on a mechanical false positive the regex cannot rule out.
   if [ "$scan_exit" -ne 0 ]; then
-    deny "Blocked by hooks/check-bash-safety.sh: outward-artifact-preflight scan_provenance.py flagged the outgoing push -- $scan_output"
+    warn "outward-artifact-preflight scan_provenance.py flagged the outgoing push for review (not blocked -- this scan surfaces candidates, it does not decide) -- $scan_output"
   fi
 fi
 

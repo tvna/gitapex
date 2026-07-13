@@ -120,8 +120,11 @@ currently unmeasured.
   or get the owner's explicit sign-off to proceed anyway with the flag
   unresolved -- for `git push`, this is backed by this plugin's
   `hooks/check-bash-safety.sh` PreToolUse hook, which runs
-  `scripts/scan_provenance.py` against the outgoing commits and blocks the
-  push if it flags anything.
+  `scripts/scan_provenance.py` against the outgoing commits and surfaces a
+  warning (not a block) if it flags anything. The script's own docstring
+  says it surfaces candidates, it does not decide -- so a hit does not
+  stop the push, but it does still require applying this checklist's
+  judgment call to each hit before the push is actually safe to make.
 - This skill only applies the checklist; it does not authorize skipping
   it, and it does not replace the deterministic gate this repository has
   not built yet.

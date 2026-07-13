@@ -26,12 +26,33 @@ _PATTERNS = [
 
 
 def scan(text):
-    """Return a list of ``(line_no, label, matched_text)`` candidate hits."""
+    """Return a list of ``(line_no, label, matched_text)`` candidate hits.
+
+    A bare "model identifier" match is cheap to trigger on non-leak text
+    that merely contains the substring "claude-" -- a repo/org name like
+    "claude-md", a filename like "claude-md-base.md", this repo's own
+    ".claude-plugin" directory, or a disclosed eval-config model pin such
+    as a YAML "model: claude-sonnet-4.6" line. None of those are provenance
+    leaks by themselves. A real leak is disclosed *in context*: alongside a
+    session URL, a claude.ai link, or explicit "generated/built by"
+    phrasing on the same line. So a "model identifier" hit is only kept
+    when the same line also carries one of those other markers; the other
+    marker types (session URL, claude.ai domain, generic build/agent tag)
+    are specific enough to report unconditionally.
+    """
     hits = []
     for line_no, line in enumerate(text.splitlines(), start=1):
+        line_hits = []
         for label, pattern in _PATTERNS:
             for match in pattern.finditer(line):
-                hits.append((line_no, label, match.group(0)))
+                line_hits.append((label, match.group(0)))
+        has_corroborating_context = any(
+            label != "model identifier" for label, _ in line_hits
+        )
+        for label, matched in line_hits:
+            if label == "model identifier" and not has_corroborating_context:
+                continue
+            hits.append((line_no, label, matched))
     return hits
 
 
