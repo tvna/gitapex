@@ -1,0 +1,14 @@
+id: seeding-gitlab
+name: GitLab remote
+description: Emits GitLab paths, not GitHub paths.
+tags:
+  - quality
+inputs:
+  prompt: |
+    Use seeding-issue-pr-templates. The remote is gitlab.com and this repo
+    has no templates. Create them.
+expected:
+  output_contains:
+    - ".gitlab/"
+  output_not_contains:
+    - ".github/ISSUE_TEMPLATE"
