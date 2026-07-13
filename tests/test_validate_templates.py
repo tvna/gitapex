@@ -81,6 +81,34 @@ def test_github_markdown_needs_value(tmp_path: Path):
     assert any("markdown needs attributes.value" in e for e in errs)
 
 
+def test_github_dropdown_needs_options(tmp_path: Path):
+    bad = (
+        "name: X\ndescription: Y\nbody:\n"
+        "  - type: dropdown\n    attributes:\n      label: Pick one\n"
+    )
+    errs = vt.validate_github(_github_repo(tmp_path, form_text=bad))
+    assert any("dropdown needs a non-empty attributes.options list" in e for e in errs)
+
+
+def test_github_checkboxes_needs_options(tmp_path: Path):
+    bad = (
+        "name: X\ndescription: Y\nbody:\n"
+        "  - type: checkboxes\n    attributes:\n      label: Confirm\n      options: []\n"
+    )
+    errs = vt.validate_github(_github_repo(tmp_path, form_text=bad))
+    assert any("checkboxes needs a non-empty attributes.options list" in e for e in errs)
+
+
+def test_github_dropdown_valid_with_options(tmp_path: Path):
+    good = (
+        "name: X\ndescription: Y\nbody:\n"
+        "  - type: dropdown\n    attributes:\n      label: Pick one\n"
+        "      options:\n        - a\n        - b\n"
+    )
+    errs = vt.validate_github(_github_repo(tmp_path, form_text=good))
+    assert errs == []
+
+
 def test_github_invalid_yaml(tmp_path: Path):
     errs = vt.validate_github(_github_repo(tmp_path, form_text="name: [unclosed\n"))
     assert any("invalid YAML" in e for e in errs)

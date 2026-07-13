@@ -39,4 +39,6 @@ Source: SchemaStore github-issue-forms.json (draft-07), verified 2026-07-13.
           required: true
 
 ## Self-check
-Run: `uv run --with pyyaml python scripts/validate_templates.py <repo_root> --platform github`
+Run: `uv run --with pyyaml python scripts/validate_templates.py <staging_dir> --platform github`
+against the staging directory holding the generated files, not the target
+repo (which has no templates yet).

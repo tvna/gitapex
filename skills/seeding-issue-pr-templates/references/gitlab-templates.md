@@ -27,4 +27,6 @@ content only.
     - [ ] ...
 
 ## Self-check
-Run: `uv run --with pyyaml python scripts/validate_templates.py <repo_root> --platform gitlab`
+Run: `uv run --with pyyaml python scripts/validate_templates.py <staging_dir> --platform gitlab`
+against the staging directory holding the generated files, not the target
+repo (which has no templates yet).

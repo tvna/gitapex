@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Validate generated Issue/PR templates for a single platform.
 
-Self-check for the seeding-issue-pr-templates skill: after the skill writes
-template files, it runs this on the target repo root to confirm the output is
-structurally valid before presenting it. A run targets exactly one platform
-(a repo remote is GitHub or GitLab, never both), so this checks one platform
-per invocation.
+Self-check for the seeding-issue-pr-templates skill: before the skill copies
+generated template files into the target repo, it runs this on the staging
+directory holding them (passed here as <repo_root>) to confirm the output is
+structurally valid. A run targets exactly one platform (a repo remote is
+GitHub or GitLab, never both), so this checks one platform per invocation.
 
 Usage:
     uv run --with pyyaml python validate_templates.py <repo_root> \\
@@ -150,8 +150,15 @@ def validate_github(repo_root: Path) -> list[str]:
             if etype == "markdown":
                 if not attrs.get("value"):
                     errors.append(f"{form}: body[{i}] markdown needs attributes.value")
-            elif not attrs.get("label"):
+                continue
+            if not attrs.get("label"):
                 errors.append(f"{form}: body[{i}] {etype} needs attributes.label")
+            if etype in ("dropdown", "checkboxes"):
+                options = attrs.get("options")
+                if not isinstance(options, list) or not options:
+                    errors.append(
+                        f"{form}: body[{i}] {etype} needs a non-empty attributes.options list"
+                    )
     config = tmpl_dir / "config.yml"
     if config.is_file():
         ctext = _read_text(config, errors)
