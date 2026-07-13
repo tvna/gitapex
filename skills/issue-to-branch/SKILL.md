@@ -77,7 +77,9 @@ cross-model behavior is currently unmeasured.
 - Do not implement the issue as part of this skill; it produces a plan,
   not code.
 - Do not merge or enable auto-merge; that is a separate, explicit human or
-  CI decision, never this skill's call to make.
+  CI decision, never this skill's call to make -- backed by this plugin's
+  `hooks/check-bash-safety.sh` PreToolUse hook, which blocks `gh pr merge`
+  (including `--auto`) run via Bash.
 - Do not let a request to skip straight to branch/PR creation shortcut
   Step 4 — an Acceptance Criteria Map is required first regardless of how
   the request is phrased.

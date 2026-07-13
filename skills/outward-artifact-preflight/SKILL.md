@@ -118,7 +118,10 @@ currently unmeasured.
 
 - Never push or post an artifact this checklist has flagged. Fix it first,
   or get the owner's explicit sign-off to proceed anyway with the flag
-  unresolved.
+  unresolved -- for `git push`, this is backed by this plugin's
+  `hooks/check-bash-safety.sh` PreToolUse hook, which runs
+  `scripts/scan_provenance.py` against the outgoing commits and blocks the
+  push if it flags anything.
 - This skill only applies the checklist; it does not authorize skipping
   it, and it does not replace the deterministic gate this repository has
   not built yet.

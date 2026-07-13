@@ -135,7 +135,9 @@ actually specifies.
   state -- re-fetch when in doubt, don't trust a memorized summary.
 - Never install eval tooling for a target repo (`skill-creator`, `waza`, an
   eval suite, etc.) as part of a review without the operator's go-ahead --
-  propose it instead (dimension 8). The skill's own bundled
+  propose it instead (dimension 8), backed by this plugin's
+  `hooks/check-bash-safety.sh` PreToolUse hook, which blocks install
+  commands run via Bash. The skill's own bundled
   `scripts/check_skill_shape.py` is not such an install -- it ships with
   the skill and only reads.
 - Never patch a wrong verdict by adjusting step 5 when the real fault was

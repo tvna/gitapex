@@ -108,7 +108,10 @@ unmeasured.
 ## Stop boundaries
 
 - Never overwrite or "improve" existing templates; their presence ends the
-  skill unless the owner names specific additions.
+  skill unless the owner names specific additions -- backed by this
+  plugin's `hooks/check-template-overwrite.sh` PreToolUse hook, which
+  denies `Write` calls that would overwrite an existing template file at a
+  known GitHub/GitLab template path.
 - Never install an enforcement gate into the target repo; document gaps only.
 - Never carry provenance/attribution markers into generated templates.
 - Never claim the templates render live; full render proof is a post-merge
