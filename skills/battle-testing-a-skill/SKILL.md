@@ -84,10 +84,11 @@ verdict is a more reliable signal than open-ended judgment.
 
 ## Stop boundaries
 
-- Do not codify a dimension as established fact or cite a corroborating
-  side-reference as authoritative beyond what
+- Do not codify a dimension as established fact beyond what
   [references/provenance-and-caveats.md](references/provenance-and-caveats.md)
   supports -- that file is the single owner of the caveats.
+- Do not cite a corroborating side-reference as authoritative: it
+  corroborates, it does not originate this skill.
 - Do not treat a model-level safety refusal as a skill guardrail pass; an
   empty refusal is evidence about neither.
 - Do not skip the quoted-line requirement to make a review read as complete.

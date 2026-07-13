@@ -11,7 +11,6 @@ reachable when the skill is deployed on its own.
 1. How the knowledge was extracted
 2. Result
 3. Caveats -- part of the knowledge, not footnotes
-4. Corroborating side-references (not sources)
 
 ## How the knowledge was extracted
 
@@ -89,20 +88,3 @@ quoted, concrete failure stated).
    fixture. It shows the core dimensions reproduce and are behaviorally
    actionable; it does not exhaustively map every adversarial dimension.
 
-## Corroborating side-references (not sources)
-
-These are external projects cited only as corroboration; the skill does not
-depend on them and does not bundle them.
-
-- The clairvoyance project runs an adversarial "battle" harness over its own
-  skills; its category set matches the extracted core, which corroborates but
-  does not originate this skill. The same project's portability write-up
-  describes the exact failure this skill exists to fix: a foreign harness
-  asked to evaluate a skill has no rubric injected and cannot say why a skill
-  is weak.
-- microsoft/waza ships a `waza adversarial` command for offline adversarial /
-  fault-injection packs -- a separate implementation of a related idea.
-
-Neither is authoritative for how a model actually reasons about adversarial
-skill-testing; the source of record for this skill is the observed
-cross-model behavior above.
