@@ -15,7 +15,9 @@ Checks (the canonical list -- the manual fallback is to apply these):
   - SKILL.md body: <= 500 lines
   - references/ files: exactly one level deep
   - any references/ file over 100 lines: contains a table of contents
-    (a Markdown heading line matching "table of contents", case-insensitive)
+    (a Markdown heading matching "Table of contents" or "Contents",
+    case-insensitive). Junk files (dotfiles, __pycache__, non-UTF-8) under
+    references/ are ignored, not flagged.
 
 Usage:
   python3 check_skill_shape.py <skill-dir-or-SKILL.md>
@@ -38,7 +40,10 @@ RESERVED_NAME_WORDS = ("anthropic", "claude")
 
 TAG_RE = re.compile(r"</?[A-Za-z][^>]*>")
 NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
-TOC_RE = re.compile(r"^#+\s+.*table of contents", re.IGNORECASE | re.MULTILINE)
+# Accept either "Table of contents" or a bare "Contents" heading.
+TOC_RE = re.compile(r"^#+\s+(?:table of )?contents\b",
+                    re.IGNORECASE | re.MULTILINE)
+BLOCK_SCALAR_INDICATORS = (">", "|", ">-", "|-", ">+", "|+")
 
 
 @dataclass(frozen=True)
@@ -52,19 +57,50 @@ class CheckResult:
 def _parse_frontmatter(text: str) -> dict[str, str]:
     """Extract top-level 'key: value' pairs from a leading --- block.
 
-    Deliberately minimal: handles the single-line scalar values these
-    skills use (name, description). No external YAML dependency.
+    Handles the scalar forms real SKILL.md files use: plain, single/double
+    quoted, and YAML block scalars (folded '>' and literal '|', whose
+    indented continuation lines are joined). Strips a leading UTF-8 BOM and
+    requires a closing '---'; without one the frontmatter is treated as
+    malformed (returns {}), rather than reading body lines as fields. No
+    external YAML dependency.
     """
+    text = text.lstrip("\ufeff")
     if not text.startswith("---"):
         return {}
+    lines = text.splitlines()
+    end = next((i for i in range(1, len(lines))
+                if lines[i].strip() == "---"), None)
+    if end is None:
+        return {}
     fields: dict[str, str] = {}
-    for line in text.splitlines()[1:]:
-        if line.strip() == "---":
-            break
-        m = re.match(r"([A-Za-z0-9_-]+):\s*(.*)$", line)
-        if m:
-            fields[m.group(1)] = m.group(2).strip()
+    i = 1
+    while i < end:
+        m = re.match(r"([A-Za-z0-9_-]+):\s*(.*)$", lines[i])
+        if not m:
+            i += 1
+            continue
+        key, value = m.group(1), m.group(2).strip()
+        if value in BLOCK_SCALAR_INDICATORS:
+            block: list[str] = []
+            i += 1
+            while i < end and (lines[i].strip() == ""
+                               or lines[i][:1] in (" ", "\t")):
+                block.append(lines[i].strip())
+                i += 1
+            joiner = "\n" if value[0] == "|" else " "
+            fields[key] = joiner.join(block).strip()
+            continue
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]
+        fields[key] = value
+        i += 1
     return fields
+
+
+def _is_ignorable(p: Path) -> bool:
+    """Junk that must not affect the references/ checks: dotfiles (e.g. a
+    macOS .DS_Store) and Python bytecode caches."""
+    return p.name.startswith(".") or "__pycache__" in p.parts
 
 
 def _resolve_skill_md(target: Path) -> Path:
@@ -121,18 +157,20 @@ def check_shape(target: Path) -> list[CheckResult]:
 
     refs_dir = skill_dir / "references"
     if refs_dir.is_dir():
-        nested = [p for p in refs_dir.rglob("*")
-                  if p.is_file() and p.parent != refs_dir]
+        nested = sorted(
+            str(p.relative_to(refs_dir)) for p in refs_dir.rglob("*")
+            if p.is_file() and p.parent != refs_dir and not _is_ignorable(p))
         results.append(CheckResult(
             "references-flat", not nested,
             "references/ files are one level deep",
-            "nested: " + ", ".join(sorted(str(p.relative_to(refs_dir))
-                                          for p in nested))
-            if nested else "flat"))
-        for ref in sorted(refs_dir.glob("*")):
-            if not ref.is_file():
+            "nested: " + ", ".join(nested) if nested else "flat"))
+        for ref in sorted(refs_dir.iterdir()):
+            if not ref.is_file() or _is_ignorable(ref):
                 continue
-            ref_text = ref.read_text(encoding="utf-8")
+            try:
+                ref_text = ref.read_text(encoding="utf-8")
+            except (UnicodeDecodeError, OSError):
+                continue  # skip binary/unreadable junk, don't abort the run
             n = len(ref_text.splitlines())
             if n > TOC_MIN_LINES:
                 has_toc = bool(TOC_RE.search(ref_text))

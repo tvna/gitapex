@@ -114,10 +114,10 @@ special case inside dimension 1 or 6 to route around it.
 
 ## Deterministic shape
 
-Run the bundled checker on this skill itself:
+Run the bundled checker on this skill itself (from the repo root):
 
 ```
-$ python3 scripts/check_skill_shape.py skills/evaluating-skill-quality
+$ python3 skills/evaluating-skill-quality/scripts/check_skill_shape.py skills/evaluating-skill-quality
 CHECK                                      RESULT  EVIDENCE (rule)
 description-present                        PASS    present  (description present and non-empty)
 description-no-xml                         PASS    no tags  (description has no XML tags)
@@ -126,11 +126,11 @@ name-pattern                               PASS    'evaluating-skill-quality'  (
 name-length                                PASS    24 chars  (name <= 64 chars)
 name-no-xml                                PASS    no tags  (name has no XML tags)
 name-not-reserved                          PASS    'evaluating-skill-quality'  (name not a reserved word ('anthropic', 'claude'))
-body-length                                PASS    129 lines  (SKILL.md body <= 500 lines)
+body-length                                PASS    147 lines  (SKILL.md body <= 500 lines)
 references-flat                            PASS    flat  (references/ files are one level deep)
-toc:rubric.md                              PASS    501 lines, TOC found  (reference over 100 lines has a TOC)
-toc:worked-example-explaining-the-work.md  PASS    270 lines, TOC found  (reference over 100 lines has a TOC)
-toc:worked-example-self-review.md          PASS    319 lines, TOC found  (reference over 100 lines has a TOC)
+toc:rubric.md                              PASS    565 lines, TOC found  (reference over 100 lines has a TOC)
+toc:worked-example-explaining-the-work.md  PASS    271 lines, TOC found  (reference over 100 lines has a TOC)
+toc:worked-example-self-review.md          PASS    324 lines, TOC found  (reference over 100 lines has a TOC)
 
 12/12 checks passed
 ```

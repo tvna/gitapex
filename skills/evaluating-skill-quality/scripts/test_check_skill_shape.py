@@ -129,3 +129,76 @@ def test_directory_without_skill_md_returns_2(tmp_path):
     empty = tmp_path / "emptydir"
     empty.mkdir()
     assert css.main([css.__file__, str(empty)]) == 2
+
+
+def _write_raw(tmp_path, text, *, references=None):
+    d = tmp_path / "skill"
+    d.mkdir()
+    (d / "SKILL.md").write_text(text, encoding="utf-8")
+    if references:
+        refs = d / "references"
+        refs.mkdir()
+        for name, content in references.items():
+            (refs / name).write_text(content, encoding="utf-8")
+    return d
+
+
+def test_folded_block_description_is_measured(tmp_path):
+    long_desc = " ".join(["word"] * 300)  # ~1499 chars, over the 1024 cap
+    text = (f"---\nname: folded\ndescription: >\n  {long_desc}\n---\n"
+            "# body\nmore\n")
+    d = _write_raw(tmp_path, text)
+    res = _by_name(css.check_shape(d))
+    assert res["description-present"].passed is True
+    assert res["description-length"].passed is False
+
+
+def test_literal_block_description_xml_is_caught(tmp_path):
+    text = ("---\nname: literal\ndescription: |\n"
+            "  Use <b>this</b> when doing the thing.\n---\n# body\n")
+    d = _write_raw(tmp_path, text)
+    assert _by_name(css.check_shape(d))["description-no-xml"].passed is False
+
+
+def test_quoted_description_excludes_surrounding_quotes(tmp_path):
+    inner = "x" * css.DESCRIPTION_MAX_CHARS  # exactly the cap once quotes drop
+    text = f'---\nname: q\ndescription: "{inner}"\n---\n# body\n'
+    d = _write_raw(tmp_path, text)
+    assert _by_name(css.check_shape(d))["description-length"].passed is True
+
+
+def test_bom_prefixed_skill_parses(tmp_path):
+    text = ("﻿---\nname: bom-skill\n"
+            "description: Valid desc. Use when testing.\n---\n# body\n")
+    d = _write_raw(tmp_path, text)
+    assert _by_name(css.check_shape(d))["description-present"].passed is True
+
+
+def test_missing_closing_fence_is_malformed(tmp_path):
+    # No closing '---'; a body line that looks like a key must NOT be read
+    # as the description.
+    text = ("---\nname: broken\ndescription: Real desc. Use when x.\n"
+            "# body\ndescription: EVIL OVERRIDE <tag>\n")
+    d = _write_raw(tmp_path, text)
+    assert _by_name(css.check_shape(d))["description-present"].passed is False
+
+
+def test_contents_heading_counts_as_toc(tmp_path):
+    filler = "\n".join(f"line {i}" for i in range(css.TOC_MIN_LINES + 5))
+    body = "# Big\n\n## Contents\n\n- [a](#a)\n- [b](#b)\n\n" + filler
+    d = _write_raw(tmp_path, "---\nname: s\ndescription: d. Use when x.\n---\n",
+                   references={"big.md": body})
+    assert _by_name(css.check_shape(d))["toc:big.md"].passed is True
+
+
+def test_junk_files_in_references_are_ignored(tmp_path):
+    d = _write_raw(tmp_path, "---\nname: s\ndescription: d. Use when x.\n---\n",
+                   references={"real.md": "ok\n"})
+    refs = d / "references"
+    (refs / ".DS_Store").write_bytes(b"\x00\xff\xfe junk")  # undecodable
+    pycache = refs / "__pycache__"
+    pycache.mkdir()
+    (pycache / "m.cpython-312.pyc").write_bytes(b"\x00\xff")
+    res = _by_name(css.check_shape(d))  # must not raise on the binary file
+    assert res["references-flat"].passed is True
+    assert css.main([css.__file__, str(d)]) == 0

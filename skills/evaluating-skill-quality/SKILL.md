@@ -12,9 +12,11 @@ skill artifact itself is good, not whether a change is correct.
 ## Two lanes
 
 - **Deterministic shape** -- fixed rules a script decides, not judgment.
-  Run `scripts/check_skill_shape.py <skill-dir>` (bundled with this
-  skill, stdlib-only, read-only); it is the single source of truth for
-  the exact rules and limits and prints PASS/FAIL per check. On a
+  Run the bundled checker on the target skill dir, giving both paths from
+  the same working directory -- e.g. from the repo root:
+  `python3 skills/evaluating-skill-quality/scripts/check_skill_shape.py <skill-dir>`
+  (stdlib-only, read-only). It is the single source of truth for the exact
+  rules and limits and prints PASS/FAIL per check. On a
   Python-less surface, apply the same rules by reading that script's
   check list (its module docstring enumerates them). The nine maturity
   dimensions below are deliberately not scripted.
