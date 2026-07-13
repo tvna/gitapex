@@ -180,10 +180,12 @@ grading below.
 
 ## 1. Discovery -- name and description
 
-`SKILL.md`'s deterministic checklist confirms a trigger *exists* (present,
-no XML tags, under the length cap). This dimension judges whether it is
-the *right* trigger -- whether the skill would win its intended request
-and lose a neighbour's. Per Anthropic's best-practices doc, `name` and
+`scripts/check_skill_shape.py` (see SKILL.md, Two lanes) confirms a
+trigger *exists* by shape -- present, no XML tags, under the length cap,
+with the exact limits owned by that script rather than restated here.
+This dimension judges whether it is the *right* trigger -- whether the
+skill would win its intended request and lose a neighbour's. Per
+Anthropic's best-practices doc, `name` and
 `description` "are particularly critical. Claude uses these when deciding
 whether to trigger the skill" -- this is the highest-leverage text in the
 whole skill, not a formality.
@@ -342,12 +344,13 @@ usable with the official `skill-creator` plugin
 (`/plugin install skill-creator@claude-plugins-official`, per
 [Claude Code's own eval-and-iterate docs][cce]); for other targets, an
 `evals/` directory or a third-party runner such as
-`waza` (`microsoft/waza`) if the repo already uses one. gitapex has
-neither an `evals/evals.json` nor an `evals/` directory committed to the
-repo today; `skill-creator` and `waza` are available in some review
-sessions but are session-local tooling, not part of the repo -- their
-presence in one session's environment does not make this dimension
-"measured" for the repo itself. Whatever the target, never silently skip
+`waza` (`microsoft/waza`) if the repo already uses one. gitapex now has
+an `evals/` directory (e.g. `evals/issue-to-branch`) but
+no `evals/evals.json` committed for this skill; `skill-creator` and
+`waza` are available in some review sessions but are session-local
+tooling, not part of the repo -- their presence in one session's
+environment does not make this dimension "measured" for the repo
+itself. Whatever the target, never silently skip
 this dimension: state plainly that behavioural evidence is unmeasured for
 the reviewed skill when no mechanism is committed to the repo, rather than
 scoring it pass or fail without one to back the score. Do not install

@@ -11,15 +11,13 @@ skill artifact itself is good, not whether a change is correct.
 
 ## Two lanes
 
-- **Deterministic shape** -- fixed rules a checker script would decide if
-  the target repository has one (e.g. `scripts/check_skills.py`); check by
-  hand otherwise. Sources and the Claude-Code-vs-generic-spec split:
-  `references/rubric.md` dimension 1. `description`: non-empty, no XML
-  tags, <= 1024 chars, states what and when. `name`, if present:
-  lowercase-hyphenated, <= 64 chars, no XML tags, no reserved word
-  (`anthropic`, `claude`); optional in Claude Code and need not match the
-  directory. `SKILL.md` body <= 500 lines. `references/` files: one level
-  deep, table of contents past 100 lines.
+- **Deterministic shape** -- fixed rules a script decides, not judgment.
+  Run `scripts/check_skill_shape.py <skill-dir>` (bundled with this
+  skill, stdlib-only, read-only); it is the single source of truth for
+  the exact rules and limits and prints PASS/FAIL per check. On a
+  Python-less surface, apply the same rules by reading that script's
+  check list (its module docstring enumerates them). The nine maturity
+  dimensions below are deliberately not scripted.
 - **Probabilistic maturity** -- nine dimensions of judgment that need a model
   or human, not a script. Full rubric with pass/fail evidence:
   [references/rubric.md](references/rubric.md).
