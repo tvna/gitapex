@@ -1,0 +1,75 @@
+name: Toolchain (nix)
+
+on:
+  push:
+    paths:
+      - "flake.nix"
+      - "flake.lock"
+      - ".github/workflows/toolchain-nix.yml"
+  pull_request:
+    paths:
+      - "flake.nix"
+      - "flake.lock"
+      - ".github/workflows/toolchain-nix.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  nix:
+    # NOTE: this matrix build-verifies only x86_64-linux (ubuntu-latest) and
+    # aarch64-darwin (macos-latest). The flake's other two systems --
+    # aarch64-linux and x86_64-darwin -- are eval-checked by `nix flake check`
+    # (hashes/attrs) but their binaries are NOT built or run here. A wrong
+    # asset name or per-arch runtime issue for those two would not be caught
+    # until someone runs nix on that arch.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+        with:
+          extra-conf: "experimental-features = nix-command flakes"
+
+      - name: Verify flake.lock is committed and current
+        run: |
+          test -f flake.lock || { echo "flake.lock is missing from the repo"; exit 1; }
+          nix flake lock
+          git diff --exit-code flake.lock \
+            || { echo "flake.lock is stale; run 'nix flake lock' locally and commit it"; exit 1; }
+
+      - name: flake check
+        run: nix flake check
+
+      - name: build Class B
+        run: nix build .#waza .#apm .#rtk .#betterleaks
+
+      - name: devShell smoke
+        run: |
+          # shellcheck disable=SC2016  # $t is expanded by the inner `bash -c`, not this shell
+          nix develop --command bash -c '
+            set -euo pipefail
+            for t in uv gh actionlint bun lychee; do echo -n "$t "; $t --version | head -1; done
+            python3 --version
+            for t in waza apm rtk betterleaks; do echo -n "$t "; $t --version | head -1; done
+          '
