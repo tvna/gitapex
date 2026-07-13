@@ -119,15 +119,15 @@ def main(argv=None):
     args = parser.parse_args(argv)
 
     if args.compare_to is not None:
-        raw = (
-            open(args.scores, encoding="utf-8").read()
-            if args.scores
-            else sys.stdin.read()
-        )
         try:
+            raw = (
+                open(args.scores, encoding="utf-8").read()
+                if args.scores
+                else sys.stdin.read()
+            )
             scores = [float(line) for line in raw.splitlines() if line.strip()]
             mean = split_mean(scores)
-        except (FileNotFoundError, ValueError) as exc:
+        except (FileNotFoundError, OSError, ValueError) as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 1
         print(f"{mean:.6f} {strict_compare(args.compare_to, mean)}")

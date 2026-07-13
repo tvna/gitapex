@@ -22,14 +22,23 @@ import argparse
 import sys
 from pathlib import Path
 
-try:
-    import yaml
-except ModuleNotFoundError:  # pyyaml is the one runtime dependency.
-    sys.stderr.write(
-        "error: pyyaml is required. Run via: "
-        "uv run --with pyyaml python validate_templates.py <repo_root>\n"
-    )
-    raise SystemExit(2)
+
+def _import_yaml():
+    """Import and return the yaml module, failing loudly if pyyaml is absent.
+
+    Deferred from module level so that --check-existing / find_existing_templates
+    (pure filesystem logic, no YAML needed) works under a bare python3 with no
+    pyyaml installed at all. Only the YAML-parsing code paths need this.
+    """
+    try:
+        import yaml
+    except ModuleNotFoundError:  # pyyaml is the one runtime dependency.
+        sys.stderr.write(
+            "error: pyyaml is required. Run via: "
+            "uv run --with pyyaml python validate_templates.py <repo_root>\n"
+        )
+        raise SystemExit(2)
+    return yaml
 
 
 def detect_platform(repo_root: Path) -> str:
@@ -76,6 +85,7 @@ def _read_text(path: Path, errors: list[str]) -> str | None:
 
 
 def _load_yaml_mapping(path: Path, text: str, errors: list[str]) -> dict | None:
+    yaml = _import_yaml()
     try:
         data = yaml.safe_load(text)
     except yaml.YAMLError as exc:
