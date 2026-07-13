@@ -1,0 +1,27 @@
+# Dependabot version updates.
+#
+# Scope note: only ecosystems Dependabot actually supports for this repo are
+# configured here. nix bumps the nixpkgs input in flake.lock (Class A tools);
+# github-actions bumps the SHA-pinned actions in .github/workflows.
+#
+# NOT configured (deliberately): the Python/uv dev dependencies (prek etc.).
+# Dependabot has no `uv` ecosystem and its `pip` ecosystem does not read uv.lock
+# / PEP 735 [dependency-groups], so a pip entry would be dead config. prek and
+# the Class B release binaries (waza/apm/rtk/betterleaks, pinned in flake.nix,
+# also outside any Dependabot ecosystem) are updated on the Renovate/custom
+# track instead -- see the toolchain design spec and PR-3 of #57.
+version: 2
+updates:
+  - package-ecosystem: "nix"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(ci)"
