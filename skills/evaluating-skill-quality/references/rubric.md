@@ -98,8 +98,9 @@ Two operational rules follow directly, quoted from the same source:
 ## Mechanism fit
 
 One of this review's own preconditions (see [Contract
-discipline](#contract-discipline) above) -- the three-way decision
-(skill vs. subagent, skill vs. hook, skill vs. CLAUDE.md) lives in
+discipline](#contract-discipline) above) -- the mechanism decision
+(skill vs. subagent, hook, or CLAUDE.md, plus, for a deterministic
+in-skill step, model-reasoning vs. a bundled script) lives in
 `SKILL.md`, checkable without opening this file. This section is the
 elaboration: the primary source and the reasoning behind each check.
 

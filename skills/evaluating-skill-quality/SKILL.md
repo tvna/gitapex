@@ -88,9 +88,12 @@ see `references/rubric.md`'s Contract discipline section.
 1. Read the target `SKILL.md` and every file in its `references/`
    directory (not only linked ones -- an unlinked file is itself a
    dimension-5 finding).
-2. Check mechanism fit per the section above. A wrong-mechanism finding
-   is the headline finding of the review -- report it even if the rest
-   of the review still completes.
+2. Check mechanism fit per the section above. A whole-artifact
+   wrong-mechanism finding (the skill should have been a hook, subagent,
+   or CLAUDE.md content) is the headline finding of the review -- report
+   it even if the rest of the review still completes. The step-level
+   Skill-step vs. bundled script finding is the exception: report it for
+   triage, not as the headline.
 3. Run the deterministic shape checker per the Two lanes section above (or
    apply its checks by hand where Python is unavailable); cite the exact
    violation.
