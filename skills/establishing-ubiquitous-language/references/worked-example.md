@@ -61,11 +61,3 @@ Note what this example does *not* do: it does not go back and rename any
 identifier in actual code, and it does not invent "Contributor" from
 nothing -- it surfaces that the resolution already happened in this
 repo's own history and records it, which is exactly the glossary's job.
-
-## Provenance (for this skill's home repository only)
-
-For readers working in this skill's own home repository (gitapex): the
-document is `docs/motivation.md`, the draft commit is `241f4392`, and the
-rename commit is `ef222b81` on pull request #2. This section is the only
-place that citation lives -- it is provenance for maintainers of this
-specific repository, not something the worked example above depends on.

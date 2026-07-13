@@ -5,6 +5,12 @@ description: Use when about to push, post, or publish any outward-facing artifac
 
 # Outward Artifact Preflight
 
+**Portability: Repository-scoped.** Checklist is general; check 1's
+"agreed disclosure convention" and the explaining-the-work coupling
+(Relationship to other skills) name this repo's own conventions --
+substitute the calling repository's actual policy and sibling skills
+where they differ.
+
 This is an interim measure: a manual stand-in for the deterministic
 preflight or CI gate this repository has not built yet. Run this
 checklist by hand before every push or post until that gate exists.
@@ -20,27 +26,44 @@ a public sink.
 1. **Undisclosed provenance markers.** Scan for anything identifying the
    build/runtime model, agent, or session that produced the artifact, and
    any internal tooling fingerprint, that the owner has not chosen to
-   disclose. If this repository already has an agreed disclosure
-   convention for PR bodies (for example a fixed "Generated with X"
-   trailer), keep it there. That is independent of check 2, though: a
-   disclosed trailer still has to pass check 2, so replace any
-   non-ASCII glyph in it (an emoji, for instance) with an ASCII
-   equivalent -- disclosure does not exempt something from the ASCII
-   rule. Commit messages follow a separate, narrower rule (where
-   installed, the explaining-the-work skill routes commit-log content to
-   one line plus a `Refs #N` pointer, nothing more) -- do not add a
-   PR-body trailer to a commit message just because it is disclosed
-   there. A bare model identifier (e.g. a `claude-*` model ID), a
-   session URL, or an internal tool name is not disclosed and must be
-   removed, unless this repository has explicitly agreed to disclose it.
+   disclose. Run `python3 scripts/scan_provenance.py --file <file>` first
+   to surface mechanical candidates (model IDs, session URLs, generic
+   build/agent tags) instead of re-scanning for these patterns in prose
+   each time; the script only surfaces candidates, it does not decide
+   whether a hit is actually undisclosed.
+
+   1. A bare model identifier (e.g. a `claude-*` model ID), a session
+      URL, or an internal tool name is not disclosed and must be
+      removed, unless this repository has explicitly agreed to disclose
+      it.
+   2. If this repository already has an agreed disclosure convention for
+      PR bodies (for example a fixed "Generated with X" trailer), keep
+      it there.
+   3. Disclosure does not exempt something from check 2: a disclosed
+      trailer still has to pass the ASCII check, so replace any
+      non-ASCII glyph in it (an emoji, for instance) with an ASCII
+      equivalent.
+   4. Commit messages follow a separate, narrower rule (where installed,
+      the explaining-the-work skill routes commit-log content to one
+      line plus a `Refs #N` pointer, nothing more) -- do not add a
+      PR-body trailer to a commit message just because it is disclosed
+      there.
 2. **ASCII-only.** No em dashes, en dashes, curly quotes, full-width
    punctuation, or any other non-ASCII character. Check with (`-P` enables
    Perl-regex mode so `\t` is read as a tab escape, not two literal
    characters -- a plain bracket expression would still flag ordinary
-   tabs):
+   tabs). This requires GNU grep with PCRE support (`grep -P`), which
+   BSD/macOS grep lacks:
 
    ```bash
    LC_ALL=C grep -nP '[^ -~\t]' <file>
+   ```
+
+   On a platform without `grep -P` (e.g. stock macOS/BSD grep), use this
+   portable equivalent instead:
+
+   ```bash
+   LC_ALL=C perl -ne 'print "$.:$_" if /[^ -~\t\n]/' <file>
    ```
 
    No output means the file is ASCII-only.
@@ -85,7 +108,13 @@ substitutes for the other.
 
 - Never push or post an artifact this checklist has flagged. Fix it first,
   or get the owner's explicit sign-off to proceed anyway with the flag
-  unresolved.
+  unresolved -- for `git push`, this is backed by this plugin's
+  `hooks/check-bash-safety.sh` PreToolUse hook, which runs
+  `scripts/scan_provenance.py` against the outgoing commits and surfaces a
+  warning (not a block) if it flags anything. The script's own docstring
+  says it surfaces candidates, it does not decide -- so a hit does not
+  stop the push, but it does still require applying this checklist's
+  judgment call to each hit before the push is actually safe to make.
 - This skill only applies the checklist; it does not authorize skipping
   it, and it does not replace the deterministic gate this repository has
   not built yet.

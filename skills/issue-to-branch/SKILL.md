@@ -5,6 +5,10 @@ description: Use when starting work from a GitHub issue, creating a branch from 
 
 # Issue to Branch
 
+**Portability: Repository-scoped.** Steps/Output are general; the
+write-path rules in references/github-issue-workflow.md are this
+repository's own.
+
 Turns a GitHub issue into an implementation-ready branch and PR plan
 without losing the issue's acceptance criteria.
 
@@ -30,14 +34,17 @@ without losing the issue's acceptance criteria.
 6. Identify the deterministic gates the mapped criteria require: tests,
    docs checks, release gates, CI status checks. See
    [GitHub issue workflow](references/github-issue-workflow.md) for
-   connector-first read/write conventions and CLI fallback boundaries.
+   connector-first conventions and the no-CLI escalation rule.
 7. Ask one focused question only when multiple interpretations survive
    after repo inspection — never guess silently, never ask what the repo
    already answers. Use portable question handoff: `AskUserQuestion` when
    available, otherwise `AskUserQuestion:` text with the same choices.
 8. Before creating or updating a PR, require its body to carry the
    Acceptance Criteria Map and verification evidence, not just a
-   description of the diff.
+   description of the diff. Validate the table's presence with
+   `python3 scripts/check_acm_present.py --body <pr-body-file>` (or pipe
+   the drafted body on stdin) rather than re-reasoning it in prose each
+   run.
 
 ## Output
 
@@ -63,7 +70,16 @@ Pattern: **Facts** -> **Assumptions** -> **Acceptance Criteria Map** ->
 - Do not implement the issue as part of this skill; it produces a plan,
   not code.
 - Do not merge or enable auto-merge; that is a separate, explicit human or
-  CI decision, never this skill's call to make.
+  CI decision, never this skill's call to make -- backed by this plugin's
+  `hooks/check-bash-safety.sh` PreToolUse hook, which blocks `gh pr merge`
+  (including `--auto`) run via Bash.
 - Do not let a request to skip straight to branch/PR creation shortcut
   Step 4 — an Acceptance Criteria Map is required first regardless of how
   the request is phrased.
+
+## Notes
+
+Portability: [GitHub issue workflow](references/github-issue-workflow.md)'s
+write-path rules (tracking-issue-before-branch, connector-first,
+no-CLI-fallback) are this repository's own git-ecosystem convention;
+substitute the calling repository's actual convention where it differs.

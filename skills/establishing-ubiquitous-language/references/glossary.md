@@ -1,24 +1,21 @@
-# Glossary
+# Glossary (template)
 
-Single source of truth for this repository's ubiquitous language -- the
-shared, consistent vocabulary used identically across code, docs, issues,
-and conversation. Maintained per the `establishing-ubiquitous-language`
-skill (`../SKILL.md`, alongside this file): new entries and conflict
-resolutions go through that skill's Elicit/Detect/Resolve/Maintain
+This file is a template, not live repository state: it ships empty and is
+not the default write target. Per `../SKILL.md` step 4, record resolved
+terms in the calling repository's own glossary doc (e.g. `docs/glossary.md`)
+so the record lives with the repo it describes, not inside a vendored or
+read-only-installed skill folder. Use this template only when the calling
+repository has no established glossary location yet.
+
+New entries and conflict resolutions go through the
+`establishing-ubiquitous-language` skill's Elicit/Detect/Resolve/Maintain
 procedure, not ad hoc.
 
-This is a scaffold: only the one term already resolved in this repo's
-history is recorded so far. Populating it further is an implementation-time
-decision for future terminology work, not a requirement of adding this
-scaffold.
+## `<Term>`
 
-## Contributor
+`<One-sentence definition of the concept this term names.>`
 
-The human giving instructions in this repository's Design-by-Contract
-issue/PR flow (see this skill's `worked-example.md` for the full history).
-Not to be conflated with "repository owner" (a GitHub permission role) or
-"Author" (the AI author/implementer participant in the same flow) --
-distinct concepts, not synonyms.
+Superseded terms: `<prior term(s), if any, and why the change happened.>`
 
-Superseded terms: "Owner" (renamed to Contributor in gitapex PR #2, commit
-`ef222b81`, since the flow described is not specific to repository owners).
+For a real worked resolution (this skill's own home repository's history,
+cited only as an example), see `worked-example.md`.

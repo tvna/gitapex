@@ -1,9 +1,13 @@
 ---
 name: evaluating-skill-quality
-description: Review a SKILL.md (and its references/) against a nine-dimension quality rubric, separating deterministic shape from probabilistic maturity, citing concrete evidence per dimension. Use when reviewing any SKILL.md -- this repository's own or one vendored from elsewhere -- before merging, vendoring, or shipping it.
+description: Review a SKILL.md (and its references/) against a nine-dimension quality rubric, separating deterministic shape from probabilistic maturity, citing concrete evidence per dimension. Use when reviewing any SKILL.md -- this repository's own or one vendored from elsewhere -- before merging, vendoring, or shipping it, for a one-shot static quality verdict; see battle-testing-a-skill for adversarial hostile-input probing, and gated-skill-edits for a measured edit loop, instead.
 ---
 
 # Evaluating Skill Quality
+
+**Portability: Portable.** Self-contained -- carries its own rubric and
+bundled read-only `check_skill_shape.py`; cites only general Anthropic
+product docs, no this-repository tooling.
 
 Judging whether a `SKILL.md` is well-authored is a distinct review lane from
 diff-correctness review or issue/PR contract review: it asks whether the
@@ -73,9 +77,12 @@ just to classify it.
   References to the origin repo as *context*/example are fine;
   references the *procedure* depends on to function are not.
 - **Repository-scoped**: intentionally depends on the origin repo's own
-  tooling or conventions. Legitimate, but must say so explicitly, near
-  the top of `SKILL.md` -- undeclared-but-repository-scoped is itself a
-  finding.
+  tooling or conventions. Legitimate, but must say so explicitly, as a
+  terse one-line marker on the first body line after the H1 (the
+  `portability-near-top` shape check enforces presence within the first
+  6 body lines) -- undeclared-but-repository-scoped is itself a finding.
+  Extended rationale belongs in a footer `## Notes` section of the same
+  file.
 - **Mixed**: a portable core plus repo-specific detail should split the
   two into a clearly named reference file, not blend them.
 
@@ -135,7 +142,9 @@ actually specifies.
   state -- re-fetch when in doubt, don't trust a memorized summary.
 - Never install eval tooling for a target repo (`skill-creator`, `waza`, an
   eval suite, etc.) as part of a review without the operator's go-ahead --
-  propose it instead (dimension 8). The skill's own bundled
+  propose it instead (dimension 8), backed by this plugin's
+  `hooks/check-bash-safety.sh` PreToolUse hook, which blocks install
+  commands run via Bash. The skill's own bundled
   `scripts/check_skill_shape.py` is not such an install -- it ships with
   the skill and only reads.
 - Never patch a wrong verdict by adjusting step 5 when the real fault was

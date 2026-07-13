@@ -5,6 +5,10 @@ description: Use when adversarially stress-testing whether a SKILL.md holds up u
 
 # Battle-testing a skill
 
+**Portability: Mixed.** Procedure is portable; the repo-specific detail
+(this repo's sibling skills, its GitHub project, corroborating
+side-projects) lives only in the references files below.
+
 ## Overview
 
 Battle-testing asks one question a style review does not: **does this
@@ -29,8 +33,9 @@ limits.
 ## When NOT to use
 
 - Triaging a single piece of inbound external text before acting on it ->
-  use untrusted-input-triage. That skill protects the current task; this one
-  audits a skill file.
+  cede this to whatever skill in your harness triages untrusted input before
+  action (in this repo, untrusted-input-triage). That skill protects the
+  current task; this one audits a skill file.
 - Judging a skill's ordinary quality (conciseness, structure, discovery) ->
   that is a static quality review, a different lens from hostile-input
   robustness.
@@ -38,8 +43,11 @@ limits.
 ## Procedure
 
 1. Enumerate the adversarial dimensions first, cold, before reading the
-   target -- so the target cannot narrow what you look for. Use the ten in
-   the Quick reference; add any the target's domain demands.
+   target -- so the target cannot narrow what you look for. Do this in a
+   fresh subagent dispatch (not the current context, which has likely already
+   seen the target): that actually provides the isolated context this step
+   assumes. Use the ten in the Quick reference; add any the target's domain
+   demands.
 2. Apply each dimension to the target SKILL.md. For every problem, name the
    dimension, quote the exact offending line, and state the concrete failure
    it would cause. A finding with no quoted line is not yet a finding.
@@ -70,15 +78,17 @@ for what a pass and a fail look like on each dimension.
 ## Connection to the held-out gate
 
 A battle-test pass/fail is a candidate checkable scorer for the held-out
-validation gate of a skill-iteration trainer (issue #25 component 1): a
-structural verdict is a more reliable signal than open-ended judgment.
+validation gate of a skill-iteration trainer
+(https://github.com/tvna/gitapex/issues/25, component 1): a structural
+verdict is a more reliable signal than open-ended judgment.
 
 ## Stop boundaries
 
-- Do not codify a dimension as established fact beyond what the extraction
-  evidence supports; the convergence is Claude-only (see caveats).
-- Do not present clairvoyance battle/ or waza adversarial output as the
-  authoritative source -- they corroborate, they do not originate this.
+- Do not codify a dimension as established fact beyond what
+  [references/provenance-and-caveats.md](references/provenance-and-caveats.md)
+  supports -- that file is the single owner of the caveats.
+- Do not cite a corroborating side-reference as authoritative: it
+  corroborates, it does not originate this skill.
 - Do not treat a model-level safety refusal as a skill guardrail pass; an
   empty refusal is evidence about neither.
 - Do not skip the quoted-line requirement to make a review read as complete.

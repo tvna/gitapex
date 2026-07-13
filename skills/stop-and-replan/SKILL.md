@@ -5,6 +5,14 @@ description: Use when your own PR body or commit message is about to contain a s
 
 # Stop and Replan
 
+**Portability: Portable.** Depends only on a connected GitHub MCP server (a
+general product capability) for the Stop action below -- no
+this-repository tooling. Tool names are written as `Server:tool` (portable
+shorthand); in Claude Code, translate to the literal double-underscore
+form -- `github:update_pull_request` is `mcp__github__update_pull_request`,
+`github:add_issue_comment` is `mcp__github__add_issue_comment`. Other
+platforms may use a different literal form for the same server/tool pair.
+
 A self-correcting phrase in your own PR body or commit message is a STOP
 signal, not a wording problem. It means the plan missed the issue, not that
 the prose describing it was clumsy.
@@ -27,7 +35,9 @@ On detection, before writing the phrase into the PR or commit:
 2. Close the current PR via `github:update_pull_request` (`state: closed`),
    with a body giving the rationale: what thesis was missed, quoting the
    detected phrase and naming the issue the PR should have satisfied.
-3. Return to the parent issue and post the same rationale via
+3. Verify the close: re-fetch the PR and confirm its state is actually
+   `closed` before proceeding -- do not assume the write succeeded.
+4. Return to the parent issue and post the same rationale via
    `github:add_issue_comment`, then re-plan from there. A fresh branch and
    PR carry the corrected plan; nothing is pushed to the closed PR's branch.
 

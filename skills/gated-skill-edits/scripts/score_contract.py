@@ -64,31 +64,94 @@ def score(output_text, assertions):
     return satisfied / total
 
 
+def split_mean(scores):
+    """Return the arithmetic mean of a non-empty sequence of scores."""
+    scores = list(scores)
+    if not scores:
+        raise ValueError("cannot take the mean of an empty score list")
+    return sum(scores) / len(scores)
+
+
+def strict_compare(before_mean, after_mean):
+    """Return ``"KEEP"`` iff ``after_mean`` strictly exceeds ``before_mean``.
+
+    Ties are rejected, matching the gate's strict improve-or-reject rule
+    (Procedure step 3): a tied or worse selection-split mean is ``"REJECT"``.
+    """
+    return "KEEP" if after_mean > before_mean else "REJECT"
+
+
 def main(argv=None):
     """CLI: score a run's output against a JSON assertions file.
 
     Reads the assertions from a JSON file (standard library only, no YAML
     dependency) and the run output from ``--output`` or standard input, then
-    prints the score.
+    prints the score. With ``--compare-to``, treats each line read from
+    ``--scores`` (or standard input, one float per line) as one task's
+    selection-split score, prints the mean, and prints ``KEEP``/``REJECT``
+    against the given prior mean per the strict improve-or-reject gate --
+    this replaces re-deriving that mean/compare arithmetic by hand each
+    iteration.
     """
     parser = argparse.ArgumentParser(
         description="Score a run against a task's substring assertions."
     )
     parser.add_argument(
         "--assertions",
-        required=True,
         help="Path to a JSON file with output_contains / output_not_contains lists.",
     )
     parser.add_argument(
         "--output",
         help="Path to the run output text; reads standard input when omitted.",
     )
+    parser.add_argument(
+        "--scores",
+        help="Path to a file of one float score per line (selection-split "
+        "scores to average); reads standard input when omitted.",
+    )
+    parser.add_argument(
+        "--compare-to",
+        type=float,
+        help="Prior selection-split mean. When given, read scores per "
+        "--scores/stdin, print the new mean, then KEEP or REJECT per the "
+        "strict improve-or-reject gate. Skips --assertions/--output.",
+    )
     args = parser.parse_args(argv)
-    with open(args.assertions, encoding="utf-8") as handle:
-        assertions = json.load(handle)
+
+    if args.compare_to is not None:
+        try:
+            raw = (
+                open(args.scores, encoding="utf-8").read()
+                if args.scores
+                else sys.stdin.read()
+            )
+            scores = [float(line) for line in raw.splitlines() if line.strip()]
+            mean = split_mean(scores)
+        except (FileNotFoundError, OSError, ValueError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        print(f"{mean:.6f} {strict_compare(args.compare_to, mean)}")
+        return 0
+
+    if not args.assertions:
+        print("error: --assertions is required unless --compare-to is used", file=sys.stderr)
+        return 1
+    try:
+        with open(args.assertions, encoding="utf-8") as handle:
+            assertions = json.load(handle)
+    except FileNotFoundError:
+        print(f"error: assertions file not found: {args.assertions}", file=sys.stderr)
+        return 1
+    except json.JSONDecodeError as exc:
+        print(f"error: invalid JSON in {args.assertions}: {exc}", file=sys.stderr)
+        return 1
     if args.output:
-        with open(args.output, encoding="utf-8") as handle:
-            output_text = handle.read()
+        try:
+            with open(args.output, encoding="utf-8") as handle:
+                output_text = handle.read()
+        except FileNotFoundError:
+            print(f"error: output file not found: {args.output}", file=sys.stderr)
+            return 1
     else:
         output_text = sys.stdin.read()
     print(f"{score(output_text, assertions):.6f}")

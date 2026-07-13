@@ -1,0 +1,27 @@
+{
+  "description": "Deterministic PreToolUse gates backing 5 approved Major findings from docs/superpowers/reports/2026-07-13-skill-gap-triage.md: blocking install commands, direct GitHub CLI writes (including auto-merge and gh api field-flag implicit writes), warning (not blocking) on git push when the outward-artifact-preflight provenance scan flags a candidate, and Write calls that would overwrite an existing issue/PR/MR template.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PLUGIN_ROOT/hooks/check-bash-safety.sh\"",
+            "timeout": 30
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PLUGIN_ROOT/hooks/check-template-overwrite.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

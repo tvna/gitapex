@@ -158,6 +158,12 @@ have been a hook, subagent, or CLAUDE.md content). The Skill-step vs.
 bundled script check below is the one exception: its finding is step-level,
 reported for triage, and is neither a headline nor a *mature* blocker.
 
+A recorded mechanism-fit decision for the *reviewed* skill -- the "keep
+vs. retire, and why" rationale once a wrong-mechanism finding has been
+weighed -- belongs in that skill's footer `## Notes` section, not
+front-loaded above its procedure; the same placement convention that
+keeps portability declarations terse up top applies here.
+
 ### Skill-step vs. bundled script
 
 The three checks above ask whether a skill is the right *artifact*. This
@@ -231,7 +237,11 @@ grading below.
   were portable is a dimension-1/6 defect (it misleads a future vendoring
   decision), not the scoping choice itself. An undeclared level that
   turns out to be repository-scoped is itself a finding, not something to
-  silently infer and move past.
+  silently infer and move past. Declared as a terse one-line marker on
+  the first body line after the H1 (the `portability-near-top` shape
+  check enforces presence within the first 6 body lines); any extended
+  rationale belongs in a footer `## Notes` section of the same file,
+  keeping the classification checkable from this file alone.
 - **Mixed** -- dimension 5 (progressive disclosure) requires the actual
   split, not just the intent to split: the repository-specific part
   belongs in a clearly named reference file (e.g.
@@ -404,16 +414,21 @@ usable with the official `skill-creator` plugin
 (`/plugin install skill-creator@claude-plugins-official`, per
 [Claude Code's own eval-and-iterate docs][cce]); for other targets, an
 `evals/` directory or a third-party runner such as
-`waza` (`microsoft/waza`) if the repo already uses one. gitapex now has
-an `evals/` directory (e.g. `evals/issue-to-branch`) but
-no `evals/evals.json` committed for this skill; `skill-creator` and
-`waza` are available in some review sessions but are session-local
-tooling, not part of the repo -- their presence in one session's
-environment does not make this dimension "measured" for the repo
-itself. Whatever the target, never silently skip
+`waza` (`microsoft/waza`) if the repo already uses one. Check whether the
+target repository has committed eval data (an `evals/` directory or
+`evals/evals.json`) for the specific skill under review -- `skill-creator`
+and `waza` may be available as session-local tooling without being part of
+the repo; their presence in one session's environment does not make this
+dimension "measured" for the repo itself. Whatever the target, never silently skip
 this dimension: state plainly that behavioural evidence is unmeasured for
 the reviewed skill when no mechanism is committed to the repo, rather than
-scoring it pass or fail without one to back the score. Do not install
+scoring it pass or fail without one to back the score. This gap-naming need
+not sit inline in the `SKILL.md`: a repository may record its per-skill
+eval status (baselines, trials, model coverage) centrally in its own
+documentation -- for example a `docs/` eval-status file -- rather than in
+each skill body, since a vendored skill should not carry the origin repo's
+eval-run bookkeeping. Read that documentation before treating an absent
+inline gap-disclosure (no `## Known gaps` section) as undisclosed. Do not install
 missing eval tooling yourself as part of a review -- propose it to the
 operator instead; installing new software (even first-party) is an
 irreversible, outward-facing action outside a review's scope, and a

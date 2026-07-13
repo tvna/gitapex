@@ -22,14 +22,23 @@ import argparse
 import sys
 from pathlib import Path
 
-try:
-    import yaml
-except ModuleNotFoundError:  # pyyaml is the one runtime dependency.
-    sys.stderr.write(
-        "error: pyyaml is required. Run via: "
-        "uv run --with pyyaml python validate_templates.py <repo_root>\n"
-    )
-    raise SystemExit(2)
+
+def _import_yaml():
+    """Import and return the yaml module, failing loudly if pyyaml is absent.
+
+    Deferred from module level so that --check-existing / find_existing_templates
+    (pure filesystem logic, no YAML needed) works under a bare python3 with no
+    pyyaml installed at all. Only the YAML-parsing code paths need this.
+    """
+    try:
+        import yaml
+    except ModuleNotFoundError:  # pyyaml is the one runtime dependency.
+        sys.stderr.write(
+            "error: pyyaml is required. Run via: "
+            "uv run --with pyyaml python validate_templates.py <repo_root>\n"
+        )
+        raise SystemExit(2)
+    return yaml
 
 
 def detect_platform(repo_root: Path) -> str:
@@ -76,6 +85,7 @@ def _read_text(path: Path, errors: list[str]) -> str | None:
 
 
 def _load_yaml_mapping(path: Path, text: str, errors: list[str]) -> dict | None:
+    yaml = _import_yaml()
     try:
         data = yaml.safe_load(text)
     except yaml.YAMLError as exc:
@@ -213,12 +223,83 @@ def validate(repo_root: Path, platform: str) -> list[str]:
     raise ValueError(f"unknown platform: {platform!r}")
 
 
+# Step 1's non-destruction gate: candidate paths for existing Issue/PR
+# templates on each platform. Scripted here so the multi-path, case-
+# insensitive enumeration is not re-reasoned in prose each run.
+_EXISTING_TEMPLATE_CANDIDATES = {
+    "github": [
+        ".github/ISSUE_TEMPLATE",
+        ".github/PULL_REQUEST_TEMPLATE",
+    ],
+    "gitlab": [
+        ".gitlab/issue_templates",
+        ".gitlab/merge_request_templates",
+    ],
+}
+_GITHUB_PR_TEMPLATE_NAME_STEMS = ("pull_request_template", "pull_request_templates")
+_GITHUB_PR_TEMPLATE_EXTS = ("", ".md", ".txt")
+
+
+def _dir_has_template(path: Path) -> bool:
+    """True if the directory holds an actual template, not just a placeholder
+    or GitHub's reserved chooser config.
+
+    A bare ``any(path.iterdir())`` over-triggers: a ``.github/ISSUE_TEMPLATE/``
+    that contains only ``config.yml`` (GitHub's template-*chooser* config, not
+    a template itself) or a ``.gitkeep`` placeholder would be reported as
+    "templates exist", hard-STOPping the seeding skill on a repo that in fact
+    has none. Count only entries that are neither dotfiles nor ``config.yml``.
+    """
+    for child in path.iterdir():
+        if child.name.startswith("."):
+            continue
+        if child.name == "config.yml":
+            continue
+        return True
+    return False
+
+
+def find_existing_templates(repo_root: Path, platform: str) -> list[str]:
+    """Return relative paths of existing templates already in the repo.
+
+    An empty list means the repo has none for this platform -- the skill's
+    Step 1 STOP condition is "any exist", so callers should treat a
+    non-empty result as a hard stop, not a partial-progress signal.
+    """
+    found: list[str] = []
+    for rel in _EXISTING_TEMPLATE_CANDIDATES.get(platform, []):
+        path = repo_root / rel
+        if path.is_dir() and _dir_has_template(path):
+            found.append(rel)
+        elif path.is_file():
+            found.append(rel)
+    if platform == "github":
+        for parent in (repo_root / ".github", repo_root / "docs", repo_root):
+            if not parent.is_dir():
+                continue
+            for entry in parent.iterdir():
+                if not entry.is_file():
+                    continue
+                stem = entry.stem.lower()
+                suffix = entry.suffix.lower()
+                if stem in _GITHUB_PR_TEMPLATE_NAME_STEMS and suffix in _GITHUB_PR_TEMPLATE_EXTS:
+                    found.append(str(entry.relative_to(repo_root)))
+    return found
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Validate generated Issue/PR templates for one platform."
     )
     parser.add_argument("repo_root", type=Path)
     parser.add_argument("--platform", choices=("github", "gitlab"))
+    parser.add_argument(
+        "--check-existing",
+        action="store_true",
+        help="Detection mode for Step 1: list existing templates in "
+        "repo_root instead of validating staged output. Exits 1 if any "
+        "are found (the skill's non-destruction gate), 0 if none.",
+    )
     args = parser.parse_args(argv)
     if not args.repo_root.is_dir():
         sys.stderr.write(f"error: {args.repo_root} is not a directory\n")
@@ -230,6 +311,17 @@ def main(argv: list[str] | None = None) -> int:
         except ValueError as exc:
             sys.stderr.write(f"error: {exc}\n")
             return 2
+
+    if args.check_existing:
+        found = find_existing_templates(args.repo_root, platform)
+        if found:
+            for rel in found:
+                print(rel)
+            print(f"FOUND: {len(found)} existing {platform} template path(s) -- STOP per Step 1")
+            return 1
+        print(f"NONE: no existing {platform} templates found")
+        return 0
+
     errors = validate(args.repo_root, platform)
     if errors:
         for e in errors:

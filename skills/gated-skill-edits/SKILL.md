@@ -5,6 +5,9 @@ description: Use when iteratively editing an existing SKILL.md across repeated m
 
 # Gated skill edits
 
+**Portability: Portable.** Sibling-skill mentions below are examples, not
+a dependency.
+
 Improve an existing `SKILL.md` as bounded, measured edits gated on a
 held-out score, instead of unmeasured rewriting. Adapts SkillOpt
 (arXiv:2605.23904); see [references/skillopt-mapping.md](references/skillopt-mapping.md)
@@ -17,9 +20,10 @@ Before any iteration, confirm both of these exist:
 - A scorer that maps a skill run on a task to a number in `[0,1]` by a
   check a machine or a disciplined reviewer can repeat: exact-match, a
   substring/structural contract (this skill bundles
-  `scripts/score_contract.py`, which scores one deterministically), a test
-  pass/fail, or a battle-test pass/fail (`battle-testing-a-skill` produces
-  one).
+  `scripts/score_contract.py`, which scores one deterministically -- run it
+  as `python3 scripts/score_contract.py --assertions task.json --output
+  run.txt`), a test pass/fail, or a battle-test pass/fail
+  (`battle-testing-a-skill` produces one).
 - A held-out set of tasks not used to motivate any edit.
 
 If either is missing, STOP. This is open-ended judgement, which SkillOpt's
@@ -41,8 +45,23 @@ evaluation. Name the gap; never fake a score to proceed.
 3. **Gate: strict improve-or-reject.** Score the candidate on the selection
    split with the same model and harness. Keep it only if the selection
    score strictly increases. Ties are rejected. A plausible-sounding edit
-   that does not move the score is not kept. See
+   that does not move the score is not kept. When per-task scores come from
+   `scripts/score_contract.py`, use its `--compare-to <prior_mean>` mode
+   (reading one score per line from `--scores` or stdin) to compute the new
+   mean and print `KEEP`/`REJECT` per this rule instead of doing the
+   arithmetic by hand. See
    [references/worked-example.md](references/worked-example.md).
+
+   - **Conditional branch -- LLM-as-judge only with adversarial
+     verification.** If no deterministic scorer exists and an LLM judge is
+     the weaker substitute SkillOpt names, never take the judge's PASS as
+     ground truth on its own. Run a separate adversarial verification pass
+     first: an independent second judgement whose only goal is to break the
+     first verdict -- feed the candidate hostile and degenerate inputs, and
+     confirm the judge cited concrete evidence for its verdict instead of
+     approving on "looks fine". Keep the edit only if it survives that pass.
+     (`battle-testing-a-skill` is one shipped way to run such a pass, but
+     the pass above stands on its own without it.)
 4. **Log rejected edits.** Record each rejected edit and the score change
    it caused, so later iterations do not repeat it. That negative feedback
    is the only value a rejected edit has; discarding it silently wastes it.
@@ -50,16 +69,6 @@ evaluation. Name the gap; never fake a score to proceed.
    on an adjacent model, harness, or nearby task and confirm it does not
    regress below that target's no-skill baseline before treating it as
    done.
-6. **LLM-as-judge only with an adversarial verification pass.** If no
-   deterministic scorer exists and an LLM judge is the weaker substitute
-   SkillOpt names, never take the judge's PASS as ground truth on its own.
-   Run a separate adversarial verification pass first: an independent
-   second judgement whose only goal is to break the first verdict -- feed
-   the candidate hostile and degenerate inputs, and confirm the judge cited
-   concrete evidence for its verdict instead of approving on "looks fine".
-   Keep the edit only if it survives that pass. (`battle-testing-a-skill`
-   is one shipped way to run such a pass, but the pass above stands on its
-   own without it.)
 
 ## Output
 
@@ -86,3 +95,10 @@ evaluation. Name the gap; never fake a score to proceed.
   verification pass.
 - This skill iterates a skill document; it does not build a training-loop
   executor, and it does not review a skill for merge.
+
+## Notes
+
+Portability: sibling-skill mentions (`battle-testing-a-skill`,
+`evaluating-skill-quality`) are this repo's own examples of a
+scorer/verification source, not a dependency -- any equivalent scorer or
+adversarial-verification mechanism satisfies the precondition gate.

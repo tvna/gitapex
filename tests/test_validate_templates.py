@@ -218,3 +218,42 @@ def test_main_fail(tmp_path: Path, capsys):
 
 def test_main_bad_dir(tmp_path: Path):
     assert vt.main([str(tmp_path / "nope"), "--platform", "github"]) == 2
+
+
+def test_find_existing_real_template(tmp_path: Path):
+    it = tmp_path / ".github" / "ISSUE_TEMPLATE"
+    it.mkdir(parents=True)
+    (it / "bug.yml").write_text("x", "utf-8")
+    assert vt.find_existing_templates(tmp_path, "github") == [".github/ISSUE_TEMPLATE"]
+
+
+def test_find_existing_ignores_config_yml(tmp_path: Path):
+    # GitHub's ISSUE_TEMPLATE/config.yml is the template *chooser* config, not
+    # a template -- a repo with only it has no templates and must not STOP.
+    it = tmp_path / ".github" / "ISSUE_TEMPLATE"
+    it.mkdir(parents=True)
+    (it / "config.yml").write_text("blank_issues_enabled: false\n", "utf-8")
+    assert vt.find_existing_templates(tmp_path, "github") == []
+
+
+def test_find_existing_ignores_gitkeep(tmp_path: Path):
+    it = tmp_path / ".github" / "ISSUE_TEMPLATE"
+    it.mkdir(parents=True)
+    (it / ".gitkeep").write_text("", "utf-8")
+    assert vt.find_existing_templates(tmp_path, "github") == []
+
+
+def test_find_existing_root_lowercase_pr_template(tmp_path: Path):
+    # Root-level, lowercase pull_request_template.md is a real, GitHub-honored
+    # location and must be detected.
+    (tmp_path / "pull_request_template.md").write_text("## Summary\n", "utf-8")
+    assert vt.find_existing_templates(tmp_path, "github") == ["pull_request_template.md"]
+
+
+def test_check_existing_config_only_reports_none(tmp_path: Path, capsys):
+    it = tmp_path / ".github" / "ISSUE_TEMPLATE"
+    it.mkdir(parents=True)
+    (it / "config.yml").write_text("blank_issues_enabled: false\n", "utf-8")
+    rc = vt.main([str(tmp_path), "--platform", "github", "--check-existing"])
+    assert rc == 0
+    assert "NONE" in capsys.readouterr().out

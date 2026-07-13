@@ -13,6 +13,8 @@ Checks (the canonical list -- the manual fallback is to apply these):
   - name (only if present): lowercase-hyphenated, <= 64 chars,
     no XML tags, contains no reserved word (anthropic, claude)
   - SKILL.md body: <= 500 lines
+  - portability declaration: appears within the first 6 body lines
+    (a "Portability:" marker, e.g. "**Portability: Portable.**")
   - references/ files: exactly one level deep
   - any references/ file over 100 lines: contains a table of contents
     (a Markdown heading matching "Table of contents" or "Contents",
@@ -44,6 +46,8 @@ NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 # Accept either "Table of contents" or a bare "Contents" heading.
 TOC_RE = re.compile(r"^#+\s+(?:table of )?contents\b",
                     re.IGNORECASE | re.MULTILINE)
+PORTABILITY_RE = re.compile(r"\bportability\s*:", re.IGNORECASE)
+PORTABILITY_MAX_BODY_LINE = 6
 BLOCK_SCALAR_INDICATORS = (">", "|", ">-", "|-", ">+", "|+")
 
 
@@ -96,6 +100,20 @@ def _parse_frontmatter(text: str) -> dict[str, str]:
         fields[key] = value
         i += 1
     return fields
+
+
+def _body_after_frontmatter(text: str) -> list[str]:
+    """Lines after the closing frontmatter '---'. If there is no
+    frontmatter, the whole text is the body."""
+    text = text.lstrip("\ufeff")  # strip a leading UTF-8 BOM, as _parse_frontmatter does
+    lines = text.splitlines()
+    if not text.startswith("---"):
+        return lines
+    end = next((i for i in range(1, len(lines))
+                if lines[i].strip() == "---"), None)
+    if end is None:
+        return lines
+    return lines[end + 1:]
 
 
 def _is_ignorable(p: Path) -> bool:
@@ -160,6 +178,16 @@ def check_shape(target: Path) -> list[CheckResult]:
     results.append(CheckResult(
         "body-length", body_lines <= BODY_MAX_LINES,
         f"SKILL.md body <= {BODY_MAX_LINES} lines", f"{body_lines} lines"))
+
+    body = _body_after_frontmatter(text)
+    near_top = any(PORTABILITY_RE.search(line)
+                   for line in body[:PORTABILITY_MAX_BODY_LINE])
+    results.append(CheckResult(
+        "portability-near-top", near_top,
+        f"a portability declaration appears within the first "
+        f"{PORTABILITY_MAX_BODY_LINE} body lines",
+        "found" if near_top else
+        f"missing or below body line {PORTABILITY_MAX_BODY_LINE}"))
 
     refs_dir = skill_dir / "references"
     if refs_dir.is_dir():
