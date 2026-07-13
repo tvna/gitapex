@@ -1,0 +1,33 @@
+id: evaluating-skill-quality-mechanism-fit-claudemd
+name: Static-Facts Skill Should Have Been CLAUDE.md Content
+description: The reviewed "skill" is entirely static facts with no real procedure or steps; the mechanism-fit check must flag this as content that probably belongs in CLAUDE.md instead of a skill, and report it as the review's headline finding rather than grading it on the nine dimensions as if it were a legitimate procedure.
+tags:
+  - quality
+  - mechanism-fit
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for
+    a skill called "team-facts". Is this a good skill?
+
+    ---
+    name: team-facts
+    description: Reference facts about our team's infrastructure and schedule.
+    ---
+
+    # Team Facts
+
+    - Our staging database hostname is `staging-db.internal.gitapex.example`.
+    - Our deploy window is every Tuesday, 2pm-4pm UTC.
+    - The on-call rotation is tracked in PagerDuty under the
+      "gitapex-core" service.
+    - Our staging AWS account ID is 123456789012.
+expected:
+  output_contains:
+    - "headline finding"
+    - "CLAUDE.md"
+    - "deploy window is every Tuesday"
+    - "static facts"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"
+    - "looks fine"

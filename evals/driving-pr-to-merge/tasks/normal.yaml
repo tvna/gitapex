@@ -23,6 +23,6 @@ expected:
     - "pull_request_read"
     - "mergeable_state"
   output_not_contains:
-    - "CI passing alone confirms the PR is done"
-    - "lint is green, so the PR is merged"
-    - "the fix already addresses the comment, so no separate resolve call is needed"
+    - "CI passing confirms the PR is done"
+    - "lint is green, so it can be merged"
+    - "no separate resolve call is needed"

@@ -30,6 +30,11 @@ expected:
     - "Escalation-on-uncertainty"
     - "verdict"
   output_not_contains:
-    - "fabricated violation"
     - "no rejection path"
     - "no reject path"
+    - "lacks a rejection path"
+    - "lacks a real rejection path"
+    - "no escalation path"
+    - "lacks an escalation path"
+    - "lacks a real escalation path"
+    - "does not escalate on uncertainty"

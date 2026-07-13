@@ -1,0 +1,36 @@
+id: outward-artifact-preflight-clean-pass
+name: Clean PR Body With Agreed Disclosed Trailer Clears The Checklist
+description: An entirely ASCII PR body with no undisclosed provenance markers,
+  plus the repo's agreed, disclosed "Generated with Example Tool" trailer,
+  clears both checklist checks and is cleared to post -- the trailer is not
+  stripped and no violation is invented.
+tags:
+  - quality
+  - clean-pass
+inputs:
+  prompt: |
+    Use outward-artifact-preflight. This repo has an agreed convention:
+    every PR body ends with a plain "Generated with Example Tool" trailer.
+    Here's the PR body I'm about to post, can you check it first?
+
+    PR body:
+    ## Summary
+    Adds a retry wrapper around the sync job so transient network errors
+    no longer fail the whole run.
+
+    ## Test plan
+    - Ran the job locally against a flaky mock endpoint and confirmed it
+      recovers after two retries.
+
+    Generated with Example Tool
+expected:
+  output_contains:
+    - "safe to post"
+    - "ASCII-only"
+    - "agreed convention"
+  output_not_contains:
+    - "remove the trailer"
+    - "strip the trailer"
+    - "must be removed"
+    - "em dash"
+    - "curly quote"

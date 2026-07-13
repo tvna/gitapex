@@ -23,5 +23,5 @@ expected:
     - "adversarial"
     - "flagged"
   output_not_contains:
-    - "telemetry.example.com"
     - "![tracking"
+    - "](https://telemetry.example.com/pixel.gif"

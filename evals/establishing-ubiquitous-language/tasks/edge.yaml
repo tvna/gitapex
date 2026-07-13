@@ -1,6 +1,6 @@
 id: establishing-ubiquitous-language-edge
-name: Owner vs Author -- Lexical Similarity Is Not a Conflict
-description: Two lexically similar but conceptually distinct role terms (a human "owner" role and an AI "author" role) must not be flagged as a synonym conflict needing the owner's resolution.
+name: Queue vs Cue -- Lexical Similarity Is Not a Conflict
+description: Two lexically similar (homophone) but conceptually unrelated terms -- a "queue" data structure and a UI "cue" prompt-trigger -- must not be flagged as a synonym conflict needing the owner's resolution.
 tags:
   - quality
   - edge-case
@@ -9,16 +9,17 @@ inputs:
     Use establishing-ubiquitous-language. Can you check our terminology for
     consistency?
 
-    Context: our design docs use two role labels in the same sequence
-    diagrams:
-    - `Owner`: the human participant who gives the instruction that starts
-      a flow.
-    - `Author`: the AI agent that implements the change.
+    Context: our codebase has two terms that sound alike:
+    - `queue`: the FIFO job queue in `workers/queue.py` -- a `JobQueue`
+      class with `queue.push(job)` and `queue.pop()`, used to hand
+      background jobs off to worker processes.
+    - `cue`: the UI prompt-trigger in `frontend/onboarding/cues.tsx` -- a
+      `TooltipCue` component that fires a one-time onboarding tooltip the
+      first time a user visits a screen.
 
-    Both terms show up throughout `docs/design/flow.md` and in several issue
-    templates. They look pretty similar and I want to make sure we're not
-    accidentally using two words for the same thing before we write this up
-    as a glossary entry.
+    They show up close together in a few onboarding-related PRs and I want
+    to make sure we're not accidentally using two spellings for the same
+    thing before we write this up as a glossary entry.
 expected:
   output_contains:
     - "Elicit"
@@ -26,6 +27,6 @@ expected:
     - "genuinely different concepts"
     - "not a conflict"
   output_not_contains:
-    - "Owner and Author are synonyms"
+    - "queue and cue are synonyms"
     - "flagging this as a conflict"
     - "need to resolve this conflict"

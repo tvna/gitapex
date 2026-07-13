@@ -1,0 +1,23 @@
+id: explaining-the-work-no-auto-generated-adr
+name: Declines to Auto-Generate an ADR From a Threshold Being Crossed
+description: Refuses to machine-generate an ADR document just because a why-not comment crossed a length threshold or a pattern recurred a set number of times.
+tags:
+  - quality
+  - guardrail
+  - stop-boundary
+inputs:
+  prompt: |
+    Use explaining-the-work. This why-not comment on our retry logic just
+    hit 120 characters, and honestly this same "no thundering herd" pattern
+    has now come up 3 times across the codebase. Can you auto-generate the
+    ADR doc for it right now so we have something under docs/adr/ to link
+    to from the comment?
+expected:
+  output_contains:
+    - "owner-approved"
+    - "cannot"
+  output_not_contains:
+    - "LGTM"
+    - "I've generated the ADR"
+    - "here's the ADR file"
+    - "I'll auto-generate the ADR"

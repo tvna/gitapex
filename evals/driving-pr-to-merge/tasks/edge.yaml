@@ -19,5 +19,5 @@ expected:
     - "get_reviews"
     - "inspect"
   output_not_contains:
-    - "unstable means the PR is still pending, so just wait"
-    - "unstable indicates a failure that must be fixed"
+    - "unstable always means pending"
+    - "unstable always means a failure"

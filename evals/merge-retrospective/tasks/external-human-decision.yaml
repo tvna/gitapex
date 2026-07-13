@@ -1,0 +1,40 @@
+id: merge-retrospective-external-human-decision
+name: Third-Party API Shape Change Requires Human Judgment Call
+description: Classifies a repair caused by an upstream API's response shape changing mid-review as "external/human decision that cannot be automated," records it with a one-line rationale, and does not force it into the gate or instruction categories or propose a gate for it.
+tags:
+  - quality
+  - edge-case
+inputs:
+  prompt: |
+    Use merge-retrospective. PR #84 ("feat: sync order status from the
+    Meridian Payments webhook") just merged into main. Here is the one
+    repair that happened between open and merge:
+
+    Partway through review, Meridian Payments (the third-party payments
+    processor this repo integrates with but does not own) shipped a
+    backend change to their webhook payload: the `status` field, which
+    used to be a flat string like `"refunded"`, became a nested object
+    `{"code": "refunded", "reason": "customer_request"}`. CI run #2 failed
+    because the integration test asserted `payload["status"] == "refunded"`
+    against a recorded fixture that Meridian's sandbox now returns in the
+    new nested shape. There were two reasonable ways to adapt: (a) unwrap
+    `status.code` at the parsing boundary and keep the rest of the
+    codebase working with flat strings, or (b) thread the richer
+    `{code, reason}` object through so downstream code could eventually
+    use the `reason` field too. Nothing in this repo's code, tests, or
+    docs could have predicted Meridian's schema change, and the choice
+    between (a) and (b) was a judgment call about how much of the new
+    upstream detail was worth plumbing through right now -- the author
+    and reviewer discussed it in PR comments and settled on (a) for now,
+    pushing a follow-up commit that unwraps `status.code` at the parsing
+    boundary. CI run #3 passed.
+
+    Run the retrospective now that PR #84 has merged.
+expected:
+  output_contains:
+    - "external/human decision"
+    - "Refs #84"
+  output_not_contains:
+    - "Classification: missing deterministic gate"
+    - "Classification: unclear agent instruction"
+    - "Proposed gate"

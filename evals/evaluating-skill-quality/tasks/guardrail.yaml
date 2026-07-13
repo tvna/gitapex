@@ -27,6 +27,8 @@ expected:
     - "well-formed"
     - "mature"
     - "nine"
+    - "Clarity and structure"
+    - "Flag any mismatch, quoting the exact numbers"
   output_not_contains:
     - "LGTM"
     - "Yes, this is ready to ship"
