@@ -67,12 +67,15 @@ def _check_ascii(path: Path, text: str, errors: list[str]) -> None:
         errors.append(f"{path}: non-ASCII content at byte {exc.start}")
 
 
-def _load_yaml_mapping(path: Path, errors: list[str]):
+def _read_text(path: Path, errors: list[str]) -> str | None:
     try:
-        text = path.read_text(encoding="utf-8")
-    except OSError as exc:
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
         errors.append(f"{path}: cannot read file ({exc})")
         return None
+
+
+def _load_yaml_mapping(path: Path, text: str, errors: list[str]) -> dict | None:
     try:
         data = yaml.safe_load(text)
     except yaml.YAMLError as exc:
@@ -98,7 +101,9 @@ def _check_pr_template_github(repo_root: Path) -> list[str]:
     if not found:
         errors.append(f"{repo_root}: no PULL_REQUEST_TEMPLATE.md found")
     for p in found:
-        text = p.read_text(encoding="utf-8")
+        text = _read_text(p, errors)
+        if text is None:
+            continue
         if not text.strip():
             errors.append(f"{p}: PR template is empty")
         _check_ascii(p, text, errors)
@@ -113,13 +118,15 @@ def validate_github(repo_root: Path) -> list[str]:
     if not forms:
         errors.append(f"{tmpl_dir}: no issue form (.yml) files found")
     for form in forms:
-        text = form.read_text(encoding="utf-8") if form.is_file() else ""
+        text = _read_text(form, errors)
+        if text is None:
+            continue
         _check_ascii(form, text, errors)
-        data = _load_yaml_mapping(form, errors)
+        data = _load_yaml_mapping(form, text, errors)
         if data is None:
             continue
         for key in GITHUB_REQUIRED_TOP_KEYS:
-            if key not in data or data[key] in (None, "", []):
+            if key not in data or data[key] in (None, ""):
                 errors.append(f"{form}: missing required key '{key}'")
         body = data.get("body")
         if not isinstance(body, list) or not body:
@@ -147,20 +154,25 @@ def validate_github(repo_root: Path) -> list[str]:
                 errors.append(f"{form}: body[{i}] {etype} needs attributes.label")
     config = tmpl_dir / "config.yml"
     if config.is_file():
-        cfg = _load_yaml_mapping(config, errors)
-        if isinstance(cfg, dict):
-            if "blank_issues_enabled" in cfg and not isinstance(
-                cfg["blank_issues_enabled"], bool
-            ):
-                errors.append(f"{config}: 'blank_issues_enabled' must be boolean")
-            links = cfg.get("contact_links")
-            if links is not None and not isinstance(links, list):
-                errors.append(f"{config}: 'contact_links' must be a list")
-            elif isinstance(links, list):
-                for j, link in enumerate(links):
-                    if not isinstance(link, dict) or not all(
-                        k in link for k in ("name", "url", "about")
-                    ):
-                        errors.append(f"{config}: contact_links[{j}] needs name/url/about")
+        ctext = _read_text(config, errors)
+        if ctext is not None:
+            _check_ascii(config, ctext, errors)
+            cfg = _load_yaml_mapping(config, ctext, errors)
+            if isinstance(cfg, dict):
+                if "blank_issues_enabled" in cfg and not isinstance(
+                    cfg["blank_issues_enabled"], bool
+                ):
+                    errors.append(f"{config}: 'blank_issues_enabled' must be boolean")
+                links = cfg.get("contact_links")
+                if links is not None and not isinstance(links, list):
+                    errors.append(f"{config}: 'contact_links' must be a list")
+                elif isinstance(links, list):
+                    for j, link in enumerate(links):
+                        if not isinstance(link, dict) or not all(
+                            k in link for k in ("name", "url", "about")
+                        ):
+                            errors.append(
+                                f"{config}: contact_links[{j}] needs name/url/about"
+                            )
     errors += _check_pr_template_github(repo_root)
     return errors

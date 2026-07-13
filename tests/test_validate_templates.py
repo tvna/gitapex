@@ -98,3 +98,45 @@ def test_github_non_ascii(tmp_path: Path):
     bad = "name: X\ndescription: café\nbody:\n  - type: markdown\n    attributes:\n      value: hi\n"
     errs = vt.validate_github(_github_repo(tmp_path, form_text=bad))
     assert any("non-ASCII" in e for e in errs)
+
+
+VALID_CONFIG = (
+    "blank_issues_enabled: false\n"
+    "contact_links:\n"
+    "  - name: Discuss\n"
+    "    url: https://example.com\n"
+    "    about: Talk to us\n"
+)
+
+
+def _write_config(tmp_path: Path, text: str) -> Path:
+    repo = _github_repo(tmp_path)
+    config = repo / ".github" / "ISSUE_TEMPLATE" / "config.yml"
+    config.write_text(text, encoding="utf-8")
+    return repo
+
+
+def test_github_config_valid(tmp_path: Path):
+    repo = _write_config(tmp_path, VALID_CONFIG)
+    assert vt.validate_github(repo) == []
+
+
+def test_github_config_bad_blank_issues_enabled(tmp_path: Path):
+    bad = "blank_issues_enabled: 1\n"
+    repo = _write_config(tmp_path, bad)
+    errs = vt.validate_github(repo)
+    assert any("blank_issues_enabled' must be boolean" in e for e in errs)
+
+
+def test_github_config_bad_contact_link(tmp_path: Path):
+    bad = "contact_links:\n  - name: Discuss\n    url: https://example.com\n"
+    repo = _write_config(tmp_path, bad)
+    errs = vt.validate_github(repo)
+    assert any("contact_links[0] needs name/url/about" in e for e in errs)
+
+
+def test_github_config_non_ascii(tmp_path: Path):
+    bad = "blank_issues_enabled: false\n# café\n"
+    repo = _write_config(tmp_path, bad)
+    errs = vt.validate_github(repo)
+    assert any("non-ASCII" in e for e in errs)
