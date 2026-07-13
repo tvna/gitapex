@@ -24,7 +24,7 @@ multi-commit batching) rather than a general-purpose PR-publishing library.
 
 Usage::
 
-    python3 scripts/sync_pr_publish.py \\
+    python3 .github/scripts/sync_pr_publish.py \\
         --base main --branch chore/sync-claude-md \\
         --title TITLE --body-file body.md \\
         --commit-subject SUBJECT --commit-body BODY \\

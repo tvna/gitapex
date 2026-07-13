@@ -1,0 +1,36 @@
+id: evaluating-skill-quality-normal
+name: Standard Review of a Mediocre SKILL.md
+description: Reviews a vague, example-free, Stop-section-free SKILL.md excerpt and must cite the deterministic shape checker plus walk the probabilistic dimensions with quoted evidence, not a summary.
+tags:
+  - quality
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review the following draft SKILL.md for
+    a skill called "document-helper" and give me the full review.
+
+    ---
+    name: document-helper
+    description: Helps with documents and file processing tasks.
+    ---
+
+    # Document Helper
+
+    This skill helps you work with documents. Follow good practices and
+    use your best judgment throughout.
+
+    ## Procedure
+
+    1. Open the document.
+    2. Do the necessary processing.
+    3. Save the result.
+
+    The skill dir is skills/document-helper/ if you need to run the
+    shape checker against it.
+expected:
+  output_contains:
+    - "check_skill_shape.py"
+    - "Helps with documents and file processing tasks"
+    - "Use when"
+  output_not_contains:
+    - "LGTM"
+    - "looks fine"

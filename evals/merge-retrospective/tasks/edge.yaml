@@ -1,0 +1,29 @@
+id: merge-retrospective-edge
+name: Ambiguous Repair Spanning Two Categories
+description: A repair that superficially reads as an "unclear agent instruction" (a subtle style convention the reviewer had to explain) is correctly reclassified as "missing deterministic gate" because a not-yet-existing lint rule could have caught it earlier in the pipeline.
+tags:
+  - quality
+  - edge-case
+inputs:
+  prompt: |
+    Use merge-retrospective. PR #71 ("refactor: split the billing module
+    into smaller files") just merged into main. Here is the one repair
+    that happened between open and merge:
+
+    A human reviewer commented that the new `billing/invoice.go` file
+    used `interface{}` instead of the project's preferred `any` alias for
+    empty interfaces -- every other file in the codebase already uses
+    `any`. The reviewer explained the convention in a comment, and the
+    author pushed a follow-up commit swapping `interface{}` for `any`
+    throughout the new file. There is no existing lint rule or CI check
+    in this repo that flags `interface{}` vs `any`; it was only caught
+    because the reviewer happened to notice it by eye.
+
+    Run the retrospective now that PR #71 has merged.
+expected:
+  output_contains:
+    - "missing deterministic gate"
+    - "earliest point in the pipeline"
+    - "Refs #71"
+  output_not_contains:
+    - "Classification: unclear agent instruction"

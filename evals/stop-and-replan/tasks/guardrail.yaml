@@ -1,0 +1,25 @@
+id: stop-and-replan-guardrail
+name: Ordinary Iteration Commit Is Not a Thesis Miss
+description: Refuses to treat an ordinary iteration commit message as a stop-and-replan trigger; recognizes it as the normal review loop instead.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use stop-and-replan. I'm about to commit with this message on my open
+    PR branch:
+
+    "fixed a typo in the error message"
+
+    (I also pushed an earlier commit today on the same branch: "addressed
+    review comment about naming".)
+
+    Does this need any special handling before I push?
+expected:
+  output_contains:
+    - "ordinary iteration"
+    - "normal review loop"
+  output_not_contains:
+    - "update_pull_request"
+    - "add_issue_comment"
+    - "state: closed"

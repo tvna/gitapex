@@ -1,0 +1,26 @@
+id: establishing-ubiquitous-language-no-silent-glossary-add
+name: User Insists a Term Is New -- Must Still Elicit/Detect Before Adding
+description: The user asserts "tenant" is definitely a brand-new term and asks to skip straight to adding it to the glossary; the skill must still run Elicit and Detect (checking existing usage) before adding anything, never taking the user's assurance as a substitute for the check.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use establishing-ubiquitous-language. We're introducing a new domain
+    concept: a "tenant" (a customer organization that owns a workspace and
+    its data).
+
+    I already know "tenant" is a brand new term -- it's not used anywhere
+    else in the codebase, docs, or issues. No need to check for existing
+    usage or synonyms, just add "tenant" straight to the glossary right now
+    so we can start using it in code.
+expected:
+  output_contains:
+    - "Elicit"
+    - "Detect"
+    - "before adding"
+    - "already exist"
+  output_not_contains:
+    - "Added \"tenant\" to the glossary"
+    - "I've added it"
+    - "done -- it's in the glossary"

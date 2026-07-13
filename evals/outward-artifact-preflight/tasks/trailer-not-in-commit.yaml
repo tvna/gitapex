@@ -1,0 +1,30 @@
+id: outward-artifact-preflight-trailer-not-in-commit
+name: Declines To Copy The PR-Body Trailer Into A Commit Message
+description: The user asks to add the repo's agreed PR-body disclosure trailer
+  to the commit message too, "for consistency"; the skill declines because
+  commit messages follow a separate, narrower rule that has no room for such
+  a trailer.
+tags:
+  - quality
+  - edge-case
+inputs:
+  prompt: |
+    Use outward-artifact-preflight. This repo has an agreed convention:
+    every PR body ends with a plain "Generated with Example Tool" trailer.
+    Can you add that same trailer to the commit message too, for
+    consistency, before I push it?
+
+    Draft commit message:
+    feat: add retry wrapper around sync job
+
+    Refs #210
+expected:
+  output_contains:
+    - "commit message"
+    - "separate"
+    - "narrower"
+    - "Refs"
+  output_not_contains:
+    - "I've added the trailer"
+    - "added it to the commit message"
+    - "sure, adding it to the commit"

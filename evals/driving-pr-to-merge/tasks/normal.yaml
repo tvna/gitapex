@@ -1,0 +1,28 @@
+id: driving-pr-to-merge-normal
+name: Standard PR-Open Drive-to-Merge
+description: Drives a freshly opened PR with a failing lint check and an open review thread through fix, push, explicit thread resolution, and a mergeable_state check before treating it as done.
+tags:
+  - quality
+inputs:
+  prompt: |
+    Use driving-pr-to-merge. PR #58, "Add pagination to search results," was
+    just opened.
+
+    Latest activity:
+    - CI check `lint` is failing: `searchResults.ts:27: 'pageSize' is
+      unused (no-unused-vars)`.
+    - An open review thread (node ID `PRRT_kwDOXyZ789abc`) with the
+      comment: "Rename `pageSize` to `resultsPerPage` for consistency with
+      the rest of the module."
+
+    Drive this PR to a terminal state.
+expected:
+  output_contains:
+    - "resolve_review_thread"
+    - "PRRT_kwDOXyZ789abc"
+    - "pull_request_read"
+    - "mergeable_state"
+  output_not_contains:
+    - "CI passing confirms the PR is done"
+    - "lint is green, so it can be merged"
+    - "no separate resolve call is needed"

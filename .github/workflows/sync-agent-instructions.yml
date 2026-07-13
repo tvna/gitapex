@@ -85,7 +85,7 @@ jobs:
       # unsigned commit, which this repository's required_signatures
       # branch-protection rule rejects at merge time (the original failure
       # this workflow hit). Mint a short-lived GitHub App installation token
-      # instead; scripts/sync_pr_publish.py uses it to create the commit
+      # instead; .github/scripts/sync_pr_publish.py uses it to create the commit
       # server-side via the GraphQL createCommitOnBranch mutation, which
       # GitHub signs and shows as Verified. See the App setup steps in
       # CONTRIBUTING.md for how SYNC_BOT_APP_ID / SYNC_BOT_APP_PRIVATE_KEY
@@ -109,7 +109,7 @@ jobs:
 
           Review and merge behind the code-owner gate. Do not auto-merge.
           EOF
-          uv run --frozen python3 scripts/sync_pr_publish.py \
+          uv run --frozen python3 .github/scripts/sync_pr_publish.py \
             --base "${GITHUB_REF_NAME}" \
             --branch chore/sync-claude-md \
             --title "chore: sync agent instructions from ${MASTER_REPO}" \

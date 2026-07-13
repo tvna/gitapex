@@ -67,17 +67,30 @@ reads as a fixed path.
 
 ## Deterministic shape
 
-| Check | Result | Evidence |
-|---|---|---|
-| Frontmatter present | Pass | Frontmatter block at lines 1-4; `name:` at line 2, `description:` at line 3 |
-| `name`, present, lowercase-hyphenated, <= 64 chars, no XML tags | Pass | `explaining-the-work` (19 chars); no XML tags. (Not required to match the directory -- see rubric.md dimension 1 -- but it does here, which is a readability nit-pass, not a shape requirement.) |
-| No reserved word | Pass | Contains neither `anthropic` nor `claude` |
-| `description` non-empty, no XML tags, <= 1024 chars | Pass | Line 3 is one line (203 chars), no `<tag>` |
-| `description` states both what and when | Pass | "Routes explanation responsibility..." (what) + "Use when writing or editing code comments, docstrings, or finalizing commit/PR messages." (when) |
-| Body <= 500 lines | Pass | 45 lines total |
-| `references/` one level deep, TOC past 100 lines | N/A | No `references/` directory exists for this skill |
+Run the bundled checker rather than computing by hand (from the repo root,
+using the checker's path within this skill):
 
-Verdict on shape alone: **well-formed**.
+```
+$ python3 skills/evaluating-skill-quality/scripts/check_skill_shape.py skills/explaining-the-work
+CHECK                RESULT  EVIDENCE (rule)
+description-present  PASS    present  (description present and non-empty)
+description-no-xml   PASS    no tags  (description has no XML tags)
+description-length   PASS    203 chars  (description <= 1024 chars)
+name-pattern         PASS    'explaining-the-work'  (name is lowercase-hyphenated)
+name-length          PASS    19 chars  (name <= 64 chars)
+name-no-xml          PASS    no tags  (name has no XML tags)
+name-not-reserved    PASS    'explaining-the-work'  (name contains no reserved word ('anthropic', 'claude'))
+body-length          PASS    45 lines  (SKILL.md body <= 500 lines)
+
+8/8 checks passed
+```
+
+(`name` is not required to match the directory -- see rubric.md dimension
+1 -- but it does here, which is a readability nit-pass, not a shape
+requirement. The checker has no `references/` check to report for this
+skill since it ships no `references/` directory.)
+
+Verdict on shape alone: **well-formed** (exit code 0).
 
 ## Probabilistic dimensions
 

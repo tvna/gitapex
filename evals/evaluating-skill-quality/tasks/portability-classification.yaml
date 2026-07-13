@@ -1,0 +1,46 @@
+id: evaluating-skill-quality-portability-classification
+name: Undeclared Repository-Scoped Procedure Must Be Flagged As Its Own Finding
+description: A SKILL.md excerpt reads like a general-purpose skill but its procedure actually depends on the origin repo's own script, label taxonomy, template file, and Slack channel, and never says so anywhere near the top of the file; establishing the portability level must surface this undeclared-but-repository-scoped state as a real finding, not silently infer and move past it.
+tags:
+  - quality
+  - portability
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for
+    a skill called "drafting-release-notes", including establishing its
+    portability level before walking the nine dimensions:
+
+    ---
+    name: drafting-release-notes
+    description: Draft release notes from merged PRs since the last tag. Use when the user asks to draft, generate, or update release notes.
+    ---
+
+    # Drafting Release Notes
+
+    ## Procedure
+
+    1. Run `./tools/gitapex-changelog/collect_merged_prs.sh` from the
+       repo root to list every PR merged since the last tag.
+    2. For each PR, look up its category using the label mapping in
+       `.gitapex/release-label-map.yaml` (this repo's own label
+       taxonomy -- `area/backend`, `area/frontend`, `kind/fix`, etc.).
+    3. Group entries by category and write them out following the exact
+       heading order in `RELEASE_TEMPLATE.md` at the repo root.
+    4. Post the draft to the `#releases` channel for review before
+       tagging.
+
+    Nowhere in this excerpt, or anywhere near the top of the file, does
+    it say this skill is repository-scoped or gitapex-specific -- on its
+    face it reads like a general "draft release notes" skill anyone
+    could vendor.
+expected:
+  output_contains:
+    - "repository-scoped"
+    - "undeclared"
+    - ".gitapex/release-label-map.yaml"
+    - "collect_merged_prs.sh"
+  output_not_contains:
+    - "this skill is Portable"
+    - "classified as Portable"
+    - "no portability concerns"
+    - "LGTM"

@@ -17,12 +17,12 @@ dev = [
 package = false
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
-pythonpath = ["scripts", "skills/seeding-issue-pr-templates/scripts"]
-addopts = "--cov=scripts --cov-report=term-missing"
+testpaths = ["tests", "skills/evaluating-skill-quality/scripts"]
+pythonpath = [".github/scripts", "skills/gated-skill-edits/scripts", "skills/evaluating-skill-quality/scripts", "skills/seeding-issue-pr-templates/scripts"]
+addopts = "--cov=.github/scripts --cov=skills/gated-skill-edits/scripts --cov=skills/evaluating-skill-quality/scripts --cov=skills/seeding-issue-pr-templates/scripts --cov-report=term-missing"
 
 [tool.coverage.run]
-source = ["scripts"]
+source = [".github/scripts", "skills/gated-skill-edits/scripts", "skills/evaluating-skill-quality/scripts", "skills/seeding-issue-pr-templates/scripts"]
 
 [tool.coverage.report]
 exclude_lines = [

@@ -34,7 +34,11 @@ Reference: `tvna/clairvoyance` (`docs/repository-layout.md`,
 
 - `hooks/` (SessionStart hooks and any other runtime hook).
 - `evals/` (waza eval suites per skill) and any `scripts/check_skills.py`-style
-  deterministic quality gate.
+  deterministic quality gate. **Update:** `tvna/gitapex#44` added
+  `waza check` as a non-blocking, informational CI report (always exits 0,
+  verified empirically against `waza check --help`) — this is visibility
+  only. The deterministic gate itself (`waza gate` against a baseline, which
+  needs a per-skill `eval.yaml`) remains deferred.
 - `.codex-plugin/plugin.json` and `.agents/plugins/marketplace.json`
   (multi-agent manifests) — Claude Code only for this pass.
 - `managed/`-style server/UI/compose product folders (the CLAUDE.md §5

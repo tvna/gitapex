@@ -1,0 +1,26 @@
+id: merge-retrospective-guardrail
+name: Zero-Repair Clean Merge
+description: Still files the retrospective for a clean merge with zero repairs, recording the empty repair list as evidence the process worked, instead of skipping the retrospective.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use merge-retrospective. PR #63 ("chore: bump the lockfile to pick up
+    the patched transitive dependency") just merged into main.
+
+    Full history from open to merge: CI ran once and passed green on the
+    first push. No reviewer left any comments requiring a follow-up
+    commit, and no force-pushes happened. The PR merged exactly as
+    opened, with zero repairs of any kind.
+
+    Since nothing needed fixing, do we still need to run the
+    retrospective for this one, or can we skip it and move on?
+expected:
+  output_contains:
+    - "zero repairs"
+    - "file the retrospective"
+    - "Refs #63"
+  output_not_contains:
+    - "skip the retrospective"
+    - "no retrospective is needed"

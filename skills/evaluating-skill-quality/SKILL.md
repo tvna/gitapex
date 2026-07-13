@@ -11,15 +11,15 @@ skill artifact itself is good, not whether a change is correct.
 
 ## Two lanes
 
-- **Deterministic shape** -- fixed rules a checker script would decide if
-  the target repository has one (e.g. `scripts/check_skills.py`); check by
-  hand otherwise. Sources and the Claude-Code-vs-generic-spec split:
-  `references/rubric.md` dimension 1. `description`: non-empty, no XML
-  tags, <= 1024 chars, states what and when. `name`, if present:
-  lowercase-hyphenated, <= 64 chars, no XML tags, no reserved word
-  (`anthropic`, `claude`); optional in Claude Code and need not match the
-  directory. `SKILL.md` body <= 500 lines. `references/` files: one level
-  deep, table of contents past 100 lines.
+- **Deterministic shape** -- fixed rules a script decides, not judgment.
+  Run the bundled checker on the target skill dir, giving both paths from
+  the same working directory -- e.g. from the repo root:
+  `python3 skills/evaluating-skill-quality/scripts/check_skill_shape.py <skill-dir>`
+  (stdlib-only, read-only). It is the single source of truth for the exact
+  rules and limits and prints PASS/FAIL per check. On a
+  Python-less surface, apply the same rules by reading that script's
+  check list (its module docstring enumerates them). The nine maturity
+  dimensions below are deliberately not scripted.
 - **Probabilistic maturity** -- nine dimensions of judgment that need a model
   or human, not a script. Full rubric with pass/fail evidence:
   [references/rubric.md](references/rubric.md).
@@ -40,15 +40,22 @@ have been a different mechanism is not fixed by polishing it further.
 - **Skill vs. hook**: a skill is an instruction the model *chooses* to
   follow; a hook fires *deterministically*. "Every time X, always do Y"
   (a formatter after every edit) or "never do this" (an absolute
-  prohibition) is the wrong tool as a skill/prose instruction alone --
-  under pressure, in a long session, or facing a prompt injection, a
-  model can fail to follow a prompted rule. Flag any safety-critical
-  prohibition in the reviewed skill with no hook or permission backing.
+  prohibition) needs deterministic backing, not prose alone. Flag any
+  safety-critical prohibition in the reviewed skill with no hook or
+  permission backing -- see `references/rubric.md`'s Mechanism fit section
+  for why a prompted rule fails under pressure.
 - **Skill vs. CLAUDE.md**: CLAUDE.md is for facts Claude should hold
   *all the time*; a skill is for a *procedure*, loaded only when
   invoked. Static facts with no real steps probably belong in CLAUDE.md
   instead; a multi-step procedure crammed into CLAUDE.md is the
   mirror-image mistake.
+- **Skill-step vs. bundled script**: a deterministic step *inside* a
+  skill's procedure is not event-bound, so a hook cannot own it; delegate
+  it to a bundled script the skill calls, rather than re-reasoning it in
+  prose each run, when the break-even favours it. A single trivial check
+  stays in-model. This is a step-level finding, not a whole-artifact
+  wrong-mechanism one -- the break-even test and rationale (correctness,
+  consistency, cost) are in `references/rubric.md`'s Mechanism fit section.
 
 Full rationale and citation: [references/rubric.md](references/rubric.md)'s
 Mechanism fit section.
@@ -83,10 +90,15 @@ see `references/rubric.md`'s Contract discipline section.
 1. Read the target `SKILL.md` and every file in its `references/`
    directory (not only linked ones -- an unlinked file is itself a
    dimension-5 finding).
-2. Check mechanism fit per the section above. A wrong-mechanism finding
-   is the headline finding of the review -- report it even if the rest
-   of the review still completes.
-3. Check the deterministic shape list above; cite the exact violation.
+2. Check mechanism fit per the section above. A whole-artifact
+   wrong-mechanism finding (the skill should have been a hook, subagent,
+   or CLAUDE.md content) is the headline finding of the review -- report
+   it even if the rest of the review still completes. The step-level
+   Skill-step vs. bundled script finding is the exception: report it for
+   triage, not as the headline.
+3. Run the deterministic shape checker per the Two lanes section above (or
+   apply its checks by hand where Python is unavailable); cite the exact
+   violation.
 4. Establish the skill's portability level per the section above.
 5. Walk all nine dimensions in `references/rubric.md`, in order (including
    8-9), quoting the specific text that earns each verdict; assume steps
@@ -102,10 +114,12 @@ portability checks:
 
 ## Scope
 
-This skill carries the rubric; it does not build a checker script, eval
-suite, or benchmarking harness for any target repo -- separate, deferred
-work. Do not expand into a general-purpose linter or add checks beyond
-what `references/rubric.md` actually specifies.
+Beyond the bundled read-only shape checker (`scripts/check_skill_shape.py`),
+this skill carries the rubric; it does not build an eval suite or
+benchmarking harness for any target repo -- separate, deferred work. Do
+not expand the bundled checker into a general-purpose linter or add
+checks beyond the deterministic shape rules and what `references/rubric.md`
+actually specifies.
 
 ## Stop boundaries
 
@@ -119,9 +133,11 @@ what `references/rubric.md` actually specifies.
   behavior claim. Ground those in Anthropic's primary docs
   (`platform.claude.com`, `code.claude.com`) or the target's observed
   state -- re-fetch when in doubt, don't trust a memorized summary.
-- Never install eval tooling (a checker script, `skill-creator`, `waza`,
-  etc.) as part of a review without the operator's go-ahead -- propose it
-  instead (dimension 8).
+- Never install eval tooling for a target repo (`skill-creator`, `waza`, an
+  eval suite, etc.) as part of a review without the operator's go-ahead --
+  propose it instead (dimension 8). The skill's own bundled
+  `scripts/check_skill_shape.py` is not such an install -- it ships with
+  the skill and only reads.
 - Never patch a wrong verdict by adjusting step 5 when the real fault was
   a wrong precondition (steps 1-4). Redo the precondition instead -- the
   bug lives where the wrong assumption was made (rubric.md, Contract

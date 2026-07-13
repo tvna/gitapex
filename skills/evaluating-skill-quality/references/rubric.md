@@ -25,6 +25,7 @@ skill's own folder.
 - [The mental model](#the-mental-model)
 - [Contract discipline](#contract-discipline)
 - [Mechanism fit](#mechanism-fit)
+  - [Skill-step vs. bundled script](#skill-step-vs-bundled-script)
 - [Portability level](#portability-level)
 - [1. Discovery -- name and description](#1-discovery----name-and-description)
 - [2. Conciseness](#2-conciseness)
@@ -97,8 +98,9 @@ Two operational rules follow directly, quoted from the same source:
 ## Mechanism fit
 
 One of this review's own preconditions (see [Contract
-discipline](#contract-discipline) above) -- the three-way decision
-(skill vs. subagent, skill vs. hook, skill vs. CLAUDE.md) lives in
+discipline](#contract-discipline) above) -- the mechanism decision
+(skill vs. subagent, hook, or CLAUDE.md, plus, for a deterministic
+in-skill step, model-reasoning vs. a bundled script) lives in
 `SKILL.md`, checkable without opening this file. This section is the
 elaboration: the primary source and the reasoning behind each check.
 
@@ -151,6 +153,64 @@ folded into the well-formed/mature ladder: report it as the review's
 headline finding regardless of how the rest of the review scores, per
 `SKILL.md`'s Procedure step 2 and Stop boundaries.
 
+This describes a *whole-artifact* wrong-mechanism finding (the skill should
+have been a hook, subagent, or CLAUDE.md content). The Skill-step vs.
+bundled script check below is the one exception: its finding is step-level,
+reported for triage, and is neither a headline nor a *mature* blocker.
+
+### Skill-step vs. bundled script
+
+The three checks above ask whether a skill is the right *artifact*. This
+fourth asks, within a correctly-chosen skill, whether a given *step* is
+best done by model reasoning or delegated to a bundled script the skill
+calls. It is distinct from the hook check: a hook is event-bound; a step
+inside a skill's procedure fires when the model reaches it, not on an
+event, so a hook cannot own it -- the mechanism choice for such a step is
+model-reasoning vs. a bundled script.
+
+Delegation is favoured on three converging grounds -- correctness,
+consistency, and cost -- when the step is deterministic:
+
+- **Correctness and consistency.** A model applying a mechanical rule
+  in-head miscounts, misremembers exact limits, and drifts when the rule
+  is restated in several places; a script is deterministic and a single
+  source of truth. Anthropic's best-practices guidance on bundling
+  executable scripts says to "prefer scripts for deterministic
+  operations" because they are "more reliable than generated code" and
+  "ensure consistency across uses" ([ab]) -- the same reliability logic
+  the skill-vs-hook check above rests on, applied to a step rather than a
+  whole skill.
+- **Cost.** The same guidance grounds the cost claim directly: a bundled
+  script "save[s] tokens (no need to include code in context)" and
+  "save[s] time (no code generation required)" ([ab]). As
+  first-principles elaboration of *why* -- labelled a *read* per
+  dimension 9's discipline, not itself a primary-doc claim -- a model
+  doing deterministic work spends a full forward pass per generated
+  token and serialises the computation into context, whose attention
+  cost grows with input size; a script is microseconds of CPU. For
+  repeated, multi-rule, or large-input work the model is worse on unit
+  cost, on scaling, and on reliability at once.
+
+**Break-even.** Delegate when the step is deterministic AND at least one
+of: repeated/looped; multi-rule or non-trivial; error-prone for a model
+(counting, exact limits, strict matching, parsing); or it must emit a
+machine-checkable artifact for a high-stakes step (dimension 7's
+plan -> validate -> execute). Keep the step in-model when it is a single
+trivial deterministic check (the tool-call round-trip costs more than it
+saves) or when it needs judgment or context (then it is not deterministic
+and belongs to the nine dimensions). Cost is never a standalone trigger:
+without one of these conditions, leave the step in prose.
+
+A finding here is a **step-level** mechanism finding -- report it when it
+fires, but it is not the whole-review headline and does not by itself
+block a *mature* verdict; it feeds triage. Because it fires only when the
+break-even clearly favours a script, a capable model is not pushed to
+script trivial work (dimension 2). This check decides *whether* a script
+should exist; dimension 7 grades the quality of one that does. The
+'two lanes' split of this review's own procedure (deterministic shape vs
+probabilistic maturity) is the same idea applied to *this* skill rather
+than a reviewed one -- an intentional parallel, not the same check.
+
 ## Portability level
 
 One of this review's own preconditions (see [Contract
@@ -180,10 +240,12 @@ grading below.
 
 ## 1. Discovery -- name and description
 
-`SKILL.md`'s deterministic checklist confirms a trigger *exists* (present,
-no XML tags, under the length cap). This dimension judges whether it is
-the *right* trigger -- whether the skill would win its intended request
-and lose a neighbour's. Per Anthropic's best-practices doc, `name` and
+`scripts/check_skill_shape.py` (see SKILL.md, Two lanes) confirms a
+trigger *exists* by shape -- present, no XML tags, under the length cap,
+with the exact limits owned by that script rather than restated here.
+This dimension judges whether it is the *right* trigger -- whether the
+skill would win its intended request and lose a neighbour's. Per
+Anthropic's best-practices doc, `name` and
 `description` "are particularly critical. Claude uses these when deciding
 whether to trigger the skill" -- this is the highest-leverage text in the
 whole skill, not a formality.
@@ -342,12 +404,13 @@ usable with the official `skill-creator` plugin
 (`/plugin install skill-creator@claude-plugins-official`, per
 [Claude Code's own eval-and-iterate docs][cce]); for other targets, an
 `evals/` directory or a third-party runner such as
-`waza` (`microsoft/waza`) if the repo already uses one. gitapex has
-neither an `evals/evals.json` nor an `evals/` directory committed to the
-repo today; `skill-creator` and `waza` are available in some review
-sessions but are session-local tooling, not part of the repo -- their
-presence in one session's environment does not make this dimension
-"measured" for the repo itself. Whatever the target, never silently skip
+`waza` (`microsoft/waza`) if the repo already uses one. gitapex now has
+an `evals/` directory (e.g. `evals/issue-to-branch`) but
+no `evals/evals.json` committed for this skill; `skill-creator` and
+`waza` are available in some review sessions but are session-local
+tooling, not part of the repo -- their presence in one session's
+environment does not make this dimension "measured" for the repo
+itself. Whatever the target, never silently skip
 this dimension: state plainly that behavioural evidence is unmeasured for
 the reviewed skill when no mechanism is committed to the repo, rather than
 scoring it pass or fail without one to back the score. Do not install
@@ -478,9 +541,13 @@ acknowledgment a live-proof gate requires -- it does not itself waive any
 live-proof check the reviewing repository applies before landing other
 kinds of changes.
 
-**Well-formed** and **mature** both presuppose mechanism fit. A skill can
-be well-formed or even mature by every dimension below and still be the
-wrong artifact -- content that should be a hook, CLAUDE.md, or a
+**Well-formed** and **mature** both presuppose *whole-artifact* mechanism
+fit -- the skill is the right container (not better as a hook, subagent, or
+CLAUDE.md content). A step-level Skill-step vs. bundled script finding is
+reported for triage but does not by itself block either verdict.
+
+A skill can be well-formed or even mature by every dimension below and
+still be the wrong artifact -- content that should be a hook, CLAUDE.md, or a
 subagent, dressed up as a well-written skill. A wrong-mechanism finding
 (see [Mechanism fit](#mechanism-fit)) is reported alongside, not
 replaced by, the well-formed/mature verdict: naming both is more useful
