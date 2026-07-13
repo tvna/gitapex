@@ -66,6 +66,7 @@ jobs:
 
       - name: devShell smoke
         run: |
+          # shellcheck disable=SC2016  # $t is expanded by the inner `bash -c`, not this shell
           nix develop --command bash -c '
             set -euo pipefail
             for t in uv gh actionlint bun lychee; do echo -n "$t "; $t --version | head -1; done
