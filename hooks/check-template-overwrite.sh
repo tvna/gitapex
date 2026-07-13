@@ -27,14 +27,35 @@ if [ -z "$file_path" ]; then
 fi
 
 is_template_path() {
-  case "$1" in
-    *.github/ISSUE_TEMPLATE/*) return 0 ;;
-    *.github/PULL_REQUEST_TEMPLATE.md) return 0 ;;
-    *.github/PULL_REQUEST_TEMPLATE/*) return 0 ;;
+  # Match case-insensitively: GitHub honors these paths regardless of case
+  # (e.g. a lowercase `.github/pull_request_template.md` is valid), so a
+  # case-sensitive match would let a lowercase overwrite slip through.
+  local p base
+  p=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
+
+  # Directory-based template locations (hold multiple templates).
+  case "$p" in
+    *.github/issue_template/*) return 0 ;;
+    *.github/pull_request_template/*) return 0 ;;
     *.gitlab/issue_templates/*) return 0 ;;
     *.gitlab/merge_request_templates/*) return 0 ;;
-    *) return 1 ;;
   esac
+
+  # Single-file PR template. GitHub honors it at the repo root, in `.github/`,
+  # or in `docs/`, with a `.md`/`.txt`/no extension. The previous version only
+  # matched `.github/PULL_REQUEST_TEMPLATE.md` (uppercase, .github-only),
+  # missing the common root-level lowercase `pull_request_template.md` and the
+  # docs/ variants that this plugin's own validate_templates.py
+  # (find_existing_templates) already enumerates. Matching the reserved
+  # basename anywhere is a safe over-approximation -- a file with this exact
+  # name is a PR template in practice -- and keeps the overwrite guard in sync
+  # with what the seeding skill treats as an existing template.
+  base=${p##*/}
+  case "$base" in
+    pull_request_template|pull_request_template.md|pull_request_template.txt) return 0 ;;
+  esac
+
+  return 1
 }
 
 if is_template_path "$file_path" && [ -f "$file_path" ]; then

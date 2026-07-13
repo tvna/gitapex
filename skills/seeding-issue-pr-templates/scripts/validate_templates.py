@@ -240,6 +240,25 @@ _GITHUB_PR_TEMPLATE_NAME_STEMS = ("pull_request_template", "pull_request_templat
 _GITHUB_PR_TEMPLATE_EXTS = ("", ".md", ".txt")
 
 
+def _dir_has_template(path: Path) -> bool:
+    """True if the directory holds an actual template, not just a placeholder
+    or GitHub's reserved chooser config.
+
+    A bare ``any(path.iterdir())`` over-triggers: a ``.github/ISSUE_TEMPLATE/``
+    that contains only ``config.yml`` (GitHub's template-*chooser* config, not
+    a template itself) or a ``.gitkeep`` placeholder would be reported as
+    "templates exist", hard-STOPping the seeding skill on a repo that in fact
+    has none. Count only entries that are neither dotfiles nor ``config.yml``.
+    """
+    for child in path.iterdir():
+        if child.name.startswith("."):
+            continue
+        if child.name == "config.yml":
+            continue
+        return True
+    return False
+
+
 def find_existing_templates(repo_root: Path, platform: str) -> list[str]:
     """Return relative paths of existing templates already in the repo.
 
@@ -250,7 +269,7 @@ def find_existing_templates(repo_root: Path, platform: str) -> list[str]:
     found: list[str] = []
     for rel in _EXISTING_TEMPLATE_CANDIDATES.get(platform, []):
         path = repo_root / rel
-        if path.is_dir() and any(path.iterdir()):
+        if path.is_dir() and _dir_has_template(path):
             found.append(rel)
         elif path.is_file():
             found.append(rel)

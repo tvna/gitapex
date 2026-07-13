@@ -58,13 +58,20 @@ warn() {
 
 # --- Shared boundary: pre-command anchor that also swallows an absolute or
 # relative path prefix -----------------------------------------------------
-# A bare "(^|[[:space:];&|]+)" boundary does not match "/usr/bin/pip" or
-# "./git" because the verb token isn't at the very start of the word -- the
-# path segment is. This optional-path-prefix group lets the boundary land
-# right before the bare verb name regardless of what directory precedes it,
-# so `/usr/bin/pip install`, `/usr/local/bin/git push`, `./pip install`, etc.
-# still match on the verb.
-cmd_boundary='(^|[[:space:];&|]+)([[:alnum:]_.-]*/)*'
+# The boundary is "start of string, or any character that cannot be part of a
+# command-name token" -- i.e. anything outside [[:alnum:]_.-]. Enumerating a
+# fixed delimiter set ([[:space:];&|]) instead let shell-indirection wrappers
+# bypass every gate: in `bash -c "pip install x"` or `eval 'gh pr merge 1'`
+# the character right before the verb is a quote, which was not in that set,
+# so the verb never anchored and the deny never fired. A negated
+# command-token class closes that whole class of wrapper (quote, paren,
+# backtick, etc.) at once instead of chasing each form. The optional
+# path-prefix group then lets the anchor land right before the bare verb name
+# regardless of a leading directory, so `/usr/bin/pip install`,
+# `./pip install`, etc. still match. (Obfuscation that hides the verb itself
+# -- base64-piped-to-sh and the like -- is out of reach of any regex gate and
+# is tracked for a deeper allowlist design in issue #55.)
+cmd_boundary='(^|[^[:alnum:]_.-])([[:alnum:]_.-]*/)*'
 
 # --- Finding 1: package/plugin install verbs -------------------------------
 # Case-insensitive, word/space-boundary anchored so `pipx install`, a path
@@ -81,8 +88,15 @@ if [[ "$lc_command" =~ $install_re ]]; then
 fi
 
 # --- Findings 2 & 3: direct CLI GitHub write commands ----------------------
-gh_issue_re="${cmd_boundary}gh[[:space:]]+issue[[:space:]]+(create|edit|close|comment)([[:space:]]|\$)"
-gh_pr_re="${cmd_boundary}gh[[:space:]]+pr[[:space:]]+(create|edit|close|comment|merge)([[:space:]]|\$)"
+# Denylist the write/mutating subcommands, not just create|edit|close|
+# comment|merge. Read subcommands (list, view, status, diff, checks,
+# checkout) stay allowed; the destructive/mutating ones -- delete, reopen,
+# transfer, pin/unpin, lock/unlock, develop (issue), review, ready (pr) --
+# were previously missed, so `gh issue delete 42` or `gh pr review 7
+# --approve` sailed past a gate whose job is to block direct CLI GitHub
+# writes.
+gh_issue_re="${cmd_boundary}gh[[:space:]]+issue[[:space:]]+(create|edit|close|comment|delete|reopen|transfer|pin|unpin|lock|unlock|develop)([[:space:]]|\$)"
+gh_pr_re="${cmd_boundary}gh[[:space:]]+pr[[:space:]]+(create|edit|close|comment|merge|review|ready|reopen|lock|unlock)([[:space:]]|\$)"
 gh_api_re="${cmd_boundary}gh[[:space:]]+api([[:space:]]|\$)"
 # Matches -X/--method (any case, already lowercased upstream) followed by
 # POST/PUT/PATCH/DELETE in any of the three flag syntaxes gh/getopt accept:
@@ -142,7 +156,30 @@ if [[ "$lc_command" =~ $push_re ]]; then
     deny "Blocked by hooks/check-bash-safety.sh: git push requires the outward-artifact-preflight scan, but scan_provenance.py was not found at $scan_script."
   fi
 
-  content=$(git -C "$project_dir" log --format=%B -p @{u}..HEAD 2>/dev/null || true)
+  # Determine the commit range being pushed. With an upstream, @{u}..HEAD is
+  # exact. On a first push (`git push -u origin newbranch`) there is no
+  # upstream, so @{u} errors and the range is empty; the old fallback then
+  # scanned only the tip commit (-1 HEAD), silently skipping every earlier
+  # commit in the very push we most want to check. Fall back to the merge-base
+  # with the best available default branch so the whole branch is scanned, and
+  # only if no reference point resolves do we scan full history.
+  range='@{u}..HEAD'
+  if ! git -C "$project_dir" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
+    base=''
+    for ref in origin/HEAD origin/main origin/master main master; do
+      if git -C "$project_dir" rev-parse --verify --quiet "$ref" >/dev/null 2>&1; then
+        base=$(git -C "$project_dir" merge-base "$ref" HEAD 2>/dev/null || true)
+        [ -n "$base" ] && break
+      fi
+    done
+    if [ -n "$base" ]; then
+      range="$base..HEAD"
+    else
+      range='HEAD'
+    fi
+  fi
+
+  content=$(git -C "$project_dir" log --format=%B -p "$range" 2>/dev/null || true)
   if [ -z "$content" ]; then
     content=$(git -C "$project_dir" log --format=%B -p -1 HEAD 2>/dev/null || true)
   fi
