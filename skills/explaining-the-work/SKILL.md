@@ -5,6 +5,12 @@ description: Use when writing or editing code comments, docstrings, or finalizin
 
 # Explaining the Work
 
+**Portability: Mixed.** The routing principle (How/What/Why/Why-not to one
+artifact each) is portable. The why-not comment's `docs/adr/NNNN-*.md`
+path and the "commit + `Refs #N`" convention below are this repository's
+own conventions; adapt the literal path/trailer form to whatever issue and
+ADR conventions the calling repository actually uses.
+
 Explanation responsibility is split by artifact. Route each piece of
 explanation to exactly one place — never duplicate it, never let it drift
 into the wrong artifact.
@@ -16,8 +22,10 @@ into the wrong artifact.
 - **Test code -> What**, expressed through the test name. Use a docstring
   only when the test name itself cannot carry an issue reference.
 - **Commit log -> not the place for Why.** The real Why lives in the
-  issue/PR body (Facts/Speculation split). A commit is one line plus a
-  `Refs #N` pointer — nothing more.
+  issue/PR body, tagged Fact (verified/observed) or Speculation
+  (unverified) rather than blended. A commit is a subject line plus a
+  `Refs #N` pointer, with any repo-mandated trailers (e.g.
+  `Co-Authored-By`) excepted — nothing else.
 - **Code comments -> Why-not / durable constraints only**, one-line form:
 
   ```
@@ -26,13 +34,23 @@ into the wrong artifact.
 
   Requires a citable issue/PR/ADR that actually evaluated the rejected
   alternative. If nothing can be cited, do not write the comment — never
-  fabricate a rationale.
+  fabricate a rationale. The mechanical part (line length, the
+  `why-not(#NNN):` prefix, the optional ADR path form) is a good fit for a
+  small lint-hook or pre-commit check where the repo has one; keep the
+  judgment call (is a rejected alternative actually citable) in-model.
 
 ## Precedence
 
 The calling repository's existing deterministic gates (`Contract:` blocks,
 allowlist justification comments, `noqa` justification, etc.) take
 precedence over this skill. Do not enumerate exceptions to those gates here.
+
+## Known gaps
+
+The committed eval suite (`evals/explaining-the-work/`) runs a single
+trial per task with no committed no-skill baseline, so its metric is not
+yet evidence of gap-closure. Only `claude-sonnet-4.6` has been evaluated;
+cross-model behavior is currently unmeasured.
 
 ## Stop boundaries
 
