@@ -101,3 +101,44 @@ true minor/major finding rows in the Task 1 report.
 - [stop-and-replan] dimension: mechanism-fit (skill vs. CLAUDE.md) | file:line: CLAUDE.md:19 | recommendation: Two prose copies of one rule invite drift; pick one canonical home — shrink the CLAUDE.md bullet to a pointer at the skill, or fold the skill's delta into CLAUDE.md and retire it.
 - [untrusted-input-triage] dimension: mechanism-fit (whole-artifact) | file:line: skills/untrusted-input-triage/SKILL.md:85-88 | recommendation: Always-on trust-boundary content belongs in CLAUDE.md (where it already lives); either retire the skill or re-scope it to an explicitly optional deep-triage checklist and record the mechanism decision.
 - [untrusted-input-triage] dimension: mechanism-fit (safety-critical prohibition, no hook backing) | file:line: skills/untrusted-input-triage/SKILL.md:92-93 | recommendation: Pair the exfiltration/execution prohibition with a deterministic PreToolUse hook or permission rule, or cite the existing gate that enforces it.
+
+## Final outcome (2026-07-14)
+
+- **Minor (74/74):** all auto-fixed across 12 skills (commits `b9d3650..d2f78ec`),
+  including a follow-up fix round for 2 Important findings a task reviewer
+  raised against the new bundled scripts. Two findings recommending edits
+  to the root `CLAUDE.md` were left unactioned (out of scope; `CLAUDE.md`
+  is APM-CLI-generated, not hand-edited in this repo). ~20 eval-baseline/
+  cross-model findings were resolved via honest "Known gaps" notes in each
+  skill rather than fabricated eval data.
+- **Major (11/11), user-adjudicated one at a time via `AskUserQuestion`:**
+  - **5 implemented as real PreToolUse hooks** (`hooks/hooks.json`,
+    `hooks/check-bash-safety.sh`, `hooks/check-template-overwrite.sh`,
+    commits `208942c..9b6e3ad`): evaluating-skill-quality's install-block,
+    issue-to-branch's auto-merge-block and CLI-GitHub-write-block,
+    outward-artifact-preflight's push-time provenance block, and
+    seeding-issue-pr-templates's template-overwrite block. A security
+    review (opus) caught a Critical `gh api` flag-syntax bypass
+    (`--method=POST`/`-XPOST`) plus absolute-path-prefix and
+    `gh api graphql` mutation bypasses; all fixed and re-verified
+    (commit `9b6e3ad`).
+  - **1 re-scoped** (untrusted-input-triage, commit `38cb38e`): explicitly
+    reframed as an optional deep-triage aid layered on CLAUDE.md's
+    always-on rule, with the mechanism decision recorded in the skill
+    itself, per the user's choice over retiring it.
+  - **1 deferred via GitHub issue** (stop-and-replan's CLAUDE.md/SKILL.md
+    duplication): [tvna/claude-md#2478](https://github.com/tvna/claude-md/issues/2478)
+    and [tvna/gitapex#54](https://github.com/tvna/gitapex/issues/54)
+    (companion issues, since `CLAUDE.md` itself must change upstream).
+  - **4 deferred via GitHub issue** (stop-and-replan's self-correction
+    phrase scan, untrusted-input-triage's execution-ban enforcement,
+    merge-retrospective's post-merge trigger, outward-artifact-preflight's
+    whole-checklist CI gate — each needs its own design pass, not a simple
+    pattern-match hook): [tvna/gitapex#55](https://github.com/tvna/gitapex/issues/55).
+- **Verification:** shape checker re-run on all 12 touched skills, all
+  PASS. Full `pytest` suite: 125 passed. No shape-checker regressions.
+  Prose/rubric-dimension fixes were NOT re-scored by a fresh nine-dimension
+  Fable review — that would require another full review round, out of
+  scope for this remediation pass. This is a judgment call, not a
+  re-verified proof, per this repo's own rule against treating indirect
+  signals as completion proof.
