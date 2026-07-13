@@ -9,6 +9,13 @@ A self-correcting phrase in your own PR body or commit message is a STOP
 signal, not a wording problem. It means the plan missed the issue, not that
 the prose describing it was clumsy.
 
+**Prerequisite:** the Stop action below requires a connected GitHub MCP
+server. Tool names are written as `Server:tool` (portable shorthand); in
+Claude Code, translate to the literal double-underscore form --
+`github:update_pull_request` is `mcp__github__update_pull_request`,
+`github:add_issue_comment` is `mcp__github__add_issue_comment`. Other
+platforms may use a different literal form for the same server/tool pair.
+
 ## Trigger phrases
 
 Recognize these, and close variants, in text you are about to write into a
@@ -27,7 +34,9 @@ On detection, before writing the phrase into the PR or commit:
 2. Close the current PR via `github:update_pull_request` (`state: closed`),
    with a body giving the rationale: what thesis was missed, quoting the
    detected phrase and naming the issue the PR should have satisfied.
-3. Return to the parent issue and post the same rationale via
+3. Verify the close: re-fetch the PR and confirm its state is actually
+   `closed` before proceeding -- do not assume the write succeeded.
+4. Return to the parent issue and post the same rationale via
    `github:add_issue_comment`, then re-plan from there. A fresh branch and
    PR carry the corrected plan; nothing is pushed to the closed PR's branch.
 
@@ -47,6 +56,13 @@ Output:
   write-path PR onto a read-only ask."
 - Comment the same rationale on #12 and re-plan from there.
 - Do not push a follow-up commit to the closed PR's branch.
+
+## Known gaps
+
+The committed eval suite (`evals/stop-and-replan/`) runs a single trial
+per task with no committed no-skill baseline. Only `claude-sonnet-4.6` has
+been evaluated; cross-model behavior is a qualitative read (low-freedom
+policy, low over-prescription risk), not measurement.
 
 ## Stop boundaries
 
