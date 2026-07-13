@@ -6,6 +6,13 @@ that the skill deliberately does not paper over. This file is self-contained:
 the full extraction record lives here, alongside the skill, so it stays
 reachable when the skill is deployed on its own.
 
+## Contents
+
+1. How the knowledge was extracted
+2. Result
+3. Caveats -- part of the knowledge, not footnotes
+4. Corroborating side-references (not sources)
+
 ## How the knowledge was extracted
 
 The dimensions were not copied from a document. Six subagents (opus x2,
@@ -67,7 +74,11 @@ quoted, concrete failure stated).
    there. Its value is portability: carrying the knowledge into a harness
    (a non-Claude agent, a bare API call, a foreign CLI) that does not get it
    injected. That portability lift is real but was not behaviorally tested in
-   the extraction environment, which can launch only Claude models.
+   the extraction environment, which can launch only Claude models. Before
+   trusting this skill as a gate, run the same fixture-and-tally protocol
+   against a non-Claude or bare-API probe (no skill injected, same three
+   planted defects) and record the result here; do not install new probe
+   tooling as part of a review session to do this.
 
 3. **Isolation was by instruction, not enforcement.** Probes were told to
    answer from their own reasoning and to report any external reference; all
