@@ -109,17 +109,28 @@ special case inside dimension 1 or 6 to route around it.
 
 ## Deterministic shape
 
-| Check | Result | Evidence |
-|---|---|---|
-| Frontmatter present | Pass | `name:` and `description:` fields present, `---` delimited |
-| `name`, present, lowercase-hyphenated, <= 64 chars, no XML tags | Pass | `evaluating-skill-quality` (24 chars); no XML tags |
-| No reserved word | Pass | Contains neither `anthropic` nor `claude` |
-| `description` non-empty, no XML tags, <= 1024 chars | Pass | 314 chars after the portability fix above, no `<tag>` |
-| `description` states both what and when | Pass | "Review a SKILL.md... against a nine-dimension quality rubric..." (what) + "Use when reviewing any SKILL.md..." (when) |
-| Body <= 500 lines | Pass | `SKILL.md` is well under the cap |
-| `references/` one level deep, TOC past 100 lines | Pass | `rubric.md` and `worked-example-explaining-the-work.md` both link directly from `SKILL.md`; both carry a table of contents and are well past 100 lines |
+Run the bundled checker on this skill itself:
 
-Verdict on shape alone: **well-formed**.
+```
+$ python3 scripts/check_skill_shape.py skills/evaluating-skill-quality
+CHECK                                      RESULT  EVIDENCE (rule)
+description-present                        PASS    present  (description present and non-empty)
+description-no-xml                         PASS    no tags  (description has no XML tags)
+description-length                         PASS    314 chars  (description <= 1024 chars)
+name-pattern                               PASS    'evaluating-skill-quality'  (name is lowercase-hyphenated)
+name-length                                PASS    24 chars  (name <= 64 chars)
+name-no-xml                                PASS    no tags  (name has no XML tags)
+name-not-reserved                          PASS    'evaluating-skill-quality'  (name not a reserved word ('anthropic', 'claude'))
+body-length                                PASS    129 lines  (SKILL.md body <= 500 lines)
+references-flat                            PASS    flat  (references/ files are one level deep)
+toc:rubric.md                              PASS    501 lines, TOC found  (reference over 100 lines has a TOC)
+toc:worked-example-explaining-the-work.md  PASS    270 lines, TOC found  (reference over 100 lines has a TOC)
+toc:worked-example-self-review.md          PASS    319 lines, TOC found  (reference over 100 lines has a TOC)
+
+12/12 checks passed
+```
+
+Verdict on shape alone: **well-formed** (exit code 0).
 
 ## Probabilistic dimensions
 
