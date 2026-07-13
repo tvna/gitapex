@@ -176,3 +176,62 @@ def validate_github(repo_root: Path) -> list[str]:
                             )
     errors += _check_pr_template_github(repo_root)
     return errors
+
+
+def validate_gitlab(repo_root: Path) -> list[str]:
+    errors: list[str] = []
+    for sub in ("issue_templates", "merge_request_templates"):
+        d = repo_root / ".gitlab" / sub
+        if not d.is_dir():
+            errors.append(f"{d}: directory missing")
+            continue
+        md_files = sorted(d.glob("*.md"))
+        if not md_files:
+            errors.append(f"{d}: no .md templates found")
+        for p in md_files:
+            text = _read_text(p, errors)
+            if text is None:
+                continue
+            if not text.strip():
+                errors.append(f"{p}: template is empty")
+            _check_ascii(p, text, errors)
+    return errors
+
+
+def validate(repo_root: Path, platform: str) -> list[str]:
+    if platform == "github":
+        return validate_github(repo_root)
+    if platform == "gitlab":
+        return validate_gitlab(repo_root)
+    raise ValueError(f"unknown platform: {platform!r}")
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Validate generated Issue/PR templates for one platform."
+    )
+    parser.add_argument("repo_root", type=Path)
+    parser.add_argument("--platform", choices=("github", "gitlab"))
+    args = parser.parse_args(argv)
+    if not args.repo_root.is_dir():
+        sys.stderr.write(f"error: {args.repo_root} is not a directory\n")
+        return 2
+    platform = args.platform
+    if platform is None:
+        try:
+            platform = detect_platform(args.repo_root)
+        except ValueError as exc:
+            sys.stderr.write(f"error: {exc}\n")
+            return 2
+    errors = validate(args.repo_root, platform)
+    if errors:
+        for e in errors:
+            print(e)
+        print(f"FAIL: {len(errors)} problem(s) in {platform} templates")
+        return 1
+    print(f"OK: {platform} templates valid")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
