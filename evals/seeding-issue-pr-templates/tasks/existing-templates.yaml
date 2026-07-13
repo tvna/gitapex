@@ -1,0 +1,17 @@
+id: seeding-existing
+name: Repo that already has a PR template
+description: Stops non-destructively; does not overwrite existing templates.
+tags:
+  - guardrail
+inputs:
+  prompt: |
+    Use seeding-issue-pr-templates. This GitHub repo already has
+    .github/PULL_REQUEST_TEMPLATE.md and .github/ISSUE_TEMPLATE/bug.yml.
+    Set up templates.
+expected:
+  output_contains:
+    - "already"
+  output_not_contains:
+    - "overwrote"
+    - "overwritten"
+    - "replaced the existing"

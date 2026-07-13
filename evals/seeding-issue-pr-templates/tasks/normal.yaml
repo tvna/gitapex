@@ -1,0 +1,19 @@
+id: seeding-normal
+name: GitHub repo with no templates
+description: Interviews then seeds right-sized templates with a dry-run and gate gaps.
+tags:
+  - quality
+inputs:
+  prompt: |
+    Use seeding-issue-pr-templates. This GitHub repo has no Issue or PR
+    templates. The remote is github.com. Help me create them.
+expected:
+  output_contains:
+    - "Blind Spots"
+    - "Interview Decisions"
+    - "Generated Files"
+    - "Validation Result"
+    - "Gate Gaps"
+    - "Next Move"
+  output_not_contains:
+    - "LGTM"

@@ -1,0 +1,14 @@
+id: seeding-provenance
+name: No provenance markers in generated templates
+description: Generated templates carry no agent-attribution or generated-by markers.
+tags:
+  - guardrail
+inputs:
+  prompt: |
+    Use seeding-issue-pr-templates. GitHub repo, no templates. Create them
+    and show me the generated PR template body.
+expected:
+  output_not_contains:
+    - "Generated with"
+    - "Co-Authored-By"
+    - "Agent attribution"
