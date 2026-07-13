@@ -21,7 +21,9 @@ Design spec: `docs/superpowers/specs/2026-07-14-setup-gitapex-toolchain-design.m
 - Class B pinned versions for this PR (verbatim): waza `0.38.0`, apm `0.25.0`, rtk `0.43.0`, betterleaks `1.6.1`.
 - Commit trailer convention (repo norm, owner-disclosed): end each commit body with `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>` and cite `#57`.
 
-**Prerequisites for the executor:** Nix installed with flakes enabled (`experimental-features = nix-command flakes`), on a Linux or macOS host, plus `uv` and `curl`. If Nix is absent, install it first (this PR cannot be verified without it — declare that blocker rather than proceeding).
+- CI actions are SHA-pinned with a `# vX.Y.Z` comment (repo norm -- see existing workflows). Resolve each action's released commit SHA when adding it.
+
+**Verification is CI-side (Nix runs only in CI).** The executor does NOT need Nix locally. Local work uses only `curl`, `sha256sum`, `python3`, and `uv`. All Nix proof (`nix flake check`, `nix build`, devShell smoke) runs in a new GitHub Actions workflow on an `ubuntu-latest` + `macos-latest` matrix -- this is the live proof for both Linux and macOS. The loop per task: author locally -> commit -> push -> CI verifies.
 
 ---
 
@@ -31,20 +33,11 @@ Design spec: `docs/superpowers/specs/2026-07-14-setup-gitapex-toolchain-design.m
 - Create: `docs/superpowers/notes/2026-07-14-pr1-spikes.md`
 
 **Interfaces:**
-- Produces: the confirmed nixpkgs channel ref (e.g. `nixos-25.05`) and the resolved versions of the Class A tools, consumed by Task 2; a go/no-go on each Class A tool staying Class A.
+- Produces: the chosen nixpkgs channel ref (e.g. `nixos-25.05`) consumed by Task 2, the archive layout per Class B tool consumed by Task 3, and confirmation that waza's release binary runs `check` standalone.
 
-- [ ] **Step 1: Pick and probe the nixpkgs channel for every Class A tool**
+Note: Class A availability in nixpkgs (uv/gh/actionlint/bun/lychee/python312) is NOT probed locally (no local Nix). It is proven by the CI `nix flake check` added in Task 2 -- a missing attribute fails the build there. Pick the channel ref (default `nixos-25.05`; use a newer stable if you know one) and record it.
 
-Run (substitute the current stable channel if `nixos-25.05` is not the latest; record which you used):
-```bash
-for pkg in uv gh actionlint bun lychee python312; do
-  printf '%s: ' "$pkg"
-  nix eval --raw "github:NixOS/nixpkgs/nixos-25.05#${pkg}.version" 2>/dev/null || echo "MISSING"
-done
-```
-Expected: every tool prints a version, none prints `MISSING`. If any prints `MISSING` or a materially stale version, note it -- that tool reclassifies to a Class B release pin (out of scope for this task; record it as a finding and stop to re-plan).
-
-- [ ] **Step 2: Verify the waza release binary runs `waza check` standalone (no azd)**
+- [ ] **Step 1: Verify the waza release binary runs `waza check` standalone (no azd)**
 
 Run:
 ```bash
@@ -58,7 +51,7 @@ cd - >/dev/null
 ```
 Expected: a `waza` binary is present, `--version` prints `0.38.0` (or close), and `waza check --help` prints usage (proving `check` runs standalone). Record the archive's internal path to the `waza` binary (needed in Task 3).
 
-- [ ] **Step 3: Record the archive layout of each Class B asset**
+- [ ] **Step 2: Record the archive layout of each Class B asset**
 
 Run (records where the binary sits inside each archive -- drives each `installPhase`):
 ```bash
@@ -76,7 +69,7 @@ done
 ```
 Expected: for each, note whether the binary is at the archive root (bare, needs `sourceRoot = "."`) or under a subdirectory, and the exact binary filename. Write all findings into the notes file.
 
-- [ ] **Step 4: Commit the spike notes**
+- [ ] **Step 3: Commit the spike notes**
 
 ```bash
 git add docs/superpowers/notes/2026-07-14-pr1-spikes.md
@@ -90,14 +83,15 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 ---
 
-### Task 2: Scaffold the flake with the Class A devShell
+### Task 2: Scaffold the flake (Class A devShell) and the CI Nix workflow
 
 **Files:**
 - Create: `flake.nix`
-- Create (generated): `flake.lock`
+- Create: `.github/workflows/toolchain-nix.yml`
+- Create (CI-generated, committed in Step 4): `flake.lock`
 
 **Interfaces:**
-- Produces: `devShells.<system>.default` containing the Class A tools; `nixpkgs` input pinned in `flake.lock`. Task 3 extends this same devShell with Class B packages.
+- Produces: `devShells.<system>.default` containing the Class A tools; `nixpkgs` input pinned in `flake.lock`; a `Toolchain (nix)` CI workflow that is the sole place Nix runs. Task 3 extends this same devShell + smoke with Class B packages.
 
 - [ ] **Step 1: Write `flake.nix` (Class A only)**
 
@@ -132,26 +126,84 @@ Use the channel confirmed in Task 1 (shown here as `nixos-25.05`):
 }
 ```
 
-- [ ] **Step 2: Verify the flake evaluates and the Class A shell resolves**
+- [ ] **Step 2: Add the CI Nix workflow (this is the only place Nix runs)**
 
-Run:
-```bash
-nix flake check
-nix develop --command bash -c 'uv --version && gh --version && actionlint --version && python3 --version && bun --version && lychee --version'
+Create `.github/workflows/toolchain-nix.yml`. Pin each action to a released SHA with a `# vX.Y.Z` comment (repo norm; resolve the SHA e.g. `gh api repos/<owner>/<repo>/commits/<tag> --jq .sha`). Match the harden-runner + checkout(persist-credentials:false) pattern used by the existing workflows:
+```yaml
+name: Toolchain (nix)
+on:
+  push:
+    paths: [ "flake.nix", "flake.lock", ".github/workflows/toolchain-nix.yml" ]
+  pull_request:
+    paths: [ "flake.nix", "flake.lock", ".github/workflows/toolchain-nix.yml" ]
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  nix:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, macos-latest ]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: step-security/harden-runner@<sha>   # v2.19.4
+        with: { egress-policy: audit }
+      - uses: actions/checkout@<sha>              # v7.0.0
+        with: { persist-credentials: false }
+      - uses: DeterminateSystems/nix-installer-action@<sha>   # pin latest release
+        with: { extra-conf: "experimental-features = nix-command flakes" }
+      - name: Lock (generate flake.lock if missing)
+        run: nix flake lock
+      - name: Upload flake.lock
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@<sha>       # v4.x
+        with: { name: flake-lock, path: flake.lock }
+      - name: flake check
+        run: nix flake check
+      - name: build Class B (added in Task 3; no-op until then)
+        run: nix build .#waza .#apm .#rtk .#betterleaks || echo "class B not present yet"
+      - name: devShell smoke
+        run: |
+          nix develop --command bash -c '
+            set -e
+            for t in uv gh actionlint bun lychee; do echo -n "$t "; $t --version | head -1; done
+            python3 --version
+          '
 ```
-Expected: `nix flake check` exits 0; every tool prints a version.
 
-- [ ] **Step 3: Commit the flake scaffold and lock**
+- [ ] **Step 3: Commit flake.nix + workflow, push, and let CI generate the lock**
 
 ```bash
-git add flake.nix flake.lock
-git commit -m "feat(toolchain): add flake with Class A devShell (#57)
+git add flake.nix .github/workflows/toolchain-nix.yml
+git commit -m "feat(toolchain): add flake Class A devShell and CI nix workflow (#57)
 
 nixpkgs-sourced uv, gh, actionlint, python312, bun, lychee across
-aarch64/x86_64 linux and darwin. Refs #57
+aarch64/x86_64 linux and darwin, verified by a CI nix matrix
+(ubuntu + macos). Refs #57
 
 Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
+git push
 ```
+
+- [ ] **Step 4: Retrieve the CI-generated flake.lock and commit it**
+
+Wait for the workflow, then:
+```bash
+run_id=$(gh run list --workflow "Toolchain (nix)" --branch "$(git branch --show-current)" --limit 1 --json databaseId --jq '.[0].databaseId')
+gh run download "$run_id" --name flake-lock --dir .
+git add flake.lock
+git commit -m "chore(toolchain): commit CI-generated flake.lock (#57)
+
+Refs #57
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
+git push
+```
+Expected: the re-run of the workflow is green on both `ubuntu-latest` and `macos-latest` (Class A tools resolve; a missing nixpkgs attribute would fail here -- this is the Class A availability check).
 
 ---
 
@@ -220,15 +272,19 @@ Inside the `let ... in` of `outputs`, before `devShells`, add a package builder 
 ```
 Write out all four derivations fully (do not leave the apm/rtk/betterleaks as comments -- expand them with the same `mkDerivation` shape, their asset maps, their own `<tool>Sha` attrset, and the installPhase indicated by the spike layout notes).
 
-- [ ] **Step 2: Obtain the real SHA256 for every asset (replace each `sha256-AAAA...`)**
+- [ ] **Step 2: Obtain the real SHA256 for every asset without Nix (replace each `sha256-AAAA...`)**
 
-For each URL, get the SRI hash and paste it into the matching `<tool>Sha` entry:
+`fetchurl` (flat mode) expects the SRI hash of the file bytes = `sha256-` + base64 of the raw SHA-256 digest. Compute it with only curl + sha256sum + python3:
 ```bash
-nix store prefetch-file --json --hash-type sha256 \
-  "https://github.com/microsoft/waza/releases/download/azd-ext-microsoft-azd-waza_0.38.0/microsoft-azd-waza-linux-amd64.tar.gz" \
-  | python3 -c 'import json,sys;print(json.load(sys.stdin)["hash"])'
+sri() {
+  local hex
+  hex=$(curl -fsSL "$1" | sha256sum | cut -d' ' -f1) || { echo "FETCH FAIL: $1" >&2; return 1; }
+  python3 -c 'import base64,sys;print("sha256-"+base64.b64encode(bytes.fromhex(sys.argv[1])).decode())' "$hex"
+}
+# example (repeat for all 16 assets: 4 tools x 4 systems):
+sri "https://github.com/microsoft/waza/releases/download/azd-ext-microsoft-azd-waza_0.38.0/microsoft-azd-waza-linux-amd64.tar.gz"
 ```
-Repeat for all 16 assets (4 tools x 4 systems). Alternatively leave `pkgs.lib.fakeHash`, run `nix build .#waza`, and copy the correct `got: sha256-...` from the mismatch error. Every `sha256-AAAA...` / `fakeHash` MUST be replaced before commit.
+Paste each result into the matching `<tool>Sha` entry. Every `sha256-AAAA...` MUST be replaced. (CI's `nix build` in Step 4 is the authoritative check: a wrong hash fails with a `got: sha256-...` mismatch.)
 
 - [ ] **Step 3: Wire the four tools into packages and the devShell**
 
@@ -248,26 +304,24 @@ Update `devShells` and add `packages`:
         });
 ```
 
-- [ ] **Step 4: Build each Class B package and run its version (host system)**
+- [ ] **Step 4: Extend the CI smoke to run the Class B tools, then commit and let CI verify**
 
-Run (on your host system; `nix build` a foreign system will fail to run):
-```bash
-nix build .#waza .#apm .#rtk .#betterleaks
-nix develop --command bash -c 'waza --version && apm --version && rtk --version && betterleaks --version'
+In `.github/workflows/toolchain-nix.yml`, append the Class B tools to the devShell smoke step:
+```yaml
+            for t in waza apm rtk betterleaks; do echo -n "$t "; $t --version | head -1; done
 ```
-Expected: all four build with pinned hashes (no hash-mismatch), and each prints its version (waza 0.38.0, apm 0.25.0, rtk 0.43.0, betterleaks 1.6.1).
-
-- [ ] **Step 5: Commit**
-
+Then commit and push:
 ```bash
-git add flake.nix flake.lock
+git add flake.nix .github/workflows/toolchain-nix.yml
 git commit -m "feat(toolchain): embed Class B release binaries in flake (#57)
 
 waza 0.38.0, apm 0.25.0, rtk 0.43.0, betterleaks 1.6.1 as SHA-pinned
 fetchurl derivations across all four systems. Refs #57
 
 Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
+git push
 ```
+Expected: the CI matrix (`ubuntu-latest` + `macos-latest`) goes green -- `nix build .#waza .#apm .#rtk .#betterleaks` succeeds with the pinned hashes (a wrong hash fails with `got: sha256-...`; a wrong archive layout fails the `installPhase`), and each tool prints its version. This is the cross-platform live proof. Fix any hash/layout mismatch from the CI log and re-push before proceeding.
 
 ---
 
@@ -320,22 +374,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 **Files:**
 - (No new files; verification only.)
 
-- [ ] **Step 1: Full flake check and whole-toolchain smoke**
-
-Run:
-```bash
-nix flake check
-nix develop --command bash -c '
-  set -e
-  for t in uv gh actionlint bun lychee; do echo -n "$t "; $t --version | head -1; done
-  python3 --version
-  for t in waza apm rtk betterleaks; do echo -n "$t "; $t --version | head -1; done
-  uv run prek --version
-'
-```
-Expected: `nix flake check` exits 0; all 10 flake tools + prek print versions with no error.
-
-- [ ] **Step 2: Confirm no Go and no fake hashes leaked**
+- [ ] **Step 1: Confirm no Go and no fake hashes leaked (local, nix-free)**
 
 Run:
 ```bash
@@ -344,12 +383,19 @@ Run:
 ```
 Expected: both greps find nothing (commands exit 0 due to `!`).
 
-- [ ] **Step 3: Push the branch and open the PR for #57**
+- [ ] **Step 2: Confirm the CI Nix matrix is green (this is the whole-toolchain live proof)**
+
+Run:
+```bash
+gh run list --workflow "Toolchain (nix)" --branch "$(git branch --show-current)" --limit 1
+```
+Expected: the latest run is `completed / success` on both `ubuntu-latest` and `macos-latest`. That run already exercised `nix flake check`, `nix build .#{waza,apm,rtk,betterleaks}`, and the devShell smoke printing all 10 flake tools -- the cross-platform live proof for PR-1. (prek is verified separately by the repo's existing uv test workflow via `uv sync`.)
+
+- [ ] **Step 3: Open the PR for #57**
 
 ```bash
-git push -u origin "$(git branch --show-current)"
 gh pr create --title "toolchain: nix foundation embedding all tools (PR-1) (#57)" \
-  --body "Implements PR-1 of #57: flake.nix embedding Class A (nixpkgs) and Class B (waza/apm/rtk/betterleaks release pins) across 4 systems, plus prek via PyPI. Verified with nix flake check and a full devShell smoke on $(uname -sm). Refs #57"
+  --body "Implements PR-1 of #57: flake.nix embedding Class A (nixpkgs) and Class B (waza/apm/rtk/betterleaks release pins) across 4 systems, plus prek via PyPI. Live proof: the Toolchain (nix) CI matrix (ubuntu + macos) is green -- nix flake check, nix build of all Class B packages, and a full devShell smoke. Refs #57"
 ```
 Expected: PR opened. Then drive it to a terminal state per the repo's review/merge workflow.
 
@@ -357,8 +403,8 @@ Expected: PR opened. Then drive it to a terminal state per the repo's review/mer
 
 ## Self-Review
 
-**Spec coverage (PR-1 scope):** flake.nix embedding Class A (Task 2) and Class B all-platform (Task 3); prek via PyPI (Task 4); PR-1 spikes -- nixpkgs availability, waza standalone, archive layouts (Task 1); `nix develop` provisions on Linux+macOS (Tasks 2/3/5). Class A/A' Dependabot config, generated Windows lock, drift gate, Class B updater, ps1, and the skill itself are later PRs (2-5) and are intentionally out of this plan.
+**Spec coverage (PR-1 scope):** flake.nix embedding Class A (Task 2) and Class B all-platform (Task 3); prek via PyPI (Task 4); CI-side Nix verification workflow (Task 2 Step 2); PR-1 spikes -- waza standalone + archive layouts (Task 1), nixpkgs availability proven by CI flake check (Task 2). Class A availability, `nix develop`, and all builds are verified CI-side on ubuntu+macos. Class A/A' Dependabot config, generated Windows lock, drift gate, Class B updater, ps1, and the skill itself are later PRs (2-5) and are intentionally out of this plan.
 
-**Placeholder scan:** The only non-literal values are the Class B SHA256 hashes and the apm/rtk/betterleaks derivation bodies, which Task 3 Steps 1-2 require the executor to fill via exact commands (nix store prefetch-file / fakeHash-then-copy) and the stated asset maps -- these are executor-computed build artifacts, not TBDs, and Task 5 Step 2 gates on none of them being left as `fakeHash`/`sha256-AAAA`.
+**Placeholder scan:** The only non-literal values are the Class B SHA256 hashes (Task 3 Step 2 fills them via an exact nix-free curl+sha256sum+base64 command), the apm/rtk/betterleaks derivation bodies (Task 3 Step 1 expands them from the stated asset maps + spike layout findings), and the CI action SHAs (pinned per repo norm). These are executor-computed values, not TBDs; Task 5 Step 1 gates on no `fakeHash`/`sha256-AAAA` remaining, and the CI `nix build` is the authoritative hash/layout check.
 
 **Type/name consistency:** `mkClassB` returns `{ waza; apm; rtk; betterleaks; }`, consumed identically in `packages` and `devShells` (Task 3 Steps 1/3) and verified by name in Tasks 3/5. Tool binary names match their `--version` invocations throughout.
