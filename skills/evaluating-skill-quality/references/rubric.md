@@ -25,7 +25,7 @@ skill's own folder.
 - [The mental model](#the-mental-model)
 - [Contract discipline](#contract-discipline)
 - [Mechanism fit](#mechanism-fit)
-- [Skill-step vs. bundled script](#skill-step-vs-bundled-script)
+  - [Skill-step vs. bundled script](#skill-step-vs-bundled-script)
 - [Portability level](#portability-level)
 - [1. Discovery -- name and description](#1-discovery----name-and-description)
 - [2. Conciseness](#2-conciseness)
@@ -155,7 +155,7 @@ headline finding regardless of how the rest of the review scores, per
 
 This describes a *whole-artifact* wrong-mechanism finding (the skill should
 have been a hook, subagent, or CLAUDE.md content). The Skill-step vs.
-bundled script check above is the one exception: its finding is step-level,
+bundled script check below is the one exception: its finding is step-level,
 reported for triage, and is neither a headline nor a *mature* blocker.
 
 ### Skill-step vs. bundled script
