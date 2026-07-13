@@ -58,8 +58,8 @@ jobs:
       - name: flake check
         run: nix flake check
 
-      - name: build Class B (added in Task 3; no-op until then)
-        run: nix build .#waza .#apm .#rtk .#betterleaks || echo "class B not present yet"
+      - name: build Class B
+        run: nix build .#waza .#apm .#rtk .#betterleaks
 
       - name: devShell smoke
         run: |
@@ -67,4 +67,5 @@ jobs:
             set -e
             for t in uv gh actionlint bun lychee; do echo -n "$t "; $t --version | head -1; done
             python3 --version
+            for t in waza apm rtk betterleaks; do echo -n "$t "; $t --version | head -1; done
           '
