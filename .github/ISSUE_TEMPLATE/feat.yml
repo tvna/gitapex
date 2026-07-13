@@ -1,0 +1,27 @@
+name: Feature request
+description: Propose a new capability (skill, script, or workflow addition)
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for proposing something new. Fill in the sections below.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is missing or hard today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance criteria
+      description: What must be true for this to be done? One criterion per line.
+    validations:
+      required: true

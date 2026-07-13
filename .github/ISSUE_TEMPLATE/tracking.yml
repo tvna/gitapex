@@ -1,0 +1,25 @@
+name: Tracking
+description: Umbrella issue coordinating several sub-issues or sub-tasks
+body:
+  - type: markdown
+    attributes:
+      value: Umbrella issue. Fill in the sections below.
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+    validations:
+      required: true
+  - type: textarea
+    id: sub-tasks
+    attributes:
+      label: Sub-issues or sub-tasks
+      description: One per line, link each sub-issue once it exists.
+    validations:
+      required: true
+  - type: textarea
+    id: definition-of-done
+    attributes:
+      label: Definition of done
+    validations:
+      required: true
