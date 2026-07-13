@@ -21,9 +21,11 @@ def _write_skill(tmp_path, *, name="good-skill",
     if description is not None:
         fm.append(f"description: {description}")
     fm.append("---")
+    portability = "**Portability: Portable.** Self-contained."
     filler = "\n".join(f"line {i}" for i in range(body_lines))
-    (d / "SKILL.md").write_text("\n".join(fm) + "\n\n" + filler + "\n",
-                                encoding="utf-8")
+    (d / "SKILL.md").write_text(
+        "\n".join(fm) + "\n\n" + portability + "\n\n" + filler + "\n",
+        encoding="utf-8")
     if references:
         refs = d / "references"
         refs.mkdir()
@@ -213,8 +215,11 @@ def test_contents_heading_counts_as_toc(tmp_path):
 
 
 def test_junk_files_in_references_are_ignored(tmp_path):
-    d = _write_raw(tmp_path, "---\nname: s\ndescription: d. Use when x.\n---\n",
-                   references={"real.md": "ok\n"})
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "**Portability: Portable.** Self-contained.\n",
+        references={"real.md": "ok\n"})
     refs = d / "references"
     (refs / ".DS_Store").write_bytes(b"\x00\xff\xfe junk")  # undecodable
     pycache = refs / "__pycache__"
@@ -223,3 +228,51 @@ def test_junk_files_in_references_are_ignored(tmp_path):
     res = _by_name(css.check_shape(d))  # must not raise on the binary file
     assert res["references-flat"].passed is True
     assert css.main([str(d)]) == 0
+
+
+def _result(results, name):
+    return next(r for r in results if r.name == name)
+
+
+def test_portability_near_top_pass(tmp_path):
+    d = tmp_path / "s"
+    d.mkdir()
+    (d / "SKILL.md").write_text(
+        "---\nname: s\ndescription: d\n---\n\n"
+        "# Title\n\n**Portability: Portable.** Self-contained.\n\nBody.\n",
+        encoding="utf-8")
+    results = css.check_shape(d / "SKILL.md")
+    assert _result(results, "portability-near-top").passed
+
+
+def test_portability_near_top_bold_colon_form(tmp_path):
+    d = tmp_path / "s"
+    d.mkdir()
+    (d / "SKILL.md").write_text(
+        "---\nname: s\ndescription: d\n---\n\n"
+        "# Title\n\n**Portability:** Portable. Self-contained.\n\nBody.\n",
+        encoding="utf-8")
+    results = css.check_shape(d / "SKILL.md")
+    assert _result(results, "portability-near-top").passed
+
+
+def test_portability_near_top_missing_fails(tmp_path):
+    d = tmp_path / "s"
+    d.mkdir()
+    (d / "SKILL.md").write_text(
+        "---\nname: s\ndescription: d\n---\n\n# Title\n\nBody with no marker.\n",
+        encoding="utf-8")
+    results = css.check_shape(d / "SKILL.md")
+    assert not _result(results, "portability-near-top").passed
+
+
+def test_portability_near_top_buried_fails(tmp_path):
+    d = tmp_path / "s"
+    d.mkdir()
+    filler = "\n".join(f"line {i}" for i in range(10))
+    (d / "SKILL.md").write_text(
+        "---\nname: s\ndescription: d\n---\n\n# Title\n\n" + filler
+        + "\n\n**Portability: Portable.** declared too low.\n",
+        encoding="utf-8")
+    results = css.check_shape(d / "SKILL.md")
+    assert not _result(results, "portability-near-top").passed
