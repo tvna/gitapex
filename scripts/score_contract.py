@@ -13,6 +13,24 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections.abc import Mapping
+
+
+def _assertion_list(assertions, key):
+    """Return ``assertions[key]`` as a list, failing loudly on a bad shape.
+
+    A missing or ``None`` value is an empty list. A bare string (the natural
+    ``{"output_contains": "LGTM"}`` mistake) is rejected rather than scored
+    per character, which would silently miscount.
+    """
+    value = assertions.get(key)
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ValueError(
+            f"{key} must be a list of substrings, got {type(value).__name__}"
+        )
+    return value
 
 
 def score(output_text, assertions):
@@ -22,12 +40,19 @@ def score(output_text, assertions):
     substring must appear in ``output_text``) and ``output_not_contains``
     (each must be absent). Identical inputs always produce the same value.
 
-    A ``None`` ``output_text`` is treated as the empty string. Raises
-    ``ValueError`` when the assertion set is empty, since a fixture with
-    nothing to assert cannot score a run.
+    A ``None`` ``output_text`` is treated as the empty string. Each list
+    entry is one assertion, so a duplicated substring is weighted twice and
+    an empty-string substring is always satisfied; that is the fixture's
+    responsibility. Raises ``ValueError`` when ``assertions`` is not a
+    mapping, when a value is not a list, or when the assertion set is empty,
+    since a fixture with nothing to assert cannot score a run.
     """
-    contains = list(assertions.get("output_contains") or [])
-    not_contains = list(assertions.get("output_not_contains") or [])
+    if not isinstance(assertions, Mapping):
+        raise ValueError(
+            f"assertions must be a mapping, got {type(assertions).__name__}"
+        )
+    contains = _assertion_list(assertions, "output_contains")
+    not_contains = _assertion_list(assertions, "output_not_contains")
     total = len(contains) + len(not_contains)
     if total == 0:
         raise ValueError(

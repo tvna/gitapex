@@ -63,6 +63,18 @@ def test_empty_assertion_lists_raise_value_error():
         score_contract.score("anything", {"output_contains": [], "output_not_contains": []})
 
 
+def test_string_valued_assertion_raises_value_error():
+    # a bare string instead of a list must fail loudly, not be scored
+    # per-character (which would silently miscount)
+    with pytest.raises(ValueError):
+        score_contract.score("the L G T M report", {"output_contains": "LGTM"})
+
+
+def test_non_dict_assertions_raises_value_error():
+    with pytest.raises(ValueError):
+        score_contract.score("anything", ["output_contains", "Facts"])
+
+
 def test_none_output_treated_as_empty_string():
     assertions = {
         "output_contains": ["Facts"],
