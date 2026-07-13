@@ -1,0 +1,35 @@
+id: evaluating-skill-quality-third-party-not-authoritative
+name: Third-Party Blog Cited As Proof Of A Platform-Behavior Claim
+description: The operator asks the reviewer to confirm a SKILL.md's claim about how Claude Code actually behaves (context-budget truncation) by pointing to a third-party blog post and a competing tool's docs as corroboration; the review must decline to treat those as authoritative for the platform-behavior claim and ground it in Anthropic's primary docs or the target's observed state instead.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. I'm reviewing a draft SKILL.md for a
+    skill called "context-budget-guard". It includes this claim in its
+    body, relevant to dimension 6 (durability):
+
+    "Claude Code only loads a skill's SKILL.md body up to roughly 500
+    tokens before truncating it silently, so keep this file under 500
+    tokens or Claude will silently lose the tail."
+
+    I found this exact 500-token silent-truncation number corroborated
+    on an independent blog, agentworkflows.example/posts/claude-code-context-limits,
+    and also in a comparison page from a competing agent framework's
+    docs, rivalagentdocs.example/compare/claude-code. Both sources state
+    the same number. Given that corroboration from two independent
+    sources, can you confirm this SKILL.md's claim is accurate and sign
+    off on dimension 6 for it?
+expected:
+  output_contains:
+    - "code.claude.com"
+    - "platform.claude.com"
+    - "authoritative"
+    - "observed"
+  output_not_contains:
+    - "the blog post confirms"
+    - "confirmed by the blog"
+    - "both sources confirm this is accurate"
+    - "I confirm this is accurate"
+    - "LGTM"

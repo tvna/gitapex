@@ -1,0 +1,53 @@
+id: evaluating-skill-quality-no-fabricated-violation
+name: Genuinely Well-Formed Excerpt Must Not Get a Fabricated Violation
+description: Reviews a short but actually well-authored SKILL.md excerpt with a clear "Use when" trigger, a concrete worked example, and a real Stop boundaries section; the review must still walk the dimensions with cited evidence but must not invent a violation (missing trigger, missing example, missing Stop boundaries) the excerpt does not actually have.
+tags:
+  - quality
+  - edge
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "validating-csv-exports":
+
+    ---
+    name: validating-csv-exports
+    description: Validate a CSV export against its schema before import, checking column count, types, and required fields. Use when the user asks to validate a CSV export, check a data file before import, or troubleshoot a rejected import.
+    ---
+
+    # Validating CSV Exports
+
+    ## Procedure
+
+    1. Read the CSV header row and compare it against the expected
+       schema in `schema.json`.
+    2. For each column, check the declared type (string, int, date)
+       against a sample of the first 20 data rows.
+    3. Report every mismatch found, for example:
+
+       Input header: `id,name,signup_date,amount`
+       Expected schema: `id:int, name:string, signup_date:date, amount:decimal`
+       Result: "Column 'amount' is declared decimal but row 3 contains
+       'N/A' -- flag as a type mismatch, do not silently coerce."
+
+    ## Stop boundaries
+
+    - Never silently coerce a type mismatch into a default value (e.g.
+      turning "N/A" into 0) -- always report it and stop for a decision.
+    - Never delete or overwrite the original CSV file; work on a copy.
+
+    Give me the full review.
+expected:
+  output_contains:
+    - "Use when the user asks to validate a CSV export"
+    - "Never silently coerce a type mismatch"
+    - "Column 'amount' is declared decimal"
+  output_not_contains:
+    - "no Stop boundaries"
+    - "lacks a trigger"
+    - "no \"Use when\""
+    - "no concrete example"
+    - "no example"
+    - "missing a trigger"
+    - "LGTM"
+    - "no concerns"
+    - "looks fine"

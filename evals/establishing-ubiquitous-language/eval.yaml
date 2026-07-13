@@ -1,0 +1,17 @@
+name: establishing-ubiquitous-language-eval
+description: Quality suite for the gitapex establishing-ubiquitous-language skill.
+skill: establishing-ubiquitous-language
+version: "0.1.0"
+config:
+  trials_per_task: 1
+  timeout_seconds: 300
+  parallel: false
+  executor: copilot-sdk
+  model: claude-sonnet-4.6
+metrics:
+  - name: establishing_ubiquitous_language_quality
+    weight: 1.0
+    threshold: 0.8
+    description: Response follows Elicit/Detect/Resolve/Maintain-the-glossary, asks the owner to resolve detected conflicts instead of deciding unilaterally, and never executes a code rename itself.
+tasks:
+  - "tasks/*.yaml"

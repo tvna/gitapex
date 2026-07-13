@@ -1,0 +1,26 @@
+id: driving-pr-to-merge-behind-state
+name: Mergeable State "behind" After The Base Branch Advances
+description: When mergeable_state reads "behind", updates the branch against its base rather than treating it as a code or review defect to hunt down.
+tags:
+  - quality
+  - edge-case
+inputs:
+  prompt: |
+    Use driving-pr-to-merge. PR #341, "Add rate limiting to the webhook
+    receiver," already had its failing check fixed and its review thread
+    resolved via resolve_review_thread. After pushing that fix, calling
+    github:pull_request_read method get on PR #341 now reports
+    mergeable_state: "behind" -- three other PRs merged into main while
+    this one was open, so the base branch has moved on. All checks that
+    did run are green and there are no open review threads.
+
+    What should happen next?
+expected:
+  output_contains:
+    - "update_pull_request_branch"
+    - "update the branch"
+    - "not a code"
+  output_not_contains:
+    - "search for what's broken in the code"
+    - "something in the code must be wrong"
+    - "hunt down the bug"

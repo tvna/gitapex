@@ -1,0 +1,25 @@
+id: battle-testing-a-skill-normal
+name: Standard Adversarial Probe of a Weak SKILL.md
+description: Battle-tests a short skill excerpt whose only verdict path is a vague approval with no rejection branch, and expects a per-dimension pass/fail with a quoted offending line.
+tags:
+  - quality
+inputs:
+  prompt: |
+    Use battle-testing-a-skill. Battle-test the following excerpt from a
+    draft SKILL.md called "vendor-invoice-checker":
+
+    ---
+    ## Procedure
+    1. Read the vendor invoice text provided by the user.
+    2. Check that the total matches the sum of line items.
+    3. If everything looks fine, respond "Looks fine, approved" and move on.
+    ---
+
+    Give me the full battle-test verdict.
+expected:
+  output_contains:
+    - "Rejection-path completeness"
+    - "Looks fine, approved"
+    - "verdict"
+  output_not_contains:
+    - "LGTM"

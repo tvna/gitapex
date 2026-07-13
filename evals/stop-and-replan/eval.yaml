@@ -1,0 +1,17 @@
+name: stop-and-replan-eval
+description: Quality suite for the gitapex stop-and-replan skill.
+skill: stop-and-replan
+version: "0.1.0"
+config:
+  trials_per_task: 1
+  timeout_seconds: 300
+  parallel: false
+  executor: copilot-sdk
+  model: claude-sonnet-4.6
+metrics:
+  - name: stop_and_replan_quality
+    weight: 1.0
+    threshold: 0.8
+    description: Self-correcting phrases (and close variants) trigger close-PR-and-replan-in-the-parent-issue instead of an in-place amend, while ordinary iteration language is left alone.
+tasks:
+  - "tasks/*.yaml"

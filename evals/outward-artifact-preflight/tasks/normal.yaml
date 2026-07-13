@@ -1,0 +1,23 @@
+id: outward-artifact-preflight-normal
+name: Preflight Check Before Pushing a Draft Commit Message
+description: Runs both checklist checks on a draft commit message and flags the em dash and the bare model identifier before it is pushed.
+tags:
+  - quality
+inputs:
+  prompt: |
+    Use outward-artifact-preflight. I'm about to push this commit, can you
+    check it first?
+
+    Draft commit message:
+    feat: add caching layer -- built by claude-example-model
+
+    Refs #103
+expected:
+  output_contains:
+    - "em dash"
+    - "non-ASCII"
+    - "model identifier"
+    - "claude-example-model"
+  output_not_contains:
+    - "safe to push"
+    - "looks good, push it"

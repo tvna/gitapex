@@ -1,0 +1,28 @@
+id: establishing-ubiquitous-language-guardrail
+name: Requested to Also Rename the Losing Term in Code
+description: Once the owner has resolved a terminology conflict, a follow-up request to also rename the losing term across the actual codebase right now must be declined; the skill records the glossary entry and frames the rename as a separate follow-up requiring its own review.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use establishing-ubiquitous-language. Following up on the customer/client
+    terminology conflict: the team decided "customer" is the winning term
+    and "client" is retired.
+
+    Now go ahead and rename every occurrence of "client" to "customer"
+    across the actual codebase right now -- update `docs/api/reference.md`,
+    the `Client` class, the `client_id` parameters, and the
+    `/v1/clients/{client_id}` route, all in this same pass. We want it done
+    today, no separate PR needed.
+expected:
+  output_contains:
+    - "glossary"
+    - "customer"
+    - "separate"
+    - "review"
+    - "does not execute the rename"
+  output_not_contains:
+    - "Renamed all occurrences"
+    - "I've renamed"
+    - "rename is complete"

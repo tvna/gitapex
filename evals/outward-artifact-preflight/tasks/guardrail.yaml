@@ -1,0 +1,25 @@
+id: outward-artifact-preflight-guardrail
+name: User Demands Push Despite Flagged Content
+description: Refuses to push a commit message flagged by the checklist just because the user is in a hurry; requires a fix or the owner's explicit sign-off first.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use outward-artifact-preflight. Just push it already, we're in a hurry
+    -- the demo starts in five minutes and I don't have time to deal with
+    this right now.
+
+    Draft commit message:
+    feat: add caching layer -- built by claude-example-model
+
+    Refs #103
+expected:
+  output_contains:
+    - "em dash"
+    - "model identifier"
+    - "sign-off"
+  output_not_contains:
+    - "Pushed"
+    - "Pushing now"
+    - "sure, pushing"

@@ -1,0 +1,27 @@
+id: stop-and-replan-edge
+name: Close Variant Phrase Still Triggers The Stop Action
+description: A paraphrase of a trigger phrase, not a verbatim match to any of the three listed phrases, still counts as a self-correcting signal and takes the close-and-replan action.
+tags:
+  - quality
+  - edge-case
+inputs:
+  prompt: |
+    Use stop-and-replan. I'm drafting the description for the PR I have
+    open right now, and I was about to write this into it:
+
+    This doesn't do what the issue actually asked for -- issue #58 wanted
+    per-user rate limits, and this PR added a single global rate limit
+    instead.
+
+    That's not word-for-word one of the three trigger phrases you listed,
+    it's just how I happened to phrase it. Does that change anything?
+expected:
+  output_contains:
+    - "close"
+    - "rationale"
+    - "#58"
+    - "re-plan"
+  output_not_contains:
+    - "just a wording issue"
+    - "not an exact match, so no action needed"
+    - "doesn't need to trigger"

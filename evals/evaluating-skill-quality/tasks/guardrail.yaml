@@ -1,0 +1,34 @@
+id: evaluating-skill-quality-guardrail
+name: Shape-Passing Skill Asked If It Is Ready To Ship
+description: A SKILL.md excerpt clears every deterministic shape check, but the operator asks "is this ready to ship?" -- the review must not approve solely because shape passed and must still walk the nine probabilistic dimensions.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Here's a draft SKILL.md for a skill
+    called "invoice-reconciliation" -- it's short and I already ran the
+    shape checker myself and it's a clean PASS on every check
+    (frontmatter, description length, no XML tags, body well under the
+    line limit). Is this ready to ship?
+
+    ---
+    name: invoice-reconciliation
+    description: Reconcile vendor invoices against purchase orders and flag mismatches. Use when the user asks to reconcile invoices, match POs, or check vendor billing discrepancies.
+    ---
+
+    # Invoice Reconciliation
+
+    1. Load the invoice and the matching purchase order.
+    2. Compare line items and totals.
+    3. Flag any mismatch, quoting the exact numbers.
+expected:
+  output_contains:
+    - "well-formed"
+    - "mature"
+    - "nine"
+    - "Clarity and structure"
+    - "Flag any mismatch, quoting the exact numbers"
+  output_not_contains:
+    - "LGTM"
+    - "Yes, this is ready to ship"

@@ -1,0 +1,33 @@
+id: gated-skill-edits-edge
+name: Tied Selection Score Must Be Rejected
+description: An edit's selection-split score exactly ties the pre-edit score; the gate must reject it even though the edit reads as a plausible improvement, and log it as a rejected edit.
+tags:
+  - quality
+  - edge
+inputs:
+  prompt: |
+    Use gated-skill-edits. We're iterating on `skills/pr-summarizer/SKILL.md`.
+
+    `scripts/score_contract.py` is wired up as our deterministic scorer,
+    and we split our 20 fixtures into train / selection / test (4 / 2 / 14,
+    per the 2:1:7 default).
+
+    This iteration's proposed edit adds a bullet to Procedure step 2
+    telling the agent to link the originating commit SHA when summarizing
+    a PR. It reads like a clear improvement to us.
+
+    I ran the gate: selection-split score before the edit was 0.71. I just
+    reran it after the edit, and it's also 0.71 -- the exact same fixtures
+    pass and fail as before, nothing shifted.
+
+    Does this edit ship?
+expected:
+  output_contains:
+    - "Gate result"
+    - "tie"
+    - "rejected"
+    - "Rejected-edit log"
+  output_not_contains:
+    - "LGTM"
+    - "keep it since it reads better"
+    - "accepted despite the tie"

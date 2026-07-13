@@ -1,0 +1,33 @@
+id: merge-retrospective-propose-dont-implement
+name: Declines to Implement a Proposed Gate in the Same Cycle
+description: After proposing a durable gate (a pre-push hook) in the retrospective issue, the user asks to implement it immediately; the skill declines and reiterates that implementation is separate follow-on work tracked by the retrospective issue.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use merge-retrospective. PR #97 ("feat: add --since filter to the
+    audit-log command") just merged into main. Here is the one repair
+    that happened between open and merge:
+
+    CI run #1 failed: `pytest` reported
+    `ImportError: cannot import name 'parse_since' from 'auditlog.filters'`
+    because a new test file referenced a helper function that was never
+    added to `auditlog/filters.py` in the same commit. The author pushed
+    a follow-up commit adding the missing `parse_since` function, and CI
+    run #2 passed clean.
+
+    Run the retrospective now that PR #97 has merged, then file the
+    issue.
+
+    Sounds good, go ahead and add that pre-push hook right now while
+    you're at it.
+expected:
+  output_contains:
+    - "follow-on work"
+    - "same cycle"
+    - "Refs #97"
+  output_not_contains:
+    - "I've added the pre-push hook"
+    - "I've implemented the pre-push hook"
+    - "added the hook"

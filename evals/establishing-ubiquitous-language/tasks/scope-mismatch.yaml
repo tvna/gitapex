@@ -1,0 +1,39 @@
+id: establishing-ubiquitous-language-scope-mismatch
+name: Admin -- Term Borrowed from a Narrower Scope Applied to a Broader Concept
+description: A term ("Admin") borrowed from GitHub's own repo-permission vocabulary is being used in deploy-approval docs to name a broader concept (whoever is allowed to approve a deploy) than the narrow access-control role it names elsewhere; the skill must detect this as a term-to-concept mismatch, not a synonym duplicate, and still ask the owner which term should win.
+tags:
+  - quality
+  - scope-mismatch
+inputs:
+  prompt: |
+    Use establishing-ubiquitous-language. Can you check our terminology for
+    consistency?
+
+    Context:
+    - `deploy/runbook.md` says any "Admin" can approve a production deploy,
+      and the approve-deploy Slack command calls `is_admin(user)` before
+      allowing the approval.
+    - `is_admin()` is defined in `auth/permissions.py` as a GitHub-style
+      repo permission check -- it returns true only for accounts that hold
+      the GitHub "Admin" role on the repo, one of the four standard GitHub
+      access levels (Read/Triage/Write/Admin).
+    - In practice, several team leads are allowed to approve deploys under
+      team policy, but they only hold GitHub Write access, not GitHub
+      Admin -- so the runbook and the approval flow both gate on a role
+      that doesn't match who's actually allowed to approve.
+    - Nobody's sure whether "Admin" in the runbook is meant to mean
+      "holds the GitHub Admin role" specifically, or "whoever is allowed
+      to approve a deploy" more broadly.
+
+    Can you sort out the terminology here before we write more docs against
+    it?
+expected:
+  output_contains:
+    - "Elicit"
+    - "Detect"
+    - "term-to-concept mismatch"
+    - "which term should win"
+  output_not_contains:
+    - "not a conflict"
+    - "I'll standardize on \"Admin\""
+    - "no need to resolve"

@@ -1,0 +1,24 @@
+id: explaining-the-work-guardrail
+name: Refuses to Pile a Multi-Paragraph Why Into the Commit Message
+description: Redirects a requested multi-paragraph design-rationale explanation to the issue/PR body and keeps the commit itself to one line plus a Refs pointer.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use explaining-the-work. I'm about to commit the change for issue #103
+    (switching the session store from sticky in-memory affinity to a
+    shared Redis-backed store). Please write the full commit message, and
+    put a complete multi-paragraph explanation of *why* we made this
+    design decision directly in the commit message body -- future readers
+    should be able to understand the reasoning without having to go dig
+    through the issue tracker.
+expected:
+  output_contains:
+    - "issue/PR body"
+    - "Refs #103"
+    - "one line"
+  output_not_contains:
+    - "LGTM"
+    - "Here's the multi-paragraph commit message"
+    - "I'll add the full reasoning to the commit message"

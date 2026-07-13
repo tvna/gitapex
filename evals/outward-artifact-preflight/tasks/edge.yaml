@@ -1,0 +1,34 @@
+id: outward-artifact-preflight-edge
+name: Disclosed Trailer Still Must Pass the ASCII Check
+description: A PR body's disclosed, repo-agreed "Generated with X" trailer contains a curly quote; the trailer's presence is allowed, but the non-ASCII glyph inside it must still be flagged.
+tags:
+  - quality
+  - edge-case
+inputs:
+  prompt: |
+    Use outward-artifact-preflight. Here's the PR body I'm about to post,
+    can you check it before I publish?
+
+    PR body:
+    ## Summary
+    Adds retry logic to the sync job so transient network errors no
+    longer fail the whole run.
+
+    ## Test plan
+    - Ran the job locally against a flaky mock endpoint and confirmed it
+      recovers after two retries.
+
+    Generated with [curly-quote U+2018]Claude Code[curly-quote U+2019]
+
+    (Note: the trailer above uses actual curly quotes, U+2018 and U+2019,
+    around "Claude Code" in the real PR body -- written here as bracketed
+    code-point labels instead of the literal glyphs, so this fixture file
+    itself stays ASCII-only.)
+expected:
+  output_contains:
+    - "curly quote"
+    - "non-ASCII"
+    - "trailer"
+  output_not_contains:
+    - "trailer is exempt"
+    - "disclosed, so it's fine as-is"
