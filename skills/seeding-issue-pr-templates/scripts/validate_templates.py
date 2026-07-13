@@ -49,3 +49,118 @@ def detect_platform(repo_root: Path) -> str:
         f"cannot auto-detect platform (github={has_github}, "
         f"gitlab={has_gitlab}); pass --platform"
     )
+
+
+# GitHub Issue Forms body element types the skill emits, transcribed from the
+# SchemaStore github-issue-forms.json schema (see references/github-issue-forms.md).
+# The schema also lists 'upload'; the skill never emits it, so it is excluded.
+GITHUB_BODY_TYPES = {"markdown", "input", "textarea", "dropdown", "checkboxes"}
+
+# Schema "required" for a form file: these three top-level keys.
+GITHUB_REQUIRED_TOP_KEYS = ("name", "description", "body")
+
+
+def _check_ascii(path: Path, text: str, errors: list[str]) -> None:
+    try:
+        text.encode("ascii")
+    except UnicodeEncodeError as exc:
+        errors.append(f"{path}: non-ASCII content at byte {exc.start}")
+
+
+def _load_yaml_mapping(path: Path, errors: list[str]):
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        errors.append(f"{path}: cannot read file ({exc})")
+        return None
+    try:
+        data = yaml.safe_load(text)
+    except yaml.YAMLError as exc:
+        errors.append(f"{path}: invalid YAML ({exc})")
+        return None
+    if not isinstance(data, dict):
+        errors.append(f"{path}: expected a YAML mapping at top level")
+        return None
+    return data
+
+
+def _check_pr_template_github(repo_root: Path) -> list[str]:
+    errors: list[str] = []
+    candidates = [
+        repo_root / ".github" / "PULL_REQUEST_TEMPLATE.md",
+        repo_root / "PULL_REQUEST_TEMPLATE.md",
+        repo_root / "docs" / "PULL_REQUEST_TEMPLATE.md",
+    ]
+    found = [p for p in candidates if p.is_file()]
+    multi = repo_root / ".github" / "PULL_REQUEST_TEMPLATE"
+    if multi.is_dir():
+        found += [p for p in sorted(multi.glob("*.md")) if p.is_file()]
+    if not found:
+        errors.append(f"{repo_root}: no PULL_REQUEST_TEMPLATE.md found")
+    for p in found:
+        text = p.read_text(encoding="utf-8")
+        if not text.strip():
+            errors.append(f"{p}: PR template is empty")
+        _check_ascii(p, text, errors)
+    return errors
+
+
+def validate_github(repo_root: Path) -> list[str]:
+    errors: list[str] = []
+    tmpl_dir = repo_root / ".github" / "ISSUE_TEMPLATE"
+    forms = [p for p in sorted(tmpl_dir.glob("*.yml")) if p.name != "config.yml"]
+    forms += [p for p in sorted(tmpl_dir.glob("*.yaml")) if p.name != "config.yaml"]
+    if not forms:
+        errors.append(f"{tmpl_dir}: no issue form (.yml) files found")
+    for form in forms:
+        text = form.read_text(encoding="utf-8") if form.is_file() else ""
+        _check_ascii(form, text, errors)
+        data = _load_yaml_mapping(form, errors)
+        if data is None:
+            continue
+        for key in GITHUB_REQUIRED_TOP_KEYS:
+            if key not in data or data[key] in (None, "", []):
+                errors.append(f"{form}: missing required key '{key}'")
+        body = data.get("body")
+        if not isinstance(body, list) or not body:
+            errors.append(f"{form}: 'body' must be a non-empty list")
+            continue
+        for i, element in enumerate(body):
+            if not isinstance(element, dict):
+                errors.append(f"{form}: body[{i}] must be a mapping")
+                continue
+            etype = element.get("type")
+            if etype not in GITHUB_BODY_TYPES:
+                errors.append(
+                    f"{form}: body[{i}] invalid type {etype!r} "
+                    f"(allowed: {sorted(GITHUB_BODY_TYPES)})"
+                )
+                continue
+            attrs = element.get("attributes")
+            if not isinstance(attrs, dict):
+                errors.append(f"{form}: body[{i}] missing 'attributes' mapping")
+                continue
+            if etype == "markdown":
+                if not attrs.get("value"):
+                    errors.append(f"{form}: body[{i}] markdown needs attributes.value")
+            elif not attrs.get("label"):
+                errors.append(f"{form}: body[{i}] {etype} needs attributes.label")
+    config = tmpl_dir / "config.yml"
+    if config.is_file():
+        cfg = _load_yaml_mapping(config, errors)
+        if isinstance(cfg, dict):
+            if "blank_issues_enabled" in cfg and not isinstance(
+                cfg["blank_issues_enabled"], bool
+            ):
+                errors.append(f"{config}: 'blank_issues_enabled' must be boolean")
+            links = cfg.get("contact_links")
+            if links is not None and not isinstance(links, list):
+                errors.append(f"{config}: 'contact_links' must be a list")
+            elif isinstance(links, list):
+                for j, link in enumerate(links):
+                    if not isinstance(link, dict) or not all(
+                        k in link for k in ("name", "url", "about")
+                    ):
+                        errors.append(f"{config}: contact_links[{j}] needs name/url/about")
+    errors += _check_pr_template_github(repo_root)
+    return errors
