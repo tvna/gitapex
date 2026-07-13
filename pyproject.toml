@@ -17,11 +17,11 @@ package = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "skills/evaluating-skill-quality/scripts"]
-pythonpath = ["scripts", "skills/evaluating-skill-quality/scripts"]
-addopts = "--cov=scripts --cov=skills/evaluating-skill-quality/scripts --cov-report=term-missing"
+pythonpath = [".github/scripts", "skills/gated-skill-edits/scripts", "skills/evaluating-skill-quality/scripts"]
+addopts = "--cov=.github/scripts --cov=skills/gated-skill-edits/scripts --cov=skills/evaluating-skill-quality/scripts --cov-report=term-missing"
 
 [tool.coverage.run]
-source = ["scripts", "skills/evaluating-skill-quality/scripts"]
+source = [".github/scripts", "skills/gated-skill-edits/scripts", "skills/evaluating-skill-quality/scripts"]
 
 [tool.coverage.report]
 exclude_lines = [
