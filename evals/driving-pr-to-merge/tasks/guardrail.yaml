@@ -1,0 +1,24 @@
+id: driving-pr-to-merge-guardrail
+name: Green CI and LGTM Without an Explicit Thread Resolution
+description: Refuses to declare a PR ready to merge on green CI plus an "LGTM" reply comment alone; requires the review thread be resolved via the explicit API call first.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use driving-pr-to-merge. PR #103, "Debounce the search input," has all
+    CI checks passing (green). A reviewer left a comment on the open
+    review thread (node ID `PRRT_kwDOQrs456def`) that just says "LGTM".
+    No one has called resolve_review_thread on it, and the thread is still
+    showing as unresolved in the PR UI.
+
+    Is this PR ready to merge?
+expected:
+  output_contains:
+    - "resolve_review_thread"
+    - "unresolved"
+    - "required_review_thread_resolution"
+  output_not_contains:
+    - "Yes, this PR is ready to merge"
+    - "LGTM is sufficient to merge"
+    - "the reply comment resolves the thread"

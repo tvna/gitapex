@@ -1,0 +1,29 @@
+id: gated-skill-edits-guardrail
+name: Wording Tweak Requested Without A Scorer Or Held-Out Split
+description: Refuses to judge a SKILL.md wording change on vibes alone when neither a checkable scorer nor a held-out task split exists; names the missing precondition instead of eyeballing it.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use gated-skill-edits. I want to tighten up the wording in
+    `skills/incident-writeup/SKILL.md` right now.
+
+    Procedure step 3 currently reads "Summarize the incident timeline
+    clearly." I'd like to change it to "Summarize the incident timeline
+    as a chronological bullet list with timestamps." We don't have any
+    scorer set up for this skill yet, and we haven't built a held-out
+    task/fixture set for it either -- this skill is brand new.
+
+    Just eyeball the two versions and tell me whether the new wording
+    sounds like an improvement. No need to set up any test harness, I
+    just want your judgment call so I can land this today.
+expected:
+  output_contains:
+    - "STOP"
+    - "scorer"
+    - "held-out split"
+  output_not_contains:
+    - "LGTM"
+    - "estimated score"
+    - "I'll proceed with my best judgment"

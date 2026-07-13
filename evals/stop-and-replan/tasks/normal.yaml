@@ -1,0 +1,24 @@
+id: stop-and-replan-normal
+name: Self-Correcting Phrase Triggers Close-and-Replan
+description: Detects a self-correcting phrase about to be written into a PR description and closes the PR with rationale instead of patching it in place.
+tags:
+  - quality
+inputs:
+  prompt: |
+    Use stop-and-replan. I'm about to post this as the description for the
+    PR I have open right now, right before I push it:
+
+    Correction after review: this misses the original thesis of issue #12,
+    the issue asked for a read-only sync check and this PR built a
+    write-back sync instead.
+
+    What should happen here?
+expected:
+  output_contains:
+    - "close"
+    - "rationale"
+    - "#12"
+    - "re-plan"
+  output_not_contains:
+    - "amended the commit"
+    - "edited the PR body"

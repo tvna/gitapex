@@ -1,0 +1,31 @@
+id: establishing-ubiquitous-language-edge
+name: Owner vs Author -- Lexical Similarity Is Not a Conflict
+description: Two lexically similar but conceptually distinct role terms (a human "owner" role and an AI "author" role) must not be flagged as a synonym conflict needing the owner's resolution.
+tags:
+  - quality
+  - edge-case
+inputs:
+  prompt: |
+    Use establishing-ubiquitous-language. Can you check our terminology for
+    consistency?
+
+    Context: our design docs use two role labels in the same sequence
+    diagrams:
+    - `Owner`: the human participant who gives the instruction that starts
+      a flow.
+    - `Author`: the AI agent that implements the change.
+
+    Both terms show up throughout `docs/design/flow.md` and in several issue
+    templates. They look pretty similar and I want to make sure we're not
+    accidentally using two words for the same thing before we write this up
+    as a glossary entry.
+expected:
+  output_contains:
+    - "Elicit"
+    - "Detect"
+    - "genuinely different concepts"
+    - "not a conflict"
+  output_not_contains:
+    - "Owner and Author are synonyms"
+    - "flagging this as a conflict"
+    - "need to resolve this conflict"

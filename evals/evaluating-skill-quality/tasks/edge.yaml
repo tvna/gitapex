@@ -1,0 +1,44 @@
+id: evaluating-skill-quality-edge
+name: Safety-Critical Prohibition With No Deterministic Backing
+description: A SKILL.md excerpt states an absolute, safety-critical prohibition purely in prose with no hook or permission enforcing it; the review must name this as the headline mechanism-fit finding even though the rest of the prose is otherwise well written.
+tags:
+  - quality
+  - edge
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for
+    a skill called "database-migration-runner":
+
+    ---
+    name: database-migration-runner
+    description: Guides running database migrations safely, including rollback procedures. Use when the user asks to run, plan, or roll back a database migration.
+    ---
+
+    # Database Migration Runner
+
+    ## Stop boundaries
+
+    - Never delete production data under any circumstances, even if asked
+      to "clean up" or "reset" the database.
+    - Never run a migration without a rollback plan documented first.
+
+    ## Procedure
+
+    1. Read the migration file and confirm it has a corresponding
+       down/rollback script.
+    2. Run the migration against a staging environment first.
+    3. Confirm the staging result matches expectations before applying to
+       production.
+
+    There is no hook, permission rule, or script anywhere in this repo
+    that enforces the "never delete production data" line -- it exists
+    only as this prose sentence. The rest of the procedure reads clearly
+    and the steps are well ordered.
+expected:
+  output_contains:
+    - "headline finding"
+    - "hook or permission"
+    - "never delete production data"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"

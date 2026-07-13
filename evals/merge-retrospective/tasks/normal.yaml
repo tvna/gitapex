@@ -1,0 +1,30 @@
+id: merge-retrospective-normal
+name: Two-Repair Merge History
+description: Classifies each of two distinct repairs on its own line and proposes a durable gate for the CI-failure repair, without collapsing them into one summary.
+tags:
+  - quality
+inputs:
+  prompt: |
+    Use merge-retrospective. PR #58 ("feat: add --json output to the
+    report command") just merged into main. Here is the full history
+    between open and merge:
+
+    - CI run #1 failed: `go vet` reported `unused variable: buf` in
+      `report/json.go`. The author pushed a follow-up commit removing the
+      dead variable, and CI run #2 passed clean.
+    - A human reviewer commented that the new `--json` flag's help text
+      ("output as json") didn't match the capitalization and punctuation
+      style of every other flag's help text in the same command ("Output
+      results as JSON."). The author pushed a follow-up commit rewording
+      the help text to match the existing convention.
+
+    Run the retrospective now that PR #58 has merged.
+expected:
+  output_contains:
+    - "missing deterministic gate"
+    - "unclear agent instruction"
+    - "Proposed gate"
+    - "Refs #58"
+  output_not_contains:
+    - "Two minor issues were fixed before merge"
+    - "both fixed by follow-up commits and the PR is clean"

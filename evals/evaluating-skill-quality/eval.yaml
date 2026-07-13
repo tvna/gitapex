@@ -1,0 +1,17 @@
+name: evaluating-skill-quality-eval
+description: Quality suite for the gitapex evaluating-skill-quality review skill.
+skill: evaluating-skill-quality
+version: "0.1.0"
+config:
+  trials_per_task: 1
+  timeout_seconds: 300
+  parallel: false
+  executor: copilot-sdk
+  model: claude-sonnet-4.6
+metrics:
+  - name: evaluating_skill_quality_quality
+    weight: 1.0
+    threshold: 0.8
+    description: Review cites the deterministic shape checker, walks the nine probabilistic dimensions with quoted evidence, and never approves solely on shape or mechanism-fit gaps.
+tasks:
+  - "tasks/*.yaml"

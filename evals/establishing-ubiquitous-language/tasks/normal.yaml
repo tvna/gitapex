@@ -1,0 +1,34 @@
+id: establishing-ubiquitous-language-normal
+name: Customer vs Client Terminology Conflict
+description: Two synonymous terms for the same concept across the billing module and the API docs; the skill must detect the conflict and ask the owner which term should win rather than deciding unilaterally.
+tags:
+  - quality
+inputs:
+  prompt: |
+    Use establishing-ubiquitous-language. Our codebase seems to have two names
+    for what looks like the same concept and I want the terminology
+    reconciled before we write any more code against it.
+
+    Context:
+    - `billing/invoice.py` and `billing/subscription.py` both use `customer`
+      throughout: a `Customer` class, a `customer_id` field,
+      `get_customer_by_id()`, and a `CustomerNotFoundError`.
+    - `docs/api/reference.md` and the public API responses use `client`
+      instead for what looks like the exact same entity: a `Client` object,
+      a `client_id` request parameter, and the route
+      `GET /v1/clients/{client_id}`.
+    - Nobody remembers which term came first; both have been in the
+      codebase for over a year, and new PRs keep picking whichever one the
+      author happened to see most recently in the file they were editing.
+
+    Can you sort out the terminology so we stop drifting between the two?
+expected:
+  output_contains:
+    - "Elicit"
+    - "Detect"
+    - "Resolve"
+    - "Maintain the glossary"
+    - "which term should win"
+  output_not_contains:
+    - "I'll standardize on \"customer\""
+    - "I'll standardize on \"client\""
