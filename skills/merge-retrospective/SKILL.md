@@ -19,6 +19,12 @@ file, point proposed gates and instruction fixes at that file (whatever
 it is called) and follow its existing conventions (posting style,
 issue/PR templates, etc.) -- this skill does not impose its own.
 
+**Prerequisite:** Step 1 and Step 4 below assume a connected GitHub MCP
+server (`mcp__github__*` tools). Where the environment lacks one, fall
+back to the repo's own approved read-only REST API wrapper for Step 1's
+history reconstruction, and to whatever write path the repo already uses
+for filing issues in Step 4.
+
 ## Classification taxonomy (fixed -- never invent a fourth category)
 
 Every repair gets exactly one of these three categories:
@@ -53,10 +59,10 @@ which in turn outranks "external decision."
    - a force-push made to correct a mistake (not just to rebase cleanly)
      -- these subcalls only reflect the PR's current commit set, not
      history that was rewritten away, so a force-push repair is only
-     enumerable if you observed it directly (e.g. it happened during
-     this session, or a `github-webhook-activity` event reported it).
-     Do not claim a force-push repair occurred, or that none did, beyond
-     what the available data actually shows.
+     enumerable if you observed it directly (it happened during this
+     session, or any session-observed merge event reported it). Do not
+     claim a force-push repair occurred, or that none did, beyond what
+     the available data actually shows.
 2. **For each repair**, identify the earliest point in the pipeline a
    deterministic gate could have caught it -- before it ever reached a
    human reviewer or a CI run.
@@ -87,6 +93,18 @@ which in turn outranks "external decision."
      proposal is.
 5. **Cross-link**: reference the merged PR number in the retrospective
    issue body (e.g. "Refs #<merged PR number>").
+6. **Verify the filed issue.** After `issue_write` returns, confirm the
+   issue actually exists (re-fetch it), that its title passed any
+   title-policy gate the repo enforces (no rejection or auto-edit), and
+   that the PR cross-link from Step 5 resolves to the correct PR. A
+   silent write failure or a title-policy rejection is not "filed."
+
+## Known gaps
+
+The committed eval suite (`evals/merge-retrospective/`) has no committed
+no-skill baseline run for the three core scenarios, so it currently
+measures compliance, not gap-closure. Only `claude-sonnet-4.6` has been
+evaluated; cross-model behavior is currently unmeasured.
 
 ## Stop boundary
 
