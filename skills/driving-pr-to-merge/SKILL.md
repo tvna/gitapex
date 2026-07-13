@@ -11,14 +11,18 @@ the exact order below; do not reorder or skip a step.
 Tool names below are written as `Server:tool` (portable shorthand, not tied
 to one agent platform). In Claude Code, translate to the literal
 double-underscore form: `Server:tool` -> `mcp__Server__tool` — e.g.
-`github:resolve_review_thread` is `mcp__github__resolve_review_thread`
-(the same tool CLAUDE.md chapter 3 cites literally). Other platforms may use
-a different literal form for the same server/tool pair.
+`github:resolve_review_thread` is `mcp__github__resolve_review_thread`.
+Other platforms may use a different literal form for the same server/tool
+pair; this skill is the source of truth for the procedure regardless of
+platform naming.
 
 ## Exact sequence
 
 1. **On PR open** — subscribe to CI, review, and comment activity without
-   asking permission. An environment-provided push-subscribe tool such as
+   asking permission. Prefer a deterministic subscription hook or automation
+   (e.g. a PR-open webhook or CI event) where the environment supports one;
+   this step's prose is the fallback for environments without one. An
+   environment-provided push-subscribe tool such as
    `Claude_Code_Remote:subscribe_pr_activity` is one example mechanism, not
    the only valid one — this skill is distributed as a plugin and must not
    assume one specific environment's toolset. When no push-subscribe tool
@@ -84,14 +88,14 @@ Fictitious PR #42, "Add retry to fetch helper," has just been opened.
    `mergeable_state` field. Suppose it now reads `mergeable_state:
    "clean"` and the `lint` check reports success.
 7. Only now, with the review thread resolved via the API and
-   `mergeable_state == "clean"` confirmed via step 6's dispatch, treat
-   PR #42 as done (merge it or hand it to the owner for the merge
-   decision, per repo policy). Had `mergeable_state` instead read
-   `"unstable"` or `"blocked"`, step 6 requires inspecting the actual
-   check-run/review details rather than assuming a meaning from the
-   state name alone — only a confirmed failure or rejection sends this
-   PR back to step 2; a still-pending check or review means wait and
-   re-check step 5 instead.
+   `mergeable_state == "clean"` confirmed via sequence step 5's verify
+   call, treat PR #42 as done (merge it or hand it to the owner for the
+   merge decision, per repo policy). Had `mergeable_state` instead read
+   `"unstable"` or `"blocked"`, sequence step 6's dispatch requires
+   inspecting the actual check-run/review details rather than assuming a
+   meaning from the state name alone — only a confirmed failure or
+   rejection sends this PR back to sequence step 2; a still-pending check
+   or review means wait and re-check sequence step 5 instead.
 
 ## Stop boundaries
 
@@ -101,9 +105,16 @@ Fictitious PR #42, "Add retry to fetch helper," has just been opened.
 - Never proceed past an access, secret, or human-decision block without
   escalating.
 
+## Known gaps
+
+The eval suite (`evals/driving-pr-to-merge/`) has no committed no-skill
+baseline run, and only `claude-sonnet-4.6` has been evaluated —
+cross-model behavior is currently unmeasured.
+
 ## Related skills
 
-Issue #9 (`stop-and-replan`) is a separate, not-yet-landed skill with a
-distinct trigger: it fires when the agent detects a specific phrase
-pattern in its own PR body or commit text, not on PR-opened, CI-failure,
-or review-thread events. Its content is intentionally not included here.
+`stop-and-replan` (see `skills/stop-and-replan/SKILL.md`) is a separate,
+landed skill with a distinct trigger: it fires when the agent detects a
+specific phrase pattern in its own PR body or commit text, not on
+PR-opened, CI-failure, or review-thread events. Its content is
+intentionally not included here.
