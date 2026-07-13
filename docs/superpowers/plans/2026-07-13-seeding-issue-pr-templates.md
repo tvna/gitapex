@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add a gitapex skill that creates Issue/PR templates for a repository that lacks them, by interviewing the maintainer (Fable unknowns method) and seeding right-sized templates rooted in tvna/claude-md, self-checked by a shipped validator.
+**Goal:** Add a gitapex skill that creates Issue/PR templates for a repository that lacks them, by interviewing the maintainer (Fable unknowns method) and seeding right-sized templates rooted in a maintained claude-md template corpus, self-checked by a shipped validator.
 
 **Architecture:** One new skill directory `skills/seeding-issue-pr-templates/` holding a platform-neutral `SKILL.md`, a Tier-2 `scripts/validate_templates.py` (pyyaml, the repo's first script-shipping skill), and four `references/` files split so a run loads exactly one platform's reference. A repo-root pytest suite exercises the validator; evals mirror the existing `issue-to-branch` shape.
 
@@ -584,9 +584,9 @@ Content (ASCII, no GitHub/GitLab syntax):
 ```markdown
 # claude-md canonical base (platform-neutral)
 
-Distilled from tvna/claude-md's template set. Used as the STARTING base,
-then right-sized per target repo. claude-md's server-side enforcement
-scripts (body_policy.py, preflight_pr_template_shape.py) are deliberately
+A distilled Design-by-Contract template set. Used as the STARTING base,
+then right-sized per target repo. Server-side enforcement scripts
+(e.g. body_policy.py, preflight_pr_template_shape.py) are deliberately
 NOT copied -- see right-sizing-and-gate-gap.md.
 
 ## Issue types (offer a subset; never invent extras)
@@ -750,7 +750,7 @@ Content (ASCII):
 ```markdown
 ---
 name: seeding-issue-pr-templates
-description: Use when a repository has no Issue or PR templates and you need to create them. Detects missing templates on GitHub or GitLab, runs a Blind Spot Pass and a one-question-at-a-time interview (Fable unknowns method), and seeds right-sized templates rooted in tvna/claude-md's Design-by-Contract structure without provenance markers or unenforceable fields; self-checks output with validate_templates.py.
+description: Use when a repository has no Issue or PR templates and you need to create them. Detects missing templates on GitHub or GitLab, runs a Blind Spot Pass and a one-question-at-a-time interview (Fable unknowns method), and seeds right-sized templates rooted in a Design-by-Contract structure without provenance markers or unenforceable fields; self-checks output with validate_templates.py.
 ---
 
 # Seeding Issue/PR Templates

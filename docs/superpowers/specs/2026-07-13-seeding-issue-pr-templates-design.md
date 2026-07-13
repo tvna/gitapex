@@ -9,8 +9,8 @@ repository create Issue/PR templates when it lacks them. The repo's own
 `.github/` carries only a workflow (no templates), so gitapex is itself a
 candidate target for the skill.
 
-The upstream `tvna/claude-md` -- from which gitapex syncs
-`CLAUDE.md`/`AGENTS.md` -- already carries a canonical template set:
+The maintained `CLAUDE.md`/`AGENTS.md` template corpus gitapex syncs from
+already carries a canonical template set:
 
 - **Issue templates** as GitHub Issue Forms (`.yml`):
   `feat / fix / chore / docs / refactor / tracking / generic` + `config.yml`.
@@ -92,7 +92,7 @@ Owner-approved decisions (this session):
 ```yaml
 ---
 name: seeding-issue-pr-templates
-description: Use when a repository has no Issue or PR templates and you need to create them. Detects missing templates on GitHub or GitLab, runs a Blind Spot Pass and a one-question-at-a-time interview (Fable unknowns method), and seeds right-sized templates rooted in tvna/claude-md's Design-by-Contract structure without provenance markers or unenforceable fields; self-checks output with validate_templates.py.
+description: Use when a repository has no Issue or PR templates and you need to create them. Detects missing templates on GitHub or GitLab, runs a Blind Spot Pass and a one-question-at-a-time interview (Fable unknowns method), and seeds right-sized templates rooted in a Design-by-Contract structure without provenance markers or unenforceable fields; self-checks output with validate_templates.py.
 ---
 ```
 

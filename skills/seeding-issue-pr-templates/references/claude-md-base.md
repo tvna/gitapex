@@ -1,8 +1,8 @@
 # claude-md canonical base (platform-neutral)
 
-Distilled from tvna/claude-md's template set. Used as the STARTING base,
-then right-sized per target repo. claude-md's server-side enforcement
-scripts (body_policy.py, preflight_pr_template_shape.py) are deliberately
+A distilled Design-by-Contract template set. Used as the STARTING base,
+then right-sized per target repo. Server-side enforcement scripts
+(e.g. body_policy.py, preflight_pr_template_shape.py) are deliberately
 NOT copied -- see right-sizing-and-gate-gap.md.
 
 ## Issue types (offer a subset; never invent extras)

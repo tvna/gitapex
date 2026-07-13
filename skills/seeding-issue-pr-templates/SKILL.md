@@ -1,6 +1,6 @@
 ---
 name: seeding-issue-pr-templates
-description: Use when a repository has no Issue or PR templates and you need to create them. Detects missing templates on GitHub or GitLab, runs a Blind Spot Pass and a one-question-at-a-time interview (Fable unknowns method), and seeds right-sized templates rooted in tvna/claude-md's Design-by-Contract structure without provenance markers or unenforceable fields; self-checks output with validate_templates.py.
+description: Use when a repository has no Issue or PR templates and you need to create them. Detects missing templates on GitHub or GitLab, runs a Blind Spot Pass and a one-question-at-a-time interview (Fable unknowns method), and seeds right-sized templates rooted in a Design-by-Contract structure without provenance markers or unenforceable fields; self-checks output with validate_templates.py.
 ---
 
 # Seeding Issue/PR Templates
