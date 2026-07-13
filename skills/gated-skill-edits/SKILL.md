@@ -5,11 +5,8 @@ description: Use when iteratively editing an existing SKILL.md across repeated m
 
 # Gated skill edits
 
-**Portability:** Portable. Sibling-skill mentions below
-(`battle-testing-a-skill`, `evaluating-skill-quality`) are this repo's own
-examples of a scorer/verification source, not a dependency -- any
-equivalent scorer or adversarial-verification mechanism satisfies the
-precondition gate.
+**Portability: Portable.** Sibling-skill mentions below are examples, not
+a dependency.
 
 Improve an existing `SKILL.md` as bounded, measured edits gated on a
 held-out score, instead of unmeasured rewriting. Adapts SkillOpt
@@ -104,3 +101,10 @@ been evaluated -- cross-model behavior is currently unmeasured.
   verification pass.
 - This skill iterates a skill document; it does not build a training-loop
   executor, and it does not review a skill for merge.
+
+## Notes
+
+Portability: sibling-skill mentions (`battle-testing-a-skill`,
+`evaluating-skill-quality`) are this repo's own examples of a
+scorer/verification source, not a dependency -- any equivalent scorer or
+adversarial-verification mechanism satisfies the precondition gate.

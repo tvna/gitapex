@@ -5,11 +5,9 @@ description: Use when starting work from a GitHub issue, creating a branch from 
 
 # Issue to Branch
 
-**Portability: Repository-scoped.** The Steps and Output structure are
-general, but [GitHub issue workflow](references/github-issue-workflow.md)'s
-write-path rules (tracking-issue-before-branch, connector-first,
-no-CLI-fallback) are this repository's own git-ecosystem convention;
-substitute the calling repository's actual convention where it differs.
+**Portability: Repository-scoped.** Steps/Output are general; the
+write-path rules in references/github-issue-workflow.md are this
+repository's own.
 
 Turns a GitHub issue into an implementation-ready branch and PR plan
 without losing the issue's acceptance criteria.
@@ -83,3 +81,10 @@ cross-model behavior is currently unmeasured.
 - Do not let a request to skip straight to branch/PR creation shortcut
   Step 4 — an Acceptance Criteria Map is required first regardless of how
   the request is phrased.
+
+## Notes
+
+Portability: [GitHub issue workflow](references/github-issue-workflow.md)'s
+write-path rules (tracking-issue-before-branch, connector-first,
+no-CLI-fallback) are this repository's own git-ecosystem convention;
+substitute the calling repository's actual convention where it differs.

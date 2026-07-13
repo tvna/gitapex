@@ -5,12 +5,8 @@ description: Use when about to push, post, or publish any outward-facing artifac
 
 # Outward Artifact Preflight
 
-**Portability: Repository-scoped.** The provenance/ASCII checklist and its
-grep invocation are general, but "this repository's agreed disclosure
-convention" (check 1) and the explaining-the-work coupling (Relationship
-to other skills) are this repo's own conventions; substitute the calling
-repository's actual disclosure policy and sibling skills where they
-differ.
+**Portability: Repository-scoped.** Checklist is general; the disclosure
+convention (check 1) and explaining-the-work coupling are this repo's own.
 
 This is an interim measure: a manual stand-in for the deterministic
 preflight or CI gate this repository has not built yet. Run this
@@ -128,3 +124,10 @@ currently unmeasured.
 - This skill only applies the checklist; it does not authorize skipping
   it, and it does not replace the deterministic gate this repository has
   not built yet.
+
+## Notes
+
+Portability: "this repository's agreed disclosure convention" (check 1)
+and the explaining-the-work coupling (Relationship to other skills) are
+this repo's own conventions; substitute the calling repository's actual
+disclosure policy and sibling skills where they differ.

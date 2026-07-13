@@ -5,11 +5,8 @@ description: Use when writing or editing code comments, docstrings, or finalizin
 
 # Explaining the Work
 
-**Portability: Mixed.** The routing principle (How/What/Why/Why-not to one
-artifact each) is portable. The why-not comment's `docs/adr/NNNN-*.md`
-path and the "commit + `Refs #N`" convention below are this repository's
-own conventions; adapt the literal path/trailer form to whatever issue and
-ADR conventions the calling repository actually uses.
+**Portability: Mixed.** Routing principle is portable; the ADR path and
+commit-trailer conventions below are this repository's own.
 
 Explanation responsibility is split by artifact. Route each piece of
 explanation to exactly one place — never duplicate it, never let it drift
@@ -61,3 +58,10 @@ cross-model behavior is currently unmeasured.
 - Never auto-generate an ADR from a threshold or metric. ADRs are
   heavyweight, owner-approved records; machine-generating them produces
   "drive-by ADRs".
+
+## Notes
+
+Portability: the why-not comment's `docs/adr/NNNN-*.md` path and the
+"commit + `Refs #N`" convention are this repository's own conventions;
+adapt the literal path/trailer form to whatever issue and ADR conventions
+the calling repository actually uses.

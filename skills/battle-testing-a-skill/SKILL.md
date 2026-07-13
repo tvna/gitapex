@@ -5,10 +5,8 @@ description: Use when adversarially stress-testing whether a SKILL.md holds up u
 
 # Battle-testing a skill
 
-**Portability: Mixed.** The ten dimensions and procedure are portable to any
-harness. Repo-specific detail (this repo's sibling skills, its GitHub
-project, corroborating side-projects) lives only in the references files
-below, not in this section.
+**Portability: Mixed.** Procedure is portable; repo-specific detail lives
+only in the references files below.
 
 ## Overview
 
@@ -92,3 +90,9 @@ verdict is a more reliable signal than open-ended judgment.
 - Do not treat a model-level safety refusal as a skill guardrail pass; an
   empty refusal is evidence about neither.
 - Do not skip the quoted-line requirement to make a review read as complete.
+
+## Notes
+
+Portability: repo-specific detail (this repo's sibling skills, its GitHub
+project, corroborating side-projects) lives only in the references files
+below, not in this section.
