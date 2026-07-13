@@ -1,0 +1,25 @@
+name: Refactor
+description: Behavior-preserving restructure of a skill, script, or workflow
+body:
+  - type: markdown
+    attributes:
+      value: Behavior-preserving restructure. Fill in the sections below.
+  - type: textarea
+    id: current-structure
+    attributes:
+      label: Current structure
+    validations:
+      required: true
+  - type: textarea
+    id: proposed-structure
+    attributes:
+      label: Proposed structure
+    validations:
+      required: true
+  - type: textarea
+    id: why-behavior-preserving
+    attributes:
+      label: Why this preserves behavior
+      description: What proof shows nothing observable changes (tests, evals, live check)?
+    validations:
+      required: true

@@ -1,0 +1,18 @@
+name: Chore
+description: Maintenance, dependency, or tooling work with no user-facing behavior change
+body:
+  - type: markdown
+    attributes:
+      value: Maintenance work. Fill in the sections below.
+  - type: textarea
+    id: what-needs-to-change
+    attributes:
+      label: What needs to change
+    validations:
+      required: true
+  - type: textarea
+    id: why-now
+    attributes:
+      label: Why now
+    validations:
+      required: false

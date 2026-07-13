@@ -1,0 +1,19 @@
+name: Documentation
+description: Documentation-only change (SKILL.md, references, specs, plans, this repo's own docs)
+labels: [documentation]
+body:
+  - type: markdown
+    attributes:
+      value: Documentation-only change. Fill in the sections below.
+  - type: textarea
+    id: whats-wrong-or-missing
+    attributes:
+      label: What is wrong or missing
+    validations:
+      required: true
+  - type: textarea
+    id: proposed-content
+    attributes:
+      label: Proposed content
+    validations:
+      required: false

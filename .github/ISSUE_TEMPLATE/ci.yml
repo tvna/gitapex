@@ -1,0 +1,18 @@
+name: CI / workflow change
+description: A change to .github/workflows, .github/scripts, or the CI pipeline
+body:
+  - type: markdown
+    attributes:
+      value: CI/workflow change. Fill in the sections below.
+  - type: textarea
+    id: what-changes
+    attributes:
+      label: What CI behavior changes
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+    validations:
+      required: true

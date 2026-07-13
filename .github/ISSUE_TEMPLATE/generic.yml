@@ -1,0 +1,12 @@
+name: Other
+description: Anything that does not fit the other issue types
+body:
+  - type: markdown
+    attributes:
+      value: Fill in the section below.
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+    validations:
+      required: true
