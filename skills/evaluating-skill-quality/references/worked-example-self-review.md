@@ -49,6 +49,11 @@ disqualifying -- the judgment-call parts of this skill are still
 correctly skill-shaped -- but worth naming rather than assuming the
 prose boundary is sufficient on its own.
 
+**Skill-step vs. bundled script**: passes. This skill's own deterministic
+shape lane was delegated to `scripts/check_skill_shape.py` (#32), so
+applying the fourth Mechanism-fit check to this skill's own procedure
+finds no remaining step-level delegate-to-script finding.
+
 ## Portability level
 
 Not explicitly declared inline (`SKILL.md` never states "this skill is
