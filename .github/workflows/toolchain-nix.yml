@@ -1,0 +1,70 @@
+name: Toolchain (nix)
+
+on:
+  push:
+    paths:
+      - "flake.nix"
+      - "flake.lock"
+      - ".github/workflows/toolchain-nix.yml"
+  pull_request:
+    paths:
+      - "flake.nix"
+      - "flake.lock"
+      - ".github/workflows/toolchain-nix.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  nix:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+        with:
+          extra-conf: "experimental-features = nix-command flakes"
+
+      - name: Lock (generate flake.lock if missing)
+        run: nix flake lock
+
+      - name: Upload flake.lock
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flake-lock
+          path: flake.lock
+
+      - name: flake check
+        run: nix flake check
+
+      - name: build Class B (added in Task 3; no-op until then)
+        run: nix build .#waza .#apm .#rtk .#betterleaks || echo "class B not present yet"
+
+      - name: devShell smoke
+        run: |
+          nix develop --command bash -c '
+            set -e
+            for t in uv gh actionlint bun lychee; do echo -n "$t "; $t --version | head -1; done
+            python3 --version
+          '
