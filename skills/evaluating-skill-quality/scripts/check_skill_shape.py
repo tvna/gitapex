@@ -11,7 +11,7 @@ no mutation. Effects are limited to stdout and the process exit code.
 Checks (the canonical list -- the manual fallback is to apply these):
   - description: present/non-empty, no XML tags, <= 1024 chars
   - name (only if present): lowercase-hyphenated, <= 64 chars,
-    no XML tags, not a reserved word (anthropic, claude)
+    no XML tags, contains no reserved word (anthropic, claude)
   - SKILL.md body: <= 500 lines
   - references/ files: exactly one level deep
   - any references/ file over 100 lines: contains a table of contents
@@ -27,6 +27,7 @@ when no readable SKILL.md is found.
 """
 from __future__ import annotations
 
+import argparse
 import re
 import sys
 from dataclasses import dataclass
@@ -103,6 +104,19 @@ def _is_ignorable(p: Path) -> bool:
     return p.name.startswith(".") or "__pycache__" in p.parts
 
 
+def _no_xml_check(field: str, value: str) -> CheckResult:
+    has_tag = bool(TAG_RE.search(value))
+    return CheckResult(
+        f"{field}-no-xml", not has_tag, f"{field} has no XML tags",
+        "tag found" if has_tag else "no tags")
+
+
+def _length_check(field: str, value: str, limit: int) -> CheckResult:
+    return CheckResult(
+        f"{field}-length", len(value) <= limit,
+        f"{field} <= {limit} chars", f"{len(value)} chars")
+
+
 def _resolve_skill_md(target: Path) -> Path:
     return target / "SKILL.md" if target.is_dir() else target
 
@@ -124,31 +138,23 @@ def check_shape(target: Path) -> list[CheckResult]:
         results.append(CheckResult(
             "description-present", True,
             "description present and non-empty", "present"))
-        has_tag = bool(TAG_RE.search(description))
-        results.append(CheckResult(
-            "description-no-xml", not has_tag,
-            "description has no XML tags",
-            "tag found" if has_tag else "no tags"))
-        results.append(CheckResult(
-            "description-length", len(description) <= DESCRIPTION_MAX_CHARS,
-            f"description <= {DESCRIPTION_MAX_CHARS} chars",
-            f"{len(description)} chars"))
+        results.append(_no_xml_check("description", description))
+        results.append(_length_check(
+            "description", description, DESCRIPTION_MAX_CHARS))
 
     name = fields.get("name")
     if name:
         results.append(CheckResult(
             "name-pattern", bool(NAME_RE.match(name)),
             "name is lowercase-hyphenated", repr(name)))
+        results.append(_length_check("name", name, NAME_MAX_CHARS))
+        results.append(_no_xml_check("name", name))
+        lname = name.lower()
+        reserved_hit = any(word in lname for word in RESERVED_NAME_WORDS)
         results.append(CheckResult(
-            "name-length", len(name) <= NAME_MAX_CHARS,
-            f"name <= {NAME_MAX_CHARS} chars", f"{len(name)} chars"))
-        has_tag = bool(TAG_RE.search(name))
-        results.append(CheckResult(
-            "name-no-xml", not has_tag,
-            "name has no XML tags", "tag found" if has_tag else "no tags"))
-        results.append(CheckResult(
-            "name-not-reserved", name.lower() not in RESERVED_NAME_WORDS,
-            f"name not a reserved word {RESERVED_NAME_WORDS}", repr(name)))
+            "name-not-reserved", not reserved_hit,
+            f"name contains no reserved word {RESERVED_NAME_WORDS}",
+            repr(name)))
 
     body_lines = len(text.splitlines())
     results.append(CheckResult(
@@ -194,12 +200,13 @@ def format_report(results: list[CheckResult]) -> str:
     return "\n".join(lines)
 
 
-def main(argv: list[str]) -> int:
-    if len(argv) != 2:
-        print("usage: python3 check_skill_shape.py <skill-dir-or-SKILL.md>",
-              file=sys.stderr)
-        return 2
-    target = Path(argv[1])
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Check a SKILL.md's deterministic shape (read-only).")
+    parser.add_argument(
+        "target", help="Path to a skill directory or a SKILL.md file.")
+    args = parser.parse_args(argv)
+    target = Path(args.target)
     skill_md = _resolve_skill_md(target)
     if not skill_md.is_file():
         print(f"error: no SKILL.md found at: {target}", file=sys.stderr)
@@ -214,4 +221,4 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main(sys.argv))
+    raise SystemExit(main())

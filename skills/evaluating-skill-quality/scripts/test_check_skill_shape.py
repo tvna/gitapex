@@ -5,6 +5,8 @@ travels with the skill on vendoring.
 """
 from pathlib import Path
 
+import pytest
+
 import check_skill_shape as css
 
 
@@ -40,18 +42,18 @@ def test_well_formed_skill_passes(tmp_path):
     d = _write_skill(tmp_path)
     results = css.check_shape(d)
     assert all(r.passed for r in results)
-    assert css.main([css.__file__, str(d)]) == 0
+    assert css.main([str(d)]) == 0
 
 
 def test_accepts_skill_md_path_directly(tmp_path):
     d = _write_skill(tmp_path)
-    assert css.main([css.__file__, str(d / "SKILL.md")]) == 0
+    assert css.main([str(d / "SKILL.md")]) == 0
 
 
 def test_missing_description_fails(tmp_path):
     d = _write_skill(tmp_path, description=None)
     assert _by_name(css.check_shape(d))["description-present"].passed is False
-    assert css.main([css.__file__, str(d)]) == 1
+    assert css.main([str(d)]) == 1
 
 
 def test_overlong_description_fails(tmp_path):
@@ -72,6 +74,16 @@ def test_uppercase_name_fails(tmp_path):
 def test_reserved_name_fails(tmp_path):
     d = _write_skill(tmp_path, name="claude")
     assert _by_name(css.check_shape(d))["name-not-reserved"].passed is False
+
+
+def test_reserved_word_as_substring_fails(tmp_path):
+    # Per Anthropic's spec the name must not *contain* a reserved word;
+    # "claude-tools" / "anthropic-helper" are the doc's own avoid-examples.
+    for bad in ("claude-code", "anthropic-helper"):
+        sub = tmp_path / bad
+        sub.mkdir()
+        d = _write_skill(sub, name=bad)
+        assert _by_name(css.check_shape(d))["name-not-reserved"].passed is False
 
 
 def test_absent_name_is_not_checked(tmp_path):
@@ -103,9 +115,18 @@ def test_long_reference_with_toc_passes(tmp_path):
     assert _by_name(css.check_shape(d))["toc:big.md"].passed is True
 
 
-def test_bad_usage_returns_2(tmp_path):
-    assert css.main([css.__file__]) == 2
-    assert css.main([css.__file__, str(tmp_path / "nope")]) == 2
+def test_missing_argument_exits_2(tmp_path):
+    # argparse exits (raises SystemExit) with code 2 when the required
+    # target is absent or extra positionals are given.
+    with pytest.raises(SystemExit) as exc:
+        css.main([])
+    assert exc.value.code == 2
+    with pytest.raises(SystemExit):
+        css.main([str(tmp_path), str(tmp_path)])
+
+
+def test_nonexistent_target_returns_2(tmp_path):
+    assert css.main([str(tmp_path / "nope")]) == 2
 
 
 def test_overlong_name_fails(tmp_path):
@@ -128,7 +149,7 @@ def test_missing_frontmatter_fails_description(tmp_path):
 def test_directory_without_skill_md_returns_2(tmp_path):
     empty = tmp_path / "emptydir"
     empty.mkdir()
-    assert css.main([css.__file__, str(empty)]) == 2
+    assert css.main([str(empty)]) == 2
 
 
 def _write_raw(tmp_path, text, *, references=None):
@@ -201,4 +222,4 @@ def test_junk_files_in_references_are_ignored(tmp_path):
     (pycache / "m.cpython-312.pyc").write_bytes(b"\x00\xff")
     res = _by_name(css.check_shape(d))  # must not raise on the binary file
     assert res["references-flat"].passed is True
-    assert css.main([css.__file__, str(d)]) == 0
+    assert css.main([str(d)]) == 0

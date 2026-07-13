@@ -79,7 +79,7 @@ description-length   PASS    203 chars  (description <= 1024 chars)
 name-pattern         PASS    'explaining-the-work'  (name is lowercase-hyphenated)
 name-length          PASS    19 chars  (name <= 64 chars)
 name-no-xml          PASS    no tags  (name has no XML tags)
-name-not-reserved    PASS    'explaining-the-work'  (name not a reserved word ('anthropic', 'claude'))
+name-not-reserved    PASS    'explaining-the-work'  (name contains no reserved word ('anthropic', 'claude'))
 body-length          PASS    45 lines  (SKILL.md body <= 500 lines)
 
 8/8 checks passed

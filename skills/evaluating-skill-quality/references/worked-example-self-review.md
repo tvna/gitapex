@@ -125,7 +125,7 @@ description-length                         PASS    314 chars  (description <= 10
 name-pattern                               PASS    'evaluating-skill-quality'  (name is lowercase-hyphenated)
 name-length                                PASS    24 chars  (name <= 64 chars)
 name-no-xml                                PASS    no tags  (name has no XML tags)
-name-not-reserved                          PASS    'evaluating-skill-quality'  (name not a reserved word ('anthropic', 'claude'))
+name-not-reserved                          PASS    'evaluating-skill-quality'  (name contains no reserved word ('anthropic', 'claude'))
 body-length                                PASS    147 lines  (SKILL.md body <= 500 lines)
 references-flat                            PASS    flat  (references/ files are one level deep)
 toc:rubric.md                              PASS    565 lines, TOC found  (reference over 100 lines has a TOC)
