@@ -106,3 +106,26 @@ def test_long_reference_with_toc_passes(tmp_path):
 def test_bad_usage_returns_2(tmp_path):
     assert css.main([css.__file__]) == 2
     assert css.main([css.__file__, str(tmp_path / "nope")]) == 2
+
+
+def test_overlong_name_fails(tmp_path):
+    d = _write_skill(tmp_path, name="a" * (css.NAME_MAX_CHARS + 1))
+    assert _by_name(css.check_shape(d))["name-length"].passed is False
+
+
+def test_xml_tag_in_name_fails(tmp_path):
+    d = _write_skill(tmp_path, name="foo<b>bar")
+    assert _by_name(css.check_shape(d))["name-no-xml"].passed is False
+
+
+def test_missing_frontmatter_fails_description(tmp_path):
+    d = tmp_path / "skill"
+    d.mkdir()
+    (d / "SKILL.md").write_text("# No frontmatter here\n", encoding="utf-8")
+    assert _by_name(css.check_shape(d))["description-present"].passed is False
+
+
+def test_directory_without_skill_md_returns_2(tmp_path):
+    empty = tmp_path / "emptydir"
+    empty.mkdir()
+    assert css.main([css.__file__, str(empty)]) == 2

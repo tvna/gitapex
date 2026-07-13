@@ -161,10 +161,15 @@ def main(argv: list[str]) -> int:
               file=sys.stderr)
         return 2
     target = Path(argv[1])
-    if not target.exists():
-        print(f"error: path not found: {target}", file=sys.stderr)
+    skill_md = _resolve_skill_md(target)
+    if not skill_md.is_file():
+        print(f"error: no SKILL.md found at: {target}", file=sys.stderr)
         return 2
-    results = check_shape(target)
+    try:
+        results = check_shape(target)
+    except (OSError, UnicodeDecodeError) as exc:
+        print(f"error: could not read skill files: {exc}", file=sys.stderr)
+        return 2
     print(format_report(results))
     return 0 if all(r.passed for r in results) else 1
 
