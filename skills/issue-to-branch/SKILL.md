@@ -5,6 +5,12 @@ description: Use when starting work from a GitHub issue, creating a branch from 
 
 # Issue to Branch
 
+**Portability: Repository-scoped.** The Steps and Output structure are
+general, but [GitHub issue workflow](references/github-issue-workflow.md)'s
+write-path rules (tracking-issue-before-branch, connector-first,
+no-CLI-fallback) are this repository's own git-ecosystem convention;
+substitute the calling repository's actual convention where it differs.
+
 Turns a GitHub issue into an implementation-ready branch and PR plan
 without losing the issue's acceptance criteria.
 
@@ -30,14 +36,17 @@ without losing the issue's acceptance criteria.
 6. Identify the deterministic gates the mapped criteria require: tests,
    docs checks, release gates, CI status checks. See
    [GitHub issue workflow](references/github-issue-workflow.md) for
-   connector-first read/write conventions and CLI fallback boundaries.
+   connector-first conventions and the no-CLI escalation rule.
 7. Ask one focused question only when multiple interpretations survive
    after repo inspection — never guess silently, never ask what the repo
    already answers. Use portable question handoff: `AskUserQuestion` when
    available, otherwise `AskUserQuestion:` text with the same choices.
 8. Before creating or updating a PR, require its body to carry the
    Acceptance Criteria Map and verification evidence, not just a
-   description of the diff.
+   description of the diff. Validate the table's presence with
+   `python3 scripts/check_acm_present.py --body <pr-body-file>` (or pipe
+   the drafted body on stdin) rather than re-reasoning it in prose each
+   run.
 
 ## Output
 
@@ -54,6 +63,11 @@ without losing the issue's acceptance criteria.
 Pattern: **Facts** -> **Assumptions** -> **Acceptance Criteria Map** ->
 **Branch Plan** -> **Verification Plan** -> **Next Move**. Insert
 **Human Decision** only when needed.
+
+## Known gaps
+
+Only `claude-sonnet-4.6` has been evaluated in `evals/issue-to-branch/`;
+cross-model behavior is currently unmeasured.
 
 ## Stop boundaries
 
