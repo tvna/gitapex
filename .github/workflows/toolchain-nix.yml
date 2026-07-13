@@ -21,6 +21,12 @@ concurrency:
 
 jobs:
   nix:
+    # NOTE: this matrix build-verifies only x86_64-linux (ubuntu-latest) and
+    # aarch64-darwin (macos-latest). The flake's other two systems --
+    # aarch64-linux and x86_64-darwin -- are eval-checked by `nix flake check`
+    # (hashes/attrs) but their binaries are NOT built or run here. A wrong
+    # asset name or per-arch runtime issue for those two would not be caught
+    # until someone runs nix on that arch.
     strategy:
       fail-fast: false
       matrix:
@@ -45,15 +51,12 @@ jobs:
         with:
           extra-conf: "experimental-features = nix-command flakes"
 
-      - name: Lock (generate flake.lock if missing)
-        run: nix flake lock
-
-      - name: Upload flake.lock
-        if: matrix.os == 'ubuntu-latest'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: flake-lock
-          path: flake.lock
+      - name: Verify flake.lock is committed and current
+        run: |
+          test -f flake.lock || { echo "flake.lock is missing from the repo"; exit 1; }
+          nix flake lock
+          git diff --exit-code flake.lock \
+            || { echo "flake.lock is stale; run 'nix flake lock' locally and commit it"; exit 1; }
 
       - name: flake check
         run: nix flake check
@@ -64,7 +67,7 @@ jobs:
       - name: devShell smoke
         run: |
           nix develop --command bash -c '
-            set -e
+            set -euo pipefail
             for t in uv gh actionlint bun lychee; do echo -n "$t "; $t --version | head -1; done
             python3 --version
             for t in waza apm rtk betterleaks; do echo -n "$t "; $t --version | head -1; done
