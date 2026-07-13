@@ -16,9 +16,10 @@ Before any iteration, confirm both of these exist:
 
 - A scorer that maps a skill run on a task to a number in `[0,1]` by a
   check a machine or a disciplined reviewer can repeat: exact-match, a
-  substring/structural contract (`scripts/score_contract.py` scores one
-  deterministically), a test pass/fail, or a battle-test pass/fail
-  (`battle-testing-a-skill` produces one).
+  substring/structural contract (this skill bundles
+  `scripts/score_contract.py`, which scores one deterministically), a test
+  pass/fail, or a battle-test pass/fail (`battle-testing-a-skill` produces
+  one).
 - A held-out set of tasks not used to motivate any edit.
 
 If either is missing, STOP. This is open-ended judgement, which SkillOpt's

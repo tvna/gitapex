@@ -17,11 +17,11 @@ package = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["scripts"]
-addopts = "--cov=scripts --cov-report=term-missing"
+pythonpath = ["scripts", "skills/gated-skill-edits/scripts"]
+addopts = "--cov=scripts --cov=skills/gated-skill-edits/scripts --cov-report=term-missing"
 
 [tool.coverage.run]
-source = ["scripts"]
+source = ["scripts", "skills/gated-skill-edits/scripts"]
 
 [tool.coverage.report]
 exclude_lines = [
