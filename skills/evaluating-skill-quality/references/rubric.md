@@ -158,6 +158,12 @@ have been a hook, subagent, or CLAUDE.md content). The Skill-step vs.
 bundled script check below is the one exception: its finding is step-level,
 reported for triage, and is neither a headline nor a *mature* blocker.
 
+A recorded mechanism-fit decision for the *reviewed* skill -- the "keep
+vs. retire, and why" rationale once a wrong-mechanism finding has been
+weighed -- belongs in that skill's footer `## Notes` section, not
+front-loaded above its procedure; the same placement convention that
+keeps portability declarations terse up top applies here.
+
 ### Skill-step vs. bundled script
 
 The three checks above ask whether a skill is the right *artifact*. This
@@ -231,7 +237,11 @@ grading below.
   were portable is a dimension-1/6 defect (it misleads a future vendoring
   decision), not the scoping choice itself. An undeclared level that
   turns out to be repository-scoped is itself a finding, not something to
-  silently infer and move past.
+  silently infer and move past. Declared as a terse one-line marker on
+  the first body line after the H1 (the `portability-near-top` shape
+  check enforces presence within the first 6 body lines); any extended
+  rationale belongs in a footer `## Notes` section of the same file,
+  keeping the classification checkable from this file alone.
 - **Mixed** -- dimension 5 (progressive disclosure) requires the actual
   split, not just the intent to split: the repository-specific part
   belongs in a clearly named reference file (e.g.
