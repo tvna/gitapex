@@ -1,0 +1,32 @@
+# Dependabot version updates.
+#
+# nix            -> bumps the nixpkgs input in flake.lock (Class A tools).
+# github-actions -> bumps the SHA-pinned actions in .github/workflows.
+# uv             -> bumps the Python dev tools in pyproject.toml / uv.lock (prek).
+#                   Dependabot supports uv (GA 2025-03; security updates 2025-12).
+#
+# NOT configured: the Class B release binaries (waza/apm/rtk/betterleaks) are
+# pinned in flake.nix, outside any Dependabot ecosystem, and are updated on the
+# Renovate/custom track -- see the toolchain design spec and PR-3 of #57.
+version: 2
+updates:
+  - package-ecosystem: "nix"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(ci)"
+
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(deps)"
