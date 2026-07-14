@@ -571,6 +571,28 @@ know whether the content itself was any good.
 
 ## References
 
+Every inline `[label]` citation above resolves to the source below.
+
+- **[ab]** Anthropic -- Skill authoring best practices.
+  <https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices>
+- **[ao]** Anthropic -- Agent Skills overview.
+  <https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview>
+- **[cc]** Anthropic -- Claude Code skills.
+  <https://code.claude.com/docs/en/skills>
+- **[cce]** Anthropic -- Claude Code skills, Evaluate and iterate on a skill.
+  <https://code.claude.com/docs/en/skills#evaluate-and-iterate-on-a-skill>
+- **[skillopt]** Yang et al., SkillOpt: Executive Strategy for Self-Evolving
+  Agent Skills, Microsoft, 2026 (arXiv:2605.23904).
+  <https://arxiv.org/abs/2605.23904>
+- **[dbc]** Bertrand Meyer, Applying "Design by Contract", IEEE Computer
+  25(10):40-51, October 1992.
+  <https://se.inf.ethz.ch/~meyer/publications/computer/contract.pdf>
+- **[steering]** Anthropic -- Steering Claude Code: skills, hooks, subagents
+  and more.
+  <https://claude.com/blog/steering-claude-code-skills-hooks-rules-subagents-and-more>
+
+<!-- Link reference definitions below power the inline [label] shortcuts; keep in sync with the visible list above. -->
+
 [ab]: https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices "Anthropic -- Skill authoring best practices"
 [ao]: https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview "Anthropic -- Agent Skills overview"
 [cc]: https://code.claude.com/docs/en/skills "Anthropic -- Claude Code skills"
