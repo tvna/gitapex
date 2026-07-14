@@ -81,7 +81,7 @@ coupling to its packages.
 | Class | Tools | Provisioned by | Version bumped by |
 |-------|-------|----------------|-------------------|
 | A: nixpkgs | uv, gh, actionlint, python312, bun, lychee | `pkgs.*` (nix); official installers (Windows) | Dependabot `nix` (bumps `nixpkgs` in `flake.lock`) |
-| A': PyPI/uv | prek | pyproject dev-dep via `uv` (all surfaces) | Renovate (uv manager) -- NOT Dependabot (no `uv` ecosystem; `pip` does not read uv.lock / PEP 735 groups) |
+| A': uv/PyPI | prek | pyproject dev-dep via `uv` (all surfaces) | Dependabot `uv` ecosystem (GA 2025-03; reads pyproject + uv.lock) |
 | B: release pin | waza, apm, rtk, betterleaks | SHA-pinned `fetchurl` derivations embedded in `flake.nix` (nix); publisher binaries (Windows ps1) | Renovate customManager on `flake.nix` (or a flake_pin-style script) |
 
 Design (E2): everything is embedded in gitapex's own flake, copying upstream
@@ -98,10 +98,9 @@ Notes: waza ships a standalone `waza check` binary plus official
 darwin/linux/windows binaries with `.sha256` companions but **windows is
 x86_64-only** (no windows-arm64 -> that surface uses WSL or x86_64 emulation).
 prek is a single Rust binary distributed via PyPI/crates.io/release +
-`prek-installer.{sh,ps1}`. NOTE (corrected in PR-2): Dependabot has no `uv`
-ecosystem and its `pip` ecosystem does not read uv.lock / PEP 735
-`[dependency-groups]`, so prek is NOT Dependabot-updatable in this uv project;
-it joins the Renovate track (Renovate has a `uv` manager) alongside Class B.
+`prek-installer.{sh,ps1}`. prek is Dependabot-updatable via the `uv` ecosystem
+(GA since 2025-03; Dependabot reads pyproject + uv.lock), configured in PR-2.
+(An earlier draft wrongly claimed uv was unsupported; corrected after review.)
 
 Class B is not covered by any Dependabot ecosystem (fetchurl pins in `flake.nix`
 are invisible to Dependabot `nix`, which only bumps `flake.lock` inputs). It is
@@ -210,8 +209,8 @@ supports `-Verify` and `-DryRun`.
 
 ### Update tooling (Class A/A' + Class B)
 - Class A: Dependabot `nix` (bumps the `nixpkgs` input in `flake.lock`).
-- Class A' (prek): Renovate `uv` manager (NOT Dependabot -- no `uv` ecosystem);
-  handled on the Renovate track with Class B in PR-3.
+- Class A' (prek): Dependabot `uv` ecosystem (reads pyproject + uv.lock);
+  configured in PR-2.
 - github-actions: Dependabot `github-actions`.
 - Class B: a **Renovate customManager** (regex over `flake.nix` let-bindings) +
   `github-releases` datasource + `postUpgradeTasks` running `nix-prefetch` to
@@ -282,14 +281,14 @@ non-inheritance (the GitHub-MCP gap that motivated this work), web egress limits
    to pyproject. `nix develop` provisions the toolchain on Linux+macOS. Includes
    the PR-1 spikes.
 2. **Update tooling (lean, done in PR #-).** Dependabot for `nix` +
-   `github-actions` only (no `pip`: Dependabot has no `uv` ecosystem); migrate
-   `waza-check.yml` off `go install` to the flake's waza (removes Go from CI).
+   `github-actions` + `uv` (the uv ecosystem bumps prek in pyproject/uv.lock);
+   migrate `waza-check.yml` off `go install` to the flake's waza (removes Go).
    The generated `toolchain.lock.json` + its drift scan were deferred to PR-4
    (their only consumer is the Windows ps1) to avoid a consumer-less artifact.
-3. **Class B + prek updater.** Renovate customManager over `flake.nix` (or a
+3. **Class B updater.** Renovate customManager over `flake.nix` (or a
    flake_pin-style script) with `github-releases` + `postUpgradeTasks`
-   (nix-prefetch) and the dead-man's switch, plus Renovate's `uv` manager for
-   prek; pytest-covered. Resolves the tooling open item.
+   (nix-prefetch) and the dead-man's switch; pytest-covered. (prek is handled by
+   the Dependabot `uv` ecosystem in PR-2, not here.) Resolves the tooling open item.
 4. **Windows ps1 + generated lock + drift gate.** CI generates
    `toolchain.lock.json` (`nix eval`) and a drift scan gates it; `setup.ps1`
    consumes the lock; signing verification.
