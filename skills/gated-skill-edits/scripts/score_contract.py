@@ -1,4 +1,4 @@
-"""Deterministic substring-contract scorer for a held-out gate. See gitapex#30.
+"""Deterministic substring-contract scorer for a held-out gate.
 
 Given a task's substring assertions (``output_contains`` /
 ``output_not_contains``) and a run's output text, returns the fraction of

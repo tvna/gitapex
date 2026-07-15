@@ -33,3 +33,19 @@ vs. author vs. contributor) traces to: the document `docs/motivation.md`, the
 draft commit `241f4392`, and the rename commit `ef222b81` on pull request #2.
 This is provenance for maintainers of this specific repository, not something
 the worked example depends on.
+
+## gated-skill-edits -- held-out gate provenance
+
+`skills/gated-skill-edits/scripts/score_contract.py`'s docstring refers to a
+"held-out gate"; for readers working in this repository, that gate was
+introduced by gitapex#30. This is provenance for maintainers of this specific
+repository, not something the script depends on.
+
+## evaluating-skill-quality -- worked-example provenance
+
+For readers working in this repository (gitapex), the worked example in
+`skills/evaluating-skill-quality/references/worked-example-self-review.md`
+notes that this skill's own deterministic shape lane was delegated to
+`scripts/check_skill_shape.py`; that delegation was made in gitapex#32. This
+is provenance for maintainers of this specific repository, not something the
+worked example depends on.
