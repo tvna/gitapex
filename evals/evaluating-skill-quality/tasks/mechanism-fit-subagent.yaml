@@ -1,0 +1,42 @@
+id: evaluating-skill-quality-mechanism-fit-subagent
+name: Large-Surface Judgment Skill Should Have Been a Subagent
+description: The reviewed "skill" is a whole-artifact large-surface side task whose intermediate results are never referenced again (a log-analysis pass); the mechanism-fit check must flag this as content that belongs in a subagent rather than a skill, and report it as the review's headline finding rather than grading it on the nine dimensions as if the container were right.
+tags:
+  - quality
+  - mechanism-fit
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for
+    a skill called "ci-log-triage". Is this a good skill?
+
+    ---
+    name: ci-log-triage
+    description: Scan the whole CI log archive for a failing run and report which builds failed and why. Use when the user asks to investigate CI failures across many builds.
+    ---
+
+    # CI Log Triage
+
+    ## Procedure
+
+    1. Read every log file under `ci-logs/` for the run (often thousands
+       of lines each).
+    2. Grep each file for error and stack-trace patterns and accumulate
+       every match.
+    3. Cross-reference the accumulated matches against a list of
+       known-flaky signatures.
+    4. Return a single summary of which builds failed and the likely
+       cause of each.
+
+    Only the final summary is returned to the caller; the thousands of
+    per-file matches and intermediate cross-referencing are scratch work
+    that would flood the main conversation and are never referenced again
+    once the summary is written.
+expected:
+  output_contains:
+    - "headline finding"
+    - "subagent"
+    - "never referenced again"
+  output_not_contains:
+    - "LGTM"
+    - "looks fine"
+    - "no concerns"
