@@ -41,6 +41,14 @@ side-references above). See the references file's "Comparative review"
 section for what that review verified directly versus what remains
 unmeasured or secondary-sourced.
 
+SKILL.md's "Connection to the held-out gate" section names `gated-skill-edits`
+as this repo's example of a skill consuming a battle-test verdict as a
+scorer, without an issue citation (kept portable). For readers working in
+this repository: that connection traces to gitapex#25 (closed design
+issue, "design a held-out-gated skill-training loop, scoped to verifiable
+tasks"), whose component 2 this skill implements; `gated-skill-edits`
+itself is the component-1 implementation, landed via PR #29.
+
 ## establishing-ubiquitous-language -- worked-example provenance
 
 For readers working in this repository (gitapex), the worked example in

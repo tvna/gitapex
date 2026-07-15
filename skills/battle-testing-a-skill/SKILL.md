@@ -86,10 +86,10 @@ for what a pass and a fail look like on each dimension.
 
 ## Connection to the held-out gate
 
-A battle-test pass/fail is a candidate checkable scorer for the held-out
-validation gate of a skill-iteration trainer
-(https://github.com/tvna/gitapex/issues/25, component 1): a structural
-verdict is a more reliable signal than open-ended judgment.
+A battle-test pass/fail is a candidate checkable scorer for a held-out
+validation gate: a structural verdict is a more reliable signal than
+open-ended judgment. `gated-skill-edits` is this repo's example of a
+skill that consumes a verdict this way.
 
 ## Stop boundaries
 
