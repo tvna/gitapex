@@ -18,6 +18,20 @@ The eval suite (`evals/driving-pr-to-merge/`) has no committed no-skill
 baseline run, and only `claude-sonnet-4.6` has been evaluated -- cross-model
 behavior is currently unmeasured.
 
+## battle-testing-a-skill
+
+The committed eval suite (`evals/battle-testing-a-skill/`) has no committed
+no-skill baseline run, and only `claude-sonnet-4.6` has been evaluated --
+cross-model behavior is currently unmeasured (dimensions 11-17's own
+cross-model spread is unmeasured for the same reason, per
+`references/provenance-and-caveats.md`). Named gap specific to this skill's
+subagent-dispatch procedure: the committed eval tasks assert on final
+output content (`output_contains`/`output_not_contains` substrings), not on
+tool-call or dispatch traces, so they cannot confirm a fresh subagent
+dispatch actually occurred for Procedure steps 1-3 or step 5's re-run --
+that mechanism was exercised by one manual live run during the change that
+introduced it, not by the committed suite.
+
 ## establishing-ubiquitous-language
 
 The committed eval suite (`evals/establishing-ubiquitous-language/`) runs
@@ -26,6 +40,20 @@ baseline run, so gap-closure is mechanized but unmeasured. Only
 `claude-sonnet-4.6` has been evaluated; cross-model behavior is a
 qualitative read (medium-freedom judgment procedure, low over-prescription
 risk), not measurement.
+
+## evaluating-skill-quality
+
+The committed eval suite (`evals/evaluating-skill-quality/`) has no
+committed no-skill baseline run, and only `claude-sonnet-4.6` has been
+evaluated -- cross-model behavior is currently unmeasured. Named gap
+specific to this skill's subagent-dispatch procedure: the committed eval
+tasks assert on final output content, not on tool-call or dispatch traces,
+so they cannot confirm the nine-dimension walk (Procedure steps 1, 2, 4, 5)
+actually ran inside a fresh subagent dispatch rather than the invoking
+context -- that mechanism was exercised by one manual live run during the
+change that introduced it, recorded in
+`skills/evaluating-skill-quality/references/worked-example-self-review.md`,
+not by the committed suite.
 
 ## explaining-the-work
 

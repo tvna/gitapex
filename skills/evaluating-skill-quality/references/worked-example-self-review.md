@@ -25,11 +25,25 @@ current. Re-run the procedure for a live verdict.
 Read per [rubric.md's Mechanism fit](rubric.md#mechanism-fit) section
 (itself added this same review pass).
 
-**Skill vs. subagent**: good fit. Reviewing a `SKILL.md` benefits from
-playing out in the main thread -- a human plausibly wants to see the
-per-dimension reasoning, push back on one finding, or ask a follow-up,
-none of which fits a subagent's isolated-summary-only return. Not a side
-task whose intermediate results go unreferenced.
+**Skill vs. subagent**: good fit, on a revised basis from an earlier pass
+of this same review. This skill is still correctly a *skill* rather than
+a bare subagent or a hook -- the human still sees the per-dimension
+reasoning, can push back on a finding, and can ask a follow-up, all
+through the main thread's relay/follow-up interface. What changed: the
+judgment-bearing step (Procedure steps 1, 2, 4, 5 -- the nine-dimension
+walk) now runs inside a fresh subagent dispatch rather than directly in
+whatever context invoked the skill, per `SKILL.md`'s new Subagent
+dispatch section and rubric.md's *isolation for neutrality* trigger
+(Mechanism fit section). The earlier verdict here ("stays fully in the
+main thread ... not a side task whose intermediate results go
+unreferenced") was correct about the *unreferenced-results* trigger but
+missed the neutrality trigger: a main thread reviewing a skill it just
+authored or discussed in the same conversation is not a neutral grader,
+regardless of whether its output is later referenced. The fix keeps
+steerability (the dispatch returns full cited reasoning, not a bare
+summary, so the main thread still has everything a human needs to
+steer) while adding the isolation the earlier pass lacked. See the
+Verification addendum below for a live run of the revised procedure.
 
 **Skill vs. CLAUDE.md**: good fit. The six-step Procedure (read,
 mechanism fit, shape, portability, nine-dimension walk, verdict) is a

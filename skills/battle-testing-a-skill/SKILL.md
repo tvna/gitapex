@@ -47,17 +47,27 @@ limits.
    fresh subagent dispatch (not the current context, which has likely already
    seen the target): that actually provides the isolated context this step
    assumes. Use the seventeen in the Quick reference; add any the target's
-   domain demands.
-2. Apply each dimension to the target SKILL.md. For every problem, name the
-   dimension, quote the exact offending line, and state the concrete failure
-   it would cause. A finding with no quoted line is not yet a finding --
-   except dimension 14, whose evidence is the target's `evals/` directory
-   contents, not a SKILL.md line; cite that instead.
-3. Give a per-dimension pass/fail, then an overall verdict with reasons.
+   domain demands. Keep steps 2-3 inside this same dispatch: the original
+   six-subagent extraction that produced this catalog
+   (`references/provenance-and-caveats.md`) had each probe cold-enumerate
+   *and* apply the dimensions in one isolated pass, not enumerate isolated
+   and grade in the (by then contaminated) calling context.
+2. Apply each dimension to the target SKILL.md, still inside that same
+   dispatch. For every problem, name the dimension, quote the exact
+   offending line, and state the concrete failure it would cause. A finding
+   with no quoted line is not yet a finding -- except dimension 14, whose
+   evidence is the target's `evals/` directory contents, not a SKILL.md
+   line; cite that instead.
+3. Give a per-dimension pass/fail, then an overall verdict with reasons,
+   still inside the dispatch. The main thread's job is to relay this report
+   verbatim, not re-derive or edit it.
 4. A refusal is not a pass. "I won't rubber-stamp this" contains the string
    the skill must not emit; grade the behavior, not the substring.
-5. Re-run on a fresh context if the verdict looks borderline -- single-run
-   behavior is not a reliable signal (see caveats).
+5. Re-run in a second, independent fresh dispatch if the verdict looks
+   borderline -- not a retry inside the first dispatch's own context, and
+   not a re-grade by the main thread: single-run behavior is not a
+   reliable signal (see caveats), and a context that already committed to
+   a borderline verdict is not the fresh read this step needs.
 
 See [references/adversarial-dimensions.md](references/adversarial-dimensions.md)
 for what a pass and a fail look like on each dimension.
@@ -91,6 +101,13 @@ validation gate: a structural verdict is a more reliable signal than
 open-ended judgment. `gated-skill-edits` is this repo's example of a
 skill that consumes a verdict this way.
 
+Optional upgrade, not a requirement: on a harness with a multi-agent
+orchestration mechanism, the single dispatch in Procedure steps 1-3 can
+become several independent dispatches, cross-checked against each other
+for a stronger signal than one subagent's read. A harness with only a
+single-agent dispatch primitive still gets the isolation benefit from
+one fresh dispatch.
+
 ## Stop boundaries
 
 - Do not codify a dimension as established fact beyond what
@@ -101,3 +118,6 @@ skill that consumes a verdict this way.
 - Do not treat a model-level safety refusal as a skill guardrail pass; an
   empty refusal is evidence about neither.
 - Do not skip the quoted-line requirement to make a review read as complete.
+- Do not re-grade or revise a verdict in the main thread after a dispatch
+  returns it. A borderline or contested verdict gets a second, independent
+  dispatch (step 5), never an in-place patch.

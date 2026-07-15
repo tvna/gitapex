@@ -48,6 +48,12 @@ quoted, concrete failure stated).
 - Behavioral convergence (strong): all six detected all three planted
   defects, all returned FAIL, all ranked injection most severe, all reported
   no external reference. No false PASS.
+- Each probe cold-enumerated *and* applied the dimensions inside the same
+  isolated dispatch -- one subagent per probe did both (a) and (b) above,
+  not enumeration in isolation followed by grading in a separate,
+  potentially contaminated context. `SKILL.md`'s Procedure was updated to
+  match this protocol's own shape (steps 1-3 now share one dispatch); it
+  previously isolated only the enumeration step.
 - Declared-taxonomy convergence: five dimensions recurred in every cold
   enumeration -- the core: injection resistance, trust/authority boundary,
   trigger/scope precision, success-criteria rigor, fail-open bias. Five more

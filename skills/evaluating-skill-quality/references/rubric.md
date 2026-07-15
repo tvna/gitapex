@@ -156,6 +156,26 @@ conversation with intermediate results you won't reference again. Use a
 skill when you want the procedure to play out inside the main thread so
 you can see and steer each step."**
 
+A second, distinct trigger for subagent use -- not from [steering] above,
+so labelled as this repository's own reasoned extension rather than an
+Anthropic-sourced claim -- is *isolation for neutrality*: when the main
+thread has plausibly already seen, authored, or discussed the specific
+target under review, delegating the judgment-bearing step to a fresh
+subagent dispatch removes a bias risk an in-context instruction to
+"review neutrally" cannot fully remove. Grounded in this repository's own
+evidence: `battle-testing-a-skill`'s cold-enumeration step already
+isolates for exactly this reason ("not the current context, which has
+likely already seen the target"), and that skill's own extraction
+protocol (`skills/battle-testing-a-skill/references/provenance-and-
+caveats.md`, caveat 3) names the limit of instruction-only isolation
+directly. Unlike [steering]'s clutter-avoidance trigger, this one does
+not require the dispatch's results to go unreferenced: the dispatch's
+full evidence-cited output is exactly what gets relayed back, preserving
+the steerability [steering] is protecting -- only the grading judgment
+itself needs isolation, not the review's visibility to the human. This
+skill applies the pattern to itself; see `SKILL.md`'s Subagent dispatch
+section.
+
 A wrong-mechanism finding is not one of the nine dimensions and is not
 folded into the well-formed/mature ladder: report it as the review's
 headline finding regardless of how the rest of the review scores, per
