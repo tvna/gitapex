@@ -1,4 +1,4 @@
-"""Check a PR body for an Acceptance Criteria Map table. See gitapex#issue-to-branch.
+"""Check a PR body for an Acceptance Criteria Map table.
 
 Step 8 of the issue-to-branch skill requires every PR body to carry the
 Acceptance Criteria Map (see ../references/acceptance-criteria-map.md), not
