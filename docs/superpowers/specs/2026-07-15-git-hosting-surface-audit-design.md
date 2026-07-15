@@ -2,8 +2,10 @@
 
 Date: 2026-07-15
 
-Refs #88. Consumes/cross-links #82 (CLI-proxy / approved REST API
-wrapper tracking issue) for every coverage gap below.
+Refs #88. Consumes/cross-links #82 (gitapex CLI governance tracking
+issue -- reopened and reframed since this doc was first written; the
+approved read-only gh wrapper is now one of #82's listed, not-yet-filed
+candidate child issues, not #82 itself) for every coverage gap below.
 
 ## Context
 
@@ -41,9 +43,12 @@ GitLab column is a stated gap, not per-item guesswork.
 | Secret-scanning status (repo feature enabled, alert count) | **Partial.** `mcp__github__run_secret_scanning` scans *given content* for secrets (useful as a defense-in-depth content check the audit can run itself on tracked files) but does not report whether the repo's native secret-scanning *feature* is toggled on -- that status is a separate gap. | **Gap.** |
 | Collaborator/permission drift | **Covered.** `mcp__github__list_repository_collaborators` (with `affiliation` filter) returns exactly this. | **Gap.** |
 
-Every row marked **Gap** is a stated consumer of #82 once that wrapper is
-built -- this design does not pretend those checks are solved today, per
-this repo's own "state the gap explicitly" convention
+Every row marked **Gap** is a stated consumer of the approved read-only
+gh wrapper once it is filed as its own child issue under #82 and built --
+not of #82 itself, which is the umbrella governance tracking issue and
+has no single "landed" state of its own. This design does not pretend
+those checks are solved today, per this repo's own "state the gap
+explicitly" convention
 (`establishing-ubiquitous-language`/`evaluating-skill-quality`).
 
 ## Scope of this design pass
@@ -54,11 +59,13 @@ Per the operator's chosen execution scope: this design doc plus
 
 ## Non-goals
 
-- Does not implement the #82 wrapper itself.
+- Does not implement the approved read-only gh wrapper itself (a
+  not-yet-filed candidate child issue under #82).
 - Does not claim GitHub-side coverage is complete -- only 2 of 8
   checklist items have real tool coverage today; the rest run as a
-  documented-gap report, not a false all-green audit, until #82 lands.
+  documented-gap report, not a false all-green audit, until that wrapper
+  is filed and built.
 - Does not add a GitLab MCP server or attempt to call GitLab's REST API
   directly from this skill (that would itself be exactly the kind of
-  ungoverned CLI/API shortcut #82 exists to replace with something
-  approved).
+  ungoverned CLI/API shortcut the gitapex CLI, tracked in #82, exists to
+  replace with something approved).
