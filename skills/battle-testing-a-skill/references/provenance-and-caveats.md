@@ -10,7 +10,8 @@ reachable when the skill is deployed on its own.
 
 1. How the knowledge was extracted
 2. Result
-3. Caveats -- part of the knowledge, not footnotes
+3. Comparative review: dimensions 11-17
+4. Caveats -- part of the knowledge, not footnotes
 
 ## How the knowledge was extracted
 
@@ -57,6 +58,52 @@ quoted, concrete failure stated).
   held across every tier; peripheral lenses differed by probe (confidentiality
   /exfiltration, safety-boundary routing, self-referential exploit framing).
 
+## Comparative review: dimensions 11-17
+
+Dimensions 11-17 (see adversarial-dimensions.md) were added by a separate
+comparative review, not the six-subagent extraction above -- see caveat 4
+before treating them as equally evidenced as 1-10.
+
+**Facts (directly verified by reading the projects):**
+
+- obra/superpowers's published skills and documentation contain no
+  discussion of adversarial/security hardening for skill composition or
+  malicious-input handling -- its skills (brainstorming, TDD, planning,
+  code review) are methodology/workflow content, not adversarial-testing
+  content. It corroborates nothing about dimensions 11-17.
+- microsoft/waza's `waza adversarial` command ships exactly two built-in
+  packs, `prompt-injection` and `scope-bypass`; neither pack's
+  documentation covers cross-skill/tool-chain composition, supply-chain or
+  installation-time provenance, cross-session memory poisoning, a
+  versioned regression corpus, multi-turn escalation, encoding/obfuscation
+  sub-techniques, or structured-output injection. It corroborates none of
+  11-17 either.
+
+**Speculation (secondary-sourced, not independently verified here):** the
+motivation for naming 11-17 draws on categories that recur in general
+LLM/agent-security discussion (encoding-based injection, multi-turn
+jailbreak escalation, supply-chain and memory-poisoning risk in
+tool-using agents, output injection into generated artifacts). No
+specific paper is cited or verified as a primary source here; treat this
+as background rationale, not an established or peer-confirmed taxonomy.
+
+**Unmeasured, disclosed here rather than silently assumed:**
+
+- The eval fixtures added for dimensions 11-17
+  (`evals/battle-testing-a-skill/tasks/`) have been structurally validated
+  (they parse, and this skill's own shape checker passes) but have not
+  been executed against a live model -- no pass/fail result exists for
+  them yet.
+- Cross-model behavior for dimensions 11-17 is unmeasured: the eval suite
+  still targets a single pinned model tier, the same as it did for
+  dimensions 1-10 (see `evals/battle-testing-a-skill/eval.yaml`), so no
+  Haiku/Opus spread exists for the new dimensions either.
+
+Do not cite this section as evidence that 11-17 have been behaviorally
+tested against a target skill -- it records only where the idea for each
+new dimension came from, what was and was not confirmed by reading the
+two side-projects, and what remains unmeasured.
+
 ## Caveats -- part of the knowledge, not footnotes
 
 1. **Claude-only convergence.** All six probes are Claude-family models --
@@ -84,7 +131,15 @@ quoted, concrete failure stated).
    six self-reported none. That is self-report, not a hard sandbox. Residual
    context contamination cannot be fully excluded.
 
-4. **Single fixture.** Convergence was measured against one three-defect
-   fixture. It shows the core dimensions reproduce and are behaviorally
-   actionable; it does not exhaustively map every adversarial dimension.
+4. **Single fixture, and dimension 14 names the gap without closing it.**
+   Convergence for dimensions 1-10 was measured against one three-defect
+   fixture; it shows the core dimensions reproduce and are behaviorally
+   actionable, but it does not exhaustively map every adversarial
+   dimension. Dimension 14 (reusable, versioned adversarial regression
+   corpus) now names this exact gap in the catalog itself, but naming the
+   dimension is not the same as closing it: this skill's own eval suite
+   (evals/battle-testing-a-skill/) is still a small, fixed set of
+   hand-written task fixtures, not a growing, versioned regression corpus
+   re-run and extended as new failure modes are found. Building that
+   corpus infrastructure remains future work.
 

@@ -11,9 +11,18 @@ this repository, so it lives here rather than in the distributed skill or its
 These are external projects cited only as corroboration; the skill does not
 depend on them and does not bundle them.
 
-- The clairvoyance project runs an adversarial "battle" harness over its own
-  skills; its category set matches the extracted core, which corroborates but
-  does not originate this skill. The same project's portability write-up
+- The clairvoyance project (public, MIT-licensed:
+  <https://github.com/tvna/clairvoyance>) runs an adversarial "battle" harness
+  over its own skills, described in `battle/README.md` as "a local, advisory
+  harness that stress-tests the skills against hostile inputs -- separate
+  from `waza`." Its five scenario categories (`scenarios/injection/`,
+  `scenarios/guardrails/`, `scenarios/routing/`, `scenarios/depth-gate/`,
+  `scenarios/encoding/`) recur across the extracted core here, which
+  corroborates but does not originate this skill -- the mapping between the
+  two category sets was previously carried as a table inside
+  `adversarial-dimensions.md` and was removed from the distributed skill;
+  this citation is its replacement, kept here as maintainer-facing corroboration
+  rather than as skill content. The same project's portability write-up
   describes the exact failure this skill exists to fix: a foreign harness
   asked to evaluate a skill has no rubric injected and cannot say why a skill
   is weak.
@@ -24,6 +33,21 @@ Neither is authoritative for how a model actually reasons about adversarial
 skill-testing; the source of record for the skill is the observed
 cross-model behavior recorded in
 `skills/battle-testing-a-skill/references/provenance-and-caveats.md`.
+
+For readers working in this repository (gitapex), dimensions 11-17 of that
+catalog were added by a comparative review tracked in gitapex#74, checking
+coverage against obra/superpowers and microsoft/waza (the same two
+side-references above). See the references file's "Comparative review"
+section for what that review verified directly versus what remains
+unmeasured or secondary-sourced.
+
+SKILL.md's "Connection to the held-out gate" section names `gated-skill-edits`
+as this repo's example of a skill consuming a battle-test verdict as a
+scorer, without an issue citation (kept portable). For readers working in
+this repository: that connection traces to gitapex#25 (closed design
+issue, "design a held-out-gated skill-training loop, scoped to verifiable
+tasks"), whose component 2 this skill implements; `gated-skill-edits`
+itself is the component-1 implementation, landed via PR #29.
 
 ## establishing-ubiquitous-language -- worked-example provenance
 
