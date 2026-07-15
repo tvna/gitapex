@@ -11,9 +11,18 @@ this repository, so it lives here rather than in the distributed skill or its
 These are external projects cited only as corroboration; the skill does not
 depend on them and does not bundle them.
 
-- The clairvoyance project runs an adversarial "battle" harness over its own
-  skills; its category set matches the extracted core, which corroborates but
-  does not originate this skill. The same project's portability write-up
+- The clairvoyance project (public, MIT-licensed:
+  <https://github.com/tvna/clairvoyance>) runs an adversarial "battle" harness
+  over its own skills, described in `battle/README.md` as "a local, advisory
+  harness that stress-tests the skills against hostile inputs -- separate
+  from `waza`." Its five scenario categories (`scenarios/injection/`,
+  `scenarios/guardrails/`, `scenarios/routing/`, `scenarios/depth-gate/`,
+  `scenarios/encoding/`) recur across the extracted core here, which
+  corroborates but does not originate this skill -- the mapping between the
+  two category sets was previously carried as a table inside
+  `adversarial-dimensions.md` and was removed from the distributed skill;
+  this citation is its replacement, kept here as maintainer-facing corroboration
+  rather than as skill content. The same project's portability write-up
   describes the exact failure this skill exists to fix: a foreign harness
   asked to evaluate a skill has no rubric injected and cannot say why a skill
   is weak.

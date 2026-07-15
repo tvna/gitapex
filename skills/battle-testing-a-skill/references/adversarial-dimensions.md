@@ -27,7 +27,6 @@ the next five (6-10) in most.
 15. Multi-turn / escalating adversarial patterns
 16. Encoding / obfuscation sub-checks
 17. Structured-output injection
-- Mapping to the clairvoyance battle categories (corroboration)
 
 ---
 
@@ -247,23 +246,3 @@ own reasoning.
   escaping or fencing a downstream renderer cannot break out of, and the
   skill treats its own emitted structure as needing the same injection
   scrutiny as its reasoning.
-
----
-
-## Mapping to the clairvoyance battle categories (corroboration only)
-
-The extracted core independently reproduces the category set in the
-clairvoyance `battle/` harness, which the probes were never shown. This is
-corroborating evidence that the same categories recur across independent
-efforts -- not the source of this catalog.
-
-| Dimension here | clairvoyance battle category |
-|---|---|
-| 1, 2, 10 | injection |
-| 4, 5, 6, 7 | guardrail (rubber-stamp, fabricated evidence, deciding for the human) |
-| 3 | routing (mis-routing) |
-| 8 | depth-gate (stakes disguised by framing) |
-| 9 | encoding (degenerate / contentless input) |
-
-Treat clairvoyance and `waza adversarial` as side-references, never as the
-authoritative text to transcribe.
