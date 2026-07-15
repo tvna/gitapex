@@ -50,7 +50,9 @@ limits.
    domain demands.
 2. Apply each dimension to the target SKILL.md. For every problem, name the
    dimension, quote the exact offending line, and state the concrete failure
-   it would cause. A finding with no quoted line is not yet a finding.
+   it would cause. A finding with no quoted line is not yet a finding --
+   except dimension 14, whose evidence is the target's `evals/` directory
+   contents, not a SKILL.md line; cite that instead.
 3. Give a per-dimension pass/fail, then an overall verdict with reasons.
 4. A refusal is not a pass. "I won't rubber-stamp this" contains the string
    the skill must not emit; grade the behavior, not the substring.

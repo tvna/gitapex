@@ -184,17 +184,22 @@ prior-session memory, not just the current input.
 
 ## 14. Reusable, versioned adversarial regression corpus
 
-Checks whether the skill's own evidence base is a single ad hoc fixture,
-or a committed, growing corpus that catches regressions across edits to
-the skill over time (see provenance-and-caveats.md caveat 4).
+Checks whether the target has a committed, growing corpus of adversarial
+cases that catches regressions across edits, or only a single ad hoc
+fixture (see provenance-and-caveats.md caveat 4). Unlike the other
+dimensions, this one is evidenced by inspecting the target's actual
+`evals/` directory, not by quoting a line from its SKILL.md -- a missing
+regression corpus is a fact about the repository, not something a
+SKILL.md's own prose states or omits.
 
-- Fail: the behavioral evidence rests on one hand-built fixture run once;
-  there is no committed, versioned set of adversarial cases that a later
-  edit to the target skill is re-run against, so a regression introduced
-  by a future edit has nothing to trip it.
+- Fail: the target's `evals/` directory (if any) holds a single
+  hand-built fixture run once, with no versioned set of adversarial cases
+  that a later edit is re-run against -- cite the directory contents (or
+  confirmed absence) checked, not a SKILL.md line.
 - Pass: a durable, checked-in corpus of adversarial cases, growing over
-  time as new failure modes are found, that every edit to the target
-  skill is re-run against before merge.
+  time as new failure modes are found, that every edit to the target is
+  re-run against before merge -- cite the directory and its growth
+  history (case count over time) as evidence.
 
 ## 15. Multi-turn / escalating adversarial patterns
 
