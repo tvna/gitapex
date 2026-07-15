@@ -19,11 +19,20 @@ onward); this cycle only lands the design docs (Task 1).
 
 ## Global constraints
 
-- Platform detection: reuse the same `.github/` vs `.gitlab/`
-  filesystem-marker + `git remote` logic as
+- Platform detection: **do not** reuse
   `seeding-issue-pr-templates/scripts/validate_templates.py`'s
-  `detect_platform()` -- do not reimplement detection differently for
-  this skill.
+  `detect_platform()` as-is -- confirmed by review, that function checks
+  only for `.github/ISSUE_TEMPLATE` and `.gitlab/issue_templates`
+  (template-directory presence) and never reads `git remote`, so it
+  misclassifies (or outright stops on) any real GitHub/GitLab repo that
+  simply has no issue templates configured -- exactly the repos a
+  hosting-surface audit, which is not template-specific, must still be
+  able to run against. Detect platform instead from `git remote get-url
+  origin` (match host `github.com`/`gitlab.com`, including
+  self-hosted/enterprise via a configurable host allowlist), falling back
+  to generic `.github/` vs `.gitlab/` directory presence (not the
+  `ISSUE_TEMPLATE`/`issue_templates` subdirectory specifically) only when
+  the remote is unparseable or absent.
 - Never load both platform references in the same run (identical rule to
   `seeding-issue-pr-templates`).
 - Every checklist item's report line states its own coverage level
@@ -50,9 +59,11 @@ onward); this cycle only lands the design docs (Task 1).
 ### Task 2: SKILL.md authoring (deferred -- future cycle)
 
 - [ ] Write `skills/git-hosting-surface-audit/SKILL.md`: platform
-      detection step (reusing `seeding-issue-pr-templates`'s logic),
-      branch-to-one-reference rule, and a report template with an
-      explicit per-item coverage column.
+      detection step per the corrected Global constraints above
+      (`git remote` host match, generic directory-marker fallback --
+      *not* `seeding-issue-pr-templates`'s template-specific
+      `detect_platform()`), branch-to-one-reference rule, and a report
+      template with an explicit per-item coverage column.
 - [ ] Write `references/github-surface-checklist.md` and
       `references/gitlab-surface-checklist.md`, each opening with the
       same "read this ONLY when Step 1 detected X" guard used verbatim
