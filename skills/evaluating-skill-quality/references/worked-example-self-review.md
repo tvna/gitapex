@@ -18,6 +18,7 @@ current. Re-run the procedure for a live verdict.
 - [Deterministic shape](#deterministic-shape)
 - [Probabilistic dimensions](#probabilistic-dimensions)
 - [Verdict](#verdict)
+- [Verification: subagent dispatch (dated addendum)](#verification-subagent-dispatch-dated-addendum)
 - [References](#references)
 
 ## Mechanism fit
@@ -25,11 +26,25 @@ current. Re-run the procedure for a live verdict.
 Read per [rubric.md's Mechanism fit](rubric.md#mechanism-fit) section
 (itself added this same review pass).
 
-**Skill vs. subagent**: good fit. Reviewing a `SKILL.md` benefits from
-playing out in the main thread -- a human plausibly wants to see the
-per-dimension reasoning, push back on one finding, or ask a follow-up,
-none of which fits a subagent's isolated-summary-only return. Not a side
-task whose intermediate results go unreferenced.
+**Skill vs. subagent**: good fit, on a revised basis from an earlier pass
+of this same review. This skill is still correctly a *skill* rather than
+a bare subagent or a hook -- the human still sees the per-dimension
+reasoning, can push back on a finding, and can ask a follow-up, all
+through the main thread's relay/follow-up interface. What changed: the
+judgment-bearing step (Procedure steps 1, 2, 4, 5 -- the nine-dimension
+walk) now runs inside a fresh subagent dispatch rather than directly in
+whatever context invoked the skill, per `SKILL.md`'s new Subagent
+dispatch section and rubric.md's *isolation for neutrality* trigger
+(Mechanism fit section). The earlier verdict here ("stays fully in the
+main thread ... not a side task whose intermediate results go
+unreferenced") was correct about the *unreferenced-results* trigger but
+missed the neutrality trigger: a main thread reviewing a skill it just
+authored or discussed in the same conversation is not a neutral grader,
+regardless of whether its output is later referenced. The fix keeps
+steerability (the dispatch returns full cited reasoning, not a bare
+summary, so the main thread still has everything a human needs to
+steer) while adding the isolation the earlier pass lacked. See the
+Verification addendum below for a live run of the revised procedure.
 
 **Skill vs. CLAUDE.md**: good fit. The six-step Procedure (read,
 mechanism fit, shape, portability, nine-dimension walk, verdict) is a
@@ -333,6 +348,48 @@ different, stronger outcome than a self-review that finds nothing. A
 self-review that always passes cleanly would itself be evidence of
 rubber-stamping -- per this skill's own Stop boundaries, a bare "looks
 fine" is exactly what is disallowed.
+
+## Verification: subagent dispatch (dated addendum)
+
+**Dated:** recorded when the Subagent dispatch section was added to
+`SKILL.md`. This addendum is not another self-review; it records a live
+run of the *revised* procedure against a different real target, to check
+that the new mechanism is actually followable end to end -- the closest
+proof available in an environment that cannot install this repository as
+a live Claude Code plugin and invoke it directly.
+
+A fresh subagent was dispatched with exactly what the new Subagent
+dispatch section specifies: the target's path
+(`skills/stop-and-replan/SKILL.md`), a pointer to this skill's own
+`SKILL.md` and `rubric.md`, and the already-established shape-checker
+fact ("9/9 checks passed") -- no framing or opinion about the target from
+the dispatching context. The dispatch returned a complete structured
+report on its own, unprompted for structure a second time:
+
+- A mechanism-fit check (no whole-artifact finding; reasoned explicitly
+  through the *isolation-for-neutrality* trigger itself, concluding it
+  does not apply to `stop-and-replan` because that skill's trigger phrase
+  already *is* the agent's completed self-admission, not a fresh
+  quality-grading judgment).
+- A portability-level citation ("Portable", quoted from the target's own
+  declaration).
+- All nine dimensions, each with quoted evidence -- two named gaps found
+  (dimension 2: the same instruction restated in Stop action and Stop
+  boundaries; dimension 4: a validate step with no fix/retry/escalate
+  branch on close-verification failure), the rest passing or explicitly
+  named-unmeasured per the Verdicts allowance for dimensions 8-9.
+- A final verdict: **well-formed, not yet mature**, with reasons tied to
+  the two named gaps -- not a bare "looks fine."
+
+This is direct evidence the new contract (full cited reasoning returned,
+not a bare summary) holds in practice, and that isolating the judgment
+step did not degrade the review's rigor -- the dispatch still found real,
+specific gaps in a target it had never seen framed by any prior
+conversation. What this single run does not establish: cross-model
+behavior, or whether isolation measurably changes verdicts relative to a
+main-thread run on the *same* target with prior framing (that A/B
+comparison is future work, named rather than assumed -- see
+`docs/skill-eval-status.md`).
 
 ## References
 

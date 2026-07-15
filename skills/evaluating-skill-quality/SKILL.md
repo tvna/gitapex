@@ -40,7 +40,13 @@ have been a different mechanism is not fixed by polishing it further.
   and steerable step by step. A subagent runs isolated; only its final
   summary returns. A side task whose intermediate results won't be
   referenced again (a deep search, a log-analysis pass, a dependency
-  audit) belongs in a subagent, not a skill.
+  audit) belongs in a subagent, not a skill. A second, distinct trigger:
+  when the main thread has plausibly already seen, authored, or discussed
+  the specific target under review, the judgment-bearing step itself
+  belongs in a fresh subagent dispatch for isolation -- even though its
+  full output *is* referenced again. Steerability survives because the
+  dispatch returns complete cited reasoning, not a bare summary; see
+  Subagent dispatch below, which this skill applies to itself.
 - **Skill vs. hook**: a skill is an instruction the model *chooses* to
   follow; a hook fires *deterministically*. "Every time X, always do Y"
   (a formatter after every edit) or "never do this" (an absolute
@@ -63,6 +69,49 @@ have been a different mechanism is not fixed by polishing it further.
 
 Full rationale and citation: [references/rubric.md](references/rubric.md)'s
 Mechanism fit section.
+
+## Subagent dispatch
+
+Procedure steps 1, 2, 4, 5, and 6 read, grade, and issue a verdict on the
+target directly -- run them inside **one fresh subagent dispatch**, not
+the invoking context. A main thread that just authored, defended, or
+extensively discussed the target is not a neutral grader; an instruction
+to "review it fairly anyway" is weaker than an actually isolated context,
+and that includes the final verdict (step 6), not only the dimension
+walk -- a main thread that only relays evidence but re-synthesizes the
+verdict itself would still be grading from a contaminated context.
+
+- Give the dispatch only the target's path (or content) and a pointer to
+  this skill's own `references/rubric.md` -- never the calling
+  conversation's framing, prior discussion, or opinion of the target.
+- Hand the dispatch step 3's shape-checker output as an established fact
+  rather than having it re-run the script itself (Contract discipline's
+  "never both" rule, `references/rubric.md`).
+- Require the dispatch to return the full structured report -- mechanism
+  fit, portability level, all nine dimensions with quoted evidence, and
+  the verdict -- not a bare summary; a postcondition with no cited
+  evidence is not a review.
+- The main thread's own job is only step 3 (run the shape checker first,
+  before dispatching) and relaying the dispatch's report -- including the
+  verdict the dispatch already issued in step 6 -- to the human verbatim,
+  never independently issuing or revising one. Clarifying
+  questions about evidence already returned can be answered directly from
+  that report; a challenge that could change a verdict gets a second,
+  independent fresh dispatch (carrying the challenge and the target's
+  path, not the first dispatch's reasoning) rather than a revision made
+  in place -- the same fault-attribution rule that governs a
+  misclassified precondition (`references/rubric.md`, Contract
+  discipline) applies to a misgraded dimension.
+- Optional upgrade, not a requirement: on a harness with a multi-agent
+  orchestration mechanism (this repository's own CLAUDE.md points to
+  superpowers' `dispatching-parallel-agents` / `subagent-driven-
+  development`; some Claude Code sessions carry a `Workflow` tool whose
+  "adversarial verify" / "judge panel" patterns run several independent
+  dispatches and cross-check them), the single dispatch above can become
+  several. A harness with only a single-agent dispatch primitive still
+  gets the isolation benefit from one fresh dispatch -- named here as an
+  illustrative example, not something this procedure depends on to
+  function.
 
 ## Portability level
 
@@ -92,7 +141,14 @@ Full rationale and per-dimension grading detail:
 ## Procedure
 
 Steps 1-4 are this review's precondition, step 6 its postcondition --
-see `references/rubric.md`'s Contract discipline section.
+see `references/rubric.md`'s Contract discipline section. Steps 1, 2, 4,
+5, and 6 execute inside the fresh subagent dispatch described in
+Subagent dispatch above -- the dispatch issues the verdict as part of
+its structured report, not the main thread. Only step 3 runs directly in
+the main thread, before the dispatch; the main thread's remaining job
+after the dispatch returns is to relay its report (including the
+verdict it already issued) verbatim -- never to independently issue or
+re-derive one.
 
 1. Read the target `SKILL.md` and every file in its `references/`
    directory (not only linked ones -- an unlinked file is itself a
@@ -111,7 +167,9 @@ see `references/rubric.md`'s Contract discipline section.
    8-9), quoting the specific text that earns each verdict; assume steps
    1-4 hold rather than re-deriving them. No cited evidence means no
    review happened.
-6. Issue a verdict per `references/rubric.md`'s Verdicts section.
+6. Issue a verdict per `references/rubric.md`'s Verdicts section, inside
+   the same dispatch as steps 1, 2, 4, and 5. The main thread relays this
+   verdict verbatim; it does not issue or re-derive its own.
 
 Worked example of steps 2-6, applied to a real merged skill:
 [references/worked-example-explaining-the-work.md](references/worked-example-explaining-the-work.md).
@@ -154,3 +212,9 @@ actually specifies.
 - Never let a strong nine-dimension score excuse a wrong-mechanism
   finding (step 2). A well-formed, mature skill that should have been a
   hook or CLAUDE.md content is still the wrong artifact.
+- Never include the calling conversation's framing, prior discussion, or
+  opinion of the target in the subagent dispatch prompt -- pass only the
+  target's path/content and this skill's own reference material.
+- Never revise a dimension verdict in the main thread after the dispatch
+  returns it. A wrong or contested verdict is fixed by a second,
+  independent dispatch, not a patch made in place.
