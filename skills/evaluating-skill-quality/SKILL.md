@@ -72,11 +72,14 @@ Mechanism fit section.
 
 ## Subagent dispatch
 
-Procedure steps 1, 2, 4, and 5 read and grade the target directly -- run
-them inside **one fresh subagent dispatch**, not the invoking context. A
-main thread that just authored, defended, or extensively discussed the
-target is not a neutral grader; an instruction to "review it fairly
-anyway" is weaker than an actually isolated context.
+Procedure steps 1, 2, 4, 5, and 6 read, grade, and issue a verdict on the
+target directly -- run them inside **one fresh subagent dispatch**, not
+the invoking context. A main thread that just authored, defended, or
+extensively discussed the target is not a neutral grader; an instruction
+to "review it fairly anyway" is weaker than an actually isolated context,
+and that includes the final verdict (step 6), not only the dimension
+walk -- a main thread that only relays evidence but re-synthesizes the
+verdict itself would still be grading from a contaminated context.
 
 - Give the dispatch only the target's path (or content) and a pointer to
   this skill's own `references/rubric.md` -- never the calling
@@ -88,8 +91,10 @@ anyway" is weaker than an actually isolated context.
   fit, portability level, all nine dimensions with quoted evidence, and
   the verdict -- not a bare summary; a postcondition with no cited
   evidence is not a review.
-- The main thread's job is steps 3 and 6: run the shape checker first,
-  then relay the dispatch's report to the human verbatim. Clarifying
+- The main thread's own job is only step 3 (run the shape checker first,
+  before dispatching) and relaying the dispatch's report -- including the
+  verdict the dispatch already issued in step 6 -- to the human verbatim,
+  never independently issuing or revising one. Clarifying
   questions about evidence already returned can be answered directly from
   that report; a challenge that could change a verdict gets a second,
   independent fresh dispatch (carrying the challenge and the target's
@@ -137,8 +142,13 @@ Full rationale and per-dimension grading detail:
 
 Steps 1-4 are this review's precondition, step 6 its postcondition --
 see `references/rubric.md`'s Contract discipline section. Steps 1, 2, 4,
-and 5 execute inside the fresh subagent dispatch described in Subagent
-dispatch above; steps 3 and 6 stay in the main thread.
+5, and 6 execute inside the fresh subagent dispatch described in
+Subagent dispatch above -- the dispatch issues the verdict as part of
+its structured report, not the main thread. Only step 3 runs directly in
+the main thread, before the dispatch; the main thread's remaining job
+after the dispatch returns is to relay its report (including the
+verdict it already issued) verbatim -- never to independently issue or
+re-derive one.
 
 1. Read the target `SKILL.md` and every file in its `references/`
    directory (not only linked ones -- an unlinked file is itself a
@@ -157,7 +167,9 @@ dispatch above; steps 3 and 6 stay in the main thread.
    8-9), quoting the specific text that earns each verdict; assume steps
    1-4 hold rather than re-deriving them. No cited evidence means no
    review happened.
-6. Issue a verdict per `references/rubric.md`'s Verdicts section.
+6. Issue a verdict per `references/rubric.md`'s Verdicts section, inside
+   the same dispatch as steps 1, 2, 4, and 5. The main thread relays this
+   verdict verbatim; it does not issue or re-derive its own.
 
 Worked example of steps 2-6, applied to a real merged skill:
 [references/worked-example-explaining-the-work.md](references/worked-example-explaining-the-work.md).
