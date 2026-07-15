@@ -49,6 +49,14 @@ waste. Skills load by progressive disclosure at three costs: `name` +
 demand. Judge each piece of information by whether it lives at the cheapest
 level that still makes it available the moment it is needed.
 
+This layering is one instance of a single meta-principle the rest of this
+rubric decomposes into per-layer checks -- [separation of concerns][soc]:
+mechanism fit separates responsibility across artifacts, progressive
+disclosure (dimension 5) across load layers, and Contract discipline's
+"never both" rule keeps each check in exactly one place. There is no
+separate dimension for it because it is cross-cutting, not one more thing
+to check.
+
 ## Contract discipline
 
 This review's own procedure is itself a contract, in [Meyer's][dbc] sense
@@ -587,6 +595,10 @@ Every inline `[label]` citation above resolves to the source below.
 - **[dbc]** Bertrand Meyer, Applying "Design by Contract", IEEE Computer
   25(10):40-51, October 1992.
   <https://se.inf.ethz.ch/~meyer/publications/computer/contract.pdf>
+- **[soc]** E. W. Dijkstra, On the role of scientific thought (EWD447), 1974;
+  reprinted in Selected Writings on Computing: A Personal Perspective,
+  Springer-Verlag, 1982.
+  <https://www.cs.utexas.edu/~EWD/transcriptions/EWD04xx/EWD447.html>
 - **[steering]** Anthropic -- Steering Claude Code: skills, hooks, subagents
   and more.
   <https://claude.com/blog/steering-claude-code-skills-hooks-rules-subagents-and-more>
@@ -599,4 +611,5 @@ Every inline `[label]` citation above resolves to the source below.
 [cce]: https://code.claude.com/docs/en/skills#evaluate-and-iterate-on-a-skill "Anthropic -- Claude Code skills, Evaluate and iterate on a skill"
 [skillopt]: https://arxiv.org/abs/2605.23904 "Yang et al., SkillOpt: Executive Strategy for Self-Evolving Agent Skills, Microsoft, 2026 (arXiv:2605.23904)"
 [dbc]: https://se.inf.ethz.ch/~meyer/publications/computer/contract.pdf "Bertrand Meyer, Applying \"Design by Contract\", IEEE Computer 25(10):40-51, October 1992"
+[soc]: https://www.cs.utexas.edu/~EWD/transcriptions/EWD04xx/EWD447.html "E. W. Dijkstra, On the role of scientific thought (EWD447), 1974; reprinted in Selected Writings on Computing: A Personal Perspective, Springer-Verlag, 1982"
 [steering]: https://claude.com/blog/steering-claude-code-skills-hooks-rules-subagents-and-more "Anthropic -- Steering Claude Code: skills, hooks, subagents and more"
