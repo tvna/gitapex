@@ -6,8 +6,11 @@ permissions and unpinned actions, webhook/deploy-key inventory, token
 scopes, secret-scanning status) for GitHub and GitLab, reporting drift as
 a decision-ready brief rather than silently assuming full coverage.
 
-**This skill's issue:** #88. **Cross-linked:** #82 (CLI-proxy / approved
-REST API wrapper -- consumer of every coverage gap below).
+**This skill's issue:** #88. **Cross-linked:** #82 (gitapex CLI
+governance tracking issue -- reopened and reframed since this plan was
+first written; the approved read-only gh wrapper is now an unfiled
+candidate child issue under #82, not #82 itself -- consumer of every
+coverage gap below).
 
 **Architecture:** One new skill directory
 `skills/git-hosting-surface-audit/` holding a platform-general `SKILL.md`
@@ -37,7 +40,8 @@ onward); this cycle only lands the design docs (Task 1).
   `seeding-issue-pr-templates`).
 - Every checklist item's report line states its own coverage level
   (Covered / Partial / Gap, per the design doc's table) -- never a single
-  aggregate "audit passed," since most items are gaps until #82 lands.
+  aggregate "audit passed," since most items are gaps until the approved
+  gh wrapper (a not-yet-filed candidate child issue under #82) is built.
 - Read-only: this skill only reports; it does not itself change branch
   protection, revoke a webhook, or rotate a key -- those stay human
   decisions per CLAUDE.md section 4.
@@ -79,8 +83,9 @@ onward); this cycle only lands the design docs (Task 1).
       platforms, including one guardrail case asserting the skill never
       reports a Gap item as passing.
 
-### Task 4: Revisit once #82 lands (future, unscheduled)
+### Task 4: Revisit once the approved gh wrapper lands (future, unscheduled)
 
 - [ ] Re-open this skill's checklist-coverage table and upgrade each
-      **Gap** row that #82's wrapper now covers -- do not let the
-      original gap list silently go stale once the wrapper exists.
+      **Gap** row that the wrapper (once filed as its own child issue
+      under #82 and built) now covers -- do not let the original gap
+      list silently go stale once it exists.
