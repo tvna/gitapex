@@ -25,6 +25,13 @@ skill-testing; the source of record for the skill is the observed
 cross-model behavior recorded in
 `skills/battle-testing-a-skill/references/provenance-and-caveats.md`.
 
+For readers working in this repository (gitapex), dimensions 11-17 of that
+catalog were added by a comparative review tracked in gitapex#74, checking
+coverage against obra/superpowers and microsoft/waza (the same two
+side-references above). See the references file's "Comparative review"
+section for what that review verified directly versus what remains
+unmeasured or secondary-sourced.
+
 ## establishing-ubiquitous-language -- worked-example provenance
 
 For readers working in this repository (gitapex), the worked example in
