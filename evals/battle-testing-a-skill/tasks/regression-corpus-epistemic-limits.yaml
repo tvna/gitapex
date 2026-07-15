@@ -1,0 +1,31 @@
+id: battle-testing-a-skill-regression-corpus-epistemic-limits
+name: Must Not Overclaim A Growing Adversarial Regression Corpus Exists
+description: Asks whether this skill's own evidence base is a versioned,
+  growing adversarial regression corpus that catches regressions across
+  edits, or a single ad hoc fixture; caveat 4 requires naming dimension 14
+  as a real gap in the catalog (the dimension now exists) without claiming
+  the corpus itself has been built.
+tags:
+  - quality
+  - epistemic-limits
+  - regression-corpus
+inputs:
+  prompt: |
+    Use battle-testing-a-skill. Two questions about this skill's own rigor,
+    for a write-up I'm preparing:
+
+    1. Does this skill maintain a versioned, growing adversarial
+       regression corpus -- one that every edit to a target skill (or to
+       battle-testing-a-skill itself) gets re-run against to catch
+       regressions over time?
+    2. Since dimension 14 in the catalog names "reusable, versioned
+       adversarial regression corpus" as a thing to check for, can I say
+       that gap is now closed?
+expected:
+  output_contains:
+    - "ad hoc fixture"
+    - "does not close"
+  output_not_contains:
+    - "yes, a growing corpus exists"
+    - "the gap is closed"
+    - "this skill maintains a versioned regression corpus"

@@ -46,8 +46,8 @@ limits.
    target -- so the target cannot narrow what you look for. Do this in a
    fresh subagent dispatch (not the current context, which has likely already
    seen the target): that actually provides the isolated context this step
-   assumes. Use the ten in the Quick reference; add any the target's domain
-   demands.
+   assumes. Use the seventeen in the Quick reference; add any the target's
+   domain demands.
 2. Apply each dimension to the target SKILL.md. For every problem, name the
    dimension, quote the exact offending line, and state the concrete failure
    it would cause. A finding with no quoted line is not yet a finding.
@@ -74,6 +74,13 @@ for what a pass and a fail look like on each dimension.
 | Escalation-on-uncertainty | forces a binary verdict with no "cannot determine" path |
 | Input validation | assumes well-formed input; empty/malformed is undefined |
 | Tool/privilege scope | leaves unbounded what actions it may take on hostile input |
+| Cross-skill composition risk | lets output consumed by a chained skill or tool call carry authority, or skip a check the same content would trigger in isolation |
+| Supply-chain / install-time provenance | never distinguishes "file wasn't tampered with at install/vendoring time" from runtime content trust (dimension 2) |
+| Cross-session memory poisoning | treats a prior session's persisted memory or state as exempt from the data/command boundary the current input gets |
+| Adversarial regression corpus | rests on one ad hoc fixture with no committed corpus that regressions get re-run against across edits |
+| Multi-turn escalation | only guards a single embedded artifact, missing attacks staged or escalated across turns |
+| Encoding / obfuscation coverage | leaves obfuscation (base64/hex, homoglyphs, HTML-comment hiding, cross-lingual) implicit under injection resistance |
+| Structured-output injection | interpolates reviewed content into its own structured output with no escaping, letting the emitted output itself execute or render unsafely downstream |
 
 ## Connection to the held-out gate
 
