@@ -69,9 +69,34 @@ instead.
 | `screening-a-low-trust-contribution` | Event: a PR/issue from an unknown/low-trust author | "...distinct from `untrusted-input-triage`, which triages a single piece of externally-authored text; this inspects a diff and its metadata." |
 
 `responding-to-a-fresh-arrival` and `screening-a-low-trust-contribution`
-are expected to co-fire on the same event (a new PR from an unknown
-author) -- each must carry a `## Relationship to other skills` section
-stating this explicitly, mirroring `outward-artifact-preflight`'s.
+are expected to co-fire on the same event (a new PR or issue from an
+unknown or low-trust author) -- each must carry a `## Relationship to
+other skills` section stating this explicitly, mirroring
+`outward-artifact-preflight`'s.
+
+**Root-cause note (added on reconciliation, 2026-07-16):** the two
+skills' own plan docs originally each pointed at the *other's* draft as
+the "verbatim" source of truth ("must match X's own section verbatim"),
+with no single anchor either draft was actually checked against -- the
+two drafts drifted (one said "unknown or low-trust author," the other
+said only "unknown author," and only one carried the
+`outward-artifact-preflight`/`explaining-the-work` citation). Fixed by
+making *this* section the single canonical source both plans and their
+future `SKILL.md`s copy from, rather than cross-referencing each other.
+
+**Canonical co-firing text (copy verbatim into each `SKILL.md`, swapping
+only which skill is "this skill" and the role-description order):**
+
+> When the fresh arrival is from an unknown or low-trust author, this
+> skill and `<the other skill>` are both expected to fire on the same
+> event -- this skill handles `<this skill's role>`, the other handles
+> `<the other skill's role>`. Apply both; neither substitutes for the
+> other. (Mirrors `outward-artifact-preflight` + `explaining-the-work`'s
+> established co-firing pattern.)
+
+Role assignment (fixed, not left to the implementer to phrase freely):
+`responding-to-a-fresh-arrival` = "content/response";
+`screening-a-low-trust-contribution` = "diff/metadata threat screening."
 
 ## Scope of this design pass
 

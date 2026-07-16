@@ -38,6 +38,13 @@ diff/metadata threat screening. Apply both; neither substitutes for the
 other. (Mirrors `outward-artifact-preflight` + `explaining-the-work`'s
 established co-firing pattern.)
 
+This text is the role-swapped mirror of the shared spec's canonical
+co-firing template (`docs/superpowers/specs/2026-07-15-triage-cluster-design.md`,
+"Canonical co-firing text") -- copy it verbatim from *that* spec when
+authoring `SKILL.md`, not from `screening-a-low-trust-contribution`'s
+plan doc directly, so both sides stay checkable against one anchor
+instead of drifting against each other.
+
 ## Global constraints
 
 - Distinct from `ranking-the-open-queue` (whole-backlog sweep, not a
@@ -64,10 +71,13 @@ established co-firing pattern.)
 - [ ] Write `skills/responding-to-a-fresh-arrival/SKILL.md`: trigger/
       description with the disambiguation clause from the shared spec,
       the four-step procedure above, and the `## Relationship to other
-      skills` section verbatim as drafted here.
-- [ ] Coordinate wording of the co-firing section with
-      `screening-a-low-trust-contribution`'s own `SKILL.md` so both sides
-      say the same thing (avoid drift between the two descriptions).
+      skills` section copied verbatim from the shared spec's canonical
+      co-firing template (role: "content/response").
+- [ ] Before merging, diff this section against
+      `screening-a-low-trust-contribution/SKILL.md`'s own co-firing
+      section -- both must be the same template with only the
+      role/other-skill-name swapped; re-copy from the shared spec if
+      either has drifted.
 
 ### Task 3: Eval coverage (deferred -- future cycle, after Task 2 lands)
 

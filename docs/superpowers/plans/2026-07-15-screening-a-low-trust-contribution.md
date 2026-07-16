@@ -34,12 +34,19 @@ only lands the design docs (Task 1).
 
 ## Relationship to other skills (co-firing, stated explicitly)
 
-When a fresh arrival is from an unknown author, this skill and
-`responding-to-a-fresh-arrival` are both expected to fire on the same
+When the fresh arrival is from an unknown or low-trust author, this skill
+and `responding-to-a-fresh-arrival` are both expected to fire on the same
 event -- this skill handles diff/metadata threat screening, the other
 handles content/response. Apply both; neither substitutes for the other.
-The wording here must match `responding-to-a-fresh-arrival`'s own
-`## Relationship to other skills` section verbatim to avoid drift.
+(Mirrors `outward-artifact-preflight` + `explaining-the-work`'s
+established co-firing pattern.)
+
+This text is the role-swapped mirror of the shared spec's canonical
+co-firing template (`docs/superpowers/specs/2026-07-15-triage-cluster-design.md`,
+"Canonical co-firing text") -- copy it verbatim from *that* spec, not
+from `responding-to-a-fresh-arrival`'s plan doc directly, so both sides
+stay checkable against one anchor instead of drifting against each
+other.
 
 ## Global constraints
 
@@ -69,9 +76,13 @@ The wording here must match `responding-to-a-fresh-arrival`'s own
 - [ ] Write `skills/screening-a-low-trust-contribution/SKILL.md`:
       trigger/description with the disambiguation clause from the shared
       spec, the concrete checks above as the procedure, and the
-      `## Relationship to other skills` section verbatim as drafted here.
-- [ ] Coordinate wording of the co-firing section with
-      `responding-to-a-fresh-arrival`'s own `SKILL.md`.
+      `## Relationship to other skills` section copied verbatim from the
+      shared spec's canonical co-firing template (role: "diff/metadata
+      threat screening").
+- [ ] Before merging, diff this section against
+      `responding-to-a-fresh-arrival/SKILL.md`'s own co-firing section --
+      both must be the same template with only the role/other-skill-name
+      swapped; re-copy from the shared spec if either has drifted.
 
 ### Task 3: Eval coverage (deferred -- future cycle, after Task 2 lands)
 
