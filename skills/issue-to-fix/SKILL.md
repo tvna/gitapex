@@ -6,11 +6,12 @@ description: Use when given a bare issue reporting a defect (or a CI failure wit
 # Issue to Fix
 
 **Portability: Portable.** Depends only on a connected GitHub MCP server (a
-general product capability) for the Step 2 escalation-comment action;
-Steps 1 and 3-5 (reproduce, write a failing test, fix, verify) are entirely
-general and depend on no this-repository tooling. Tool names below are
-written as `Server:tool` (portable shorthand); in Claude Code, translate to
-the literal double-underscore form -- `github:add_issue_comment` is
+general product capability) for the Step 2 escalation action (commenting
+on an existing issue or opening a new one); Steps 1 and 3-5 (reproduce,
+write a failing test, fix, verify) are entirely general and depend on no
+this-repository tooling. Tool names below are written as `Server:tool`
+(portable shorthand); in Claude Code, translate to the literal
+double-underscore form -- `github:add_issue_comment` is
 `mcp__github__add_issue_comment`. Other platforms may use a different
 literal form for the same server/tool pair.
 
@@ -24,11 +25,20 @@ what has not been reproduced.
    against the real code path -- never a proxy, never inferred behavior.
    Do not proceed to any later step without a live reproduction.
 2. **Escalate on failed reproduction.** If reproduction fails, stop here.
-   Comment on the issue (e.g. `github:add_issue_comment`) stating exactly
-   what was tried and what did not reproduce, then stop -- do not guess at
-   a fix for an unreproduced defect. This is the same "ambiguous input
-   earns a question, evidence earns a fix" discipline applied concretely:
-   a failed reproduction is ambiguous input, not evidence.
+   - If the input is an existing issue, comment on it (e.g.
+     `github:add_issue_comment`) stating exactly what was tried and what
+     did not reproduce.
+   - If the input is a standalone CI failure with no linked issue (for
+     example, a scheduled workflow run with no issue tracking it), open a
+     new issue (e.g. `github:issue_write` method `create`) recording the
+     same: what was tried and what did not reproduce. This follows the
+     repository's own "open an issue before any branch, commit, or PR"
+     convention rather than leaving a CI signal with nowhere to land.
+
+   Either way, stop -- do not guess at a fix for an unreproduced defect.
+   This is the same "ambiguous input earns a question, evidence earns a
+   fix" discipline applied concretely: a failed reproduction is ambiguous
+   input, not evidence.
 3. **Write a failing test first.** Once reproduced, encode the failure as
    a test that fails for the right reason -- run it and confirm it fails
    before touching any fix code. Skipping straight to a fix, even one the
@@ -60,6 +70,12 @@ Contrast: had step 1 failed to reproduce the duplicates against the real
 search path, the correct next move is step 2 -- comment on #142 stating
 the exact query tried and that no duplicates appeared, then stop. Do not
 guess at a dedupe fix for a defect that did not reproduce.
+
+Contrast (no linked issue): a scheduled nightly workflow fails with no
+issue tracking it, and attempting the same steps that failed in CI does
+not reproduce the failure locally. Step 2's first bullet does not apply
+-- there is no issue to comment on -- so open a new issue recording the
+exact steps attempted and that they did not reproduce, then stop.
 
 ## Stop boundaries
 
