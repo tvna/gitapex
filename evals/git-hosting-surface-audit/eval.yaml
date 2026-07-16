@@ -1,0 +1,17 @@
+name: git-hosting-surface-audit-eval
+description: Quality suite for the gitapex git-hosting-surface-audit skill.
+skill: git-hosting-surface-audit
+version: "0.1.0"
+config:
+  trials_per_task: 1
+  timeout_seconds: 300
+  parallel: false
+  executor: copilot-sdk
+  model: claude-sonnet-4.6
+metrics:
+  - name: git_hosting_surface_audit_quality
+    weight: 1.0
+    threshold: 0.8
+    description: Detects platform correctly, loads exactly one platform reference, reports every checklist item's real coverage level (Covered/Partial/Gap) with Gap items cross-linked to #82, and never claims an aggregate "audit passed" or upgrades a Gap to Covered.
+tasks:
+  - "tasks/*.yaml"
