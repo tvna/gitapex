@@ -1,8 +1,11 @@
-# gitapex-specific cross-links (read only inside this repo)
+# gitapex-specific cross-links (read only when this is gitapex's own copy)
 
-Read this ONLY when running this skill inside the gitapex repository
-itself. A vendored copy of this skill in another repository drops this
-file entirely and substitutes its own governance issue, instruction
+Read this ONLY when *this copy of the skill* lives in the gitapex
+repository -- not when the repository being *audited* happens to be
+gitapex (the two are unrelated: gitapex's own copy of this skill uses
+the pointers below no matter which platform or repository is under
+audit). A copy of this skill vendored into a different repository drops
+this file entirely and substitutes its own governance issue, instruction
 file, and script precedent for the three pointers below -- nothing else
 in this skill depends on this file existing.
 
@@ -22,9 +25,9 @@ as "blocked on #82 landing."
 This skill never takes a write action (change branch protection, revoke
 a webhook, rotate a deploy key) -- those stay human decisions **per this
 repo's own `CLAUDE.md`, section 4** ("Simplicity, Bounded by Safety"). A
-vendored copy cites whatever instruction file the target repository has
-for the same rule, if any; the read-only principle itself still applies
-even with no file to cite.
+copy vendored into a different repository cites whatever instruction
+file *that hosting repository* has for the same rule, if any; the
+read-only principle itself still applies even with no file to cite.
 
 ## Unpinned-actions script precedent
 

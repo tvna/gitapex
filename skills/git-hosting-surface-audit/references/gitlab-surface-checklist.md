@@ -31,11 +31,16 @@ sides, only the coverage level and API differ.
 Every row above is a stated consumer of whatever approved tooling would
 close it, once GitLab support for that tooling actually exists --
 cross-link the tracking issue for approved-but-unbuilt tooling in the
-report for each. When running this skill inside gitapex itself, see
-`references/gitapex-cross-links.md` for this repo's own tracking issue
-and its exact wording convention ("consumer of an unfiled candidate
-child issue," not "blocked on landing"); a vendored copy substitutes its
-own tracking issue or drops the cross-link if the calling repo has none.
+report for each. That tracking issue belongs to *this skill's own home
+repository*, never to the GitLab repository being audited (the two are
+unrelated: this checklist runs precisely because the audit target is a
+GitLab repo, which is never gitapex's own hosting platform -- gitapex's
+copy of this skill still cross-links gitapex's own issue regardless).
+If this copy of the skill lives in gitapex itself, see
+`references/gitapex-cross-links.md` for that tracking issue and its
+exact wording convention ("consumer of an unfiled candidate child
+issue," not "blocked on landing"); a copy vendored into a different
+repository substitutes that repository's own tracking issue instead.
 
 ## Self-check
 

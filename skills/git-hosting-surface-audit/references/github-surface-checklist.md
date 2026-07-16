@@ -21,12 +21,16 @@ round a Gap up because a workaround seems achievable in the moment.
 | 8 | Collaborator/permission drift | **Covered.** `mcp__github__list_repository_collaborators` (with an `affiliation` filter) returns exactly this. | Call the tool; report its result. |
 
 Every **Gap** row above is a stated consumer of whatever approved tooling
-would close it, once that tooling is actually built. When running this
-skill inside gitapex itself, see `references/gitapex-cross-links.md` for
-this repo's own tracking issue and the exact wording convention for that
-cross-link; a vendored copy substitutes its own tracking issue or drops
-the cross-link if the calling repo has none. The unpinned-actions script's
-borrowed shape (item 3) is also documented there.
+would close it, once that tooling is actually built -- the tracking issue
+to cross-link belongs to *this skill's own home repository*, never to the
+repository being audited (the two are unrelated: even when the audit
+target above is someone else's GitHub project, gitapex's own copy of this
+skill still cross-links gitapex's own issue). If this copy of the skill
+lives in gitapex itself, see `references/gitapex-cross-links.md` for that
+tracking issue and the exact wording convention for the cross-link; a
+copy vendored into a different repository substitutes that repository's
+own tracking issue instead. The unpinned-actions script's borrowed shape
+(item 3) is also documented there.
 
 ## Self-check
 
