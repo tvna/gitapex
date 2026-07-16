@@ -47,11 +47,12 @@ double-underscore form: `Server:tool` -> `mcp__Server__tool` -- e.g.
    alongside its label.
 5. **Rank and output** as the table contract below, applying
    [references/scoring-rubric.md](references/scoring-rubric.md)'s
-   ordering rule to break ties between items. Before presenting the
-   table, re-check the assembled order against that rule directly -- its
-   four levels are exact enough to verify mechanically -- rather than
-   trusting a first-pass sort; a multi-key tie-break across many items is
-   exactly where a first pass tends to drift.
+   ordering rule to break ties between items, down to its final stable
+   key (issue/PR number) for items still tied after every axis. Before
+   presenting the table, re-check the assembled order against that rule
+   directly -- its levels are exact enough to verify mechanically --
+   rather than trusting a first-pass sort; a multi-key tie-break across
+   many items is exactly where a first pass tends to drift.
 6. **State any cap.** If pagination stops before the full backlog is
    swept (a rate limit, an operator-given item cap), say so explicitly in
    the output.

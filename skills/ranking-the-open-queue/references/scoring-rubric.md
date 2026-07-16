@@ -67,20 +67,30 @@ dark mode," with no further detail, scores **Needs scoping**.
 
 ## Ordering rule
 
-Rank strictly in this order, top to bottom:
+Rank strictly in this order, top to bottom. Every level orders the *full*
+three-point scale of its axis -- no two distinct verdicts on the same
+axis are ever left unordered relative to each other:
 
-1. Any item scored **Blocked** sorts below every **Unblocked** or
-   **Soft-blocked** item, regardless of its Severity -- acting on it now
-   is wasted effort by definition of this axis.
-2. Among the remaining items, **Defect** outranks **Enhancement**, which
-   outranks **Chore**.
-3. Within the same Severity tier, **Ready** outranks **Needs scoping**,
-   which outranks **Needs clarification**.
-4. Staleness only breaks ties that remain after rules 1-3 -- within the
-   same Severity/Blockage/Actionability tier, **Stale** items sort above
-   **Aging**, which sorts above **Fresh** (an old, ready, unblocked defect
-   nobody has picked up yet is a stronger candidate than a fresh one).
+1. **Blockage**, first: **Unblocked** outranks **Soft-blocked**, which
+   outranks **Blocked**, regardless of Severity -- acting on a Blocked
+   item now is wasted effort by definition of this axis, and a
+   Soft-blocked item (a hinted but untracked dependency) is a lower-
+   confidence candidate than a confirmed-Unblocked one.
+2. Within the same Blockage tier, **Defect** outranks **Enhancement**,
+   which outranks **Chore**.
+3. Within the same Blockage/Severity tier, **Ready** outranks **Needs
+   scoping**, which outranks **Needs clarification**.
+4. Within the same Blockage/Severity/Actionability tier, **Stale**
+   outranks **Aging**, which outranks **Fresh** (an old, ready, unblocked
+   defect nobody has picked up yet is a stronger candidate than a fresh
+   one).
+5. **Final stable key.** Two items identical on all four axis verdicts
+   (same Blockage, Severity, Actionability, and Staleness band) are still
+   given a strict, reproducible order rather than left as an arbitrary or
+   shared rank: sort by ascending issue/PR number. This key carries no
+   priority meaning of its own -- it exists only so the same backlog
+   produces the same order on a repeat sweep.
 
-This rule is deterministic given the four axis verdicts; the judgment
-call is in assigning each verdict from the item's actual content, not in
-the ordering itself.
+This rule is deterministic given the four axis verdicts plus the item
+number; the judgment call is in assigning each axis verdict from the
+item's actual content, not in the ordering itself.
