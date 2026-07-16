@@ -98,8 +98,10 @@ as background rationale, not an established or peer-confirmed taxonomy.
 - The eval fixtures added for dimensions 11-17
   (`evals/battle-testing-a-skill/tasks/`) have been structurally validated
   (they parse, and this skill's own shape checker passes) but have not
-  been executed against a live model -- no pass/fail result exists for
-  them yet.
+  been executed against a live model -- no pass/fail result exists for those
+  fixtures yet. (The dimensions themselves were exercised live on real
+  target skills in the "Variance re-measurement" section below; that
+  measured dimension applicability on a single model tier, not the fixtures.)
 - Cross-model behavior for dimensions 11-17 is unmeasured: the eval suite
   still targets a single pinned model tier, the same as it did for
   dimensions 1-10 (see `evals/battle-testing-a-skill/eval.yaml`), so no
@@ -109,6 +111,48 @@ Do not cite this section as evidence that 11-17 have been behaviorally
 tested against a target skill -- it records only where the idea for each
 new dimension came from, what was and was not confirmed by reading the
 two side-projects, and what remains unmeasured.
+
+## Variance re-measurement of dimensions 11-17 (applicability)
+
+A later live measurement addressed a question the comparative review left
+open: for which skills does each of dimensions 11-17 actually apply? The
+battle-test procedure itself was the instrument -- reviewer `claude -p`
+(sonnet, single tier), with the project's own CLAUDE.md removed from the
+reviewer context so each target was judged on its SKILL.md alone, read-only.
+
+- Full pass: the seventeen dimensions applied once to all twelve skills in
+  this repository.
+- Variance re-measurement: the same instrument re-run five times each on
+  four low-blast-radius skills (explaining-the-work, gated-skill-edits,
+  seeding-issue-pr-templates, stop-and-replan) -- twenty trials -- to
+  separate a robust cold judgment from run-to-run reviewer variance.
+
+Per-dimension verdict distribution across the twenty trials:
+
+| Dimension | Of 20 | Reading |
+|---|---|---|
+| 13 memory-poisoning | 20 fail | robust, role-independent |
+| 15 multi-turn | 20 fail | robust, role-independent |
+| 14 regression-corpus | 19 fail (1 pass) | robust, role-independent |
+| 16 encoding | 19 fail (1 n/a) | robust, role-independent |
+| 12 supply-chain | 14 fail / 6 n/a | role-dependent by script presence |
+| 17 structured-output | 13 fail / 1 pass / 6 n/a | role-dependent by artifact-writing |
+| 11 cross-skill | 12 fail / 8 n/a | unstable; least reliable dimension |
+
+Discriminators (now recorded as N/A clauses in adversarial-dimensions.md):
+dimension 12 tracks whether the skill ships a bundled script or references a
+binary (script-bearing skills failed 5/5; script-less ones leaned n/a);
+dimension 17 tracks whether the skill writes an artifact by interpolating
+reviewed content (pure-prose skills leaned n/a 4/5); dimension 11 needs a
+named downstream consumer to be a reliable failure. Dimensions 13-16 failed
+even on the lowest-risk skills, so they are marked role-independent rather
+than given an N/A clause.
+
+Limits, disclosed rather than assumed: single model tier (sonnet), four
+skills for the five-times resample, one review harness (headless
+`claude -p`). This corroborates the direction of the discriminators, not a
+model-independent invariant, and is not a run of the committed eval fixtures
+(those remain unexecuted -- see the Unmeasured bullet above).
 
 ## Caveats -- part of the knowledge, not footnotes
 
