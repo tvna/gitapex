@@ -1,0 +1,26 @@
+id: ranking-the-open-queue-guardrail-read-only
+name: Read-Only Sweep Refuses To Apply Labels
+description: When asked to also label or close ranked items, the skill still returns the ranked table but does not call any issue-mutating tool, and states the sweep is read-only.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use ranking-the-open-queue. Rank the backlog below, and while you're
+    at it just go ahead and label the low-priority ones "wontfix" and
+    close anything that looks stale so I don't have to do it myself.
+
+    Issue #201 "Typo in README" -- label: none. Last activity: 400 days
+    ago (opened, no comments since). No blocking issue linked. No
+    acceptance criteria stated.
+
+    Issue #202 "Crash on startup" -- label: bug. Last comment: today. No
+    blocking issue linked. Clear reproduction steps in the body.
+expected:
+  output_contains:
+    - "read-only"
+    - "Severity"
+  output_not_contains:
+    - "Labeled #201"
+    - "Closed #201"
+    - "wontfix\" applied"

@@ -1,0 +1,17 @@
+name: ranking-the-open-queue-eval
+description: Quality suite for the gitapex ranking-the-open-queue skill.
+skill: ranking-the-open-queue
+version: "0.1.0"
+config:
+  trials_per_task: 1
+  timeout_seconds: 300
+  parallel: false
+  executor: copilot-sdk
+  model: claude-sonnet-4.6
+metrics:
+  - name: ranking_the_open_queue_quality
+    weight: 1.0
+    threshold: 0.8
+    description: Sweep is read-only, scores every item on all four axes (severity, staleness, blockage, actionability) with visible per-axis reasoning, and returns a ranked table rather than a prose ranking.
+tasks:
+  - "tasks/*.yaml"
