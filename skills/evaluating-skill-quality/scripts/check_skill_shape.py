@@ -20,10 +20,12 @@ Checks (the canonical list -- the manual fallback is to apply these):
     (a Markdown heading matching "Table of contents" or "Contents",
     case-insensitive). Junk files (dotfiles, __pycache__, non-UTF-8) under
     references/ are ignored, not flagged.
-  - SKILL.md body: every Markdown link target ([text](path)) that is not
-    an absolute URL/scheme (http(s):, mailto:, etc.) or a bare in-page
-    fragment (#section) must resolve inside the skill's own directory --
-    a relative link that escapes it (e.g. "../../docs/x.md") fails. This
+  - SKILL.md body: every Markdown link target -- inline ([text](path))
+    or reference-style ([text][label] resolved via a [label]: path
+    definition) -- that is not an absolute URL/scheme (http(s):,
+    mailto:, etc.) or a bare in-page fragment (#section) must resolve
+    inside the skill's own directory -- a relative link that escapes it
+    (e.g. "../../docs/x.md") fails. This
     gives the skill's own "Portable" self-declaration (whose definition
     already requires every instruction to resolve inside the skill's own
     folder) a deterministic backstop.
@@ -67,9 +69,12 @@ TOC_RE = re.compile(r"^#+\s+(?:table of )?contents\b",
 PORTABILITY_RE = re.compile(r"\bportability\s*:", re.IGNORECASE)
 PORTABILITY_MAX_BODY_LINE = 6
 BLOCK_SCALAR_INDICATORS = (">", "|", ">-", "|-", ">+", "|+")
-# Markdown inline link syntax: [text](target). Does not match reference-
-# style links ([text][ref]); SKILL.md bodies in this repo use inline links.
+# Markdown inline link syntax: [text](target).
 LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
+# Reference-style link definitions: [label]: target -- the destination a
+# [text][label] reference resolves to. Up to 3 leading spaces per
+# CommonMark; destination is either <...>-wrapped or a bare non-space run.
+REFDEF_RE = re.compile(r"^[ ]{0,3}\[[^\]]+\]:\s*(<[^>]*>|\S+)", re.MULTILINE)
 # An absolute-URL scheme (http:, https:, mailto:, ftp:, ...) -- anything
 # matching this is external, not a same-repo relative path.
 SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.\-]*:")
@@ -150,15 +155,23 @@ def _out_of_skill_link_targets(body_text: str, skill_dir: Path) -> list[str]:
     """Return each Markdown link target in ``body_text`` that resolves
     outside ``skill_dir``.
 
-    Skips absolute-URL/scheme targets (http:, https:, mailto:, ...) and
-    bare in-page fragments (#section) -- neither is a same-repo relative
-    path. Resolution is purely lexical (os.path.normpath), not a real
+    Covers both inline links ([text](target)) and reference-style links
+    ([text][label] resolved via a [label]: target definition elsewhere in
+    the body) -- a reference-style target is exactly as capable of
+    escaping the skill directory as an inline one. Skips absolute-URL/
+    scheme targets (http:, https:, mailto:, ...) and bare in-page
+    fragments (#section) -- neither is a same-repo relative path.
+    Resolution is purely lexical (os.path.normpath), not a real
     filesystem lookup, since the target need not exist for this check.
     """
     skill_norm = os.path.normpath(str(skill_dir))
+    raw_targets = [m.group(1) for m in LINK_RE.finditer(body_text)]
+    raw_targets += [m.group(1) for m in REFDEF_RE.finditer(body_text)]
     offenders = []
-    for match in LINK_RE.finditer(body_text):
-        target = match.group(1).strip()
+    for raw in raw_targets:
+        target = raw.strip()
+        if len(target) >= 2 and target[0] == "<" and target[-1] == ">":
+            target = target[1:-1].strip()
         if SCHEME_RE.match(target):
             continue
         path_part = target.split("#", 1)[0].split("?", 1)[0].strip()
