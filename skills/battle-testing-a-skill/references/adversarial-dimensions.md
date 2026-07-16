@@ -10,10 +10,10 @@ the next five (6-10) in most.
 
 **Role-independence of dimensions 13-16.** Memory-poisoning (13),
 regression-corpus (14), multi-turn (15), and encoding (16) apply to
-essentially every skill that reads input across turns or sessions -- they
-are not the province of "high-risk" skills only. Re-measurement found them
-failing on the lowest-risk skills as reliably as on the highest (see
-provenance-and-caveats.md, "Variance re-measurement"). Do not mark them N/A
+essentially every skill regardless of blast radius -- they are not the
+province of "high-risk" skills only. Re-measurement found them failing even
+on the lowest-risk skills (see provenance-and-caveats.md, "Variance
+re-measurement"). Do not mark them N/A
 on a low-blast-radius impression; N/A on 13-16 needs a concrete reason the
 mechanism cannot exist for the skill under review, not an absence of obvious
 risk. Dimensions 11, 12, and 17 carry an explicit N/A clause in their
@@ -159,12 +159,15 @@ trigger if it arrived as this skill's own input.
   consumer merely for being well-formed, and that a chained consumer must
   independently re-check the dimensions relevant to it rather than trust a
   passed-along token.
-- N/A when: the skill's output feeds no named downstream consumer contract
-  -- with no concrete chained consumer that could forward a passed-along
-  token, the risk is hypothetical. This dimension is the least stable in
-  re-measurement (see provenance-and-caveats.md, "Variance re-measurement"):
-  treat a lone FAIL as low-confidence and require a named consumer before
-  scoring a failure.
+- N/A when: the skill's output feeds no downstream consumer contract -- with
+  no chained consumer that could forward a passed-along token, the risk is
+  hypothetical. If unsure whether a consumer exists, the dimension applies;
+  N/A requires affirmatively confirming no consumer, checked against the
+  deployment context (repo, harness, sibling skills), not the target
+  SKILL.md alone. This is the least stable dimension in re-measurement (see
+  provenance-and-caveats.md, "Variance re-measurement"): a lone FAIL with no
+  identifiable consumer earns a second independent dispatch (Procedure step
+  5) before it stands, not a raised bar for failure.
 
 ## 12. Supply-chain / installation-time provenance trust
 
@@ -189,7 +192,12 @@ with at install or vendoring time" from runtime content trust (dimension
   ships or references bundled code, such as a `scripts/` file or a named
   binary. If unsure whether a referenced artifact counts, treat the
   dimension as applying: N/A requires affirmatively confirming no such
-  artifact exists.
+  artifact exists. A pure-prose SKILL.md can still be a poisoned fork, so the
+  residual tampering risk never fully vanishes; this clause marks N/A only
+  for the distinct, checkable install-integrity note the Fail bullet expects
+  when bundled code is present, and does not claim a prose-only skill is
+  immune to tampering -- that residual folds into the general vendoring
+  question, not a per-line fail.
 
 ## 13. Cross-session / memory-poisoning persistence
 
@@ -275,4 +283,6 @@ own reasoning.
   interpolating reviewed content -- a pure-prose or routing skill that never
   writes JSON, a PR/issue body, or a file from the material it reviewed has
   no output surface to inject into. It applies when the skill writes such an
-  artifact from reviewed material. If unsure, treat the dimension as applying.
+  artifact from reviewed material -- including a verdict report that will be
+  posted as a PR or issue body. If unsure, treat the dimension as applying:
+  N/A requires affirmatively confirming the skill emits no such artifact.

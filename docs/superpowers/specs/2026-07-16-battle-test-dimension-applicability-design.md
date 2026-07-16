@@ -111,7 +111,7 @@ references. Type/parse checks alone do not count.
 
 ## Out of scope
 
-- No eval fixtures added (射程 A). An executable eval that locks the
+- No eval fixtures added (scope A). An executable eval that locks the
   N/A-scoping is future work; adding an unexecutable fixture now would be an
   indirect signal, which the repo standards forbid as a stand-in for proof.
 - No SKILL.md Quick-reference table change.

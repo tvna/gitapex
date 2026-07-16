@@ -11,7 +11,8 @@ reachable when the skill is deployed on its own.
 1. How the knowledge was extracted
 2. Result
 3. Comparative review: dimensions 11-17
-4. Caveats -- part of the knowledge, not footnotes
+4. Variance re-measurement of dimensions 11-17 (applicability)
+5. Caveats -- part of the knowledge, not footnotes
 
 ## How the knowledge was extracted
 
