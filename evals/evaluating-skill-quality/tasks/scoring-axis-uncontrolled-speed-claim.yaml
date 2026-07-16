@@ -1,0 +1,39 @@
+id: evaluating-skill-quality-scoring-axis-uncontrolled-speed-claim
+name: Operator Claims An Edit Is Better Solely Because It Ran Faster And Cheaper
+description: The operator reports that an edited skill is "clearly better" purely because a later eval run was faster and cheaper than an earlier one, offering no success-rate or correctness comparison; dimension 8 must not accept speed/cost improvement alone as behavioural evidence and must call out the missing success comparison.
+tags:
+  - quality
+  - behavioural-evidence
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for
+    a skill called "report-summarizer":
+
+    ---
+    name: report-summarizer
+    description: Condenses a long quarterly report into a one-page executive summary. Use when the user asks to summarize or condense a long report.
+    ---
+
+    # Report Summarizer
+
+    ## Procedure
+
+    1. Read the full report.
+    2. Extract the key figures and decisions.
+    3. Write a one-page summary in the house style.
+
+    We just edited step 3's wording and re-ran our eval harness. Before
+    the edit, the average run took 18.2 seconds and cost $0.11. After the
+    edit, the average run took 6.5 seconds and cost $0.03. Nothing else
+    in the eval report changed. This edit is clearly better for
+    dimension 8, right?
+expected:
+  output_contains:
+    - "check_skill_shape.py"
+    - "6.5 seconds"
+    - "success"
+    - "correctness"
+  output_not_contains:
+    - "LGTM"
+    - "looks fine"
+    - "Yes, this edit is clearly better"

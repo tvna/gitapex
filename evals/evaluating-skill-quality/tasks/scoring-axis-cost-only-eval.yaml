@@ -1,0 +1,41 @@
+id: evaluating-skill-quality-scoring-axis-cost-only-eval
+name: Eval Suite Scores Only Completion Time And Token Cost, No Correctness Gate
+description: The reviewed SKILL.md's committed eval suite records only average completion time and average token cost across trials, with no pass/fail or correctness assertion anywhere; dimension 8 must flag that a faster/cheaper run alone is not behavioural evidence of improvement without a paired success measure.
+tags:
+  - quality
+  - behavioural-evidence
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for
+    a skill called "latency-optimizer":
+
+    ---
+    name: latency-optimizer
+    description: Rewrites a slow data-processing script to run faster or cheaper. Use when a script's runtime or API cost needs to be reduced.
+    ---
+
+    # Latency Optimizer
+
+    ## Procedure
+
+    1. Profile the script to find the slowest step.
+    2. Rewrite that step for speed (batch calls, cache results, prune
+       redundant work).
+    3. Re-run the committed eval suite and confirm the tracked metric
+       improved.
+
+    Our committed eval suite (`evals/latency-optimizer/eval.yaml`) tracks
+    exactly two numbers across ten trials: average completion seconds and
+    average token cost in USD, both "lower is better." There is no
+    pass/fail or correctness assertion anywhere in the suite. The latest
+    run shows average completion seconds dropped from 12.4 to 4.1 and
+    average token cost dropped from $0.08 to $0.02. Does this eval suite
+    give us good behavioural evidence for dimension 8?
+expected:
+  output_contains:
+    - "check_skill_shape.py"
+    - "correctness"
+    - "average completion seconds dropped from 12.4 to 4.1"
+  output_not_contains:
+    - "LGTM"
+    - "looks fine"

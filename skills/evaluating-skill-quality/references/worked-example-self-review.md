@@ -273,7 +273,29 @@ issues rather than passing by default.
 
 ### 7. Bundled scripts
 
-N/A. This skill ships no code.
+Applicable, not N/A -- this skill ships `scripts/check_skill_shape.py`
+(and its test, `scripts/test_check_skill_shape.py`), the deterministic
+shape checker Step 3 above delegates to. An earlier pass of this same
+review graded this dimension N/A, contradicting its own Step 3 and
+Mechanism-fit sections a few paragraphs up, which both cite that script
+as the shape lane's implementation -- a self-contradiction within one
+document, fixed here rather than left standing.
+
+Walking the actual checklist: **solve, don't punt** -- the script raises
+readable errors (missing file, bad usage) rather than leaving the model
+to cope, per its own exit-code contract (0/1/2). **No voodoo
+constants** -- previously a real gap (`DESCRIPTION_MAX_CHARS`,
+`NAME_MAX_CHARS`, `BODY_MAX_LINES`, `TOC_MIN_LINES` were uncommented);
+fixed in this pass with citations (the first three trace to the Claude
+Developer Platform Skills API limits in [ab], `TOC_MIN_LINES` disclosed
+as this repository's own convention rather than an Anthropic number).
+**Dependencies listed; execution intent stated** -- stdlib-only,
+explicitly declared ("Read-only... No writes, no network"), and
+`SKILL.md` states plainly to run it, not just read it. **Clear
+documentation** -- the module docstring states inputs, outputs, exit
+codes, and the full check list. **Verifiable intermediate outputs for
+high-stakes batch work** -- not applicable; this is a single read-only
+pass/fail check, not a plan -> validate -> execute batch pattern.
 
 ### 8. Behavioural evidence
 
@@ -302,6 +324,18 @@ editing session itself. The extensive back-and-forth in this session
 (finding issues, fixing them, re-checking) resembles the *shape* of
 iterative validation but was not scored against a held-out split, so it
 does not meet the letter of the discipline this dimension names.
+
+**Update (PR #103):** this gap was closed for one specific edit, not
+retroactively for the skill's whole authoring history. The dimension-8
+scoring-axis paragraph added in that PR was scored against a documented
+held-out train/selection/test split
+(`evals/evaluating-skill-quality/split.md`) before and after the edit,
+using `skills/gated-skill-edits/scripts/score_contract.py`: the selection
+mean strictly improved (0.964286 -> 1.000000), so the edit was kept per
+the gate's ties-rejected rule. That is one real instance of this
+discipline applied to this skill, not evidence that every earlier edit
+in this document's history went through it -- the paragraph above still
+accurately describes the many edits that did not.
 
 ### 9. Cross-model robustness
 
@@ -333,8 +367,10 @@ rather than instead of the well-formed/mature verdict below.
 **Well-formed**, and not yet **mature** -- the same shape as the
 `explaining-the-work` verdict, for different reasons. Dimensions 1
 (after the description fix), 3, 4, 5, 6 (after the two portability
-fixes) clear cleanly with cited evidence; 7 is not applicable; dimensions
-8 and 9 are explicitly named as unmeasured rather than silently assumed,
+fixes), and 7 (applicable -- this skill ships `check_skill_shape.py`;
+clears cleanly after the constant-comment fix) all clear cleanly with
+cited evidence; dimensions 8 and 9 are explicitly named as unmeasured
+rather than silently assumed,
 satisfying rubric.md's Verdicts allowance for 8-9 specifically. Dimension
 2 carries a forward-looking watch-point (file growth over one long
 session) rather than a current named gap, so it does not by itself block

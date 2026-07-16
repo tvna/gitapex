@@ -512,6 +512,34 @@ edit to an *existing* skill, still ask what held-out evidence (a fresh
 task run, a previously-failing case, a fresh no-edit baseline) shows the
 change is actually better, not merely different.
 
+**When a committed eval suite records a numeric score, gate acceptance on
+success/correctness first, and never on elapsed time or token/API cost
+alone** -- a faster or cheaper run that did not solve the task is not a
+better run. This is the same scorer that produces the selection-split
+score described in the held-out-gate paragraph above; nothing below
+substitutes for it. Treat elapsed time and
+consumed cost as a legitimate but *conditional* axis: valid only as a
+cost-versus-accuracy comparison at matched success rate, never a
+standalone ranking. Kapoor et al., "AI Agents That Matter" ([kapoor]),
+show a cheap, simple agent beating a costlier state-of-the-art agent at
+equal-or-better accuracy -- cost only means something once accuracy is
+fixed or reported alongside it. Self-reported or single-run time savings
+are also not reliable on their own: METR's randomized controlled trial
+([metrrct]) found developers self-reporting roughly 20% faster
+completion with AI assistance while a real measurement showed them about
+19% *slower*. Where repeated trials are cheap enough for the harness,
+also record reproducibility -- variance across repeated runs of the same
+task, the discipline pass@k ([passk]) formalizes for code generation --
+since a skill that passes once and fails on retry is weaker evidence than
+a stable pass, even at an identical mean. And a passing functional score
+does not clear a run that left an unintended diff, an unresolved
+destructive operation, or scope creep beyond the task; record that
+alongside the score, not folded into it. None of this is a new rubric
+dimension -- it is what this dimension, and a target repository's own
+eval-status bookkeeping, should record when the harness can record it;
+where it cannot, name the gap the same way a missing baseline or
+cross-model run is named above.
+
 ## 9. Cross-model robustness
 
 A skill's effect depends on the model running it. Anthropic's own
@@ -622,6 +650,16 @@ Every inline `[label]` citation above resolves to the source below.
 - **[steering]** Anthropic -- Steering Claude Code: skills, hooks, subagents
   and more.
   <https://claude.com/blog/steering-claude-code-skills-hooks-rules-subagents-and-more>
+- **[kapoor]** Kapoor, Stroebl, Siegel, Nadgir, Narayanan -- AI Agents That
+  Matter, 2024 (arXiv:2407.01502).
+  <https://arxiv.org/abs/2407.01502>
+- **[passk]** Chen et al. -- Evaluating Large Language Models Trained on
+  Code, OpenAI, 2021 (arXiv:2107.03374).
+  <https://arxiv.org/abs/2107.03374>
+- **[metrrct]** Becker, Rush, Barnes, Rein -- Measuring the Impact of
+  Early-2025 AI on Experienced Open-Source Developer Productivity, METR,
+  2025 (arXiv:2507.09089).
+  <https://arxiv.org/abs/2507.09089>
 
 <!-- Link reference definitions below power the inline [label] shortcuts; keep in sync with the visible list above. -->
 
@@ -630,6 +668,9 @@ Every inline `[label]` citation above resolves to the source below.
 [cc]: https://code.claude.com/docs/en/skills "Anthropic -- Claude Code skills"
 [cce]: https://code.claude.com/docs/en/skills#evaluate-and-iterate-on-a-skill "Anthropic -- Claude Code skills, Evaluate and iterate on a skill"
 [skillopt]: https://arxiv.org/abs/2605.23904 "Yang et al., SkillOpt: Executive Strategy for Self-Evolving Agent Skills, Microsoft, 2026 (arXiv:2605.23904)"
+[kapoor]: https://arxiv.org/abs/2407.01502 "Kapoor, Stroebl, Siegel, Nadgir, Narayanan -- AI Agents That Matter, 2024 (arXiv:2407.01502)"
+[passk]: https://arxiv.org/abs/2107.03374 "Chen et al. -- Evaluating Large Language Models Trained on Code, OpenAI, 2021 (arXiv:2107.03374)"
+[metrrct]: https://arxiv.org/abs/2507.09089 "Becker, Rush, Barnes, Rein -- Measuring the Impact of Early-2025 AI on Experienced Open-Source Developer Productivity, METR, 2025 (arXiv:2507.09089)"
 [dbc]: https://se.inf.ethz.ch/~meyer/publications/computer/contract.pdf "Bertrand Meyer, Applying \"Design by Contract\", IEEE Computer 25(10):40-51, October 1992"
 [soc]: https://www.cs.utexas.edu/~EWD/transcriptions/EWD04xx/EWD447.html "E. W. Dijkstra, On the role of scientific thought (EWD447), 1974; reprinted in Selected Writings on Computing: A Personal Perspective, Springer-Verlag, 1982"
 [steering]: https://claude.com/blog/steering-claude-code-skills-hooks-rules-subagents-and-more "Anthropic -- Steering Claude Code: skills, hooks, subagents and more"
