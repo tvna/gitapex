@@ -12,6 +12,31 @@ gaps rather than expecting them inline.
 Update this file whenever a skill's eval suite gains a baseline run, an
 additional model tier, or more trials per task.
 
+## Cross-model matrix scaffolding (issue #106)
+
+The harness to *measure* the repo's cross-model consistency concept now
+exists; the measurement itself does not yet. Concretely, as of issue #106:
+
+- All 12 `evals/*/eval.yaml` declare `trials_per_task: 3` (was 1), so each
+  task is sampled 3 times per run rather than once. (waza's docs describe
+  bootstrap confidence intervals at trials > 1; that behavior is not verified
+  here, since this environment cannot run waza.)
+- `evals/scripts/set_config_model.py` rewrites a suite's `config.model` for a
+  given tier (waza 0.38.0 has no `--model` flag), and
+  `.github/workflows/waza-eval-matrix.yml` fans that over a model list on
+  manual `workflow_dispatch`. It is advisory, never a merge gate.
+- No result files are committed, and the change that added this scaffolding
+  ran in an environment that could not execute waza (no nix/waza binary), so
+  it produced no measurement. The workflow also cannot run until the owner
+  provisions the copilot-sdk endpoint secrets (`COPILOT_BASE_URL` /
+  `COPILOT_PROVIDER_BASE_URL`); it fails loudly at preflight otherwise.
+
+So every per-skill "only `claude-sonnet-4.6` has been evaluated; cross-model
+behavior is currently unmeasured" line below still holds: the trials count is
+a config declaration, and single-tier / single-run statements describe the
+*executed* provenance, which stays as recorded until a credentialed dispatch
+of the matrix workflow commits results. Do not read the scaffolding as a run.
+
 ## driving-pr-to-merge
 
 The eval suite (`evals/driving-pr-to-merge/`) has no committed no-skill
@@ -64,9 +89,10 @@ no-skill baseline and does not close the gap named above.
 
 ## explaining-the-work
 
-The committed eval suite (`evals/explaining-the-work/`) runs a single trial
-per task with no committed no-skill baseline, so its metric is not yet
-evidence of gap-closure. Only `claude-sonnet-4.6` has been evaluated;
+The committed eval suite (`evals/explaining-the-work/`) has no committed run
+at its now-declared 3 trials per task and no committed no-skill baseline, so
+its metric is not yet evidence of gap-closure. Only `claude-sonnet-4.6` has
+been evaluated;
 cross-model behavior is currently unmeasured.
 
 ## gated-skill-edits
@@ -110,21 +136,24 @@ faster/cheaper tier), not measurement.
 
 ## seeding-issue-pr-templates
 
-The committed eval suite (`evals/seeding-issue-pr-templates/`) runs a single
-trial per task with no committed without-skill baseline. Only
+The committed eval suite (`evals/seeding-issue-pr-templates/`) has no
+committed run at its now-declared 3 trials per task and no committed
+without-skill baseline. Only
 `claude-sonnet-4.6` has been evaluated; cross-model behavior is currently
 unmeasured.
 
 ## stop-and-replan
 
-The committed eval suite (`evals/stop-and-replan/`) runs a single trial per
-task with no committed no-skill baseline. Only `claude-sonnet-4.6` has been
+The committed eval suite (`evals/stop-and-replan/`) has no committed run at
+its now-declared 3 trials per task and no committed no-skill baseline. Only
+`claude-sonnet-4.6` has been
 evaluated; cross-model behavior is a qualitative read (low-freedom policy,
 low over-prescription risk), not measurement.
 
 ## untrusted-input-triage
 
 The committed eval suite (`evals/untrusted-input-triage/`) has no documented
-without-skill baseline and runs a single trial per task. Only
+without-skill baseline and no committed run at its now-declared 3 trials per
+task. Only
 `claude-sonnet-4.6` has been evaluated; cross-model behavior is currently
 unmeasured.

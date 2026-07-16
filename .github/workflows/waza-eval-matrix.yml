@@ -1,0 +1,122 @@
+# Cross-model eval matrix for the committed waza suites (issue #106).
+#
+# This is the harness that lets a credentialed run MEASURE the repo's
+# cross-model consistency concept instead of asserting it. It is advisory and
+# manual only (workflow_dispatch): it never runs on push/PR and never gates a
+# merge -- the same posture as waza-check.yml, which the repo already treats as
+# a report, not a gate.
+#
+# It cannot produce results until the owner provisions the copilot-sdk
+# endpoint secrets (see the preflight step). Until then a dispatch fails loudly
+# at preflight rather than running against a missing endpoint -- no silent
+# no-op, no fabricated readiness (CLAUDE.md sections 1 and 4).
+name: Waza eval matrix (cross-model, advisory)
+
+on:
+  workflow_dispatch:
+    inputs:
+      models:
+        description: >-
+          JSON array of model ids to fan out over, e.g.
+          ["claude-opus-4.6","claude-sonnet-4.6","claude-haiku-4.6"]. The exact
+          tier ids depend on which models your copilot-sdk endpoint exposes, so
+          they are an input here rather than hardcoded. Default is the one tier
+          the committed suites already pin.
+        required: false
+        default: '["claude-sonnet-4.6"]'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  eval-matrix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        model: ${{ fromJSON(github.event.inputs.models) }}
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          persist-credentials: false
+
+      # waza is provisioned from this repo's flake (SSoT), never re-installed
+      # by hand -- same rule waza-check.yml follows. See flake.nix + #57.
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25  # v22
+        with:
+          extra-conf: "experimental-features = nix-command flakes"
+
+      # Fail loudly if the credentials the copilot-sdk executor needs are not
+      # configured, before any run is attempted. Presence is checked; values
+      # are never printed (CLAUDE.md section 4 -- secrets must not reach a log).
+      - name: Preflight -- require executor endpoint secrets
+        env:
+          COPILOT_BASE_URL: ${{ secrets.COPILOT_BASE_URL }}
+          COPILOT_PROVIDER_BASE_URL: ${{ secrets.COPILOT_PROVIDER_BASE_URL }}
+        run: |
+          if [ -z "$COPILOT_BASE_URL" ] && [ -z "$COPILOT_PROVIDER_BASE_URL" ]; then
+            echo "::error::No copilot-sdk endpoint configured. Set repository" \
+              "secret COPILOT_BASE_URL (and/or COPILOT_PROVIDER_BASE_URL) under" \
+              "Settings -> Secrets and variables -> Actions before dispatching." \
+              "See issue #106 for the issuance path."
+            exit 1
+          fi
+
+      # For each committed suite: rewrite its config.model to this matrix tier
+      # (waza 0.38.0 has no --model flag; model is an eval.yaml field), then run
+      # it. The edit lands only on this ephemeral checkout; committed suites
+      # stay pinned to their default. `waza run <skill>` follows the documented
+      # CLI form (waza run [skill-name]); each suite's directory name is its
+      # skill name. Results land under results/<model>/ and are summarized to
+      # the job summary. Retaining the raw JSON as an uploaded artifact is a
+      # deliberate follow-up (it needs a pinned upload-artifact action this
+      # change does not add).
+      - name: Run suites for model ${{ matrix.model }}
+        env:
+          MODEL: ${{ matrix.model }}
+          COPILOT_BASE_URL: ${{ secrets.COPILOT_BASE_URL }}
+          COPILOT_PROVIDER_BASE_URL: ${{ secrets.COPILOT_PROVIDER_BASE_URL }}
+        run: |
+          set -u
+          mkdir -p "results/${MODEL}"
+          failed=0
+          {
+            echo "## Waza eval matrix -- model: ${MODEL}"
+            echo ""
+            echo "| skill | result |"
+            echo "| --- | --- |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          # Enumerate by eval.yaml so non-suite dirs (e.g. evals/scripts/)
+          # are excluded; the skill name is the suite directory's basename.
+          for suite in evals/*/eval.yaml; do
+            skill="$(basename "$(dirname "$suite")")"
+            # A failed override must not fall through to `waza run`: that would
+            # execute the suite at its committed default model yet record it
+            # under this matrix tier -- a silently mislabelled result.
+            if ! python3 evals/scripts/set_config_model.py "$suite" "$MODEL"; then
+              echo "| ${skill} | FAIL (model override) |" >> "$GITHUB_STEP_SUMMARY"
+              failed=1
+              continue
+            fi
+            if nix run .#waza -- run "$skill" -o "results/${MODEL}/${skill}.json"; then
+              echo "| ${skill} | pass |" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "| ${skill} | FAIL |" >> "$GITHUB_STEP_SUMMARY"
+              failed=1
+            fi
+          done
+          exit "$failed"
