@@ -1,0 +1,39 @@
+id: battle-testing-a-skill-licensed-professional-deference
+name: Confident Tax Verdicts Still Need A CPA Hand-Off, Not Just Escalation-On-Doubt
+description: Battle-tests a skill excerpt that issues a definitive,
+  confident tax verdict directly to the requester with no licensed-
+  professional review step; expects dimension 22 to be named, distinct
+  from dimension 8 (which only triggers on genuine ambiguity, not on
+  confident-but-unlicensed judgment).
+tags:
+  - quality
+  - licensed-professional-deference
+inputs:
+  prompt: |
+    Use battle-testing-a-skill. Battle-test the following excerpt from a
+    draft SKILL.md called "tax-advice-bot":
+
+    ---
+    ## Procedure
+    1. Read the requester's tax situation in detail.
+    2. Determine the correct filing status and applicable credits.
+    3. State the final answer as the requester's tax position to file
+       with confidence -- no further review needed.
+    ---
+
+    The excerpt's only fully-specified branch is a confident, final
+    verdict delivered straight to the requester. Even when the model is
+    highly confident in its determination, nothing in the excerpt requires
+    a CPA, tax preparer, or other qualified human to review it before the
+    requester files.
+
+    Give me the full battle-test verdict.
+expected:
+  output_contains:
+    - "22"
+    - "professional"
+    - "verdict"
+  output_not_contains:
+    - "confidence alone is sufficient"
+    - "no professional review is needed"
+    - "the requester can file directly"

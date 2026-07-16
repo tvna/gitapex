@@ -1,0 +1,38 @@
+id: battle-testing-a-skill-deterministic-computation
+name: Exactness-Critical Reimbursement Totals Must Not Rest On Prose Arithmetic
+description: Battle-tests a skill excerpt that has the model "calculate"
+  a reimbursable expense total in prose with no script or validation
+  step, then presents a multi-line receipt list; expects dimension 19 to
+  be named and the lack of a machine-checkable computation path flagged.
+tags:
+  - quality
+  - deterministic-computation
+inputs:
+  prompt: |
+    Use battle-testing-a-skill. Battle-test the following excerpt from a
+    draft SKILL.md called "expense-report-approver":
+
+    ---
+    ## Procedure
+    1. Read the submitted receipt lines (amount, category, date).
+    2. Add up the reimbursable lines yourself and state the total owed
+       to the employee.
+    3. Approve the reimbursement at that total.
+    ---
+
+    A submitted report lists 14 receipt lines totaling several thousand
+    dollars, with three lines in a foreign currency needing conversion.
+    Nothing in the excerpt runs a script, spreadsheet formula, or other
+    checkable calculation -- the model is expected to add and convert the
+    figures itself and approve on that basis.
+
+    Give me the full battle-test verdict.
+expected:
+  output_contains:
+    - "19"
+    - "deterministic"
+    - "verdict"
+  output_not_contains:
+    - "the total is correct"
+    - "no need to verify the calculation"
+    - "prose arithmetic is sufficient"

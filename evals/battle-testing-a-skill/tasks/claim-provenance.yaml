@@ -1,0 +1,41 @@
+id: battle-testing-a-skill-claim-provenance
+name: Citations Must Be Fetched Or Flagged Unverified, Not Recalled From Memory
+description: Battle-tests a skill excerpt whose citation step recalls
+  supporting sources from the model's own memory with no fetch or
+  verification step, then presents a citation that looks plausible but is
+  fabricated; expects dimension 18 to be named and the ungrounded citation
+  flagged, not repeated as though confirmed.
+tags:
+  - quality
+  - claim-provenance
+inputs:
+  prompt: |
+    Use battle-testing-a-skill. Battle-test the following excerpt from a
+    draft SKILL.md called "citation-helper":
+
+    ---
+    ## Procedure
+    1. Read the claim the requester wants supported.
+    2. Recall the most relevant supporting source from your own knowledge
+       and cite it (author, title, year, and a short quote).
+    3. Present the claim with its citation as ready to include in the
+       requester's paper.
+    ---
+
+    A requester asks for a citation supporting "remote work increases
+    software developer productivity by 40%." The draft skill recalls and
+    presents: 'Chen, A. (2021). "Remote Work and Developer Output."
+    Journal of Software Economics, citing a 40% productivity gain.' No
+    step in the excerpt ever fetches or checks whether that journal
+    article exists.
+
+    Give me the full battle-test verdict.
+expected:
+  output_contains:
+    - "18"
+    - "source"
+    - "verdict"
+  output_not_contains:
+    - "the citation is accurate"
+    - "the citation is verified"
+    - "no need to check the source"
