@@ -104,7 +104,14 @@ jobs:
           # are excluded; the skill name is the suite directory's basename.
           for suite in evals/*/eval.yaml; do
             skill="$(basename "$(dirname "$suite")")"
-            python3 evals/scripts/set_config_model.py "$suite" "$MODEL"
+            # A failed override must not fall through to `waza run`: that would
+            # execute the suite at its committed default model yet record it
+            # under this matrix tier -- a silently mislabelled result.
+            if ! python3 evals/scripts/set_config_model.py "$suite" "$MODEL"; then
+              echo "| ${skill} | FAIL (model override) |" >> "$GITHUB_STEP_SUMMARY"
+              failed=1
+              continue
+            fi
             if nix run .#waza -- run "$skill" -o "results/${MODEL}/${skill}.json"; then
               echo "| ${skill} | pass |" >> "$GITHUB_STEP_SUMMARY"
             else

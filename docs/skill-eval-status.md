@@ -17,8 +17,10 @@ additional model tier, or more trials per task.
 The harness to *measure* the repo's cross-model consistency concept now
 exists; the measurement itself does not yet. Concretely, as of issue #106:
 
-- All 12 `evals/*/eval.yaml` declare `trials_per_task: 3` (was 1), so a run
-  yields waza's bootstrap confidence intervals instead of a single sample.
+- All 12 `evals/*/eval.yaml` declare `trials_per_task: 3` (was 1), so each
+  task is sampled 3 times per run rather than once. (waza's docs describe
+  bootstrap confidence intervals at trials > 1; that behavior is not verified
+  here, since this environment cannot run waza.)
 - `evals/scripts/set_config_model.py` rewrites a suite's `config.model` for a
   given tier (waza 0.38.0 has no `--model` flag), and
   `.github/workflows/waza-eval-matrix.yml` fans that over a model list on

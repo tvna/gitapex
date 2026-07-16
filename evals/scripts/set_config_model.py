@@ -51,7 +51,7 @@ def set_config_model(text: str, model: str) -> str:
 
     config_start = None
     for i, line in enumerate(lines):
-        if line.rstrip("\n") == "config:" or line.startswith("config:"):
+        if line.startswith("config:"):
             config_start = i
             break
     if config_start is None:
