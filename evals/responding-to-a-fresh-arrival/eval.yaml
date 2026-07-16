@@ -1,0 +1,17 @@
+name: responding-to-a-fresh-arrival-eval
+description: Quality suite for the gitapex responding-to-a-fresh-arrival skill.
+skill: responding-to-a-fresh-arrival
+version: "0.1.0"
+config:
+  trials_per_task: 1
+  timeout_seconds: 300
+  parallel: false
+  executor: copilot-sdk
+  model: claude-sonnet-4.6
+metrics:
+  - name: responding_to_a_fresh_arrival_quality
+    weight: 1.0
+    threshold: 0.8
+    description: Reproduces or explicitly refutes, dedupes before responding, labels from content not the reporter's template choice, and posts exactly one first-response comment naming the next step.
+tasks:
+  - "tasks/*.yaml"

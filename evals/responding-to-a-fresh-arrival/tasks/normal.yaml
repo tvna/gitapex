@@ -1,0 +1,30 @@
+id: responding-to-a-fresh-arrival-normal
+name: Fresh Issue With Repro Steps, No Duplicate
+description: A newly-arrived issue with clear repro steps and no existing
+  duplicate; the skill reproduces, confirms no duplicate, labels from
+  content, and posts one first-response comment naming the next step.
+tags:
+  - quality
+inputs:
+  prompt: |
+    Use responding-to-a-fresh-arrival. Issue #204 just arrived:
+
+    Title: CLI crashes when --output points at a read-only directory
+    Body:
+    Repro steps:
+    1. mkdir -p /tmp/ro && chmod 555 /tmp/ro
+    2. run `mytool build --output /tmp/ro`
+    Expected: a clear "permission denied" error.
+    Actual: unhandled traceback, exit code 1.
+
+    No related open issues found in a quick manual look, but confirm with
+    search_issues yourself.
+expected:
+  output_contains:
+    - "reproduce"
+    - "search_issues"
+    - "duplicate"
+    - "next"
+  output_not_contains:
+    - "Merged"
+    - "Branch created"
