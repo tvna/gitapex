@@ -276,3 +276,90 @@ def test_portability_near_top_buried_fails(tmp_path):
         encoding="utf-8")
     results = css.check_shape(d / "SKILL.md")
     assert not _result(results, "portability-near-top").passed
+
+
+def test_out_of_skill_link_fails(tmp_path):
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "**Portability: Portable.** Self-contained.\n\n"
+        "## Notes\n\nSee [design doc](../../docs/foo.md) for context.\n")
+    results = css.check_shape(d)
+    result = _result(results, "links-inside-skill")
+    assert not result.passed
+    assert "../../docs/foo.md" in result.evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_in_skill_reference_link_passes(tmp_path):
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "**Portability: Portable.** Self-contained.\n\n"
+        "## Notes\n\nSee [background](references/foo.md) for context.\n",
+        references={"foo.md": "background\n"})
+    assert _result(css.check_shape(d), "links-inside-skill").passed
+
+
+def test_absolute_url_link_is_skipped(tmp_path):
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "**Portability: Portable.** Self-contained.\n\n"
+        "See [the spec](https://example.com/y) for background.\n")
+    assert _result(css.check_shape(d), "links-inside-skill").passed
+
+
+def test_fragment_only_link_is_skipped(tmp_path):
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "**Portability: Portable.** Self-contained.\n\n"
+        "Jump to [the checklist](#checklist) below.\n")
+    assert _result(css.check_shape(d), "links-inside-skill").passed
+
+
+def test_absolute_path_link_fails(tmp_path):
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "**Portability: Portable.** Self-contained.\n\n"
+        "See [system config](/etc/passwd) for context.\n")
+    result = _result(css.check_shape(d), "links-inside-skill")
+    assert not result.passed
+    assert "/etc/passwd" in result.evidence
+
+
+def test_reference_style_out_of_skill_link_fails(tmp_path):
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "**Portability: Portable.** Self-contained.\n\n"
+        "See the [runbook][r] for details.\n\n"
+        "[r]: ../../docs/runbook.md\n")
+    result = _result(css.check_shape(d), "links-inside-skill")
+    assert not result.passed
+    assert "../../docs/runbook.md" in result.evidence
+
+
+def test_reference_style_in_skill_link_passes(tmp_path):
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "**Portability: Portable.** Self-contained.\n\n"
+        "See the [background][b] for context.\n\n"
+        "[b]: references/foo.md\n",
+        references={"foo.md": "background\n"})
+    assert _result(css.check_shape(d), "links-inside-skill").passed
+
+
+def test_reference_style_angle_bracket_target_fails(tmp_path):
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "**Portability: Portable.** Self-contained.\n\n"
+        "See the [runbook][r] for details.\n\n"
+        "[r]: <../../docs/runbook.md>\n")
+    result = _result(css.check_shape(d), "links-inside-skill")
+    assert not result.passed
+    assert "../../docs/runbook.md" in result.evidence

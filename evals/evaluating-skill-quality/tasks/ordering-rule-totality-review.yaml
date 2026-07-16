@@ -1,0 +1,39 @@
+id: evaluating-skill-quality-ordering-rule-totality-review
+name: Ordering Rule Leaves Two Axis Values Unordered And Has No Full-Tie Key
+description: The reviewed reference file's Ordering rule sorts Blocked below Unblocked/Soft-blocked but never orders Unblocked relative to Soft-blocked, and its tie-break only fires within a tier -- leaving items tied across every axis with no final rule. Dimension 4 must name both gaps as a totality problem, not approve the rule as complete because it "looks deterministic."
+tags:
+  - quality
+  - clarity-and-structure
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft reference file excerpt
+    for a skill called "ranking-the-open-queue":
+
+    ## Ordering rule
+
+    Rank strictly in this order, top to bottom:
+
+    1. Any item scored Blocked sorts below every Unblocked or
+       Soft-blocked item, regardless of its Severity -- acting on it now
+       is wasted effort by definition of this axis.
+    2. Among the remaining items, Defect outranks Enhancement, which
+       outranks Chore.
+    3. Within the same Severity tier, Ready outranks Needs scoping,
+       which outranks Needs clarification.
+    4. Staleness only breaks ties that remain after rules 1-3 -- within
+       the same Severity/Blockage/Actionability tier, Stale items sort
+       above Aging, which sorts above Fresh.
+
+    This rule is deterministic given the four axis verdicts; the
+    judgment call is in assigning each verdict from the item's actual
+    content, not in the ordering itself. Does dimension 4 (Clarity and
+    structure) have any concerns with this Ordering rule as written?
+expected:
+  output_contains:
+    - "Unblocked"
+    - "Soft-blocked"
+    - "tie"
+  output_not_contains:
+    - "LGTM"
+    - "looks fine"
+    - "no concerns"
