@@ -6,7 +6,12 @@ the cross-model extraction (see provenance-and-caveats.md); dimensions
 11-17 were added later by a separate review and are not equally
 evidenced -- see provenance-and-caveats.md's "Comparative review" section
 before treating them as settled. The first five recurred in every probe;
-the next five (6-10) in most.
+the next five (6-10) in most. Dimensions 18-22 were added later still,
+from a domain-gap analysis (not live behavioral extraction) targeting
+evidence-first academic and regulated-procedure (legal/tax/accounting)
+skills specifically, and are domain-conditional -- see
+provenance-and-caveats.md's "Comparative gap review" section before
+treating them as settled.
 
 **Role-independence of dimensions 13-16.** Memory-poisoning (13),
 regression-corpus (14), multi-turn (15), and encoding (16) apply to
@@ -16,8 +21,8 @@ on the lowest-risk skills (see provenance-and-caveats.md, "Variance
 re-measurement"). Do not mark them N/A
 on a low-blast-radius impression; N/A on 13-16 needs a concrete reason the
 mechanism cannot exist for the skill under review, not an absence of obvious
-risk. Dimensions 11, 12, and 17 carry an explicit N/A clause in their
-sections below.
+risk. Dimensions 11, 12, 17, and 18-22 carry an explicit N/A clause in
+their sections below.
 
 ## Contents
 
@@ -38,6 +43,11 @@ sections below.
 15. Multi-turn / escalating adversarial patterns
 16. Encoding / obfuscation sub-checks
 17. Structured-output injection
+18. Claim-provenance / source-grounding enforcement
+19. Deterministic-computation mandate
+20. Regulatory-version / jurisdiction currency
+21. Auditor-reconstructable evidence trail
+22. Licensed-professional deference
 
 ---
 
@@ -284,3 +294,131 @@ own reasoning.
   artifact from reviewed material -- including a verdict report that will be
   posted as a PR or issue body. If unsure, treat the dimension as applying:
   N/A requires affirmatively confirming the skill emits no such artifact.
+
+## 18. Claim-provenance / source-grounding enforcement
+
+Checks whether the skill's procedure requires factual or citation claims
+in its output to be grounded in a checkable primary source, rather than
+resting on model memory or an unverified secondary summary.
+
+- Fail: the skill instructs producing citations, case law, statutory
+  text, academic sources, or "supporting evidence" with no step
+  requiring the source actually be fetched, checked, or quoted -- a
+  fabricated-looking citation (wrong year, a non-existent case, a
+  paraphrase presented as a direct quote) would pass unnoticed because
+  nothing in the procedure re-derives or checks it against the source.
+- Pass: the skill requires each factual/citation claim in its output to
+  carry a fetched or otherwise checkable primary source, and requires an
+  explicit "unverified" or "could not confirm" tag when a source cannot
+  be checked, rather than presenting an unconfirmed claim as settled.
+- N/A when: the skill's output makes no factual or citation claims that
+  a reader would rely on as true (a pure formatting, routing, or
+  code-generation skill with no evidentiary content). It applies
+  whenever the skill's stated purpose is academic/research writing,
+  legal argument, citation, or any output whose factual accuracy a
+  reader is expected to trust. If unsure, treat the dimension as
+  applying: N/A requires affirmatively confirming the skill makes no
+  such claims.
+
+## 19. Deterministic-computation mandate
+
+Checks whether the skill lets a numeric or monetary result that the
+domain requires to be exact rest on model-estimated arithmetic instead
+of a verifiable computation.
+
+- Fail: the skill's procedure computes a monetary total, tax figure,
+  statutory-threshold comparison, or other exactness-critical number by
+  having the model "calculate" or "estimate" it in prose, with no step
+  delegating the arithmetic to a script, spreadsheet formula, or other
+  machine-checkable path, and no validation step before the figure
+  reaches an outward-facing artifact.
+- Pass: every exactness-critical numeric or monetary output is produced
+  or independently re-checked by a deterministic mechanism (a bundled
+  script, an external calculator/ledger tool, a formula the reviewer can
+  re-run), and the skill states that a discrepancy between the model's
+  draft figure and the deterministic check blocks output rather than
+  being silently reconciled.
+- N/A when: the skill produces no numeric or monetary figures whose
+  exactness matters to a reader relying on them (a qualitative-only or
+  advisory skill). It applies whenever the skill's domain is accounting,
+  tax, billing, or any procedure where an incorrect number has a real
+  financial or compliance consequence. If unsure, treat the dimension as
+  applying: N/A requires affirmatively confirming no such figures exist.
+
+## 20. Regulatory-version / jurisdiction currency
+
+Checks whether the skill's procedure requires identifying which
+regulatory framework, jurisdiction, and effective date govern the
+specific case being processed, distinct from whether the SKILL.md's own
+prose has gone stale (dimension 6 in the sibling skill-quality rubric,
+which flags the document, not the case-specific rule the procedure
+applies).
+
+- Fail: the skill applies legal, tax, or accounting rules with no step
+  asking which jurisdiction or regulatory version applies to the current
+  case, and no requirement to confirm the cited rule is still in force
+  as of the case's relevant date -- a rule that changed after the skill
+  was written, or that never applied in the requester's jurisdiction,
+  would be applied silently as if universal and permanent.
+- Pass: the skill requires stating the regulatory framework,
+  jurisdiction, and effective date it is applying to the specific case,
+  and requires the user or a fresh check to confirm currency before the
+  result is relied upon.
+- N/A when: the skill's procedure applies no jurisdiction- or time-bound
+  legal, tax, or regulatory rule (a skill with no compliance content at
+  all). It applies whenever the skill's domain is legal, tax, or
+  regulatory-compliance procedure. If unsure, treat the dimension as
+  applying: N/A requires affirmatively confirming no such rule is
+  applied.
+
+## 21. Auditor-reconstructable evidence trail
+
+Checks whether a compliance-relevant skill's output preserves enough of
+a record for a human auditor or regulator, not just a technical
+reviewer, to reconstruct the basis for the result later -- distinct from
+dimension 7 (evidence/decision-readiness), which asks only whether a
+review verdict can be verified by inspection in the moment, not whether
+a compliance conclusion survives later audit.
+
+- Fail: the skill's output states a compliance conclusion (approved,
+  compliant, filed correctly) without recording which source or rule
+  version was checked, against which specific input values, and when --
+  a later audit has nothing but the bare conclusion to go on, and cannot
+  tell whether the result would still hold today.
+- Pass: the output records what was checked, against which
+  source/version, on which input values, and when, in a form durable
+  enough that someone other than the original requester could
+  reconstruct why the result was reached.
+- N/A when: the skill's output carries no compliance, filing, or
+  audit-relevant conclusion (a pure code-editing or exploratory-research
+  skill). It applies whenever the skill's output is meant to stand as
+  evidence of having followed a required legal, regulatory, or
+  accounting procedure. If unsure, treat the dimension as applying: N/A
+  requires affirmatively confirming the output carries no such
+  conclusion.
+
+## 22. Licensed-professional deference
+
+Checks whether the skill defers a legal, tax, or accounting
+determination to a qualified human even when the model's own confidence
+is high -- distinct from dimension 8 (escalation-on-uncertainty), which
+triggers only on genuine ambiguity, not on confident-but-unlicensed
+judgment.
+
+- Fail: the skill's only fully-specified branch issues a definitive
+  compliance, tax, or legal verdict directly to the requester, with no
+  step requiring a licensed professional's review before the requester
+  relies on it -- high model confidence is treated as sufficient, so a
+  wrong-but-confident answer reaches the requester as if it were a
+  professional sign-off.
+- Pass: the skill frames its output as a draft or a professional's-
+  review input, states plainly that it is not a substitute for a
+  qualified human's (CPA, tax preparer, lawyer) sign-off, and requires
+  that hand-off before the result is treated as final -- regardless of
+  how confident the model's own answer was.
+- N/A when: the skill's output carries no legal, tax, or accounting
+  determination that ordinarily requires a licensed professional
+  (general research summarization with no compliance verdict). It
+  applies whenever the skill issues or could be read as issuing such a
+  determination. If unsure, treat the dimension as applying: N/A
+  requires affirmatively confirming no such determination is issued.
