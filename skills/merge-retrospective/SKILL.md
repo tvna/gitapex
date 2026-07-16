@@ -22,11 +22,11 @@ file, point proposed gates and instruction fixes at that file (whatever
 it is called) and follow its existing conventions (posting style,
 issue/PR templates, etc.) -- this skill does not impose its own.
 
-**Prerequisite:** Step 1 and Step 4 below assume a connected GitHub MCP
-server (`mcp__github__*` tools). Where the environment lacks one, fall
-back to the repo's own approved read-only REST API wrapper for Step 1's
-history reconstruction, and to whatever write path the repo already uses
-for filing issues in Step 4.
+**Prerequisite:** Step 0, Step 1, and Step 4 below assume a connected
+GitHub MCP server (`mcp__github__*` tools). Where the environment lacks
+one, fall back to the repo's own approved read-only REST API wrapper for
+Step 0's issue search and Step 1's history reconstruction, and to
+whatever write path the repo already uses for filing issues in Step 4.
 
 ## Classification taxonomy (fixed -- never invent a fourth category)
 
@@ -53,6 +53,28 @@ which in turn outranks "external decision."
 
 ## Procedure
 
+0. **Carry-forward check.** Before enumerating this cycle's repairs,
+   check whether gates proposed by *prior* retrospective issues actually
+   got implemented, so a proposed gate cannot silently rot across cycles
+   unnoticed.
+   - **Find prior retrospective issues:** `mcp__github__search_issues`
+     for `label:retrospective state:open` -- the reliable,
+     non-text-matching anchor Step 4 below now creates. Issues filed
+     before the label existed carry no label; for those, fall back to
+     `"Merge retrospective:" in:title` (or the repo's own retrospective
+     title convention, if it has one).
+   - **For each hit, check whether its proposed gate was implemented:**
+     search for a merged PR or commit whose message cites that
+     retrospective issue's number (this repo's own "cite the issue
+     number in every commit" convention already creates the citation
+     trail; this step is the first to read it back). No such citation
+     found means the gate is still unimplemented.
+   - **Report, don't implement:** for each unimplemented gate found, add
+     a **"Carried-forward gate"** subsection to *this* cycle's new
+     retrospective issue (the one Step 4 files below) -- not a comment on
+     the old issue, which would fragment visibility. This only escalates
+     visibility across cycles; it does not implement the gate (see Stop
+     boundary).
 1. **Enumerate every repair** between PR open and merge. Use
    `mcp__github__pull_request_read` (`get_commits`, `get_reviews`,
    `get_review_comments`, `get_check_runs`) to reconstruct the history.
@@ -85,6 +107,12 @@ which in turn outranks "external decision."
      already enforces (for example, an ASCII-only body is common
      practice; check the repo's own instruction file or recent
      PR/issue history if unsure).
+   - Apply a `retrospective` label to the filed issue (creating the
+     label first via the repo's own label-management path if it does
+     not yet exist). This is additive bookkeeping only -- it does not
+     change what the issue says -- and exists so a future cycle's Step 0
+     can find this issue by label instead of relying on title-text
+     matching.
    - Content requirements below apply regardless of which shape the
      body ends up in: for every "missing deterministic gate" repair,
      propose a durable gate in the issue body -- proposing, not
@@ -116,6 +144,12 @@ which in turn outranks "external decision."
 - Do not collapse multiple repairs into one vague summary line -- each
   repair gets its own entry and its own classification, even if several
   share the same root cause.
+- Step 0's carry-forward check only *reads* prior issues and their
+  linked PRs/commits and *reports* findings as a subsection of the
+  current cycle's issue -- it never implements a carried-forward gate
+  itself, per the same propose-don't-implement posture as the rule
+  above. A gate that has rotted unimplemented across cycles becomes more
+  visible, not more done.
 
 ## Worked example
 
