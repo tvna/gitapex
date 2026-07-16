@@ -44,9 +44,11 @@ either:
 1. **Reproduce.** Attempt the issue's reported reproduction steps
    directly. Never proceed to a fix without a live reproduction.
 2. **Escalate on failed reproduction.** If reproduction fails, stop and
-   escalate explicitly (comment on the issue stating what was tried and
-   what did not reproduce) rather than guessing at a fix for an
-   unreproduced defect. This is the same "ambiguous input earns a
+   escalate explicitly rather than guessing at a fix for an unreproduced
+   defect: comment on the issue stating what was tried and what did not
+   reproduce if one exists, or open a new issue recording the same when
+   the input is a standalone CI failure with no linked issue (see
+   "Amendment" below). This is the same "ambiguous input earns a
    question, evidence earns a fix" discipline CLAUDE.md section 2
    already states as a general principle, applied concretely here.
 3. **Write a failing test first.** Once reproduced, encode the failure as
@@ -86,3 +88,29 @@ batch). No `skills/*/SKILL.md` file is authored in this pass.
   this terminology resolution executes.
 - Does not build an eval suite yet (deferred to the same future cycle as
   `SKILL.md` authoring).
+
+## Amendment (2026-07-16)
+
+`skills/issue-to-fix/SKILL.md` and `evals/issue-to-fix/` landed in PR #112
+(closes #89). An automated reviewer on that PR (chatgpt-codex-connector,
+P2) flagged a real gap: this design's Step 2 as originally written
+("comment on the issue") has no valid target when the input is a
+standalone CI failure not linked to any issue -- a case this skill's own
+trigger explicitly claims to cover ("a CI failure with no scoped fix
+yet").
+
+**Resolution (owner-approved, same session):** rather than narrowing the
+skill's scope to issue-backed reports only, Step 2 now branches:
+
+- Existing issue -> comment on it (unchanged from the original design).
+- No linked issue (e.g. a standalone/scheduled CI failure) -> open a new
+  issue recording the same evidence (what was tried, what did not
+  reproduce), per this repository's own "open an issue before any
+  branch, commit, or PR" convention (CLAUDE.md section 3) -- rather than
+  inventing a separate, repo-specific escalation channel for CI-only
+  input.
+
+Either branch still stops at Step 2 without guessing at a fix; only the
+escalation target differs by input shape. The Step 2 text above and
+`skills/issue-to-fix/SKILL.md`'s own Step 2 and worked-example sections
+were both updated to match.
