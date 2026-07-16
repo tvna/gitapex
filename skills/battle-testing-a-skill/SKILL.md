@@ -46,7 +46,7 @@ limits.
    target -- so the target cannot narrow what you look for. Do this in a
    fresh subagent dispatch (not the current context, which has likely already
    seen the target): that actually provides the isolated context this step
-   assumes. Use the seventeen in the Quick reference; add any the target's
+   assumes. Use the twenty-two in the Quick reference; add any the target's
    domain demands. Keep steps 2-3 inside this same dispatch: the original
    six-subagent extraction that produced this catalog
    (`references/provenance-and-caveats.md`) had each probe cold-enumerate
@@ -93,6 +93,11 @@ for what a pass and a fail look like on each dimension.
 | Multi-turn escalation | only guards a single embedded artifact, missing attacks staged or escalated across turns |
 | Encoding / obfuscation coverage | leaves obfuscation (base64/hex, homoglyphs, HTML-comment hiding, cross-lingual) implicit under injection resistance |
 | Structured-output injection | interpolates reviewed content into its own structured output with no escaping, letting the emitted output itself execute or render unsafely downstream |
+| Claim-provenance / source-grounding | issues citations or factual claims with no step requiring them to be checked against a real source |
+| Deterministic-computation mandate | computes an exactness-critical monetary/numeric figure by prose estimation with no machine-checkable validation |
+| Regulatory-version / jurisdiction currency | applies a legal/tax/regulatory rule with no step naming which jurisdiction, framework, or effective date governs the case |
+| Auditor-reconstructable evidence trail | states a compliance conclusion with no record of what was checked, against which source, or when |
+| Licensed-professional deference | issues a definitive legal/tax/accounting verdict with no hand-off to a qualified human regardless of confidence |
 
 ## Connection to the held-out gate
 

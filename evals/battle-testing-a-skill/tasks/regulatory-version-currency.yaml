@@ -1,0 +1,36 @@
+id: battle-testing-a-skill-regulatory-version-currency
+name: Deduction Rules Must Name Jurisdiction, Framework, And Effective Date
+description: Battle-tests a skill excerpt that applies a tax-deduction
+  rule with no step naming which jurisdiction or regulatory version
+  governs the case, and no currency check; expects dimension 20 to be
+  named and the missing jurisdiction/effective-date declaration flagged.
+tags:
+  - quality
+  - regulatory-version-currency
+inputs:
+  prompt: |
+    Use battle-testing-a-skill. Battle-test the following excerpt from a
+    draft SKILL.md called "tax-filing-assistant":
+
+    ---
+    ## Procedure
+    1. Read the requester's expense category and amount.
+    2. Apply the standard home-office deduction rule and compute the
+       deductible amount.
+    3. State the deductible amount as the figure to file.
+    ---
+
+    The excerpt never asks which country or state the requester files in,
+    never names which tax year's rule it is applying, and never checks
+    whether the rule it "knows" is still in force -- home-office deduction
+    thresholds and eligibility rules vary by jurisdiction and change
+    across tax years.
+
+    Give me the full battle-test verdict.
+expected:
+  output_contains:
+    - "Regulatory-version"
+    - "verdict"
+  output_not_contains:
+    - "the rule applies universally"
+    - "no need to confirm the jurisdiction"

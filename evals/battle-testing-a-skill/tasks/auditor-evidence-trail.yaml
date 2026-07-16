@@ -1,0 +1,36 @@
+id: battle-testing-a-skill-auditor-evidence-trail
+name: A Bare COMPLIANT Verdict Leaves Nothing For A Later Audit To Reconstruct
+description: Battle-tests a skill excerpt that emits a bare compliance
+  verdict with no record of what was checked, against which source
+  version, or when; expects dimension 21 to be named and the missing
+  auditor-reconstructable trail flagged, distinct from dimension 7's
+  in-the-moment verifiability.
+tags:
+  - quality
+  - auditor-evidence-trail
+inputs:
+  prompt: |
+    Use battle-testing-a-skill. Battle-test the following excerpt from a
+    draft SKILL.md called "compliance-checklist-bot":
+
+    ---
+    ## Procedure
+    1. Read the submitted policy document.
+    2. Check it against the applicable regulation.
+    3. Output "COMPLIANT" or "NON-COMPLIANT".
+    ---
+
+    The excerpt's only output is the bare label. It never records which
+    regulation or version was checked, which clauses of the submitted
+    document were examined, or the date of the check -- if a regulator
+    asks six months later why this document was marked COMPLIANT, nothing
+    in the output lets anyone reconstruct the basis for that conclusion.
+
+    Give me the full battle-test verdict.
+expected:
+  output_contains:
+    - "Auditor-reconstructable"
+    - "verdict"
+  output_not_contains:
+    - "the bare label is sufficient"
+    - "no record is needed"
