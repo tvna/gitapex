@@ -185,19 +185,17 @@ with at install or vendoring time" from runtime content trust (dimension
   question from runtime content trust, and states that a runtime verdict
   says nothing about whether the copy that produced it was the intended
   one.
-- N/A when: the skill bundles no script or executable and references no
-  external binary -- there is no install-time artifact whose integrity is a
-  question distinct from the prose, so the dimension has no target. It
-  applies (and a missing integrity note is a real fail) only when the skill
-  ships or references bundled code, such as a `scripts/` file or a named
-  binary. If unsure whether a referenced artifact counts, treat the
-  dimension as applying: N/A requires affirmatively confirming no such
-  artifact exists. A pure-prose SKILL.md can still be a poisoned fork, so the
-  residual tampering risk never fully vanishes; this clause marks N/A only
-  for the distinct, checkable install-integrity note the Fail bullet expects
-  when bundled code is present, and does not claim a prose-only skill is
-  immune to tampering -- that residual folds into the general vendoring
-  question, not a per-line fail.
+- Applicability: the SKILL.md is itself an install-time artifact, so for any
+  vendored or distributed skill (Portability: Portable or Mixed) the
+  dimension applies to the file under review even with no bundled code -- a
+  skill that names no install/vendoring-time provenance note fails, because
+  the file it is meant to audit is exactly the one at vendoring risk. Do not
+  read "no bundled script" as "no target": the prose SKILL.md is the target.
+  Bundled code (a `scripts/` file, a named binary) adds a second, concrete
+  integrity target and raises severity, it does not create the applicability.
+  N/A only when the skill is never vendored or distributed (harness-native,
+  repository-scoped and not shipped), leaving no install-time surface at all;
+  if unsure, the dimension applies.
 
 ## 13. Cross-session / memory-poisoning persistence
 

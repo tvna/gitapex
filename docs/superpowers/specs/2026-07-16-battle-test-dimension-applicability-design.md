@@ -116,3 +116,15 @@ references. Type/parse checks alone do not count.
   indirect signal, which the repo standards forbid as a stand-in for proof.
 - No SKILL.md Quick-reference table change.
 - No change to docs/skill-eval-status.md or docs/skill-provenance.md.
+
+## Review-round correction
+
+Independent review (an automated PR reviewer, corroborated by a second
+reviewer) flagged that the dim 12 discriminator ("N/A when the skill ships
+no bundled script") exempted the SKILL.md itself, which is the install-time
+artifact the dimension exists to audit. The dim 12 clause was revised to
+keep the SKILL.md in scope for any vendored or distributed skill; bundled
+code now only raises severity, and N/A is reserved for a skill that is never
+distributed. This moves dim 12 from the "role-dependent" framing above
+toward the role-independent set. The dim 17 and dim 11 discriminators are
+unchanged.

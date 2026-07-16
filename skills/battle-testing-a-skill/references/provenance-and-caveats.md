@@ -136,24 +136,36 @@ Per-dimension verdict distribution across the twenty trials:
 | 15 multi-turn | 20 fail | robust, role-independent |
 | 14 regression-corpus | 19 fail (1 pass) | robust, role-independent |
 | 16 encoding | 19 fail (1 n/a) | robust, role-independent |
-| 12 supply-chain | 14 fail / 6 n/a | role-dependent by script presence |
+| 12 supply-chain | 14 fail / 6 n/a | split by script presence as observed, but see the review-round correction below |
 | 17 structured-output | 13 fail / 1 pass / 6 n/a | role-dependent by artifact-writing |
 | 11 cross-skill | 12 fail / 8 n/a | unstable; least reliable dimension |
 
-Discriminators (now recorded as N/A clauses in adversarial-dimensions.md):
-dimension 12 tracks whether the skill ships a bundled script or references a
-binary (script-bearing skills failed 5/5; script-less ones leaned n/a);
-dimension 17 tracks whether the skill writes an artifact by interpolating
-reviewed content (pure-prose skills leaned n/a 4/5); dimension 11 needs a
-named downstream consumer to be a reliable failure. Dimensions 13-16 failed
-even on the lowest-risk skills, so they are marked role-independent rather
-than given an N/A clause.
+Discriminators (recorded as applicability clauses in
+adversarial-dimensions.md): dimension 17 tracks whether the skill writes an
+artifact by interpolating reviewed content (pure-prose skills leaned n/a
+4/5); dimension 11 needs a named downstream consumer to be a reliable
+failure, and applies under uncertainty. Dimensions 13-16 failed even on the
+lowest-risk skills, so they are marked role-independent rather than given an
+N/A clause. Dimension 12's observed split by script presence (script-bearing
+5/5 fail; script-less leaning n/a) was corrected in review -- see the note
+below.
 
 Limits, disclosed rather than assumed: single model tier (sonnet), four
 skills for the five-times resample, one review harness (headless
 `claude -p`). This corroborates the direction of the discriminators, not a
 model-independent invariant, and is not a run of the committed eval fixtures
 (those remain unexecuted -- see the Unmeasured bullet above).
+
+Review-round correction (dimension 12): an independent review flagged that
+the script-presence split above reflected reviewer leniency, not correct
+role fit. The SKILL.md is itself an install/vendoring-time artifact, so
+dimension 12 stays in scope for any vendored or distributed skill even with
+no bundled code -- suppressing it for a prose-only skill would exempt the
+very file the audit is meant to check. Bundled code raises severity, it does
+not create applicability. The adversarial-dimensions.md clause was revised
+accordingly, which puts dimension 12 closer to the role-independent set
+(13-16) than to the role-dependent pair (11, 17); N/A is reserved for a
+skill that is never vendored or distributed.
 
 ## Caveats -- part of the knowledge, not footnotes
 
