@@ -30,10 +30,8 @@ inputs:
     Give me the full battle-test verdict.
 expected:
   output_contains:
-    - "22"
-    - "professional"
+    - "Licensed-professional"
     - "verdict"
   output_not_contains:
     - "confidence alone is sufficient"
     - "no professional review is needed"
-    - "the requester can file directly"

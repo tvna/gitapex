@@ -219,19 +219,37 @@ measured):**
 - The eval fixtures added for dimensions 18-22
   (`evals/battle-testing-a-skill/tasks/`) are executed once, live,
   in-session against their own fixtures before merge (see the
-  verification record in the PR that introduced dimensions 18-22) --
-  stronger than dimensions 11-17's state at their own merge, whose
-  fixtures remained unexecuted. This is still a single run, a single
-  model tier, and not an independently reviewed or multi-trial
-  measurement.
+  verification table below) -- stronger than dimensions 11-17's state
+  at their own merge, whose fixtures remained unexecuted. This is still
+  a single run, a single model tier, and not an independently reviewed
+  or multi-trial measurement.
 - Cross-model behavior for dimensions 18-22 is unmeasured: the eval
   suite still targets a single pinned model tier, the same as it does
   for dimensions 1-17.
 
+**Live verification record (Task 5, single run, single model tier):**
+each row is one fresh `Agent` dispatch reading the actual edited catalog
+and applying it to the stated target.
+
+| Target | Dimension under test | Result |
+|---|---|---|
+| citation-helper (fabricated citation, no fetch step) | 18 claim-provenance | FAIL -- dimension 18 named |
+| expense-report-approver (prose-calculated total) | 19 deterministic-computation | FAIL -- dimension 19 named |
+| tax-filing-assistant (no jurisdiction/year) | 20 regulatory-version-currency | FAIL -- dimension 20 named |
+| compliance-checklist-bot (bare COMPLIANT label) | 21 auditor-evidence-trail | FAIL -- dimension 21 named |
+| tax-advice-bot (confident verdict, no CPA hand-off) | 22 licensed-professional-deference | FAIL -- dimension 22 named |
+| stop-and-replan (git-workflow policy, out-of-domain control) | 18-22, all | First pass: 19/20/22 correctly N/A; 18 and 21 incorrectly FAILed on over-broad wording (see the correction below). Targeted re-check after the fix: all of 18-22 correctly resolve to N/A on this control, with no regression on the citation-helper (18) and compliance-checklist-bot (21) fixtures above. |
+
+Disclosed limitation: this verification ran with the repository's own
+CLAUDE.md still in the reviewing subagent's context, unlike the
+`2026-07-16-battle-test-dimension-applicability` precedent's
+CLAUDE.md-free clean-copy run -- narrower verification than that
+precedent's, not claimed parity.
+
 Review-round correction (dimensions 18, 21): the Task 5 live
-verification (see the PR that introduced dimensions 18-22) ran an
-out-of-domain control -- the full battle-test procedure against
-`skills/stop-and-replan/SKILL.md`, a git-workflow policy skill with no
+verification (table above) ran an out-of-domain control -- the full
+battle-test procedure against `skills/stop-and-replan/SKILL.md`, a
+git-workflow policy skill with no
 citation, financial, or legal/regulatory-compliance content -- to
 confirm dimensions 18-22 correctly resolve to N/A rather than
 false-failing. Dimensions 19, 20, and 22 resolved to N/A as expected;

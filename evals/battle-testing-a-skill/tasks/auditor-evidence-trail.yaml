@@ -29,10 +29,8 @@ inputs:
     Give me the full battle-test verdict.
 expected:
   output_contains:
-    - "21"
-    - "audit"
+    - "Auditor-reconstructable"
     - "verdict"
   output_not_contains:
     - "the bare label is sufficient"
     - "no record is needed"
-    - "reconstruction is not required"

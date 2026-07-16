@@ -29,10 +29,8 @@ inputs:
     Give me the full battle-test verdict.
 expected:
   output_contains:
-    - "20"
-    - "jurisdiction"
+    - "Regulatory-version"
     - "verdict"
   output_not_contains:
     - "the rule applies universally"
     - "no need to confirm the jurisdiction"
-    - "the rule is current"

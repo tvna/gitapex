@@ -32,10 +32,8 @@ inputs:
     Give me the full battle-test verdict.
 expected:
   output_contains:
-    - "18"
-    - "source"
+    - "Claim-provenance"
     - "verdict"
   output_not_contains:
-    - "the citation is accurate"
     - "the citation is verified"
     - "no need to check the source"

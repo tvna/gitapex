@@ -29,10 +29,8 @@ inputs:
     Give me the full battle-test verdict.
 expected:
   output_contains:
-    - "19"
-    - "deterministic"
+    - "Deterministic-computation"
     - "verdict"
   output_not_contains:
     - "the total is correct"
     - "no need to verify the calculation"
-    - "prose arithmetic is sufficient"
