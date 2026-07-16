@@ -11,7 +11,8 @@ reachable when the skill is deployed on its own.
 1. How the knowledge was extracted
 2. Result
 3. Comparative review: dimensions 11-17
-4. Caveats -- part of the knowledge, not footnotes
+4. Variance re-measurement of dimensions 11-17 (applicability)
+5. Caveats -- part of the knowledge, not footnotes
 
 ## How the knowledge was extracted
 
@@ -98,8 +99,10 @@ as background rationale, not an established or peer-confirmed taxonomy.
 - The eval fixtures added for dimensions 11-17
   (`evals/battle-testing-a-skill/tasks/`) have been structurally validated
   (they parse, and this skill's own shape checker passes) but have not
-  been executed against a live model -- no pass/fail result exists for
-  them yet.
+  been executed against a live model -- no pass/fail result exists for those
+  fixtures yet. (The dimensions themselves were exercised live on real
+  target skills in the "Variance re-measurement" section below; that
+  measured dimension applicability on a single model tier, not the fixtures.)
 - Cross-model behavior for dimensions 11-17 is unmeasured: the eval suite
   still targets a single pinned model tier, the same as it did for
   dimensions 1-10 (see `evals/battle-testing-a-skill/eval.yaml`), so no
@@ -109,6 +112,60 @@ Do not cite this section as evidence that 11-17 have been behaviorally
 tested against a target skill -- it records only where the idea for each
 new dimension came from, what was and was not confirmed by reading the
 two side-projects, and what remains unmeasured.
+
+## Variance re-measurement of dimensions 11-17 (applicability)
+
+A later live measurement addressed a question the comparative review left
+open: for which skills does each of dimensions 11-17 actually apply? The
+battle-test procedure itself was the instrument -- reviewer `claude -p`
+(sonnet, single tier), with the project's own CLAUDE.md removed from the
+reviewer context so each target was judged on its SKILL.md alone, read-only.
+
+- Full pass: the seventeen dimensions applied once to all twelve skills in
+  this repository.
+- Variance re-measurement: the same instrument re-run five times each on
+  four low-blast-radius skills (explaining-the-work, gated-skill-edits,
+  seeding-issue-pr-templates, stop-and-replan) -- twenty trials -- to
+  separate a robust cold judgment from run-to-run reviewer variance.
+
+Per-dimension verdict distribution across the twenty trials:
+
+| Dimension | Of 20 | Reading |
+|---|---|---|
+| 13 memory-poisoning | 20 fail | robust, role-independent |
+| 15 multi-turn | 20 fail | robust, role-independent |
+| 14 regression-corpus | 19 fail (1 pass) | robust, role-independent |
+| 16 encoding | 19 fail (1 n/a) | robust, role-independent |
+| 12 supply-chain | 14 fail / 6 n/a | split by script presence as observed, but see the review-round correction below |
+| 17 structured-output | 13 fail / 1 pass / 6 n/a | role-dependent by artifact-writing |
+| 11 cross-skill | 12 fail / 8 n/a | unstable; least reliable dimension |
+
+Discriminators (recorded as applicability clauses in
+adversarial-dimensions.md): dimension 17 tracks whether the skill writes an
+artifact by interpolating reviewed content (pure-prose skills leaned n/a
+4/5); dimension 11 needs a named downstream consumer to be a reliable
+failure, and applies under uncertainty. Dimensions 13-16 failed even on the
+lowest-risk skills, so they are marked role-independent rather than given an
+N/A clause. Dimension 12's observed split by script presence (script-bearing
+5/5 fail; script-less leaning n/a) was corrected in review -- see the note
+below.
+
+Limits, disclosed rather than assumed: single model tier (sonnet), four
+skills for the five-times resample, one review harness (headless
+`claude -p`). This corroborates the direction of the discriminators, not a
+model-independent invariant, and is not a run of the committed eval fixtures
+(those remain unexecuted -- see the Unmeasured bullet above).
+
+Review-round correction (dimension 12): an independent review flagged that
+the script-presence split above reflected reviewer leniency, not correct
+role fit. The SKILL.md is itself an install/vendoring-time artifact, so
+dimension 12 stays in scope for any vendored or distributed skill even with
+no bundled code -- suppressing it for a prose-only skill would exempt the
+very file the audit is meant to check. Bundled code raises severity, it does
+not create applicability. The adversarial-dimensions.md clause was revised
+accordingly, which puts dimension 12 closer to the role-independent set
+(13-16) than to the role-dependent pair (11, 17); N/A is reserved for a
+skill that is never vendored or distributed.
 
 ## Caveats -- part of the knowledge, not footnotes
 
