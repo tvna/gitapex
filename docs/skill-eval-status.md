@@ -55,6 +55,13 @@ change that introduced it, recorded in
 `skills/evaluating-skill-quality/references/worked-example-self-review.md`,
 not by the committed suite.
 
+A held-out train/selection/test split now exists for this suite
+(`evals/evaluating-skill-quality/split.md`), covering the 9 original
+fixtures plus 2 fixtures added specifically to gate scoring-axis edits to
+dimension 8. It exists to satisfy `gated-skill-edits`' precondition gate
+before any iterative edit to `references/rubric.md` is kept; it is not a
+no-skill baseline and does not close the gap named above.
+
 ## explaining-the-work
 
 The committed eval suite (`evals/explaining-the-work/`) runs a single trial
