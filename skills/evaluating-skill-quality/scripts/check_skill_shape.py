@@ -35,9 +35,19 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+# The Claude Developer Platform Skills API enforces description <= 1024
+# chars and name <= 64 lowercase-hyphen chars (platform.claude.com/docs/
+# en/agents-and-tools/agent-skills/best-practices) -- stricter than Claude
+# Code's own frontmatter parsing, so this checker uses the platform's
+# tighter cap to stay valid on both surfaces.
 DESCRIPTION_MAX_CHARS = 1024
 NAME_MAX_CHARS = 64
+# "Keep SKILL.md body under 500 lines for optimal performance" (same doc;
+# also code.claude.com/docs/en/skills).
 BODY_MAX_LINES = 500
+# Not an Anthropic-specified number -- this repository's own convention
+# for when a reference file earns a table of contents, chosen as a round
+# threshold past which skimming a flat file gets slow.
 TOC_MIN_LINES = 100
 RESERVED_NAME_WORDS = ("anthropic", "claude")
 
