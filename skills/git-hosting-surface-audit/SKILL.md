@@ -1,16 +1,17 @@
 ---
 name: git-hosting-surface-audit
-description: Use when auditing a GitHub or GitLab repository's hosting-platform configuration surface -- branch protection, required reviews/checks, Actions/CI permissions, unpinned third-party actions, webhook inventory, deploy-key inventory, token scopes, secret-scanning status. Detects platform from git remote (with a directory-marker fallback), loads exactly one platform's checklist reference, and reports each item's real tool coverage (Covered/Partial/Gap) instead of a false all-green summary. Gap items cross-link gitapex CLI governance issue #82.
+description: Use when auditing a GitHub or GitLab repository's hosting-platform configuration surface -- branch protection, required reviews/checks, Actions/CI permissions, unpinned third-party actions, webhook inventory, deploy-key inventory, token scopes, secret-scanning status. Detects platform from git remote (with a directory-marker fallback), loads exactly one platform's checklist reference, and reports each item's real tool coverage (Covered/Partial/Gap) instead of a false all-green summary. Gap items cross-link this repository's own tracking issue for approved-but-unbuilt tooling.
 ---
 
 # Git Hosting Surface Audit
 
-**Portability: Mixed.** Procedure and the coverage-honesty rule are
-portable to any GitHub/GitLab repo. The Gap cross-link target (#82, this
-repo's gitapex CLI governance tracking issue) and the unpinned-actions
-script's borrowed pattern (`.github/scripts/scan_toolchain_pin_drift.py`)
-are this repo's own -- substitute the calling repository's actual
-governance issue and drift-scan precedent where they differ.
+**Portability: Mixed.** The procedure, the coverage-honesty rule, and
+both platform checklists are portable to any GitHub/GitLab repo. The
+handful of pointers into gitapex's own governance issue, instruction
+file, and script precedent are isolated in
+`references/gitapex-cross-links.md` -- read only when running inside
+gitapex itself; a vendored copy drops that one file and substitutes its
+own targets. Nothing else in this skill depends on it.
 
 Audits a repository's hosting-platform *configuration* surface (not its
 code) and reports what was actually checked versus what could not be
@@ -51,10 +52,11 @@ it never changes branch protection, revokes a webhook, or rotates a key.
    what is available and state precisely what it does and does not verify.
    For a **Gap** item, do not attempt a workaround (an ungoverned direct
    API call, a scraped web page, a guess) -- report it as a Gap and cross-
-   link gitapex CLI governance issue #82 (the approved read-only gh
-   wrapper that would close this gap is an unfiled candidate child issue
-   under #82, not #82 itself -- word the link that way, not as "blocked on
-   #82 landing").
+   link this repository's own tracking issue for approved-but-unbuilt
+   tooling, if it has one. When running inside gitapex itself, that
+   target and its exact wording convention are in
+   `references/gitapex-cross-links.md`; a vendored copy substitutes its
+   own target or omits the cross-link if the calling repo has none.
 4. **Report per item, never as one aggregate verdict.** Every checklist
    item's line states its own coverage level. Do not summarize with a
    single "audit passed" or "N/M checks green" headline -- with 2 of 8
@@ -67,28 +69,31 @@ it never changes branch protection, revokes a webhook, or rotates a key.
 - **Facts:** detected platform, detection method used (remote host match
   or directory-marker fallback), repo identity.
 - **Per-item results:** one line per checklist item --
-  `<item> -- <Covered|Partial|Gap> -- <what was actually run> -- <finding, or "gap: see #82">`.
+  `<item> -- <Covered|Partial|Gap> -- <what was actually run> -- <finding, or "gap: see the tracking issue">`.
 - **Gap summary:** count of Gap items out of total, each cross-linked to
-  #82.
+  this repository's tracking issue for approved-but-unbuilt tooling
+  (when running in gitapex itself, see
+  `references/gitapex-cross-links.md` for that target).
 - **Next Move:** the concrete next action (e.g. fix a specific unpinned
-  action, or file the read-only gh wrapper as a child issue under #82 to
-  close a named Gap).
+  action, or file the approved tooling that would close a named Gap as
+  its own tracked issue).
 
 ## Stop boundaries
 
 - Never report an aggregate "audit passed," "all green," or a bare score
-  with no per-item breakdown -- most items are gaps until the approved
-  read-only gh wrapper (a not-yet-filed candidate child issue under #82)
-  exists.
+  with no per-item breakdown -- most items are gaps until the tooling
+  that would close them is actually approved and built.
 - Never claim a **Gap** item as **Covered** or **Partial** because a
   workaround seems achievable in the moment; that workaround is itself the
-  kind of ungoverned shortcut gitapex CLI governance (#82) exists to
-  replace with something approved.
+  kind of ungoverned shortcut a repository's own tooling-governance
+  process exists to replace with something approved.
 - Never load both platform references in one run.
 - Never take a write action (change branch protection, revoke a webhook,
   rotate a deploy key) -- this skill only reports; those stay human
-  decisions per CLAUDE.md section 4.
+  decisions. (Running inside gitapex itself: see
+  `references/gitapex-cross-links.md` for this repo's own instruction-file
+  citation for that rule.)
 - Never write a second, divergent unpinned-actions detector -- reuse
-  `scripts/scan_unpinned_actions.py`, which reuses
-  `.github/scripts/scan_toolchain_pin_drift.py`'s walk/report/exit-code
-  shape.
+  `scripts/scan_unpinned_actions.py`. (Running inside gitapex itself: see
+  `references/gitapex-cross-links.md` for the existing drift-scan
+  precedent its shape reuses.)
