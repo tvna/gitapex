@@ -1,0 +1,17 @@
+name: issue-to-fix-eval
+description: Quality suite for the gitapex issue-to-fix skill.
+skill: issue-to-fix
+version: "0.1.0"
+config:
+  trials_per_task: 1
+  timeout_seconds: 300
+  parallel: false
+  executor: copilot-sdk
+  model: claude-sonnet-4.6
+metrics:
+  - name: issue_to_fix_quality
+    weight: 1.0
+    threshold: 0.8
+    description: Response follows reproduce -> (escalate on failure) -> failing test -> minimal fix -> verify in strict order, never fixing an unreproduced defect and never skipping the failing-test step.
+tasks:
+  - "tasks/*.yaml"
