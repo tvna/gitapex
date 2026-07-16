@@ -12,7 +12,8 @@ reachable when the skill is deployed on its own.
 2. Result
 3. Comparative review: dimensions 11-17
 4. Variance re-measurement of dimensions 11-17 (applicability)
-5. Caveats -- part of the knowledge, not footnotes
+5. Comparative gap review: dimensions 18-22 (evidence-first / regulated-procedure domains)
+6. Caveats -- part of the knowledge, not footnotes
 
 ## How the knowledge was extracted
 
@@ -167,6 +168,72 @@ accordingly, which puts dimension 12 closer to the role-independent set
 (13-16) than to the role-dependent pair (11, 17); N/A is reserved for a
 skill that is never vendored or distributed.
 
+## Comparative gap review: dimensions 18-22 (evidence-first / regulated-procedure domains)
+
+Dimensions 18-22 (see adversarial-dimensions.md) were added by a
+session-run gap analysis, not the six-subagent extraction (dimensions
+1-10) nor the obra/superpowers-vs-waza comparative review (dimensions
+11-17). The analysis was requested by the repository operator, who asked
+whether the existing apparatus -- this catalog plus
+`evaluating-skill-quality`'s rubric plus the `evals/` harness -- is
+sufficient for evaluating skills that solve evidence-first academic
+problems or legal/regulatory procedures such as corporate accounting. It
+was dispatched to a `fable`-model subagent rather than run inline.
+
+**Facts (directly checked in this repository):**
+
+- A `grep` across `skills/` and `evals/` for citation/audit/statute/
+  fiscal/GAAP/IFRS/ledger/peer-review terms returned zero domain-targeted
+  skills or eval fixtures -- no existing skill or fixture in this repo
+  already covers academic-citation or legal/accounting-compliance
+  content, so dimensions 18-22 are new coverage, not a duplicate.
+- Neither `evaluating-skill-quality/references/rubric.md` nor
+  `adversarial-dimensions.md` (dimensions 1-17) operationalizes
+  CLAUDE.md's "ground claims in primary sources" doctrine as a checkable
+  review dimension for a target skill's own output; the doctrine exists
+  only as a general agent instruction (CLAUDE.md section 2), not a
+  reviewable checklist item.
+- Rubric dimension 6 (durability) and the "Skill-step vs. bundled
+  script" section address SKILL.md prose going stale and delegating
+  deterministic work to scripts respectively, but neither requires a
+  case-specific jurisdiction/effective-date declaration or an
+  exactness-critical numeric mandate; adversarial dimensions 7 and 8
+  address in-the-moment verdict verifiability and ambiguity-triggered
+  escalation respectively, but neither requires an auditor-reconstructable
+  trail or confidence-independent deference to a licensed professional.
+
+**Speculation (this session's authored judgment, not independently
+measured):**
+
+- The specific Fail/Pass wording and N/A discriminators for dimensions
+  18-22 are drafted from the gap analysis's findings, not measured
+  against a live fixture the way dimensions 1-10 were, and not
+  cross-checked against a second project's own catalog the way
+  dimensions 11-17 were partly corroborated (or refuted) against
+  obra/superpowers and waza. Treat the dimension boundaries themselves
+  (e.g., where dimension 20 ends and dimension 21 begins) as this
+  session's design choice, open to revision on further use.
+
+**Unmeasured, disclosed here rather than silently assumed:**
+
+- The eval fixtures added for dimensions 18-22
+  (`evals/battle-testing-a-skill/tasks/`) are executed once, live,
+  in-session against their own fixtures before merge (see the
+  verification record in the PR that introduced dimensions 18-22) --
+  stronger than dimensions 11-17's state at their own merge, whose
+  fixtures remained unexecuted. This is still a single run, a single
+  model tier, and not an independently reviewed or multi-trial
+  measurement.
+- Cross-model behavior for dimensions 18-22 is unmeasured: the eval
+  suite still targets a single pinned model tier, the same as it does
+  for dimensions 1-17.
+
+Do not cite this section as evidence that dimensions 18-22 have been
+behaviorally tested against a broad set of real target skills -- it
+records where the idea for each new dimension came from, what was
+checked in this repository to confirm the gap, and what remains
+unmeasured.
+
 ## Caveats -- part of the knowledge, not footnotes
 
 1. **Claude-only convergence.** All six probes are Claude-family models --
@@ -205,4 +272,18 @@ skill that is never vendored or distributed.
    hand-written task fixtures, not a growing, versioned regression corpus
    re-run and extended as new failure modes are found. Building that
    corpus infrastructure remains future work.
+
+5. **Verifiable-fact eval scorers remain a named, disclosed gap.** The
+   gap analysis that produced dimensions 18-22 (see "Comparative gap
+   review" above) also identified a sixth concern: an eval harness
+   capable of checking whether a citation is real or a computation is
+   correct, not just matching a substring. `evals/*/eval.yaml` supports
+   only `output_contains`/`output_not_contains` assertions -- structurally
+   incapable of verifying a fact against a live source or re-running a
+   calculation. This caveat names that gap, the same way caveat 4 names
+   dimension 14's regression-corpus gap; it does not close it. Building a
+   scorer with that capability remains future work, deliberately out of
+   scope for the change that added dimensions 18-22, to avoid shipping an
+   eval mechanism whose own claims (this fact is verified, this
+   calculation is correct) it cannot back.
 
