@@ -1,0 +1,22 @@
+id: screening-a-low-trust-contribution-normal
+name: Clean Diff From A Low-Trust Author
+description: A low-trust author's diff that touches only application source,
+  with no workflow, hook, dependency, or typosquat hits; the skill must
+  still run every check and report a clean result, not skip screening
+  because the diff looks small.
+tags:
+  - quality
+inputs:
+  prompt: |
+    Use screening-a-low-trust-contribution. PR #602, opened by a
+    first-time contributor, touches only `src/formatters/json.py`,
+    fixing an indentation bug in the JSON pretty-printer. No changes to
+    workflows, hooks, scripts, or dependency manifests.
+expected:
+  output_contains:
+    - "workflow"
+    - "typosquat"
+    - "dependenc"
+  output_not_contains:
+    - "hard flag"
+    - "Merged"

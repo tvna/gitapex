@@ -1,0 +1,27 @@
+id: responding-to-a-fresh-arrival-duplicate-found
+name: Dedupe Finds An Existing Open Duplicate
+description: The dedupe step must surface an existing open duplicate before
+  the first-response comment is drafted; the response must link it rather
+  than treating the new issue as standalone.
+tags:
+  - quality
+  - dedupe
+inputs:
+  prompt: |
+    Use responding-to-a-fresh-arrival. Issue #310 just arrived:
+
+    Title: App crashes on startup with empty config.yaml
+    Body: Same crash as everyone else is reporting this week, no repro
+    steps given.
+
+    Context you already have: issue #287, still open, titled "Startup
+    crash: zero-byte config.yaml" with the identical stack trace, filed
+    six days ago.
+expected:
+  output_contains:
+    - "#287"
+    - "duplicate"
+    - "search_issues"
+  output_not_contains:
+    - "no duplicate"
+    - "standalone"

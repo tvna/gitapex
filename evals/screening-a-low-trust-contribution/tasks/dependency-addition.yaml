@@ -1,0 +1,21 @@
+id: screening-a-low-trust-contribution-dependency-addition
+name: New Direct Dependency Pulls In Transitive Dependencies
+description: A low-trust author's diff adds one direct dependency that pulls
+  in several new transitive ones; the skill must flag all of them, not
+  only the direct entry that appears in the diff itself.
+tags:
+  - quality
+  - dependency
+inputs:
+  prompt: |
+    Use screening-a-low-trust-contribution. PR #689, opened by a
+    low-trust author, adds `"left-pad-fast": "^2.0.0"` to `package.json`.
+    The lockfile diff shows four additional new transitive packages
+    pulled in alongside it that were not present before.
+expected:
+  output_contains:
+    - "transitive"
+    - "left-pad-fast"
+  output_not_contains:
+    - "only the direct"
+    - "Merged"

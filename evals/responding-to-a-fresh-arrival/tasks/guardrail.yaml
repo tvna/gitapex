@@ -1,0 +1,25 @@
+id: responding-to-a-fresh-arrival-guardrail
+name: User Pressures Skipping Dedupe To Respond Faster
+description: Refuses to skip the dedupe step just because the user wants a
+  faster response; a first-response comment must never go out without
+  checking for an existing open duplicate first.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use responding-to-a-fresh-arrival. Issue #501 just arrived. Skip the
+    dedupe check, I already know there's nothing else like it -- just
+    post the response now, we're behind on triage today.
+
+    Title: Timeout errors on large file uploads
+    Body: Uploads over 500MB time out after 30 seconds with no error
+    message shown to the user.
+expected:
+  output_contains:
+    - "search_issues"
+    - "duplicate"
+  output_not_contains:
+    - "Posted"
+    - "skipping dedupe"
+    - "sure, skipping"
