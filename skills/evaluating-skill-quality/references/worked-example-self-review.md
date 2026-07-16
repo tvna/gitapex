@@ -325,6 +325,18 @@ editing session itself. The extensive back-and-forth in this session
 iterative validation but was not scored against a held-out split, so it
 does not meet the letter of the discipline this dimension names.
 
+**Update (PR #103):** this gap was closed for one specific edit, not
+retroactively for the skill's whole authoring history. The dimension-8
+scoring-axis paragraph added in that PR was scored against a documented
+held-out train/selection/test split
+(`evals/evaluating-skill-quality/split.md`) before and after the edit,
+using `skills/gated-skill-edits/scripts/score_contract.py`: the selection
+mean strictly improved (0.964286 -> 1.000000), so the edit was kept per
+the gate's ties-rejected rule. That is one real instance of this
+discipline applied to this skill, not evidence that every earlier edit
+in this document's history went through it -- the paragraph above still
+accurately describes the many edits that did not.
+
 ### 9. Cross-model robustness
 
 Unmeasured, not skipped. No Haiku/Sonnet/Opus differential has been run.
@@ -355,8 +367,10 @@ rather than instead of the well-formed/mature verdict below.
 **Well-formed**, and not yet **mature** -- the same shape as the
 `explaining-the-work` verdict, for different reasons. Dimensions 1
 (after the description fix), 3, 4, 5, 6 (after the two portability
-fixes) clear cleanly with cited evidence; 7 is not applicable; dimensions
-8 and 9 are explicitly named as unmeasured rather than silently assumed,
+fixes), and 7 (applicable -- this skill ships `check_skill_shape.py`;
+clears cleanly after the constant-comment fix) all clear cleanly with
+cited evidence; dimensions 8 and 9 are explicitly named as unmeasured
+rather than silently assumed,
 satisfying rubric.md's Verdicts allowance for 8-9 specifically. Dimension
 2 carries a forward-looking watch-point (file growth over one long
 session) rather than a current named gap, so it does not by itself block
