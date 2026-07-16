@@ -33,8 +33,7 @@ double-underscore form: `Server:tool` -> `mcp__Server__tool` -- e.g.
    `Server:search_issues` for targeted criteria (a label combination, an
    activity cutoff, an author), per the GitHub MCP server's own tool
    guidance -- list_* for broad simple retrieval, search_* for targeted
-   queries. Page in batches of 5-10 items. Never shell out to a
-   command-line GitHub tool for this sweep.
+   queries. Page in batches of 5-10 items.
 3. **Extract per item.** Pull only what the four scoring axes need: its
    labels and issue type, the timestamp of its last human activity (a
    comment, commit, or review -- not its creation time), any linked or
@@ -44,16 +43,18 @@ double-underscore form: `Server:tool` -> `mcp__Server__tool` -- e.g.
 4. **Score, per axis.** Apply the four axes in
    [references/scoring-rubric.md](references/scoring-rubric.md) --
    Severity, Staleness, Blockage, Actionability -- to every item
-   independently. Record the reasoning behind each axis's verdict, not
-   only a final number; a blended score with no visible per-axis
-   breakdown hides exactly the judgment call the operator needs to see.
-5. **Rank and output** as the table contract below, using
+   independently. Record the reasoning behind each axis's verdict
+   alongside its label.
+5. **Rank and output** as the table contract below, applying
    [references/scoring-rubric.md](references/scoring-rubric.md)'s
-   ordering rule to break ties between items -- never a hand-waved order.
+   ordering rule to break ties between items. Before presenting the
+   table, re-check the assembled order against that rule directly -- its
+   four levels are exact enough to verify mechanically -- rather than
+   trusting a first-pass sort; a multi-key tie-break across many items is
+   exactly where a first pass tends to drift.
 6. **State any cap.** If pagination stops before the full backlog is
    swept (a rate limit, an operator-given item cap), say so explicitly in
-   the output. A partial sweep presented as complete is a worse answer
-   than a smaller, honestly labeled one.
+   the output.
 
 ## Output
 
@@ -63,6 +64,14 @@ paragraph to read through):
 
 | Rank | Item | Severity | Staleness | Blockage | Actionability | Recommended next step |
 |---|---|---|---|---|---|---|
+
+Worked example row, from the scoring-rubric.md worked examples: an issue
+scored Defect / Stale (no activity in 95 days) / Unblocked / Ready
+outranks a similarly-scored but Fresh item per the ordering rule's
+tie-break (Staleness only breaks ties after Blockage and Severity/
+Actionability already tie):
+
+| 1 | #101 "Fix crash on empty input" | Defect | Stale (95d) | Unblocked | Ready | Start now -- reproduction and acceptance criteria already present. |
 
 Followed by:
 
@@ -86,13 +95,12 @@ recommends; it never invokes or hands off execution itself.
   them) gets a table plus an explicit statement that doing so is outside
   this skill's read-only scope, not silent compliance.
 - Never shell out to a command-line GitHub tool (e.g. `gh`) for the
-  sweep -- `Server:list_issues`/`Server:search_issues` only.
-- Never silently truncate the swept set. A cap from rate limits or an
-  operator-given item count is stated in the output, not hidden behind an
-  apparently-complete table.
-- Never collapse the four scoring axes into a single blended number with
-  no visible per-axis reasoning -- the operator needs to see why an item
-  ranked where it did, not just where it ranked.
+  sweep -- `Server:list_issues`/`Server:search_issues` only (Procedure
+  step 2).
+- Never present a partial sweep as complete, or a first-pass sort as
+  final, without the explicit checks Procedure steps 5-6 already call
+  for -- a smaller, honestly labeled, order-verified table beats a
+  larger or better-looking one that skipped either check.
 - Never fabricate a scoring signal. A missing last-activity timestamp,
   unclear blocking reference, or absent scope signal is stated as missing
   in Assumptions, never silently inferred so the table looks complete.
@@ -111,3 +119,11 @@ across four qualitative axes applied to free-text issue/PR content, not a
 deterministic rule a script could apply consistently -- revisit only if a
 future review finds scoring drift across repeated runs on the same
 backlog.
+
+The ordering rule itself (scoring-rubric.md's tie-break, applied once
+axis verdicts are assigned) is separately deterministic and a plausible
+future bundled-script candidate on a large backlog. Left unscripted for
+now -- Procedure step 5's explicit re-check covers it at the sweep sizes
+this skill is used at today -- but this is not the same "unscriptable
+judgment call" rationale as the axis-scoring decision above; revisit if a
+review finds the manual re-check itself drifting on a large sweep.
