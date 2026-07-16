@@ -85,7 +85,11 @@ cross-model behavior is currently unmeasured.
 The committed eval suite (`evals/merge-retrospective/`) has no committed
 no-skill baseline run for the three core scenarios, so it currently
 measures compliance, not gap-closure. Only `claude-sonnet-4.6` has been
-evaluated; cross-model behavior is currently unmeasured.
+evaluated; cross-model behavior is currently unmeasured. The Step 0
+carry-forward check (added to `SKILL.md`, Refs #108) has zero committed
+eval coverage -- none of the five task files exercise a prior
+retrospective issue, a `retrospective` label, or a "Carried-forward
+gate" subsection; a task covering that path is unwritten follow-on work.
 
 ## outward-artifact-preflight
 

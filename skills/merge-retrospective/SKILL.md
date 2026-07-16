@@ -1,6 +1,6 @@
 ---
 name: merge-retrospective
-description: Use when a pull request has just merged, before closing the turn -- enumerates every repair between PR open and merge, classifies each as a missing deterministic gate, an unclear agent instruction, or an external/human decision that cannot be automated, and files a retrospective issue proposing durable gates for the first category.
+description: Use when a pull request has just merged, before closing the turn -- checks whether gates proposed by prior retrospective issues were ever implemented, enumerates every repair between PR open and merge, classifies each as a missing deterministic gate, an unclear agent instruction, or an external/human decision that cannot be automated, and files a retrospective issue proposing durable gates plus any still-unimplemented carried-forward gates.
 ---
 
 # Merge Retrospective
@@ -22,11 +22,11 @@ file, point proposed gates and instruction fixes at that file (whatever
 it is called) and follow its existing conventions (posting style,
 issue/PR templates, etc.) -- this skill does not impose its own.
 
-**Prerequisite:** Step 1 and Step 4 below assume a connected GitHub MCP
-server (`mcp__github__*` tools). Where the environment lacks one, fall
-back to the repo's own approved read-only REST API wrapper for Step 1's
-history reconstruction, and to whatever write path the repo already uses
-for filing issues in Step 4.
+**Prerequisite:** Step 0, Step 1, and Step 4 below assume a connected
+GitHub MCP server (`mcp__github__*` tools). Where the environment lacks
+one, fall back to the repo's own approved read-only REST API wrapper for
+Step 0's issue search and Step 1's history reconstruction, and to
+whatever write path the repo already uses for filing issues in Step 4.
 
 ## Classification taxonomy (fixed -- never invent a fourth category)
 
@@ -53,6 +53,35 @@ which in turn outranks "external decision."
 
 ## Procedure
 
+0. **Carry-forward check.** Before enumerating this cycle's repairs,
+   check whether gates proposed by *prior* retrospective issues actually
+   got implemented, so a proposed gate cannot silently rot across cycles
+   unnoticed.
+   - **Find prior retrospective issues:** `mcp__github__search_issues`
+     for `label:retrospective` -- deliberately unfiltered by state.
+     Closing an issue is not proof its proposed gate was implemented
+     (a retrospective can be closed as stale, deduplicated, or superseded
+     while its gate is still unbuilt), so an open-only search would
+     silently drop exactly the issues this check exists to catch. This
+     is the reliable, non-text-matching anchor Step 4 below now creates.
+     Issues filed before the label existed carry no label; for those,
+     fall back to `"Merge retrospective:" in:title` (or the repo's own
+     retrospective title convention, if it has one), also unfiltered by
+     state.
+   - **For each hit, check whether its proposed gate was implemented:**
+     `mcp__github__search_commits` (or `search_issues` scoped to merged
+     PRs) for a merged PR or commit whose message cites that
+     retrospective issue's number -- any of `Refs #N`, `Closes #N`,
+     `Fixes #N`, or a bare `#N` counts (this repo's own "cite the issue
+     number in every commit" convention already creates the citation
+     trail; this step is the first to read it back). No such citation
+     found means the gate is still unimplemented.
+   - **Report, don't implement:** for each unimplemented gate found, hand
+     it to Step 4 below as a **"Carried-forward gate"** entry, kept in
+     its own subsection separate from this cycle's own Repairs (do not
+     merge the two lists -- a carried-forward gate was not a repair in
+     *this* cycle). Never post it as a comment on the old issue, which
+     would fragment visibility instead of concentrating it.
 1. **Enumerate every repair** between PR open and merge. Use
    `mcp__github__pull_request_read` (`get_commits`, `get_reviews`,
    `get_review_comments`, `get_check_runs`) to reconstruct the history.
@@ -85,6 +114,12 @@ which in turn outranks "external decision."
      already enforces (for example, an ASCII-only body is common
      practice; check the repo's own instruction file or recent
      PR/issue history if unsure).
+   - Apply a `retrospective` label to the filed issue (creating the
+     label first via the repo's own label-management path if it does
+     not yet exist). This is additive bookkeeping only -- it does not
+     change what the issue says -- and exists so a future cycle's Step 0
+     can find this issue by label instead of relying on title-text
+     matching.
    - Content requirements below apply regardless of which shape the
      body ends up in: for every "missing deterministic gate" repair,
      propose a durable gate in the issue body -- proposing, not
@@ -93,7 +128,10 @@ which in turn outranks "external decision."
      "external/human decision" repairs, record the classification and
      a one-line rationale; noting what instruction would have helped
      is useful context but not a required deliverable the way the gate
-     proposal is.
+     proposal is. If Step 0 found any unimplemented prior gates, include
+     them here as their own **"Carried-forward gate"** subsection,
+     distinct from this cycle's Repairs section -- omit the subsection
+     entirely when Step 0 found nothing to carry forward.
 5. **Cross-link**: reference the merged PR number in the retrospective
    issue body (e.g. "Refs #<merged PR number>").
 6. **Verify the filed issue.** After `issue_write` returns, confirm the
@@ -116,6 +154,8 @@ which in turn outranks "external decision."
 - Do not collapse multiple repairs into one vague summary line -- each
   repair gets its own entry and its own classification, even if several
   share the same root cause.
+- The rule above binds Step 0 too: a carried-forward gate gets reported,
+  never implemented, in the cycle that surfaces it.
 
 ## Worked example
 
@@ -166,6 +206,15 @@ Two repairs occurred between PR open and merge.
    added to the repo's own instruction file, if it has one, so future
    agents learn it up front instead of from review -- not required, just
    useful context.)
+
+## Carried-forward gate
+
+Step 0 found that issue #31 ("Merge retrospective: PR #29") proposed a
+pre-commit hook enforcing conventional-commit message format, but no
+merged PR or commit citing #31 exists yet -- the gate is still
+unimplemented one cycle later. Escalating visibility here rather than
+letting it rot silently; implementing it remains separate follow-on work,
+same as any gate proposed in this cycle's own Repairs section above.
 
 ## Notes
 
