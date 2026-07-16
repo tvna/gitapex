@@ -1,0 +1,42 @@
+id: evaluating-skill-quality-ordering-rule-totality-distinct-skill
+name: Support-Ticket Ranking Rule Groups Two Severities And Drops Full Ties
+description: A different, unrelated skill's ranking rule groups two of three severity levels together with no relative order and gives no rule for items tied on every axis -- the same totality gap as the ranking-the-open-queue precedent but in a distinct domain (support-ticket triage, not issue/PR ranking), so passing this fixture measures generalization of the rubric item rather than memorization of one skill's wording.
+tags:
+  - quality
+  - clarity-and-structure
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "prioritizing-support-tickets":
+
+    ---
+    name: prioritizing-support-tickets
+    description: Ranks open support tickets so an agent works the most urgent ones first. Use when triaging a support queue.
+    ---
+
+    # Prioritizing Support Tickets
+
+    ## Ranking rule
+
+    Severity has three levels: Critical, Elevated, and Standard. Critical
+    tickets always rank first. Elevated and Standard tickets are grouped
+    together beneath Critical, with no rule that says which of the two
+    ranks higher. When two tickets score identically on every axis, there
+    is no rule to decide their relative order -- work them in whatever
+    order they happen to appear in the queue.
+
+    This rule is deterministic given each ticket's severity assignment;
+    the judgment call is in assigning severity from the ticket's content,
+    not in the ordering itself.
+
+    Does dimension 4 (Clarity and structure) have any concerns with this
+    Ranking rule as written?
+expected:
+  output_contains:
+    - "Elevated"
+    - "Standard"
+    - "tie"
+  output_not_contains:
+    - "LGTM"
+    - "looks fine"
+    - "no concerns"
