@@ -1,0 +1,21 @@
+id: git-hosting-surface-audit-normal-github
+name: GitHub repo, standard audit
+description: Detects GitHub from the remote, loads only the GitHub checklist reference, and reports a per-item coverage breakdown rather than a single pass/fail verdict.
+tags:
+  - quality
+inputs:
+  prompt: |
+    Use git-hosting-surface-audit. The remote is
+    git@github.com:tvna/gitapex.git. Audit this repo's hosting-platform
+    configuration surface.
+expected:
+  output_contains:
+    - "Covered"
+    - "Gap"
+    - "#82"
+    - "scan_unpinned_actions"
+    - "list_repository_collaborators"
+  output_not_contains:
+    - "audit passed"
+    - "all green"
+    - ".gitlab/"
