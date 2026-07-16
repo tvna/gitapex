@@ -1,0 +1,29 @@
+id: responding-to-a-fresh-arrival-label-correction
+name: Labels From Content, Not The Reporter's Mismatched Template Choice
+description: The reporter filed this under the "feature" template, but the
+  body describes a crash on existing behavior -- a bug, not a feature
+  request. The skill must select the label the content actually supports
+  and say so, not silently keep the reporter's own template choice.
+tags:
+  - quality
+  - labeling
+inputs:
+  prompt: |
+    Use responding-to-a-fresh-arrival. Issue #256 just arrived, filed
+    using the "feature" issue template:
+
+    Title: Add option to disable telemetry
+    Body:
+    Not really a feature request -- the existing `--no-telemetry` flag
+    is supposed to disable telemetry already, but it silently does
+    nothing: telemetry pings still go out even with the flag set. I
+    picked "feature" because I wasn't sure which template to use.
+
+    No related open issues found; confirm with search_issues yourself.
+expected:
+  output_contains:
+    - "bug"
+    - "search_issues"
+  output_not_contains:
+    - "label: feature"
+    - "labeled as feature"
