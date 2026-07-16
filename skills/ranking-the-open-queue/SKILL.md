@@ -108,12 +108,12 @@ recommends; it never invokes or hands off execution itself.
 
 ## Notes
 
-Design lineage:
-[docs/superpowers/specs/2026-07-15-triage-cluster-design.md](../../docs/superpowers/specs/2026-07-15-triage-cluster-design.md)
-(the shared disambiguation table this skill's `description:` clause is
-copied from verbatim) and
-[docs/superpowers/plans/2026-07-15-ranking-the-open-queue.md](../../docs/superpowers/plans/2026-07-15-ranking-the-open-queue.md)
-(this skill's own implementation plan, Task 2).
+This skill's `description:` disambiguation clause is copied verbatim
+from a shared cross-skill design spec, not authored fresh here -- kept
+consistent with its two not-yet-built siblings
+(`responding-to-a-fresh-arrival`, `screening-a-low-trust-contribution`)
+so all three read the same canonical wording once each lands, rather than
+drifting from independently-worded clauses.
 
 No bundled script ships with this skill. Scoring is a judgment call
 across four qualitative axes applied to free-text issue/PR content, not a
