@@ -40,6 +40,22 @@ FULL_SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 # Local actions ("./path/to/action") and Docker actions ("docker://image:tag")
 # are not third-party version references -- excluded, not flagged.
 NON_THIRD_PARTY_PREFIXES = ("./", "docker://")
+QUOTE_CHARS = ("'", '"')
+
+
+def _strip_matching_quotes(action: str, ref: str) -> tuple[str, str]:
+    """Strip a quote pair YAML allows around the whole `uses:` scalar.
+
+    `uses: "actions/checkout@<sha>"` is valid YAML -- USES_RE's \\S+ groups
+    still capture the quote characters (a leading '"' on action, a
+    trailing '"' on ref), which would fail the 40-char-SHA check on a
+    correctly pinned line and report a false unpinned finding. Only strip
+    when the leading and trailing quote characters match, so an
+    unrelated literal quote is left alone rather than silently dropped.
+    """
+    if action[:1] in QUOTE_CHARS and ref[-1:] == action[0]:
+        return action[1:], ref[:-1]
+    return action, ref
 
 
 def find_unpinned_actions(workflows_dir: pathlib.Path = WORKFLOWS_DIR) -> list[tuple[str, int, str]]:
@@ -52,7 +68,7 @@ def find_unpinned_actions(workflows_dir: pathlib.Path = WORKFLOWS_DIR) -> list[t
             match = USES_RE.match(line)
             if not match:
                 continue
-            action, ref = match.group(1), match.group(2)
+            action, ref = _strip_matching_quotes(match.group(1), match.group(2))
             if action.startswith(NON_THIRD_PARTY_PREFIXES):
                 continue
             if not FULL_SHA_RE.match(ref):

@@ -61,6 +61,41 @@ def test_trailing_version_comment_does_not_hide_a_real_line(tmp_path):
     assert len(sua.find_unpinned_actions(tmp_path)) == 1
 
 
+def test_double_quoted_sha_pinned_action_is_not_flagged(tmp_path):
+    # Regression (Codex review on PR #111): `uses: "actions/checkout@<sha>"`
+    # is valid YAML. Without stripping the quote pair, the ref capture group
+    # keeps its trailing '"', fails the 40-char-SHA check, and a correctly
+    # pinned line gets reported as a false unpinned finding.
+    _write(
+        tmp_path,
+        "ci.yml",
+        '      - uses: "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0"\n',
+    )
+    assert sua.find_unpinned_actions(tmp_path) == []
+
+
+def test_single_quoted_sha_pinned_action_is_not_flagged(tmp_path):
+    _write(
+        tmp_path,
+        "ci.yml",
+        "      - uses: 'actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0'\n",
+    )
+    assert sua.find_unpinned_actions(tmp_path) == []
+
+
+def test_quoted_tag_pinned_action_is_still_flagged(tmp_path):
+    _write(tmp_path, "ci.yml", '      - uses: "actions/checkout@v4"\n')
+    assert len(sua.find_unpinned_actions(tmp_path)) == 1
+
+
+def test_mismatched_quote_characters_are_not_stripped(tmp_path):
+    # A leading '"' with no matching trailing '"' is not a real quote pair
+    # -- must not be silently stripped, since that could hide a genuine
+    # unpinned ref behind mismatched punctuation instead of flagging it.
+    _write(tmp_path, "ci.yml", "      - uses: \"actions/checkout@v4'\n")
+    assert len(sua.find_unpinned_actions(tmp_path)) == 1
+
+
 def test_multiple_files_and_lines_all_reported(tmp_path):
     _write(tmp_path, "a.yml", "      - uses: actions/checkout@v4\n")
     _write(tmp_path, "b.yml", "      - uses: owner/repo@v1\n      - uses: owner/repo@main\n")
