@@ -1,0 +1,113 @@
+---
+name: ranking-the-open-queue
+description: Sweep the backlog of already-known open issues/PRs and hand the operator a decision-ready ranked queue -- scored on severity, staleness, blockage, and actionability -- when deciding what to act on first across many items, not a single already-selected one. Read-only: never labels, comments, or otherwise mutates an issue or PR; see `responding-to-a-fresh-arrival` for a single newly-arrived item's initial response, and `screening-a-low-trust-contribution` for diff-level threat screening of an unknown author's contribution, instead.
+---
+
+# Ranking the Open Queue
+
+**Portability: Portable.** Depends only on a connected GitHub MCP server
+(`list_issues`/`search_issues`, general product capabilities), addressed
+via the portable `Server:tool` shorthand documented below -- no
+this-repository tooling. The scoring axes (references/scoring-rubric.md)
+are repo-agnostic criteria, not this repository's own convention.
+
+Every existing single-item skill in this cluster (`issue-to-branch`,
+`responding-to-a-fresh-arrival`, `screening-a-low-trust-contribution`)
+assumes the operator has already picked which issue or PR to act on. This
+skill is what runs before that pick: a periodic sweep across a whole
+backlog that answers "of these N open items, which should I even look at,
+and in what order."
+
+Tool names below are written as `Server:tool` (portable shorthand, not
+tied to one agent platform). In Claude Code, translate to the literal
+double-underscore form: `Server:tool` -> `mcp__Server__tool` -- e.g.
+`github:search_issues` is `mcp__github__search_issues`.
+
+## Procedure
+
+1. **Resolve scope.** Confirm the repository (and any operator-named
+   filters -- a label, a milestone, a specific author) before sweeping.
+   Default to open issues and open PRs across the whole repository when
+   the operator states no filter.
+2. **Sweep, paginated.** Use `Server:list_issues` for broad retrieval and
+   `Server:search_issues` for targeted criteria (a label combination, an
+   activity cutoff, an author), per the GitHub MCP server's own tool
+   guidance -- list_* for broad simple retrieval, search_* for targeted
+   queries. Page in batches of 5-10 items. Never shell out to a
+   command-line GitHub tool for this sweep.
+3. **Extract per item.** Pull only what the four scoring axes need: its
+   labels and issue type, the timestamp of its last human activity (a
+   comment, commit, or review -- not its creation time), any linked or
+   referenced blocking issue, and whether its body carries a concrete
+   scope (an Acceptance Criteria Map, a reproduction, explicit acceptance
+   criteria) or not.
+4. **Score, per axis.** Apply the four axes in
+   [references/scoring-rubric.md](references/scoring-rubric.md) --
+   Severity, Staleness, Blockage, Actionability -- to every item
+   independently. Record the reasoning behind each axis's verdict, not
+   only a final number; a blended score with no visible per-axis
+   breakdown hides exactly the judgment call the operator needs to see.
+5. **Rank and output** as the table contract below, using
+   [references/scoring-rubric.md](references/scoring-rubric.md)'s
+   ordering rule to break ties between items -- never a hand-waved order.
+6. **State any cap.** If pagination stops before the full backlog is
+   swept (a rate limit, an operator-given item cap), say so explicitly in
+   the output. A partial sweep presented as complete is a worse answer
+   than a smaller, honestly labeled one.
+
+## Output
+
+Exactly one Markdown table, per this repository's own force-multiplier
+convention (a visualization a human can inspect for anomalies, not a
+paragraph to read through):
+
+| Rank | Item | Severity | Staleness | Blockage | Actionability | Recommended next step |
+|---|---|---|---|---|---|---|
+
+Followed by:
+
+- **Scope swept:** the repository, filters applied, and item count (with
+  any cap from Procedure step 6 stated explicitly).
+- **Facts:** the per-item signals Step 3 actually found (label, last
+  activity date, blocking reference, scope signal), cited to source.
+- **Assumptions:** anything inferred where a signal was missing or
+  ambiguous, never silently treated as a fact.
+
+A "Recommended next step" cell may point at another skill (for example,
+`responding-to-a-fresh-arrival` for an item that scores low on
+Actionability and needs a clarification pass) -- this skill only
+recommends; it never invokes or hands off execution itself.
+
+## Stop boundaries
+
+- Never label, comment on, close, assign, or otherwise write to any issue
+  or PR swept by this skill -- read-only sweep and report only. A request
+  to also act on the ranked items (label them, close them, comment on
+  them) gets a table plus an explicit statement that doing so is outside
+  this skill's read-only scope, not silent compliance.
+- Never shell out to a command-line GitHub tool (e.g. `gh`) for the
+  sweep -- `Server:list_issues`/`Server:search_issues` only.
+- Never silently truncate the swept set. A cap from rate limits or an
+  operator-given item count is stated in the output, not hidden behind an
+  apparently-complete table.
+- Never collapse the four scoring axes into a single blended number with
+  no visible per-axis reasoning -- the operator needs to see why an item
+  ranked where it did, not just where it ranked.
+- Never fabricate a scoring signal. A missing last-activity timestamp,
+  unclear blocking reference, or absent scope signal is stated as missing
+  in Assumptions, never silently inferred so the table looks complete.
+
+## Notes
+
+Design lineage:
+[docs/superpowers/specs/2026-07-15-triage-cluster-design.md](../../docs/superpowers/specs/2026-07-15-triage-cluster-design.md)
+(the shared disambiguation table this skill's `description:` clause is
+copied from verbatim) and
+[docs/superpowers/plans/2026-07-15-ranking-the-open-queue.md](../../docs/superpowers/plans/2026-07-15-ranking-the-open-queue.md)
+(this skill's own implementation plan, Task 2).
+
+No bundled script ships with this skill. Scoring is a judgment call
+across four qualitative axes applied to free-text issue/PR content, not a
+deterministic rule a script could apply consistently -- revisit only if a
+future review finds scoring drift across repeated runs on the same
+backlog.

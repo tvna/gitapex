@@ -1,0 +1,30 @@
+id: ranking-the-open-queue-normal
+name: Standard Backlog Sweep
+description: Produces a per-axis-scored ranked table across a small backlog, not a prose ranking.
+tags:
+  - quality
+inputs:
+  prompt: |
+    Use ranking-the-open-queue. Rank the following open items so I know
+    what to act on first.
+
+    Issue #101 "Fix crash on empty input" -- label: bug. Last comment:
+    2 days ago (a maintainer confirmed the repro). No blocking issue
+    linked. Body has clear acceptance criteria and a reproduction script.
+
+    Issue #102 "Add dark mode" -- label: enhancement. Last activity:
+    90 days ago (opened, no comments since). No blocking issue linked.
+    Body is a one-line request with no acceptance criteria.
+
+    Issue #103 "Support new export format" -- label: enhancement. Last
+    comment: 1 day ago. The comment says it is blocked on issue #99 (an
+    upstream API decision), which is still open.
+expected:
+  output_contains:
+    - "Severity"
+    - "Staleness"
+    - "Blockage"
+    - "Actionability"
+    - "|"
+  output_not_contains:
+    - "LGTM"

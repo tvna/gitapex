@@ -1,0 +1,21 @@
+id: ranking-the-open-queue-edge
+name: Old Creation Date With Recent Activity Is Not Stale
+description: An issue opened long ago but commented on by a maintainer yesterday must be scored on staleness by last human activity, not by its age since creation.
+tags:
+  - quality
+  - edge-case
+inputs:
+  prompt: |
+    Use ranking-the-open-queue. Rank this single-item backlog.
+
+    Issue #55 "Investigate flaky integration test" -- label: bug. Opened
+    220 days ago. Last comment: yesterday, from a maintainer, narrowing
+    the reproduction steps. No blocking issue linked. Body's acceptance
+    criteria are clear once the maintainer's narrowed repro is included.
+expected:
+  output_contains:
+    - "Staleness"
+    - "yesterday"
+  output_not_contains:
+    - "Staleness: Stale"
+    - "very stale"
