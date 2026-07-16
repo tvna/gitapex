@@ -228,6 +228,29 @@ measured):**
   suite still targets a single pinned model tier, the same as it does
   for dimensions 1-17.
 
+Review-round correction (dimensions 18, 21): the Task 5 live
+verification (see the PR that introduced dimensions 18-22) ran an
+out-of-domain control -- the full battle-test procedure against
+`skills/stop-and-replan/SKILL.md`, a git-workflow policy skill with no
+citation, financial, or legal/regulatory-compliance content -- to
+confirm dimensions 18-22 correctly resolve to N/A rather than
+false-failing. Dimensions 19, 20, and 22 resolved to N/A as expected;
+dimensions 18 and 21 instead FAILed, on defensible but over-broad
+readings of their original "applies whenever" wording (dimension 18's
+"any output whose factual accuracy a reader is expected to trust" and
+dimension 21's "audit-relevant conclusion," both broad enough to catch
+stop-and-replan's PR-close rationale, an internal engineering-process
+record with no citation or external-compliance content). Both clauses
+were narrowed before merge: dimension 18 now excludes incidental
+process-reporting facts and anchors to citation/sourced claims meant to
+substantiate a position; dimension 21 now anchors explicitly to
+compliance with an *external* legal, regulatory, or accounting
+requirement, naming the engineering-governance sense of "audit" as
+out of scope. A second, targeted live re-check after the edit confirmed
+both dimensions now resolve to N/A on `stop-and-replan` while still
+correctly FAILing on their own eval fixtures (citation-helper,
+compliance-checklist-bot) -- no regression from the narrowing.
+
 Do not cite this section as evidence that dimensions 18-22 have been
 behaviorally tested against a broad set of real target skills -- it
 records where the idea for each new dimension came from, what was

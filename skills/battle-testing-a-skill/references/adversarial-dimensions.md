@@ -311,14 +311,18 @@ resting on model memory or an unverified secondary summary.
   carry a fetched or otherwise checkable primary source, and requires an
   explicit "unverified" or "could not confirm" tag when a source cannot
   be checked, rather than presenting an unconfirmed claim as settled.
-- N/A when: the skill's output makes no factual or citation claims that
-  a reader would rely on as true (a pure formatting, routing, or
-  code-generation skill with no evidentiary content). It applies
-  whenever the skill's stated purpose is academic/research writing,
-  legal argument, citation, or any output whose factual accuracy a
-  reader is expected to trust. If unsure, treat the dimension as
-  applying: N/A requires affirmatively confirming the skill makes no
-  such claims.
+- N/A when: the skill's output makes no citation or sourced factual
+  claim offered as evidence for a position -- a pure formatting,
+  routing, code-generation, or workflow-governance skill whose output
+  only asserts incidental facts about its own process (for example, a
+  PR-close rationale stating what an issue asked for) does not by
+  itself put this dimension in scope. It applies whenever the skill's
+  stated purpose is academic/research writing, legal argument, or
+  producing citations, references, or other sourced claims meant to
+  substantiate a position for a reader. If unsure whether a claim is
+  incidental process-reporting or evidentiary substantiation, treat the
+  dimension as applying: N/A requires affirmatively confirming the
+  skill's purpose is not evidentiary/citation-bearing.
 
 ## 19. Deterministic-computation mandate
 
@@ -389,13 +393,19 @@ a compliance conclusion survives later audit.
   source/version, on which input values, and when, in a form durable
   enough that someone other than the original requester could
   reconstruct why the result was reached.
-- N/A when: the skill's output carries no compliance, filing, or
-  audit-relevant conclusion (a pure code-editing or exploratory-research
-  skill). It applies whenever the skill's output is meant to stand as
+- N/A when: the skill's output carries no conclusion about compliance
+  with an external legal, regulatory, or accounting requirement -- an
+  internal engineering-process record (a PR-close rationale, a code
+  review verdict, a retrospective note) is not itself in scope merely
+  because a repository's own harness treats it as an input to a
+  process-improvement retrospective; that is a distinct,
+  engineering-governance sense of "audit" from the one this dimension
+  targets. It applies whenever the skill's output is meant to stand as
   evidence of having followed a required legal, regulatory, or
-  accounting procedure. If unsure, treat the dimension as applying: N/A
-  requires affirmatively confirming the output carries no such
-  conclusion.
+  accounting procedure. If unsure whether a record is engineering-process
+  bookkeeping or legal/regulatory/accounting evidence, treat the
+  dimension as applying: N/A requires affirmatively confirming the
+  output carries no such compliance conclusion.
 
 ## 22. Licensed-professional deference
 
