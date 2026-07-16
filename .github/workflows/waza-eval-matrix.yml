@@ -100,9 +100,11 @@ jobs:
             echo "| skill | result |"
             echo "| --- | --- |"
           } >> "$GITHUB_STEP_SUMMARY"
-          for dir in evals/*/; do
-            skill="$(basename "$dir")"
-            python3 evals/scripts/set_config_model.py "evals/${skill}/eval.yaml" "$MODEL"
+          # Enumerate by eval.yaml so non-suite dirs (e.g. evals/scripts/)
+          # are excluded; the skill name is the suite directory's basename.
+          for suite in evals/*/eval.yaml; do
+            skill="$(basename "$(dirname "$suite")")"
+            python3 evals/scripts/set_config_model.py "$suite" "$MODEL"
             if nix run .#waza -- run "$skill" -o "results/${MODEL}/${skill}.json"; then
               echo "| ${skill} | pass |" >> "$GITHUB_STEP_SUMMARY"
             else
