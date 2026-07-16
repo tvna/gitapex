@@ -20,6 +20,13 @@ Checks (the canonical list -- the manual fallback is to apply these):
     (a Markdown heading matching "Table of contents" or "Contents",
     case-insensitive). Junk files (dotfiles, __pycache__, non-UTF-8) under
     references/ are ignored, not flagged.
+  - SKILL.md body: every Markdown link target ([text](path)) that is not
+    an absolute URL/scheme (http(s):, mailto:, etc.) or a bare in-page
+    fragment (#section) must resolve inside the skill's own directory --
+    a relative link that escapes it (e.g. "../../docs/x.md") fails. This
+    gives the skill's own "Portable" self-declaration (whose definition
+    already requires every instruction to resolve inside the skill's own
+    folder) a deterministic backstop.
 
 Usage:
   python3 check_skill_shape.py <skill-dir-or-SKILL.md>
@@ -30,6 +37,7 @@ when no readable SKILL.md is found.
 from __future__ import annotations
 
 import argparse
+import os.path
 import re
 import sys
 from dataclasses import dataclass
@@ -59,6 +67,12 @@ TOC_RE = re.compile(r"^#+\s+(?:table of )?contents\b",
 PORTABILITY_RE = re.compile(r"\bportability\s*:", re.IGNORECASE)
 PORTABILITY_MAX_BODY_LINE = 6
 BLOCK_SCALAR_INDICATORS = (">", "|", ">-", "|-", ">+", "|+")
+# Markdown inline link syntax: [text](target). Does not match reference-
+# style links ([text][ref]); SKILL.md bodies in this repo use inline links.
+LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
+# An absolute-URL scheme (http:, https:, mailto:, ftp:, ...) -- anything
+# matching this is external, not a same-repo relative path.
+SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.\-]*:")
 
 
 @dataclass(frozen=True)
@@ -132,6 +146,33 @@ def _is_ignorable(p: Path) -> bool:
     return p.name.startswith(".") or "__pycache__" in p.parts
 
 
+def _out_of_skill_link_targets(body_text: str, skill_dir: Path) -> list[str]:
+    """Return each Markdown link target in ``body_text`` that resolves
+    outside ``skill_dir``.
+
+    Skips absolute-URL/scheme targets (http:, https:, mailto:, ...) and
+    bare in-page fragments (#section) -- neither is a same-repo relative
+    path. Resolution is purely lexical (os.path.normpath), not a real
+    filesystem lookup, since the target need not exist for this check.
+    """
+    skill_norm = os.path.normpath(str(skill_dir))
+    offenders = []
+    for match in LINK_RE.finditer(body_text):
+        target = match.group(1).strip()
+        if SCHEME_RE.match(target):
+            continue
+        path_part = target.split("#", 1)[0].split("?", 1)[0].strip()
+        if not path_part:
+            continue  # fragment-only or query-only link
+        if os.path.isabs(path_part):
+            normalized = os.path.normpath(path_part)
+        else:
+            normalized = os.path.normpath(os.path.join(skill_norm, path_part))
+        if normalized != skill_norm and not normalized.startswith(skill_norm + os.sep):
+            offenders.append(target)
+    return offenders
+
+
 def _no_xml_check(field: str, value: str) -> CheckResult:
     has_tag = bool(TAG_RE.search(value))
     return CheckResult(
@@ -198,6 +239,12 @@ def check_shape(target: Path) -> list[CheckResult]:
         f"{PORTABILITY_MAX_BODY_LINE} body lines",
         "found" if near_top else
         f"missing or below body line {PORTABILITY_MAX_BODY_LINE}"))
+
+    offenders = _out_of_skill_link_targets("\n".join(body), skill_dir)
+    results.append(CheckResult(
+        "links-inside-skill", not offenders,
+        "Markdown link targets resolve inside the skill's own directory",
+        "all inside" if not offenders else "outside: " + ", ".join(offenders)))
 
     refs_dir = skill_dir / "references"
     if refs_dir.is_dir():
