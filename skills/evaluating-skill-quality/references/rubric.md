@@ -515,8 +515,9 @@ change is actually better, not merely different.
 **When a committed eval suite records a numeric score, gate acceptance on
 success/correctness first, and never on elapsed time or token/API cost
 alone** -- a faster or cheaper run that did not solve the task is not a
-better run. This is the same `[0,1]` scorer the held-out gate above
-requires; nothing below substitutes for it. Treat elapsed time and
+better run. This is the same scorer that produces the selection-split
+score described in the held-out-gate paragraph above; nothing below
+substitutes for it. Treat elapsed time and
 consumed cost as a legitimate but *conditional* axis: valid only as a
 cost-versus-accuracy comparison at matched success rate, never a
 standalone ranking. Kapoor et al., "AI Agents That Matter" ([kapoor]),
