@@ -219,11 +219,37 @@ split (Candidate A's fuller design) would be warranted instead.
   `github.com/open-policy-agent/opa/rego` package instead -- likely better
   conformance, but a different embedding decision. This recommendation
   assumes Rust; revisit if Go wins.
-- **The ownership-boundary convention is soft.** If gitapex's
+- ~~**The ownership-boundary convention is soft.** If gitapex's
   redistribution mechanism (how config behaves when forked/vendored into a
   downstream repo) turns out to need a harder separation than a path
   convention provides, revisit against Candidate A's fuller structural
-  split (a genuinely separate `governance.json` registry file).
+  split (a genuinely separate `governance.json` registry file).~~
+  **Resolved (2026-07-17):** gitapex redistributes the SCHEMA only
+  (`.gitapex/ssot.schema.json`). Each adopting repo's actual
+  `.gitapex/ssot.json` instance is generated locally by a `gitapex init`
+  step, which decides branch-strategy/git-workflow config from that
+  repo's business-domain and team-size requirements -- see
+  https://github.com/tvna/gitapex/issues/127. Since instances are
+  freshly generated per-repo rather than forked/merged from an upstream
+  instance, the merge-conflict scenario Candidate A's structural split
+  was hedging against does not exist. This confirms the winning C-prime
+  design (single `ssot.json`, no separate registry file) was correct for
+  this reason too, not merely acceptable. Does not reopen this doc's
+  recommendation.
+
+## Addendum (2026-07-17): gitapex init is new, separately-scoped work
+
+The `gitapex init` scaffolding step referenced above -- generating an
+initial `.gitapex/ssot.json` instance from business-domain and team-size
+inputs, including branch-strategy/git-workflow decisions -- was previously
+undesigned anywhere (not #123, not this doc, not #126). It is filed
+separately as https://github.com/tvna/gitapex/issues/127 (child of #82),
+including an open question worth noting here since it touches this doc's
+own `regorus` embedding decision: whether `init`'s (domain, team-size) ->
+workflow decision logic should be hardcoded in the CLI or could reuse the
+same embedded `regorus` evaluator this doc recommends for runtime gate
+evaluation -- i.e. a possible reuse synergy for the embedding decision,
+not yet resolved either way. See #127 for the full scope.
 
 ## Non-goals
 
