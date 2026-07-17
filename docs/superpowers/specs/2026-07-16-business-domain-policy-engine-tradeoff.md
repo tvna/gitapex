@@ -251,6 +251,64 @@ same embedded `regorus` evaluator this doc recommends for runtime gate
 evaluation -- i.e. a possible reuse synergy for the embedding decision,
 not yet resolved either way. See #127 for the full scope.
 
+## Addendum (2026-07-17): refinements distilled from microsoft/agent-governance-toolkit (AGT)
+
+A comparative review against `microsoft/agent-governance-toolkit` (a large,
+mature Microsoft governance framework; verified against its primary-source
+specs, not its marketing) confirmed this doc's core architecture rather
+than superseding it: AGT does not embed Rego -- its `opa` feature shells
+out to an external `opa` binary at runtime, exactly the adopter-side
+toolchain dependency this doc's `regorus`-embedding decision was designed
+to eliminate. Adopting AGT for Rego evaluation would violate this doc's
+own constraints, not satisfy them; this doc's recommendation stands
+unchanged. Two independent comparative-review passes converged on the
+following narrow, distilled refinements (principles only -- no AGT
+dependency, no AGT code):
+
+- **Fixture-suite as a single deterministic gate for two open risks.**
+  AGT pairs every normative surface with a versioned spec plus an
+  executable conformance-test corpus. Distilled: `change/v1` (the still-
+  unspecified input-document contract, first open risk above) and
+  `regorus`'s Rego-builtin conformance (second open risk above) can be
+  closed by ONE artifact -- a committed corpus of golden input documents,
+  evaluated against known `.rego` policies, with pinned expected verdicts,
+  run in CI and re-run as a conformance canary on every `regorus` version
+  bump. This turns two recorded-but-unaddressed risks into one concrete,
+  buildable gate (CLAUDE.md section 3's "build the gate before the
+  operation it guards").
+- **Dependency supply-chain audit gate.** AGT's `deny.toml` (cargo-deny
+  config) reflects a deterministic CI gate over its own engine's
+  dependency closure (advisories, licenses). Distilled principle: the
+  embedded Rego evaluator's dependency tree is itself a governed artifact.
+  Add a language-appropriate equivalent (`cargo-deny` for Rust,
+  `govulncheck`+license-check for Go) as a CI gate on whichever engine
+  crate/module wins the Rust-vs-Go decision -- record this requirement as
+  one of that decision's inputs, not an afterthought once the language is
+  picked.
+- **Drift-gate content-hygiene check.** AGT's MCP Security Gateway
+  performs static analysis on tool descriptors before they are exposed to
+  agents (hidden Unicode, encoded/base64 payloads, role-override strings).
+  Distilled principle, retargeted to gitapex's actual exposure (gitapex is
+  not an MCP client consuming third-party tools here -- see #126's
+  addendum for where the MCP-specific version of this applies): the
+  existing `kind`/format cross-check drift gate (this doc's "Evaluation"
+  section) should be extended with a content-hygiene pass over every file
+  a `policy_sources[]` entry resolves to -- reject non-ASCII control,
+  bidirectional-override, and zero-width Unicode characters; flag large
+  opaque base64 literals for manual review. Rationale: `explain_denial`
+  (per #126) and any future gate-explanation surface relays a `.rego`
+  file's rule names, comments, and string literals into an agent's
+  context. A hidden-Unicode or encoded payload in a policy file is exactly
+  the class of content human review reliably misses and #127's
+  branch-protection mitigation (who can merge) does not inspect (what the
+  merged bytes contain) -- this is a complementary, not duplicate, check.
+  This is a general-purpose primitive (also reused by #126's MCP
+  tool-descriptor scan) -- implement it once, call it from both sites.
+
+These three items refine this doc's design; they do not change the
+Candidate C-prime recommendation, the schema shape, or the scored
+comparison above.
+
 ## Non-goals
 
 See #125's own Non-goals section -- identical scope boundary, not restated

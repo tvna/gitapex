@@ -193,6 +193,98 @@ registry and evaluator exist.
 - MCP tools are advisory-only by construction; any future implementation
   issue must not conflate "queryable via MCP" with "enforced."
 
+## Addendum (2026-07-17): corrected premise and refinements distilled from microsoft/agent-governance-toolkit (AGT)
+
+### Corrected premise: redistributed adopters are assumed to have their own MCP server / tool ecosystem
+
+The operator has clarified an assumption this doc did not previously
+state: gitapex's redistributed adopters are assumed to already run their
+own MCP server(s) with their own tool surface -- not only gitapex's own
+three advisory tools (`evaluate_gate`/`list_gates`/`explain_denial`) in
+isolation. This does **not** reverse this doc's Analysis 2 verdict --
+routing gitapex's own PreToolUse hooks or CI gates through MCP is still
+rejected for the same structural reasons (wrong transport for a
+synchronous hot path; no session exists during CI). What it does is bring
+a genuinely new capability into scope, analyzed below.
+
+### New capability: MCP tool-poisoning / typosquat static analysis
+
+A comparative review against `microsoft/agent-governance-toolkit` (AGT),
+verified against its primary-source specs, found AGT's "MCP Security
+Gateway" performs static analysis on MCP tool descriptors before they are
+exposed to an agent: hidden-Unicode/encoded-payload scanning, rug-pull
+fingerprint comparison (detecting a tool's declared schema or behavior
+silently changing between scans), and typosquat detection (Levenshtein
+distance against a known-good tool-name allowlist). AGT's own gateway is
+embeddable and transport-agnostic (no server/sidecar required to run it),
+consistent with this doc's own constraints. Under the corrected premise
+above, this capability is now in scope for gitapex, retargeted to
+gitapex's actual role: gitapex is not consuming AGT's gateway, but the
+adopter's broader MCP tool ecosystem is a real, adopter-controlled attack
+surface gitapex's governance layer should be able to observe.
+
+Distilled, dependency-free design:
+
+- **Mechanism.** Reuses the content-hygiene primitive specified in #125's
+  addendum (hidden Unicode/bidi/zero-width character detection, opaque
+  base64 flagging) applied to MCP tool descriptors instead of `.rego`
+  files, plus two additions specific to this surface: (a) Levenshtein-
+  distance typosquat detection against a registered known-good tool-name
+  allowlist, and (b) rug-pull fingerprint comparison -- a pinned hash of
+  each known tool's declared schema/description, re-checked on each scan,
+  flagging any drift for review rather than silently trusting a changed
+  tool.
+- **Registry shape.** The known-good tool-name allowlist and pinned
+  fingerprints are themselves `policy_sources[]` data (references, not
+  inline values -- consistent with #123's discipline), scaffolded at
+  `gitapex init` time (see #127) and updated deliberately, not
+  auto-accepted.
+- **Trigger.** Reuses the existing `"sessionstart"` plane already defined
+  in #123's schema -- static analysis runs before tools are made available
+  to an agent for the session, matching AGT's own timing choice and this
+  doc's existing stdio-session-scoped model. No new plane is needed.
+- **Governance discipline.** Per #125's anti-enum-creep rule (grafted from
+  Candidate D), adding this as a new `gates[].kind` value (e.g.
+  `"mcp-tool-scan"`) must itself cite the concrete need established here
+  -- done, by this addendum -- rather than being added speculatively.
+- **What this is not:** still advisory/observational, not enforcement of
+  third-party agent behavior -- gitapex can flag a suspicious tool
+  descriptor to the session, but (per this doc's existing hard limit) it
+  cannot compel a non-cooperating MCP client to consult the scan result
+  before calling the tool. The value is defense for gitapex's OWN session
+  and for cooperating callers, not a network-wide guarantee.
+
+### Fail-closed refinement: three-valued `evaluate_gate` result
+
+AGT's normative "MUST fail closed" discipline exposed a real, previously
+unspecified gap in this doc's own `evaluate_gate(name, input)` design:
+what does it return when the Rego evaluation itself errors (a missing
+`data_ref`, a parse failure, a malformed input document) rather than
+cleanly evaluating to allow/deny? Distilled rule: `evaluate_gate` must
+return a three-valued result -- `pass` / `deny` / `error (indeterminate)`
+-- and an engine error must NEVER be presentable as `pass`. An advisory
+tool that answers "pass" on its own internal error is worse than no tool
+at all, since its entire value proposition is predicting the enforcing
+gate's real verdict. `explain_denial` must cover indeterminate results,
+not only clean denials.
+
+### Related, deferred: post-call output-hygiene scanning
+
+A related idea -- applying the same content-hygiene scan to tool CALL
+OUTPUT (not just MCP tool descriptors or policy files), catching hidden/
+encoded instruction payloads relayed back to an agent after an allowed
+tool call completes -- was raised and initially deferred as having no
+clearly-owning issue (gitapex's hook architecture only ever denies
+pre-call today, never inspects output). This is noted here as a real,
+evidenced gap (not hypothetical): during the same design pass that
+produced this addendum, the harness running this analysis itself flagged
+and neutralized instruction-shaped content inside two subagent research
+outputs, an unprompted, concrete instance of exactly this risk class. It
+remains outside this doc's own scope (no issue owns gitapex's hook
+architecture yet -- #82's candidate 4 is the closest, still unfiled) but
+is recorded here rather than silently dropped, for whichever future issue
+ends up owning PreToolUse/PostToolUse hook design.
+
 ## Non-goals
 
 See #126's own Non-goals section -- identical scope boundary, not
