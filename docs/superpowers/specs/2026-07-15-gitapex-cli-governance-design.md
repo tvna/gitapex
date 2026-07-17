@@ -88,6 +88,33 @@ future `establishing-ubiquitous-language` pass, once both files are real
 enough to reason about concretely rather than as two still-unbuilt
 proposals. Do not pre-emptively rename either concept now.
 
+**Resolved (2026-07-17), superseding the paragraph above.** The operator
+has clarified the intended relationship: `.gitapex/toolchain.lock.json`
+is not an unrelated peer of `.gitapex/ssot.json` -- it is a downstream
+consumer/reference registered under it. `flake.nix`/`flake.lock` remain
+the toolchain version SSoT exactly as `docs/superpowers/specs/
+2026-07-14-setup-gitapex-toolchain-design.md` specifies (Nix-eval-
+generated, never hand-edited); what changes is that the generated file
+also gets a `policy_sources[]` entry in `.gitapex/ssot.json` (`format:
+"json"`, `authority: "pinned toolchain versions for gitapex-compliant
+dev environment deployment"`), and moves from `.gitapex/toolchain.lock.json`
+to `.gitapex/policies/toolchain.lock.json` so that `.gitapex/`'s top
+level stays reserved for the registry files themselves
+(`ssot.json`/`ssot.schema.json`) and `.gitapex/policies/` holds
+everything the registry references (business-domain `.rego` files per
+#125, and now this generated lock file too). This does not change
+`toolchain.lock.json`'s generation mechanism, its "never hand-edited"
+invariant, or `flake.nix`'s status as the true version SSoT -- see
+`docs/superpowers/specs/2026-07-14-setup-gitapex-toolchain-design.md`'s
+own update for the path change and the new policy_sources reference.
+The "ubiquitous-language collision" concern above is resolved by this
+parent/child clarification, not by a rename: both files legitimately
+live under `.gitapex/`, one is the registry, the other is a registered,
+generated reference within it. Full detail and the connection to
+`gitapex init`'s Claude Code web / installed-plugin bootstrap sequence:
+https://github.com/tvna/gitapex/issues/131 and
+https://github.com/tvna/gitapex/issues/127.
+
 ## Distribution: reusing the Class B binary pattern
 
 Once a compiled gitapex CLI binary exists, this repo already has a
@@ -136,10 +163,13 @@ existing wording, not committed.
   candidate, not selected.
 - Rust vs. Go for the compiled binary.
 - Which middleware/SaaS integrations, if any, come first.
-- How (or whether) this CLI's own config model interacts at all with the
-  unrelated `.gitapex/toolchain.lock.json` consumption model described in
-  the toolchain-foundation design -- they may simply coexist
-  independently under the same directory with no interaction; that has
-  not been decided either way.
+- ~~How (or whether) this CLI's own config model interacts at all with
+  the unrelated `.gitapex/toolchain.lock.json` consumption model
+  described in the toolchain-foundation design -- they may simply
+  coexist independently under the same directory with no interaction;
+  that has not been decided either way.~~ **Resolved (2026-07-17):** see
+  the updated Naming collision section above -- `toolchain.lock.json` is
+  registered as a `policy_sources[]` entry under `ssot.json` and moves to
+  `.gitapex/policies/`.
 - When child issues get filed against the reopened #82, and in what
   order among the six candidates it currently lists.

@@ -51,6 +51,27 @@ Facts, consolidated from prior issues (not new claims):
      gitapex.
 - It reads/evaluates a registry (`.gitapex/ssot.json`), files it
   references (`policy_sources[]`), and per-invocation event/context data.
+- **Toolchain provisioning is a precondition this doc previously left
+  implicit (added 2026-07-17).** None of #123/#125/#126/#127/#130 state
+  what provisions the toolchain gitapex itself needs to run (Rust/Go
+  runtime for the eventual compiled CLI; today's Python tooling
+  dependencies). A separate, earlier initiative
+  (`docs/superpowers/specs/2026-07-14-setup-gitapex-toolchain-design.md`)
+  already designs this for the "Installed-plugin context (consumers)" --
+  gitapex distributed as a Claude Code plugin, invoked via Claude Code
+  web or another surface by a redistributed adopter's users: a
+  cooldown-gated, Nix-driven bootstrap materializes the bundled flake
+  from `${CLAUDE_PLUGIN_ROOT}` into a user-writable cache before any
+  tool in the bundle runs. This assumption is now explicit: any design in
+  this initiative that runs in that context (#125's embedded evaluator,
+  #127's `gitapex init`) implicitly depends on that bootstrap having
+  already completed, or triggers it as its own first step -- see #127's
+  own addendum for where this is made concrete. `.gitapex/policies/
+  toolchain.lock.json` (moved from `.gitapex/toolchain.lock.json`,
+  2026-07-17) is registered as a `policy_sources[]` entry under
+  `.gitapex/ssot.json` for this reason -- gitapex's own registry now has
+  a reference to the toolchain state it depends on, even though
+  `flake.nix` remains that state's actual source of truth.
 
 ## Binding zero-trust principles
 
