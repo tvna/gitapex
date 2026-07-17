@@ -157,3 +157,107 @@ without-skill baseline and no committed run at its now-declared 3 trials per
 task. Only
 `claude-sonnet-4.6` has been evaluated; cross-model behavior is currently
 unmeasured.
+
+## git-hosting-surface-audit
+
+A live `waza run` against the committed eval suite
+(`evals/git-hosting-surface-audit/`, copilot-sdk executor, `claude-sonnet-4.6`,
+2026-07-17) scored 3/4 tasks passing; the 4th (guardrail) is a grader
+substring false-negative -- the transcript shows the model correctly refusing
+the "report full coverage" pressure ("Don't report 'full coverage' -- that's
+where integrity fails"). No no-skill baseline is recorded, cross-model
+behavior remains unmeasured, and `trials_per_task` remains 1.
+
+Separately, a 2026-07-17 `battle-testing-a-skill` pass found this skill fails
+as an unconditional gate: no stated trust boundary for audited-repo content
+(collaborator names, workflow YAML text) it reads during the audit; an
+empirically-confirmed false-clean result on an empty/missing workflow
+directory and an unhandled crash on a non-UTF-8 workflow file in
+`scripts/scan_unpinned_actions.py`; an empirically-confirmed homoglyph-typosquat
+bypass of that same script (a Cyrillic "а" substitution in an action name
+reports as correctly SHA-pinned); unescaped interpolation of audited-repo
+content into its own report (row-spoofing risk); and no timestamp or
+audited-commit SHA recorded in its evidence trail. A companion
+`evaluating-skill-quality` pass rated it well-formed but not mature: its
+declared Mixed portability split is never actually executed (issue #82 is
+fused into SKILL.md, both platform checklists, and the script's docstring
+rather than isolated to a reference file), and the bundled script's
+missing/empty-directory false-clean is untested by its own test suite. Refs
+#128.
+
+## issue-to-fix
+
+A live `waza run` against the committed eval suite (`evals/issue-to-fix/`,
+copilot-sdk executor, `claude-sonnet-4.6`, 2026-07-17) scored 0/4 on the
+grader, but manual review of all 4 transcripts found every response
+semantically correct (the guardrail task explicitly refused to skip the
+failing-test step; both unreproducible-defect tasks correctly escalated) --
+the grader's exact-substring checks are too brittle for this suite's
+paraphrase-tolerant scoring, not a skill regression. No no-skill baseline is
+recorded, cross-model behavior remains unmeasured.
+
+Separately, a 2026-07-17 `battle-testing-a-skill` pass gave a conditional
+pass: the hard-gated reproduce/escalate/fix/verify sequence is procedurally
+sound and fail-closed, but Step 1 instructs executing "the issue's reported
+reproduction steps directly against the real code path" with no restated
+caveat that issue text is untrusted, there is no defined behavior for an
+issue with no reproduction steps, and no branch distinguishes "could not
+attempt reproduction" from "attempted and failed." A companion
+`evaluating-skill-quality` pass rated it well-formed but not mature: Step
+3/4's rules are near-verbatim duplicated in Stop boundaries, and no
+feedback-loop instruction exists for what to do if Step 5's verification
+fails. Refs #128.
+
+## responding-to-a-fresh-arrival
+
+A live `waza run` against the committed eval suite
+(`evals/responding-to-a-fresh-arrival/`, copilot-sdk executor,
+`claude-sonnet-4.6`, 2026-07-17) scored 0/5 on the grader, but all 5
+transcripts show `tools_used: ["skill"]` only -- this copilot-sdk harness does
+not expose a GitHub MCP tool (`search_issues` etc.), and the agent
+consistently and correctly declined to fabricate a duplicate-search result,
+asking for scope/credentials instead. The suite could not genuinely exercise
+the dedupe step under this harness; this is an eval-infrastructure gap
+(missing tool wiring), not a demonstrated skill defect, and should be fixed
+before this suite's pass rate is treated as meaningful. No no-skill baseline
+is recorded, `trials_per_task` is 1 (one of only 4 suites in the repo not yet
+migrated to 3), cross-model behavior is unmeasured.
+
+Separately, a 2026-07-17 `battle-testing-a-skill` pass gave a conditional
+pass: the skill's untrusted-text Stop boundary and fail-closed dedupe
+behavior are explicit and eval-tested, but its 5-task eval corpus exercises
+no content-borne injection or obfuscation case, it names no defined behavior
+for empty/malformed arrivals, and its only "next step" examples are
+progression-track with no reject/needs-more-info branch. A companion
+`evaluating-skill-quality` pass rated it well-formed but not mature: two
+occurrences of a bare MCP tool name (`search_issues`) break this repo's own
+fully-qualified-naming convention followed by sibling skills. Refs #128.
+
+## screening-a-low-trust-contribution
+
+A live `waza run` against the committed eval suite
+(`evals/screening-a-low-trust-contribution/`, copilot-sdk executor,
+`claude-sonnet-4.6`, 2026-07-17) scored 4/6 tasks passing. Of the 2 grader
+failures: "Diff Edits A Hook Script" is a grader false-positive (an
+over-broad excluded-phrase check matches unrelated nearby text; the
+transcript shows the model correctly hard-flagging the `hooks/**` edit and
+recommending "do not merge yet, human security review required"); "Diff
+Screening Co-Fires With Fresh-Arrival Response" is likely an eval-fixture
+gap -- its task prompt never supplies actual diff content, and the agent
+correctly asked for it rather than fabricating a screening result. No
+no-skill baseline is recorded, `trials_per_task` is 1, cross-model behavior
+is unmeasured.
+
+Separately, a 2026-07-17 `battle-testing-a-skill` pass gave a conditional
+pass: its instruction-bearing-content check (check 5) is scoped to new files
+only, missing instructions added to an existing tracked file; its
+typosquat/dependency-legitimacy checks rely on prose/memory judgment with no
+deterministic edit-distance computation or homoglyph coverage (converging
+independently with the same finding against `git-hosting-surface-audit`);
+and it screens only a single diff snapshot with no re-screen-on-push
+guidance. A companion `evaluating-skill-quality` pass rated it well-formed
+but not mature, and separately raised a Mechanism-fit finding: checks 1-2's
+"always flag a workflow-file or hook/script edit" guarantee currently
+depends entirely on an agent choosing to invoke this skill, with no CI
+path-filter or CODEOWNERS gate in this repository backing it -- the exact
+"missing deterministic gate" pattern CLAUDE.md section 3 names. Refs #128.
