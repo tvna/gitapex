@@ -285,6 +285,85 @@ architecture yet -- #82's candidate 4 is the closest, still unfiled) but
 is recorded here rather than silently dropped, for whichever future issue
 ends up owning PreToolUse/PostToolUse hook design.
 
+## Addendum (2026-07-17): zero-trust hardening
+
+Per #131 (the binding execution-environment assumptions and zero-trust
+principles for this whole initiative), an adversarial audit against this
+doc found five concrete gaps.
+
+- **F1 -- stdio parentage is not identity.** This doc's only implicit
+  trust boundary is "the client spawned us over stdio," which relocates
+  trust to the spawner -- exactly the component the corrected-premise
+  addendum above assumes may host poisoned tools (#131 principles 1, 4).
+  A compromised MCP client can hammer `evaluate_gate` with pathological
+  `input` documents (deep nesting, huge payloads, worst-case rule joins)
+  purely to burn CPU; nothing in this doc bounds that. Fix: MCP mode MUST
+  NOT attribute authority to the caller under any circumstance (no
+  env-derived "who is asking" logic, ever) and MUST be abuse-resistant
+  independent of caller identity -- a hard per-call input-size cap (e.g.
+  1 MiB), a per-call evaluation timeout, and bounded in-flight
+  concurrency (stdio is inherently single-client; serialize), degrading
+  to `error(indeterminate)` on any bound violation, never a hang or
+  crash.
+- **F2 -- `explain_denial` is a gate-evasion oracle.** The fail-loud
+  disclosure contract ("every denial carries... the Rego rule path")
+  was written for the operator-facing CLI and inherited unexamined by
+  the MCP surface, which serves arbitrary session callers. Looping
+  `evaluate_gate` + `explain_denial` over candidate inputs is an
+  iterative probe for the minimally-evasive PR -- a direct #131 principle
+  7 violation. Fix: split disclosure by surface. Over MCP, `explain_denial`
+  returns only a stable reason-code enum plus a one-line human summary
+  and remediation pointer; Rego rule paths, policy file paths, and engine
+  error internals are reserved to a local, operator-invoked `gitapex
+  gates explain` CLI subcommand, never exposed over the MCP tool surface.
+  This is a fixed build-time contract, not a caller-negotiable flag.
+- **F3 -- MCP tool-poisoning allowlist: TOFU bootstrap and attacker-
+  writable baseline.** Two related gaps in the tool-poisoning capability
+  added above. (a) The rug-pull mechanism "re-checks" a pinned fingerprint
+  but never states who establishes pin #1; if #127's `gitapex init` seeds
+  it from whatever tools are discoverable at init time, a tool poisoned
+  *before* first init becomes the permanently-trusted baseline (#131
+  principles 1, 2). Fix: the init-time seed MUST itself pass the same
+  hidden-Unicode/encoded-payload/typosquat static checks before being
+  accepted as a baseline; a descriptor failing hygiene is written
+  `quarantined`, never `pinned`, and the seeded pins land as a reviewable
+  diff through the normal code-owner merge gate, not silently into the
+  working tree. (b) Since the allowlist/fingerprints are ordinary
+  `policy_sources[]` files, a rug-pulling tool (or anything with working-
+  tree write access) can update its own pinned hash in the same change
+  that swaps its schema -- drift detection would compare against a
+  baseline the adversary can edit (#131 principle 4). Fix: the
+  `sessionstart` scan resolves fingerprints only from committed,
+  merge-gated state (HEAD); a dirty/modified fingerprint file is itself
+  flagged as a finding, reusing #125's content-hygiene-over-
+  `policy_sources` pass.
+- **F4 -- The poisoning scan's own failure mode is unspecified.** This
+  doc imports AGT's "MUST fail closed" for `evaluate_gate` but never
+  applies it to the new scan -- an unspecified outcome for a malformed
+  descriptor, a discovery timeout, or an unreadable allowlist defaults in
+  practice to "proceed, assume clean" (#131 principle 6). Fix: a scan
+  that cannot complete for any given tool yields `error(indeterminate)`
+  *per tool*, reported to the session identically to a positive finding
+  -- "unscanned" and "flagged" must never look different from each other
+  to the caller. Since the plane is advisory (this doc's existing hard
+  limit), "block" remains the cooperating client's decision -- but
+  gitapex must never *report* clean on an incomplete scan.
+- **F5 -- MCP mode inherits full ambient privilege it does not need.**
+  The single binary carries the invoking shell's full environment (tokens,
+  proxy credentials, CI secrets) into MCP mode too, even though the MCP
+  peer is less trusted by default than a direct hook invocation from the
+  agent harness, and the three advisory tools need only repo-tree reads
+  plus local Rego evaluation -- no network, no credentials (#131
+  principle 3). Fix: `gitapex mcp` (or equivalent) sanitizes its own
+  environment at startup (drop everything but an explicit allowlist),
+  performs no network I/O by construction in this mode, and confines file
+  reads to the repo root -- self-imposed least privilege, verifiable in
+  code review, with no dependency on OS-level sandboxing.
+
+No gap was found in the stdio-only transport decision itself (HTTP/SSE
+remains correctly rejected) or in the advisory-not-enforcement framing
+(F4's fix preserves it) -- reviewed, not silently skipped.
+
 ## Non-goals
 
 See #126's own Non-goals section -- identical scope boundary, not

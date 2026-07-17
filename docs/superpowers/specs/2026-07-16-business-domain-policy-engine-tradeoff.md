@@ -309,6 +309,92 @@ These three items refine this doc's design; they do not change the
 Candidate C-prime recommendation, the schema shape, or the scored
 comparison above.
 
+**Correction to the content-hygiene wording above:** "flag large opaque
+base64 literals for manual review" is superseded by the zero-trust
+addendum below (F5) -- a flagged literal blocks by default, not warn-
+and-proceed.
+
+## Addendum (2026-07-17): zero-trust hardening
+
+Per #131 (the binding execution-environment assumptions and zero-trust
+principles for this whole initiative), an adversarial audit against this
+doc found five concrete gaps. Each is a design change to fold into a
+future implementation pass, not a reversal of the Candidate C-prime
+recommendation.
+
+- **F1 -- Unscoped input, least-privilege violation.** The `change/v1`
+  contract (still an open risk above) defaults toward one blanket
+  document handed to every gate's Rego evaluation regardless of what that
+  gate's rule actually reads. Since adopter-authored `.rego` files are
+  untrusted under "assume breach" (#131 principle 4), an unrelated gate's
+  malicious or buggy rule could read fields it never needed and leak them
+  via its own denial message. Fix: every `kind: "opa-rego"` gate entry
+  gains a required `input_scope: [...]` array of `change/v1` field paths;
+  the CLI assembles only those fields, an undeclared field is simply
+  absent (not merely filtered after assembly); the drift gate statically
+  rejects a `.rego` source whose parsed AST references an `input.` path
+  outside its own declared scope.
+- **F2 -- `kind: "script"` is unsandboxed.** This #123-era kind (extended,
+  not introduced, by #125's registry dispatch) runs adopter-registered
+  subprocesses with the CLI's full ambient privileges -- full env
+  (including CI secrets in the CI invocation context, MCP-client-provided
+  env in the MCP context per #126), full filesystem, full network. Under
+  #131 principles 3 and 4, a compromised or malicious script-kind entry is
+  unmediated credential exfiltration. Fix, mirroring #125's own
+  anti-enum-creep governance discipline applied to script capabilities
+  rather than to new `kind` values: two required fields on `kind:
+  "script"` entries -- `env_allowlist: []` (empty default; the CLI
+  constructs a clean environment for the subprocess, never inherits) and
+  `network: "none" | "declared"` (default `"none"`, enforced best-effort;
+  `"declared"` requires a written justification string in the registry
+  entry). The drift gate rejects a script entry missing either field.
+- **F3 -- `data_refs` has no namespace boundary.** "Loaded as the Rego
+  `data` document" (singular, unscoped) creates two gaps: key collisions
+  between two gates' threshold files silently change a verdict
+  (last-load-wins), and `data_refs` resolution is transitive through a
+  `policy_sources[]` entry's own declarations, so editing one *source*
+  can inject data into every *gate* that references it -- a cross-gate
+  smuggling path the content-hygiene check (byte-level, not scope-aware)
+  does not see. Fix: each `data_ref` mounts under `data.<source_id>`,
+  never at the document root; duplicate source ids or any cross-mount key
+  collision is a registry-validation error (fails closed, #131 principle
+  6); a gate's evaluation loads only `data_refs` reachable from its own
+  declared `policy_refs`, and the drift gate verifies this closure is
+  declared, not silently inherited.
+- **F4 -- `regorus` pinning and builtin surface.** The dependency-audit
+  gate (added above) checks licenses/advisories but not exact-version
+  pinning, inconsistent with the Class B binary's own SHA-pinned
+  distribution discipline. Separately: upstream OPA/Rego ships
+  network-capable builtins (`http.send`, `net.lookup_ip_addr`) and
+  environment-disclosure builtins (`opa.runtime`); nothing in this design
+  currently *requires* these be absent or disabled in the embedded
+  evaluator, so a future `regorus` version silently adding support for one
+  would turn every adopter-authored `.rego` file into an undeclared egress
+  channel. Fix: (a) the committed lockfile pins `regorus` to an exact
+  version and checksum, CI fails on lockfile drift, and the fixture-suite
+  conformance canary (added above) is keyed to that pinned version; (b)
+  the fixture corpus includes negative fixtures asserting network- and
+  environment-disclosure builtins are absent or explicitly disabled --
+  an enforced builtin allowlist, verified by test, not assumed by design.
+- **F5 -- Content-hygiene check must fail closed, including its own
+  failure.** The hygiene check added above did not specify what happens
+  when it cannot itself run (an unreadable file, an unparseable encoding).
+  Under #131 principle 6, this is INDETERMINATE, not "assume clean": a
+  hygiene-check error blocks evaluation for every gate referencing that
+  source, full stop -- never skip-the-check-and-evaluate-anyway. Likewise,
+  "flag for manual review" (as originally worded above) is a fail-open
+  warn-and-proceed path in practice; corrected to: a flagged base64
+  literal blocks evaluation until its content hash is explicitly
+  allowlisted in the registry entry (`content_exceptions: ["sha256:..."]`),
+  turning "manual review" into a recorded, diffable, reviewable decision
+  rather than a silent pass-through.
+
+No exploitable gap was found in the `kind`/format dispatch mechanism
+itself (no confused-deputy path between `format: "rego"` and `kind`), or
+in the single-static-binary/no-sidecar architecture (it eliminates the
+whole class of server-attack-surface by construction) -- these are noted
+as reviewed, not silently skipped.
+
 ## Non-goals
 
 See #125's own Non-goals section -- identical scope boundary, not restated

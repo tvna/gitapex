@@ -153,6 +153,89 @@ who don't.
 - The extension tier's exact configuration surface in `.gitapex/ssot.json`
   (a new top-level `audit` block, most likely, but not specified here).
 
+## Addendum (2026-07-17): zero-trust hardening
+
+Per #131 (the binding execution-environment assumptions and zero-trust
+principles for this whole initiative), an adversarial audit against this
+doc found five concrete gaps.
+
+- **F1 -- `actor` is a self-asserted label, not a verified identity.**
+  "References an identity that ALREADY exists and is already stronger"
+  (above) is true of the mechanisms cited (commit signing, OIDC) but the
+  schema as specified stores only a *string* the audit-writing process
+  asserts about itself -- the strength of the referenced mechanism never
+  actually transfers to the record. A signed-and-verified commit SHA
+  grounds *who* signed; an unsigned commit SHA identifies *which* commit
+  but not *who* authored it with any assurance; a CI-run-id read from an
+  env var is an unauthenticated label any code execution inside that job
+  can forge (#131 principle 5). Fix: replace the scalar `actor` field
+  with `actor: {ref, provenance, verification}` where `provenance` is
+  `verified | asserted`. A signed-and-verified commit -> `verified` (with
+  `verification: "gpg-signature:<keyid>"` or equivalent); an unsigned
+  commit SHA, or a CI run id read from environment without an actually
+  fetched-and-validated OIDC token -> `asserted`. Any consumer of this
+  audit trail MUST treat `asserted` actors as untrusted context, never as
+  attribution.
+- **F2 -- tamper-evidence with no specified verifier is tamper-evidence
+  in theory only.** The hash chain is "detectable by anyone with full
+  access to the log file" but nothing specifies *what* runs verification
+  or *when* (#131 principle 4). An attacker who truncates the file and
+  rewrites the chain from a chosen point is never caught if nothing
+  re-verifies. Fix: (a) a `gitapex audit verify` subcommand; (b)
+  automatic incremental verification of the tail entries on every gate
+  evaluation before appending, failing closed on mismatch (per F5 below);
+  (c) full-chain verification as a documented CI step; (d) the current
+  head hash recorded somewhere externally anchored (e.g. printed in CI
+  job output, anchored by the runner's own log retention) so a
+  truncate-and-rewrite of the whole file is itself detectable -- a chain
+  with no externally anchored head is rewritable wholesale.
+- **F3 -- mode 0600 and the hash chain are conflated protections.**
+  Filesystem permission bits are a weak, host-local control -- void
+  against root, void on CI runners sharing a filesystem or restoring
+  caches across jobs (#131 principle 4's assume-breach). The design never
+  claimed 0600 was sufficient, but never scoped it either, which is how
+  conflation calcifies into implementation. Fix: one explicit sentence in
+  the schema section -- "0600 reduces casual/accidental disclosure only
+  and is not a tamper-evidence or integrity mechanism; integrity comes
+  solely from the hash chain plus F2's verification triggers plus the
+  optional signature tier. On shared/ephemeral runners, assume the file
+  is readable and writable by any code in the job."
+- **F4 -- `policy_version` is self-reported by the process it exists to
+  keep honest.** The hash is computed and written by the same gitapex
+  process (and its `regorus` dependency) whose honesty the field is
+  meant to check -- a compromised binary or dependency can evaluate a
+  weakened policy while logging the hash of a legitimate one, and nothing
+  in the design would catch this (#131 principles 1, 4). This is a
+  fundamental limit of self-reported logging, not a bug to silently
+  paper over: state it explicitly in the design ("this field defends
+  against policy-FILE drift, not evaluator compromise"), then close what
+  is closable -- F2's verification pass, run as a separate, less-
+  privileged process or a differently-provisioned CI step, recomputes the
+  content hash of the policy at the recorded registry ref and flags any
+  entry whose `policy_version` matches no policy version reachable in git
+  history. This applies the same "cross-check against git's own content-
+  addressed store" philosophy F1 applies to `actor`.
+- **F5 -- audit-write failure is an unspecified, accidental fail-open.**
+  Nothing in the design states what a gate evaluation does when the
+  JSONL append itself fails (disk full, permission error, the file
+  deleted mid-run). Unspecified defaults to log-and-continue in practice,
+  which gives a trivial bypass: fill the disk, and every gate still
+  passes unaudited (#131 principle 6, directly). Fix: audit-write failure
+  MUST deny the gated operation, with an explicit `verdict: error` reason
+  surfaced to the caller (CLAUDE.md section 4's "fail loudly"). This
+  creates a real, deliberate availability-vs-security tradeoff (a full
+  disk can now deny legitimate operations) -- record it as an accepted,
+  explicit tradeoff with a logged-elsewhere break-glass override as the
+  only escape hatch, never as a silent default.
+
+The rejections of a mandatory REST collector and DID-based identity
+(above) remain sound as rejections -- no reintroduction is warranted.
+One caveat on the optional Ed25519 signature tier: a signature made by a
+key resident on the same compromised host signs lies fluently -- the tier
+buys non-repudiation of *authorship*, not truthfulness of *content*. Add
+one sentence to the extension-tier section stating this limit explicitly,
+so it is not overclaimed later.
+
 ## Non-goals
 
 See #130's own Non-goals section -- identical scope boundary, not
