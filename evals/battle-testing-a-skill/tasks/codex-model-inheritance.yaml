@@ -1,0 +1,28 @@
+id: battle-testing-a-skill-codex-model-inheritance
+name: Codex Parent Model Inheritance
+description: Requires the Codex route to inherit the caller model by default and to emit the model-aware report contract.
+tags:
+  - quality
+  - codex
+  - model-routing
+inputs:
+  prompt: |
+    Use battle-testing-a-skill in a Codex harness. The trusted hook input says
+    caller_model is "fixture-caller-model". No fixed-route allowlist was
+    supplied. Route a 3-trial battle test and report the routing decision
+    using the required output contract. Do not perform the target review;
+    this fixture checks routing only.
+expected:
+  output_contains:
+    - "caller_model"
+    - "fixture-caller-model"
+    - "tester_model"
+    - "model_route"
+    - "inherited"
+    - "trials"
+    - "3"
+    - "skill_version"
+    - "executed_at"
+  output_not_contains:
+    - "model_route: fixed"
+    - "overall: FAIL"

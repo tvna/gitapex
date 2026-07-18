@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from collections.abc import Mapping
 
@@ -69,7 +70,29 @@ def split_mean(scores):
     scores = list(scores)
     if not scores:
         raise ValueError("cannot take the mean of an empty score list")
+    for index, value in enumerate(scores):
+        _validate_correctness(value, f"score[{index}]")
     return sum(scores) / len(scores)
+
+
+def _validate_correctness(value, label):
+    """Reject correctness values outside the finite ``[0, 1]`` contract."""
+    try:
+        valid = math.isfinite(value) and 0 <= value <= 1
+    except TypeError as exc:
+        raise ValueError(f"{label} must be a finite number in [0,1]") from exc
+    if not valid:
+        raise ValueError(f"{label} must be a finite number in [0,1]")
+
+
+def _validate_context_cost(value, label):
+    """Reject context costs that are non-finite or negative."""
+    try:
+        valid = math.isfinite(value) and value >= 0
+    except TypeError as exc:
+        raise ValueError(f"{label} must be a finite non-negative number") from exc
+    if not valid:
+        raise ValueError(f"{label} must be a finite non-negative number")
 
 
 def strict_compare(before_mean, after_mean):
@@ -78,7 +101,32 @@ def strict_compare(before_mean, after_mean):
     Ties are rejected, matching the gate's strict improve-or-reject rule
     (Procedure step 3): a tied or worse selection-split mean is ``"REJECT"``.
     """
+    _validate_correctness(before_mean, "before correctness")
+    _validate_correctness(after_mean, "after correctness")
     return "KEEP" if after_mean > before_mean else "REJECT"
+
+
+def pruning_compare(
+    before_correctness,
+    after_correctness,
+    before_context_cost,
+    after_context_cost,
+):
+    """Apply the predeclared correctness-first pruning gate.
+
+    A correctness improvement is a normal strict improvement. At matched
+    correctness, pruning is kept only when context cost strictly falls.
+    Correctness regressions and cost ties/increases are rejected.
+    """
+    _validate_correctness(before_correctness, "before correctness")
+    _validate_correctness(after_correctness, "after correctness")
+    _validate_context_cost(before_context_cost, "before context cost")
+    _validate_context_cost(after_context_cost, "after context cost")
+    if after_correctness > before_correctness:
+        return "KEEP"
+    if after_correctness < before_correctness:
+        return "REJECT"
+    return "KEEP" if after_context_cost < before_context_cost else "REJECT"
 
 
 def main(argv=None):
@@ -116,8 +164,40 @@ def main(argv=None):
         "--scores/stdin, print the new mean, then KEEP or REJECT per the "
         "strict improve-or-reject gate. Skips --assertions/--output.",
     )
+    parser.add_argument(
+        "--pruning-only",
+        action="store_true",
+        help="Use the predeclared pruning-only lexicographic gate. Requires "
+        "--compare-to and both context-cost arguments.",
+    )
+    parser.add_argument(
+        "--prior-context-cost",
+        type=float,
+        help="Context cost of the current skill for a pruning-only gate.",
+    )
+    parser.add_argument(
+        "--candidate-context-cost",
+        type=float,
+        help="Context cost of the candidate skill for a pruning-only gate.",
+    )
     args = parser.parse_args(argv)
 
+    context_costs = (args.prior_context_cost, args.candidate_context_cost)
+    if args.pruning_only and (
+        args.compare_to is None or any(value is None for value in context_costs)
+    ):
+        print(
+            "error: --pruning-only requires --compare-to, "
+            "--prior-context-cost, and --candidate-context-cost",
+            file=sys.stderr,
+        )
+        return 1
+    if not args.pruning_only and any(value is not None for value in context_costs):
+        print(
+            "error: context-cost arguments require --pruning-only",
+            file=sys.stderr,
+        )
+        return 1
     if args.compare_to is not None:
         try:
             raw = (
@@ -127,10 +207,20 @@ def main(argv=None):
             )
             scores = [float(line) for line in raw.splitlines() if line.strip()]
             mean = split_mean(scores)
+            verdict = (
+                pruning_compare(
+                    args.compare_to,
+                    mean,
+                    args.prior_context_cost,
+                    args.candidate_context_cost,
+                )
+                if args.pruning_only
+                else strict_compare(args.compare_to, mean)
+            )
         except (FileNotFoundError, OSError, ValueError) as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 1
-        print(f"{mean:.6f} {strict_compare(args.compare_to, mean)}")
+        print(f"{mean:.6f} {verdict}")
         return 0
 
     if not args.assertions:

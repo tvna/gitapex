@@ -61,6 +61,15 @@ assertion depends on that line, so the score is unchanged.
   **rejected**. A plausible-sounding edit that does not move the score is
   not kept.
 
+### Edit C (kept only as predeclared pruning)
+
+Before scoring, classify a deletion-only candidate as pruning-only and
+declare UTF-8 byte length as the context-cost proxy. Its selection
+correctness remains **1.0 -> 1.0**, while measured cost falls **920 -> 810**.
+The correctness-first pruning gate therefore **keeps** it. The identical
+correctness tie without that predeclaration and strict cost reduction would
+be an ordinary tie and reject, just like Edit B.
+
 ### Rejected-edit log
 
 ```

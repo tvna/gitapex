@@ -67,6 +67,9 @@ not repeat failed edits -- negative feedback at no inference-time cost.
 What this skill adapts: strict improve-or-reject with ties rejected
 (procedure step 3) and the rejected-edit log as negative feedback
 (procedure step 4). These are the load-bearing invariants of the skill.
+The predeclared pruning-only context-cost gate is a local, correctness-first
+extension rather than a claim about SkillOpt; `SKILL.md` owns its exact
+acceptance rule, while ordinary scalar ties remain rejected here.
 
 ### Appendix B: the precondition and the transfer caution
 

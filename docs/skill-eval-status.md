@@ -66,6 +66,15 @@ no mechanics change, no new decision branch introduced -- so no new eval
 fixture was added; the existing suite's coverage of step 1 is unchanged.
 Refs #149.
 
+Codex model-aware routing is now implemented: the default route inherits the
+parent model, optional fixed routes use an external exact-match allowlist, and
+unknown callers fail closed as `INDETERMINATE`. The bundled deterministic
+router has pytest coverage, and committed fixtures cover inheritance and the
+unknown-caller stop path. These are implementation and fixture facts, not a
+Codex model measurement: neither fixture has been executed against a real
+Codex model, no Codex result artifact is committed, and Codex behavioral
+reproducibility remains unmeasured.
+
 ## establishing-ubiquitous-language
 
 The committed eval suite (`evals/establishing-ubiquitous-language/`) runs
@@ -90,11 +99,11 @@ change that introduced it, recorded in
 not by the committed suite.
 
 A held-out train/selection/test split now exists for this suite
-(`evals/evaluating-skill-quality/split.md`), covering the 9 original
-fixtures plus 2 fixtures added specifically to gate scoring-axis edits to
-dimension 8. It exists to satisfy `gated-skill-edits`' precondition gate
-before any iterative edit to `references/rubric.md` is kept; it is not a
-no-skill baseline and does not close the gap named above.
+(`evals/evaluating-skill-quality/split.md`), covering 27 fixtures across
+11 train, 10 selection, and 6 test cases. It exists to satisfy
+`gated-skill-edits`' precondition gate before any iterative edit to
+`references/rubric.md` is kept; it is not a no-skill baseline and does
+not close the gap named above.
 
 **Issue #149 (unknowns framework):** `references/rubric.md` gained an
 `## Unknowns framework` section (four-quadrant framing adapted from

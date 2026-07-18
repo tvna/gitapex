@@ -11,15 +11,15 @@ block deterministically.
 
 ## Corpus size and the 2:1:7 caveat
 
-SkillOpt's default split ratio is 2:1:7. At 11 fixtures that ratio gives a
-selection split of roughly one task, too thin to gate a strict
-improve-or-reject decision on (a single fixture's score has no way to
-average out run-to-run variance). Following the precedent already set in
+SkillOpt's default split ratio is 2:1:7. At 27 fixtures that ratio gives a
+selection split of roughly three tasks, too thin to gate a strict
+improve-or-reject decision because three observations provide little ability
+to average out run-to-run variance. Following the precedent already set in
 `skills/gated-skill-edits/references/worked-example.md` ("the ratio is
-aspirational" for a small fixture count), this split uses a flatter 4:4:3
-partition instead, named explicitly as a deviation from the 2:1:7 default
-rather than silently applied. The honest minimal groundwork, per that same
-worked example, is a larger fixture corpus over time, not a smaller gate.
+aspirational" for a small fixture count), this split uses a flatter 11:10:6
+partition, named explicitly as a deviation from the 2:1:7 default. The
+honest minimal groundwork, per that same worked example, is a larger
+fixture corpus over time, not a smaller gate.
 
 ## Assignment
 
@@ -28,7 +28,8 @@ worked example, is a larger fixture corpus over time, not a smaller gate.
   `no-unauthorized-eval-tooling.yaml`, `scoring-axis-cost-only-eval.yaml`,
   `ordering-rule-totality-review.yaml`, `blind-spot-pass-domain-gap.yaml`,
   `model-effort-tier-fit-unjustified-model.yaml`,
-  `portability-declarative-fact-claim.yaml`.
+  `portability-declarative-fact-claim.yaml`, `branch-and-step-contracts.yaml`,
+  `sentence-level-pruning.yaml`, `progressive-disclosure-placement.yaml`.
 - **selection** (gates acceptance; scored before/after a candidate edit,
   strict improve-or-reject, ties rejected): `edge.yaml`,
   `mechanism-fit-subagent.yaml`, `third-party-not-authoritative.yaml`,
@@ -36,7 +37,8 @@ worked example, is a larger fixture corpus over time, not a smaller gate.
   `ordering-rule-totality-distinct-skill.yaml`,
   `blind-spot-pass-generalizes.yaml`,
   `model-effort-tier-fit-unjustified-effort.yaml`,
-  `portability-issue-number-citation.yaml`.
+  `portability-issue-number-citation.yaml`, `heldout-vague-completion.yaml`,
+  `heldout-semantic-noop-vs-brevity.yaml`.
 - **test** (read once, for a final report only, never to motivate or gate
   an edit): `guardrail.yaml`, `no-fabricated-violation.yaml`,
   `portability-classification.yaml`, `blind-spot-pass-not-silent.yaml`,
@@ -125,13 +127,22 @@ citation used purely as an illustrative design analogy, with no
 unconditional fact-claim and no issue number, must not be flagged as a
 false positive by the stricter check.
 
+The three `branch-and-step-contracts`, `sentence-level-pruning`, and
+`progressive-disclosure-placement` fixtures directly motivated the current
+rubric operationalization, so they are train fixtures. They have not been
+used to claim a selection-gate result or a live eval result.
+
+The two `heldout-*` selection fixtures were prepared independently before
+the current implementation began and were not shown to the implementation
+agent. They are selection evidence only and must not motivate edits.
+
 ## Reuse
 
 Future edits to this rubric should reuse this same split rather than
 re-deriving one per iteration, so the selection split stays genuinely
-held out across iterations. If a future edit targets a topic none of
-these 16 (now 22) fixtures probe, add a new train/selection pair the
-same way this one was added, and record the addition here.
+held out across iterations. If a future edit targets a topic none of the
+27 fixtures probe, add motivated cases to train and fresh generalization
+cases to selection before scoring, and record the addition here.
 
 ## Rejected-edit log
 
@@ -142,7 +153,8 @@ enumerated ranking/tie-break rule (every pair of distinct values
 ordered, a final stable key for full ties) -- see issue #116, Repair 1
 for the exact proposed wording.
 
-Precondition and splits: satisfied, per this file (13 fixtures,
+Precondition and splits: satisfied for that historical iteration, per this
+file's then-current corpus (13 fixtures,
 5:5:3 with this iteration's additions -- see Assignment above).
 
 Gate result: the selection-split baseline (5 fixtures: `edge.yaml`,

@@ -91,6 +91,53 @@ def test_deterministic_same_inputs_same_output():
     assert first == second == 1.0
 
 
+def test_pruning_compare_keeps_matched_correctness_with_lower_context_cost():
+    assert score_contract.pruning_compare(0.9, 0.9, 1400, 1120) == "KEEP"
+
+
+def test_pruning_compare_rejects_correctness_regression_even_if_context_falls():
+    assert score_contract.pruning_compare(0.9, 0.8, 1400, 1) == "REJECT"
+
+
+def test_pruning_compare_rejects_matched_correctness_without_strict_cost_drop():
+    assert score_contract.pruning_compare(0.9, 0.9, 1400, 1400) == "REJECT"
+    assert score_contract.pruning_compare(0.9, 0.9, 1400, 1500) == "REJECT"
+
+
+def test_ordinary_scalar_tie_remains_rejected():
+    assert score_contract.strict_compare(0.9, 0.9) == "REJECT"
+
+
+@pytest.mark.parametrize("invalid", [float("nan"), float("inf"), -0.01, 1.01])
+def test_strict_compare_rejects_invalid_correctness(invalid):
+    with pytest.raises(ValueError, match=r"finite number in \[0,1\]"):
+        score_contract.strict_compare(invalid, 0.9)
+    with pytest.raises(ValueError, match=r"finite number in \[0,1\]"):
+        score_contract.strict_compare(0.9, invalid)
+
+
+@pytest.mark.parametrize("invalid", [float("nan"), float("inf"), -1])
+def test_pruning_compare_rejects_invalid_context_cost(invalid):
+    with pytest.raises(ValueError, match="finite non-negative"):
+        score_contract.pruning_compare(0.9, 0.9, invalid, 100)
+    with pytest.raises(ValueError, match="finite non-negative"):
+        score_contract.pruning_compare(0.9, 0.9, 100, invalid)
+
+
+@pytest.mark.parametrize("invalid", [float("nan"), float("inf"), -0.01, 1.01])
+def test_pruning_compare_rejects_invalid_correctness(invalid):
+    with pytest.raises(ValueError, match=r"finite number in \[0,1\]"):
+        score_contract.pruning_compare(invalid, 0.9, 100, 90)
+    with pytest.raises(ValueError, match=r"finite number in \[0,1\]"):
+        score_contract.pruning_compare(0.9, invalid, 100, 90)
+
+
+def test_split_mean_rejects_non_finite_and_out_of_range_correctness():
+    for invalid in (float("nan"), float("inf"), -0.01, 1.01):
+        with pytest.raises(ValueError, match=r"finite number in \[0,1\]"):
+            score_contract.split_mean([0.9, invalid])
+
+
 def test_main_scores_assertions_json_and_output_file(tmp_path, capsys):
     apath = tmp_path / "assertions.json"
     apath.write_text(json.dumps({"output_contains": ["Facts"], "output_not_contains": ["LGTM"]}), encoding="utf-8")
@@ -108,3 +155,76 @@ def test_main_reads_output_from_stdin(tmp_path, capsys, monkeypatch):
     rc = score_contract.main(["--assertions", str(apath)])
     assert rc == 0
     assert capsys.readouterr().out.strip() == "0.500000"
+
+
+def test_main_pruning_gate_keeps_matched_correctness_with_lower_cost(
+    tmp_path, capsys
+):
+    scores = tmp_path / "scores.txt"
+    scores.write_text("0.9\n0.9\n", encoding="utf-8")
+    rc = score_contract.main(
+        [
+            "--compare-to",
+            "0.9",
+            "--scores",
+            str(scores),
+            "--pruning-only",
+            "--prior-context-cost",
+            "1400",
+            "--candidate-context-cost",
+            "1120",
+        ]
+    )
+    assert rc == 0
+    assert capsys.readouterr().out.strip() == "0.900000 KEEP"
+
+
+def test_main_rejects_context_costs_without_pruning_declaration(capsys):
+    rc = score_contract.main(
+        ["--compare-to", "0.9", "--prior-context-cost", "1400"]
+    )
+    assert rc == 1
+    assert "require --pruning-only" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("invalid", ["nan", "inf", "-0.1", "1.1"])
+def test_main_rejects_invalid_correctness_scores(tmp_path, capsys, invalid):
+    scores = tmp_path / "scores.txt"
+    scores.write_text(f"0.9\n{invalid}\n", encoding="utf-8")
+    rc = score_contract.main(
+        ["--compare-to", "0.9", "--scores", str(scores)]
+    )
+    assert rc == 1
+    assert "finite number in [0,1]" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("invalid", ["nan", "inf", "-0.1", "1.1"])
+def test_main_rejects_invalid_prior_correctness(tmp_path, capsys, invalid):
+    scores = tmp_path / "scores.txt"
+    scores.write_text("0.9\n", encoding="utf-8")
+    rc = score_contract.main(
+        ["--compare-to", invalid, "--scores", str(scores)]
+    )
+    assert rc == 1
+    assert "finite number in [0,1]" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("invalid", ["nan", "inf"])
+def test_main_rejects_non_finite_context_costs(tmp_path, capsys, invalid):
+    scores = tmp_path / "scores.txt"
+    scores.write_text("0.9\n", encoding="utf-8")
+    rc = score_contract.main(
+        [
+            "--compare-to",
+            "0.9",
+            "--scores",
+            str(scores),
+            "--pruning-only",
+            "--prior-context-cost",
+            invalid,
+            "--candidate-context-cost",
+            "100",
+        ]
+    )
+    assert rc == 1
+    assert "finite non-negative" in capsys.readouterr().err

@@ -1,0 +1,25 @@
+id: evaluating-skill-quality-progressive-disclosure-placement
+name: Branch Common Rules And Contextual Reference Pointers Are Misplaced
+description: Checks branch-common versus branch-specific placement, contextual pointer wording, and co-location of instructions that must be applied together.
+tags:
+  - quality
+  - progressive-disclosure
+  - train
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this layout:
+
+    SKILL.md says only "See references/details.md." The reference starts
+    with rules required by every request, then contains the tax-only route.
+    The tax route's validation rule is in a second unlinked file.
+
+    Explain the progressive-disclosure defects.
+expected:
+  output_contains:
+    - "branch-common"
+    - "branch-specific"
+    - "context"
+    - "co-locat"
+  output_not_contains:
+    - "LGTM"
+    - "placement is fine"

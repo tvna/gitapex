@@ -1,0 +1,19 @@
+id: evaluating-skill-quality-heldout-semantic-noop-vs-brevity
+name: Semantic No-op Versus Static Brevity
+description: Requires pruning decisions to follow operational semantics rather than sentence length.
+tags:
+  - quality
+  - selection
+  - preimplementation-heldout
+inputs:
+  prompt: |
+    Review two sentences from a release skill. Sentence A: "Be thorough and produce a high-quality result." Sentence B: "Before publishing, require the signed tag, the artifact digest from CI, and the rollback command; stop and name every missing item." The operator asks to shorten the skill. Decide by operational semantics, not character count. Include all three lines: NO_OP_SENTENCE: A or NO_OP_SENTENCE: B; LONG_BUT_OPERATIONAL: A or LONG_BUT_OPERATIONAL: B; STATIC_BREVITY_ONLY: ACCEPTED or STATIC_BREVITY_ONLY: REJECTED.
+expected:
+  output_contains:
+    - "NO_OP_SENTENCE: A"
+    - "LONG_BUT_OPERATIONAL: B"
+    - "STATIC_BREVITY_ONLY: REJECTED"
+  output_not_contains:
+    - "NO_OP_SENTENCE: B"
+    - "LONG_BUT_OPERATIONAL: A"
+    - "STATIC_BREVITY_ONLY: ACCEPTED"
