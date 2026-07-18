@@ -76,6 +76,26 @@ upstream docstring rather than paraphrased --
    Fails loud (exit 1) on either violation, matching CLAUDE.md section
    4's fail-loud-not-silent-catch rule.
 
+**"Wired into CI" means two different mechanisms, not one, because
+GitHub gives PRs and issues different enforcement primitives -- stated
+explicitly since blurring them would overclaim.** For PRs, "the gate
+fails loud" is a real, pre-merge block: the script runs as a required
+status check, and a required check's failure is what a branch
+protection ruleset actually consults before allowing a merge (the same
+mechanism every other CI gate in this repo already relies on). Issues
+have no equivalent -- GitHub has no required-check concept for issue
+creation, so a workflow that runs `on: issues` fires only AFTER GitHub
+has already created the issue, and its exit code cannot reject that
+write after the fact. Emitting an `::error::` annotation there reports
+a violation; it does not, by itself, back anything out. So for issues
+specifically, the server-side gate's action on a detected violation is
+a genuine remediation, not just a report: it closes the issue via the
+GitHub API with a comment naming the violation and asking the author to
+re-open with a corrected title, and applies an `invalid-title` label so
+the closure is distinguishable from a normal resolution in triage
+views. That remediation is what makes the server-side layer an actual
+backstop for issues -- the annotation alone would not be.
+
 **Client-side PreToolUse hook**, ported as a required second layer, not
 an optional extra: gitapex already has an established PreToolUse-hook
 pattern (`hooks/check-bash-safety.sh`, `hooks/check-template-
@@ -83,23 +103,34 @@ overwrite.sh`) -- a title-policy hook denying a non-conforming
 `mcp__github__issue_write`/`create_pull_request`/`update_pull_request`
 call BEFORE it reaches GitHub is the same defense-in-depth shape these
 two already establish, catching the violation earlier and cheaper than
-the server-side gate would. Fail-open contract, stated explicitly per
-the real upstream hook's own documented contract: "any parse error or
-unexpected payload shape emits `::error::...` to stderr and exits 0
-with no decision, so a hook bug never wedges the session" -- the
-server-side gate remains the backstop regardless of a hook-side failure,
-exactly the split #131 principle 6 (fail closed, including on
-INDETERMINATE) requires at the layer that actually enforces, while the
-convenience layer degrades safely.
+the server-side gate would, and for issues specifically it is the
+ONLY layer that prevents the bad title from ever existing on the
+platform rather than remediating it after the fact. Fail-open contract,
+stated explicitly per the real upstream hook's own documented contract:
+"any parse error or unexpected payload shape emits `::error::...` to
+stderr and exits 0 with no decision, so a hook bug never wedges the
+session" -- the server-side gate remains the backstop regardless of a
+hook-side failure (a pre-merge block for PRs, a close-and-relabel
+remediation for issues, per the split above), exactly the split #131
+principle 6 (fail closed, including on INDETERMINATE) requires at the
+layer that actually enforces, while the convenience layer degrades
+safely.
 
-## Decision 2: ASCII-only becomes operator-configurable, not an absolute floor
+**Named gap, not papered over:** an issue filed through any path other
+than a harness session running this hook (the GitHub web UI directly,
+a different tool, the API called by a script) never passes through the
+PreToolUse layer at all -- the server-side close-and-relabel
+remediation is the only control that reaches it, and it is detective
+(the bad title existed, however briefly, and was visible until closed)
+rather than preventive. This design does not claim otherwise.
 
-**Correction (2026-07-18, operator feedback):** Decision 1 above ported
-the ASCII-only check as an unconditional floor, matching claude-md's own
-posture unexamined. Revised: gitapex makes it a configurable policy
-toggle, defaulting to the secure (ASCII-only) state, with an explicit,
-reasoned opt-out -- not a blanket relaxation, and not adopted
-uncritically either direction.
+## Decision 2: ASCII-only is operator-configurable, not an absolute floor
+
+**Decision (2026-07-18, operator direction):** Decision 1 above ports
+the ASCII-only check as claude-md itself runs it -- an unconditional
+floor. gitapex instead makes it a configurable policy toggle, defaulting
+to the secure (ASCII-only) state, with an explicit, reasoned opt-out --
+not a blanket relaxation, and not adopted uncritically either direction.
 
 **The two upstream rationales are distinct and must be separated, not
 bundled:**
@@ -156,22 +187,39 @@ otherwise always apply.
   live config, not just to external input.
 
 **A narrower, unconditional floor survives the toggle -- this is not a
-blunt on/off switch.** Even with `ascii_only = false`, the gate still
-unconditionally rejects zero-width characters (ZWSP/ZWNJ/ZWJ/BOM),
-bidirectional control overrides (RLO/LRO/PDF and the newer isolate
-controls), and other Unicode format ("Cf" category) characters -- none
-of these have any legitimate use in a title in ANY language, so nothing
+blunt on/off switch, and the floor is drawn at "has no legitimate title
+use," not at "is a zero-width or Cf-category character."** Even with
+`ascii_only = false`, the gate still unconditionally rejects zero-width
+space (ZWSP) and the byte-order mark (BOM), and bidirectional control
+overrides/isolates (RLO/LRO/PDF and the newer isolate controls) -- none
+of these have any legitimate use in a title in any language, so nothing
 about the operator's stated productivity concern argues for allowing
-them, and this is the specific vector the upstream rationale names
-first ("zero-width marks, RTL controls"). What toggles OFF is the
-broader restriction to ordinary printable ASCII -- legitimate multibyte
-text (Japanese, accented Latin, CJK, emoji) becomes permitted. Homoglyph
-confusion (a lookalike character substituted for an expected ASCII one)
-is a narrower residual risk specifically about text PRETENDING to be
-ASCII; a title legitimately written in Japanese is not making that
-pretense, so this design does not additionally restrict homoglyphs when
-`ascii_only = false` -- named here as a considered, not overlooked,
-scope boundary.
+them, and the bidi-override vector is the specific one the upstream
+rationale names first ("RTL controls").
+
+ZWNJ (U+200C) and ZWJ (U+200D) are deliberately **not** on that
+unconditional list, unlike the rest of the zero-width/Cf set: ZWNJ has
+real orthographic use in Persian and other scripts (preventing letter
+joining), and ZWJ is how most composite emoji sequences are actually
+built (family/profession/flag emoji render as separate glyphs without
+it) -- exactly the "legitimate multibyte text... emoji" the toggle is
+meant to permit, below. Blocking them unconditionally would contradict
+that permission for the specific characters emoji sequences need most.
+They fall under the SAME `ascii_only` toggle as the rest of non-ASCII
+content: rejected when `ascii_only = true` (the default), permitted
+when `ascii_only = false`, same as any other legitimate-language
+character -- not a special case, just correctly scoped to the toggle
+whose stated purpose already covers them.
+
+What toggles OFF, then, is the broader restriction to ordinary
+printable ASCII -- legitimate multibyte text (Japanese, accented Latin,
+CJK, emoji and its ZWJ-sequence joiners, Persian and its ZWNJ) becomes
+permitted. Homoglyph confusion (a lookalike character substituted for
+an expected ASCII one) is a narrower residual risk specifically about
+text PRETENDING to be ASCII; a title legitimately written in Japanese
+is not making that pretense, so this design does not additionally
+restrict homoglyphs when `ascii_only = false` -- named here as a
+considered, not overlooked, scope boundary.
 
 **Explicitly NOT gated by #147's `security-tier`.** Considered and
 rejected: tier answers "how much security depth for this organization's
@@ -195,13 +243,17 @@ decision does not touch it.
 
 Restated as its own decision because CLAUDE.md section 4 requires the
 split to be argued per function, not defaulted: the SERVER-SIDE gate
-fails loud on a genuine policy violation (a bad title must be blocked,
-full stop -- #131 principle 6). The CLIENT-SIDE hook fails OPEN only on
-its OWN malfunction (a parse error, an unexpected payload shape it
+fails loud on a genuine policy violation (a bad title must be blocked
+for a PR, or closed-and-relabeled for an issue, full stop -- #131
+principle 6, and the PR-vs-issue mechanism split named under Decision
+1's server-side-gate bullet above). The CLIENT-SIDE hook fails OPEN only
+on its OWN malfunction (a parse error, an unexpected payload shape it
 cannot interpret) -- never on a title it correctly identified as
 violating policy, where it still denies. The two are not in tension:
-one is "the hook is broken" (fail open, server backstop catches it),
-the other is "the title is bad" (fail closed at both layers).
+one is "the hook is broken" (fail open, server backstop catches it,
+even though for an issue that backstop is a remediation after the fact
+rather than a pre-write block), the other is "the title is bad" (fail
+closed at both layers, each in the way its platform actually allows).
 
 ## Decision 4: allowed-types list, grounded in gitapex's own real usage
 
@@ -229,11 +281,25 @@ edit away when a real commit needs them, matching this repo's own
 anti-speculative-complexity discipline (#125's rule, applied here to a
 type list instead of a gate kind).
 
-Scope pattern: reuse claude-md's own `[a-z0-9][a-z0-9-]*` unchanged --
-gitapex's real scopes (`cli`, `plugin`, `skills`, `battle-testing-a-
-skill`, `evaluating-skill-quality`, ...) already fit it without
-exception, verified against the same git-log scan; no argued need to
-diverge.
+Scope pattern: claude-md's own `[a-z0-9][a-z0-9-]*` does **not** fit
+gitapex's real scope history without exception -- a corrected git-log
+scan (`git log --all --oneline` grepped for `type(scope):` shapes, not
+assumed from a handful of examples) finds both a comma-delimited
+multi-scope title (`evaluating-skill-quality,battle-testing-a-skill`)
+and multiple slash-delimited path-qualified scopes
+(`skills/gated-skill-edits`, `skills/issue-to-branch`,
+`skills/merge-retrospective`, `skills/outward-artifact-preflight`,
+`skills/seeding-issue-pr-templates`, `skills/stop-and-replan`,
+`skills/untrusted-input-triage`), none of which claude-md's unchanged
+pattern accepts. Both forms are established, repeated conventions in
+this repo's own history, not one-off typos -- prohibiting them now
+would need its own migration argument this design does not make, so
+the pattern is widened instead:
+`[a-z0-9][a-z0-9/-]*(,[a-z0-9][a-z0-9/-]*)*` -- each individual scope
+token keeps claude-md's own alnum-first/hyphen shape, plus `/` for
+path-qualified scopes, and a comma joins multiple scope tokens in one
+title. This is scope-widening the pattern to match reality already in
+the repository, not inventing a new convention.
 
 ## Decision 5: what is NOT ported -- named, not silently dropped
 
