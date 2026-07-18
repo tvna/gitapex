@@ -33,9 +33,10 @@ body -- the same discipline this correction exists to restore.
 
 Per this repository's discipline (matching #57/#123/#125/#126/#127/#130/
 #131/#144/#145/#147/#148/#151 precedent): this doc records a design
-only. No `.gitapex/doc-dependencies.toml`, no `scripts/doc_graph.py` or
-`gate_doc_graph_pr.py` port, no CI wiring is created by this pass.
-Implementing it as real code is a later, separate step.
+only. No `.gitapex/policies/doc-dependencies.toml`, no
+`scripts/doc_graph.py` or `gate_doc_graph_pr.py` port, no CI wiring is
+created by this pass. Implementing it as real code is a later, separate
+step.
 
 ## Why this doc exists
 
@@ -68,8 +69,11 @@ enforcement shapes.
 ## Decision 1: port the real mechanism -- a co-change graph, not a content checker
 
 **Decision: adopt claude-md's actual design, ported (not reinvented):
-a typed, directed dependency GRAPH (`.gitapex/doc-dependencies.toml`)
-of document/script/workflow nodes, with typed edges recording "when
+a typed, directed dependency GRAPH
+(`.gitapex/policies/doc-dependencies.toml` -- relocated from claude-md's
+own flat `.gitapex/doc-dependencies.toml` per #123 Addendum 3, which
+also names this exact file as a worked example of the consolidation
+rule) of document/script/workflow nodes, with typed edges recording "when
 FROM changes, TO should be reviewed." A CI gate
 (`gate_doc_graph_pr.py`-equivalent) reads the PR's changed-file list; for
 every changed file that is a graph node, it requires every
@@ -231,9 +235,9 @@ this doc's full scope on the point; it does not retrofit #127 itself.
 
 Per CLAUDE.md section 3's rule and #144's own precedent (the inventory
 and its gate shipped together), the implementation issue must seed
-`.gitapex/doc-dependencies.toml` with Decision 3's nodes/edges in the
-SAME change that adds the gate script -- a drift gate with nothing
-registered protects nothing.
+`.gitapex/policies/doc-dependencies.toml` with Decision 3's nodes/edges
+in the SAME change that adds the gate script -- a drift gate with
+nothing registered protects nothing.
 
 Worth porting alongside the gate, not required for the gate to function:
 `doc_graph.py`'s `render_mermaid` function, which turns the graph into a
@@ -278,11 +282,11 @@ regex and format, fail-loud/fail-open split), `.gitapex/ssot.schema.json`
 (`policy_sources[].format` enum -- the error this session's #144 fix
 corrected), and `scripts/owasp_asi_mapping.py` (confirmed near-exact
 match to gitapex's own `gate_owasp_asi_mapping.py`, including identical
-`VALID_STATUSES`).
+`VALID_STATUSES`). gitapex's own file relocates to
+`.gitapex/policies/doc-dependencies.toml` per #123 Addendum 3 -- settled
+there, not left open here.
 
-Speculation, named as such: the exact port's file paths in gitapex
-(`.gitapex/doc-dependencies.toml` mirrors claude-md's own path, a
-reasonable default but an implementation-issue decision); whether
+Speculation, named as such: whether
 gitapex ports `doc_graph_viz`-equivalent tooling beyond the
 `render_mermaid` function itself; whether `.github/workflows/`
 gains a dedicated `validate-doc-graph.yml`-equivalent workflow or the
@@ -291,8 +295,8 @@ resolved here.
 
 ## Non-goals
 
-- No `.gitapex/doc-dependencies.toml`, no `scripts/doc_graph.py` or
-  gate port, no CI wiring, no `render_mermaid` port -- design only. A
+- No `.gitapex/policies/doc-dependencies.toml`, no `scripts/doc_graph.py`
+  or gate port, no CI wiring, no `render_mermaid` port -- design only. A
   later session may implement this, matching #144's design-to-code
   precedent.
 - Not a content/semantic consistency checker of any kind -- Decision 1
@@ -332,6 +336,9 @@ resolved here.
 - [ ] Facts vs. speculation cites real files read this session by path,
       not paraphrased issue-body descriptions -- the discipline this
       whole revision exists to restore.
+- [ ] The policy/schema files live at `.gitapex/policies/
+      doc-dependencies.toml` / `.schema.json`, not claude-md's own flat
+      `.gitapex/doc-dependencies.toml` path -- per #123 Addendum 3.
 
 ## Related Issue
 
