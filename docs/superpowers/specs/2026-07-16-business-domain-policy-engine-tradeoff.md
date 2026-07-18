@@ -205,20 +205,35 @@ split (Candidate A's fuller design) would be warranted instead.
 
 ## Open risks
 
-- **The `input` document contract is real, unaddressed API surface.**
+- ~~**The `input` document contract is real, unaddressed API surface.**
   Every candidate underspecifies what fields the CLI assembles and passes
   to the evaluator per plane/trigger. This needs its own versioned spec
   (e.g. `change/v1`), tested and documented on its own, before
-  implementation -- regardless of which candidate is chosen.
-- **`regorus` conformance is unverified** against the specific builtins
+  implementation -- regardless of which candidate is chosen.~~
+  **Resolved (2026-07-18):** see the full `change/v1` specification in
+  the Addendum below -- schema by namespace, a scope-gated additivity
+  versioning rule, and an eight-case fixture corpus design that closes
+  this risk and the regorus-conformance risk below together.
+- ~~**`regorus` conformance is unverified** against the specific builtins
   gitapex's own worked examples use (`time.*`, `sprintf`, set
   comprehensions). Flagged as speculation, not fact, in the underlying
-  design sketches; needs a conformance smoke test before adoption.
-- **Rust-vs-Go is still open** (`docs/versioning.md`). `regorus` is
+  design sketches; needs a conformance smoke test before adoption.~~
+  **Resolved (2026-07-18):** the `change/v1` fixture corpus (Addendum
+  below) includes a dedicated negative fixture (`builtin-denied-network`)
+  asserting `http.send`/`net.lookup_ip_addr`/`opa.runtime` are absent or
+  disabled, run via a `gitapex fixtures verify` subcommand wired as a
+  conformance canary on every `regorus` version bump -- the mechanism to
+  close this risk is now designed; the actual verification run against a
+  real `regorus` build is still an implementation-time step.
+- ~~**Rust-vs-Go is still open** (`docs/versioning.md`). `regorus` is
   Rust-only; choosing Go would mean falling back to OPA's own pure-Go
   `github.com/open-policy-agent/opa/rego` package instead -- likely better
   conformance, but a different embedding decision. This recommendation
-  assumes Rust; revisit if Go wins.
+  assumes Rust; revisit if Go wins.~~ **Resolved (2026-07-18): Rust**,
+  per a dedicated decision brief -- see `docs/versioning.md`'s updated
+  `cli` row and the Addendum below for the full brief and its one named
+  tripwire (the `regorus` conformance fixture above failing a required
+  builtin flips this to Go while the switch is still a design edit).
 - ~~**The ownership-boundary convention is soft.** If gitapex's
   redistribution mechanism (how config behaves when forked/vendored into a
   downstream repo) turns out to need a harder separation than a path
@@ -394,6 +409,202 @@ itself (no confused-deputy path between `format: "rego"` and `kind`), or
 in the single-static-binary/no-sidecar architecture (it eliminates the
 whole class of server-attack-surface by construction) -- these are noted
 as reviewed, not silently skipped.
+
+## Addendum (2026-07-18): Rust-vs-Go decision brief
+
+**Decision: Rust, confidence ~70/30, one named tripwire.** Concrete
+named choices considered: (A) Rust + embedded `regorus` (chosen) vs.
+(B) Go + embedded `github.com/open-policy-agent/opa/rego` (a viable
+fallback, not a degraded option).
+
+**Factor 1 -- Rego ecosystem fit (dominant).** Go's `opa/rego` is
+canonical (conformance risk vanishes by construction) -- Go's single
+strongest card. Weighed against three points: (1) the conformance risk
+is now gated by the fixture corpus below, buildable regardless of
+language; (2) `regorus` lacks `http.send`/`net.lookup_ip_addr` by
+construction, satisfying #131's F4 (network builtins absent) fail-safe-
+by-construction rather than fail-safe-by-configuration, the stronger
+position under an assume-breach posture; (3) `regorus` is a small
+pure-Rust crate vs. OPA's Go module's larger dependency closure, a
+smaller tree for the already-mandated dependency-audit gate to cover.
+The "every doc assumes Rust" inertia carries zero weight as evidence --
+now is the cheap moment to reverse it if warranted, a doc edit not a
+code rewrite.
+
+**Factor 2 -- distribution/Class B fit.** Near-wash; GitHub-hosted
+runners natively cover all four Class B targets regardless of language,
+so cross-compilation friction is moot. Binary size mildly favors Rust.
+Not decisive.
+
+**Factor 3 -- team/ecosystem signal.** Existing tooling is Python; Go is
+generally the gentler on-ramp, but the compiled CLI is opaque to
+contributors either way once shipped. Low weight, and explicitly left
+open to the operator's own unweighable preference (personal/hiring
+familiarity) as a legitimate override -- not evaluated further here.
+
+**The tripwire:** run the `regorus` conformance fixture (below) *first*.
+If it fails a required builtin (`time.*`, `sprintf`, set comprehensions)
+with no trivial workaround, flip to Go immediately, while the switch is
+still a design edit. This is the sole condition under which this
+decision reopens without a fresh operator instruction.
+
+**What changes if this holds:** `docs/versioning.md`'s `cli` row updated
+(done, this pass). No further change to this doc's Evaluation section.
+**What would change on the Go override:** `regorus` references
+throughout this doc's Evaluation section replaced with `opa/rego`; F4
+reworked from absent-by-construction to a capabilities-config allowlist
+with negative fixtures; the dependency-audit gate becomes `govulncheck`
++ license check.
+
+## Addendum (2026-07-18): `change/v1` input-document specification
+
+Closes both open risks above with one artifact, per the AGT addendum's
+own proposal.
+
+### Schema, by namespace
+
+Assembled per-gate from the gate's declared `input_scope` (#131-era F1):
+undeclared fields are **absent, not null** -- assembly-time omission,
+never post-assembly filtering. Only `meta` is always assembled (no
+repository/actor content, zero least-privilege cost, needed by every
+policy to version-check and distinguish `block`/`audit`).
+
+```jsonc
+{
+  "meta": {
+    "api_version": { "const": "gitapex.dev/change/v1" },
+    "schema_revision": { "type": "integer", "minimum": 0 },
+    "plane": { "enum": ["pre-commit", "pre-push", "pretooluse", "ci", "mcp"] },
+    "mode":  { "enum": ["block", "audit"] }
+  },
+  "changed_files": { "type": "array", "items": { "required": ["path", "status"],
+    "properties": { "path": {"type":"string"}, "status": {"enum":["added","modified","deleted","renamed"]},
+                     "old_path": {"type":"string"} } } },
+  "pr": { "properties": { "number": {"type":"integer"}, "title": {"type":"string"},
+    "body": {"type":"string"}, "labels": {"type":"array","items":{"type":"string"}},
+    "author": { "properties": { "login": {"type":"string"}, "provenance": {"const":"asserted"} } },
+    "base_ref": {"type":"string"}, "head_ref": {"type":"string"} } },
+  "commit": { "properties": { "sha": {"type":"string"}, "message": {"type":"string"},
+    "author": { "properties": { "name": {"type":"string"}, "email": {"type":"string"} } },
+    "signed": {"type":"boolean"}, "signature_verified": {"type":"boolean"},
+    "provenance": {"enum":["verified","asserted"]}, "verification": {"type":"string"} } },
+  "policy": { "properties": { "sources": { "type":"array", "items": {
+    "required": ["id","path","format","sha256"],
+    "properties": { "id":{"type":"string"}, "path":{"type":"string"},
+                     "format":{"type":"string"}, "sha256":{"type":"string"} } } } } },
+  "workspace": { "properties": { "root": {"type":"string"}, "platform": {"enum":["github","gitlab"]} } }
+}
+```
+
+**Decided points:**
+
+- **File contents are never in `change/v1`**, not by default and not via
+  opt-in scope -- the highest-value leak payload through a denial
+  message, and unbounded document size in the least-trusted `mcp` plane.
+  A gate needing content declares its own specific-file read via
+  `policy_refs`/script, outside this document. `changed_files[].content`
+  is a reserved name requiring a `v2` discussion.
+- **`pr.title`/`pr.body`/`commit.message` pass through under #138 Gate
+  6's untrusted-text-advisory framing** (cross-reference, not redesign):
+  raw bytes, no trust conferred; a gate's denial message must not echo
+  them verbatim (#131 principle 7).
+- **`commit.provenance` originates here**, not at audit-log-write time
+  (#130's addendum F1): `signature_verified == true` yields `"verified"`
+  with a populated `verification`; anything else -- unsigned, or
+  verification unable to run -- yields `"asserted"`. Indeterminate
+  verification never upgrades trust (#131 principle 6). `pr.author.provenance`
+  is constitutionally `"asserted"` (an unauthenticated platform API
+  string at this boundary).
+- **`policy` carries metadata, not values.** Resolved `data_refs` values
+  do NOT ride in this document -- they mount at `data.<source_id>` via
+  regorus's separate `data` channel (per this doc's own F3). The registry
+  stays references-only, the input document stays content-minimal, and
+  `policy.sources[].sha256` lets #130's audit trail cross-check
+  `policy_version` against an independently recomputed hash rather than
+  a bare self-report.
+
+### Versioning rule
+
+Additive fields ship within `v1`; `meta.schema_revision` increments;
+`v2` is reserved for breaking changes (rename, retype, semantic change,
+adding file contents). Justification: adopter CLI binaries and
+registries WILL skew (#127's generate-locally model has no central sync
+point), and a `v2`-per-field rule would force lockstep upgrades across
+parties who cannot coordinate. The usual additivity hazard (a consumer
+silently depending on a field an older producer omits) is structurally
+closed by `input_scope` itself: a policy only ever sees fields its gate
+declared, and a registry declaring a scope path the running binary's
+schema revision doesn't know is a registry-validation error, fail
+closed (#131 principle 6) -- loud and diffable, never a silent
+`undefined`.
+
+### Fixture corpus (the mechanism that closes both risks above)
+
+```
+fixtures/change-v1/
+  schema.json                    # canonical JSON Schema, the versioned artifact
+  <case-name>/
+    input.json                   # full assembled change/v1 document
+    scope.json                   # registry-entry excerpt: input_scope + policy_refs/data_refs
+    policy.rego                  # the known policy
+    data/<source_id>.json        # optional, mounted per F3
+    expected.json                # {"outcome": "allow"|"deny"|"rejected-by-drift-gate", ...}
+```
+
+Eight seed cases, each plane covered at least once: `ci-pr-clean-pass`,
+`ci-pr-label-deny`, `scope-violation-static-reject` (a `.rego` file
+referencing an undeclared `input.` path -- asserts static AST rejection
+per F1, never reaches evaluation), `data-refs-mount-resolution` (asserts
+`data.<source_id>` mounting AND root-mount absence per F3),
+`pre-push-unsigned-commit-deny` (`commit.provenance: "asserted"` denied
+by a signed-commits policy), `pretooluse-audit-mode-pass`,
+`mcp-minimal-scope-pass`, and `builtin-denied-network` (the negative
+fixture closing the regorus-conformance risk: asserts
+`http.send`/`net.lookup_ip_addr`/`opa.runtime` are absent or disabled).
+
+**CI wiring: a `gitapex fixtures verify` subcommand**, not an external
+test harness -- it exercises the shipped assembly code path and the
+embedded, lockfile-pinned `regorus` itself; an external harness linking
+`regorus` separately would verify a proxy, exactly the indirect-signal
+substitution CLAUDE.md section 1 forbids. Runs on every PR, and re-runs
+as the conformance canary on every `regorus` version bump (the
+dependency-audit gate's lockfile-drift check triggers it).
+
+### Worked example
+
+Registry entry (excerpt):
+
+```jsonc
+{
+  "id": "frozen-path-guard", "kind": "opa-rego", "planes": ["ci"],
+  "policy_refs": ["frozen-paths-policy", "frozen-path-list"],
+  "input_scope": ["changed_files.*", "pr.labels", "commit.sha", "commit.provenance"]
+}
+```
+
+Assembled document (only declared fields plus mandatory `meta`; note
+`pr.title`/`pr.body`/`commit.message`/`workspace` are absent --
+undeclared):
+
+```json
+{
+  "meta": { "api_version": "gitapex.dev/change/v1", "schema_revision": 0, "plane": "ci", "mode": "block" },
+  "changed_files": [
+    { "path": "db/migrations/0042_drop_users_email.sql", "status": "added" },
+    { "path": "docs/runbook.md", "status": "renamed", "old_path": "docs/ops.md" }
+  ],
+  "pr": { "labels": ["migration", "needs-dba-review"] },
+  "commit": { "sha": "9f2c41a7e8b3d6905c1f0a4e2b8d7c6f5a4e3d2b", "provenance": "verified" }
+}
+```
+
+`data.frozen-path-list` (mounted separately per F3) supplies the actual
+frozen-path globs -- never inside `input`.
+
+**Open item carried forward:** the `pre-commit` plane value above is
+inferred from #131's invocation-context list, not yet confirmed against
+a real #123 registry example -- confirm exact spelling when #123 is
+implemented.
 
 ## Non-goals
 
