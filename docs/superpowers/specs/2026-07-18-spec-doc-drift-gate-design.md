@@ -152,9 +152,12 @@ verb. For `governs`/`compiled_to`, `from` is the upstream authority. For
 `derives_from`, `from` is the DOWNSTREAM/derived doc and `to` is the
 upstream authority it derives from -- verified against the real TOML's
 own `design_philosophy_prd -> ubiquitous_language, type=derives_from`
-edge, where `ubiquitous_language` is the authority. gitapex's own edges
-below use `derives_from` for exactly this reason: the derived doc names
-itself as `from`.
+edge, where `ubiquitous_language` is the authority. gitapex's own
+seed edges below use `governs` instead, precisely because the co-change
+direction they need is the other one: `from` is the upstream authority
+(the tier enum, the hearing's zero-schema-fields guarantee) and `to`
+is the devcontainer spec that hardcodes an assumption about it, so
+editing the authority is what must trigger review of the consumer.
 
 ## Decision 3: the concrete graph for gitapex's real chain
 
@@ -187,19 +190,39 @@ type = "prd"
 description = "This document -- the drift-gate design itself (#152)."
 
 [[edges]]
-from = "devcontainer_generation_prd"
-to = "init_capability_tiers_prd"
-type = "derives_from"
+from = "init_capability_tiers_prd"
+to = "devcontainer_generation_prd"
+type = "governs"
 severity = "blocking"
-note = "Devcontainer content-by-tier table hardcodes the security-tier enum; co-change on tier vocabulary changes."
+note = "The security-tier enum and per-tier control set defined here are hardcoded into the devcontainer content-by-tier table; co-change that table whenever the tier vocabulary or its control set changes."
 
 [[edges]]
-from = "devcontainer_generation_prd"
-to = "init_hearing_fable_prd"
-type = "derives_from"
+from = "init_hearing_fable_prd"
+to = "devcontainer_generation_prd"
+type = "governs"
 severity = "blocking"
-note = "Decision 3's non-consumption argument rests on Decision 1's zero-schema-fields guarantee; co-change if that guarantee changes."
+note = "Decision 3's non-consumption argument rests on this document's Decision 1 zero-schema-fields guarantee; co-change the devcontainer spec's non-consumption claim if that guarantee changes."
 ```
+
+**Edges point from the authority to its consumer, not the reverse.**
+Both seed edges above name the devcontainer spec as `to`, not `from`,
+even though it is the file that most recently changed in this stacked
+PR chain -- that is deliberate, not a mistake to "fix" back the other
+way. Per Decision 2's directional convention, `governs` reads "if FROM
+(the upstream authority) changes, review TO (the governed downstream
+doc)"; the drift scenario this design exists to catch is exactly that
+direction -- someone edits the tier enum or the hearing's
+zero-schema-fields guarantee and forgets the devcontainer spec that
+hardcodes an assumption about it. An edge with `from =
+devcontainer_generation_prd` would instead fire when the devcontainer
+spec itself changes and require review of its own upstream authorities
+-- a real but different check (did this edit stay faithful to what it
+derives from), not the co-change-on-upstream-change guarantee named in
+each edge's `note` field above. `derives_from` was the wrong edge type
+for this relationship for the same reason: its own documented
+directional convention (Decision 2) points the "if changed, review"
+arrow from the derived doc back to its authority, which is `governs`'s
+job here, not `derives_from`'s.
 
 `docs/security-control-inventory.md` and `.github/scripts/
 gate_owasp_asi_mapping.py`/`gate_owasp_llm_mapping.py` (#144/#145) are
