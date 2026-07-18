@@ -65,11 +65,9 @@ to check.
 A borrowed lens for what this review does and does not yet see, not a new
 scoring dimension. Adapted from Anthropic's own field guide on working with
 Claude models -- Thariq Shihipar, "A Field Guide to Fable: Finding Your
-Unknowns" ([fable], fetched via a `site:claude.com` search-result
-confirmation in this session; a direct fetch returned HTTP 403, a
-proxy-level block in this environment, not evidence against the URL) --
-which names four kinds of gap between what an operator tells an agent (the
-map) and what the actual work requires (the territory):
+Unknowns" ([fable]) -- which names four kinds of gap between what an
+operator tells an agent (the map) and what the actual work requires (the
+territory):
 
 - **Known knowns** -- what the target `SKILL.md` states outright; dimensions
   1-9 read this directly.
@@ -89,9 +87,12 @@ map) and what the actual work requires (the territory):
 ### Blind spot pass
 
 A precondition step (`SKILL.md`'s Procedure step 2, alongside the Mechanism
-fit checks), not a tenth dimension -- the fixed nine-dimension count
-(`evals/evaluating-skill-quality/tasks/guardrail.yaml` checks the reviewer
-still says "nine") is unchanged by this section.
+fit checks), not a tenth dimension -- the fixed nine-dimension count is
+unchanged by this section. (As a point of local fact about this
+repository specifically, not part of this skill's own portable content:
+`evals/evaluating-skill-quality/tasks/guardrail.yaml` checks the reviewer
+still says "nine" -- illustrative confirmation, not something this claim
+depends on to be true.)
 
 Before walking dimensions 1-9, name explicitly whether the target's specific
 domain exposes a quality concern that none of the nine dimensions,
