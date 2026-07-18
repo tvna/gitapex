@@ -63,8 +63,8 @@ the original pass, prose-only backing for a real supply-chain-risk
 concern (an agent autonomously running an install command), because
 gitapex had no hooks infrastructure at the time.
 
-**Update (dogfooding re-run against the live repository, same session as
-issue #155):** this specific claim -- "gitapex has no hooks infrastructure
+**Update ([issue #164][issue164], dogfooding re-run against the live
+repository, same session as [issue #155][issue155]):** this specific claim -- "gitapex has no hooks infrastructure
 at all today" -- has since been falsified by a real repository change and
 is corrected here rather than left to silently rot per dimension 6's own
 durability standard. `hooks/hooks.json` now wires a `PreToolUse` gate on
@@ -219,10 +219,11 @@ same instruction in two places" fail this dimension itself names. Not a
 current violation -- a forward-looking note on a file that has grown
 several times in one review pass.
 
-**Update (dogfooding re-run, same session as issue #155):** the file
+**Update ([issue #164][issue164], dogfooding re-run, same session as
+[issue #155][issue155]):** the file
 grew again, from the 565 lines recorded above to **806 lines**, across
-two further gated edits (issue #149's Unknowns framework / Blind spot
-pass, issue #155's Model/effort tier fit). Checked directly against the
+two further gated edits ([issue #149][issue149]'s Unknowns framework / Blind spot
+pass, [issue #155][issue155]'s Model/effort tier fit). Checked directly against the
 specific drift risk named above -- neither `waza`'s divergences nor
 SkillOpt's disciplines are cited a second time anywhere in the new
 content, so that named violation has not occurred, and a full read of
@@ -352,7 +353,7 @@ editing session itself. The extensive back-and-forth in this session
 iterative validation but was not scored against a held-out split, so it
 does not meet the letter of the discipline this dimension names.
 
-**Update (PR #103):** this gap was closed for one specific edit, not
+**Update ([PR #103][pr103]):** this gap was closed for one specific edit, not
 retroactively for the skill's whole authoring history. The dimension-8
 scoring-axis paragraph added in that PR was scored against a documented
 held-out train/selection/test split
@@ -364,14 +365,14 @@ discipline applied to this skill, not evidence that every earlier edit
 in this document's history went through it -- the paragraph above still
 accurately describes the many edits that did not.
 
-**Update (issue #149, Unknowns framework / Blind spot pass):** a second
+**Update ([issue #149][issue149], Unknowns framework / Blind spot pass):** a second
 gated edit. This session had no registered `Skill` tool for
 `evaluating-skill-quality` to dispatch against (it is this repository's
 own content, not an installed plugin), so each live dispatch was
 instructed explicitly to read `SKILL.md`/`references/rubric.md` off disk
 and follow the Procedure by hand -- a reasonable proxy for the
 `copilot-sdk`-executor harness the 13 prior fixtures were calibrated
-against. An external review on PR #150
+against. An external review on [PR #150][pr150]
 (`chatgpt-codex-connector[bot]`) caught two real bugs a first pass at
 this gate missed: two new fixtures' assertions were case-sensitive
 against text the rubric itself prescribes in a different case
@@ -392,10 +393,10 @@ change, moving cleanly from 0.75 to 1.00 on both independent runs. Full
 record, including the per-fixture score table and the two bugs' exact
 fix: `evals/evaluating-skill-quality/split.md`'s Kept-edit log.
 
-**Update (issue #155, Model/effort tier fit):** a third gated edit, same
+**Update ([issue #155][issue155], Model/effort tier fit):** a third gated edit, same
 session, same no-registered-`Skill`-tool workaround. This round's
 selection-split before scores reused the six pre-existing fixtures'
-already-measured after scores from the issue #149 gate directly above
+already-measured after scores from the [issue #149][issue149] gate directly above
 (same committed file state, same matched methodology -- disclosed reuse,
 not a silent assumption), so only the one new selection fixture,
 `model-effort-tier-fit-unjustified-effort.yaml`, needed a genuine fresh
@@ -413,7 +414,7 @@ diagnostic verbatim). A held-out restraint check,
 `model-effort-tier-fit-justified.yaml` (test split, read once), found
 the new check does not over-fire on a pin that already meets its own
 justification criteria -- and caught one more instance of the exact
-case-sensitivity bug PR #150's external review found for `blind spot`:
+case-sensitivity bug [PR #150][pr150]'s external review found for `blind spot`:
 this fixture's own `output_contains: ["model/effort pin justified"]`
 false-failed against a dispatch that (correctly) capitalized it as a
 sentence-initial "Model/effort pin justified." Fixed the same way, by
@@ -470,7 +471,8 @@ self-review that always passes cleanly would itself be evidence of
 rubber-stamping -- per this skill's own Stop boundaries, a bare "looks
 fine" is exactly what is disallowed.
 
-**Update (dogfooding re-run, issue #155 session):** a fresh, fully live
+**Update ([issue #164][issue164], dogfooding re-run, [issue #155][issue155]
+session):** a fresh, fully live
 dispatch (real subagent, real target -- this skill's own current files on
 disk, not a synthetic fixture) ran the complete current Procedure against
 this skill, including both of this session's own new checks, per this
@@ -492,7 +494,7 @@ scorer (`score_contract.py`'s substring matching) actually measures the
 judgment it is scoring -- live evidence for this exact gap already exists
 in this session's own history (two independent case-sensitivity
 false-failures, both caught by review rather than by the gate itself; see
-the issue #149 and #155 updates in dimension 8 below). Left unfixed here,
+the [issue #149][issue149] and [issue #155][issue155] updates in dimension 8 above). Left unfixed here,
 correctly, per the Blind spot pass's own instruction that a durable
 rubric change is a deliberate, `gated-skill-edits`-gated edit, not
 something a single review session improvises -- named for a future
@@ -542,5 +544,21 @@ comparison is future work, named rather than assumed -- see
 
 ## References
 
-(No external URLs specific to this file beyond those already collected in
-[rubric.md's References](rubric.md#references).)
+External primary-source URLs are already collected in
+[rubric.md's References](rubric.md#references). This file's own
+in-repo PR/issue citations are fully qualified below (`owner/repo#N`
+resolving to an explicit URL) rather than left as bare `#N` shorthand --
+a bare `#N` auto-links relative to whichever repository currently hosts
+this file, which silently resolves to the wrong issue or PR once this
+Portable skill is vendored elsewhere; a fully qualified link always
+resolves to `tvna/gitapex`, correctly, regardless of where the file
+lives. Cited as illustrative history of this skill's own authoring
+process (per the Portability level section's "references to the origin
+repository as context... remain fine"), never as a step this skill's
+procedure depends on to function.
+
+[pr103]: https://github.com/tvna/gitapex/pull/103 "gitapex PR #103 -- dimension-8 scoring-axis paragraph, held-out gated"
+[pr150]: https://github.com/tvna/gitapex/pull/150 "gitapex PR #150 -- Unknowns framework / Blind spot pass + Model/effort tier fit"
+[issue149]: https://github.com/tvna/gitapex/issues/149 "gitapex issue #149 -- Unknowns framework / Blind spot pass"
+[issue155]: https://github.com/tvna/gitapex/issues/155 "gitapex issue #155 -- Model/effort tier fit"
+[issue164]: https://github.com/tvna/gitapex/issues/164 "gitapex issue #164 -- dogfooding follow-up, stale hooks claim + growth watch-point"
