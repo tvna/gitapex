@@ -2,14 +2,14 @@
 
 Date: 2026-07-18
 
-Refs #153 (child of #82). Extends #144's design-then-implement
-precedent. Directly gates issue #124's credentialed dispatch of
+Refs [#153](https://github.com/tvna/gitapex/issues/153) (child of [#82](https://github.com/tvna/gitapex/issues/82)). Extends [#144](https://github.com/tvna/gitapex/issues/144)'s design-then-implement
+precedent. Directly gates issue [#124](https://github.com/tvna/gitapex/issues/124)'s credentialed dispatch of
 `.github/workflows/waza-eval-matrix.yml`.
 
 ## Design-only scope
 
-Per this repository's discipline (matching #57/#123/#125/#126/#127/#130/
-#131/#144/#145/#147/#148/#151/#152 precedent): this doc records a design
+Per this repository's discipline (matching [#57](https://github.com/tvna/gitapex/issues/57)/[#123](https://github.com/tvna/gitapex/issues/123)/[#125](https://github.com/tvna/gitapex/issues/125)/[#126](https://github.com/tvna/gitapex/issues/126)/[#127](https://github.com/tvna/gitapex/issues/127)/[#130](https://github.com/tvna/gitapex/issues/130)/
+[#131](https://github.com/tvna/gitapex/issues/131)/[#144](https://github.com/tvna/gitapex/issues/144)/[#145](https://github.com/tvna/gitapex/issues/145)/[#147](https://github.com/tvna/gitapex/issues/147)/[#148](https://github.com/tvna/gitapex/issues/148)/[#151](https://github.com/tvna/gitapex/issues/151)/[#152](https://github.com/tvna/gitapex/issues/152) precedent): this doc records a design
 only. No `.gitapex/policies/llm-budget-policy.toml`, no `.gitapex/
 policies/llm-budget-policy.schema.json`, no
 `.github/scripts/gate_workflow_llm_budget.py` is created by this pass.
@@ -17,15 +17,15 @@ policies/llm-budget-policy.schema.json`, no
 ## Why this doc exists
 
 An audit this session (reading `tvna/claude-md`'s real `.gitapex/`
-files, not issue-body paraphrase, after an earlier design -- #152 --
+files, not issue-body paraphrase, after an earlier design -- [#152](https://github.com/tvna/gitapex/issues/152) --
 was found to have missed a whole mechanism by relying on paraphrase)
 found gitapex's design chain had never once considered claude-md's
 `.gitapex/llm-budget-policy.toml` + `scripts/scan_workflow_llm_
-budget.py` (claude-md #2269, "token blowout guard") -- despite it being
+budget.py` (claude-md [#2269](https://github.com/tvna/claude-md/issues/2269), "token blowout guard") -- despite it being
 one of the first `policy_sources[]`-adjacent files in the very
-`ssot.json` instance issue #123 says gitapex should model on. gitapex's
+`ssot.json` instance issue [#123](https://github.com/tvna/gitapex/issues/123) says gitapex should model on. gitapex's
 own copy of the policy file relocates to
-`.gitapex/policies/llm-budget-policy.toml` per #123 Addendum 3 (every
+`.gitapex/policies/llm-budget-policy.toml` per [#123](https://github.com/tvna/gitapex/issues/123) Addendum 3 (every
 `policy_sources[]`-eligible file consolidates under
 `.gitapex/policies/`, not scattered the way claude-md's own bottom-up
 history left its files) -- the mechanism is ported unabridged, only its
@@ -34,7 +34,7 @@ location changes.
 This is not a hypothetical gap. `.github/workflows/waza-eval-matrix.yml`
 (committed, real) already fans out over LLM model ids via a
 `copilot-sdk` endpoint (`nix run .#waza -- run "$skill"`, gated on
-`COPILOT_BASE_URL`/`COPILOT_PROVIDER_BASE_URL` secrets), and issue #124
+`COPILOT_BASE_URL`/`COPILOT_PROVIDER_BASE_URL` secrets), and issue [#124](https://github.com/tvna/gitapex/issues/124)
 is the follow-up that provisions real credentials and actually dispatches
 it. Notably: claude-md's own instance has `budgets = []` -- "no workflow
 invokes an LLM today" there. **gitapex has the live case before its more
@@ -74,7 +74,7 @@ Port claude-md's real contract (read this session from
 files), including the parts the JSON-Schema subset cannot express and
 that the real implementation enforces in the scanner itself, not the
 schema -- stated explicitly here so a future implementation doesn't
-silently drop them the way #152's first draft silently dropped an
+silently drop them the way [#152](https://github.com/tvna/gitapex/issues/152)'s first draft silently dropped an
 architectural distinction it hadn't yet read:
 
 - **Policy file** (`.gitapex/policies/llm-budget-policy.toml`): a top-level
@@ -91,7 +91,7 @@ architectural distinction it hadn't yet read:
   The real schema's own description states plainly what it CANNOT
   express: the "at least one of `max_tokens_per_run` /
   `max_cost_usd_per_run`" rule has no `oneOf`/`anyOf` in the shared
-  draft-2020-12 subset this repo's schemas use (matching #123's
+  draft-2020-12 subset this repo's schemas use (matching [#123](https://github.com/tvna/gitapex/issues/123)'s
   `gate_kind` XOR-rule precedent) -- ported as a bespoke check in the
   gate script itself, not attempted in the schema.
 - **The gate** (`.github/scripts/gate_workflow_llm_budget.py`): for
@@ -127,7 +127,7 @@ The five upstream markers are kept, not dropped: gitapex is a
 redistributed CLI whose adopters may run `claude-code-action`, direct
 `claude -p`/`codex exec` invocations, or direct API calls in their OWN
 workflows once this mechanism ships as part of the CLI's governance
-surface (#127's `gitapex init` scaffolding is a plausible future
+surface ([#127](https://github.com/tvna/gitapex/issues/127)'s `gitapex init` scaffolding is a plausible future
 consumer of this exact policy file) -- removing them would be
 speculative narrowing with no argued benefit, the mirror-image mistake
 of speculative widening.
@@ -135,7 +135,7 @@ of speculative widening.
 ## Decision 3: seed a real budget for `waza-eval-matrix.yml`
 
 Per CLAUDE.md section 3 (ship the drift gate with the invariant) and
-#144's own precedent (inventory and gate shipped together): the
+[#144](https://github.com/tvna/gitapex/issues/144)'s own precedent (inventory and gate shipped together): the
 implementation issue must seed a `budgets[]` entry for
 `waza-eval-matrix.yml` in the SAME change as the gate script, not as a
 follow-up -- an unpopulated `budgets = []` would let the gate pass
@@ -148,8 +148,10 @@ only... never runs on push/PR and never gates a merge"):
 
 - `max_runs_per_day`: a small number (proposed: `5`) -- manual dispatch
   only, no automated trigger exists to run it repeatedly; a low ceiling
-  costs nothing operationally and bounds a credential-misuse or
-  fat-fingered-repeated-dispatch scenario.
+  costs nothing to declare and gives a documented ceiling to check a
+  fat-fingered-repeated-dispatch or credential-misuse scenario against
+  after the fact. It does not, by itself, stop a sixth run from
+  happening -- see the enforcement-scope note under Decision 4.
 - `max_retries`: `0` -- the workflow has no retry logic of its own
   (`fail-fast: false` in its matrix strategy governs cross-model
   independence within one run, not run-level retries); a ported
@@ -158,29 +160,54 @@ only... never runs on push/PR and never gates a merge"):
 - `max_tokens_per_run` or `max_cost_usd_per_run`: **explicitly NOT
   proposed with a number here.** This design does not have real
   per-run cost/token data for the workflow's actual per-model,
-  per-suite `waza run` calls (12 suites x N models x `trials_per_task:
-  3`, per issue #124's own description) -- inventing a plausible-
-  sounding ceiling would be exactly the "confident guess presented as
-  fact" this repo's own primary-source discipline exists to prevent.
+  per-suite `waza run` calls. The committed shape, counted directly
+  from `evals/*/eval.yaml` and each suite's `tasks/*.yaml` this
+  session rather than assumed from issue [#124](https://github.com/tvna/gitapex/issues/124)'s own description: 17
+  suites (not the 12 an earlier pass assumed), 5 of which declare
+  `trials_per_task: 1` and 12 of which declare `trials_per_task: 3` --
+  not a uniform count -- for 265 `waza run` invocations per model, not
+  a uniform `12 x 3`. Inventing a plausible-sounding cost/token
+  ceiling from the wrong shape would be exactly the "confident guess
+  presented as fact" this repo's own primary-source discipline exists
+  to prevent, and would size the ceiling off the wrong workload besides.
   **Flagged as an open input for the operator to supply before the gate
   can be implemented** -- the implementation issue's first blocking
   step, not a design gap to paper over. A one-time real dispatch under
-  #124 (or a dry-run cost estimate from the copilot-sdk provider's own
+  [#124](https://github.com/tvna/gitapex/issues/124) (or a dry-run cost estimate from the copilot-sdk provider's own
   pricing) is the natural source for this number once available.
 
-## Decision 4: relationship to #124 -- precondition, not parallel
+## Decision 4: relationship to [#124](https://github.com/tvna/gitapex/issues/124) -- precondition, not parallel
 
-This gate is #124's precondition, mirroring claude-md's own
+This gate is [#124](https://github.com/tvna/gitapex/issues/124)'s precondition, mirroring claude-md's own
 `scan_workflow_llm_budget.py` docstring verbatim: "No workflow invokes
 an LLM today, so this gate passes trivially until [a future workflow]
 introduces one; it is that future workflow's precondition, not a
 retrofit." For gitapex, the workflow already exists (unlike claude-md's
 still-hypothetical case) -- so the ordering is sharper: **this gate
-should land and be verified passing BEFORE #124's owner-provisioned
-credentials make a real dispatch possible**, not after. #124's own
+should land and be verified passing BEFORE [#124](https://github.com/tvna/gitapex/issues/124)'s owner-provisioned
+credentials make a real dispatch possible**, not after. [#124](https://github.com/tvna/gitapex/issues/124)'s own
 "Steps" section should gain a reference to this gate as an explicit
-precondition once implemented (a small addition to #124, not designed
-here -- #124 remains unmodified by this issue itself).
+precondition once implemented (a small addition to [#124](https://github.com/tvna/gitapex/issues/124), not designed
+here -- [#124](https://github.com/tvna/gitapex/issues/124) remains unmodified by this issue itself).
+
+**Enforcement scope, stated plainly so this gate is not mistaken for
+more than it is.** This is a declaration-completeness gate, exactly
+like the real `scan_workflow_llm_budget.py` it ports: it scans
+repository text for a marker-matched workflow and checks that a
+complete `budgets[]` entry is *declared* for it. It never reads GitHub
+Actions run history, never queries the copilot-sdk provider for actual
+token/cost usage, and never blocks a dispatch at invocation time --
+`max_runs_per_day`, `max_retries`, and the token/cost ceiling can all
+be exceeded in practice while this gate stays green, because nothing
+in its design reads runtime usage. What it actually buys: a workflow
+that invokes an LLM cannot land, or stay landed, without a documented
+budget existing somewhere a human authored and reviewed it -- CI-time
+transparency and a fail-loud precondition on the *declaration*, not
+runtime enforcement of the *limit*. Runtime/provider-side enforcement
+(rate-limiting or usage-querying against the copilot-sdk endpoint
+itself) is a materially different, currently undesigned mechanism;
+closing that gap is out of this design's scope and would need its own
+issue, not an implicit assumption riding on this gate's name.
 
 ## Decision 5: gate placement
 
@@ -202,18 +229,25 @@ gate argues for a shared cluster.
 
 Facts: `tvna/claude-md`'s `.gitapex/llm-budget-policy.toml` (the real
 upstream's own placement -- gitapex's is
-`.gitapex/policies/llm-budget-policy.toml`, per #123 Addendum 3),
+`.gitapex/policies/llm-budget-policy.toml`, per [#123](https://github.com/tvna/gitapex/issues/123) Addendum 3),
 `.gitapex/llm-budget-policy.schema.json`, and
 `scripts/scan_workflow_llm_budget.py`, read in full this session; the
 verified absence of any marker match against gitapex's real
 `.github/workflows/waza-eval-matrix.yml` (grepped this session, not
-assumed); issue #124's own body (12 suites, `trials_per_task: 3`,
-`workflow_dispatch`-only, owner-provisioned-secret precondition).
+assumed); the real committed suite/task/trial shape (17 suites, mixed
+`trials_per_task` of 1 and 3, 265 `waza run` invocations per model),
+counted directly from `evals/*/eval.yaml` and each suite's
+`tasks/*.yaml` this session, not from issue [#124](https://github.com/tvna/gitapex/issues/124)'s own body -- that
+body's stated "12 suites, `trials_per_task: 3`" undercounts the real
+committed suite set and is not treated as authoritative here where it
+disagrees with the committed files themselves; its
+`workflow_dispatch`-only, owner-provisioned-secret precondition
+description does match the committed workflow and is treated as fact.
 
 Speculation, named as such: the exact `max_runs_per_day`/`max_retries`
 values proposed in Decision 3 are this design's reasoned defaults, open
 to operator revision; the cost/token ceiling is explicitly not proposed
-at all (Decision 3); whether `gitapex init` (#127) becomes a real future
+at all (Decision 3); whether `gitapex init` ([#127](https://github.com/tvna/gitapex/issues/127)) becomes a real future
 consumer of this policy file for adopter workflows is a plausible but
 undesigned future connection, named only to justify keeping the five
 upstream markers (Decision 2), not designed further here.
@@ -222,8 +256,8 @@ upstream markers (Decision 2), not designed further here.
 
 - No `.gitapex/policies/llm-budget-policy.toml`, no schema file, no
   gate script -- design only. A later session may implement this,
-  matching #144's design-to-code precedent.
-- Not designing #124's credentialed-run execution -- this gate is a
+  matching [#144](https://github.com/tvna/gitapex/issues/144)'s design-to-code precedent.
+- Not designing [#124](https://github.com/tvna/gitapex/issues/124)'s credentialed-run execution -- this gate is a
   precondition for it.
 - Not inventing a cost/token ceiling number -- flagged as an open input
   for the operator (Decision 3).
@@ -244,17 +278,17 @@ upstream markers (Decision 2), not designed further here.
       `max_runs_per_day`/`max_retries`, with the cost/token ceiling
       explicitly flagged as an operator-supplied open input, not
       invented.
-- [ ] The relationship to #124 (precondition, ordering stated
+- [ ] The relationship to [#124](https://github.com/tvna/gitapex/issues/124) (precondition, ordering stated
       explicitly) is specified.
 - [ ] Gate placement (CI plane, no cluster) is decided and argued
       against an existing gitapex gate's precedent.
 - [ ] The policy/schema files live at `.gitapex/policies/
       llm-budget-policy.toml` / `.schema.json`, not claude-md's own flat
-      `.gitapex/llm-budget-policy.toml` path -- per #123 Addendum 3, with
+      `.gitapex/llm-budget-policy.toml` path -- per [#123](https://github.com/tvna/gitapex/issues/123) Addendum 3, with
       the gate script remaining under `.github/scripts/` per gitapex's
       separate, already-established gate-code convention.
 
 ## Related Issue
 
-Child of #82. Extends #144's design-then-implement precedent. Directly
-gates issue #124's credentialed dispatch. Refs #153.
+Child of [#82](https://github.com/tvna/gitapex/issues/82). Extends [#144](https://github.com/tvna/gitapex/issues/144)'s design-then-implement precedent. Directly
+gates issue [#124](https://github.com/tvna/gitapex/issues/124)'s credentialed dispatch. Refs [#153](https://github.com/tvna/gitapex/issues/153).
