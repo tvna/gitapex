@@ -42,9 +42,21 @@ check out the commit itself, run again; diff the two outcome maps.
   red base stays attributable: preserving existing failures IS behavior
   preservation, so the gate never wedges on an already-red parent.
 - A collected-test-set delta (tests added/removed/renamed by the
-  refactor) -> **warn**, not fail: refactors legitimately move test
-  files; only an outcome flip on a shared test ID is proof of behavior
-  change.
+  refactor) is checked against coverage of the touched production
+  lines, not just test-ID presence (caught in PR #146 review, applied
+  2026-07-18: a naive warn-only delta lets a behavior-changing refactor
+  hide by deleting or renaming exactly the test that would have flipped
+  -- no shared ID survives to prove anything, so the claim passes
+  unchecked). If a line the commit touches was covered by a test at the
+  parent SHA and is covered by no test at the commit SHA (coverage
+  regressed, not merely renamed), that is **indistinguishable from
+  hiding a regression and fails**, same severity as an outcome flip --
+  it does not matter whether the removal was malicious or accidental,
+  the behavior-preservation claim is unverifiable either way. A delta
+  that is pure addition, or a rename/move where the touched lines remain
+  covered under the new test id, **warns** (or passes with an
+  informational note) -- only a net coverage loss on touched lines is
+  the failable signal.
 
 **Test suite definition.** Whatever the repo's declared runner executes
 -- for gitapex today, `uv run pytest` (`pyproject.toml`'s `testpaths` +
@@ -66,43 +78,68 @@ passes exactly as the discipline prescribes. Cost is bounded by
 `max_checked_commits` (default 5; above it, fail with "split the PR" --
 consistent with #138 G4's narrow-change-surface stance).
 
-**No tests for the touched code: warn, not fail-closed.** Argued, not
-defaulted: (1) fail-closed would forbid refactoring exactly the untested
-code that most needs tidying ("tidy first to make the change easy"), and
-(2) it creates a perverse incentive to mislabel refactors as `fix` to
-dodge the gate -- corrupting the very `refactor(...)` signal both #138 G4
-and this gate depend on. Instead, using coverage instrumentation
-(`pytest --cov`), the gate computes whether any test executed the
-non-test files the commit touched; zero coverage produces a
-`claim-unverified` **warn** annotation. This mirrors #138 G2's
-`proxy-evidence-verification` honesty: this leg's registry status is
-`partial` forever, stated rather than overclaimed. Infrastructure errors
-(the suite won't collect at either SHA) fail closed -- an unrunnable claim
-on the `ci` plane is indistinguishable from a false one (#131 principle
-6, matching #142's fail-closed-on-unverifiable stance).
+**No tests for the touched code, ever: warn, not fail-closed. Coverage
+that existed and disappeared: fail.** These are different signals,
+argued differently. Code with **zero coverage at both the parent and the
+commit** (never tested at all) warns, not fails: (1) fail-closed there
+would forbid refactoring exactly the untested code that most needs
+tidying ("tidy first to make the change easy"), and (2) it creates a
+perverse incentive to mislabel refactors as `fix` to dodge the gate --
+corrupting the very `refactor(...)` signal both #138 G4 and this gate
+depend on. Using coverage instrumentation (`pytest --cov`), the gate
+computes whether any test executed the non-test files the commit
+touched; zero coverage at both ends produces a `claim-unverified`
+**warn** annotation. This mirrors #138 G2's `proxy-evidence-verification`
+honesty: this leg's registry status is `partial` forever, stated rather
+than overclaimed. Code that **was** covered at the parent and is not
+covered at the commit is the different, failable case described above --
+the claim was verifiable and the evidence for it was removed, which the
+gate treats as a false claim rather than an absent one. Infrastructure
+errors (the suite won't collect at either SHA) fail closed -- an
+unrunnable claim on the `ci` plane is indistinguishable from a false one
+(#131 principle 6, matching #142's fail-closed-on-unverifiable stance).
 
-**New sibling gate, not an extension of #138 G4.** Three reasons: G4 is
+**New sibling gate, not an extension of #138 G4 -- and NOT sharing a
+trigger.** Three reasons for the sibling-not-extension choice: G4 is
 *static* (numstat arithmetic, cheap on `pre-push` + `ci`); this gate is
 *dynamic* (executes the suite twice per commit, `ci` plane only -- a
 pre-push double suite run would be hostile to the push loop). G4's
 failure asks for a justification section; this gate's failure is a
 falsified *claim* no prose can justify -- different failure semantics,
 the same two-gates-not-one rationale #138 already used for its own Gate
-3. They share only the trigger convention, which lives in a shared
-policy source both reference; G4's registry entry gains one
-`policy_refs` addition rather than absorbing the mechanism.
+3.
+
+**Correction (caught in PR #146 review, applied 2026-07-18): they do
+NOT share a trigger, only a regex pattern, and the earlier "shared
+trigger convention" wording was imprecise enough to be wrong.** #138 G4
+and `docs/versioning.md`'s commit convention key `gate-refactor-net-growth`
+off the **PR title/body** (a PR titled `refactor(scope): ...` triggers
+the net-growth check for the PR as a whole -- net line growth is a
+whole-changeset property, so PR granularity is correct for it).
+`gate-tidy-first` keys off **individual commit subjects** in the PR
+range (behavior-preservation is a per-commit claim, so commit granularity
+is correct for it). Treating these as one shared trigger is actively
+wrong in both directions: retitling a single commit to `feat` would not
+exempt a `refactor`-titled PR from G4 (G4 never reads commit subjects),
+and a `refactor`-titled commit inside a `feat`-titled PR would silently
+bypass G4 entirely (G4 never reads that PR's commits). The two gates
+share only the **regex** that recognizes the `refactor(scope): ...`
+shape (moved into `tidy-first-policy` below as the single pattern
+source, referenced by both gates' `policy_refs`), applied at each gate's
+own, deliberately different, granularity -- not a shared trigger. G4's
+existing PR-title/body trigger in #138 is unchanged by this design.
 
 ### Registry JSON
 
 ```jsonc
 // policy_sources[]
 { "id": "tidy-first-policy", "path": ".gitapex/policies/tidy-first.toml", "format": "toml",
-  "authority": "refactor(...) commit-subject trigger regex (shared with gate-refactor-net-growth); per-scope suite commands ([suite.plugin] = 'uv run pytest', [suite.cli] reserved); max_checked_commits; outcome-comparison rules (shared-id flips fail, set deltas warn); coverage-unverified warn contract" }
+  "authority": "the refactor(scope): ... recognition regex (the single pattern source; consumed by gate-tidy-first at commit-subject granularity and referenced, not triggered, by gate-refactor-net-growth's separate PR-title/body check); per-scope suite commands ([suite.plugin] = 'uv run pytest', [suite.cli] reserved); max_checked_commits; outcome-comparison rules (shared-id flips fail, coverage-regressed deltas fail, coverage-preserved/pure-addition deltas warn); zero-coverage-at-both-ends claim-unverified warn contract" }
 
 // gates[]
 { "id": "gate-tidy-first", "kind": "script", "script": "scripts/gate_tidy_first.py",
-  "rule": "each PR commit titled refactor(...) is behavior-preserving by proof: per-test outcomes at the commit equal outcomes at its parent; a shared-test flip fails (mislabeled commit: split or retitle), collected-set deltas warn, zero coverage of touched files warns claim-unverified (partial leg, stated)",
-  "planes": ["ci"], "trigger": "pull_request opened/synchronize, iterating refactor(...)-titled commits in the merge-base range",
+  "rule": "each PR commit titled refactor(...) is behavior-preserving by proof: per-test outcomes at the commit equal outcomes at its parent; a shared-test flip fails (mislabeled commit: split or retitle); a test-set delta that drops coverage of touched lines previously covered also fails (indistinguishable from hiding a regression); zero coverage of touched files at both parent and commit warns claim-unverified (partial leg, stated)",
+  "planes": ["ci"], "trigger": "pull_request opened/synchronize, iterating refactor(...)-titled commits in the merge-base range (commit-subject granularity; independent of gate-refactor-net-growth's PR-level trigger)",
   "fail_policy": "closed (unrunnable suite at either SHA fails; the claim is unverifiable)",
   "policy_refs": ["tidy-first-policy"], "cluster": "change-surface", "tracking_issue": null }
 ```
@@ -219,10 +256,19 @@ guarding the semantic gate's non-authority).
 ## Key contested calls, summarized
 
 - Problem A is fail-closed on unverifiable claims but warn-only on
-  absent test coverage -- fail-closed there would punish refactoring
-  untested code and corrupt the `refactor(...)` label signal itself.
+  test coverage that was absent at *both* SHAs -- fail-closed there
+  would punish refactoring untested code and corrupt the `refactor(...)`
+  label signal itself. Coverage that existed at the parent and is gone
+  at the commit is a different, failable case (see below).
 - Problem A is a new sibling of #138 G4, not an extension of it -- static
-  vs. dynamic checks, different planes, different failure semantics.
+  vs. dynamic checks, different planes, different failure semantics, and
+  (revised after PR #146 review) genuinely different trigger granularity
+  -- they share a regex, not a trigger.
+- Problem A fails, not warns, when a `refactor(...)` commit's test-set
+  delta drops coverage of previously-covered touched lines -- a warn-only
+  delta let a behavior-changing refactor hide by deleting or renaming
+  exactly the test that would have exposed it, leaving no shared test ID
+  to flip (PR #146 review finding, fixed 2026-07-18).
 - Problem B is advisory-forever with the constraint schema-enforced, not
   just promised in prose -- an unreviewable stochastic judgment must
   never hold merge authority under #131's zero-trust principles, and its

@@ -101,11 +101,26 @@ source:**
    Facts, Proposed work, Verification, Acceptance criteria; the retry
    backoff on the merge SHA is 4 attempts at 2/4/8s. Two skip conditions
    the draft missed entirely: zero-inline-review-comment merges (recorded
-   in the ledger, no retro opened) and a label-derived false-positive
-   prior (skip when historical FP rate >=0.5, tentative-only >=0.3, with
-   a minimum sample size of 5).
+   in the ledger, no retro opened in claude-md) and a label-derived
+   false-positive prior (skip when historical FP rate >=0.5,
+   tentative-only >=0.3, with a minimum sample size of 5).
 5. A third daily job the draft missed: `auto_retro.py post-merge-rescan`,
    a 24-48h checklist rescan on already-opened retros — added below.
+
+**Deliberate deviation from claude-md's own zero-comment skip (caught in
+PR #146 review, applied 2026-07-18):** claude-md's own skip on
+zero-inline-review-comment merges does not carry over to gitapex as-is.
+gitapex's CLAUDE.md section 3 states "auto-open a retrospective issue"
+after each merge with no comment-count carve-out, and a comment-free
+merge is exactly the small or already-clean change most likely to
+recur -- skipping it silently removes the feedback loop for the PRs it
+would catch most cheaply. `post-merge-auto-retro` below therefore always
+opens a retrospective on merge; the zero-comment signal is retained only
+as a ledger annotation (feeding #142's repair-free-merge quality signal)
+and the trusted-bot / dedup / FP-prior skips are unchanged, since those
+three are genuine no-new-information cases (bot-authored, already
+tracked, or historically noise) rather than a size/comment-count proxy
+for "probably fine."
 
 ```jsonc
 // policy_sources[]
@@ -118,7 +133,7 @@ source:**
 
 // gates[]
 { "id": "post-merge-auto-retro", "kind": "script", "script": "scripts/auto_retro.py",
-  "rule": "on merged-PR close, open a retrospective issue titled/labeled per retro-identity, seeded with required sections; skip on retro-PR recursion, trusted-bot actor, existing retro (dedup search), zero inline review comments (ledger row instead), or a high false-positive prior",
+  "rule": "on merged-PR close, always open a retrospective issue titled/labeled per retro-identity, seeded with required sections (per CLAUDE.md section 3's unconditional after-each-merge rule -- no comment-count carve-out); skip only on retro-PR recursion, trusted-bot actor, existing retro (dedup search), or a high false-positive prior; a zero-inline-review-comment merge still opens a retro, annotated with a ledger row rather than skipped",
   "planes": ["ci"], "trigger": "pull_request_target closed + if merged==true (subcommand: run)",
   "policy_refs": ["retro-identity", "retro-operations", "trusted-bots", "issue-required-sections"],
   "cluster": "retro-integrity", "tracking_issue": 140 },
