@@ -24,6 +24,14 @@ evaluating a SKILL.md, and (b) apply them to a fixture with three planted
 defects. Any external adversarial-testing taxonomy was deliberately withheld
 so the enumeration could not be led.
 
+In the vocabulary of Anthropic's own field guide on working with Claude
+models (Thariq Shihipar, "A Field Guide to Fable: Finding Your Unknowns",
+<https://claude.com/blog/a-field-guide-to-claude-fable-finding-your-unknowns>),
+this cold-enumerate-before-reading-the-target protocol is a **Blind Spot
+Pass** aimed at this catalog's own *unknown unknowns* -- the "Comparative
+gap review: dimensions 18-22" section below is one completed run of it,
+later applied by name.
+
 The fixture's three planted defects (known only to the dispatcher):
 
 - D1 mis-routing: a description so broad ("any task where something needs

@@ -57,6 +57,15 @@ dispatch actually occurred for Procedure steps 1-3 or step 5's re-run --
 that mechanism was exercised by one manual live run during the change that
 introduced it, not by the committed suite.
 
+**Issue #149 (unknowns framework):** Procedure step 1 and
+`references/provenance-and-caveats.md` now name the existing cold-
+enumeration-before-reading-the-target move as a **Blind Spot Pass**
+(Anthropic's own field guide on working with Claude models, Thariq
+Shihipar, "A Field Guide to Fable: Finding Your Unknowns"). Naming-only --
+no mechanics change, no new decision branch introduced -- so no new eval
+fixture was added; the existing suite's coverage of step 1 is unchanged.
+Refs #149.
+
 ## establishing-ubiquitous-language
 
 The committed eval suite (`evals/establishing-ubiquitous-language/`) runs
@@ -87,6 +96,31 @@ dimension 8. It exists to satisfy `gated-skill-edits`' precondition gate
 before any iterative edit to `references/rubric.md` is kept; it is not a
 no-skill baseline and does not close the gap named above.
 
+**Issue #149 (unknowns framework):** `references/rubric.md` gained an
+`## Unknowns framework` section (four-quadrant framing adapted from
+Anthropic's own field guide on working with Claude models, Thariq
+Shihipar, "A Field Guide to Fable: Finding Your Unknowns") and a
+`### Blind spot pass` subsection wired into `SKILL.md` Procedure step 2 --
+a precondition step, not a tenth dimension. Went through
+`gated-skill-edits`' own held-out gate: 3 new fixtures added to
+`split.md`'s split (16 total). Gate result is **KEEP**, but with a
+disclosed methodology gap rather than a clean full-split number -- this
+session has no registered `Skill` tool for `evaluating-skill-quality`, so
+live dispatches read `SKILL.md`/`references/rubric.md` off disk directly
+rather than running under the `copilot-sdk` executor the suite is
+otherwise calibrated for, and the session hit its own dispatch rate limit
+before a matched-methodology *before* run could be completed for 5 of the
+6 selection fixtures. The purpose-built fixture scored a clean
+matched-methodology strict improvement (selection mean 0.625 -> 0.875);
+the other 5 showed zero regression and zero Blind-spot-pass over-firing
+across 10 after-edit dispatches, but only against a different-harness
+historical before-baseline, so no mixed-harness number is claimed as the
+gate result. Full record, per-fixture scores, and the named follow-up (a
+clean full-split re-run once a registered-plugin harness is available):
+`evals/evaluating-skill-quality/split.md`'s Kept-edit log and
+`references/worked-example-self-review.md`'s dimension-8 addendum. Refs
+#149.
+
 ## explaining-the-work
 
 The committed eval suite (`evals/explaining-the-work/`) has no committed run
@@ -100,6 +134,13 @@ cross-model behavior is currently unmeasured.
 The committed eval suite (`evals/gated-skill-edits/`) has no committed
 with-skill vs. no-skill score comparison, and only `claude-sonnet-4.6` has
 been evaluated -- cross-model behavior is currently unmeasured.
+
+**Issue #149 (unknowns framework):** the Precondition gate section gained a
+**Blind spot pass** bullet -- name whether the fixture corpus itself has an
+unknown-unknown blind spot before trusting the split -- adapted from
+Anthropic's own field guide on working with Claude models (Thariq Shihipar,
+"A Field Guide to Fable: Finding Your Unknowns"). Advisory naming addition,
+not a new enforced branch, so no new eval fixture was added. Refs #149.
 
 ## issue-to-branch
 

@@ -25,8 +25,19 @@ Before any iteration, confirm both of these exist:
   run.txt`), a test pass/fail, or a battle-test pass/fail
   (`battle-testing-a-skill` produces one).
 - A held-out set of tasks not used to motivate any edit.
+- **Blind spot pass**: before trusting the split, name explicitly whether
+  the fixture corpus has an unknown-unknown blind spot -- a failure category
+  no train/selection/test task exercises at all. If found, name it, the
+  same discipline the scorer/split STOP below already applies to a missing
+  scorer or split; if not found, say so explicitly rather than leaving the
+  question unaddressed. (Vocabulary from Anthropic's own field guide on
+  working with Claude models: Thariq Shihipar, "A Field Guide to Fable:
+  Finding Your Unknowns",
+  <https://claude.com/blog/a-field-guide-to-claude-fable-finding-your-unknowns>;
+  see `evaluating-skill-quality/references/rubric.md`'s Unknowns framework
+  section for the fuller four-quadrant mapping this repo now shares.)
 
-If either is missing, STOP. This is open-ended judgement, which SkillOpt's
+If either the scorer or the split is missing, STOP. This is open-ended judgement, which SkillOpt's
 Limitations (Appendix B) flags as needing stronger human or model-based
 evaluation. Name the gap; never fake a score to proceed.
 
@@ -93,6 +104,8 @@ evaluation. Name the gap; never fake a score to proceed.
 - Never ship a skill that has not passed a transfer check.
 - Never treat an LLM judge's pass as ground truth without an adversarial
   verification pass.
+- Never leave the Blind spot pass unaddressed -- an explicit "no gap found"
+  and a silently skipped question are not the same thing.
 - This skill iterates a skill document; it does not build a training-loop
   executor, and it does not review a skill for merge.
 
