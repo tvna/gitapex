@@ -66,6 +66,14 @@ have been a different mechanism is not fixed by polishing it further.
   stays in-model. This is a step-level finding, not a whole-artifact
   wrong-mechanism one -- the break-even test and rationale (correctness,
   consistency, cost) are in `references/rubric.md`'s Mechanism fit section.
+- **Model/effort tier fit**: when the reviewed skill's own content --
+  prose instructions or a bundled Workflow script -- pins a specific
+  model tier or reasoning-effort level for itself or a sub-dispatch, that
+  pin needs its own justification, the same way a mechanism choice does.
+  Most skills correctly omit both and inherit the caller's; that absence
+  is not a finding. Also a step-level finding, not a whole-artifact one
+  -- criteria and citation are in `references/rubric.md`'s Mechanism fit
+  section.
 
 Full rationale and citation: [references/rubric.md](references/rubric.md)'s
 Mechanism fit section.

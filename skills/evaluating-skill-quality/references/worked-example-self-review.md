@@ -365,6 +365,35 @@ change, moving cleanly from 0.75 to 1.00 on both independent runs. Full
 record, including the per-fixture score table and the two bugs' exact
 fix: `evals/evaluating-skill-quality/split.md`'s Kept-edit log.
 
+**Update (issue #155, Model/effort tier fit):** a third gated edit, same
+session, same no-registered-`Skill`-tool workaround. This round's
+selection-split before scores reused the six pre-existing fixtures'
+already-measured after scores from the issue #149 gate directly above
+(same committed file state, same matched methodology -- disclosed reuse,
+not a silent assumption), so only the one new selection fixture,
+`model-effort-tier-fit-unjustified-effort.yaml`, needed a genuine fresh
+before dispatch (pinned to the pre-edit commit via `git show` to avoid a
+working-tree race with the edit in progress). Selection mean: **0.912698
+-> 0.963719, KEEP**. One pre-existing fixture,
+`scoring-axis-uncontrolled-speed-claim.yaml`, dipped from 1.000000 to
+0.857143 on an assertion unrelated to this edit (a paraphrase, "6.5s"
+for "6.5 seconds," in dimension-8 discussion this check never touches);
+checked directly and disclosed rather than silently re-run, and did not
+change the KEEP outcome. The purpose-built fixture moved cleanly from
+0.500000 (the pre-edit rubric has no such check to cite) to 1.000000
+(the post-edit dispatch named the check and used its "try hard enough"
+diagnostic verbatim). A held-out restraint check,
+`model-effort-tier-fit-justified.yaml` (test split, read once), found
+the new check does not over-fire on a pin that already meets its own
+justification criteria -- and caught one more instance of the exact
+case-sensitivity bug PR #150's external review found for `blind spot`:
+this fixture's own `output_contains: ["model/effort pin justified"]`
+false-failed against a dispatch that (correctly) capitalized it as a
+sentence-initial "Model/effort pin justified." Fixed the same way, by
+matching a case-invariant fragment (`"pin justified"`) rather than
+re-running for a lucky pass. Full record, including the per-fixture
+score table: `evals/evaluating-skill-quality/split.md`'s Kept-edit log.
+
 ### 9. Cross-model robustness
 
 Unmeasured, not skipped. No Haiku/Sonnet/Opus differential has been run.

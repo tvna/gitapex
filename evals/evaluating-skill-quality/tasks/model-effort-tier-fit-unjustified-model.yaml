@@ -1,0 +1,33 @@
+id: evaluating-skill-quality-model-effort-tier-fit-unjustified-model
+name: Unjustified Model Pin -- Opus at Max Effort for a Mechanical Rename
+description: The reviewed SKILL.md excerpt is for a trivial, single-variable rename skill that unconditionally pins Opus running at max effort with no difficulty cited; this is exactly the routine/mechanical work the source guidance says needs no capability upgrade, so the Model/effort tier fit check must name the pin as unjustified.
+tags:
+  - quality
+  - mechanism-fit
+  - model-effort-tier-fit
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "renaming-a-variable". Is this a good skill?
+
+    ---
+    name: renaming-a-variable
+    description: Rename a single variable consistently across a file. Use when the user asks to rename a variable.
+    ---
+
+    # Renaming a Variable
+
+    ## Procedure
+
+    1. Find every occurrence of the variable in the file.
+    2. Always dispatch this task to Opus running at max effort, for
+       consistency and thoroughness.
+    3. Replace every occurrence with the new name.
+    4. Report how many occurrences were replaced.
+expected:
+  output_contains:
+    - "Model/effort tier fit"
+    - "mechanical"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"

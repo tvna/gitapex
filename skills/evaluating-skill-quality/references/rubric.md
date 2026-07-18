@@ -28,6 +28,7 @@ skill's own folder.
 - [Contract discipline](#contract-discipline)
 - [Mechanism fit](#mechanism-fit)
   - [Skill-step vs. bundled script](#skill-step-vs-bundled-script)
+  - [Model/effort tier fit](#modeleffort-tier-fit)
 - [Portability level](#portability-level)
 - [1. Discovery -- name and description](#1-discovery----name-and-description)
 - [2. Conciseness](#2-conciseness)
@@ -245,8 +246,9 @@ headline finding regardless of how the rest of the review scores, per
 
 This describes a *whole-artifact* wrong-mechanism finding (the skill should
 have been a hook, subagent, or CLAUDE.md content). The Skill-step vs.
-bundled script check below is the one exception: its finding is step-level,
-reported for triage, and is neither a headline nor a *mature* blocker.
+bundled script and Model/effort tier fit checks below are the exceptions:
+their findings are step-level, reported for triage, and are neither a
+headline nor a *mature* blocker.
 
 A recorded mechanism-fit decision for the *reviewed* skill -- the "keep
 vs. retire, and why" rationale once a wrong-mechanism finding has been
@@ -306,6 +308,63 @@ should exist; dimension 7 grades the quality of one that does. The
 'two lanes' split of this review's own procedure (deterministic shape vs
 probabilistic maturity) is the same idea applied to *this* skill rather
 than a reviewed one -- an intentional parallel, not the same check.
+
+### Model/effort tier fit
+
+A fifth Mechanism-fit check, distinct from the four above: not whether
+the skill is the right *artifact*, but whether a model-tier or
+reasoning-effort *pin* the skill's own content makes -- in prose
+instructions to the invoking agent, or in a bundled Workflow script's
+`agent()` calls -- is itself justified. Grounded in Anthropic's own
+guidance on this exact choice, Lydia Hallie (Claude Code team),
+"Choosing a Claude model and effort level in Claude Code" ([modeleffort]):
+"Effort changes how much work Claude does. The model changes what Claude
+knows."
+
+**Applicability.** Fires only when the target's own content pins a model
+or effort level somewhere. Most skills correctly omit both and inherit
+the caller's -- per the source's own default guidance, "for most tasks,
+use the model's default effort level" -- and an absent pin is not a
+finding.
+
+- **Model pin.** Justified when the pinned tier matches genuine
+  difficulty the source names directly: "subtle bugs, unfamiliar
+  domains, architecture decisions," or a step where "the smaller model
+  is confidently wrong no matter how much context you give it."
+  Unjustified when it forces a stronger tier for work the source calls
+  routine -- "edits you can describe precisely, mechanical changes,
+  questions about code that's already in context" -- with no such
+  difficulty cited. An unjustified downgrade (forcing a weaker tier onto
+  a step that plausibly needs the difficulty-driven capability) is the
+  same finding in the other direction.
+- **Effort pin.** Justified when it is a stated, deliberate, general
+  preference tied to the skill's own domain (e.g. an irreversible
+  operation whose skill explicitly always wants exhaustive verification)
+  -- matching the source's framing of effort as "a manual override... 
+  reach for it deliberately... a general preference, not a task-by-task
+  decision." Unjustified when a non-default level is set with no stated
+  reason, especially forcing a *lower* effort onto a step that needs
+  verification -- the source's own diagnostic applies directly here:
+  "did it not try hard enough, or did it not know enough?" A skill that
+  forces low effort onto a verification-heavy step is pre-emptively
+  choosing the "didn't try hard enough" failure mode for its own users.
+- **Token-consumption confusion.** A skill that treats effort as a hard
+  cap on tokens (rather than `max_tokens`, the only real hard cap in the
+  system) is a distinct, citable misunderstanding of the mechanism,
+  worth naming even independent of whether the specific pin is otherwise
+  justified.
+
+**When a pin is found justified, say so explicitly** (e.g. "model/effort
+pin justified -- <reason>"), the same restraint discipline dimension 8's
+"silence is not evidence" rule already applies elsewhere in this rubric
+-- a pin existing is not itself a finding, and inventing one where the
+skill's own stated reason already matches the source's criteria is not a
+review, it is noise.
+
+A finding here is a **step-level** mechanism finding, the same standing
+as Skill-step vs. bundled script above -- report it when it fires, but it
+is not the whole-review headline and does not by itself block a *mature*
+verdict.
 
 ## Portability level
 
@@ -676,8 +735,9 @@ kinds of changes.
 
 **Well-formed** and **mature** both presuppose *whole-artifact* mechanism
 fit -- the skill is the right container (not better as a hook, subagent, or
-CLAUDE.md content). A step-level Skill-step vs. bundled script finding is
-reported for triage but does not by itself block either verdict.
+CLAUDE.md content). A step-level finding (Skill-step vs. bundled script, or
+Model/effort tier fit) is reported for triage but does not by itself block
+either verdict.
 
 A skill can be well-formed or even mature by every dimension below and
 still be the wrong artifact -- content that should be a hook, CLAUDE.md, or a
@@ -715,6 +775,9 @@ Every inline `[label]` citation above resolves to the source below.
 - **[fable]** Thariq Shihipar, Anthropic -- A Field Guide to Fable: Finding
   Your Unknowns.
   <https://claude.com/blog/a-field-guide-to-claude-fable-finding-your-unknowns>
+- **[modeleffort]** Lydia Hallie, Anthropic (Claude Code team) -- Choosing
+  a Claude model and effort level in Claude Code.
+  <https://claude.com/blog/claude-model-and-effort-level-in-claude-code>
 - **[kapoor]** Kapoor, Stroebl, Siegel, Nadgir, Narayanan -- AI Agents That
   Matter, 2024 (arXiv:2407.01502).
   <https://arxiv.org/abs/2407.01502>
@@ -740,3 +803,4 @@ Every inline `[label]` citation above resolves to the source below.
 [soc]: https://www.cs.utexas.edu/~EWD/transcriptions/EWD04xx/EWD447.html "E. W. Dijkstra, On the role of scientific thought (EWD447), 1974; reprinted in Selected Writings on Computing: A Personal Perspective, Springer-Verlag, 1982"
 [steering]: https://claude.com/blog/steering-claude-code-skills-hooks-rules-subagents-and-more "Anthropic -- Steering Claude Code: skills, hooks, subagents and more"
 [fable]: https://claude.com/blog/a-field-guide-to-claude-fable-finding-your-unknowns "Thariq Shihipar, Anthropic -- A Field Guide to Fable: Finding Your Unknowns"
+[modeleffort]: https://claude.com/blog/claude-model-and-effort-level-in-claude-code "Lydia Hallie, Anthropic (Claude Code team) -- Choosing a Claude model and effort level in Claude Code"

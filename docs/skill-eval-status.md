@@ -121,6 +121,34 @@ and the bug fixes: `evals/evaluating-skill-quality/split.md`'s Kept-edit
 log and `references/worked-example-self-review.md`'s dimension-8
 addendum. Refs #149.
 
+**Issue #155 (model/effort tier fit):** `references/rubric.md` gained a
+fifth Mechanism-fit check, `### Model/effort tier fit`, grounded in
+Anthropic's own guidance on choosing a model tier and reasoning-effort
+level in Claude Code (Lydia Hallie, Claude Code team) -- checking
+whether a reviewed skill's own model/effort pins are justified per that
+guidance, when the skill pins one at all. A step-level finding, same
+standing as the existing Skill-step vs. bundled script check; wired into
+`SKILL.md`'s Mechanism-fit bullet list. Went through `gated-skill-edits`'
+own held-out gate: 3 new fixtures added to `split.md`'s split (19
+total). This gate reused the six pre-existing selection fixtures'
+already-measured after scores from the issue #149 gate directly above as
+this gate's before baseline (same committed file state, same matched
+methodology -- disclosed reuse), so only the one new selection fixture
+needed a genuine fresh before/after pair. Selection mean: **0.912698 ->
+0.963719, KEEP**. One pre-existing fixture dipped on an assertion
+unrelated to this edit (a paraphrase in unrelated dimension-8 content);
+checked directly, disclosed, and did not change the outcome. The
+purpose-built fixture moved cleanly from 0.500000 to 1.000000. A
+held-out restraint check (test split, read once) confirmed the new
+check does not over-fire on an already-justified pin, and caught one
+more instance of the same case-sensitivity fixture bug PR #150's
+external review found for `blind spot` -- fixed the same way, by
+matching a case-invariant fragment instead of re-running for a lucky
+pass. Full record, per-fixture scores, and the bug fix:
+`evals/evaluating-skill-quality/split.md`'s Kept-edit log and
+`references/worked-example-self-review.md`'s dimension-8 addendum. Refs
+#155.
+
 ## explaining-the-work
 
 The committed eval suite (`evals/explaining-the-work/`) has no committed run
