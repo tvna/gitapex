@@ -53,31 +53,46 @@ every session regardless of task -- exactly what belongs in a skill
 rather than always-loaded CLAUDE.md content.
 
 **Skill vs. hook**: mostly good fit, one gap named at the time this
-section was originally written, since closed -- see the dated update
-immediately below. The review process itself is inherently a judgment
-call (grading nine dimensions is not a deterministic check), so prose is
-the right mechanism for the bulk of this skill. The one Stop boundary
-that is safety-adjacent rather than purely judgment -- "Never install
-eval tooling ... without the operator's go-ahead" -- was, at the time of
-the original pass, prose-only backing for a real supply-chain-risk
-concern (an agent autonomously running an install command), because
-gitapex had no hooks infrastructure at the time.
+section was originally written, since revised twice -- see the dated
+updates immediately below. The review process itself is inherently a
+judgment call (grading nine dimensions is not a deterministic check), so
+prose is the right mechanism for the bulk of this skill. The one Stop
+boundary that is safety-adjacent rather than purely judgment -- "Never
+install eval tooling ... without the operator's go-ahead" -- was, at the
+time of the original pass, prose-only backing for a real
+supply-chain-risk concern (an agent autonomously running an install
+command), because gitapex had no hooks infrastructure at the time.
 
 **Update ([issue #164][issue164], dogfooding re-run against the live
-repository, same session as [issue #155][issue155]):** this specific claim -- "gitapex has no hooks infrastructure
-at all today" -- has since been falsified by a real repository change and
-is corrected here rather than left to silently rot per dimension 6's own
-durability standard. `hooks/hooks.json` now wires a `PreToolUse` gate on
-`Bash` to `hooks/check-bash-safety.sh`, whose deny message cites this
-skill by name: `"Blocked by hooks/check-bash-safety.sh: command matches a
-package/plugin install pattern. Per evaluating-skill-quality/SKILL.md's
-stop boundary, installs require the operator's explicit go-ahead..."`.
-`SKILL.md`'s own Stop boundaries section already reflects this ("backed
-by this plugin's `hooks/check-bash-safety.sh` PreToolUse hook, which
-blocks install commands run via Bash") -- only this reference file's
-older mechanism-fit narrative had fallen behind. The gap named in the
-original pass is closed: this Stop boundary now has genuine deterministic
-backing, not prose alone.
+repository, same session as [issue #155][issue155]):** the claim "gitapex
+has no hooks infrastructure at all today" is stale -- `hooks/hooks.json`
+now wires a `PreToolUse` gate on `Bash` to `hooks/check-bash-safety.sh`,
+whose deny message cites this skill by name. A first attempt at
+correcting this went too far, though: it edited `SKILL.md`'s own Stop
+boundary to assert "backed by this plugin's `hooks/check-bash-safety.sh`
+PreToolUse hook" as a flat, unconditional fact -- which is itself a
+portability defect (Portability level, dimension 6 at full Portable
+strictness), not a fix. `SKILL.md` is declared Portable; a vendored copy
+running in a different plugin, with no `hooks/check-bash-safety.sh` at
+that path, would carry a false claim of deterministic backing it does not
+actually have -- worse than the original prose-only gap, since a false
+claim of enforcement is more misleading than an honestly-named absence.
+Corrected properly below.
+
+**Update (second correction, same session):** `SKILL.md`'s Stop boundary
+now checks the actual environment conditionally instead of hardcoding a
+path or a plugin name: "check directly rather than assuming either way;
+if a target repository has such a hook, that is real enforcement, and if
+it does not, this boundary is currently prose-only and worth naming as a
+Mechanism-fit gap." This is the correct portable posture -- true in any
+plugin this skill is vendored into, including one with no hook at all --
+rather than a claim that only happens to be true in gitapex today. As a
+point of local fact about gitapex specifically (illustrative context, not
+part of the skill's own portable content): checking this environment
+directly confirms `hooks/hooks.json` + `hooks/check-bash-safety.sh` do
+back this Stop boundary here, so the original gap is closed *in this
+repository*, but that fact lives in this worked example, not baked into
+`SKILL.md` itself.
 
 **Skill-step vs. bundled script**: passes. This skill's own deterministic
 shape lane was delegated to `scripts/check_skill_shape.py`, so applying
@@ -446,9 +461,15 @@ risk reduction is not the same claim as measured transfer success.
 **Mechanism fit**: good fit overall. The original pass here named a gap
 -- the eval-tooling-install Stop boundary was safety-adjacent prose with
 no hook backing, in a repo with no hooks infrastructure at the time. Per
-the dated update above, this gap is now closed: `hooks/hooks.json` +
-`hooks/check-bash-safety.sh` back that Stop boundary deterministically,
-verified live against the current repository.
+the dated updates above, `SKILL.md`'s own text now checks this
+conditionally against whatever environment it actually runs in, rather
+than asserting a fixed answer -- the correct portable posture, since a
+hardcoded "yes, backed" claim would itself have been a defect once
+vendored somewhere without the hook this repository happens to have. In
+this repository specifically, that conditional check does currently
+resolve to "yes, backed" (`hooks/hooks.json` + `hooks/check-bash-safety.sh`,
+verified live), but that fact lives here, in this worked example, not in
+the skill's own portable content.
 
 **Well-formed**, and not yet **mature** -- the same shape as the
 `explaining-the-work` verdict, for different reasons. Dimensions 1

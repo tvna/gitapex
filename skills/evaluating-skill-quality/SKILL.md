@@ -223,11 +223,16 @@ actually specifies.
   state -- re-fetch when in doubt, don't trust a memorized summary.
 - Never install eval tooling for a target repo (`skill-creator`, `waza`, an
   eval suite, etc.) as part of a review without the operator's go-ahead --
-  propose it instead (dimension 8), backed by this plugin's
-  `hooks/check-bash-safety.sh` PreToolUse hook, which blocks install
-  commands run via Bash. The skill's own bundled
-  `scripts/check_skill_shape.py` is not such an install -- it ships with
-  the skill and only reads.
+  propose it instead (dimension 8). Whether that prohibition has real
+  deterministic backing (a PreToolUse hook blocking install commands, a
+  permission rule) or is prose-only depends on the environment this
+  dispatch is actually running in -- check directly rather than assuming
+  either way; if a target repository has such a hook, that is real
+  enforcement, and if it does not, this boundary is currently prose-only
+  and worth naming as a Mechanism-fit gap the same way any other
+  unenforced safety-critical prohibition would be. The skill's own
+  bundled `scripts/check_skill_shape.py` is not such an install -- it
+  ships with the skill and only reads.
 - Never patch a wrong verdict by adjusting step 5 when the real fault was
   a wrong precondition (steps 1-4). Redo the precondition instead -- the
   bug lives where the wrong assumption was made (rubric.md, Contract
