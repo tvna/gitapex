@@ -113,6 +113,11 @@ def test_pruning_compare_rejects_regression_beyond_published_precision():
     assert score_contract.pruning_compare(0.939815, 0.9398144, 1400, 1) == "REJECT"
 
 
+def test_pruning_compare_rejects_an_unpublished_prior_precision():
+    with pytest.raises(ValueError, match="published six-decimal precision"):
+        score_contract.pruning_compare(0.9000004, 0.9, 100, 99)
+
+
 def test_pruning_compare_rejects_correctness_regression_even_if_context_falls():
     assert score_contract.pruning_compare(0.9, 0.8, 1400, 1) == "REJECT"
 

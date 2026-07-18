@@ -150,5 +150,6 @@ must be independent and retained; the count is never report-only metadata.
   empty refusal is evidence about neither.
 - Do not skip the quoted-line requirement to make a review read as complete.
 - Do not re-grade or revise a verdict in the main thread after a dispatch
-  returns it. A borderline or contested verdict gets a second, independent
-  dispatch (step 5), never an in-place patch.
+  returns it. Cross-trial disagreement follows step 5 and remains
+  `INDETERMINATE`. Any later rerun is a separate retained run, never an extra
+  unbudgeted dispatch or an in-place patch to the current run.

@@ -106,6 +106,14 @@ def _published_correctness(value):
     return round(value, CORRECTNESS_DECIMALS)
 
 
+def _validate_published_prior(value):
+    """Require a prior copied from this CLI's six-decimal output."""
+    if value != _published_correctness(value):
+        raise ValueError(
+            "prior correctness must use the CLI's published six-decimal precision"
+        )
+
+
 def strict_compare(before_mean, after_mean):
     """Return ``"KEEP"`` iff ``after_mean`` strictly exceeds ``before_mean``.
 
@@ -114,9 +122,9 @@ def strict_compare(before_mean, after_mean):
     """
     _validate_correctness(before_mean, "before correctness")
     _validate_correctness(after_mean, "after correctness")
-    before = _published_correctness(before_mean)
+    _validate_published_prior(before_mean)
     after = _published_correctness(after_mean)
-    return "KEEP" if after > before else "REJECT"
+    return "KEEP" if after > before_mean else "REJECT"
 
 
 def pruning_compare(
@@ -135,11 +143,11 @@ def pruning_compare(
     _validate_correctness(after_correctness, "after correctness")
     _validate_context_cost(before_context_cost, "before context cost")
     _validate_context_cost(after_context_cost, "after context cost")
-    before = _published_correctness(before_correctness)
+    _validate_published_prior(before_correctness)
     after = _published_correctness(after_correctness)
-    if after > before:
+    if after > before_correctness:
         return "KEEP"
-    if after < before:
+    if after < before_correctness:
         return "REJECT"
     return "KEEP" if after_context_cost < before_context_cost else "REJECT"
 

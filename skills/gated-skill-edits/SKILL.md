@@ -74,8 +74,9 @@ evaluation. Name the gap; never fake a score to proceed.
    ordinary gate; add `--pruning-only --prior-context-cost <n>
    --candidate-context-cost <n>` only for the predeclared pruning gate.
    The script reads one task score per line from `--scores` or stdin and
-   compares correctness at the same six-decimal precision it prints, so a
-   printed baseline can be fed back without creating a false regression.
+   requires `--compare-to` to be the exact six-decimal baseline it previously
+   printed, then compares the candidate at that same published precision.
+   A higher-precision prior is ambiguous input and fails loudly.
    It prints the mean plus `KEEP`/`REJECT`, avoiding hand arithmetic. See
    [references/worked-example.md](references/worked-example.md).
 
