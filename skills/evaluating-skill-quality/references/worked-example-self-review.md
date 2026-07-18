@@ -52,22 +52,32 @@ real procedure invoked situationally, not a fact Claude should hold in
 every session regardless of task -- exactly what belongs in a skill
 rather than always-loaded CLAUDE.md content.
 
-**Skill vs. hook**: mostly good fit, one named gap. The review process
-itself is inherently a judgment call (grading nine dimensions is not a
-deterministic check), so prose is the right mechanism for the bulk of
-this skill. But one Stop boundary is safety-adjacent rather than purely
-judgment: "Never install eval tooling ... without the operator's
-go-ahead." Per the primary source, a "never do this" instruction that
-guards something that actually matters needs deterministic enforcement
-(a hook, a permission rule) because "under pressure, in a long session
-... the model can fail to follow a prompted rule" -- and gitapex has no
-hooks infrastructure at all today (confirmed: `hooks/` is an explicit
-Non-goal in the design spec cited elsewhere in this rubric). This Stop
-boundary is currently prose-only backing for a real supply-chain-risk
-concern (an agent autonomously running an install command). Not
-disqualifying -- the judgment-call parts of this skill are still
-correctly skill-shaped -- but worth naming rather than assuming the
-prose boundary is sufficient on its own.
+**Skill vs. hook**: mostly good fit, one gap named at the time this
+section was originally written, since closed -- see the dated update
+immediately below. The review process itself is inherently a judgment
+call (grading nine dimensions is not a deterministic check), so prose is
+the right mechanism for the bulk of this skill. The one Stop boundary
+that is safety-adjacent rather than purely judgment -- "Never install
+eval tooling ... without the operator's go-ahead" -- was, at the time of
+the original pass, prose-only backing for a real supply-chain-risk
+concern (an agent autonomously running an install command), because
+gitapex had no hooks infrastructure at the time.
+
+**Update (dogfooding re-run against the live repository, same session as
+issue #155):** this specific claim -- "gitapex has no hooks infrastructure
+at all today" -- has since been falsified by a real repository change and
+is corrected here rather than left to silently rot per dimension 6's own
+durability standard. `hooks/hooks.json` now wires a `PreToolUse` gate on
+`Bash` to `hooks/check-bash-safety.sh`, whose deny message cites this
+skill by name: `"Blocked by hooks/check-bash-safety.sh: command matches a
+package/plugin install pattern. Per evaluating-skill-quality/SKILL.md's
+stop boundary, installs require the operator's explicit go-ahead..."`.
+`SKILL.md`'s own Stop boundaries section already reflects this ("backed
+by this plugin's `hooks/check-bash-safety.sh` PreToolUse hook, which
+blocks install commands run via Bash") -- only this reference file's
+older mechanism-fit narrative had fallen behind. The gap named in the
+original pass is closed: this Stop boundary now has genuine deterministic
+backing, not prose alone.
 
 **Skill-step vs. bundled script**: passes. This skill's own deterministic
 shape lane was delegated to `scripts/check_skill_shape.py`, so applying
@@ -208,6 +218,23 @@ second time elsewhere in a future edit, that would be the "restating the
 same instruction in two places" fail this dimension itself names. Not a
 current violation -- a forward-looking note on a file that has grown
 several times in one review pass.
+
+**Update (dogfooding re-run, same session as issue #155):** the file
+grew again, from the 565 lines recorded above to **806 lines**, across
+two further gated edits (issue #149's Unknowns framework / Blind spot
+pass, issue #155's Model/effort tier fit). Checked directly against the
+specific drift risk named above -- neither `waza`'s divergences nor
+SkillOpt's disciplines are cited a second time anywhere in the new
+content, so that named violation has not occurred, and a full read of
+the current file found no other instance of the "restating the same
+instruction in two places" fail either: both new sections cite their own
+distinct primary sources ([fable], [modeleffort]) and earn their length
+the same way the original note required. This is not a clean pass by
+default, though -- it is a materialized instance of exactly the trend
+the original note flagged as a risk to watch, not merely a hypothetical
+anymore, and should be actively re-checked (not assumed still fine) at
+the next edit to this file rather than treated as settled by this one
+clean check.
 
 ### 3. Degree of freedom
 
@@ -415,11 +442,12 @@ risk reduction is not the same claim as measured transfer success.
 
 ## Verdict
 
-**Mechanism fit**: good fit overall, with one named gap -- the
-eval-tooling-install Stop boundary is safety-adjacent prose with no
-hook backing, in a repo with no hooks infrastructure yet. Reported here
-as the headline finding per rubric.md's Verdicts section, alongside
-rather than instead of the well-formed/mature verdict below.
+**Mechanism fit**: good fit overall. The original pass here named a gap
+-- the eval-tooling-install Stop boundary was safety-adjacent prose with
+no hook backing, in a repo with no hooks infrastructure at the time. Per
+the dated update above, this gap is now closed: `hooks/hooks.json` +
+`hooks/check-bash-safety.sh` back that Stop boundary deterministically,
+verified live against the current repository.
 
 **Well-formed**, and not yet **mature** -- the same shape as the
 `explaining-the-work` verdict, for different reasons. Dimensions 1
@@ -441,6 +469,34 @@ different, stronger outcome than a self-review that finds nothing. A
 self-review that always passes cleanly would itself be evidence of
 rubber-stamping -- per this skill's own Stop boundaries, a bare "looks
 fine" is exactly what is disallowed.
+
+**Update (dogfooding re-run, issue #155 session):** a fresh, fully live
+dispatch (real subagent, real target -- this skill's own current files on
+disk, not a synthetic fixture) ran the complete current Procedure against
+this skill, including both of this session's own new checks, per this
+repository's own "gate completion on live proof, not plan-time intent
+alone" discipline. Result: **well-formed** (14/14 deterministic checks,
+confirmed live), **not yet mature** -- for two reasons, both since
+addressed above rather than left standing: dimension 2's forward-looking
+watch-point had, by that point, moved past hypothetical (see the dated
+update above), and dimension 6 had a genuine, uncaught durability defect
+in this very file (the stale "no hooks infrastructure" claim, now
+corrected in the Mechanism fit section above). The Model/effort tier fit
+check correctly found and explicitly stated that this skill's own content
+pins no model or effort level anywhere -- an absence, not a finding, per
+its own restraint discipline. The Blind spot pass found one new,
+genuine rubric gap specific to this target's self-referential domain: the
+held-out-gate discipline (dimension 8 above) covers split methodology
+(disjointness, strict improvement) but never asks whether the automated
+scorer (`score_contract.py`'s substring matching) actually measures the
+judgment it is scoring -- live evidence for this exact gap already exists
+in this session's own history (two independent case-sensitivity
+false-failures, both caught by review rather than by the gate itself; see
+the issue #149 and #155 updates in dimension 8 below). Left unfixed here,
+correctly, per the Blind spot pass's own instruction that a durable
+rubric change is a deliberate, `gated-skill-edits`-gated edit, not
+something a single review session improvises -- named for a future
+iteration rather than patched inline.
 
 ## Verification: subagent dispatch (dated addendum)
 
