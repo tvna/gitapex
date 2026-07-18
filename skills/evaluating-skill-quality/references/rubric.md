@@ -112,9 +112,11 @@ procedure, rather than a one-off session technique.
 - **If a gap is found**: name it in the review's output the same way an
   unmeasured dimension 8/9 gap is named. Never fold it silently into an
   existing dimension's verdict, and never invent an ad hoc tenth dimension
-  inline to cover it -- a durable rubric change is a deliberate,
-  `gated-skill-edits`-gated edit to this file (see dimension 8's held-out-gate
-  paragraph below), not something a single review session improvises.
+  inline to cover it -- a durable rubric change should go through this
+  repository's own held-out-gated edit process if the environment has one
+  (this repository's own is `gated-skill-edits`; see dimension 8's
+  held-out-gate paragraph below) or an equivalent measured accept/reject
+  step if it does not, not something a single review session improvises.
 - **If no gap is found**: say so explicitly ("no rubric blind spot found for
   this target's domain") rather than leaving the question unaddressed --
   the same "silence is not evidence" discipline dimension 8 already applies
@@ -382,6 +384,32 @@ grading below.
   defect, not a style nit. References to the origin repository as
   *context* or a *worked example* remain fine; only references the
   *procedure* depends on to function are graded this strictly.
+  - **The portability litmus test, applied to every sentence, not only
+    executed steps**: for Portable-declared content, ask of each claim --
+    including one the model never executes as a step, such as a Stop
+    boundary or a Mechanism-fit assertion -- *"would this exact sentence
+    remain true, unchanged, if this file were copied into a repository
+    carrying none of the origin repo's state?"* A runtime path-read
+    failing this test is the same defect as a **declarative fact-claim**
+    failing it (e.g. "backed by this plugin's `hooks/check-x.sh`," "this
+    repository's tests currently number 214"). Grade both identically;
+    the absence of an executed step does not exempt a prose assertion.
+    Fail: an unconditional claim that a specific file, hook, or count
+    backs a rule. Pass: a conditional check ("real deterministic backing
+    if the current environment has one; verify directly rather than
+    assuming either way").
+  - **Stop boundaries and Mechanism-fit prose are the highest-risk
+    locations for this failure**, because an author who correctly checked
+    the *origin* repository and found a hook is tempted to record that
+    finding as a flat, unconditional fact rather than as a conditional
+    check -- the claim silently stops being portable at exactly the
+    moment it stops being hedged. Read every Stop-boundaries and
+    Mechanism-fit sentence in Portable-declared content twice: once
+    answering "is this backed" (Mechanism fit's question), once answering
+    "would this sentence's specific wording survive being read in an
+    unrelated repository" (the portability litmus test) -- these are
+    different questions, and Portable-declared content must pass both,
+    not just the first.
 - **Repository-scoped** -- a repository-scoped skill that reads as if it
   were portable is a dimension-1/6 defect (it misleads a future vendoring
   decision), not the scoping choice itself. An undeclared level that
@@ -518,6 +546,17 @@ one read.
   never a bare tool name.
 - Forward slashes in every path (`references/rubric.md`), never backslashes.
 - A default with an escape hatch, not a menu of options.
+- No bare (`#149`) or even fully-qualified (`owner/repo#149`) GitHub
+  issue/PR-number citation inside content declared (or read as)
+  **Portable**. A bare `#N` auto-links relative to whichever repository
+  currently hosts the file and silently resolves to the wrong issue once
+  vendored; a fully qualified link avoids the wrong-resolution risk but
+  is still the origin repository's own issue-tracker bookkeeping blended
+  into portable teaching content -- the same portable-core/repo-detail
+  split the Mixed classification above and dimension 5 already require
+  for other content. Route dated, issue-linked history to the origin
+  repository's own status documentation (e.g. a `docs/`-level eval or
+  change log) instead of a worked example inside the skill's own folder.
 - For a skill declared (or read as) **Portable** (see
   [Portability level](#portability-level)): no procedural step reads,
   cites as authority, or branches on a path outside the skill's own
@@ -525,7 +564,10 @@ one read.
   context (a worked example, a "here is what this looked like once") is
   fine; a step that tells the model to go check a repository-specific
   path to decide what to do next is not -- that path breaks the moment
-  the skill is copied elsewhere.
+  the skill is copied elsewhere. This applies to a **declarative
+  fact-claim** exactly as strictly as to an executed step -- see the
+  portability litmus test in [Portability level](#portability-level)
+  above.
 
 ## 7. Bundled scripts (only if the skill ships code)
 

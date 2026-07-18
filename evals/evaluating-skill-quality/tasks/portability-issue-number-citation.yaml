@@ -1,0 +1,36 @@
+id: evaluating-skill-quality-portability-issue-number-citation
+name: Bare Issue-Number Citation Inside a Portable Skill's Own Body
+description: A different domain and a different failure mode from the declarative-fact-claim train fixture -- a Portable-declared skill's own SKILL.md body cites a bare issue number as the provenance for a specific edge case, which auto-links to the wrong issue once the skill is vendored into a different repository; the gate measures whether the new dimension-6 sub-check generalizes to this citation-shaped failure rather than memorizing the train fixture's Stop-boundary wording.
+tags:
+  - quality
+  - portability
+  - issue-number-citation
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "normalizing-timestamps".
+
+    ---
+    name: normalizing-timestamps
+    description: Normalize timestamps in a dataset to a single timezone and format. Use when the user asks to normalize, standardize, or fix inconsistent timestamps.
+    ---
+
+    **Portability: Portable.** Self-contained -- carries its own
+    normalization rules and cites no repository-specific tooling.
+
+    # Normalizing Timestamps
+
+    ## Procedure
+
+    1. Detect the source timezone for each timestamp column.
+    2. Convert every timestamp to UTC in ISO 8601 format.
+    3. For the ambiguous-timezone edge case first reported in issue #88 of
+       this project, default to the dataset's most common timezone rather
+       than failing.
+expected:
+  output_contains:
+    - "#88"
+    - "issue/PR-number citation"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"

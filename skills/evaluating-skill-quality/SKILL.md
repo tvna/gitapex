@@ -99,6 +99,14 @@ verdict itself would still be grading from a contaminated context.
   fit, portability level, all nine dimensions with quoted evidence, and
   the verdict -- not a bare summary; a postcondition with no cited
   evidence is not a review.
+- When the target has Stop boundaries or Mechanism-fit prose, instruct
+  the dispatch explicitly to check each such sentence against *both*
+  Mechanism fit's "is this backed" question and the portability litmus
+  test's "would this exact wording survive being read in an unrelated
+  repository" question (`references/rubric.md`'s Portability level
+  section) -- the dispatch's default nine-dimension walk answers the
+  first by habit and can silently skip the second unless told to ask it
+  separately.
 - The main thread's own job is only step 3 (run the shape checker first,
   before dispatching) and relaying the dispatch's report -- including the
   verdict the dispatch already issued in step 6 -- to the human verbatim,
@@ -132,7 +140,14 @@ just to classify it.
   check run, a path read, a command executed) resolves inside the
   skill's own folder, or cites only general product-level docs.
   References to the origin repo as *context*/example are fine;
-  references the *procedure* depends on to function are not.
+  references the *procedure* depends on to function are not. Apply this
+  to every sentence, not only executed steps: a **declarative
+  fact-claim** ("backed by this plugin's `X`," "this repo's tests
+  currently number N") fails Portable exactly like a runtime path-read
+  does, if it would go false once copied elsewhere. Stop boundaries and
+  Mechanism-fit prose are the highest-risk spot for this -- see
+  `references/rubric.md`'s Portability level section for the full
+  litmus test.
 - **Repository-scoped**: intentionally depends on the origin repo's own
   tooling or conventions. Legitimate, but must say so explicitly, as a
   terse one-line marker on the first body line after the H1 (the

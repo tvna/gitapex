@@ -193,6 +193,45 @@ carries no issue/PR-number citations of its own and reads as clean,
 timeless worked-example content regardless of which repository hosts it.
 Refs #164.
 
+**Issue #165 (portability litmus test for declarative fact-claims):**
+`references/rubric.md` gained an explicit portability litmus test ("would
+this exact sentence remain true, unchanged, if this file were copied into
+a repository carrying none of the origin repo's state?"), applied to
+every sentence including Stop-boundaries/Mechanism-fit prose, plus a
+named dimension-6 sub-check banning bare/qualified GitHub issue-PR
+citations inside Portable-declared content; mirrored in `SKILL.md` and
+wired into the Subagent-dispatch instructions. Motivated by a real,
+repeated pattern: a pre-existing `SKILL.md` defect (an unconditional
+"backed by this plugin's `hooks/check-bash-safety.sh`" claim, predating
+this session, introduced 2026-07-14) survived five gated edits and one
+live dogfooding pass unflagged, and this session's own #164 fix
+introduced the same class of defect again (bare issue-number citations)
+before a follow-up audit and root-cause investigation traced the common
+cause: the prior rubric anchored Portability checks to *executed-step*
+patterns, so a *declarative fact-claim* in prose never pattern-matched
+either checklist. Went through `gated-skill-edits`' own held-out gate: 3
+new fixtures added to `split.md`'s split (22 total). Reused the seven
+pre-existing selection fixtures' already-measured after scores from the
+issue #155 gate above as this gate's before baseline (disclosed reuse);
+only the one new selection fixture needed a genuine fresh before/after
+pair. Selection mean: **0.937004 -> 1.000000, KEEP**. Two pre-existing
+fixtures moved up on content this edit never touches (run-to-run wording
+variance, disclosed, not banked as a win). Fixing the new fixture's own
+assertion caught a live instance of the "scorer construct validity" gap
+this session's own Blind Spot Pass had already named as open: the
+original assertion was loose enough to score a pre-edit, rubric-unsupported
+hedge identically to the post-edit confirmed violation -- tightened to a
+phrase unique to the new rubric text, turning a false tie into a genuine
+before/after gap (0.750000 -> 1.000000). A second, unrelated,
+pre-existing fixture bug (`edge.yaml`, predating this session) was also
+found and fixed: an assertion matching one historical transcript's
+paraphrase rather than the rubric's own stable, quoted primary-source
+text. Full record, per-fixture scores, and both bug fixes:
+`evals/evaluating-skill-quality/split.md`'s Kept-edit log -- consistent
+with the #164 fix directly above, this dated history is not additionally
+duplicated into `references/worked-example-self-review.md`, which stays
+issue/PR-number-free by design. Refs #165.
+
 ## explaining-the-work
 
 The committed eval suite (`evals/explaining-the-work/`) has no committed run

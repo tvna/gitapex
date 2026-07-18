@@ -27,18 +27,21 @@ worked example, is a larger fixture corpus over time, not a smaller gate.
   acceptance): `normal.yaml`, `mechanism-fit-claudemd.yaml`,
   `no-unauthorized-eval-tooling.yaml`, `scoring-axis-cost-only-eval.yaml`,
   `ordering-rule-totality-review.yaml`, `blind-spot-pass-domain-gap.yaml`,
-  `model-effort-tier-fit-unjustified-model.yaml`.
+  `model-effort-tier-fit-unjustified-model.yaml`,
+  `portability-declarative-fact-claim.yaml`.
 - **selection** (gates acceptance; scored before/after a candidate edit,
   strict improve-or-reject, ties rejected): `edge.yaml`,
   `mechanism-fit-subagent.yaml`, `third-party-not-authoritative.yaml`,
   `scoring-axis-uncontrolled-speed-claim.yaml`,
   `ordering-rule-totality-distinct-skill.yaml`,
   `blind-spot-pass-generalizes.yaml`,
-  `model-effort-tier-fit-unjustified-effort.yaml`.
+  `model-effort-tier-fit-unjustified-effort.yaml`,
+  `portability-issue-number-citation.yaml`.
 - **test** (read once, for a final report only, never to motivate or gate
   an edit): `guardrail.yaml`, `no-fabricated-violation.yaml`,
   `portability-classification.yaml`, `blind-spot-pass-not-silent.yaml`,
-  `model-effort-tier-fit-justified.yaml`.
+  `model-effort-tier-fit-justified.yaml`,
+  `portability-legitimate-illustrative-citation.yaml`.
 
 The two `scoring-axis-*` fixtures were added alongside this split
 specifically because none of the original 9 fixtures assert on
@@ -95,12 +98,39 @@ diagnosis skill's Opus/max-effort pin, backed by a stated reason matching
 the source's own hard-problem examples, must be recognized as justified
 and said so explicitly, not flagged as a false positive.
 
+The three `portability-declarative-fact-claim.yaml` /
+`portability-issue-number-citation.yaml` /
+`portability-legitimate-illustrative-citation.yaml` fixtures were added
+for issue #165 (the portability litmus test for declarative fact-claims,
+plus a named GitHub issue/PR-citation sub-check), for the same reason:
+none of the prior 19 fixtures probe whether the review catches a
+declarative fact-claim (a prose assertion the model never executes as a
+step, e.g. "backed by this plugin's X") or a bare/qualified GitHub
+issue-number citation embedded in Portable-declared content -- the
+existing `portability-classification.yaml` fixture (test split) only
+probes an undeclared repository-scoped *executed-step* dependency, a
+different failure shape.
+`portability-declarative-fact-claim.yaml` sits in train (a Stop boundary
+unconditionally claiming to be "backed by" a specific named hook file --
+it motivated the edit, mirroring the exact failure shape a real
+pre-existing gitapex bug had). `portability-issue-number-citation.yaml`
+sits in selection and uses a distinct domain and a distinct failure mode
+(a bare issue-number citation inside a skill's own procedure text, not a
+Stop-boundary fact-claim) so the gate measures generalization across the
+litmus test and the new dimension-6 sub-check together, not memorization
+of the train fixture's exact wording.
+`portability-legitimate-illustrative-citation.yaml` sits in test (read
+once, for the final report) and checks the restraint side: a sibling-skill
+citation used purely as an illustrative design analogy, with no
+unconditional fact-claim and no issue number, must not be flagged as a
+false positive by the stricter check.
+
 ## Reuse
 
 Future edits to this rubric should reuse this same split rather than
 re-deriving one per iteration, so the selection split stays genuinely
 held out across iterations. If a future edit targets a topic none of
-these 16 (now 19) fixtures probe, add a new train/selection pair the
+these 16 (now 22) fixtures probe, add a new train/selection pair the
 same way this one was added, and record the addition here.
 
 ## Rejected-edit log
@@ -317,3 +347,121 @@ sentence leading into it is capitalized. Re-scored after the fix:
 independently confirmed unrelated to the edit and disclosed), a clean
 generalization result on the fixture built to test the new check, and a
 confirmed restraint result on the held-out justified-pin fixture.
+
+**Iteration: issue #165, portability litmus test for declarative
+fact-claims.** Candidate edit: add an explicit litmus test to
+`references/rubric.md`'s Portability level section ("would this exact
+sentence remain true, unchanged, if this file were copied into a
+repository carrying none of the origin repo's state?"), applied to every
+sentence including Stop-boundaries/Mechanism-fit prose, not only executed
+steps; a named dimension-6 sub-check banning bare/qualified GitHub
+issue-PR citations inside Portable-declared content; a mirrored, terser
+version in `SKILL.md`'s Portability level section; a Subagent-dispatch
+instruction to check Stop-boundaries/Mechanism-fit prose against both the
+Mechanism-fit "is this backed" question and the new litmus test
+separately; and a fallback in the Blind Spot Pass's "if a gap is found"
+branch, which previously named `gated-skill-edits` as the sole mechanism
+for a durable change with no fallback for a vendored context without that
+sibling skill.
+
+Motivation, disclosed in full: this round was not a hypothetical
+exercise. Live dogfooding of the just-edited `evaluating-skill-quality`
+skill against itself (recorded above and in
+`references/worked-example-self-review.md`) found a real, pre-existing
+portability defect in `SKILL.md`'s own Stop boundaries -- an unconditional
+claim to be "backed by this plugin's `hooks/check-bash-safety.sh`
+PreToolUse hook" -- that predates this session (introduced 2026-07-14,
+commit `7848d39`) and survived five subsequent gated edits plus one live
+dogfooding pass, including one where the dispatch read the sentence
+directly and affirmed it as correct rather than flagging it. A follow-up
+audit then found the same class of defect recurring inside this session's
+own edits: bare issue-number citations added to the Portable skill's own
+worked-example file, and a hardcoded `gated-skill-edits` dependency with
+no fallback. A dedicated root-cause investigation diagnosed why: the
+rubric's prior Portability guidance was anchored to *executed-step*
+patterns ("reads/cites as authority/branches on a path"), so a
+*declarative fact-claim* in prose -- never executed as a step -- did not
+pattern-match either checklist and repeatedly slipped through, including
+past a live dogfooding pass built specifically to catch this class of
+issue.
+
+Precondition and splits: satisfied (22 fixtures, 8:8:6 with this
+iteration's additions -- see Assignment above).
+
+Methodology, disclosed reuse: the other 7 selection fixtures' **before**
+score for this gate = their **after** score from #155's already-completed
+gate above (same committed file state at the time, same matched
+methodology). Only the new selection fixture,
+`portability-issue-number-citation.yaml`, needed a genuine fresh
+**before** dispatch (run against `git show 89cc296:<path>`, the commit
+immediately prior to this edit, to avoid a working-tree race). All 8
+selection fixtures then got a fresh **after** dispatch against the
+post-edit working tree, scored with
+`skills/gated-skill-edits/scripts/score_contract.py`:
+
+| Fixture | Before | After |
+|---|---|---|
+| `edge.yaml` | 1.000000 (reused, #155 after) | 1.000000 |
+| `mechanism-fit-subagent.yaml` | 1.000000 (reused, #155 after) | 1.000000 |
+| `third-party-not-authoritative.yaml` | 0.888889 (reused, #155 after) | 1.000000 |
+| `scoring-axis-uncontrolled-speed-claim.yaml` | 0.857143 (reused, #155 after) | 1.000000 |
+| `ordering-rule-totality-distinct-skill.yaml` | 1.000000 (reused, #155 after) | 1.000000 |
+| `blind-spot-pass-generalizes.yaml` | 1.000000 (reused, #155 after) | 1.000000 |
+| `model-effort-tier-fit-unjustified-effort.yaml` | 1.000000 (reused, #155 after) | 1.000000 |
+| `portability-issue-number-citation.yaml` | 0.750000 (fresh) | 1.000000 (fresh) |
+
+Selection mean: **before 0.937004 -> after 1.000000**. Run via
+`score_contract.py --compare-to 0.937004 --scores after-scores.txt`:
+`1.000000 KEEP`.
+
+Two pre-existing fixtures moved up (`third-party-not-authoritative.yaml`
+0.888889 -> 1.000000, `scoring-axis-uncontrolled-speed-claim.yaml`
+0.857143 -> 1.000000) on content this edit never touches (dimension 6's
+third-party-citation guidance, dimension 8's scoring-axis guidance) --
+checked directly, both are run-to-run subagent wording variance (e.g.
+`third-party-not-authoritative.yaml`'s "observed" appeared this run but
+not last), not an effect of the edit, and disclosed rather than silently
+banked as a win.
+
+Along the way, fixing the new fixture's own assertion caught a live
+demonstration of the exact "scorer construct validity" gap this
+session's Blind Spot Pass had already named as a still-open rubric gap
+(see the dogfooding update in `worked-example-self-review.md`'s
+Mechanism-fit section): the fresh **before** dispatch (pre-edit rubric,
+no litmus test yet) independently reasoned its way to a *hedged, explicitly
+unsupported-by-rubric* concern about the "issue #88" citation via the
+pre-existing Blind Spot Pass mechanism, and the first version of this
+fixture's assertion (`output_contains: ["#88", "vendored"]`) was loose
+enough to score that hedged before-run a perfect 1.000000 -- indistinguishable
+from the post-edit run's *confirmed, rubric-cited* "Fail" verdict, on
+substring matching alone. Tightened the assertion to
+`"issue/PR-number citation"`, a phrase that exists only in the new
+dimension-6 bullet and is therefore absent from every pre-edit
+transcript by construction -- re-scored: before 0.750000, after
+1.000000, a genuine, construct-valid improvement instead of a
+false tie. A second, unrelated fixture bug was also found and fixed on
+this same fixture, `edge.yaml` (pre-existing, predates this session):
+`output_contains: ["hook or permission"]` matched one historical
+transcript's paraphrase but not this round's fresh dispatch, which
+instead quoted the rubric's own primary-source text verbatim,
+`"hooks and permissions"` -- changed the assertion to the stable,
+rubric-quoted phrase (confirmed present in both this round's and the
+historical #149-round transcript), re-scored: 1.000000 in both cases, no
+change to any reported mean.
+
+**Restraint check (test split, read once):**
+`portability-legitimate-illustrative-citation.yaml` -- a sibling-skill
+citation used purely as an illustrative design analogy, explicitly
+self-hedged in its own text ("not a dependency this procedure needs that
+sibling skill to be present for"). The after-edit dispatch reasoned
+through both litmus questions explicitly rather than defaulting either
+way, correctly concluded the citation clears the carve-out, and did not
+flag a false positive -- confirming the stricter check does not over-fire
+on a legitimate illustrative reference.
+
+**KEEP.** Strict improvement on the selection split, a genuine
+(construct-valid, after tightening one fixture's own assertion)
+generalization result on the fixture built to test the new check, two
+unrelated fixture-assertion bugs found and fixed along the way (disclosed,
+not silently patched), and a confirmed restraint result on the held-out
+legitimate-citation fixture.
