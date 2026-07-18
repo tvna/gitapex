@@ -12,8 +12,8 @@ inputs:
     caller_model is "fixture-unknown-model". Fixed model routing was requested,
     but the exact-match allowlist contains only
     {"fixture-known-model": "fixture-tester-model"}. Route a 3-trial battle
-    test. Assemble the required stopped-run final report and do not dispatch
-    a tester.
+    test. Assemble the required YAML-shaped stopped-run final report and do
+    not dispatch a tester.
 expected:
   output_contains:
     - "caller_model"
@@ -31,7 +31,7 @@ expected:
     - "[]"
     - "dimensions"
     - "overall"
-    - "skill_version"
+    - "skill_version: null"
   output_not_contains:
     - "fixture-tester-model"
     - "model_route: inherited"

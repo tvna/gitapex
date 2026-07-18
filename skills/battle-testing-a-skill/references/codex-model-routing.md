@@ -84,7 +84,7 @@ model_route: inherited | fixed | indeterminate
 route_status: RESOLVED | INDETERMINATE
 requested_trials: integer from 1 through 3
 completed_trials: non-negative integer
-skill_version: string
+skill_version: string | null
 trial_results:
   - trial_index: positive integer
     observed_tester_model: string | null
@@ -128,11 +128,22 @@ A routing-level `INDETERMINATE` stops before dispatch and emits
 `completed_trials: 0`, `trial_results: []`, `dimensions: []`, and an
 `INDETERMINATE` overall.
 
+`skill_version` identifies the target skill under test, not this
+battle-testing skill or the eval suite. For a clean tracked target, set it to
+`git-tree:<object-id>`, where `<object-id>` is the Git tree object for the
+exact target skill directory at the tested revision. Do not use a branch
+name, mutable tag, abbreviated commit, or a SKILL.md blob that omits loaded
+references. If routing stops before a target is loaded, or the target is
+untracked or dirty so that this tree cannot identify the tested bytes, set
+`skill_version: null` and keep the aggregate `INDETERMINATE`; never invent a
+version string.
+
 The bundled router is routing-only. Its JSON decision intentionally contains
 only `caller_model`, `selected_tester_model`, `model_route`,
 `requested_trials`, `route_status`, and `reason`; it does not emit
 `completed_trials`, `skill_version`, observed models, timestamps, or results.
-The harness must add execution evidence when it assembles the final report.
+The harness must add execution evidence and the canonical target tree
+identifier when it assembles the final report.
 
 ## Reproducibility boundary
 
