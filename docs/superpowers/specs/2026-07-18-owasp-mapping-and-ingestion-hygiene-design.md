@@ -126,24 +126,21 @@ where a manipulated payload steers tool use (ASI02); structured
 extraction and hard size caps shrink that surface. This does not detect
 anything -- detection stays with Gate 6.
 
-**Cost framing, corrected citation (2026-07-18, issue #145).** Primary
-source confirms **LLM10:2025 Unbounded Consumption** -- "LLM systems
-lack resource constraints on usage... uncontrolled access depletes
+**Cost framing, primary citation (issue #145).** Primary source
+confirms **LLM10:2025 Unbounded Consumption** -- "LLM systems lack
+resource constraints on usage... uncontrolled access depletes
 computational resources, causing service disruption and excessive
 costs" (`genai.owasp.org/llm-top-10/`) -- is the exact-fitting authority
-for this deliverable, not merely adjacent support. This was originally
-cited via the nearest ASI-list neighbor, T4 Resource Overload (quotas,
-rate-limiting, resource management), because the ASI01-ASI10 Top 10 has
-**no** dedicated unbounded-consumption category of its own; that gap in
-the newer Agentic list is exactly why the older, base-layer LLM Top 10
-turns out to have the cleaner citation once actually checked (issue
-#145's own hypothesis, now verified against the primary source rather
-than assumed). LLM10:2025 is cited as this deliverable's primary
-authority; T4 Resource Overload remains adjacent support for the
-agentic-specific angle (a manipulated payload driving resource-heavy
-tool use, not just size). Token waste stood on its own engineering merit
-either way -- this correction only sharpens the security citation, it
-does not change the design.
+for this deliverable. The ASI01-ASI10 Top 10 has **no** dedicated
+unbounded-consumption category of its own, so the older, base-layer LLM
+Top 10 carries the cleaner citation here (issue #145's own hypothesis,
+verified against the primary source). LLM10:2025 is cited as this
+deliverable's primary authority; T4 Resource Overload (quotas,
+rate-limiting, resource management) remains adjacent support for the
+agentic-specific angle -- a manipulated payload driving resource-heavy
+tool use, not just size. Token waste stands on its own engineering
+merit independent of which OWASP list is cited; the design is unchanged
+by the choice of primary citation.
 
 **Mechanism.** A PostToolUse hook -- the payload exists only after the
 tool returns, so PreToolUse cannot see it. Matchers: `WebFetch`/
