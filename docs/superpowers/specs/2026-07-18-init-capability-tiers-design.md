@@ -228,8 +228,8 @@ legitimate Foundation posture."
 | Tier | gitapex capability | Mechanism |
 |---|---|---|
 | Foundation | No static long-lived credential anywhere in scaffolded output; F6-scoped fine-grained credential with documented expiry/rotation | `configure`: scaffolded workflows contain no embedded secrets; `recommend`: posture report documents the fine-grained single-repo token issuance path, minimum permissions, expiry, and handoff verification (CLAUDE.md section 3's issuance-path rule). |
-| Enterprise | Short-lived, federated workflow identity replacing stored secrets; verified commit identity on governed paths | `configure`: scaffold OIDC-federated credentials for the apply workflow where the platform supports it (directly closes the ASI03 "no short-lived/OIDC identity" gap named in the security-control-inventory mapping); `configure`: required signed commits on `.gitapex/**` via ruleset -- verified identity over asserted (#131 principle 5). |
-| Advanced | Repo-wide verified identity; verified gitapex binary provenance | `configure`: required signed commits repo-wide; `configure`: SHA-pinned Class B binary distribution (#125) plus posture-report-documented attestation verification of the binary itself. Hardware-backed agent identity (HSM/TPM, remote attestation of agent instances): **not covered** -- a redistributed CLI has no issuance or attestation infrastructure, and inventing one here would contradict the inventory's honesty discipline. |
+| Enterprise | Short-lived, federated workflow identity replacing stored secrets; verified commit identity on governed paths | `recommend`: a GitHub Actions OIDC token is exchanged with an *external* identity provider, not with GitHub itself -- GitHub's repository-administration REST API accepts only a GitHub App/installation token, PAT, or equivalent GitHub credential, never a raw Actions OIDC token, so the apply workflow's stored credential cannot be replaced by OIDC alone. Closing the ASI03 gap requires a broker external to what `init` can scaffold: a cloud workload-identity provider (fronting a secrets-managed GitHub App private key) that the OIDC token is exchanged with, which then mints a short-lived GitHub App installation token. The posture report documents this broker pattern and the GitHub App issuance path; `init` cannot stand up the broker itself, so this stays `recommend`, not `configure`, until an adopter wires one. `configure`: required signed commits on `.gitapex/**` via ruleset -- verified identity over asserted (#131 principle 5). |
+| Advanced | Repo-wide verified identity; integrity-pinned gitapex binary distribution | `configure`: required signed commits repo-wide; `configure`: SHA-pinned Class B binary distribution (#125) -- this proves the downloaded bytes match a preselected digest, not who produced them or that they came from an authorized build; the security-control-inventory's own ASI04 row already scores this `partially covered` for exactly that reason. `recommend`: posture report documents the separate producer-signature/attestation verification path needed for actual binary provenance -- out of `init`'s `configure` scope, same as the Enterprise OIDC broker above. Hardware-backed agent identity (HSM/TPM, remote attestation of agent instances): **not covered** -- a redistributed CLI has no issuance or attestation infrastructure, and inventing one here would contradict the inventory's honesty discipline. |
 
 Honest inversion note: the source's *Foundation* row (per-agent-instance
 cryptographic identifiers) is unreachable at any gitapex tier. gitapex
@@ -342,12 +342,23 @@ third closed-enum input, but NOT a third cross-product axis. The
 existing ~9-row (team-size, platform) table is composed with a separate
 3-row per-tier parameter table -- both binary-embedded, immutable, no
 override path, per F2 unchanged -- keeping total rows near 12, safely
-under #127's ~20-row re-evaluation threshold. An unrecognized or
-indeterminate tier value hits the mandatory default row, whose output is
-the narrowest per F2's existing rule, made precise for the tier axis as:
-**Foundation's artifact set (scaffold least) with the strictest
-enforcement-parameter values (grant least)** -- restrictive by default,
-additive surface off, floors always.
+under #127's ~20-row re-evaluation threshold.
+
+An unrecognized or indeterminate `security-tier` value does **not**
+resolve to Foundation. F2's "mandatory default row is the narrowest
+artifact set" rule is safe for the (team-size, platform) axes, where
+narrowest genuinely means safest: those axes only ever *add* scaffolded
+surface. `security-tier` is different -- it gates enforcement *strength*
+(OIDC-federated identity, repo-wide signature requirement, external
+audit anchoring) directly, so silently mapping an indeterminate value to
+Foundation would make a corrupted-input case *less* restrictive on those
+dimensions, the opposite of fail-closed. Init instead **blocks scaffold
+generation** on an unrecognized/indeterminate `security-tier`: exits
+non-zero, reports the invalid value, and generates nothing until the
+operator re-runs with an explicit, valid tier. This mirrors the floors
+table's existing pattern above (a failed/partial platform-state fetch
+classifies as widening and blocks, rather than proceeding on an assumed
+value) instead of introducing a tier-specific exception to it.
 
 **Re-init movement between tiers is governed by #127's existing
 monotonicity rule, not replaced by a tier-level rule:**
@@ -380,11 +391,13 @@ OWASP mapping design doc; the source document's tier tables and design
 test as quoted; #130's audit-trail design and its addendum findings;
 #126's disclosure split; the #125-addendum content-hygiene check.
 
-Speculation, named as such: that platform OIDC federation is available
-for the specific apply-workflow shape #127 scaffolds on both `github`
-and `gitlab` (verify per-platform at implementation time; where absent,
-the Enterprise identity row degrades to `recommend` with the documented-
-issuance-path fallback, it does not silently claim `configure`); that
+Speculation, named as such: that an adopter is willing to stand up the
+external OIDC-to-GitHub-App-token broker the Enterprise identity row's
+`recommend` classification depends on, and that the specific
+apply-workflow shape #127 scaffolds can be adapted to call it on both
+`github` and `gitlab` (verify per-platform at implementation time; the
+row stays `recommend` regardless of platform since `init` itself cannot
+scaffold the broker, only document the pattern); that
 required-signature rulesets are enforceable on path-scoped rules on both
 platforms (same verification duty); the exact posture-report filename
 and the `security_tier` field shape (implementation-issue decisions).
@@ -429,8 +442,8 @@ and the `security_tier` field shape (implementation-issue decisions).
       infrastructure examples verbatim.
 - [ ] The default tier, the non-interactive behavior, and the F2
       decision-table composition (factored lookup, row budget under the
-      ~20-row threshold, narrowest default row semantics for the tier
-      axis) are each stated explicitly.
+      ~20-row threshold, block-not-downgrade semantics for an
+      unrecognized/indeterminate tier value) are each stated explicitly.
 - [ ] Re-init tier movement is expressed entirely in terms of #127's
       existing per-change monotonicity classification (widening blocks,
       label never trusted, baseline fetched from merge-gated platform
