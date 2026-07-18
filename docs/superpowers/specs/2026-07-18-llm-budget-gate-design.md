@@ -10,20 +10,26 @@ precedent. Directly gates issue #124's credentialed dispatch of
 
 Per this repository's discipline (matching #57/#123/#125/#126/#127/#130/
 #131/#144/#145/#147/#148/#151/#152 precedent): this doc records a design
-only. No `.gitapex/llm-budget-policy.toml`, no `.gitapex/
-llm-budget-policy.schema.json`, no `.github/scripts/gate_workflow_llm_
-budget.py` is created by this pass.
+only. No `.gitapex/policies/llm-budget-policy.toml`, no `.gitapex/
+policies/llm-budget-policy.schema.json`, no
+`.github/scripts/gate_workflow_llm_budget.py` is created by this pass.
 
 ## Why this doc exists
 
 An audit this session (reading `tvna/claude-md`'s real `.gitapex/`
 files, not issue-body paraphrase, after an earlier design -- #152 --
 was found to have missed a whole mechanism by relying on paraphrase)
-found gitapex's design chain had never once considered
+found gitapex's design chain had never once considered claude-md's
 `.gitapex/llm-budget-policy.toml` + `scripts/scan_workflow_llm_
 budget.py` (claude-md #2269, "token blowout guard") -- despite it being
 one of the first `policy_sources[]`-adjacent files in the very
-`ssot.json` instance issue #123 says gitapex should model on.
+`ssot.json` instance issue #123 says gitapex should model on. gitapex's
+own copy of the policy file relocates to
+`.gitapex/policies/llm-budget-policy.toml` per #123 Addendum 3 (every
+`policy_sources[]`-eligible file consolidates under
+`.gitapex/policies/`, not scattered the way claude-md's own bottom-up
+history left its files) -- the mechanism is ported unabridged, only its
+location changes.
 
 This is not a hypothetical gap. `.github/workflows/waza-eval-matrix.yml`
 (committed, real) already fans out over LLM model ids via a
@@ -71,7 +77,7 @@ schema -- stated explicitly here so a future implementation doesn't
 silently drop them the way #152's first draft silently dropped an
 architectural distinction it hadn't yet read:
 
-- **Policy file** (`.gitapex/llm-budget-policy.toml`): a top-level
+- **Policy file** (`.gitapex/policies/llm-budget-policy.toml`): a top-level
   `markers = [...]` array of literal substrings (not regexes), matched
   against each logical line of `.github/workflows/*.{yml,yaml}` after
   shell-continuation flattening; comment lines (`#`-prefixed) are
@@ -80,7 +86,7 @@ architectural distinction it hadn't yet read:
   workflow, each requiring `workflow` (basename), `max_runs_per_day`,
   `max_retries`, and at least one of `max_tokens_per_run` /
   `max_cost_usd_per_run`.
-- **Schema** (`.gitapex/llm-budget-policy.schema.json`): shape-only,
+- **Schema** (`.gitapex/policies/llm-budget-policy.schema.json`): shape-only,
   `additionalProperties: false` throughout so a typo'd key fails loud.
   The real schema's own description states plainly what it CANNOT
   express: the "at least one of `max_tokens_per_run` /
@@ -194,7 +200,9 @@ gate argues for a shared cluster.
 
 ## Facts vs. speculation
 
-Facts: `tvna/claude-md`'s `.gitapex/llm-budget-policy.toml`,
+Facts: `tvna/claude-md`'s `.gitapex/llm-budget-policy.toml` (the real
+upstream's own placement -- gitapex's is
+`.gitapex/policies/llm-budget-policy.toml`, per #123 Addendum 3),
 `.gitapex/llm-budget-policy.schema.json`, and
 `scripts/scan_workflow_llm_budget.py`, read in full this session; the
 verified absence of any marker match against gitapex's real
@@ -212,9 +220,9 @@ upstream markers (Decision 2), not designed further here.
 
 ## Non-goals
 
-- No `.gitapex/llm-budget-policy.toml`, no schema file, no gate script
-  -- design only. A later session may implement this, matching #144's
-  design-to-code precedent.
+- No `.gitapex/policies/llm-budget-policy.toml`, no schema file, no
+  gate script -- design only. A later session may implement this,
+  matching #144's design-to-code precedent.
 - Not designing #124's credentialed-run execution -- this gate is a
   precondition for it.
 - Not inventing a cost/token ceiling number -- flagged as an open input
@@ -240,6 +248,11 @@ upstream markers (Decision 2), not designed further here.
       explicitly) is specified.
 - [ ] Gate placement (CI plane, no cluster) is decided and argued
       against an existing gitapex gate's precedent.
+- [ ] The policy/schema files live at `.gitapex/policies/
+      llm-budget-policy.toml` / `.schema.json`, not claude-md's own flat
+      `.gitapex/llm-budget-policy.toml` path -- per #123 Addendum 3, with
+      the gate script remaining under `.github/scripts/` per gitapex's
+      separate, already-established gate-code convention.
 
 ## Related Issue
 
