@@ -138,6 +138,19 @@ just to classify it.
 Full rationale and per-dimension grading detail:
 [references/rubric.md](references/rubric.md)'s Portability level section.
 
+## Unknowns framework
+
+Full rationale: [references/rubric.md](references/rubric.md)'s Unknowns
+framework section. Four kinds of gap between what a `SKILL.md` states and
+what this review actually checks -- known knowns, known unknowns, unknown
+knowns, unknown unknowns (adapted from Anthropic's own field guide on
+working with Claude models, cited in rubric.md) -- and the **Blind spot
+pass**: before walking the nine dimensions (Procedure step 2, alongside
+Mechanism fit), name explicitly whether the target's domain exposes a
+rubric gap none of dimensions 1-9, Mechanism fit, or Portability level
+already covers, or state explicitly that none was found. Not a tenth
+dimension; the fixed nine-dimension count is unchanged.
+
 ## Procedure
 
 Steps 1-4 are this review's precondition, step 6 its postcondition --
@@ -158,7 +171,9 @@ re-derive one.
    or CLAUDE.md content) is the headline finding of the review -- report
    it even if the rest of the review still completes. The step-level
    Skill-step vs. bundled script finding is the exception: report it for
-   triage, not as the headline.
+   triage, not as the headline. Also run the Blind spot pass per the
+   Unknowns framework section above -- name a rubric gap if the target's
+   domain exposes one, or state explicitly that none was found.
 3. Run the deterministic shape checker per the Two lanes section above (or
    apply its checks by hand where Python is unavailable); cite the exact
    violation.
@@ -218,3 +233,6 @@ actually specifies.
 - Never revise a dimension verdict in the main thread after the dispatch
   returns it. A wrong or contested verdict is fixed by a second,
   independent dispatch, not a patch made in place.
+- Never leave the Blind spot pass unaddressed -- an explicit "no gap found"
+  and a silently skipped question are not the same thing; the latter is
+  not a completed review.

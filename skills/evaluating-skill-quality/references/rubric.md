@@ -23,6 +23,8 @@ skill's own folder.
 ## Table of contents
 
 - [The mental model](#the-mental-model)
+- [Unknowns framework](#unknowns-framework)
+  - [Blind spot pass](#blind-spot-pass)
 - [Contract discipline](#contract-discipline)
 - [Mechanism fit](#mechanism-fit)
   - [Skill-step vs. bundled script](#skill-step-vs-bundled-script)
@@ -56,6 +58,66 @@ disclosure (dimension 5) across load layers, and Contract discipline's
 "never both" rule keeps each check in exactly one place. There is no
 separate dimension for it because it is cross-cutting, not one more thing
 to check.
+
+## Unknowns framework
+
+A borrowed lens for what this review does and does not yet see, not a new
+scoring dimension. Adapted from Anthropic's own field guide on working with
+Claude models -- Thariq Shihipar, "A Field Guide to Fable: Finding Your
+Unknowns" ([fable], fetched via a `site:claude.com` search-result
+confirmation in this session; a direct fetch returned HTTP 403, a
+proxy-level block in this environment, not evidence against the URL) --
+which names four kinds of gap between what an operator tells an agent (the
+map) and what the actual work requires (the territory):
+
+- **Known knowns** -- what the target `SKILL.md` states outright; dimensions
+  1-9 read this directly.
+- **Known unknowns** -- gaps this review is already aware it cannot close.
+  Dimensions 8-9's "name the gap explicitly, never silently skip" discipline
+  is this review's existing outlet for them.
+- **Unknown knowns** -- judgment a reviewer would recognize on sight but this
+  rubric does not enumerate as a checklist item. Mechanism fit's qualitative
+  calls are this review's main outlet for them.
+- **Unknown unknowns** -- a gap in this fixed nine-dimension rubric itself,
+  for the specific target's domain, that no dimension, Mechanism fit check,
+  or Portability rule currently names. Left unaddressed, this quadrant is
+  silently assumed empty rather than actually checked -- the
+  [Blind spot pass](#blind-spot-pass) below is the one step that exists to
+  surface it.
+
+### Blind spot pass
+
+A precondition step (`SKILL.md`'s Procedure step 2, alongside the Mechanism
+fit checks), not a tenth dimension -- the fixed nine-dimension count
+(`evals/evaluating-skill-quality/tasks/guardrail.yaml` checks the reviewer
+still says "nine") is unchanged by this section.
+
+Before walking dimensions 1-9, name explicitly whether the target's specific
+domain exposes a quality concern that none of the nine dimensions,
+Mechanism fit, or Portability level already covers. This is the same move
+that produced `battle-testing-a-skill`'s dimensions 18-22 from a gap
+analysis of that skill's own catalog
+(`battle-testing-a-skill/references/provenance-and-caveats.md`, "Comparative
+gap review: dimensions 18-22") -- applied here to this rubric instead of
+that one. This repository has also used the same move informally, once, to
+find gaps in its own *skill coverage* rather than in one skill's rubric
+(`docs/superpowers/specs/2026-07-15-triage-cluster-design.md`: "a
+Fable-assisted skill-gap analysis (Known/Unknown blind-spot pass...)"
+motivated `ranking-the-open-queue`, `responding-to-a-fresh-arrival`, and
+`screening-a-low-trust-contribution`) -- this section is the first time the
+same move is formalized as a repeatable step *inside* a skill's own
+procedure, rather than a one-off session technique.
+
+- **If a gap is found**: name it in the review's output the same way an
+  unmeasured dimension 8/9 gap is named. Never fold it silently into an
+  existing dimension's verdict, and never invent an ad hoc tenth dimension
+  inline to cover it -- a durable rubric change is a deliberate,
+  `gated-skill-edits`-gated edit to this file (see dimension 8's held-out-gate
+  paragraph below), not something a single review session improvises.
+- **If no gap is found**: say so explicitly ("no rubric blind spot found for
+  this target's domain") rather than leaving the question unaddressed --
+  the same "silence is not evidence" discipline dimension 8 already applies
+  to behavioural evidence, applied here to rubric coverage instead.
 
 ## Contract discipline
 
@@ -650,6 +712,9 @@ Every inline `[label]` citation above resolves to the source below.
 - **[steering]** Anthropic -- Steering Claude Code: skills, hooks, subagents
   and more.
   <https://claude.com/blog/steering-claude-code-skills-hooks-rules-subagents-and-more>
+- **[fable]** Thariq Shihipar, Anthropic -- A Field Guide to Fable: Finding
+  Your Unknowns.
+  <https://claude.com/blog/a-field-guide-to-claude-fable-finding-your-unknowns>
 - **[kapoor]** Kapoor, Stroebl, Siegel, Nadgir, Narayanan -- AI Agents That
   Matter, 2024 (arXiv:2407.01502).
   <https://arxiv.org/abs/2407.01502>
@@ -674,3 +739,4 @@ Every inline `[label]` citation above resolves to the source below.
 [dbc]: https://se.inf.ethz.ch/~meyer/publications/computer/contract.pdf "Bertrand Meyer, Applying \"Design by Contract\", IEEE Computer 25(10):40-51, October 1992"
 [soc]: https://www.cs.utexas.edu/~EWD/transcriptions/EWD04xx/EWD447.html "E. W. Dijkstra, On the role of scientific thought (EWD447), 1974; reprinted in Selected Writings on Computing: A Personal Perspective, Springer-Verlag, 1982"
 [steering]: https://claude.com/blog/steering-claude-code-skills-hooks-rules-subagents-and-more "Anthropic -- Steering Claude Code: skills, hooks, subagents and more"
+[fable]: https://claude.com/blog/a-field-guide-to-claude-fable-finding-your-unknowns "Thariq Shihipar, Anthropic -- A Field Guide to Fable: Finding Your Unknowns"

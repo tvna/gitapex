@@ -337,6 +337,34 @@ discipline applied to this skill, not evidence that every earlier edit
 in this document's history went through it -- the paragraph above still
 accurately describes the many edits that did not.
 
+**Update (issue #149, Unknowns framework / Blind spot pass):** a second
+gated edit, with a disclosed methodology gap this time rather than a
+clean full-split number. This session had no registered `Skill` tool for
+`evaluating-skill-quality` to dispatch against (it is this repository's
+own content, not an installed plugin), so each live dispatch was
+instructed explicitly to read `SKILL.md`/`references/rubric.md` off disk
+and follow the Procedure by hand -- a reasonable proxy for the
+`copilot-sdk`-executor harness the 13 prior fixtures were calibrated
+against, but not the same harness, and it introduces its own
+paraphrase/capitalization variance independent of the edit. The
+purpose-built fixture (`blind-spot-pass-generalizes.yaml`) was scored with
+matched methodology on both sides: selection mean **0.625 -> 0.875**, a
+strict improvement. The other 5 selection fixtures were re-run after the
+edit (10 dispatches total) and every one produced its required
+substantive finding with zero regression and zero Blind-spot-pass
+over-firing, but this session hit its own dispatch rate limit before a
+matched-methodology *before* run could be completed for them, so their
+only "before" data point is the historical, different-harness baseline of
+1.0 each -- comparing that directly against this session's proxy-harness
+after-scores would measure harness fidelity, not the edit, so no such
+mixed number is used as the gate result. **KEEP**, on the matched-fixture
+strict improvement plus the qualitative zero-regression finding across
+the rest of the split -- see `evals/evaluating-skill-quality/split.md`'s
+Kept-edit log for the full record, including the specific per-fixture
+scores and the disclosed harness-mismatch caveat. A full 6-fixture
+matched-methodology gate re-run remains named future work there, not
+silently treated as already done.
+
 ### 9. Cross-model robustness
 
 Unmeasured, not skipped. No Haiku/Sonnet/Opus differential has been run.

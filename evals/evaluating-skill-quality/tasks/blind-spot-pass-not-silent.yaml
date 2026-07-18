@@ -1,0 +1,50 @@
+id: evaluating-skill-quality-blind-spot-pass-not-silent
+name: Blind Spot Pass Must Not Be Silently Skipped on an Ordinary Skill
+description: The reviewed SKILL.md excerpt is an ordinary, low-stakes markdown-table-formatting skill with no genuine domain-specific rubric gap; the Blind spot pass must still explicitly state that no blind spot was found rather than silently omitting the question or fabricating a gap that is not really there.
+tags:
+  - quality
+  - blind-spot-pass
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "markdown-table-formatter". Is this a good skill?
+
+    ---
+    name: markdown-table-formatter
+    description: Reformat a Markdown table so its columns are aligned and its pipe characters line up. Use when the user pastes a misaligned Markdown table and asks for it to be cleaned up.
+    ---
+
+    # Markdown Table Formatter
+
+    ## Procedure
+
+    1. Parse the pasted table into rows and columns.
+    2. Compute the widest cell per column.
+    3. Re-emit the table with every column padded to that width and every
+       pipe character aligned.
+
+    ## Example
+
+    Input:
+    ```
+    | a | bb |
+    | - | -- |
+    | 1 | 22 |
+    ```
+
+    Output:
+    ```
+    | a  | bb |
+    | -- | -- |
+    | 1  | 22 |
+    ```
+
+    ## Stop boundaries
+
+    - Never change the table's cell content, only its whitespace padding.
+expected:
+  output_contains:
+    - "no rubric blind spot"
+  output_not_contains:
+    - "dimension 10"
+    - "tenth dimension"
