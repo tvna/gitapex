@@ -10,8 +10,8 @@ own design.
 
 Per this repository's discipline (matching #57/#123/#125/#126/#127/#130/
 #131/#144/#145/#147/#148/#151/#152/#153 precedent): this doc records a
-design only. No `.github/title-policy.toml`, no gate script, no
-PreToolUse hook is created by this pass.
+design only. No `.gitapex/policies/title-policy.toml`, no gate script,
+no PreToolUse hook is created by this pass.
 
 ## Why this doc exists
 
@@ -47,10 +47,18 @@ verifies.
 
 **Decision: port the two-layer mechanism from `tvna/claude-md`
 (`scripts/title_policy.py` + `scripts/preflight_title_policy.py`,
-`.github/title-policy.toml`) as the floor, unabridged.**
+`.github/title-policy.toml`) as the floor, unabridged -- relocated to
+`.gitapex/policies/title-policy.toml` per #123 Addendum 3 (gitapex
+consolidates every `policy_sources[]`-eligible file under
+`.gitapex/policies/`, not scattered under `.github/` the way claude-md's
+own bottom-up history left it). The mechanism is ported unabridged; only
+the file's location changes.**
 
-**Server-side gate** (a `.github/scripts/gate_title_policy.py`-equivalent,
-wired into CI on issue/PR events): two checks, cited from the real
+**Server-side gate** (a `.github/scripts/gate_title_policy.py`-equivalent
+reading `.gitapex/policies/title-policy.toml`, wired into CI on issue/PR
+events -- the gate SCRIPT stays under `.github/scripts/`, gitapex's own
+established convention for gate code (#144/#145); only the policy DATA
+file moves under #123 Addendum 3): two checks, cited from the real
 upstream docstring rather than paraphrased --
 
 1. **ASCII-only.** "Title text is header-level metadata: it appears in
@@ -186,9 +194,11 @@ Not just listed as motivation -- checked against this design:
 ## Facts vs. speculation
 
 Facts: `tvna/claude-md`'s `scripts/title_policy.py`,
-`scripts/preflight_title_policy.py`, and `.github/title-policy.toml`,
-read in full this session (ASCII-only rationale, conventional-shape
-regex construction, fail-open hook contract, all quoted from real
+`scripts/preflight_title_policy.py`, and `.github/title-policy.toml`
+(the real upstream's own placement -- gitapex's is
+`.gitapex/policies/title-policy.toml`, per #123 Addendum 3), read in
+full this session (ASCII-only rationale, conventional-shape regex
+construction, fail-open hook contract, all quoted from real
 docstrings); gitapex's own real commit-title type usage (`git log
 --all --format='%s'`, checked this session); `docs/versioning.md`'s
 current convention table (verified to already document `refactor(...)`,
@@ -207,9 +217,9 @@ implementation-issue detail not fixed here.
 
 ## Non-goals
 
-- No `.github/title-policy.toml`, no gate script, no PreToolUse hook --
-  design only. A later session may implement this, matching #144's
-  design-to-code precedent.
+- No `.gitapex/policies/title-policy.toml`, no gate script, no
+  PreToolUse hook -- design only. A later session may implement this,
+  matching #144's design-to-code precedent.
 - Not adopting the type-fit heuristic or issue-ref dedup rule now --
   Decision 4 names them as available future extensions, not designed.
 - Not reopening #138 Gate 4's own design -- this issue closes a
@@ -237,6 +247,11 @@ implementation-issue detail not fixed here.
 - [ ] Each of the three existing dependents is checked against the
       design and confirmed satisfied (or explicitly pending
       implementation), not just cited as motivation.
+- [ ] The policy file lives at `.gitapex/policies/title-policy.toml`,
+      not claude-md's own `.github/title-policy.toml` path -- per #123
+      Addendum 3, with the gate script remaining under
+      `.github/scripts/` per gitapex's separate, already-established
+      gate-code convention.
 
 ## Related Issue
 
