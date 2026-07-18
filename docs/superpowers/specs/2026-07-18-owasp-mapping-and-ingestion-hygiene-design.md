@@ -73,19 +73,41 @@ claude-md's `not applicable` verdicts flip here):
 | ASI09 Human-Agent Trust Exploitation | covered | #138 Gate 5's TTL-bounded acks keep confirmation with the human; Gate 1 blocks self-excusing PR language; #126 splits denial detail away from the untrusted MCP surface. |
 | ASI10 Rogue Agents | not covered | No runtime behavioral-anomaly detection or per-session containment exists anywhere in #125-#143; containment is only the platform merge boundary #127 scaffolds. Honest gap, not inflated. |
 
-**Registry JSON** (extends #138's schema):
+**Registry JSON, corrected 2026-07-18 against the real upstream schema
+(issue #152's finding: this session had not read `tvna/claude-md`'s
+actual `.gitapex/ssot.schema.json` when this snippet was first written;
+it has now been read, and this snippet is corrected accordingly rather
+than left wrong for a future session to trip over).** Two errors are
+fixed. First, `policy_sources[].format` is a closed enum in the real
+schema -- `["toml", "json", "yaml"]` -- and does not include
+`"markdown"`; `docs/security-control-inventory.md` cannot legally be a
+`policy_sources[]` entry as originally drafted. Second, and more
+fundamentally, the real upstream repo does not register its own
+markdown PRD documents (like its own `docs/prd/security-control-
+inventory.md`) as `policy_sources[]` entries at all -- `policy_sources[]`
+is for machine-readable data files gates actually PARSE
+(toml/json/yaml); a narrative markdown doc a gate reads and verifies
+directly (as `gate_owasp_asi_mapping.py` does, taking the doc path as a
+plain argument, no indirection) is instead a NODE in the separate
+`.gitapex/doc-dependencies.toml` graph (see #152's design). Corrected:
 
 ```jsonc
-// policy_sources[]
-{ "id": "owasp-asi-inventory", "path": "docs/security-control-inventory.md", "format": "markdown",
-  "authority": "single SoT mapping gitapex controls onto OWASP Agentic Top 10 ASI01..ASI10; peer axis to the zero-trust model in #131" }
+// doc-dependencies.toml nodes[] (not policy_sources[] -- see correction note above)
+{ "id": "owasp_asi_inventory", "path": "docs/security-control-inventory.md", "type": "prd",
+  "description": "Single SoT mapping gitapex controls onto OWASP Agentic Top 10 ASI01..ASI10; peer axis to the zero-trust model in #131" }
 
 // gates[]
-{ "id": "gate-owasp-asi-mapping", "kind": "script", "script": "scripts/gate_owasp_asi_mapping.py",
+{ "id": "gate-owasp-asi-mapping", "kind": "script", "script": ".github/scripts/gate_owasp_asi_mapping.py",
   "rule": "ASI01..ASI10 each appear exactly once with a valid status and non-empty rationale; completeness only, correctness stays with review",
   "planes": ["ci"], "trigger": "pull_request touching docs/ or .gitapex/",
-  "policy_refs": ["owasp-asi-inventory"], "cluster": "security-inventory", "tracking_issue": null }
+  "policy_refs": [], "cluster": "security-inventory", "tracking_issue": null }
 ```
+
+(`policy_refs` is empty: the gate reads
+`docs/security-control-inventory.md` directly by path, not through a
+registered policy-file indirection -- matching the real upstream
+`owasp_asi_mapping.py`'s actual `--inventory` argument contract, read
+this session.)
 
 ## Deliverable 2: `content-ingestion-hygiene`
 
