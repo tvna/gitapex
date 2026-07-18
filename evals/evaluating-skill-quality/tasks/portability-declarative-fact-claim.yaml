@@ -1,0 +1,40 @@
+id: evaluating-skill-quality-portability-declarative-fact-claim
+name: Declarative Fact-Claim Violation -- Unconditional Hook-Backing Claim in a Portable Skill's Stop Boundary
+description: A Portable-declared skill's Stop boundary asserts it is "backed by" a specific, named hook file as an unconditional fact, exactly the failure shape a real pre-existing gitapex bug had (a Stop boundary that survived multiple gated edits and one live dogfooding pass unflagged); the portability litmus test must catch this declarative fact-claim even though the model never executes it as a procedural step.
+tags:
+  - quality
+  - portability
+  - declarative-fact-claim
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "redacting-secrets-before-commit".
+
+    ---
+    name: redacting-secrets-before-commit
+    description: Scan a commit's staged diff for raw credentials before it is made. Use when the user asks to check a commit for secrets before committing.
+    ---
+
+    **Portability: Portable.** Self-contained -- carries its own scanning
+    rules and cites no repository-specific tooling.
+
+    # Redacting Secrets Before Commit
+
+    ## Procedure
+
+    1. Scan the staged diff for high-entropy strings and known credential
+       patterns.
+    2. Report any match with its file and line number.
+
+    ## Stop boundaries
+
+    - Never commit a file containing a raw API key or credential -- backed
+      by this repository's own `pre-commit-secret-scan.sh` hook, which
+      blocks any commit containing a high-entropy string.
+expected:
+  output_contains:
+    - "litmus test"
+    - "pre-commit-secret-scan"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"

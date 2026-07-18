@@ -66,6 +66,14 @@ have been a different mechanism is not fixed by polishing it further.
   stays in-model. This is a step-level finding, not a whole-artifact
   wrong-mechanism one -- the break-even test and rationale (correctness,
   consistency, cost) are in `references/rubric.md`'s Mechanism fit section.
+- **Model/effort tier fit**: when the reviewed skill's own content --
+  prose instructions or a bundled Workflow script -- pins a specific
+  model tier or reasoning-effort level for itself or a sub-dispatch, that
+  pin needs its own justification, the same way a mechanism choice does.
+  Most skills correctly omit both and inherit the caller's; that absence
+  is not a finding. Also a step-level finding, not a whole-artifact one
+  -- criteria and citation are in `references/rubric.md`'s Mechanism fit
+  section.
 
 Full rationale and citation: [references/rubric.md](references/rubric.md)'s
 Mechanism fit section.
@@ -91,6 +99,14 @@ verdict itself would still be grading from a contaminated context.
   fit, portability level, all nine dimensions with quoted evidence, and
   the verdict -- not a bare summary; a postcondition with no cited
   evidence is not a review.
+- When the target has Stop boundaries or Mechanism-fit prose, instruct
+  the dispatch explicitly to check each such sentence against *both*
+  Mechanism fit's "is this backed" question and the portability litmus
+  test's "would this exact wording survive being read in an unrelated
+  repository" question (`references/rubric.md`'s Portability level
+  section) -- the dispatch's default nine-dimension walk answers the
+  first by habit and can silently skip the second unless told to ask it
+  separately.
 - The main thread's own job is only step 3 (run the shape checker first,
   before dispatching) and relaying the dispatch's report -- including the
   verdict the dispatch already issued in step 6 -- to the human verbatim,
@@ -124,7 +140,14 @@ just to classify it.
   check run, a path read, a command executed) resolves inside the
   skill's own folder, or cites only general product-level docs.
   References to the origin repo as *context*/example are fine;
-  references the *procedure* depends on to function are not.
+  references the *procedure* depends on to function are not. Apply this
+  to every sentence, not only executed steps: a **declarative
+  fact-claim** ("backed by this plugin's `X`," "this repo's tests
+  currently number N") fails Portable exactly like a runtime path-read
+  does, if it would go false once copied elsewhere. Stop boundaries and
+  Mechanism-fit prose are the highest-risk spot for this -- see
+  `references/rubric.md`'s Portability level section for the full
+  litmus test.
 - **Repository-scoped**: intentionally depends on the origin repo's own
   tooling or conventions. Legitimate, but must say so explicitly, as a
   terse one-line marker on the first body line after the H1 (the
@@ -137,6 +160,19 @@ just to classify it.
 
 Full rationale and per-dimension grading detail:
 [references/rubric.md](references/rubric.md)'s Portability level section.
+
+## Unknowns framework
+
+Full rationale: [references/rubric.md](references/rubric.md)'s Unknowns
+framework section. Four kinds of gap between what a `SKILL.md` states and
+what this review actually checks -- known knowns, known unknowns, unknown
+knowns, unknown unknowns (adapted from Anthropic's own field guide on
+working with Claude models, cited in rubric.md) -- and the **Blind spot
+pass**: before walking the nine dimensions (Procedure step 2, alongside
+Mechanism fit), name explicitly whether the target's domain exposes a
+rubric gap none of dimensions 1-9, Mechanism fit, or Portability level
+already covers, or state explicitly that none was found. Not a tenth
+dimension; the fixed nine-dimension count is unchanged.
 
 ## Procedure
 
@@ -158,7 +194,9 @@ re-derive one.
    or CLAUDE.md content) is the headline finding of the review -- report
    it even if the rest of the review still completes. The step-level
    Skill-step vs. bundled script finding is the exception: report it for
-   triage, not as the headline.
+   triage, not as the headline. Also run the Blind spot pass per the
+   Unknowns framework section above -- name a rubric gap if the target's
+   domain exposes one, or state explicitly that none was found.
 3. Run the deterministic shape checker per the Two lanes section above (or
    apply its checks by hand where Python is unavailable); cite the exact
    violation.
@@ -200,11 +238,16 @@ actually specifies.
   state -- re-fetch when in doubt, don't trust a memorized summary.
 - Never install eval tooling for a target repo (`skill-creator`, `waza`, an
   eval suite, etc.) as part of a review without the operator's go-ahead --
-  propose it instead (dimension 8), backed by this plugin's
-  `hooks/check-bash-safety.sh` PreToolUse hook, which blocks install
-  commands run via Bash. The skill's own bundled
-  `scripts/check_skill_shape.py` is not such an install -- it ships with
-  the skill and only reads.
+  propose it instead (dimension 8). Whether that prohibition has real
+  deterministic backing (a PreToolUse hook blocking install commands, a
+  permission rule) or is prose-only depends on the environment this
+  dispatch is actually running in -- check directly rather than assuming
+  either way; if a target repository has such a hook, that is real
+  enforcement, and if it does not, this boundary is currently prose-only
+  and worth naming as a Mechanism-fit gap the same way any other
+  unenforced safety-critical prohibition would be. The skill's own
+  bundled `scripts/check_skill_shape.py` is not such an install -- it
+  ships with the skill and only reads.
 - Never patch a wrong verdict by adjusting step 5 when the real fault was
   a wrong precondition (steps 1-4). Redo the precondition instead -- the
   bug lives where the wrong assumption was made (rubric.md, Contract
@@ -218,3 +261,6 @@ actually specifies.
 - Never revise a dimension verdict in the main thread after the dispatch
   returns it. A wrong or contested verdict is fixed by a second,
   independent dispatch, not a patch made in place.
+- Never leave the Blind spot pass unaddressed -- an explicit "no gap found"
+  and a silently skipped question are not the same thing; the latter is
+  not a completed review.

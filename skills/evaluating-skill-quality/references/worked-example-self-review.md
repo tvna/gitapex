@@ -52,22 +52,20 @@ real procedure invoked situationally, not a fact Claude should hold in
 every session regardless of task -- exactly what belongs in a skill
 rather than always-loaded CLAUDE.md content.
 
-**Skill vs. hook**: mostly good fit, one named gap. The review process
-itself is inherently a judgment call (grading nine dimensions is not a
-deterministic check), so prose is the right mechanism for the bulk of
-this skill. But one Stop boundary is safety-adjacent rather than purely
-judgment: "Never install eval tooling ... without the operator's
-go-ahead." Per the primary source, a "never do this" instruction that
-guards something that actually matters needs deterministic enforcement
-(a hook, a permission rule) because "under pressure, in a long session
-... the model can fail to follow a prompted rule" -- and gitapex has no
-hooks infrastructure at all today (confirmed: `hooks/` is an explicit
-Non-goal in the design spec cited elsewhere in this rubric). This Stop
-boundary is currently prose-only backing for a real supply-chain-risk
-concern (an agent autonomously running an install command). Not
-disqualifying -- the judgment-call parts of this skill are still
-correctly skill-shaped -- but worth naming rather than assuming the
-prose boundary is sufficient on its own.
+**Skill vs. hook**: good fit. The review process itself is inherently a
+judgment call (grading nine dimensions is not a deterministic check), so
+prose is the right mechanism for the bulk of this skill. The one Stop
+boundary that is safety-adjacent rather than purely judgment -- "Never
+install eval tooling ... without the operator's go-ahead" -- checks its
+own backing conditionally against whatever environment it actually runs
+in: real deterministic backing (a PreToolUse hook, a permission rule) if
+that environment has one, an explicit Mechanism-fit gap if it does not.
+This is the correct portable posture for a safety-adjacent Stop boundary
+in a Portable-declared skill -- asserting a fixed answer either way (that
+it is always backed, or always prose-only) would itself be a defect,
+since the true answer depends on wherever the skill happens to be
+running. Dated development history of how this boundary's wording
+reached its current state: `docs/skill-eval-status.md`.
 
 **Skill-step vs. bundled script**: passes. This skill's own deterministic
 shape lane was delegated to `scripts/check_skill_shape.py`, so applying
@@ -209,6 +207,20 @@ same instruction in two places" fail this dimension itself names. Not a
 current violation -- a forward-looking note on a file that has grown
 several times in one review pass.
 
+**Update (materialized watch-point):** the file has grown further since
+the note above was written, across additional gated edits. Checked
+directly against the specific drift risk named above -- neither `waza`'s
+divergences nor SkillOpt's disciplines are cited a second time anywhere
+in the new content, so that named violation has not occurred, and a full
+read of the current file found no other instance of the "restating the
+same instruction in two places" fail either: each addition cites its own
+distinct primary source. This is not a clean pass by default, though --
+it is a materialized instance of exactly the trend the original note
+flagged as a risk to watch, not merely a hypothetical anymore, and should
+be actively re-checked (not assumed still fine) at the next edit rather
+than treated as settled by this one clean check. Line-count history and
+which specific edits contributed: `docs/skill-eval-status.md`.
+
 ### 3. Degree of freedom
 
 Pass. The deterministic-shape checklist is low-freedom (exact fields,
@@ -325,17 +337,26 @@ editing session itself. The extensive back-and-forth in this session
 iterative validation but was not scored against a held-out split, so it
 does not meet the letter of the discipline this dimension names.
 
-**Update (PR #103):** this gap was closed for one specific edit, not
-retroactively for the skill's whole authoring history. The dimension-8
-scoring-axis paragraph added in that PR was scored against a documented
-held-out train/selection/test split
-(`evals/evaluating-skill-quality/split.md`) before and after the edit,
-using `skills/gated-skill-edits/scripts/score_contract.py`: the selection
-mean strictly improved (0.964286 -> 1.000000), so the edit was kept per
-the gate's ties-rejected rule. That is one real instance of this
-discipline applied to this skill, not evidence that every earlier edit
-in this document's history went through it -- the paragraph above still
-accurately describes the many edits that did not.
+**Update (held-out gate discipline applied, multiple iterations):** this
+gap has since been closed for several specific edits to this skill, not
+retroactively for its whole authoring history -- each time via a
+documented held-out train/selection/test split
+(`evals/evaluating-skill-quality/split.md`), scored before and after with
+`skills/gated-skill-edits/scripts/score_contract.py`, requiring a strict
+improvement (ties rejected) before the edit was kept. That is real,
+repeated instances of this discipline applied to this skill, not evidence
+every earlier edit went through it -- the paragraph above still
+accurately describes the many edits that did not. One of these gates also
+surfaced two real fixture-assertion bugs (case-sensitivity against text
+the rubric itself prescribes in a different case; a negative assertion
+that false-failed a correct denial), caught by external review rather
+than found here first, and fixed the same way each time it recurred:
+match the assertion to what the rubric actually prescribes rather than an
+assumed casing, and ban only affirmative claims, never a phrase a correct
+denial would also contain. Full per-edit record -- which specific change
+each gate covered, the exact before/after scores, and the fixture bugs
+found along the way: `evals/evaluating-skill-quality/split.md`'s
+Kept-edit log and `docs/skill-eval-status.md`.
 
 ### 9. Cross-model robustness
 
@@ -358,11 +379,13 @@ risk reduction is not the same claim as measured transfer success.
 
 ## Verdict
 
-**Mechanism fit**: good fit overall, with one named gap -- the
-eval-tooling-install Stop boundary is safety-adjacent prose with no
-hook backing, in a repo with no hooks infrastructure yet. Reported here
-as the headline finding per rubric.md's Verdicts section, alongside
-rather than instead of the well-formed/mature verdict below.
+**Mechanism fit**: good fit overall. The one safety-adjacent Stop
+boundary (eval-tooling installs) checks its own backing conditionally
+against whatever environment it actually runs in, rather than asserting
+a fixed answer -- the correct portable posture for a Portable-declared
+skill, since a hardcoded "yes, backed" claim would itself be a defect
+once vendored somewhere with no such hook. Development history of how
+this boundary's wording reached this state: `docs/skill-eval-status.md`.
 
 **Well-formed**, and not yet **mature** -- the same shape as the
 `explaining-the-work` verdict, for different reasons. Dimensions 1
@@ -384,6 +407,26 @@ different, stronger outcome than a self-review that finds nothing. A
 self-review that always passes cleanly would itself be evidence of
 rubber-stamping -- per this skill's own Stop boundaries, a bare "looks
 fine" is exactly what is disallowed.
+
+**Verification via live dogfooding:** a fresh, fully live dispatch (real
+subagent, real target -- this skill's own current files on disk, not a
+synthetic fixture) ran the complete current Procedure against this
+skill, per this repository's own "gate completion on live proof, not
+plan-time intent alone" discipline. Result at the time: **well-formed**
+(14/14 deterministic checks, confirmed live), **not yet mature** -- two
+dimension 1-7 gaps, both since addressed above rather than left standing.
+The Model/effort tier fit check correctly found and explicitly stated
+that this skill's own content pins no model or effort level anywhere --
+an absence, not a finding, per its own restraint discipline. The Blind
+spot pass found one genuine rubric gap specific to this target's
+self-referential domain: the held-out-gate discipline above covers split
+methodology (disjointness, strict improvement) but never asks whether
+the automated scorer (`score_contract.py`'s substring matching) actually
+measures the judgment it is scoring -- left unfixed here, correctly, per
+the Blind spot pass's own instruction that a durable rubric change is a
+deliberate, `gated-skill-edits`-gated edit, not something a single review
+session improvises. Dated record of which edit this run followed:
+`docs/skill-eval-status.md`.
 
 ## Verification: subagent dispatch (dated addendum)
 
@@ -429,5 +472,13 @@ comparison is future work, named rather than assumed -- see
 
 ## References
 
-(No external URLs specific to this file beyond those already collected in
-[rubric.md's References](rubric.md#references).)
+External primary-source URLs are already collected in
+[rubric.md's References](rubric.md#references). This file intentionally
+carries no issue- or PR-number citations of its own: a bare `#N` (or even
+a fully qualified `owner/repo#N`) is gitapex-repo-specific bookkeeping
+that does not belong blended into a Portable skill's worked-example
+content, the same class of gap dimension 5's Mixed-portability guidance
+names for a portable-core-plus-repo-specific-detail split. This
+skill's own dated, issue-linked development history lives entirely in
+this repository's own bookkeeping instead: `docs/skill-eval-status.md`
+and `evals/evaluating-skill-quality/split.md`'s Kept-edit log.

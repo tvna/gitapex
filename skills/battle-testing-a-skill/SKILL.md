@@ -47,7 +47,14 @@ limits.
    fresh subagent dispatch (not the current context, which has likely already
    seen the target): that actually provides the isolated context this step
    assumes. Use the twenty-two in the Quick reference; add any the target's
-   domain demands. Keep steps 2-3 inside this same dispatch: the original
+   domain demands. This cold-enumeration-before-reading-the-target move is a
+   **Blind Spot Pass** for this catalog's own unknown unknowns -- surfacing
+   an adversarial dimension the fixed twenty-two-item list does not yet
+   name, before the target narrows what gets looked for (vocabulary from
+   Anthropic's own field guide on working with Claude models: Thariq
+   Shihipar, "A Field Guide to Fable: Finding Your Unknowns",
+   <https://claude.com/blog/a-field-guide-to-claude-fable-finding-your-unknowns>).
+   Keep steps 2-3 inside this same dispatch: the original
    six-subagent extraction that produced this catalog
    (`references/provenance-and-caveats.md`) had each probe cold-enumerate
    *and* apply the dimensions in one isolated pass, not enumerate isolated
