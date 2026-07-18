@@ -126,14 +126,21 @@ where a manipulated payload steers tool use (ASI02); structured
 extraction and hard size caps shrink that surface. This does not detect
 anything -- detection stays with Gate 6.
 
-**Cost framing, honestly scoped.** T4 Resource Overload (quotas,
-rate-limiting, resource management) is the closest security framing for
-unbounded ingestion -- but the ASI01-ASI10 Top 10 has **no** dedicated
-unbounded-consumption category the way the older OWASP LLM Top 10 did
-(LLM10:2025 Unbounded Consumption). That is an honest observation about
-the taxonomy's current shape, not a gap gitapex must invent an ASI row
-to fill. Token waste is a sufficient engineering rationale on its own;
-T4 is cited as adjacent support, not as its authority.
+**Cost framing, primary citation (issue #145).** Primary source
+confirms **LLM10:2025 Unbounded Consumption** -- "LLM systems lack
+resource constraints on usage... uncontrolled access depletes
+computational resources, causing service disruption and excessive
+costs" (`genai.owasp.org/llm-top-10/`) -- is the exact-fitting authority
+for this deliverable. The ASI01-ASI10 Top 10 has **no** dedicated
+unbounded-consumption category of its own, so the older, base-layer LLM
+Top 10 carries the cleaner citation here (issue #145's own hypothesis,
+verified against the primary source). LLM10:2025 is cited as this
+deliverable's primary authority; T4 Resource Overload (quotas,
+rate-limiting, resource management) remains adjacent support for the
+agentic-specific angle -- a manipulated payload driving resource-heavy
+tool use, not just size. Token waste stands on its own engineering
+merit independent of which OWASP list is cited; the design is unchanged
+by the choice of primary citation.
 
 **Mechanism.** A PostToolUse hook -- the payload exists only after the
 tool returns, so PreToolUse cannot see it. Matchers: `WebFetch`/
