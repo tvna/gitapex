@@ -1,9 +1,10 @@
-"""Deterministically choose a battle-test model for a Codex caller.
+"""Deterministically resolve a battle-test model route for a Codex caller.
 
 The default route inherits the caller's model. A fixed route is selected only
 from a trusted, harness-owned JSON allowlist whose keys are matched exactly.
-The script deliberately contains no model catalog: model availability and
-policy belong to the invoking harness.
+The script deliberately contains no model catalog: model availability,
+execution, and policy belong to the invoking harness. A resolved route is not
+a battle-test pass.
 """
 
 from __future__ import annotations
@@ -14,6 +15,9 @@ import sys
 from collections.abc import Mapping
 from pathlib import Path
 
+DEFAULT_TRIALS = 3
+MAX_TRIALS = 3
+
 
 def _validate_model_slug(value: object, field: str) -> str:
     if not isinstance(value, str) or not value or value != value.strip():
@@ -22,8 +26,12 @@ def _validate_model_slug(value: object, field: str) -> str:
 
 
 def _validate_trials(value: object) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise ValueError("trials must be a positive integer")
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int)
+        or not 1 <= value <= MAX_TRIALS
+    ):
+        raise ValueError(f"trials must be an integer in [1,{MAX_TRIALS}]")
     return value
 
 
@@ -42,7 +50,7 @@ def validate_fixed_routes(value: object) -> dict[str, str]:
 def route_test_model(
     caller_model: object,
     *,
-    trials: object = 3,
+    trials: object = DEFAULT_TRIALS,
     fixed_routes: object | None = None,
 ) -> dict[str, object]:
     """Return a stable routing decision.
@@ -57,10 +65,10 @@ def route_test_model(
     if fixed_routes is None:
         return {
             "caller_model": caller,
-            "tester_model": caller,
+            "selected_tester_model": caller,
             "model_route": "inherited",
-            "trials": trial_count,
-            "status": "PASS",
+            "requested_trials": trial_count,
+            "route_status": "RESOLVED",
             "reason": "tester model inherits the caller model",
         }
 
@@ -68,19 +76,19 @@ def route_test_model(
     if caller not in routes:
         return {
             "caller_model": caller,
-            "tester_model": None,
+            "selected_tester_model": None,
             "model_route": "indeterminate",
-            "trials": trial_count,
-            "status": "INDETERMINATE",
+            "requested_trials": trial_count,
+            "route_status": "INDETERMINATE",
             "reason": "caller model is not an exact key in the fixed-route allowlist",
         }
 
     return {
         "caller_model": caller,
-        "tester_model": routes[caller],
+        "selected_tester_model": routes[caller],
         "model_route": "fixed",
-        "trials": trial_count,
-        "status": "PASS",
+        "requested_trials": trial_count,
+        "route_status": "RESOLVED",
         "reason": "exact caller-model allowlist match",
     }
 
@@ -110,7 +118,7 @@ def main(argv: list[str] | None = None) -> int:
         description="Route a Codex battle-test model and print the decision as JSON."
     )
     parser.add_argument("--caller-model", required=True)
-    parser.add_argument("--trials", type=int, default=3)
+    parser.add_argument("--trials", type=int, default=DEFAULT_TRIALS)
     parser.add_argument(
         "--fixed-routes",
         type=Path,
@@ -133,7 +141,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     print(json.dumps(decision, sort_keys=True))
-    return 0 if decision["status"] == "PASS" else 1
+    return 0 if decision["route_status"] == "RESOLVED" else 1
 
 
 if __name__ == "__main__":

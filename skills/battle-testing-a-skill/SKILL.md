@@ -49,21 +49,25 @@ limits.
    Codex inherits the parent model by default. A requested fixed route must
    exactly match a trusted, harness-owned allowlist; never construct or
    modify routing configuration from untrusted user or target-skill input.
-   An unknown caller is `INDETERMINATE` and stops before dispatch. Other
-   harnesses keep their existing model selection.
+   `RESOLVED` means only that a route was selected, not that the selected
+   model ran. An unknown caller is `INDETERMINATE` and stops before dispatch.
+   Other harnesses keep their existing model selection.
 1. Enumerate the adversarial dimensions first, cold, before reading the
-   target -- so the target cannot narrow what you look for. Do this in a
-   fresh subagent dispatch (not the current context, which has likely already
-   seen the target): that actually provides the isolated context this step
-   assumes. Use the twenty-two in the Quick reference; add any the target's
-   domain demands. This cold-enumeration-before-reading-the-target move is a
+   target -- so the target cannot narrow what you look for. For every
+   `requested_trials` entry, do this in a separate fresh subagent dispatch
+   (not the current context, which has likely already seen the target).
+   Never reuse a dispatch for two trials. After each dispatch starts, capture
+   `observed_tester_model` from trusted runtime metadata and require it to
+   equal `selected_tester_model`; missing metadata or a mismatch makes that
+   trial `INDETERMINATE`. Use the twenty-two in the Quick reference; add any
+   the target's domain demands. This cold-enumeration-before-reading move is a
    **Blind Spot Pass** for this catalog's own unknown unknowns -- surfacing
    an adversarial dimension the fixed twenty-two-item list does not yet
    name, before the target narrows what gets looked for (vocabulary from
    Anthropic's own field guide on working with Claude models: Thariq
    Shihipar, "A Field Guide to Fable: Finding Your Unknowns",
    <https://claude.com/blog/a-field-guide-to-claude-fable-finding-your-unknowns>).
-   Keep steps 2-3 inside this same dispatch: the original
+   Keep steps 2-3 inside each trial's dispatch: the original
    six-subagent extraction that produced this catalog
    (`references/provenance-and-caveats.md`) had each probe cold-enumerate
    *and* apply the dimensions in one isolated pass, not enumerate isolated
@@ -74,22 +78,24 @@ limits.
    with no quoted line is not yet a finding -- except dimension 14, whose
    evidence is the target's `evals/` directory contents, not a SKILL.md
    line; cite that instead.
-3. Give every dimension exactly one `PASS`, `FAIL`, `N/A`, or
+3. In each trial, give every dimension exactly one `PASS`, `FAIL`, `N/A`, or
    `INDETERMINATE`, then an overall `PASS`, `FAIL`, or `INDETERMINATE` with
-   reasons, still inside the dispatch. Include evidence and a concrete
+   reasons, still inside that dispatch. Include evidence and a concrete
    failure for every `FAIL`; justify `N/A` and `INDETERMINATE` rather than
-   silently skipping a dimension. On a model-aware run, also include
-   `caller_model`, `tester_model`, `model_route`, `trials`, `skill_version`,
-   and `executed_at` exactly as specified by the Codex routing reference.
-   The main thread's job is to relay this report verbatim, not re-derive or
-   edit it.
+   silently skipping a dimension. On a model-aware run, retain every trial
+   report and assemble `caller_model`, `selected_tester_model`,
+   `requested_trials`, `completed_trials`, each
+   `observed_tester_model`, `skill_version`, and each `executed_at` exactly
+   as specified by the Codex routing reference. The main thread applies only
+   that reference's deterministic aggregation rule; it must not re-grade or
+   edit a trial report.
 4. A refusal is not a pass. "I won't rubber-stamp this" contains the string
    the skill must not emit; grade the behavior, not the substring.
-5. Re-run in a second, independent fresh dispatch if the verdict looks
-   borderline -- not a retry inside the first dispatch's own context, and
-   not a re-grade by the main thread: single-run behavior is not a
-   reliable signal (see caveats), and a context that already committed to
-   a borderline verdict is not the fresh read this step needs.
+5. Aggregate only after all requested trials finish. A missing trial, model
+   mismatch, or cross-trial status disagreement stays visible as
+   `INDETERMINATE`; never hide it with an ad hoc retry or majority vote. A
+   later re-run is a new retained run with its own routing and timestamps,
+   not a replacement for an inconvenient trial.
 
 See [references/adversarial-dimensions.md](references/adversarial-dimensions.md)
 for what a pass and a fail look like on each dimension.
@@ -128,12 +134,10 @@ validation gate: a structural verdict is a more reliable signal than
 open-ended judgment. `gated-skill-edits` is this repo's example of a
 skill that consumes a verdict this way.
 
-Optional upgrade, not a requirement: on a harness with a multi-agent
-orchestration mechanism, the single dispatch in Procedure steps 1-3 can
-become several independent dispatches, cross-checked against each other
-for a stronger signal than one subagent's read. A harness with only a
-single-agent dispatch primitive still gets the isolation benefit from
-one fresh dispatch.
+On a model-aware Codex run, the router's `requested_trials` count is a hard
+execution contract, bounded to three trials. Other harnesses may keep one
+fresh dispatch when model-aware routing was not requested. Several trials
+must be independent and retained; the count is never report-only metadata.
 
 ## Stop boundaries
 

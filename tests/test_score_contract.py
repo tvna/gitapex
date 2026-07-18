@@ -95,6 +95,24 @@ def test_pruning_compare_keeps_matched_correctness_with_lower_context_cost():
     assert score_contract.pruning_compare(0.9, 0.9, 1400, 1120) == "KEEP"
 
 
+def test_pruning_compare_uses_the_cli_published_correctness_precision():
+    recomputed_same_scores = 0.9398148333333333
+    assert (
+        score_contract.pruning_compare(
+            0.939815,
+            recomputed_same_scores,
+            1400,
+            1120,
+        )
+        == "KEEP"
+    )
+    assert score_contract.strict_compare(0.939815, recomputed_same_scores) == "REJECT"
+
+
+def test_pruning_compare_rejects_regression_beyond_published_precision():
+    assert score_contract.pruning_compare(0.939815, 0.9398144, 1400, 1) == "REJECT"
+
+
 def test_pruning_compare_rejects_correctness_regression_even_if_context_falls():
     assert score_contract.pruning_compare(0.9, 0.8, 1400, 1) == "REJECT"
 
@@ -116,12 +134,26 @@ def test_strict_compare_rejects_invalid_correctness(invalid):
         score_contract.strict_compare(0.9, invalid)
 
 
+def test_correctness_validators_reject_booleans():
+    with pytest.raises(ValueError, match=r"finite number in \[0,1\]"):
+        score_contract.strict_compare(False, 0.9)
+    with pytest.raises(ValueError, match=r"finite number in \[0,1\]"):
+        score_contract.split_mean([0.9, True])
+
+
 @pytest.mark.parametrize("invalid", [float("nan"), float("inf"), -1])
 def test_pruning_compare_rejects_invalid_context_cost(invalid):
     with pytest.raises(ValueError, match="finite non-negative"):
         score_contract.pruning_compare(0.9, 0.9, invalid, 100)
     with pytest.raises(ValueError, match="finite non-negative"):
         score_contract.pruning_compare(0.9, 0.9, 100, invalid)
+
+
+def test_context_cost_validator_rejects_booleans():
+    with pytest.raises(ValueError, match="finite non-negative"):
+        score_contract.pruning_compare(0.9, 0.9, False, 100)
+    with pytest.raises(ValueError, match="finite non-negative"):
+        score_contract.pruning_compare(0.9, 0.9, 100, True)
 
 
 @pytest.mark.parametrize("invalid", [float("nan"), float("inf"), -0.01, 1.01])

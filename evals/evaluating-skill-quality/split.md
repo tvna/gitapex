@@ -16,7 +16,7 @@ selection split of roughly three tasks, too thin to gate a strict
 improve-or-reject decision because three observations provide little ability
 to average out run-to-run variance. Following the precedent already set in
 `skills/gated-skill-edits/references/worked-example.md` ("the ratio is
-aspirational" for a small fixture count), this split uses a flatter 11:10:6
+aspirational" for a small fixture count), this split uses a flatter 12:9:6
 partition, named explicitly as a deviation from the 2:1:7 default. The
 honest minimal groundwork, per that same worked example, is a larger
 fixture corpus over time, not a smaller gate.
@@ -29,7 +29,8 @@ fixture corpus over time, not a smaller gate.
   `ordering-rule-totality-review.yaml`, `blind-spot-pass-domain-gap.yaml`,
   `model-effort-tier-fit-unjustified-model.yaml`,
   `portability-declarative-fact-claim.yaml`, `branch-and-step-contracts.yaml`,
-  `sentence-level-pruning.yaml`, `progressive-disclosure-placement.yaml`.
+  `sentence-level-pruning.yaml`, `progressive-disclosure-placement.yaml`,
+  `heldout-semantic-noop-vs-brevity.yaml`.
 - **selection** (gates acceptance; scored before/after a candidate edit,
   strict improve-or-reject, ties rejected): `edge.yaml`,
   `mechanism-fit-subagent.yaml`, `third-party-not-authoritative.yaml`,
@@ -37,8 +38,7 @@ fixture corpus over time, not a smaller gate.
   `ordering-rule-totality-distinct-skill.yaml`,
   `blind-spot-pass-generalizes.yaml`,
   `model-effort-tier-fit-unjustified-effort.yaml`,
-  `portability-issue-number-citation.yaml`, `heldout-vague-completion.yaml`,
-  `heldout-semantic-noop-vs-brevity.yaml`.
+  `portability-issue-number-citation.yaml`, `heldout-vague-completion.yaml`.
 - **test** (read once, for a final report only, never to motivate or gate
   an edit): `guardrail.yaml`, `no-fabricated-violation.yaml`,
   `portability-classification.yaml`, `blind-spot-pass-not-silent.yaml`,
@@ -132,9 +132,15 @@ The three `branch-and-step-contracts`, `sentence-level-pruning`, and
 rubric operationalization, so they are train fixtures. They have not been
 used to claim a selection-gate result or a live eval result.
 
-The two `heldout-*` selection fixtures were prepared independently before
-the current implementation began and were not shown to the implementation
-agent. They are selection evidence only and must not motivate edits.
+`heldout-vague-completion.yaml` was prepared independently before the current
+implementation began and was not shown to the implementation agent. It is
+selection evidence only and must not motivate edits.
+
+`heldout-semantic-noop-vs-brevity.yaml` was originally prepared the same way,
+but review found that its expected answer contradicted the new rubric by
+calling unmeasured prose a behavioral no-op. The expectation was corrected
+and the fixture moved to train. Its earlier score is invalid and excluded
+from candidate-acceptance evidence.
 
 ## Reuse
 

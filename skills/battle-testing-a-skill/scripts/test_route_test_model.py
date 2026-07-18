@@ -8,10 +8,10 @@ import route_test_model as router
 def test_default_route_inherits_parent_model():
     assert router.route_test_model("caller-model", trials=3) == {
         "caller_model": "caller-model",
-        "tester_model": "caller-model",
+        "selected_tester_model": "caller-model",
         "model_route": "inherited",
-        "trials": 3,
-        "status": "PASS",
+        "requested_trials": 3,
+        "route_status": "RESOLVED",
         "reason": "tester model inherits the caller model",
     }
 
@@ -20,18 +20,18 @@ def test_fixed_route_requires_exact_allowlist_match():
     decision = router.route_test_model(
         "model-1", fixed_routes={"model-1": "tester-2"}
     )
-    assert decision["tester_model"] == "tester-2"
+    assert decision["selected_tester_model"] == "tester-2"
     assert decision["model_route"] == "fixed"
-    assert decision["status"] == "PASS"
+    assert decision["route_status"] == "RESOLVED"
 
 
 def test_fixed_route_does_not_use_prefix_or_family_match():
     decision = router.route_test_model(
         "model-1-preview", fixed_routes={"model-1": "tester-2"}
     )
-    assert decision["tester_model"] is None
+    assert decision["selected_tester_model"] is None
     assert decision["model_route"] == "indeterminate"
-    assert decision["status"] == "INDETERMINATE"
+    assert decision["route_status"] == "INDETERMINATE"
 
 
 def test_unknown_fixed_route_cli_fails_closed(tmp_path, capsys):
@@ -41,8 +41,8 @@ def test_unknown_fixed_route_cli_fails_closed(tmp_path, capsys):
         ["--caller-model", "unknown", "--fixed-routes", str(routes)]
     ) == 1
     output = json.loads(capsys.readouterr().out)
-    assert output["status"] == "INDETERMINATE"
-    assert output["tester_model"] is None
+    assert output["route_status"] == "INDETERMINATE"
+    assert output["selected_tester_model"] is None
 
 
 @pytest.mark.parametrize("caller", ["", " padded ", 42, None])
@@ -51,9 +51,9 @@ def test_rejects_invalid_caller_model(caller):
         router.route_test_model(caller)
 
 
-@pytest.mark.parametrize("trials", [0, -1, True, 1.5])
+@pytest.mark.parametrize("trials", [0, -1, 4, True, 1.5])
 def test_rejects_invalid_trials(trials):
-    with pytest.raises(ValueError, match="positive integer"):
+    with pytest.raises(ValueError, match=r"integer in \[1,3\]"):
         router.route_test_model("model", trials=trials)
 
 
@@ -77,10 +77,10 @@ def test_cli_emits_stable_inherited_json(capsys):
     assert router.main(["--caller-model", "model-z", "--trials", "2"]) == 0
     assert json.loads(capsys.readouterr().out) == {
         "caller_model": "model-z",
-        "tester_model": "model-z",
+        "selected_tester_model": "model-z",
         "model_route": "inherited",
-        "trials": 2,
-        "status": "PASS",
+        "requested_trials": 2,
+        "route_status": "RESOLVED",
         "reason": "tester model inherits the caller model",
     }
 

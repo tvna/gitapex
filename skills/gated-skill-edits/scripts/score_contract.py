@@ -16,6 +16,8 @@ import math
 import sys
 from collections.abc import Mapping
 
+CORRECTNESS_DECIMALS = 6
+
 
 def _assertion_list(assertions, key):
     """Return ``assertions[key]`` as a list, failing loudly on a bad shape.
@@ -77,6 +79,8 @@ def split_mean(scores):
 
 def _validate_correctness(value, label):
     """Reject correctness values outside the finite ``[0, 1]`` contract."""
+    if isinstance(value, bool):
+        raise ValueError(f"{label} must be a finite number in [0,1]")
     try:
         valid = math.isfinite(value) and 0 <= value <= 1
     except TypeError as exc:
@@ -87,12 +91,19 @@ def _validate_correctness(value, label):
 
 def _validate_context_cost(value, label):
     """Reject context costs that are non-finite or negative."""
+    if isinstance(value, bool):
+        raise ValueError(f"{label} must be a finite non-negative number")
     try:
         valid = math.isfinite(value) and value >= 0
     except TypeError as exc:
         raise ValueError(f"{label} must be a finite non-negative number") from exc
     if not valid:
         raise ValueError(f"{label} must be a finite non-negative number")
+
+
+def _published_correctness(value):
+    """Normalize correctness to the precision emitted by this CLI."""
+    return round(value, CORRECTNESS_DECIMALS)
 
 
 def strict_compare(before_mean, after_mean):
@@ -103,7 +114,9 @@ def strict_compare(before_mean, after_mean):
     """
     _validate_correctness(before_mean, "before correctness")
     _validate_correctness(after_mean, "after correctness")
-    return "KEEP" if after_mean > before_mean else "REJECT"
+    before = _published_correctness(before_mean)
+    after = _published_correctness(after_mean)
+    return "KEEP" if after > before else "REJECT"
 
 
 def pruning_compare(
@@ -122,9 +135,11 @@ def pruning_compare(
     _validate_correctness(after_correctness, "after correctness")
     _validate_context_cost(before_context_cost, "before context cost")
     _validate_context_cost(after_context_cost, "after context cost")
-    if after_correctness > before_correctness:
+    before = _published_correctness(before_correctness)
+    after = _published_correctness(after_correctness)
+    if after > before:
         return "KEEP"
-    if after_correctness < before_correctness:
+    if after < before:
         return "REJECT"
     return "KEEP" if after_context_cost < before_context_cost else "REJECT"
 

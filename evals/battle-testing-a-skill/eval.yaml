@@ -12,6 +12,6 @@ metrics:
   - name: battle_testing_quality
     weight: 1.0
     threshold: 0.8
-    description: Verdict gives every dimension a PASS, FAIL, N/A, or INDETERMINATE status with evidence, concrete failures where applicable, and an overall reasoned verdict; model-aware runs also report caller_model, tester_model, model_route, trials, skill_version, and executed_at.
+    description: Verdict gives every dimension a PASS, FAIL, N/A, or INDETERMINATE status with evidence, concrete failures where applicable, and an overall reasoned verdict; completed model-aware runs also separate selected from observed tester models, requested from completed trials, and retain per-trial timestamps and results.
 tasks:
   - "tasks/*.yaml"

@@ -69,11 +69,14 @@ Refs #149.
 Codex model-aware routing is now implemented: the default route inherits the
 parent model, optional fixed routes use an external exact-match allowlist, and
 unknown callers fail closed as `INDETERMINATE`. The bundled deterministic
-router has pytest coverage, and committed fixtures cover inheritance and the
-unknown-caller stop path. These are implementation and fixture facts, not a
-Codex model measurement: neither fixture has been executed against a real
-Codex model, no Codex result artifact is committed, and Codex behavioral
-reproducibility remains unmeasured.
+router reports route resolution rather than execution success, bounds the
+requested trial budget, and has pytest coverage. The execution contract
+separates selected from observed tester models and requested from completed
+trials. Committed fixtures cover inheritance and the unknown-caller stop
+path. These are implementation and fixture facts, not a Codex model
+measurement: neither fixture has been executed against a real Codex model,
+no Codex result artifact is committed, and Codex behavioral reproducibility
+remains unmeasured.
 
 ## establishing-ubiquitous-language
 
@@ -100,7 +103,7 @@ not by the committed suite.
 
 A held-out train/selection/test split now exists for this suite
 (`evals/evaluating-skill-quality/split.md`), covering 27 fixtures across
-11 train, 10 selection, and 6 test cases. It exists to satisfy
+12 train, 9 selection, and 6 test cases. It exists to satisfy
 `gated-skill-edits`' precondition gate before any iterative edit to
 `references/rubric.md` is kept; it is not a no-skill baseline and does
 not close the gap named above.
