@@ -89,7 +89,7 @@ toolchain-only surfaces.**
 The other 6 surfaces (web, macOS/Linux/Windows CLI, macOS/Windows
 Desktop-local) each need exactly one thing: the pinned toolchain, live,
 in an environment an operator or CI job is already running in. None of
-them read `.gitapex/ssot.json`; none of them vary by `security-tier`.
+them read `.gitapex/ssot.json`; none of them vary by `security_tier`.
 Devcontainer is categorically different: its own definition is content
 gitapex GENERATES, and that content should vary by tier (Decision 3,
 below) -- a property none of the other 6 surfaces have. Keeping it in
@@ -114,8 +114,12 @@ say-so or a flag claiming "already done"):
   than inventing a second one).
 - **Phase 2's artifact.** `.gitapex/ssot.json` present, schema-valid
   (per `.gitapex/ssot.schema.json`), and carrying a resolved
-  `security-tier` value from the closed enum (`foundation | enterprise |
-  advanced`) -- not absent, not a placeholder.
+  `security_tier` value from the closed enum (`foundation | enterprise |
+  advanced`) -- not absent, not a placeholder. (Field name per #147:
+  `security_tier`, snake_case, is the persisted `.gitapex/ssot.json`
+  key; `security-tier`, hyphenated, names the closed-enum CLI input/
+  election that produces it -- the two are not interchangeable
+  spellings of one name.)
 
 Any missing or invalid precondition is INDETERMINATE, and per #131
 principle 6, INDETERMINATE is a deny: phase 3 refuses outright with a
@@ -131,7 +135,7 @@ enum -- an incomplete phase 2 is a hard stop, not a lookup miss.
 
 **Consumed (real, validated schema fields):**
 
-- **`security-tier`** (#147) drives concrete devcontainer content --
+- **`security_tier`** (#147) drives concrete devcontainer content --
   see the tier table below. This is the field this whole design exists
   to make useful.
 - **Toolchain pins** (phase 1's lock content) are baked into the
@@ -169,7 +173,7 @@ honesty vocabulary; devcontainer generation raises gitapex's floor
 within container-boundary tooling, it does not change any `not covered`
 verdict #147 already recorded at the platform level.
 
-| `security-tier` | devcontainer `configure` | Honesty note |
+| `security_tier` | devcontainer `configure` | Honesty note |
 |---|---|---|
 | `foundation` | Toolchain baked in from phase-1 pins; no isolation beyond Docker's own container/namespace boundary | Matches #147 Foundation's "identity-based isolation... network segmentation as backstop" -- a devcontainer's own process boundary is exactly that backstop, not a hard barrier, and Foundation does not pretend otherwise. |
 | `enterprise` | Dropped Linux capabilities beyond what the toolchain needs, read-only root filesystem where the toolchain tolerates it, CPU/memory resource limits, mount surface restricted to the repo tree | The concrete `configure`-class translation #147 cited but left untranslated: "sandboxed execution environments per agent... mandatory for agents handling untrusted input." |
@@ -182,6 +186,28 @@ implementation-time detail to verify against the live
 `containers.dev` specification, not asserted as fact here -- this table
 states WHAT each tier configures, not the literal JSON shape.
 
+**Enforceability check, per control.** The table's "where the toolchain
+tolerates it" (read-only root) and "where the host/CI platform
+supports it" (egress allowlist) qualifiers are not silent
+best-effort language -- each names a control whose applicability phase
+3 must actually probe before claiming it, because a `configure` tag
+that turns out unenforceable on the live toolchain/host would report a
+tier stronger than what was actually applied, the same overclaim F2
+already forbids for the platform-level controls. For each such
+conditional control, phase 3 probes enforceability against the
+resolved toolchain (phase 1's pins) and the target host/CI platform
+before generating: if enforceable, it is emitted and stays `configure`;
+if not, generation still proceeds for the controls that ARE
+enforceable, but the unenforceable control is downgraded to
+`recommend` in the same generated devcontainer-companion output #147's
+posture report uses for platform-level `recommend` items (documenting
+what could not be applied and why), never silently omitted or left
+implied by an unqualified `configure` tag. Generation itself is never
+blocked by one unenforceable control -- only #131 principle 6's
+INDETERMINATE precondition failures (Decision 2, above) block phase 3
+outright; a known-unenforceable control is a determinate `recommend`,
+not an INDETERMINATE.
+
 ## Decision 4: regeneration reuses #127's monotonicity discipline
 
 **Decision: `.devcontainer/**` (definition file plus any generated
@@ -189,7 +215,7 @@ Dockerfile) joins the existing protected-paths set alongside
 `.gitapex/ssot.json` and `.gitapex/policies/**` under F3's ruleset
 (`bypass_actors: []`, PR-required, code-owner review) -- extending that
 floor, not creating a parallel one. Regeneration on a later change
-(toolchain pin bump, `security-tier` change via re-init) reuses #127's
+(toolchain pin bump, `security_tier` change via re-init) reuses #127's
 existing re-init rule unchanged: diff the newly generated output against
 LIVE PLATFORM state (never a local copy, per F4), classify each change
 as narrowing (tightening -- an added capability drop, a newly-scoped
@@ -211,6 +237,29 @@ change's "customization" label, exactly as #127 already specifies for
 `ssot.json`. This is a `policy_sources[]` registration, not a
 `.gitapex/ssot.schema.json` change.
 
+**Preserving an edit is not the same as revalidating it.** The
+widening/narrowing diff (F4) classifies *changes between live and
+new*; a manual relaxation an earlier PR already approved (an extra
+host mount, `privileged: true`) is unchanged by a tier raise and so
+produces no diff hunk at all -- F4 has nothing to classify because
+nothing moved. Left there, raising `security_tier` to `enterprise`/
+`advanced` could complete while the merged devcontainer still carries
+a pre-existing relaxation that defeats the newly selected tier's own
+required controls (Devcontainer content by tier, above), and F4's
+widening-block would never fire because it only ever looks at deltas.
+So the three-way merge gets one more step beyond F4's existing diff:
+after computing baseline/live/new and preserving live-only manual
+edits per the usual rule, phase 3 validates the MERGED result (not
+just the diff) against the newly selected tier's required-control set
+-- the same table the enforceability check above already probes. A
+preserved edit that violates a required control for the target tier
+is reported the same way an unenforceable control is (a named
+`recommend`/flagged item in the devcontainer-companion output,
+above), and the operator resolves it explicitly (drop the manual
+edit, or accept the lower effective tier consciously) rather than the
+scaffold silently reporting a tier stronger than what the merged
+definition actually enforces.
+
 **The self-regeneration attack scenario, named explicitly.** #131
 principle 4 (assume breach) requires asking: what if phase 3 runs FROM
 INSIDE a compromised devcontainer, regenerating its own definition to
@@ -230,7 +279,7 @@ principled reason: #148's business-domain hearing is open-ended (real
 unknown unknowns, no enum can capture the answer space), which is why
 it requires an agent and has no CLI-native form at all, degraded or
 otherwise. Phase 3's inputs are the opposite -- fully structured,
-already-validated schema fields (`security-tier`, resolved toolchain
+already-validated schema fields (`security_tier`, resolved toolchain
 pins) with no discovery step needed. A deterministic CLI subcommand
 (e.g. `gitapex devcontainer generate`, naming an implementation-issue
 detail) reading those fields and emitting typed, serialized JSON (never
@@ -252,7 +301,7 @@ tier already recorded or refuses per Decision 2.
 Facts: #57's stated "flake baked into image" direction and its
 unresolved "devcontainer image ownership and rebuild cadence" open item;
 #127's F1-F6, its `.init-baseline.json` three-way-diff pattern, and its
-re-init monotonicity rule; #131's seven principles; #147's `security-tier`
+re-init monotonicity rule; #131's seven principles; #147's `security_tier`
 field, its honesty vocabulary (`configure`/`recommend`/`not covered`),
 and its citation of the source Zero Trust document's "sandboxed
 execution environments per agent... mandatory for agents handling
