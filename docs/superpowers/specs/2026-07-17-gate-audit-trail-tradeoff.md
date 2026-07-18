@@ -143,15 +143,26 @@ who don't.
   available as an opt-in backend an adopter could build on top of the
   local JSONL default, but is not gitapex's own concern to implement.
 
-## Open items (recorded, not resolved by this doc)
+## Open items -- RESOLVED 2026-07-18 (see Addendum below for full briefs)
 
-- Exact write path, rotation, and retention policy for the local JSONL
-  file.
-- Whether the audit log itself should be `.gitignore`'d (loses history
+- ~~Exact write path, rotation, and retention policy for the local JSONL
+  file.~~ **Resolved:** per-context sink resolution (persistent user-
+  state directory for local/hook/MCP contexts; CI job artifact + printed
+  head-hash for the ephemeral-runner context), size-based rotation (10MB,
+  10 segments) with an explicit hash-carry-forward mechanism so rotation
+  never breaks the chain. See Addendum item 1-2.
+- ~~Whether the audit log itself should be `.gitignore`'d (loses history
   across clones) or committed (leaks into repo history) -- genuinely
-  undecided, needs its own small design pass before implementation.
-- The extension tier's exact configuration surface in `.gitapex/ssot.json`
-  (a new top-level `audit` block, most likely, but not specified here).
+  undecided, needs its own small design pass before implementation.~~
+  **Resolved: `.gitignore`'d, never committed** -- rejected on mechanism
+  (pre-commit chicken-and-egg, guaranteed merge conflicts on every gate
+  evaluation), not just taste; CI log/artifact anchoring substitutes for
+  git-native tamper evidence, with an optional git-ref checkpoint
+  (`refs/gitapex/audit`) for adopters wanting stronger anchoring. See
+  Addendum item 3.
+- ~~The extension tier's exact configuration surface in `.gitapex/ssot.json`
+  (a new top-level `audit` block, most likely, but not specified here).~~
+  **Resolved:** concrete `audit` block schema, see Addendum item 4.
 
 ## Addendum (2026-07-17): zero-trust hardening
 
@@ -235,6 +246,97 @@ key resident on the same compromised host signs lies fluently -- the tier
 buys non-repudiation of *authorship*, not truthfulness of *content*. Add
 one sentence to the extension-tier section stating this limit explicitly,
 so it is not overclaimed later.
+
+## Addendum (2026-07-18): write path, rotation, commit policy, extension-tier schema
+
+### 1. Write path -- one algorithm, per-context sink
+
+Not one universal path. **Local/hook/MCP contexts (git hook, Claude-
+Code-style hook, MCP subprocess):**
+`${XDG_STATE_HOME:-~/.local/state}/gitapex/audit/<repo-fingerprint>/audit.jsonl`,
+where `<repo-fingerprint>` is the first 16 hex chars of SHA-256 over the
+repository's root-commit SHA -- stable across clones/moves, unlike a
+path hash. XDG state (not cache, which is deletable by contract) survives
+repeated hook firings, stays outside the worktree (no accidental commit,
+no MCP client reading it through repo-tree tools -- #131 principle 7). If
+unwritable (a read-only MCP container), F5's fail-closed applies unless
+`audit.sink.mode: "custom"` names a writable path.
+
+**Ephemeral CI-runner context:** append to a runner-scratch path (e.g.
+`$RUNNER_TEMP/gitapex-audit/audit.jsonl`), then two mandatory job-end
+steps: upload as a CI artifact, and print the chain-head hash into the
+job log -- exactly the "externally anchored head" F2 already requires;
+CI's own log/artifact retention IS the persistence layer here, since
+nothing else outlives the runner.
+
+One feature, not two: entry schema, hash chain, append logic, and verify
+logic are identical everywhere; only the resolved sink directory and the
+anchoring step differ per context.
+
+### 2. Rotation and retention -- size-based, with mandatory hash carry-forward
+
+Rotate at 10MB; keep 10 closed segments locally (~100MB ceiling); CI
+retention is owned by the platform's artifact-retention policy (external
+responsibility, consistent with zero-server). Naive rotation breaks the
+chain at every boundary -- a fresh file with a null `previous_hash` seed
+hands an attacker a free truncation point per rotation, defeating F2's
+whole tamper-evidence result. Concrete carry-forward: on rotation, the
+closed segment is renamed `audit-<seq>-<head8>.jsonl` (`head8` = first 8
+hex chars of its final entry hash); the new segment's FIRST entry is
+itself an audited event (`event_type: "audit_rotation"`, `previous_hash`
+= the closed segment's full head hash, payload records the closed
+segment's filename/entry-count/head-hash). `gitapex audit verify` (F2a)
+walks segments oldest-to-newest checking each rotation entry against its
+predecessor's actual final hash -- retention pruning deletes only whole
+oldest segments, and the oldest retained segment's rotation entry still
+names its pruned predecessor's head hash, so verification distinguishes
+"pruned by policy" (boundary intact) from "tampered" (hash mismatch).
+
+### 3. Commit vs. `.gitignore` -- gitignored, anchoring substitutes for git history
+
+Rejected on mechanism, not taste: (a) a pre-commit hook cannot cleanly
+add its own audit entry to the commit being created -- per-entry
+committing is a chicken-and-egg; (b) an append-only file touched by
+every gate evaluation guarantees merge conflicts across concurrent
+branches and pollutes every diff (the exact quality-vs-volume failure
+CLAUDE.md section 5 names); (c) #127's protected-path category exists
+for HUMAN-REVIEWED policy definitions -- putting a machine append-stream
+behind CODEOWNERS review either blocks every evaluation on a PR or
+forces auto-approval that hollows the protection out. The audit trail is
+evidence, not policy; it does not belong in that category. The "an
+uncommitted log on an ephemeral runner proves nothing" objection is
+answered by item 1's CI anchoring made MANDATORY (head hash printed to
+platform-retained job logs, artifact uploaded) -- a truncate-and-rewrite
+is detectable against state the attacker's job cannot rewrite. For
+adopters wanting git-native anchoring, the extension tier (item 4) offers
+`audit.anchor.git_ref` (e.g. `refs/gitapex/audit`): push ~100-byte
+head-hash checkpoint records to a non-branch ref (gh-pages-style
+precedent), anchoring the head hash only, never the log body -- no
+history pollution.
+
+### 4. Extension-tier configuration surface
+
+```jsonc
+// .gitapex/ssot.json -- new top-level "audit" object
+"audit": {
+  "enabled": true,
+  "sink": { "mode": "auto", "path": null },          // auto | state-dir | workspace | custom
+  "rotation": { "max_bytes": 10485760, "max_segments": 10 },
+  "anchor": { "ci_log": true, "git_ref": null },      // git_ref: e.g. "refs/gitapex/audit"
+  "signing": { "enabled": false, "key_ref": null },   // key_ref = a policy_sources[] id
+  "merkle_proofs": { "enabled": false, "checkpoint_interval": 1000 }
+}
+```
+
+`signing.key_ref` references an existing `policy_sources[]` entry id
+(consistent with how `data_refs` and `toolchain.lock.json` already
+resolve), whose file holds the PUBLIC key / key locator only -- merge-
+gated behind #127's protection, so key substitution requires passing the
+same review gate as a policy change; the private key is adopter-supplied
+via keychain/env, never a repo value. Deliberate absence: there is no
+`fail_open` knob anywhere in this block -- F5's fail-closed is not
+configuration, and its break-glass path stays an out-of-band, logged-
+elsewhere override, never a flag an adopter can flip.
 
 ## Non-goals
 
