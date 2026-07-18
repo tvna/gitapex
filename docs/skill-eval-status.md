@@ -118,8 +118,7 @@ attempt as an incomplete partial record. Both fixed, and the full
 exactly (no regression), and the entire improvement came from the
 purpose-built fixture (0.75 -> 1.00). Full record, per-fixture scores,
 and the bug fixes: `evals/evaluating-skill-quality/split.md`'s Kept-edit
-log and `references/worked-example-self-review.md`'s dimension-8
-addendum. Refs #149.
+log. Refs #149.
 
 **Issue #155 (model/effort tier fit):** `references/rubric.md` gained a
 fifth Mechanism-fit check, `### Model/effort tier fit`, grounded in
@@ -145,9 +144,54 @@ more instance of the same case-sensitivity fixture bug PR #150's
 external review found for `blind spot` -- fixed the same way, by
 matching a case-invariant fragment instead of re-running for a lucky
 pass. Full record, per-fixture scores, and the bug fix:
-`evals/evaluating-skill-quality/split.md`'s Kept-edit log and
-`references/worked-example-self-review.md`'s dimension-8 addendum. Refs
-#155.
+`evals/evaluating-skill-quality/split.md`'s Kept-edit log. Refs #155.
+
+**Issue #164 (self-review worked example, portability corrections):** a
+live dogfooding pass (the just-edited skill reviewing its own current
+files via a real fresh-subagent dispatch, per its own Subagent dispatch
+procedure) found two real issues in
+`references/worked-example-self-review.md`: a stale claim that "gitapex
+has no hooks infrastructure at all today" (false -- `hooks/hooks.json` +
+`hooks/check-bash-safety.sh` now back the eval-tooling-install Stop
+boundary), and a materialized growth watch-point (`rubric.md` grown from
+565 to 806 lines across the #149 and #155 edits, with no new instance of
+the specific drift risk previously named). The Blind spot pass also
+surfaced one still-open rubric gap: the held-out gate's scorer
+(`score_contract.py`, substring matching) has no check on its own
+construct validity, evidenced by this session's own repeated
+case-sensitivity false-failures -- correctly left unfixed, per the
+rubric's own instruction that a durable rubric change is a deliberate
+`gated-skill-edits`-gated edit, not something a single review session
+improvises.
+
+A first attempt at fixing the stale hooks claim overcorrected: it edited
+`SKILL.md`'s own Stop boundary to assert "backed by this plugin's
+`hooks/check-bash-safety.sh` PreToolUse hook" as an unconditional fact --
+itself a new portability defect (a vendored copy in a different plugin
+with no file at that path would carry a false enforcement claim, worse
+than the original honestly-named prose-only gap). Caught in review and
+corrected: `SKILL.md` now checks the actual environment conditionally
+("if a target repository has such a hook, that is real enforcement...
+if it does not, this boundary is currently prose-only") rather than
+asserting a fixed answer -- true in any plugin this skill is vendored
+into, not only gitapex.
+
+A separate portability sweep then found that
+`references/worked-example-self-review.md` itself -- inside this
+Portable skill's own folder -- had accumulated many gitapex issue/PR
+number citations as inline "Update (issue #N)" changelog narrative
+(dated corrections, gate-result score tables). Bare `#N` auto-links
+resolve relative to whichever repository currently hosts the file, so
+they silently resolve to the wrong issue once vendored; even fully
+qualified, embedding this repository's own issue-tracker history inside
+a Portable skill's worked example blends repo-specific bookkeeping into
+portable teaching content, the same class of gap dimension 5's Mixed
+guidance names for a portable-core-plus-repo-specific-detail split. Fix:
+this section (and the two paragraphs above) is now the single home for
+that dated, issue-linked history; `references/worked-example-self-review.md`
+carries no issue/PR-number citations of its own and reads as clean,
+timeless worked-example content regardless of which repository hosts it.
+Refs #164.
 
 ## explaining-the-work
 

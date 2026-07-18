@@ -52,47 +52,20 @@ real procedure invoked situationally, not a fact Claude should hold in
 every session regardless of task -- exactly what belongs in a skill
 rather than always-loaded CLAUDE.md content.
 
-**Skill vs. hook**: mostly good fit, one gap named at the time this
-section was originally written, since revised twice -- see the dated
-updates immediately below. The review process itself is inherently a
+**Skill vs. hook**: good fit. The review process itself is inherently a
 judgment call (grading nine dimensions is not a deterministic check), so
 prose is the right mechanism for the bulk of this skill. The one Stop
 boundary that is safety-adjacent rather than purely judgment -- "Never
-install eval tooling ... without the operator's go-ahead" -- was, at the
-time of the original pass, prose-only backing for a real
-supply-chain-risk concern (an agent autonomously running an install
-command), because gitapex had no hooks infrastructure at the time.
-
-**Update ([issue #164][issue164], dogfooding re-run against the live
-repository, same session as [issue #155][issue155]):** the claim "gitapex
-has no hooks infrastructure at all today" is stale -- `hooks/hooks.json`
-now wires a `PreToolUse` gate on `Bash` to `hooks/check-bash-safety.sh`,
-whose deny message cites this skill by name. A first attempt at
-correcting this went too far, though: it edited `SKILL.md`'s own Stop
-boundary to assert "backed by this plugin's `hooks/check-bash-safety.sh`
-PreToolUse hook" as a flat, unconditional fact -- which is itself a
-portability defect (Portability level, dimension 6 at full Portable
-strictness), not a fix. `SKILL.md` is declared Portable; a vendored copy
-running in a different plugin, with no `hooks/check-bash-safety.sh` at
-that path, would carry a false claim of deterministic backing it does not
-actually have -- worse than the original prose-only gap, since a false
-claim of enforcement is more misleading than an honestly-named absence.
-Corrected properly below.
-
-**Update (second correction, same session):** `SKILL.md`'s Stop boundary
-now checks the actual environment conditionally instead of hardcoding a
-path or a plugin name: "check directly rather than assuming either way;
-if a target repository has such a hook, that is real enforcement, and if
-it does not, this boundary is currently prose-only and worth naming as a
-Mechanism-fit gap." This is the correct portable posture -- true in any
-plugin this skill is vendored into, including one with no hook at all --
-rather than a claim that only happens to be true in gitapex today. As a
-point of local fact about gitapex specifically (illustrative context, not
-part of the skill's own portable content): checking this environment
-directly confirms `hooks/hooks.json` + `hooks/check-bash-safety.sh` do
-back this Stop boundary here, so the original gap is closed *in this
-repository*, but that fact lives in this worked example, not baked into
-`SKILL.md` itself.
+install eval tooling ... without the operator's go-ahead" -- checks its
+own backing conditionally against whatever environment it actually runs
+in: real deterministic backing (a PreToolUse hook, a permission rule) if
+that environment has one, an explicit Mechanism-fit gap if it does not.
+This is the correct portable posture for a safety-adjacent Stop boundary
+in a Portable-declared skill -- asserting a fixed answer either way (that
+it is always backed, or always prose-only) would itself be a defect,
+since the true answer depends on wherever the skill happens to be
+running. Dated development history of how this boundary's wording
+reached its current state: `docs/skill-eval-status.md`.
 
 **Skill-step vs. bundled script**: passes. This skill's own deterministic
 shape lane was delegated to `scripts/check_skill_shape.py`, so applying
@@ -234,23 +207,19 @@ same instruction in two places" fail this dimension itself names. Not a
 current violation -- a forward-looking note on a file that has grown
 several times in one review pass.
 
-**Update ([issue #164][issue164], dogfooding re-run, same session as
-[issue #155][issue155]):** the file
-grew again, from the 565 lines recorded above to **806 lines**, across
-two further gated edits ([issue #149][issue149]'s Unknowns framework / Blind spot
-pass, [issue #155][issue155]'s Model/effort tier fit). Checked directly against the
-specific drift risk named above -- neither `waza`'s divergences nor
-SkillOpt's disciplines are cited a second time anywhere in the new
-content, so that named violation has not occurred, and a full read of
-the current file found no other instance of the "restating the same
-instruction in two places" fail either: both new sections cite their own
-distinct primary sources ([fable], [modeleffort]) and earn their length
-the same way the original note required. This is not a clean pass by
-default, though -- it is a materialized instance of exactly the trend
-the original note flagged as a risk to watch, not merely a hypothetical
-anymore, and should be actively re-checked (not assumed still fine) at
-the next edit to this file rather than treated as settled by this one
-clean check.
+**Update (materialized watch-point):** the file has grown further since
+the note above was written, across additional gated edits. Checked
+directly against the specific drift risk named above -- neither `waza`'s
+divergences nor SkillOpt's disciplines are cited a second time anywhere
+in the new content, so that named violation has not occurred, and a full
+read of the current file found no other instance of the "restating the
+same instruction in two places" fail either: each addition cites its own
+distinct primary source. This is not a clean pass by default, though --
+it is a materialized instance of exactly the trend the original note
+flagged as a risk to watch, not merely a hypothetical anymore, and should
+be actively re-checked (not assumed still fine) at the next edit rather
+than treated as settled by this one clean check. Line-count history and
+which specific edits contributed: `docs/skill-eval-status.md`.
 
 ### 3. Degree of freedom
 
@@ -368,74 +337,26 @@ editing session itself. The extensive back-and-forth in this session
 iterative validation but was not scored against a held-out split, so it
 does not meet the letter of the discipline this dimension names.
 
-**Update ([PR #103][pr103]):** this gap was closed for one specific edit, not
-retroactively for the skill's whole authoring history. The dimension-8
-scoring-axis paragraph added in that PR was scored against a documented
-held-out train/selection/test split
-(`evals/evaluating-skill-quality/split.md`) before and after the edit,
-using `skills/gated-skill-edits/scripts/score_contract.py`: the selection
-mean strictly improved (0.964286 -> 1.000000), so the edit was kept per
-the gate's ties-rejected rule. That is one real instance of this
-discipline applied to this skill, not evidence that every earlier edit
-in this document's history went through it -- the paragraph above still
-accurately describes the many edits that did not.
-
-**Update ([issue #149][issue149], Unknowns framework / Blind spot pass):** a second
-gated edit. This session had no registered `Skill` tool for
-`evaluating-skill-quality` to dispatch against (it is this repository's
-own content, not an installed plugin), so each live dispatch was
-instructed explicitly to read `SKILL.md`/`references/rubric.md` off disk
-and follow the Procedure by hand -- a reasonable proxy for the
-`copilot-sdk`-executor harness the 13 prior fixtures were calibrated
-against. An external review on [PR #150][pr150]
-(`chatgpt-codex-connector[bot]`) caught two real bugs a first pass at
-this gate missed: two new fixtures' assertions were case-sensitive
-against text the rubric itself prescribes in a different case
-(`"blind spot"` vs. the rubric's own `## Blind spot pass` heading), and
-a negative assertion (`"tenth dimension"`) false-failed a dispatch that
-correctly *denied* inventing one. Both fixed. The same review also
-correctly named that a first gate attempt was a partial record (only 1
-of 6 selection fixtures had a matched-methodology before/after pair, cut
-short by this session's own dispatch rate limit) rather than the
-complete strict-improve-or-reject measurement `gated-skill-edits`'
-Procedure step 3 actually requires. Once the rate limit cleared, the
-full 6-fixture selection split was re-measured, matched methodology on
-both sides, and scored with `score_contract.py`: selection mean
-**0.939815 -> 0.981482, KEEP**. The 5 pre-existing fixtures tied exactly
-(no regression); the entire improvement came from
-`blind-spot-pass-generalizes.yaml`, the fixture built to test this
-change, moving cleanly from 0.75 to 1.00 on both independent runs. Full
-record, including the per-fixture score table and the two bugs' exact
-fix: `evals/evaluating-skill-quality/split.md`'s Kept-edit log.
-
-**Update ([issue #155][issue155], Model/effort tier fit):** a third gated edit, same
-session, same no-registered-`Skill`-tool workaround. This round's
-selection-split before scores reused the six pre-existing fixtures'
-already-measured after scores from the [issue #149][issue149] gate directly above
-(same committed file state, same matched methodology -- disclosed reuse,
-not a silent assumption), so only the one new selection fixture,
-`model-effort-tier-fit-unjustified-effort.yaml`, needed a genuine fresh
-before dispatch (pinned to the pre-edit commit via `git show` to avoid a
-working-tree race with the edit in progress). Selection mean: **0.912698
--> 0.963719, KEEP**. One pre-existing fixture,
-`scoring-axis-uncontrolled-speed-claim.yaml`, dipped from 1.000000 to
-0.857143 on an assertion unrelated to this edit (a paraphrase, "6.5s"
-for "6.5 seconds," in dimension-8 discussion this check never touches);
-checked directly and disclosed rather than silently re-run, and did not
-change the KEEP outcome. The purpose-built fixture moved cleanly from
-0.500000 (the pre-edit rubric has no such check to cite) to 1.000000
-(the post-edit dispatch named the check and used its "try hard enough"
-diagnostic verbatim). A held-out restraint check,
-`model-effort-tier-fit-justified.yaml` (test split, read once), found
-the new check does not over-fire on a pin that already meets its own
-justification criteria -- and caught one more instance of the exact
-case-sensitivity bug [PR #150][pr150]'s external review found for `blind spot`:
-this fixture's own `output_contains: ["model/effort pin justified"]`
-false-failed against a dispatch that (correctly) capitalized it as a
-sentence-initial "Model/effort pin justified." Fixed the same way, by
-matching a case-invariant fragment (`"pin justified"`) rather than
-re-running for a lucky pass. Full record, including the per-fixture
-score table: `evals/evaluating-skill-quality/split.md`'s Kept-edit log.
+**Update (held-out gate discipline applied, multiple iterations):** this
+gap has since been closed for several specific edits to this skill, not
+retroactively for its whole authoring history -- each time via a
+documented held-out train/selection/test split
+(`evals/evaluating-skill-quality/split.md`), scored before and after with
+`skills/gated-skill-edits/scripts/score_contract.py`, requiring a strict
+improvement (ties rejected) before the edit was kept. That is real,
+repeated instances of this discipline applied to this skill, not evidence
+every earlier edit went through it -- the paragraph above still
+accurately describes the many edits that did not. One of these gates also
+surfaced two real fixture-assertion bugs (case-sensitivity against text
+the rubric itself prescribes in a different case; a negative assertion
+that false-failed a correct denial), caught by external review rather
+than found here first, and fixed the same way each time it recurred:
+match the assertion to what the rubric actually prescribes rather than an
+assumed casing, and ban only affirmative claims, never a phrase a correct
+denial would also contain. Full per-edit record -- which specific change
+each gate covered, the exact before/after scores, and the fixture bugs
+found along the way: `evals/evaluating-skill-quality/split.md`'s
+Kept-edit log and `docs/skill-eval-status.md`.
 
 ### 9. Cross-model robustness
 
@@ -458,18 +379,13 @@ risk reduction is not the same claim as measured transfer success.
 
 ## Verdict
 
-**Mechanism fit**: good fit overall. The original pass here named a gap
--- the eval-tooling-install Stop boundary was safety-adjacent prose with
-no hook backing, in a repo with no hooks infrastructure at the time. Per
-the dated updates above, `SKILL.md`'s own text now checks this
-conditionally against whatever environment it actually runs in, rather
-than asserting a fixed answer -- the correct portable posture, since a
-hardcoded "yes, backed" claim would itself have been a defect once
-vendored somewhere without the hook this repository happens to have. In
-this repository specifically, that conditional check does currently
-resolve to "yes, backed" (`hooks/hooks.json` + `hooks/check-bash-safety.sh`,
-verified live), but that fact lives here, in this worked example, not in
-the skill's own portable content.
+**Mechanism fit**: good fit overall. The one safety-adjacent Stop
+boundary (eval-tooling installs) checks its own backing conditionally
+against whatever environment it actually runs in, rather than asserting
+a fixed answer -- the correct portable posture for a Portable-declared
+skill, since a hardcoded "yes, backed" claim would itself be a defect
+once vendored somewhere with no such hook. Development history of how
+this boundary's wording reached this state: `docs/skill-eval-status.md`.
 
 **Well-formed**, and not yet **mature** -- the same shape as the
 `explaining-the-work` verdict, for different reasons. Dimensions 1
@@ -492,34 +408,25 @@ self-review that always passes cleanly would itself be evidence of
 rubber-stamping -- per this skill's own Stop boundaries, a bare "looks
 fine" is exactly what is disallowed.
 
-**Update ([issue #164][issue164], dogfooding re-run, [issue #155][issue155]
-session):** a fresh, fully live
-dispatch (real subagent, real target -- this skill's own current files on
-disk, not a synthetic fixture) ran the complete current Procedure against
-this skill, including both of this session's own new checks, per this
-repository's own "gate completion on live proof, not plan-time intent
-alone" discipline. Result: **well-formed** (14/14 deterministic checks,
-confirmed live), **not yet mature** -- for two reasons, both since
-addressed above rather than left standing: dimension 2's forward-looking
-watch-point had, by that point, moved past hypothetical (see the dated
-update above), and dimension 6 had a genuine, uncaught durability defect
-in this very file (the stale "no hooks infrastructure" claim, now
-corrected in the Mechanism fit section above). The Model/effort tier fit
-check correctly found and explicitly stated that this skill's own content
-pins no model or effort level anywhere -- an absence, not a finding, per
-its own restraint discipline. The Blind spot pass found one new,
-genuine rubric gap specific to this target's self-referential domain: the
-held-out-gate discipline (dimension 8 above) covers split methodology
-(disjointness, strict improvement) but never asks whether the automated
-scorer (`score_contract.py`'s substring matching) actually measures the
-judgment it is scoring -- live evidence for this exact gap already exists
-in this session's own history (two independent case-sensitivity
-false-failures, both caught by review rather than by the gate itself; see
-the [issue #149][issue149] and [issue #155][issue155] updates in dimension 8 above). Left unfixed here,
-correctly, per the Blind spot pass's own instruction that a durable
-rubric change is a deliberate, `gated-skill-edits`-gated edit, not
-something a single review session improvises -- named for a future
-iteration rather than patched inline.
+**Verification via live dogfooding:** a fresh, fully live dispatch (real
+subagent, real target -- this skill's own current files on disk, not a
+synthetic fixture) ran the complete current Procedure against this
+skill, per this repository's own "gate completion on live proof, not
+plan-time intent alone" discipline. Result at the time: **well-formed**
+(14/14 deterministic checks, confirmed live), **not yet mature** -- two
+dimension 1-7 gaps, both since addressed above rather than left standing.
+The Model/effort tier fit check correctly found and explicitly stated
+that this skill's own content pins no model or effort level anywhere --
+an absence, not a finding, per its own restraint discipline. The Blind
+spot pass found one genuine rubric gap specific to this target's
+self-referential domain: the held-out-gate discipline above covers split
+methodology (disjointness, strict improvement) but never asks whether
+the automated scorer (`score_contract.py`'s substring matching) actually
+measures the judgment it is scoring -- left unfixed here, correctly, per
+the Blind spot pass's own instruction that a durable rubric change is a
+deliberate, `gated-skill-edits`-gated edit, not something a single review
+session improvises. Dated record of which edit this run followed:
+`docs/skill-eval-status.md`.
 
 ## Verification: subagent dispatch (dated addendum)
 
@@ -566,20 +473,12 @@ comparison is future work, named rather than assumed -- see
 ## References
 
 External primary-source URLs are already collected in
-[rubric.md's References](rubric.md#references). This file's own
-in-repo PR/issue citations are fully qualified below (`owner/repo#N`
-resolving to an explicit URL) rather than left as bare `#N` shorthand --
-a bare `#N` auto-links relative to whichever repository currently hosts
-this file, which silently resolves to the wrong issue or PR once this
-Portable skill is vendored elsewhere; a fully qualified link always
-resolves to `tvna/gitapex`, correctly, regardless of where the file
-lives. Cited as illustrative history of this skill's own authoring
-process (per the Portability level section's "references to the origin
-repository as context... remain fine"), never as a step this skill's
-procedure depends on to function.
-
-[pr103]: https://github.com/tvna/gitapex/pull/103 "gitapex PR #103 -- dimension-8 scoring-axis paragraph, held-out gated"
-[pr150]: https://github.com/tvna/gitapex/pull/150 "gitapex PR #150 -- Unknowns framework / Blind spot pass + Model/effort tier fit"
-[issue149]: https://github.com/tvna/gitapex/issues/149 "gitapex issue #149 -- Unknowns framework / Blind spot pass"
-[issue155]: https://github.com/tvna/gitapex/issues/155 "gitapex issue #155 -- Model/effort tier fit"
-[issue164]: https://github.com/tvna/gitapex/issues/164 "gitapex issue #164 -- dogfooding follow-up, stale hooks claim + growth watch-point"
+[rubric.md's References](rubric.md#references). This file intentionally
+carries no issue- or PR-number citations of its own: a bare `#N` (or even
+a fully qualified `owner/repo#N`) is gitapex-repo-specific bookkeeping
+that does not belong blended into a Portable skill's worked-example
+content, the same class of gap dimension 5's Mixed-portability guidance
+names for a portable-core-plus-repo-specific-detail split. This
+skill's own dated, issue-linked development history lives entirely in
+this repository's own bookkeeping instead: `docs/skill-eval-status.md`
+and `evals/evaluating-skill-quality/split.md`'s Kept-edit log.
