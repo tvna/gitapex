@@ -1,303 +1,341 @@
 # A cross-document drift gate for the docs/superpowers/specs/ chain
 
-Date: 2026-07-18
+Date: 2026-07-18 (rewritten same-day after reading the real upstream
+source this design was meant to port from)
 
 Refs #152 (child of #82). Extends #144/#145 (a distinct gate shape --
 see Decision 0) and covers the existing #127/#147/#148/#151 chain as its
 worked example and backfill target. Design-only; does not reopen any of
 those four docs' content or decisions.
 
+## Correction note (read first)
+
+This design's first draft proposed a bespoke JSON registry
+(`.spec-dependencies.json`) checking `closed-enum` and `quoted-guarantee`
+content equality between docs -- built without ever reading
+`tvna/claude-md`, the repository this whole design chain has cited
+throughout as prior art. That was a mistake, flagged by the operator:
+"if we're designing without reading the upstream codebase, direction
+drift is a real risk." It was. `tvna/claude-md` was added to this
+session and its real files read for the first time this pass:
+`.gitapex/doc-dependencies.{toml,schema.json}`, `scripts/doc_graph.py`,
+`scripts/gate_doc_graph_pr.py`. **Claude-md already has exactly this
+mechanism, built, tested, and running -- and it works nothing like the
+first draft.** It doesn't verify document CONTENT at all; it enforces
+that a changed document's declared dependents are also touched in the
+same PR (or explicitly waived). This revision replaces the first
+draft's mechanism wholesale with a port of the real one, rather than
+patching the wrong design. Everything below is grounded in the actual
+files read this session, cited by path, not paraphrased from an issue
+body -- the same discipline this correction exists to restore.
+
 ## Design-only scope
 
 Per this repository's discipline (matching #57/#123/#125/#126/#127/#130/
 #131/#144/#145/#147/#148/#151 precedent): this doc records a design
-only. No `.github/scripts/gate_*.py` file, no registry file, no CI
-wiring is created by this pass. Implementing it as real code (matching
-how #144's design became `gate_owasp_asi_mapping.py`) is a later,
-separate step.
+only. No `.gitapex/doc-dependencies.toml`, no `scripts/doc_graph.py` or
+`gate_doc_graph_pr.py` port, no CI wiring is created by this pass.
+Implementing it as real code is a later, separate step.
 
 ## Why this doc exists
 
-Four docs now form a real dependency chain, not just a citation list:
-
-- #151's devcontainer tier-content table hardcodes #147's `security-tier`
-  closed enum (`foundation | enterprise | advanced`) -- if #147 later
-  renames or adds a tier, #151's table silently goes stale.
-- #151's Decision 3 ("phase 3 does not consume business-domain hearing
-  output") rests on #148's Decision 1 guarantee ("Business domain
-  contributes zero decision-table keys, zero schema fields... and zero
-  enforced state") -- if #148 is later revised, #151's argument's
-  premise disappears with nothing to flag it.
-- #148 itself rests on #127's specific, argued reason for dropping
-  `business-domain` as a gating key -- the same pattern one layer up.
-
-CLAUDE.md section 3 names this class of gap directly: "Establishing an
-invariant... is such an operation: ship its drift gate in the same
-change, not a follow-up." Strictly read, that obligation was missed
-starting at #147 -- the first doc in this chain another doc came to
-depend on -- not first at #151 or now. This design exists to define the
-gate that should have shipped then, and to backfill the chain that
-already exists (Decision 4) rather than deferring that too.
+Four docs form a real dependency chain, not just a citation list:
+#151's devcontainer tier-content table depends on #147's `security-tier`
+closed enum; #151's Decision 3 depends on #148's Decision 1 guarantee;
+#148 itself depends on #127's specific reasoning. None of these are
+mechanically checked -- if any upstream doc is edited later, every
+downstream doc that cited the old content goes silently stale. CLAUDE.md
+section 3 names this class of gap directly: "ship its drift gate in the
+same change, not a follow-up." That obligation was missed starting at
+#147, the first doc in this chain another doc came to depend on.
 
 ## Decision 0: distinct from #144/#145's existing gates
 
 #144/#145's `gate_owasp_asi_mapping.py`/`gate_owasp_llm_mapping.py`
-check ONE document's table completeness against a closed EXTERNAL list
--- OWASP's own official ASI01-10/LLM01-10 category IDs, an authority
-outside this repo. This design is about INTERNAL cross-document
-consistency -- multiple gitapex-authored docs citing each other's
-specific values, with gitapex's own earlier doc as the authority. Same
-underlying discipline (ship the drift gate with the invariant), a
-structurally different check (external-list completeness vs.
-internal-citation equality). Kept as a sibling design, not folded into
+(confirmed this session to closely mirror the real
+`tvna/claude-md/scripts/owasp_asi_mapping.py`, including an
+EXACT match on `VALID_STATUSES` -- that part of the citation chain held
+up) check ONE document's table completeness against a closed EXTERNAL
+list. This design is about INTERNAL cross-document consistency between
+gitapex-authored docs. Kept as a sibling mechanism, not folded into
 either existing gate, for the same independent-versioning reason #145
-gave for keeping its own gate separate from #144's.
+gave for keeping its own gate separate from #144's -- and, as it turns
+out, because the real upstream mechanism this design ports is itself a
+DIFFERENT tool from `owasp_asi_mapping.py` in claude-md too: the two
+coexist there as genuinely separate scripts covering separate
+enforcement shapes.
 
-## Decision 1: split what a deterministic gate can check from what needs review
+## Decision 1: port the real mechanism -- a co-change graph, not a content checker
 
-**Decision: the gate verifies mechanical facts about text (a value set
-matches; a quoted sentence still appears verbatim) -- never whether a
-downstream argument BUILT on an upstream fact is still sound. That
-judgment is a review-agent's job, per CLAUDE.md section 3's own split
-("review/repair agents... handle the semantic judgment determinism
-cannot, not artifact code"), not a script's.**
+**Decision: adopt claude-md's actual design, ported (not reinvented):
+a typed, directed dependency GRAPH (`.gitapex/doc-dependencies.toml`)
+of document/script/workflow nodes, with typed edges recording "when
+FROM changes, TO should be reviewed." A CI gate
+(`gate_doc_graph_pr.py`-equivalent) reads the PR's changed-file list; for
+every changed file that is a graph node, it requires every
+`blocking`-severity dependent to also appear in the diff -- or to be
+explicitly waived with a `doc-graph-waiver: NODE_ID; reason` line in the
+PR body. `advisory`-severity dependents produce an informational note,
+never a failure.**
 
-Concrete example of what stays out of deterministic-gate scope, named
-explicitly rather than left implicit: if #148's Decision 1 sentence
-changes from "contributes zero... schema fields" to "contributes one
-schema field, X" -- the gate below (Decision 3) WILL catch that the old
-quoted sentence disappeared and fail loudly. What it will NOT do is
-evaluate whether #151's Decision 3 argument ("therefore phase 3 cannot
-consume hearing output") is still correct once #148 allows a schema
-field -- that re-evaluation is exactly the kind of judgment call this
-repo already routes to a review pass at a concentrated point (CLAUDE.md
-section 3), not something a regex should attempt. The gate's job ends at
-"the fact you cited changed -- go look," never "the fact you cited
-changed, and here is whether your argument still holds."
+This is a categorically different strategy from the first draft, and
+better-suited to the actual problem, for a reason worth stating
+plainly: **the gate never tries to verify that document content is
+still consistent.** It only verifies that a human touched (or
+explicitly declined to touch) the dependent document in the same
+change. Whether what they wrote there is still correct is left to
+review -- the same deterministic-vs-judgment split CLAUDE.md section 3
+already prescribes, but reached by NOT attempting content verification
+at all, rather than by building two content-checking mechanisms
+(closed-enum, quoted-guarantee) and then drawing a boundary around what
+they can't reach, as the first draft did. The simpler mechanism
+subsumes the boundary the more complex one needed to state explicitly.
 
-Two dependency kinds fall out of this split, both mechanically checkable
-without pretending to parse prose semantics:
+Ported wholesale, cited by real file read this session:
 
-## Decision 2: closed-enum consistency (worked example: #147 <-> #151)
+- **Node/edge model** (`scripts/doc_graph.py`, `tvna/claude-md`): a
+  `DocNode` (`id`, `path`, `type`, `description`) and a `DocEdge`
+  (`from_id`, `to_id`, `type`, `severity`, `note`). `impact_report`
+  checks only DIRECT (one-hop) blocking edges from each changed
+  node -- no transitive closure, deliberately: a two-hop drift is caught
+  when the intermediate node's own edge fires on its own later change,
+  not by chasing chains eagerly.
+- **The waiver mechanism** (`scripts/gate_doc_graph_pr.py`): plain-text,
+  MCP-safe (no HTML comments, which GitHub MCP write tools strip) --
+  `doc-graph-waiver: NODE_ID; reason`, one per line, parsed by regex from
+  the PR body. A waived node is reported, not silently dropped.
+- **Fail policy** (`gate_doc_graph_pr.py`, read verbatim): fails LOUD
+  (exit 1) when a required co-change is missing or unwaived, matching
+  CLAUDE.md section 4; fails OPEN (exit 0, with a warning) when the git
+  diff itself is unavailable, so the gate degrades to a skip rather than
+  blocking a PR on infrastructure trouble -- a fail-open carve-out
+  claude-md itself scopes narrowly (unavailable diff only, never an
+  unavailable graph file or a validation error, both of which stay
+  fail-closed).
 
-When a source doc declares a canonical closed enum inline, in the
-pattern this repo's docs already use unprompted -- `` `field-name`:
-`value-a | value-b | value-c` `` (backtick-wrapped field name, colon,
-backtick-wrapped pipe-separated values) -- any consumer doc that
-tabulates or restates that same value set must match it exactly: same
-set, no additions, no omissions, no renames.
+## Decision 2: node/edge type vocabulary, ported and trimmed
 
-**Worked example, already true of the real text today (no doc edit
-required for this design to be checkable):** #147 contains the literal
-substring `` `security-tier`: `foundation | enterprise | advanced` ``
-in its Decision-1-equivalent section. #151's "Devcontainer content by
-tier" table has first-column values `` `foundation` ``, `` `enterprise`
-``, `` `advanced` `` under a `security-tier` header. A gate extracts the
-source enum via a regex anchored on the declaration pattern, extracts
-the consumer's value set from the table rows (skipping header/separator
-rows, same shape as #144/#145's `_ROW_RE` approach), and asserts set
-equality. Mismatch in either direction (a value #151 tabulates that
-#147 no longer declares, or a value #147 declares that #151's table
-omits) is a hard failure naming exactly which value is out of sync.
+Real `VALID_NODE_TYPES` (`doc_graph.py`): `{"universal_text",
+"compiled_artifact", "prd", "standard", "runbook", "harness_script",
+"harness_workflow", "archive"}`. gitapex has no APM-compiled
+universal-text pipeline (`universal_text`/`compiled_artifact` describe
+claude-md's own `master.instructions.md` -> `CLAUDE.md`/`AGENTS.md`
+compilation, which gitapex's repo doesn't have) and no archived docs yet
+(`archive`). Adopt the subset gitapex's own chain actually needs today
+-- `prd` (design specs under `docs/superpowers/specs/`), `harness_script`
+(`.github/scripts/gate_*.py`) -- and add `standard`/`runbook`/
+`harness_workflow`/others only when a concrete gitapex doc needs one,
+per this repo's own anti-enum-creep discipline (#125's rule, applied
+here to node types instead of gate kinds).
 
-## Decision 3: quoted-guarantee presence (worked example: #148 <-> #151)
+Edge types and their DEFAULT severity class, ported unchanged (the
+vocabulary itself is generic, not claude-md-specific, so porting it
+verbatim -- not gitapex-specific renaming -- is the right call):
 
-Not every cross-doc dependency is enum-shaped. #148's Decision 1
-guarantee is a sentence, not a value list. For this class, the registry
-records the exact sentence as a literal string; the gate's check is that
-the string still appears in the source doc, compared after
-**whitespace normalization** (line breaks and repeated spaces collapsed
-to a single space on both the registry's stored quote and the source
-doc's text before comparison) -- not raw byte-for-byte equality. This
-is deliberately blunt -- it does not verify the consumer's argument,
-only that the specific fact it quoted has not silently changed
-underneath it (Decision 1's boundary, restated concretely).
+| Edge type | Reads as | Default severity |
+|---|---|---|
+| `governs` | upstream principles define/constrain downstream | blocking |
+| `compiled_to` | upstream compiles deterministically into downstream | blocking |
+| `derives_from` | downstream design was derived from upstream | blocking |
+| `enforced_by` | downstream script enforces upstream rule | advisory |
+| `implements` | downstream is the concrete implementation of upstream | advisory |
+| `references` | upstream cites downstream | advisory |
 
-**Why normalization, stated from a real finding, not assumed upfront:**
-verifying this design's own worked example against the actual #148 text
-this session found that the guarantee sentence wraps across three
-markdown source lines (`docs/superpowers/specs/2026-07-18-init-hearing-fable-design.md`
-lines 88-90) -- semantically one sentence, but not one line. A literal
-byte-for-byte grep failed on it despite the guarantee being completely
-unchanged; only a rewrap, not a rewrite. Requiring raw byte equality
-would make the gate fire on routine markdown reflow (a paragraph
-re-wrapped by an editor, no meaning changed) -- a worse false-positive
-than the accepted one below, because it punishes formatting, not
-content. Whitespace normalization is the fix, verified against this
-exact case.
+**Directional convention, stated explicitly because it is easy to get
+backwards:** `from -> to` always reads as "if FROM changes, review TO,"
+but which side is upstream/authoritative depends on the edge type's own
+verb. For `governs`/`compiled_to`, `from` is the upstream authority. For
+`derives_from`, `from` is the DOWNSTREAM/derived doc and `to` is the
+upstream authority it derives from -- verified against the real TOML's
+own `design_philosophy_prd -> ubiquitous_language, type=derives_from`
+edge, where `ubiquitous_language` is the authority. gitapex's own edges
+below use `derives_from` for exactly this reason: the derived doc names
+itself as `from`.
 
-**Worked example, verified against the real text this session (after
-normalization):** the sentence "Business domain contributes zero
-decision-table keys, zero schema fields, zero free text to any
-generated artifact, and zero enforced state." appears in #148's
-Decision 1, wrapped across three source lines as noted above. #151's
-Decision 3 rests on it. A registry entry records the sentence (stored as
-one logical string, regardless of how the source wraps it) against
-#148's path; the gate normalizes both sides and fails loudly, naming the
-missing sentence and the consumer doc that depends on it, if it's gone
-after normalization -- not if it merely got re-wrapped.
+## Decision 3: the concrete graph for gitapex's real chain
 
-A rewrite of the SAME guarantee in different words (not just a
-character-level edit) would legitimately break this check even though a
-human might judge the meaning unchanged -- an accepted false positive,
-not a flaw to fix here: CLAUDE.md section 4's fail-loud preference over
-a silent pass applies, and a doc author who intentionally rewrites a
-cited guarantee is expected to update the registry's quoted string in
-the same change, exactly as #127's own decision-table changes are
-expected to ship with their own drift-gate update.
+Worked, not abstract -- these are the actual current dependencies,
+usable as the implementation issue's seed data.
 
-## Decision 4: registry format
+```toml
+[[nodes]]
+id = "init_capability_tiers_prd"
+path = "docs/superpowers/specs/2026-07-18-init-capability-tiers-design.md"
+type = "prd"
+description = "Foundation/Enterprise/Advanced security-tier framework for gitapex init (#147)."
 
-**Decision: a standalone, git-tracked JSON registry --
-`docs/superpowers/specs/.spec-dependencies.json` -- modeled on
-`.gitapex/ssot.json`'s already-decided `policy_sources[]` shape
-(#123: "references and routing only, never policy values") without
-assuming that file exists yet (it doesn't -- #123 is itself still
-design-only). One entry per cross-doc dependency:**
+[[nodes]]
+id = "init_hearing_fable_prd"
+path = "docs/superpowers/specs/2026-07-18-init-hearing-fable-design.md"
+type = "prd"
+description = "Business-domain hearing design for gitapex init, Fable method (#148)."
 
-```jsonc
-[
-  {
-    "id": "tier-enum-147-to-151",
-    "kind": "closed-enum",
-    "source": { "path": "docs/superpowers/specs/2026-07-18-init-capability-tiers-design.md" },
-    "consumer": { "path": "docs/superpowers/specs/2026-07-18-devcontainer-generation-phase-design.md",
-                   "anchor": "Devcontainer content by tier" },
-    "field": "security-tier",
-    "tracking_issue": 152
-  },
-  {
-    "id": "zero-schema-fields-148-to-151",
-    "kind": "quoted-guarantee",
-    "source": { "path": "docs/superpowers/specs/2026-07-18-init-hearing-fable-design.md" },
-    "consumer": { "path": "docs/superpowers/specs/2026-07-18-devcontainer-generation-phase-design.md",
-                   "anchor": "Decision 3" },
-    "quote": "Business domain contributes zero decision-table keys, zero schema fields, zero free text to any generated artifact, and zero enforced state.",
-    "tracking_issue": 152
-  }
-]
+[[nodes]]
+id = "devcontainer_generation_prd"
+path = "docs/superpowers/specs/2026-07-18-devcontainer-generation-phase-design.md"
+type = "prd"
+description = "Explicit post-init devcontainer generation phase (#151)."
+
+[[nodes]]
+id = "spec_doc_drift_gate_prd"
+path = "docs/superpowers/specs/2026-07-18-spec-doc-drift-gate-design.md"
+type = "prd"
+description = "This document -- the drift-gate design itself (#152)."
+
+[[edges]]
+from = "devcontainer_generation_prd"
+to = "init_capability_tiers_prd"
+type = "derives_from"
+severity = "blocking"
+note = "Devcontainer content-by-tier table hardcodes the security-tier enum; co-change on tier vocabulary changes."
+
+[[edges]]
+from = "devcontainer_generation_prd"
+to = "init_hearing_fable_prd"
+type = "derives_from"
+severity = "blocking"
+note = "Decision 3's non-consumption argument rests on Decision 1's zero-schema-fields guarantee; co-change if that guarantee changes."
 ```
 
-`kind` is a closed enum itself (`closed-enum | quoted-guarantee`),
-matching #123's own anti-enum-creep discipline: a new kind is added only
-when a concrete dependency needs it, not speculatively. `tracking_issue`
-follows #123's schema precedent (nullable, records the originating
-issue). This file is a natural future migration candidate into
-`.gitapex/ssot.json`'s `policy_sources[]` once #123 ships real code and
-gitapex's own repo starts consuming its own registry -- stated as a
-migration path, not built now, since building it early would couple
-this design to #123's still-unresolved schema timeline for no present
-benefit.
+`docs/security-control-inventory.md` and `.github/scripts/
+gate_owasp_asi_mapping.py`/`gate_owasp_llm_mapping.py` (#144/#145) are
+deliberately NOT added as graph nodes: they already carry their own,
+stronger, content-verifying gates (Decision 0). Adding graph edges for
+them would duplicate enforcement the real
+`tvna/claude-md/.gitapex/doc-dependencies.toml` itself avoids -- its own
+`owasp_asi_mapping.py` and `security_control_inventory.md` are likewise
+absent from its graph, confirmed by reading the actual node list this
+session, not assumed. The graph is for dependencies that have no
+dedicated gate of their own -- exactly #152's original problem.
 
-## Decision 5: backfilling the existing chain
+## Decision 4: a real limitation this design does not paper over
 
-**Decision: shipping the gate without also registering the dependencies
-that already exist (#147<->#151, #148<->#151) would recreate exactly the
-gap this issue exists to close -- a drift gate with nothing registered
-protects nothing. The implementation issue must seed
-`.spec-dependencies.json` with (at minimum) the two worked-example
-entries above in the SAME change that adds the gate script, not as a
-follow-up.** This mirrors #144's own precedent: the inventory doc and
-its gate shipped together, not doc-then-gate-later.
+**#127 has no `docs/superpowers/specs/` file.** Its entire design lives
+in the GitHub issue body. The node model requires a `path` to a tracked
+file (`node_for_path` matches against `git diff --name-only` output,
+which only sees files); a GitHub issue body has no such path and cannot
+"co-change" in a diff the gate can observe. Two real dependencies named
+in this doc's first draft -- #148's advisory-only decision depending on
+#127's reasoning for dropping `business-domain`, and #151's Decision 4
+depending on #127's F4 rule text -- are therefore **not representable
+in this mechanism as it stands.**
 
-Two further dependencies exist in the chain and are named here for the
-implementation issue to seed, not resolved by this design doc itself
-(consistent with Non-goals -- this doc designs the mechanism, it does
-not audit the full chain for every dependency):
+This is stated as a limitation, not solved here: the honest fix is for
+#127 to gain its own `docs/superpowers/specs/*.md` file (a natural,
+separately-scoped follow-up recommendation, not a change this design
+makes), after which the two dependencies above become ordinary
+`derives_from` edges like the ones in Decision 3. Recommending that is
+this doc's full scope on the point; it does not retrofit #127 itself.
 
-- #148's advisory-only decision itself depends on #127's specific
-  reasoning for dropping `business-domain` as a gating key -- a
-  `quoted-guarantee`-shaped dependency on #127's text, symmetric with
-  the #148<->#151 example above.
-- #151's Decision 4 (regeneration monotonicity) depends on #127's F4
-  rule text ("live PLATFORM state, never a local copy") -- another
-  `quoted-guarantee` candidate.
+## Decision 5: implementation-issue backfill and the bonus visualization
+
+Per CLAUDE.md section 3's rule and #144's own precedent (the inventory
+and its gate shipped together), the implementation issue must seed
+`.gitapex/doc-dependencies.toml` with Decision 3's nodes/edges in the
+SAME change that adds the gate script -- a drift gate with nothing
+registered protects nothing.
+
+Worth porting alongside the gate, not required for the gate to function:
+`doc_graph.py`'s `render_mermaid` function, which turns the graph into a
+Mermaid `flowchart LR` diagram. This is a direct, low-cost instance of
+CLAUDE.md section 6's "produce a workflow artifact that makes state
+visible by inspection" rule -- the dependency chain becomes a diagram a
+human can scan instead of prose they must reconstruct. Named as a
+should-port, not a hard requirement of Decision 1's core mechanism.
 
 ## What this does not attempt
 
-- **Auto-discovery of cross-references via prose parsing or NLP.**
-  Dependencies must be explicitly registered by whoever writes the
-  citing doc, not inferred. This is a deliberate scope limit, not an
-  oversight: inferring "doc B depends on doc A" from free text is
-  exactly the kind of speculative-complexity CLAUDE.md section 4 warns
-  against, and a missed auto-detection would be a worse failure mode
-  (silent gap) than a missed manual registration (at least visible in
-  review as an omitted registry entry).
-- **Verifying that a downstream argument remains sound** once an
-  upstream fact changes -- Decision 1's boundary. The gate flags "go
-  look"; it never renders a verdict on what it finds.
-- **A general citation-integrity checker for issue numbers** (verifying
-  every `#NNN` in a spec doc resolves to a real GitHub issue). A real,
-  useful, but separate concern -- different data source (GitHub API vs.
-  local files), different failure mode (network-dependent), and no
-  existing worked example forcing its shape yet. Named as a candidate
-  for a future, separate issue, not designed here.
+- **Verifying document content is still correct.** Restated as the
+  central, deliberate trade-off (Decision 1): the gate enforces
+  co-change, not consistency. A PR that touches both #147 and #151 but
+  updates #151 wrong still passes the gate -- that gap is real, accepted,
+  and routed to review, exactly where CLAUDE.md section 3 already says
+  semantic judgment belongs. The first draft's attempt to also catch
+  THAT case (via literal-content regex matching) is not carried forward;
+  it added real complexity (the whitespace-normalization fix the first
+  draft needed) for a guarantee the real upstream mechanism doesn't
+  attempt either.
+- **Transitive/multi-hop drift detection.** `impact_report` checks only
+  direct edges, matching the real `doc_graph.py` exactly -- not a
+  simplification introduced here.
+- **Graphing #127** until it has a file (Decision 4).
+- **A general citation-integrity checker for issue numbers.** Unchanged
+  from the first draft: a real, separate, future candidate, not designed
+  here.
 
 ## Facts vs. speculation
 
-Facts: #144/#145's actual gate shape and its `_ROW_RE`-style table
-parsing (`gate_owasp_asi_mapping.py`, `gate_owasp_llm_mapping.py`, read
-this session); #123's `policy_sources[]` shape and its "references and
-routing only, never policy values" stated design constraint; CLAUDE.md
-section 3's explicit "ship the drift gate in the same change" rule; the
-two worked-example strings (`` `security-tier`: `foundation |
-enterprise | advanced` `` in #147; the exact Decision-1 sentence in
-#148) as they currently and verifiably appear in those docs' text, read
-this session, not paraphrased.
+Facts, verified by reading the actual files this session (not from
+memory, not from issue-body paraphrase): `tvna/claude-md`'s
+`.gitapex/doc-dependencies.toml` (node/edge inventory, including the
+confirmed absence of `owasp_asi_mapping.py`/`security_control_inventory.md`
+as graph nodes), `.gitapex/doc-dependencies.schema.json` (shape-only,
+validated by `scripts/doc_graph.py` for enum/referential-integrity per
+its own description), `scripts/doc_graph.py` (`VALID_NODE_TYPES`,
+`BLOCKING_EDGE_TYPES`/`ADVISORY_EDGE_TYPES`, `impact_report`'s one-hop-only
+behavior, `render_mermaid`), `scripts/gate_doc_graph_pr.py` (waiver
+regex and format, fail-loud/fail-open split), `.gitapex/ssot.schema.json`
+(`policy_sources[].format` enum -- the error this session's #144 fix
+corrected), and `scripts/owasp_asi_mapping.py` (confirmed near-exact
+match to gitapex's own `gate_owasp_asi_mapping.py`, including identical
+`VALID_STATUSES`).
 
-Speculation, named as such: the exact regex/extraction implementation
-for Decision 2's enum pattern (an implementation-issue detail, not fixed
-here beyond "same style as #144/#145's row parser"); whether `.spec-
-dependencies.json` should eventually cover docs outside
-`docs/superpowers/specs/` (e.g. `docs/security-control-inventory.md`
-itself) -- no argued need found this session, not extended
-speculatively; the eventual migration into `.gitapex/ssot.json`'s
-`policy_sources[]` depends on #123's still-undecided implementation
-timeline.
+Speculation, named as such: the exact port's file paths in gitapex
+(`.gitapex/doc-dependencies.toml` mirrors claude-md's own path, a
+reasonable default but an implementation-issue decision); whether
+gitapex ports `doc_graph_viz`-equivalent tooling beyond the
+`render_mermaid` function itself; whether `.github/workflows/`
+gains a dedicated `validate-doc-graph.yml`-equivalent workflow or the
+gate rides an existing one -- an implementation-issue choice, not
+resolved here.
 
 ## Non-goals
 
-- No `.github/scripts/gate_*.py` file, no `.spec-dependencies.json` file,
-  no CI wiring -- design only. A later session may implement this,
-  matching #144's design-to-code precedent, but that is a separate step.
-- Not a general-purpose prose/semantic consistency checker -- Decision 1
-  states this boundary explicitly; that class of drift is named and
-  routed to review, not faked as deterministic.
+- No `.gitapex/doc-dependencies.toml`, no `scripts/doc_graph.py` or
+  gate port, no CI wiring, no `render_mermaid` port -- design only. A
+  later session may implement this, matching #144's design-to-code
+  precedent.
+- Not a content/semantic consistency checker of any kind -- Decision 1
+  states this trade-off explicitly as the point of the design, not an
+  oversight.
 - Not reopening #127/#147/#148/#151's actual content -- this issue
-  designs the mechanism that would catch future drift in them; it
-  audits their citation STRUCTURE (Decision 5's named dependencies) but
-  does not correct or re-litigate their decisions.
-- Not migrating into `.gitapex/ssot.json` now -- that file doesn't exist
-  yet; the standalone registry is this design's actual proposal, the
-  migration is a stated future path only.
-- Not a citation-integrity checker for issue numbers -- named as a
-  separate future candidate, not designed here.
+  designs the mechanism that would catch future drift in them.
+- Not retrofitting #127 with a spec-doc file -- recommended (Decision 4),
+  not performed here.
+- Not a citation-integrity checker for issue numbers -- separate future
+  candidate, unchanged from the first draft.
 
 ## Acceptance criteria
 
-- [ ] The deterministic-vs-review split is stated with a concrete named
-      example of what stays out of scope (an argument's continued
-      soundness, not just "semantic stuff in general").
-- [ ] Closed-enum consistency (Decision 2) is specified concretely
-      enough to implement directly against the real #147/#151
-      `security-tier` text, with the exact declaration pattern stated.
-- [ ] Quoted-guarantee consistency (Decision 3) is specified with its
-      accepted-false-positive tradeoff (a meaning-preserving rewrite
-      still fails the check) stated as a deliberate choice, not an
-      oversight.
-- [ ] The registry format (Decision 4) is modeled explicitly on
-      `.gitapex/ssot.json`'s `policy_sources[]` shape without assuming
-      that file exists, and states the future-migration relationship.
-- [ ] Backfill for the existing #127/#147/#148/#151 chain is specified
-      as shipping in the SAME change as the gate (Decision 5), with the
-      two worked-example entries given concretely and two further named
-      dependencies flagged for the implementation issue to seed.
-- [ ] Non-goals name what is explicitly not attempted (auto-discovery,
-      argument-soundness verification, issue-citation integrity) so the
-      design doesn't overreach into intractable or premature territory.
+- [ ] The mechanism is a ported co-change graph (nodes/edges/severity,
+      PR-diff-based enforcement, plain-text waiver), not a
+      content-equality checker -- Decision 1 states this as a deliberate
+      replacement of the first draft's approach, with the real upstream
+      files cited by path.
+- [ ] Node/edge vocabulary is ported from the real `doc_graph.py`
+      constants, trimmed to gitapex's actual current needs (Decision 2),
+      with the `derives_from` directional convention stated explicitly
+      and verified against a real example edge.
+- [ ] Decision 3's graph is concrete and seedable directly from this
+      doc (real node paths, real edges, real notes) -- not left
+      abstract.
+- [ ] The #127-has-no-file limitation (Decision 4) is stated plainly as
+      an unrepresentable gap, with a recommendation (not a fix) for
+      closing it.
+- [ ] #144/#145's files are explicitly excluded from the graph with the
+      reason stated (already have stronger, dedicated content gates;
+      confirmed the real claude-md graph excludes its own equivalent
+      files too).
+- [ ] What the mechanism does NOT verify (content correctness) is stated
+      as the design's deliberate trade-off, not discovered as a gap
+      after the fact.
+- [ ] Facts vs. speculation cites real files read this session by path,
+      not paraphrased issue-body descriptions -- the discipline this
+      whole revision exists to restore.
 
 ## Related Issue
 
-Child of #82. Extends #144/#145 (distinct gate shape, same
-ship-with-the-invariant discipline). Covers #127/#147/#148/#151 as its
-worked example and backfill target. Refs #152.
+Child of #82. Extends #144/#145 (distinct gate shape, confirmed via the
+real upstream graph's own exclusion of equivalent files). Covers
+#127/#147/#148/#151 as worked example, backfill target, and (for #127)
+a named, unresolved limitation. Refs #152.
