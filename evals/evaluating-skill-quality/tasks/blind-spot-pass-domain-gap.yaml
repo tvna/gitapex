@@ -31,8 +31,8 @@ inputs:
       $75.
 expected:
   output_contains:
-    - "blind spot"
+    - "Blind spot pass"
     - "jurisdiction"
   output_not_contains:
     - "dimension 10"
-    - "tenth dimension"
+    - "adding a tenth dimension"

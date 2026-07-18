@@ -338,32 +338,32 @@ in this document's history went through it -- the paragraph above still
 accurately describes the many edits that did not.
 
 **Update (issue #149, Unknowns framework / Blind spot pass):** a second
-gated edit, with a disclosed methodology gap this time rather than a
-clean full-split number. This session had no registered `Skill` tool for
+gated edit. This session had no registered `Skill` tool for
 `evaluating-skill-quality` to dispatch against (it is this repository's
 own content, not an installed plugin), so each live dispatch was
 instructed explicitly to read `SKILL.md`/`references/rubric.md` off disk
 and follow the Procedure by hand -- a reasonable proxy for the
 `copilot-sdk`-executor harness the 13 prior fixtures were calibrated
-against, but not the same harness, and it introduces its own
-paraphrase/capitalization variance independent of the edit. The
-purpose-built fixture (`blind-spot-pass-generalizes.yaml`) was scored with
-matched methodology on both sides: selection mean **0.625 -> 0.875**, a
-strict improvement. The other 5 selection fixtures were re-run after the
-edit (10 dispatches total) and every one produced its required
-substantive finding with zero regression and zero Blind-spot-pass
-over-firing, but this session hit its own dispatch rate limit before a
-matched-methodology *before* run could be completed for them, so their
-only "before" data point is the historical, different-harness baseline of
-1.0 each -- comparing that directly against this session's proxy-harness
-after-scores would measure harness fidelity, not the edit, so no such
-mixed number is used as the gate result. **KEEP**, on the matched-fixture
-strict improvement plus the qualitative zero-regression finding across
-the rest of the split -- see `evals/evaluating-skill-quality/split.md`'s
-Kept-edit log for the full record, including the specific per-fixture
-scores and the disclosed harness-mismatch caveat. A full 6-fixture
-matched-methodology gate re-run remains named future work there, not
-silently treated as already done.
+against. An external review on PR #150
+(`chatgpt-codex-connector[bot]`) caught two real bugs a first pass at
+this gate missed: two new fixtures' assertions were case-sensitive
+against text the rubric itself prescribes in a different case
+(`"blind spot"` vs. the rubric's own `## Blind spot pass` heading), and
+a negative assertion (`"tenth dimension"`) false-failed a dispatch that
+correctly *denied* inventing one. Both fixed. The same review also
+correctly named that a first gate attempt was a partial record (only 1
+of 6 selection fixtures had a matched-methodology before/after pair, cut
+short by this session's own dispatch rate limit) rather than the
+complete strict-improve-or-reject measurement `gated-skill-edits`'
+Procedure step 3 actually requires. Once the rate limit cleared, the
+full 6-fixture selection split was re-measured, matched methodology on
+both sides, and scored with `score_contract.py`: selection mean
+**0.939815 -> 0.981482, KEEP**. The 5 pre-existing fixtures tied exactly
+(no regression); the entire improvement came from
+`blind-spot-pass-generalizes.yaml`, the fixture built to test this
+change, moving cleanly from 0.75 to 1.00 on both independent runs. Full
+record, including the per-fixture score table and the two bugs' exact
+fix: `evals/evaluating-skill-quality/split.md`'s Kept-edit log.
 
 ### 9. Cross-model robustness
 

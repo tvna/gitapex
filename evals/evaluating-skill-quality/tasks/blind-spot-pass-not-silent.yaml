@@ -44,7 +44,7 @@ inputs:
     - Never change the table's cell content, only its whitespace padding.
 expected:
   output_contains:
-    - "no rubric blind spot"
+    - "rubric blind spot found"
   output_not_contains:
     - "dimension 10"
-    - "tenth dimension"
+    - "adding a tenth dimension"

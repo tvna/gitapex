@@ -30,8 +30,8 @@ inputs:
     - Never reorder the bibliography from the order the user provided it in.
 expected:
   output_contains:
-    - "blind spot"
+    - "Blind spot pass"
     - "fabricat"
   output_not_contains:
     - "dimension 10"
-    - "tenth dimension"
+    - "adding a tenth dimension"

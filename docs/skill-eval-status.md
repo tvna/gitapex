@@ -103,23 +103,23 @@ Shihipar, "A Field Guide to Fable: Finding Your Unknowns") and a
 `### Blind spot pass` subsection wired into `SKILL.md` Procedure step 2 --
 a precondition step, not a tenth dimension. Went through
 `gated-skill-edits`' own held-out gate: 3 new fixtures added to
-`split.md`'s split (16 total). Gate result is **KEEP**, but with a
-disclosed methodology gap rather than a clean full-split number -- this
-session has no registered `Skill` tool for `evaluating-skill-quality`, so
-live dispatches read `SKILL.md`/`references/rubric.md` off disk directly
-rather than running under the `copilot-sdk` executor the suite is
-otherwise calibrated for, and the session hit its own dispatch rate limit
-before a matched-methodology *before* run could be completed for 5 of the
-6 selection fixtures. The purpose-built fixture scored a clean
-matched-methodology strict improvement (selection mean 0.625 -> 0.875);
-the other 5 showed zero regression and zero Blind-spot-pass over-firing
-across 10 after-edit dispatches, but only against a different-harness
-historical before-baseline, so no mixed-harness number is claimed as the
-gate result. Full record, per-fixture scores, and the named follow-up (a
-clean full-split re-run once a registered-plugin harness is available):
-`evals/evaluating-skill-quality/split.md`'s Kept-edit log and
-`references/worked-example-self-review.md`'s dimension-8 addendum. Refs
-#149.
+`split.md`'s split (16 total). This session has no registered `Skill`
+tool for `evaluating-skill-quality`, so live dispatches read
+`SKILL.md`/`references/rubric.md` off disk directly and followed the
+Procedure by hand rather than running under the `copilot-sdk` executor
+the suite is otherwise calibrated for -- a reasonable proxy, disclosed
+rather than hidden. A PR #150 review (`chatgpt-codex-connector[bot]`)
+caught two real bugs in the new fixtures' assertions (case-sensitivity
+against the rubric's own prescribed capitalization; a negative assertion
+that false-failed a correct denial) and correctly flagged a first gate
+attempt as an incomplete partial record. Both fixed, and the full
+6-fixture selection split was re-measured end to end: selection mean
+**0.939815 -> 0.981482, KEEP** -- the 5 pre-existing fixtures tied
+exactly (no regression), and the entire improvement came from the
+purpose-built fixture (0.75 -> 1.00). Full record, per-fixture scores,
+and the bug fixes: `evals/evaluating-skill-quality/split.md`'s Kept-edit
+log and `references/worked-example-self-review.md`'s dimension-8
+addendum. Refs #149.
 
 ## explaining-the-work
 

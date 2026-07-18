@@ -144,68 +144,70 @@ step 2 and Stop boundaries. Full text: see this PR's diff.
 Precondition and splits: satisfied (16 fixtures, 6:6:4 with this
 iteration's additions -- see Assignment above).
 
-Gate result, and a disclosed methodology limitation, honestly recorded
-rather than papered over: this session has no registered `Skill` tool for
-`evaluating-skill-quality` (it is this repository's own unpublished
-content, not an installed plugin in the dispatching harness), so "one
-fresh subagent dispatch per fixture" here means explicitly instructing
-each dispatch to read `SKILL.md`/`references/rubric.md` off disk (via
+Methodology note (a real constraint, disclosed rather than hidden, but
+resolved below with a complete measurement -- see the PR #150 review
+thread for the prior partial record this superseded): this session has no
+registered `Skill` tool for `evaluating-skill-quality` (it is this
+repository's own unpublished content, not an installed plugin in the
+dispatching harness), so "one fresh subagent dispatch per fixture" here
+means explicitly instructing each dispatch to read
+`SKILL.md`/`references/rubric.md` off disk (via
 `git show <pre-edit-commit>:<path>` for a before-run, direct `Read` for an
 after-run) and follow the Procedure by hand, rather than a real
 `copilot-sdk`-executor run with the skill actually registered -- the
-harness the 13 prior fixtures were originally calibrated against. This
-matters because two effects are then entangled in a naive before/after
-diff: the edit's real effect, and this harness's own paraphrase/
-capitalization variance (e.g. a dispatch writing `## Blind spot pass` as a
-heading, capital B, versus the fixture's lowercase `"blind spot"`
-assertion; or citing `scripts/check_skill_shape.py`'s effect in prose
-without repeating that exact filename). Measured directly:
+harness the 13 prior fixtures were originally calibrated against. A first
+pass at this gate ran into two real problems, both caught by external
+review (`chatgpt-codex-connector[bot]` on PR #150) rather than found here
+first:
 
-- **The fixture built to test this edit** (`blind-spot-pass-generalizes.yaml`),
-  scored with matched methodology on both sides (same explicit
-  read-the-files-and-follow-the-procedure instruction, before *and*
-  after): before mean **0.625** (2 live dispatches: 0.75, 0.50 -- the
-  unedited rubric's dimension-3/4 walk already caught the citation
-  skill's fabrication risk generically about half the time, but never
-  named it as a rubric gap), after mean **0.875** (2 live dispatches:
-  1.00, 0.75 -- every after-run's dispatch produced an explicit Blind
-  spot pass section naming the fabrication-risk gap; the 0.75 run used
-  only the capitalized heading form, missing the lowercase
-  `"blind spot"` substring -- harness noise, not a missed finding).
-  **Strict improvement (0.875 > 0.625), matched methodology.**
-- **The other 5 selection fixtures**, re-run after the edit under the
-  same explicit-file-read methodology (10 total after-dispatches across
-  the 5, 1-2 per fixture): every single dispatch produced the fixture's
-  required substantive finding (`edge.yaml`'s hook-or-permission headline
-  finding; `mechanism-fit-subagent.yaml`'s subagent-not-skill headline
-  finding; `third-party-not-authoritative.yaml`'s primary-source-grounded
-  rejection of the fabricated blog citations;
-  `scoring-axis-uncontrolled-speed-claim.yaml`'s correctness-over-cost
-  rejection; `ordering-rule-totality-distinct-skill.yaml`'s
-  Elevated/Standard/tie gap). Four of the ten dispatches also ran a Blind
-  spot pass that surfaced a real, distinct, domain-specific gap
-  unprompted (credential redaction in CI-log output; reviewer-directed
-  content injected into a reviewed artifact; ticket-triage
-  starvation/escalation policy soundness; citation fabrication, on this
-  fixture too) -- and the remaining six explicitly said "no rubric
-  gap/blind spot found" rather than either staying silent or inventing
-  one, on targets where none applied. Zero over-firing, zero missed
-  required finding, across every dispatch collected. This session hit its
-  own dispatch rate limit before a matched-methodology *before* run could
-  be completed for these 5 (only the historical, real-harness-measured
-  baseline of 1.0 each exists for "before") -- so a clean full 6-fixture
-  strict-improvement number is **not claimed here**; mixing this
-  session's proxy-harness after-scores against those fixtures' original
-  real-harness before-scores would measure harness fidelity, not the
-  edit, and this file does not present that mixed number as a gate
-  result.
+1. Two fixture assertions were themselves buggy: `blind-spot-pass-*`'s
+   `output_contains: ["blind spot"]` was case-sensitive against a
+   dispatch that (correctly, per the rubric's own `### Blind spot pass`
+   heading) wrote `## Blind spot pass`, and all three new fixtures'
+   `output_not_contains: ["tenth dimension"]` false-failed a dispatch
+   that correctly wrote "not a tenth dimension" to *deny* inventing one.
+   Both fixed: the positive assertions now match the rubric's own
+   prescribed capitalization (`"Blind spot pass"`), and the negative
+   assertion now requires an affirmative invented-dimension phrase
+   (`"adding a tenth dimension"`) rather than banning the whole phrase
+   regardless of negation.
+2. A first attempt at the gate hit this session's own dispatch rate
+   limit before a matched-methodology *before* run could complete for 5
+   of 6 selection fixtures, leaving only a partial record (the
+   purpose-built fixture's matched pair, plus qualitative-only evidence
+   for the rest). That limit cleared later in the same session; the
+   gate below is the complete re-run against the corrected fixtures, not
+   the partial one.
 
-**KEEP**, on the strict matched-methodology improvement for the
-purpose-built fixture plus the qualitative zero-regression /
-zero-over-firing finding across the other five -- not on a clean
-full-split numeric comparison, which this session's tooling could
-not produce. Named as future work: re-run all 6 selection fixtures'
-*before* state under this same explicit-file-read methodology (once this
-session's dispatch limit resets, or once `evaluating-skill-quality` is
-actually installed as a registered plugin in a dispatching harness) to
-replace this partial record with a clean full-split number.
+**Full selection-split result, matched methodology, both directions, all
+6 fixtures, one fresh dispatch per fixture per side (2 for
+`blind-spot-pass-generalizes.yaml`, averaged to one fixture-level score;
+1 each for the other 5), scored with
+`skills/gated-skill-edits/scripts/score_contract.py`:**
+
+| Fixture | Before | After |
+|---|---|---|
+| `edge.yaml` | 1.000000 | 1.000000 |
+| `mechanism-fit-subagent.yaml` | 1.000000 | 1.000000 |
+| `third-party-not-authoritative.yaml` | 0.888889 | 0.888889 |
+| `scoring-axis-uncontrolled-speed-claim.yaml` | 1.000000 | 1.000000 |
+| `ordering-rule-totality-distinct-skill.yaml` | 1.000000 | 1.000000 |
+| `blind-spot-pass-generalizes.yaml` | 0.750000 (mean of 0.75, 0.75) | 1.000000 (mean of 1.00, 1.00) |
+
+Selection mean: **before 0.939815 -> after 0.981482**. Run via
+`score_contract.py --compare-to 0.939815 --scores after-scores.txt`:
+`0.981482 KEEP`. The 5 pre-existing fixtures tie exactly (no regression,
+no improvement -- expected, since the edit adds a section and one
+sentence and touches nothing those fixtures assert on); the entire
+improvement comes from `blind-spot-pass-generalizes.yaml`, the fixture
+built to test this exact change, moving cleanly from 0.75 to 1.00 on both
+independent runs once the assertion bug above was fixed. Every after-run
+dispatch across all 6 fixtures also independently confirmed no
+Blind-spot-pass over-firing: 4 of the fixtures' after-dispatches
+correctly found and named a real, distinct, unprompted domain-specific
+gap (fabrication risk, credential redaction, reviewer-injected content,
+ticket-triage policy soundness), and the rest correctly said no gap was
+found on targets where none applied.
+
+**KEEP.** Strict improvement, matched methodology, complete 6-fixture
+selection split -- not a partial or disclosed-limitation record.
