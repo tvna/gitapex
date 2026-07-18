@@ -169,21 +169,41 @@ Per invocation context:
 | CI job step | No | -- | Non-interactive path, unchanged (below). |
 | MCP server subprocess (stdio, #126 -- least trusted) | No hearing on gitapex's side | An MCP client may hold whatever conversation it likes on its own side; gitapex neither knows nor cares | Per #131 principles 1-2, a client-side conversation earns zero trust; whatever the client concluded, the only things gitapex ever accepts remain #127's validated inputs. |
 
-The trust argument is short because the interface is so narrow.
-Assume the hearing agent is compromised, or steered by adversarial
-text it ingested (a poisoned reference repo, an injected issue body)
--- #131 principle 4. What can it reach? The hearing's output is a
-prose recommendation document. It writes no generated config, selects
-no decision-table row, and confers no enforcement; a malicious
-recommendation must still survive the operator's review and the
-merge-gated policy-authoring path (with CODEOWNERS,
-`bypass_actors: []`, and required review -- #127's floors) before any
-gate exists. The blast radius of a fully adversarial hearing is a bad
-suggestion in a document a human reviews -- which is the same blast
-radius as any untrusted text this repo's CLAUDE.md section 2 already
-governs, and the hearing skill instructs the agent to treat all
-reference material it reads during the hearing as untrusted data
-accordingly.
+The trust argument covers what the hearing's *content* can do, not
+what the *session running it* can do -- those are two different
+claims, and only the first is this design's to make. Assume the
+hearing agent is compromised, or steered by adversarial text it
+ingested (a poisoned reference repo, an injected issue body) -- #131
+principle 4.
+
+For the content path: the hearing's output is a prose recommendation
+document. It writes no generated config, selects no decision-table
+row, and confers no enforcement; a malicious recommendation that
+tries to reach `.gitapex/policies/**` or `.gitapex/ssot.json` must
+still go through a PR and survive the operator's review and the
+merge-gated policy-authoring path (CODEOWNERS, `bypass_actors: []`,
+required review -- #127's floors, which apply to every write to those
+paths regardless of who or what proposes it, not specifically to the
+hearing). That part of the blast radius is bounded to a bad
+suggestion in a document a human reviews -- the same blast radius as
+any untrusted text CLAUDE.md section 2 already governs.
+
+For the session path: a `SKILL.md` instruction cannot restrict the
+tool calls of the agent it is instructing if that agent is the
+compromised component -- CODEOWNERS protects what merges, not what a
+compromised session can otherwise do with its ambient tool access
+(local file writes, outward GitHub calls, anything else the harness
+session is permitted). This design does not claim to close that gap;
+it is #131's general assume-breach problem for any harness session,
+hearing or not, and solving it is out of scope here. What this design
+does do, narrowly, for the one outward-write capability the hearing
+itself introduces (Stage 6's issue-write step): gate it behind an
+explicit per-write operator confirmation rather than letting the
+agent call it unattended, and cap what it is allowed to disclose (see
+Stage 6). That narrows this design's own residual surface; it does
+not substitute for a session-level least-privilege boundary, which
+remains a named, open gap belonging to #131/#126 rather than to the
+hearing.
 
 ## The staged hearing flow
 
@@ -248,11 +268,23 @@ The source's Brainstorms technique, near-verbatim in its churn
 example's shape: "search the codebase and brainstorm N candidate
 domain gates we could add, from cheapest to most ambitious. I'll
 tell you which ones resonate." The agent proposes concrete candidate
-gates grounded in Stages 1-2 (e.g., for a payments domain: an
-output-filtering gate on card-data-shaped strings in governed paths;
-for a health domain: a data-handling advisory gate on files matching
-the repo's records module), each with what it would govern, what it
-would cost, and what it would NOT catch. This is the unknown-knowns
+gates grounded in Stages 1-2, each pitched at the input contract the
+candidate's `kind` actually has access to (#125's `change/v1`: path
+metadata, commit provenance, PR title/body/message -- never file
+contents, which need a separate specific-file/script read outside
+`change/v1`): e.g., for a payments domain, cheapest-first, (a) a
+`kind: opa-rego` path-scoped gate over `change/v1` that requires
+verified commit provenance on any diff touching the repo's payments
+module (path metadata + provenance only, no content read), then (b)
+if that resonates, a costlier `kind: script` gate that reads the
+changed files under that path directly to flag card-data-shaped
+strings -- the content-matching idea the operator will likely reach
+for first, but it needs the specific-file read, not a pure
+`change/v1` rule; for a health domain: a `kind: script` data-handling
+advisory gate on files matching the repo's records module (also a
+specific-file read, for the same reason). Each candidate states what
+it would govern, what it would cost, and what it would NOT catch.
+This is the unknown-knowns
 stage: the operator recognizes "yes, that one" from candidates they
 could never have specified cold. The source's scope warning applies
 and the skill encodes it: brainstorming prevents setting too narrow
@@ -325,15 +357,39 @@ Then the source's Implementation-notes and Pitches-and-explainers
 close: the agent packages the hearing record -- the domain
 characterization in the operator's words, the recommended gates with
 rationale, the rejected candidates and why, and open questions the
-hearing could not resolve -- into (a) the advisory document itself
-and (b) the body of each issue opened for an accepted
-recommendation (one issue per gate, per this repo's
-issue-before-branch discipline), so the eventual gate PR's reviewers
-start with the operator's unknowns already answered -- the source's
-stated purpose for the technique, and CLAUDE.md section 6's
-decision-brief requirement met by the same artifact. F1 note: all of
-this is prose authored through ordinary review, never binary-emitted,
-never machine-read; no free text has entered any generated artifact.
+hearing could not resolve -- into (a) the advisory document itself,
+which stays local (in the repo's working tree / a branch the operator
+controls, never auto-pushed) and may carry the hearing's full detail,
+and (b) a **redacted, minimum-necessary summary** in the body of each
+issue opened for an accepted recommendation (one issue per gate, per
+this repo's issue-before-branch discipline) -- naming only what the
+gate governs and why, never reproducing prior-incident detail,
+regulated-data specifics, or verbatim operator answers that do not
+serve reviewer buy-in. Interview answers about prior incidents,
+regulated data classes, or prohibited agent actions can be sensitive;
+a public or broadly visible issue tracker is not the advisory
+document's access boundary, so the two artifacts are not
+interchangeable copies of the same content.
+
+Opening the issue is itself gated, not automatic: the agent drafts
+the redacted summary and shows it to the operator for an explicit
+go/no-go before calling the issue-write tool -- the same
+TTL-bounded-confirmation shape #138's Gate 5 already uses for other
+irreversible-ish operations, applied here because issue creation is
+an outward, harness-initiated write that no merge gate reviews before
+it happens. This is a deliberately narrow scope for the harness
+session's issue-write authority during the hearing: it does not
+extend to editing `.gitapex/policies/**` or `.gitapex/ssot.json`
+directly (those stay behind the ordinary PR-required,
+`bypass_actors: []`, CODEOWNERS-reviewed path already established as
+a floor), and it does not extend to opening issues, or any other
+outward write, without the operator's explicit per-write
+confirmation -- narrowing, not relying on, the "a malicious
+recommendation must still survive review" argument above, since that
+argument only covers state that flows through a merge, not a direct
+issue-write call. F1 note: all of this is prose authored through
+ordinary review, never binary-emitted, never machine-read; no free
+text has entered any generated artifact.
 
 ## Technique-to-stage map (source coverage, at a glance)
 
