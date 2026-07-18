@@ -185,8 +185,14 @@ registry and evaluator exist.
 
 ## Open risks
 
-- MCP protocol transport-lifecycle specifics should be verified against
-  the live spec at modelcontextprotocol.io before implementation.
+- ~~MCP protocol transport-lifecycle specifics should be verified against
+  the live spec at modelcontextprotocol.io before implementation.~~
+  **Resolved (2026-07-18):** verified against the spec's canonical
+  source (spec revision 2025-11-25, newer than this doc's original
+  drafting) -- see the verification addendum below. All four checked
+  claims verified; one small design note added (tool-result error
+  mapping) plus one small piece of good news (native OAuth is HTTP-only
+  by spec, so this doc's stdio-only design needs zero auth layer at all).
 - The residual gap this analysis explicitly scopes out (a misconfigured
   hook could be bypassed by a client that ignores it) is real but assigned
   to the adopter's sandbox/execution environment, not to gitapex itself.
@@ -363,6 +369,59 @@ doc found five concrete gaps.
 No gap was found in the stdio-only transport decision itself (HTTP/SSE
 remains correctly rejected) or in the advisory-not-enforcement framing
 (F4's fix preserves it) -- reviewed, not silently skipped.
+
+## Addendum (2026-07-18): MCP protocol spec verification
+
+Verified against the spec's canonical source (revision 2025-11-25).
+
+- **Transport naming: VERIFIED.** stdio is still called stdio (client
+  subprocess, JSON-RPC over stdin/stdout, no session-ID mechanism). The
+  earlier speculation that HTTP/SSE was renamed is CONFIRMED: it is now
+  "Streamable HTTP" -- still a persistent, independent, multi-client
+  network listener (origin-header validation required, DNS-rebinding
+  defense), unchanged in kind from what this doc already rejected.
+- **stdio session lifecycle: VERIFIED.** Matches this doc's "session-
+  scoped child process, dies with the session, no persistent listener"
+  model exactly. Spec shutdown sequence: client closes the input stream,
+  waits for exit or sends SIGTERM, SIGKILL if still running -- an
+  ordinary subprocess lifecycle, as assumed.
+- **Tool call / error mechanics: VERIFIED, one design note added.** The
+  spec defines exactly two error layers: protocol errors (standard
+  JSON-RPC `error` object) and tool execution errors (`isError: true` in
+  an otherwise-successful response). Mapping for `evaluate_gate`'s
+  three-valued result: `pass`/`deny` are both SUCCESSFUL tool executions
+  (a deny verdict is a valid gate result, not an execution failure) and
+  belong in `structuredContent` under a declared `outputSchema`; `error`
+  (the engine itself could not evaluate) maps to `isError: true`.
+  **Correction to keep in mind at implementation time: do not model
+  `deny` as `isError: true`** -- the spec reserves that flag for
+  execution failure, and conflating a policy denial with an execution
+  error would misuse the protocol's own error-signaling contract.
+- **Native OAuth: VERIFIED, favorable finding.** The spec defines an
+  OAuth 2.1-based authorization flow (PKCE mandatory, RFC 9728/8414/
+  7591/8707/6750) -- but explicitly scopes it to HTTP transports only:
+  "Implementations using an STDIO transport SHOULD NOT follow this
+  specification, and instead retrieve credentials from the environment."
+  Since this doc's design is stdio-only, **no auth layer is needed at
+  all** for the advisory tools as designed -- the earlier "MCP-standard
+  OAuth is the likelier first answer" note (in the identity-layer
+  discussion referenced from #125's AGT addendum) only becomes relevant
+  if this doc's HTTP/SSE rejection is ever revisited, which it is not.
+
+**New, not requested but noted for the operator:** the 2025-11-25
+revision adds experimental Tasks (durable/polling requests -- relevant
+only if `evaluate_gate` ever becomes long-running, which it is not
+designed to be) and Client ID Metadata Documents (URL-as-client-ID
+registration, strengthening the OAuth-over-SPIFFE reasoning already on
+record). Neither requires a change to this doc's design; both are noted
+as future-relevant context, not action items.
+
+Verification method note: direct fetches to `modelcontextprotocol.io`
+were blocked by this environment's egress proxy policy; verification
+used the spec's canonical GitHub source
+(`modelcontextprotocol/modelcontextprotocol`, `main`, matching the
+2025-11-25 dated revision) instead -- same source of truth, different
+access path.
 
 ## Non-goals
 
