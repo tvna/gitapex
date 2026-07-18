@@ -86,6 +86,45 @@ def test_malformed_row_extra_column_is_drift(tmp_path):
     assert any("malformed table row" in p for p in problems)
 
 
+def test_missing_table_header_is_drift(tmp_path):
+    path = tmp_path / "inventory.md"
+    path.write_text(f"# Security control inventory\n\n{HEADING}{_complete_rows()}")
+    problems = gate.find_drift(path)
+    assert any("table header" in p or "table separator" in p or "header/separator" in p for p in problems)
+
+
+def test_no_table_at_all_is_drift(tmp_path):
+    path = tmp_path / "inventory.md"
+    path.write_text(f"# Security control inventory\n\n{HEADING}Just prose, no table.\n")
+    problems = gate.find_drift(path)
+    assert any("header/separator row missing" in p for p in problems)
+
+
+def test_header_with_lead_in_prose_is_still_recognized(tmp_path):
+    """Prose before the header/separator, as in the real inventory doc,
+    must not be mistaken for the header row itself."""
+    path = tmp_path / "inventory.md"
+    prose = "Source: OWASP GenAI Security Project, some citation text.\n\n"
+    path.write_text(f"# Security control inventory\n\n{HEADING}{prose}{TABLE_HEADER}{_complete_rows()}")
+    assert gate.find_drift(path) == []
+
+
+def test_malformed_header_row_is_drift(tmp_path):
+    path = tmp_path / "inventory.md"
+    bad_header = "| Category | State | Notes |\n|---|---|---|\n"
+    path.write_text(f"# Security control inventory\n\n{HEADING}{bad_header}{_complete_rows()}")
+    problems = gate.find_drift(path)
+    assert any("malformed table header row" in p for p in problems)
+
+
+def test_missing_separator_row_is_drift(tmp_path):
+    path = tmp_path / "inventory.md"
+    header_only = "| ASI | Status | Rationale |\n"
+    path.write_text(f"# Security control inventory\n\n{HEADING}{header_only}{_complete_rows()}")
+    problems = gate.find_drift(path)
+    assert any("separator" in p for p in problems)
+
+
 def test_unrecognized_id_is_drift(tmp_path):
     path = _write(tmp_path, _complete_rows() + "| ASI11 Not A Real Category | covered | N/A. |\n")
     problems = gate.find_drift(path)

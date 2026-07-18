@@ -27,6 +27,8 @@ VALID_STATUSES = {"covered", "partially covered", "not covered", "not applicable
 _ROW_RE = re.compile(r"^\|(?P<id>[^|]+)\|(?P<status>[^|]+)\|(?P<rationale>[^|]+)\|\s*$")
 _ID_TOKEN_RE = re.compile(r"\bASI\d{2}\b")
 _HEADER_ID_RE = re.compile(r"^(asi|id)$", re.IGNORECASE)
+_HEADER_ROW_RE = re.compile(r"^\|\s*(?:ASI|ID)\s*\|\s*Status\s*\|\s*Rationale\s*\|\s*$", re.IGNORECASE)
+_SEPARATOR_ROW_RE = re.compile(r"^\|(?:\s*:?-+:?\s*\|){3}\s*$")
 
 
 def _extract_section(text: str) -> str | None:
@@ -41,6 +43,28 @@ def _extract_section(text: str) -> str | None:
         len(lines),
     )
     return "\n".join(lines[start + 1 : end])
+
+
+def _validate_table_header(section: str) -> str | None:
+    """Return an error message if the table's header/separator rows are
+    missing or malformed, else None.
+
+    Without this check, deleting the header/separator rows still leaves
+    row-shaped data lines that `_parse_rows` would happily accept, even
+    though GitHub would render the remaining lines as plain text instead
+    of a table. Looks at the first two ``|``-prefixed lines in the
+    section (skipping any lead-in prose paragraphs), not the section's
+    first two lines outright.
+    """
+    pipe_lines = [line.strip() for line in section.splitlines() if line.strip().startswith("|")]
+    if len(pipe_lines) < 2:
+        return "table header/separator row missing"
+    header, separator = pipe_lines[0], pipe_lines[1]
+    if not _HEADER_ROW_RE.match(header):
+        return f"malformed table header row: {header!r}"
+    if not _SEPARATOR_ROW_RE.match(separator):
+        return f"malformed table separator row: {separator!r}"
+    return None
 
 
 def _parse_rows(section: str) -> tuple[list[tuple[str, str, str]], list[str]]:
@@ -80,6 +104,10 @@ def find_drift(inventory_path: pathlib.Path = INVENTORY_PATH) -> list[str]:
     section = _extract_section(text)
     if section is None:
         return [f"{inventory_path}: missing section heading {SECTION_HEADING!r}"]
+
+    header_problem = _validate_table_header(section)
+    if header_problem:
+        return [f"{inventory_path}: {header_problem}"]
 
     rows, malformed = _parse_rows(section)
     problems: list[str] = []
