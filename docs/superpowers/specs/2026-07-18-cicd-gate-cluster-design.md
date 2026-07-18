@@ -20,20 +20,22 @@ Four Fable subagents were dispatched in parallel against primary sources
 4. a broader survey of the sibling's CI-plane automation for gate
    candidates not already captured by #138 or the retro cluster.
 
-**Provenance note (fact vs. reconstruction):** subagents 2 (protection)
-and 4 (broader survey) are reproduced below near-verbatim from their
-returned reports, each independently grounded in files read in full at
-`/workspace/claude-md`. Subagents 1 (core trigger) and 3 (convergence
-loop) ran earlier in the same session; their full transcripts rotated out
-of the local task-output store before this synthesis pass, so their gate
-JSON below is reconstructed from the session's design record (gate ids,
-cluster names, and policy_sources names as returned) rather than
-re-quoted from primary text. The reconstruction follows the exact schema
-verified live in subagents 2 and 4. This is flagged, not hidden, per
-CLAUDE.md section 2's fact/speculation separation — treat the core-cluster
-and convergence-cluster JSON as **speculation-grade** (schema-consistent,
-not independently re-verified against `auto_retro.py`) until a follow-up
-pass re-reads the source scripts directly.
+**Provenance note (fact vs. reconstruction, updated 2026-07-18):**
+sections 1 and 3 were originally reconstructed from a compacted session
+summary rather than primary source, because the subagent transcripts that
+produced them had rotated out of the local task-output store. A dedicated
+verification pass has since re-read `scripts/auto_retro.py`,
+`scripts/post_merge_retro_append.py`, `scripts/_auto_retro_ledger.py`,
+`scripts/scan_retro_followup_drift.py`, `scripts/_retro_labels.py`,
+`scripts/_trusted_bots.py`, `.github/workflows/post-merge.yml`, and
+`.github/workflows/daily-maintenance.yml` in full at `/workspace/claude-md`
+and corrected every filename, plane, trigger, and label-taxonomy value
+that turned out to be wrong — which was most of them. Sections 1 and 3
+below are now fact-grounded, not speculation-grade; each corrected value
+notes what the original draft claimed versus what the source actually
+shows. Sections 2 and 4 remain as originally reproduced near-verbatim
+from their own subagents, each independently grounded in files read in
+full at `/workspace/claude-md`.
 
 ## Cross-cutting reconciliation
 
@@ -67,29 +69,72 @@ scope" gate 3(a) below reserves the *title prefix* `Merge retrospective:`
 for the CI job only, not a `(auto-retro)` Conventional Commit scope —
 adapt the mechanism, not the literal string.
 
-## 1. Auto-retro core cluster (reconstructed, see provenance note)
+## 1. Auto-retro core cluster (verified 2026-07-18 against `auto_retro.py` et al.)
 
-Post-merge trigger that opens the retrospective issue, plus a dedup check
-so re-triggers (re-runs, retries) don't mint duplicates.
+Post-merge trigger that opens the retrospective issue, an in-process dedup
+check, and a separate agent-facing hint that prevents an interactive
+session from opening a redundant one.
+
+**Corrections from the original draft, each fact-checked against primary
+source:**
+
+1. Draft claimed the opener is `scripts/post_merge_retro_append.py`; the
+   actual CI opener is `scripts/auto_retro.py run`, invoked by
+   `.github/workflows/post-merge.yml`'s `open-retro` job.
+   `post_merge_retro_append.py` is a different mechanism entirely: an
+   agent-side PostToolUse hook on `mcp__github__merge_pull_request` that
+   emits `additionalContext` telling the interactive agent not to open a
+   duplicate retro or redundant repair comment (fail-open). It is real,
+   but it is a third gate, not the opener — added below as
+   `merge-retro-dedup-agent-hint`.
+2. Draft claimed dedup lives in `scripts/_auto_retro_ledger.py`; the
+   actual dedup is `search_retro_issues()` inside `auto_retro.py` itself
+   (query `repo:{repo} type:issue in:title "PR #{n}" "retro"`, open+closed).
+   `_auto_retro_ledger.py` is the repair-free merge-rate ledger (a weekly
+   snapshot), unrelated to dedup.
+3. Draft claimed trigger `pull_request closed (merged=true)`; the actual
+   trigger is `pull_request_target: types [closed]` with a job-level
+   `if: github.event.pull_request.merged == true`.
+4. Draft's policy-input fields were under-specified; confirmed real
+   values: trusted-bot allowlist is `.github/trusted_bots.toml`
+   (fail-open to a hardcoded fallback list); required sections are Scope,
+   Facts, Proposed work, Verification, Acceptance criteria; the retry
+   backoff on the merge SHA is 4 attempts at 2/4/8s. Two skip conditions
+   the draft missed entirely: zero-inline-review-comment merges (recorded
+   in the ledger, no retro opened) and a label-derived false-positive
+   prior (skip when historical FP rate >=0.5, tentative-only >=0.3, with
+   a minimum sample size of 5).
+5. A third daily job the draft missed: `auto_retro.py post-merge-rescan`,
+   a 24-48h checklist rescan on already-opened retros — added below.
 
 ```jsonc
 // policy_sources[]
 { "id": "retro-operations", "path": ".gitapex/policies/retro-operations.toml", "format": "toml",
-  "authority": "auto-retro operational config: dedup search shape, post-merge wait bound, ledger path; identity predicate itself lives in retro-identity, imported not copied" },
+  "authority": "auto-retro operational config: dedup search shape (in:title \"PR #N\" + \"retro\", open+closed), merge-SHA retry backoff (4 attempts, 2/4/8s), post-merge rescan window (24-48h), FP-prior thresholds (skip >=0.5, tentative-only >=0.3, min sample 5); identity predicate itself lives in retro-identity, imported not copied" },
 { "id": "trusted-bots", "path": ".gitapex/policies/trusted-bots.toml", "format": "toml",
-  "authority": "actor allowlist for bot-authored events the auto-retro CI job trusts as merge signals" },
+  "authority": "actor allowlist (exact logins, fail-open to a built-in fallback) whose authored/merged PRs skip retro opening" },
 { "id": "issue-required-sections", "path": ".gitapex/policies/issue-required-sections.toml", "format": "toml",
-  "authority": "required body sections for an auto-opened retro issue (what changed, repair signals, gate provenance)" }
+  "authority": "required body sections for an auto-opened retro issue: Scope, Facts, Proposed work, Verification, Acceptance criteria" }
 
 // gates[]
-{ "id": "post-merge-auto-retro", "kind": "script", "script": "scripts/post_merge_retro_append.py",
-  "rule": "on PR merge, open (or append to, if a matching open retro already exists) a retrospective issue titled per retro-identity, labeled per retro-identity, seeded with required sections",
-  "planes": ["ci"], "trigger": "pull_request closed (merged=true)",
+{ "id": "post-merge-auto-retro", "kind": "script", "script": "scripts/auto_retro.py",
+  "rule": "on merged-PR close, open a retrospective issue titled/labeled per retro-identity, seeded with required sections; skip on retro-PR recursion, trusted-bot actor, existing retro (dedup search), zero inline review comments (ledger row instead), or a high false-positive prior",
+  "planes": ["ci"], "trigger": "pull_request_target closed + if merged==true (subcommand: run)",
   "policy_refs": ["retro-identity", "retro-operations", "trusted-bots", "issue-required-sections"],
   "cluster": "retro-integrity", "tracking_issue": 140 },
-{ "id": "merge-retro-dedup", "kind": "script", "script": "scripts/_auto_retro_ledger.py",
-  "rule": "before opening a new retro issue, search for an existing open issue matching retro-identity's pattern for the same merge; append rather than duplicate",
-  "planes": ["ci"], "trigger": "invoked by post-merge-auto-retro before issue creation",
+{ "id": "merge-retro-dedup", "kind": "script", "script": "scripts/auto_retro.py",
+  "rule": "before opening, search open+closed issues matching retro-identity for the same source PR; an existing match skips creation rather than duplicating (in-process search_retro_issues, not a separate script)",
+  "planes": ["ci"], "trigger": "invoked inside post-merge-auto-retro's run() before issue creation",
+  "policy_refs": ["retro-identity", "retro-operations"],
+  "cluster": "retro-integrity", "tracking_issue": 140 },
+{ "id": "merge-retro-dedup-agent-hint", "kind": "script", "script": "scripts/post_merge_retro_append.py",
+  "rule": "PostToolUse hook on the merge tool: instruct the interactive agent not to open a duplicate retro or redundant repair comment; fallback creation only if the CI opener never ran",
+  "planes": ["posttooluse"], "trigger": "mcp__github__merge_pull_request",
+  "fail_policy": "open",
+  "policy_refs": ["retro-identity"], "cluster": "retro-integrity", "tracking_issue": 140 },
+{ "id": "retro-post-merge-rescan", "kind": "script", "script": "scripts/auto_retro.py",
+  "rule": "rescan an already-opened retro's checklist 24-48h after the triggering merge, catching repair signals that only surfaced after CI settled",
+  "planes": ["ci"], "trigger": "scheduled (daily) + workflow_dispatch (subcommand: post-merge-rescan)",
   "policy_refs": ["retro-identity", "retro-operations"],
   "cluster": "retro-integrity", "tracking_issue": 140 }
 ```
@@ -189,26 +234,45 @@ with a `# retro-close-ack` escape marker.
   "policy_refs": ["retro-identity"], "cluster": "retro-integrity", "tracking_issue": 140 }
 ```
 
-## 3. Retro-convergence cluster (reconstructed, see provenance note)
+## 3. Retro-convergence cluster (verified 2026-07-18 against `scan_retro_followup_drift.py` et al.)
 
 TP/FP feedback loop over closed retro follow-up items, plus a sentinel
 that auto-closes stale retros after a bounded inactivity window, plus the
 label taxonomy both draw on.
 
+**Corrections from the original draft, each fact-checked against primary
+source:**
+
+1. Draft claimed the drift scan runs weekly; the actual schedule is
+   **daily** (`.github/workflows/daily-maintenance.yml`, cron
+   `0 4 * * *`, job `scan`, `scan_retro_followup_drift.py run`).
+2. Draft guessed a 5-label taxonomy of "retrospective, gate-candidate,
+   false-positive, drift-confirmed, sentinel-closed" — the count of 5 was
+   right, every name was wrong. The real taxonomy (`_retro_labels.py`) is
+   `retro:tp`, `retro:fp`, `retro:fp-candidate`, `retro:tentative`,
+   `retro:expired`.
+3. Draft invented `scripts/retro_sentinel.py`; the real sentinel is
+   `scripts/auto_retro.py sentinel`, same workflow, job `scan-and-close`:
+   applies `retro:expired`, posts an idempotency-marker comment, closes as
+   `not_planned`.
+4. Draft claimed `sentinel_inactivity_days=30`; the actual default is
+   **14** (env-overridable). `stale_days=30` for the drift scan itself
+   was correct.
+
 ```jsonc
 // policy_sources[]
 { "id": "retro-convergence-policy", "path": ".gitapex/policies/retro-convergence.toml", "format": "toml",
-  "authority": "label taxonomy (5 labels: e.g. retrospective, gate-candidate, false-positive, drift-confirmed, sentinel-closed), stale_days=30, sentinel_inactivity_days=30" }
+  "authority": "label taxonomy (retro:tp, retro:fp, retro:fp-candidate, retro:tentative, retro:expired), stale_days=30, sentinel_inactivity_days=14 (env-overridable)" }
 
 // gates[]
 { "id": "retro-followup-drift", "kind": "script", "script": "scripts/scan_retro_followup_drift.py",
-  "rule": "scan closed retro follow-up issues for TP/FP convergence signal; flag drift between predicted repair-signal classification and actual outcome",
-  "planes": ["ci"], "trigger": "scheduled (weekly) + workflow_dispatch",
+  "rule": "scan retro follow-up links for TP/FP convergence signal; a not_planned close or unmerged-PR close confirms retro:fp, a 404 or >=stale_days inactivity marks retro:fp-candidate; never overwrite an operator-applied retro:tp/retro:fp",
+  "planes": ["ci"], "trigger": "scheduled (daily 04:00 UTC) + workflow_dispatch (subcommand: run)",
   "policy_refs": ["retro-identity", "retro-convergence-policy"],
   "cluster": "retro-integrity", "tracking_issue": 140 },
-{ "id": "retro-sentinel", "kind": "script", "script": "scripts/retro_sentinel.py",
-  "rule": "auto-close a retro issue after sentinel_inactivity_days of no activity, applying the sentinel-closed label from the shared taxonomy",
-  "planes": ["ci"], "trigger": "scheduled (daily)",
+{ "id": "retro-sentinel", "kind": "script", "script": "scripts/auto_retro.py",
+  "rule": "close an untouched open retro after sentinel_inactivity_days (14) as not_planned: apply retro:expired, post a marker comment for idempotency, then close; retro:expired never feeds the TP/FP prior",
+  "planes": ["ci"], "trigger": "scheduled (daily 04:00 UTC) + workflow_dispatch (subcommand: sentinel)",
   "policy_refs": ["retro-identity", "retro-convergence-policy"],
   "cluster": "retro-integrity", "tracking_issue": 140 }
 ```
@@ -357,15 +421,18 @@ section-5 gap stays visible, don't build it yet.
 - Not designing the workflow-permissions least-privilege scanner #131
   flags as a gap — no sibling artifact exists to adapt from; a future pass
   can design it from scratch if prioritized.
-- Auto-retro core and convergence gate JSON (sections 1 and 3) are
-  speculation-grade per the provenance note above; re-verifying them
-  against `auto_retro.py`/`scan_retro_followup_drift.py` directly is a
-  prerequisite for implementation, not for filing this design.
 
 ## Acceptance criteria
 
-- [ ] All 12 gates (2 core + 3 protection + 2 convergence + 5 broader
-      candidates, one marked deferred) have concrete registry JSON above.
+- [x] Sections 1 and 3 re-verified 2026-07-18 against primary source
+      (`auto_retro.py`, `post_merge_retro_append.py`,
+      `scan_retro_followup_drift.py`, `_retro_labels.py`,
+      `_trusted_bots.py`, and both workflow files); every filename,
+      plane, trigger, and label value corrected to match. No longer
+      speculation-grade.
+- [ ] All 15 gates (4 core + 3 protection + 2 convergence + 5 broader
+      candidates, one marked deferred + 1 rescan gate found during
+      verification) have concrete registry JSON above.
 - [ ] Cluster-naming conflict (`retro-loop`/`retro-integrity`/`retro-convergence`)
       resolved to a single `retro-integrity` tag.
 - [ ] `policy_sources[]` overlap (`retro-conventions`/`retro-identity`)
