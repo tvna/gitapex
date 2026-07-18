@@ -70,6 +70,22 @@ def test_empty_rationale_is_drift(tmp_path):
     assert any("ASI01: empty rationale" in p for p in problems)
 
 
+def test_malformed_row_missing_trailing_pipe_is_drift(tmp_path):
+    """A row-shaped line referencing an ASI ID that doesn't match the
+    3-column shape (e.g. missing the trailing pipe) must not be silently
+    dropped -- it should surface as drift even though the remaining
+    well-formed ASI01 row alone would otherwise look complete."""
+    path = _write(tmp_path, _complete_rows() + "| ASI01 Duplicate | covered | rationale")
+    problems = gate.find_drift(path)
+    assert any("malformed table row" in p for p in problems)
+
+
+def test_malformed_row_extra_column_is_drift(tmp_path):
+    path = _write(tmp_path, _complete_rows() + "| ASI02 Duplicate | covered | rationale | extra |\n")
+    problems = gate.find_drift(path)
+    assert any("malformed table row" in p for p in problems)
+
+
 def test_unrecognized_id_is_drift(tmp_path):
     path = _write(tmp_path, _complete_rows() + "| ASI11 Not A Real Category | covered | N/A. |\n")
     problems = gate.find_drift(path)

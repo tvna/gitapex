@@ -25,6 +25,8 @@ REQUIRED_IDS = [f"ASI{i:02d}" for i in range(1, 11)]
 VALID_STATUSES = {"covered", "partially covered", "not covered", "not applicable"}
 
 _ROW_RE = re.compile(r"^\|(?P<id>[^|]+)\|(?P<status>[^|]+)\|(?P<rationale>[^|]+)\|\s*$")
+_ID_TOKEN_RE = re.compile(r"\bASI\d{2}\b")
+_HEADER_ID_RE = re.compile(r"^(asi|id)$", re.IGNORECASE)
 
 
 def _extract_section(text: str) -> str | None:
@@ -41,21 +43,31 @@ def _extract_section(text: str) -> str | None:
     return "\n".join(lines[start + 1 : end])
 
 
-def _parse_rows(section: str) -> list[tuple[str, str, str]]:
-    """Return (id, status, rationale) for each markdown table row in the
-    section, skipping the header row and the ``---`` separator row."""
+def _parse_rows(section: str) -> tuple[list[tuple[str, str, str]], list[str]]:
+    """Return ((id, status, rationale) rows, malformed row lines) for the section.
+
+    Skips the header row and the ``---`` separator row. A line that looks
+    like a table row referencing an ASI ID (``|``-delimited, containing an
+    ``ASInn`` token) but does not match the required 3-column shape is
+    reported as malformed rather than silently dropped, so a broken or
+    extra-column duplicate row still surfaces as drift instead of vanishing.
+    """
     rows: list[tuple[str, str, str]] = []
+    malformed: list[str] = []
     for line in section.splitlines():
-        match = _ROW_RE.match(line.strip())
+        stripped = line.strip()
+        match = _ROW_RE.match(stripped)
         if not match:
+            if stripped.startswith("|") and _ID_TOKEN_RE.search(stripped):
+                malformed.append(stripped)
             continue
         raw_id = match.group("id").strip()
-        if raw_id.lower() in {"asi", "---", ""} or set(raw_id) <= {"-", " ", ":"}:
+        if _HEADER_ID_RE.match(raw_id) or set(raw_id) <= {"-", " ", ":"}:
             continue
         # First whitespace-delimited token is the ASI ID, e.g. "ASI01 Agent Goal Hijack".
         asi_id = raw_id.split()[0] if raw_id.split() else raw_id
         rows.append((asi_id, match.group("status").strip(), match.group("rationale").strip()))
-    return rows
+    return rows, malformed
 
 
 def find_drift(inventory_path: pathlib.Path = INVENTORY_PATH) -> list[str]:
@@ -69,8 +81,11 @@ def find_drift(inventory_path: pathlib.Path = INVENTORY_PATH) -> list[str]:
     if section is None:
         return [f"{inventory_path}: missing section heading {SECTION_HEADING!r}"]
 
-    rows = _parse_rows(section)
+    rows, malformed = _parse_rows(section)
     problems: list[str] = []
+
+    for bad_row in malformed:
+        problems.append(f"malformed table row (does not match the id|status|rationale shape): {bad_row!r}")
 
     seen: dict[str, int] = {}
     for asi_id, status, rationale in rows:
