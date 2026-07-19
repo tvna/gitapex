@@ -11,12 +11,12 @@ block deterministically.
 
 ## Corpus size and the 2:1:7 caveat
 
-SkillOpt's default split ratio is 2:1:7. At 27 fixtures that ratio gives a
+SkillOpt's default split ratio is 2:1:7. At 30 fixtures that ratio gives a
 selection split of roughly three tasks, too thin to gate a strict
 improve-or-reject decision because three observations provide little ability
 to average out run-to-run variance. Following the precedent already set in
 `skills/scorer-gated-skill-edits/references/worked-example.md` ("the ratio is
-aspirational" for a small fixture count), this split uses a flatter 12:9:6
+aspirational" for a small fixture count), this split uses a flatter 13:10:7
 partition, named explicitly as a deviation from the 2:1:7 default. The
 honest minimal groundwork, per that same worked example, is a larger
 fixture corpus over time, not a smaller gate.
@@ -30,7 +30,8 @@ fixture corpus over time, not a smaller gate.
   `model-effort-tier-fit-unjustified-model.yaml`,
   `portability-declarative-fact-claim.yaml`, `branch-and-step-contracts.yaml`,
   `sentence-level-pruning.yaml`, `progressive-disclosure-placement.yaml`,
-  `heldout-semantic-noop-vs-brevity.yaml`.
+  `heldout-semantic-noop-vs-brevity.yaml`,
+  `capability-assumption-broad-excuses-explanation.yaml`.
 - **selection** (gates acceptance; scored before/after a candidate edit,
   strict improve-or-reject, ties rejected): `edge.yaml`,
   `mechanism-fit-subagent.yaml`, `third-party-not-authoritative.yaml`,
@@ -38,12 +39,33 @@ fixture corpus over time, not a smaller gate.
   `ordering-rule-totality-distinct-skill.yaml`,
   `blind-spot-pass-generalizes.yaml`,
   `model-effort-tier-fit-unjustified-effort.yaml`,
-  `portability-issue-number-citation.yaml`, `heldout-vague-completion.yaml`.
+  `portability-issue-number-citation.yaml`, `heldout-vague-completion.yaml`,
+  `capability-assumption-frontier-flags-explanation.yaml`.
 - **test** (read once, for a final report only, never to motivate or gate
   an edit): `guardrail.yaml`, `no-fabricated-violation.yaml`,
   `portability-classification.yaml`, `blind-spot-pass-not-silent.yaml`,
   `model-effort-tier-fit-justified.yaml`,
-  `portability-legitimate-illustrative-citation.yaml`.
+  `portability-legitimate-illustrative-citation.yaml`,
+  `capability-assumption-adaptive-progressive-disclosure.yaml`.
+
+The three `capability-assumption-*` fixtures were added for issue #183
+(Sub-project B, the capability-assumption grading semantics), for the
+same reason: none of the prior 27 fixtures assert on the new Broad /
+Frontier / Adaptive per-dimension grading effect at all.
+`capability-assumption-broad-excuses-explanation.yaml` sits in train (a
+Broad-declared skill's well-known-concept explanation, motivating the
+dimension-2 Broad bullet -- it was used to calibrate the bullet's wording
+against a live dispatch before the selection fixture was written).
+`capability-assumption-frontier-flags-explanation.yaml` sits in selection
+and uses a distinct domain (database migrations, not flaky tests) and the
+opposite declared level (Frontier, not Broad) with the same shape of
+well-known-concept restatement, so the gate measures whether the check
+generalizes the Frontier direction rather than memorizing the train
+fixture's domain or its Broad-excuses wording.
+`capability-assumption-adaptive-progressive-disclosure.yaml` sits in test
+(read once) and checks the restraint side for the Adaptive-only
+dimension-5 effect: does the review verify a genuine lean-body-plus-depth
+split rather than rubber-stamping any Adaptive declaration.
 
 The two `scoring-axis-*` fixtures were added alongside this split
 specifically because none of the original 9 fixtures assert on
@@ -483,3 +505,140 @@ generalization result on the fixture built to test the new check, two
 unrelated fixture-assertion bugs found and fixed along the way (disclosed,
 not silently patched), and a confirmed restraint result on the held-out
 legitimate-citation fixture.
+
+**Iteration: issue #183, Sub-project B, Capability assumption grading
+semantics.** Candidate edit: add the full per-dimension Broad / Frontier /
+Adaptive grading effect to `references/rubric.md`'s Capability assumption
+section for dimensions 2 (Conciseness), 3 (Degree of freedom), and 9
+(Cross-model robustness), and an Adaptive-only effect for dimension 5
+(Progressive disclosure); state the boundary against Model/effort tier
+fit explicitly in both directions; assign the declaration-vs-pin
+consistency check to Procedure step 4 as its sole owner; update
+`SKILL.md`'s Capability assumption section and step 4 to match; reclassify
+`battle-testing-a-skill` from Broad to Adaptive. Full text: see this PR's
+diff.
+
+Precondition and splits: satisfied (30 fixtures, 13:10:7 with this
+iteration's additions -- see Assignment above).
+
+Methodology, disclosed reuse: the other 9 selection fixtures'
+**before** score for this gate = their **after** score from issue #165's
+already-completed gate above (same committed file state at the time,
+same matched methodology) -- re-deriving it would be exactly the "never
+both" redundancy Contract discipline forbids, EXCEPT for
+`heldout-vague-completion.yaml`, which despite being listed in the
+Assignment since issue #149 was never actually scored in any prior
+iteration's before/after table -- it needed a genuine fresh **before**
+dispatch here for the first time, run against the pinned pre-edit
+snapshot (`git show 228486c:<path>`, identical to `29b4ed0:<path>`, the
+last commit to touch either file). The new selection fixture,
+`capability-assumption-frontier-flags-explanation.yaml`, also needed a
+fresh **before** dispatch against that same pinned snapshot. All 10
+selection fixtures then got a fresh **after** dispatch against the
+post-edit working tree, one fresh subagent per fixture, scored with
+`skills/scorer-gated-skill-edits/scripts/score_contract.py`:
+
+| Fixture | Before | After |
+|---|---|---|
+| `edge.yaml` | 1.000000 (reused, #165 after) | 1.000000 |
+| `mechanism-fit-subagent.yaml` | 1.000000 (reused, #165 after) | 1.000000 |
+| `third-party-not-authoritative.yaml` | 1.000000 (reused, #165 after) | 1.000000 |
+| `scoring-axis-uncontrolled-speed-claim.yaml` | 1.000000 (reused, #165 after) | 0.857143 |
+| `ordering-rule-totality-distinct-skill.yaml` | 1.000000 (reused, #165 after) | 1.000000 |
+| `blind-spot-pass-generalizes.yaml` | 1.000000 (reused, #165 after) | 1.000000 |
+| `model-effort-tier-fit-unjustified-effort.yaml` | 1.000000 (reused, #165 after) | 1.000000 |
+| `portability-issue-number-citation.yaml` | 1.000000 (reused, #165 after) | 1.000000 |
+| `heldout-vague-completion.yaml` | 1.000000 (fresh, first-ever gate) | 1.000000 |
+| `capability-assumption-frontier-flags-explanation.yaml` | 0.750000 (fresh) | 1.000000 (fresh) |
+
+Selection mean: **before 0.975000 -> after 0.985714**. Run via
+`score_contract.py --compare-to 0.975000 --scores after-scores.txt`:
+`0.985714 KEEP`.
+
+`scoring-axis-uncontrolled-speed-claim.yaml` dipped from 1.000000 to
+0.857143 (6/7 assertions) -- checked directly, this is the same class of
+run-to-run subagent wording variance already documented twice above for
+this exact fixture (issue #149's "6.5s/$0.03" paraphrase miss): this
+round's after-dispatch answered the dimension-8 cost/success question
+correctly and in full but never happened to mention running
+`check_skill_shape.py`, an assertion unrelated to anything this edit
+touches (the edit only changes the Capability assumption and Model/effort
+tier fit sections; this fixture exercises dimension 8 alone). Disclosed
+rather than silently rerun until it passed; it does not change the KEEP
+outcome.
+
+The purpose-built fixture, `capability-assumption-frontier-flags-explanation.yaml`,
+moved from 0.750000 (before: the pre-edit rubric has no Broad/Frontier/
+Adaptive calibration at all, so the before-dispatch correctly failed the
+excerpt's step 1 against the *generic* "explaining what a well-known
+format or tool is" Fail example -- a real, cited fail, but one that never
+uses or needs the word "sprawl," since the pre-edit rubric's own
+"sprawl" category is specifically "branch-specific detail paid on every
+route" and does not describe a single non-branching sentence) to
+1.000000 (after: the post-edit dispatch reached the identical bottom-line
+verdict -- still a fail -- but by directly quoting the new Frontier
+bullet's own relabeling of this exact failure shape as "sprawl even
+where a Broad-declared skill would be excused for the identical
+sentence"). This is a genuine, content-driven improvement, not an
+engineered one: the before/after dispatches independently reached the
+same PASS/FAIL direction (both correctly fail the excerpt) but ground it
+in materially different rubric text, exactly as the edit intends -- the
+fixture's assertions score the *reasoning path* (does the review cite
+the new Frontier calibration), not merely the final verdict word.
+
+**Fixture bug found and fixed along the way, disclosed:**
+`capability-assumption-frontier-flags-explanation.yaml`'s first draft
+banned bare `"clean pass"` in `output_not_contains` -- a negation trap of
+exactly the class documented earlier in this log (issue #165's
+`model-effort-tier-fit-justified.yaml` casing bug, the #149
+`tenth dimension` bug): a *correct* denial naturally writes "**Not a
+clean pass**," which still contains the banned substring "clean pass,"
+so the assertion would have false-failed the correct verdict. Found
+during this same gate run (before any selection score was banked, so no
+motivating-from-selection leak), fixed by tightening the banned phrase to
+the affirmative-only `"is a clean pass"` -- a wrong-but-plausible
+"this is a clean pass" answer still trips it, while "Not a clean pass"
+does not contain that substring. Re-scored after the fix: 1.000000,
+matching the number reported in the table above (the fix was applied
+before the table's numbers were recorded, not after).
+
+**Restraint check (test split, read once):**
+`capability-assumption-adaptive-progressive-disclosure.yaml` -- a
+triage-log-anomalies excerpt declaring `capabilityAssumption: Adaptive`
+with a genuinely lean-looking body and a substantial (240-line)
+referenced decision tree, designed to check whether the new
+Adaptive-only dimension-5 effect verifies the split rather than
+rubber-stamping the declaration. Result: the after-edit dispatch did
+**not** rubber-stamp it -- it explicitly declined to accept the 240-line
+reference's contents on the paraphrase given, and separately found a
+real, citable gap against the rubric's own new Adaptive bullet ("the
+body must actually be lean by this dimension's existing tests (common
+case reachable without opening a reference...)"): the excerpt's common
+case (classify any reported anomaly) cannot complete from the body
+alone, since the classification logic lives entirely in the reference,
+so "common case reachable without opening a reference" fails even though
+"no forced *multi*-file read" passes. This is a stronger restraint result
+than the clean pass this fixture was originally built to elicit: it is
+direct, unprompted evidence the new check has real teeth against a
+plausible-looking but not-fully-qualifying Adaptive declaration, not
+merely a rubber stamp for any skill that sets the enum value. Per the
+test-split rule, the fixture's own excerpt is left unchanged rather than
+retrofitted to force a clean-pass outcome now that its actual result is
+known.
+
+**Falsifiable acceptance criterion (issue #183, and the design spec's
+Sub-project B sequencing section):** a live before/after re-grade of the
+real `battle-testing-a-skill`, reclassified from Broad to Adaptive in
+this same change, is recorded separately in
+`docs/skill-eval-status.md`'s `battle-testing-a-skill` section (not
+repeated here, since that re-grade is against a real shipped skill, not
+a held-out fixture) -- see that file for the specific dimension verdict
+that changed.
+
+**KEEP.** Strict improvement on the selection split (one real, disclosed,
+edit-unrelated dip; two fixtures scored for the first time), a genuine
+content-driven generalization result on the fixture built to test the new
+check (same verdict direction, different and correct rubric grounding), a
+negation-trap fixture bug found and fixed before any score was banked,
+and a restraint result on the held-out Adaptive fixture that is stronger
+evidence of rigor than the clean pass it was designed to check for.

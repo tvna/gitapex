@@ -370,6 +370,15 @@ as Skill-step vs. bundled script above -- report it when it fires, but it
 is not the whole-review headline and does not by itself block a *mature*
 verdict.
 
+This check never cross-references the target's declared
+`capabilityAssumption` -- it runs at Procedure step 2, before the sidecar
+is even read at step 4, and stays declaration-independent by design. The
+declaration-vs-pin consistency check (does a `Frontier` declaration
+contradict a weak-tier pin found here) is [Capability
+assumption](#capability-assumption)'s job at step 4, not this one's;
+Contract discipline's "never both" rule is why the check has exactly one
+owner rather than being duplicated in both places.
+
 ## Portability level
 
 One of this review's own preconditions (see [Contract
@@ -434,10 +443,138 @@ before grading (see [Contract discipline](#contract-discipline)), read from
 the skill's `gitapex_metadata.yaml` sidecar. The three levels are defined
 in `SKILL.md`, checkable without opening this file.
 
-The per-dimension grading effect of Broad / Frontier / Adaptive on
-dimensions 2, 3, 5, and 9 is specified in sub-project B and is not yet part
-of this rubric. Until it lands, record the declared level as established
-fact and grade those dimensions as before.
+This axis pins nothing and never executes: it only calibrates how
+strictly dimensions 2, 3, 5, and 9 grade, below. Distinct from
+[Model/effort tier fit](#modeleffort-tier-fit): that check judges a
+model-or-effort *pin the target's own content makes*, which the invoking
+agent acts on at runtime, and it fires only when such a pin actually
+exists in the target's prose or a bundled Workflow script -- an absence
+is not a finding, and zero of this repository's 17 skills contain one, so
+tier fit currently has no coverage at all over the population this axis
+exists for. Capability assumption instead recalibrates the *reviewer's*
+strictness against the declared regime, with full coverage over every
+skill regardless of whether that skill pins anything. Never merge the two
+checks and never let one substitute for the other: a skill can declare
+Frontier and pin nothing (the common case), or declare Broad and
+legitimately pin a strong model for one fragile step, without either
+being a defect on its own.
+
+**Declaration-vs-pin consistency has exactly one owner: this precondition
+step (`SKILL.md` Procedure step 4), not Model/effort tier fit at step
+2.** Tier fit stays declaration-independent by design -- it runs before
+the sidecar is even read, so it cannot see the declaration and must not
+be asked to cross-check against it. Once step 4 reads both the
+declaration and, from step 2's already-completed findings, whatever pin
+(if any) the target's own content makes, check the pair for
+contradiction: a skill declaring `Frontier` (authored assuming a
+strong-reasoning model) that pins a weak model or a low effort level onto
+its own judgment-bearing step is stating two incompatible things about
+itself in two different places. Name that contradiction here, once, as a
+precondition finding; never re-derive it inside dimension 2, 3, 5, or 9's
+walk, and never leave tier fit silent about the pin itself -- tier fit
+still independently reports whether the pin is justified by the source's
+own difficulty criteria (a different question from "does this pin match
+the declaration"), it simply does not own the cross-check. A `Broad`- or
+`Adaptive`-declared skill pinning a strong model for one step is not by
+itself a contradiction (reserving strength for one fragile step is
+compatible with staying broadly effective elsewhere); only a `Frontier`
+declaration paired with a weak-tier pin asserts something the declaration
+itself contradicts.
+
+**Per-dimension grading effect:**
+
+- **Dimension 2 (Conciseness).**
+  - **Broad** -- grade against the stated target: a weak or economical
+    model, or a constrained harness. Explanation that would be redundant
+    for a strong model (spelling out a rule's rationale, restating a
+    definition, walking through why a step matters) is not automatically
+    sprawl or duplication when the declared target plausibly still needs
+    it. Still fail relevance, duplication, sediment, and true sprawl
+    (branch-specific detail paid on every route) exactly as before --
+    Broad changes what counts as *necessary* explanation, not whether an
+    irrelevant or duplicated sentence is excused.
+  - **Frontier** -- grade at full strictness: the declared target already
+    knows fundamentals, so explaining a well-known concept, restating a
+    definition, or walking through routine rationale is sprawl even where
+    a Broad-declared skill would be excused for the identical sentence. A
+    Frontier skill earns no leniency for verbosity authored "just in
+    case" a weaker model reads it -- it explicitly does not target one.
+  - **Adaptive** -- grade the `SKILL.md` body itself at Frontier-level
+    strictness (the body is what a strong model reads directly), but do
+    not charge the body for depth that correctly lives in `references/`
+    instead -- that split is dimension 5's question, not this one's. A
+    restatement *inside the body* of material the linked reference
+    already covers is still sprawl; material that exists only once, in
+    the reference, is not double-counted here.
+- **Dimension 3 (Degree of freedom).**
+  - **Broad** -- the existing fragility test (does prescription match the
+    operation's fragility) still applies, but a narrower-than-strictly-
+    necessary prescription is graded more leniently: a weak model
+    benefits from an exact sequence even on some tasks a stronger model
+    could handle with open judgment, so low-freedom phrasing for a
+    medium-freedom operation is not on its own a finding. A mismatch in
+    the other direction -- loose prose for a genuinely fragile,
+    irreversible operation -- is ungraded by this axis and still fails
+    exactly as before; Broad never excuses under-constraining a fragile
+    step.
+  - **Frontier** -- grade at full strictness in the over-constraining
+    direction: rigid step-by-step phrasing for an open-ended judgment
+    task is a clearer defect here than the identical text under Broad,
+    because the declared target does not need the hand-holding and a
+    smart model forced through unnecessary steps is exactly the
+    over-prescription risk this axis exists to catch. Under-constraining
+    a fragile operation still fails identically to Broad.
+  - **Adaptive** -- grade the body at Frontier-level freedom expectations
+    (the strong model reads the body directly and should get judgment
+    room there); the deeper `references/` material a weaker model pulls
+    on demand may be more prescriptive without penalty, mirroring Broad's
+    leniency but confined to the references rather than the body.
+- **Dimension 9 (Cross-model robustness).**
+  - **Broad** -- the full Haiku/Sonnet/Opus spread applies as written:
+    the skill must give a weak tier *enough* guidance, and failing to do
+    so is a real, gradeable gap, not an unmeasured one.
+  - **Frontier** -- the weak-tier bar is out of scope by declaration: a
+    Frontier skill states it does not target Haiku or an equivalent
+    constrained tier, so failing to give Haiku enough guidance is not a
+    dimension-9 finding for it. The Opus over-explaining check still
+    applies in full -- a Frontier declaration raises the floor, it does
+    not lower the ceiling.
+  - **Adaptive** -- the weak-tier bar is satisfied differently, not
+    waived: confirm Haiku's needs are met by the `references/` material
+    on demand, not by the same lean body Opus reads directly. If the body
+    alone would leave a weak tier under-guided and the references do not
+    actually supply what is missing (present but thin, or not linked at
+    the point a weaker tier would need them), that is a dimension-9
+    finding specific to Adaptive -- the declared strategy only counts
+    once it is verified to work, not merely asserted.
+- **Dimension 5 (Progressive disclosure) -- Adaptive only.** Broad and
+  Frontier leave this dimension's grading completely unchanged from the
+  text above: neither level says anything about how content should be
+  layered, only about which model tier the content assumes, so neither
+  gives this dimension a new rule to apply. Adaptive is different because
+  its own definition -- "a lean body a strong model runs directly, plus
+  deeper `references/` a weaker model pulls on demand" -- *is* a
+  progressive-disclosure strategy, not merely a capability target;
+  declaring Adaptive is itself a claim about layering, and this dimension
+  is where that claim gets checked:
+  - The body must actually be lean by this dimension's existing tests
+    (common case reachable without opening a reference, no forced
+    multi-file read) -- an Adaptive declaration paired with a bloated
+    body that already contains the deferred depth is a contradiction
+    between the declaration and the artifact, named here rather than
+    silently accepted because the sidecar says so.
+  - The deferred depth must actually be present and reachable in
+    `references/`, not merely implied -- a lean body with no reference
+    file substantial enough to carry what a weaker tier would need is an
+    Adaptive declaration with nothing behind it, the same
+    declaration-vs-reality gap the Portability level section already
+    checks for Mixed.
+  - Where both hold, Adaptive is the one declared level for which a lean
+    body is itself the intended, correct shape rather than a fixed style
+    preference -- do not flag the same leanness dimension 2's Frontier
+    bullet already rewards as a dimension-5 finding too; each dimension
+    keeps its own question (2: is the body concise; 5: is the split real
+    and reachable).
 
 ## 1. Discovery -- name and description
 

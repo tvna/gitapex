@@ -1,0 +1,54 @@
+id: evaluating-skill-quality-capability-assumption-adaptive-progressive-disclosure
+name: Adaptive Declaration Must Be Verified Against a Real Lean-Body-Plus-Depth Split, Not Assumed
+description: The reviewed SKILL.md declares capabilityAssumption Adaptive and genuinely has a lean body plus a substantial references/ file, but the review must still verify dimension 5's Adaptive-specific checks (body actually lean, deferred depth actually present and reachable) rather than passing it purely because the sidecar says Adaptive. Restraint check on the held-out test split, read once -- confirms the new Adaptive-only dimension-5 effect does not just rubber-stamp any Adaptive declaration.
+tags:
+  - quality
+  - progressive-disclosure
+  - capability-assumption
+  - test
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "triaging-log-anomalies". Its gitapex_metadata.yaml sidecar
+    declares:
+
+    spec:
+      portability: Portable
+      capabilityAssumption: Adaptive
+
+    ---
+    name: triaging-log-anomalies
+    description: Triage an unusual pattern in application logs. Use when the user reports a spike in errors or an unfamiliar log pattern.
+    ---
+
+    # Triaging Log Anomalies
+
+    ## Procedure
+
+    1. Pull the last hour of logs around the reported time window.
+    2. Classify the anomaly as one of: error-rate spike, latency spike, or
+       a new/unseen log message. See
+       [references/anomaly-classification.md](references/anomaly-classification.md)
+       for the full decision tree, worked examples for each class, and the
+       exact commands to pull each signal -- read it before classifying if
+       you have not memorized the tree.
+    3. Once classified, follow that class's remediation steps in the
+       reference file and report the root cause with the log lines that
+       proved it.
+
+    The `references/anomaly-classification.md` file referenced above is 240
+    lines: a full decision tree, five worked examples (one per anomaly
+    class), and the exact log-query commands for each branch -- everything
+    steps 2-3 need that isn't already in the body above.
+
+    Focus your review on dimension 5 (Progressive disclosure), given the
+    declared capabilityAssumption: is this a clean pass, and what
+    specifically did you check to reach that verdict (not just "it declares
+    Adaptive so it passes")?
+expected:
+  output_contains:
+    - "Adaptive"
+    - "lean"
+  output_not_contains:
+    - "declares Adaptive so it passes"
+    - "LGTM"
