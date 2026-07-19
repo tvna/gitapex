@@ -1,0 +1,35 @@
+id: evaluating-skill-quality-ablation-capability-already-run
+name: Baseline Already Measured -- Restraint Check
+description: Restraint side of the ablation-capability sub-check -- a target whose eval-status notes already record a real with-skill-vs-without-skill comparison, with concrete lift numbers. The correct review does not name an ablation-capability gap at all here; it must not false-positive by demanding a mechanism-capability statement when the comparison has already been run and reported.
+tags:
+  - quality
+  - behavioural-evidence
+  - ablation-capability
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "duplicate-ticket-detector". Is this a good skill?
+
+    ---
+    name: duplicate-ticket-detector
+    description: Flag whether a new support ticket duplicates an already-open ticket. Use when the user asks to check a new ticket for duplicates.
+    ---
+
+    # Duplicate Ticket Detector
+
+    ## Procedure
+
+    1. Read the new ticket's title and body.
+    2. Compare it against open tickets from the last 90 days.
+    3. Report the closest match and a similarity score, or report no match.
+
+    The repository's own eval-status notes for this skill say: "Baseline
+    ablation run 2026-07-18: with-skill 91% correct duplicate-flag rate
+    across 20 held-out ticket pairs versus a 34% no-skill baseline --
+    LIFT, recorded via battle/run_battle.py --ablate."
+expected:
+  output_contains:
+    - "91%"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"
