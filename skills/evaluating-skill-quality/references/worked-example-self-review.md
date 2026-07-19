@@ -148,22 +148,23 @@ name-pattern                               PASS    'evaluating-skill-quality'  (
 name-length                                PASS    24 chars  (name <= 64 chars)
 name-no-xml                                PASS    no tags  (name has no XML tags)
 name-not-reserved                          PASS    'evaluating-skill-quality'  (name contains no reserved word ('anthropic', 'claude'))
-body-length                                PASS    313 lines  (SKILL.md body <= 500 lines)
+body-length                                PASS    326 lines  (SKILL.md body <= 500 lines)
 metadata-file-present                      PASS    present  (gitapex_metadata.yaml exists next to SKILL.md)
 manifest-parsable                          PASS    no malformed lines  (gitapex_metadata.yaml has no malformed top-level lines)
 manifest-envelope                          PASS    apiVersion='gitapex.dev/v1alpha1', kind='SkillMetadata'  (apiVersion is gitapex.dev/v1alpha1 and kind is SkillMetadata)
 metadata-name-matches-dir                  PASS    'evaluating-skill-quality' vs directory 'evaluating-skill-quality'  (metadata.name equals the skill directory name)
 portability-declared                       PASS    'Portable'  (spec.portability is one of ('Portable', 'Repository-scoped', 'Mixed'))
 capability-assumption-declared             PASS    'Broad'  (spec.capabilityAssumption is one of ('Broad', 'Frontier', 'Adaptive'))
+references-well-formed                     PASS    1 entry  (spec.references, if present, is a non-empty list of non-empty strings)
 links-inside-skill                         PASS    all inside  (Markdown link targets resolve inside the skill's own directory)
 references-flat                            PASS    flat  (references/ files are one level deep)
-toc:rubric.md                              PASS    888 lines, TOC found  (reference over 100 lines has a TOC)
+toc:rubric.md                              PASS    1060 lines, TOC found  (reference over 100 lines has a TOC)
 toc:worked-example-explaining-the-work.md  PASS    279 lines, TOC found  (reference over 100 lines has a TOC)
-toc:worked-example-self-review.md          PASS    497 lines, TOC found  (reference over 100 lines has a TOC)
+toc:worked-example-self-review.md          PASS    498 lines, TOC found  (reference over 100 lines has a TOC)
 portable-no-issue-citation                 PASS    none  (Portable content has no bare-prose GitHub issue/PR-number citation)
 portable-no-repo-path-citation             PASS    none  (Portable content has no bare-prose origin-repository path citation)
 
-21/21 checks passed
+22/22 checks passed
 ```
 
 Verdict on shape alone: **well-formed** (exit code 0).

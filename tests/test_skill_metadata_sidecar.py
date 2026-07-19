@@ -61,3 +61,43 @@ def test_skill_passes_deterministic_shape_checker(skill_dir):
             for r in failures
         )
     )
+
+
+# Drift gate for the single-source-of-truth invariant Sub-project C
+# established: docs/skill-provenance.md was retired in favor of each
+# skill's own gitapex_metadata.yaml spec.references, precisely so
+# provenance has exactly one home. Per CLAUDE.md's rule that such an
+# invariant ships its drift gate in the same change, not a follow-up.
+
+# The four skills docs/skill-provenance.md named before it was retired
+# (Sub-project C, issue #184) -- kept here, not re-derived from the
+# (deleted) file, since this is a fixed historical fact of that migration.
+SKILLS_WITH_MIGRATED_PROVENANCE = (
+    "battle-testing-a-skill",
+    "establishing-ubiquitous-language",
+    "scorer-gated-skill-edits",
+    "evaluating-skill-quality",
+)
+
+
+def test_skill_provenance_file_stays_retired():
+    assert not (REPO_ROOT / "docs" / "skill-provenance.md").exists(), (
+        "docs/skill-provenance.md was retired in favor of each skill's own "
+        "gitapex_metadata.yaml spec.references (Sub-project C, issue #184) "
+        "-- recreating it would reintroduce a second home for the same "
+        "maintainer-facing provenance data."
+    )
+
+
+@pytest.mark.parametrize("skill_name", SKILLS_WITH_MIGRATED_PROVENANCE)
+def test_migrated_provenance_stays_populated(skill_name):
+    skill_dir = SKILLS_DIR / skill_name
+    parsed = css._parse_manifest(
+        (skill_dir / css.SIDECAR_FILENAME).read_text(encoding="utf-8"))
+    references = parsed.root.get("spec", {}).get("references")
+    assert isinstance(references, list) and references, (
+        f"{skill_name}'s gitapex_metadata.yaml lost its migrated "
+        "spec.references content (Sub-project C, issue #184); this is the "
+        "sole remaining home for that provenance now that "
+        "docs/skill-provenance.md is retired."
+    )

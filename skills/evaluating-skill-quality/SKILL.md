@@ -19,12 +19,12 @@ skill artifact itself is good, not whether a change is correct.
   rules and limits and prints PASS/FAIL per check. On a
   Python-less surface, apply the same rules by reading that script's
   check list (its module docstring enumerates them). The nine maturity
-  dimensions below are deliberately not scripted. The five sidecar checks
+  dimensions below are deliberately not scripted. The six sidecar checks
   assume the target lives in a repository that has adopted this metadata
   convention; when the target is a skill vendored from one that has not,
   those checks fail as expected -- not a defect in the reviewed skill --
   so record them as not-applicable and say so explicitly in the report
-  rather than reporting five failures as findings.
+  rather than reporting six failures as findings.
 - **Probabilistic maturity** -- nine dimensions of judgment that need a model
   or human, not a script. Full rubric with pass/fail evidence:
   [references/rubric.md](references/rubric.md).

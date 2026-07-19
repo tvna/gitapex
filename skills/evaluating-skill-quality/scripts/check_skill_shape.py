@@ -20,11 +20,15 @@ Checks (the canonical list -- the manual fallback is to apply these):
     apiVersion is gitapex.dev/v1alpha1 and kind is SkillMetadata;
     metadata.name equals the skill directory name; spec.portability is one
     of Portable/Repository-scoped/Mixed; spec.capabilityAssumption is one
-    of Broad/Frontier/Adaptive. Ungated sidecar scalar fields (e.g.
-    spec.references, spec.skillDependencies, spec.evalStatus) ARE parsed
-    into the spec map by _parse_manifest, just not gated/checked here; only
-    nested maps and list items under them are skipped by the parser, and
-    indented lines are never flagged as malformed regardless of shape.
+    of Broad/Frontier/Adaptive; spec.references, if present, is a non-empty
+    list of non-empty scalar strings, each item consistently indented with
+    its own list and not an unquoted YAML mapping key such as "path: foo"
+    (references-well-formed) -- the only gated list field. Other ungated
+    sidecar fields (e.g. spec.skillDependencies,
+    spec.evalStatus) ARE parsed into the spec map by _parse_manifest, just
+    not gated/checked here; only nested maps and list items under them are
+    skipped by the parser, and indented lines are never flagged as
+    malformed regardless of shape.
   - references/ files: exactly one level deep
   - any references/ file over 100 lines: contains a table of contents
     (a Markdown heading matching "Table of contents" or "Contents",
@@ -73,6 +77,7 @@ when no readable SKILL.md is found.
 from __future__ import annotations
 
 import argparse
+import json
 import os.path
 import re
 import sys
@@ -105,6 +110,21 @@ EXPECTED_API_VERSION = "gitapex.dev/v1alpha1"
 EXPECTED_KIND = "SkillMetadata"
 PORTABILITY_LEVELS = ("Portable", "Repository-scoped", "Mixed")
 CAPABILITY_ASSUMPTIONS = ("Broad", "Frontier", "Adaptive")
+# A plain "- <value>" list item, indented 2 or more spaces -- real YAML
+# accepts a block sequence indented level with its mapping key (2 spaces,
+# same as spec.references' own key) or further indented (4 spaces, this
+# repo's convention); requiring one exact width would silently drop an
+# otherwise-valid item at a different indent instead of reading it. The
+# only list shape this parser understands, and only under spec.references
+# specifically.
+REFERENCES_LIST_ITEM_RE = re.compile(r"^[ ]{2,}-\s*(.*)$")
+# An unquoted item that itself looks like a YAML mapping key ("key: value"
+# or a bare "key:"), e.g. "- path: references/rubric.md" -- real YAML
+# parses that as a single-key mapping, not a scalar string, and this
+# parser has no map-shaped-item support. A quoted string starting with
+# this same text (e.g. "\"path: something\"") is a deliberate scalar and
+# is excluded by the caller checking for a wrapping quote first.
+REFERENCES_MAPPING_LIKE_RE = re.compile(r"^[A-Za-z0-9_.-]+:(\s|$)")
 
 TAG_RE = re.compile(r"</?[A-Za-z][^>]*>")
 NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
@@ -209,6 +229,23 @@ def _parse_frontmatter(text: str) -> dict[str, str]:
 
 def _unquote(value: str) -> str:
     if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+        if value[0] == '"':
+            # A double-quoted YAML scalar's escaping is a superset-safe
+            # match for JSON string escaping (this repository's own
+            # sidecar-generation method deliberately relies on that: see
+            # the design plan's Task 1, which builds these values with
+            # json.dumps). Decoding via the stdlib json module handles
+            # every escape a generator might emit (\", \\, \n, \uXXXX,
+            # ...), not just the two this parser previously hand-decoded.
+            # Fall back to a naive strip on decode failure (e.g. a stray
+            # unescaped literal quote) rather than raising -- this parser
+            # never raises on malformed sidecar content.
+            try:
+                decoded = json.loads(value)
+            except ValueError:
+                decoded = None
+            if isinstance(decoded, str):
+                return decoded
         return value[1:-1]
     return value
 
@@ -221,24 +258,38 @@ class ManifestParse:
     ``malformed_lines`` holds each offending line (trimmed), in file order --
     empty when the sidecar's top-level structure is clean. See
     ``_parse_manifest`` for the exact malformed-line rule.
+
+    ``malformed_reference_items`` holds each spec.references list item
+    (trimmed) that could not be read as a plain scalar string -- an
+    unquoted mapping-shaped entry (e.g. "path: foo") or one indented
+    inconsistently with the rest of its own list. Empty when every item in
+    every spec.references list parsed cleanly. Unlike ``malformed_lines``,
+    these are indented lines; they would otherwise be silently skipped by
+    this parser's own "indented lines are never malformed" rule, which is
+    why they need this separate, explicit channel rather than reusing
+    ``malformed_lines``.
     """
     root: dict[str, object]
     malformed_lines: list[str]
+    malformed_reference_items: list[str]
 
 
 def _parse_manifest(text: str) -> ManifestParse:
     """Parse the YAML subset the metadata sidecar is specified to use.
 
     Reads top-level 'key: value' scalars and exactly-two-space-indented
-    scalars under a top-level map (metadata:, spec:). Deeper nesting and
-    list items are deliberately skipped: no gated field uses them, and
-    skipping keeps this stdlib-only with no YAML dependency. Ungated
-    fields such as spec.references or spec.skillDependencies may therefore
-    be arbitrarily structured without this parser needing to understand
-    them. Inline '# comment' text after a value on the same line is not
-    stripped -- it is read as part of the value, which is safe (fails
-    closed against the expected enum/literal) but is not a supported way
-    to annotate a sidecar field.
+    scalars under a top-level map (metadata:, spec:). One exception:
+    spec.references (and only that key, and only directly under spec) is
+    read as a flat list of scalar strings, each a "- <value>" line indented
+    2 or more spaces -- the shape this repository's sidecars use for
+    maintainer-facing provenance (see the design spec's Sub-project C).
+    Every other nested map or list (e.g. spec.skillDependencies) is still
+    deliberately skipped, exactly as before: no other gated field uses
+    list/nested structure, and skipping keeps this stdlib-only with no
+    YAML dependency. Inline '# comment' text after a value on the same
+    line is not stripped -- it is read as part of the value, which is safe
+    (fails closed against the expected enum/literal) but is not a
+    supported way to annotate a sidecar field.
 
     A top-level (column-0) line that is not blank, not a '#' comment, not a
     YAML document marker ('---' or '...'), and does not match the top-level
@@ -246,29 +297,78 @@ def _parse_manifest(text: str) -> ManifestParse:
     that real PyYAML would reject with a ParserError. Every such line is
     collected (trimmed) into the returned ``ManifestParse.malformed_lines``,
     so a caller can fail the sidecar even though this permissive parser
-    itself does not raise. Indented lines are NEVER considered malformed --
-    two-or-more-space lines belong to the nested/list structures (see above)
+    itself does not raise. Indented lines are NEVER considered malformed
+    this same way -- every indented line belongs to nested/list structures
     this parser deliberately does not interpret, and flagging them would
-    defeat that reserved-field design.
+    defeat that reserved-field design. spec.references list items are the
+    one exception with their own malformed channel: an unquoted item
+    shaped like a YAML mapping key ("path: foo", real YAML would read that
+    as a nested mapping, not a scalar) or an item indented inconsistently
+    with the rest of its own list is collected (trimmed) into
+    ``ManifestParse.malformed_reference_items`` instead of being silently
+    accepted as a garbled scalar string.
     """
     text = text.lstrip("\ufeff")  # strip a leading UTF-8 BOM, as _parse_frontmatter does
     root: dict[str, object] = {}
-    current: dict[str, str] | None = None
+    current: dict[str, object] | None = None
+    collecting_refs: list[str] | None = None
+    refs_indent: int | None = None
     malformed: list[str] = []
+    malformed_refs: list[str] = []
+
+    def _finalize_refs() -> None:
+        nonlocal collecting_refs, refs_indent
+        if collecting_refs is not None and current is not None:
+            current["references"] = collecting_refs
+        collecting_refs = None
+        refs_indent = None
+
     for raw in text.splitlines():
         line = raw.rstrip()
         if not line.strip() or line.lstrip().startswith("#"):
             continue
+        if collecting_refs is not None:
+            item = REFERENCES_LIST_ITEM_RE.match(line)
+            if item:
+                item_indent = len(line) - len(line.lstrip(" "))
+                if refs_indent is None:
+                    refs_indent = item_indent
+                if item_indent != refs_indent:
+                    # Same list, different indent than its own first item --
+                    # real YAML would reject this outright.
+                    malformed_refs.append(line.strip())
+                    continue
+                raw_text = item.group(1).strip()
+                is_quoted = (len(raw_text) >= 2 and raw_text[0] == raw_text[-1]
+                             and raw_text[0] in "\"'")
+                if not is_quoted and REFERENCES_MAPPING_LIKE_RE.match(raw_text):
+                    # An unquoted "key: value" item -- real YAML reads this
+                    # as a nested mapping, not the scalar string this
+                    # parser understands; flag it rather than silently
+                    # truncating the mapping into a garbled string.
+                    malformed_refs.append(line.strip())
+                else:
+                    collecting_refs.append(_unquote(raw_text))
+                continue
+            # Not a list item: the references list ends here. Finalize it
+            # and fall through to process this line normally below.
+            _finalize_refs()
         if line[:1] in (" ", "\t"):
-            # Indented: nested/list content this parser does not interpret.
+            # Indented: nested/list content this parser does not interpret,
+            # except spec.references (handled above once its list starts).
             # Exactly two spaces: a four-space line (a child of a nested
             # map) has a space where this expects a key character, so it
             # will not match and is skipped -- never malformed either way.
             nested = re.match(r"[ ]{2}([A-Za-z0-9_-]+):\s*(.*)$", line)
             if nested and current is not None:
-                value = nested.group(2).strip()
-                if value:
-                    current[nested.group(1)] = _unquote(value)
+                key, value = nested.group(1), nested.group(2).strip()
+                # current is root["spec"] by identity exactly while inside
+                # the spec: block, so this is "are we directly under spec"
+                # without tracking a separate current-top-key variable.
+                if key == "references" and current is root.get("spec") and not value:
+                    collecting_refs = []
+                elif value:
+                    current[key] = _unquote(value)
             continue
         if line.strip() in ("---", "..."):
             continue
@@ -279,12 +379,14 @@ def _parse_manifest(text: str) -> ManifestParse:
                 root[key] = _unquote(value)
                 current = None
             else:
-                child: dict[str, str] = {}
+                child: dict[str, object] = {}
                 root[key] = child
                 current = child
             continue
         malformed.append(line.strip())
-    return ManifestParse(root=root, malformed_lines=malformed)
+    _finalize_refs()
+    return ManifestParse(root=root, malformed_lines=malformed,
+                          malformed_reference_items=malformed_refs)
 
 
 def _body_after_frontmatter(text: str) -> list[str]:
@@ -547,10 +649,12 @@ def check_shape(target: Path) -> list[CheckResult]:
             parsed = _parse_manifest(sidecar.read_text(encoding="utf-8"))
             manifest: dict[str, object] | None = parsed.root
             malformed_lines = parsed.malformed_lines
+            malformed_reference_items = parsed.malformed_reference_items
             read_error: str | None = None
         except (OSError, UnicodeDecodeError) as exc:
             manifest = None
             malformed_lines = []
+            malformed_reference_items = []
             read_error = type(exc).__name__
 
         if manifest is None:
@@ -572,6 +676,10 @@ def check_shape(target: Path) -> list[CheckResult]:
             results.append(CheckResult(
                 "capability-assumption-declared", False,
                 f"spec.capabilityAssumption is one of {CAPABILITY_ASSUMPTIONS}",
+                evidence))
+            results.append(CheckResult(
+                "references-well-formed", False,
+                "spec.references, if present, is a non-empty list of non-empty strings",
                 evidence))
             # Deliberately not the body-marker fallback: a present-but-broken
             # sidecar is authoritative-and-failing, not absent. Running the
@@ -606,8 +714,9 @@ def check_shape(target: Path) -> list[CheckResult]:
                 "metadata-name-matches-dir", meta_name == resolved_dir_name,
                 "metadata.name equals the skill directory name",
                 f"{meta_name!r} vs directory {resolved_dir_name!r}"))
-            spec = manifest.get("spec")
-            spec = spec if isinstance(spec, dict) else {}
+            spec_raw = manifest.get("spec")
+            spec_is_mapping = isinstance(spec_raw, dict)
+            spec = spec_raw if spec_is_mapping else {}
             portability = spec.get("portability")
             results.append(CheckResult(
                 "portability-declared", portability in PORTABILITY_LEVELS,
@@ -619,6 +728,49 @@ def check_shape(target: Path) -> list[CheckResult]:
                 capability in CAPABILITY_ASSUMPTIONS,
                 f"spec.capabilityAssumption is one of {CAPABILITY_ASSUMPTIONS}",
                 repr(capability)))
+            references = spec.get("references")
+            if not spec_is_mapping:
+                # spec itself failed to parse as a mapping (e.g. "spec:
+                # some-scalar"), the same precondition failure
+                # portability-declared/capability-assumption-declared
+                # already report above -- "not declared" would misreport
+                # this as the ordinary optional-and-absent case.
+                results.append(CheckResult(
+                    "references-well-formed", False,
+                    "spec.references, if present, is a non-empty list of non-empty strings",
+                    f"spec is not a mapping: {spec_raw!r}"))
+            elif malformed_reference_items:
+                # A mapping-shaped or inconsistently-indented list item was
+                # already flagged by the parser -- fail loudly instead of
+                # reporting on whatever garbled scalar it was misparsed
+                # into, even if the rest of the list otherwise looks like
+                # a clean list of strings.
+                count = len(malformed_reference_items)
+                results.append(CheckResult(
+                    "references-well-formed", False,
+                    "spec.references, if present, is a non-empty list of non-empty strings",
+                    f"{count} malformed entr{'y' if count == 1 else 'ies'}: "
+                    f"{malformed_reference_items[0]!r}"))
+            elif references is None:
+                results.append(CheckResult(
+                    "references-well-formed", True,
+                    "spec.references, if present, is a non-empty list of non-empty strings",
+                    "not declared (optional)"))
+            elif (isinstance(references, list) and references
+                  and all(isinstance(r, str) and r.strip() for r in references)):
+                ref_count = len(references)
+                ref_noun = "entry" if ref_count == 1 else "entries"
+                results.append(CheckResult(
+                    "references-well-formed", True,
+                    "spec.references, if present, is a non-empty list of non-empty strings",
+                    f"{ref_count} {ref_noun}"))
+            else:
+                ref_evidence = ("empty list" if references == []
+                                else f"not a list of non-empty strings: {references!r}")
+                results.append(CheckResult(
+                    "references-well-formed", False,
+                    "spec.references, if present, is a non-empty list of non-empty strings",
+                    ref_evidence))
             if portability in PORTABILITY_LEVELS:
                 sidecar_portability = SidecarPortability(
                     state="usable", level=portability)

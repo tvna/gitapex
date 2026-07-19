@@ -5,3 +5,5 @@ metadata:
 spec:
   portability: Portable
   capabilityAssumption: Broad
+  references:
+    - "`skills/scorer-gated-skill-edits/scripts/score_contract.py`'s docstring refers to a \"held-out gate\"; for readers working in this repository, that gate was introduced by gitapex#30. This is provenance for maintainers of this specific repository, not something the script depends on."
