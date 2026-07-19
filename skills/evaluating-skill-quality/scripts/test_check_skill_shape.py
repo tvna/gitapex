@@ -820,3 +820,135 @@ def test_typo_portability_does_not_skip_citation_scan(tmp_path):
     # 4. sidecar Mixed while body marker says Portable -> sidecar wins,
     #    citation checks absent: covered by
     #    test_sidecar_beats_conflicting_body_marker.
+
+
+# ---- references-well-formed ----
+
+def test_references_absent_is_well_formed(tmp_path):
+    d = _write_skill(tmp_path)
+    by = _by_name(css.check_shape(d))
+    assert by["references-well-formed"].passed is True
+    assert by["references-well-formed"].evidence == "not declared (optional)"
+    assert css.main([str(d)]) == 0
+
+
+def test_references_valid_list_is_well_formed(tmp_path):
+    d = _write_skill(tmp_path)
+    (d / "gitapex_metadata.yaml").write_text(
+        "apiVersion: gitapex.dev/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  references:\n"
+        "    - \"gitapex#25\"\n"
+        "    - \"PR #29\"\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["references-well-formed"].passed is True
+    assert by["references-well-formed"].evidence == "2 entries"
+    assert css.main([str(d)]) == 0
+
+
+def test_references_empty_list_fails(tmp_path):
+    d = _write_skill(tmp_path)
+    (d / "gitapex_metadata.yaml").write_text(
+        "apiVersion: gitapex.dev/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  references:\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["references-well-formed"].passed is False
+    assert by["references-well-formed"].evidence == "empty list"
+    assert css.main([str(d)]) == 1
+
+
+def test_references_blank_entry_fails(tmp_path):
+    d = _write_skill(tmp_path)
+    (d / "gitapex_metadata.yaml").write_text(
+        "apiVersion: gitapex.dev/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  references:\n"
+        "    - \"gitapex#25\"\n"
+        "    -    \n"
+        "    - \"PR #29\"\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["references-well-formed"].passed is False
+    assert css.main([str(d)]) == 1
+
+
+def test_references_non_list_scalar_fails(tmp_path):
+    d = _write_skill(tmp_path)
+    (d / "gitapex_metadata.yaml").write_text(
+        "apiVersion: gitapex.dev/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  references: gitapex#25\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["references-well-formed"].passed is False
+    assert css.main([str(d)]) == 1
+
+
+def test_references_well_formed_fails_when_sidecar_unreadable(tmp_path):
+    d = _write_skill(tmp_path)
+    sidecar = d / "gitapex_metadata.yaml"
+    sidecar.write_bytes(b"\xff\xfe\x00\x01invalid")
+    by = _by_name(css.check_shape(d))
+    assert by["references-well-formed"].passed is False
+
+
+def test_manifest_parser_parses_spec_references_list():
+    text = (
+        "apiVersion: gitapex.dev/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  references:\n"
+        "    - \"gitapex#25\"\n"
+        "    - \"PR #29\"\n"
+    )
+    parsed = css._parse_manifest(text)
+    assert parsed.root["spec"]["references"] == ["gitapex#25", "PR #29"]
+    assert parsed.malformed_lines == []
+
+
+def test_manifest_parser_still_ignores_skill_dependencies():
+    # Regression guard: spec.references gaining a real parser must not widen
+    # to spec.skillDependencies (reserved for Sub-project D).
+    text = (
+        "apiVersion: gitapex.dev/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  skillDependencies:\n"
+        "    requires: []\n"
+        "    relatedTo:\n"
+        "      - other-skill\n"
+    )
+    parsed = css._parse_manifest(text)
+    assert "skillDependencies" not in parsed.root["spec"]
+    assert parsed.malformed_lines == []
