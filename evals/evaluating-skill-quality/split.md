@@ -530,27 +530,42 @@ metadata sidecar migration) touched `references/rubric.md`'s Portability
 level section and added a new Capability assumption section, but left
 dimension 8 and every other section byte-identical -- confirmed directly
 (`git diff` against the pre-migration commit shows only those two hunks).
-Of the 8 pre-existing selection fixtures, 7 assert on content this
+Of the 9 pre-existing selection fixtures, 8 assert on content this
 migration never touched (mechanism fit, dimension 4, dimension 8's
-scoring-axis guidance, blind-spot-pass, model-effort-tier-fit); the 8th,
-`portability-issue-number-citation.yaml`, targets dimension 6's citation
-ban (also untouched by the migration, confirmed by the same diff) on a
-target that declares portability via the pre-sidecar body-marker
-convention, which the shape checker's fallback path still supports for a
-foreign/vendored target -- so its assertions remain valid unchanged. All 8
-therefore reuse their #165 after-scores (all 1.000000) as this gate's
-before scores -- disclosed reuse, the same "never both" discipline the
-prior two iterations already applied. Only the new selection fixture,
-`ablation-capability-runner-exists-not-run.yaml`, needed a genuine fresh
-before/after pair.
+scoring-axis guidance, blind-spot-pass, model-effort-tier-fit); one of
+those 8, `portability-issue-number-citation.yaml`, targets dimension 6's
+citation ban (also untouched by the migration, confirmed by the same
+diff) on a target that declares portability via the pre-sidecar
+body-marker convention, which the shape checker's fallback path still
+supports for a foreign/vendored target -- so its assertions remain valid
+unchanged. Those 8 therefore reuse their #165 after-scores (all
+1.000000) as this gate's before scores -- disclosed reuse, the same
+"never both" discipline the prior two iterations already applied.
 
-Methodology: one fresh, isolated subagent dispatch per side for the new
-selection fixture (this repository has no registered `Skill` tool for its
-own unpublished `evaluating-skill-quality` content, so each dispatch was
-instructed to read `references/rubric.md` and `SKILL.md` directly --
-`git show 228486c:...` for the before side, the working tree for the
-after side -- and follow the Procedure by hand), scored with
-`skills/scorer-gated-skill-edits/scripts/score_contract.py`:
+**Correction (found by external review, PR #190 `chatgpt-codex-connector[bot]`):**
+the first version of this gate omitted the 9th pre-existing selection
+fixture, `heldout-vague-completion.yaml`, from the table below entirely
+-- the reported mean covered 9 tasks against a declared 10-fixture
+selection split, so a regression in the omitted fixture could not have
+blocked the `KEEP` decision. Checked directly: unlike the other 8 reused
+fixtures, `heldout-vague-completion.yaml` has never appeared in any prior
+recorded Kept-edit gate (#149, #155, #165) -- it was added to the
+selection split independently, before those iterations, and this repository
+has apparently never actually gated on it before now, a pre-existing gap
+in this file's own history that predates this session. With no genuine
+prior score to reuse, it needed its own fresh before/after pair, the same
+as the new fixture. Both dispatches confirm what its content already
+implies (it targets dimension 4's completion-criteria language, nothing
+in dimension 8): identical `COMPLETION_CRITERIA: FAIL` verdicts either
+side of the edit.
+
+Methodology: one fresh, isolated subagent dispatch per side for each of
+the two fixtures needing a genuine pair (this repository has no
+registered `Skill` tool for its own unpublished `evaluating-skill-quality`
+content, so each dispatch was instructed to read `references/rubric.md`
+and `SKILL.md` directly -- `git show 228486c:...` for the before side, the
+working tree for the after side -- and follow the Procedure by hand),
+scored with `skills/scorer-gated-skill-edits/scripts/score_contract.py`:
 
 | Fixture | Before | After |
 |---|---|---|
@@ -562,11 +577,15 @@ after side -- and follow the Procedure by hand), scored with
 | `blind-spot-pass-generalizes.yaml` | 1.000000 (reused, #165 after) | 1.000000 |
 | `model-effort-tier-fit-unjustified-effort.yaml` | 1.000000 (reused, #165 after) | 1.000000 |
 | `portability-issue-number-citation.yaml` | 1.000000 (reused, #165 after) | 1.000000 |
+| `heldout-vague-completion.yaml` | 1.000000 (fresh) | 1.000000 (fresh) |
 | `ablation-capability-runner-exists-not-run.yaml` | 0.750000 (fresh) | 1.000000 (fresh) |
 
-Selection mean: **before 0.972222 -> after 1.000000**. Run via
-`score_contract.py --compare-to 0.972222 --scores after-scores.txt`:
-`1.000000 KEEP`.
+Selection mean: **before 0.975000 -> after 1.000000**. Run via
+`score_contract.py --compare-to 0.975000 --scores after-scores.txt`:
+`1.000000 KEEP`. (The original, incomplete 9-fixture table reported
+`before 0.972222 -> after 1.000000`, also `KEEP` -- correcting the
+omission changes the precision and the fixture count, not the verdict,
+since `heldout-vague-completion.yaml` scored identically on both sides.)
 
 The fresh fixture's own before-run (pre-edit rubric) still named the
 existing `battle/run_battle.py --ablate` tool and correctly declined to
@@ -604,13 +623,33 @@ named a third, correct disposition -- while also independently flagging
 that the figure was self-reported and unverified by an isolated dispatch
 with no access to the target's actual repository, a distinct finding this
 review did not ask for but which is consistent with the rubric's
-primary-source-grounding discipline. Confirms the sub-check does not
-false-positive on an already-measured target.
+primary-source-grounding discipline.
 
-**KEEP.** Strict improvement on the selection split, a genuine
-generalization result on the fixture built to test the new check, one
-fixture-assertion bug (a negation trap) found and fixed before scoring
-rather than after, and a confirmed restraint result on the held-out
-already-run fixture that also demonstrated the check correctly recognizes
-a third disposition (history, not just capability-vs-absence) it was
-never explicitly designed to enumerate.
+**Correction (found by external review, PR #190 `chatgpt-codex-connector[bot]`):**
+this fixture's first-draft assertions (`output_contains: ["91%"]`, plus
+the generic `LGTM`/`no concerns` guardrails) could not actually
+substantiate the restraint claim above: `"91%"` is copied verbatim from
+the fixture's own prompt, so a *wrong* response that repeats the number
+while incorrectly concluding "no ablation mechanism exists" would have
+scored identically 1.0 -- exactly the false positive this fixture exists
+to catch, undetected by construction. Fixed by strengthening the positive
+assertion to require three independently-improbable-for-a-wrong-answer
+tokens together: `"91%"`, `"34%"` (the paired baseline figure a
+mechanism-gap conclusion has no reason to restate), and `"already"` (the
+history-recognizing language a mechanism-gap conclusion would
+contradict) -- re-scored against the real (not paraphrased) transcript
+above: still `1.000000`. This is deliberately a positive-only fix, not a
+negative ban on the two sub-check phrasings: the same negation-trap risk
+already found and fixed once in this iteration (above) would recur if a
+correct restraint response quoted either phrase only to reject it.
+
+**KEEP.** Strict improvement on the corrected 10-fixture selection split,
+a genuine generalization result on the fixture built to test the new
+check, one selection fixture omitted from the first-draft table and
+restored with its own genuine before/after pair, one fixture-assertion
+negation-trap bug found and fixed before scoring, one restraint-fixture
+discrimination bug found after external review and fixed with a
+positive-only assertion, and a confirmed restraint result on the
+held-out already-run fixture that also demonstrated the check correctly
+recognizes a third disposition (history, not just capability-vs-absence)
+it was never explicitly designed to enumerate.

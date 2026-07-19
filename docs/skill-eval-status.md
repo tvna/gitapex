@@ -288,25 +288,35 @@ does not restate per-dimension rubric content, only pointing to
 line to update.
 
 Went through `scorer-gated-skill-edits`' own held-out gate: 3 new
-fixtures added to `split.md`'s split (30 total, 13:10:7). The other 8
-selection fixtures' before scores reused their #165 after-scores
+fixtures added to `split.md`'s split (30 total, 13:10:7). Of the 9
+pre-existing selection fixtures, 8 reused their #165 after-scores
 unchanged (disclosed reuse -- confirmed via `git diff` that the
 intervening skill-metadata-sidecar migration touched only the Portability
 level and Capability assumption sections of `rubric.md`, leaving
-dimension 8 and everything the 8 reused fixtures assert on
-byte-identical). Only the new selection fixture needed a genuine fresh
-before/after pair: **0.750000 -> 1.000000**. Selection mean: **0.972222
--> 1.000000, KEEP** (`score_contract.py --compare-to 0.972222`). A
-negation-trap fixture-assertion bug (an `output_not_contains` phrase a
-*correct* denial would also contain -- the same class `references/
-rubric.md`'s own dimension-6 history already hit once, see the #149 entry
-above) was found and fixed in all three new fixtures *before* scoring,
-not after seeing a result. A restraint check on the held-out test fixture
-(a target whose baseline was already measured and reported) confirmed no
-false positive, and additionally surfaced that the new sub-check
+dimension 8 and everything those 8 fixtures assert on byte-identical);
+the 9th, `heldout-vague-completion.yaml`, had never actually been scored
+in any prior recorded gate (a pre-existing gap in this file's own
+history, found by external PR review -- see below) and got its own fresh
+before/after pair, scoring identically (1.000000) on both sides since it
+targets dimension 4, not dimension 8. The new selection fixture needed a
+genuine fresh before/after pair too: **0.750000 -> 1.000000**. Selection
+mean: **0.975000 -> 1.000000, KEEP** (`score_contract.py --compare-to
+0.975000`). A negation-trap fixture-assertion bug (an
+`output_not_contains` phrase a *correct* denial would also contain -- the
+same class `references/rubric.md`'s own dimension-6 history already hit
+once, see the #149 entry above) was found and fixed in all three new
+fixtures *before* scoring, not after seeing a result. A restraint check
+on the held-out test fixture (a target whose baseline was already
+measured and reported) confirmed no false positive after a second,
+external-review-driven fix: the restraint fixture's first-draft assertion
+(`"91%"` alone, copied verbatim from its own prompt) could not actually
+distinguish a correct restraint response from an incorrect one repeating
+the same number, so it was strengthened to require three tokens together
+(`"91%"`, `"34%"`, `"already"`) a wrong conclusion has no reason to
+produce jointly. The check additionally surfaced that the new sub-check
 correctly recognizes a third disposition -- ablation *history*, not just
 capability-vs-absence -- that it was not explicitly designed to name.
-Full record, per-fixture scores, and the fixture-assertion bug fix:
+Full record, per-fixture scores, and both fixture-assertion bug fixes:
 `evals/evaluating-skill-quality/split.md`'s Kept-edit log. The same
 sub-check applied live to this repository's own `battle-testing-a-skill`
 entry above found a genuine "no ablation mechanism exists" gap,

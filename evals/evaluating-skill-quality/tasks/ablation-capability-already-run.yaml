@@ -30,6 +30,8 @@ inputs:
 expected:
   output_contains:
     - "91%"
+    - "34%"
+    - "already"
   output_not_contains:
     - "LGTM"
     - "no concerns"
