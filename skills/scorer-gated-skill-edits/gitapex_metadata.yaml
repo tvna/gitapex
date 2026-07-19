@@ -1,0 +1,7 @@
+apiVersion: gitapex.dev/v1alpha1
+kind: SkillMetadata
+metadata:
+  name: scorer-gated-skill-edits
+spec:
+  portability: Portable
+  capabilityAssumption: Broad

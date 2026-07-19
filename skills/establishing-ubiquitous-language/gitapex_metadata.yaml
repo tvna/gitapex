@@ -1,0 +1,7 @@
+apiVersion: gitapex.dev/v1alpha1
+kind: SkillMetadata
+metadata:
+  name: establishing-ubiquitous-language
+spec:
+  portability: Portable
+  capabilityAssumption: Broad

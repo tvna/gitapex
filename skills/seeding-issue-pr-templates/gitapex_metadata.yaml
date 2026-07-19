@@ -1,0 +1,7 @@
+apiVersion: gitapex.dev/v1alpha1
+kind: SkillMetadata
+metadata:
+  name: seeding-issue-pr-templates
+spec:
+  portability: Mixed
+  capabilityAssumption: Broad

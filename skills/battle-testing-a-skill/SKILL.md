@@ -5,9 +5,9 @@ description: Use when adversarially stress-testing whether a SKILL.md holds up u
 
 # Battle-testing a skill
 
-**Portability: Mixed.** Procedure is portable; the repo-specific detail
-(this repo's sibling skills, its GitHub project, corroborating
-side-projects) lives only in the references files below.
+This skill's procedure is portable; the repo-specific detail (this
+repo's sibling skills, its GitHub project, corroborating side-projects)
+lives only in the references files below.
 
 ## Overview
 

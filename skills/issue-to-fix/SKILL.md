@@ -5,8 +5,8 @@ description: Use when given a bare issue reporting a defect (or a CI failure wit
 
 # Issue to Fix
 
-**Portability: Portable.** Depends only on a connected GitHub MCP server (a
-general product capability) for the Step 2 escalation action (commenting
+This skill depends only on a connected GitHub MCP server (a general
+product capability) for the Step 2 escalation action (commenting
 on an existing issue or opening a new one); Steps 1 and 3-5 (reproduce,
 write a failing test, fix, verify) are entirely general and depend on no
 this-repository tooling. Tool names below are written as `Server:tool`

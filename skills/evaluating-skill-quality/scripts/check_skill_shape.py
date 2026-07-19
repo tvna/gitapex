@@ -13,8 +13,18 @@ Checks (the canonical list -- the manual fallback is to apply these):
   - name (only if present): lowercase-hyphenated, <= 64 chars,
     no XML tags, contains no reserved word (anthropic, claude)
   - SKILL.md body: <= 500 lines
-  - portability declaration: appears within the first 6 body lines
-    (a "Portability:" marker, e.g. "**Portability: Portable.**")
+  - metadata sidecar (gitapex_metadata.yaml, next to SKILL.md): present;
+    has no malformed top-level lines (manifest-parsable -- a column-0 line
+    that is not blank/comment/document-marker and does not match the
+    top-level "key:" pattern, e.g. a stray "- invalid mapping entry");
+    apiVersion is gitapex.dev/v1alpha1 and kind is SkillMetadata;
+    metadata.name equals the skill directory name; spec.portability is one
+    of Portable/Repository-scoped/Mixed; spec.capabilityAssumption is one
+    of Broad/Frontier/Adaptive. Ungated sidecar scalar fields (e.g.
+    spec.references, spec.skillDependencies, spec.evalStatus) ARE parsed
+    into the spec map by _parse_manifest, just not gated/checked here; only
+    nested maps and list items under them are skipped by the parser, and
+    indented lines are never flagged as malformed regardless of shape.
   - references/ files: exactly one level deep
   - any references/ file over 100 lines: contains a table of contents
     (a Markdown heading matching "Table of contents" or "Contents",
@@ -30,7 +40,17 @@ Checks (the canonical list -- the manual fallback is to apply these):
     already requires every instruction to resolve inside the skill's own
     folder) a deterministic backstop.
   - Portable self-citation (only when the skill declares "Portable", not
-    "Mixed" or "Repository-scoped"): no bare-prose GitHub issue/PR-number
+    "Mixed" or "Repository-scoped"). The declaration is read
+    sidecar-primary with a body-marker fallback: the sidecar's
+    spec.portability decides whenever it is present and usable -- the form
+    every skill in this repository uses -- a skill with no sidecar at all
+    (typically one vendored in from another repository) falls back to the
+    near-top "**Portability: <level>.**" body marker, and a skill whose
+    sidecar exists but is unreadable or carries no recognised
+    spec.portability runs the scan unconditionally (a false negative in a
+    gate is worse than a false positive, and such a skill is already
+    failing portability-declared) -- so no skill state ever silently skips
+    it. The scan itself: no bare-prose GitHub issue/PR-number
     citation (#149 or owner/repo#149) and no bare-prose origin-repository
     path citation (evals/... or docs/...) in SKILL.md or references/*.md
     body text. A bare #N auto-links relative to whichever repository
@@ -75,13 +95,22 @@ BODY_MAX_LINES = 500
 TOC_MIN_LINES = 100
 RESERVED_NAME_WORDS = ("anthropic", "claude")
 
+# The sidecar is this repository's own metadata convention, not part of the
+# Anthropic Agent Skills standard -- hence the gitapex_ prefix. It is never
+# auto-loaded by the skill runtime, so it can never change skill behavior.
+SIDECAR_FILENAME = "gitapex_metadata.yaml"
+# Kubernetes-manifest-shaped envelope, borrowed as a convention only; the
+# version lets the schema grow without breaking older sidecars.
+EXPECTED_API_VERSION = "gitapex.dev/v1alpha1"
+EXPECTED_KIND = "SkillMetadata"
+PORTABILITY_LEVELS = ("Portable", "Repository-scoped", "Mixed")
+CAPABILITY_ASSUMPTIONS = ("Broad", "Frontier", "Adaptive")
+
 TAG_RE = re.compile(r"</?[A-Za-z][^>]*>")
 NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 # Accept either "Table of contents" or a bare "Contents" heading.
 TOC_RE = re.compile(r"^#+\s+(?:table of )?contents\b",
                     re.IGNORECASE | re.MULTILINE)
-PORTABILITY_RE = re.compile(r"\bportability\s*:", re.IGNORECASE)
-PORTABILITY_MAX_BODY_LINE = 6
 BLOCK_SCALAR_INDICATORS = (">", "|", ">-", "|-", ">+", "|+")
 # Markdown inline link syntax: [text](target).
 LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
@@ -97,6 +126,11 @@ SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.\-]*:")
 # Portable only when its portability marker says "Portable" without the
 # "Mixed" / "Repository-scoped" qualifiers -- those levels legitimately cite
 # repo-specific paths and issues, so the scan does not apply to them.
+# The near-top body marker, kept only as the fallback declaration form for a
+# skill vendored in from another repository that has no sidecar. Skills in
+# this repository declare portability in gitapex_metadata.yaml instead.
+PORTABILITY_RE = re.compile(r"\bportability\s*:", re.IGNORECASE)
+PORTABILITY_MAX_BODY_LINE = 6
 PORTABLE_LEVEL_RE = re.compile(r"\bportable\b", re.IGNORECASE)
 NON_PORTABLE_LEVEL_RE = re.compile(r"\b(?:mixed|repository-scoped|repo-scoped)\b",
                                    re.IGNORECASE)
@@ -168,11 +202,89 @@ def _parse_frontmatter(text: str) -> dict[str, str]:
             joiner = "\n" if value[0] == "|" else " "
             fields[key] = joiner.join(block).strip()
             continue
-        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
-            value = value[1:-1]
-        fields[key] = value
+        fields[key] = _unquote(value)
         i += 1
     return fields
+
+
+def _unquote(value: str) -> str:
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+        return value[1:-1]
+    return value
+
+
+@dataclass(frozen=True)
+class ManifestParse:
+    """Result of ``_parse_manifest``: the parsed top-level mapping plus any
+    malformed top-level lines found alongside it.
+
+    ``malformed_lines`` holds each offending line (trimmed), in file order --
+    empty when the sidecar's top-level structure is clean. See
+    ``_parse_manifest`` for the exact malformed-line rule.
+    """
+    root: dict[str, object]
+    malformed_lines: list[str]
+
+
+def _parse_manifest(text: str) -> ManifestParse:
+    """Parse the YAML subset the metadata sidecar is specified to use.
+
+    Reads top-level 'key: value' scalars and exactly-two-space-indented
+    scalars under a top-level map (metadata:, spec:). Deeper nesting and
+    list items are deliberately skipped: no gated field uses them, and
+    skipping keeps this stdlib-only with no YAML dependency. Ungated
+    fields such as spec.references or spec.skillDependencies may therefore
+    be arbitrarily structured without this parser needing to understand
+    them. Inline '# comment' text after a value on the same line is not
+    stripped -- it is read as part of the value, which is safe (fails
+    closed against the expected enum/literal) but is not a supported way
+    to annotate a sidecar field.
+
+    A top-level (column-0) line that is not blank, not a '#' comment, not a
+    YAML document marker ('---' or '...'), and does not match the top-level
+    'key:' pattern is malformed -- e.g. a stray '- invalid mapping entry'
+    that real PyYAML would reject with a ParserError. Every such line is
+    collected (trimmed) into the returned ``ManifestParse.malformed_lines``,
+    so a caller can fail the sidecar even though this permissive parser
+    itself does not raise. Indented lines are NEVER considered malformed --
+    two-or-more-space lines belong to the nested/list structures (see above)
+    this parser deliberately does not interpret, and flagging them would
+    defeat that reserved-field design.
+    """
+    text = text.lstrip("\ufeff")  # strip a leading UTF-8 BOM, as _parse_frontmatter does
+    root: dict[str, object] = {}
+    current: dict[str, str] | None = None
+    malformed: list[str] = []
+    for raw in text.splitlines():
+        line = raw.rstrip()
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        if line[:1] in (" ", "\t"):
+            # Indented: nested/list content this parser does not interpret.
+            # Exactly two spaces: a four-space line (a child of a nested
+            # map) has a space where this expects a key character, so it
+            # will not match and is skipped -- never malformed either way.
+            nested = re.match(r"[ ]{2}([A-Za-z0-9_-]+):\s*(.*)$", line)
+            if nested and current is not None:
+                value = nested.group(2).strip()
+                if value:
+                    current[nested.group(1)] = _unquote(value)
+            continue
+        if line.strip() in ("---", "..."):
+            continue
+        top = re.match(r"([A-Za-z0-9_-]+):\s*(.*)$", line)
+        if top:
+            key, value = top.group(1), top.group(2).strip()
+            if value:
+                root[key] = _unquote(value)
+                current = None
+            else:
+                child: dict[str, str] = {}
+                root[key] = child
+                current = child
+            continue
+        malformed.append(line.strip())
+    return ManifestParse(root=root, malformed_lines=malformed)
 
 
 def _body_after_frontmatter(text: str) -> list[str]:
@@ -230,21 +342,72 @@ def _out_of_skill_link_targets(body_text: str, skill_dir: Path) -> list[str]:
     return offenders
 
 
-def _is_portable(body: list[str]) -> bool:
+@dataclass(frozen=True)
+class SidecarPortability:
+    """Three-state summary of the sidecar's portability declaration.
+
+    Derived once, in ``check_shape``, from the single sidecar read+parse
+    performed there -- this module never reads the sidecar a second time to
+    answer the portability question. Handed to ``_is_portable``, which
+    dispatches on ``state`` instead of touching the filesystem itself.
+
+    - "absent": no ``gitapex_metadata.yaml`` next to SKILL.md. The
+      vendored-from-elsewhere case: ``_is_portable`` falls back to the
+      near-top body marker.
+    - "usable": the sidecar was read and parsed, and its
+      ``spec.portability`` is one of ``PORTABILITY_LEVELS``. ``level``
+      carries that value; ``_is_portable`` returns ``level == "Portable"``.
+    - "unusable": the sidecar exists but could not be read/parsed (bad
+      encoding, OS error), or its ``spec.portability`` is missing or not a
+      recognised level. ``_is_portable`` returns True unconditionally in
+      this state -- see its docstring for why.
+    """
+    state: str
+    level: str | None = None
+
+
+def _is_portable(body: list[str], sidecar: SidecarPortability) -> bool:
     """Whether the skill declares itself Portable (not Mixed/Repository-scoped).
 
-    Reads the same near-top portability marker the ``portability-near-top``
-    check locates. "Mixed" and "Repository-scoped" skills legitimately cite
-    repo-specific paths and issues, so the Portable self-citation scan does
-    not apply to them.
+    Dispatches on ``sidecar`` (a ``SidecarPortability`` derived once in
+    ``check_shape`` from its single sidecar read -- this function never
+    reads the sidecar itself):
 
-    The level word may wrap onto the line after the ``Portability:`` marker
-    (e.g. ``**Portability:**`` then ``Portable. ...``). Reading only the
-    marker line would then classify a Portable skill as non-Portable and
-    silently skip the citation scan -- a false negative in the gate, worse
-    than a false positive -- so when the marker line carries no level word,
-    the immediately following line is folded in before deciding.
+    1. ``sidecar.state == "usable"``: the sidecar alone decides --
+       "Portable" -> True, "Mixed" / "Repository-scoped" -> False. This is
+       the declaration form every skill in this repository uses, since the
+       enum moved out of the SKILL.md body and into the sidecar.
+    2. ``sidecar.state == "absent"``: no sidecar file at all -- fall back to
+       the near-top body marker (``**Portability: Portable.**``). A skill
+       vendored in from another repository carries that marker and no
+       sidecar, and must still get the citation scan rather than silently
+       skipping it.
+    3. ``sidecar.state == "unusable"``: the sidecar exists but is
+       unreadable, or its ``spec.portability`` is missing/unrecognised.
+       Returns True -- run the scan -- WITHOUT consulting the body marker.
+       This is deliberate: when a sidecar is present it is authoritative,
+       and this repo's own rule is that a false negative in a gate (a
+       silently skipped scan) is worse than a false positive (extra
+       citation findings). A skill in this state is already failing
+       ``portability-declared``, so the extra findings land on an
+       already-red skill rather than a silently-skipped one.
+
+    "Mixed" and "Repository-scoped" skills legitimately cite repo-specific
+    paths and issues, so the Portable self-citation scan does not apply to
+    them.
+
+    In the fallback (absent) path the level word may wrap onto the line
+    after the ``Portability:`` marker (e.g. ``**Portability:**`` then
+    ``Portable. ...``). Reading only the marker line would then classify a
+    Portable skill as non-Portable and silently skip the citation scan -- a
+    false negative in the gate, worse than a false positive -- so when the
+    marker line carries no level word, the immediately following line is
+    folded in before deciding.
     """
+    if sidecar.state == "usable":
+        return sidecar.level == "Portable"
+    if sidecar.state == "unusable":
+        return True
     window = body[:PORTABILITY_MAX_BODY_LINE]
     for i, line in enumerate(window):
         if PORTABILITY_RE.search(line):
@@ -366,15 +529,103 @@ def check_shape(target: Path) -> list[CheckResult]:
         "body-length", body_lines <= BODY_MAX_LINES,
         f"SKILL.md body <= {BODY_MAX_LINES} lines", f"{body_lines} lines"))
 
+    sidecar = skill_dir / SIDECAR_FILENAME
+    if not sidecar.is_file():
+        results.append(CheckResult(
+            "metadata-file-present", False,
+            f"{SIDECAR_FILENAME} exists next to SKILL.md", "missing"))
+        sidecar_portability = SidecarPortability(state="absent")
+    else:
+        results.append(CheckResult(
+            "metadata-file-present", True,
+            f"{SIDECAR_FILENAME} exists next to SKILL.md", "present"))
+        # Single read+parse site for the sidecar in this module (see the
+        # SidecarPortability docstring): a corrupt (non-UTF-8) or otherwise
+        # unreadable sidecar must not raise out of check_shape -- it is a
+        # shape defect, reported as FAILed checks, not a usage error.
+        try:
+            parsed = _parse_manifest(sidecar.read_text(encoding="utf-8"))
+            manifest: dict[str, object] | None = parsed.root
+            malformed_lines = parsed.malformed_lines
+            read_error: str | None = None
+        except (OSError, UnicodeDecodeError) as exc:
+            manifest = None
+            malformed_lines = []
+            read_error = type(exc).__name__
+
+        if manifest is None:
+            evidence = f"unreadable: {read_error}"
+            results.append(CheckResult(
+                "manifest-parsable", False,
+                "gitapex_metadata.yaml has no malformed top-level lines",
+                evidence))
+            results.append(CheckResult(
+                "manifest-envelope", False,
+                f"apiVersion is {EXPECTED_API_VERSION} and kind is {EXPECTED_KIND}",
+                evidence))
+            results.append(CheckResult(
+                "metadata-name-matches-dir", False,
+                "metadata.name equals the skill directory name", evidence))
+            results.append(CheckResult(
+                "portability-declared", False,
+                f"spec.portability is one of {PORTABILITY_LEVELS}", evidence))
+            results.append(CheckResult(
+                "capability-assumption-declared", False,
+                f"spec.capabilityAssumption is one of {CAPABILITY_ASSUMPTIONS}",
+                evidence))
+            # Deliberately not the body-marker fallback: a present-but-broken
+            # sidecar is authoritative-and-failing, not absent. Running the
+            # scan (rather than skipping it) lands extra findings on a skill
+            # that is already failing portability-declared -- a false
+            # negative in the gate is worse than a false positive.
+            sidecar_portability = SidecarPortability(state="unusable")
+        else:
+            if malformed_lines:
+                count = len(malformed_lines)
+                plural = "" if count == 1 else "s"
+                manifest_parsable_evidence = (
+                    f"{count} malformed line{plural}: {malformed_lines[0]!r}")
+            else:
+                manifest_parsable_evidence = "no malformed lines"
+            results.append(CheckResult(
+                "manifest-parsable", not malformed_lines,
+                "gitapex_metadata.yaml has no malformed top-level lines",
+                manifest_parsable_evidence))
+            api = manifest.get("apiVersion")
+            kind_value = manifest.get("kind")
+            envelope_ok = (api == EXPECTED_API_VERSION
+                           and kind_value == EXPECTED_KIND)
+            results.append(CheckResult(
+                "manifest-envelope", envelope_ok,
+                f"apiVersion is {EXPECTED_API_VERSION} and kind is {EXPECTED_KIND}",
+                f"apiVersion={api!r}, kind={kind_value!r}"))
+            meta = manifest.get("metadata")
+            meta_name = meta.get("name") if isinstance(meta, dict) else None
+            resolved_dir_name = Path(os.path.abspath(skill_dir)).name
+            results.append(CheckResult(
+                "metadata-name-matches-dir", meta_name == resolved_dir_name,
+                "metadata.name equals the skill directory name",
+                f"{meta_name!r} vs directory {resolved_dir_name!r}"))
+            spec = manifest.get("spec")
+            spec = spec if isinstance(spec, dict) else {}
+            portability = spec.get("portability")
+            results.append(CheckResult(
+                "portability-declared", portability in PORTABILITY_LEVELS,
+                f"spec.portability is one of {PORTABILITY_LEVELS}",
+                repr(portability)))
+            capability = spec.get("capabilityAssumption")
+            results.append(CheckResult(
+                "capability-assumption-declared",
+                capability in CAPABILITY_ASSUMPTIONS,
+                f"spec.capabilityAssumption is one of {CAPABILITY_ASSUMPTIONS}",
+                repr(capability)))
+            if portability in PORTABILITY_LEVELS:
+                sidecar_portability = SidecarPortability(
+                    state="usable", level=portability)
+            else:
+                sidecar_portability = SidecarPortability(state="unusable")
+
     body = _body_after_frontmatter(text)
-    near_top = any(PORTABILITY_RE.search(line)
-                   for line in body[:PORTABILITY_MAX_BODY_LINE])
-    results.append(CheckResult(
-        "portability-near-top", near_top,
-        f"a portability declaration appears within the first "
-        f"{PORTABILITY_MAX_BODY_LINE} body lines",
-        "found" if near_top else
-        f"missing or below body line {PORTABILITY_MAX_BODY_LINE}"))
 
     offenders = _out_of_skill_link_targets("\n".join(body), skill_dir)
     results.append(CheckResult(
@@ -406,7 +657,7 @@ def check_shape(target: Path) -> list[CheckResult]:
                     f"reference over {TOC_MIN_LINES} lines has a TOC",
                     f"{n} lines, " + ("TOC found" if has_toc else "no TOC")))
 
-    if _is_portable(body):
+    if _is_portable(body, sidecar_portability):
         results.extend(_portable_citation_checks(skill_md, skill_dir, body))
 
     return results

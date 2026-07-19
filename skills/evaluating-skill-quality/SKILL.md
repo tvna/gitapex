@@ -5,10 +5,6 @@ description: Review a SKILL.md (and its references/) against a nine-dimension qu
 
 # Evaluating Skill Quality
 
-**Portability: Portable.** Self-contained -- carries its own rubric and
-bundled read-only `check_skill_shape.py`; cites only general Anthropic
-product docs, no this-repository tooling.
-
 Judging whether a `SKILL.md` is well-authored is a distinct review lane from
 diff-correctness review or issue/PR contract review: it asks whether the
 skill artifact itself is good, not whether a change is correct.
@@ -23,7 +19,12 @@ skill artifact itself is good, not whether a change is correct.
   rules and limits and prints PASS/FAIL per check. On a
   Python-less surface, apply the same rules by reading that script's
   check list (its module docstring enumerates them). The nine maturity
-  dimensions below are deliberately not scripted.
+  dimensions below are deliberately not scripted. The five sidecar checks
+  assume the target lives in a repository that has adopted this metadata
+  convention; when the target is a skill vendored from one that has not,
+  those checks fail as expected -- not a defect in the reviewed skill --
+  so record them as not-applicable and say so explicitly in the report
+  rather than reporting five failures as findings.
 - **Probabilistic maturity** -- nine dimensions of judgment that need a model
   or human, not a script. Full rubric with pass/fail evidence:
   [references/rubric.md](references/rubric.md).
@@ -150,11 +151,10 @@ just to classify it.
   litmus test.
 - **Repository-scoped**: intentionally depends on the origin repo's own
   tooling or conventions. Legitimate, but must say so explicitly, as a
-  terse one-line marker on the first body line after the H1 (the
-  `portability-near-top` shape check enforces presence within the first
-  6 body lines) -- undeclared-but-repository-scoped is itself a finding.
-  Extended rationale belongs in a footer `## Notes` section of the same
-  file.
+  `portability` field in the skill's `gitapex_metadata.yaml` sidecar (the
+  `portability-declared` shape check enforces its presence and value) --
+  undeclared-but-repository-scoped is itself a finding. Extended rationale
+  belongs in a footer `## Notes` section of `SKILL.md`.
 - **Mixed**: a portable core plus repo-specific detail should split the
   two into a clearly named reference file, not blend them.
 
@@ -173,6 +173,41 @@ Mechanism fit), name explicitly whether the target's domain exposes a
 rubric gap none of dimensions 1-9, Mechanism fit, or Portability level
 already covers, or state explicitly that none was found. Not a tenth
 dimension; the fixed nine-dimension count is unchanged.
+
+## Capability assumption
+
+Declared alongside portability in the skill's `gitapex_metadata.yaml`
+sidecar, as `spec.capabilityAssumption`. It records which compute /
+model-capability regime the skill was authored for. That recording is all
+this declaration does today: it is recorded and declared now, with
+**no grading effect yet**.
+
+The per-dimension grading effect of Broad / Frontier / Adaptive on
+dimensions 2 (Conciseness), 3 (Degree of freedom), 5 (Progressive
+disclosure), and 9 (Cross-model robustness) is specified in sub-project B
+and is not yet part of this rubric. Until it lands, record the declared
+level as established fact and grade those four dimensions exactly as
+before -- against one fixed preference, not calibrated to the skill's own
+target.
+
+Distinct from Mechanism fit's Model/effort tier fit check: that judges a
+model or effort *pin the skill's own content makes*, which the invoking
+agent acts on at runtime. This declaration pins nothing and never executes
+-- it is recorded for future calibration and currently has no grading
+effect at all.
+
+- **Broad** -- authored to stay effective down to a weak or economical
+  model, or a constrained harness.
+- **Frontier** -- authored assuming a strong-reasoning model; does not
+  target weak tiers.
+- **Adaptive** -- a lean body a strong model runs directly, plus deeper
+  `references/` a weaker model pulls on demand.
+
+Authors still declare one of these three levels correctly now -- the
+`capability-assumption-declared` shape check already gates the value even
+though grading does not yet use it. Full detail:
+[references/rubric.md](references/rubric.md)'s Capability assumption
+section.
 
 ## Procedure
 
@@ -200,7 +235,12 @@ re-derive one.
 3. Run the deterministic shape checker per the Two lanes section above (or
    apply its checks by hand where Python is unavailable); cite the exact
    violation.
-4. Establish the skill's portability level per the section above.
+4. Read the skill's `gitapex_metadata.yaml` sidecar and establish both its
+   portability level and its capability assumption per the sections above.
+   When the target has no sidecar (e.g. vendored from a repository that has
+   not adopted this convention), establish both by reading the target's
+   content instead -- the same way an undeclared level is read today -- and
+   note the sidecar's absence as context, not as a finding.
 5. Walk all nine dimensions in `references/rubric.md`, in order (including
    8-9), quoting the specific text that earns each verdict; assume steps
    1-4 hold rather than re-deriving them. No cited evidence means no
@@ -264,3 +304,10 @@ actually specifies.
 - Never leave the Blind spot pass unaddressed -- an explicit "no gap found"
   and a silently skipped question are not the same thing; the latter is
   not a completed review.
+
+## Notes
+
+Portability rationale: self-contained -- carries its own rubric and bundled
+read-only `check_skill_shape.py`; cites only general Anthropic product
+docs, no this-repository tooling. The declared level itself lives in
+`gitapex_metadata.yaml`.

@@ -5,11 +5,11 @@ description: Use when your own PR body or commit message is about to contain a s
 
 # Stop and Replan
 
-**Portability: Portable.** Depends only on a connected GitHub MCP server (a
-general product capability) for the Stop action below -- no
-this-repository tooling. Tool names are written as `Server:tool` (portable
-shorthand); in Claude Code, translate to the literal double-underscore
-form -- `github:update_pull_request` is `mcp__github__update_pull_request`,
+This skill depends only on a connected GitHub MCP server (a general
+product capability) for the Stop action below -- no this-repository
+tooling. Tool names are written as `Server:tool` (portable shorthand); in
+Claude Code, translate to the literal double-underscore form --
+`github:update_pull_request` is `mcp__github__update_pull_request`,
 `github:add_issue_comment` is `mcp__github__add_issue_comment`. Other
 platforms may use a different literal form for the same server/tool pair.
 

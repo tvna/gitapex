@@ -30,6 +30,7 @@ skill's own folder.
   - [Skill-step vs. bundled script](#skill-step-vs-bundled-script)
   - [Model/effort tier fit](#modeleffort-tier-fit)
 - [Portability level](#portability-level)
+- [Capability assumption](#capability-assumption)
 - [1. Discovery -- name and description](#1-discovery----name-and-description)
 - [2. Conciseness](#2-conciseness)
 - [3. Degree of freedom](#3-degree-of-freedom)
@@ -415,16 +416,28 @@ grading below.
   were portable is a dimension-1/6 defect (it misleads a future vendoring
   decision), not the scoping choice itself. An undeclared level that
   turns out to be repository-scoped is itself a finding, not something to
-  silently infer and move past. Declared as a terse one-line marker on
-  the first body line after the H1 (the `portability-near-top` shape
-  check enforces presence within the first 6 body lines); any extended
-  rationale belongs in a footer `## Notes` section of the same file,
-  keeping the classification checkable from this file alone.
+  silently infer and move past. Declared as the `portability` field in
+  the skill's `gitapex_metadata.yaml` sidecar (the
+  `portability-declared` shape check enforces presence and value); any
+  extended rationale belongs in a footer `## Notes` section of
+  `SKILL.md`.
 - **Mixed** -- dimension 5 (progressive disclosure) requires the actual
   split, not just the intent to split: the repository-specific part
   belongs in a clearly named reference file (e.g.
   `references/this-repo-only.md`) a consumer can identify and drop, not
   blended into the portable core.
+
+## Capability assumption
+
+Like the portability level, this is a precondition the review establishes
+before grading (see [Contract discipline](#contract-discipline)), read from
+the skill's `gitapex_metadata.yaml` sidecar. The three levels are defined
+in `SKILL.md`, checkable without opening this file.
+
+The per-dimension grading effect of Broad / Frontier / Adaptive on
+dimensions 2, 3, 5, and 9 is specified in sub-project B and is not yet part
+of this rubric. Until it lands, record the declared level as established
+fact and grade those dimensions as before.
 
 ## 1. Discovery -- name and description
 

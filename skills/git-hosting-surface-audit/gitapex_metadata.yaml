@@ -1,0 +1,7 @@
+apiVersion: gitapex.dev/v1alpha1
+kind: SkillMetadata
+metadata:
+  name: git-hosting-surface-audit
+spec:
+  portability: Mixed
+  capabilityAssumption: Broad
