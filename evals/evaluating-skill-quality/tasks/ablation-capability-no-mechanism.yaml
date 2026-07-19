@@ -1,0 +1,37 @@
+id: evaluating-skill-quality-ablation-capability-no-mechanism
+name: No Baseline Recorded, and No Runner Could Produce One
+description: Motivates the ablation-capability sub-check -- the target repository's own eval-status note reads "no committed no-skill baseline run" the same way this repository's own docs/skill-eval-status.md does for nearly every skill, but the repository's only evaluation tooling is a structural output_contains/output_not_contains runner with no way to run the same task with the skill withheld and compare. The correct review names the mechanism gap explicitly rather than repeating the generic "no baseline" phrasing.
+tags:
+  - quality
+  - behavioural-evidence
+  - ablation-capability
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "log-triage-assistant". Is this a good skill?
+
+    ---
+    name: log-triage-assistant
+    description: Triage a batch of application log lines into likely-benign and likely-incident categories. Use when the user asks to triage, categorize, or prioritize a batch of log lines.
+    ---
+
+    # Log Triage Assistant
+
+    ## Procedure
+
+    1. Read the batch of log lines the user provides.
+    2. Classify each line as likely-benign or likely-incident.
+    3. Return the incident-likely lines first, with a one-line reason each.
+
+    The repository's own eval-status notes for this skill say: "The
+    committed eval suite has no committed no-skill baseline run." The
+    repository's evaluation tooling is a single runner that scores a
+    transcript against output_contains / output_not_contains assertions;
+    nothing in the repository can run the same task with the skill withheld
+    and compare the result.
+expected:
+  output_contains:
+    - "no ablation mechanism"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"
