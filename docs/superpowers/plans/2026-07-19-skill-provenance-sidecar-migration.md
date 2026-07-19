@@ -141,13 +141,14 @@ the file only after Task 1's content is confirmed present and correct.
 
 - [ ] **Step 1: Check PR #189's state**
 
-Prefer the GitHub MCP server's platform-integrated read tool (e.g.
-`pull_request_read` / `get_pull_request`) over a raw `gh` invocation, per
-CLAUDE.md section 3 ("use platform-integrated tool calls ... for
-read operations ... Do not invoke command-line GitHub tools directly").
-Only fall back to a read-only `gh pr view 189 --repo tvna/gitapex --json
-state,mergedAt,baseRefName` if no GitHub MCP server is connected in the
-executing session.
+Use the GitHub MCP server's platform-integrated read tool (e.g.
+`pull_request_read` / `get_pull_request`), per CLAUDE.md section 3: "use
+platform-integrated tool calls ... or the repository's approved REST API
+wrapper for read operations ... Do not invoke command-line GitHub tools
+directly." No exception is carved out for "no MCP server connected" -- if
+no GitHub MCP server and no approved REST API wrapper are available in
+the executing session, STOP and ask the operator how to check PR #189's
+state, rather than falling back to a raw `gh` invocation.
 
 Expected: `"state": "MERGED"` / `merged: true`. If not merged yet, STOP --
 do not proceed to Task 1. Re-check later or wait for operator confirmation.

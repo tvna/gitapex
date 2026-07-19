@@ -525,9 +525,12 @@ def test_malformed_top_level_line_fails_manifest_parsable(tmp_path):
 def test_legitimate_deeper_nesting_passes_manifest_parsable(tmp_path):
     # Pins that the malformed-line fix does not break the reserved-field
     # design: spec.skillDependencies (a nested map with a list-valued
-    # 'requires' and a 'relatedTo' list) and spec.references (a top-level
-    # list) are ungated and deliberately not interpreted by the parser --
-    # none of their indented lines may be flagged as malformed.
+    # 'requires' and a 'relatedTo' list) is still ungated and deliberately
+    # not interpreted by the parser -- none of its indented lines may be
+    # flagged as malformed. spec.references' own mapping-shaped-item case
+    # is a distinct scenario, covered by
+    # test_references_mapping_shaped_item_fails_well_formed below (that
+    # field is no longer ungated as of Sub-project C).
     d = _write_skill(tmp_path)
     (d / "gitapex_metadata.yaml").write_text(
         "apiVersion: gitapex.dev/v1alpha1\n"
@@ -540,15 +543,70 @@ def test_legitimate_deeper_nesting_passes_manifest_parsable(tmp_path):
         "  skillDependencies:\n"
         "    requires: []\n"
         "    relatedTo:\n"
-        "      - other-skill\n"
+        "      - other-skill\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["manifest-parsable"].passed is True
+    assert by["manifest-parsable"].evidence == "no malformed lines"
+    assert css.main([str(d)]) == 0
+
+
+def test_references_mapping_shaped_item_fails_well_formed(tmp_path):
+    # Regression guard for the bug an independent review round found: a
+    # mapping-shaped spec.references item (the exact shape the previous
+    # test used to carry, back when this field was still fully ungated)
+    # must not be silently truncated into a garbled scalar string and
+    # certified as well-formed -- it must fail loudly instead.
+    d = _write_skill(tmp_path)
+    (d / "gitapex_metadata.yaml").write_text(
+        "apiVersion: gitapex.dev/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
         "  references:\n"
         "    - path: references/rubric.md\n"
         "      title: Rubric\n",
         encoding="utf-8")
     by = _by_name(css.check_shape(d))
     assert by["manifest-parsable"].passed is True
-    assert by["manifest-parsable"].evidence == "no malformed lines"
-    assert css.main([str(d)]) == 0
+    assert by["references-well-formed"].passed is False
+    assert "path: references/rubric.md" in by["references-well-formed"].evidence
+    assert css.main([str(d)]) == 1
+    parsed = css._parse_manifest((d / "gitapex_metadata.yaml").read_text(encoding="utf-8"))
+    assert parsed.malformed_reference_items == ["- path: references/rubric.md"]
+    # The malformed item is excluded from the parsed list entirely (not
+    # silently kept as a garbled string); nothing else in this fixture's
+    # references block was well-formed, so the list itself ends up empty.
+    assert parsed.root["spec"]["references"] == []
+
+
+def test_references_inconsistent_indent_item_fails_well_formed(tmp_path):
+    # Regression guard: real YAML rejects a block sequence whose items are
+    # not all at the same indent. A well-formed item followed by one at a
+    # different indent must be flagged, not silently accepted alongside it.
+    d = _write_skill(tmp_path)
+    (d / "gitapex_metadata.yaml").write_text(
+        "apiVersion: gitapex.dev/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  references:\n"
+        "    - \"a\"\n"
+        "  - \"b\"\n"
+        "      - \"c\"\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["references-well-formed"].passed is False
+    assert css.main([str(d)]) == 1
+    parsed = css._parse_manifest((d / "gitapex_metadata.yaml").read_text(encoding="utf-8"))
+    assert parsed.root["spec"]["references"] == ["a"]
+    assert parsed.malformed_reference_items == ['- "b"', '- "c"']
 
 
 def test_comment_and_document_marker_pass_manifest_parsable(tmp_path):
@@ -975,6 +1033,13 @@ def test_references_entries_decode_escaped_quotes():
     parsed = css._parse_manifest(text)
     assert parsed.root["spec"]["references"] == [
         'a "quoted" phrase', "a literal backslash: \\"]
+
+
+def test_unquote_falls_back_on_invalid_json_escaping():
+    # _unquote decodes double-quoted values via json.loads; a value that
+    # is not valid JSON (e.g. a stray unescaped inner quote) must fall back
+    # to a naive strip rather than raising or propagating the exception.
+    assert css._unquote('"bad "quote" here"') == 'bad "quote" here'
 
 
 def test_references_list_item_at_two_space_indent_is_read(tmp_path):

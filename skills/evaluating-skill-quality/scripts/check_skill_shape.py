@@ -21,8 +21,10 @@ Checks (the canonical list -- the manual fallback is to apply these):
     metadata.name equals the skill directory name; spec.portability is one
     of Portable/Repository-scoped/Mixed; spec.capabilityAssumption is one
     of Broad/Frontier/Adaptive; spec.references, if present, is a non-empty
-    list of non-empty strings (references-well-formed) -- the only gated
-    list field. Other ungated sidecar fields (e.g. spec.skillDependencies,
+    list of non-empty scalar strings, each item consistently indented with
+    its own list and not an unquoted YAML mapping key such as "path: foo"
+    (references-well-formed) -- the only gated list field. Other ungated
+    sidecar fields (e.g. spec.skillDependencies,
     spec.evalStatus) ARE parsed into the spec map by _parse_manifest, just
     not gated/checked here; only nested maps and list items under them are
     skipped by the parser, and indented lines are never flagged as
@@ -75,6 +77,7 @@ when no readable SKILL.md is found.
 from __future__ import annotations
 
 import argparse
+import json
 import os.path
 import re
 import sys
@@ -115,6 +118,13 @@ CAPABILITY_ASSUMPTIONS = ("Broad", "Frontier", "Adaptive")
 # only list shape this parser understands, and only under spec.references
 # specifically.
 REFERENCES_LIST_ITEM_RE = re.compile(r"^[ ]{2,}-\s*(.*)$")
+# An unquoted item that itself looks like a YAML mapping key ("key: value"
+# or a bare "key:"), e.g. "- path: references/rubric.md" -- real YAML
+# parses that as a single-key mapping, not a scalar string, and this
+# parser has no map-shaped-item support. A quoted string starting with
+# this same text (e.g. "\"path: something\"") is a deliberate scalar and
+# is excluded by the caller checking for a wrapping quote first.
+REFERENCES_MAPPING_LIKE_RE = re.compile(r"^[A-Za-z0-9_.-]+:(\s|$)")
 
 TAG_RE = re.compile(r"</?[A-Za-z][^>]*>")
 NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
@@ -219,16 +229,24 @@ def _parse_frontmatter(text: str) -> dict[str, str]:
 
 def _unquote(value: str) -> str:
     if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
-        inner = value[1:-1]
         if value[0] == '"':
-            # Decode the two escapes this repo's sidecars actually use
-            # (backslash-escaped quote, escaped backslash) so a value like
-            # spec.references' "...as \"battle\"..." round-trips to the
-            # real quote character instead of leaking a literal backslash.
-            # Order matters: unescape \\ first so a literal \" is not
-            # mistaken for an escaped quote after \\ has been resolved.
-            inner = inner.replace("\\\\", "\\").replace('\\"', '"')
-        return inner
+            # A double-quoted YAML scalar's escaping is a superset-safe
+            # match for JSON string escaping (this repository's own
+            # sidecar-generation method deliberately relies on that: see
+            # the design plan's Task 1, which builds these values with
+            # json.dumps). Decoding via the stdlib json module handles
+            # every escape a generator might emit (\", \\, \n, \uXXXX,
+            # ...), not just the two this parser previously hand-decoded.
+            # Fall back to a naive strip on decode failure (e.g. a stray
+            # unescaped literal quote) rather than raising -- this parser
+            # never raises on malformed sidecar content.
+            try:
+                decoded = json.loads(value)
+            except ValueError:
+                decoded = None
+            if isinstance(decoded, str):
+                return decoded
+        return value[1:-1]
     return value
 
 
@@ -240,9 +258,20 @@ class ManifestParse:
     ``malformed_lines`` holds each offending line (trimmed), in file order --
     empty when the sidecar's top-level structure is clean. See
     ``_parse_manifest`` for the exact malformed-line rule.
+
+    ``malformed_reference_items`` holds each spec.references list item
+    (trimmed) that could not be read as a plain scalar string -- an
+    unquoted mapping-shaped entry (e.g. "path: foo") or one indented
+    inconsistently with the rest of its own list. Empty when every item in
+    every spec.references list parsed cleanly. Unlike ``malformed_lines``,
+    these are indented lines; they would otherwise be silently skipped by
+    this parser's own "indented lines are never malformed" rule, which is
+    why they need this separate, explicit channel rather than reusing
+    ``malformed_lines``.
     """
     root: dict[str, object]
     malformed_lines: list[str]
+    malformed_reference_items: list[str]
 
 
 def _parse_manifest(text: str) -> ManifestParse:
@@ -268,23 +297,31 @@ def _parse_manifest(text: str) -> ManifestParse:
     that real PyYAML would reject with a ParserError. Every such line is
     collected (trimmed) into the returned ``ManifestParse.malformed_lines``,
     so a caller can fail the sidecar even though this permissive parser
-    itself does not raise. Indented lines are NEVER considered malformed --
-    lines under spec.references are read as list items (see above); every
-    other indented line belongs to nested/list structures this parser
-    deliberately does not interpret, and flagging them would defeat that
-    reserved-field design.
+    itself does not raise. Indented lines are NEVER considered malformed
+    this same way -- every indented line belongs to nested/list structures
+    this parser deliberately does not interpret, and flagging them would
+    defeat that reserved-field design. spec.references list items are the
+    one exception with their own malformed channel: an unquoted item
+    shaped like a YAML mapping key ("path: foo", real YAML would read that
+    as a nested mapping, not a scalar) or an item indented inconsistently
+    with the rest of its own list is collected (trimmed) into
+    ``ManifestParse.malformed_reference_items`` instead of being silently
+    accepted as a garbled scalar string.
     """
     text = text.lstrip("\ufeff")  # strip a leading UTF-8 BOM, as _parse_frontmatter does
     root: dict[str, object] = {}
     current: dict[str, object] | None = None
     collecting_refs: list[str] | None = None
+    refs_indent: int | None = None
     malformed: list[str] = []
+    malformed_refs: list[str] = []
 
     def _finalize_refs() -> None:
-        nonlocal collecting_refs
+        nonlocal collecting_refs, refs_indent
         if collecting_refs is not None and current is not None:
             current["references"] = collecting_refs
         collecting_refs = None
+        refs_indent = None
 
     for raw in text.splitlines():
         line = raw.rstrip()
@@ -293,7 +330,25 @@ def _parse_manifest(text: str) -> ManifestParse:
         if collecting_refs is not None:
             item = REFERENCES_LIST_ITEM_RE.match(line)
             if item:
-                collecting_refs.append(_unquote(item.group(1).strip()))
+                item_indent = len(line) - len(line.lstrip(" "))
+                if refs_indent is None:
+                    refs_indent = item_indent
+                if item_indent != refs_indent:
+                    # Same list, different indent than its own first item --
+                    # real YAML would reject this outright.
+                    malformed_refs.append(line.strip())
+                    continue
+                raw_text = item.group(1).strip()
+                is_quoted = (len(raw_text) >= 2 and raw_text[0] == raw_text[-1]
+                             and raw_text[0] in "\"'")
+                if not is_quoted and REFERENCES_MAPPING_LIKE_RE.match(raw_text):
+                    # An unquoted "key: value" item -- real YAML reads this
+                    # as a nested mapping, not the scalar string this
+                    # parser understands; flag it rather than silently
+                    # truncating the mapping into a garbled string.
+                    malformed_refs.append(line.strip())
+                else:
+                    collecting_refs.append(_unquote(raw_text))
                 continue
             # Not a list item: the references list ends here. Finalize it
             # and fall through to process this line normally below.
@@ -330,7 +385,8 @@ def _parse_manifest(text: str) -> ManifestParse:
             continue
         malformed.append(line.strip())
     _finalize_refs()
-    return ManifestParse(root=root, malformed_lines=malformed)
+    return ManifestParse(root=root, malformed_lines=malformed,
+                          malformed_reference_items=malformed_refs)
 
 
 def _body_after_frontmatter(text: str) -> list[str]:
@@ -593,10 +649,12 @@ def check_shape(target: Path) -> list[CheckResult]:
             parsed = _parse_manifest(sidecar.read_text(encoding="utf-8"))
             manifest: dict[str, object] | None = parsed.root
             malformed_lines = parsed.malformed_lines
+            malformed_reference_items = parsed.malformed_reference_items
             read_error: str | None = None
         except (OSError, UnicodeDecodeError) as exc:
             manifest = None
             malformed_lines = []
+            malformed_reference_items = []
             read_error = type(exc).__name__
 
         if manifest is None:
@@ -681,6 +739,18 @@ def check_shape(target: Path) -> list[CheckResult]:
                     "references-well-formed", False,
                     "spec.references, if present, is a non-empty list of non-empty strings",
                     f"spec is not a mapping: {spec_raw!r}"))
+            elif malformed_reference_items:
+                # A mapping-shaped or inconsistently-indented list item was
+                # already flagged by the parser -- fail loudly instead of
+                # reporting on whatever garbled scalar it was misparsed
+                # into, even if the rest of the list otherwise looks like
+                # a clean list of strings.
+                count = len(malformed_reference_items)
+                results.append(CheckResult(
+                    "references-well-formed", False,
+                    "spec.references, if present, is a non-empty list of non-empty strings",
+                    f"{count} malformed entr{'y' if count == 1 else 'ies'}: "
+                    f"{malformed_reference_items[0]!r}"))
             elif references is None:
                 results.append(CheckResult(
                     "references-well-formed", True,
