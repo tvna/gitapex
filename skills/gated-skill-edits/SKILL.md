@@ -81,6 +81,38 @@ evaluation. Name the gap; never fake a score to proceed.
    regress below that target's no-skill baseline before treating it as
    done.
 
+## Authoring fixtures for a substring scorer
+
+When the scorer is a substring contract (`scripts/score_contract.py` here,
+or any `output_contains` / `output_not_contains` check), the assertions are
+themselves fallible and their defects are silent: the gate still runs, it
+just measures the wrong thing.
+
+- **Each fixture must discriminate, not just match.** At least one
+  `output_contains` string per fixture must be unique to the specific
+  finding under test -- a phrase the *correct* conclusion contains and a
+  *wrong-but-plausible* one does not. A substring match cannot tell "used
+  this keyword while confirming a real finding" from "used it while hedging
+  a non-finding"; if every assertion is satisfied by both, a before/after
+  gate can score a rubric-unsupported hedge identically to a cited
+  confirmation (a false tie), and a real improvement reads as neutral. This
+  is the construct-validity limit of a pure substring scorer: verify each
+  fixture's assertions actually separate the two conclusions, not merely
+  appear in the transcript. It stays a partly semantic authoring judgment a
+  linter cannot fully make.
+- **Quote the reference exactly; do not paraphrase or miscase it.** An
+  assertion meant to match the reviewing skill's own wording should carry
+  that wording verbatim: the same casing as the rubric's heading or quote,
+  the rubric's primary phrasing rather than a near-synonym, and no bare
+  `output_not_contains` phrase that a correct *denial* would also contain.
+  Each of these has silently false-failed a correct run.
+- Where the environment ships a deterministic checker for the second rule,
+  run it before the gate (this repository provides
+  `evals/scripts/lint_fixture_assertions.py` alongside its
+  `check_skill_shape.py`): it catches the casing, negation-trap, and
+  paraphrase-drift cases mechanically, leaving only the discrimination rule
+  to human judgment.
+
 ## Output
 
 - **Precondition:** the scorer and the held-out split, named, or the STOP
@@ -106,6 +138,15 @@ evaluation. Name the gap; never fake a score to proceed.
   verification pass.
 - Never leave the Blind spot pass unaddressed -- an explicit "no gap found"
   and a silently skipped question are not the same thing.
+- Never obtain a pre-edit ("before") file state by mutating the working
+  tree (`git stash`, `git checkout`, `git reset`) while a dispatch that
+  reads that working tree may still be in flight. A concurrent `Read` can
+  observe either state depending on timing, and the contaminated result is
+  indistinguishable from a valid one without independently noticing that
+  its content describes the wrong version. Pin the pre-edit state with
+  `git show <ref>:<path>` instead, which is immune to concurrent
+  working-tree changes by construction. See
+  [references/worked-example.md](references/worked-example.md).
 - This skill iterates a skill document; it does not build a training-loop
   executor, and it does not review a skill for merge.
 
