@@ -662,7 +662,7 @@ def check_shape(target: Path) -> list[CheckResult]:
                 results.append(CheckResult(
                     "references-well-formed", True,
                     "spec.references, if present, is a non-empty list of non-empty strings",
-                    f"{len(references)} entries"))
+                    f"{len(references)} " + ("entry" if len(references) == 1 else "entries")))
             else:
                 ref_evidence = ("empty list" if references == []
                                 else f"not a list of non-empty strings: {references!r}")
