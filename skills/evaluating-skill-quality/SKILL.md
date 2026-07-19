@@ -123,16 +123,34 @@ just to classify it.
   references the *procedure* depends on to function are not.
 - **Repository-scoped**: intentionally depends on the origin repo's own
   tooling or conventions. Legitimate, but must say so explicitly, as a
-  terse one-line marker on the first body line after the H1 (the
-  `portability-near-top` shape check enforces presence within the first
-  6 body lines) -- undeclared-but-repository-scoped is itself a finding.
-  Extended rationale belongs in a footer `## Notes` section of the same
-  file.
+  `portability` field in the skill's `gitapex_metadata.yaml` sidecar (the
+  `portability-declared` shape check enforces its presence and value) --
+  undeclared-but-repository-scoped is itself a finding. Extended rationale
+  belongs in a footer `## Notes` section of `SKILL.md`.
 - **Mixed**: a portable core plus repo-specific detail should split the
   two into a clearly named reference file, not blend them.
 
 Full rationale and per-dimension grading detail:
 [references/rubric.md](references/rubric.md)'s Portability level section.
+
+## Capability assumption
+
+Declared alongside portability in the skill's `gitapex_metadata.yaml`
+sidecar, as `spec.capabilityAssumption`. It records which compute /
+model-capability regime the skill was authored for, so conciseness and
+degree of freedom are graded against the skill's own target rather than one
+fixed preference.
+
+- **Broad** -- authored to stay effective down to a weak or economical
+  model, or a constrained harness.
+- **Frontier** -- authored assuming a strong-reasoning model; does not
+  target weak tiers.
+- **Adaptive** -- a lean body a strong model runs directly, plus deeper
+  `references/` a weaker model pulls on demand.
+
+The per-dimension grading effect of each level is defined in
+[references/rubric.md](references/rubric.md)'s Capability assumption
+section.
 
 ## Procedure
 
@@ -158,7 +176,8 @@ re-derive one.
 3. Run the deterministic shape checker per the Two lanes section above (or
    apply its checks by hand where Python is unavailable); cite the exact
    violation.
-4. Establish the skill's portability level per the section above.
+4. Read the skill's `gitapex_metadata.yaml` sidecar and establish both its
+   portability level and its capability assumption per the sections above.
 5. Walk all nine dimensions in `references/rubric.md`, in order (including
    8-9), quoting the specific text that earns each verdict; assume steps
    1-4 hold rather than re-deriving them. No cited evidence means no
