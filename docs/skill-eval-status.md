@@ -92,7 +92,7 @@ not by the committed suite.
 A held-out train/selection/test split now exists for this suite
 (`evals/evaluating-skill-quality/split.md`), covering the 9 original
 fixtures plus 2 fixtures added specifically to gate scoring-axis edits to
-dimension 8. It exists to satisfy `gated-skill-edits`' precondition gate
+dimension 8. It exists to satisfy `scorer-gated-skill-edits`' precondition gate
 before any iterative edit to `references/rubric.md` is kept; it is not a
 no-skill baseline and does not close the gap named above.
 
@@ -102,7 +102,7 @@ Anthropic's own field guide on working with Claude models, Thariq
 Shihipar, "A Field Guide to Fable: Finding Your Unknowns") and a
 `### Blind spot pass` subsection wired into `SKILL.md` Procedure step 2 --
 a precondition step, not a tenth dimension. Went through
-`gated-skill-edits`' own held-out gate: 3 new fixtures added to
+`scorer-gated-skill-edits`' own held-out gate: 3 new fixtures added to
 `split.md`'s split (16 total). This session has no registered `Skill`
 tool for `evaluating-skill-quality`, so live dispatches read
 `SKILL.md`/`references/rubric.md` off disk directly and followed the
@@ -127,7 +127,7 @@ level in Claude Code (Lydia Hallie, Claude Code team) -- checking
 whether a reviewed skill's own model/effort pins are justified per that
 guidance, when the skill pins one at all. A step-level finding, same
 standing as the existing Skill-step vs. bundled script check; wired into
-`SKILL.md`'s Mechanism-fit bullet list. Went through `gated-skill-edits`'
+`SKILL.md`'s Mechanism-fit bullet list. Went through `scorer-gated-skill-edits`'
 own held-out gate: 3 new fixtures added to `split.md`'s split (19
 total). This gate reused the six pre-existing selection fixtures'
 already-measured after scores from the issue #149 gate directly above as
@@ -161,7 +161,7 @@ surfaced one still-open rubric gap: the held-out gate's scorer
 construct validity, evidenced by this session's own repeated
 case-sensitivity false-failures -- correctly left unfixed, per the
 rubric's own instruction that a durable rubric change is a deliberate
-`gated-skill-edits`-gated edit, not something a single review session
+`scorer-gated-skill-edits`-gated edit, not something a single review session
 improvises.
 
 A first attempt at fixing the stale hooks claim overcorrected: it edited
@@ -209,7 +209,7 @@ introduced the same class of defect again (bare issue-number citations)
 before a follow-up audit and root-cause investigation traced the common
 cause: the prior rubric anchored Portability checks to *executed-step*
 patterns, so a *declarative fact-claim* in prose never pattern-matched
-either checklist. Went through `gated-skill-edits`' own held-out gate: 3
+either checklist. Went through `scorer-gated-skill-edits`' own held-out gate: 3
 new fixtures added to `split.md`'s split (22 total). Reused the seven
 pre-existing selection fixtures' already-measured after scores from the
 issue #155 gate above as this gate's before baseline (disclosed reuse);
@@ -240,9 +240,9 @@ its metric is not yet evidence of gap-closure. Only `claude-sonnet-4.6` has
 been evaluated;
 cross-model behavior is currently unmeasured.
 
-## gated-skill-edits
+## scorer-gated-skill-edits
 
-The committed eval suite (`evals/gated-skill-edits/`) has no committed
+The committed eval suite (`evals/scorer-gated-skill-edits/`) has no committed
 with-skill vs. no-skill score comparison, and only `claude-sonnet-4.6` has
 been evaluated -- cross-model behavior is currently unmeasured.
 

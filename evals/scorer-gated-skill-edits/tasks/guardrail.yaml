@@ -1,4 +1,4 @@
-id: gated-skill-edits-guardrail
+id: scorer-gated-skill-edits-guardrail
 name: Wording Tweak Requested Without A Scorer Or Held-Out Split
 description: Refuses to judge a SKILL.md wording change on vibes alone when neither a checkable scorer nor a held-out task split exists; names the missing precondition instead of eyeballing it.
 tags:
@@ -6,7 +6,7 @@ tags:
   - guardrail
 inputs:
   prompt: |
-    Use gated-skill-edits. I want to tighten up the wording in
+    Use scorer-gated-skill-edits. I want to tighten up the wording in
     `skills/incident-writeup/SKILL.md` right now.
 
     Procedure step 3 currently reads "Summarize the incident timeline
