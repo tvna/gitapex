@@ -155,6 +155,11 @@ home. This supersedes the body-line placement described in
     battle-testing-a-skill ... instead"), not dependencies. Collapsing
     them into one list would make almost every Portable skill look
     self-contradictory. Populated and gated in Sub-project D.
+  - `spec.evalStatus` -- e.g. a `baseline:` date and a `lift:` result.
+    Reserved for issue #185's per-skill no-skill-baseline / lift bookkeeping
+    (rubric dimension 8), currently held centrally in
+    `docs/skill-eval-status.md` one `## <skill-name>` section per skill.
+    Name and shape only; not populated, parsed, or gated by this sub-project.
 - **Parsing (stdlib-only preserved):** because the format is one we
   control and fully specify (2-space indent, simple scalars for the gated
   fields under `metadata`/`spec`), the checker reads it with a small

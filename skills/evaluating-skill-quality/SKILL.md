@@ -19,7 +19,12 @@ skill artifact itself is good, not whether a change is correct.
   rules and limits and prints PASS/FAIL per check. On a
   Python-less surface, apply the same rules by reading that script's
   check list (its module docstring enumerates them). The nine maturity
-  dimensions below are deliberately not scripted.
+  dimensions below are deliberately not scripted. The five sidecar checks
+  assume the target lives in a repository that has adopted this metadata
+  convention; when the target is a skill vendored from one that has not,
+  those checks fail as expected -- not a defect in the reviewed skill --
+  so record them as not-applicable and say so explicitly in the report
+  rather than reporting five failures as findings.
 - **Probabilistic maturity** -- nine dimensions of judgment that need a model
   or human, not a script. Full rubric with pass/fail evidence:
   [references/rubric.md](references/rubric.md).
@@ -178,6 +183,10 @@ re-derive one.
    violation.
 4. Read the skill's `gitapex_metadata.yaml` sidecar and establish both its
    portability level and its capability assumption per the sections above.
+   When the target has no sidecar (e.g. vendored from a repository that has
+   not adopted this convention), establish both by reading the target's
+   content instead -- the same way an undeclared level is read today -- and
+   note the sidecar's absence as context, not as a finding.
 5. Walk all nine dimensions in `references/rubric.md`, in order (including
    8-9), quoting the specific text that earns each verdict; assume steps
    1-4 hold rather than re-deriving them. No cited evidence means no

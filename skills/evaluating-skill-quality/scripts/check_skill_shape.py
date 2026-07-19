@@ -18,7 +18,7 @@ Checks (the canonical list -- the manual fallback is to apply these):
     metadata.name equals the skill directory name; spec.portability is one
     of Portable/Repository-scoped/Mixed; spec.capabilityAssumption is one
     of Broad/Frontier/Adaptive. Ungated sidecar fields (spec.references,
-    spec.skillDependencies) are not parsed or checked.
+    spec.skillDependencies, spec.evalStatus) are not parsed or checked.
   - references/ files: exactly one level deep
   - any references/ file over 100 lines: contains a table of contents
     (a Markdown heading matching "Table of contents" or "Contents",
