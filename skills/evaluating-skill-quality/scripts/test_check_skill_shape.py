@@ -465,3 +465,27 @@ def test_portable_clean_skill_passes_citation_scan(tmp_path):
     res = _by_name(css.check_shape(d))
     assert res["portable-no-issue-citation"].passed is True
     assert res["portable-no-repo-path-citation"].passed is True
+
+
+def test_wrapped_portable_marker_still_runs_citation_scan(tmp_path):
+    # The level word wraps onto the line after the marker; the scan must
+    # still run, not silently skip (a false negative in the gate).
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "**Portability:**\nPortable. Self-contained.\n\n"
+        "First reported in issue #149 of this project.\n")
+    assert _by_name(css.check_shape(d))["portable-no-issue-citation"].passed is False
+
+
+def test_wrapped_mixed_marker_still_skips_citation_scan(tmp_path):
+    # The same wrap, but a Mixed level: the scan must stay skipped, since
+    # Mixed skills legitimately cite repo paths/issues.
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "**Portability:**\nMixed. Repo detail is split out.\n\n"
+        "Handled in evals/foo/bar.yaml, first reported in issue #149.\n")
+    names = _by_name(css.check_shape(d))
+    assert "portable-no-issue-citation" not in names
+    assert "portable-no-repo-path-citation" not in names

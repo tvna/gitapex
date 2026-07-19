@@ -237,10 +237,22 @@ def _is_portable(body: list[str]) -> bool:
     check locates. "Mixed" and "Repository-scoped" skills legitimately cite
     repo-specific paths and issues, so the Portable self-citation scan does
     not apply to them.
+
+    The level word may wrap onto the line after the ``Portability:`` marker
+    (e.g. ``**Portability:**`` then ``Portable. ...``). Reading only the
+    marker line would then classify a Portable skill as non-Portable and
+    silently skip the citation scan -- a false negative in the gate, worse
+    than a false positive -- so when the marker line carries no level word,
+    the immediately following line is folded in before deciding.
     """
-    for line in body[:PORTABILITY_MAX_BODY_LINE]:
+    window = body[:PORTABILITY_MAX_BODY_LINE]
+    for i, line in enumerate(window):
         if PORTABILITY_RE.search(line):
-            return bool(PORTABLE_LEVEL_RE.search(line)) and not NON_PORTABLE_LEVEL_RE.search(line)
+            decl = line
+            if not (PORTABLE_LEVEL_RE.search(line)
+                    or NON_PORTABLE_LEVEL_RE.search(line)):
+                decl = " ".join(window[i:i + 2])  # level wrapped to next line
+            return bool(PORTABLE_LEVEL_RE.search(decl)) and not NON_PORTABLE_LEVEL_RE.search(decl)
     return False
 
 
