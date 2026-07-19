@@ -134,11 +134,18 @@ home. This supersedes the body-line placement described in
   - `spec.capabilityAssumption`: one of `Broad`, `Frontier`, `Adaptive`.
     (camelCase `spec` field per k8s convention; the enum *values* stay
     PascalCase, matching the prose levels.)
-- **`spec` ungated fields (optional, free-form, not checker-enforced in A):**
-  maintainer-facing metadata. Two are reserved by name now so later
-  sub-projects do not have to re-negotiate the shape:
-  - `spec.references` -- a list of primary-source / corroboration links,
-    commit SHAs, PR numbers. Populated in Sub-project C.
+- **`spec.references` (optional, gated by Sub-project C):** a list of
+  primary-source / corroboration links, commit SHAs, PR numbers --
+  maintainer-facing provenance. When present, must be a non-empty list of
+  non-empty strings (the `references-well-formed` check); when absent, no
+  finding. Populated for `battle-testing-a-skill`,
+  `establishing-ubiquitous-language`, `scorer-gated-skill-edits`, and
+  `evaluating-skill-quality` -- the four skills `docs/skill-provenance.md`
+  covered before Sub-project C retired that central file in favor of this
+  per-skill field. The gate is deliberately narrow: only this one field's
+  list shape is parsed; no other nested/list field gained a parser.
+- **`spec` ungated fields (optional, free-form, not checker-enforced):**
+  maintainer-facing metadata, still reserved by name only:
   - `spec.skillDependencies` -- the inter-skill dependency graph, split by
     strength:
 
@@ -164,9 +171,13 @@ home. This supersedes the body-line placement described in
   control and fully specify (2-space indent, simple scalars for the gated
   fields under `metadata`/`spec`), the checker reads it with a small
   indentation-aware reader -- no PyYAML dependency. It walks the top-level
-  keys, then the `metadata` and `spec` children it needs; ungated list
-  fields like `spec.references` are skipped, not parsed. Full arbitrary
-  YAML is neither produced nor required.
+  keys, then the `metadata` and `spec` children it needs. One exception,
+  added in Sub-project C: `spec.references` is read as a flat list of
+  scalar strings (each a `- "..."` line, indented exactly 4 spaces),
+  because that field alone is now gated. Every other nested map or list
+  field (`spec.skillDependencies` and any future addition) is still
+  skipped, not parsed -- this is not a general arbitrary-YAML reader.
+  Full arbitrary YAML is neither produced nor required.
 - **Example** (`skills/evaluating-skill-quality/gitapex_metadata.yaml`):
 
   ```yaml
@@ -177,8 +188,8 @@ home. This supersedes the body-line placement described in
   spec:
     portability: Portable
     capabilityAssumption: Broad
-    # references:            # (Sub-project C)
-    #   - https://...
+    references:
+      - "For readers working in this repository (gitapex), the worked example in `skills/evaluating-skill-quality/references/worked-example-self-review.md` notes that this skill's own deterministic shape lane was delegated to `scripts/check_skill_shape.py`; that delegation was made in gitapex#32. This is provenance for maintainers of this specific repository, not something the worked example depends on."
   ```
 
 - **Behavior-neutrality invariant (hard requirement / stop boundary):**
@@ -219,6 +230,11 @@ cases, add cases for the new checks (valid manifest; missing file; wrong
 `apiVersion`/`kind`; `metadata.name` mismatch; missing or invalid-enum
 `spec` field). Preserve stdlib-only and read-only properties and the
 0/1/2 exit-code contract.
+
+Sub-project C later added a sixth check to this list,
+`references-well-formed` -- `spec.references`, if present, is a non-empty
+list of non-empty strings -- via a narrow parser extension that reads
+only that one field's list shape (section 4.5).
 
 ### 4.3 Migration of the 17 skills
 
@@ -292,28 +308,46 @@ responding-to-a-fresh-arrival, screening-a-low-trust-contribution.
   output block (which currently shows `portability-near-top PASS`) to the
   new check names.
 
-### 4.5 Relationship to `docs/skill-provenance.md` (Sub-project C)
+### 4.5 Relationship to `docs/skill-provenance.md` (Sub-project C -- complete)
 
-`docs/skill-provenance.md` today centralizes exactly the category this
+`docs/skill-provenance.md` used to centralize exactly the category this
 sidecar is meant to host: per-skill, maintainer-facing,
 repository-specific provenance and corroboration references, explicitly
 "not skill behavior" and "a vendored skill does not need this
-repository's own history." Consolidating it into per-skill sidecars is
-the natural end state of the general-purpose goal.
+repository's own history." Sub-project C consolidated it into per-skill
+sidecars, the natural end state of the general-purpose goal, and then
+deleted the central file rather than leaving a pointer -- the operator's
+explicit choice, since the sidecar is now the sole source of truth and a
+stub would just be an extra hop.
 
-Boundary (what does *not* move): behavior-relevant primary-source
+Boundary (what did *not* move): behavior-relevant primary-source
 citations that the skill's own procedure depends on -- e.g. `rubric.md`'s
 References section, which the review procedure cites as grounding
-authority -- are skill *content*, not maintainer metadata, and stay in
+authority -- are skill *content*, not maintainer metadata, and stayed in
 the skill. The test is the same behavior-neutrality invariant: if a
 review step reads it, it is content; if only a maintainer reads it, it is
-sidecar metadata.
+sidecar metadata. Verified directly during C: `rubric.md`'s References
+section shares no entries with what moved.
 
-This migration is **Sub-project C**, kept separate from A so A stays a
+Sub-project C populated `spec.references` for the four skills
+`docs/skill-provenance.md` named -- `battle-testing-a-skill`,
+`establishing-ubiquitous-language`, `scorer-gated-skill-edits`, and
+`evaluating-skill-quality` -- content unchanged, only relocated, and
+deleted the central file once the migration was verified. It also added
+the `references-well-formed` shape check (section 4.2), a decision the
+operator made explicitly rather than leaving the field permanently
+ungated: when present, `spec.references` must be a non-empty list of
+non-empty strings. The gate is narrowly scoped to this one field --
+`spec.skillDependencies` and `spec.evalStatus` remain exactly as
+unparsed/ungated as A left them, reserved for their own later
+sub-projects.
+
+This migration was **Sub-project C**, kept separate from A so A stayed a
 focused mechanism change rather than a mechanism + bulk data migration.
-A only defines the format that admits the `references` field; C fills it
-and retires the central file (or leaves a pointer). Sequencing of C
-relative to B is open (both depend only on A's mechanism).
+A only defined the format that admitted the `references` field; C filled
+it, gated it, and retired the central file. C was sequenced after
+Sub-project B (issue #183) merged, since both touched
+`skills/battle-testing-a-skill/gitapex_metadata.yaml`.
 
 ## 5. Backward compatibility and risks
 
@@ -390,9 +424,11 @@ on. Then, in either order (both depend only on A):
     reclassification and no flipped verdict, the axis is ceremony and
     should be retired instead of kept. Landing the semantics is not
     sufficient on its own.
-- **Sub-project C** -- migrate `docs/skill-provenance.md`'s per-skill
-  provenance / primary-source references into each sidecar's `references`
-  field (section 4.5), and retire or repoint the central file.
+- **Sub-project C** (#184, complete) -- migrated `docs/skill-provenance.md`'s
+  per-skill provenance / primary-source references into each sidecar's
+  `references` field, added the `references-well-formed` gate, and
+  retired the central file (section 4.5). Landed after Sub-project B
+  merged, since both touched `battle-testing-a-skill`'s sidecar.
 - **Sub-project D** -- populate `spec.skillDependencies` for all 17 skills
   (classifying each existing cross-skill reference as hard `requires` or
   soft `relatedTo`) and add two deterministic gates: every named skill
