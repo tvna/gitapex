@@ -13,8 +13,12 @@ Checks (the canonical list -- the manual fallback is to apply these):
   - name (only if present): lowercase-hyphenated, <= 64 chars,
     no XML tags, contains no reserved word (anthropic, claude)
   - SKILL.md body: <= 500 lines
-  - portability declaration: appears within the first 6 body lines
-    (a "Portability:" marker, e.g. "**Portability: Portable.**")
+  - metadata sidecar (gitapex_metadata.yaml, next to SKILL.md): present;
+    apiVersion is gitapex.dev/v1alpha1 and kind is SkillMetadata;
+    metadata.name equals the skill directory name; spec.portability is one
+    of Portable/Repository-scoped/Mixed; spec.capabilityAssumption is one
+    of Broad/Frontier/Adaptive. Ungated sidecar fields (spec.references,
+    spec.skillDependencies) are not parsed or checked.
   - references/ files: exactly one level deep
   - any references/ file over 100 lines: contains a table of contents
     (a Markdown heading matching "Table of contents" or "Contents",
@@ -61,13 +65,22 @@ BODY_MAX_LINES = 500
 TOC_MIN_LINES = 100
 RESERVED_NAME_WORDS = ("anthropic", "claude")
 
+# The sidecar is this repository's own metadata convention, not part of the
+# Anthropic Agent Skills standard -- hence the gitapex_ prefix. It is never
+# auto-loaded by the skill runtime, so it can never change skill behavior.
+SIDECAR_FILENAME = "gitapex_metadata.yaml"
+# Kubernetes-manifest-shaped envelope, borrowed as a convention only; the
+# version lets the schema grow without breaking older sidecars.
+EXPECTED_API_VERSION = "gitapex.dev/v1alpha1"
+EXPECTED_KIND = "SkillMetadata"
+PORTABILITY_LEVELS = ("Portable", "Repository-scoped", "Mixed")
+CAPABILITY_ASSUMPTIONS = ("Broad", "Frontier", "Adaptive")
+
 TAG_RE = re.compile(r"</?[A-Za-z][^>]*>")
 NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 # Accept either "Table of contents" or a bare "Contents" heading.
 TOC_RE = re.compile(r"^#+\s+(?:table of )?contents\b",
                     re.IGNORECASE | re.MULTILINE)
-PORTABILITY_RE = re.compile(r"\bportability\s*:", re.IGNORECASE)
-PORTABILITY_MAX_BODY_LINE = 6
 BLOCK_SCALAR_INDICATORS = (">", "|", ">-", "|-", ">+", "|+")
 # Markdown inline link syntax: [text](target).
 LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
@@ -129,6 +142,52 @@ def _parse_frontmatter(text: str) -> dict[str, str]:
         fields[key] = value
         i += 1
     return fields
+
+
+def _unquote(value: str) -> str:
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+        return value[1:-1]
+    return value
+
+
+def _parse_manifest(text: str) -> dict[str, object]:
+    """Parse the YAML subset the metadata sidecar is specified to use.
+
+    Reads top-level 'key: value' scalars and exactly-two-space-indented
+    scalars under a top-level map (metadata:, spec:). Deeper nesting and
+    list items are deliberately skipped: no gated field uses them, and
+    skipping keeps this stdlib-only with no YAML dependency. Ungated
+    fields such as spec.references or spec.skillDependencies may therefore
+    be arbitrarily structured without this parser needing to understand
+    them.
+    """
+    text = text.lstrip("\ufeff")  # strip a leading UTF-8 BOM, as _parse_frontmatter does
+    root: dict[str, object] = {}
+    current: dict[str, str] | None = None
+    for raw in text.splitlines():
+        line = raw.rstrip()
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        top = re.match(r"([A-Za-z0-9_-]+):\s*(.*)$", line)
+        if top:
+            key, value = top.group(1), top.group(2).strip()
+            if value:
+                root[key] = _unquote(value)
+                current = None
+            else:
+                child: dict[str, str] = {}
+                root[key] = child
+                current = child
+            continue
+        # Exactly two spaces: a four-space line (a child of a nested map)
+        # has a space where this expects a key character, so it will not
+        # match and is skipped.
+        nested = re.match(r"[ ]{2}([A-Za-z0-9_-]+):\s*(.*)$", line)
+        if nested and current is not None:
+            value = nested.group(2).strip()
+            if value:
+                current[nested.group(1)] = _unquote(value)
+    return root
 
 
 def _body_after_frontmatter(text: str) -> list[str]:
@@ -243,15 +302,45 @@ def check_shape(target: Path) -> list[CheckResult]:
         "body-length", body_lines <= BODY_MAX_LINES,
         f"SKILL.md body <= {BODY_MAX_LINES} lines", f"{body_lines} lines"))
 
+    sidecar = skill_dir / SIDECAR_FILENAME
+    if not sidecar.is_file():
+        results.append(CheckResult(
+            "metadata-file-present", False,
+            f"{SIDECAR_FILENAME} exists next to SKILL.md", "missing"))
+    else:
+        results.append(CheckResult(
+            "metadata-file-present", True,
+            f"{SIDECAR_FILENAME} exists next to SKILL.md", "present"))
+        manifest = _parse_manifest(sidecar.read_text(encoding="utf-8"))
+        api = manifest.get("apiVersion")
+        kind_value = manifest.get("kind")
+        envelope_ok = (api == EXPECTED_API_VERSION
+                       and kind_value == EXPECTED_KIND)
+        results.append(CheckResult(
+            "manifest-envelope", envelope_ok,
+            f"apiVersion is {EXPECTED_API_VERSION} and kind is {EXPECTED_KIND}",
+            f"apiVersion={api!r}, kind={kind_value!r}"))
+        meta = manifest.get("metadata")
+        meta_name = meta.get("name") if isinstance(meta, dict) else None
+        results.append(CheckResult(
+            "metadata-name-matches-dir", meta_name == skill_dir.name,
+            "metadata.name equals the skill directory name",
+            f"{meta_name!r} vs directory {skill_dir.name!r}"))
+        spec = manifest.get("spec")
+        spec = spec if isinstance(spec, dict) else {}
+        portability = spec.get("portability")
+        results.append(CheckResult(
+            "portability-declared", portability in PORTABILITY_LEVELS,
+            f"spec.portability is one of {PORTABILITY_LEVELS}",
+            repr(portability)))
+        capability = spec.get("capabilityAssumption")
+        results.append(CheckResult(
+            "capability-assumption-declared",
+            capability in CAPABILITY_ASSUMPTIONS,
+            f"spec.capabilityAssumption is one of {CAPABILITY_ASSUMPTIONS}",
+            repr(capability)))
+
     body = _body_after_frontmatter(text)
-    near_top = any(PORTABILITY_RE.search(line)
-                   for line in body[:PORTABILITY_MAX_BODY_LINE])
-    results.append(CheckResult(
-        "portability-near-top", near_top,
-        f"a portability declaration appears within the first "
-        f"{PORTABILITY_MAX_BODY_LINE} body lines",
-        "found" if near_top else
-        f"missing or below body line {PORTABILITY_MAX_BODY_LINE}"))
 
     offenders = _out_of_skill_link_targets("\n".join(body), skill_dir)
     results.append(CheckResult(

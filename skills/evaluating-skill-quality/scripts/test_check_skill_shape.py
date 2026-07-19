@@ -12,7 +12,10 @@ import check_skill_shape as css
 
 def _write_skill(tmp_path, *, name="good-skill",
                  description="Does a thing. Use when doing the thing.",
-                 body_lines=10, references=None):
+                 body_lines=10, references=None,
+                 sidecar=True, api_version="gitapex.dev/v1alpha1",
+                 kind="SkillMetadata", meta_name="skill",
+                 portability="Portable", capability_assumption="Broad"):
     d = tmp_path / "skill"
     d.mkdir()
     fm = ["---"]
@@ -21,11 +24,25 @@ def _write_skill(tmp_path, *, name="good-skill",
     if description is not None:
         fm.append(f"description: {description}")
     fm.append("---")
-    portability = "**Portability: Portable.** Self-contained."
     filler = "\n".join(f"line {i}" for i in range(body_lines))
     (d / "SKILL.md").write_text(
-        "\n".join(fm) + "\n\n" + portability + "\n\n" + filler + "\n",
-        encoding="utf-8")
+        "\n".join(fm) + "\n\n" + filler + "\n", encoding="utf-8")
+    if sidecar:
+        lines = []
+        if api_version is not None:
+            lines.append(f"apiVersion: {api_version}")
+        if kind is not None:
+            lines.append(f"kind: {kind}")
+        lines.append("metadata:")
+        if meta_name is not None:
+            lines.append(f"  name: {meta_name}")
+        lines.append("spec:")
+        if portability is not None:
+            lines.append(f"  portability: {portability}")
+        if capability_assumption is not None:
+            lines.append(f"  capabilityAssumption: {capability_assumption}")
+        (d / "gitapex_metadata.yaml").write_text(
+            "\n".join(lines) + "\n", encoding="utf-8")
     if references:
         refs = d / "references"
         refs.mkdir()
@@ -220,6 +237,15 @@ def test_junk_files_in_references_are_ignored(tmp_path):
         "---\nname: s\ndescription: d. Use when x.\n---\n\n"
         "**Portability: Portable.** Self-contained.\n",
         references={"real.md": "ok\n"})
+    (d / "gitapex_metadata.yaml").write_text(
+        "apiVersion: gitapex.dev/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n",
+        encoding="utf-8")
     refs = d / "references"
     (refs / ".DS_Store").write_bytes(b"\x00\xff\xfe junk")  # undecodable
     pycache = refs / "__pycache__"
@@ -232,50 +258,6 @@ def test_junk_files_in_references_are_ignored(tmp_path):
 
 def _result(results, name):
     return next(r for r in results if r.name == name)
-
-
-def test_portability_near_top_pass(tmp_path):
-    d = tmp_path / "s"
-    d.mkdir()
-    (d / "SKILL.md").write_text(
-        "---\nname: s\ndescription: d\n---\n\n"
-        "# Title\n\n**Portability: Portable.** Self-contained.\n\nBody.\n",
-        encoding="utf-8")
-    results = css.check_shape(d / "SKILL.md")
-    assert _result(results, "portability-near-top").passed
-
-
-def test_portability_near_top_bold_colon_form(tmp_path):
-    d = tmp_path / "s"
-    d.mkdir()
-    (d / "SKILL.md").write_text(
-        "---\nname: s\ndescription: d\n---\n\n"
-        "# Title\n\n**Portability:** Portable. Self-contained.\n\nBody.\n",
-        encoding="utf-8")
-    results = css.check_shape(d / "SKILL.md")
-    assert _result(results, "portability-near-top").passed
-
-
-def test_portability_near_top_missing_fails(tmp_path):
-    d = tmp_path / "s"
-    d.mkdir()
-    (d / "SKILL.md").write_text(
-        "---\nname: s\ndescription: d\n---\n\n# Title\n\nBody with no marker.\n",
-        encoding="utf-8")
-    results = css.check_shape(d / "SKILL.md")
-    assert not _result(results, "portability-near-top").passed
-
-
-def test_portability_near_top_buried_fails(tmp_path):
-    d = tmp_path / "s"
-    d.mkdir()
-    filler = "\n".join(f"line {i}" for i in range(10))
-    (d / "SKILL.md").write_text(
-        "---\nname: s\ndescription: d\n---\n\n# Title\n\n" + filler
-        + "\n\n**Portability: Portable.** declared too low.\n",
-        encoding="utf-8")
-    results = css.check_shape(d / "SKILL.md")
-    assert not _result(results, "portability-near-top").passed
 
 
 def test_out_of_skill_link_fails(tmp_path):
@@ -363,3 +345,84 @@ def test_reference_style_angle_bracket_target_fails(tmp_path):
     result = _result(css.check_shape(d), "links-inside-skill")
     assert not result.passed
     assert "../../docs/runbook.md" in result.evidence
+
+
+def test_sidecar_checks_pass_on_good_skill(tmp_path):
+    d = _write_skill(tmp_path)
+    by = _by_name(css.check_shape(d))
+    for check in ("metadata-file-present", "manifest-envelope",
+                  "metadata-name-matches-dir", "portability-declared",
+                  "capability-assumption-declared"):
+        assert by[check].passed is True, check
+    assert css.main([str(d)]) == 0
+
+
+def test_portability_near_top_check_is_gone(tmp_path):
+    d = _write_skill(tmp_path)
+    assert "portability-near-top" not in _by_name(css.check_shape(d))
+
+
+def test_missing_sidecar_fails(tmp_path):
+    d = _write_skill(tmp_path, sidecar=False)
+    by = _by_name(css.check_shape(d))
+    assert by["metadata-file-present"].passed is False
+    assert css.main([str(d)]) == 1
+
+
+def test_wrong_api_version_fails(tmp_path):
+    d = _write_skill(tmp_path, api_version="example.com/v1")
+    assert _by_name(css.check_shape(d))["manifest-envelope"].passed is False
+
+
+def test_wrong_kind_fails(tmp_path):
+    d = _write_skill(tmp_path, kind="NotASkill")
+    assert _by_name(css.check_shape(d))["manifest-envelope"].passed is False
+
+
+def test_metadata_name_mismatch_fails(tmp_path):
+    d = _write_skill(tmp_path, meta_name="some-other-name")
+    assert _by_name(css.check_shape(d))["metadata-name-matches-dir"].passed is False
+
+
+def test_missing_portability_fails(tmp_path):
+    d = _write_skill(tmp_path, portability=None)
+    assert _by_name(css.check_shape(d))["portability-declared"].passed is False
+
+
+def test_invalid_portability_value_fails(tmp_path):
+    d = _write_skill(tmp_path, portability="SomewhatPortable")
+    assert _by_name(css.check_shape(d))["portability-declared"].passed is False
+
+
+def test_missing_capability_assumption_fails(tmp_path):
+    d = _write_skill(tmp_path, capability_assumption=None)
+    assert _by_name(
+        css.check_shape(d))["capability-assumption-declared"].passed is False
+
+
+def test_invalid_capability_assumption_value_fails(tmp_path):
+    d = _write_skill(tmp_path, capability_assumption="Medium")
+    assert _by_name(
+        css.check_shape(d))["capability-assumption-declared"].passed is False
+
+
+def test_manifest_parser_ignores_deeper_nesting(tmp_path):
+    text = (
+        "apiVersion: gitapex.dev/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  skillDependencies:\n"
+        "    requires: []\n"
+        "    relatedTo:\n"
+        "      - other-skill\n"
+        "  capabilityAssumption: Broad\n"
+    )
+    parsed = css._parse_manifest(text)
+    assert parsed["apiVersion"] == "gitapex.dev/v1alpha1"
+    assert parsed["metadata"]["name"] == "skill"
+    assert parsed["spec"]["portability"] == "Portable"
+    assert parsed["spec"]["capabilityAssumption"] == "Broad"
+    assert "requires" not in parsed["spec"]
