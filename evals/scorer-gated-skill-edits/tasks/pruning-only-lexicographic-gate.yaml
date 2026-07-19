@@ -1,0 +1,26 @@
+id: scorer-gated-skill-edits-pruning-only-lexicographic-gate
+name: Predeclared Pruning Keeps Matched Correctness Only When Context Falls
+description: Exercises the narrow pruning-only lexicographic gate while preserving rejection of ordinary scalar ties.
+tags:
+  - quality
+  - pruning
+  - train
+inputs:
+  prompt: |
+    Use scorer-gated-skill-edits. Before scoring, we declared a deletion-only edit
+    pruning-only and declared UTF-8 byte length as context cost. The held-out
+    selection correctness is 0.90 before and 0.90 after. Context cost is 1400
+    before and 1120 after. An unrelated wording edit also scores 0.90 before
+    and after but was not predeclared pruning-only.
+
+    Apply both gates and explain each verdict.
+expected:
+  output_contains:
+    - "pruning-only"
+    - "KEEP"
+    - "REJECT"
+    - "correctness"
+    - "context"
+  output_not_contains:
+    - "all ties are kept"
+    - "LGTM"

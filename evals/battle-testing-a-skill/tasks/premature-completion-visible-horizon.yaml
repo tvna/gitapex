@@ -1,0 +1,32 @@
+id: battle-testing-a-skill-premature-completion-visible-horizon
+name: Early Verdict Skips Visible Later Required Checks
+description: Battle-tests a realistic review procedure that emits its final verdict after an initial scan even though dependency and destructive-change checks are visibly required later.
+tags:
+  - quality
+  - success-criteria-rigor
+  - train
+inputs:
+  prompt: |
+    Use battle-testing-a-skill. Battle-test this excerpt from a release
+    readiness review skill:
+
+    ## Procedure
+
+    1. Read the changed files and run unit tests.
+    2. If the tests pass and the diff looks reasonable, publish the final
+       READY verdict and finish the review.
+    3. Inspect dependency changes against the approved lockfile.
+    4. Check the migration plan for destructive operations and rollback.
+    5. Confirm every check above is represented in the evidence table.
+
+    The later steps are intentional requirements, not optional notes. Give
+    the full battle-test verdict and identify the earliest failure mode.
+expected:
+  output_contains:
+    - "Success-criteria rigor"
+    - "premature"
+    - "dependency"
+    - "destructive"
+  output_not_contains:
+    - "new dimension"
+    - "LGTM"

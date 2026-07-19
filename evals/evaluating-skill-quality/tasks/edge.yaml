@@ -37,7 +37,7 @@ inputs:
 expected:
   output_contains:
     - "headline finding"
-    - "hook or permission"
+    - "hooks and permissions"
     - "never delete production data"
   output_not_contains:
     - "LGTM"

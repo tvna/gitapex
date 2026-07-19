@@ -1,0 +1,41 @@
+id: evaluating-skill-quality-portability-legitimate-illustrative-citation
+name: Legitimate Illustrative Sibling-Skill Citation Must Not Be Flagged -- Restraint Check
+description: A Portable-declared skill cites a sibling skill purely as an illustrative analogy for its own design ("this structure mirrors the approach used in..."), with no unconditional fact-claim and no issue/PR number -- the stricter portability litmus test and dimension-6 sub-check must not over-fire on a citation the rubric's own carve-out already treats as fine, the same restraint discipline dimension 8's "silence is not evidence" rule requires elsewhere.
+tags:
+  - quality
+  - portability
+  - restraint
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "extracting-key-decisions".
+
+    ---
+    name: extracting-key-decisions
+    description: Extract the key decisions and action items from a long meeting transcript. Use when the user asks to summarize decisions or action items from a meeting.
+    ---
+
+    **Portability: Portable.** Self-contained -- carries its own extraction
+    rules and cites no repository-specific tooling.
+
+    # Extracting Key Decisions
+
+    ## Procedure
+
+    1. Read the full transcript.
+    2. Identify each point where a decision was made or an action item was
+       assigned, with the responsible party if named.
+    3. Output a structured list: decision or action, owner, any stated
+       deadline.
+
+    This structure mirrors the approach used in `summarizing-meeting-notes`'s
+    decision-log format (see that skill's own references for background) --
+    an illustrative precedent for this skill's own output shape, not a
+    dependency this procedure needs that sibling skill to be present for.
+expected:
+  output_contains:
+    - "illustrative"
+    - "summarizing-meeting-notes"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"

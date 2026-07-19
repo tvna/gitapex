@@ -57,6 +57,27 @@ dispatch actually occurred for Procedure steps 1-3 or step 5's re-run --
 that mechanism was exercised by one manual live run during the change that
 introduced it, not by the committed suite.
 
+**Issue #149 (unknowns framework):** Procedure step 1 and
+`references/provenance-and-caveats.md` now name the existing cold-
+enumeration-before-reading-the-target move as a **Blind Spot Pass**
+(Anthropic's own field guide on working with Claude models, Thariq
+Shihipar, "A Field Guide to Fable: Finding Your Unknowns"). Naming-only --
+no mechanics change, no new decision branch introduced -- so no new eval
+fixture was added; the existing suite's coverage of step 1 is unchanged.
+Refs #149.
+
+Codex model-aware routing is now implemented: the default route inherits the
+parent model, optional fixed routes use an external exact-match allowlist, and
+unknown callers fail closed as `INDETERMINATE`. The bundled deterministic
+router reports route resolution rather than execution success, bounds the
+requested trial budget, and has pytest coverage. The execution contract
+separates selected from observed tester models and requested from completed
+trials. Committed fixtures cover inheritance and the unknown-caller stop
+path. These are implementation and fixture facts, not a Codex model
+measurement: neither fixture has been executed against a real Codex model,
+no Codex result artifact is committed, and Codex behavioral reproducibility
+remains unmeasured.
+
 ## establishing-ubiquitous-language
 
 The committed eval suite (`evals/establishing-ubiquitous-language/`) runs
@@ -81,11 +102,147 @@ change that introduced it, recorded in
 not by the committed suite.
 
 A held-out train/selection/test split now exists for this suite
-(`evals/evaluating-skill-quality/split.md`), covering the 9 original
-fixtures plus 2 fixtures added specifically to gate scoring-axis edits to
-dimension 8. It exists to satisfy `gated-skill-edits`' precondition gate
-before any iterative edit to `references/rubric.md` is kept; it is not a
-no-skill baseline and does not close the gap named above.
+(`evals/evaluating-skill-quality/split.md`), covering 27 fixtures across
+12 train, 9 selection, and 6 test cases. It exists to satisfy
+`scorer-gated-skill-edits`' precondition gate before any iterative edit to
+`references/rubric.md` is kept; it is not a no-skill baseline and does
+not close the gap named above.
+
+**Issue #149 (unknowns framework):** `references/rubric.md` gained an
+`## Unknowns framework` section (four-quadrant framing adapted from
+Anthropic's own field guide on working with Claude models, Thariq
+Shihipar, "A Field Guide to Fable: Finding Your Unknowns") and a
+`### Blind spot pass` subsection wired into `SKILL.md` Procedure step 2 --
+a precondition step, not a tenth dimension. Went through
+`scorer-gated-skill-edits`' own held-out gate: 3 new fixtures added to
+`split.md`'s split (16 total). This session has no registered `Skill`
+tool for `evaluating-skill-quality`, so live dispatches read
+`SKILL.md`/`references/rubric.md` off disk directly and followed the
+Procedure by hand rather than running under the `copilot-sdk` executor
+the suite is otherwise calibrated for -- a reasonable proxy, disclosed
+rather than hidden. A PR #150 review (`chatgpt-codex-connector[bot]`)
+caught two real bugs in the new fixtures' assertions (case-sensitivity
+against the rubric's own prescribed capitalization; a negative assertion
+that false-failed a correct denial) and correctly flagged a first gate
+attempt as an incomplete partial record. Both fixed, and the full
+6-fixture selection split was re-measured end to end: selection mean
+**0.939815 -> 0.981482, KEEP** -- the 5 pre-existing fixtures tied
+exactly (no regression), and the entire improvement came from the
+purpose-built fixture (0.75 -> 1.00). Full record, per-fixture scores,
+and the bug fixes: `evals/evaluating-skill-quality/split.md`'s Kept-edit
+log. Refs #149.
+
+**Issue #155 (model/effort tier fit):** `references/rubric.md` gained a
+fifth Mechanism-fit check, `### Model/effort tier fit`, grounded in
+Anthropic's own guidance on choosing a model tier and reasoning-effort
+level in Claude Code (Lydia Hallie, Claude Code team) -- checking
+whether a reviewed skill's own model/effort pins are justified per that
+guidance, when the skill pins one at all. A step-level finding, same
+standing as the existing Skill-step vs. bundled script check; wired into
+`SKILL.md`'s Mechanism-fit bullet list. Went through `scorer-gated-skill-edits`'
+own held-out gate: 3 new fixtures added to `split.md`'s split (19
+total). This gate reused the six pre-existing selection fixtures'
+already-measured after scores from the issue #149 gate directly above as
+this gate's before baseline (same committed file state, same matched
+methodology -- disclosed reuse), so only the one new selection fixture
+needed a genuine fresh before/after pair. Selection mean: **0.912698 ->
+0.963719, KEEP**. One pre-existing fixture dipped on an assertion
+unrelated to this edit (a paraphrase in unrelated dimension-8 content);
+checked directly, disclosed, and did not change the outcome. The
+purpose-built fixture moved cleanly from 0.500000 to 1.000000. A
+held-out restraint check (test split, read once) confirmed the new
+check does not over-fire on an already-justified pin, and caught one
+more instance of the same case-sensitivity fixture bug PR #150's
+external review found for `blind spot` -- fixed the same way, by
+matching a case-invariant fragment instead of re-running for a lucky
+pass. Full record, per-fixture scores, and the bug fix:
+`evals/evaluating-skill-quality/split.md`'s Kept-edit log. Refs #155.
+
+**Issue #164 (self-review worked example, portability corrections):** a
+live dogfooding pass (the just-edited skill reviewing its own current
+files via a real fresh-subagent dispatch, per its own Subagent dispatch
+procedure) found two real issues in
+`references/worked-example-self-review.md`: a stale claim that "gitapex
+has no hooks infrastructure at all today" (false -- `hooks/hooks.json` +
+`hooks/check-bash-safety.sh` now back the eval-tooling-install Stop
+boundary), and a materialized growth watch-point (`rubric.md` grown from
+565 to 806 lines across the #149 and #155 edits, with no new instance of
+the specific drift risk previously named). The Blind spot pass also
+surfaced one still-open rubric gap: the held-out gate's scorer
+(`score_contract.py`, substring matching) has no check on its own
+construct validity, evidenced by this session's own repeated
+case-sensitivity false-failures -- correctly left unfixed, per the
+rubric's own instruction that a durable rubric change is a deliberate
+`scorer-gated-skill-edits`-gated edit, not something a single review session
+improvises.
+
+A first attempt at fixing the stale hooks claim overcorrected: it edited
+`SKILL.md`'s own Stop boundary to assert "backed by this plugin's
+`hooks/check-bash-safety.sh` PreToolUse hook" as an unconditional fact --
+itself a new portability defect (a vendored copy in a different plugin
+with no file at that path would carry a false enforcement claim, worse
+than the original honestly-named prose-only gap). Caught in review and
+corrected: `SKILL.md` now checks the actual environment conditionally
+("if a target repository has such a hook, that is real enforcement...
+if it does not, this boundary is currently prose-only") rather than
+asserting a fixed answer -- true in any plugin this skill is vendored
+into, not only gitapex.
+
+A separate portability sweep then found that
+`references/worked-example-self-review.md` itself -- inside this
+Portable skill's own folder -- had accumulated many gitapex issue/PR
+number citations as inline "Update (issue #N)" changelog narrative
+(dated corrections, gate-result score tables). Bare `#N` auto-links
+resolve relative to whichever repository currently hosts the file, so
+they silently resolve to the wrong issue once vendored; even fully
+qualified, embedding this repository's own issue-tracker history inside
+a Portable skill's worked example blends repo-specific bookkeeping into
+portable teaching content, the same class of gap dimension 5's Mixed
+guidance names for a portable-core-plus-repo-specific-detail split. Fix:
+this section (and the two paragraphs above) is now the single home for
+that dated, issue-linked history; `references/worked-example-self-review.md`
+carries no issue/PR-number citations of its own and reads as clean,
+timeless worked-example content regardless of which repository hosts it.
+Refs #164.
+
+**Issue #165 (portability litmus test for declarative fact-claims):**
+`references/rubric.md` gained an explicit portability litmus test ("would
+this exact sentence remain true, unchanged, if this file were copied into
+a repository carrying none of the origin repo's state?"), applied to
+every sentence including Stop-boundaries/Mechanism-fit prose, plus a
+named dimension-6 sub-check banning bare/qualified GitHub issue-PR
+citations inside Portable-declared content; mirrored in `SKILL.md` and
+wired into the Subagent-dispatch instructions. Motivated by a real,
+repeated pattern: a pre-existing `SKILL.md` defect (an unconditional
+"backed by this plugin's `hooks/check-bash-safety.sh`" claim, predating
+this session, introduced 2026-07-14) survived five gated edits and one
+live dogfooding pass unflagged, and this session's own #164 fix
+introduced the same class of defect again (bare issue-number citations)
+before a follow-up audit and root-cause investigation traced the common
+cause: the prior rubric anchored Portability checks to *executed-step*
+patterns, so a *declarative fact-claim* in prose never pattern-matched
+either checklist. Went through `scorer-gated-skill-edits`' own held-out gate: 3
+new fixtures added to `split.md`'s split (22 total). Reused the seven
+pre-existing selection fixtures' already-measured after scores from the
+issue #155 gate above as this gate's before baseline (disclosed reuse);
+only the one new selection fixture needed a genuine fresh before/after
+pair. Selection mean: **0.937004 -> 1.000000, KEEP**. Two pre-existing
+fixtures moved up on content this edit never touches (run-to-run wording
+variance, disclosed, not banked as a win). Fixing the new fixture's own
+assertion caught a live instance of the "scorer construct validity" gap
+this session's own Blind Spot Pass had already named as open: the
+original assertion was loose enough to score a pre-edit, rubric-unsupported
+hedge identically to the post-edit confirmed violation -- tightened to a
+phrase unique to the new rubric text, turning a false tie into a genuine
+before/after gap (0.750000 -> 1.000000). A second, unrelated,
+pre-existing fixture bug (`edge.yaml`, predating this session) was also
+found and fixed: an assertion matching one historical transcript's
+paraphrase rather than the rubric's own stable, quoted primary-source
+text. Full record, per-fixture scores, and both bug fixes:
+`evals/evaluating-skill-quality/split.md`'s Kept-edit log -- consistent
+with the #164 fix directly above, this dated history is not additionally
+duplicated into `references/worked-example-self-review.md`, which stays
+issue/PR-number-free by design. Refs #165.
 
 ## explaining-the-work
 
@@ -95,11 +252,18 @@ its metric is not yet evidence of gap-closure. Only `claude-sonnet-4.6` has
 been evaluated;
 cross-model behavior is currently unmeasured.
 
-## gated-skill-edits
+## scorer-gated-skill-edits
 
-The committed eval suite (`evals/gated-skill-edits/`) has no committed
+The committed eval suite (`evals/scorer-gated-skill-edits/`) has no committed
 with-skill vs. no-skill score comparison, and only `claude-sonnet-4.6` has
 been evaluated -- cross-model behavior is currently unmeasured.
+
+**Issue #149 (unknowns framework):** the Precondition gate section gained a
+**Blind spot pass** bullet -- name whether the fixture corpus itself has an
+unknown-unknown blind spot before trusting the split -- adapted from
+Anthropic's own field guide on working with Claude models (Thariq Shihipar,
+"A Field Guide to Fable: Finding Your Unknowns"). Advisory naming addition,
+not a new enforced branch, so no new eval fixture was added. Refs #149.
 
 ## issue-to-branch
 

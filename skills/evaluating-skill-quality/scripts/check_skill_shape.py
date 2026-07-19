@@ -33,6 +33,27 @@ Checks (the canonical list -- the manual fallback is to apply these):
     gives the skill's own "Portable" self-declaration (whose definition
     already requires every instruction to resolve inside the skill's own
     folder) a deterministic backstop.
+  - Portable self-citation (only when the skill declares "Portable", not
+    "Mixed" or "Repository-scoped"). The declaration is read
+    sidecar-primary with a body-marker fallback: the sidecar's
+    spec.portability decides whenever it is present and usable -- the form
+    every skill in this repository uses -- and only a skill with no usable
+    sidecar (typically one vendored in from another repository) falls back
+    to the near-top "**Portability: <level>.**" body marker, so such a
+    skill still gets scanned rather than silently skipped. The scan itself:
+    no bare-prose GitHub issue/PR-number
+    citation (#149 or owner/repo#149) and no bare-prose origin-repository
+    path citation (evals/... or docs/...) in SKILL.md or references/*.md
+    body text. A bare #N auto-links relative to whichever repository
+    currently hosts the file and silently resolves to the wrong issue
+    once the skill is vendored; a repo-relative path breaks the same way.
+    Matches inside inline code (`#149`), fenced code blocks, absolute
+    URLs, and Markdown links are excluded -- those are the established
+    ways this repo's Portable skills quote such a token illustratively
+    without it resolving live. This is the deterministic backstop for the
+    rubric's dimension-6 Portable-skill rule; the semantic judgment of
+    whether a citation is illustrative context vs. the skill's own
+    bookkeeping stays with that model-judged dimension.
 
 Usage:
   python3 check_skill_shape.py <skill-dir-or-SKILL.md>
@@ -91,6 +112,41 @@ REFDEF_RE = re.compile(r"^[ ]{0,3}\[[^\]]+\]:\s*(<[^>]*>|\S+)", re.MULTILINE)
 # An absolute-URL scheme (http:, https:, mailto:, ftp:, ...) -- anything
 # matching this is external, not a same-repo relative path.
 SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.\-]*:")
+
+# Portable self-citation scan (see the module docstring). A skill counts as
+# Portable only when its portability marker says "Portable" without the
+# "Mixed" / "Repository-scoped" qualifiers -- those levels legitimately cite
+# repo-specific paths and issues, so the scan does not apply to them.
+# The near-top body marker, kept only as the fallback declaration form for a
+# skill vendored in from another repository that has no sidecar. Skills in
+# this repository declare portability in gitapex_metadata.yaml instead.
+PORTABILITY_RE = re.compile(r"\bportability\s*:", re.IGNORECASE)
+PORTABILITY_MAX_BODY_LINE = 6
+PORTABLE_LEVEL_RE = re.compile(r"\bportable\b", re.IGNORECASE)
+NON_PORTABLE_LEVEL_RE = re.compile(r"\b(?:mixed|repository-scoped|repo-scoped)\b",
+                                   re.IGNORECASE)
+# A GitHub issue/PR-number citation: an optional "owner/repo" prefix, then
+# "#" and a digit run. The trailing (?![\d-]) rejects an in-page anchor slug
+# like "#1-discovery" (a digit run followed by "-word"); a real citation ends
+# at the digits.
+ISSUE_CITATION_RE = re.compile(
+    r"(?:[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*)?#\d+(?![\d-])")
+# An origin-repository path citation rooted at this repo's own top-level
+# tooling dirs. Kept deliberately narrow (evals/ and docs/) -- the two roots
+# the historical incidents used -- rather than every path shape, so the scan
+# stays a low-false-positive backstop, not a general path linter.
+REPO_PATH_CITATION_RE = re.compile(r"(?:evals|docs)/[A-Za-z0-9._/-]+")
+# A run of Markdown "already illustrative / already external" syntax whose
+# contents must not be scanned: a fenced code block (``` ... ```), an inline
+# code span (`...`), an absolute URL, an inline link ([text](target)), a
+# reference-style link ([text][label]), or a reference definition
+# ([label]: target). Stripping these leaves only bare prose.
+FENCE_RE = re.compile(r"^\s*(?:```|~~~)")
+INLINE_CODE_RE = re.compile(r"`[^`]*`")
+BARE_URL_RE = re.compile(r"[a-zA-Z][a-zA-Z0-9+.\-]*://[^\s>)\]]+")
+MD_INLINE_LINK_RE = re.compile(r"\[[^\]]*\]\([^)]*\)")
+MD_REF_LINK_RE = re.compile(r"\[[^\]]*\]\[[^\]]*\]")
+MD_REF_DEF_RE = re.compile(r"^\s{0,3}\[[^\]]+\]:\s.*$")
 
 
 @dataclass(frozen=True)
@@ -246,6 +302,123 @@ def _out_of_skill_link_targets(body_text: str, skill_dir: Path) -> list[str]:
     return offenders
 
 
+def _sidecar_portability(skill_dir: Path) -> str | None:
+    """The sidecar's ``spec.portability`` value, or None if unusable.
+
+    Returns None -- meaning "fall back to the body marker" -- when the
+    sidecar is absent, unreadable, or carries no value in
+    ``PORTABILITY_LEVELS``. Reuses ``_parse_manifest`` so the sidecar has
+    exactly one parser in this module. Read-only.
+    """
+    sidecar = skill_dir / SIDECAR_FILENAME
+    if not sidecar.is_file():
+        return None
+    try:
+        manifest = _parse_manifest(sidecar.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError):
+        return None
+    spec = manifest.get("spec")
+    if not isinstance(spec, dict):
+        return None
+    value = spec.get("portability")
+    return value if value in PORTABILITY_LEVELS else None
+
+
+def _is_portable(body: list[str], skill_dir: Path) -> bool:
+    """Whether the skill declares itself Portable (not Mixed/Repository-scoped).
+
+    Sidecar-primary, body-marker fallback:
+
+    1. If ``skill_dir`` holds a readable ``gitapex_metadata.yaml`` carrying a
+       usable ``spec.portability`` value, that value alone decides:
+       "Portable" -> True, "Mixed" / "Repository-scoped" -> False. This is
+       the declaration form every skill in this repository uses, since the
+       enum moved out of the SKILL.md body and into the sidecar.
+    2. Otherwise -- no sidecar, an unreadable one, or one with no recognised
+       ``spec.portability`` -- fall back to the near-top body marker
+       (``**Portability: Portable.**``). A skill vendored in from another
+       repository carries that marker and no sidecar, and must still get
+       the citation scan rather than silently skipping it.
+
+    "Mixed" and "Repository-scoped" skills legitimately cite repo-specific
+    paths and issues, so the Portable self-citation scan does not apply to
+    them under either path.
+
+    In the fallback path the level word may wrap onto the line after the
+    ``Portability:`` marker (e.g. ``**Portability:**`` then ``Portable.
+    ...``). Reading only the marker line would then classify a Portable
+    skill as non-Portable and silently skip the citation scan -- a false
+    negative in the gate, worse than a false positive -- so when the marker
+    line carries no level word, the immediately following line is folded in
+    before deciding.
+    """
+    declared = _sidecar_portability(skill_dir)
+    if declared is not None:
+        return declared == "Portable"
+    window = body[:PORTABILITY_MAX_BODY_LINE]
+    for i, line in enumerate(window):
+        if PORTABILITY_RE.search(line):
+            decl = line
+            if not (PORTABLE_LEVEL_RE.search(line)
+                    or NON_PORTABLE_LEVEL_RE.search(line)):
+                decl = " ".join(window[i:i + 2])  # level wrapped to next line
+            return bool(PORTABLE_LEVEL_RE.search(decl)) and not NON_PORTABLE_LEVEL_RE.search(decl)
+    return False
+
+
+def _strip_illustrative_spans(body_text: str) -> str:
+    """Return ``body_text`` with every span that quotes a token
+    illustratively or externally removed, leaving only bare prose.
+
+    Removes fenced code blocks wholesale, then per surviving line strips
+    inline code spans, absolute URLs, Markdown inline/reference links, and
+    reference definitions. These are exactly the forms in which this repo's
+    Portable skills already write an issue number or repo path without it
+    resolving live (an inline-code ``#149``, a full URL, a ``[PR #2][pr2]``
+    worked-example link), so what remains is a citation sitting unguarded in
+    running prose -- the shape the historical incidents took.
+    """
+    out: list[str] = []
+    in_fence = False
+    for line in body_text.splitlines():
+        if FENCE_RE.match(line):
+            in_fence = not in_fence
+            out.append("")
+            continue
+        if in_fence:
+            out.append("")
+            continue
+        if MD_REF_DEF_RE.match(line):
+            out.append("")
+            continue
+        stripped = INLINE_CODE_RE.sub(" ", line)
+        stripped = BARE_URL_RE.sub(" ", stripped)
+        stripped = MD_INLINE_LINK_RE.sub(" ", stripped)
+        stripped = MD_REF_LINK_RE.sub(" ", stripped)
+        out.append(stripped)
+    return "\n".join(out)
+
+
+def _portable_citation_offenders(body_text: str) -> tuple[list[str], list[str]]:
+    """Return (issue-number, repo-path) bare-prose citations in ``body_text``.
+
+    Applies the illustrative-span strip first, so only citations left
+    unguarded in running prose are reported. Order-preserving and
+    deduplicated so the evidence string is stable and terse.
+    """
+    prose = _strip_illustrative_spans(body_text)
+    issues = _dedup(m.group(0) for m in ISSUE_CITATION_RE.finditer(prose))
+    paths = _dedup(m.group(0) for m in REPO_PATH_CITATION_RE.finditer(prose))
+    return issues, paths
+
+
+def _dedup(items) -> list[str]:
+    seen: dict[str, None] = {}
+    for item in items:
+        seen.setdefault(item, None)
+    return list(seen)
+
+
 def _no_xml_check(field: str, value: str) -> CheckResult:
     has_tag = bool(TAG_RE.search(value))
     return CheckResult(
@@ -374,7 +547,48 @@ def check_shape(target: Path) -> list[CheckResult]:
                     f"reference over {TOC_MIN_LINES} lines has a TOC",
                     f"{n} lines, " + ("TOC found" if has_toc else "no TOC")))
 
+    if _is_portable(body, skill_dir):
+        results.extend(_portable_citation_checks(skill_md, skill_dir, body))
+
     return results
+
+
+def _portable_citation_checks(skill_md: Path, skill_dir: Path,
+                              body: list[str]) -> list[CheckResult]:
+    """The two Portable self-citation checks over SKILL.md body and
+    references/*.md. Each source contributes its offenders labelled by file,
+    so a failure points at the exact file to fix.
+    """
+    sources: list[tuple[str, str]] = [(skill_md.name, "\n".join(body))]
+    refs_dir = skill_dir / "references"
+    if refs_dir.is_dir():
+        for ref in sorted(refs_dir.iterdir()):
+            if not ref.is_file() or _is_ignorable(ref):
+                continue
+            try:
+                ref_text = ref.read_text(encoding="utf-8")
+            except (UnicodeDecodeError, OSError):
+                continue
+            sources.append((f"references/{ref.name}",
+                            "\n".join(_body_after_frontmatter(ref_text))))
+
+    issue_hits: list[str] = []
+    path_hits: list[str] = []
+    for label, source_text in sources:
+        issues, paths = _portable_citation_offenders(source_text)
+        issue_hits += [f"{label}:{c}" for c in issues]
+        path_hits += [f"{label}:{c}" for c in paths]
+
+    return [
+        CheckResult(
+            "portable-no-issue-citation", not issue_hits,
+            "Portable content has no bare-prose GitHub issue/PR-number citation",
+            "none" if not issue_hits else "found: " + ", ".join(issue_hits)),
+        CheckResult(
+            "portable-no-repo-path-citation", not path_hits,
+            "Portable content has no bare-prose origin-repository path citation",
+            "none" if not path_hits else "found: " + ", ".join(path_hits)),
+    ]
 
 
 def format_report(results: list[CheckResult]) -> str:

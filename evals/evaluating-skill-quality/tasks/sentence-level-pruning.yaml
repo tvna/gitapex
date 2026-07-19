@@ -1,0 +1,27 @@
+id: evaluating-skill-quality-sentence-level-pruning
+name: Static Pruning Findings Are Not Automatically Behavioral No-Ops
+description: Requires sentence-level pruning to separate relevance, duplication, sediment, and sprawl from a model-relative no-op claim that needs measured before/after evidence.
+tags:
+  - quality
+  - conciseness
+  - train
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this paragraph:
+
+    PDFs are a common document format. Always quote the failing line.
+    Always quote the failing line. In 2024 this repository used tool X.
+    If the rare tax branch fires, load all 80 jurisdiction rules below.
+
+    No before/after model run exists. Classify what should be pruned and
+    tell me whether any sentence can already be called a behavioral no-op.
+expected:
+  output_contains:
+    - "irrelevant"
+    - "duplicate"
+    - "sediment"
+    - "sprawl"
+    - "model"
+  output_not_contains:
+    - "proven no-op"
+    - "LGTM"

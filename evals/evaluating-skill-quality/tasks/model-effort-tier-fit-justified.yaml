@@ -1,0 +1,36 @@
+id: evaluating-skill-quality-model-effort-tier-fit-justified
+name: Justified Model/Effort Pin Must Not Be Flagged -- Race-Condition Diagnosis
+description: The reviewed SKILL.md excerpt pins Opus at max effort for diagnosing an intermittent race condition, with a stated reason matching the source guidance's own hard-problem examples almost verbatim (subtle, hard-to-reproduce, a smaller model confidently wrong); the Model/effort tier fit check must recognize this as justified and say so explicitly rather than flagging a pin that already meets the criteria or silently skipping the question.
+tags:
+  - quality
+  - mechanism-fit
+  - model-effort-tier-fit
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "diagnosing-a-race-condition". Is this a good skill?
+
+    ---
+    name: diagnosing-a-race-condition
+    description: Diagnose an intermittent, hard-to-reproduce race condition in concurrent code. Use when the user reports a flaky bug involving threads, async code, or shared state.
+    ---
+
+    # Diagnosing a Race Condition
+
+    ## Procedure
+
+    1. Gather the flaky failure's logs and stack traces across multiple
+       runs.
+    2. Dispatch the root-cause analysis to Opus at max effort: race
+       conditions are exactly the subtle, hard-to-reproduce class of bug
+       where a smaller model is confidently wrong regardless of context,
+       and getting this diagnosis wrong wastes days of follow-up
+       debugging.
+    3. Propose a fix and a regression test that reproduces the race
+       deterministically.
+expected:
+  output_contains:
+    - "pin justified"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"

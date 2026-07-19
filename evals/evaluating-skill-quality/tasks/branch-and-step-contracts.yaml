@@ -1,0 +1,26 @@
+id: evaluating-skill-quality-branch-and-step-contracts
+name: Missing And Duplicate Branch Triggers With Incomplete Step Criteria
+description: Reviews a procedure whose two verdict branches share one trigger, whose escalation route has no trigger, and whose finite file walk can stop after a sample.
+tags:
+  - quality
+  - clarity-and-structure
+  - train
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this Procedure excerpt:
+
+    1. Inspect some files in references/.
+    2. If the review has concerns, output REJECT.
+    3. If the review has concerns, output NEEDS_WORK.
+    4. Otherwise ask a human when appropriate.
+
+    Does dimension 4 identify every branch and step-contract gap?
+expected:
+  output_contains:
+    - "duplicate"
+    - "trigger"
+    - "every"
+    - "references/"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"

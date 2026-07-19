@@ -5,6 +5,16 @@ by the same `output_contains` / `output_not_contains` substring contract
 that `evals/issue-to-branch/` already ships. The skill is fictional so this
 example cannot go stale against any real skill's current text.
 
+## Contents
+
+- [The scorer](#the-scorer)
+- [The splits](#the-splits)
+- [Starting score](#starting-score)
+- [Iteration 1](#iteration-1)
+- [After the iteration](#after-the-iteration)
+- [Obtaining the "before" state under a live gate](#obtaining-the-before-state-under-a-live-gate)
+- [What this example demonstrates](#what-this-example-demonstrates)
+
 ## The scorer
 
 Each task fixture asserts substrings that must (or must not) appear in the
@@ -61,6 +71,15 @@ assertion depends on that line, so the score is unchanged.
   **rejected**. A plausible-sounding edit that does not move the score is
   not kept.
 
+### Edit C (kept only as predeclared pruning)
+
+Before scoring, classify a deletion-only candidate as pruning-only and
+declare UTF-8 byte length as the context-cost proxy. Its selection
+correctness remains **1.0 -> 1.0**, while measured cost falls **920 -> 810**.
+The correctness-first pruning gate therefore **keeps** it. The identical
+correctness tie without that predeclaration and strict cost reduction would
+be an ordinary tie and reject, just like Edit B.
+
 ### Rejected-edit log
 
 ```
@@ -83,9 +102,21 @@ Later iterations read this log and do not re-propose Edit B.
 - **Next move:** if the selection score can still rise, run another
   iteration on fresh train evidence; otherwise ship the current best skill.
 
+## Obtaining the "before" state under a live gate
+
+Score the *before* skill from `git show <ref>:<path>`, never a working-tree
+stash. One incident lost a whole before-score dispatch: the files were
+`git stash`ed to pre-edit state, a Stop hook forced a commit, and the
+`git stash pop` restoring a coherent tree landed *while the dispatch was
+still in flight* -- its `Read` calls silently saw the post-edit files. It
+was caught only by a lucky tell (the report cited rubric content that did
+not exist yet) and had to be redone. `git show` is fixed at the named
+revision, so a concurrent working-tree change cannot move it.
+
 ## What this example demonstrates
 
 - Edits are motivated by the **train** split; the **selection** split only
   gates; the **test** split is untouched.
 - Acceptance is **strict**: 0.75 -> 1.0 is kept, 1.0 -> 1.0 is rejected.
-- A rejected edit still produces value as a **logged** negative signal.
+- A rejected edit still produces value as a **logged** negative signal, and
+  the "before" state comes from `git show`, never a working-tree stash.

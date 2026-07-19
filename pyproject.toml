@@ -10,7 +10,7 @@ dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
     "pyyaml>=6.0",
-    "prek>=0.4",
+    "prek>=0.4.10",
 ]
 
 [tool.uv]
@@ -18,12 +18,12 @@ dev = [
 package = false
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "skills/evaluating-skill-quality/scripts"]
-pythonpath = [".github/scripts", "skills/gated-skill-edits/scripts", "skills/evaluating-skill-quality/scripts", "skills/seeding-issue-pr-templates/scripts", "evals/scripts"]
-addopts = "--cov=.github/scripts --cov=skills/gated-skill-edits/scripts --cov=skills/evaluating-skill-quality/scripts --cov=skills/seeding-issue-pr-templates/scripts --cov=evals/scripts --cov-report=term-missing"
+testpaths = ["tests", "skills/battle-testing-a-skill/scripts", "skills/evaluating-skill-quality/scripts"]
+pythonpath = [".github/scripts", "skills/battle-testing-a-skill/scripts", "skills/scorer-gated-skill-edits/scripts", "skills/evaluating-skill-quality/scripts", "skills/seeding-issue-pr-templates/scripts", "evals/scripts"]
+addopts = "--cov=.github/scripts --cov=skills/battle-testing-a-skill/scripts --cov=skills/scorer-gated-skill-edits/scripts --cov=skills/evaluating-skill-quality/scripts --cov=skills/seeding-issue-pr-templates/scripts --cov=evals/scripts --cov-report=term-missing"
 
 [tool.coverage.run]
-source = [".github/scripts", "skills/gated-skill-edits/scripts", "skills/evaluating-skill-quality/scripts", "skills/seeding-issue-pr-templates/scripts", "evals/scripts"]
+source = [".github/scripts", "skills/battle-testing-a-skill/scripts", "skills/scorer-gated-skill-edits/scripts", "skills/evaluating-skill-quality/scripts", "skills/seeding-issue-pr-templates/scripts", "evals/scripts"]
 
 [tool.coverage.report]
 exclude_lines = [

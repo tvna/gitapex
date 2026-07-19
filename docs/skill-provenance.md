@@ -41,12 +41,12 @@ side-references above). See the references file's "Comparative review"
 section for what that review verified directly versus what remains
 unmeasured or secondary-sourced.
 
-SKILL.md's "Connection to the held-out gate" section names `gated-skill-edits`
+SKILL.md's "Connection to the held-out gate" section names `scorer-gated-skill-edits`
 as this repo's example of a skill consuming a battle-test verdict as a
 scorer, without an issue citation (kept portable). For readers working in
 this repository: that connection traces to gitapex#25 (closed design
 issue, "design a held-out-gated skill-training loop, scoped to verifiable
-tasks"), whose component 2 this skill implements; `gated-skill-edits`
+tasks"), whose component 2 this skill implements; `scorer-gated-skill-edits`
 itself is the component-1 implementation, landed via PR #29.
 
 ## establishing-ubiquitous-language -- worked-example provenance
@@ -58,9 +58,9 @@ draft commit `241f4392`, and the rename commit `ef222b81` on pull request #2.
 This is provenance for maintainers of this specific repository, not something
 the worked example depends on.
 
-## gated-skill-edits -- held-out gate provenance
+## scorer-gated-skill-edits -- held-out gate provenance
 
-`skills/gated-skill-edits/scripts/score_contract.py`'s docstring refers to a
+`skills/scorer-gated-skill-edits/scripts/score_contract.py`'s docstring refers to a
 "held-out gate"; for readers working in this repository, that gate was
 introduced by gitapex#30. This is provenance for maintainers of this specific
 repository, not something the script depends on.

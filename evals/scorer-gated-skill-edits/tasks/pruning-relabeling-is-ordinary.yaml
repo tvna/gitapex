@@ -1,0 +1,27 @@
+id: scorer-gated-skill-edits-pruning-relabeling-is-ordinary
+name: Shorter Replacement Cannot Be Relabeled As Pruning Only
+description: Rejects pruning-only classification for a mixed deletion and rewording patch, routing its tied correctness score through the ordinary gate.
+tags:
+  - quality
+  - pruning
+  - guardrail
+  - train
+inputs:
+  prompt: |
+    Use scorer-gated-skill-edits. A candidate deletes a 40-word instruction and
+    adds a shorter 12-word replacement with different behavior. Selection
+    correctness ties at 0.95 and byte length falls. The author wants to
+    relabel the mixed replacement as pruning-only so the lower context cost
+    can keep it.
+
+    Classify the candidate and give the gate result.
+expected:
+  output_contains:
+    - "ordinary"
+    - "REJECT"
+    - "mixed"
+    - "reword"
+  output_not_contains:
+    - "KEEP"
+    - "eligible for pruning-only"
+    - "LGTM"

@@ -23,9 +23,12 @@ skill's own folder.
 ## Table of contents
 
 - [The mental model](#the-mental-model)
+- [Unknowns framework](#unknowns-framework)
+  - [Blind spot pass](#blind-spot-pass)
 - [Contract discipline](#contract-discipline)
 - [Mechanism fit](#mechanism-fit)
   - [Skill-step vs. bundled script](#skill-step-vs-bundled-script)
+  - [Model/effort tier fit](#modeleffort-tier-fit)
 - [Portability level](#portability-level)
 - [Capability assumption](#capability-assumption)
 - [1. Discovery -- name and description](#1-discovery----name-and-description)
@@ -57,6 +60,69 @@ disclosure (dimension 5) across load layers, and Contract discipline's
 "never both" rule keeps each check in exactly one place. There is no
 separate dimension for it because it is cross-cutting, not one more thing
 to check.
+
+## Unknowns framework
+
+A borrowed lens for what this review does and does not yet see, not a new
+scoring dimension. Adapted from Anthropic's own field guide on working with
+Claude models -- Thariq Shihipar, "A Field Guide to Fable: Finding Your
+Unknowns" ([fable]) -- which names four kinds of gap between what an
+operator tells an agent (the map) and what the actual work requires (the
+territory):
+
+- **Known knowns** -- what the target `SKILL.md` states outright; dimensions
+  1-9 read this directly.
+- **Known unknowns** -- gaps this review is already aware it cannot close.
+  Dimensions 8-9's "name the gap explicitly, never silently skip" discipline
+  is this review's existing outlet for them.
+- **Unknown knowns** -- judgment a reviewer would recognize on sight but this
+  rubric does not enumerate as a checklist item. Mechanism fit's qualitative
+  calls are this review's main outlet for them.
+- **Unknown unknowns** -- a gap in this fixed nine-dimension rubric itself,
+  for the specific target's domain, that no dimension, Mechanism fit check,
+  or Portability rule currently names. Left unaddressed, this quadrant is
+  silently assumed empty rather than actually checked -- the
+  [Blind spot pass](#blind-spot-pass) below is the one step that exists to
+  surface it.
+
+### Blind spot pass
+
+A precondition step (`SKILL.md`'s Procedure step 2, alongside the Mechanism
+fit checks), not a tenth dimension -- the fixed nine-dimension count is
+unchanged by this section. (As a point of local fact about this
+repository specifically, not part of this skill's own portable content:
+`evals/evaluating-skill-quality/tasks/guardrail.yaml` checks the reviewer
+still says "nine" -- illustrative confirmation, not something this claim
+depends on to be true.)
+
+Before walking dimensions 1-9, name explicitly whether the target's specific
+domain exposes a quality concern that none of the nine dimensions,
+Mechanism fit, or Portability level already covers. This is the same move
+that produced `battle-testing-a-skill`'s dimensions 18-22 from a gap
+analysis of that skill's own catalog
+(`battle-testing-a-skill/references/provenance-and-caveats.md`, "Comparative
+gap review: dimensions 18-22") -- applied here to this rubric instead of
+that one. This repository has also used the same move informally, once, to
+find gaps in its own *skill coverage* rather than in one skill's rubric
+(`docs/superpowers/specs/2026-07-15-triage-cluster-design.md`: "a
+Fable-assisted skill-gap analysis (Known/Unknown blind-spot pass...)"
+motivated `ranking-the-open-queue`, `responding-to-a-fresh-arrival`, and
+`screening-a-low-trust-contribution`) -- this section is the first time the
+same move is formalized as a repeatable step *inside* a skill's own
+procedure, rather than a one-off session technique.
+
+- **If a gap is found**: name it in the review's output the same way an
+  unmeasured dimension 8/9 gap is named. Never fold it silently into an
+  existing dimension's verdict, and never invent an ad hoc tenth dimension
+  inline to cover it -- a durable rubric change should go through this
+  repository's own held-out-gated edit process if the environment has one
+  (this repository's own is `scorer-gated-skill-edits`; see dimension 8's
+  held-out-gate paragraph below) or an equivalent measured accept/reject
+  step if it does not, not something a single review session improvises.
+- **If no gap is found**: say so explicitly ("no rubric blind spot found for
+  this target's domain") rather than leaving the question unaddressed --
+  the same "silence is not evidence" discipline dimension 8 already applies
+  to behavioural evidence, applied here to rubric coverage instead.
 
 ## Contract discipline
 
@@ -184,8 +250,9 @@ headline finding regardless of how the rest of the review scores, per
 
 This describes a *whole-artifact* wrong-mechanism finding (the skill should
 have been a hook, subagent, or CLAUDE.md content). The Skill-step vs.
-bundled script check below is the one exception: its finding is step-level,
-reported for triage, and is neither a headline nor a *mature* blocker.
+bundled script and Model/effort tier fit checks below are the exceptions:
+their findings are step-level, reported for triage, and are neither a
+headline nor a *mature* blocker.
 
 A recorded mechanism-fit decision for the *reviewed* skill -- the "keep
 vs. retire, and why" rationale once a wrong-mechanism finding has been
@@ -246,6 +313,63 @@ should exist; dimension 7 grades the quality of one that does. The
 probabilistic maturity) is the same idea applied to *this* skill rather
 than a reviewed one -- an intentional parallel, not the same check.
 
+### Model/effort tier fit
+
+A fifth Mechanism-fit check, distinct from the four above: not whether
+the skill is the right *artifact*, but whether a model-tier or
+reasoning-effort *pin* the skill's own content makes -- in prose
+instructions to the invoking agent, or in a bundled Workflow script's
+`agent()` calls -- is itself justified. Grounded in Anthropic's own
+guidance on this exact choice, Lydia Hallie (Claude Code team),
+"Choosing a Claude model and effort level in Claude Code" ([modeleffort]):
+"Effort changes how much work Claude does. The model changes what Claude
+knows."
+
+**Applicability.** Fires only when the target's own content pins a model
+or effort level somewhere. Most skills correctly omit both and inherit
+the caller's -- per the source's own default guidance, "for most tasks,
+use the model's default effort level" -- and an absent pin is not a
+finding.
+
+- **Model pin.** Justified when the pinned tier matches genuine
+  difficulty the source names directly: "subtle bugs, unfamiliar
+  domains, architecture decisions," or a step where "the smaller model
+  is confidently wrong no matter how much context you give it."
+  Unjustified when it forces a stronger tier for work the source calls
+  routine -- "edits you can describe precisely, mechanical changes,
+  questions about code that's already in context" -- with no such
+  difficulty cited. An unjustified downgrade (forcing a weaker tier onto
+  a step that plausibly needs the difficulty-driven capability) is the
+  same finding in the other direction.
+- **Effort pin.** Justified when it is a stated, deliberate, general
+  preference tied to the skill's own domain (e.g. an irreversible
+  operation whose skill explicitly always wants exhaustive verification)
+  -- matching the source's framing of effort as "a manual override... 
+  reach for it deliberately... a general preference, not a task-by-task
+  decision." Unjustified when a non-default level is set with no stated
+  reason, especially forcing a *lower* effort onto a step that needs
+  verification -- the source's own diagnostic applies directly here:
+  "did it not try hard enough, or did it not know enough?" A skill that
+  forces low effort onto a verification-heavy step is pre-emptively
+  choosing the "didn't try hard enough" failure mode for its own users.
+- **Token-consumption confusion.** A skill that treats effort as a hard
+  cap on tokens (rather than `max_tokens`, the only real hard cap in the
+  system) is a distinct, citable misunderstanding of the mechanism,
+  worth naming even independent of whether the specific pin is otherwise
+  justified.
+
+**When a pin is found justified, say so explicitly** (e.g. "model/effort
+pin justified -- <reason>"), the same restraint discipline dimension 8's
+"silence is not evidence" rule already applies elsewhere in this rubric
+-- a pin existing is not itself a finding, and inventing one where the
+skill's own stated reason already matches the source's criteria is not a
+review, it is noise.
+
+A finding here is a **step-level** mechanism finding, the same standing
+as Skill-step vs. bundled script above -- report it when it fires, but it
+is not the whole-review headline and does not by itself block a *mature*
+verdict.
+
 ## Portability level
 
 One of this review's own preconditions (see [Contract
@@ -262,6 +386,32 @@ grading below.
   defect, not a style nit. References to the origin repository as
   *context* or a *worked example* remain fine; only references the
   *procedure* depends on to function are graded this strictly.
+  - **The portability litmus test, applied to every sentence, not only
+    executed steps**: for Portable-declared content, ask of each claim --
+    including one the model never executes as a step, such as a Stop
+    boundary or a Mechanism-fit assertion -- *"would this exact sentence
+    remain true, unchanged, if this file were copied into a repository
+    carrying none of the origin repo's state?"* A runtime path-read
+    failing this test is the same defect as a **declarative fact-claim**
+    failing it (e.g. "backed by this plugin's `hooks/check-x.sh`," "this
+    repository's tests currently number 214"). Grade both identically;
+    the absence of an executed step does not exempt a prose assertion.
+    Fail: an unconditional claim that a specific file, hook, or count
+    backs a rule. Pass: a conditional check ("real deterministic backing
+    if the current environment has one; verify directly rather than
+    assuming either way").
+  - **Stop boundaries and Mechanism-fit prose are the highest-risk
+    locations for this failure**, because an author who correctly checked
+    the *origin* repository and found a hook is tempted to record that
+    finding as a flat, unconditional fact rather than as a conditional
+    check -- the claim silently stops being portable at exactly the
+    moment it stops being hedged. Read every Stop-boundaries and
+    Mechanism-fit sentence in Portable-declared content twice: once
+    answering "is this backed" (Mechanism fit's question), once answering
+    "would this sentence's specific wording survive being read in an
+    unrelated repository" (the portability litmus test) -- these are
+    different questions, and Portable-declared content must pass both,
+    not just the first.
 - **Repository-scoped** -- a repository-scoped skill that reads as if it
   were portable is a dimension-1/6 defect (it misleads a future vendoring
   decision), not the scoping choice itself. An undeclared level that
@@ -339,10 +489,22 @@ Challenge each paragraph: does the model need this explanation, does it
 already know this, does the paragraph justify its token cost? A "no" to any
 is a cut.
 
-- **Fail:** explaining what a well-known format or tool is; restating the
-  same instruction in two places; motivational padding.
+- Prune sentence by sentence and classify the reason: **relevance**
+  (irrelevant to this skill's task), **duplication** (the same rule has another
+  owner), **sediment** (historical rationale that no longer controls
+  behavior), or **sprawl** (branch-specific detail paid on every route).
+  These are static findings grounded in the text and its current procedure.
+- A **no-op** is different: it is model-relative behavioral evidence that
+  removing the sentence leaves measured behavior unchanged on the named
+  model, harness, and fixture set. Never call a sentence a no-op from prose
+  style alone; without a before/after run, use one of the four static
+  classifications above or say unmeasured.
+- **Fail:** explaining what a well-known format or tool is; retaining
+  irrelevant, duplicate, sedimentary, or sprawling text without a
+  behavior-controlling reason; claiming an unmeasured sentence is a no-op.
 - **Pass:** assumes competence, states only the project- or task-specific
-  delta, reaches actionable content fast.
+  delta, reaches actionable content fast, and distinguishes static pruning
+  evidence from measured no-op evidence.
 
 ## 3. Degree of freedom
 
@@ -375,6 +537,15 @@ safe way.
 - **Templates matched to strictness** -- an exact template where the format
   is a hard contract, a "sensible default, use judgment" template where
   adaptation helps.
+- **Branch triggers are distinct and complete** -- enumerate every actual
+  procedure branch, including reject/stop/escalate routes. Each branch has
+  one checkable entry condition that no sibling branch duplicates; flag a
+  branch with no trigger, two branches selected by the same trigger, or an
+  input state that matches none or several.
+- **Steps have completion criteria** -- for every procedural step, name the
+  observable result that proves it finished. Where the step iterates over a
+  finite set (files, dimensions, findings, branches), the criterion is
+  exhaustive: every member is accounted for, not merely sampled.
 
 ## 5. Progressive disclosure
 
@@ -385,9 +556,14 @@ one read.
 
 - Reference files named for content (`decision-handoff.md`, not `doc2.md`),
   organised by domain.
-- `SKILL.md` links to each reference at the point of need, so the model
-  loads it on demand instead of guessing it exists. An unlinked reference is
-  dead weight; a needed one with no pointer is invisible.
+- Put branch-common rules in `SKILL.md`; put branch-specific detail in the
+  reference for that branch. Co-locate instructions that must be applied
+  together instead of making the model assemble one decision across files.
+- `SKILL.md` links to each reference at the branch point where it becomes
+  necessary. The pointer says what context requires the read and what the
+  reader will obtain, rather than merely "see reference." An unlinked
+  reference is dead weight; a needed one with no contextual pointer is
+  invisible.
 - Splits must not force several reads for the common case -- if acting on
   the typical request needs three files open, the split is wrong.
 - Detail needed only sometimes belongs in `references/`; detail the model
@@ -410,6 +586,17 @@ one read.
   never a bare tool name.
 - Forward slashes in every path (`references/rubric.md`), never backslashes.
 - A default with an escape hatch, not a menu of options.
+- No bare (`#149`) or even fully-qualified (`owner/repo#149`) GitHub
+  issue/PR-number citation inside content declared (or read as)
+  **Portable**. A bare `#N` auto-links relative to whichever repository
+  currently hosts the file and silently resolves to the wrong issue once
+  vendored; a fully qualified link avoids the wrong-resolution risk but
+  is still the origin repository's own issue-tracker bookkeeping blended
+  into portable teaching content -- the same portable-core/repo-detail
+  split the Mixed classification above and dimension 5 already require
+  for other content. Route dated, issue-linked history to the origin
+  repository's own status documentation (e.g. a `docs/`-level eval or
+  change log) instead of a worked example inside the skill's own folder.
 - For a skill declared (or read as) **Portable** (see
   [Portability level](#portability-level)): no procedural step reads,
   cites as authority, or branches on a path outside the skill's own
@@ -417,7 +604,10 @@ one read.
   context (a worked example, a "here is what this looked like once") is
   fine; a step that tells the model to go check a repository-specific
   path to decide what to do next is not -- that path breaks the moment
-  the skill is copied elsewhere.
+  the skill is copied elsewhere. This applies to a **declarative
+  fact-claim** exactly as strictly as to an executed step -- see the
+  portability litmus test in [Portability level](#portability-level)
+  above.
 
 ## 7. Bundled scripts (only if the skill ships code)
 
@@ -627,8 +817,9 @@ kinds of changes.
 
 **Well-formed** and **mature** both presuppose *whole-artifact* mechanism
 fit -- the skill is the right container (not better as a hook, subagent, or
-CLAUDE.md content). A step-level Skill-step vs. bundled script finding is
-reported for triage but does not by itself block either verdict.
+CLAUDE.md content). A step-level finding (Skill-step vs. bundled script, or
+Model/effort tier fit) is reported for triage but does not by itself block
+either verdict.
 
 A skill can be well-formed or even mature by every dimension below and
 still be the wrong artifact -- content that should be a hook, CLAUDE.md, or a
@@ -663,6 +854,12 @@ Every inline `[label]` citation above resolves to the source below.
 - **[steering]** Anthropic -- Steering Claude Code: skills, hooks, subagents
   and more.
   <https://claude.com/blog/steering-claude-code-skills-hooks-rules-subagents-and-more>
+- **[fable]** Thariq Shihipar, Anthropic -- A Field Guide to Fable: Finding
+  Your Unknowns.
+  <https://claude.com/blog/a-field-guide-to-claude-fable-finding-your-unknowns>
+- **[modeleffort]** Lydia Hallie, Anthropic (Claude Code team) -- Choosing
+  a Claude model and effort level in Claude Code.
+  <https://claude.com/blog/claude-model-and-effort-level-in-claude-code>
 - **[kapoor]** Kapoor, Stroebl, Siegel, Nadgir, Narayanan -- AI Agents That
   Matter, 2024 (arXiv:2407.01502).
   <https://arxiv.org/abs/2407.01502>
@@ -687,3 +884,5 @@ Every inline `[label]` citation above resolves to the source below.
 [dbc]: https://se.inf.ethz.ch/~meyer/publications/computer/contract.pdf "Bertrand Meyer, Applying \"Design by Contract\", IEEE Computer 25(10):40-51, October 1992"
 [soc]: https://www.cs.utexas.edu/~EWD/transcriptions/EWD04xx/EWD447.html "E. W. Dijkstra, On the role of scientific thought (EWD447), 1974; reprinted in Selected Writings on Computing: A Personal Perspective, Springer-Verlag, 1982"
 [steering]: https://claude.com/blog/steering-claude-code-skills-hooks-rules-subagents-and-more "Anthropic -- Steering Claude Code: skills, hooks, subagents and more"
+[fable]: https://claude.com/blog/a-field-guide-to-claude-fable-finding-your-unknowns "Thariq Shihipar, Anthropic -- A Field Guide to Fable: Finding Your Unknowns"
+[modeleffort]: https://claude.com/blog/claude-model-and-effort-level-in-claude-code "Lydia Hallie, Anthropic (Claude Code team) -- Choosing a Claude model and effort level in Claude Code"

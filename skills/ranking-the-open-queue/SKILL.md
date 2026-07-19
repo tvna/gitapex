@@ -72,7 +72,7 @@ outranks a similarly-scored but Fresh item per the ordering rule's
 tie-break (Staleness only breaks ties after Blockage and Severity/
 Actionability already tie):
 
-| 1 | #101 "Fix crash on empty input" | Defect | Stale (95d) | Unblocked | Ready | Start now -- reproduction and acceptance criteria already present. |
+| 1 | `#101` "Fix crash on empty input" | Defect | Stale (95d) | Unblocked | Ready | Start now -- reproduction and acceptance criteria already present. |
 
 Followed by:
 

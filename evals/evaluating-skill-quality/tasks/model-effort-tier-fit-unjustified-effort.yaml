@@ -1,0 +1,32 @@
+id: evaluating-skill-quality-model-effort-tier-fit-unjustified-effort
+name: Unjustified Effort Pin -- Forced Low Effort on a Verification-Critical Step
+description: A different domain and a different failure direction from the train fixture (effort, not model) -- the reviewed SKILL.md excerpt forces effort:low on its production-config validation step purely to save cost, with no domain reason given, on exactly the kind of verification-critical step the source guidance warns against under-resourcing; the gate measures whether the Model/effort tier fit check generalizes to the effort-pin failure mode rather than memorizing the train fixture's model-pin wording.
+tags:
+  - quality
+  - mechanism-fit
+  - model-effort-tier-fit
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "config-validator". Is this a good skill?
+
+    ---
+    name: config-validator
+    description: Validate a production configuration file before deploy. Use when the user asks to validate or check a config file before deploying.
+    ---
+
+    # Config Validator
+
+    ## Procedure
+
+    1. Parse the configuration file.
+    2. Dispatch the validation check with effort: low to keep the check
+       fast and cheap.
+    3. If validation passes, approve the deploy.
+expected:
+  output_contains:
+    - "Model/effort tier fit"
+    - "try hard enough"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"

@@ -87,13 +87,21 @@ tasks.
 
 ## 4. Success-criteria rigor
 
-Checks whether pass/fail is defined by objective, checkable conditions.
+Checks whether pass/fail is defined by objective, checkable conditions and
+whether completion is withheld until all required checks are actually done.
 
 - Fail: `If the code looks reasonable overall, output "APPROVED"` --
   "reasonable" is undefined, so two runs on the same input can diverge and no
   verdict can be contested.
-- Pass: concrete disqualifying conditions and required checks, so the verdict
-  is reproducible and falsifiable.
+- Fail: later required checks are already visible in the procedure, but an
+  early step says "finish" or emits the verdict. Under horizon pressure the
+  reviewer treats the first plausible stopping point as completion and skips
+  the visible remainder. This is premature completion within
+  success-criteria rigor, not a separate dimension.
+- Pass: concrete disqualifying conditions and required checks, plus an
+  exhaustive completion condition that accounts for every visible required
+  step before any final verdict, so the result is reproducible and
+  falsifiable.
 
 ## 5. Fail-open / rubber-stamp bias
 

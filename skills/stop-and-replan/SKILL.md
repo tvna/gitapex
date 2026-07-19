@@ -45,17 +45,17 @@ On detection, before writing the phrase into the PR or commit:
 
 Input (about to be written as this PR's description):
 
-> Correction after review: this misses the original thesis of #12 -- the
+> Correction after review: this misses the original thesis of the parent issue -- the
 > issue asked for a read-only sync check, and this PR built a write-back
 > sync instead.
 
 Output:
 
-- Close this PR with body: "Missed the original thesis of #12: the issue
+- Close this PR with body: "Missed the original thesis of the parent issue: the issue
   asked for a read-only sync check, this PR implemented a write-back sync
-  instead. Closing to re-plan in #12 rather than retrofitting a
+  instead. Closing to re-plan in the parent issue rather than retrofitting a
   write-path PR onto a read-only ask."
-- Comment the same rationale on #12 and re-plan from there.
+- Comment the same rationale on the parent issue and re-plan from there.
 - Do not push a follow-up commit to the closed PR's branch.
 
 ## Stop boundaries
