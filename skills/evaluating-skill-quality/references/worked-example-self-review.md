@@ -143,24 +143,27 @@ $ python3 skills/evaluating-skill-quality/scripts/check_skill_shape.py skills/ev
 CHECK                                      RESULT  EVIDENCE (rule)
 description-present                        PASS    present  (description present and non-empty)
 description-no-xml                         PASS    no tags  (description has no XML tags)
-description-length                         PASS    476 chars  (description <= 1024 chars)
+description-length                         PASS    483 chars  (description <= 1024 chars)
 name-pattern                               PASS    'evaluating-skill-quality'  (name is lowercase-hyphenated)
 name-length                                PASS    24 chars  (name <= 64 chars)
 name-no-xml                                PASS    no tags  (name has no XML tags)
 name-not-reserved                          PASS    'evaluating-skill-quality'  (name contains no reserved word ('anthropic', 'claude'))
-body-length                                PASS    242 lines  (SKILL.md body <= 500 lines)
+body-length                                PASS    313 lines  (SKILL.md body <= 500 lines)
 metadata-file-present                      PASS    present  (gitapex_metadata.yaml exists next to SKILL.md)
+manifest-parsable                          PASS    no malformed lines  (gitapex_metadata.yaml has no malformed top-level lines)
 manifest-envelope                          PASS    apiVersion='gitapex.dev/v1alpha1', kind='SkillMetadata'  (apiVersion is gitapex.dev/v1alpha1 and kind is SkillMetadata)
 metadata-name-matches-dir                  PASS    'evaluating-skill-quality' vs directory 'evaluating-skill-quality'  (metadata.name equals the skill directory name)
 portability-declared                       PASS    'Portable'  (spec.portability is one of ('Portable', 'Repository-scoped', 'Mixed'))
 capability-assumption-declared             PASS    'Broad'  (spec.capabilityAssumption is one of ('Broad', 'Frontier', 'Adaptive'))
 links-inside-skill                         PASS    all inside  (Markdown link targets resolve inside the skill's own directory)
 references-flat                            PASS    flat  (references/ files are one level deep)
-toc:rubric.md                              PASS    689 lines, TOC found  (reference over 100 lines has a TOC)
+toc:rubric.md                              PASS    888 lines, TOC found  (reference over 100 lines has a TOC)
 toc:worked-example-explaining-the-work.md  PASS    279 lines, TOC found  (reference over 100 lines has a TOC)
-toc:worked-example-self-review.md          PASS    439 lines, TOC found  (reference over 100 lines has a TOC)
+toc:worked-example-self-review.md          PASS    497 lines, TOC found  (reference over 100 lines has a TOC)
+portable-no-issue-citation                 PASS    none  (Portable content has no bare-prose GitHub issue/PR-number citation)
+portable-no-repo-path-citation             PASS    none  (Portable content has no bare-prose origin-repository path citation)
 
-18/18 checks passed
+21/21 checks passed
 ```
 
 Verdict on shape alone: **well-formed** (exit code 0).

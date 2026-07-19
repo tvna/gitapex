@@ -178,14 +178,23 @@ dimension; the fixed nine-dimension count is unchanged.
 
 Declared alongside portability in the skill's `gitapex_metadata.yaml`
 sidecar, as `spec.capabilityAssumption`. It records which compute /
-model-capability regime the skill was authored for, so conciseness, degree
-of freedom, progressive disclosure, and cross-model robustness are graded
-against the skill's own target rather than one fixed preference.
+model-capability regime the skill was authored for. That recording is all
+this declaration does today: it is recorded and declared now, with
+**no grading effect yet**.
+
+The per-dimension grading effect of Broad / Frontier / Adaptive on
+dimensions 2 (Conciseness), 3 (Degree of freedom), 5 (Progressive
+disclosure), and 9 (Cross-model robustness) is specified in sub-project B
+and is not yet part of this rubric. Until it lands, record the declared
+level as established fact and grade those four dimensions exactly as
+before -- against one fixed preference, not calibrated to the skill's own
+target.
 
 Distinct from Mechanism fit's Model/effort tier fit check: that judges a
 model or effort *pin the skill's own content makes*, which the invoking
 agent acts on at runtime. This declaration pins nothing and never executes
--- it only calibrates how strictly the dimensions below grade.
+-- it is recorded for future calibration and currently has no grading
+effect at all.
 
 - **Broad** -- authored to stay effective down to a weak or economical
   model, or a constrained harness.
@@ -194,7 +203,9 @@ agent acts on at runtime. This declaration pins nothing and never executes
 - **Adaptive** -- a lean body a strong model runs directly, plus deeper
   `references/` a weaker model pulls on demand.
 
-The per-dimension grading effect of each level is defined in
+Authors still declare one of these three levels correctly now -- the
+`capability-assumption-declared` shape check already gates the value even
+though grading does not yet use it. Full detail:
 [references/rubric.md](references/rubric.md)'s Capability assumption
 section.
 

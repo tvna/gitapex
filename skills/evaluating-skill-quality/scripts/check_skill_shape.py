@@ -14,13 +14,17 @@ Checks (the canonical list -- the manual fallback is to apply these):
     no XML tags, contains no reserved word (anthropic, claude)
   - SKILL.md body: <= 500 lines
   - metadata sidecar (gitapex_metadata.yaml, next to SKILL.md): present;
+    has no malformed top-level lines (manifest-parsable -- a column-0 line
+    that is not blank/comment/document-marker and does not match the
+    top-level "key:" pattern, e.g. a stray "- invalid mapping entry");
     apiVersion is gitapex.dev/v1alpha1 and kind is SkillMetadata;
     metadata.name equals the skill directory name; spec.portability is one
     of Portable/Repository-scoped/Mixed; spec.capabilityAssumption is one
     of Broad/Frontier/Adaptive. Ungated sidecar scalar fields (e.g.
     spec.references, spec.skillDependencies, spec.evalStatus) ARE parsed
     into the spec map by _parse_manifest, just not gated/checked here; only
-    nested maps and list items under them are skipped by the parser.
+    nested maps and list items under them are skipped by the parser, and
+    indented lines are never flagged as malformed regardless of shape.
   - references/ files: exactly one level deep
   - any references/ file over 100 lines: contains a table of contents
     (a Markdown heading matching "Table of contents" or "Contents",
@@ -209,7 +213,20 @@ def _unquote(value: str) -> str:
     return value
 
 
-def _parse_manifest(text: str) -> dict[str, object]:
+@dataclass(frozen=True)
+class ManifestParse:
+    """Result of ``_parse_manifest``: the parsed top-level mapping plus any
+    malformed top-level lines found alongside it.
+
+    ``malformed_lines`` holds each offending line (trimmed), in file order --
+    empty when the sidecar's top-level structure is clean. See
+    ``_parse_manifest`` for the exact malformed-line rule.
+    """
+    root: dict[str, object]
+    malformed_lines: list[str]
+
+
+def _parse_manifest(text: str) -> ManifestParse:
     """Parse the YAML subset the metadata sidecar is specified to use.
 
     Reads top-level 'key: value' scalars and exactly-two-space-indented
@@ -222,13 +239,38 @@ def _parse_manifest(text: str) -> dict[str, object]:
     stripped -- it is read as part of the value, which is safe (fails
     closed against the expected enum/literal) but is not a supported way
     to annotate a sidecar field.
+
+    A top-level (column-0) line that is not blank, not a '#' comment, not a
+    YAML document marker ('---' or '...'), and does not match the top-level
+    'key:' pattern is malformed -- e.g. a stray '- invalid mapping entry'
+    that real PyYAML would reject with a ParserError. Every such line is
+    collected (trimmed) into the returned ``ManifestParse.malformed_lines``,
+    so a caller can fail the sidecar even though this permissive parser
+    itself does not raise. Indented lines are NEVER considered malformed --
+    two-or-more-space lines belong to the nested/list structures (see above)
+    this parser deliberately does not interpret, and flagging them would
+    defeat that reserved-field design.
     """
     text = text.lstrip("\ufeff")  # strip a leading UTF-8 BOM, as _parse_frontmatter does
     root: dict[str, object] = {}
     current: dict[str, str] | None = None
+    malformed: list[str] = []
     for raw in text.splitlines():
         line = raw.rstrip()
         if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        if line[:1] in (" ", "\t"):
+            # Indented: nested/list content this parser does not interpret.
+            # Exactly two spaces: a four-space line (a child of a nested
+            # map) has a space where this expects a key character, so it
+            # will not match and is skipped -- never malformed either way.
+            nested = re.match(r"[ ]{2}([A-Za-z0-9_-]+):\s*(.*)$", line)
+            if nested and current is not None:
+                value = nested.group(2).strip()
+                if value:
+                    current[nested.group(1)] = _unquote(value)
+            continue
+        if line.strip() in ("---", "..."):
             continue
         top = re.match(r"([A-Za-z0-9_-]+):\s*(.*)$", line)
         if top:
@@ -241,15 +283,8 @@ def _parse_manifest(text: str) -> dict[str, object]:
                 root[key] = child
                 current = child
             continue
-        # Exactly two spaces: a four-space line (a child of a nested map)
-        # has a space where this expects a key character, so it will not
-        # match and is skipped.
-        nested = re.match(r"[ ]{2}([A-Za-z0-9_-]+):\s*(.*)$", line)
-        if nested and current is not None:
-            value = nested.group(2).strip()
-            if value:
-                current[nested.group(1)] = _unquote(value)
-    return root
+        malformed.append(line.strip())
+    return ManifestParse(root=root, malformed_lines=malformed)
 
 
 def _body_after_frontmatter(text: str) -> list[str]:
@@ -509,15 +544,21 @@ def check_shape(target: Path) -> list[CheckResult]:
         # unreadable sidecar must not raise out of check_shape -- it is a
         # shape defect, reported as FAILed checks, not a usage error.
         try:
-            manifest: dict[str, object] | None = _parse_manifest(
-                sidecar.read_text(encoding="utf-8"))
+            parsed = _parse_manifest(sidecar.read_text(encoding="utf-8"))
+            manifest: dict[str, object] | None = parsed.root
+            malformed_lines = parsed.malformed_lines
             read_error: str | None = None
         except (OSError, UnicodeDecodeError) as exc:
             manifest = None
+            malformed_lines = []
             read_error = type(exc).__name__
 
         if manifest is None:
             evidence = f"unreadable: {read_error}"
+            results.append(CheckResult(
+                "manifest-parsable", False,
+                "gitapex_metadata.yaml has no malformed top-level lines",
+                evidence))
             results.append(CheckResult(
                 "manifest-envelope", False,
                 f"apiVersion is {EXPECTED_API_VERSION} and kind is {EXPECTED_KIND}",
@@ -539,6 +580,17 @@ def check_shape(target: Path) -> list[CheckResult]:
             # negative in the gate is worse than a false positive.
             sidecar_portability = SidecarPortability(state="unusable")
         else:
+            if malformed_lines:
+                count = len(malformed_lines)
+                plural = "" if count == 1 else "s"
+                manifest_parsable_evidence = (
+                    f"{count} malformed line{plural}: {malformed_lines[0]!r}")
+            else:
+                manifest_parsable_evidence = "no malformed lines"
+            results.append(CheckResult(
+                "manifest-parsable", not malformed_lines,
+                "gitapex_metadata.yaml has no malformed top-level lines",
+                manifest_parsable_evidence))
             api = manifest.get("apiVersion")
             kind_value = manifest.get("kind")
             envelope_ok = (api == EXPECTED_API_VERSION

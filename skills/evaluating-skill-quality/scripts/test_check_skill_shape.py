@@ -488,11 +488,96 @@ def test_manifest_parser_ignores_deeper_nesting(tmp_path):
         "  capabilityAssumption: Broad\n"
     )
     parsed = css._parse_manifest(text)
-    assert parsed["apiVersion"] == "gitapex.dev/v1alpha1"
-    assert parsed["metadata"]["name"] == "skill"
-    assert parsed["spec"]["portability"] == "Portable"
-    assert parsed["spec"]["capabilityAssumption"] == "Broad"
-    assert "requires" not in parsed["spec"]
+    assert parsed.root["apiVersion"] == "gitapex.dev/v1alpha1"
+    assert parsed.root["metadata"]["name"] == "skill"
+    assert parsed.root["spec"]["portability"] == "Portable"
+    assert parsed.root["spec"]["capabilityAssumption"] == "Broad"
+    assert "requires" not in parsed.root["spec"]
+    assert parsed.malformed_lines == []
+
+
+# ---- manifest-parsable (malformed top-level line detection) ----
+
+def test_malformed_top_level_line_fails_manifest_parsable(tmp_path):
+    # The exact reported case: a top-level '- invalid mapping entry' line
+    # that real PyYAML rejects with a ParserError, sitting alongside an
+    # otherwise fully valid sidecar.
+    d = _write_skill(tmp_path)
+    (d / "gitapex_metadata.yaml").write_text(
+        "apiVersion: gitapex.dev/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "- invalid mapping entry\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    result = by["manifest-parsable"]
+    assert result.passed is False
+    assert "1 malformed line" in result.evidence
+    assert "- invalid mapping entry" in result.evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_legitimate_deeper_nesting_passes_manifest_parsable(tmp_path):
+    # Pins that the malformed-line fix does not break the reserved-field
+    # design: spec.skillDependencies (a nested map with a list-valued
+    # 'requires' and a 'relatedTo' list) and spec.references (a top-level
+    # list) are ungated and deliberately not interpreted by the parser --
+    # none of their indented lines may be flagged as malformed.
+    d = _write_skill(tmp_path)
+    (d / "gitapex_metadata.yaml").write_text(
+        "apiVersion: gitapex.dev/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  skillDependencies:\n"
+        "    requires: []\n"
+        "    relatedTo:\n"
+        "      - other-skill\n"
+        "  references:\n"
+        "    - path: references/rubric.md\n"
+        "      title: Rubric\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["manifest-parsable"].passed is True
+    assert by["manifest-parsable"].evidence == "no malformed lines"
+    assert css.main([str(d)]) == 0
+
+
+def test_comment_and_document_marker_pass_manifest_parsable(tmp_path):
+    # A '#' comment and YAML document markers ('---' / '...') at column 0
+    # must not be flagged as malformed.
+    d = _write_skill(tmp_path)
+    (d / "gitapex_metadata.yaml").write_text(
+        "# a leading comment\n"
+        "---\n"
+        "apiVersion: gitapex.dev/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "...\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["manifest-parsable"].passed is True
+    assert css.main([str(d)]) == 0
+
+
+def test_unreadable_sidecar_fails_manifest_parsable(tmp_path):
+    d = _write_skill(tmp_path)
+    (d / "gitapex_metadata.yaml").write_bytes(b"\xff\xfe not utf8 \x00\x01")
+    by = _by_name(css.check_shape(d))
+    assert by["manifest-parsable"].passed is False
+    assert "UnicodeDecodeError" in by["manifest-parsable"].evidence
+    assert css.main([str(d)]) == 1
 
 
 # ---- Portable self-citation scan (issue #171) ----
