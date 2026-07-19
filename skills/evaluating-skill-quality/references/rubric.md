@@ -115,7 +115,7 @@ procedure, rather than a one-off session technique.
   existing dimension's verdict, and never invent an ad hoc tenth dimension
   inline to cover it -- a durable rubric change should go through this
   repository's own held-out-gated edit process if the environment has one
-  (this repository's own is `gated-skill-edits`; see dimension 8's
+  (this repository's own is `scorer-gated-skill-edits`; see dimension 8's
   held-out-gate paragraph below) or an equivalent measured accept/reject
   step if it does not, not something a single review session improvises.
 - **If no gap is found**: say so explicitly ("no rubric blind spot found for

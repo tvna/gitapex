@@ -1,4 +1,4 @@
-id: gated-skill-edits-heldout-ordinary-scalar-tie
+id: scorer-gated-skill-edits-heldout-ordinary-scalar-tie
 name: Ordinary Scalar Tie Remains Rejected
 description: Rejects a tied scalar selection score when no efficiency component or tie-break was predeclared.
 tags:

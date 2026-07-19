@@ -1,7 +1,7 @@
 # Eval split bookkeeping
 
 This records train / selection / test intent for
-`evals/gated-skill-edits/`. It does not claim a live eval result.
+`evals/scorer-gated-skill-edits/`. It does not claim a live eval result.
 
 ## Assignment
 

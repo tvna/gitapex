@@ -1,4 +1,4 @@
-id: gated-skill-edits-edge
+id: scorer-gated-skill-edits-edge
 name: Tied Selection Score Must Be Rejected
 description: An edit's selection-split score exactly ties the pre-edit score; the gate must reject it even though the edit reads as a plausible improvement, and log it as a rejected edit.
 tags:
@@ -6,7 +6,7 @@ tags:
   - edge
 inputs:
   prompt: |
-    Use gated-skill-edits. We're iterating on `skills/pr-summarizer/SKILL.md`.
+    Use scorer-gated-skill-edits. We're iterating on `skills/pr-summarizer/SKILL.md`.
 
     `scripts/score_contract.py` is wired up as our deterministic scorer,
     and we split our 20 fixtures into train / selection / test (4 / 2 / 14,

@@ -1,4 +1,4 @@
-id: gated-skill-edits-branch-balanced-corpus
+id: scorer-gated-skill-edits-branch-balanced-corpus
 name: Trigger Branch Has Only Positive Train Coverage
 description: Stops iteration when one trigger branch has no negative/non-trigger case and no held-out coverage.
 tags:
@@ -7,7 +7,7 @@ tags:
   - train
 inputs:
   prompt: |
-    Use gated-skill-edits. The skill has normal, escalation, and reject
+    Use scorer-gated-skill-edits. The skill has normal, escalation, and reject
     branches. Our corpus has positive routes for all three, but escalation
     appears only in train and has no negative/non-trigger case anywhere.
     The scorer is deterministic and the other branches have held-out cases.

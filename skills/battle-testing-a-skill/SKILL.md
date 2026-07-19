@@ -131,7 +131,7 @@ for what a pass and a fail look like on each dimension.
 
 A battle-test pass/fail is a candidate checkable scorer for a held-out
 validation gate: a structural verdict is a more reliable signal than
-open-ended judgment. `gated-skill-edits` is this repo's example of a
+open-ended judgment. `scorer-gated-skill-edits` is this repo's example of a
 skill that consumes a verdict this way.
 
 On a model-aware Codex run, the router's `requested_trials` count is a hard

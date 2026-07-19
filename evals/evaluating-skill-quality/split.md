@@ -1,11 +1,11 @@
-# Held-out split for gated-skill-edits
+# Held-out split for scorer-gated-skill-edits
 
 Train / selection / test partition for `evals/evaluating-skill-quality/`,
-established so `gated-skill-edits`' precondition gate (a real scorer plus a
+established so `scorer-gated-skill-edits`' precondition gate (a real scorer plus a
 held-out split, both required before any iterative edit to this skill's
 `references/rubric.md` is kept) is satisfied. See
-`skills/gated-skill-edits/SKILL.md` for the gate itself and
-`skills/gated-skill-edits/scripts/score_contract.py` for the scorer, which
+`skills/scorer-gated-skill-edits/SKILL.md` for the gate itself and
+`skills/scorer-gated-skill-edits/scripts/score_contract.py` for the scorer, which
 scores each fixture's `expected.output_contains` / `output_not_contains`
 block deterministically.
 
@@ -15,7 +15,7 @@ SkillOpt's default split ratio is 2:1:7. At 27 fixtures that ratio gives a
 selection split of roughly three tasks, too thin to gate a strict
 improve-or-reject decision because three observations provide little ability
 to average out run-to-run variance. Following the precedent already set in
-`skills/gated-skill-edits/references/worked-example.md` ("the ratio is
+`skills/scorer-gated-skill-edits/references/worked-example.md` ("the ratio is
 aspirational" for a small fixture count), this split uses a flatter 12:9:6
 partition, named explicitly as a deviation from the 2:1:7 default. The
 honest minimal groundwork, per that same worked example, is a larger
@@ -169,7 +169,7 @@ Gate result: the selection-split baseline (5 fixtures: `edge.yaml`,
 `ordering-rule-totality-distinct-skill.yaml`) was measured live -- one
 fresh subagent dispatch per fixture, following `evaluating-skill-quality`'s
 own Procedure against the *unedited* `references/rubric.md` -- and
-scored with `skills/gated-skill-edits/scripts/score_contract.py`
+scored with `skills/scorer-gated-skill-edits/scripts/score_contract.py`
 against each fixture's `expected` block. Selection mean: **1.000000**
 (all 5 fixtures scored 1.0; the new `ordering-rule-totality-distinct-skill`
 fixture's assertions -- `Elevated`, `Standard`, `tie` -- were already
@@ -251,7 +251,7 @@ first:
 6 fixtures, one fresh dispatch per fixture per side (2 for
 `blind-spot-pass-generalizes.yaml`, averaged to one fixture-level score;
 1 each for the other 5), scored with
-`skills/gated-skill-edits/scripts/score_contract.py`:**
+`skills/scorer-gated-skill-edits/scripts/score_contract.py`:**
 
 | Fixture | Before | After |
 |---|---|---|
@@ -300,7 +300,7 @@ needed a genuine fresh **before** dispatch (run against
 avoid a working-tree race with the edit in progress). All 7 selection
 fixtures then got a fresh **after** dispatch against the post-edit
 working tree, one fresh subagent per fixture, scored with
-`skills/gated-skill-edits/scripts/score_contract.py`:
+`skills/scorer-gated-skill-edits/scripts/score_contract.py`:
 
 | Fixture | Before | After |
 |---|---|---|
@@ -415,7 +415,7 @@ methodology). Only the new selection fixture,
 immediately prior to this edit, to avoid a working-tree race). All 8
 selection fixtures then got a fresh **after** dispatch against the
 post-edit working tree, scored with
-`skills/gated-skill-edits/scripts/score_contract.py`:
+`skills/scorer-gated-skill-edits/scripts/score_contract.py`:
 
 | Fixture | Before | After |
 |---|---|---|

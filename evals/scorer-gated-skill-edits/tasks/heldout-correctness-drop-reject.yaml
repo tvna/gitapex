@@ -1,4 +1,4 @@
-id: gated-skill-edits-heldout-correctness-drop-reject
+id: scorer-gated-skill-edits-heldout-correctness-drop-reject
 name: Correctness Drop Overrides Efficiency Gain
 description: Applies a predeclared correctness-first lexicographic scorer and rejects a shorter but less correct candidate.
 tags:
