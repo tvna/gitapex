@@ -1,0 +1,16 @@
+id: evaluating-skill-quality-heldout-vague-completion
+name: Vague And Non-exhaustive Completion Criteria
+description: Detects a completion boundary that is neither machine-checkable nor exhaustive enough for a repeatable process.
+tags:
+  - quality
+  - selection
+  - preimplementation-heldout
+inputs:
+  prompt: |
+    Review this procedure excerpt: "1. Inspect the changed files. 2. Check the important cases. 3. When the result looks satisfactory, approve the change." Judge whether its completion condition is both checkable and exhaustive enough for a repeatable process. Explain the missing observable boundary briefly. Include exactly one verdict line: COMPLETION_CRITERIA: PASS or COMPLETION_CRITERIA: FAIL.
+expected:
+  output_contains:
+    - "COMPLETION_CRITERIA: FAIL"
+    - "checkable"
+  output_not_contains:
+    - "COMPLETION_CRITERIA: PASS"

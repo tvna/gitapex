@@ -1,0 +1,17 @@
+id: scorer-gated-skill-edits-heldout-correctness-drop-reject
+name: Correctness Drop Overrides Efficiency Gain
+description: Applies a predeclared correctness-first lexicographic scorer and rejects a shorter but less correct candidate.
+tags:
+  - quality
+  - selection
+  - preimplementation-heldout
+inputs:
+  prompt: |
+    Before trials, the team declared a lexicographic selection scorer: correctness first, then context-efficiency only on an exact correctness tie. Baseline is correctness=0.94, efficiency=0.55. The shorter candidate is correctness=0.93, efficiency=0.90. Apply the declared scorer. Include exactly these lines: SCORER_POLICY: PREDECLARED_CORRECTNESS_FIRST and GATE_RESULT: KEEP or GATE_RESULT: REJECT.
+expected:
+  output_contains:
+    - "SCORER_POLICY: PREDECLARED_CORRECTNESS_FIRST"
+    - "GATE_RESULT: REJECT"
+    - "0.93"
+  output_not_contains:
+    - "GATE_RESULT: KEEP"

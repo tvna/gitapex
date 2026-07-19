@@ -476,10 +476,22 @@ Challenge each paragraph: does the model need this explanation, does it
 already know this, does the paragraph justify its token cost? A "no" to any
 is a cut.
 
-- **Fail:** explaining what a well-known format or tool is; restating the
-  same instruction in two places; motivational padding.
+- Prune sentence by sentence and classify the reason: **relevance**
+  (irrelevant to this skill's task), **duplication** (the same rule has another
+  owner), **sediment** (historical rationale that no longer controls
+  behavior), or **sprawl** (branch-specific detail paid on every route).
+  These are static findings grounded in the text and its current procedure.
+- A **no-op** is different: it is model-relative behavioral evidence that
+  removing the sentence leaves measured behavior unchanged on the named
+  model, harness, and fixture set. Never call a sentence a no-op from prose
+  style alone; without a before/after run, use one of the four static
+  classifications above or say unmeasured.
+- **Fail:** explaining what a well-known format or tool is; retaining
+  irrelevant, duplicate, sedimentary, or sprawling text without a
+  behavior-controlling reason; claiming an unmeasured sentence is a no-op.
 - **Pass:** assumes competence, states only the project- or task-specific
-  delta, reaches actionable content fast.
+  delta, reaches actionable content fast, and distinguishes static pruning
+  evidence from measured no-op evidence.
 
 ## 3. Degree of freedom
 
@@ -512,6 +524,15 @@ safe way.
 - **Templates matched to strictness** -- an exact template where the format
   is a hard contract, a "sensible default, use judgment" template where
   adaptation helps.
+- **Branch triggers are distinct and complete** -- enumerate every actual
+  procedure branch, including reject/stop/escalate routes. Each branch has
+  one checkable entry condition that no sibling branch duplicates; flag a
+  branch with no trigger, two branches selected by the same trigger, or an
+  input state that matches none or several.
+- **Steps have completion criteria** -- for every procedural step, name the
+  observable result that proves it finished. Where the step iterates over a
+  finite set (files, dimensions, findings, branches), the criterion is
+  exhaustive: every member is accounted for, not merely sampled.
 
 ## 5. Progressive disclosure
 
@@ -522,9 +543,14 @@ one read.
 
 - Reference files named for content (`decision-handoff.md`, not `doc2.md`),
   organised by domain.
-- `SKILL.md` links to each reference at the point of need, so the model
-  loads it on demand instead of guessing it exists. An unlinked reference is
-  dead weight; a needed one with no pointer is invisible.
+- Put branch-common rules in `SKILL.md`; put branch-specific detail in the
+  reference for that branch. Co-locate instructions that must be applied
+  together instead of making the model assemble one decision across files.
+- `SKILL.md` links to each reference at the branch point where it becomes
+  necessary. The pointer says what context requires the read and what the
+  reader will obtain, rather than merely "see reference." An unlinked
+  reference is dead weight; a needed one with no contextual pointer is
+  invisible.
 - Splits must not force several reads for the common case -- if acting on
   the typical request needs three files open, the split is wrong.
 - Detail needed only sometimes belongs in `references/`; detail the model

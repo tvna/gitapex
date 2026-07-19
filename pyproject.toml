@@ -18,12 +18,12 @@ dev = [
 package = false
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "skills/evaluating-skill-quality/scripts"]
-pythonpath = [".github/scripts", "skills/scorer-gated-skill-edits/scripts", "skills/evaluating-skill-quality/scripts", "skills/seeding-issue-pr-templates/scripts", "evals/scripts"]
-addopts = "--cov=.github/scripts --cov=skills/scorer-gated-skill-edits/scripts --cov=skills/evaluating-skill-quality/scripts --cov=skills/seeding-issue-pr-templates/scripts --cov=evals/scripts --cov-report=term-missing"
+testpaths = ["tests", "skills/battle-testing-a-skill/scripts", "skills/evaluating-skill-quality/scripts"]
+pythonpath = [".github/scripts", "skills/battle-testing-a-skill/scripts", "skills/scorer-gated-skill-edits/scripts", "skills/evaluating-skill-quality/scripts", "skills/seeding-issue-pr-templates/scripts", "evals/scripts"]
+addopts = "--cov=.github/scripts --cov=skills/battle-testing-a-skill/scripts --cov=skills/scorer-gated-skill-edits/scripts --cov=skills/evaluating-skill-quality/scripts --cov=skills/seeding-issue-pr-templates/scripts --cov=evals/scripts --cov-report=term-missing"
 
 [tool.coverage.run]
-source = [".github/scripts", "skills/scorer-gated-skill-edits/scripts", "skills/evaluating-skill-quality/scripts", "skills/seeding-issue-pr-templates/scripts", "evals/scripts"]
+source = [".github/scripts", "skills/battle-testing-a-skill/scripts", "skills/scorer-gated-skill-edits/scripts", "skills/evaluating-skill-quality/scripts", "skills/seeding-issue-pr-templates/scripts", "evals/scripts"]
 
 [tool.coverage.report]
 exclude_lines = [

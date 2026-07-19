@@ -50,17 +50,34 @@ evaluation. Name the gap; never fake a score to proceed.
    plainly when too few fixtures exist to split meaningfully. The minimal
    groundwork is then a larger fixture corpus, not a smaller gate. See
    [references/skillopt-mapping.md](references/skillopt-mapping.md).
+   Inventory every actual trigger branch before accepting the split. The
+   corpus must contain a positive route and a negative/non-trigger case for
+   each branch, and no branch may exist only in train: at least one held-out
+   fixture must exercise it. Record this coverage or STOP and expand the
+   corpus.
 2. **Propose bounded edits.** Cap the number of edits per iteration (the
    learning-rate analogue). Prefer localized add / delete / replace patches
    over a full rewrite, so one bad iteration cannot erase working rules.
+   Before scoring, classify the candidate as ordinary or pruning-only and,
+   for pruning-only, predeclare the deterministic context-cost measure.
+   Pruning-only is eligible only when the patch deletes text and adds or
+   rewords no behavior; a replacement, mixed add/delete patch, relabeling,
+   or uncertain classification uses the ordinary gate.
 3. **Gate: strict improve-or-reject.** Score the candidate on the selection
    split with the same model and harness. Keep it only if the selection
-   score strictly increases. Ties are rejected. A plausible-sounding edit
-   that does not move the score is not kept. When per-task scores come from
-   `scripts/score_contract.py`, use its `--compare-to <prior_mean>` mode
-   (reading one score per line from `--scores` or stdin) to compute the new
-   mean and print `KEEP`/`REJECT` per this rule instead of doing the
-   arithmetic by hand. See
+   correctness score strictly increases. Ordinary ties are rejected. A
+   predeclared pruning-only candidate has one narrow lexicographic exception:
+   correctness may not fall, and at exactly matched correctness its measured
+   context cost must strictly decrease. This does not turn a style-only or
+   ordinary scalar tie into a keep. When per-task scores come from
+   `scripts/score_contract.py`, use `--compare-to <prior_mean>` for the
+   ordinary gate; add `--pruning-only --prior-context-cost <n>
+   --candidate-context-cost <n>` only for the predeclared pruning gate.
+   The script reads one task score per line from `--scores` or stdin and
+   requires `--compare-to` to be the exact six-decimal baseline it previously
+   printed, then compares the candidate at that same published precision.
+   A higher-precision prior is ambiguous input and fails loudly.
+   It prints the mean plus `KEEP`/`REJECT`, avoiding hand arithmetic. See
    [references/worked-example.md](references/worked-example.md).
 
    - **Conditional branch -- LLM-as-judge only with adversarial
@@ -119,8 +136,9 @@ just measures the wrong thing.
   with the gap identified.
 - **Splits:** which fixtures are train / selection / test.
 - **Proposed edits:** the bounded patch set for this iteration.
-- **Gate result:** selection score before and after, and keep or reject
-  (ties rejected).
+- **Gate result:** selection correctness before and after, candidate class,
+  and keep or reject; pruning-only results also report context cost before
+  and after.
 - **Rejected-edit log:** edits tried and rejected, with the score change.
 - **Transfer check:** the adjacent target and whether it regressed.
 - **Next move:** the concrete next iteration or the ship/stop decision.
@@ -131,8 +149,9 @@ just measures the wrong thing.
   their absence is the STOP, not a prompt to invent a score.
 - Never motivate an edit from the selection or test split; that leaks the
   gate and inflates the score.
-- Never keep a tied or worse edit; strict improvement is the only accept
-  condition.
+- Never keep a worse-correctness edit. Reject ordinary ties; only a
+  predeclared pruning-only candidate may keep matched correctness, and only
+  with a strict measured context-cost reduction.
 - Never ship a skill that has not passed a transfer check.
 - Never treat an LLM judge's pass as ground truth without an adversarial
   verification pass.
