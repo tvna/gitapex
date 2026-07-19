@@ -11,12 +11,12 @@ block deterministically.
 
 ## Corpus size and the 2:1:7 caveat
 
-SkillOpt's default split ratio is 2:1:7. At 30 fixtures that ratio gives a
-selection split of roughly three tasks, too thin to gate a strict
-improve-or-reject decision because three observations provide little ability
+SkillOpt's default split ratio is 2:1:7. At 33 fixtures that ratio gives a
+selection split of roughly five tasks, too thin to gate a strict
+improve-or-reject decision because five observations provide little ability
 to average out run-to-run variance. Following the precedent already set in
 `skills/scorer-gated-skill-edits/references/worked-example.md` ("the ratio is
-aspirational" for a small fixture count), this split uses a flatter 13:10:7
+aspirational" for a small fixture count), this split uses a flatter 14:11:8
 partition, named explicitly as a deviation from the 2:1:7 default. The
 honest minimal groundwork, per that same worked example, is a larger
 fixture corpus over time, not a smaller gate.
@@ -31,7 +31,8 @@ fixture corpus over time, not a smaller gate.
   `portability-declarative-fact-claim.yaml`, `branch-and-step-contracts.yaml`,
   `sentence-level-pruning.yaml`, `progressive-disclosure-placement.yaml`,
   `heldout-semantic-noop-vs-brevity.yaml`,
-  `capability-assumption-broad-excuses-explanation.yaml`.
+  `capability-assumption-broad-excuses-explanation.yaml`,
+  `ablation-capability-no-mechanism.yaml`.
 - **selection** (gates acceptance; scored before/after a candidate edit,
   strict improve-or-reject, ties rejected): `edge.yaml`,
   `mechanism-fit-subagent.yaml`, `third-party-not-authoritative.yaml`,
@@ -40,13 +41,15 @@ fixture corpus over time, not a smaller gate.
   `blind-spot-pass-generalizes.yaml`,
   `model-effort-tier-fit-unjustified-effort.yaml`,
   `portability-issue-number-citation.yaml`, `heldout-vague-completion.yaml`,
-  `capability-assumption-frontier-flags-explanation.yaml`.
+  `capability-assumption-frontier-flags-explanation.yaml`,
+  `ablation-capability-runner-exists-not-run.yaml`.
 - **test** (read once, for a final report only, never to motivate or gate
   an edit): `guardrail.yaml`, `no-fabricated-violation.yaml`,
   `portability-classification.yaml`, `blind-spot-pass-not-silent.yaml`,
   `model-effort-tier-fit-justified.yaml`,
   `portability-legitimate-illustrative-citation.yaml`,
-  `capability-assumption-adaptive-progressive-disclosure.yaml`.
+  `capability-assumption-adaptive-progressive-disclosure.yaml`,
+  `ablation-capability-already-run.yaml`.
 
 The three `capability-assumption-*` fixtures were added for issue #183
 (Sub-project B, the capability-assumption grading semantics), for the
@@ -66,6 +69,16 @@ fixture's domain or its Broad-excuses wording.
 (read once) and checks the restraint side for the Adaptive-only
 dimension-5 effect: does the review verify a genuine lean-body-plus-depth
 split rather than rubber-stamping any Adaptive declaration.
+
+The three `ablation-capability-*` fixtures were added independently, in
+the same window, for issue #185 (the ablation-capability sub-check on
+dimension 8) -- see that iteration's own entry below for their rationale.
+Landing in the same merged corpus as the three `capability-assumption-*`
+fixtures above is coincidental (two sub-projects of the same
+skill-metadata-sidecar effort progressing in parallel), not a shared
+design; the two triples probe unrelated rubric sections (dimension 8's
+ablation-capability distinction vs. the Capability assumption axis's
+dimensions 2/3/5/9).
 
 The two `scoring-axis-*` fixtures were added alongside this split
 specifically because none of the original 9 fixtures assert on
@@ -163,6 +176,29 @@ but review found that its expected answer contradicted the new rubric by
 calling unmeasured prose a behavioral no-op. The expectation was corrected
 and the fixture moved to train. Its earlier score is invalid and excluded
 from candidate-acceptance evidence.
+
+The three `ablation-capability-no-mechanism.yaml` /
+`ablation-capability-runner-exists-not-run.yaml` /
+`ablation-capability-already-run.yaml` fixtures were added for the
+ablation-capability sub-check (dimension 8), for the same reason as prior
+additions: none of the prior 27 fixtures probe whether the review
+distinguishes an unrecorded-but-achievable baseline from a genuinely
+unbuildable one, or recognizes when a baseline has already been measured.
+`ablation-capability-no-mechanism.yaml` sits in train (an invented
+log-triage-assistant skill whose repository has only a structural
+pass/fail eval runner and no way to run a with-skill-vs-without-skill
+comparison at all -- it motivated the edit).
+`ablation-capability-runner-exists-not-run.yaml` sits in selection and
+uses a distinct domain (invoice parsing) and the opposite discrimination
+case: the repository already ships an ablation-capable runner, it simply
+has not been pointed at this skill yet -- so the gate measures whether the
+sub-check generalizes to "ablation-capable, not yet run" rather than
+defaulting to the train fixture's "no mechanism" framing whenever a
+baseline is merely unrecorded. `ablation-capability-already-run.yaml` sits
+in test (read once, for the final report) and checks the restraint side: a
+target whose baseline has already been measured and reported with concrete
+lift numbers must not be false-positively flagged with either
+ablation-capability phrasing.
 
 ## Reuse
 
@@ -518,8 +554,11 @@ consistency check to Procedure step 4 as its sole owner; update
 `battle-testing-a-skill` from Broad to Adaptive. Full text: see this PR's
 diff.
 
-Precondition and splits: satisfied (30 fixtures, 13:10:7 with this
-iteration's additions -- see Assignment above).
+Precondition and splits: satisfied at the time this iteration ran (30
+fixtures, 13:10:7 -- see Assignment above; the corpus grew to 33,
+14:11:8 once this PR merged alongside issue #185's own iteration below,
+which was landing in parallel -- see the Merge reconciliation entry at
+the end of this log for the combined, re-verified result).
 
 Methodology, disclosed reuse: the other 9 selection fixtures'
 **before** score for this gate = their **after** score from issue #165's
@@ -626,6 +665,55 @@ test-split rule, the fixture's own excerpt is left unchanged rather than
 retrofitted to force a clean-pass outcome now that its actual result is
 known.
 
+**Correction (found by external review, PR #189 `chatgpt-codex-connector[bot]`):**
+two real defects in this fixture, found together. First, the reference's
+content was only paraphrased in the prompt ("240 lines: a full decision
+tree..."), not actually supplied -- so a reviewer could only trust the
+summary rather than verify the artifact Procedure step 1 requires reading
+in full, and the assertions (`"Adaptive"`, `"lean"`) did not require any
+specific verdict direction at all: a wrong answer concluding FAIL would
+have scored identically to the intended PASS. Second, and more
+substantively, the excerpt's *body* deferred the actual classification
+rule (the numeric thresholds) entirely to the reference, keeping only
+worked examples and exact commands there -- re-graded live against the
+fixed rubric wording below, this genuinely FAILS dimension 5 ("the body
+must actually be lean **for the strong-model path**... a Frontier-capable
+reader completes the common case from the body alone"), since the
+thresholds are read on every single classification, not merely by a weak
+tier "on demand." This was not a fixture-assertion bug alone; the
+*designed* excerpt did not actually qualify as a good-Adaptive-split
+example. Fixed by (a) inlining the actual four-branch classification rule
+into the body's Procedure steps, leaving only worked examples and exact
+query commands in the reference (the assertion Adaptive's Fair test
+distinguishes: everyday-use reasoning belongs in the body; per-branch
+detail used only sometimes belongs in the reference), (b) including the
+reference's full real content in the prompt so the reviewer can verify it
+directly, and (c) requiring an explicit `"PASS"` token while banning
+plausible wrong-conclusion phrasings (`"dimension 5 fails"`,
+`"dimension 5, FAIL"`). Re-verified live against the corrected excerpt and
+the corrected rubric wording (see the next correction below): explicit,
+non-rubber-stamped **PASS**, citing exactly the intended reasoning (body
+inlines the everyday rule; reference is scoped to genuinely on-demand
+per-branch detail). This is a stronger, more honest restraint result than
+the original: it demonstrates the check both refuses to rubber-stamp
+(caught the first, flawed version of this exact fixture) and correctly
+recognizes a genuinely qualifying split once one is actually given.
+
+**Second correction, same review (rubric wording, not just the
+fixture):** the Codex review separately flagged that the Adaptive
+dimension-5 "body must be lean" bullet was ambiguous about which model
+tier's path the "no forced reference read" test applies to -- read
+strictly, it could be misapplied to fail any Adaptive skill where a
+*weak* tier legitimately pulls the reference for the common case, which
+is Adaptive's own intended behavior, not a defect. Fixed in
+`references/rubric.md` by scoping the bullet explicitly to the
+**strong-model path** ("a Frontier-capable reader completes the common
+case from the body alone... this does not mean no tier ever needs the
+reference: Adaptive's own definition has a weaker tier pull the reference
+for that same common case by design, and that is the strategy working as
+intended"). This same wording fix is also what the live re-verification
+above applied.
+
 **Falsifiable acceptance criterion (issue #183, and the design spec's
 Sub-project B sequencing section):** a live before/after re-grade of the
 real `battle-testing-a-skill`, reclassified from Broad to Adaptive in
@@ -642,3 +730,230 @@ check (same verdict direction, different and correct rubric grounding), a
 negation-trap fixture bug found and fixed before any score was banked,
 and a restraint result on the held-out Adaptive fixture that is stronger
 evidence of rigor than the clean pass it was designed to check for.
+
+**Iteration: ablation-capability sub-check (dimension 8).** Candidate edit:
+add a new bold-lead paragraph to `references/rubric.md`'s dimension 8
+(Behavioural evidence), right after the existing "Check the target
+repository for an eval mechanism" paragraph, requiring the review to
+distinguish "ablation-capable, not yet run" (a with-skill-vs-without-skill
+comparison mechanism exists in the repository, just not yet pointed at
+this skill) from "no ablation mechanism exists in this repository" (no
+such mechanism exists at all), rather than collapsing both into an
+undifferentiated "no baseline." Motivated directly by this repository's
+own `docs/skill-eval-status.md`, which records that exact undifferentiated
+phrasing for nearly every skill in the repository. Full text: see this
+PR's diff.
+
+Precondition and splits: satisfied (30 fixtures, 13:10:7 with this
+iteration's additions -- see Assignment above). Between the prior
+iteration (issue #165) and this one, an unrelated change (the skill
+metadata sidecar migration) touched `references/rubric.md`'s Portability
+level section and added a new Capability assumption section, but left
+dimension 8 and every other section byte-identical -- confirmed directly
+(`git diff` against the pre-migration commit shows only those two hunks).
+Of the 9 pre-existing selection fixtures, 8 assert on content this
+migration never touched (mechanism fit, dimension 4, dimension 8's
+scoring-axis guidance, blind-spot-pass, model-effort-tier-fit); one of
+those 8, `portability-issue-number-citation.yaml`, targets dimension 6's
+citation ban (also untouched by the migration, confirmed by the same
+diff) on a target that declares portability via the pre-sidecar
+body-marker convention, which the shape checker's fallback path still
+supports for a foreign/vendored target -- so its assertions remain valid
+unchanged. Those 8 therefore reuse their #165 after-scores (all
+1.000000) as this gate's before scores -- disclosed reuse, the same
+"never both" discipline the prior two iterations already applied.
+
+**Correction (found by external review, PR #190 `chatgpt-codex-connector[bot]`):**
+the first version of this gate omitted the 9th pre-existing selection
+fixture, `heldout-vague-completion.yaml`, from the table below entirely
+-- the reported mean covered 9 tasks against a declared 10-fixture
+selection split, so a regression in the omitted fixture could not have
+blocked the `KEEP` decision. Checked directly: unlike the other 8 reused
+fixtures, `heldout-vague-completion.yaml` has never appeared in any prior
+recorded Kept-edit gate (#149, #155, #165) -- it was added to the
+selection split independently, before those iterations, and this repository
+has apparently never actually gated on it before now, a pre-existing gap
+in this file's own history that predates this session. With no genuine
+prior score to reuse, it needed its own fresh before/after pair, the same
+as the new fixture. Both dispatches confirm what its content already
+implies (it targets dimension 4's completion-criteria language, nothing
+in dimension 8): identical `COMPLETION_CRITERIA: FAIL` verdicts either
+side of the edit.
+
+Methodology: one fresh, isolated subagent dispatch per side for each of
+the two fixtures needing a genuine pair (this repository has no
+registered `Skill` tool for its own unpublished `evaluating-skill-quality`
+content, so each dispatch was instructed to read `references/rubric.md`
+and `SKILL.md` directly -- `git show 228486c:...` for the before side, the
+working tree for the after side -- and follow the Procedure by hand),
+scored with `skills/scorer-gated-skill-edits/scripts/score_contract.py`:
+
+| Fixture | Before | After |
+|---|---|---|
+| `edge.yaml` | 1.000000 (reused, #165 after) | 1.000000 |
+| `mechanism-fit-subagent.yaml` | 1.000000 (reused, #165 after) | 1.000000 |
+| `third-party-not-authoritative.yaml` | 1.000000 (reused, #165 after) | 1.000000 |
+| `scoring-axis-uncontrolled-speed-claim.yaml` | 1.000000 (reused, #165 after) | 1.000000 |
+| `ordering-rule-totality-distinct-skill.yaml` | 1.000000 (reused, #165 after) | 1.000000 |
+| `blind-spot-pass-generalizes.yaml` | 1.000000 (reused, #165 after) | 1.000000 |
+| `model-effort-tier-fit-unjustified-effort.yaml` | 1.000000 (reused, #165 after) | 1.000000 |
+| `portability-issue-number-citation.yaml` | 1.000000 (reused, #165 after) | 1.000000 |
+| `heldout-vague-completion.yaml` | 1.000000 (fresh) | 1.000000 (fresh) |
+| `ablation-capability-runner-exists-not-run.yaml` | 0.750000 (fresh) | 1.000000 (fresh) |
+
+Selection mean: **before 0.975000 -> after 1.000000**. Run via
+`score_contract.py --compare-to 0.975000 --scores after-scores.txt`:
+`1.000000 KEEP`. (The original, incomplete 9-fixture table reported
+`before 0.972222 -> after 1.000000`, also `KEEP` -- correcting the
+omission changes the precision and the fixture count, not the verdict,
+since `heldout-vague-completion.yaml` scored identically on both sides.)
+
+The fresh fixture's own before-run (pre-edit rubric) still named the
+existing `battle/run_battle.py --ablate` tool and correctly declined to
+treat "no baseline run" as a hard block -- but it never produced the
+exact discriminating phrase `"ablation-capable, not yet run"`, since that
+phrasing did not exist in the rubric yet, scoring 0.750000 (3/4
+assertions). The after-run named the sub-check's exact phrasing verbatim
+("this is **ablation-capable, not yet run** -- not '...no ablation
+mechanism exists...'"), scoring 1.000000 -- a genuine, construct-valid
+improvement from the edit, not a reused or coincidental phrase.
+
+A real fixture-assertion bug was found and fixed *before* scoring, not
+after seeing a result: the after-run's dispatch explicitly wrote a denial
+of the wrong framing ("not 'no ablation mechanism exists...'"), which
+means an `output_not_contains: ["no ablation mechanism"]` assertion --
+the first draft of all three new fixtures -- would have false-failed a
+*correct* response purely for stating what it was rejecting, the same
+negation-trap class of bug `references/rubric.md`'s own dimension-6
+history (the "tenth dimension" fixture, recorded above under issue #149)
+already hit once. Fixed the same way: dropped the fragile
+`output_not_contains` bans on the counterpart phrasing from all three new
+fixtures, keeping only the generic `"LGTM"` / `"no concerns"` guardrails
+plus a strong, unique positive assertion per fixture -- the positive
+phrasing alone is sufficiently discriminating (a wrong answer states the
+opposite conclusion, it does not omit stating any conclusion).
+
+**Restraint check (test split, read once):**
+`ablation-capability-already-run.yaml` -- a target whose eval-status notes
+already report a real, dated with-skill-vs-without-skill comparison (91%
+vs. a 34% no-skill baseline). The after-edit dispatch correctly recognized
+this as ablation *history*, not mere *capability*, explicitly declined
+both of the sub-check's two phrasings ("I am not using either of those
+phrasings because the text plainly shows a run occurred"), and instead
+named a third, correct disposition -- while also independently flagging
+that the figure was self-reported and unverified by an isolated dispatch
+with no access to the target's actual repository, a distinct finding this
+review did not ask for but which is consistent with the rubric's
+primary-source-grounding discipline.
+
+**Correction (found by external review, PR #190 `chatgpt-codex-connector[bot]`):**
+this fixture's first-draft assertions (`output_contains: ["91%"]`, plus
+the generic `LGTM`/`no concerns` guardrails) could not actually
+substantiate the restraint claim above: `"91%"` is copied verbatim from
+the fixture's own prompt, so a *wrong* response that repeats the number
+while incorrectly concluding "no ablation mechanism exists" would have
+scored identically 1.0 -- exactly the false positive this fixture exists
+to catch, undetected by construction. Fixed by strengthening the positive
+assertion to require three independently-improbable-for-a-wrong-answer
+tokens together: `"91%"`, `"34%"` (the paired baseline figure a
+mechanism-gap conclusion has no reason to restate), and `"already"` (the
+history-recognizing language a mechanism-gap conclusion would
+contradict) -- re-scored against the real (not paraphrased) transcript
+above: still `1.000000`. This is deliberately a positive-only fix, not a
+negative ban on the two sub-check phrasings: the same negation-trap risk
+already found and fixed once in this iteration (above) would recur if a
+correct restraint response quoted either phrase only to reject it.
+
+**KEEP.** Strict improvement on the corrected 10-fixture selection split,
+a genuine generalization result on the fixture built to test the new
+check, one selection fixture omitted from the first-draft table and
+restored with its own genuine before/after pair, one fixture-assertion
+negation-trap bug found and fixed before scoring, one restraint-fixture
+discrimination bug found after external review and fixed with a
+positive-only assertion, and a confirmed restraint result on the
+held-out already-run fixture that also demonstrated the check correctly
+recognizes a third disposition (history, not just capability-vs-absence)
+it was never explicitly designed to enumerate.
+
+**Merge reconciliation: issue #183 (PR #189) and issue #185 (PR #190),
+landed in parallel onto the same two files.** Both iterations above ran
+their own held-out gate independently, against a rubric that had only
+their own edit applied -- neither saw the other's change. Once merged,
+the corpus is 33 fixtures (14:11:8, not the 30/13:10:7 each iteration
+reported at the time), and the selection split has 11 fixtures, not 10.
+Per this repository's own "a clean textual auto-merge is not a safe
+merge" discipline, re-verifying against the actual merged file, not
+reusing either iteration's now-stale table, is required rather than
+optional.
+
+`references/rubric.md` merged with no textual conflict (the two edits
+land in disjoint sections: Capability assumption plus the Model/effort
+tier fit boundary note for #183, dimension 8's ablation-capability
+paragraph for #185) -- confirmed by inspection that both sections are
+present, complete, and mutually unaffected post-merge. `SKILL.md` had no
+conflict (unchanged by #185). `docs/skill-eval-status.md` and this file
+both had textual insertions at overlapping points, resolved by hand,
+preserving both iterations' entries in full rather than dropping either.
+
+Re-verification, one fresh dispatch per fixture whose assertions plausibly
+interact with content either edit touches, against the actual merged
+working tree (not a pinned snapshot, since this entry's purpose is
+confirming the real current state):
+
+| Fixture | Before (reused) | After (merged rubric) |
+|---|---|---|
+| `edge.yaml` | 1.000000 | 1.000000 (unaffected, not re-run) |
+| `mechanism-fit-subagent.yaml` | 1.000000 | 1.000000 (unaffected, not re-run) |
+| `third-party-not-authoritative.yaml` | 1.000000 | 1.000000 (unaffected, not re-run) |
+| `scoring-axis-uncontrolled-speed-claim.yaml` | 1.000000 | 1.000000 (fresh) |
+| `ordering-rule-totality-distinct-skill.yaml` | 1.000000 | 1.000000 (unaffected, not re-run) |
+| `blind-spot-pass-generalizes.yaml` | 1.000000 | 1.000000 (unaffected, not re-run) |
+| `model-effort-tier-fit-unjustified-effort.yaml` | 1.000000 | 1.000000 (unaffected, not re-run) |
+| `portability-issue-number-citation.yaml` | 1.000000 | 1.000000 (unaffected, not re-run) |
+| `heldout-vague-completion.yaml` | 1.000000 | 1.000000 (established both sides by #185's iteration, dimension 4, untouched by either merged edit) |
+| `capability-assumption-frontier-flags-explanation.yaml` | 0.750000 | 1.000000 (established by #183's iteration; content is dimension-2/Capability-assumption only, untouched by #185's dimension-8 edit) |
+| `ablation-capability-runner-exists-not-run.yaml` | 0.750000 | 1.000000 (established by #185's iteration; content is dimension-8/ablation-capability only, untouched by #183's edit) |
+
+Selection mean: **before 0.954545 -> after 1.000000**. Run via
+`score_contract.py --compare-to 0.954545 --scores after-scores.txt`:
+`1.000000 KEEP`.
+
+`scoring-axis-uncontrolled-speed-claim.yaml` needed the one genuine fresh
+re-run: it asserts on dimension 8 (behavioural evidence), the exact
+section #185's edit touches, so its #165-reused before-score could not
+be assumed still valid the way the other 7 untouched fixtures' could.
+The fresh dispatch against the merged rubric scored **0.857143** on
+first pass (6/7) -- missing only the literal substring `"6.5 seconds"`,
+because the dispatch correctly answered the dimension-8 question in full
+but abbreviated the number as `"6.5s"` rather than spelling out
+"seconds." This is not a new bug: it is the third independent
+occurrence of the *exact same* fixture brittleness, first documented in
+issue #149's Kept-edit log entry above ("dipped from 1.000000 to
+0.857143... discussed the fixture's cost/speed numbers as '6.5s/$0.03'
+rather than the assertion's exact literal '6.5 seconds'") and reproduced
+a second time earlier in this same merge's own reconciliation work.
+Fixed properly this time rather than disclosed-and-left, since three
+independent hits confirm it is not run-to-run noise: relaxed the
+assertion from the literal phrase `"6.5 seconds"` to the bare numeral
+`"6.5"`, which matches both `"6.5 seconds"` and `"6.5s"` and still
+discriminates a correct, specific answer from a generic non-answer (a
+response that never engages with the actual numbers in the prompt would
+not contain `"6.5"` either way). Re-scored after the fix: `1.000000`.
+
+Two fixtures (`capability-assumption-frontier-flags-explanation.yaml`,
+`ablation-capability-runner-exists-not-run.yaml`) keep their own
+iteration's already-established scores rather than a fresh re-run: each
+asserts on exactly one edit's own new content (dimension 2's Capability
+assumption calibration; dimension 8's ablation-capability distinction,
+respectively) and neither section was touched by the other iteration's
+edit, confirmed directly by the disjoint-section observation above -- a
+fresh dispatch would re-derive an already-known answer, the same "never
+both" redundancy this file's own methodology notes have avoided
+throughout.
+
+**KEEP.** Strict improvement on the true, fully-merged 11-fixture
+selection split (0.954545 -> 1.000000), with the one fixture whose
+content could plausibly have interacted with both edits re-verified
+fresh against the real merged file rather than assumed, and a
+three-times-recurring fixture-assertion brittleness fixed at the root
+instead of disclosed a third time.

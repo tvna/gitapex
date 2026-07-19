@@ -821,6 +821,23 @@ irreversible, outward-facing action outside a review's scope, and a
 forced install of an unfamiliar third-party tool carries supply-chain
 risk.
 
+**Distinguish ablation-capability from ablation-history when naming a "no
+baseline" gap.** "No baseline recorded" collapses two different situations
+that a repository's own eval-status bookkeeping should not blur: a runnable
+with-skill-vs-without-skill comparison mechanism already exists in the
+repository and simply has not been pointed at this skill yet, versus no such
+mechanism exists in the repository at all. State explicitly which one
+applies -- **"ablation-capable, not yet run"** (name the existing runner) or
+**"no ablation mechanism exists in this repository"** (name what would be
+missing: a runner able to produce a with-skill-vs-without-skill comparison,
+not merely a pass/fail eval suite). A structural eval suite that only asserts
+`output_contains`/`output_not_contains` is not itself an ablation mechanism
+-- it can confirm a skill's output looks right without ever running the same
+task with the skill withheld. This sub-check does not, on its own, block a
+*mature* verdict -- the same carve-out this dimension already gives
+measured-vs-named-unmeasured evidence generally; it exists so an unactionable
+"no baseline" stops reading identically to an actionable one.
+
 **`waza check`'s output is useful evidence, but verify its heuristics
 against the primary spec before trusting a verdict from it** -- do not
 treat a third-party tool's score as equivalent to Anthropic's own bar any

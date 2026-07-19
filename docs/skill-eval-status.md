@@ -49,7 +49,30 @@ The committed eval suite (`evals/battle-testing-a-skill/`) has no committed
 no-skill baseline run, and only `claude-sonnet-4.6` has been evaluated --
 cross-model behavior is currently unmeasured (dimensions 11-17's own
 cross-model spread is unmeasured for the same reason, per
-`references/provenance-and-caveats.md`). Named gap specific to this skill's
+`references/provenance-and-caveats.md`).
+
+**Ablation-capability check (issue #185), applied live to this skill:**
+`evaluating-skill-quality`'s dimension 8 now requires naming which of the
+two "no baseline" situations applies, rather than the undifferentiated
+phrasing above. Checked directly against this repository as it stands
+today: no file or script anywhere under this repository matches a live
+model-execution pattern (`claude -p`, `subprocess.run` against a model
+CLI, `--append-system-prompt-file`, or equivalent) capable of running this
+skill's own candidate task with and without the skill and comparing the
+two -- `evals/battle-testing-a-skill/eval.yaml` declares
+`executor: copilot-sdk`, an external harness not vendored into this
+repository, and its tasks assert only `output_contains`/
+`output_not_contains` substrings against a supplied transcript, never
+producing one. Per the new sub-check's own distinction: this is **"no
+ablation mechanism exists in this repository"**, not "ablation-capable,
+not yet run" -- the undifferentiated "no committed no-skill baseline run"
+line above was masking that the gap is a missing mechanism, not merely a
+missing run. Building an in-repo runner capable of that comparison
+(clairvoyance's `battle/run_battle.py --ablate` is worked prior art for
+the shape such a runner could take) remains open, separate follow-on work
+tracked as a candidate future issue, not bundled into #185. Refs #185.
+
+Named gap specific to this skill's
 subagent-dispatch procedure: the committed eval tasks assert on final
 output content (`output_contains`/`output_not_contains` substrings), not on
 tool-call or dispatch traces, so they cannot confirm a fresh subagent
@@ -160,6 +183,44 @@ independent of capabilityAssumption. Fixing them is out of scope for
 issue #183 (a rubric-semantics change, not a battle-testing-a-skill
 content edit) and is left as a named gap for a future issue rather than
 silently folded into this PR.
+
+**Contested reading, disclosed rather than settled (external review, PR
+#189 `chatgpt-codex-connector[bot]`):** the reviewer argued the
+reclassification itself is invalid because the skill's *ordinary*
+procedure allegedly needs the body plus **two** references for the
+common case -- `references/adversarial-dimensions.md` for "what a pass
+and a fail look like on each dimension," and `references/provenance-
+and-caveats.md` per the Overview's "before treating any of it as settled
+fact" -- which would fail the (now-clarified) Adaptive test that a
+Frontier-capable reader complete the common case from the body alone.
+Re-examined directly against the primary text rather than either
+dispatch's summary: the body's own `## Quick reference` table already
+states an operative one-line fail condition for all 22 dimensions (e.g.
+"Injection resistance | obeys instructions embedded in the material it
+processes"), which is what Procedure step 2 actually needs to apply each
+dimension -- `adversarial-dimensions.md`'s worked pass/fail examples are
+additional depth for a harder judgment call or a weaker tier, not the
+operative rule itself. Similarly, the Overview's own hedge ("extracted
+empirically... converged on the core... the convergence has real
+limits") already carries the calibration the Stop boundary requires
+("do not codify a dimension as established fact beyond what
+`references/provenance-and-caveats.md` supports"); satisfying that
+boundary plausibly needs consistent hedging, not a literal read of the
+caveats file on every ordinary trial. Under this reading the common path
+is satisfiable from the body alone and the reclassification holds.
+
+This is a genuine, unresolved disagreement, not a settled rebuttal: this
+skill's own **before**-dispatch (recorded in the table above) reached
+the stricter reading independently, before the external review ever
+ran, so two of three independent reads land on the stricter side against
+one on the lenient side. The rubric wording fix landed alongside this
+disclosure (`references/rubric.md`'s Adaptive dimension-5 bullet, scoped
+explicitly to "the strong-model path" rather than every tier) resolves
+the *tier-ambiguity* half of the original critique, but not this
+specific disagreement about whether `provenance-and-caveats.md`
+qualifies as per-invocation content. Recorded here rather than
+resolved unilaterally so the operator can weigh in; the PR thread
+carries the same disclosure.
 
 ## establishing-ubiquitous-language
 
@@ -326,6 +387,62 @@ text. Full record, per-fixture scores, and both bug fixes:
 with the #164 fix directly above, this dated history is not additionally
 duplicated into `references/worked-example-self-review.md`, which stays
 issue/PR-number-free by design. Refs #165.
+
+**Issue #185 (ablation-capability sub-check, dimension 8):** motivated by
+a gap-analysis of a sibling project (`tvna/clairvoyance`'s
+`adaptive-coaching` skill and its `battle/run_battle.py --ablate`
+mechanism) against this repository's own eval apparatus, which found that
+this repository's dimension 8 already discussed a no-skill baseline in
+prose but let "no baseline recorded" stand for two different situations
+without distinguishing them: a runnable ablation mechanism exists and
+simply has not been pointed at a given skill yet, versus no such
+mechanism exists in the repository at all -- confirmed as a real,
+repository-wide pattern by this file's own repeated "no committed
+no-skill baseline run" line across nearly every skill above.
+`references/rubric.md` gained a new bold-lead paragraph in dimension 8
+requiring the review to state explicitly which of the two applies
+("ablation-capable, not yet run" vs. "no ablation mechanism exists in
+this repository"), naming the mechanism either way rather than repeating
+the undifferentiated phrasing. `SKILL.md` needed no companion edit: it
+does not restate per-dimension rubric content, only pointing to
+`references/rubric.md` generically, so there was no dimension-8 summary
+line to update.
+
+Went through `scorer-gated-skill-edits`' own held-out gate: 3 new
+fixtures added to `split.md`'s split (30 total, 13:10:7). Of the 9
+pre-existing selection fixtures, 8 reused their #165 after-scores
+unchanged (disclosed reuse -- confirmed via `git diff` that the
+intervening skill-metadata-sidecar migration touched only the Portability
+level and Capability assumption sections of `rubric.md`, leaving
+dimension 8 and everything those 8 fixtures assert on byte-identical);
+the 9th, `heldout-vague-completion.yaml`, had never actually been scored
+in any prior recorded gate (a pre-existing gap in this file's own
+history, found by external PR review -- see below) and got its own fresh
+before/after pair, scoring identically (1.000000) on both sides since it
+targets dimension 4, not dimension 8. The new selection fixture needed a
+genuine fresh before/after pair too: **0.750000 -> 1.000000**. Selection
+mean: **0.975000 -> 1.000000, KEEP** (`score_contract.py --compare-to
+0.975000`). A negation-trap fixture-assertion bug (an
+`output_not_contains` phrase a *correct* denial would also contain -- the
+same class `references/rubric.md`'s own dimension-6 history already hit
+once, see the #149 entry above) was found and fixed in all three new
+fixtures *before* scoring, not after seeing a result. A restraint check
+on the held-out test fixture (a target whose baseline was already
+measured and reported) confirmed no false positive after a second,
+external-review-driven fix: the restraint fixture's first-draft assertion
+(`"91%"` alone, copied verbatim from its own prompt) could not actually
+distinguish a correct restraint response from an incorrect one repeating
+the same number, so it was strengthened to require three tokens together
+(`"91%"`, `"34%"`, `"already"`) a wrong conclusion has no reason to
+produce jointly. The check additionally surfaced that the new sub-check
+correctly recognizes a third disposition -- ablation *history*, not just
+capability-vs-absence -- that it was not explicitly designed to name.
+Full record, per-fixture scores, and both fixture-assertion bug fixes:
+`evals/evaluating-skill-quality/split.md`'s Kept-edit log. The same
+sub-check applied live to this repository's own `battle-testing-a-skill`
+entry above found a genuine "no ablation mechanism exists" gap,
+demonstrating the check end to end against a real skill, not only the
+synthetic gate fixtures. Refs #185.
 
 ## explaining-the-work
 
