@@ -5,9 +5,6 @@ description: Use when a project's terminology is inconsistent or undefined acros
 
 # Establishing Ubiquitous Language
 
-**Portability: Portable.** Self-contained; requires no particular
-instruction file.
-
 Ubiquitous language is the Domain-Driven Design term for a shared,
 consistent vocabulary used identically by people and agents in code, docs,
 issues, and conversation.
@@ -61,3 +58,8 @@ full walkthrough, step by step.
   anything to the glossary, even when no conflict turns out to exist.
 - Never resolve a detected conflict silently. Ask the owner; do not decide
   by fiat, frequency, or authorship convenience.
+
+## Notes
+
+Portability rationale: self-contained; requires no particular instruction
+file. The declared level itself lives in `gitapex_metadata.yaml`.

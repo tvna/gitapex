@@ -5,9 +5,9 @@ description: Use when a pull request has just been opened, or has an open CI fai
 
 # Driving a PR to Merge
 
-**Portability: Portable.** Depends only on a connected GitHub MCP server (a
-general product capability), addressed via the portable `Server:tool`
-shorthand documented below -- no this-repository tooling.
+This skill depends only on a connected GitHub MCP server (a general
+product capability), addressed via the portable `Server:tool` shorthand
+documented below -- no this-repository tooling.
 
 A fragile, order-dependent sequence, not a matter of prose judgement. Follow
 the exact order below; do not reorder or skip a step.

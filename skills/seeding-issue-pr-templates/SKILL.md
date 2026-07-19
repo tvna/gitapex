@@ -5,10 +5,10 @@ description: Use when a repository has no Issue or PR templates and you need to 
 
 # Seeding Issue/PR Templates
 
-**Portability: Mixed.** Procedure is portable; the Acceptance Criteria <->
-Evidence spine option (Step 4, axis 3) names this repo's own
-`issue-to-branch` convention as an alignment target, offered as an option,
-not a dependency the procedure needs to function.
+Procedure is portable; the Acceptance Criteria <-> Evidence spine option
+(Step 4, axis 3) names this repo's own `issue-to-branch` convention as an
+alignment target, offered as an option, not a dependency the procedure
+needs to function.
 
 Creates Issue/PR templates for a repository that lacks them, tailored to the
 repo by interview, self-checked before it is written.

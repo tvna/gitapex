@@ -5,9 +5,8 @@ description: Use when starting work from a GitHub issue, creating a branch from 
 
 # Issue to Branch
 
-**Portability: Repository-scoped.** Steps/Output are general; the
-write-path rules in references/github-issue-workflow.md are this
-repository's own.
+Steps/Output are general; the write-path rules in
+references/github-issue-workflow.md are this repository's own.
 
 Turns a GitHub issue into an implementation-ready branch and PR plan
 without losing the issue's acceptance criteria.

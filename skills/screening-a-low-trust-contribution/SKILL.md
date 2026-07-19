@@ -5,10 +5,9 @@ description: Use when a PR or issue from an unknown or low-trust author needs it
 
 # Screening a Low-Trust Contribution
 
-**Portability: Repository-scoped.** Checks are general; the specific
-paths named below (`.github/workflows/**`, `hooks/**`, this repo's
-dependency manifests) are this repository's own and need substituting
-elsewhere.
+Checks are general; the specific paths named below
+(`.github/workflows/**`, `hooks/**`, this repo's dependency manifests)
+are this repository's own and need substituting elsewhere.
 
 Inspects a PR or issue's diff and metadata for contribution-level
 threats from an unknown or low-trust author -- distinct from

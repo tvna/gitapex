@@ -5,7 +5,7 @@ description: Sweep the backlog of already-known open issues/PRs and hand the ope
 
 # Ranking the Open Queue
 
-**Portability: Portable.** Depends only on a connected GitHub MCP server
+This skill depends only on a connected GitHub MCP server
 (`list_issues`/`search_issues`, general product capabilities), addressed
 via the portable `Server:tool` shorthand documented below -- no
 this-repository tooling. The scoring axes (references/scoring-rubric.md)

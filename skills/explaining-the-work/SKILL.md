@@ -5,8 +5,8 @@ description: Use when writing or editing code comments, docstrings, or finalizin
 
 # Explaining the Work
 
-**Portability: Mixed.** Routing principle is portable; the ADR path and
-commit-trailer conventions below are this repository's own.
+Routing principle is portable; the ADR path and commit-trailer conventions
+below are this repository's own.
 
 Explanation responsibility is split by artifact. Route each piece of
 explanation to exactly one place — never duplicate it, never let it drift

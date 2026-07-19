@@ -5,8 +5,8 @@ description: Use when a pull request has just merged, before closing the turn --
 
 # Merge Retrospective
 
-**Portability: Portable.** Self-contained procedure; depends only on a
-connected GitHub MCP server for the issue-filing step.
+This is a self-contained procedure; it depends only on a connected GitHub
+MCP server for the issue-filing step.
 
 A merged PR is not the end of the cycle. Before closing the turn, look
 back at everything that had to be repaired between opening the PR and

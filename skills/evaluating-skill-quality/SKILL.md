@@ -5,10 +5,6 @@ description: Review a SKILL.md (and its references/) against a nine-dimension qu
 
 # Evaluating Skill Quality
 
-**Portability: Portable.** Self-contained -- carries its own rubric and
-bundled read-only `check_skill_shape.py`; cites only general Anthropic
-product docs, no this-repository tooling.
-
 Judging whether a `SKILL.md` is well-authored is a distinct review lane from
 diff-correctness review or issue/PR contract review: it asks whether the
 skill artifact itself is good, not whether a change is correct.
@@ -218,3 +214,10 @@ actually specifies.
 - Never revise a dimension verdict in the main thread after the dispatch
   returns it. A wrong or contested verdict is fixed by a second,
   independent dispatch, not a patch made in place.
+
+## Notes
+
+Portability rationale: self-contained -- carries its own rubric and bundled
+read-only `check_skill_shape.py`; cites only general Anthropic product
+docs, no this-repository tooling. The declared level itself lives in
+`gitapex_metadata.yaml`.
