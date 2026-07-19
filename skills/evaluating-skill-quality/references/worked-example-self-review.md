@@ -470,10 +470,10 @@ grades differently:
   alternate-harness transfer has been observed. These remain unmeasured
   exactly as stated above, and dimension 9's own text permits saying so.
 
-Net effect: the verdict does **not** flip -- it stays Pass-shaped
-(well-formed, not yet mature), and dimension 9 is still one of the two
-dimensions the overall Verdict names as carrying unmeasured facets. What
-changes is precision: the earlier flat "Unmeasured, not skipped" was
+Net effect: dimension 9's own outcome does **not** flip to a failure
+under Broad -- it stays Pass-shaped, and dimension 9 is still one of the
+two dimensions the overall Verdict names as carrying unmeasured facets.
+What changes is precision: the earlier flat "Unmeasured, not skipped" was
 slightly overbroad under Broad, filing a gradeable adequacy question
 under "unmeasured" when Broad requires it be graded (and it Passes).
 Established on the live subagent re-walk, not by inference.
@@ -488,34 +488,48 @@ skill, since a hardcoded "yes, backed" claim would itself be a defect
 once vendored somewhere with no such hook. Development history of how
 this boundary's wording reached this state: `docs/skill-eval-status.md`.
 
-**Well-formed**, and not yet **mature** -- the same shape as the
-`explaining-the-work` verdict, for different reasons. Dimensions 1
-(after the description fix), 3, 4, 5, 6 (after the two portability
-fixes), and 7 (applicable -- this skill ships `check_skill_shape.py`;
-clears cleanly after the constant-comment fix) all clear cleanly with
-cited evidence; dimensions 8 and 9 are explicitly named as unmeasured
-rather than silently assumed,
-satisfying rubric.md's Verdicts allowance for 8-9 specifically. Dimension
-2 carries a forward-looking watch-point (file growth over one long
-session) rather than a current named gap, so it does not by itself block
-mature the way an uncleared 1-7 gap would -- but it is close enough to
-the line that the next edit to `rubric.md` should re-check it rather than
-assume it still holds.
+**Well-formed**, and now **mature** -- diverging here from the
+`explaining-the-work` verdict (which stayed *not yet mature*), because
+this skill's dimension 1-7 gaps were each fixed during this same review
+rather than left standing. Dimensions 1 (after the description fix), 3,
+4, 5, 6 (after the two portability fixes), and 7 (applicable -- this
+skill ships `check_skill_shape.py`; clears cleanly after the
+constant-comment fix) all clear cleanly with cited evidence; dimensions 8
+and 9 are explicitly named as unmeasured rather than silently assumed,
+which rubric.md's Verdicts section allows for 8-9 specifically without
+blocking mature. Dimension 2 carries a forward-looking watch-point (file
+growth over one long session) rather than a current named gap, so -- per
+the rubric's own binary, where only a named 1-7 gap blocks -- it does not
+hold the verdict below mature; it is close enough to the line, though,
+that the next edit to `rubric.md` should re-check it rather than assume
+it still holds. This "mature" is the bounded kind rubric.md defines: it
+clears everything this repository's tooling can check today, not a claim
+of proven behaviour -- precisely because dimensions 8 and 9 remain
+named-unmeasured rather than passed. (An earlier draft of this verdict
+read "not yet mature" while simultaneously asserting every one of these
+same clear-1-7-plus-named-8-9 conditions -- a verdict that contradicted
+its own governing rubric; corrected here to the verdict those conditions
+actually entail.)
 
 **Update (capability-assumption axis re-grade, Broad):** this skill's
 `Broad` declaration has since been re-walked against dimensions 2, 3, 5,
 and 9 (the four the axis calibrates) via the live subagent dispatch
-recorded in each subsection above. The overall verdict is unchanged --
-still well-formed, not yet mature -- because no dimension flips to a
-failure under Broad: 2, 3, and 5 keep their prior reads (5 by the axis's
-own documented no-op for Broad), and 9 keeps its Pass-shaped outcome. The
-only substantive change is a framing correction inside dimension 9: Broad
-requires the weak-tier "enough guidance?" question be graded (it Passes on
-the strength of the detailed `references/rubric.md`) rather than filed
-under "unmeasured," while the model-differential run and transfer testing
-stay honestly unmeasured -- so the "8 and 9 unmeasured" allowance this
-verdict rests on still holds for dimension 9's measured-transfer facet
+recorded in each subsection above. No dimension flips to a failure under
+Broad: 2, 3, and 5 keep their prior reads (5 by the axis's own documented
+no-op for Broad), and 9 keeps its Pass-shaped outcome. The one
+substantive per-dimension change is a framing correction inside dimension
+9: Broad requires the weak-tier "enough guidance?" question be graded (it
+Passes on the strength of the detailed `references/rubric.md`) rather than
+filed under "unmeasured," while the model-differential run and transfer
+testing stay honestly unmeasured -- so the "8 and 9 unmeasured" allowance
+the verdict rests on still holds for dimension 9's measured-transfer facet
 specifically, now stated more precisely than the earlier blanket did.
+Separately from the Broad walk, the headline verdict above was reconciled
+with rubric.md's Verdicts definition (dimensions 1-7 clear with no named
+gap, plus 8-9 named-unmeasured) and corrected from an earlier "not yet
+mature" to **mature**: the Broad re-grade does not itself drive that
+correction, but it confirms none of its four dimensions introduces a
+blocking 1-7 gap that would hold the verdict below mature.
 
 The honest summary: this review found and fixed two real portability
 defects in the artifact it was reviewing (itself), which is a materially
