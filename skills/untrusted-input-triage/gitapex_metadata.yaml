@@ -1,0 +1,7 @@
+apiVersion: gitapex.dev/v1alpha1
+kind: SkillMetadata
+metadata:
+  name: untrusted-input-triage
+spec:
+  portability: Portable
+  capabilityAssumption: Broad

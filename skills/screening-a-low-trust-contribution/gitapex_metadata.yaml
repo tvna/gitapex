@@ -1,0 +1,7 @@
+apiVersion: gitapex.dev/v1alpha1
+kind: SkillMetadata
+metadata:
+  name: screening-a-low-trust-contribution
+spec:
+  portability: Repository-scoped
+  capabilityAssumption: Broad
