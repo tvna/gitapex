@@ -178,9 +178,14 @@ dimension; the fixed nine-dimension count is unchanged.
 
 Declared alongside portability in the skill's `gitapex_metadata.yaml`
 sidecar, as `spec.capabilityAssumption`. It records which compute /
-model-capability regime the skill was authored for, so conciseness and
-degree of freedom are graded against the skill's own target rather than one
-fixed preference.
+model-capability regime the skill was authored for, so conciseness, degree
+of freedom, progressive disclosure, and cross-model robustness are graded
+against the skill's own target rather than one fixed preference.
+
+Distinct from Mechanism fit's Model/effort tier fit check: that judges a
+model or effort *pin the skill's own content makes*, which the invoking
+agent acts on at runtime. This declaration pins nothing and never executes
+-- it only calibrates how strictly the dimensions below grade.
 
 - **Broad** -- authored to stay effective down to a weak or economical
   model, or a constrained harness.
