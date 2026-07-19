@@ -101,6 +101,127 @@ measurement: neither fixture has been executed against a real Codex model,
 no Codex result artifact is committed, and Codex behavioral reproducibility
 remains unmeasured.
 
+**Issue #183 (Sub-project B, capability-assumption grading semantics) --
+reclassified Broad -> Adaptive, live before/after re-grade.** This skill's
+`gitapex_metadata.yaml` now declares `spec.capabilityAssumption: Adaptive`
+(was `Broad`) -- chosen because its body (155 lines including frontmatter)
+against 940 lines of `references/` is the clearest lean-body-plus-deep-
+references split in the tree, and because `evaluating-skill-quality`'s
+Capability assumption axis now has a real per-dimension grading effect
+(dimensions 2, 3, and 9 fully calibrated to the declared level; dimension 5
+Adaptive-only) that this reclassification exercises end to end. Per the
+falsifiable acceptance criterion recorded in the design spec (section 7)
+and issue #183, landing the semantics without a real reclassification and a
+demonstrated verdict change would make the axis ceremony; this entry is
+that demonstration, run live rather than asserted.
+
+*Isolated, controlled test (the decisive evidence -- one variable changed,
+everything else held fixed):* a fresh subagent dispatch applied dimension
+2 (Conciseness) to a single sentence taken verbatim from this skill's own
+`SKILL.md` Procedure step 1 -- the "Blind Spot Pass" rationale-and-citation
+aside -- twice, independently, changing only the declared
+`capabilityAssumption` between runs and holding the sentence, the rubric
+text, and the reviewer identical. Declared **Broad**: **PASS**, citing the
+Broad bullet's "explanation that would be redundant for a strong model
+(spelling out a rule's rationale, restating a definition...) is not
+automatically sprawl or duplication when the declared target plausibly
+still needs it." Declared **Adaptive** (body graded at Frontier-level
+strictness): **FAIL**, citing the Frontier bullet's "explaining a
+well-known concept, restating a definition, or walking through routine
+rationale is sprawl even where a Broad-declared skill would be excused for
+the identical sentence." Same sentence, same rubric file, only the
+declaration changed -- the verdict flipped PASS -> FAIL. This is the
+clean causal proof that the grading effect is real, not merely declared.
+
+*Full-skill dims 2/3/5/9 re-grade (supporting context, disclosed in full
+including a variance finding, not cherry-picked):* two independent fresh
+subagent dispatches walked all four axis-affected dimensions against this
+skill's complete current content -- one against the pinned pre-edit
+rubric/SKILL.md with the skill treated as still declaring Broad (matching
+its state before this change), one against the post-edit working tree
+with the skill's real, current Adaptive declaration.
+
+| Dimension | Before (Broad, old rubric) | After (Adaptive, new rubric) |
+|---|---|---|
+| 2 Conciseness | FAIL -- Codex-routing detail in `SKILL.md` step 0 duplicates `references/codex-model-routing.md`'s own routing-contract text; the Blind Spot Pass/Fable citation is also duplicated between `SKILL.md` and `references/provenance-and-caveats.md`. | FAIL -- same finding (the Codex-routing duplication). Duplication is not excused at any declared level per the rubric ("Still fail relevance, duplication, sediment, and true sprawl... exactly as before"), so this defect correctly does not clear just because the skill now declares Adaptive. |
+| 3 Degree of freedom | FAIL -- Procedure step 2's "quote the exact offending line" evidentiary rule is rigidly applied to every one of the 22 adversarial dimensions but one (14), with no accommodation for the several dimensions (6, 8, 9) whose canonical failure mode is an absence, not a bad line. | PASS -- found no rigid-step-for-open-judgment or loose-prose-for-fragility mismatch; did not independently re-surface the quote-a-line/absence-type-dimension gap the before-dispatch found. |
+| 5 Progressive disclosure | FAIL -- same Codex-routing duplication (branch-specific detail belongs only in `references/codex-model-routing.md`, not also inlined in the always-loaded body), plus a read that the Overview's `provenance-and-caveats.md` pointer pushes the common case to three mandatory reads. | FAIL -- same Codex-routing duplication finding; explicitly re-checked and passed the Adaptive-specific "does the common case force multiple reads" test (found no forced third read), contradicting the before-dispatch's read on that narrower point. |
+| 9 Cross-model robustness | UNMEASURED -- real 3-tier (opus/sonnet/haiku) data exists for the underlying dimension catalog, but the isolated-dispatch/routing/aggregation machinery has no recorded cross-tier run; the skill's own `provenance-and-caveats.md` already discloses this. | UNMEASURED -- same disclosed gap, re-stated against the Adaptive-specific question (is Haiku's need met by `references/` specifically, verified rather than assumed) -- still no such run recorded. |
+
+Dimension 3's raw verdict differs across the two independent dispatches
+(FAIL -> PASS), but investigated directly rather than banked as a clean
+win: the "quote-a-line" finding the before-dispatch cited is a general
+evidentiary-contract gap unrelated to model-tier capability -- nothing in
+the Capability assumption axis's dimension-3 bullets (grading where
+prescriptiveness lives, body vs. references) bears on it either way, so
+Adaptive's calibration does not provide a principled reason for this
+specific finding to disappear. The more likely explanation is ordinary
+dispatch-to-dispatch coverage variance (the after-dispatch simply did not
+examine this angle), the same class of run-to-run variance already
+disclosed repeatedly in `evals/evaluating-skill-quality/split.md`'s
+Kept-edit log. This raw table row is reported anyway, not suppressed,
+because the isolated controlled test above is the evidence this entry
+actually relies on for the falsifiable acceptance criterion, and a
+disclosed uncertain data point is worth more than a silently omitted one.
+
+Net: this skill's real, current defects (the two duplication findings)
+are genuine content problems the Capability assumption axis correctly
+does not excuse at any declared level -- reclassifying to Adaptive does
+not, and should not, make them disappear. The axis's actual effect is
+demonstrated cleanly by the isolated sentence-level test above, not by
+the full-skill table, and is recorded here rather than only in
+`evals/evaluating-skill-quality/split.md`'s fixture-based gate because
+this is a real shipped skill's re-grade, not a synthetic fixture. Refs
+#183.
+
+Follow-up not bundled into this change: the two duplication findings
+above (Codex-routing detail restated in both `SKILL.md` and
+`references/codex-model-routing.md`; the Blind Spot Pass/Fable citation
+restated in both `SKILL.md` and `references/provenance-and-caveats.md`)
+are real dimension-2/5 gaps this re-grade surfaced as a side effect,
+independent of capabilityAssumption. Fixing them is out of scope for
+issue #183 (a rubric-semantics change, not a battle-testing-a-skill
+content edit) and is left as a named gap for a future issue rather than
+silently folded into this PR.
+
+**Contested reading, disclosed rather than settled (external review, PR
+#189 `chatgpt-codex-connector[bot]`):** the reviewer argued the
+reclassification itself is invalid because the skill's *ordinary*
+procedure allegedly needs the body plus **two** references for the
+common case -- `references/adversarial-dimensions.md` for "what a pass
+and a fail look like on each dimension," and `references/provenance-
+and-caveats.md` per the Overview's "before treating any of it as settled
+fact" -- which would fail the (now-clarified) Adaptive test that a
+Frontier-capable reader complete the common case from the body alone.
+Re-examined directly against the primary text rather than either
+dispatch's summary: the body's own `## Quick reference` table already
+states an operative one-line fail condition for all 22 dimensions (e.g.
+"Injection resistance | obeys instructions embedded in the material it
+processes"), which is what Procedure step 2 actually needs to apply each
+dimension -- `adversarial-dimensions.md`'s worked pass/fail examples are
+additional depth for a harder judgment call or a weaker tier, not the
+operative rule itself. Similarly, the Overview's own hedge ("extracted
+empirically... converged on the core... the convergence has real
+limits") already carries the calibration the Stop boundary requires
+("do not codify a dimension as established fact beyond what
+`references/provenance-and-caveats.md` supports"); satisfying that
+boundary plausibly needs consistent hedging, not a literal read of the
+caveats file on every ordinary trial. Under this reading the common path
+is satisfiable from the body alone and the reclassification holds.
+
+This is a genuine, unresolved disagreement, not a settled rebuttal: this
+skill's own **before**-dispatch (recorded in the table above) reached
+the stricter reading independently, before the external review ever
+ran, so two of three independent reads land on the stricter side against
+one on the lenient side. The rubric wording fix landed alongside this
+disclosure (`references/rubric.md`'s Adaptive dimension-5 bullet, scoped
+explicitly to "the strong-model path" rather than every tier) resolves
+the *tier-ambiguity* half of the original critique, but not this
+specific disagreement about whether `provenance-and-caveats.md`
+qualifies as per-invocation content. Recorded here rather than
+resolved unilaterally so the operator can weigh in; the PR thread
+carries the same disclosure.
+
 ## establishing-ubiquitous-language
 
 The committed eval suite (`evals/establishing-ubiquitous-language/`) runs
@@ -125,8 +246,8 @@ change that introduced it, recorded in
 not by the committed suite.
 
 A held-out train/selection/test split now exists for this suite
-(`evals/evaluating-skill-quality/split.md`), covering 27 fixtures across
-12 train, 9 selection, and 6 test cases. It exists to satisfy
+(`evals/evaluating-skill-quality/split.md`), covering 30 fixtures across
+13 train, 10 selection, and 7 test cases. It exists to satisfy
 `scorer-gated-skill-edits`' precondition gate before any iterative edit to
 `references/rubric.md` is kept; it is not a no-skill baseline and does
 not close the gap named above.

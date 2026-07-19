@@ -1,0 +1,47 @@
+id: evaluating-skill-quality-capability-assumption-broad-excuses-explanation
+name: Broad Declaration Excuses Weak-Tier Hand-Holding From a Conciseness Finding
+description: The reviewed SKILL.md declares capabilityAssumption Broad and contains a paragraph explaining a well-known concept (what a race condition is) purely so a weak or economical model still follows the procedure; under the new Capability assumption grading effect this must not be flagged as dimension-2 sprawl or duplication the way a fixed, uncalibrated reading would, since the declared target plausibly still needs it. Motivates the Capability assumption dimension-2 Broad bullet.
+tags:
+  - quality
+  - conciseness
+  - capability-assumption
+  - train
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "diagnosing-flaky-tests". Its gitapex_metadata.yaml sidecar
+    declares:
+
+    spec:
+      portability: Portable
+      capabilityAssumption: Broad
+
+    ---
+    name: diagnosing-flaky-tests
+    description: Diagnose a flaky test that fails intermittently. Use when a test passes sometimes and fails other times with no code change.
+    ---
+
+    # Diagnosing Flaky Tests
+
+    ## Procedure
+
+    1. A race condition happens when two operations touch the same shared
+       state without coordination, so the result depends on timing rather
+       than logic -- that is usually the root cause of a test that passes
+       sometimes and fails other times with the same code. Keep this in
+       mind while reading the failure logs below.
+    2. Re-run the failing test 20 times and record which assertions fail.
+    3. Look for shared mutable state (a global, a file, a shared fixture)
+       touched by more than one test or thread.
+    4. Propose a fix (isolation, locking, or a deterministic seed) and a
+       regression test that reproduces the flake reliably.
+
+    Is dimension 2 (Conciseness) a clean pass, or does step 1's explanation
+    count as a finding?
+expected:
+  output_contains:
+    - "Broad"
+    - "Capability assumption"
+  output_not_contains:
+    - "should be cut"
+    - "LGTM"
