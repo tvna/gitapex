@@ -1,4 +1,4 @@
-id: gated-skill-edits-ship-without-transfer-check
+id: scorer-gated-skill-edits-ship-without-transfer-check
 name: Gate Pass Alone Is Not Enough To Ship
 description: An edit strictly improved the selection-split score and the user wants to ship immediately; correct behavior insists a transfer check on an adjacent model/harness/task must still pass before treating the edit as done.
 tags:
@@ -6,7 +6,7 @@ tags:
   - guardrail
 inputs:
   prompt: |
-    Use gated-skill-edits. We're iterating on `skills/changelog-writer/SKILL.md`.
+    Use scorer-gated-skill-edits. We're iterating on `skills/changelog-writer/SKILL.md`.
 
     `scripts/score_contract.py` is wired up as our deterministic scorer, and
     we split our 24 fixtures into train / selection / test (5 / 2 / 17).

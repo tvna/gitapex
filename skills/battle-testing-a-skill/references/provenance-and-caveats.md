@@ -133,7 +133,7 @@ reviewer context so each target was judged on its SKILL.md alone, read-only.
 - Full pass: the seventeen dimensions applied once to all twelve skills in
   this repository.
 - Variance re-measurement: the same instrument re-run five times each on
-  four low-blast-radius skills (explaining-the-work, gated-skill-edits,
+  four low-blast-radius skills (explaining-the-work, scorer-gated-skill-edits,
   seeding-issue-pr-templates, stop-and-replan) -- twenty trials -- to
   separate a robust cold judgment from run-to-run reviewer variance.
 

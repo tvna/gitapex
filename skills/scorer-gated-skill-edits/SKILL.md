@@ -1,9 +1,9 @@
 ---
-name: gated-skill-edits
+name: scorer-gated-skill-edits
 description: Use when iteratively editing an existing SKILL.md across repeated measured trials and deciding whether to keep each edit. Requires a checkable scorer and a held-out split first; applies SkillOpt's strict improve-or-reject validation gate by hand.
 ---
 
-# Gated skill edits
+# Scorer-gated skill edits
 
 **Portability: Portable.** Sibling-skill mentions below are examples, not
 a dependency.

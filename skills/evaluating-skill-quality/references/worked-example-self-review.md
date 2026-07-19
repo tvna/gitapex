@@ -176,10 +176,10 @@ just a trigger-string diff:
 - `battle-testing-a-skill` -- adversarial-stress lens (does the skill hold
   up under hostile/degenerate input) vs. this skill's static quality lens
   (is the skill well-authored). Different question, same artifact type.
-- `gated-skill-edits` -- a measured edit loop (score, edit, re-score against
+- `scorer-gated-skill-edits` -- a measured edit loop (score, edit, re-score against
   a contract) for *changing* a skill, vs. this skill's one-shot verdict for
   *reviewing* one. Complementary, not overlapping: this skill can supply
-  the initial verdict that `gated-skill-edits` then iterates against.
+  the initial verdict that `scorer-gated-skill-edits` then iterates against.
 
 One genuine watch-point, not a failure: `outward-artifact-preflight`'s
 trigger ("about to push, post, or publish any outward-facing artifact --
@@ -342,7 +342,7 @@ gap has since been closed for several specific edits to this skill, not
 retroactively for its whole authoring history -- each time via a
 documented held-out train/selection/test split
 (`evals/evaluating-skill-quality/split.md`), scored before and after with
-`skills/gated-skill-edits/scripts/score_contract.py`, requiring a strict
+`skills/scorer-gated-skill-edits/scripts/score_contract.py`, requiring a strict
 improvement (ties rejected) before the edit was kept. That is real,
 repeated instances of this discipline applied to this skill, not evidence
 every earlier edit went through it -- the paragraph above still
@@ -424,7 +424,7 @@ methodology (disjointness, strict improvement) but never asks whether
 the automated scorer (`score_contract.py`'s substring matching) actually
 measures the judgment it is scoring -- left unfixed here, correctly, per
 the Blind spot pass's own instruction that a durable rubric change is a
-deliberate, `gated-skill-edits`-gated edit, not something a single review
+deliberate, `scorer-gated-skill-edits`-gated edit, not something a single review
 session improvises. Dated record of which edit this run followed:
 `docs/skill-eval-status.md`.
 
