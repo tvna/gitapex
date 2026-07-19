@@ -358,10 +358,38 @@ Live proof, not a green type-check standing in for behavior:
 Sub-project A (this spec) lands first: it is the mechanism the rest sit
 on. Then, in either order (both depend only on A):
 
-- **Sub-project B** -- add the `capability-assumption` grading semantics
-  to `rubric.md` (dimensions 2, 3, 5, 9), the full SKILL.md Capability
-  assumption section, the self-review re-grade, and any deliberate
-  Frontier / Adaptive reclassification.
+- **Sub-project B** (#183) -- add the `capability-assumption` grading
+  semantics. Scope decided after a trade-off analysis against `main`'s
+  `Model/effort tier fit` check, which landed in parallel:
+  - Dimensions **2, 3, and 9** get the full Broad / Frontier / Adaptive
+    effects. Dimension **5's effect is Adaptive-only**; Broad and Frontier
+    leave dimension 5 grading unchanged, because Adaptive's definition (a
+    lean body plus deeper `references/`) *is* a progressive-disclosure
+    strategy while the other two say nothing about layering.
+  - Keep both concepts, and state the boundary: `Model/effort tier fit`
+    judges a model/effort **pin the skill's content makes**, which the
+    invoking agent acts on at runtime; `capability-assumption` pins
+    nothing and never executes, and only calibrates grading. The decisive
+    evidence that they are not one condition: tier fit "fires only when
+    the target's own content pins a model or effort level," and **zero of
+    the 17 skills contain any such pin** -- so it has no coverage at all
+    over the population this axis exists for. Do not merge them, and do
+    not rename the field.
+  - The declaration-vs-pin consistency check gets **exactly one owner**
+    (the step-4 precondition), or the rubric's own "never both" rule is
+    violated. Tier fit stays declaration-independent; it runs at step 2,
+    before the sidecar is read at step 4.
+  - Reclassify `battle-testing-a-skill` to **Adaptive** (body 151 lines
+    against 940 lines of `references/`, the clearest layered split in the
+    tree) and record a before/after re-grade showing a changed dimension
+    verdict.
+  - Route the rubric edit through `scorer-gated-skill-edits`' held-out
+    gate, recording the selection-split scores before and after, per this
+    repository's convention for rubric edits.
+  - **Falsifiable acceptance criterion:** if B ships with no
+    reclassification and no flipped verdict, the axis is ceremony and
+    should be retired instead of kept. Landing the semantics is not
+    sufficient on its own.
 - **Sub-project C** -- migrate `docs/skill-provenance.md`'s per-skill
   provenance / primary-source references into each sidecar's `references`
   field (section 4.5), and retire or repoint the central file.
