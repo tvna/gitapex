@@ -107,10 +107,14 @@ EXPECTED_API_VERSION = "gitapex.dev/v1alpha1"
 EXPECTED_KIND = "SkillMetadata"
 PORTABILITY_LEVELS = ("Portable", "Repository-scoped", "Mixed")
 CAPABILITY_ASSUMPTIONS = ("Broad", "Frontier", "Adaptive")
-# A plain "- <value>" list item, indented exactly 4 spaces (2 for the
-# parent map's nesting, 2 more for the list marker) -- the only list shape
-# this parser understands, and only under spec.references specifically.
-REFERENCES_LIST_ITEM_RE = re.compile(r"^[ ]{4}-\s*(.*)$")
+# A plain "- <value>" list item, indented 2 or more spaces -- real YAML
+# accepts a block sequence indented level with its mapping key (2 spaces,
+# same as spec.references' own key) or further indented (4 spaces, this
+# repo's convention); requiring one exact width would silently drop an
+# otherwise-valid item at a different indent instead of reading it. The
+# only list shape this parser understands, and only under spec.references
+# specifically.
+REFERENCES_LIST_ITEM_RE = re.compile(r"^[ ]{2,}-\s*(.*)$")
 
 TAG_RE = re.compile(r"</?[A-Za-z][^>]*>")
 NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
@@ -215,7 +219,16 @@ def _parse_frontmatter(text: str) -> dict[str, str]:
 
 def _unquote(value: str) -> str:
     if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
-        return value[1:-1]
+        inner = value[1:-1]
+        if value[0] == '"':
+            # Decode the two escapes this repo's sidecars actually use
+            # (backslash-escaped quote, escaped backslash) so a value like
+            # spec.references' "...as \"battle\"..." round-trips to the
+            # real quote character instead of leaking a literal backslash.
+            # Order matters: unescape \\ first so a literal \" is not
+            # mistaken for an escaped quote after \\ has been resolved.
+            inner = inner.replace("\\\\", "\\").replace('\\"', '"')
+        return inner
     return value
 
 
@@ -239,7 +252,7 @@ def _parse_manifest(text: str) -> ManifestParse:
     scalars under a top-level map (metadata:, spec:). One exception:
     spec.references (and only that key, and only directly under spec) is
     read as a flat list of scalar strings, each a "- <value>" line indented
-    exactly 4 spaces -- the shape this repository's sidecars use for
+    2 or more spaces -- the shape this repository's sidecars use for
     maintainer-facing provenance (see the design spec's Sub-project C).
     Every other nested map or list (e.g. spec.skillDependencies) is still
     deliberately skipped, exactly as before: no other gated field uses
@@ -264,9 +277,15 @@ def _parse_manifest(text: str) -> ManifestParse:
     text = text.lstrip("\ufeff")  # strip a leading UTF-8 BOM, as _parse_frontmatter does
     root: dict[str, object] = {}
     current: dict[str, object] | None = None
-    current_key: str | None = None
     collecting_refs: list[str] | None = None
     malformed: list[str] = []
+
+    def _finalize_refs() -> None:
+        nonlocal collecting_refs
+        if collecting_refs is not None and current is not None:
+            current["references"] = collecting_refs
+        collecting_refs = None
+
     for raw in text.splitlines():
         line = raw.rstrip()
         if not line.strip() or line.lstrip().startswith("#"):
@@ -278,8 +297,7 @@ def _parse_manifest(text: str) -> ManifestParse:
                 continue
             # Not a list item: the references list ends here. Finalize it
             # and fall through to process this line normally below.
-            current["references"] = collecting_refs
-            collecting_refs = None
+            _finalize_refs()
         if line[:1] in (" ", "\t"):
             # Indented: nested/list content this parser does not interpret,
             # except spec.references (handled above once its list starts).
@@ -289,7 +307,10 @@ def _parse_manifest(text: str) -> ManifestParse:
             nested = re.match(r"[ ]{2}([A-Za-z0-9_-]+):\s*(.*)$", line)
             if nested and current is not None:
                 key, value = nested.group(1), nested.group(2).strip()
-                if key == "references" and current_key == "spec" and not value:
+                # current is root["spec"] by identity exactly while inside
+                # the spec: block, so this is "are we directly under spec"
+                # without tracking a separate current-top-key variable.
+                if key == "references" and current is root.get("spec") and not value:
                     collecting_refs = []
                 elif value:
                     current[key] = _unquote(value)
@@ -302,16 +323,13 @@ def _parse_manifest(text: str) -> ManifestParse:
             if value:
                 root[key] = _unquote(value)
                 current = None
-                current_key = None
             else:
                 child: dict[str, object] = {}
                 root[key] = child
                 current = child
-                current_key = key
             continue
         malformed.append(line.strip())
-    if collecting_refs is not None and current is not None:
-        current["references"] = collecting_refs
+    _finalize_refs()
     return ManifestParse(root=root, malformed_lines=malformed)
 
 
@@ -638,8 +656,9 @@ def check_shape(target: Path) -> list[CheckResult]:
                 "metadata-name-matches-dir", meta_name == resolved_dir_name,
                 "metadata.name equals the skill directory name",
                 f"{meta_name!r} vs directory {resolved_dir_name!r}"))
-            spec = manifest.get("spec")
-            spec = spec if isinstance(spec, dict) else {}
+            spec_raw = manifest.get("spec")
+            spec_is_mapping = isinstance(spec_raw, dict)
+            spec = spec_raw if spec_is_mapping else {}
             portability = spec.get("portability")
             results.append(CheckResult(
                 "portability-declared", portability in PORTABILITY_LEVELS,
@@ -652,17 +671,29 @@ def check_shape(target: Path) -> list[CheckResult]:
                 f"spec.capabilityAssumption is one of {CAPABILITY_ASSUMPTIONS}",
                 repr(capability)))
             references = spec.get("references")
-            if references is None:
+            if not spec_is_mapping:
+                # spec itself failed to parse as a mapping (e.g. "spec:
+                # some-scalar"), the same precondition failure
+                # portability-declared/capability-assumption-declared
+                # already report above -- "not declared" would misreport
+                # this as the ordinary optional-and-absent case.
+                results.append(CheckResult(
+                    "references-well-formed", False,
+                    "spec.references, if present, is a non-empty list of non-empty strings",
+                    f"spec is not a mapping: {spec_raw!r}"))
+            elif references is None:
                 results.append(CheckResult(
                     "references-well-formed", True,
                     "spec.references, if present, is a non-empty list of non-empty strings",
                     "not declared (optional)"))
             elif (isinstance(references, list) and references
                   and all(isinstance(r, str) and r.strip() for r in references)):
+                ref_count = len(references)
+                ref_noun = "entry" if ref_count == 1 else "entries"
                 results.append(CheckResult(
                     "references-well-formed", True,
                     "spec.references, if present, is a non-empty list of non-empty strings",
-                    f"{len(references)} " + ("entry" if len(references) == 1 else "entries")))
+                    f"{ref_count} {ref_noun}"))
             else:
                 ref_evidence = ("empty list" if references == []
                                 else f"not a list of non-empty strings: {references!r}")

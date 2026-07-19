@@ -391,7 +391,7 @@ def test_sidecar_checks_pass_on_good_skill(tmp_path):
     by = _by_name(css.check_shape(d))
     for check in ("metadata-file-present", "manifest-envelope",
                   "metadata-name-matches-dir", "portability-declared",
-                  "capability-assumption-declared"):
+                  "capability-assumption-declared", "references-well-formed"):
         assert by[check].passed is True, check
     assert css.main([str(d)]) == 0
 
@@ -458,7 +458,7 @@ def test_non_utf8_sidecar_fails_checks_not_exit_2(tmp_path):
     # try/except (OSError, UnicodeDecodeError) itself, so the exception
     # never propagates out -- it is reported as FAILed CheckResults with
     # evidence naming the read failure. metadata-file-present still PASSes
-    # (the file does exist); the four checks that need the parsed manifest
+    # (the file does exist); the five checks that need the parsed manifest
     # FAIL. main() returns 1 (a full readable report), same as any other
     # shape failure -- not 2, which stays reserved for a missing/unreadable
     # SKILL.md (see test_directory_without_skill_md_returns_2).
@@ -467,7 +467,8 @@ def test_non_utf8_sidecar_fails_checks_not_exit_2(tmp_path):
     by = _by_name(css.check_shape(d))
     assert by["metadata-file-present"].passed is True
     for check in ("manifest-envelope", "metadata-name-matches-dir",
-                  "portability-declared", "capability-assumption-declared"):
+                  "portability-declared", "capability-assumption-declared",
+                  "references-well-formed"):
         assert by[check].passed is False, check
         assert "UnicodeDecodeError" in by[check].evidence, check
     assert css.main([str(d)]) == 1
@@ -952,3 +953,107 @@ def test_manifest_parser_still_ignores_skill_dependencies():
     parsed = css._parse_manifest(text)
     assert "skillDependencies" not in parsed.root["spec"]
     assert parsed.malformed_lines == []
+
+
+def test_references_entries_decode_escaped_quotes():
+    # Regression guard: _unquote must decode \" (and \\) inside a
+    # double-quoted spec.references entry, not leave a literal backslash
+    # in the parsed string -- the exact shape battle-testing-a-skill's
+    # real sidecar entries use.
+    text = (
+        "apiVersion: gitapex.dev/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  references:\n"
+        "    - \"a \\\"quoted\\\" phrase\"\n"
+        "    - \"a literal backslash: \\\\\"\n"
+    )
+    parsed = css._parse_manifest(text)
+    assert parsed.root["spec"]["references"] == [
+        'a "quoted" phrase', "a literal backslash: \\"]
+
+
+def test_references_list_item_at_two_space_indent_is_read(tmp_path):
+    # Regression guard: a block-sequence item aligned with its own key
+    # (2-space indent, same as "references:" itself) is valid YAML and
+    # must be read, not silently dropped as an empty list.
+    d = _write_skill(tmp_path)
+    (d / "gitapex_metadata.yaml").write_text(
+        "apiVersion: gitapex.dev/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  references:\n"
+        "  - \"gitapex#25\"\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["references-well-formed"].passed is True
+    assert by["references-well-formed"].evidence == "1 entry"
+
+
+def test_references_list_item_at_three_space_indent_is_read(tmp_path):
+    d = _write_skill(tmp_path)
+    (d / "gitapex_metadata.yaml").write_text(
+        "apiVersion: gitapex.dev/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  references:\n"
+        "   - \"gitapex#25\"\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["references-well-formed"].passed is True
+    assert by["references-well-formed"].evidence == "1 entry"
+
+
+def test_references_list_ended_by_a_following_sibling_key(tmp_path):
+    # Regression guard for the mid-loop finalize path (as opposed to the
+    # end-of-file finalize): spec.references followed by another spec key
+    # must close the list correctly and not swallow the next key.
+    d = _write_skill(tmp_path)
+    (d / "gitapex_metadata.yaml").write_text(
+        "apiVersion: gitapex.dev/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  references:\n"
+        "    - \"a\"\n"
+        "    - \"b\"\n"
+        "  capabilityAssumption: Broad\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["references-well-formed"].passed is True
+    assert by["references-well-formed"].evidence == "2 entries"
+    assert by["capability-assumption-declared"].passed is True
+    assert by["capability-assumption-declared"].evidence == "'Broad'"
+
+
+def test_references_well_formed_fails_when_spec_is_not_a_mapping(tmp_path):
+    # Regression guard: "spec: some-scalar" is the same precondition
+    # failure portability-declared/capability-assumption-declared already
+    # report -- references-well-formed must not misreport it as the
+    # ordinary optional-and-absent case.
+    d = _write_skill(tmp_path)
+    (d / "gitapex_metadata.yaml").write_text(
+        "apiVersion: gitapex.dev/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec: not-a-mapping-scalar\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["portability-declared"].passed is False
+    assert by["references-well-formed"].passed is False
+    assert "not a mapping" in by["references-well-formed"].evidence
