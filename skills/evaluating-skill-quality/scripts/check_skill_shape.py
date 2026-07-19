@@ -323,7 +323,7 @@ def check_shape(target: Path) -> list[CheckResult]:
             f"apiVersion={api!r}, kind={kind_value!r}"))
         meta = manifest.get("metadata")
         meta_name = meta.get("name") if isinstance(meta, dict) else None
-        resolved_dir_name = skill_dir.resolve().name
+        resolved_dir_name = Path(os.path.abspath(skill_dir)).name
         results.append(CheckResult(
             "metadata-name-matches-dir", meta_name == resolved_dir_name,
             "metadata.name equals the skill directory name",

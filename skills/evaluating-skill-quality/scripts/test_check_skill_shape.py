@@ -3,11 +3,29 @@
 Fixtures are synthesized in tmp_path so the test is self-contained and
 travels with the skill on vendoring.
 """
+import os
+import tempfile
 from pathlib import Path
 
 import pytest
 
 import check_skill_shape as css
+
+
+def _symlinks_supported():
+    """Probe once whether this platform/user can create symlinks (e.g.
+    Windows without Developer Mode or admin rights cannot)."""
+    try:
+        with tempfile.TemporaryDirectory() as td:
+            target = Path(td) / "target"
+            target.mkdir()
+            os.symlink(target, Path(td) / "link", target_is_directory=True)
+        return True
+    except OSError:
+        return False
+
+
+_SYMLINKS_SUPPORTED = _symlinks_supported()
 
 
 def _write_skill(tmp_path, *, name="good-skill",
@@ -82,6 +100,21 @@ def test_relative_target_matches_dir_name(tmp_path, monkeypatch):
     by_file = _by_name(css.check_shape(Path("SKILL.md")))
     assert by_file["metadata-name-matches-dir"].passed is True
     assert css.main(["SKILL.md"]) == 0
+
+
+@pytest.mark.skipif(not _SYMLINKS_SUPPORTED,
+                    reason="platform cannot create symlinks")
+def test_metadata_name_matches_symlink_basename_not_target(tmp_path):
+    # skill_dir must be made absolute WITHOUT following symlinks: if a
+    # skill directory is itself a symlink whose target has a different
+    # basename, the check must compare metadata.name against the
+    # symlink's own name, not the real directory it points to.
+    real_dir = _write_skill(tmp_path, meta_name="link-name")
+    link = tmp_path / "link-name"
+    os.symlink(real_dir, link, target_is_directory=True)
+    by = _by_name(css.check_shape(link))
+    assert by["metadata-name-matches-dir"].passed is True
+    assert css.main([str(link)]) == 0
 
 
 def test_missing_description_fails(tmp_path):
