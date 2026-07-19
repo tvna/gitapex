@@ -121,8 +121,10 @@ spec:
 
 - [ ] **Step 2: Create the remaining 16 with the same shape**
 
-Run this from the repository root. It writes only files that do not yet
-exist and uses the surveyed portability value per skill:
+Run this from the repository root. It writes all 17 sidecars using the
+surveyed portability value per skill, including the one written by hand in
+Step 1 -- the content is identical, so rewriting it is harmless and keeps
+this one command the single source of the file contents:
 
 ```bash
 cd "$(git rev-parse --show-toplevel)"
@@ -818,23 +820,25 @@ with:
 - [ ] **Step 4: Update `rubric.md` placement wording and add the stub**
 
 In `references/rubric.md`, in the **Portability level** section's
-Repository-scoped bullet, replace:
+Repository-scoped bullet, replace this text (verified verbatim against the
+file -- match the line wrapping exactly):
 
 ```
-Declared as a terse one-line marker on the first body line
-  after the H1 (the `portability-near-top` shape check enforces presence
-  within the first 6 body lines); any extended rationale belongs in a
-  footer `## Notes` section of the same file, keeping the classification
-  checkable from this file alone.
+Declared as a terse one-line marker on
+  the first body line after the H1 (the `portability-near-top` shape
+  check enforces presence within the first 6 body lines); any extended
+  rationale belongs in a footer `## Notes` section of the same file,
+  keeping the classification checkable from this file alone.
 ```
 
 with:
 
 ```
-Declared as the `portability` field in the skill's
-  `gitapex_metadata.yaml` sidecar (the `portability-declared` shape check
-  enforces presence and value); any extended rationale belongs in a footer
-  `## Notes` section of `SKILL.md`.
+Declared as the `portability` field in
+  the skill's `gitapex_metadata.yaml` sidecar (the
+  `portability-declared` shape check enforces presence and value); any
+  extended rationale belongs in a footer `## Notes` section of
+  `SKILL.md`.
 ```
 
 Then add this section immediately after the Portability level section:
