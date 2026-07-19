@@ -137,9 +137,7 @@ def _parse_frontmatter(text: str) -> dict[str, str]:
             joiner = "\n" if value[0] == "|" else " "
             fields[key] = joiner.join(block).strip()
             continue
-        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
-            value = value[1:-1]
-        fields[key] = value
+        fields[key] = _unquote(value)
         i += 1
     return fields
 
@@ -159,7 +157,10 @@ def _parse_manifest(text: str) -> dict[str, object]:
     skipping keeps this stdlib-only with no YAML dependency. Ungated
     fields such as spec.references or spec.skillDependencies may therefore
     be arbitrarily structured without this parser needing to understand
-    them.
+    them. Inline '# comment' text after a value on the same line is not
+    stripped -- it is read as part of the value, which is safe (fails
+    closed against the expected enum/literal) but is not a supported way
+    to annotate a sidecar field.
     """
     text = text.lstrip("\ufeff")  # strip a leading UTF-8 BOM, as _parse_frontmatter does
     root: dict[str, object] = {}
@@ -322,10 +323,11 @@ def check_shape(target: Path) -> list[CheckResult]:
             f"apiVersion={api!r}, kind={kind_value!r}"))
         meta = manifest.get("metadata")
         meta_name = meta.get("name") if isinstance(meta, dict) else None
+        resolved_dir_name = skill_dir.resolve().name
         results.append(CheckResult(
-            "metadata-name-matches-dir", meta_name == skill_dir.name,
+            "metadata-name-matches-dir", meta_name == resolved_dir_name,
             "metadata.name equals the skill directory name",
-            f"{meta_name!r} vs directory {skill_dir.name!r}"))
+            f"{meta_name!r} vs directory {resolved_dir_name!r}"))
         spec = manifest.get("spec")
         spec = spec if isinstance(spec, dict) else {}
         portability = spec.get("portability")

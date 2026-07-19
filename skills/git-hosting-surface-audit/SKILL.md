@@ -5,12 +5,12 @@ description: Use when auditing a GitHub or GitLab repository's hosting-platform 
 
 # Git Hosting Surface Audit
 
-Procedure and the coverage-honesty rule are portable to any GitHub/GitLab
-repo. The Gap cross-link target (#82, this
-repo's gitapex CLI governance tracking issue) and the unpinned-actions
-script's borrowed pattern (`.github/scripts/scan_toolchain_pin_drift.py`)
-are this repo's own -- substitute the calling repository's actual
-governance issue and drift-scan precedent where they differ.
+This skill's procedure and the coverage-honesty rule are portable to any
+GitHub/GitLab repo. The Gap cross-link target (#82, this repo's gitapex
+CLI governance tracking issue) and the unpinned-actions script's
+borrowed pattern (`.github/scripts/scan_toolchain_pin_drift.py`) are
+this repo's own -- substitute the calling repository's actual governance
+issue and drift-scan precedent where they differ.
 
 Audits a repository's hosting-platform *configuration* surface (not its
 code) and reports what was actually checked versus what could not be

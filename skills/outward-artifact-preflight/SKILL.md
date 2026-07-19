@@ -5,10 +5,10 @@ description: Use when about to push, post, or publish any outward-facing artifac
 
 # Outward Artifact Preflight
 
-Checklist is general; check 1's "agreed disclosure convention" and the
-explaining-the-work coupling (Relationship to other skills) name this
-repo's own conventions -- substitute the calling repository's actual
-policy and sibling skills where they differ.
+This skill's checklist is general; check 1's "agreed disclosure
+convention" and the explaining-the-work coupling (Relationship to other
+skills) name this repo's own conventions -- substitute the calling
+repository's actual policy and sibling skills where they differ.
 
 This is an interim measure: a manual stand-in for the deterministic
 preflight or CI gate this repository has not built yet. Run this

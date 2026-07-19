@@ -5,7 +5,7 @@ description: Use when a PR or issue from an unknown or low-trust author needs it
 
 # Screening a Low-Trust Contribution
 
-Checks are general; the specific paths named below
+This skill's checks are general; the specific paths named below
 (`.github/workflows/**`, `hooks/**`, this repo's dependency manifests)
 are this repository's own and need substituting elsewhere.
 

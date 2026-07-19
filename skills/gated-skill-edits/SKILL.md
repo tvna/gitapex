@@ -5,7 +5,8 @@ description: Use when iteratively editing an existing SKILL.md across repeated m
 
 # Gated skill edits
 
-Sibling-skill mentions below are examples, not a dependency.
+This skill is portable; sibling-skill mentions below are examples, not a
+dependency.
 
 Improve an existing `SKILL.md` as bounded, measured edits gated on a
 held-out score, instead of unmeasured rewriting. Adapts SkillOpt

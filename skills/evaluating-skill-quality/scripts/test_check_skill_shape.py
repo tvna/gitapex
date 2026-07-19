@@ -69,6 +69,21 @@ def test_accepts_skill_md_path_directly(tmp_path):
     assert css.main([str(d / "SKILL.md")]) == 0
 
 
+def test_relative_target_matches_dir_name(tmp_path, monkeypatch):
+    # A relative invocation (e.g. "." from inside the skill directory, or a
+    # bare "SKILL.md") must not collapse skill_dir.name to "" -- the
+    # directory name has to be resolved to an absolute path first so
+    # metadata-name-matches-dir compares against the real directory name.
+    d = _write_skill(tmp_path)
+    monkeypatch.chdir(d)
+    by_dot = _by_name(css.check_shape(Path(".")))
+    assert by_dot["metadata-name-matches-dir"].passed is True
+    assert css.main(["."]) == 0
+    by_file = _by_name(css.check_shape(Path("SKILL.md")))
+    assert by_file["metadata-name-matches-dir"].passed is True
+    assert css.main(["SKILL.md"]) == 0
+
+
 def test_missing_description_fails(tmp_path):
     d = _write_skill(tmp_path, description=None)
     assert _by_name(css.check_shape(d))["description-present"].passed is False
@@ -234,8 +249,7 @@ def test_contents_heading_counts_as_toc(tmp_path):
 def test_junk_files_in_references_are_ignored(tmp_path):
     d = _write_raw(
         tmp_path,
-        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
-        "**Portability: Portable.** Self-contained.\n",
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n",
         references={"real.md": "ok\n"})
     (d / "gitapex_metadata.yaml").write_text(
         "apiVersion: gitapex.dev/v1alpha1\n"
@@ -264,7 +278,6 @@ def test_out_of_skill_link_fails(tmp_path):
     d = _write_raw(
         tmp_path,
         "---\nname: s\ndescription: d. Use when x.\n---\n\n"
-        "**Portability: Portable.** Self-contained.\n\n"
         "## Notes\n\nSee [design doc](../../docs/foo.md) for context.\n")
     results = css.check_shape(d)
     result = _result(results, "links-inside-skill")
@@ -277,7 +290,6 @@ def test_in_skill_reference_link_passes(tmp_path):
     d = _write_raw(
         tmp_path,
         "---\nname: s\ndescription: d. Use when x.\n---\n\n"
-        "**Portability: Portable.** Self-contained.\n\n"
         "## Notes\n\nSee [background](references/foo.md) for context.\n",
         references={"foo.md": "background\n"})
     assert _result(css.check_shape(d), "links-inside-skill").passed
@@ -287,7 +299,6 @@ def test_absolute_url_link_is_skipped(tmp_path):
     d = _write_raw(
         tmp_path,
         "---\nname: s\ndescription: d. Use when x.\n---\n\n"
-        "**Portability: Portable.** Self-contained.\n\n"
         "See [the spec](https://example.com/y) for background.\n")
     assert _result(css.check_shape(d), "links-inside-skill").passed
 
@@ -296,7 +307,6 @@ def test_fragment_only_link_is_skipped(tmp_path):
     d = _write_raw(
         tmp_path,
         "---\nname: s\ndescription: d. Use when x.\n---\n\n"
-        "**Portability: Portable.** Self-contained.\n\n"
         "Jump to [the checklist](#checklist) below.\n")
     assert _result(css.check_shape(d), "links-inside-skill").passed
 
@@ -305,7 +315,6 @@ def test_absolute_path_link_fails(tmp_path):
     d = _write_raw(
         tmp_path,
         "---\nname: s\ndescription: d. Use when x.\n---\n\n"
-        "**Portability: Portable.** Self-contained.\n\n"
         "See [system config](/etc/passwd) for context.\n")
     result = _result(css.check_shape(d), "links-inside-skill")
     assert not result.passed
@@ -316,7 +325,6 @@ def test_reference_style_out_of_skill_link_fails(tmp_path):
     d = _write_raw(
         tmp_path,
         "---\nname: s\ndescription: d. Use when x.\n---\n\n"
-        "**Portability: Portable.** Self-contained.\n\n"
         "See the [runbook][r] for details.\n\n"
         "[r]: ../../docs/runbook.md\n")
     result = _result(css.check_shape(d), "links-inside-skill")
@@ -328,7 +336,6 @@ def test_reference_style_in_skill_link_passes(tmp_path):
     d = _write_raw(
         tmp_path,
         "---\nname: s\ndescription: d. Use when x.\n---\n\n"
-        "**Portability: Portable.** Self-contained.\n\n"
         "See the [background][b] for context.\n\n"
         "[b]: references/foo.md\n",
         references={"foo.md": "background\n"})
@@ -339,7 +346,6 @@ def test_reference_style_angle_bracket_target_fails(tmp_path):
     d = _write_raw(
         tmp_path,
         "---\nname: s\ndescription: d. Use when x.\n---\n\n"
-        "**Portability: Portable.** Self-contained.\n\n"
         "See the [runbook][r] for details.\n\n"
         "[r]: <../../docs/runbook.md>\n")
     result = _result(css.check_shape(d), "links-inside-skill")
@@ -404,6 +410,25 @@ def test_invalid_capability_assumption_value_fails(tmp_path):
     d = _write_skill(tmp_path, capability_assumption="Medium")
     assert _by_name(
         css.check_shape(d))["capability-assumption-declared"].passed is False
+
+
+def test_quoted_portability_value_passes(tmp_path):
+    # A double-quoted scalar ("Portable") must be unquoted before matching
+    # PORTABILITY_LEVELS -- exercises _unquote via _parse_manifest.
+    d = _write_skill(tmp_path, portability='"Portable"')
+    assert _by_name(css.check_shape(d))["portability-declared"].passed is True
+
+
+def test_non_utf8_sidecar_exits_2(tmp_path):
+    # Pinned behavior: check_shape() reads the sidecar with
+    # read_text(encoding="utf-8") and does not catch the decode error
+    # itself; main()'s top-level try/except (OSError, UnicodeDecodeError)
+    # around check_shape(...) catches it instead, printing an error and
+    # returning 2 -- the same "could not read skill files" exit code used
+    # for a missing/unreadable SKILL.md, not a checkable FAIL result.
+    d = _write_skill(tmp_path)
+    (d / "gitapex_metadata.yaml").write_bytes(b"\xff\xfe not utf8 \x00\x01")
+    assert css.main([str(d)]) == 2
 
 
 def test_manifest_parser_ignores_deeper_nesting(tmp_path):
