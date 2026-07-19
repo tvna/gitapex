@@ -2,14 +2,19 @@
 
 **Date:** 2026-07-19
 **Status:** Design, awaiting review
-**Scope:** Sub-project A of a three-part effort. **A** (this spec) is the
+**Scope:** Sub-project A of a four-part effort. **A** (this spec) is the
 mechanism: a per-skill metadata sidecar file, migration of the existing
 Portability declaration into it, a new `capability-assumption` field, and
 the gate that enforces both. **B** (separate spec) adds the rubric grading
 semantics that give `capability-assumption` its teeth. **C** (separate
 spec) migrates maintainer-facing provenance / primary-source references
 (`docs/skill-provenance.md`) into the sidecar's free-form `references`
-field. B and C both depend only on A and are independent of each other.
+field. **D** (separate spec) populates and gates `skillDependencies`, the
+inter-skill dependency graph. B, C, and D each depend only on A and are
+independent of each other.
+
+Issues: A = #182, B = #183, C = #184. D has no issue yet; open one before
+starting that work, per the issue-first rule.
 
 A's split from B mirrors the `evaluating-skill-quality` skill's own "two
 lanes" model (deterministic shape vs. probabilistic maturity): A is shape
@@ -64,10 +69,12 @@ home. This supersedes the body-line placement described in
   data that must not live in the portable skill body (it does not affect
   skill behavior and a vendored consumer does not need it) but that this
   repository's maintainers do need. The two enum fields below are the
-  first inhabitants; maintainer-facing *primary-source / provenance
-  references* (commit SHAs, PR numbers, corroborating external projects,
-  grounding URLs -- the category currently in `docs/skill-provenance.md`)
-  are the next intended inhabitant (see section 4.5 and Sub-project C).
+  first inhabitants; two more are reserved by name now: *primary-source /
+  provenance references* (commit SHAs, PR numbers, corroborating external
+  projects, grounding URLs -- the category currently in
+  `docs/skill-provenance.md`, see section 4.5 and Sub-project C) and the
+  *inter-skill dependency graph* (`skillDependencies`, see section 4.1 and
+  Sub-project D).
 - A single structured per-skill metadata file that is the source of truth
   for `portability` and `capability-assumption`.
 - The deterministic gate (`check_skill_shape.py`) enforces the file's
@@ -93,6 +100,10 @@ home. This supersedes the body-line placement described in
 - Migrating `docs/skill-provenance.md` content into the sidecars. A only
   reserves the `references` field's format (section 4.5); the actual
   data migration and retirement of the central file is Sub-project C.
+- Populating or gating `spec.skillDependencies`. A only reserves the
+  field's shape (section 4.1); classifying each skill's references as
+  hard `requires` vs. soft `relatedTo`, and adding the dangling-reference
+  and Portable-vs-requires contradiction gates, is Sub-project D.
 
 ## 4. Design
 
@@ -123,10 +134,27 @@ home. This supersedes the body-line placement described in
   - `spec.capabilityAssumption`: one of `Broad`, `Frontier`, `Adaptive`.
     (camelCase `spec` field per k8s convention; the enum *values* stay
     PascalCase, matching the prose levels.)
-- **`spec` ungated fields (optional, free-form, not checker-enforced):**
-  maintainer-facing metadata such as `spec.references` (a list of
-  primary-source / corroboration links, commit SHAs, PR numbers).
-  Populating these is Sub-project C's concern; A only reserves the shape.
+- **`spec` ungated fields (optional, free-form, not checker-enforced in A):**
+  maintainer-facing metadata. Two are reserved by name now so later
+  sub-projects do not have to re-negotiate the shape:
+  - `spec.references` -- a list of primary-source / corroboration links,
+    commit SHAs, PR numbers. Populated in Sub-project C.
+  - `spec.skillDependencies` -- the inter-skill dependency graph, split by
+    strength:
+
+    ```yaml
+    skillDependencies:
+      requires: []          # hard: the procedure cannot function without it
+      relatedTo:            # soft: boundary / complement / see-also
+        - battle-testing-a-skill
+    ```
+
+    The hard/soft split is load-bearing, not decoration: a survey of the
+    current tree found 13 of 17 skills referenced by a sibling, but nearly
+    all of those references are *boundary* statements ("see
+    battle-testing-a-skill ... instead"), not dependencies. Collapsing
+    them into one list would make almost every Portable skill look
+    self-contradictory. Populated and gated in Sub-project D.
 - **Parsing (stdlib-only preserved):** because the format is one we
   control and fully specify (2-space indent, simple scalars for the gated
   fields under `metadata`/`spec`), the checker reads it with a small
@@ -189,17 +217,57 @@ cases, add cases for the new checks (valid manifest; missing file; wrong
 
 ### 4.3 Migration of the 17 skills
 
-For each `skills/<name>/`:
+**This is a per-skill judgment task, not a bulk mechanical edit.** A survey
+of the current tree found that all 17 Portability declarations carry
+substantive prose, and some of that prose is *behavior-relevant* -- an
+instruction the model executing the skill actually needs. The sharpest
+example, from `stop-and-replan`:
+
+> **Portability: Portable.** ... Tool names are written as `Server:tool`
+> (portable shorthand); in Claude Code, translate to the literal
+> double-underscore form -- `github:update_pull_request` is
+> `mcp__github__update_pull_request` ...
+
+Others in the same class: `outward-artifact-preflight`,
+`screening-a-low-trust-contribution`, and `git-hosting-surface-audit` each
+tell the reader to "substitute the calling repository's actual policy /
+governance issue where they differ."
+
+Moving that text into the sidecar would break the skill outright: the
+sidecar is never auto-loaded, so the model would never read it. Deleting
+the paragraph would lose the instruction. Only the *enum value* is
+genuinely redundant with the sidecar.
+
+**Three-way split.** For each `skills/<name>/`:
 
 1. Create `gitapex_metadata.yaml` as a `SkillMetadata` manifest:
-   `metadata.name` = the directory name, `spec.portability` = the value
-   the body line declares today, `spec.capabilityAssumption` = `Broad`.
-2. Remove the now-redundant `**Portability: ...**` body-line declaration
-   from `SKILL.md` (avoids the rubric's own "never both" / dimension-2
-   restated-instruction fault).
+   `metadata.name` = the directory name, `spec.portability` = the enum the
+   body line declares today, `spec.capabilityAssumption` = `Broad`.
+2. Classify the existing declaration paragraph and route each part:
+   - **Enum value** (`Portable` / `Repository-scoped` / `Mixed`) -> the
+     sidecar. This alone is the "never both" duplication being removed.
+   - **Behavior-relevant prose** (tool-name translation, "substitute your
+     repository's X") -> **stays in `SKILL.md`**, with only the
+     `**Portability: <enum>.**` marker prefix dropped and the remaining
+     text rewritten to read as a normal sentence.
+   - **Pure maintainer rationale** (e.g. `establishing-ubiquitous-language`'s
+     "Self-contained; requires no particular instruction file.") -> a
+     `## Notes` footer in `SKILL.md`, or the sidecar's free-form space.
+3. Verify per skill that no behavior-relevant sentence was moved into the
+   sidecar or dropped -- this is the behavior-neutrality invariant applied
+   to the migration itself.
 
 All 17 skills get `spec.capabilityAssumption: Broad` in this sub-project;
 any Frontier / Adaptive reclassification is deferred to Sub-project B.
+
+Current declared values to carry over (surveyed from the tree):
+`Portable` -- driving-pr-to-merge, establishing-ubiquitous-language,
+evaluating-skill-quality, gated-skill-edits, issue-to-fix,
+merge-retrospective, ranking-the-open-queue, stop-and-replan,
+untrusted-input-triage. `Mixed` -- battle-testing-a-skill,
+explaining-the-work, git-hosting-surface-audit, seeding-issue-pr-templates.
+`Repository-scoped` -- issue-to-branch, outward-artifact-preflight,
+responding-to-a-fresh-arrival, screening-a-low-trust-contribution.
 
 ### 4.4 Documentation / prose updates
 
@@ -265,8 +333,18 @@ Live proof, not a green type-check standing in for behavior:
   `apiVersion`/`kind`, `metadata.name` mismatch, missing `spec` field, and
   invalid enum value each FAIL with a clear message and exit 1; bad usage
   exits 2.
-- Grep the tree to prove no `**Portability:` body line survives in any
+- Grep the tree to prove no `**Portability:` marker survives in any
   `SKILL.md` and no doc still references `portability-near-top`.
+- **Per-skill diff review of the three-way split (section 4.3):** for each
+  of the 17 skills, confirm every behavior-relevant sentence from the old
+  declaration is still present in `SKILL.md` -- not moved into the sidecar
+  and not dropped. Concretely, `stop-and-replan`'s `Server:tool` ->
+  `mcp__github__*` translation note and the "substitute the calling
+  repository's ..." instructions in `outward-artifact-preflight`,
+  `screening-a-low-trust-contribution`, and `git-hosting-surface-audit`
+  must all still be readable from the skill body alone. This is the
+  behavior-neutrality invariant checked against the migration itself, and
+  it is a review step a script cannot decide.
 - Confirm the checker performs no writes and no network access (read-only
   property preserved).
 
@@ -282,6 +360,12 @@ on. Then, in either order (both depend only on A):
 - **Sub-project C** -- migrate `docs/skill-provenance.md`'s per-skill
   provenance / primary-source references into each sidecar's `references`
   field (section 4.5), and retire or repoint the central file.
+- **Sub-project D** -- populate `spec.skillDependencies` for all 17 skills
+  (classifying each existing cross-skill reference as hard `requires` or
+  soft `relatedTo`) and add two deterministic gates: every named skill
+  resolves to an existing `skills/<name>/` (catches dangling references
+  after a rename or retirement), and a non-empty `requires` contradicts
+  `portability: Portable`.
 
 Each sub-project is its own issue -> spec -> plan -> implementation
 cycle, per the repository's issue-first rule.
