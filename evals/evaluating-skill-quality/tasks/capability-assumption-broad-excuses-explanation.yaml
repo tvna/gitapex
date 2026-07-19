@@ -41,7 +41,7 @@ inputs:
 expected:
   output_contains:
     - "Broad"
-    - "capability assumption"
+    - "Capability assumption"
   output_not_contains:
     - "should be cut"
     - "LGTM"

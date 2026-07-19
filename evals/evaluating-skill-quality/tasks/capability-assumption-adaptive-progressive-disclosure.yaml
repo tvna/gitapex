@@ -1,6 +1,6 @@
 id: evaluating-skill-quality-capability-assumption-adaptive-progressive-disclosure
 name: Adaptive Declaration Must Be Verified Against a Real Lean-Body-Plus-Depth Split, Not Assumed
-description: The reviewed SKILL.md declares capabilityAssumption Adaptive and genuinely has a lean body plus a substantial references/ file, but the review must still verify dimension 5's Adaptive-specific checks (body actually lean, deferred depth actually present and reachable) rather than passing it purely because the sidecar says Adaptive. Restraint check on the held-out test split, read once -- confirms the new Adaptive-only dimension-5 effect does not just rubber-stamp any Adaptive declaration.
+description: The reviewed SKILL.md declares capabilityAssumption Adaptive and genuinely has a lean body plus a substantial references/ file, but the review must still verify dimension 5's Adaptive-specific checks (body actually lean for the strong-model path, deferred depth actually present and reachable) rather than passing it purely because the sidecar says Adaptive. The reference file's actual content is included in the prompt so the reviewer can verify it directly instead of trusting a paraphrase. Restraint check on the held-out test split, read once -- confirms the new Adaptive-only dimension-5 effect does not just rubber-stamp any Adaptive declaration, and requires the specific PASS verdict this genuinely-qualifying skill should earn.
 tags:
   - quality
   - progressive-disclosure
@@ -25,30 +25,71 @@ inputs:
 
     ## Procedure
 
-    1. Pull the last hour of logs around the reported time window.
-    2. Classify the anomaly as one of: error-rate spike, latency spike, or
-       a new/unseen log message. See
+    1. Pull the last hour of logs around the reported time window, plus
+       the trailing 7-day baseline for the same service (error rate, p99
+       latency, and the prior 30 days' log-template corpus).
+    2. Classify the anomaly against this rule, in order: error rate over
+       3x baseline -> error-rate spike; else p99 latency over 2x baseline
+       -> latency spike; else any log message whose template hash is
+       absent from the 30-day corpus -> new/unseen log message; else not
+       an anomaly by this rule -- escalate as unclassified rather than
+       forcing one of the three classes.
+    3. Once classified, follow that class's remediation steps in
        [references/anomaly-classification.md](references/anomaly-classification.md)
-       for the full decision tree, worked examples for each class, and the
-       exact commands to pull each signal -- read it before classifying if
-       you have not memorized the tree.
-    3. Once classified, follow that class's remediation steps in the
-       reference file and report the root cause with the log lines that
-       proved it.
+       and report the root cause with the log lines that proved it. The
+       reference also carries one worked example per class and the exact
+       query commands for each -- open it for those, not to reclassify.
 
-    The `references/anomaly-classification.md` file referenced above is 240
-    lines: a full decision tree, five worked examples (one per anomaly
-    class), and the exact log-query commands for each branch -- everything
-    steps 2-3 need that isn't already in the body above.
+    The full content of `references/anomaly-classification.md`, so you can
+    verify it directly rather than trust a summary:
+
+    ---
+    # Anomaly classification
+
+    ## Worked examples
+
+    ### Error-rate spike
+    Input: `checkout-service` error rate 4.1x baseline, p99 latency 1.1x
+    baseline (normal). Classification: error-rate spike (rule 2 fires
+    first; latency is normal so rule 3 is moot). Remediation: pull the
+    top 5 error signatures via `logs query --service checkout-service
+    --level error --window 1h --group-by error.signature`; check the most
+    recent deploy for checkout-service against the incident start time.
+
+    ### Latency spike
+    Input: `search-service` error rate 1.0x baseline (normal), p99 latency
+    3.2x baseline. Classification: latency spike. Remediation: pull the
+    slowest 20 traces via `traces query --service search-service --window
+    1h --sort duration:desc --limit 20`; check for a downstream dependency
+    also showing elevated latency in the same window.
+
+    ### New/unseen log message
+    Input: error rate and latency both normal, but 340 occurrences of a
+    log template hash not seen in the prior 30 days. Classification:
+    new/unseen log message. Remediation: pull 10 full-text samples via
+    `logs query --template-hash <hash> --window 1h --limit 10`; check the
+    owning service's recent deploys for a new code path or dependency
+    version bump that could emit this message for the first time.
+
+    ### Escalate (no class fires)
+    Input: error rate 1.2x baseline, p99 latency 1.3x baseline, no new
+    template hashes. None of rules 2-4 fire. Classification: not an
+    anomaly by this tree -- escalate as unclassified rather than forcing
+    error-rate spike as a default; report the window and the three checked
+    signals so a human can decide whether the tree itself has a gap.
+    ---
 
     Focus your review on dimension 5 (Progressive disclosure), given the
     declared capabilityAssumption: is this a clean pass, and what
     specifically did you check to reach that verdict (not just "it declares
-    Adaptive so it passes")?
+    Adaptive so it passes")? State an explicit PASS or FAIL for this
+    dimension.
 expected:
   output_contains:
     - "Adaptive"
-    - "lean"
+    - "PASS"
   output_not_contains:
     - "declares Adaptive so it passes"
+    - "dimension 5 fails"
+    - "dimension 5, FAIL"
     - "LGTM"

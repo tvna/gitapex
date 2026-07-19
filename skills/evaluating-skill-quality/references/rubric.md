@@ -557,12 +557,18 @@ itself contradicts.
   progressive-disclosure strategy, not merely a capability target;
   declaring Adaptive is itself a claim about layering, and this dimension
   is where that claim gets checked:
-  - The body must actually be lean by this dimension's existing tests
-    (common case reachable without opening a reference, no forced
-    multi-file read) -- an Adaptive declaration paired with a bloated
-    body that already contains the deferred depth is a contradiction
-    between the declaration and the artifact, named here rather than
-    silently accepted because the sidecar says so.
+  - The body must actually be lean **for the strong-model path** -- a
+    Frontier-capable reader completes the common case from the body
+    alone, with no forced read of a reference. This does not mean no
+    tier ever needs the reference: Adaptive's own definition has a
+    weaker tier pull the reference for that same common case by design,
+    and that is the strategy working as intended, not a dimension-5
+    finding. What is a finding: an Adaptive declaration paired with a
+    bloated body that already contains the deferred depth (there is
+    nothing left for a weaker tier to pull, and nothing for a stronger
+    tier to skip) -- a contradiction between the declaration and the
+    artifact, named here rather than silently accepted because the
+    sidecar says so.
   - The deferred depth must actually be present and reachable in
     `references/`, not merely implied -- a lean body with no reference
     file substantial enough to carry what a weaker tier would need is an
@@ -625,6 +631,18 @@ whole skill, not a formality.
 Challenge each paragraph: does the model need this explanation, does it
 already know this, does the paragraph justify its token cost? A "no" to any
 is a cut.
+
+**This section's own examples below (including the Fail bullet's "explaining
+what a well-known format or tool is") are the ungraded, no-declaration
+default -- equivalent to Frontier-level strictness, since a skill with no
+sidecar or an unrecognized declaration is graded at full strictness rather
+than assumed lenient.** For a target that declares `capabilityAssumption` in
+its `gitapex_metadata.yaml` sidecar, the [Capability
+assumption](#capability-assumption) section's per-dimension bullets take
+over and can excuse (Broad) or further tighten (Frontier, and the body under
+Adaptive) exactly this Fail example for the identical sentence; that section
+is authoritative for a declared target, not this one -- read it first, and
+apply the plain examples below only when no declaration exists or applies.
 
 - Prune sentence by sentence and classify the reason: **relevance**
   (irrelevant to this skill's task), **duplication** (the same rule has another
