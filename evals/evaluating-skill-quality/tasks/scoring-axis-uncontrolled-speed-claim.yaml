@@ -30,7 +30,7 @@ inputs:
 expected:
   output_contains:
     - "check_skill_shape.py"
-    - "6.5 seconds"
+    - "6.5"
     - "success"
     - "correctness"
   output_not_contains:

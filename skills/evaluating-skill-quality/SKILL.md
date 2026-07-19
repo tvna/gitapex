@@ -74,7 +74,9 @@ have been a different mechanism is not fixed by polishing it further.
   Most skills correctly omit both and inherit the caller's; that absence
   is not a finding. Also a step-level finding, not a whole-artifact one
   -- criteria and citation are in `references/rubric.md`'s Mechanism fit
-  section.
+  section. Runs at step 2, before the sidecar is read at step 4, and
+  stays declaration-independent: the capability-assumption
+  declaration-vs-pin cross-check is step 4's job, not this one's.
 
 Full rationale and citation: [references/rubric.md](references/rubric.md)'s
 Mechanism fit section.
@@ -178,23 +180,30 @@ dimension; the fixed nine-dimension count is unchanged.
 
 Declared alongside portability in the skill's `gitapex_metadata.yaml`
 sidecar, as `spec.capabilityAssumption`. It records which compute /
-model-capability regime the skill was authored for. That recording is all
-this declaration does today: it is recorded and declared now, with
-**no grading effect yet**.
-
-The per-dimension grading effect of Broad / Frontier / Adaptive on
-dimensions 2 (Conciseness), 3 (Degree of freedom), 5 (Progressive
-disclosure), and 9 (Cross-model robustness) is specified in sub-project B
-and is not yet part of this rubric. Until it lands, record the declared
-level as established fact and grade those four dimensions exactly as
-before -- against one fixed preference, not calibrated to the skill's own
-target.
+model-capability regime the skill was authored for, and calibrates how
+strictly dimensions 2 (Conciseness), 3 (Degree of freedom), and 9
+(Cross-model robustness) grade against that stated target. Dimension 5
+(Progressive disclosure) gets an effect only for **Adaptive** -- Broad and
+Frontier leave dimension 5 grading unchanged, since Adaptive's own
+definition (a lean body plus deeper `references/`) is itself a
+progressive-disclosure claim while the other two say nothing about
+layering. Full per-dimension detail:
+[references/rubric.md](references/rubric.md)'s Capability assumption
+section.
 
 Distinct from Mechanism fit's Model/effort tier fit check: that judges a
 model or effort *pin the skill's own content makes*, which the invoking
-agent acts on at runtime. This declaration pins nothing and never executes
--- it is recorded for future calibration and currently has no grading
-effect at all.
+agent acts on at runtime, and fires only when such a pin actually exists
+(most skills correctly have none, and zero of this repository's 17 skills
+do today). This declaration pins nothing and never executes -- it
+recalibrates the *reviewer's* grading strictness and has full coverage
+over every skill regardless of whether that skill pins anything. The two
+checks are never merged, and the one place they interact -- a declared
+level that contradicts a pin the same skill's own content makes (e.g.
+declaring Frontier while pinning a weak model onto a judgment step) --
+has exactly one owner: Procedure step 4 below, not the tier-fit check at
+step 2. Tier fit runs before the sidecar is even read and stays
+declaration-independent by design.
 
 - **Broad** -- authored to stay effective down to a weak or economical
   model, or a constrained harness.
@@ -204,10 +213,9 @@ effect at all.
   `references/` a weaker model pulls on demand.
 
 Authors still declare one of these three levels correctly now -- the
-`capability-assumption-declared` shape check already gates the value even
-though grading does not yet use it. Full detail:
-[references/rubric.md](references/rubric.md)'s Capability assumption
-section.
+`capability-assumption-declared` shape check gates the value. Full
+detail: [references/rubric.md](references/rubric.md)'s Capability
+assumption section.
 
 ## Procedure
 
@@ -237,10 +245,15 @@ re-derive one.
    violation.
 4. Read the skill's `gitapex_metadata.yaml` sidecar and establish both its
    portability level and its capability assumption per the sections above.
-   When the target has no sidecar (e.g. vendored from a repository that has
-   not adopted this convention), establish both by reading the target's
-   content instead -- the same way an undeclared level is read today -- and
-   note the sidecar's absence as context, not as a finding.
+   Check the declared capability assumption against any model/effort pin
+   step 2 already found: a `Frontier` declaration paired with a
+   weak-tier pin is a contradiction, named here once -- this is the
+   declaration-vs-pin consistency check's one owner, not step 2's
+   Model/effort tier fit. When the target has no sidecar (e.g. vendored
+   from a repository that has not adopted this convention), establish
+   both by reading the target's content instead -- the same way an
+   undeclared level is read today -- and note the sidecar's absence as
+   context, not as a finding.
 5. Walk all nine dimensions in `references/rubric.md`, in order (including
    8-9), quoting the specific text that earns each verdict; assume steps
    1-4 hold rather than re-deriving them. No cited evidence means no

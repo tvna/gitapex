@@ -4,4 +4,4 @@ metadata:
   name: battle-testing-a-skill
 spec:
   portability: Mixed
-  capabilityAssumption: Broad
+  capabilityAssumption: Adaptive
