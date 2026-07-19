@@ -452,16 +452,25 @@ def test_quoted_portability_value_passes(tmp_path):
     assert _by_name(css.check_shape(d))["portability-declared"].passed is True
 
 
-def test_non_utf8_sidecar_exits_2(tmp_path):
-    # Pinned behavior: check_shape() reads the sidecar with
-    # read_text(encoding="utf-8") and does not catch the decode error
-    # itself; main()'s top-level try/except (OSError, UnicodeDecodeError)
-    # around check_shape(...) catches it instead, printing an error and
-    # returning 2 -- the same "could not read skill files" exit code used
-    # for a missing/unreadable SKILL.md, not a checkable FAIL result.
+def test_non_utf8_sidecar_fails_checks_not_exit_2(tmp_path):
+    # Updated contract: a corrupt sidecar is a shape defect, not a usage
+    # error. check_shape() wraps its single sidecar read+parse in
+    # try/except (OSError, UnicodeDecodeError) itself, so the exception
+    # never propagates out -- it is reported as FAILed CheckResults with
+    # evidence naming the read failure. metadata-file-present still PASSes
+    # (the file does exist); the four checks that need the parsed manifest
+    # FAIL. main() returns 1 (a full readable report), same as any other
+    # shape failure -- not 2, which stays reserved for a missing/unreadable
+    # SKILL.md (see test_directory_without_skill_md_returns_2).
     d = _write_skill(tmp_path)
     (d / "gitapex_metadata.yaml").write_bytes(b"\xff\xfe not utf8 \x00\x01")
-    assert css.main([str(d)]) == 2
+    by = _by_name(css.check_shape(d))
+    assert by["metadata-file-present"].passed is True
+    for check in ("manifest-envelope", "metadata-name-matches-dir",
+                  "portability-declared", "capability-assumption-declared"):
+        assert by[check].passed is False, check
+        assert "UnicodeDecodeError" in by[check].evidence, check
+    assert css.main([str(d)]) == 1
 
 
 def test_manifest_parser_ignores_deeper_nesting(tmp_path):
@@ -683,14 +692,46 @@ def test_body_marker_used_when_no_sidecar_present(tmp_path):
         assert check in names, check
 
 
-def test_unusable_sidecar_portability_falls_back_to_body_marker(tmp_path):
-    # A sidecar whose spec.portability is not a recognised level is not a
-    # usable declaration, so the body marker decides.
+def test_unusable_sidecar_portability_runs_scan_regardless_of_body_marker(tmp_path):
+    # A sidecar whose spec.portability is not a recognised level is
+    # "unusable": _is_portable returns True unconditionally for it, WITHOUT
+    # consulting the body marker -- a present sidecar is authoritative even
+    # when broken (see _is_portable's docstring, state 3). Here the body
+    # marker says Mixed; if the old fall-back-to-body-marker behavior were
+    # still in effect, the scan would be skipped. It must not be.
     d = _write_sidecar(_write_raw(
         tmp_path,
         "---\nname: s\ndescription: d. Use when x.\n---\n\n"
-        "**Portability: Portable.** Self-contained.\n\n"
-        "A clean portable body.\n"), "SomewhatPortable")
+        "**Portability: Mixed.** Repo-specific detail is split out.\n\n"
+        "Handled in evals/foo/bar.yaml, first reported in issue #149.\n"),
+        "SomewhatPortable")
     names = _by_name(css.check_shape(d))
     for check in _CITATION_CHECKS:
         assert check in names, check
+    assert names["portable-no-issue-citation"].passed is False
+    assert names["portable-no-repo-path-citation"].passed is False
+
+
+def test_typo_portability_does_not_skip_citation_scan(tmp_path):
+    # Confirmed defect this pass fixes: a typo'd spec.portability value
+    # (e.g. "Portible") used to make the old _sidecar_portability() return
+    # None, so _is_portable fell back to the (in this repo, always absent)
+    # body marker and the Portable citation scan was silently skipped. Now
+    # an unusable sidecar runs the scan unconditionally, so a bare #149
+    # citation is caught, and portability-declared also fails -- the skill
+    # is red on both checks instead of silently green on one of them.
+    d = _write_sidecar(_write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "First reported in issue #149 of this project.\n"), "Portible")
+    by = _by_name(css.check_shape(d))
+    assert by["portability-declared"].passed is False
+    assert "portable-no-issue-citation" in by
+    assert by["portable-no-issue-citation"].passed is False
+    assert "#149" in by["portable-no-issue-citation"].evidence
+
+    # 3. sidecar absent + body marker Portable -> fallback still runs the
+    #    scan: covered by test_body_marker_used_when_no_sidecar_present.
+    # 4. sidecar Mixed while body marker says Portable -> sidecar wins,
+    #    citation checks absent: covered by
+    #    test_sidecar_beats_conflicting_body_marker.

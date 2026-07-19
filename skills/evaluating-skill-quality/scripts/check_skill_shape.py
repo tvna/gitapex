@@ -17,8 +17,10 @@ Checks (the canonical list -- the manual fallback is to apply these):
     apiVersion is gitapex.dev/v1alpha1 and kind is SkillMetadata;
     metadata.name equals the skill directory name; spec.portability is one
     of Portable/Repository-scoped/Mixed; spec.capabilityAssumption is one
-    of Broad/Frontier/Adaptive. Ungated sidecar fields (spec.references,
-    spec.skillDependencies, spec.evalStatus) are not parsed or checked.
+    of Broad/Frontier/Adaptive. Ungated sidecar scalar fields (e.g.
+    spec.references, spec.skillDependencies, spec.evalStatus) ARE parsed
+    into the spec map by _parse_manifest, just not gated/checked here; only
+    nested maps and list items under them are skipped by the parser.
   - references/ files: exactly one level deep
   - any references/ file over 100 lines: contains a table of contents
     (a Markdown heading matching "Table of contents" or "Contents",
@@ -37,11 +39,14 @@ Checks (the canonical list -- the manual fallback is to apply these):
     "Mixed" or "Repository-scoped"). The declaration is read
     sidecar-primary with a body-marker fallback: the sidecar's
     spec.portability decides whenever it is present and usable -- the form
-    every skill in this repository uses -- and only a skill with no usable
-    sidecar (typically one vendored in from another repository) falls back
-    to the near-top "**Portability: <level>.**" body marker, so such a
-    skill still gets scanned rather than silently skipped. The scan itself:
-    no bare-prose GitHub issue/PR-number
+    every skill in this repository uses -- a skill with no sidecar at all
+    (typically one vendored in from another repository) falls back to the
+    near-top "**Portability: <level>.**" body marker, and a skill whose
+    sidecar exists but is unreadable or carries no recognised
+    spec.portability runs the scan unconditionally (a false negative in a
+    gate is worse than a false positive, and such a skill is already
+    failing portability-declared) -- so no skill state ever silently skips
+    it. The scan itself: no bare-prose GitHub issue/PR-number
     citation (#149 or owner/repo#149) and no bare-prose origin-repository
     path citation (evals/... or docs/...) in SKILL.md or references/*.md
     body text. A bare #N auto-links relative to whichever repository
@@ -302,59 +307,72 @@ def _out_of_skill_link_targets(body_text: str, skill_dir: Path) -> list[str]:
     return offenders
 
 
-def _sidecar_portability(skill_dir: Path) -> str | None:
-    """The sidecar's ``spec.portability`` value, or None if unusable.
+@dataclass(frozen=True)
+class SidecarPortability:
+    """Three-state summary of the sidecar's portability declaration.
 
-    Returns None -- meaning "fall back to the body marker" -- when the
-    sidecar is absent, unreadable, or carries no value in
-    ``PORTABILITY_LEVELS``. Reuses ``_parse_manifest`` so the sidecar has
-    exactly one parser in this module. Read-only.
+    Derived once, in ``check_shape``, from the single sidecar read+parse
+    performed there -- this module never reads the sidecar a second time to
+    answer the portability question. Handed to ``_is_portable``, which
+    dispatches on ``state`` instead of touching the filesystem itself.
+
+    - "absent": no ``gitapex_metadata.yaml`` next to SKILL.md. The
+      vendored-from-elsewhere case: ``_is_portable`` falls back to the
+      near-top body marker.
+    - "usable": the sidecar was read and parsed, and its
+      ``spec.portability`` is one of ``PORTABILITY_LEVELS``. ``level``
+      carries that value; ``_is_portable`` returns ``level == "Portable"``.
+    - "unusable": the sidecar exists but could not be read/parsed (bad
+      encoding, OS error), or its ``spec.portability`` is missing or not a
+      recognised level. ``_is_portable`` returns True unconditionally in
+      this state -- see its docstring for why.
     """
-    sidecar = skill_dir / SIDECAR_FILENAME
-    if not sidecar.is_file():
-        return None
-    try:
-        manifest = _parse_manifest(sidecar.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError):
-        return None
-    spec = manifest.get("spec")
-    if not isinstance(spec, dict):
-        return None
-    value = spec.get("portability")
-    return value if value in PORTABILITY_LEVELS else None
+    state: str
+    level: str | None = None
 
 
-def _is_portable(body: list[str], skill_dir: Path) -> bool:
+def _is_portable(body: list[str], sidecar: SidecarPortability) -> bool:
     """Whether the skill declares itself Portable (not Mixed/Repository-scoped).
 
-    Sidecar-primary, body-marker fallback:
+    Dispatches on ``sidecar`` (a ``SidecarPortability`` derived once in
+    ``check_shape`` from its single sidecar read -- this function never
+    reads the sidecar itself):
 
-    1. If ``skill_dir`` holds a readable ``gitapex_metadata.yaml`` carrying a
-       usable ``spec.portability`` value, that value alone decides:
+    1. ``sidecar.state == "usable"``: the sidecar alone decides --
        "Portable" -> True, "Mixed" / "Repository-scoped" -> False. This is
        the declaration form every skill in this repository uses, since the
        enum moved out of the SKILL.md body and into the sidecar.
-    2. Otherwise -- no sidecar, an unreadable one, or one with no recognised
-       ``spec.portability`` -- fall back to the near-top body marker
-       (``**Portability: Portable.**``). A skill vendored in from another
-       repository carries that marker and no sidecar, and must still get
-       the citation scan rather than silently skipping it.
+    2. ``sidecar.state == "absent"``: no sidecar file at all -- fall back to
+       the near-top body marker (``**Portability: Portable.**``). A skill
+       vendored in from another repository carries that marker and no
+       sidecar, and must still get the citation scan rather than silently
+       skipping it.
+    3. ``sidecar.state == "unusable"``: the sidecar exists but is
+       unreadable, or its ``spec.portability`` is missing/unrecognised.
+       Returns True -- run the scan -- WITHOUT consulting the body marker.
+       This is deliberate: when a sidecar is present it is authoritative,
+       and this repo's own rule is that a false negative in a gate (a
+       silently skipped scan) is worse than a false positive (extra
+       citation findings). A skill in this state is already failing
+       ``portability-declared``, so the extra findings land on an
+       already-red skill rather than a silently-skipped one.
 
     "Mixed" and "Repository-scoped" skills legitimately cite repo-specific
     paths and issues, so the Portable self-citation scan does not apply to
-    them under either path.
+    them.
 
-    In the fallback path the level word may wrap onto the line after the
-    ``Portability:`` marker (e.g. ``**Portability:**`` then ``Portable.
-    ...``). Reading only the marker line would then classify a Portable
-    skill as non-Portable and silently skip the citation scan -- a false
-    negative in the gate, worse than a false positive -- so when the marker
-    line carries no level word, the immediately following line is folded in
-    before deciding.
+    In the fallback (absent) path the level word may wrap onto the line
+    after the ``Portability:`` marker (e.g. ``**Portability:**`` then
+    ``Portable. ...``). Reading only the marker line would then classify a
+    Portable skill as non-Portable and silently skip the citation scan -- a
+    false negative in the gate, worse than a false positive -- so when the
+    marker line carries no level word, the immediately following line is
+    folded in before deciding.
     """
-    declared = _sidecar_portability(skill_dir)
-    if declared is not None:
-        return declared == "Portable"
+    if sidecar.state == "usable":
+        return sidecar.level == "Portable"
+    if sidecar.state == "unusable":
+        return True
     window = body[:PORTABILITY_MAX_BODY_LINE]
     for i, line in enumerate(window):
         if PORTABILITY_RE.search(line):
@@ -481,39 +499,79 @@ def check_shape(target: Path) -> list[CheckResult]:
         results.append(CheckResult(
             "metadata-file-present", False,
             f"{SIDECAR_FILENAME} exists next to SKILL.md", "missing"))
+        sidecar_portability = SidecarPortability(state="absent")
     else:
         results.append(CheckResult(
             "metadata-file-present", True,
             f"{SIDECAR_FILENAME} exists next to SKILL.md", "present"))
-        manifest = _parse_manifest(sidecar.read_text(encoding="utf-8"))
-        api = manifest.get("apiVersion")
-        kind_value = manifest.get("kind")
-        envelope_ok = (api == EXPECTED_API_VERSION
-                       and kind_value == EXPECTED_KIND)
-        results.append(CheckResult(
-            "manifest-envelope", envelope_ok,
-            f"apiVersion is {EXPECTED_API_VERSION} and kind is {EXPECTED_KIND}",
-            f"apiVersion={api!r}, kind={kind_value!r}"))
-        meta = manifest.get("metadata")
-        meta_name = meta.get("name") if isinstance(meta, dict) else None
-        resolved_dir_name = Path(os.path.abspath(skill_dir)).name
-        results.append(CheckResult(
-            "metadata-name-matches-dir", meta_name == resolved_dir_name,
-            "metadata.name equals the skill directory name",
-            f"{meta_name!r} vs directory {resolved_dir_name!r}"))
-        spec = manifest.get("spec")
-        spec = spec if isinstance(spec, dict) else {}
-        portability = spec.get("portability")
-        results.append(CheckResult(
-            "portability-declared", portability in PORTABILITY_LEVELS,
-            f"spec.portability is one of {PORTABILITY_LEVELS}",
-            repr(portability)))
-        capability = spec.get("capabilityAssumption")
-        results.append(CheckResult(
-            "capability-assumption-declared",
-            capability in CAPABILITY_ASSUMPTIONS,
-            f"spec.capabilityAssumption is one of {CAPABILITY_ASSUMPTIONS}",
-            repr(capability)))
+        # Single read+parse site for the sidecar in this module (see the
+        # SidecarPortability docstring): a corrupt (non-UTF-8) or otherwise
+        # unreadable sidecar must not raise out of check_shape -- it is a
+        # shape defect, reported as FAILed checks, not a usage error.
+        try:
+            manifest: dict[str, object] | None = _parse_manifest(
+                sidecar.read_text(encoding="utf-8"))
+            read_error: str | None = None
+        except (OSError, UnicodeDecodeError) as exc:
+            manifest = None
+            read_error = type(exc).__name__
+
+        if manifest is None:
+            evidence = f"unreadable: {read_error}"
+            results.append(CheckResult(
+                "manifest-envelope", False,
+                f"apiVersion is {EXPECTED_API_VERSION} and kind is {EXPECTED_KIND}",
+                evidence))
+            results.append(CheckResult(
+                "metadata-name-matches-dir", False,
+                "metadata.name equals the skill directory name", evidence))
+            results.append(CheckResult(
+                "portability-declared", False,
+                f"spec.portability is one of {PORTABILITY_LEVELS}", evidence))
+            results.append(CheckResult(
+                "capability-assumption-declared", False,
+                f"spec.capabilityAssumption is one of {CAPABILITY_ASSUMPTIONS}",
+                evidence))
+            # Deliberately not the body-marker fallback: a present-but-broken
+            # sidecar is authoritative-and-failing, not absent. Running the
+            # scan (rather than skipping it) lands extra findings on a skill
+            # that is already failing portability-declared -- a false
+            # negative in the gate is worse than a false positive.
+            sidecar_portability = SidecarPortability(state="unusable")
+        else:
+            api = manifest.get("apiVersion")
+            kind_value = manifest.get("kind")
+            envelope_ok = (api == EXPECTED_API_VERSION
+                           and kind_value == EXPECTED_KIND)
+            results.append(CheckResult(
+                "manifest-envelope", envelope_ok,
+                f"apiVersion is {EXPECTED_API_VERSION} and kind is {EXPECTED_KIND}",
+                f"apiVersion={api!r}, kind={kind_value!r}"))
+            meta = manifest.get("metadata")
+            meta_name = meta.get("name") if isinstance(meta, dict) else None
+            resolved_dir_name = Path(os.path.abspath(skill_dir)).name
+            results.append(CheckResult(
+                "metadata-name-matches-dir", meta_name == resolved_dir_name,
+                "metadata.name equals the skill directory name",
+                f"{meta_name!r} vs directory {resolved_dir_name!r}"))
+            spec = manifest.get("spec")
+            spec = spec if isinstance(spec, dict) else {}
+            portability = spec.get("portability")
+            results.append(CheckResult(
+                "portability-declared", portability in PORTABILITY_LEVELS,
+                f"spec.portability is one of {PORTABILITY_LEVELS}",
+                repr(portability)))
+            capability = spec.get("capabilityAssumption")
+            results.append(CheckResult(
+                "capability-assumption-declared",
+                capability in CAPABILITY_ASSUMPTIONS,
+                f"spec.capabilityAssumption is one of {CAPABILITY_ASSUMPTIONS}",
+                repr(capability)))
+            if portability in PORTABILITY_LEVELS:
+                sidecar_portability = SidecarPortability(
+                    state="usable", level=portability)
+            else:
+                sidecar_portability = SidecarPortability(state="unusable")
 
     body = _body_after_frontmatter(text)
 
@@ -547,7 +605,7 @@ def check_shape(target: Path) -> list[CheckResult]:
                     f"reference over {TOC_MIN_LINES} lines has a TOC",
                     f"{n} lines, " + ("TOC found" if has_toc else "no TOC")))
 
-    if _is_portable(body, skill_dir):
+    if _is_portable(body, sidecar_portability):
         results.extend(_portable_citation_checks(skill_md, skill_dir, body))
 
     return results

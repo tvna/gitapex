@@ -23,7 +23,9 @@ SKILLS_DIR = REPO_ROOT / "skills"
 
 # Guards against the discovery silently finding nothing (e.g. a bad REPO_ROOT
 # or a moved skills/ directory) and the test suite then vacuously "passing".
-MIN_EXPECTED_SKILLS = 10
+# There are 17 skills in this repository today; a floor of 10 would tolerate
+# losing 7 of them silently, so the floor is set close to the real count.
+MIN_EXPECTED_SKILLS = 15
 
 
 def _discover_skill_dirs() -> list[pathlib.Path]:
