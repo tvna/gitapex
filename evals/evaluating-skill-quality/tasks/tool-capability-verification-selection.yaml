@@ -1,0 +1,37 @@
+id: evaluating-skill-quality-tool-capability-verification-selection
+name: Monitoring Tool Cannot Attribute a Manual Override to an Actor
+description: A different domain and a different tool from the train fixture -- the target's procedure claims a metrics-query tool can identify which operator manually triggered a rollback override, when that tool only returns aggregate numeric time-series values with no actor field. The gate measures whether the Tool-capability verification check generalizes to a distinct tool/claim pair rather than memorizing the train fixture's force-push wording.
+tags:
+  - quality
+  - mechanism-fit
+  - tool-capability-verification
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "rollback-incident-review". Is this a good skill?
+
+    ---
+    name: rollback-incident-review
+    description: Review a production rollback incident and identify its root cause. Use when the user asks to review, investigate, or write up a rollback incident.
+    ---
+
+    # Rollback Incident Review
+
+    ## Procedure
+
+    1. Call the monitoring tool's metrics-query subcall, which returns the
+       aggregate request-rate and error-rate time series around the
+       rollback window -- nothing else.
+    2. From that same subcall's output, identify which on-call operator
+       manually triggered the override, since the metrics-query subcall
+       can attribute the rollback to the specific operator who triggered
+       it.
+    3. Write up the root cause and the identified operator in the incident
+       report.
+expected:
+  output_contains:
+    - "Tool-capability verification"
+    - "actor-identity"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"

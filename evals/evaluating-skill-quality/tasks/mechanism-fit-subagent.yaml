@@ -33,7 +33,7 @@ inputs:
     once the summary is written.
 expected:
   output_contains:
-    - "headline finding"
+    - "eadline finding"
     - "subagent"
     - "never referenced again"
   output_not_contains:

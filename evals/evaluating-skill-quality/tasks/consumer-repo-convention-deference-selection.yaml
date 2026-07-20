@@ -1,0 +1,38 @@
+id: evaluating-skill-quality-consumer-repo-convention-deference-selection
+name: PR-Body Step Hardcodes a Fixed Heading Set With No Repo-Convention Fallback
+description: A different domain and a different write-path step from the train fixture (PR body, not issue title/body) -- the target's procedure asserts a fixed PR-body heading set as the one correct shape for any repository, with no fallback to the consumer repository's own PR template. The gate measures whether the new bullet generalizes to a PR-body convention rather than memorizing the train fixture's issue-title wording.
+tags:
+  - quality
+  - portability
+  - consumer-repo-convention-deference
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "dependency-bump-reviewer".
+
+    ---
+    name: dependency-bump-reviewer
+    description: Review an automated dependency-bump pull request and summarize the risk. Use when the user asks to review or summarize a dependency-bump PR.
+    ---
+
+    **Portability: Portable.** Self-contained -- carries its own risk
+    checklist and cites no repository-specific tooling.
+
+    # Dependency Bump Reviewer
+
+    ## Procedure
+
+    1. Diff the lockfile to identify every changed package and version.
+    2. Check each changed package's changelog for breaking changes.
+    3. Post a review comment. Every review comment this skill posts must
+       use exactly these two headings, in this order: `## Risk summary`
+       and `## Recommended action` -- this is the correct shape for a
+       dependency-bump review in any repository, so always use it as
+       written.
+expected:
+  output_contains:
+    - "asserts its convention unconditionally"
+    - "hardcod"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"
