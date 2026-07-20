@@ -65,7 +65,8 @@ in a Portable-declared skill -- asserting a fixed answer either way (that
 it is always backed, or always prose-only) would itself be a defect,
 since the true answer depends on wherever the skill happens to be
 running. Dated development history of how this boundary's wording
-reached its current state: `docs/skill-eval-status.md`.
+reached its current state, in this repository's own bookkeeping:
+`docs/skill-eval-status.md`.
 
 **Skill-step vs. bundled script**: passes. This skill's own deterministic
 shape lane was delegated to `scripts/check_skill_shape.py`, so applying
@@ -233,7 +234,8 @@ it is a materialized instance of exactly the trend the original note
 flagged as a risk to watch, not merely a hypothetical anymore, and should
 be actively re-checked (not assumed still fine) at the next edit rather
 than treated as settled by this one clean check. Line-count history and
-which specific edits contributed: `docs/skill-eval-status.md`.
+which specific edits contributed, in this repository's own bookkeeping:
+`docs/skill-eval-status.md`.
 
 **Update (capability-assumption axis re-grade, Broad):** this skill now
 declares `capabilityAssumption: Broad` in its `metadata/gitapex.yaml`
@@ -376,7 +378,8 @@ pass/fail check, not a plan -> validate -> execute batch pattern.
 
 ### 8. Behavioural evidence
 
-Unmeasured for pass/fail, not skipped: as of this snapshot, `evals/evaluating-skill-quality/eval.yaml`
+Unmeasured for pass/fail, not skipped: as of this snapshot, this
+repository's own `evals/evaluating-skill-quality/eval.yaml`
 is committed, but no baseline-vs-no-skill comparison has been run against
 it (per Anthropic's evaluation-driven-development standard, dimension 8's
 primary bar). Mechanism-present, baseline-unmeasured -- the same gap named
@@ -405,10 +408,11 @@ does not meet the letter of the discipline this dimension names.
 **Update (held-out gate discipline applied, multiple iterations):** this
 gap has since been closed for several specific edits to this skill, not
 retroactively for its whole authoring history -- each time via a
-documented held-out train/selection/test split
-(`evals/evaluating-skill-quality/split.md`), scored before and after with
-`skills/scorer-gated-skill-edits/scripts/score_contract.py`, requiring a strict
-improvement (ties rejected) before the edit was kept. That is real,
+documented held-out train/selection/test split, recorded in this
+repository's own `evals/evaluating-skill-quality/split.md`, scored
+before and after with
+`skills/scorer-gated-skill-edits/scripts/score_contract.py`, requiring a
+strict improvement (ties rejected) before the edit was kept. That is real,
 repeated instances of this discipline applied to this skill, not evidence
 every earlier edit went through it -- the paragraph above still
 accurately describes the many edits that did not. One of these gates also
@@ -487,7 +491,8 @@ against whatever environment it actually runs in, rather than asserting
 a fixed answer -- the correct portable posture for a Portable-declared
 skill, since a hardcoded "yes, backed" claim would itself be a defect
 once vendored somewhere with no such hook. Development history of how
-this boundary's wording reached this state: `docs/skill-eval-status.md`.
+this boundary's wording reached this state, in this repository's own
+bookkeeping: `docs/skill-eval-status.md`.
 
 **Well-formed**, and now **mature** -- diverging here from the
 `explaining-the-work` verdict (which stayed *not yet mature*), because
@@ -607,8 +612,8 @@ specific gaps in a target it had never seen framed by any prior
 conversation. What this single run does not establish: cross-model
 behavior, or whether isolation measurably changes verdicts relative to a
 main-thread run on the *same* target with prior framing (that A/B
-comparison is future work, named rather than assumed -- see
-`docs/skill-eval-status.md`).
+comparison is future work, named rather than assumed -- see this
+repository's own `docs/skill-eval-status.md`).
 
 ## References
 

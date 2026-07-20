@@ -726,6 +726,7 @@ def test_non_portable_skill_skips_citation_scan(tmp_path):
     names = _by_name(css.check_shape(d))
     assert "portable-no-issue-citation" not in names
     assert "portable-no-repo-path-citation" not in names
+    assert "portable-no-unhedged-inline-path-citation" not in names
 
 
 def test_portable_citation_in_reference_file_fails(tmp_path):
@@ -767,12 +768,143 @@ def test_wrapped_mixed_marker_still_skips_citation_scan(tmp_path):
     names = _by_name(css.check_shape(d))
     assert "portable-no-issue-citation" not in names
     assert "portable-no-repo-path-citation" not in names
+    assert "portable-no-unhedged-inline-path-citation" not in names
+
+
+# ---- Portable inline-code repo-path citation hedge scan (issue #220) ----
+#
+# #171's illustrative-span exemption treats every inline-code citation as
+# automatically safe. #220's own reported bug is exactly that gap: an
+# inline-code citation of a real origin-repository path
+# (`docs/superpowers/specs/...`) that passed the #171 scan cleanly despite
+# having no hedge explaining it is this repository's own file. These tests
+# cover the negative (no hedge -> still flagged) and positive (an approved
+# hedge phrase -> passes) cases the acceptance criteria call for, plus the
+# two real citations issue #220 names by name.
+
+def test_portable_unhedged_inline_repo_path_fails(tmp_path):
+    # The reported bug's exact shape: a real-looking inline-code citation
+    # with no hedge anywhere nearby.
+    d = _write_raw(tmp_path, _portable_body(
+        "See the design spec: `docs/superpowers/specs/2026-07-20-x.md`."))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-path-citation"]
+    assert result.passed is False
+    assert "docs/superpowers/specs/2026-07-20-x.md" in result.evidence
+
+
+def test_portable_hedged_inline_repo_path_this_repository_passes(tmp_path):
+    # rubric.md's own established phrasing.
+    d = _write_raw(tmp_path, _portable_body(
+        "This repository has also recorded the design spec at "
+        "`docs/superpowers/specs/2026-07-20-x.md`."))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-path-citation"]
+    assert result.passed is True
+
+
+def test_rubric_style_hedge_passes(tmp_path):
+    # Mirrors the exact citation named in issue #220's acceptance criteria
+    # 2: rubric.md's "This repository has also used the same move
+    # informally ..." sentence, confirmed not to false-positive.
+    d = _write_raw(tmp_path, _portable_body(
+        "This repository has also used the same move informally, once, "
+        "to find gaps in its own *skill coverage* rather than in one "
+        "skill's rubric "
+        "(`docs/superpowers/specs/2026-07-15-triage-cluster-design.md`: "
+        '"a Fable-assisted skill-gap analysis").'))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-path-citation"]
+    assert result.passed is True
+
+
+def test_scorer_gated_style_hedge_passes(tmp_path):
+    # Mirrors the exact citation named in issue #220's acceptance criteria
+    # 3: scorer-gated-skill-edits/SKILL.md's added-in-#217 hedge.
+    d = _write_raw(tmp_path, _portable_body(
+        "This repository has also recorded the design spec for that flag, "
+        "for readers working in this specific repository, at "
+        "`docs/superpowers/specs/2026-07-20-judge-mode-scorer-design.md`; "
+        "a vendored copy of this skill has no such file and does not "
+        "need one."))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-path-citation"]
+    assert result.passed is True
+
+
+def test_calling_repository_hedge_passes(tmp_path):
+    # The opposite direction: a generic, illustrative path name for
+    # whatever repository the skill lands in, matching
+    # establishing-ubiquitous-language's own phrasing.
+    d = _write_raw(tmp_path, _portable_body(
+        "Record the winning term in the calling repository's own "
+        "glossary doc (e.g. `docs/glossary.md`)."))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-path-citation"]
+    assert result.passed is True
+
+
+def test_target_repository_hedge_passes(tmp_path):
+    d = _write_raw(tmp_path, _portable_body(
+        "Check the target repository for an eval mechanism -- for a "
+        "Claude Code target, that's an `evals/evals.json` file."))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-path-citation"]
+    assert result.passed is True
+
+
+def test_gitapex_hedge_passes(tmp_path):
+    d = _write_raw(tmp_path, _portable_body(
+        "gitapex's own repository does not currently have a "
+        "`docs/adr/` directory."))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-path-citation"]
+    assert result.passed is True
+
+
+def test_hedge_in_different_paragraph_does_not_count(tmp_path):
+    # Bounded distance, not whole-document: a hedge phrase two paragraphs
+    # away must not exempt an unrelated citation in its own paragraph.
+    d = _write_raw(tmp_path, _portable_body(
+        "This repository has also recorded some background context "
+        "elsewhere.\n\n"
+        "See the design spec: `docs/superpowers/specs/2026-07-20-x.md`."))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-path-citation"]
+    assert result.passed is False
+
+
+def test_hedge_wrapped_across_lines_within_paragraph_counts(tmp_path):
+    # A hedge phrase that Markdown line-wraps across two lines of the same
+    # paragraph must still be found -- whitespace is normalized before the
+    # search, matching how the real establishing-ubiquitous-language
+    # citation is actually wrapped in the repository.
+    d = _write_raw(tmp_path, _portable_body(
+        "Record the winning term in the calling\n"
+        "repository's own glossary doc (e.g. `docs/glossary.md`)."))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-path-citation"]
+    assert result.passed is True
+
+
+def test_fenced_inline_repo_path_still_excluded_from_hedge_scan(tmp_path):
+    # A citation inside a fenced code block stays exempt unconditionally
+    # (issue #171 acceptance criterion 3) -- this new, narrower check must
+    # not reopen that case.
+    d = _write_raw(tmp_path, _portable_body(
+        "Bad-example target content under review:\n\n"
+        "```\nsee `docs/superpowers/specs/2026-07-20-x.md`\n```"))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-path-citation"]
+    assert result.passed is True
+
+
+def test_unhedged_inline_repo_path_in_reference_file_fails(tmp_path):
+    # The scan covers references/*.md, not just SKILL.md, and labels the
+    # file, matching the other two Portable citation checks.
+    d = _write_raw(tmp_path, _portable_body("Clean body."),
+                   references={"notes.md":
+                               "See `docs/superpowers/specs/x.md` for context.\n"})
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-path-citation"]
+    assert result.passed is False
+    assert "references/notes.md:`docs/superpowers/specs/x.md`" in result.evidence
 
 
 # ---- Portability source precedence: sidecar first, body marker as fallback ----
 
 _CITATION_CHECKS = ("portable-no-issue-citation",
-                    "portable-no-repo-path-citation")
+                    "portable-no-repo-path-citation",
+                    "portable-no-unhedged-inline-path-citation")
 
 
 def _write_sidecar(skill_dir, portability):

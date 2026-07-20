@@ -74,6 +74,25 @@ Checks (the canonical list -- the manual fallback is to apply these):
     rubric's dimension-6 Portable-skill rule; the semantic judgment of
     whether a citation is illustrative context vs. the skill's own
     bookkeeping stays with that model-judged dimension.
+  - Portable inline-code repo-path citation without a hedge (issue #220,
+    narrowing the blind spot the exemption above leaves open): treating
+    every inline-code path citation as automatically illustrative was
+    itself the gap -- an inline-code `evals/...`/`docs/...` citation reads
+    exactly as authoritative as a bare-prose one to a reader who has no
+    way to tell "illustrative example" from "this repository's own real
+    file" from the backticks alone. This check re-inspects exactly the
+    inline-code spans the bare-prose scan above deliberately skips, and
+    fails one that has no approved hedge phrase (HEDGE_PHRASES) anywhere
+    in the same Markdown paragraph -- this repository's own established
+    convention for marking such a citation as deliberate rather than a
+    dangling self-reference (see e.g. rubric.md's "This repository has
+    also used ..." and scorer-gated-skill-edits/SKILL.md's "This
+    repository has also recorded ..."). Fenced code blocks stay exempt
+    unconditionally, as the module docstring above already covers -- this
+    check never runs on blocks, only on inline code, since a worked
+    example's illustrative fenced output is a different, already-settled
+    case (issue #171 acceptance criterion 3) that this issue does not
+    reopen.
 
 Usage:
   python3 check_skill_shape.py <skill-dir-or-SKILL.md>
@@ -196,6 +215,32 @@ BARE_URL_RE = re.compile(r"[a-zA-Z][a-zA-Z0-9+.\-]*://[^\s>)\]]+")
 MD_INLINE_LINK_RE = re.compile(r"\[[^\]]*\]\([^)]*\)")
 MD_REF_LINK_RE = re.compile(r"\[[^\]]*\]\[[^\]]*\]")
 MD_REF_DEF_RE = re.compile(r"^\s{0,3}\[[^\]]+\]:\s.*$")
+
+# Approved hedge phrases for the inline-code repo-path citation check (issue
+# #220). Matched case-insensitively as a plain substring anywhere in the
+# same Markdown paragraph as the citation -- not a word-boundary regex, so a
+# longer phrase already in use (e.g. "this repository's own", "this
+# repository specifically", "this repository has also", "this repository
+# provides") is covered by the shorter "this repository" entry without a
+# separate one for each variant. Two directions both count as hedged, and
+# both are already this repository's own established phrasing, not
+# invented for this check: "this repository" / "gitapex" marks a citation
+# as a deliberate, known-real reference to this specific repository's own
+# file (rubric.md's "This repository has also used ...", worked-example-
+# explaining-the-work.md's "gitapex's own repository does not currently
+# have ..."); "the calling repository" / "the target repository" marks the
+# opposite -- a generic illustrative path name for whatever repository the
+# skill lands in or reviews, not a claim that this repository has that file
+# (establishing-ubiquitous-language's "the calling repository's own
+# glossary doc", rubric.md's "Check the target repository for an eval
+# mechanism"). Either direction defeats the same blind spot: a reader can
+# no longer mistake the citation for an unexplained dangling self-reference.
+HEDGE_PHRASES = (
+    "this repository",
+    "the calling repository",
+    "the target repository",
+    "gitapex",
+)
 
 
 @dataclass(frozen=True)
@@ -653,6 +698,29 @@ def _is_portable(body: list[str], sidecar: SidecarPortability) -> bool:
     return False
 
 
+def _blank_fenced_blocks(body_text: str) -> str:
+    """Return ``body_text`` with every fenced code block's lines (the
+    fence markers themselves included) replaced by empty lines, preserving
+    line count and every other line verbatim.
+
+    Shared by ``_strip_illustrative_spans`` (which goes on to also strip
+    inline code, URLs, and links) and ``_inline_repo_path_offenders``
+    (which deliberately keeps inline code intact, since it inspects
+    exactly those spans) -- both need fenced blocks excluded the same way,
+    since a fenced code block is "already illustrative" regardless of
+    which citation shape is being scanned for.
+    """
+    out: list[str] = []
+    in_fence = False
+    for line in body_text.splitlines():
+        if FENCE_RE.match(line):
+            in_fence = not in_fence
+            out.append("")
+            continue
+        out.append("" if in_fence else line)
+    return "\n".join(out)
+
+
 def _strip_illustrative_spans(body_text: str) -> str:
     """Return ``body_text`` with every span that quotes a token
     illustratively or externally removed, leaving only bare prose.
@@ -666,15 +734,7 @@ def _strip_illustrative_spans(body_text: str) -> str:
     running prose -- the shape the historical incidents took.
     """
     out: list[str] = []
-    in_fence = False
-    for line in body_text.splitlines():
-        if FENCE_RE.match(line):
-            in_fence = not in_fence
-            out.append("")
-            continue
-        if in_fence:
-            out.append("")
-            continue
+    for line in _blank_fenced_blocks(body_text).splitlines():
         if MD_REF_DEF_RE.match(line):
             out.append("")
             continue
@@ -684,6 +744,47 @@ def _strip_illustrative_spans(body_text: str) -> str:
         stripped = MD_REF_LINK_RE.sub(" ", stripped)
         out.append(stripped)
     return "\n".join(out)
+
+
+def _inline_repo_path_offenders(body_text: str) -> list[str]:
+    """Return each inline-code ``evals/``/``docs/`` path citation in
+    ``body_text`` that has no approved hedge phrase (see ``HEDGE_PHRASES``)
+    anywhere in its own Markdown paragraph (see the module docstring's
+    issue #220 entry for the rationale).
+
+    Paragraph-bounded rather than sentence-bounded: a Markdown paragraph
+    (a run of contiguous non-blank lines, as ``references/`` files'
+    TOC_MIN_LINES handling already treats structurally) is this module's
+    existing unit for "the same piece of running prose," and reusing it
+    here avoids a second, sentence-tokenizing heuristic that would need to
+    handle abbreviations, bold/link markup, and mid-sentence inline code
+    reliably. A paragraph is still a bounded distance, not the whole file
+    -- an unrelated hedge two paragraphs away does not count -- so a
+    dangling self-citation like the one issue #220 reports (no hedge
+    anywhere nearby) is still caught. Whitespace inside a paragraph is
+    normalized to single spaces before the hedge search, since Markdown
+    line-wraps a hedge phrase across lines exactly as often as it wraps
+    any other prose (e.g. "the calling\\n   repository's own").
+    Fenced code blocks are excluded first via ``_blank_fenced_blocks``,
+    same as the bare-prose scan -- a citation inside a fenced illustrative
+    example never reaches this check, matching the module docstring's
+    "fenced code blocks stay exempt unconditionally" note. Order-preserving
+    and deduplicated, matching ``_portable_citation_offenders``.
+    """
+    offenders: list[str] = []
+    defenced = _blank_fenced_blocks(body_text)
+    for para in re.split(r"\n\s*\n", defenced):
+        if not para.strip():
+            continue
+        normalized = re.sub(r"\s+", " ", para)
+        citations = [m.group(0) for m in INLINE_CODE_RE.finditer(normalized)
+                     if REPO_PATH_CITATION_RE.search(m.group(0)[1:-1])]
+        if not citations:
+            continue
+        hedged = any(phrase in normalized.lower() for phrase in HEDGE_PHRASES)
+        if not hedged:
+            offenders.extend(citations)
+    return _dedup(offenders)
 
 
 def _portable_citation_offenders(body_text: str) -> tuple[list[str], list[str]]:
@@ -989,10 +1090,13 @@ def _portable_citation_checks(skill_md: Path, skill_dir: Path,
 
     issue_hits: list[str] = []
     path_hits: list[str] = []
+    inline_path_hits: list[str] = []
     for label, source_text in sources:
         issues, paths = _portable_citation_offenders(source_text)
         issue_hits += [f"{label}:{c}" for c in issues]
         path_hits += [f"{label}:{c}" for c in paths]
+        inline_path_hits += [f"{label}:{c}"
+                             for c in _inline_repo_path_offenders(source_text)]
 
     return [
         CheckResult(
@@ -1003,6 +1107,13 @@ def _portable_citation_checks(skill_md: Path, skill_dir: Path,
             "portable-no-repo-path-citation", not path_hits,
             "Portable content has no bare-prose origin-repository path citation",
             "none" if not path_hits else "found: " + ", ".join(path_hits)),
+        CheckResult(
+            "portable-no-unhedged-inline-path-citation", not inline_path_hits,
+            "Portable content has no inline-code origin-repository path "
+            f"citation without an approved hedge phrase {HEDGE_PHRASES} "
+            "in the same paragraph",
+            "none" if not inline_path_hits
+            else "found: " + ", ".join(inline_path_hits)),
     ]
 
 

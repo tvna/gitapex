@@ -178,7 +178,9 @@ been split out.
 Pass. No time-sensitive content (no dated API or version reference). No
 external tool or package dependency, so the "state the install step" rule
 does not apply. No MCP tool is referenced. The one path in the skill,
-`docs/adr/NNNN-*.md` (line 24), uses forward slashes.
+`docs/adr/NNNN-*.md` (line 24, the same template destination gitapex's own
+repository does not yet have, per Portability level above), uses forward
+slashes.
 
 ### 7. Bundled scripts
 
