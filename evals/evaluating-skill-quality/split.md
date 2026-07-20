@@ -1150,3 +1150,89 @@ reported including one sample that reasoned to the same underlying finding
 via a different, pre-existing check, three fixture-assertion bugs found
 and fixed before any score was banked, and the pre-edit/post-edit race
 condition caught and corrected before it could contaminate the gate.
+
+**Correction (found by external review, an adversarial-verification pass
+run against this PR by a Fable-model subagent instructed to refute, not
+confirm, the change):** four defects, none individually flipping the
+verdict, all fixed before merge.
+
+1. **Undisclosed fourth assertion edit.** The disclosure paragraph above
+   named three fixed assertions but omitted a fourth: `edge.yaml`'s
+   `"never delete production data"` was also loosened to
+   `"delete production data"` during the same gate run, for the identical
+   reason (the confirmed-live after-transcript quoted the target's own
+   Stop boundary with a capital "Never," which the original lowercase
+   assertion missed). The fix was correct; failing to list it in this
+   file's own disclosure was not. Recorded here now, and the omission
+   itself is the finding -- a gate record that silently drops one of its
+   own corrections is not a complete record, independent of whether the
+   dropped correction was individually sound.
+2. **A brittle positive assertion.** `tool-capability-verification-
+   selection.yaml`'s `"actor"` assertion is satisfied by `"factor"` /
+   `"contributing factor"` -- idiomatic vocabulary in this fixture's own
+   root-cause-analysis domain -- which a wrong-direction or off-topic
+   response could trip by accident. Tightened to `"actor-identity"`
+   (confirmed present in the same live sample that motivated the original
+   choice, confirmed absent from both before-samples and the other
+   after-sample); the recorded 0.500000/0.875000 scores above are
+   unchanged by this tightening, since the assertion narrows a match that
+   was already present or already absent in every transcript scored.
+3. **Rubric-text portability wording.** The new Dimension 6 bullet said
+   "this origin repository" (a demonstrative that, read literally in a
+   vendored copy, either dangles or narrows the check to conventions
+   matching the rubric's own host) and left its Fail criterion unscoped by
+   Portable/Repository-scoped, unlike the adjacent issue/PR-number
+   citation bullet, which scopes explicitly in its own lead sentence. Both
+   fixed in `references/rubric.md`: reworded to "the origin repository"
+   matching the sibling bullet, explicit Portable-only scoping added to
+   the lead sentence, and an explicit Repository-scoped carve-out added
+   (a skill that has declared itself Repository-scoped is not asking this
+   bullet to excuse it -- that declaration is exactly what it means to
+   hardcode this repository's own convention on purpose). Neither fix
+   changes any already-recorded score: no scored fixture's target declares
+   Repository-scoped, and none of the live transcripts depended on the
+   demonstrative's exact wording.
+4. **Missing citation-status label.** The Mechanism fit section's own
+   intro promises "the primary source and the reasoning behind each
+   check," and `SKILL.md`'s Tool-capability verification bullet promises a
+   citation in `rubric.md` that the new subsection did not carry. Fixed by
+   adding the same disclosure this file already uses for its other
+   non-Anthropic-sourced check (the isolation-for-neutrality trigger,
+   "labelled here as this repository's own reasoned extension rather than
+   an Anthropic-sourced claim"). Also added: an explicit instruction for
+   when the named tool's schema is genuinely unreachable from a review
+   (say so, rather than silently guessing at the claim's truth either
+   way), closing a real gap the adversarial pass found -- both gating
+   fixtures name fictional tools whose schema this review cannot actually
+   fetch, and the check as first drafted gave no instruction for that
+   case.
+
+**Named, not fixed -- an open, structural limitation of this gate as run,
+not unique to this iteration:** the same adversarial pass argued the
+selection-split improvement here leans heavily on citation vocabulary
+(does the after-transcript name the new check/bullet) rather than fully
+isolating "the review now catches a defect it previously missed" from
+"the review now has new words available to quote." This is a real
+property of how every prior iteration in this log has also built its
+gating fixtures (a new check's own fixture is, by construction, scored
+0 on the phrases that check introduces before the check exists) --
+this iteration does not introduce the pattern, but it does not escape it
+either. The disclosed 0.500000 sample for
+`consumer-repo-convention-deference-selection.yaml` is the sharpest
+concrete instance: it is genuine evidence the underlying defect was
+*already* reachable via the pre-existing Skill-vs-hook check on one live
+run, which both argues the new bullet's marginal detection contribution
+on that specific target is unproven, and argues the fixture measures which
+check gets cited rather than whether the defect was found at all -- both
+readings are true at once, and this file records both rather than picking
+the more favorable one. No fix to this file's fixture-authoring pattern is
+attempted here; that is a change to `scorer-gated-skill-edits`' own
+authoring guidance, out of scope for a single skill-content iteration, and
+is instead the subject of a tracked follow-up (see the post-merge
+retrospective for this PR).
+
+**KEEP stands** after the corrections above: none of the four bugs
+found changes any recorded before/after score, the named structural
+limitation is disclosed rather than concealed, and the rubric-text and
+citation fixes strictly improve the shipped content without touching the
+scored fixtures' assertions in a way that would change the table.

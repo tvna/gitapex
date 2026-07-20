@@ -387,7 +387,11 @@ target chose the right kind of artifact, or the right model/effort tier,
 but whether a claim the target's own content makes about what a named tool
 or MCP subcall *can do* is actually true. A Stop boundary or guardrail step
 is only as sound as the tool capability it leans on, and a plausible-
-sounding claim is not evidence the cited tool actually supports it.
+sounding claim is not evidence the cited tool actually supports it. Labelled
+here as this repository's own reasoned extension rather than an
+Anthropic-sourced claim, the same disclosure the isolation-for-neutrality
+trigger above already uses for content this file did not ground in [steering]
+or another primary source.
 
 **Applicability.** Fires when the target's content asserts that calling a
 specific tool or MCP subcall detects, verifies, enforces, or reconstructs
@@ -411,7 +415,10 @@ force-push overwrites the prior ref, so a subcall that lists a pull
 request's current commits cannot, from that call alone, tell whether an
 earlier commit was silently replaced. Distinguish what a tool call
 *observes now* from what a claim assumes it can *reconstruct after the
-fact*.
+fact*. When the named tool is internal, unpublished, or otherwise has no
+schema or docs reachable from this review, say that explicitly rather than
+guessing at the claim's truth either way -- the same "never silently skip"
+discipline dimension 8 already applies to an unmeasured baseline.
 
 **Fail:** the target states or implies a tool subcall can detect, verify,
 or reconstruct something its schema or documentation does not support --
@@ -801,21 +808,25 @@ one read.
   for other content. Route dated, issue-linked history to the origin
   repository's own status documentation (e.g. a `docs/`-level eval or
   change log) instead of a worked example inside the skill's own folder.
-- A skill's issue-filing or PR-body step must not hardcode this origin
-  repository's own title format, body template, or workflow-ordering rule
-  (e.g. "always open a tracking issue before any branch," or one fixed
-  PR-body heading set) as if it were universal. That convention belongs to
-  whichever consumer repository the skill actually runs in -- a
-  Portable-declared skill's write-path content should read as a
-  conditional default with an explicit fallback ("substitute the calling
-  repository's actual convention where it differs"), not as the one
-  correct shape asserted flatly. Distinct from the issue/PR-number
-  citation bullet above: that one bans citing a *specific* number; this
-  one bans hardcoding a *convention* or *ordering rule* as if no consumer
-  repository's variant could exist. Pass: the skill states its own
-  convention as an illustrative default with a stated fallback to the
-  consumer repository's real convention. Fail: the skill asserts its
-  convention unconditionally, with no such fallback.
+- Inside content declared (or read as) **Portable** (mirroring the
+  issue/PR-number citation bullet's own scoping): a skill's issue-filing or
+  PR-body step must not hardcode the origin repository's own title format,
+  body template, or workflow-ordering rule (e.g. "always open a tracking
+  issue before any branch," or one fixed PR-body heading set) as if it were
+  universal. That convention belongs to whichever consumer repository the
+  skill actually runs in -- a Portable skill's write-path content should
+  read as a conditional default with an explicit fallback ("substitute the
+  calling repository's actual convention where it differs"), not as the one
+  correct shape asserted flatly. A skill declared (or read as)
+  Repository-scoped is not held to this bullet: hardcoding this
+  repository's own convention is exactly what that declaration means to
+  say explicitly. Distinct from the issue/PR-number citation bullet above:
+  that one bans citing a *specific* number; this one bans hardcoding a
+  *convention* or *ordering rule* as if no consumer repository's variant
+  could exist. Pass: the skill states its own convention as an
+  illustrative default with a stated fallback to the consumer repository's
+  real convention. Fail: the skill asserts its convention unconditionally,
+  with no such fallback.
 - For a skill declared (or read as) **Portable** (see
   [Portability level](#portability-level)): no procedural step reads,
   cites as authority, or branches on a path outside the skill's own
