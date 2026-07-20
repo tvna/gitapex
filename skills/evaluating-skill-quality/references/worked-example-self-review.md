@@ -235,6 +235,27 @@ be actively re-checked (not assumed still fine) at the next edit rather
 than treated as settled by this one clean check. Line-count history and
 which specific edits contributed: `docs/skill-eval-status.md`.
 
+**Update (capability-assumption axis re-grade, Broad):** this skill now
+declares `capabilityAssumption: Broad` in its `gitapex_metadata.yaml`
+sidecar, so this dimension is graded under the Broad bullet of
+[rubric.md's Capability assumption](rubric.md#capability-assumption)
+section: explanation that would be redundant for a strong model "is not
+automatically sprawl or duplication when the declared target plausibly
+still needs it," while relevance, duplication, sediment, and true sprawl
+"still fail ... exactly as before." Applied to the watch-point above,
+Broad does **not** change the verdict, because the watch-point's live
+axis is *duplication* ("restating the same instruction in two places"),
+which the Broad bullet explicitly does not excuse. Broad only bears on
+the *length* half of the earlier unease: rationale-heavy growth (the
+SkillOpt disciplines, the three `waza` divergences with source citations)
+is not sprawl-by-length-alone under Broad, since a weak or economical
+target plausibly still needs that spelled-out rationale. So Broad
+*reinforces* the existing no-current-violation read on the length axis
+while leaving the duplication watch-point -- the finding's real content
+-- fully in force. Re-walked live via a fresh isolated subagent dispatch
+per `SKILL.md`'s Subagent dispatch section, against the current files on
+disk, not by inference.
+
 ### 3. Degree of freedom
 
 Pass. The deterministic-shape checklist is low-freedom (exact fields,
@@ -246,6 +267,20 @@ sits at medium freedom: two named categories plus a documented mixed
 case, not an open-ended judgment and not a rigid binary flag either --
 appropriate for a call that is real but has a small number of legitimate
 answers.
+
+**Update (capability-assumption axis re-grade, Broad):** graded under the
+Broad bullet of [rubric.md's Capability assumption](rubric.md#capability-assumption)
+section, which forgives a narrower-than-strictly-necessary prescription
+(low-freedom phrasing for a task a stronger model could handle with open
+judgment "is not on its own a finding") but "never excuses
+under-constraining a fragile step." Neither lever moves the verdict here:
+the low-freedom content (the deterministic-shape checklist) is matched to
+genuinely script-checkable facts -- which dimension 3 says should be
+low-freedom for every tier regardless -- so there is no
+over-constrained-for-a-strong-model step for Broad's leniency to act on;
+and the walk finds no loose prose over a fragile, irreversible operation
+for the never-excused direction to catch. **Unchanged: clean Pass.**
+Confirmed on the live subagent re-walk described above.
 
 ### 4. Clarity and structure
 
@@ -286,6 +321,22 @@ Contract discipline -- are checkable from `SKILL.md` alone; only step 4
 the same "cheapest level that still makes it available" test dimension 5
 itself states, applied to the precondition/postcondition split from
 Contract discipline rather than only to dimension content.
+
+**Update (capability-assumption axis re-grade, Broad -- no-op, stated
+explicitly):** the capability-assumption axis is applied here for
+completeness, not silently skipped, precisely so the no-op is on the
+record. Per [rubric.md's Capability assumption](rubric.md#capability-assumption)
+section, dimension 5 is the "Adaptive only" case: "Broad and Frontier
+leave this dimension's grading completely unchanged ... neither gives
+this dimension a new rule to apply." This skill declares **Broad**, not
+Adaptive, so the axis adds nothing here: the Pass above stands verbatim,
+earned entirely on the tier-independent split-is-real-and-reachable
+question (both worked examples one level deep, linked from `SKILL.md`,
+each with a TOC past 100 lines; the Portability definitions moved into
+`SKILL.md` so steps 1-3 are checkable without opening `rubric.md`). Had
+the declaration been Adaptive, this is where the body-leanness-vs-deferred-
+depth claim would get checked -- but it is not, so there is deliberately
+no new finding.
 
 ### 6. Durability
 
@@ -391,6 +442,43 @@ copy in a different repository, and no run under a different harness
 Portability level section above is designed to reduce the *risk* of, but
 risk reduction is not the same claim as measured transfer success.
 
+**Update (capability-assumption axis re-grade, Broad -- framing
+correction, not a verdict flip):** this is the one dimension of the four
+the axis actually re-grades, so it is recorded as real evidence rather
+than forced back into the prior shape. Under the Broad bullet of
+[rubric.md's Capability assumption](rubric.md#capability-assumption)
+section, "the full Haiku/Sonnet/Opus spread applies as written: the skill
+must give a weak tier *enough* guidance, and failing to do so is a real,
+gradeable **gap, not an unmeasured one**." That splits the blanket
+"Unmeasured, not skipped" verdict above into two questions that Broad
+grades differently:
+
+- **Weak-tier guidance adequacy -- now gradeable, and it Passes.** Broad
+  forbids parking this sub-question under "unmeasured": whether the skill
+  supplies a weak tier enough scaffolding is a *static* read the reviewer
+  must render from the text, without running Haiku. Rendered here, it
+  Passes -- the judgment-bearing content lives in the detailed,
+  rationale-rich `references/rubric.md`, which plausibly gives a weak tier
+  the scaffolding the lean `SKILL.md` body alone would not. (The same
+  reference depth dimension 2 watches for length is, on this axis, an
+  asset.) The original subsection already gestured at this when it noted
+  the prose judgment calls are "the shape most likely to need *more*
+  guidance on Haiku" -- Broad turns that informal read into an affirmative
+  Pass rather than a deferral.
+- **Model-differential run and transfer testing -- still honestly
+  unmeasured.** Broad does not manufacture measured data: no
+  Haiku/Sonnet/Opus A/B differential has been run, and no vendored-copy or
+  alternate-harness transfer has been observed. These remain unmeasured
+  exactly as stated above, and dimension 9's own text permits saying so.
+
+Net effect: dimension 9's own outcome does **not** flip to a failure
+under Broad -- it stays Pass-shaped, and dimension 9 is still one of the
+two dimensions the overall Verdict names as carrying unmeasured facets.
+What changes is precision: the earlier flat "Unmeasured, not skipped" was
+slightly overbroad under Broad, filing a gradeable adequacy question
+under "unmeasured" when Broad requires it be graded (and it Passes).
+Established on the live subagent re-walk, not by inference.
+
 ## Verdict
 
 **Mechanism fit**: good fit overall. The one safety-adjacent Stop
@@ -401,19 +489,57 @@ skill, since a hardcoded "yes, backed" claim would itself be a defect
 once vendored somewhere with no such hook. Development history of how
 this boundary's wording reached this state: `docs/skill-eval-status.md`.
 
-**Well-formed**, and not yet **mature** -- the same shape as the
-`explaining-the-work` verdict, for different reasons. Dimensions 1
-(after the description fix), 3, 4, 5, 6 (after the two portability
-fixes), and 7 (applicable -- this skill ships `check_skill_shape.py`;
-clears cleanly after the constant-comment fix) all clear cleanly with
-cited evidence; dimensions 8 and 9 are explicitly named as unmeasured
-rather than silently assumed,
-satisfying rubric.md's Verdicts allowance for 8-9 specifically. Dimension
-2 carries a forward-looking watch-point (file growth over one long
-session) rather than a current named gap, so it does not by itself block
-mature the way an uncleared 1-7 gap would -- but it is close enough to
-the line that the next edit to `rubric.md` should re-check it rather than
-assume it still holds.
+**Well-formed**, and now **mature** -- diverging here from the
+`explaining-the-work` verdict (which stayed *not yet mature*), because
+this skill's dimension 1-7 gaps were each fixed during this same review
+rather than left standing. Dimensions 1 (after the description fix), 3,
+4, 5, 6 (after the two portability fixes), and 7 (applicable -- this
+skill ships `check_skill_shape.py`; clears cleanly after the
+constant-comment fix) all clear cleanly with cited evidence; dimensions 8
+and 9 are explicitly named as unmeasured rather than silently assumed,
+which rubric.md's Verdicts section allows for 8-9 specifically without
+blocking mature. Dimension 2 carries a forward-looking watch-point (file
+growth over one long session) rather than a current named gap, so -- per
+the rubric's own binary, where only a named 1-7 gap blocks -- it does not
+hold the verdict below mature; it is close enough to the line, though,
+that the next edit to `rubric.md` should re-check it rather than assume
+it still holds. The "Mixed" grade and "not a clean pass by default"
+wording in dimension 2's own subsection denote exactly this
+forward-looking watch-point -- not a rubric "minor gap," which under
+rubric.md's Verdicts rule ("a 'minor' gap still means that dimension has
+not cleared") would leave the dimension uncleared and block mature. That
+distinction is load-bearing here: dimension 2's subsection reaches the
+explicit conclusion "not a current violation," so under the rubric's
+binary it clears, and the "Mixed"/"not a clean pass" language reports the
+two-sided observation (tight body, grown reference) plus a note to
+re-check, not a present, mature-blocking gap. This "mature" is the bounded kind rubric.md defines: it
+clears everything this repository's tooling can check today, not a claim
+of proven behaviour -- precisely because dimensions 8 and 9 remain
+named-unmeasured rather than passed. (An earlier draft of this verdict
+read "not yet mature" while simultaneously asserting every one of these
+same clear-1-7-plus-named-8-9 conditions -- a verdict that contradicted
+its own governing rubric; corrected here to the verdict those conditions
+actually entail.)
+
+**Update (capability-assumption axis re-grade, Broad):** this skill's
+`Broad` declaration has since been re-walked against dimensions 2, 3, 5,
+and 9 (the four the axis calibrates) via the live subagent dispatch
+recorded in each subsection above. No dimension flips to a failure under
+Broad: 2, 3, and 5 keep their prior reads (5 by the axis's own documented
+no-op for Broad), and 9 keeps its Pass-shaped outcome. The one
+substantive per-dimension change is a framing correction inside dimension
+9: Broad requires the weak-tier "enough guidance?" question be graded (it
+Passes on the strength of the detailed `references/rubric.md`) rather than
+filed under "unmeasured," while the model-differential run and transfer
+testing stay honestly unmeasured -- so the "8 and 9 unmeasured" allowance
+the verdict rests on still holds for dimension 9's measured-transfer facet
+specifically, now stated more precisely than the earlier blanket did.
+Separately from the Broad walk, the headline verdict above was reconciled
+with rubric.md's Verdicts definition (dimensions 1-7 clear with no named
+gap, plus 8-9 named-unmeasured) and corrected from an earlier "not yet
+mature" to **mature**: the Broad re-grade does not itself drive that
+correction, but it confirms none of its four dimensions introduces a
+blocking 1-7 gap that would hold the verdict below mature.
 
 The honest summary: this review found and fixed two real portability
 defects in the artifact it was reviewing (itself), which is a materially
