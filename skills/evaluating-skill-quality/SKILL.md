@@ -77,6 +77,14 @@ have been a different mechanism is not fixed by polishing it further.
   section. Runs at step 2, before the sidecar is read at step 4, and
   stays declaration-independent: the capability-assumption
   declaration-vs-pin cross-check is step 4's job, not this one's.
+- **Tool-capability verification**: when the reviewed skill's own content
+  cites a specific tool or MCP subcall as able to detect, verify, or
+  reconstruct something -- most often inside a Stop boundary or a
+  guardrail step -- check that claim against the tool's actual
+  schema/docs before accepting it; a plausible-sounding capability claim
+  is not evidence the cited tool actually supports it. Also a step-level
+  finding, not a whole-artifact one -- criteria and citation are in
+  `references/rubric.md`'s Mechanism fit section.
 
 Full rationale and citation: [references/rubric.md](references/rubric.md)'s
 Mechanism fit section.

@@ -1,0 +1,38 @@
+id: evaluating-skill-quality-consumer-repo-convention-deference-train
+name: Issue-Filing Step Hardcodes This Repo's Own Title/Body Convention
+description: Motivates the consumer-repo issue/PR-convention deference bullet (Dimension 6) -- the target's issue-filing step asserts a fixed title prefix and a fixed heading set as the correct issue shape for any repository, with no deference to the consumer repository's own issue template or title convention. The review must flag this as a portability defect, not accept the convention as a reasonable default.
+tags:
+  - quality
+  - portability
+  - consumer-repo-convention-deference
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "flaky-test-triage".
+
+    ---
+    name: flaky-test-triage
+    description: Triage a reported flaky test and file a tracking issue for it. Use when the user asks to triage or file an issue for a flaky test.
+    ---
+
+    **Portability: Portable.** Self-contained -- carries its own triage
+    steps and cites no repository-specific tooling.
+
+    # Flaky Test Triage
+
+    ## Procedure
+
+    1. Reproduce the failure three times to confirm it is actually flaky.
+    2. File a tracking issue. Every issue this skill files must be titled
+       exactly `flaky: <test name>` and its body must use exactly these
+       three headings, in this order: `## Repro steps`, `## Failure rate`,
+       `## Suspected cause` -- this is the correct shape for a flaky-test
+       issue in any repository.
+    3. Link the tracking issue in your reply.
+expected:
+  output_contains:
+    - "consumer repository"
+    - "hardcod"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"
