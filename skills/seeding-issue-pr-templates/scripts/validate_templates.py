@@ -136,7 +136,7 @@ def validate_github(repo_root: Path) -> list[str]:
         if data is None:
             continue
         for key in GITHUB_REQUIRED_TOP_KEYS:
-            if key not in data or data[key] in (None, ""):
+            if key not in data or data[key] in (None, "", []):
                 errors.append(f"{form}: missing required key '{key}'")
         body = data.get("body")
         if not isinstance(body, list) or not body:
