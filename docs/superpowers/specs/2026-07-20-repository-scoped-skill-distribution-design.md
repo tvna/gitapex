@@ -1,12 +1,27 @@
 # Repository-scoped skills must not ship in the distributed plugin
 
 **Date:** 2026-07-20
-**Status:** Design, awaiting review (proposal only -- no code/manifest changes
-in this pass)
-**Scope:** Enumerate which of gitapex's 17 skills are unsafe to redistribute
-as-is, and propose a redesign that keeps them usable for gitapex's own
-development without shipping them to consumers of the `gitapex` plugin.
-Issue: #222.
+**Status:** Implemented (superseding an earlier revision of this same spec
+that proposed relocation instead -- see "Revision note" below)
+**Scope:** Enumerate which of gitapex's 17 skills were unsafe to redistribute
+as-is, and rewrite them so every skill in `skills/` is genuinely `Portable`
+(or `Mixed` with an already-isolated repo-specific detail), keeping the
+existing "distribute all of `skills/`" behavior correct instead of carving
+out an exception for it. Issue: #222.
+
+## Revision note
+
+This spec's first revision (committed to the same PR) proposed relocating
+the four `Repository-scoped` skills to `.claude/skills/` and adding a
+`plugin.json` allowlist for the rest. The operator corrected the direction
+before merge: the environment is also installing other skill collections
+(Superpowers, Clairvoyance) for developer experience, `.claude/skills/` is
+explicitly not to be used as the storage mechanism, and the standing premise
+going forward is to make a skill redistributable by rewriting it, not by
+segregating it from distribution, unless a skill is found that genuinely
+cannot be generalized. Section 2's enumeration is unchanged (it was already
+accurate); section 3 below replaces the relocation-plus-allowlist design
+with the generalization actually implemented.
 
 ## 1. Context
 
@@ -29,49 +44,48 @@ mechanized by the `metadata/gitapex.yaml` sidecar from
 - **Mixed** -- a portable core plus repo-specific detail, which should be
   split into a clearly named reference rather than blended.
 
-That taxonomy is checked today only for **honest disclosure**:
-`skills/evaluating-skill-quality/scripts/check_skill_shape.py` (gated in CI
-by `tests/test_repository_skill_shape.py`) fails a skill that behaves as
-Repository-scoped but does not declare it. Nothing reads the declaration to
-decide what actually gets **distributed**. A skill can be perfectly honest
-about depending on gitapex's own conventions and still be installed, as-is,
-into an unrelated repository.
+That taxonomy was checked, before this change, only for **honest
+disclosure**: `skills/evaluating-skill-quality/scripts/check_skill_shape.py`
+(gated in CI by `tests/test_repository_skill_shape.py`) fails a skill that
+behaves as Repository-scoped but does not declare it. Nothing read the
+declaration to decide what actually gets **distributed**. A skill could be
+perfectly honest about depending on gitapex's own conventions and still be
+installed, as-is, into an unrelated repository.
 
 ## 2. Enumeration of targets
 
 All 17 `skills/*/metadata/gitapex.yaml` sidecars were read directly to
-produce this table (2026-07-20).
+produce this table (2026-07-20, before the rewrite in section 3).
 
-### 2a. Repository-scoped (4) -- the actual redistribution risk
+### 2a. Repository-scoped (4, before this change) -- the actual redistribution risk
 
-| Skill | What in it depends on gitapex specifically |
+| Skill | What in it depended on gitapex specifically |
 |---|---|
-| `issue-to-branch` | `references/github-issue-workflow.md`'s write-path rules (tracking-issue-before-branch, connector-first, no-CLI-fallback) are, per the skill's own "Notes" section, "this repository's own git-ecosystem convention." |
-| `outward-artifact-preflight` | Check 1's "agreed disclosure convention" and the `explaining-the-work` coupling name gitapex's own provenance/ASCII policy; the skill's own header says so ("substitute the calling repository's actual policy... where they differ"). |
-| `responding-to-a-fresh-arrival` | Step 3 (Label) reads `.github/ISSUE_TEMPLATE/*.yml` -- this repository's own label source, named as such in the skill's header. |
-| `screening-a-low-trust-contribution` | Checks 1-3 hardcode this repo's own paths (`.github/workflows/**`, `hooks/**`, `skills/*/scripts/**`, gitapex's own dependency manifests), again named as such in the skill's header. |
+| `issue-to-branch` | `references/github-issue-workflow.md`'s write-path rules (tracking-issue-before-branch, connector-first, no-CLI-fallback) were, per the skill's own "Notes" section, "this repository's own git-ecosystem convention." |
+| `outward-artifact-preflight` | Check 1's "agreed disclosure convention" and check 3's ASCII-only rule named gitapex's own provenance/character-set policy with no inline fallback. |
+| `responding-to-a-fresh-arrival` | Step 3 (Label) read `.github/ISSUE_TEMPLATE/*.yml` and the header called this "this repository's own" label source. |
+| `screening-a-low-trust-contribution` | Checks 1-3 hardcoded gitapex's own paths (`.github/workflows/**`, `hooks/**`, `skills/*/scripts/**`, its dependency manifests) with no substitution guidance beyond a header aside. |
 
-Each of these four already states, in its own SKILL.md, that the named part
-is "this repository's own" and that a consumer should "substitute the
-calling repository's actual convention" -- but that is prose inside the
-distributed file, not something enforced before the file reaches the
-consumer. A foreign install either silently misapplies gitapex's own rules,
-or relies on the installing agent noticing and rewriting the skill by hand.
+Each of these four already stated, in its own SKILL.md, that the named part
+was "this repository's own" and that a consumer should "substitute the
+calling repository's actual convention" -- but that was prose in a detached
+header/footer note, not an inline default+fallback next to the instruction
+itself, and the field declared `Repository-scoped` rather than `Portable`.
+Nothing stopped an unrelated consumer from receiving the file as-is.
 
-### 2b. Mixed (4) -- already isolate the repo-specific part, no structural change proposed
+### 2b. Mixed (4) -- already isolate the repo-specific part, no change made
 
 | Skill | Repo-specific part (already isolated to one clause/citation) |
 |---|---|
-| `battle-testing-a-skill` | One "For readers working in this repository (gitapex)" clause in the metadata sidecar's `references`, plus a gitapex issue-number citation (#74) inside `references/adversarial-dimensions.md`. |
+| `battle-testing-a-skill` | One "For readers working in this repository (gitapex)" clause in the metadata sidecar's `references`, plus a gitapex issue-number citation (`#74`) inside `references/adversarial-dimensions.md`. |
 | `explaining-the-work` | "this repository's own" commit-trailer convention, named inline, two spots in `SKILL.md`. |
-| `git-hosting-surface-audit` | Cites gitapex's own CLI-governance issue #82 as a cross-link example. |
+| `git-hosting-surface-audit` | Cites gitapex's own CLI-governance issue `#82` as a cross-link example. |
 | `seeding-issue-pr-templates` | Names gitapex's own `issue-to-branch` convention as one worked example among general steps. |
 
-These four were reviewed as part of this pass and found lower-risk: the
-repo-specific detail is a citation or a single named clause the skill's
-procedure does not depend on to run, matching the "Mixed" definition's intent
-that a portable core is what a consumer actually uses. No relocation is
-proposed for these; flagging them here as reviewed, not overlooked.
+These four were reviewed again under the corrected premise and still found
+appropriately Mixed: the repo-specific detail is a citation or a single named
+clause the skill's procedure does not depend on to run, not a functional
+dependency that needs generalizing. No change made.
 
 ### 2c. Portable (9) -- unaffected
 
@@ -81,126 +95,126 @@ proposed for these; flagging them here as reviewed, not overlooked.
 `untrusted-input-triage`. No repo-specific dependency found in any of these
 sidecars or bodies.
 
-### 2d. The distribution manifest itself
+### 2d. Confirmed: no skill needs to stay repository-internal
 
-- `.claude-plugin/plugin.json` has no `skills` field -- Claude Code defaults
-  to auto-discovering every subdirectory of `skills/` (confirmed against
-  `code.claude.com/docs/en/plugins-reference.md`, "Plugin manifest schema").
-- `.claude-plugin/marketplace.json`'s one plugin entry has `"source": "./"`.
-- No CI workflow (`lint.yml`, `test.yml`, `toolchain-nix.yml`,
-  `waza-check.yml`, `waza-eval-matrix.yml`) filters `skills/` contents before
-  a consumer would fetch them; `tests/test_repository_skill_shape.py` only
-  runs the shape/honesty checker over every `skills/*/`.
+Re-reading all four Repository-scoped skills in full against gitapex's own
+existing rubric bullet for exactly this situation
+(`skills/evaluating-skill-quality/references/rubric.md:811-829`, the
+consumer-repo-convention-deference dimension added in PR #216 / issue #200)
+found no hidden gitapex-only mechanism in any of them -- each cites a
+generic GitHub/git concept (issue-before-branch discipline, GitHub issue
+templates, CI/hook/dependency-manifest paths, ASCII/provenance-disclosure
+policy) that any repository can have its own version of. A repo-wide search
+for exclusivity language ("gitapex CLI", "only gitapex", "specific to
+gitapex", "gitapex itself") turned up nothing beyond `git-hosting-surface-
+audit`'s already-Mixed, already-isolated citation to issue `#82`, which this
+change does not touch. Conclusion: all four generalize; none needed to stay
+repository-only, so no `.claude/skills/`-style segregation was needed.
 
-### 2e. Adjacent finding, explicitly out of scope here
+## 3. Redesign implemented: generalize in place, reclassify to Portable
+
+### 3a. Pattern
+
+Per the rubric bullet cited in 2d, a `Portable` skill's write-path (or
+similar) content should read as **a conditional default with an explicit,
+inline fallback** ("substitute the calling repository's actual convention
+where it differs"), not as the one correct shape asserted flatly, and not
+as a fallback confined to a detached header/footer note. Applied to each of
+the four:
+
+1. **`issue-to-branch`**: `references/github-issue-workflow.md`'s write-path
+   bullet now states the tracking-issue-before-branch rule as this skill's
+   default with an inline fallback clause. The `hooks/check-bash-safety.sh`
+   citations (there and in `SKILL.md`'s Stop boundary) are reframed as one
+   illustrative example of backing enforcement, not an assumed dependency.
+   The `SKILL.md` footer Notes section no longer uses `Repository-scoped`-style
+   framing since the fallback is now inline in the reference file itself.
+2. **`outward-artifact-preflight`**: check 1's "agreed disclosure convention"
+   wording now says "the calling repository" instead of "this repository"
+   (de-anchoring the demonstrative); check 3 (ASCII-only) gained an explicit
+   "default to ASCII-only ... unless the calling repository documents a
+   different character-set policy" clause; the Stop boundary's hook citation
+   was reframed as illustrative, matching #1.
+3. **`responding-to-a-fresh-arrival`**: the header no longer calls
+   `.github/ISSUE_TEMPLATE/*.yml` "this repository's own" (it is a common,
+   not gitapex-exclusive, GitHub convention); Step 3 gained an explicit
+   fallback for a repository with no issue-type label templates; Global
+   constraints' ASCII and hook-citation lines were reframed the same way as
+   #2/#1. The worked example's bare `#142`/`#98` issue-number references
+   were wrapped in inline code spans (`` `#142` ``), matching the convention
+   already used by other Portable skills (e.g. `issue-to-fix`,
+   `ranking-the-open-queue`) so a bare number does not live-autolink once
+   the file is copied elsewhere.
+4. **`screening-a-low-trust-contribution`**: the header and checks 1-3 now
+   name gitapex's own paths as illustrative examples of a generic category
+   (hook/script directories; dependency manifests) with an explicit
+   substitution clause, rather than the definition of the category. The
+   worked example's bare `PR #211` was wrapped in an inline code span for
+   the same reason as #3.
+
+For all four, several other "per this repository's ... rule" asides (about
+treating issue/PR text as untrusted, and about read-only decision
+boundaries) were generalized to plain statements of the underlying
+practice, since the practice itself is not gitapex-specific and the
+"this repository's" framing was an unnecessary, un-generalizable anchor.
+
+`metadata/gitapex.yaml`'s `spec.portability` was changed from
+`Repository-scoped` to `Portable` for all four.
+
+### 3b. Why this, not the relocation approach from the prior revision
+
+The relocation approach (move to `.claude/skills/`, allowlist the rest in
+`plugin.json`) was mechanically sound -- confirmed against Claude Code's own
+docs (`code.claude.com/docs/en/plugin-marketplaces.md`'s "Advanced plugin
+entries" and `code.claude.com/docs/en/skills.md`'s "Where skills live") --
+but the operator ruled it out: it does not fit alongside installing other
+skill collections for developer experience, and it treats a generalizable
+skill as if it were irreducibly repo-only. Since section 2d found no skill
+that actually needs that, generalizing in place is the smaller, more useful
+change: every skill remains a real, working example of a genuinely portable
+procedure, `skills/` continues to mean exactly what
+`docs/repository-layout.md` already says it means, and no manifest or
+directory-layout change was needed at all.
+
+### 3c. Non-goals (still not part of this change)
+
+- No content change to the four Mixed skills (2b) -- their repo-specific
+  detail is already appropriately isolated and does not block distribution.
+- No fix for the hooks-distribution finding below (2e was renumbered out of
+  the main flow; see "Adjacent finding") -- separate follow-up issue.
+- No manifest change: `.claude-plugin/plugin.json` and `marketplace.json`
+  are unchanged, since nothing needs excluding from the default `skills/`
+  scan anymore.
+
+### Adjacent finding, still explicitly out of scope
 
 `hooks/hooks.json` already wires `hooks/check-bash-safety.sh` and
 `hooks/check-template-overwrite.sh` via `$CLAUDE_PLUGIN_ROOT` -- hooks are
 already distributed today, which `docs/repository-layout.md`'s "(and, later,
-hooks)" phrasing does not reflect. `check-bash-safety.sh` and the
-Repository-scoped screening skills both reference this repo's own paths and
-conventions -- the same redistribution-risk class as this spec, but a
-different artifact type (a hook script, not a skill folder) with its own
-manifest surface (`hooks.json`, not `plugin.json`'s `skills` field). Tracked
-here as a pointer for a follow-up issue; not designed or fixed in this pass.
+hooks)" phrasing does not reflect. `check-bash-safety.sh` itself still
+encodes gitapex-only deny rules (`gh issue`/`gh pr` writes, `gh pr merge`).
+Same redistribution-risk class as this spec, different artifact type (a hook
+script, not a skill folder, with its own manifest surface). Tracked here as
+a pointer for a follow-up issue; not designed or fixed in this pass.
 
-## 3. Proposed redesign
+## 4. Verification (performed)
 
-### 3a. Mechanism (confirmed against Claude Code's own docs, not assumed)
-
-Two independently documented Claude Code mechanisms make this a
-relocation-plus-allowlist change, not a rewrite of any skill's content:
-
-1. **Marketplace-root `skills` allowlist replaces, rather than adds to, the
-   default scan.** Per `code.claude.com/docs/en/plugin-marketplaces.md`
-   ("Advanced plugin entries"): when a marketplace plugin entry's `source`
-   resolves to the marketplace root -- gitapex's `"source": "./"` qualifies
-   exactly, per that same section's own example -- explicitly listing
-   specific `skills/<name>` subdirectories in `plugin.json`'s `skills` field
-   makes that list the *complete* set for the entry; every other directory
-   under the shared `skills/` folder stops loading for that plugin's
-   consumers. (Listing `./skills/` itself, or the plugin root, keeps the full
-   scan -- the allowlist must name specific children.)
-2. **Project-local skills are a separate, doc-supported loading path.** Per
-   `code.claude.com/docs/en/skills.md` ("Where skills live"), Claude Code
-   independently auto-discovers skills from `.claude/skills/<name>/SKILL.md`,
-   walked up from the working directory to the repository root -- with no
-   plugin/marketplace install step at all, and unnamespaced (`/skill-name`
-   rather than `/gitapex:skill-name`). This is exactly the mechanism gitapex
-   needs to keep the four Repository-scoped skills firing for anyone working
-   directly in its own tree.
-
-### 3b. The change
-
-1. Relocate the four Repository-scoped skill directories --
-   `issue-to-branch/`, `outward-artifact-preflight/`,
-   `responding-to-a-fresh-arrival/`, `screening-a-low-trust-contribution/` --
-   from `skills/<name>/` to `.claude/skills/<name>/`, unchanged internally
-   (`SKILL.md`, `metadata/gitapex.yaml`, `references/`, `scripts/` as
-   applicable move as a unit; no content rewrite).
-2. Add to `.claude-plugin/plugin.json`:
-   ```json
-   "skills": [
-     "skills/battle-testing-a-skill",
-     "skills/driving-pr-to-merge",
-     "skills/establishing-ubiquitous-language",
-     "skills/evaluating-skill-quality",
-     "skills/explaining-the-work",
-     "skills/git-hosting-surface-audit",
-     "skills/issue-to-fix",
-     "skills/merge-retrospective",
-     "skills/ranking-the-open-queue",
-     "skills/scorer-gated-skill-edits",
-     "skills/seeding-issue-pr-templates",
-     "skills/stop-and-replan",
-     "skills/untrusted-input-triage"
-   ]
-   ```
-   (the 9 Portable + 4 Mixed directories from 2b/2c -- 13 entries). Per 3a.1
-   this becomes the complete distributed set; the four relocated directories,
-   no longer present under `skills/`, cannot be picked up even accidentally.
-3. Update `docs/repository-layout.md`: document the two-tier split
-   (`skills/` = plugin-distributed, allowlisted in `plugin.json`;
-   `.claude/skills/` = project-local, gitapex-development-only, never
-   installed by consumers) and correct the "(and, later, hooks)" phrasing
-   given 2e's finding that hooks are already live.
-4. Update `docs/versioning.md`'s **plugin** product row: scope is the
-   allowlisted subset of `skills/`, not "all of `skills/`."
-5. Extend `tests/test_repository_skill_shape.py`'s `SKILL_DIRS` collection to
-   also glob `.claude/skills/*` (in addition to the existing `skills/*`), so
-   the four relocated skills keep the same shape/honesty gate they have
-   today -- moving a skill out of the distributed tree is not a reason to
-   stop checking it.
-
-### 3c. Non-goals (explicitly deferred, not part of this proposal)
-
-- No content change to the four Mixed skills (2b) -- their repo-specific
-  detail is already appropriately isolated.
-- No fix for the hooks-distribution finding (2e) -- separate follow-up issue.
-- No new CI gate that keeps `plugin.json`'s allowlist in sync with
-  `skills/`'s actual contents if a future skill is added or renamed (a
-  plausible next gate, matching this repo's own "push deterministic work into
-  hooks/CI" convention, but not built here -- noted as a future idea only).
-- No version bump automation change; `docs/versioning.md`'s manual-bump
-  process is untouched.
-
-## 4. Verification (for the follow-up implementation PR, not this pass)
-
-- `python3 -m json.tool .claude-plugin/plugin.json` parses cleanly and the
-  `skills` array has exactly 13 entries, all resolving to real directories.
-- `find skills -mindepth 1 -maxdepth 1 -type d | wc -l` reports 13 (down from
-  17), and `find .claude/skills -mindepth 1 -maxdepth 1 -type d | wc -l`
-  reports 4.
-- `cd tests && python3 -m pytest test_repository_skill_shape.py -q` passes
-  for all 17 skills across both roots.
-- Manual dry run: a hypothetical consumer repo installing `gitapex` via
-  `/plugin marketplace add` would, per the confirmed marketplace-root
-  allowlist behavior, receive only the 13 listed skills.
+- `for d in skills/*/; do python3 skills/evaluating-skill-quality/scripts/check_skill_shape.py "$d"; done`
+  -- all 17 pass, including the four newly-`Portable` skills.
+- `uv run --with pytest python3 -m pytest tests/test_repository_skill_shape.py -q`
+  -- 17 passed.
+- `uv run --with pytest python3 -m pytest skills/evaluating-skill-quality/scripts/test_check_skill_shape.py -q`
+  -- 103 passed.
+- `LC_ALL=C grep -nP '[^ -~\t]' <file>` on every file touched by this change
+  -- no new non-ASCII characters introduced (a small number of pre-existing
+  em dashes in untouched lines of `issue-to-branch/SKILL.md` and
+  `references/github-issue-workflow.md` were left as-is; fixing them is
+  unrelated to this change's scope).
+- Read every rewritten `SKILL.md`/reference file back to confirm no
+  behavior was lost -- only the framing/fallback wording changed, plus the
+  two worked-example issue-number citations wrapped in inline code spans.
 
 ## 5. Open items carried forward
 
-- File a separate issue for 2e (hooks-distribution scope) once this proposal
-  is reviewed -- not filed yet, since this spec's scope is skills only.
-- The future CI gate mentioned in 3c (keep the allowlist in sync with
-  `skills/`'s actual contents) is not scheduled; revisit if the allowlist
-  drifts in practice.
+- File a separate issue for the hooks-distribution finding above once this
+  change lands -- not filed yet, since this spec's scope is skills only.
