@@ -5,3 +5,7 @@ metadata:
 spec:
   portability: Repository-scoped
   capabilityAssumption: Broad
+  skillDependencies:
+    requires: []
+    relatedTo:
+      - explaining-the-work
