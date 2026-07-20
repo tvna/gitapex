@@ -224,6 +224,48 @@ def test_main_rejects_context_costs_without_pruning_declaration(capsys):
     assert "require --pruning-only" in capsys.readouterr().err
 
 
+def test_main_judge_agree_appends_agree_marker(tmp_path, capsys):
+    scores = tmp_path / "scores.txt"
+    scores.write_text("0.9\n1.0\n", encoding="utf-8")
+    rc = score_contract.main(
+        ["--compare-to", "0.9", "--scores", str(scores), "--judge-verdict", "agree"]
+    )
+    assert rc == 0
+    assert capsys.readouterr().out.strip() == "0.950000 KEEP JUDGE_AGREE"
+
+
+def test_main_judge_disagree_appends_review_required_marker(tmp_path, capsys):
+    scores = tmp_path / "scores.txt"
+    scores.write_text("0.9\n1.0\n", encoding="utf-8")
+    rc = score_contract.main(
+        ["--compare-to", "0.9", "--scores", str(scores), "--judge-verdict", "disagree"]
+    )
+    assert rc == 0
+    assert (
+        capsys.readouterr().out.strip()
+        == "0.950000 KEEP JUDGE_DISAGREE_REVIEW_REQUIRED"
+    )
+
+
+def test_main_judge_verdict_does_not_change_recorded_mean_or_verdict(tmp_path, capsys):
+    scores = tmp_path / "scores.txt"
+    scores.write_text("0.9\n1.0\n", encoding="utf-8")
+    rc_plain = score_contract.main(["--compare-to", "0.9", "--scores", str(scores)])
+    plain = capsys.readouterr().out.strip()
+    rc_judged = score_contract.main(
+        ["--compare-to", "0.9", "--scores", str(scores), "--judge-verdict", "disagree"]
+    )
+    judged = capsys.readouterr().out.strip()
+    assert rc_plain == rc_judged == 0
+    assert judged.startswith(plain)
+
+
+def test_main_rejects_judge_verdict_without_compare_to(capsys):
+    rc = score_contract.main(["--judge-verdict", "agree"])
+    assert rc == 1
+    assert "--judge-verdict requires --compare-to" in capsys.readouterr().err
+
+
 @pytest.mark.parametrize("invalid", ["nan", "inf", "-0.1", "1.1"])
 def test_main_rejects_invalid_correctness_scores(tmp_path, capsys, invalid):
     scores = tmp_path / "scores.txt"

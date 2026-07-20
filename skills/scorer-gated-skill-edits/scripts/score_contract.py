@@ -162,7 +162,11 @@ def main(argv=None):
     selection-split score, prints the mean, and prints ``KEEP``/``REJECT``
     against the given prior mean per the strict improve-or-reject gate --
     this replaces re-deriving that mean/compare arithmetic by hand each
-    iteration.
+    iteration. With ``--compare-to`` and ``--judge-verdict``, additionally
+    appends the outcome of an adversarially-verified semantic judge (already
+    run by the caller; this script does not call a model) as ``JUDGE_AGREE``
+    or ``JUDGE_DISAGREE_REVIEW_REQUIRED`` -- an additional recorded field,
+    never blended into the substring mean or verdict.
     """
     parser = argparse.ArgumentParser(
         description="Score a run against a task's substring assertions."
@@ -194,6 +198,15 @@ def main(argv=None):
         "--compare-to and both context-cost arguments.",
     )
     parser.add_argument(
+        "--judge-verdict",
+        choices=["agree", "disagree"],
+        help="Outcome of an adversarially-verified semantic judge's read of "
+        "whether the transcript's conclusion matches the fixture's intended "
+        "finding, already resolved by the caller against this same "
+        "--compare-to gate. Recorded alongside the substring verdict, never "
+        "blended into it. Requires --compare-to.",
+    )
+    parser.add_argument(
         "--prior-context-cost",
         type=float,
         help="Context cost of the current skill for a pruning-only gate.",
@@ -221,6 +234,12 @@ def main(argv=None):
             file=sys.stderr,
         )
         return 1
+    if args.judge_verdict is not None and args.compare_to is None:
+        print(
+            "error: --judge-verdict requires --compare-to",
+            file=sys.stderr,
+        )
+        return 1
     if args.compare_to is not None:
         try:
             raw = (
@@ -243,7 +262,12 @@ def main(argv=None):
         except (FileNotFoundError, OSError, ValueError) as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 1
-        print(f"{mean:.6f} {verdict}")
+        line = f"{mean:.6f} {verdict}"
+        if args.judge_verdict == "agree":
+            line += " JUDGE_AGREE"
+        elif args.judge_verdict == "disagree":
+            line += " JUDGE_DISAGREE_REVIEW_REQUIRED"
+        print(line)
         return 0
 
     if not args.assertions:
