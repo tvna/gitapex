@@ -11,12 +11,12 @@ block deterministically.
 
 ## Corpus size and the 2:1:7 caveat
 
-SkillOpt's default split ratio is 2:1:7. At 33 fixtures that ratio gives a
+SkillOpt's default split ratio is 2:1:7. At 37 fixtures that ratio gives a
 selection split of roughly five tasks, too thin to gate a strict
 improve-or-reject decision because five observations provide little ability
 to average out run-to-run variance. Following the precedent already set in
 `skills/scorer-gated-skill-edits/references/worked-example.md` ("the ratio is
-aspirational" for a small fixture count), this split uses a flatter 14:11:8
+aspirational" for a small fixture count), this split uses a flatter 16:13:8
 partition, named explicitly as a deviation from the 2:1:7 default. The
 honest minimal groundwork, per that same worked example, is a larger
 fixture corpus over time, not a smaller gate.
@@ -32,7 +32,9 @@ fixture corpus over time, not a smaller gate.
   `sentence-level-pruning.yaml`, `progressive-disclosure-placement.yaml`,
   `heldout-semantic-noop-vs-brevity.yaml`,
   `capability-assumption-broad-excuses-explanation.yaml`,
-  `ablation-capability-no-mechanism.yaml`.
+  `ablation-capability-no-mechanism.yaml`,
+  `tool-capability-verification-train.yaml`,
+  `consumer-repo-convention-deference-train.yaml`.
 - **selection** (gates acceptance; scored before/after a candidate edit,
   strict improve-or-reject, ties rejected): `edge.yaml`,
   `mechanism-fit-subagent.yaml`, `third-party-not-authoritative.yaml`,
@@ -42,7 +44,9 @@ fixture corpus over time, not a smaller gate.
   `model-effort-tier-fit-unjustified-effort.yaml`,
   `portability-issue-number-citation.yaml`, `heldout-vague-completion.yaml`,
   `capability-assumption-frontier-flags-explanation.yaml`,
-  `ablation-capability-runner-exists-not-run.yaml`.
+  `ablation-capability-runner-exists-not-run.yaml`,
+  `tool-capability-verification-selection.yaml`,
+  `consumer-repo-convention-deference-selection.yaml`.
 - **test** (read once, for a final report only, never to motivate or gate
   an edit): `guardrail.yaml`, `no-fabricated-violation.yaml`,
   `portability-classification.yaml`, `blind-spot-pass-not-silent.yaml`,
@@ -200,7 +204,57 @@ target whose baseline has already been measured and reported with concrete
 lift numbers must not be false-positively flagged with either
 ablation-capability phrasing.
 
-## Reuse
+The `tool-capability-verification-train.yaml` / `-selection.yaml` pair was
+added for issue #200's Tool-capability verification check (a sixth
+Mechanism-fit check), for the same reason as prior additions: none of the
+prior 33 fixtures probe whether the review catches a target's own
+unverified claim that a named tool/MCP subcall can detect, verify, or
+reconstruct something. `-train.yaml` sits in train (a PR-history-audit
+skill claiming a commit-listing subcall can detect a force-push -- it
+motivated the edit, directly mirroring the retrospective's own motivating
+incident). `-selection.yaml` sits in selection and uses a distinct domain
+and a distinct tool/claim pair (a metrics-query subcall wrongly claimed to
+attribute a rollback to a specific operator, not a force-push) so the gate
+measures generalization, not memorization of the train fixture's wording.
+No dedicated restraint fixture was added for this check; the existing
+`guardrail.yaml` / `no-fabricated-violation.yaml` fixtures already probe
+generic false-positive restraint across the whole rubric.
+
+The `consumer-repo-convention-deference-train.yaml` / `-selection.yaml`
+pair was added for issue #200's other checklist item, a new Dimension 6
+(Durability) bullet, for the same reason: none of the prior 33 fixtures
+probe whether the review catches a target hardcoding this origin
+repository's own issue/PR title-body convention as universal instead of
+deferring to the consumer repository's own convention -- a different
+failure shape from the existing issue/PR-*number*-citation sub-check.
+`-train.yaml` sits in train (an issue-filing step with a fixed title
+prefix and heading set -- it motivated the edit). `-selection.yaml` sits
+in selection and uses a distinct domain and write-path step (a PR-body
+heading set, not an issue title/body) so the gate measures generalization
+rather than memorization. As with the pair above, no dedicated restraint
+fixture was added; the generic restraint fixtures already cover it.
+
+Two fixture-assertion bugs of the same recurring class this file has
+already documented multiple times (run-to-run casing/paraphrase variance,
+not a rubric regression) were found and fixed during this iteration's own
+gate run, before any score was banked: `consumer-repo-convention-
+deference-*`'s first-draft assertion required the literal phrase
+"consumer repository," which one correct after-dispatch instead phrased
+as "consuming repository" -- tightened to the rubric's own verbatim Fail
+criterion, `"asserts its convention unconditionally,"` which a dispatch
+citing the new bullet reproduces exactly. `tool-capability-verification-
+selection.yaml`'s first-draft assertion required "cannot attribute,"
+absent from at least one otherwise-correct after-dispatch that reasoned
+to the identical verdict via different phrasing -- loosened to `"actor"`
+(confirmed present in one live sample, absent from two live before-runs).
+A third, pre-existing bug in this same class was also found and fixed on
+two fixtures this iteration's edit touches indirectly: `edge.yaml` and
+`mechanism-fit-subagent.yaml` both required lowercase `"headline
+finding"`, which a dispatch bolding it as a section title ("**Headline
+finding**") or as a standalone lowercase mid-sentence mention
+inconsistently satisfies -- both changed to the case-agnostic
+`"eadline finding"` (dropping the leading letter), immune to either
+capitalization.
 
 Future edits to this rubric should reuse this same split rather than
 re-deriving one per iteration, so the selection split stays genuinely
@@ -957,3 +1011,142 @@ content could plausibly have interacted with both edits re-verified
 fresh against the real merged file rather than assumed, and a
 three-times-recurring fixture-assertion brittleness fixed at the root
 instead of disclosed a third time.
+
+**Iteration: issue #200, Tool-capability verification (sixth Mechanism-fit
+check) + consumer-repo issue/PR-convention deference (Dimension 6
+bullet).** Candidate edit: add a `### Tool-capability verification`
+subsection to `references/rubric.md`'s Mechanism fit section (a target's
+own claim that a named tool/MCP subcall can detect, verify, or reconstruct
+something must be checked against that tool's actual schema/docs, not
+accepted on plausibility alone) plus a matching bullet in `SKILL.md`'s
+Mechanism fit list and TOC entry; and a new Dimension 6 (Durability)
+bullet banning a hardcoded, unconditional origin-repo issue/PR title-body
+or workflow-ordering convention in Portable-declared content, distinct
+from the existing issue/PR-*number*-citation bullet. Full text: see this
+PR's diff. Scoped per the issue's own note: the original third item
+(bare `CLAUDE.md ch.N` citations) is out of scope, already substantially
+covered by the existing Portability-level litmus test and
+`portable-no-repo-path-citation`/`portable-no-issue-citation` shape
+checks, with the one remaining gap in that area tracked separately in
+issue #192.
+
+Precondition and splits: satisfied (37 fixtures, 16:13:8 with this
+iteration's additions -- see Assignment above).
+
+Methodology, disclosed reuse: the two edits land in disjoint rubric
+sections (Mechanism fit; Dimension 6), each new bullet is appended after
+existing content rather than modifying it, and neither touches any other
+dimension. Of the 11 pre-existing selection fixtures, 7 assert on content
+neither edit touches at all (`third-party-not-authoritative.yaml`,
+`scoring-axis-uncontrolled-speed-claim.yaml`,
+`ordering-rule-totality-distinct-skill.yaml`,
+`blind-spot-pass-generalizes.yaml`, `heldout-vague-completion.yaml`,
+`capability-assumption-frontier-flags-explanation.yaml`,
+`ablation-capability-runner-exists-not-run.yaml`) and reuse their already-
+established 1.000000 score unchanged on both sides -- disclosed reuse, the
+same "never both" discipline this file's methodology notes have applied
+throughout. The other 4 (`edge.yaml`, `mechanism-fit-subagent.yaml`,
+`model-effort-tier-fit-unjustified-effort.yaml`,
+`portability-issue-number-citation.yaml`) sit in the same sections either
+edit touches, so each got a genuine fresh **after** dispatch (before
+reused at 1.000000, since neither edit modifies the text those fixtures
+actually assert on) rather than being assumed unaffected. The two new
+selection fixtures each got a genuine fresh **before** dispatch, pinned to
+the immutable pre-edit commit hash `8e1eb4249f12e03fbf6e42134c03af4c9ff7756b`
+rather than the symbolic ref `HEAD` -- a first attempt at this gate used
+`git show HEAD:<path>` for the before side and then committed the edit
+before those dispatches had necessarily finished reading, moving what
+`HEAD` resolved to mid-flight; caught before any score was banked (the
+race Stop boundaries name directly) and corrected by re-dispatching both
+against the pinned hash, which is immune to the race by construction. Two
+of the touched-fixture after-dispatches and one new-fixture after-dispatch
+returned only a status stub ("the dispatch is running... I'll relay it")
+because the harness they ran in has its own `Agent`/subagent-dispatch
+capability and, following `SKILL.md`'s Subagent-dispatch instruction
+literally, tried to spawn a further nested dispatch rather than perform
+the review itself -- caught immediately (the stub is not a review) and
+redone with an explicit instruction not to delegate further, since the
+dispatch is already the isolated fresh context the instruction calls for.
+
+One fresh after-dispatch per touched pre-existing fixture, and two
+independent fresh after-dispatches per new selection fixture (the second
+sample happened to arrive as a nested dispatch from one of the stubbed
+attempts above; kept and averaged per this file's own
+`blind-spot-pass-generalizes.yaml` precedent for multiple genuine samples,
+not discarded), scored with
+`skills/scorer-gated-skill-edits/scripts/score_contract.py`:
+
+| Fixture | Before | After |
+|---|---|---|
+| `edge.yaml` | 1.000000 (reused) | 1.000000 (fresh, 2 samples, both 1.000000) |
+| `mechanism-fit-subagent.yaml` | 1.000000 (reused) | 1.000000 (fresh) |
+| `third-party-not-authoritative.yaml` | 1.000000 (reused) | 1.000000 (unaffected, not re-run) |
+| `scoring-axis-uncontrolled-speed-claim.yaml` | 1.000000 (reused) | 1.000000 (unaffected, not re-run) |
+| `ordering-rule-totality-distinct-skill.yaml` | 1.000000 (reused) | 1.000000 (unaffected, not re-run) |
+| `blind-spot-pass-generalizes.yaml` | 1.000000 (reused) | 1.000000 (unaffected, not re-run) |
+| `model-effort-tier-fit-unjustified-effort.yaml` | 1.000000 (reused) | 1.000000 (fresh) |
+| `portability-issue-number-citation.yaml` | 1.000000 (reused) | 1.000000 (fresh) |
+| `heldout-vague-completion.yaml` | 1.000000 (reused) | 1.000000 (unaffected, not re-run) |
+| `capability-assumption-frontier-flags-explanation.yaml` | 1.000000 (reused) | 1.000000 (unaffected, not re-run) |
+| `ablation-capability-runner-exists-not-run.yaml` | 1.000000 (reused) | 1.000000 (unaffected, not re-run) |
+| `tool-capability-verification-selection.yaml` | 0.500000 (fresh, pinned hash) | 0.875000 (fresh, mean of 2 samples: 1.000000, 0.750000) |
+| `consumer-repo-convention-deference-selection.yaml` | 0.500000 (fresh, pinned hash) | 0.750000 (fresh, mean of 2 samples: 1.000000, 0.500000) |
+
+Selection mean: **before 0.923077 -> after 0.971154**. Run via
+`score_contract.py --compare-to 0.923077 --scores after-scores.txt`:
+`0.971154 KEEP`.
+
+The two new fixtures' averaged after-scores are honestly reported below
+their ceiling and disclosed in full rather than only the higher sample:
+`tool-capability-verification-selection.yaml`'s two after-dispatches both
+correctly reached the FAIL verdict and both cited the new
+"Tool-capability verification" heading by name, but only one used the
+specific word "actor" this fixture's assertion checks for as a second,
+domain-specific confirmation (present in "aggregate rate time series carry
+no actor-identity field," absent from two independent before-runs) --
+scoring 1.000000 and 0.750000 respectively; the heading citation alone
+already discriminates strongly, since it cannot appear in any before-run
+by construction. `consumer-repo-convention-deference-selection.yaml`'s two
+after-dispatches diverged more substantively: one directly cited the new
+Dimension 6 bullet's own Fail criterion verbatim ("asserts its convention
+unconditionally... hardcoded") and scored 1.000000; the other reasoned to
+a related but distinct finding via the *pre-existing* Skill-vs-hook
+Mechanism-fit check instead ("always use it as written" read as an
+unenforced hook-shaped rule) without citing the new bullet at all, scoring
+0.500000 -- a genuine, disclosed signal that this specific defect shape is
+sometimes already caught by an existing check under a different
+classification, not a fixture bug. Both dispositions are defensible
+reviews of the same target; the averaged score reflects that real
+variance rather than picking the more favorable sample.
+
+Three fixture-assertion bugs of the recurring casing/paraphrase-variance
+class this file has repeatedly documented were found and fixed during
+this same gate run, before any score was banked -- see the Assignment
+section's own paragraph above for the specifics (`"consumer repository"`
+-> the rubric's verbatim Fail phrase; `"cannot attribute"` -> `"actor"`;
+`"headline finding"` -> the case-agnostic `"eadline finding"` on two
+pre-existing fixtures, `edge.yaml` and `mechanism-fit-subagent.yaml`).
+
+**No dedicated restraint fixture in this iteration** (see the Assignment
+section's rationale) -- restraint against over-firing either new check is
+instead evidenced qualitatively across every after-dispatch above: none
+of the touched pre-existing fixtures' after-runs (none of whose targets
+make a tool-capability claim or hardcode an issue/PR convention) false-
+positively invoked either new check, each explicitly stating "not
+applicable" for Tool-capability verification and passing Dimension 6
+cleanly.
+
+**Transfer check:** not run this iteration. No prior entry in this log has
+recorded an adjacent-model/harness transfer check (SkillOpt Section 4.3)
+for any iterative rubric edit to date -- named here as a pre-existing,
+still-open gap in this file's own practice, not silently assumed clear
+for this edit specifically.
+
+**KEEP.** Strict improvement on the selection split (0.923077 -> 0.971154)
+across all 13 fixtures, with 7 pre-existing fixtures confirmed unaffected
+by inspection, 4 pre-existing fixtures re-verified fresh rather than
+assumed, both new fixtures' averaged (not cherry-picked) scores honestly
+reported including one sample that reasoned to the same underlying finding
+via a different, pre-existing check, three fixture-assertion bugs found
+and fixed before any score was banked, and the pre-edit/post-edit race
+condition caught and corrected before it could contaminate the gate.

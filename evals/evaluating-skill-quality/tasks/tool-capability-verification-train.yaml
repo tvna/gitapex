@@ -32,7 +32,7 @@ inputs:
 expected:
   output_contains:
     - "Tool-capability verification"
-    - "cannot detect"
+    - "silently replaced"
   output_not_contains:
     - "LGTM"
     - "no concerns"

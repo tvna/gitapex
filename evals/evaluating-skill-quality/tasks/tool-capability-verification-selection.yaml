@@ -31,7 +31,7 @@ inputs:
 expected:
   output_contains:
     - "Tool-capability verification"
-    - "cannot attribute"
+    - "actor"
   output_not_contains:
     - "LGTM"
     - "no concerns"

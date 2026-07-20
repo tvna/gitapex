@@ -31,7 +31,7 @@ inputs:
     3. Link the tracking issue in your reply.
 expected:
   output_contains:
-    - "consumer repository"
+    - "asserts its convention unconditionally"
     - "hardcod"
   output_not_contains:
     - "LGTM"
