@@ -204,7 +204,9 @@ def main(argv=None):
         "whether the transcript's conclusion matches the fixture's intended "
         "finding, already resolved by the caller against this same "
         "--compare-to gate. Recorded alongside the substring verdict, never "
-        "blended into it. Requires --compare-to.",
+        "blended into it. Requires --compare-to; incompatible with "
+        "--pruning-only, whose verdict is a context-cost comparison rather "
+        "than the substring-derived KEEP/REJECT a semantic judge is scoped to.",
     )
     parser.add_argument(
         "--prior-context-cost",
@@ -237,6 +239,14 @@ def main(argv=None):
     if args.judge_verdict is not None and args.compare_to is None:
         print(
             "error: --judge-verdict requires --compare-to",
+            file=sys.stderr,
+        )
+        return 1
+    if args.judge_verdict is not None and args.pruning_only:
+        print(
+            "error: --judge-verdict is not defined for --pruning-only -- a "
+            "pruning verdict is a context-cost comparison, not the "
+            "substring-derived KEEP/REJECT a semantic judge is scoped to",
             file=sys.stderr,
         )
         return 1

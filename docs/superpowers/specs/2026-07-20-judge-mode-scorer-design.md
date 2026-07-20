@@ -126,6 +126,16 @@ hand or by an agent following `scorer-gated-skill-edits`'s procedure) and
 disagreement is advisory input to a human decision, not a pass/fail gate on
 its own.
 
+**Out of scope: `--pruning-only`.** `--judge-verdict` is rejected together
+with `--pruning-only`. A predeclared pruning-only verdict is partly a
+context-cost comparison (`pruning_compare`'s matched-correctness,
+lower-cost branch); a semantic judge reading a transcript against a
+fixture's `description` has no comparable basis to agree or disagree with a
+byte-count/context-cost measurement. Scoping the flag to the ordinary
+`strict_compare` gate keeps the judge's remit exactly what Decisions 1-2
+describe -- the substring-derived KEEP/REJECT -- rather than silently
+accepting a combination the four questions above never considered.
+
 ## What this spec does not build
 
 - No judge model, no API call, no new dependency, no credential-issuance
