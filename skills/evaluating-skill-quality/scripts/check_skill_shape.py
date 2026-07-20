@@ -135,16 +135,17 @@ REFERENCES_LIST_ITEM_RE = re.compile(r"^[ ]{2,}-\s*(.*)$")
 REFERENCES_MAPPING_LIKE_RE = re.compile(r"^[A-Za-z0-9_.-]+:(\s|$)")
 
 # spec.skillDependencies's two recognized subkeys, and the shape of their
-# lines. Unlike spec.references (which tolerates indent drift from years of
-# pre-existing files), this field is new and every real sidecar is authored
-# in the same change, so the parser accepts exactly one indent: subkeys at
-# 4 spaces (one level under skillDependencies' own 2-space key), list items
-# at 5+ spaces (strictly deeper than the subkey, so a dedented line reliably
-# ends the list).
+# lines. Subkeys sit at 4 spaces (one level under skillDependencies' own
+# 2-space key). List items accept 4 or more spaces -- real YAML allows a
+# block sequence indented level with its own key (4 spaces, same as
+# "requires:"/"relatedTo:" themselves) or further indented (this repo's
+# convention); requiring one exact width would silently drop an otherwise-
+# valid item at a different indent instead of reading it, the same
+# accommodation REFERENCES_LIST_ITEM_RE already makes for spec.references.
 SKILL_DEPENDENCY_SUBKEYS = ("requires", "relatedTo")
 SKILL_DEP_SUBKEY_RE = re.compile(r"^[ ]{4}(requires|relatedTo):\s*(.*)$")
 SKILL_DEP_UNKNOWN_KEY_RE = re.compile(r"^[ ]{4}([A-Za-z0-9_-]+):")
-SKILL_DEP_LIST_ITEM_RE = re.compile(r"^[ ]{5,}-\s*(.*)$")
+SKILL_DEP_LIST_ITEM_RE = re.compile(r"^[ ]{4,}-\s*(.*)$")
 
 TAG_RE = re.compile(r"</?[A-Za-z][^>]*>")
 NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
