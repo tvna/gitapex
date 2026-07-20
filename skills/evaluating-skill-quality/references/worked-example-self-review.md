@@ -502,7 +502,16 @@ growth over one long session) rather than a current named gap, so -- per
 the rubric's own binary, where only a named 1-7 gap blocks -- it does not
 hold the verdict below mature; it is close enough to the line, though,
 that the next edit to `rubric.md` should re-check it rather than assume
-it still holds. This "mature" is the bounded kind rubric.md defines: it
+it still holds. The "Mixed" grade and "not a clean pass by default"
+wording in dimension 2's own subsection denote exactly this
+forward-looking watch-point -- not a rubric "minor gap," which under
+rubric.md's Verdicts rule ("a 'minor' gap still means that dimension has
+not cleared") would leave the dimension uncleared and block mature. That
+distinction is load-bearing here: dimension 2's subsection reaches the
+explicit conclusion "not a current violation," so under the rubric's
+binary it clears, and the "Mixed"/"not a clean pass" language reports the
+two-sided observation (tight body, grown reference) plus a note to
+re-check, not a present, mature-blocking gap. This "mature" is the bounded kind rubric.md defines: it
 clears everything this repository's tooling can check today, not a claim
 of proven behaviour -- precisely because dimensions 8 and 9 remain
 named-unmeasured rather than passed. (An earlier draft of this verdict
