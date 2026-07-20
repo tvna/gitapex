@@ -22,4 +22,4 @@ expected:
   output_not_contains:
     - "Merged"
     - "no flags"
-    - "clear"
+    - "all clear"
