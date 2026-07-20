@@ -31,7 +31,7 @@ _SYMLINKS_SUPPORTED = _symlinks_supported()
 def _write_skill(tmp_path, *, name="good-skill",
                  description="Does a thing. Use when doing the thing.",
                  body_lines=10, references=None,
-                 sidecar=True, api_version="gitapex.dev/v1alpha1",
+                 sidecar=True, api_version="gitapex.io/v1alpha1",
                  kind="SkillMetadata", meta_name="skill",
                  portability="Portable", capability_assumption="Broad"):
     d = tmp_path / "skill"
@@ -59,7 +59,8 @@ def _write_skill(tmp_path, *, name="good-skill",
             lines.append(f"  portability: {portability}")
         if capability_assumption is not None:
             lines.append(f"  capabilityAssumption: {capability_assumption}")
-        (d / "gitapex_metadata.yaml").write_text(
+        (d / "metadata").mkdir(parents=True, exist_ok=True)
+        (d / "metadata/gitapex.yaml").write_text(
             "\n".join(lines) + "\n", encoding="utf-8")
     if references:
         refs = d / "references"
@@ -284,8 +285,9 @@ def test_junk_files_in_references_are_ignored(tmp_path):
         tmp_path,
         "---\nname: s\ndescription: d. Use when x.\n---\n\n",
         references={"real.md": "ok\n"})
-    (d / "gitapex_metadata.yaml").write_text(
-        "apiVersion: gitapex.dev/v1alpha1\n"
+    (d / "metadata").mkdir()
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
         "kind: SkillMetadata\n"
         "metadata:\n"
         "  name: skill\n"
@@ -463,7 +465,7 @@ def test_non_utf8_sidecar_fails_checks_not_exit_2(tmp_path):
     # shape failure -- not 2, which stays reserved for a missing/unreadable
     # SKILL.md (see test_directory_without_skill_md_returns_2).
     d = _write_skill(tmp_path)
-    (d / "gitapex_metadata.yaml").write_bytes(b"\xff\xfe not utf8 \x00\x01")
+    (d / "metadata/gitapex.yaml").write_bytes(b"\xff\xfe not utf8 \x00\x01")
     by = _by_name(css.check_shape(d))
     assert by["metadata-file-present"].passed is True
     for check in ("manifest-envelope", "metadata-name-matches-dir",
@@ -476,7 +478,7 @@ def test_non_utf8_sidecar_fails_checks_not_exit_2(tmp_path):
 
 def test_manifest_parser_ignores_deeper_nesting(tmp_path):
     text = (
-        "apiVersion: gitapex.dev/v1alpha1\n"
+        "apiVersion: gitapex.io/v1alpha1\n"
         "kind: SkillMetadata\n"
         "metadata:\n"
         "  name: skill\n"
@@ -489,7 +491,7 @@ def test_manifest_parser_ignores_deeper_nesting(tmp_path):
         "  capabilityAssumption: Broad\n"
     )
     parsed = css._parse_manifest(text)
-    assert parsed.root["apiVersion"] == "gitapex.dev/v1alpha1"
+    assert parsed.root["apiVersion"] == "gitapex.io/v1alpha1"
     assert parsed.root["metadata"]["name"] == "skill"
     assert parsed.root["spec"]["portability"] == "Portable"
     assert parsed.root["spec"]["capabilityAssumption"] == "Broad"
@@ -504,8 +506,8 @@ def test_malformed_top_level_line_fails_manifest_parsable(tmp_path):
     # that real PyYAML rejects with a ParserError, sitting alongside an
     # otherwise fully valid sidecar.
     d = _write_skill(tmp_path)
-    (d / "gitapex_metadata.yaml").write_text(
-        "apiVersion: gitapex.dev/v1alpha1\n"
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
         "kind: SkillMetadata\n"
         "metadata:\n"
         "  name: skill\n"
@@ -532,8 +534,8 @@ def test_legitimate_deeper_nesting_passes_manifest_parsable(tmp_path):
     # test_references_mapping_shaped_item_fails_well_formed below (that
     # field is no longer ungated as of Sub-project C).
     d = _write_skill(tmp_path)
-    (d / "gitapex_metadata.yaml").write_text(
-        "apiVersion: gitapex.dev/v1alpha1\n"
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
         "kind: SkillMetadata\n"
         "metadata:\n"
         "  name: skill\n"
@@ -558,8 +560,8 @@ def test_references_mapping_shaped_item_fails_well_formed(tmp_path):
     # must not be silently truncated into a garbled scalar string and
     # certified as well-formed -- it must fail loudly instead.
     d = _write_skill(tmp_path)
-    (d / "gitapex_metadata.yaml").write_text(
-        "apiVersion: gitapex.dev/v1alpha1\n"
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
         "kind: SkillMetadata\n"
         "metadata:\n"
         "  name: skill\n"
@@ -575,7 +577,7 @@ def test_references_mapping_shaped_item_fails_well_formed(tmp_path):
     assert by["references-well-formed"].passed is False
     assert "path: references/rubric.md" in by["references-well-formed"].evidence
     assert css.main([str(d)]) == 1
-    parsed = css._parse_manifest((d / "gitapex_metadata.yaml").read_text(encoding="utf-8"))
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
     assert parsed.malformed_reference_items == ["- path: references/rubric.md"]
     # The malformed item is excluded from the parsed list entirely (not
     # silently kept as a garbled string); nothing else in this fixture's
@@ -588,8 +590,8 @@ def test_references_inconsistent_indent_item_fails_well_formed(tmp_path):
     # not all at the same indent. A well-formed item followed by one at a
     # different indent must be flagged, not silently accepted alongside it.
     d = _write_skill(tmp_path)
-    (d / "gitapex_metadata.yaml").write_text(
-        "apiVersion: gitapex.dev/v1alpha1\n"
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
         "kind: SkillMetadata\n"
         "metadata:\n"
         "  name: skill\n"
@@ -604,7 +606,7 @@ def test_references_inconsistent_indent_item_fails_well_formed(tmp_path):
     by = _by_name(css.check_shape(d))
     assert by["references-well-formed"].passed is False
     assert css.main([str(d)]) == 1
-    parsed = css._parse_manifest((d / "gitapex_metadata.yaml").read_text(encoding="utf-8"))
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
     assert parsed.root["spec"]["references"] == ["a"]
     assert parsed.malformed_reference_items == ['- "b"', '- "c"']
 
@@ -613,10 +615,10 @@ def test_comment_and_document_marker_pass_manifest_parsable(tmp_path):
     # A '#' comment and YAML document markers ('---' / '...') at column 0
     # must not be flagged as malformed.
     d = _write_skill(tmp_path)
-    (d / "gitapex_metadata.yaml").write_text(
+    (d / "metadata/gitapex.yaml").write_text(
         "# a leading comment\n"
         "---\n"
-        "apiVersion: gitapex.dev/v1alpha1\n"
+        "apiVersion: gitapex.io/v1alpha1\n"
         "kind: SkillMetadata\n"
         "metadata:\n"
         "  name: skill\n"
@@ -632,7 +634,7 @@ def test_comment_and_document_marker_pass_manifest_parsable(tmp_path):
 
 def test_unreadable_sidecar_fails_manifest_parsable(tmp_path):
     d = _write_skill(tmp_path)
-    (d / "gitapex_metadata.yaml").write_bytes(b"\xff\xfe not utf8 \x00\x01")
+    (d / "metadata/gitapex.yaml").write_bytes(b"\xff\xfe not utf8 \x00\x01")
     by = _by_name(css.check_shape(d))
     assert by["manifest-parsable"].passed is False
     assert "UnicodeDecodeError" in by["manifest-parsable"].evidence
@@ -772,8 +774,9 @@ _CITATION_CHECKS = ("portable-no-issue-citation",
 
 
 def _write_sidecar(skill_dir, portability):
-    (skill_dir / "gitapex_metadata.yaml").write_text(
-        "apiVersion: gitapex.dev/v1alpha1\n"
+    (skill_dir / "metadata").mkdir(parents=True, exist_ok=True)
+    (skill_dir / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
         "kind: SkillMetadata\n"
         "metadata:\n"
         "  name: skill\n"
@@ -830,7 +833,7 @@ def test_body_marker_used_when_no_sidecar_present(tmp_path):
         "---\nname: s\ndescription: d. Use when x.\n---\n\n"
         "**Portability: Portable.** Self-contained.\n\n"
         "A clean portable body.\n")
-    assert not (d / "gitapex_metadata.yaml").exists()
+    assert not (d / "metadata/gitapex.yaml").exists()
     names = _by_name(css.check_shape(d))
     for check in _CITATION_CHECKS:
         assert check in names, check
@@ -893,8 +896,8 @@ def test_references_absent_is_well_formed(tmp_path):
 
 def test_references_valid_list_is_well_formed(tmp_path):
     d = _write_skill(tmp_path)
-    (d / "gitapex_metadata.yaml").write_text(
-        "apiVersion: gitapex.dev/v1alpha1\n"
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
         "kind: SkillMetadata\n"
         "metadata:\n"
         "  name: skill\n"
@@ -913,8 +916,8 @@ def test_references_valid_list_is_well_formed(tmp_path):
 
 def test_references_empty_list_fails(tmp_path):
     d = _write_skill(tmp_path)
-    (d / "gitapex_metadata.yaml").write_text(
-        "apiVersion: gitapex.dev/v1alpha1\n"
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
         "kind: SkillMetadata\n"
         "metadata:\n"
         "  name: skill\n"
@@ -931,8 +934,8 @@ def test_references_empty_list_fails(tmp_path):
 
 def test_references_blank_entry_fails(tmp_path):
     d = _write_skill(tmp_path)
-    (d / "gitapex_metadata.yaml").write_text(
-        "apiVersion: gitapex.dev/v1alpha1\n"
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
         "kind: SkillMetadata\n"
         "metadata:\n"
         "  name: skill\n"
@@ -951,8 +954,8 @@ def test_references_blank_entry_fails(tmp_path):
 
 def test_references_non_list_scalar_fails(tmp_path):
     d = _write_skill(tmp_path)
-    (d / "gitapex_metadata.yaml").write_text(
-        "apiVersion: gitapex.dev/v1alpha1\n"
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
         "kind: SkillMetadata\n"
         "metadata:\n"
         "  name: skill\n"
@@ -968,7 +971,7 @@ def test_references_non_list_scalar_fails(tmp_path):
 
 def test_references_well_formed_fails_when_sidecar_unreadable(tmp_path):
     d = _write_skill(tmp_path)
-    sidecar = d / "gitapex_metadata.yaml"
+    sidecar = d / "metadata/gitapex.yaml"
     sidecar.write_bytes(b"\xff\xfe\x00\x01invalid")
     by = _by_name(css.check_shape(d))
     assert by["references-well-formed"].passed is False
@@ -976,7 +979,7 @@ def test_references_well_formed_fails_when_sidecar_unreadable(tmp_path):
 
 def test_manifest_parser_parses_spec_references_list():
     text = (
-        "apiVersion: gitapex.dev/v1alpha1\n"
+        "apiVersion: gitapex.io/v1alpha1\n"
         "kind: SkillMetadata\n"
         "metadata:\n"
         "  name: skill\n"
@@ -996,7 +999,7 @@ def test_manifest_parser_still_ignores_skill_dependencies():
     # Regression guard: spec.references gaining a real parser must not widen
     # to spec.skillDependencies (reserved for Sub-project D).
     text = (
-        "apiVersion: gitapex.dev/v1alpha1\n"
+        "apiVersion: gitapex.io/v1alpha1\n"
         "kind: SkillMetadata\n"
         "metadata:\n"
         "  name: skill\n"
@@ -1019,7 +1022,7 @@ def test_references_entries_decode_escaped_quotes():
     # in the parsed string -- the exact shape battle-testing-a-skill's
     # real sidecar entries use.
     text = (
-        "apiVersion: gitapex.dev/v1alpha1\n"
+        "apiVersion: gitapex.io/v1alpha1\n"
         "kind: SkillMetadata\n"
         "metadata:\n"
         "  name: skill\n"
@@ -1047,8 +1050,8 @@ def test_references_list_item_at_two_space_indent_is_read(tmp_path):
     # (2-space indent, same as "references:" itself) is valid YAML and
     # must be read, not silently dropped as an empty list.
     d = _write_skill(tmp_path)
-    (d / "gitapex_metadata.yaml").write_text(
-        "apiVersion: gitapex.dev/v1alpha1\n"
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
         "kind: SkillMetadata\n"
         "metadata:\n"
         "  name: skill\n"
@@ -1065,8 +1068,8 @@ def test_references_list_item_at_two_space_indent_is_read(tmp_path):
 
 def test_references_list_item_at_three_space_indent_is_read(tmp_path):
     d = _write_skill(tmp_path)
-    (d / "gitapex_metadata.yaml").write_text(
-        "apiVersion: gitapex.dev/v1alpha1\n"
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
         "kind: SkillMetadata\n"
         "metadata:\n"
         "  name: skill\n"
@@ -1086,8 +1089,8 @@ def test_references_list_ended_by_a_following_sibling_key(tmp_path):
     # end-of-file finalize): spec.references followed by another spec key
     # must close the list correctly and not swallow the next key.
     d = _write_skill(tmp_path)
-    (d / "gitapex_metadata.yaml").write_text(
-        "apiVersion: gitapex.dev/v1alpha1\n"
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
         "kind: SkillMetadata\n"
         "metadata:\n"
         "  name: skill\n"
@@ -1111,8 +1114,8 @@ def test_references_well_formed_fails_when_spec_is_not_a_mapping(tmp_path):
     # report -- references-well-formed must not misreport it as the
     # ordinary optional-and-absent case.
     d = _write_skill(tmp_path)
-    (d / "gitapex_metadata.yaml").write_text(
-        "apiVersion: gitapex.dev/v1alpha1\n"
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
         "kind: SkillMetadata\n"
         "metadata:\n"
         "  name: skill\n"

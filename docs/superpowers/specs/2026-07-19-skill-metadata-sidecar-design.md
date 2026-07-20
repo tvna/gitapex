@@ -109,12 +109,15 @@ home. This supersedes the body-line placement described in
 
 ### 4.1 The sidecar file
 
-- **Path:** `skills/<name>/gitapex_metadata.yaml` (one per skill,
-  alongside `SKILL.md`). The `gitapex_` prefix deliberately marks the file
-  as *this repository's own* metadata convention -- `portability` and
+- **Path:** `skills/<name>/metadata/gitapex.yaml` (one per skill, in a
+  `metadata/` subdirectory alongside `SKILL.md`). The `metadata/` directory
+  and `gitapex`-labelled filename deliberately mark the file as *this
+  repository's own* metadata convention -- `portability` and
   `capability-assumption` are gitapex evaluation fields, not part of the
   Anthropic Agent Skills standard -- so a vendored consumer can recognize
-  and drop it without mistaking it for standard skill metadata.
+  and drop it without mistaking it for standard skill metadata. (Relocated
+  from the flat `gitapex_metadata.yaml` filename this sub-project
+  originally used; see issue #208.)
 - **Format:** a Kubernetes-manifest-shaped document -- the familiar
   `apiVersion` / `kind` / `metadata` / `spec` envelope, borrowed as a
   *convention* only (these files are never applied to a cluster). The
@@ -124,7 +127,7 @@ home. This supersedes the body-line placement described in
   `metadata` (identity) vs. `spec` (declared content) split. This matches
   the sidecar's role as the general, growing maintainer-metadata home.
 - **Envelope fields (checker-enforced):**
-  - `apiVersion`: `gitapex.dev/v1alpha1` (a namespacing string in k8s
+  - `apiVersion`: `gitapex.io/v1alpha1` (a namespacing string in k8s
     group/version form, not a claim to own the domain; `v1alpha1` signals
     the schema is still evolving).
   - `kind`: `SkillMetadata`.
@@ -178,10 +181,10 @@ home. This supersedes the body-line placement described in
   field (`spec.skillDependencies` and any future addition) is still
   skipped, not parsed -- this is not a general arbitrary-YAML reader.
   Full arbitrary YAML is neither produced nor required.
-- **Example** (`skills/evaluating-skill-quality/gitapex_metadata.yaml`):
+- **Example** (`skills/evaluating-skill-quality/metadata/gitapex.yaml`):
 
   ```yaml
-  apiVersion: gitapex.dev/v1alpha1
+  apiVersion: gitapex.io/v1alpha1
   kind: SkillMetadata
   metadata:
     name: evaluating-skill-quality
@@ -211,9 +214,9 @@ indentation-aware manifest reader (a light extension of the existing
 `_parse_frontmatter` scalar logic that also descends into the
 `metadata` and `spec` maps), and these checks:
 
-- `metadata-file-present` -- `gitapex_metadata.yaml` exists and is readable
-  next to `SKILL.md`.
-- `manifest-envelope` -- `apiVersion` equals `gitapex.dev/v1alpha1` and
+- `metadata-file-present` -- `metadata/gitapex.yaml` exists and is
+  readable under the skill directory.
+- `manifest-envelope` -- `apiVersion` equals `gitapex.io/v1alpha1` and
   `kind` equals `SkillMetadata` (the recognized shape).
 - `metadata-name-matches-dir` -- `metadata.name` equals the skill's
   directory name (a clean identity invariant for the sidecar; unlike the
@@ -261,7 +264,7 @@ genuinely redundant with the sidecar.
 
 **Three-way split.** For each `skills/<name>/`:
 
-1. Create `gitapex_metadata.yaml` as a `SkillMetadata` manifest:
+1. Create `metadata/gitapex.yaml` as a `SkillMetadata` manifest:
    `metadata.name` = the directory name, `spec.portability` = the enum the
    body line declares today, `spec.capabilityAssumption` = `Broad`.
 2. Classify the existing declaration paragraph and route each part:
@@ -294,7 +297,7 @@ responding-to-a-fresh-arrival, screening-a-low-trust-contribution.
 
 - `skills/evaluating-skill-quality/SKILL.md`: the "Portability level"
   section's placement language ("terse one-line marker on the first body
-  line") changes to "declared in the skill's `gitapex_metadata.yaml`
+  line") changes to "declared in the skill's `metadata/gitapex.yaml`
   sidecar"; add a short "Capability assumption" section pointing at the
   same sidecar and naming the three levels (semantics deferred to the
   rubric in Sub-project B); update Procedure step 4 to read both fields

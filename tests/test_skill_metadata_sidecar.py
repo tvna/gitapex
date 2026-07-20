@@ -3,7 +3,7 @@ shape checker (skills/evaluating-skill-quality/scripts/check_skill_shape.py).
 
 Today that checker's own unit tests run in CI, but the checker was never
 actually applied to the repository's real skills as part of any automated
-run -- a new skill with a missing or malformed gitapex_metadata.yaml sidecar
+run -- a new skill with a missing or malformed metadata/gitapex.yaml sidecar
 (or any other shape violation) could merge green. This test closes that gap
 by discovering every skills/*/ directory that has a SKILL.md and running
 check_shape() against it, parametrized per skill so a failure names the
@@ -65,7 +65,7 @@ def test_skill_passes_deterministic_shape_checker(skill_dir):
 
 # Drift gate for the single-source-of-truth invariant Sub-project C
 # established: docs/skill-provenance.md was retired in favor of each
-# skill's own gitapex_metadata.yaml spec.references, precisely so
+# skill's own metadata/gitapex.yaml spec.references, precisely so
 # provenance has exactly one home. Per CLAUDE.md's rule that such an
 # invariant ships its drift gate in the same change, not a follow-up.
 
@@ -83,7 +83,7 @@ SKILLS_WITH_MIGRATED_PROVENANCE = (
 def test_skill_provenance_file_stays_retired():
     assert not (REPO_ROOT / "docs" / "skill-provenance.md").exists(), (
         "docs/skill-provenance.md was retired in favor of each skill's own "
-        "gitapex_metadata.yaml spec.references (Sub-project C, issue #184) "
+        "metadata/gitapex.yaml spec.references (Sub-project C, issue #184) "
         "-- recreating it would reintroduce a second home for the same "
         "maintainer-facing provenance data."
     )
@@ -93,10 +93,10 @@ def test_skill_provenance_file_stays_retired():
 def test_migrated_provenance_stays_populated(skill_name):
     skill_dir = SKILLS_DIR / skill_name
     parsed = css._parse_manifest(
-        (skill_dir / css.SIDECAR_FILENAME).read_text(encoding="utf-8"))
+        (skill_dir / css.SIDECAR_RELATIVE_PATH).read_text(encoding="utf-8"))
     references = parsed.root.get("spec", {}).get("references")
     assert isinstance(references, list) and references, (
-        f"{skill_name}'s gitapex_metadata.yaml lost its migrated "
+        f"{skill_name}'s metadata/gitapex.yaml lost its migrated "
         "spec.references content (Sub-project C, issue #184); this is the "
         "sole remaining home for that provenance now that "
         "docs/skill-provenance.md is retired."

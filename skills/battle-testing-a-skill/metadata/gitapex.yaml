@@ -1,4 +1,4 @@
-apiVersion: gitapex.dev/v1alpha1
+apiVersion: gitapex.io/v1alpha1
 kind: SkillMetadata
 metadata:
   name: battle-testing-a-skill

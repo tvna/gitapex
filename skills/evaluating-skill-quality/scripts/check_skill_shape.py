@@ -13,11 +13,11 @@ Checks (the canonical list -- the manual fallback is to apply these):
   - name (only if present): lowercase-hyphenated, <= 64 chars,
     no XML tags, contains no reserved word (anthropic, claude)
   - SKILL.md body: <= 500 lines
-  - metadata sidecar (gitapex_metadata.yaml, next to SKILL.md): present;
-    has no malformed top-level lines (manifest-parsable -- a column-0 line
-    that is not blank/comment/document-marker and does not match the
-    top-level "key:" pattern, e.g. a stray "- invalid mapping entry");
-    apiVersion is gitapex.dev/v1alpha1 and kind is SkillMetadata;
+  - metadata sidecar (metadata/gitapex.yaml, under the skill directory):
+    present; has no malformed top-level lines (manifest-parsable -- a
+    column-0 line that is not blank/comment/document-marker and does not
+    match the top-level "key:" pattern, e.g. a stray "- invalid mapping
+    entry"); apiVersion is gitapex.io/v1alpha1 and kind is SkillMetadata;
     metadata.name equals the skill directory name; spec.portability is one
     of Portable/Repository-scoped/Mixed; spec.capabilityAssumption is one
     of Broad/Frontier/Adaptive; spec.references, if present, is a non-empty
@@ -101,12 +101,13 @@ TOC_MIN_LINES = 100
 RESERVED_NAME_WORDS = ("anthropic", "claude")
 
 # The sidecar is this repository's own metadata convention, not part of the
-# Anthropic Agent Skills standard -- hence the gitapex_ prefix. It is never
-# auto-loaded by the skill runtime, so it can never change skill behavior.
-SIDECAR_FILENAME = "gitapex_metadata.yaml"
+# Anthropic Agent Skills standard -- hence its own metadata/ subdirectory
+# and gitapex-labelled apiVersion. It is never auto-loaded by the skill
+# runtime, so it can never change skill behavior.
+SIDECAR_RELATIVE_PATH = "metadata/gitapex.yaml"
 # Kubernetes-manifest-shaped envelope, borrowed as a convention only; the
 # version lets the schema grow without breaking older sidecars.
-EXPECTED_API_VERSION = "gitapex.dev/v1alpha1"
+EXPECTED_API_VERSION = "gitapex.io/v1alpha1"
 EXPECTED_KIND = "SkillMetadata"
 PORTABILITY_LEVELS = ("Portable", "Repository-scoped", "Mixed")
 CAPABILITY_ASSUMPTIONS = ("Broad", "Frontier", "Adaptive")
@@ -148,7 +149,7 @@ SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.\-]*:")
 # repo-specific paths and issues, so the scan does not apply to them.
 # The near-top body marker, kept only as the fallback declaration form for a
 # skill vendored in from another repository that has no sidecar. Skills in
-# this repository declare portability in gitapex_metadata.yaml instead.
+# this repository declare portability in metadata/gitapex.yaml instead.
 PORTABILITY_RE = re.compile(r"\bportability\s*:", re.IGNORECASE)
 PORTABILITY_MAX_BODY_LINE = 6
 PORTABLE_LEVEL_RE = re.compile(r"\bportable\b", re.IGNORECASE)
@@ -453,7 +454,7 @@ class SidecarPortability:
     answer the portability question. Handed to ``_is_portable``, which
     dispatches on ``state`` instead of touching the filesystem itself.
 
-    - "absent": no ``gitapex_metadata.yaml`` next to SKILL.md. The
+    - "absent": no ``metadata/gitapex.yaml`` under the skill directory. The
       vendored-from-elsewhere case: ``_is_portable`` falls back to the
       near-top body marker.
     - "usable": the sidecar was read and parsed, and its
@@ -631,16 +632,16 @@ def check_shape(target: Path) -> list[CheckResult]:
         "body-length", body_lines <= BODY_MAX_LINES,
         f"SKILL.md body <= {BODY_MAX_LINES} lines", f"{body_lines} lines"))
 
-    sidecar = skill_dir / SIDECAR_FILENAME
+    sidecar = skill_dir / SIDECAR_RELATIVE_PATH
     if not sidecar.is_file():
         results.append(CheckResult(
             "metadata-file-present", False,
-            f"{SIDECAR_FILENAME} exists next to SKILL.md", "missing"))
+            f"{SIDECAR_RELATIVE_PATH} exists", "missing"))
         sidecar_portability = SidecarPortability(state="absent")
     else:
         results.append(CheckResult(
             "metadata-file-present", True,
-            f"{SIDECAR_FILENAME} exists next to SKILL.md", "present"))
+            f"{SIDECAR_RELATIVE_PATH} exists", "present"))
         # Single read+parse site for the sidecar in this module (see the
         # SidecarPortability docstring): a corrupt (non-UTF-8) or otherwise
         # unreadable sidecar must not raise out of check_shape -- it is a
@@ -661,7 +662,7 @@ def check_shape(target: Path) -> list[CheckResult]:
             evidence = f"unreadable: {read_error}"
             results.append(CheckResult(
                 "manifest-parsable", False,
-                "gitapex_metadata.yaml has no malformed top-level lines",
+                f"{SIDECAR_RELATIVE_PATH} has no malformed top-level lines",
                 evidence))
             results.append(CheckResult(
                 "manifest-envelope", False,
@@ -697,7 +698,7 @@ def check_shape(target: Path) -> list[CheckResult]:
                 manifest_parsable_evidence = "no malformed lines"
             results.append(CheckResult(
                 "manifest-parsable", not malformed_lines,
-                "gitapex_metadata.yaml has no malformed top-level lines",
+                f"{SIDECAR_RELATIVE_PATH} has no malformed top-level lines",
                 manifest_parsable_evidence))
             api = manifest.get("apiVersion")
             kind_value = manifest.get("kind")
