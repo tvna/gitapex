@@ -23,12 +23,19 @@ Checks (the canonical list -- the manual fallback is to apply these):
     of Broad/Frontier/Adaptive; spec.references, if present, is a non-empty
     list of non-empty scalar strings, each item consistently indented with
     its own list and not an unquoted YAML mapping key such as "path: foo"
-    (references-well-formed) -- the only gated list field. Other ungated
-    sidecar fields (e.g. spec.skillDependencies,
-    spec.evalStatus) ARE parsed into the spec map by _parse_manifest, just
-    not gated/checked here; only nested maps and list items under them are
-    skipped by the parser, and indented lines are never flagged as
-    malformed regardless of shape.
+    (references-well-formed); spec.skillDependencies, if present, is a
+    mapping with only the keys requires/relatedTo, each -- if present -- a
+    list of non-empty scalar strings with the same per-item shape rules as
+    spec.references, except an empty list is valid here, unlike
+    spec.references (skill-dependencies-well-formed); every name listed in
+    either list resolves to an existing sibling skill directory
+    (skill-dependencies-resolve); and a non-empty
+    spec.skillDependencies.requires is incompatible with
+    spec.portability: Portable (requires-portability-compatible). Other
+    ungated sidecar fields (e.g. spec.evalStatus) ARE parsed into the spec
+    map by _parse_manifest, just not gated/checked here; only nested maps
+    and list items under them are skipped by the parser, and indented
+    lines are never flagged as malformed regardless of shape.
   - references/ files: exactly one level deep
   - any references/ file over 100 lines: contains a table of contents
     (a Markdown heading matching "Table of contents" or "Contents",
@@ -126,6 +133,18 @@ REFERENCES_LIST_ITEM_RE = re.compile(r"^[ ]{2,}-\s*(.*)$")
 # this same text (e.g. "\"path: something\"") is a deliberate scalar and
 # is excluded by the caller checking for a wrapping quote first.
 REFERENCES_MAPPING_LIKE_RE = re.compile(r"^[A-Za-z0-9_.-]+:(\s|$)")
+
+# spec.skillDependencies's two recognized subkeys, and the shape of their
+# lines. Unlike spec.references (which tolerates indent drift from years of
+# pre-existing files), this field is new and every real sidecar is authored
+# in the same change, so the parser accepts exactly one indent: subkeys at
+# 4 spaces (one level under skillDependencies' own 2-space key), list items
+# at 5+ spaces (strictly deeper than the subkey, so a dedented line reliably
+# ends the list).
+SKILL_DEPENDENCY_SUBKEYS = ("requires", "relatedTo")
+SKILL_DEP_SUBKEY_RE = re.compile(r"^[ ]{4}(requires|relatedTo):\s*(.*)$")
+SKILL_DEP_UNKNOWN_KEY_RE = re.compile(r"^[ ]{4}([A-Za-z0-9_-]+):")
+SKILL_DEP_LIST_ITEM_RE = re.compile(r"^[ ]{5,}-\s*(.*)$")
 
 TAG_RE = re.compile(r"</?[A-Za-z][^>]*>")
 NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
@@ -269,28 +288,58 @@ class ManifestParse:
     this parser's own "indented lines are never malformed" rule, which is
     why they need this separate, explicit channel rather than reusing
     ``malformed_lines``.
+
+    ``malformed_skill_dependency_items`` and ``unknown_skill_dependency_keys``
+    are spec.skillDependencies' equivalents: the former holds each
+    requires/relatedTo list item that is mapping-shaped or inconsistently
+    indented (same rule as ``malformed_reference_items``, one nesting level
+    deeper); the latter holds each key found directly under
+    spec.skillDependencies that is not ``requires`` or ``relatedTo``
+    (trimmed line, e.g. "extra: foo"). Both empty when the field is absent
+    or parsed cleanly.
     """
     root: dict[str, object]
     malformed_lines: list[str]
     malformed_reference_items: list[str]
+    malformed_skill_dependency_items: list[str]
+    unknown_skill_dependency_keys: list[str]
 
 
 def _parse_manifest(text: str) -> ManifestParse:
     """Parse the YAML subset the metadata sidecar is specified to use.
 
     Reads top-level 'key: value' scalars and exactly-two-space-indented
-    scalars under a top-level map (metadata:, spec:). One exception:
-    spec.references (and only that key, and only directly under spec) is
-    read as a flat list of scalar strings, each a "- <value>" line indented
-    2 or more spaces -- the shape this repository's sidecars use for
-    maintainer-facing provenance (see the design spec's Sub-project C).
-    Every other nested map or list (e.g. spec.skillDependencies) is still
-    deliberately skipped, exactly as before: no other gated field uses
-    list/nested structure, and skipping keeps this stdlib-only with no
-    YAML dependency. Inline '# comment' text after a value on the same
-    line is not stripped -- it is read as part of the value, which is safe
-    (fails closed against the expected enum/literal) but is not a
-    supported way to annotate a sidecar field.
+    scalars under a top-level map (metadata:, spec:). Two exceptions:
+
+    - spec.references (and only that key, and only directly under spec) is
+      read as a flat list of scalar strings, each a "- <value>" line
+      indented 2 or more spaces -- the shape this repository's sidecars use
+      for maintainer-facing provenance (see the design spec's
+      Sub-project C).
+    - spec.skillDependencies (and only that key, and only directly under
+      spec) is read as a mapping with exactly two recognized subkeys,
+      ``requires`` and ``relatedTo`` (see the design spec's Sub-project D).
+      Each subkey, at exactly 4-space indent, is either an inline empty
+      list (``requires: []``) or an empty value opening a block list of
+      "- <value>" items at 5 or more spaces indent -- one nesting level
+      deeper than spec.references' own items, and with the same per-item
+      shape rules (mapping-like-item and indent-consistency detection).
+      Unlike spec.references, this parser accepts only one indent width
+      per level rather than tolerating drift, since every real sidecar is
+      authored fresh in the same change that adds this parser, not
+      migrated from years of pre-existing files. A key inside
+      spec.skillDependencies other than ``requires``/``relatedTo`` is
+      collected into ``ManifestParse.unknown_skill_dependency_keys``
+      instead of being silently skipped, since an unrecognized key here is
+      a real shape defect the checker is expected to catch, not reserved
+      space.
+
+    Every other nested map or list (e.g. spec.evalStatus) is still
+    deliberately skipped, exactly as before: skipping keeps this
+    stdlib-only with no YAML dependency. Inline '# comment' text after a
+    value on the same line is not stripped -- it is read as part of the
+    value, which is safe (fails closed against the expected enum/literal)
+    but is not a supported way to annotate a sidecar field.
 
     A top-level (column-0) line that is not blank, not a '#' comment, not a
     YAML document marker ('---' or '...'), and does not match the top-level
@@ -301,13 +350,14 @@ def _parse_manifest(text: str) -> ManifestParse:
     itself does not raise. Indented lines are NEVER considered malformed
     this same way -- every indented line belongs to nested/list structures
     this parser deliberately does not interpret, and flagging them would
-    defeat that reserved-field design. spec.references list items are the
-    one exception with their own malformed channel: an unquoted item
-    shaped like a YAML mapping key ("path: foo", real YAML would read that
-    as a nested mapping, not a scalar) or an item indented inconsistently
-    with the rest of its own list is collected (trimmed) into
-    ``ManifestParse.malformed_reference_items`` instead of being silently
-    accepted as a garbled scalar string.
+    defeat that reserved-field design. spec.references and
+    spec.skillDependencies list items are the exceptions with their own
+    malformed channels: an unquoted item shaped like a YAML mapping key
+    ("path: foo", real YAML would read that as a nested mapping, not a
+    scalar) or an item indented inconsistently with the rest of its own
+    list is collected (trimmed) into ``ManifestParse.malformed_reference_items``
+    or ``ManifestParse.malformed_skill_dependency_items`` respectively,
+    instead of being silently accepted as a garbled scalar string.
     """
     text = text.lstrip("\ufeff")  # strip a leading UTF-8 BOM, as _parse_frontmatter does
     root: dict[str, object] = {}
@@ -316,6 +366,13 @@ def _parse_manifest(text: str) -> ManifestParse:
     refs_indent: int | None = None
     malformed: list[str] = []
     malformed_refs: list[str] = []
+    in_skill_deps = False
+    skill_deps: dict[str, object] = {}
+    collecting_dep_list: list[str] | None = None
+    collecting_dep_key: str | None = None
+    dep_list_indent: int | None = None
+    malformed_deps: list[str] = []
+    unknown_dep_keys: list[str] = []
 
     def _finalize_refs() -> None:
         nonlocal collecting_refs, refs_indent
@@ -323,6 +380,22 @@ def _parse_manifest(text: str) -> ManifestParse:
             current["references"] = collecting_refs
         collecting_refs = None
         refs_indent = None
+
+    def _finalize_dep_list() -> None:
+        nonlocal collecting_dep_list, collecting_dep_key, dep_list_indent
+        if collecting_dep_list is not None and collecting_dep_key is not None:
+            skill_deps[collecting_dep_key] = collecting_dep_list
+        collecting_dep_list = None
+        collecting_dep_key = None
+        dep_list_indent = None
+
+    def _finalize_skill_deps() -> None:
+        nonlocal in_skill_deps, skill_deps
+        _finalize_dep_list()
+        if in_skill_deps and current is not None:
+            current["skillDependencies"] = skill_deps
+        in_skill_deps = False
+        skill_deps = {}
 
     for raw in text.splitlines():
         line = raw.rstrip()
@@ -354,12 +427,64 @@ def _parse_manifest(text: str) -> ManifestParse:
             # Not a list item: the references list ends here. Finalize it
             # and fall through to process this line normally below.
             _finalize_refs()
+        if collecting_dep_list is not None:
+            item = SKILL_DEP_LIST_ITEM_RE.match(line)
+            if item:
+                item_indent = len(line) - len(line.lstrip(" "))
+                if dep_list_indent is None:
+                    dep_list_indent = item_indent
+                if item_indent != dep_list_indent:
+                    malformed_deps.append(line.strip())
+                    continue
+                raw_text = item.group(1).strip()
+                is_quoted = (len(raw_text) >= 2 and raw_text[0] == raw_text[-1]
+                             and raw_text[0] in "\"'")
+                if not is_quoted and REFERENCES_MAPPING_LIKE_RE.match(raw_text):
+                    malformed_deps.append(line.strip())
+                else:
+                    collecting_dep_list.append(_unquote(raw_text))
+                continue
+            # Not a list item: this requires/relatedTo list ends here.
+            _finalize_dep_list()
+        if in_skill_deps:
+            subkey = SKILL_DEP_SUBKEY_RE.match(line)
+            if subkey:
+                key, value = subkey.group(1), subkey.group(2).strip()
+                if value == "[]":
+                    skill_deps[key] = []
+                elif not value:
+                    collecting_dep_list = []
+                    collecting_dep_key = key
+                    dep_list_indent = None
+                else:
+                    # Not an empty list and not "[]" -- this narrow parser
+                    # has no flow-sequence support; store the raw scalar so
+                    # the shape gate can fail it as the wrong type rather
+                    # than silently dropping it.
+                    skill_deps[key] = value
+                continue
+            unknown = SKILL_DEP_UNKNOWN_KEY_RE.match(line)
+            if unknown:
+                unknown_dep_keys.append(line.strip())
+                continue
+            indent = len(line) - len(line.lstrip(" "))
+            if line[:1] in (" ", "\t") and indent >= 4:
+                # Stray content deeper inside the block that is not a
+                # recognized subkey or list-item line -- skip silently,
+                # consistent with "indented lines are never malformed"
+                # except the explicit channels above.
+                continue
+            # Dedented below the block's own indent: skillDependencies ends
+            # here. Finalize it and fall through to process this line
+            # normally below.
+            _finalize_skill_deps()
         if line[:1] in (" ", "\t"):
             # Indented: nested/list content this parser does not interpret,
-            # except spec.references (handled above once its list starts).
-            # Exactly two spaces: a four-space line (a child of a nested
-            # map) has a space where this expects a key character, so it
-            # will not match and is skipped -- never malformed either way.
+            # except spec.references and spec.skillDependencies (handled
+            # above once each starts). Exactly two spaces: a four-space
+            # line (a child of a nested map) has a space where this
+            # expects a key character, so it will not match and is
+            # skipped -- never malformed either way.
             nested = re.match(r"[ ]{2}([A-Za-z0-9_-]+):\s*(.*)$", line)
             if nested and current is not None:
                 key, value = nested.group(1), nested.group(2).strip()
@@ -368,6 +493,9 @@ def _parse_manifest(text: str) -> ManifestParse:
                 # without tracking a separate current-top-key variable.
                 if key == "references" and current is root.get("spec") and not value:
                     collecting_refs = []
+                elif key == "skillDependencies" and current is root.get("spec") and not value:
+                    in_skill_deps = True
+                    skill_deps = {}
                 elif value:
                     current[key] = _unquote(value)
             continue
@@ -386,8 +514,11 @@ def _parse_manifest(text: str) -> ManifestParse:
             continue
         malformed.append(line.strip())
     _finalize_refs()
+    _finalize_skill_deps()
     return ManifestParse(root=root, malformed_lines=malformed,
-                          malformed_reference_items=malformed_refs)
+                          malformed_reference_items=malformed_refs,
+                          malformed_skill_dependency_items=malformed_deps,
+                          unknown_skill_dependency_keys=unknown_dep_keys)
 
 
 def _body_after_frontmatter(text: str) -> list[str]:
@@ -651,11 +782,15 @@ def check_shape(target: Path) -> list[CheckResult]:
             manifest: dict[str, object] | None = parsed.root
             malformed_lines = parsed.malformed_lines
             malformed_reference_items = parsed.malformed_reference_items
+            malformed_skill_dependency_items = parsed.malformed_skill_dependency_items
+            unknown_skill_dependency_keys = parsed.unknown_skill_dependency_keys
             read_error: str | None = None
         except (OSError, UnicodeDecodeError) as exc:
             manifest = None
             malformed_lines = []
             malformed_reference_items = []
+            malformed_skill_dependency_items = []
+            unknown_skill_dependency_keys = []
             read_error = type(exc).__name__
 
         if manifest is None:
@@ -682,6 +817,19 @@ def check_shape(target: Path) -> list[CheckResult]:
                 "references-well-formed", False,
                 "spec.references, if present, is a non-empty list of non-empty strings",
                 evidence))
+            results.append(CheckResult(
+                "skill-dependencies-well-formed", False,
+                "spec.skillDependencies, if present, is a mapping with only "
+                "requires/relatedTo keys, each -- if present -- a list of "
+                "non-empty strings", evidence))
+            results.append(CheckResult(
+                "skill-dependencies-resolve", False,
+                "every name in spec.skillDependencies.requires/relatedTo "
+                "resolves to an existing sibling skill directory", evidence))
+            results.append(CheckResult(
+                "requires-portability-compatible", False,
+                "a non-empty spec.skillDependencies.requires is incompatible "
+                "with spec.portability: Portable", evidence))
             # Deliberately not the body-marker fallback: a present-but-broken
             # sidecar is authoritative-and-failing, not absent. Running the
             # scan (rather than skipping it) lands extra findings on a skill
@@ -772,6 +920,10 @@ def check_shape(target: Path) -> list[CheckResult]:
                     "references-well-formed", False,
                     "spec.references, if present, is a non-empty list of non-empty strings",
                     ref_evidence))
+            results.extend(_skill_dependency_checks(
+                spec_is_mapping, spec_raw, spec,
+                malformed_skill_dependency_items, unknown_skill_dependency_keys,
+                skill_dir, portability))
             if portability in PORTABILITY_LEVELS:
                 sidecar_portability = SidecarPortability(
                     state="usable", level=portability)
@@ -852,6 +1004,120 @@ def _portable_citation_checks(skill_md: Path, skill_dir: Path,
             "Portable content has no bare-prose origin-repository path citation",
             "none" if not path_hits else "found: " + ", ".join(path_hits)),
     ]
+
+
+def _valid_skill_dependency_list(value: object) -> bool:
+    """Whether ``value`` is a valid requires/relatedTo list: a list of
+    non-empty strings. Unlike spec.references, an empty list is valid here
+    -- most skills' spec.skillDependencies.requires is expected to be
+    empty (see the design spec's Sub-project D rationale)."""
+    return isinstance(value, list) and all(
+        isinstance(v, str) and v.strip() for v in value)
+
+
+def _skill_dependency_checks(spec_is_mapping: bool, spec_raw: object,
+                              spec: dict[str, object],
+                              malformed_items: list[str],
+                              unknown_keys: list[str],
+                              skill_dir: Path,
+                              portability: object) -> list[CheckResult]:
+    """The three spec.skillDependencies checks (Sub-project D):
+    ``skill-dependencies-well-formed`` (shape), ``skill-dependencies-resolve``
+    (every named sibling exists -- the dangling-reference gate), and
+    ``requires-portability-compatible`` (a non-empty ``requires`` cannot
+    coexist with ``spec.portability: Portable`` -- a portable skill cannot
+    hard-depend on a sibling that does not travel with it).
+
+    Mirrors the spec.references cascade in ``check_shape``: shape is
+    checked first, since a badly-shaped field has nothing sensible to
+    resolve or contradict against -- in every early-return branch below,
+    ``skill-dependencies-resolve`` and ``requires-portability-compatible``
+    report "nothing to check" rather than silently passing on data that was
+    never actually a list.
+    """
+    well_formed_rule = ("spec.skillDependencies, if present, is a mapping "
+                         "with only requires/relatedTo keys, each -- if "
+                         "present -- a list of non-empty strings")
+    resolve_rule = ("every name in spec.skillDependencies.requires/relatedTo "
+                     "resolves to an existing sibling skill directory")
+    contradiction_rule = ("a non-empty spec.skillDependencies.requires is "
+                           "incompatible with spec.portability: Portable")
+
+    if not spec_is_mapping:
+        evidence = f"spec is not a mapping: {spec_raw!r}"
+        return [
+            CheckResult("skill-dependencies-well-formed", False,
+                        well_formed_rule, evidence),
+            CheckResult("skill-dependencies-resolve", True, resolve_rule,
+                        "nothing to check (spec is not a mapping)"),
+            CheckResult("requires-portability-compatible", True,
+                        contradiction_rule,
+                        "nothing to check (spec is not a mapping)"),
+        ]
+
+    deps = spec.get("skillDependencies")
+    if deps is None:
+        return [
+            CheckResult("skill-dependencies-well-formed", True,
+                        well_formed_rule, "not declared (optional)"),
+            CheckResult("skill-dependencies-resolve", True, resolve_rule,
+                        "not declared (optional)"),
+            CheckResult("requires-portability-compatible", True,
+                        contradiction_rule, "not declared (optional)"),
+        ]
+
+    if not isinstance(deps, dict):
+        evidence = f"not a mapping: {deps!r}"
+        return [
+            CheckResult("skill-dependencies-well-formed", False,
+                        well_formed_rule, evidence),
+            CheckResult("skill-dependencies-resolve", True, resolve_rule,
+                        "nothing to check (not a mapping)"),
+            CheckResult("requires-portability-compatible", True,
+                        contradiction_rule, "nothing to check (not a mapping)"),
+        ]
+
+    results: list[CheckResult] = []
+    problems: list[str] = []
+    if unknown_keys:
+        count = len(unknown_keys)
+        problems.append(f"{count} unknown key{'' if count == 1 else 's'}: "
+                         f"{unknown_keys[0]!r}")
+    if malformed_items:
+        count = len(malformed_items)
+        problems.append(f"{count} malformed entr{'y' if count == 1 else 'ies'}: "
+                         f"{malformed_items[0]!r}")
+    for key in SKILL_DEPENDENCY_SUBKEYS:
+        if key in deps and not _valid_skill_dependency_list(deps[key]):
+            problems.append(f"{key} is not a list of non-empty strings: "
+                             f"{deps[key]!r}")
+
+    if problems:
+        results.append(CheckResult("skill-dependencies-well-formed", False,
+                                    well_formed_rule, "; ".join(problems)))
+    else:
+        declared = [k for k in SKILL_DEPENDENCY_SUBKEYS if k in deps]
+        evidence = f"{', '.join(declared)} declared" if declared else "no keys declared"
+        results.append(CheckResult("skill-dependencies-well-formed", True,
+                                    well_formed_rule, evidence))
+
+    requires = deps.get("requires")
+    requires = requires if _valid_skill_dependency_list(requires) else []
+    related = deps.get("relatedTo")
+    related = related if _valid_skill_dependency_list(related) else []
+    named = list(dict.fromkeys(requires + related))
+    dangling = [n for n in named if not (skill_dir.parent / n).is_dir()]
+    results.append(CheckResult(
+        "skill-dependencies-resolve", not dangling, resolve_rule,
+        "all resolve" if not dangling else "dangling: " + ", ".join(dangling)))
+
+    contradiction = bool(requires) and portability == "Portable"
+    results.append(CheckResult(
+        "requires-portability-compatible", not contradiction, contradiction_rule,
+        "ok" if not contradiction
+        else f"non-empty requires with portability={portability!r}"))
+
+    return results
 
 
 def format_report(results: list[CheckResult]) -> str:

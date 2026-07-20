@@ -526,13 +526,15 @@ def test_malformed_top_level_line_fails_manifest_parsable(tmp_path):
 
 def test_legitimate_deeper_nesting_passes_manifest_parsable(tmp_path):
     # Pins that the malformed-line fix does not break the reserved-field
-    # design: spec.skillDependencies (a nested map with a list-valued
-    # 'requires' and a 'relatedTo' list) is still ungated and deliberately
-    # not interpreted by the parser -- none of its indented lines may be
-    # flagged as malformed. spec.references' own mapping-shaped-item case
-    # is a distinct scenario, covered by
-    # test_references_mapping_shaped_item_fails_well_formed below (that
-    # field is no longer ungated as of Sub-project C).
+    # design: a nested map like spec.skillDependencies (a list-valued
+    # 'requires' and a 'relatedTo' list) must never have its indented
+    # lines flagged as malformed top-level lines -- that's a distinct
+    # concern from the field's own shape gates
+    # (skill-dependencies-well-formed et al., covered separately below).
+    # spec.references' own mapping-shaped-item case is a distinct scenario,
+    # covered by test_references_mapping_shaped_item_fails_well_formed
+    # below (that field is no longer ungated as of Sub-project C).
+    (tmp_path / "other-skill").mkdir()
     d = _write_skill(tmp_path)
     (d / "metadata/gitapex.yaml").write_text(
         "apiVersion: gitapex.io/v1alpha1\n"
@@ -995,9 +997,35 @@ def test_manifest_parser_parses_spec_references_list():
     assert parsed.malformed_lines == []
 
 
-def test_manifest_parser_still_ignores_skill_dependencies():
-    # Regression guard: spec.references gaining a real parser must not widen
-    # to spec.skillDependencies (reserved for Sub-project D).
+def test_manifest_parser_parses_spec_skill_dependencies():
+    # Sub-project D: unlike spec.evalStatus (still reserved and ungated),
+    # spec.skillDependencies now gets a real parser, mirroring the
+    # spec.references precedent one nesting level deeper.
+    text = (
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Mixed\n"
+        "  capabilityAssumption: Broad\n"
+        "  skillDependencies:\n"
+        "    requires: []\n"
+        "    relatedTo:\n"
+        "      - other-skill\n"
+    )
+    parsed = css._parse_manifest(text)
+    assert parsed.root["spec"]["skillDependencies"] == {
+        "requires": [], "relatedTo": ["other-skill"]}
+    assert parsed.malformed_lines == []
+    assert parsed.malformed_skill_dependency_items == []
+    assert parsed.unknown_skill_dependency_keys == []
+
+
+def test_manifest_parser_still_ignores_eval_status():
+    # Regression guard: spec.skillDependencies gaining a real parser must
+    # not widen to spec.evalStatus (reserved for issue #185, untouched by
+    # this sub-project).
     text = (
         "apiVersion: gitapex.io/v1alpha1\n"
         "kind: SkillMetadata\n"
@@ -1006,13 +1034,12 @@ def test_manifest_parser_still_ignores_skill_dependencies():
         "spec:\n"
         "  portability: Portable\n"
         "  capabilityAssumption: Broad\n"
-        "  skillDependencies:\n"
-        "    requires: []\n"
-        "    relatedTo:\n"
-        "      - other-skill\n"
+        "  evalStatus:\n"
+        "    baseline: 2026-01-01\n"
+        "    lift: 0.2\n"
     )
     parsed = css._parse_manifest(text)
-    assert "skillDependencies" not in parsed.root["spec"]
+    assert "evalStatus" not in parsed.root["spec"]
     assert parsed.malformed_lines == []
 
 
@@ -1125,3 +1152,222 @@ def test_references_well_formed_fails_when_spec_is_not_a_mapping(tmp_path):
     assert by["portability-declared"].passed is False
     assert by["references-well-formed"].passed is False
     assert "not a mapping" in by["references-well-formed"].evidence
+
+
+# ---- skill-dependencies-well-formed / skill-dependencies-resolve /
+#      requires-portability-compatible (Sub-project D) ----
+
+_SKILL_DEP_CHECKS = ("skill-dependencies-well-formed",
+                     "skill-dependencies-resolve",
+                     "requires-portability-compatible")
+
+
+def _write_skill_deps_sidecar(d, body, *, portability="Mixed"):
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        f"  portability: {portability}\n"
+        "  capabilityAssumption: Broad\n"
+        f"{body}",
+        encoding="utf-8")
+    return d
+
+
+def test_skill_dependencies_absent_is_well_formed(tmp_path):
+    d = _write_skill(tmp_path)
+    by = _by_name(css.check_shape(d))
+    for check in _SKILL_DEP_CHECKS:
+        assert by[check].passed is True, check
+        assert by[check].evidence == "not declared (optional)"
+    assert css.main([str(d)]) == 0
+
+
+def test_skill_dependencies_valid_resolves_and_is_well_formed(tmp_path):
+    (tmp_path / "other-skill").mkdir()
+    d = _write_skill_deps_sidecar(
+        _write_skill(tmp_path),
+        "  skillDependencies:\n"
+        "    requires: []\n"
+        "    relatedTo:\n"
+        "      - other-skill\n")
+    by = _by_name(css.check_shape(d))
+    assert by["skill-dependencies-well-formed"].passed is True
+    assert by["skill-dependencies-resolve"].passed is True
+    assert by["skill-dependencies-resolve"].evidence == "all resolve"
+    assert by["requires-portability-compatible"].passed is True
+    assert css.main([str(d)]) == 0
+
+
+def test_skill_dependencies_both_lists_empty_is_valid(tmp_path):
+    # Unlike spec.references, an empty list is the expected common case for
+    # requires, and relatedTo may legitimately be empty too (no siblings
+    # mention this skill) -- neither is a failure.
+    d = _write_skill_deps_sidecar(
+        _write_skill(tmp_path),
+        "  skillDependencies:\n"
+        "    requires: []\n"
+        "    relatedTo: []\n")
+    by = _by_name(css.check_shape(d))
+    assert by["skill-dependencies-well-formed"].passed is True
+    assert by["skill-dependencies-resolve"].passed is True
+    assert by["requires-portability-compatible"].passed is True
+    assert css.main([str(d)]) == 0
+
+
+def test_skill_dependencies_unknown_key_fails_well_formed(tmp_path):
+    d = _write_skill_deps_sidecar(
+        _write_skill(tmp_path),
+        "  skillDependencies:\n"
+        "    requires: []\n"
+        "    extra: foo\n")
+    by = _by_name(css.check_shape(d))
+    assert by["skill-dependencies-well-formed"].passed is False
+    assert "unknown key" in by["skill-dependencies-well-formed"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_skill_dependencies_non_list_scalar_fails_well_formed(tmp_path):
+    d = _write_skill_deps_sidecar(
+        _write_skill(tmp_path),
+        "  skillDependencies:\n"
+        "    requires: yes\n"
+        "    relatedTo: []\n")
+    by = _by_name(css.check_shape(d))
+    assert by["skill-dependencies-well-formed"].passed is False
+    assert "requires is not a list" in by["skill-dependencies-well-formed"].evidence
+    # The malformed subkey is treated as empty for the other two gates,
+    # not silently trusted -- no dangling/contradiction false negative.
+    assert by["skill-dependencies-resolve"].passed is True
+    assert by["requires-portability-compatible"].passed is True
+    assert css.main([str(d)]) == 1
+
+
+def test_skill_dependencies_mapping_shaped_item_fails_well_formed(tmp_path):
+    d = _write_skill_deps_sidecar(
+        _write_skill(tmp_path),
+        "  skillDependencies:\n"
+        "    requires: []\n"
+        "    relatedTo:\n"
+        "      - name: other-skill\n")
+    by = _by_name(css.check_shape(d))
+    assert by["skill-dependencies-well-formed"].passed is False
+    assert "malformed entry" in by["skill-dependencies-well-formed"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_skill_dependencies_inconsistent_indent_fails_well_formed(tmp_path):
+    d = _write_skill_deps_sidecar(
+        _write_skill(tmp_path),
+        "  skillDependencies:\n"
+        "    requires: []\n"
+        "    relatedTo:\n"
+        "      - \"a\"\n"
+        "       - \"b\"\n")
+    by = _by_name(css.check_shape(d))
+    assert by["skill-dependencies-well-formed"].passed is False
+    assert css.main([str(d)]) == 1
+
+
+def test_skill_dependencies_whole_field_wrong_type_fails_well_formed(tmp_path):
+    d = _write_skill_deps_sidecar(_write_skill(tmp_path), "  skillDependencies: oops\n")
+    by = _by_name(css.check_shape(d))
+    assert by["skill-dependencies-well-formed"].passed is False
+    assert "not a mapping" in by["skill-dependencies-well-formed"].evidence
+    assert by["skill-dependencies-resolve"].passed is True
+    assert by["requires-portability-compatible"].passed is True
+
+
+def test_skill_dependencies_dangling_requires_fails_resolve(tmp_path):
+    d = _write_skill_deps_sidecar(
+        _write_skill(tmp_path),
+        "  skillDependencies:\n"
+        "    requires:\n"
+        "      - ghost-skill\n"
+        "    relatedTo: []\n")
+    by = _by_name(css.check_shape(d))
+    assert by["skill-dependencies-well-formed"].passed is True
+    assert by["skill-dependencies-resolve"].passed is False
+    assert "ghost-skill" in by["skill-dependencies-resolve"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_skill_dependencies_dangling_related_to_fails_resolve(tmp_path):
+    d = _write_skill_deps_sidecar(
+        _write_skill(tmp_path),
+        "  skillDependencies:\n"
+        "    requires: []\n"
+        "    relatedTo:\n"
+        "      - ghost-skill\n")
+    by = _by_name(css.check_shape(d))
+    assert by["skill-dependencies-resolve"].passed is False
+    assert "ghost-skill" in by["skill-dependencies-resolve"].evidence
+
+
+def test_requires_portability_contradiction_fails_on_portable(tmp_path):
+    (tmp_path / "other-skill").mkdir()
+    d = _write_skill_deps_sidecar(
+        _write_skill(tmp_path),
+        "  skillDependencies:\n"
+        "    requires:\n"
+        "      - other-skill\n"
+        "    relatedTo: []\n",
+        portability="Portable")
+    by = _by_name(css.check_shape(d))
+    assert by["skill-dependencies-resolve"].passed is True
+    assert by["requires-portability-compatible"].passed is False
+    assert "Portable" in by["requires-portability-compatible"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_requires_non_empty_on_mixed_does_not_contradict(tmp_path):
+    (tmp_path / "other-skill").mkdir()
+    d = _write_skill_deps_sidecar(
+        _write_skill(tmp_path),
+        "  skillDependencies:\n"
+        "    requires:\n"
+        "      - other-skill\n"
+        "    relatedTo: []\n",
+        portability="Mixed")
+    by = _by_name(css.check_shape(d))
+    assert by["requires-portability-compatible"].passed is True
+    assert css.main([str(d)]) == 0
+
+
+def test_requires_empty_on_portable_does_not_contradict(tmp_path):
+    d = _write_skill_deps_sidecar(
+        _write_skill(tmp_path),
+        "  skillDependencies:\n"
+        "    requires: []\n"
+        "    relatedTo: []\n",
+        portability="Portable")
+    by = _by_name(css.check_shape(d))
+    assert by["requires-portability-compatible"].passed is True
+    assert css.main([str(d)]) == 0
+
+
+def test_skill_dependencies_checks_fail_when_sidecar_unreadable(tmp_path):
+    d = _write_skill(tmp_path)
+    sidecar = d / "metadata/gitapex.yaml"
+    sidecar.write_bytes(b"\xff\xfe\x00\x01invalid")
+    by = _by_name(css.check_shape(d))
+    for check in _SKILL_DEP_CHECKS:
+        assert by[check].passed is False, check
+
+
+def test_skill_dependencies_well_formed_fails_when_spec_is_not_a_mapping(tmp_path):
+    d = _write_skill(tmp_path)
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec: not-a-mapping-scalar\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["skill-dependencies-well-formed"].passed is False
+    assert "not a mapping" in by["skill-dependencies-well-formed"].evidence
+    assert by["skill-dependencies-resolve"].passed is True
+    assert by["requires-portability-compatible"].passed is True
