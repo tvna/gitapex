@@ -5,3 +5,8 @@ metadata:
 spec:
   portability: Portable
   capabilityAssumption: Broad
+  skillDependencies:
+    requires: []
+    relatedTo:
+      - driving-pr-to-merge
+      - issue-to-branch

@@ -5,3 +5,9 @@ metadata:
 spec:
   portability: Repository-scoped
   capabilityAssumption: Broad
+  skillDependencies:
+    requires: []
+    relatedTo:
+      - battle-testing-a-skill
+      - responding-to-a-fresh-arrival
+      - untrusted-input-triage

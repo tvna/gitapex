@@ -5,3 +5,9 @@ metadata:
 spec:
   portability: Portable
   capabilityAssumption: Broad
+  skillDependencies:
+    requires: []
+    relatedTo:
+      - issue-to-branch
+      - responding-to-a-fresh-arrival
+      - screening-a-low-trust-contribution

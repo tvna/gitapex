@@ -5,3 +5,7 @@ metadata:
 spec:
   portability: Portable
   capabilityAssumption: Broad
+  skillDependencies:
+    requires: []
+    relatedTo:
+      - stop-and-replan

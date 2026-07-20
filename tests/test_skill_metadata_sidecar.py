@@ -101,3 +101,117 @@ def test_migrated_provenance_stays_populated(skill_name):
         "sole remaining home for that provenance now that "
         "docs/skill-provenance.md is retired."
     )
+
+
+# ---- spec.skillDependencies.requires cycle gate (Sub-project D, issue #188) ----
+#
+# check_shape() operates on one skill directory at a time and cannot see the
+# graph across skills, so this repo-wide invariant lives here, alongside the
+# other repo-wide gates above, rather than in the single-skill checker.
+#
+# Decision (scope item 4 of #188): a `requires` cycle IS an error. `relatedTo`
+# cycles are fine -- they are boundary/complement statements between two
+# independently-usable skills (e.g. ranking-the-open-queue <->
+# responding-to-a-fresh-arrival <-> screening-a-low-trust-contribution, and
+# evaluating-skill-quality <-> scorer-gated-skill-edits, both real cycles in
+# this repository today). A `requires` cycle would mean neither skill in the
+# cycle could ever function standalone, contradicting the load-bearing
+# definition in the design spec (section 4.1): "requires: the procedure
+# cannot function without it." Two skills each unable to function without
+# the other is not a coherent state.
+
+
+def _find_requires_cycle(graph: dict[str, list[str]]) -> list[str] | None:
+    """Return one cycle (as a path of skill names) if ``graph`` -- a
+    skill-name -> its `requires` list mapping -- contains one, else None.
+
+    Standard white/gray/black DFS. A name that appears as a dependency but
+    is not itself a key in ``graph`` (a dangling reference) is treated as a
+    dead end, not an error -- that is gate 2's (skill-dependencies-resolve)
+    job, not this one's.
+    """
+    WHITE, GRAY, BLACK = 0, 1, 2
+    color = {name: WHITE for name in graph}
+    path: list[str] = []
+
+    def visit(name: str) -> list[str] | None:
+        color[name] = GRAY
+        path.append(name)
+        for dep in graph.get(name, []):
+            if dep not in color:
+                continue
+            if color[dep] == GRAY:
+                return path[path.index(dep):] + [dep]
+            if color[dep] == WHITE:
+                found = visit(dep)
+                if found:
+                    return found
+        path.pop()
+        color[name] = BLACK
+        return None
+
+    for name in graph:
+        if color[name] == WHITE:
+            found = visit(name)
+            if found:
+                return found
+    return None
+
+
+def test_find_requires_cycle_returns_none_for_acyclic_graph():
+    graph = {"a": ["b"], "b": ["c"], "c": []}
+    assert _find_requires_cycle(graph) is None
+
+
+def test_find_requires_cycle_detects_a_two_cycle():
+    graph = {"a": ["b"], "b": ["a"]}
+    cycle = _find_requires_cycle(graph)
+    assert cycle is not None
+    assert set(cycle) == {"a", "b"}
+
+
+def test_find_requires_cycle_detects_a_longer_cycle():
+    graph = {"a": ["b"], "b": ["c"], "c": ["a"]}
+    cycle = _find_requires_cycle(graph)
+    assert cycle is not None
+    assert set(cycle) == {"a", "b", "c"}
+
+
+def test_find_requires_cycle_ignores_dangling_dependencies():
+    # A name in `requires` with no entry in the graph is a dead end for
+    # this helper, not a crash and not a cycle -- dangling detection is
+    # skill-dependencies-resolve's job.
+    graph = {"a": ["ghost-skill"]}
+    assert _find_requires_cycle(graph) is None
+
+
+def test_find_requires_cycle_handles_relatedto_style_mutual_edges_if_misused():
+    # Sanity: if this helper were ever pointed at a relatedTo graph instead
+    # of requires, a legitimate mutual/cyclic relatedTo pair (fine per the
+    # design spec) would still report as a "cycle" -- confirming callers
+    # must build the graph from `requires` only, never `relatedTo`.
+    graph = {"ranking-the-open-queue": ["responding-to-a-fresh-arrival"],
+             "responding-to-a-fresh-arrival": ["ranking-the-open-queue"]}
+    assert _find_requires_cycle(graph) is not None
+
+
+def _real_requires_graph() -> dict[str, list[str]]:
+    graph: dict[str, list[str]] = {}
+    for skill_dir in SKILL_DIRS:
+        sidecar = skill_dir / css.SIDECAR_RELATIVE_PATH
+        if not sidecar.is_file():
+            continue
+        parsed = css._parse_manifest(sidecar.read_text(encoding="utf-8"))
+        deps = parsed.root.get("spec", {}).get("skillDependencies")
+        requires = deps.get("requires") if isinstance(deps, dict) else None
+        graph[skill_dir.name] = requires if isinstance(requires, list) else []
+    return graph
+
+
+def test_no_requires_cycle_among_real_skills():
+    cycle = _find_requires_cycle(_real_requires_graph())
+    assert cycle is None, (
+        f"requires cycle found: {' -> '.join(cycle)} -- a requires cycle is "
+        "an error per #188's scope item 4 (see the module docstring above): "
+        "no skill in the cycle could ever function standalone."
+    )

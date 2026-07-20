@@ -13,8 +13,7 @@ field. **D** (separate spec) populates and gates `skillDependencies`, the
 inter-skill dependency graph. B, C, and D each depend only on A and are
 independent of each other.
 
-Issues: A = #182, B = #183, C = #184. D has no issue yet; open one before
-starting that work, per the issue-first rule.
+Issues: A = #182, B = #183, C = #184, D = #188.
 
 A's split from B mirrors the `evaluating-skill-quality` skill's own "two
 lanes" model (deterministic shape vs. probabilistic maturity): A is shape
@@ -147,24 +146,32 @@ home. This supersedes the body-line placement described in
   covered before Sub-project C retired that central file in favor of this
   per-skill field. The gate is deliberately narrow: only this one field's
   list shape is parsed; no other nested/list field gained a parser.
+- **`spec.skillDependencies` (optional, gated by Sub-project D -- see
+  section 4.6):** the inter-skill dependency graph, split by strength:
+
+  ```yaml
+  skillDependencies:
+    requires: []          # hard: the procedure cannot function without it
+    relatedTo:            # soft: boundary / complement / see-also
+      - battle-testing-a-skill
+  ```
+
+  When present, `requires` and `relatedTo`, if present, must each be a
+  list of non-empty strings -- an empty list is valid, unlike
+  `spec.references` (`skill-dependencies-well-formed`); every named skill
+  must resolve to an existing `skills/<name>/` directory
+  (`skill-dependencies-resolve`); and a non-empty `requires` is
+  incompatible with `spec.portability: Portable`
+  (`requires-portability-compatible`). When absent, no finding. Populated
+  for all 17 skills; `requires` is empty for all 17 (see section 4.6 for
+  why). The hard/soft split is load-bearing, not decoration: a survey of
+  the current tree found 13 of 17 skills referenced by a sibling, but
+  nearly all of those references are *boundary* statements ("see
+  battle-testing-a-skill ... instead"), not dependencies. Collapsing them
+  into one list would have made almost every Portable skill look
+  self-contradictory.
 - **`spec` ungated fields (optional, free-form, not checker-enforced):**
   maintainer-facing metadata, still reserved by name only:
-  - `spec.skillDependencies` -- the inter-skill dependency graph, split by
-    strength:
-
-    ```yaml
-    skillDependencies:
-      requires: []          # hard: the procedure cannot function without it
-      relatedTo:            # soft: boundary / complement / see-also
-        - battle-testing-a-skill
-    ```
-
-    The hard/soft split is load-bearing, not decoration: a survey of the
-    current tree found 13 of 17 skills referenced by a sibling, but nearly
-    all of those references are *boundary* statements ("see
-    battle-testing-a-skill ... instead"), not dependencies. Collapsing
-    them into one list would make almost every Portable skill look
-    self-contradictory. Populated and gated in Sub-project D.
   - `spec.evalStatus` -- e.g. a `baseline:` date and a `lift:` result.
     Reserved for issue #185's per-skill no-skill-baseline / lift bookkeeping
     (rubric dimension 8), currently held centrally in
@@ -174,13 +181,17 @@ home. This supersedes the body-line placement described in
   control and fully specify (2-space indent, simple scalars for the gated
   fields under `metadata`/`spec`), the checker reads it with a small
   indentation-aware reader -- no PyYAML dependency. It walks the top-level
-  keys, then the `metadata` and `spec` children it needs. One exception,
-  added in Sub-project C: `spec.references` is read as a flat list of
-  scalar strings (each a `- "..."` line, indented exactly 4 spaces),
-  because that field alone is now gated. Every other nested map or list
-  field (`spec.skillDependencies` and any future addition) is still
-  skipped, not parsed -- this is not a general arbitrary-YAML reader.
-  Full arbitrary YAML is neither produced nor required.
+  keys, then the `metadata` and `spec` children it needs. Two exceptions:
+  `spec.references`, added in Sub-project C, is read as a flat list of
+  scalar strings (each a `- "..."` line, indented exactly 4 spaces);
+  `spec.skillDependencies`, added in Sub-project D, is read as a mapping
+  with exactly two recognized subkeys (`requires`, `relatedTo`), each
+  either an inline empty list or a block list of scalar strings, one
+  nesting level deeper than `spec.references`' own items (section 4.6).
+  Every other nested map or list field (`spec.evalStatus` and any future
+  addition) is still skipped, not parsed -- this is not a general
+  arbitrary-YAML reader. Full arbitrary YAML is neither produced nor
+  required.
 - **Example** (`skills/evaluating-skill-quality/metadata/gitapex.yaml`):
 
   ```yaml
@@ -342,8 +353,10 @@ operator made explicitly rather than leaving the field permanently
 ungated: when present, `spec.references` must be a non-empty list of
 non-empty strings. The gate is narrowly scoped to this one field --
 `spec.skillDependencies` and `spec.evalStatus` remain exactly as
-unparsed/ungated as A left them, reserved for their own later
-sub-projects.
+unparsed/ungated as A left them at this point, reserved for their own
+later sub-projects (`spec.skillDependencies` was populated and gated
+later, in Sub-project D -- section 4.6; `spec.evalStatus` remains
+reserved).
 
 This migration was **Sub-project C**, kept separate from A so A stayed a
 focused mechanism change rather than a mechanism + bulk data migration.
@@ -351,6 +364,79 @@ A only defined the format that admitted the `references` field; C filled
 it, gated it, and retired the central file. C was sequenced after
 Sub-project B (issue #183) merged, since both touched
 `skills/battle-testing-a-skill/gitapex_metadata.yaml`.
+
+### 4.6 Populating and gating `spec.skillDependencies` (Sub-project D, issue #188 -- complete)
+
+A reserved `spec.skillDependencies`' shape (section 4.1) without
+populating or gating it. D filled it for all 17 skills and added the two
+gates the field exists to enable: `skill-dependencies-resolve` (every
+named skill resolves to an existing `skills/<name>/` directory) and
+`requires-portability-compatible` (a non-empty `requires` is incompatible
+with `spec.portability: Portable`), plus `skill-dependencies-well-formed`
+(the parser-level shape gate, mirroring `references-well-formed`).
+
+**Classification is a per-skill judgment call, not grep transcription.**
+The dependency graph quoted when this issue was opened found 13 of 17
+skills referenced by at least one sibling. Re-surveyed and reclassified by
+reading the actual citing sentence in every case (not the grep hit alone),
+the result is that **every one of those edges is `relatedTo`; `requires`
+is empty for all 17 skills.** This is not a shortcut default -- it falls
+out of explicit textual evidence repeated across the tree:
+`scorer-gated-skill-edits` states outright that its sibling mentions "are
+examples, not a dependency"; `seeding-issue-pr-templates` calls its
+`issue-to-branch` mention "an option, not a dependency the procedure needs
+to function"; `ranking-the-open-queue` states "This skill depends only on
+a connected GitHub MCP server ... no this-repository tooling"; several
+pairs (`responding-to-a-fresh-arrival` / `screening-a-low-trust-contribution`,
+`outward-artifact-preflight` / `explaining-the-work`) describe co-firing as
+"Apply both; neither substitutes for the other." Two grep-shaped false
+positives were excluded on inspection: a "Mirrors X + Y's established
+co-firing pattern" sentence cites a *different* pair's precedent as an
+analogy, not a relationship of the citing skill to X/Y itself; and a skill
+named only as the subject of a worked example is not a relationship
+between the reviewing skill and the reviewed one.
+
+Mutual/cyclic `relatedTo` edges survive by design and are expected:
+`ranking-the-open-queue` <-> `responding-to-a-fresh-arrival` <->
+`screening-a-low-trust-contribution`, and `evaluating-skill-quality` <->
+`scorer-gated-skill-edits`. These are boundary/complement statements
+between two independently-usable skills, not a coupling that breaks
+either one standalone.
+
+**Scope item 4 decision: a `requires` cycle IS an error.** Unlike
+`relatedTo`, `requires` means (per the shape comment above) "the procedure
+cannot function without it." Two skills each unable to function without
+the other is not a coherent state -- a `requires` cycle would mean neither
+skill in the cycle could ever be used standalone, contradicting that
+definition. `check_shape()` cannot enforce this itself (it reads one skill
+directory at a time and has no view of the graph across skills), so the
+decision is enforced instead by a repo-wide test
+(`tests/test_skill_metadata_sidecar.py`) that builds the real `requires`
+graph from all 17 sidecars and asserts it is acyclic -- a durable gate the
+decision needs, even though it passes trivially today with every
+`requires` list empty.
+
+**Parser extension.** `_parse_manifest` gained a second narrow exception
+alongside `spec.references`: `spec.skillDependencies` is read as a mapping
+with exactly two recognized subkeys, `requires` and `relatedTo`, each
+either an inline empty list (`requires: []`) or a block list of scalar
+strings one nesting level deeper than `spec.references`' own items. Unlike
+`spec.references`, this parser accepts only one indent width per level
+rather than tolerating drift, since every real sidecar was authored fresh
+in the same change that added the parser, not migrated from years of
+pre-existing files. An unrecognized key inside `spec.skillDependencies`
+(e.g. a typo) is a real shape defect the checker now catches, not reserved
+space -- it fails `skill-dependencies-well-formed` by name.
+
+Per #187's retrospective (every field the checker reads gets a valid /
+absent / present-but-invalid test triad), `skills/evaluating-skill-quality/scripts/test_check_skill_shape.py`
+covers: valid population with a real sibling; the field absent entirely;
+and, for present-but-invalid, an unknown key, a non-list scalar value, a
+mapping-shaped list item, inconsistent item indent, a dangling name in
+either list, the whole field typed as a scalar instead of a mapping, and
+both gates' Portable-contradiction cases (fires on `Portable`, does not
+fire on `Mixed`/`Repository-scoped`, does not fire when `requires` is
+empty).
 
 ## 5. Backward compatibility and risks
 
@@ -432,12 +518,18 @@ on. Then, in either order (both depend only on A):
   `references` field, added the `references-well-formed` gate, and
   retired the central file (section 4.5). Landed after Sub-project B
   merged, since both touched `battle-testing-a-skill`'s sidecar.
-- **Sub-project D** -- populate `spec.skillDependencies` for all 17 skills
-  (classifying each existing cross-skill reference as hard `requires` or
-  soft `relatedTo`) and add two deterministic gates: every named skill
-  resolves to an existing `skills/<name>/` (catches dangling references
-  after a rename or retirement), and a non-empty `requires` contradicts
-  `portability: Portable`.
+- **Sub-project D** (#188, complete) -- populated `spec.skillDependencies`
+  for all 17 skills (classifying each existing cross-skill reference as
+  hard `requires` or soft `relatedTo` by reading the citing sentence, not
+  transcribing grep hits) and added the two deterministic gates:
+  `skill-dependencies-resolve` (every named skill resolves to an existing
+  `skills/<name>/`, catching dangling references after a rename or
+  retirement) and `requires-portability-compatible` (a non-empty
+  `requires` contradicts `portability: Portable`). Decided a `requires`
+  cycle is an error and enforced that with a repo-wide acyclicity test
+  (section 4.6). Result: `requires` is empty for all 17 skills today --
+  every real cross-skill reference in the tree turned out to be a
+  boundary/complement statement, not a hard dependency.
 
 Each sub-project is its own issue -> spec -> plan -> implementation
 cycle, per the repository's issue-first rule.

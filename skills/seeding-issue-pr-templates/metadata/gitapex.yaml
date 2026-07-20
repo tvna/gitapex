@@ -5,3 +5,7 @@ metadata:
 spec:
   portability: Mixed
   capabilityAssumption: Broad
+  skillDependencies:
+    requires: []
+    relatedTo:
+      - issue-to-branch
