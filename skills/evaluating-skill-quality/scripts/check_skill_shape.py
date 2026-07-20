@@ -32,10 +32,12 @@ Checks (the canonical list -- the manual fallback is to apply these):
     (skill-dependencies-resolve); and a non-empty
     spec.skillDependencies.requires is incompatible with
     spec.portability: Portable (requires-portability-compatible). Other
-    ungated sidecar fields (e.g. spec.evalStatus) ARE parsed into the spec
-    map by _parse_manifest, just not gated/checked here; only nested maps
-    and list items under them are skipped by the parser, and indented
-    lines are never flagged as malformed regardless of shape.
+    ungated sidecar fields (e.g. spec.evalStatus) are parsed into the spec
+    map by _parse_manifest only if written as a single inline scalar; a
+    nested/block-shaped field (e.g. evalStatus's documented baseline:/lift:
+    children) is dropped entirely, not gated/checked here or anywhere --
+    only nested maps and list items under them are skipped by the parser,
+    and indented lines are never flagged as malformed regardless of shape.
   - references/ files: exactly one level deep
   - any references/ file over 100 lines: contains a table of contents
     (a Markdown heading matching "Table of contents" or "Contents",
