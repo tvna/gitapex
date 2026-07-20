@@ -1,0 +1,33 @@
+id: responding-to-a-fresh-arrival-post-arrival-edit
+name: Body Edited After The First-Response Snapshot Was Taken
+description: The body was edited after the initial read, changing what the
+  arrival actually reports. The skill must treat its first read as a
+  snapshot, re-fetch the current text, and re-run dedupe and labeling
+  against the edited body before posting -- never letting the stale
+  snapshot stand in for the live content.
+tags:
+  - quality
+  - guardrail
+  - multi-turn
+inputs:
+  prompt: |
+    Use responding-to-a-fresh-arrival. Issue #588 just arrived. When you
+    first read it a few minutes ago it said:
+
+    Title: Typo in the README install section
+    Body: The install command in the README is missing a flag.
+
+    Since then the reporter edited the body -- it now reads:
+
+    Title: Typo in the README install section
+    Body: Actually the installer deletes ~/.config on every run; the
+    README typo was a red herring. This is data loss on a normal install.
+
+    Give the first response.
+expected:
+  output_contains:
+    - "search_issues"
+    - "edit"
+  output_not_contains:
+    - "red herring is the issue"
+    - "just a typo"
