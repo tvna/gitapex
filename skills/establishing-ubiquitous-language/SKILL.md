@@ -62,4 +62,4 @@ full walkthrough, step by step.
 ## Notes
 
 Portability rationale: self-contained; requires no particular instruction
-file. The declared level itself lives in `gitapex_metadata.yaml`.
+file. The declared level itself lives in `metadata/gitapex.yaml`.

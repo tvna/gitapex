@@ -426,7 +426,7 @@ grading below.
   decision), not the scoping choice itself. An undeclared level that
   turns out to be repository-scoped is itself a finding, not something to
   silently infer and move past. Declared as the `portability` field in
-  the skill's `gitapex_metadata.yaml` sidecar (the
+  the skill's `metadata/gitapex.yaml` sidecar (the
   `portability-declared` shape check enforces presence and value); any
   extended rationale belongs in a footer `## Notes` section of
   `SKILL.md`.
@@ -440,7 +440,7 @@ grading below.
 
 Like the portability level, this is a precondition the review establishes
 before grading (see [Contract discipline](#contract-discipline)), read from
-the skill's `gitapex_metadata.yaml` sidecar. The three levels are defined
+the skill's `metadata/gitapex.yaml` sidecar. The three levels are defined
 in `SKILL.md`, checkable without opening this file.
 
 This axis pins nothing and never executes: it only calibrates how
@@ -637,7 +637,7 @@ what a well-known format or tool is") are the ungraded, no-declaration
 default -- equivalent to Frontier-level strictness, since a skill with no
 sidecar or an unrecognized declaration is graded at full strictness rather
 than assumed lenient.** For a target that declares `capabilityAssumption` in
-its `gitapex_metadata.yaml` sidecar, the [Capability
+its `metadata/gitapex.yaml` sidecar, the [Capability
 assumption](#capability-assumption) section's per-dimension bullets take
 over and can excuse (Broad) or further tighten (Frontier, and the body under
 Adaptive) exactly this Fail example for the identical sentence; that section

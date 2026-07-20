@@ -9,7 +9,7 @@ tags:
 inputs:
   prompt: |
     Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
-    skill called "reviewing-database-migrations". Its gitapex_metadata.yaml
+    skill called "reviewing-database-migrations". Its metadata/gitapex.yaml
     sidecar declares:
 
     spec:

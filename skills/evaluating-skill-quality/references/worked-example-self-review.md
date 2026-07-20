@@ -75,7 +75,7 @@ remaining step-level delegate-to-script finding.
 ## Portability level
 
 Declared as `portability: Portable` in this skill's
-`gitapex_metadata.yaml` sidecar, and cross-read against the
+`metadata/gitapex.yaml` sidecar, and cross-read against the
 Portable / Repository-scoped / Mixed definitions in `SKILL.md` itself
 (see also [rubric.md's Portability level](rubric.md#portability-level)
 for the per-dimension elaboration), the same way it read
@@ -88,7 +88,7 @@ this skill's own folder or cites general, product-level primary sources
 (`platform.claude.com`, `code.claude.com`); no step tells the model to
 read or branch on a path outside `skills/evaluating-skill-quality/` in
 this origin repository. (Step 4 reads a path inside the *target* skill's
-own directory -- its `gitapex_metadata.yaml`, when present -- but that is
+own directory -- its `metadata/gitapex.yaml`, when present -- but that is
 the review's parameterized subject, not a dependency on this origin
 repository's tree, so the portability claim still holds.)
 Illustrative mentions of "gitapex" in `rubric.md` (dimensions 8 and the
@@ -149,9 +149,9 @@ name-length                                PASS    24 chars  (name <= 64 chars)
 name-no-xml                                PASS    no tags  (name has no XML tags)
 name-not-reserved                          PASS    'evaluating-skill-quality'  (name contains no reserved word ('anthropic', 'claude'))
 body-length                                PASS    326 lines  (SKILL.md body <= 500 lines)
-metadata-file-present                      PASS    present  (gitapex_metadata.yaml exists next to SKILL.md)
-manifest-parsable                          PASS    no malformed lines  (gitapex_metadata.yaml has no malformed top-level lines)
-manifest-envelope                          PASS    apiVersion='gitapex.dev/v1alpha1', kind='SkillMetadata'  (apiVersion is gitapex.dev/v1alpha1 and kind is SkillMetadata)
+metadata-file-present                      PASS    present  (metadata/gitapex.yaml exists)
+manifest-parsable                          PASS    no malformed lines  (metadata/gitapex.yaml has no malformed top-level lines)
+manifest-envelope                          PASS    apiVersion='gitapex.io/v1alpha1', kind='SkillMetadata'  (apiVersion is gitapex.io/v1alpha1 and kind is SkillMetadata)
 metadata-name-matches-dir                  PASS    'evaluating-skill-quality' vs directory 'evaluating-skill-quality'  (metadata.name equals the skill directory name)
 portability-declared                       PASS    'Portable'  (spec.portability is one of ('Portable', 'Repository-scoped', 'Mixed'))
 capability-assumption-declared             PASS    'Broad'  (spec.capabilityAssumption is one of ('Broad', 'Frontier', 'Adaptive'))
@@ -160,7 +160,7 @@ links-inside-skill                         PASS    all inside  (Markdown link ta
 references-flat                            PASS    flat  (references/ files are one level deep)
 toc:rubric.md                              PASS    1060 lines, TOC found  (reference over 100 lines has a TOC)
 toc:worked-example-explaining-the-work.md  PASS    279 lines, TOC found  (reference over 100 lines has a TOC)
-toc:worked-example-self-review.md          PASS    498 lines, TOC found  (reference over 100 lines has a TOC)
+toc:worked-example-self-review.md          PASS    624 lines, TOC found  (reference over 100 lines has a TOC)
 portable-no-issue-citation                 PASS    none  (Portable content has no bare-prose GitHub issue/PR-number citation)
 portable-no-repo-path-citation             PASS    none  (Portable content has no bare-prose origin-repository path citation)
 
@@ -236,7 +236,7 @@ than treated as settled by this one clean check. Line-count history and
 which specific edits contributed: `docs/skill-eval-status.md`.
 
 **Update (capability-assumption axis re-grade, Broad):** this skill now
-declares `capabilityAssumption: Broad` in its `gitapex_metadata.yaml`
+declares `capabilityAssumption: Broad` in its `metadata/gitapex.yaml`
 sidecar, so this dimension is graded under the Broad bullet of
 [rubric.md's Capability assumption](rubric.md#capability-assumption)
 section: explanation that would be redundant for a strong model "is not

@@ -9,7 +9,7 @@ tags:
 inputs:
   prompt: |
     Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
-    skill called "diagnosing-flaky-tests". Its gitapex_metadata.yaml sidecar
+    skill called "diagnosing-flaky-tests". Its metadata/gitapex.yaml sidecar
     declares:
 
     spec:

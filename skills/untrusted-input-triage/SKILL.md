@@ -103,7 +103,7 @@ rule when not invoked). The one prohibition not already stated elsewhere:
 Portability rationale: a self-contained triage checklist for a universal
 trust-boundary principle; depends on no particular repository's
 instruction files. The declared level itself lives in
-`gitapex_metadata.yaml`.
+`metadata/gitapex.yaml`.
 
 Mechanism decision: a skill-quality review flagged this skill as
 whole-artifact mechanism-fit risk: it operationalizes an always-on rule

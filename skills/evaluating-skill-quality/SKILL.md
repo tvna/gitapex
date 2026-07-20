@@ -153,7 +153,7 @@ just to classify it.
   litmus test.
 - **Repository-scoped**: intentionally depends on the origin repo's own
   tooling or conventions. Legitimate, but must say so explicitly, as a
-  `portability` field in the skill's `gitapex_metadata.yaml` sidecar (the
+  `portability` field in the skill's `metadata/gitapex.yaml` sidecar (the
   `portability-declared` shape check enforces its presence and value) --
   undeclared-but-repository-scoped is itself a finding. Extended rationale
   belongs in a footer `## Notes` section of `SKILL.md`.
@@ -178,7 +178,7 @@ dimension; the fixed nine-dimension count is unchanged.
 
 ## Capability assumption
 
-Declared alongside portability in the skill's `gitapex_metadata.yaml`
+Declared alongside portability in the skill's `metadata/gitapex.yaml`
 sidecar, as `spec.capabilityAssumption`. It records which compute /
 model-capability regime the skill was authored for, and calibrates how
 strictly dimensions 2 (Conciseness), 3 (Degree of freedom), and 9
@@ -243,7 +243,7 @@ re-derive one.
 3. Run the deterministic shape checker per the Two lanes section above (or
    apply its checks by hand where Python is unavailable); cite the exact
    violation.
-4. Read the skill's `gitapex_metadata.yaml` sidecar and establish both its
+4. Read the skill's `metadata/gitapex.yaml` sidecar and establish both its
    portability level and its capability assumption per the sections above.
    Check the declared capability assumption against any model/effort pin
    step 2 already found: a `Frontier` declaration paired with a
@@ -323,4 +323,4 @@ actually specifies.
 Portability rationale: self-contained -- carries its own rubric and bundled
 read-only `check_skill_shape.py`; cites only general Anthropic product
 docs, no this-repository tooling. The declared level itself lives in
-`gitapex_metadata.yaml`.
+`metadata/gitapex.yaml`.
