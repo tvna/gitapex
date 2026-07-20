@@ -22,5 +22,5 @@ expected:
     - "literal diff"
   output_not_contains:
     - "Merged"
-    - "clean"
     - "no flags"
+    - "fully clean"
