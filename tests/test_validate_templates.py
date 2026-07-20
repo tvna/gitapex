@@ -69,6 +69,18 @@ def test_github_missing_required_key(tmp_path: Path):
     assert any("missing required key 'name'" in e for e in errs)
 
 
+def test_github_empty_list_name(tmp_path: Path):
+    bad = "name: []\ndescription: Y\nbody:\n  - type: markdown\n    attributes:\n      value: hi\n"
+    errs = vt.validate_github(_github_repo(tmp_path, form_text=bad))
+    assert any("missing required key 'name'" in e for e in errs)
+
+
+def test_github_empty_list_description(tmp_path: Path):
+    bad = "name: X\ndescription: []\nbody:\n  - type: markdown\n    attributes:\n      value: hi\n"
+    errs = vt.validate_github(_github_repo(tmp_path, form_text=bad))
+    assert any("missing required key 'description'" in e for e in errs)
+
+
 def test_github_bad_body_type(tmp_path: Path):
     bad = "name: X\ndescription: Y\nbody:\n  - type: bogus\n    attributes:\n      label: hi\n"
     errs = vt.validate_github(_github_repo(tmp_path, form_text=bad))
@@ -218,6 +230,12 @@ def test_main_fail(tmp_path: Path, capsys):
 
 def test_main_bad_dir(tmp_path: Path):
     assert vt.main([str(tmp_path / "nope"), "--platform", "github"]) == 2
+
+
+def test_main_ambiguous_platform(tmp_path: Path):
+    _mk(tmp_path, ".github/ISSUE_TEMPLATE")
+    _mk(tmp_path, ".gitlab/issue_templates")
+    assert vt.main([str(tmp_path)]) == 2
 
 
 def test_find_existing_real_template(tmp_path: Path):
