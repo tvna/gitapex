@@ -65,7 +65,8 @@ in a Portable-declared skill -- asserting a fixed answer either way (that
 it is always backed, or always prose-only) would itself be a defect,
 since the true answer depends on wherever the skill happens to be
 running. Dated development history of how this boundary's wording
-reached its current state: `docs/skill-eval-status.md`.
+reached its current state, in this repository's own bookkeeping:
+`docs/skill-eval-status.md`.
 
 **Skill-step vs. bundled script**: passes. This skill's own deterministic
 shape lane was delegated to `scripts/check_skill_shape.py`, so applying
@@ -148,7 +149,7 @@ name-pattern                               PASS    'evaluating-skill-quality'  (
 name-length                                PASS    24 chars  (name <= 64 chars)
 name-no-xml                                PASS    no tags  (name has no XML tags)
 name-not-reserved                          PASS    'evaluating-skill-quality'  (name contains no reserved word ('anthropic', 'claude'))
-body-length                                PASS    326 lines  (SKILL.md body <= 500 lines)
+body-length                                PASS    334 lines  (SKILL.md body <= 500 lines)
 metadata-file-present                      PASS    present  (metadata/gitapex.yaml exists)
 manifest-parsable                          PASS    no malformed lines  (metadata/gitapex.yaml has no malformed top-level lines)
 manifest-envelope                          PASS    apiVersion='gitapex.io/v1alpha1', kind='SkillMetadata'  (apiVersion is gitapex.io/v1alpha1 and kind is SkillMetadata)
@@ -156,15 +157,19 @@ metadata-name-matches-dir                  PASS    'evaluating-skill-quality' vs
 portability-declared                       PASS    'Portable'  (spec.portability is one of ('Portable', 'Repository-scoped', 'Mixed'))
 capability-assumption-declared             PASS    'Broad'  (spec.capabilityAssumption is one of ('Broad', 'Frontier', 'Adaptive'))
 references-well-formed                     PASS    1 entry  (spec.references, if present, is a non-empty list of non-empty strings)
+skill-dependencies-well-formed             PASS    requires, relatedTo declared  (spec.skillDependencies, if present, is a mapping with only requires/relatedTo keys, each -- if present -- a list of non-empty strings)
+skill-dependencies-resolve                 PASS    all resolve  (every name in spec.skillDependencies.requires/relatedTo resolves to an existing sibling skill directory)
+requires-portability-compatible            PASS    ok  (a non-empty spec.skillDependencies.requires is incompatible with spec.portability: Portable)
 links-inside-skill                         PASS    all inside  (Markdown link targets resolve inside the skill's own directory)
 references-flat                            PASS    flat  (references/ files are one level deep)
-toc:rubric.md                              PASS    1060 lines, TOC found  (reference over 100 lines has a TOC)
-toc:worked-example-explaining-the-work.md  PASS    279 lines, TOC found  (reference over 100 lines has a TOC)
-toc:worked-example-self-review.md          PASS    624 lines, TOC found  (reference over 100 lines has a TOC)
+toc:rubric.md                              PASS    1135 lines, TOC found  (reference over 100 lines has a TOC)
+toc:worked-example-explaining-the-work.md  PASS    282 lines, TOC found  (reference over 100 lines has a TOC)
+toc:worked-example-self-review.md          PASS    634 lines, TOC found  (reference over 100 lines has a TOC)
 portable-no-issue-citation                 PASS    none  (Portable content has no bare-prose GitHub issue/PR-number citation)
 portable-no-repo-path-citation             PASS    none  (Portable content has no bare-prose origin-repository path citation)
+portable-no-unhedged-inline-path-citation  PASS    none  (Portable content has no inline-code origin-repository path citation without an approved hedge phrase ('this repository', 'the calling repository', 'the target repository', 'gitapex') in its own sentence or the sentence immediately before it)
 
-22/22 checks passed
+26/26 checks passed
 ```
 
 Verdict on shape alone: **well-formed** (exit code 0).
@@ -233,7 +238,8 @@ it is a materialized instance of exactly the trend the original note
 flagged as a risk to watch, not merely a hypothetical anymore, and should
 be actively re-checked (not assumed still fine) at the next edit rather
 than treated as settled by this one clean check. Line-count history and
-which specific edits contributed: `docs/skill-eval-status.md`.
+which specific edits contributed, in this repository's own bookkeeping:
+`docs/skill-eval-status.md`.
 
 **Update (capability-assumption axis re-grade, Broad):** this skill now
 declares `capabilityAssumption: Broad` in its `metadata/gitapex.yaml`
@@ -376,7 +382,8 @@ pass/fail check, not a plan -> validate -> execute batch pattern.
 
 ### 8. Behavioural evidence
 
-Unmeasured for pass/fail, not skipped: as of this snapshot, `evals/evaluating-skill-quality/eval.yaml`
+Unmeasured for pass/fail, not skipped: as of this snapshot, this
+repository's own `evals/evaluating-skill-quality/eval.yaml`
 is committed, but no baseline-vs-no-skill comparison has been run against
 it (per Anthropic's evaluation-driven-development standard, dimension 8's
 primary bar). Mechanism-present, baseline-unmeasured -- the same gap named
@@ -405,10 +412,11 @@ does not meet the letter of the discipline this dimension names.
 **Update (held-out gate discipline applied, multiple iterations):** this
 gap has since been closed for several specific edits to this skill, not
 retroactively for its whole authoring history -- each time via a
-documented held-out train/selection/test split
-(`evals/evaluating-skill-quality/split.md`), scored before and after with
-`skills/scorer-gated-skill-edits/scripts/score_contract.py`, requiring a strict
-improvement (ties rejected) before the edit was kept. That is real,
+documented held-out train/selection/test split, recorded in this
+repository's own `evals/evaluating-skill-quality/split.md`, scored
+before and after with
+`skills/scorer-gated-skill-edits/scripts/score_contract.py`, requiring a
+strict improvement (ties rejected) before the edit was kept. That is real,
 repeated instances of this discipline applied to this skill, not evidence
 every earlier edit went through it -- the paragraph above still
 accurately describes the many edits that did not. One of these gates also
@@ -418,10 +426,11 @@ that false-failed a correct denial), caught by external review rather
 than found here first, and fixed the same way each time it recurred:
 match the assertion to what the rubric actually prescribes rather than an
 assumed casing, and ban only affirmative claims, never a phrase a correct
-denial would also contain. Full per-edit record -- which specific change
-each gate covered, the exact before/after scores, and the fixture bugs
-found along the way: `evals/evaluating-skill-quality/split.md`'s
-Kept-edit log and `docs/skill-eval-status.md`.
+denial would also contain. Full per-edit record, in this repository's own
+bookkeeping -- which specific change each gate covered, the exact
+before/after scores, and the fixture bugs found along the way:
+`evals/evaluating-skill-quality/split.md`'s Kept-edit log and
+`docs/skill-eval-status.md`.
 
 ### 9. Cross-model robustness
 
@@ -487,7 +496,8 @@ against whatever environment it actually runs in, rather than asserting
 a fixed answer -- the correct portable posture for a Portable-declared
 skill, since a hardcoded "yes, backed" claim would itself be a defect
 once vendored somewhere with no such hook. Development history of how
-this boundary's wording reached this state: `docs/skill-eval-status.md`.
+this boundary's wording reached this state, in this repository's own
+bookkeeping: `docs/skill-eval-status.md`.
 
 **Well-formed**, and now **mature** -- diverging here from the
 `explaining-the-work` verdict (which stayed *not yet mature*), because
@@ -565,8 +575,8 @@ the automated scorer (`score_contract.py`'s substring matching) actually
 measures the judgment it is scoring -- left unfixed here, correctly, per
 the Blind spot pass's own instruction that a durable rubric change is a
 deliberate, `scorer-gated-skill-edits`-gated edit, not something a single review
-session improvises. Dated record of which edit this run followed:
-`docs/skill-eval-status.md`.
+session improvises. Dated record of which edit this run followed, in
+this repository's own bookkeeping: `docs/skill-eval-status.md`.
 
 ## Verification: subagent dispatch (dated addendum)
 
@@ -607,8 +617,8 @@ specific gaps in a target it had never seen framed by any prior
 conversation. What this single run does not establish: cross-model
 behavior, or whether isolation measurably changes verdicts relative to a
 main-thread run on the *same* target with prior framing (that A/B
-comparison is future work, named rather than assumed -- see
-`docs/skill-eval-status.md`).
+comparison is future work, named rather than assumed -- see this
+repository's own `docs/skill-eval-status.md`).
 
 ## References
 
