@@ -56,7 +56,16 @@ limits.
    target -- so the target cannot narrow what you look for. For every
    `requested_trials` entry, do this in a separate fresh subagent dispatch
    (not the current context, which has likely already seen the target).
-   Never reuse a dispatch for two trials. After each dispatch starts, capture
+   Never reuse a dispatch for two trials. Required, not optional: when the
+   calling repository carries its own project-instruction file (for example
+   `CLAUDE.md` or `AGENTS.md`), exclude that file from the dispatch's
+   context before the dispatch starts, using whatever mechanism the harness
+   provides for that (a project-instruction-file-free scratch copy, an
+   auto-load-disabling flag, an isolated or headless invocation, or
+   equivalent) -- a dispatch that inherits the calling repository's own
+   instructions is not the neutral, portable evaluation this step requires,
+   and the omission does not get to surface only when a human happens to
+   ask about it directly. After each dispatch starts, capture
    `observed_tester_model` from trusted runtime metadata and require it to
    equal `selected_tester_model`; missing metadata or a mismatch makes that
    trial `INDETERMINATE`. Use the twenty-two in the Quick reference; add any
@@ -149,6 +158,11 @@ must be independent and retained; the count is never report-only metadata.
 - Do not treat a model-level safety refusal as a skill guardrail pass; an
   empty refusal is evidence about neither.
 - Do not skip the quoted-line requirement to make a review read as complete.
+- Do not dispatch a trial into a context that still carries the calling
+  repository's own project-instruction file (`CLAUDE.md`, `AGENTS.md`, or
+  equivalent). Strip it via the harness's own means -- a clean scratch copy,
+  an auto-load-disabling flag, an isolated invocation -- before the dispatch
+  starts, not after a human catches the contamination by asking.
 - Do not re-grade or revise a verdict in the main thread after a dispatch
   returns it. Cross-trial disagreement follows step 5 and remains
   `INDETERMINATE`. Any later rerun is a separate retained run, never an extra

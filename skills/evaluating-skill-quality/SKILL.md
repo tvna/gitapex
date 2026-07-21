@@ -103,6 +103,15 @@ verdict itself would still be grading from a contaminated context.
 - Give the dispatch only the target's path (or content) and a pointer to
   this skill's own `references/rubric.md` -- never the calling
   conversation's framing, prior discussion, or opinion of the target.
+- Required, not optional: when the calling repository carries its own
+  project-instruction file (for example `CLAUDE.md` or `AGENTS.md`),
+  exclude that file from the dispatch's context before dispatching, using
+  whatever mechanism the harness provides for that (a project-instruction-
+  file-free scratch copy, an auto-load-disabling flag, an isolated or
+  headless invocation, or equivalent). A dispatch that inherits the calling
+  repository's own instructions is not the neutral grading context this
+  section exists to guarantee, and the omission must not depend on a human
+  asking whether it happened.
 - Hand the dispatch step 3's shape-checker output as an established fact
   rather than having it re-run the script itself (Contract discipline's
   "never both" rule, `references/rubric.md`).
@@ -379,6 +388,11 @@ actually specifies.
 - Never include the calling conversation's framing, prior discussion, or
   opinion of the target in the subagent dispatch prompt -- pass only the
   target's path/content and this skill's own reference material.
+- Never dispatch the review into a context that still carries the calling
+  repository's own project-instruction file (`CLAUDE.md`, `AGENTS.md`, or
+  equivalent). Strip it via the harness's own means -- a clean scratch copy,
+  an auto-load-disabling flag, an isolated invocation -- before the dispatch
+  starts, not after a human catches the contamination by asking.
 - Never revise a dimension verdict in the main thread after the dispatch
   returns it. A wrong or contested verdict is fixed by a second,
   independent dispatch, not a patch made in place.
