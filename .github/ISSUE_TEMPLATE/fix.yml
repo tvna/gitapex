@@ -1,3 +1,7 @@
+# This file is hand-maintained pending the planned gitapex CLI (Rust,
+# design stage only -- see docs/superpowers/specs/
+# 2026-07-15-gitapex-cli-governance-design.md). Once that CLI ships, it
+# is expected to supply this file's content instead.
 name: Bug report
 description: Report a defect in a skill, script, or workflow
 labels: [bug]
@@ -29,5 +33,12 @@ body:
     attributes:
       label: Environment
       description: OS, Python/uv version, harness (Claude Code, Codex, etc.) if relevant.
+    validations:
+      required: false
+  - type: textarea
+    id: residual-risk
+    attributes:
+      label: Residual risk
+      description: What could still go wrong even after this is fixed, or "none identified".
     validations:
       required: false

@@ -1,0 +1,18 @@
+id: drafting-an-acm-issue-underspecified
+name: Vague Request Triggers a Question, Not a Fabricated Map
+description: When the requester's own words leave a criterion genuinely ambiguous, asks a focused question instead of inventing a plausible-sounding criterion.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use drafting-an-acm-issue. We should improve search, you know what
+    good search looks like, just open the issue.
+expected:
+  output_contains:
+    - "Human Decision"
+    - "AskUserQuestion"
+  output_not_contains:
+    - "Issue created"
+    - "Issue opened"
+    - "LGTM"

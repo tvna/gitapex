@@ -1,6 +1,6 @@
 id: git-hosting-surface-audit-edge-directory-fallback
 name: No parseable remote, directory-marker fallback
-description: When git remote is absent or unparseable, falls back to generic .github/ vs .gitlab/ directory-marker presence -- not seeding-issue-pr-templates's ISSUE_TEMPLATE-specific detect_platform(), which would misclassify a repo with no issue templates configured.
+description: When git remote is absent or unparseable, falls back to generic .github/ vs .gitlab/ directory-marker presence, not issue-template-directory presence specifically, which would misclassify a repo with no issue templates configured.
 tags:
   - quality
   - edge-case

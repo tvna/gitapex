@@ -3,7 +3,7 @@ kind: SkillMetadata
 metadata:
   name: screening-a-low-trust-contribution
 spec:
-  portability: Repository-scoped
+  portability: Portable
   capabilityAssumption: Broad
   skillDependencies:
     requires: []

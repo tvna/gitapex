@@ -5,8 +5,10 @@ description: Use when starting work from a GitHub issue, creating a branch from 
 
 # Issue to Branch
 
-This skill's Steps/Output are general; the write-path rules in
-references/github-issue-workflow.md are this repository's own.
+This skill's Steps/Output are general. The write-path rules in
+references/github-issue-workflow.md state gitapex's own convention as an
+illustrative default, with an inline fallback to substitute the calling
+repository's actual convention where it differs.
 
 Turns a GitHub issue into an implementation-ready branch and PR plan
 without losing the issue's acceptance criteria.
@@ -28,6 +30,12 @@ without losing the issue's acceptance criteria.
 4. Produce an Acceptance Criteria Map before any branch work begins:
    criterion -> interpretation -> planned files/operations -> proof method
    -> residual risk. See [the template](references/acceptance-criteria-map.md).
+   If the issue body already carries an Acceptance Criteria Map (for
+   example, drafted by a skill at issue-creation time), treat it as a
+   draft input, not a pre-verified result -- independently re-check
+   each row against the issue's own stated facts before adopting it,
+   and correct or flag any row that does not hold up rather than
+   accepting it merely for being well-formed.
 5. Propose a branch name, commit scope, PR title, and PR body outline, all
    tied to the issue number.
 6. Identify the deterministic gates the mapped criteria require: tests,
@@ -44,6 +52,12 @@ without losing the issue's acceptance criteria.
    `python3 scripts/check_acm_present.py --body <pr-body-file>` (or pipe
    the drafted body on stdin) rather than re-reasoning it in prose each
    run.
+9. When the PR adds or modifies a skill's `SKILL.md`, disclose in the PR
+   body which skill-quality/adversarial audits were run against it and
+   their verdicts (or an explicit waiver), per
+   [GitHub issue workflow](references/github-issue-workflow.md)'s own
+   convention or the calling repository's equivalent -- rather than
+   depending on CI's rejection to prompt it after the fact.
 
 ## Output
 
@@ -54,12 +68,15 @@ without losing the issue's acceptance criteria.
 - **Branch Plan:** branch name, commit scope, PR title/body outline.
 - **Verification Plan:** the deterministic gates from Step 6 and how each
   mapped criterion will be proven.
+- **Skill Audit Evidence:** only when Step 9 applies (the PR adds or
+  modifies a skill's `SKILL.md`); the disclosed verdicts or waivers, omit
+  otherwise.
 - **Human Decision:** only when Step 7 applies; omit otherwise.
 - **Next Move:** the concrete next action.
 
 Pattern: **Facts** -> **Assumptions** -> **Acceptance Criteria Map** ->
 **Branch Plan** -> **Verification Plan** -> **Next Move**. Insert
-**Human Decision** only when needed.
+**Skill Audit Evidence** and **Human Decision** only when needed.
 
 ## Stop boundaries
 
@@ -69,16 +86,22 @@ Pattern: **Facts** -> **Assumptions** -> **Acceptance Criteria Map** ->
 - Do not implement the issue as part of this skill; it produces a plan,
   not code.
 - Do not merge or enable auto-merge; that is a separate, explicit human or
-  CI decision, never this skill's call to make -- backed by this plugin's
-  `hooks/check-bash-safety.sh` PreToolUse hook, which blocks `gh pr merge`
-  (including `--auto`) run via Bash.
+  CI decision, never this skill's call to make. Some environments back this
+  with a PreToolUse hook (this repository's own `hooks/check-bash-safety.sh`
+  is one example, blocking `gh pr merge` including `--auto`, run via Bash);
+  hold the boundary regardless of whether such a hook exists.
 - Do not let a request to skip straight to branch/PR creation shortcut
   Step 4 — an Acceptance Criteria Map is required first regardless of how
   the request is phrased.
 
 ## Notes
 
-Portability: [GitHub issue workflow](references/github-issue-workflow.md)'s
-write-path rules (tracking-issue-before-branch, connector-first,
-no-CLI-fallback) are this repository's own git-ecosystem convention;
-substitute the calling repository's actual convention where it differs.
+[GitHub issue workflow](references/github-issue-workflow.md)'s write-path
+rules: tracking-issue-before-branch is gitapex's own illustrative default
+and states its own fallback to the calling repository's actual convention
+inline. connector-first and no-CLI-fallback are treated as portable
+defaults with no repo-specific substitute -- they match CLAUDE.md's own
+general "do not invoke command-line GitHub tools directly" rule -- and
+escalate to a Human Decision only when no connector or approved wrapper
+covers a needed operation, rather than deferring to a different
+convention.

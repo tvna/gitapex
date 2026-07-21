@@ -26,13 +26,12 @@ it never changes branch protection, revokes a webhook, or rotates a key.
 
 ## Steps
 
-1. **Detect platform and non-destruction gate.** Do NOT reuse
-   `seeding-issue-pr-templates`'s `detect_platform()` as-is -- that
-   function only checks for `.github/ISSUE_TEMPLATE` /
-   `.gitlab/issue_templates` (template-directory presence), so it
-   misclassifies any real GitHub/GitLab repo that simply has no issue
-   templates configured. This audit is not template-specific and must
-   still run against those repos. Detect instead:
+1. **Detect platform and non-destruction gate.** Do NOT detect platform by
+   issue-template-directory presence alone (`.github/ISSUE_TEMPLATE` /
+   `.gitlab/issue_templates`) -- that misclassifies any real GitHub/GitLab
+   repo that simply has no issue templates configured. This audit is not
+   template-specific and must still run against those repos. Detect
+   instead:
    1. Read `git remote get-url origin`. Match the host against known
       GitHub hosts (`github.com`, plus any GitHub Enterprise host the
       operator names) and known GitLab hosts (`gitlab.com`, plus any
@@ -50,7 +49,7 @@ it never changes branch protection, revokes a webhook, or rotates a key.
    is gitapex's own copy.** Read ONLY the detected platform's checklist
    reference -- `references/github-surface-checklist.md` for GitHub,
    `references/gitlab-surface-checklist.md` for GitLab -- and never open
-   both in the same run (identical rule to `seeding-issue-pr-templates`).
+   both in the same run.
    If this copy of the skill's own files lives in the gitapex repository,
    also read `references/gitapex-cross-links.md`: Step 3's cross-link
    target comes from it, and skipping this read is what makes a Gap

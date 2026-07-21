@@ -130,12 +130,26 @@ battle-test procedure itself was the instrument -- reviewer `claude -p`
 (sonnet, single tier), with the project's own CLAUDE.md removed from the
 reviewer context so each target was judged on its SKILL.md alone, read-only.
 
-- Full pass: the seventeen dimensions applied once to all twelve skills in
-  this repository.
+At the time of this run, that CLAUDE.md-free clean-copy practice existed
+only as descriptive precedent in this file -- a record of what one
+verification happened to do, not a requirement `SKILL.md`'s own Procedure
+enforced on every dispatch. A later incident (gitapex#242, Repairs item 3)
+found exactly that gap: an ordinary in-session dispatch inherited this
+repository's own CLAUDE.md undisclosed, caught only because a human asked
+directly. `SKILL.md`'s Procedure step 1 now requires excluding the calling
+repository's own project-instruction file(s) from every dispatch as a
+standard step, not merely as color carried by this reference file
+(gitapex#250). This section continues to record the historical run below;
+read it as the origin of that requirement, not as the requirement's only
+enforcement.
+
+- Full pass: the seventeen dimensions applied once to all skills in this
+  repository at the time.
 - Variance re-measurement: the same instrument re-run five times each on
-  four low-blast-radius skills (explaining-the-work, scorer-gated-skill-edits,
-  seeding-issue-pr-templates, stop-and-replan) -- twenty trials -- to
-  separate a robust cold judgment from run-to-run reviewer variance.
+  four low-blast-radius skills at the time (explaining-the-work,
+  scorer-gated-skill-edits, stop-and-replan, plus one skill retired since)
+  -- twenty trials -- to separate a robust cold judgment from run-to-run
+  reviewer variance.
 
 Per-dimension verdict distribution across the twenty trials:
 
@@ -252,7 +266,11 @@ Disclosed limitation: this verification ran with the repository's own
 CLAUDE.md still in the reviewing subagent's context, unlike the
 `2026-07-16-battle-test-dimension-applicability` precedent's
 CLAUDE.md-free clean-copy run -- narrower verification than that
-precedent's, not claimed parity.
+precedent's, not claimed parity. This is a historical record, not
+retroactively corrected: it is exactly the class of gap `SKILL.md`
+Procedure step 1's now-required exclusion step (gitapex#250) exists to
+close on every future dispatch, not just this repository's own future
+verifications.
 
 Review-round correction (dimensions 18, 21): the Task 5 live
 verification (table above) ran an out-of-domain control -- the full

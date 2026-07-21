@@ -3,7 +3,7 @@ kind: SkillMetadata
 metadata:
   name: outward-artifact-preflight
 spec:
-  portability: Repository-scoped
+  portability: Portable
   capabilityAssumption: Broad
   skillDependencies:
     requires: []

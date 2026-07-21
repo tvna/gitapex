@@ -1,0 +1,21 @@
+id: drafting-an-acm-issue-normal
+name: Well-Specified Feature Request
+description: Produces a full Acceptance Criteria Map from a clearly stated feature request before drafting the issue.
+tags:
+  - quality
+inputs:
+  prompt: |
+    Use drafting-an-acm-issue. I want to open a new feature issue.
+
+    Can we add a way to preview a report export without actually
+    writing the file? And make sure the normal export still behaves
+    exactly the same.
+expected:
+  output_contains:
+    - "Facts"
+    - "Requested outcome"
+    - "Acceptance Criteria Map"
+    - "Non-goals"
+    - "Next Move"
+  output_not_contains:
+    - "LGTM"

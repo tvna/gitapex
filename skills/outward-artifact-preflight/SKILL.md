@@ -5,10 +5,13 @@ description: Use when about to push, post, or publish any outward-facing artifac
 
 # Outward Artifact Preflight
 
-This skill's checklist is general; check 1's "agreed disclosure
-convention" and the explaining-the-work coupling (Relationship to other
-skills) name this repo's own conventions -- substitute the calling
-repository's actual policy and sibling skills where they differ.
+This skill's checklist is general. Check 1's "agreed disclosure
+convention" and check 3's ASCII-only default illustrate gitapex's own
+policy; each states an inline fallback to substitute the calling
+repository's actual policy where it differs. The explaining-the-work
+coupling (Relationship to other skills) names a sibling skill gitapex
+happens to also install -- apply it where that sibling is installed,
+skip it otherwise.
 
 This is an interim measure: a manual stand-in for the deterministic
 preflight or CI gate this repository has not built yet. Run this
@@ -33,15 +36,16 @@ destined for a public sink.
 
    1. A bare model identifier (e.g. a `claude-*` model ID), a session
       URL, or an internal tool name is not disclosed and must be
-      removed, unless this repository has explicitly agreed to disclose
-      it.
-   2. If this repository already has an agreed disclosure convention for
-      PR bodies (for example a fixed "Generated with X" trailer), keep
-      it there.
+      removed, unless the calling repository has explicitly agreed to
+      disclose it.
+   2. If the calling repository already has an agreed disclosure
+      convention for PR bodies (for example a fixed "Generated with X"
+      trailer), keep it there.
    3. Disclosure does not exempt something from check 3: a disclosed
-      trailer still has to pass the ASCII check, so replace any
-      non-ASCII glyph in it (an emoji, for instance) with an ASCII
-      equivalent.
+      trailer still has to pass whatever check 3 currently requires --
+      by default an ASCII equivalent for any non-ASCII glyph (an emoji,
+      for instance), unless the calling repository's own documented
+      character-set policy (check 3's fallback) already permits it.
    4. Commit messages follow a separate, narrower rule (where installed,
       the explaining-the-work skill routes commit-log content to one
       line plus a `Refs #N` pointer, nothing more) -- do not add a
@@ -67,8 +71,11 @@ destined for a public sink.
    If the re-scan flags a candidate, call `update_pull_request` to strip
    it, then re-fetch and re-run the scan once more to confirm it was not
    force-reinjected before treating the artifact as clean.
-3. **ASCII-only.** No em dashes, en dashes, curly quotes, full-width
-   punctuation, or any other non-ASCII character. Check with (`-P` enables
+3. **ASCII-only.** Default to no em dashes, en dashes, curly quotes,
+   full-width punctuation, or any other non-ASCII character -- gitapex's
+   own convention. If the calling repository documents a different
+   character-set policy (for example, permitting Unicode or emoji),
+   follow that instead. Check with (`-P` enables
    Perl-regex mode so `\t` is read as a tab escape, not two literal
    characters -- a plain bracket expression would still flag ordinary
    tabs). This requires GNU grep with PCRE support (`grep -P`), which
@@ -171,13 +178,14 @@ substitutes for the other.
 
 - Never push or post an artifact this checklist has flagged. Fix it first,
   or get the owner's explicit sign-off to proceed anyway with the flag
-  unresolved -- for `git push`, this is backed by this plugin's
-  `hooks/check-bash-safety.sh` PreToolUse hook, which runs
-  `scripts/scan_provenance.py` against the outgoing commits and surfaces a
-  warning (not a block) if it flags anything. The script's own docstring
-  says it surfaces candidates, it does not decide -- so a hit does not
-  stop the push, but it does still require applying this checklist's
-  judgment call to each hit before the push is actually safe to make.
+  unresolved. Some environments back the `git push` case with a
+  PreToolUse hook (this repository's own `hooks/check-bash-safety.sh` is
+  one example: it runs `scripts/scan_provenance.py` against the outgoing
+  commits and surfaces a warning, not a block, if it flags anything). The
+  script's own docstring says it surfaces candidates, it does not decide
+  -- so a hit does not stop the push, but it does still require applying
+  this checklist's judgment call to each hit before the push is actually
+  safe to make, whether or not such a hook exists.
 - Check 1's pre-submission scan is not sufficient on its own for
   `create_pull_request`/`update_pull_request`: no hook re-checks what the
   platform actually stores. Item 2's post-creation re-check is mandatory

@@ -3,8 +3,9 @@ kind: SkillMetadata
 metadata:
   name: issue-to-branch
 spec:
-  portability: Repository-scoped
+  portability: Portable
   capabilityAssumption: Broad
   skillDependencies:
     requires: []
-    relatedTo: []
+    relatedTo:
+      - drafting-an-acm-issue

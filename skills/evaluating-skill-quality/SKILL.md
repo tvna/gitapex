@@ -103,6 +103,26 @@ verdict itself would still be grading from a contaminated context.
 - Give the dispatch only the target's path (or content) and a pointer to
   this skill's own `references/rubric.md` -- never the calling
   conversation's framing, prior discussion, or opinion of the target.
+- Required, not optional: when the calling repository carries its own
+  project-instruction file (for example `CLAUDE.md` or `AGENTS.md`),
+  exclude that file from the dispatch's context before dispatching, using
+  whatever mechanism the harness provides for that (a project-instruction-
+  file-free scratch copy, an auto-load-disabling flag, an isolated or
+  headless invocation, or equivalent). A dispatch that inherits the calling
+  repository's own instructions is not the neutral grading context this
+  section exists to guarantee, and the omission must not depend on a human
+  asking whether it happened. Requesting the exclusion is not proof it
+  held: before treating the dispatch as ready, confirm with an observable
+  check (e.g. list or search the chosen scratch location and its full
+  directory ancestry for `CLAUDE.md`/`AGENTS.md` and require the result to
+  be empty) rather than trusting intent. If the harness offers none of the
+  listed mechanisms, that is itself a blocker -- stop and escalate rather
+  than dispatching into a contaminated context. Whether this exclusion
+  carries real deterministic backing (a hook, a permission rule) or is
+  enforced by this instruction alone depends on the environment the
+  dispatch actually runs in -- check directly rather than assuming either
+  way, the same self-audit this skill already applies to its
+  eval-tooling-install Stop boundary below.
 - Hand the dispatch step 3's shape-checker output as an established fact
   rather than having it re-run the script itself (Contract discipline's
   "never both" rule, `references/rubric.md`).
@@ -225,6 +245,66 @@ Authors still declare one of these three levels correctly now -- the
 detail: [references/rubric.md](references/rubric.md)'s Capability
 assumption section.
 
+## Lifecycle
+
+Optional. Three independent sub-blocks plus one plain scalar under
+`spec.lifecycle` in the skill's `metadata/gitapex.yaml` sidecar (the
+`lifecycle-well-formed` shape check enforces their shape when present) --
+a skill declaring none of them is implicitly **Stable**, the state every
+skill in this repository is in today:
+
+```yaml
+spec:
+  lifecycle:
+    experimental:
+      reason: why this skill is not yet proven
+      trackingIssue: "#123"      # tracks graduation to Stable
+      since: "2026-07-21"        # optional, YYYY-MM-DD
+    deprecated:
+      reason: why this skill is deprecated
+      replacement: name-of-sibling-skill
+      since: "2026-07-21"        # optional, YYYY-MM-DD
+      removeAfter: "2026-10-01"  # optional, YYYY-MM-DD, documentation only
+    stable:
+      since: "2026-07-21"        # when this skill graduated
+      compatibilityGuarantee: GA # optional: Alpha | Beta | GA
+    renamedFrom: old-skill-name  # optional, this skill's former directory name
+```
+
+- **`experimental`**: `reason` and `trackingIssue` are required once this
+  block is present at all; `since` is optional. `trackingIssue` must be
+  an anchored `#123` or `owner/repo#123` reference.
+- **`deprecated`**: `reason` and `replacement` are required once this
+  block is present at all; `since`/`removeAfter` are optional.
+  `replacement` must name an existing sibling skill directory (the
+  `lifecycle-deprecated-replacement-resolves` shape check enforces this
+  -- the same dangling-reference gate `spec.skillDependencies` uses).
+- **`stable`**: `since` is required once this block is present at all
+  (`compatibilityGuarantee`, if given, must be one of `Alpha`/`Beta`/
+  `GA` -- Kubernetes' API-stability tiers). `experimental` and `stable`
+  cannot both be present: "not yet graduated" and "already graduated on
+  some date" are a real contradiction, unlike `experimental`+
+  `deprecated`, which stays ungated (an experimental skill can
+  legitimately be superseded by a different experiment).
+- **`renamedFrom`**: a plain scalar, not a sub-block, naming this same
+  skill's former directory name. Deliberately backward-pointing and
+  **not** resolved against sibling directories, unlike
+  `deprecated.replacement` -- the old name is expected to no longer
+  exist (a `git mv` deletes it), so there is nowhere to host a
+  forward-pointing record on the old side.
+- `since`/`removeAfter`, when given, must be real `YYYY-MM-DD` dates.
+  `removeAfter` documents an intended removal date only; no automation in
+  this repository deletes a skill once that date passes, and no
+  automation graduates a skill out of `experimental` when its
+  `trackingIssue` closes.
+- None of these declarations change how any of the nine dimensions
+  grade, and no skill's own runtime procedure may read or branch on any
+  of them -- this is metadata only, same as Portability level and
+  Capability assumption.
+
+Full rationale: [references/rubric.md](references/rubric.md)'s Lifecycle
+section.
+
 ## Procedure
 
 Steps 1-4 are this review's precondition, step 6 its postcondition --
@@ -319,6 +399,17 @@ actually specifies.
 - Never include the calling conversation's framing, prior discussion, or
   opinion of the target in the subagent dispatch prompt -- pass only the
   target's path/content and this skill's own reference material.
+- Never dispatch the review into a context that still carries the calling
+  repository's own project-instruction file (`CLAUDE.md`, `AGENTS.md`, or
+  equivalent). Strip it via the harness's own means -- a clean scratch copy,
+  an auto-load-disabling flag, an isolated invocation -- before the dispatch
+  starts, not after a human catches the contamination by asking. Do not
+  treat requesting the strip as proof it held -- confirm it with the
+  observable check the Subagent dispatch section requires. Whether this
+  boundary carries real deterministic backing or is enforced by this
+  instruction alone depends on the running environment; check directly, the
+  same self-audit the eval-tooling-install boundary above already applies,
+  rather than assuming either way.
 - Never revise a dimension verdict in the main thread after the dispatch
   returns it. A wrong or contested verdict is fixed by a second,
   independent dispatch, not a patch made in place.
