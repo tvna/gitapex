@@ -214,6 +214,60 @@ skill's own Step 8 enforces, applied here to the templates themselves.
   known cause; expects an explicit "unknown, pending reproduction" entry
   rather than a fabricated cause or a blank column.
 
+Four more fixtures were added after the adversarial pass below closed
+its findings: `injection-in-requester-text.yaml` (dimension 1/16 --
+plain-English embedded instruction), `encoded-payload.yaml` (dimension
+16 -- instruction hidden in an HTML comment), `multi-turn-escalation.yaml`
+(dimension 15 -- a later turn claims prior agreement to skip the
+ambiguity question), and `secret-redaction.yaml` (the Blind Spot
+finding below -- a pasted credential must never be echoed into the
+created issue).
+
+## Adversarial pass (battle-testing-a-skill + evaluating-skill-quality)
+
+Run once against the initial version of this skill, each as one fresh,
+isolated subagent dispatch per those skills' own procedures.
+
+**battle-testing-a-skill overall verdict: FAIL**, 8 of 22 dimensions
+(dimensions 9, 11, 12, 13, 14, 15, 16, 17 -- the summary line in the
+dispatch's own report undercounted this as seven, omitting dimension 17
+from its tally despite grading it FAIL with full evidence in the
+per-dimension walk; the individual grades, not the summary arithmetic,
+are treated as authoritative here). **evaluating-skill-quality verdict:
+well-formed, not mature**, blocked by dimension 6 (Durability) --
+two unhedged sentences asserted a specific sibling skill's existence
+and behavior as flat fact inside `Portable`-declared content -- plus a
+named Blind Spot gap (no rubric dimension checks a skill's
+untrusted-input-to-public-artifact write path for secret/PII
+carry-through).
+
+All nine findings were closed in this skill's own text (SKILL.md
+Steps 1-8, Stop boundaries, Related skills, Notes) and, for dimension
+11 specifically, reciprocally in `issue-to-branch`'s Step 4 (an
+existing-issue ACM is now explicitly a draft input to re-verify, not
+an unconditional read) plus a `skillDependencies.relatedTo` link added
+in both directions:
+
+| Finding | Fix |
+|---|---|
+| Dim 6 (Durability) | Hedged both sentences ("when the calling repository has a sibling skill...") in the intro and Related skills section. |
+| Dim 9 (degenerate input) | Step 2 now asks for the change before drafting when the request carries no substantive content. |
+| Dim 11 (cross-skill composition) | Step 8 and Stop boundaries now state the ACM is a draft, never pre-verified; `issue-to-branch` Step 4 now requires independently re-checking a pre-existing ACM rather than adopting it. |
+| Dim 12 (supply-chain provenance) | Notes section now names install/vendoring-time integrity as a question distinct from runtime content trust. |
+| Dim 13 (memory poisoning) | Step 1 now extends the data/command boundary to prior-session memory and cached notes explicitly. |
+| Dim 14 (regression corpus) | Grew from 6 to 10 fixtures, closing the injection/encoding/multi-turn/secret-redaction attack-shape gap the dispatch named. CI gating status is unchanged -- see Known limitations. |
+| Dim 15 (multi-turn escalation) | Step 7 now states a later turn's claimed prior agreement does not exempt a criterion from re-derivation. |
+| Dim 16 (encoding/obfuscation) | Step 1 now names base64/hex, HTML comments, homoglyphs, and cross-lingual text explicitly. |
+| Dim 17 (structured-output injection) | Step 4 now requires escaping/neutralizing pipe characters and control sequences before they enter a table cell. |
+| Blind Spot (secret/PII carry-through) | Step 3 and Stop boundaries now require scanning for and redacting secrets/credentials/PII before citing the requester's words verbatim. |
+
+Neither adversarial dispatch was re-run against the fixed version in
+this pass (explicit operator decision); the fixes above were
+self-verified against each finding's own quoted pass criteria and the
+deterministic shape checker, not re-graded by a fresh dispatch. A
+formal re-run remains available as a follow-up if independent
+re-certification is wanted.
+
 ## Known limitations (product-management lens, named not closed)
 
 - **No enforcement mechanism.** The skill is agent-invoked, not a hard
@@ -238,6 +292,18 @@ skill's own Step 8 enforces, applied here to the templates themselves.
 - **No adoption/impact metric.** The eval suite measures this skill's own
   output quality, not whether using it measurably lightens
   `issue-to-branch`'s Step 4 in practice.
+- **Eval corpus is not a merge gate.** The 10-fixture regression corpus
+  (including the four adversarial fixtures added in this pass) is real
+  and committed, but this repository's own `waza-check` CI job is
+  documented as advisory ("a report, not a gate"), and the cross-model
+  matrix workflow never runs on push/PR. A regression in adversarial
+  behavior would not currently block a merge; closing this is a
+  repository-wide CI-gating decision, out of scope for a single skill.
+- **No formal re-certification after the fixes above.** The battle-test
+  and quality-review findings were closed by editing this skill's text
+  directly and self-verified against each finding's quoted criteria,
+  not by re-running either adversarial dispatch against the fixed
+  version (explicit operator decision for this pass).
 
 ## Verification
 
