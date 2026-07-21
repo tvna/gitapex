@@ -376,7 +376,20 @@ REPO_PATH_CITATION_RE = re.compile(r"(?:evals|docs)/[A-Za-z0-9._/-]+")
 # reference-style link ([text][label]), or a reference definition
 # ([label]: target). Stripping these leaves only bare prose.
 FENCE_RE = re.compile(r"^\s*(?:```|~~~)")
-INLINE_CODE_RE = re.compile(r"`[^`]*`")
+# A Markdown inline code span: a run of 1-3 backticks, non-greedy content,
+# then a closing run of the SAME length (\1) -- CommonMark's own rule, used
+# e.g. when the span's content itself needs to contain a literal backtick
+# (` ``a`b`` `). A first cut of this regex (`` `[^`]*` ``) assumed every span
+# uses exactly one backtick each side; a review finding on issue #263 showed
+# that a double-backtick span (` ``#42`` `) instead reads as two adjacent
+# EMPTY single-backtick spans under that assumption, so its content was
+# never inspected by either citation check below -- a silent evasion route,
+# not just a cosmetic gap. Capped at 3 backticks (this file already reserves
+# exactly 3 for FENCE_RE's own fenced-block markers, handled separately
+# per-line by ``_blank_fenced_blocks`` before this regex ever runs on that
+# line) rather than an unbounded ``+``, since this checker is deliberately a
+# practical approximation of CommonMark, not a full parser.
+INLINE_CODE_RE = re.compile(r"(`{1,3})(?!`)(.+?)(?<!`)\1(?!`)")
 BARE_URL_RE = re.compile(r"[a-zA-Z][a-zA-Z0-9+.\-]*://[^\s>)\]]+")
 MD_INLINE_LINK_RE = re.compile(r"\[[^\]]*\]\([^)]*\)")
 MD_REF_LINK_RE = re.compile(r"\[[^\]]*\]\[[^\]]*\]")
@@ -408,20 +421,28 @@ HEDGE_PHRASES = (
 # one marks an issue-*number* citation as a rule/syntax illustration rather
 # than worked-example bookkeeping -- different questions, so a shared phrase
 # list would blur both.
-# "anchored" is this repository's own established way of describing a
-# trackingIssue field's *shape* (an anchored #123 or owner/repo#123
-# reference) rather than citing a specific issue as content -- see
-# evaluating-skill-quality's own SKILL.md and rubric.md trackingIssue
-# documentation.
-# "citation" catches this skill's own, distinct self-referential case: this
+# Deliberately full multi-word phrases, not bare words, matching HEDGE_PHRASES'
+# own convention (a first cut of this check used the bare words "anchored"
+# and "citation" and was caught by review: an ordinary sentence like "See the
+# citation in PR `#144` for prior art" or "the review is anchored to PR
+# `#88`" contains either bare word while citing a real, banned issue number --
+# the exact defect this check exists to catch). Full phrases collapse that
+# false-negative surface close to zero without adding new mechanism.
+# "must be an anchored" is this repository's own established way of
+# introducing a trackingIssue field's *shape* (`trackingIssue` must be an
+# anchored `#123` or `owner/repo#123` reference) rather than citing a
+# specific issue as content -- see evaluating-skill-quality's own SKILL.md
+# and rubric.md trackingIssue documentation, verbatim in both.
+# "issue/pr-number citation" (matched case-insensitively, like every other
+# entry here) catches this skill's own, distinct self-referential case: this
 # very shape check's rule stated in prose (e.g. "A bare GitHub issue/PR-
 # number citation (#149, owner/repo#149) is barred ..."), the same way the
 # module docstring above states it, just duplicated for the model reader.
 # Both phrases are this repository's own already-established phrasing, not
 # invented for this check.
 ISSUE_CITATION_HEDGE_PHRASES = (
-    "anchored",
-    "citation",
+    "must be an anchored",
+    "issue/pr-number citation",
 )
 
 
@@ -1199,7 +1220,7 @@ def _inline_citation_offenders(defenced_text: str, citation_re: re.Pattern[str],
         sentences = _SENTENCE_SPLIT_RE.split(normalized)
         for i, sentence in enumerate(sentences):
             matches = [m for m in INLINE_CODE_RE.finditer(sentence)
-                       if citation_re.search(m.group(0)[1:-1])]
+                       if citation_re.search(m.group(2))]
             if not matches:
                 continue
             prev_lower = sentences[i - 1].lower() if i > 0 else ""

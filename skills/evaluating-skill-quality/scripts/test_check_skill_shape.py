@@ -1037,6 +1037,30 @@ def test_approved_issue_hedge_phrase_passes(tmp_path):
     assert result.passed is True
 
 
+def test_bare_hedge_word_does_not_exempt_a_real_citation(tmp_path):
+    # Regression guard for a review finding on the first cut of this check:
+    # a bare single-word hedge ("anchored"/"citation") is satisfied by
+    # ordinary prose that uses the word while citing a real, banned issue
+    # number -- exactly the defect this check exists to catch. The approved
+    # phrases are full multi-word phrases for this reason; "citation" alone
+    # (not the full "issue/pr-number citation" phrase) must not exempt this.
+    d = _write_raw(tmp_path, _portable_body(
+        "For provenance citation, see PR `#42` which fixed the bug."))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-issue-citation"]
+    assert result.passed is False
+    assert "#42" in result.evidence
+
+
+def test_bare_anchored_word_does_not_exempt_a_real_citation(tmp_path):
+    # Same regression guard, the other bare word: ordinary prose using
+    # "anchored" in an unrelated sense must not exempt a real citation.
+    d = _write_raw(tmp_path, _portable_body(
+        "The review is anchored to PR `#88` for full context."))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-issue-citation"]
+    assert result.passed is False
+    assert "#88" in result.evidence
+
+
 def test_self_referential_rule_statement_with_citation_hedge_passes(tmp_path):
     # A distinct legitimate case discovered while wiring this check up:
     # evaluating-skill-quality's own SKILL.md/rubric.md restate the
@@ -1117,6 +1141,22 @@ def test_unhedged_inline_issue_citation_in_reference_file_fails(tmp_path):
     result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-issue-citation"]
     assert result.passed is False
     assert "references/notes.md:`#42`" in result.evidence
+
+
+def test_double_backtick_code_span_citation_still_flagged(tmp_path):
+    # Regression guard for a review finding: INLINE_CODE_RE's first cut
+    # assumed every code span uses exactly one backtick on each side. A
+    # double-backtick span (Markdown's own escape form for content that
+    # itself needs a literal backtick) reads as two adjacent EMPTY
+    # single-backtick spans under that assumption, so its content was never
+    # inspected -- a citation using two backticks instead of one silently
+    # evaded this check entirely. INLINE_CODE_RE now matches a same-length
+    # closing delimiter run (1-3 backticks), so this must still be flagged.
+    d = _write_raw(tmp_path, _portable_body(
+        "Fictitious PR ``#42`` has just been opened."))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-issue-citation"]
+    assert result.passed is False
+    assert "``#42``" in result.evidence
 
 
 # ---- Portability source precedence: sidecar first, body marker as fallback ----
