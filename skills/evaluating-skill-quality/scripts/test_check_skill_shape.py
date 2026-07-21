@@ -134,6 +134,71 @@ def test_xml_tag_in_description_fails(tmp_path):
     assert _by_name(css.check_shape(d))["description-no-xml"].passed is False
 
 
+def test_unquoted_colon_space_in_description_fails(tmp_path):
+    d = _write_skill(tmp_path, description="Read-only: never mutates state.")
+    res = _by_name(css.check_shape(d))["description-yaml-safe"]
+    assert res.passed is False
+    assert "unquoted ': ' or trailing ':'" in res.evidence
+
+
+def test_trailing_colon_in_description_fails(tmp_path):
+    d = _write_skill(tmp_path, description="Use when doing the thing:")
+    res = _by_name(css.check_shape(d))["description-yaml-safe"]
+    assert res.passed is False
+    assert "unquoted ': ' or trailing ':'" in res.evidence
+
+
+def test_unquoted_comment_marker_in_description_fails(tmp_path):
+    d = _write_skill(tmp_path, description="Does a thing # not a comment")
+    res = _by_name(css.check_shape(d))["description-yaml-safe"]
+    assert res.passed is False
+    assert "unquoted ' #' or leading '#'" in res.evidence
+
+
+def test_hyphenated_aside_in_description_passes(tmp_path):
+    # This repository's own established convention for the same kind of
+    # aside a raw colon would otherwise be used for.
+    d = _write_skill(tmp_path, description="Read-only -- never mutates state.")
+    assert _by_name(css.check_shape(d))["description-yaml-safe"].passed is True
+
+
+def test_earlier_comment_marker_reported_over_later_colon(tmp_path):
+    # A real YAML parser truncates at the first hazard it hits -- the
+    # earlier ' #' here, not the later ': ' -- so the evidence must point
+    # at char 12 (the comment marker), not char 19 (the colon).
+    d = _write_skill(tmp_path, description="Does a thing # note: still unsafe")
+    res = _by_name(css.check_shape(d))["description-yaml-safe"]
+    assert res.passed is False
+    assert res.evidence == "unquoted ' #' or leading '#' at char 12"
+
+
+def test_quoted_description_with_colon_passes_yaml_safe(tmp_path):
+    # A double-quoted description is already safe under a real YAML parser
+    # regardless of an embedded ": " -- _parse_frontmatter strips the
+    # quotes, so the check must know the source was quoted rather than
+    # scanning the already-unquoted text.
+    text = ('---\nname: quoted-desc\n'
+            'description: "Read-only: never mutates state."\n---\n# body\n')
+    d = _write_raw(tmp_path, text)
+    res = _by_name(css.check_shape(d))["description-yaml-safe"]
+    assert res.passed is True
+    assert res.evidence == "safe (quoted or block scalar in source)"
+
+
+def test_folded_block_description_with_colon_passes_yaml_safe(tmp_path):
+    # A folded block scalar (">") is already safe under a real YAML parser
+    # regardless of an embedded ": " -- _parse_frontmatter joins the
+    # continuation lines into plain text, so the check must know the
+    # source was a block scalar rather than scanning the joined text.
+    text = ("---\nname: folded-desc\ndescription: >\n"
+            "  Read-only: never mutates state,\n"
+            "  safely written as a folded block scalar.\n---\n# body\n")
+    d = _write_raw(tmp_path, text)
+    res = _by_name(css.check_shape(d))["description-yaml-safe"]
+    assert res.passed is True
+    assert res.evidence == "safe (quoted or block scalar in source)"
+
+
 def test_uppercase_name_fails(tmp_path):
     d = _write_skill(tmp_path, name="Good-Skill")
     assert _by_name(css.check_shape(d))["name-pattern"].passed is False

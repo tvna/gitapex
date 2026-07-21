@@ -145,6 +145,7 @@ CHECK                                      RESULT  EVIDENCE (rule)
 description-present                        PASS    present  (description present and non-empty)
 description-no-xml                         PASS    no tags  (description has no XML tags)
 description-length                         PASS    483 chars  (description <= 1024 chars)
+description-yaml-safe                      PASS    safe  (description (an unquoted YAML plain scalar) has no ': ', trailing ':', or ' #'/leading '#' that would break or silently truncate under a real YAML parser)
 name-pattern                               PASS    'evaluating-skill-quality'  (name is lowercase-hyphenated)
 name-length                                PASS    24 chars  (name <= 64 chars)
 name-no-xml                                PASS    no tags  (name has no XML tags)
@@ -169,7 +170,7 @@ portable-no-issue-citation                 PASS    none  (Portable content has n
 portable-no-repo-path-citation             PASS    none  (Portable content has no bare-prose origin-repository path citation)
 portable-no-unhedged-inline-path-citation  PASS    none  (Portable content has no inline-code origin-repository path citation without an approved hedge phrase ('this repository', 'the calling repository', 'the target repository', 'gitapex') in its own sentence or the sentence immediately before it)
 
-26/26 checks passed
+27/27 checks passed
 ```
 
 Verdict on shape alone: **well-formed** (exit code 0).
