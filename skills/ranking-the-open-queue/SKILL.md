@@ -5,7 +5,7 @@ description: Sweep the backlog of already-known open issues/PRs and hand the ope
 
 # Ranking the Open Queue
 
-**Portability: Portable.** Depends only on a connected GitHub MCP server
+This skill depends only on a connected GitHub MCP server
 (`list_issues`/`search_issues`, general product capabilities), addressed
 via the portable `Server:tool` shorthand documented below -- no
 this-repository tooling. The scoring axes (references/scoring-rubric.md)
@@ -72,7 +72,7 @@ outranks a similarly-scored but Fresh item per the ordering rule's
 tie-break (Staleness only breaks ties after Blockage and Severity/
 Actionability already tie):
 
-| 1 | #101 "Fix crash on empty input" | Defect | Stale (95d) | Unblocked | Ready | Start now -- reproduction and acceptance criteria already present. |
+| 1 | `#101` "Fix crash on empty input" | Defect | Stale (95d) | Unblocked | Ready | Start now -- reproduction and acceptance criteria already present. |
 
 Followed by:
 

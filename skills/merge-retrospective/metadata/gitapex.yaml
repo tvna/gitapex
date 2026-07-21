@@ -1,0 +1,10 @@
+apiVersion: gitapex.io/v1alpha1
+kind: SkillMetadata
+metadata:
+  name: merge-retrospective
+spec:
+  portability: Portable
+  capabilityAssumption: Broad
+  skillDependencies:
+    requires: []
+    relatedTo: []

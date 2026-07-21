@@ -1,0 +1,38 @@
+id: evaluating-skill-quality-tool-capability-verification-train
+name: Detection Claim Assumes a Tool Can Reconstruct History It Only Observes Now
+description: Motivates the Tool-capability verification Mechanism-fit check -- the target's Stop boundary claims a pull-request read tool's commit-listing subcall can detect whether an earlier commit was force-pushed, when that subcall only returns the PR's current commit list and cannot see a ref that was already overwritten. The review must flag this as an unverified tool-capability claim, not accept it because the claim reads plausibly.
+tags:
+  - quality
+  - mechanism-fit
+  - tool-capability-verification
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "pr-history-audit". Is this a good skill?
+
+    ---
+    name: pr-history-audit
+    description: Audit a pull request's commit history for undisclosed rewrites before approving a merge. Use when the user asks to audit, verify, or check a pull request's commit history.
+    ---
+
+    # PR History Audit
+
+    ## Stop boundaries
+
+    - Never approve a merge without first confirming no commit on the
+      branch was force-pushed after review started: call the PR-read
+      tool's commit-listing subcall and compare it against the review's
+      start time -- that subcall can detect whether a force-push occurred.
+
+    ## Procedure
+
+    1. Call the PR-read tool's commit-listing subcall.
+    2. If it reports a force-push occurred, block the merge.
+    3. Otherwise, proceed with the standard review checklist.
+expected:
+  output_contains:
+    - "Tool-capability verification"
+    - "silently replaced"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"

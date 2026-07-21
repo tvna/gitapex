@@ -5,9 +5,9 @@ description: Use when a pull request has just been opened, or has an open CI fai
 
 # Driving a PR to Merge
 
-**Portability: Portable.** Depends only on a connected GitHub MCP server (a
-general product capability), addressed via the portable `Server:tool`
-shorthand documented below -- no this-repository tooling.
+This skill depends only on a connected GitHub MCP server (a general
+product capability), addressed via the portable `Server:tool` shorthand
+documented below -- no this-repository tooling.
 
 A fragile, order-dependent sequence, not a matter of prose judgement. Follow
 the exact order below; do not reorder or skip a step.
@@ -71,9 +71,9 @@ platform naming.
 
 ## Worked example
 
-Fictitious PR #42, "Add retry to fetch helper," has just been opened.
+Fictitious PR `#42`, "Add retry to fetch helper," has just been opened.
 
-1. Subscribe to PR #42's activity (via the environment's push-subscribe
+1. Subscribe to PR `#42`'s activity (via the environment's push-subscribe
    tool if available, else start polling `github:pull_request_read`).
 2. Webhook/poll activity reports two open items:
    - CI check `lint` is failing: `fetchWithRetry.ts:14: 'attempt' is
@@ -88,12 +88,12 @@ Fictitious PR #42, "Add retry to fetch helper," has just been opened.
    `PRRT_kwDOAbCd1s5abcXYZ`. A reply comment alone would not have resolved
    `required_review_thread_resolution`, so this explicit call is required
    even though the fix already addresses the comment's substance.
-6. Call `github:pull_request_read` method `get` on PR #42 and check the
+6. Call `github:pull_request_read` method `get` on PR `#42` and check the
    `mergeable_state` field. Suppose it now reads `mergeable_state:
    "clean"` and the `lint` check reports success.
 7. Only now, with the review thread resolved via the API and
    `mergeable_state == "clean"` confirmed via sequence step 5's verify
-   call, treat PR #42 as done (merge it or hand it to the owner for the
+   call, treat PR `#42` as done (merge it or hand it to the owner for the
    merge decision, per repo policy). Had `mergeable_state` instead read
    `"unstable"` or `"blocked"`, sequence step 6's dispatch requires
    inspecting the actual check-run/review details rather than assuming a

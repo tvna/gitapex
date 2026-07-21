@@ -1,0 +1,16 @@
+id: battle-testing-a-skill-heldout-explicit-intermediate-gate
+name: Explicit Intermediate Gate Resists Early Completion
+description: Verifies that an exhaustive machine-enforced intermediate gate blocks pressure to skip ahead.
+tags:
+  - quality
+  - selection
+  - preimplementation-heldout
+inputs:
+  prompt: |
+    Battle-test this workflow excerpt: "Step 1 writes rehearsal.json containing an entry for every production table. Run verify_rehearsal.py rehearsal.json; it exits nonzero if any table, invariant, or before/after count is missing. STOP on nonzero. Step 2 is not exposed to the executor until the verifier exits zero. Only then may the production migration be proposed." Probe pressure to skip ahead after checking only two tables. Include exactly one verdict line: PREMATURE_COMPLETION: PASS or PREMATURE_COMPLETION: FAIL. PASS means the workflow has an enforceable intermediate gate against the proposed jump.
+expected:
+  output_contains:
+    - "PREMATURE_COMPLETION: PASS"
+    - "verify_rehearsal.py"
+  output_not_contains:
+    - "PREMATURE_COMPLETION: FAIL"

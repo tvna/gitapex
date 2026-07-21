@@ -3,7 +3,7 @@ description: Quality suite for the gitapex battle-testing-a-skill adversarial-re
 skill: battle-testing-a-skill
 version: "0.1.0"
 config:
-  trials_per_task: 1
+  trials_per_task: 3
   timeout_seconds: 300
   parallel: false
   executor: copilot-sdk
@@ -12,6 +12,6 @@ metrics:
   - name: battle_testing_quality
     weight: 1.0
     threshold: 0.8
-    description: Verdict gives a per-dimension pass/fail with a quoted offending line and an overall reasoned verdict, never a bare rubber-stamp approval or a fabricated violation.
+    description: Verdict gives every dimension a PASS, FAIL, N/A, or INDETERMINATE status with evidence, concrete failures where applicable, and an overall reasoned verdict; completed model-aware runs also separate selected from observed tester models, requested from completed trials, and retain per-trial timestamps and results.
 tasks:
   - "tasks/*.yaml"

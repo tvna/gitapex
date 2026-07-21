@@ -1,0 +1,30 @@
+id: scorer-gated-skill-edits-llm-judge-without-adversarial-pass
+name: LLM Judge PASS Alone Is Not Ground Truth
+description: No deterministic scorer exists for this skill's task, so an LLM judge is standing in; the judge reported PASS and the user wants to keep the edit on that alone. Correct behavior requires a separate adversarial verification pass before keeping it.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use scorer-gated-skill-edits. We're iterating on `skills/meeting-notes-writer/SKILL.md`.
+
+    There's no deterministic scorer for this one -- the outputs are free-form
+    prose summaries, so nothing like `score_contract.py` applies here. We're
+    using an LLM judge instead to grade whether a candidate summary covers
+    the required decision points.
+
+    This iteration's edit adds a bullet to Procedure step 4 telling the
+    agent to list action items with an owner name attached. We ran it on
+    the selection-split fixtures and the judge came back with "PASS" on
+    the candidate output.
+
+    Can we keep this edit now?
+expected:
+  output_contains:
+    - "adversarial verification pass"
+    - "judge"
+    - "ground truth"
+  output_not_contains:
+    - "LGTM"
+    - "keep it, the judge passed it"
+    - "the PASS is sufficient"

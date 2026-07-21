@@ -52,22 +52,20 @@ real procedure invoked situationally, not a fact Claude should hold in
 every session regardless of task -- exactly what belongs in a skill
 rather than always-loaded CLAUDE.md content.
 
-**Skill vs. hook**: mostly good fit, one named gap. The review process
-itself is inherently a judgment call (grading nine dimensions is not a
-deterministic check), so prose is the right mechanism for the bulk of
-this skill. But one Stop boundary is safety-adjacent rather than purely
-judgment: "Never install eval tooling ... without the operator's
-go-ahead." Per the primary source, a "never do this" instruction that
-guards something that actually matters needs deterministic enforcement
-(a hook, a permission rule) because "under pressure, in a long session
-... the model can fail to follow a prompted rule" -- and gitapex has no
-hooks infrastructure at all today (confirmed: `hooks/` is an explicit
-Non-goal in the design spec cited elsewhere in this rubric). This Stop
-boundary is currently prose-only backing for a real supply-chain-risk
-concern (an agent autonomously running an install command). Not
-disqualifying -- the judgment-call parts of this skill are still
-correctly skill-shaped -- but worth naming rather than assuming the
-prose boundary is sufficient on its own.
+**Skill vs. hook**: good fit. The review process itself is inherently a
+judgment call (grading nine dimensions is not a deterministic check), so
+prose is the right mechanism for the bulk of this skill. The one Stop
+boundary that is safety-adjacent rather than purely judgment -- "Never
+install eval tooling ... without the operator's go-ahead" -- checks its
+own backing conditionally against whatever environment it actually runs
+in: real deterministic backing (a PreToolUse hook, a permission rule) if
+that environment has one, an explicit Mechanism-fit gap if it does not.
+This is the correct portable posture for a safety-adjacent Stop boundary
+in a Portable-declared skill -- asserting a fixed answer either way (that
+it is always backed, or always prose-only) would itself be a defect,
+since the true answer depends on wherever the skill happens to be
+running. Dated development history of how this boundary's wording
+reached its current state: `docs/skill-eval-status.md`.
 
 **Skill-step vs. bundled script**: passes. This skill's own deterministic
 shape lane was delegated to `scripts/check_skill_shape.py`, so applying
@@ -76,8 +74,8 @@ remaining step-level delegate-to-script finding.
 
 ## Portability level
 
-Not explicitly declared inline (`SKILL.md` never states "this skill is
-Portable"), so this review reads the actual content against the
+Declared as `portability: Portable` in this skill's
+`metadata/gitapex.yaml` sidecar, and cross-read against the
 Portable / Repository-scoped / Mixed definitions in `SKILL.md` itself
 (see also [rubric.md's Portability level](rubric.md#portability-level)
 for the per-dimension elaboration), the same way it read
@@ -88,7 +86,11 @@ Read as: **Portable**, after two fixes made during this same review pass
 step in `SKILL.md`'s "Two lanes" and "Procedure" sections resolves inside
 this skill's own folder or cites general, product-level primary sources
 (`platform.claude.com`, `code.claude.com`); no step tells the model to
-read or branch on a path outside `skills/evaluating-skill-quality/`.
+read or branch on a path outside `skills/evaluating-skill-quality/` in
+this origin repository. (Step 4 reads a path inside the *target* skill's
+own directory -- its `metadata/gitapex.yaml`, when present -- but that is
+the review's parameterized subject, not a dependency on this origin
+repository's tree, so the portability claim still holds.)
 Illustrative mentions of "gitapex" in `rubric.md` (dimensions 8 and the
 SkillOpt paragraph) are examples of applying a generic rule to the
 reviewer's current context, not paths the procedure depends on -- they
@@ -141,18 +143,28 @@ $ python3 skills/evaluating-skill-quality/scripts/check_skill_shape.py skills/ev
 CHECK                                      RESULT  EVIDENCE (rule)
 description-present                        PASS    present  (description present and non-empty)
 description-no-xml                         PASS    no tags  (description has no XML tags)
-description-length                         PASS    314 chars  (description <= 1024 chars)
+description-length                         PASS    483 chars  (description <= 1024 chars)
 name-pattern                               PASS    'evaluating-skill-quality'  (name is lowercase-hyphenated)
 name-length                                PASS    24 chars  (name <= 64 chars)
 name-no-xml                                PASS    no tags  (name has no XML tags)
 name-not-reserved                          PASS    'evaluating-skill-quality'  (name contains no reserved word ('anthropic', 'claude'))
-body-length                                PASS    147 lines  (SKILL.md body <= 500 lines)
+body-length                                PASS    326 lines  (SKILL.md body <= 500 lines)
+metadata-file-present                      PASS    present  (metadata/gitapex.yaml exists)
+manifest-parsable                          PASS    no malformed lines  (metadata/gitapex.yaml has no malformed top-level lines)
+manifest-envelope                          PASS    apiVersion='gitapex.io/v1alpha1', kind='SkillMetadata'  (apiVersion is gitapex.io/v1alpha1 and kind is SkillMetadata)
+metadata-name-matches-dir                  PASS    'evaluating-skill-quality' vs directory 'evaluating-skill-quality'  (metadata.name equals the skill directory name)
+portability-declared                       PASS    'Portable'  (spec.portability is one of ('Portable', 'Repository-scoped', 'Mixed'))
+capability-assumption-declared             PASS    'Broad'  (spec.capabilityAssumption is one of ('Broad', 'Frontier', 'Adaptive'))
+references-well-formed                     PASS    1 entry  (spec.references, if present, is a non-empty list of non-empty strings)
+links-inside-skill                         PASS    all inside  (Markdown link targets resolve inside the skill's own directory)
 references-flat                            PASS    flat  (references/ files are one level deep)
-toc:rubric.md                              PASS    565 lines, TOC found  (reference over 100 lines has a TOC)
-toc:worked-example-explaining-the-work.md  PASS    271 lines, TOC found  (reference over 100 lines has a TOC)
-toc:worked-example-self-review.md          PASS    324 lines, TOC found  (reference over 100 lines has a TOC)
+toc:rubric.md                              PASS    1060 lines, TOC found  (reference over 100 lines has a TOC)
+toc:worked-example-explaining-the-work.md  PASS    279 lines, TOC found  (reference over 100 lines has a TOC)
+toc:worked-example-self-review.md          PASS    624 lines, TOC found  (reference over 100 lines has a TOC)
+portable-no-issue-citation                 PASS    none  (Portable content has no bare-prose GitHub issue/PR-number citation)
+portable-no-repo-path-citation             PASS    none  (Portable content has no bare-prose origin-repository path citation)
 
-12/12 checks passed
+22/22 checks passed
 ```
 
 Verdict on shape alone: **well-formed** (exit code 0).
@@ -178,10 +190,10 @@ just a trigger-string diff:
 - `battle-testing-a-skill` -- adversarial-stress lens (does the skill hold
   up under hostile/degenerate input) vs. this skill's static quality lens
   (is the skill well-authored). Different question, same artifact type.
-- `gated-skill-edits` -- a measured edit loop (score, edit, re-score against
+- `scorer-gated-skill-edits` -- a measured edit loop (score, edit, re-score against
   a contract) for *changing* a skill, vs. this skill's one-shot verdict for
   *reviewing* one. Complementary, not overlapping: this skill can supply
-  the initial verdict that `gated-skill-edits` then iterates against.
+  the initial verdict that `scorer-gated-skill-edits` then iterates against.
 
 One genuine watch-point, not a failure: `outward-artifact-preflight`'s
 trigger ("about to push, post, or publish any outward-facing artifact --
@@ -209,6 +221,41 @@ same instruction in two places" fail this dimension itself names. Not a
 current violation -- a forward-looking note on a file that has grown
 several times in one review pass.
 
+**Update (materialized watch-point):** the file has grown further since
+the note above was written, across additional gated edits. Checked
+directly against the specific drift risk named above -- neither `waza`'s
+divergences nor SkillOpt's disciplines are cited a second time anywhere
+in the new content, so that named violation has not occurred, and a full
+read of the current file found no other instance of the "restating the
+same instruction in two places" fail either: each addition cites its own
+distinct primary source. This is not a clean pass by default, though --
+it is a materialized instance of exactly the trend the original note
+flagged as a risk to watch, not merely a hypothetical anymore, and should
+be actively re-checked (not assumed still fine) at the next edit rather
+than treated as settled by this one clean check. Line-count history and
+which specific edits contributed: `docs/skill-eval-status.md`.
+
+**Update (capability-assumption axis re-grade, Broad):** this skill now
+declares `capabilityAssumption: Broad` in its `metadata/gitapex.yaml`
+sidecar, so this dimension is graded under the Broad bullet of
+[rubric.md's Capability assumption](rubric.md#capability-assumption)
+section: explanation that would be redundant for a strong model "is not
+automatically sprawl or duplication when the declared target plausibly
+still needs it," while relevance, duplication, sediment, and true sprawl
+"still fail ... exactly as before." Applied to the watch-point above,
+Broad does **not** change the verdict, because the watch-point's live
+axis is *duplication* ("restating the same instruction in two places"),
+which the Broad bullet explicitly does not excuse. Broad only bears on
+the *length* half of the earlier unease: rationale-heavy growth (the
+SkillOpt disciplines, the three `waza` divergences with source citations)
+is not sprawl-by-length-alone under Broad, since a weak or economical
+target plausibly still needs that spelled-out rationale. So Broad
+*reinforces* the existing no-current-violation read on the length axis
+while leaving the duplication watch-point -- the finding's real content
+-- fully in force. Re-walked live via a fresh isolated subagent dispatch
+per `SKILL.md`'s Subagent dispatch section, against the current files on
+disk, not by inference.
+
 ### 3. Degree of freedom
 
 Pass. The deterministic-shape checklist is low-freedom (exact fields,
@@ -220,6 +267,20 @@ sits at medium freedom: two named categories plus a documented mixed
 case, not an open-ended judgment and not a rigid binary flag either --
 appropriate for a call that is real but has a small number of legitimate
 answers.
+
+**Update (capability-assumption axis re-grade, Broad):** graded under the
+Broad bullet of [rubric.md's Capability assumption](rubric.md#capability-assumption)
+section, which forgives a narrower-than-strictly-necessary prescription
+(low-freedom phrasing for a task a stronger model could handle with open
+judgment "is not on its own a finding") but "never excuses
+under-constraining a fragile step." Neither lever moves the verdict here:
+the low-freedom content (the deterministic-shape checklist) is matched to
+genuinely script-checkable facts -- which dimension 3 says should be
+low-freedom for every tier regardless -- so there is no
+over-constrained-for-a-strong-model step for Broad's leniency to act on;
+and the walk finds no loose prose over a fragile, irreversible operation
+for the never-excused direction to catch. **Unchanged: clean Pass.**
+Confirmed on the live subagent re-walk described above.
 
 ### 4. Clarity and structure
 
@@ -260,6 +321,22 @@ Contract discipline -- are checkable from `SKILL.md` alone; only step 4
 the same "cheapest level that still makes it available" test dimension 5
 itself states, applied to the precondition/postcondition split from
 Contract discipline rather than only to dimension content.
+
+**Update (capability-assumption axis re-grade, Broad -- no-op, stated
+explicitly):** the capability-assumption axis is applied here for
+completeness, not silently skipped, precisely so the no-op is on the
+record. Per [rubric.md's Capability assumption](rubric.md#capability-assumption)
+section, dimension 5 is the "Adaptive only" case: "Broad and Frontier
+leave this dimension's grading completely unchanged ... neither gives
+this dimension a new rule to apply." This skill declares **Broad**, not
+Adaptive, so the axis adds nothing here: the Pass above stands verbatim,
+earned entirely on the tier-independent split-is-real-and-reachable
+question (both worked examples one level deep, linked from `SKILL.md`,
+each with a TOC past 100 lines; the Portability definitions moved into
+`SKILL.md` so steps 1-3 are checkable without opening `rubric.md`). Had
+the declaration been Adaptive, this is where the body-leanness-vs-deferred-
+depth claim would get checked -- but it is not, so there is deliberately
+no new finding.
 
 ### 6. Durability
 
@@ -325,17 +402,26 @@ editing session itself. The extensive back-and-forth in this session
 iterative validation but was not scored against a held-out split, so it
 does not meet the letter of the discipline this dimension names.
 
-**Update (PR #103):** this gap was closed for one specific edit, not
-retroactively for the skill's whole authoring history. The dimension-8
-scoring-axis paragraph added in that PR was scored against a documented
-held-out train/selection/test split
-(`evals/evaluating-skill-quality/split.md`) before and after the edit,
-using `skills/gated-skill-edits/scripts/score_contract.py`: the selection
-mean strictly improved (0.964286 -> 1.000000), so the edit was kept per
-the gate's ties-rejected rule. That is one real instance of this
-discipline applied to this skill, not evidence that every earlier edit
-in this document's history went through it -- the paragraph above still
-accurately describes the many edits that did not.
+**Update (held-out gate discipline applied, multiple iterations):** this
+gap has since been closed for several specific edits to this skill, not
+retroactively for its whole authoring history -- each time via a
+documented held-out train/selection/test split
+(`evals/evaluating-skill-quality/split.md`), scored before and after with
+`skills/scorer-gated-skill-edits/scripts/score_contract.py`, requiring a strict
+improvement (ties rejected) before the edit was kept. That is real,
+repeated instances of this discipline applied to this skill, not evidence
+every earlier edit went through it -- the paragraph above still
+accurately describes the many edits that did not. One of these gates also
+surfaced two real fixture-assertion bugs (case-sensitivity against text
+the rubric itself prescribes in a different case; a negative assertion
+that false-failed a correct denial), caught by external review rather
+than found here first, and fixed the same way each time it recurred:
+match the assertion to what the rubric actually prescribes rather than an
+assumed casing, and ban only affirmative claims, never a phrase a correct
+denial would also contain. Full per-edit record -- which specific change
+each gate covered, the exact before/after scores, and the fixture bugs
+found along the way: `evals/evaluating-skill-quality/split.md`'s
+Kept-edit log and `docs/skill-eval-status.md`.
 
 ### 9. Cross-model robustness
 
@@ -356,27 +442,104 @@ copy in a different repository, and no run under a different harness
 Portability level section above is designed to reduce the *risk* of, but
 risk reduction is not the same claim as measured transfer success.
 
+**Update (capability-assumption axis re-grade, Broad -- framing
+correction, not a verdict flip):** this is the one dimension of the four
+the axis actually re-grades, so it is recorded as real evidence rather
+than forced back into the prior shape. Under the Broad bullet of
+[rubric.md's Capability assumption](rubric.md#capability-assumption)
+section, "the full Haiku/Sonnet/Opus spread applies as written: the skill
+must give a weak tier *enough* guidance, and failing to do so is a real,
+gradeable **gap, not an unmeasured one**." That splits the blanket
+"Unmeasured, not skipped" verdict above into two questions that Broad
+grades differently:
+
+- **Weak-tier guidance adequacy -- now gradeable, and it Passes.** Broad
+  forbids parking this sub-question under "unmeasured": whether the skill
+  supplies a weak tier enough scaffolding is a *static* read the reviewer
+  must render from the text, without running Haiku. Rendered here, it
+  Passes -- the judgment-bearing content lives in the detailed,
+  rationale-rich `references/rubric.md`, which plausibly gives a weak tier
+  the scaffolding the lean `SKILL.md` body alone would not. (The same
+  reference depth dimension 2 watches for length is, on this axis, an
+  asset.) The original subsection already gestured at this when it noted
+  the prose judgment calls are "the shape most likely to need *more*
+  guidance on Haiku" -- Broad turns that informal read into an affirmative
+  Pass rather than a deferral.
+- **Model-differential run and transfer testing -- still honestly
+  unmeasured.** Broad does not manufacture measured data: no
+  Haiku/Sonnet/Opus A/B differential has been run, and no vendored-copy or
+  alternate-harness transfer has been observed. These remain unmeasured
+  exactly as stated above, and dimension 9's own text permits saying so.
+
+Net effect: dimension 9's own outcome does **not** flip to a failure
+under Broad -- it stays Pass-shaped, and dimension 9 is still one of the
+two dimensions the overall Verdict names as carrying unmeasured facets.
+What changes is precision: the earlier flat "Unmeasured, not skipped" was
+slightly overbroad under Broad, filing a gradeable adequacy question
+under "unmeasured" when Broad requires it be graded (and it Passes).
+Established on the live subagent re-walk, not by inference.
+
 ## Verdict
 
-**Mechanism fit**: good fit overall, with one named gap -- the
-eval-tooling-install Stop boundary is safety-adjacent prose with no
-hook backing, in a repo with no hooks infrastructure yet. Reported here
-as the headline finding per rubric.md's Verdicts section, alongside
-rather than instead of the well-formed/mature verdict below.
+**Mechanism fit**: good fit overall. The one safety-adjacent Stop
+boundary (eval-tooling installs) checks its own backing conditionally
+against whatever environment it actually runs in, rather than asserting
+a fixed answer -- the correct portable posture for a Portable-declared
+skill, since a hardcoded "yes, backed" claim would itself be a defect
+once vendored somewhere with no such hook. Development history of how
+this boundary's wording reached this state: `docs/skill-eval-status.md`.
 
-**Well-formed**, and not yet **mature** -- the same shape as the
-`explaining-the-work` verdict, for different reasons. Dimensions 1
-(after the description fix), 3, 4, 5, 6 (after the two portability
-fixes), and 7 (applicable -- this skill ships `check_skill_shape.py`;
-clears cleanly after the constant-comment fix) all clear cleanly with
-cited evidence; dimensions 8 and 9 are explicitly named as unmeasured
-rather than silently assumed,
-satisfying rubric.md's Verdicts allowance for 8-9 specifically. Dimension
-2 carries a forward-looking watch-point (file growth over one long
-session) rather than a current named gap, so it does not by itself block
-mature the way an uncleared 1-7 gap would -- but it is close enough to
-the line that the next edit to `rubric.md` should re-check it rather than
-assume it still holds.
+**Well-formed**, and now **mature** -- diverging here from the
+`explaining-the-work` verdict (which stayed *not yet mature*), because
+this skill's dimension 1-7 gaps were each fixed during this same review
+rather than left standing. Dimensions 1 (after the description fix), 3,
+4, 5, 6 (after the two portability fixes), and 7 (applicable -- this
+skill ships `check_skill_shape.py`; clears cleanly after the
+constant-comment fix) all clear cleanly with cited evidence; dimensions 8
+and 9 are explicitly named as unmeasured rather than silently assumed,
+which rubric.md's Verdicts section allows for 8-9 specifically without
+blocking mature. Dimension 2 carries a forward-looking watch-point (file
+growth over one long session) rather than a current named gap, so -- per
+the rubric's own binary, where only a named 1-7 gap blocks -- it does not
+hold the verdict below mature; it is close enough to the line, though,
+that the next edit to `rubric.md` should re-check it rather than assume
+it still holds. The "Mixed" grade and "not a clean pass by default"
+wording in dimension 2's own subsection denote exactly this
+forward-looking watch-point -- not a rubric "minor gap," which under
+rubric.md's Verdicts rule ("a 'minor' gap still means that dimension has
+not cleared") would leave the dimension uncleared and block mature. That
+distinction is load-bearing here: dimension 2's subsection reaches the
+explicit conclusion "not a current violation," so under the rubric's
+binary it clears, and the "Mixed"/"not a clean pass" language reports the
+two-sided observation (tight body, grown reference) plus a note to
+re-check, not a present, mature-blocking gap. This "mature" is the bounded kind rubric.md defines: it
+clears everything this repository's tooling can check today, not a claim
+of proven behaviour -- precisely because dimensions 8 and 9 remain
+named-unmeasured rather than passed. (An earlier draft of this verdict
+read "not yet mature" while simultaneously asserting every one of these
+same clear-1-7-plus-named-8-9 conditions -- a verdict that contradicted
+its own governing rubric; corrected here to the verdict those conditions
+actually entail.)
+
+**Update (capability-assumption axis re-grade, Broad):** this skill's
+`Broad` declaration has since been re-walked against dimensions 2, 3, 5,
+and 9 (the four the axis calibrates) via the live subagent dispatch
+recorded in each subsection above. No dimension flips to a failure under
+Broad: 2, 3, and 5 keep their prior reads (5 by the axis's own documented
+no-op for Broad), and 9 keeps its Pass-shaped outcome. The one
+substantive per-dimension change is a framing correction inside dimension
+9: Broad requires the weak-tier "enough guidance?" question be graded (it
+Passes on the strength of the detailed `references/rubric.md`) rather than
+filed under "unmeasured," while the model-differential run and transfer
+testing stay honestly unmeasured -- so the "8 and 9 unmeasured" allowance
+the verdict rests on still holds for dimension 9's measured-transfer facet
+specifically, now stated more precisely than the earlier blanket did.
+Separately from the Broad walk, the headline verdict above was reconciled
+with rubric.md's Verdicts definition (dimensions 1-7 clear with no named
+gap, plus 8-9 named-unmeasured) and corrected from an earlier "not yet
+mature" to **mature**: the Broad re-grade does not itself drive that
+correction, but it confirms none of its four dimensions introduces a
+blocking 1-7 gap that would hold the verdict below mature.
 
 The honest summary: this review found and fixed two real portability
 defects in the artifact it was reviewing (itself), which is a materially
@@ -384,6 +547,26 @@ different, stronger outcome than a self-review that finds nothing. A
 self-review that always passes cleanly would itself be evidence of
 rubber-stamping -- per this skill's own Stop boundaries, a bare "looks
 fine" is exactly what is disallowed.
+
+**Verification via live dogfooding:** a fresh, fully live dispatch (real
+subagent, real target -- this skill's own current files on disk, not a
+synthetic fixture) ran the complete current Procedure against this
+skill, per this repository's own "gate completion on live proof, not
+plan-time intent alone" discipline. Result at the time: **well-formed**
+(14/14 deterministic checks, confirmed live), **not yet mature** -- two
+dimension 1-7 gaps, both since addressed above rather than left standing.
+The Model/effort tier fit check correctly found and explicitly stated
+that this skill's own content pins no model or effort level anywhere --
+an absence, not a finding, per its own restraint discipline. The Blind
+spot pass found one genuine rubric gap specific to this target's
+self-referential domain: the held-out-gate discipline above covers split
+methodology (disjointness, strict improvement) but never asks whether
+the automated scorer (`score_contract.py`'s substring matching) actually
+measures the judgment it is scoring -- left unfixed here, correctly, per
+the Blind spot pass's own instruction that a durable rubric change is a
+deliberate, `scorer-gated-skill-edits`-gated edit, not something a single review
+session improvises. Dated record of which edit this run followed:
+`docs/skill-eval-status.md`.
 
 ## Verification: subagent dispatch (dated addendum)
 
@@ -429,5 +612,13 @@ comparison is future work, named rather than assumed -- see
 
 ## References
 
-(No external URLs specific to this file beyond those already collected in
-[rubric.md's References](rubric.md#references).)
+External primary-source URLs are already collected in
+[rubric.md's References](rubric.md#references). This file intentionally
+carries no issue- or PR-number citations of its own: a bare `#N` (or even
+a fully qualified `owner/repo#N`) is gitapex-repo-specific bookkeeping
+that does not belong blended into a Portable skill's worked-example
+content, the same class of gap dimension 5's Mixed-portability guidance
+names for a portable-core-plus-repo-specific-detail split. This
+skill's own dated, issue-linked development history lives entirely in
+this repository's own bookkeeping instead: `docs/skill-eval-status.md`
+and `evals/evaluating-skill-quality/split.md`'s Kept-edit log.

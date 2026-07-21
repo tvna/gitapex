@@ -153,7 +153,8 @@ committed `flake.nix` is referenced in place only by the repo context.
   the read-only plugin cache. It **initializes** the toolchain into a
   user-writable cache (e.g. `${XDG_CACHE_HOME:-~/.cache}/gitapex/toolchain/`) by
   materializing the bundled flake from `${CLAUDE_PLUGIN_ROOT}` (flake.nix,
-  flake.lock, toolchain.lock.json) and provisioning there.
+  flake.lock, `.gitapex/policies/toolchain.lock.json`) and provisioning
+  there.
   Initialization is **cooldown-gated**: a cheap check (toolchain present, and a
   recorded marker of `{plugin version, TTL timestamp}` still valid) runs every
   invocation; the expensive `nix`-build init runs only on first use, cooldown
@@ -164,15 +165,37 @@ Dependabot-tracked pins; as an installed plugin it is **frozen at the installed
 plugin version** (the pins that plugin release bundled), with the cooldown TTL
 bounding how often the initialized cache is refreshed and plugin updates being
 the way to move pins forward. Because `flake.nix`, `flake.lock`, and the
-generated `toolchain.lock.json` are all committed, the bundle is self-contained
-and reproducible at each plugin version. (Advanced flake-input consumption by
-other repos is an open item, not in this scope.)
+generated `.gitapex/policies/toolchain.lock.json` are all committed, the
+bundle is self-contained and reproducible at each plugin version.
+(Advanced flake-input consumption by other repos is an open item, not in
+this scope.)
+
+**Relationship to `.gitapex/ssot.json` (added 2026-07-17).** A separate,
+later design initiative (the CLI governance work tracked from
+https://github.com/tvna/gitapex/issues/82) defines
+`.gitapex/ssot.json`, a business-domain gate registry, unrelated to this
+doc's toolchain-provisioning scope in mechanism but now explicitly
+related in registration: `toolchain.lock.json` is registered as a
+`policy_sources[]` entry under `ssot.json` (`format: "json"`, `authority:
+"pinned toolchain versions for gitapex-compliant dev environment
+deployment"`) and moves from `.gitapex/toolchain.lock.json` to
+`.gitapex/policies/toolchain.lock.json` accordingly (see all path
+references above and in Architecture/Components below). This does NOT
+change anything in this doc's own design: `flake.nix`/`flake.lock` remain
+the toolchain version SSoT, generation via `nix eval` is unchanged, and
+the file remains never-hand-edited. `ssot.json` becomes a downstream
+reference consumer, not a second source of truth. See
+https://github.com/tvna/gitapex/issues/131 for why this connection
+matters: gitapex's governance-registry designs (embedded Rego evaluation,
+`gitapex init` scaffolding) implicitly assume a provisioned toolchain
+already exists in the Installed-plugin/Claude-Code-web context described
+above, and that assumption was previously undocumented outside this file.
 
 ## Architecture
 
 ```
 flake.nix / flake.lock              # SSoT: Class A from nixpkgs input; Class B fetchurl pins embedded in let-bindings (static, regex-parseable)
-.gitapex/toolchain.lock.json        # GENERATED (nix eval) for the ps1 path; never hand-edited
+.gitapex/policies/toolchain.lock.json  # GENERATED (nix eval) for the ps1 path; never hand-edited; registered as a policy_sources[] entry in .gitapex/ssot.json (see #82/#131)
 .gitapex/setup.ps1                  # Windows-native: reads the lock, installs signed publisher binaries
 pyproject.toml                      # prek + python dev deps
 renovate.json / .github/dependabot.yml   # Class A/A' + Class B customManager over flake.nix (tooling TBD, see Open items)
@@ -194,7 +217,7 @@ static regex-parseable strings. The flake is the single SSoT. `nix develop`
 yields uv, gh, actionlint, python312, bun, lychee, waza, apm, rtk, betterleaks;
 prek is available via `uv run prek`.
 
-### `.gitapex/toolchain.lock.json` (generated)
+### `.gitapex/policies/toolchain.lock.json` (generated)
 CI runs `nix eval` to resolve every tool's version (Class A from the nixpkgs
 input, Class B from the flake let-bindings) into a single machine-readable lock
 the Windows ps1 consumes. Regenerated whenever `flake.lock` or a Class B pin

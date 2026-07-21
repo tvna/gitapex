@@ -15,7 +15,7 @@ agent.
 
 ```
 .claude-plugin/    marketplace.json + plugin.json (Claude Code/Codex manifests; plugin.json is the version source of truth)
-skills/            one directory per skill (SKILL.md, optionally references/) — deployed by apm/Claude/Codex
+skills/            one directory per skill (SKILL.md, metadata/gitapex.yaml, optionally references/) — deployed by apm/Claude/Codex
   explaining-the-work/  routes code-comment/commit/test explanation responsibility to the right artifact
   issue-to-branch/      turns a GitHub issue into an implementation-ready branch/PR plan with an Acceptance Criteria Map
   seeding-issue-pr-templates/  creates Issue/PR templates when a repo lacks them; first script-shipping skill (scripts/validate_templates.py)

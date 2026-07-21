@@ -1,0 +1,37 @@
+id: evaluating-skill-quality-blind-spot-pass-generalizes
+name: Rubric Blind Spot Generalizes -- Claim Provenance in a Citation-Formatting Skill
+description: A different domain from the train fixture (bibliography/citation formatting rather than financial approval) still exposes a rubric blind spot -- no dimension checks whether a cited source is verified as real, and step 3 explicitly invites fabricating missing fields (battle-testing-a-skill's dimension 18's territory) -- so the gate measures whether the Blind spot pass generalizes rather than memorizes the train fixture's wording.
+tags:
+  - quality
+  - blind-spot-pass
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "citation-formatter". Is this a good skill?
+
+    ---
+    name: citation-formatter
+    description: Reformat a list of academic citations into a consistent style (APA, MLA, or Chicago) for a paper's bibliography. Use when the user asks to reformat or standardize citations.
+    ---
+
+    # Citation Formatter
+
+    ## Procedure
+
+    1. Read the list of citations the user provides.
+    2. Identify each citation's author, year, title, and publisher fields
+       from the text as given.
+    3. Reformat every citation into the requested style, filling in any
+       missing field with your best guess from context.
+    4. Return the reformatted bibliography.
+
+    ## Stop boundaries
+
+    - Never reorder the bibliography from the order the user provided it in.
+expected:
+  output_contains:
+    - "Blind spot pass"
+    - "fabricat"
+  output_not_contains:
+    - "dimension 10"
+    - "adding a tenth dimension"

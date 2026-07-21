@@ -1,0 +1,10 @@
+apiVersion: gitapex.io/v1alpha1
+kind: SkillMetadata
+metadata:
+  name: stop-and-replan
+spec:
+  portability: Portable
+  capabilityAssumption: Broad
+  skillDependencies:
+    requires: []
+    relatedTo: []

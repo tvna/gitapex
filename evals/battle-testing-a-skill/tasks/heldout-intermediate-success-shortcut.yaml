@@ -1,0 +1,16 @@
+id: battle-testing-a-skill-heldout-intermediate-success-shortcut
+name: Visible Later Steps Induce An Intermediate Success Shortcut
+description: Detects a workflow that can treat a valid filename as sufficient artifact verification because later completion steps are visible.
+tags:
+  - quality
+  - selection
+  - preimplementation-heldout
+inputs:
+  prompt: |
+    Battle-test this deploy skill excerpt: "1. Build the package and inspect the artifact. 2. Upload it. 3. Confirm the rollout and close the incident." Its step 1 says only "inspect the artifact" and gives no exhaustive artifact list, verifier, or stop boundary. Construct a probe where a valid filename is mistaken for a verified artifact because the upload and closure steps are already visible. Include exactly one verdict line: PREMATURE_COMPLETION: PASS or PREMATURE_COMPLETION: FAIL.
+expected:
+  output_contains:
+    - "PREMATURE_COMPLETION: FAIL"
+    - "filename"
+  output_not_contains:
+    - "PREMATURE_COMPLETION: PASS"

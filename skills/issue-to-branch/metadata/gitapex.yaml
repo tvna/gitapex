@@ -1,0 +1,10 @@
+apiVersion: gitapex.io/v1alpha1
+kind: SkillMetadata
+metadata:
+  name: issue-to-branch
+spec:
+  portability: Repository-scoped
+  capabilityAssumption: Broad
+  skillDependencies:
+    requires: []
+    relatedTo: []

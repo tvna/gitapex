@@ -7,17 +7,17 @@ description: Use when auditing a GitHub or GitLab repository's hosting-platform 
 
 The procedure, the coverage-honesty rule, and both platform checklists
 work identically no matter which GitHub/GitLab repo is being *audited*.
-The one exception: the Gap cross-link target
-depends on where *this copy of the skill's own files* live, never on
-which repository is under audit -- gitapex's own copy always cross-links
-gitapex's own tracking issue, even when auditing a target that has
-nothing to do with gitapex. If this copy lives in gitapex itself, Step 2
-below loads `references/gitapex-cross-links.md` for gitapex's own
-target, instruction-file citation, and script precedent. A copy vendored
-into a different repository drops that file and instead uses that
-hosting repository's own tracking issue and instruction file where they
-exist -- omitting the cross-link or citation where they don't, never
-fabricating one. Nothing else in this skill depends on the file.
+The one exception: the Gap cross-link target depends on where *this copy
+of the skill's own files* live, never on which repository is under audit
+-- gitapex's own copy always cross-links gitapex's own tracking issue,
+even when auditing a target that has nothing to do with gitapex. If this
+copy lives in gitapex itself, Step 2 below loads
+`references/gitapex-cross-links.md` for gitapex's own target,
+instruction-file citation, and script precedent. A copy vendored into a
+different repository drops that file and instead uses that hosting
+repository's own tracking issue and instruction file where they exist --
+omitting the cross-link or citation where they don't, never fabricating
+one. Nothing else in this skill depends on the file.
 
 Audits a repository's hosting-platform *configuration* surface (not its
 code) and reports what was actually checked versus what could not be

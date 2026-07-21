@@ -1,0 +1,13 @@
+apiVersion: gitapex.io/v1alpha1
+kind: SkillMetadata
+metadata:
+  name: responding-to-a-fresh-arrival
+spec:
+  portability: Repository-scoped
+  capabilityAssumption: Broad
+  skillDependencies:
+    requires: []
+    relatedTo:
+      - issue-to-branch
+      - ranking-the-open-queue
+      - screening-a-low-trust-contribution

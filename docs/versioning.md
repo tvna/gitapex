@@ -11,7 +11,7 @@ CLI-only change actually shipped.
 | Product | Scope | Tag format | Version file | Status |
 |---|---|---|---|---|
 | **plugin** | `skills/`, `.claude-plugin/plugin.json` | `plugin-vX.Y.Z` | `.claude-plugin/plugin.json` | Live now (`0.1.0`) |
-| **cli** | The future gitapex single-binary CLI: SSOT config (`.gitapex/ssot.json`) plus a modular policy-engine-driven governance/gate-control layer for business-domain changes (OPA/Rego is the named candidate mechanism), including git/GitHub middleware and SaaS-integration operations -- the originally-scoped approved read-only gh wrapper is one governed-operation instance within this, not the whole product (see `docs/superpowers/specs/2026-07-15-gitapex-cli-governance-design.md` and tracking issue #82). Currently Python tooling under `.github/scripts/`; provisional Rust rewrite (Go acceptable later if warranted, not decided now) once CLAUDE.md has matured | `cli-vX.Y.Z` | To be decided when the CLI product exists | Reserved — no version file yet |
+| **cli** | The future gitapex single-binary CLI: SSOT config (`.gitapex/ssot.json`) plus a modular policy-engine-driven governance/gate-control layer for business-domain changes (embedded Rego via `regorus`, per issue #125's decided design), including git/GitHub middleware and SaaS-integration operations -- the originally-scoped approved read-only gh wrapper is one governed-operation instance within this, not the whole product (see `docs/superpowers/specs/2026-07-15-gitapex-cli-governance-design.md` and tracking issue #82). Currently Python tooling under `.github/scripts/`; **Rust, decided 2026-07-18** (see `docs/superpowers/specs/2026-07-16-business-domain-policy-engine-tradeoff.md`'s Rust-vs-Go decision brief), conditional on the `regorus` conformance fixture-suite (#125) passing -- revisit to Go only if that tripwire fires, while the switch is still a design edit, not a code rewrite | `cli-vX.Y.Z` | To be decided when the CLI product exists | Reserved — no version file yet |
 | **compose** | Future deployment/dev topology (e.g. docker-compose) | `compose-vX.Y.Z` | To be decided when compose assets exist | Reserved — no version file yet |
 
 Only the **plugin** row is real today. **cli** and **compose** are named and
@@ -30,10 +30,16 @@ Commits carry product intent in the scope, so a future release process (if
 built) can tell which product to release:
 
 ```
-feat(plugin): ...   fix(plugin): ...   docs(plugin): ...
-feat(cli): ...       fix(cli): ...       docs(cli): ...
-feat(compose): ...   fix(compose): ...   docs(compose): ...
+feat(plugin): ...   fix(plugin): ...   docs(plugin): ...   refactor(plugin): ...
+feat(cli): ...       fix(cli): ...       docs(cli): ...       refactor(cli): ...
+feat(compose): ...   fix(compose): ...   docs(compose): ...   refactor(compose): ...
 ```
+
+`refactor(...)` carries no version-bump semantics of its own (SemVer-wise
+it is a patch at most) but is a required, deterministic signal for
+issue #138's `gate-refactor-net-growth` gate design: only a PR titled
+`refactor(scope): ...` triggers the net-line-growth-justification check;
+`feat`/`fix`/`docs` PRs are exempt since growth is expected on them.
 
 ## Branch strategy
 

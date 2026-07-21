@@ -5,8 +5,8 @@ description: Use when given a bare issue reporting a defect (or a CI failure wit
 
 # Issue to Fix
 
-**Portability: Portable.** Depends only on a connected GitHub MCP server (a
-general product capability) for the Step 2 escalation action (commenting
+This skill depends only on a connected GitHub MCP server (a general
+product capability) for the Step 2 escalation action (commenting
 on an existing issue or opening a new one); Steps 1 and 3-5 (reproduce,
 write a failing test, fix, verify) are entirely general and depend on no
 this-repository tooling. Tool names below are written as `Server:tool`
@@ -52,7 +52,7 @@ what has not been reproduced.
 
 ## Worked example
 
-Issue #142, "Search returns duplicate results when a query matches both
+Issue `#142`, "Search returns duplicate results when a query matches both
 title and body."
 
 1. Reproduce: run the search endpoint with a query matching both fields
@@ -67,7 +67,7 @@ title and body."
    suite -- no other test regressed.
 
 Contrast: had step 1 failed to reproduce the duplicates against the real
-search path, the correct next move is step 2 -- comment on #142 stating
+search path, the correct next move is step 2 -- comment on `#142` stating
 the exact query tried and that no duplicates appeared, then stop. Do not
 guess at a dedupe fix for a defect that did not reproduce.
 

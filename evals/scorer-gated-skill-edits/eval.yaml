@@ -1,0 +1,17 @@
+name: scorer-gated-skill-edits-eval
+description: Quality suite for the gitapex scorer-gated-skill-edits measured-iteration skill.
+skill: scorer-gated-skill-edits
+version: "0.1.0"
+config:
+  trials_per_task: 3
+  timeout_seconds: 300
+  parallel: false
+  executor: copilot-sdk
+  model: claude-sonnet-4.6
+metrics:
+  - name: scorer_gated_skill_edits_quality
+    weight: 1.0
+    threshold: 0.8
+    description: Reports Splits, a bounded edit set, and a Gate result with a selection-score before/after comparison under strict improve-or-reject, and STOPs instead of proceeding when the scorer or held-out split is missing.
+tasks:
+  - "tasks/*.yaml"

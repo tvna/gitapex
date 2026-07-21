@@ -1,0 +1,39 @@
+id: evaluating-skill-quality-ablation-capability-runner-exists-not-run
+name: Ablation Runner Exists Repo-Wide, Just Not Pointed at This Skill Yet
+description: A different domain and the opposite discrimination case from the train fixture -- the repository already carries a runner capable of a with-skill-vs-without-skill comparison (named explicitly, modeled on a real prior-art tool), it simply has not been run for this specific skill yet. The gate measures whether the ablation-capability sub-check generalizes to "ablation-capable, not yet run" rather than defaulting to the train fixture's "no mechanism" framing whenever a baseline is merely unrecorded.
+tags:
+  - quality
+  - behavioural-evidence
+  - ablation-capability
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "invoice-parser". Is this a good skill?
+
+    ---
+    name: invoice-parser
+    description: Extract line items and totals from a scanned invoice image. Use when the user asks to parse, extract, or read data from an invoice.
+    ---
+
+    # Invoice Parser
+
+    ## Procedure
+
+    1. Read the invoice image the user provides.
+    2. Extract each line item's description, quantity, and unit price.
+    3. Extract the invoice total and confirm it equals the sum of line items.
+
+    The repository's own eval-status notes for this skill say: "No
+    committed no-skill baseline run yet." Separately, the repository ships
+    `battle/run_battle.py --ablate`, a standing tool that runs any scenario
+    through two arms on the same prompt -- skill-injected and a no-skill
+    baseline -- and reports the lift. It has been run for several other
+    skills in the repository but has not yet been pointed at
+    invoice-parser.
+expected:
+  output_contains:
+    - "ablation-capable, not yet run"
+    - "run_battle.py"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"

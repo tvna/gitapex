@@ -5,9 +5,9 @@ description: Use when a single issue or PR has just arrived and needs a fast fir
 
 # Responding to a Fresh Arrival
 
-**Portability: Repository-scoped.** Procedure is general; the label
-source (`.github/ISSUE_TEMPLATE/*.yml`) and the GitHub tool-call
-convention below are this repository's own.
+This skill's procedure is general; the label source
+(`.github/ISSUE_TEMPLATE/*.yml`) and the GitHub tool-call convention
+below are this repository's own.
 
 Gives a single newly-arrived issue or PR a fast, latency-focused first
 response -- the moment before anyone decides whether it becomes real

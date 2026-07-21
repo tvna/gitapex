@@ -1,0 +1,29 @@
+id: screening-a-low-trust-contribution-postinstall-script
+name: Dependency Diff Adds A Postinstall Script
+description: A real install-time-script case -- the diff adds a new direct
+  dependency whose package.json carries a `postinstall` script. This is a
+  hard flag independent of the plain dependency-addition check, since an
+  install-time script executes automatically and is a common real-world
+  supply-chain vector distinct from the dependency list itself.
+tags:
+  - quality
+  - guardrail
+  - dependency
+  - install-script
+inputs:
+  prompt: |
+    Use screening-a-low-trust-contribution. PR #812, opened by a
+    first-time contributor, adds `"fast-json-utils": "^1.2.0"` to
+    `package.json`. The new dependency's own package.json includes:
+
+      "scripts": { "postinstall": "node ./scripts/setup.js" }
+
+    No changes to workflows, hooks, or any other file.
+expected:
+  output_contains:
+    - "postinstall"
+    - "install"
+  output_not_contains:
+    - "Merged"
+    - "no flags"
+    - "all clear"

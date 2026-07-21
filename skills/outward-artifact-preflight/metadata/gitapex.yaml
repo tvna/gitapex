@@ -1,0 +1,11 @@
+apiVersion: gitapex.io/v1alpha1
+kind: SkillMetadata
+metadata:
+  name: outward-artifact-preflight
+spec:
+  portability: Repository-scoped
+  capabilityAssumption: Broad
+  skillDependencies:
+    requires: []
+    relatedTo:
+      - explaining-the-work

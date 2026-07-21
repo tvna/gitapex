@@ -1,0 +1,11 @@
+apiVersion: gitapex.io/v1alpha1
+kind: SkillMetadata
+metadata:
+  name: driving-pr-to-merge
+spec:
+  portability: Portable
+  capabilityAssumption: Broad
+  skillDependencies:
+    requires: []
+    relatedTo:
+      - stop-and-replan

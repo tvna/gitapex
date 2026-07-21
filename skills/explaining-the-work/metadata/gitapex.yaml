@@ -1,0 +1,10 @@
+apiVersion: gitapex.io/v1alpha1
+kind: SkillMetadata
+metadata:
+  name: explaining-the-work
+spec:
+  portability: Mixed
+  capabilityAssumption: Broad
+  skillDependencies:
+    requires: []
+    relatedTo: []

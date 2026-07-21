@@ -5,11 +5,11 @@ description: Use when your own PR body or commit message is about to contain a s
 
 # Stop and Replan
 
-**Portability: Portable.** Depends only on a connected GitHub MCP server (a
-general product capability) for the Stop action below -- no
-this-repository tooling. Tool names are written as `Server:tool` (portable
-shorthand); in Claude Code, translate to the literal double-underscore
-form -- `github:update_pull_request` is `mcp__github__update_pull_request`,
+This skill depends only on a connected GitHub MCP server (a general
+product capability) for the Stop action below -- no this-repository
+tooling. Tool names are written as `Server:tool` (portable shorthand); in
+Claude Code, translate to the literal double-underscore form --
+`github:update_pull_request` is `mcp__github__update_pull_request`,
 `github:add_issue_comment` is `mcp__github__add_issue_comment`. Other
 platforms may use a different literal form for the same server/tool pair.
 
@@ -45,17 +45,17 @@ On detection, before writing the phrase into the PR or commit:
 
 Input (about to be written as this PR's description):
 
-> Correction after review: this misses the original thesis of #12 -- the
+> Correction after review: this misses the original thesis of the parent issue -- the
 > issue asked for a read-only sync check, and this PR built a write-back
 > sync instead.
 
 Output:
 
-- Close this PR with body: "Missed the original thesis of #12: the issue
+- Close this PR with body: "Missed the original thesis of the parent issue: the issue
   asked for a read-only sync check, this PR implemented a write-back sync
-  instead. Closing to re-plan in #12 rather than retrofitting a
+  instead. Closing to re-plan in the parent issue rather than retrofitting a
   write-path PR onto a read-only ask."
-- Comment the same rationale on #12 and re-plan from there.
+- Comment the same rationale on the parent issue and re-plan from there.
 - Do not push a follow-up commit to the closed PR's branch.
 
 ## Stop boundaries

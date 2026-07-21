@@ -1,0 +1,51 @@
+id: evaluating-skill-quality-capability-assumption-frontier-flags-explanation
+name: Frontier Declaration Still Flags Weak-Tier Hand-Holding as Sprawl
+description: A distinct domain and the opposite declared level from the train fixture (Frontier, not Broad) -- the reviewed SKILL.md excerpt contains the same shape of well-known-concept restatement (what a database index is), but declares capabilityAssumption Frontier, so the new grading effect must flag it as a dimension-2 finding rather than excusing it; the gate measures whether the Capability assumption check generalizes the Frontier direction rather than memorizing the train fixture's Broad-excuses wording or its domain.
+tags:
+  - quality
+  - conciseness
+  - capability-assumption
+  - selection
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "reviewing-database-migrations". Its metadata/gitapex.yaml
+    sidecar declares:
+
+    spec:
+      portability: Portable
+      capabilityAssumption: Frontier
+
+    ---
+    name: reviewing-database-migrations
+    description: Review a database migration before it merges. Use when a PR adds or modifies a schema migration file.
+    ---
+
+    # Reviewing Database Migrations
+
+    ## Procedure
+
+    1. A database index is a data structure that lets the database find
+       rows without scanning the whole table, trading extra write cost and
+       storage for faster reads -- keep this in mind when judging whether
+       the migration below needs one. Read the migration's diff in full.
+    2. Check whether any query added or changed by this PR would now scan a
+       table without an index it needs.
+    3. Check whether the migration is reversible (a working `down` step) and
+       whether it locks the table for longer than this project's stated
+       deploy window.
+    4. Approve, request changes with the specific missing index/rollback
+       named, or escalate if the table is large enough that the lock risk
+       needs a maintenance window.
+
+    Focus your review specifically on dimension 2 (Conciseness): given the
+    skill's declared capabilityAssumption, is step 1's explanation of what a
+    database index is a clean pass, or does it count as a dimension-2
+    finding? Cite the specific rubric wording you're applying.
+expected:
+  output_contains:
+    - "Frontier"
+    - "sprawl"
+  output_not_contains:
+    - "is a clean pass"
+    - "LGTM"

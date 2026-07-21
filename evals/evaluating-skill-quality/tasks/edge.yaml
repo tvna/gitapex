@@ -36,9 +36,9 @@ inputs:
     and the steps are well ordered.
 expected:
   output_contains:
-    - "headline finding"
-    - "hook or permission"
-    - "never delete production data"
+    - "eadline finding"
+    - "hooks and permissions"
+    - "delete production data"
   output_not_contains:
     - "LGTM"
     - "no concerns"

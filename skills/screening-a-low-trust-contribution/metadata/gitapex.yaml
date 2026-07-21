@@ -1,0 +1,14 @@
+apiVersion: gitapex.io/v1alpha1
+kind: SkillMetadata
+metadata:
+  name: screening-a-low-trust-contribution
+spec:
+  portability: Repository-scoped
+  capabilityAssumption: Broad
+  skillDependencies:
+    requires: []
+    relatedTo:
+      - battle-testing-a-skill
+      - responding-to-a-fresh-arrival
+      - untrusted-input-triage
+      - git-hosting-surface-audit

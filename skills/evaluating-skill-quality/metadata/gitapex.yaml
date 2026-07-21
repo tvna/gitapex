@@ -1,0 +1,15 @@
+apiVersion: gitapex.io/v1alpha1
+kind: SkillMetadata
+metadata:
+  name: evaluating-skill-quality
+spec:
+  portability: Portable
+  capabilityAssumption: Broad
+  references:
+    - "For readers working in this repository (gitapex), the worked example in `skills/evaluating-skill-quality/references/worked-example-self-review.md` notes that this skill's own deterministic shape lane was delegated to `scripts/check_skill_shape.py`; that delegation was made in gitapex#32. This is provenance for maintainers of this specific repository, not something the worked example depends on."
+  skillDependencies:
+    requires: []
+    relatedTo:
+      - battle-testing-a-skill
+      - scorer-gated-skill-edits
+      - outward-artifact-preflight

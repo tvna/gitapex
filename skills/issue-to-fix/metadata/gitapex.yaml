@@ -1,0 +1,12 @@
+apiVersion: gitapex.io/v1alpha1
+kind: SkillMetadata
+metadata:
+  name: issue-to-fix
+spec:
+  portability: Portable
+  capabilityAssumption: Broad
+  skillDependencies:
+    requires: []
+    relatedTo:
+      - driving-pr-to-merge
+      - issue-to-branch
