@@ -297,7 +297,7 @@ any Frontier / Adaptive reclassification is deferred to Sub-project B.
 
 Current declared values to carry over (surveyed from the tree):
 `Portable` -- driving-pr-to-merge, establishing-ubiquitous-language,
-evaluating-skill-quality, gated-skill-edits, issue-to-fix,
+evaluating-skill-quality, scorer-gated-skill-edits, issue-to-fix,
 merge-retrospective, ranking-the-open-queue, stop-and-replan,
 untrusted-input-triage. `Mixed` -- battle-testing-a-skill,
 explaining-the-work, git-hosting-surface-audit, seeding-issue-pr-templates.

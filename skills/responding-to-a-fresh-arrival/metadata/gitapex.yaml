@@ -3,7 +3,7 @@ kind: SkillMetadata
 metadata:
   name: responding-to-a-fresh-arrival
 spec:
-  portability: Repository-scoped
+  portability: Portable
   capabilityAssumption: Broad
   skillDependencies:
     requires: []

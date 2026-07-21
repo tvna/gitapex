@@ -4,12 +4,14 @@ Prefer platform-integrated tool calls (a connected GitHub app/MCP) for
 writes — issues, comments, branches, PRs — since a write path commonly
 carries a paired safety check that a raw API call bypasses. An approved
 REST API wrapper is for reads only, to reduce token consumption. Never
-shell out to a command-line GitHub tool directly -- backed by this
-plugin's `hooks/check-bash-safety.sh` PreToolUse hook, which blocks
-`gh issue`/`gh pr` write subcommands and `gh api -X POST/PUT/PATCH/DELETE`
-run via Bash. If no connector or approved wrapper covers the operation you
-need, that is itself a Human Decision: say so explicitly and ask, rather
-than falling back to a CLI.
+shell out to a command-line GitHub tool directly, for a read or a write.
+Some environments back the write side with a PreToolUse hook (this repository's own
+`hooks/check-bash-safety.sh` is one example, blocking `gh issue`/`gh pr`
+write subcommands and `gh api -X POST/PUT/PATCH/DELETE` run via Bash);
+apply the underlying preference even where no such hook exists. If no
+connector or approved wrapper covers the operation you need, that is
+itself a Human Decision: say so explicitly and ask, rather than falling
+back to a CLI.
 
 ## Read path
 
@@ -22,9 +24,10 @@ than falling back to a CLI.
 
 ## Write path
 
-- Open (or confirm) the tracking issue before creating a branch, per this
-  repo's git-ecosystem convention. Cite the issue number in every commit
-  message and in the PR title/body.
+- Open (or confirm) the tracking issue before creating a branch. This is
+  this skill's default write-path convention; substitute the calling
+  repository's actual convention where it documents a different one. Cite
+  the issue number in every commit message and in the PR title/body.
 - On PR open, subscribe to its activity (CI, reviews, comments) and drive
   it to a terminal state — merged, or closed with a stated reason. Do not
   ask permission to do this baseline monitoring.
