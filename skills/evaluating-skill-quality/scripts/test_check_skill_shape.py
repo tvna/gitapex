@@ -134,6 +134,28 @@ def test_xml_tag_in_description_fails(tmp_path):
     assert _by_name(css.check_shape(d))["description-no-xml"].passed is False
 
 
+def test_unquoted_colon_space_in_description_fails(tmp_path):
+    d = _write_skill(tmp_path, description="Read-only: never mutates state.")
+    assert _by_name(css.check_shape(d))["description-yaml-safe"].passed is False
+
+
+def test_trailing_colon_in_description_fails(tmp_path):
+    d = _write_skill(tmp_path, description="Use when doing the thing:")
+    assert _by_name(css.check_shape(d))["description-yaml-safe"].passed is False
+
+
+def test_unquoted_comment_marker_in_description_fails(tmp_path):
+    d = _write_skill(tmp_path, description="Does a thing # not a comment")
+    assert _by_name(css.check_shape(d))["description-yaml-safe"].passed is False
+
+
+def test_hyphenated_aside_in_description_passes(tmp_path):
+    # This repository's own established convention for the same kind of
+    # aside a raw colon would otherwise be used for.
+    d = _write_skill(tmp_path, description="Read-only -- never mutates state.")
+    assert _by_name(css.check_shape(d))["description-yaml-safe"].passed is True
+
+
 def test_uppercase_name_fails(tmp_path):
     d = _write_skill(tmp_path, name="Good-Skill")
     assert _by_name(css.check_shape(d))["name-pattern"].passed is False

@@ -9,7 +9,16 @@ Read-only: reads the target skill's files only. No writes, no network,
 no mutation. Effects are limited to stdout and the process exit code.
 
 Checks (the canonical list -- the manual fallback is to apply these):
-  - description: present/non-empty, no XML tags, <= 1024 chars
+  - description: present/non-empty, no XML tags, <= 1024 chars, and safe as
+    an unquoted YAML plain scalar -- no ": " (colon + whitespace) or
+    trailing ":" (either reads as the start of a new mapping key to a real
+    YAML parser and breaks parsing), and no " #" or leading "#" (reads as
+    a comment marker and silently truncates the rest of the value). Every
+    SKILL.md in this repository writes description as an unquoted
+    single-line scalar, so this failure mode is real, not theoretical --
+    this checker's own frontmatter parser is deliberately lenient and does
+    not reproduce it, so this is a dedicated check rather than a side
+    effect of parsing.
   - name (only if present): lowercase-hyphenated, <= 64 chars,
     no XML tags, contains no reserved word (anthropic, claude)
   - SKILL.md body: <= 500 lines
@@ -173,6 +182,16 @@ SKILL_DEP_UNKNOWN_KEY_RE = re.compile(r"^[ ]{4}([A-Za-z0-9_-]+):")
 SKILL_DEP_LIST_ITEM_RE = re.compile(r"^[ ]{4,}-\s*(.*)$")
 
 TAG_RE = re.compile(r"</?[A-Za-z][^>]*>")
+# A YAML plain (unquoted) scalar cannot safely contain ": " (colon followed
+# by whitespace) or end in a bare ":" -- a real YAML parser reads either as
+# the start of a new mapping key and either raises ("mapping values are not
+# allowed in this context") or misparses the rest of the line. It similarly
+# treats " #" (or a leading "#") as a comment marker, silently truncating
+# everything after it. This repository's own frontmatter parser
+# (_parse_frontmatter, above) is deliberately lenient and reproduces
+# neither failure, so this check exists independently of it.
+UNSAFE_COLON_RE = re.compile(r":(?:\s|$)")
+UNSAFE_COMMENT_RE = re.compile(r"(?:^|\s)#")
 NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 # Accept either "Table of contents" or a bare "Contents" heading.
 TOC_RE = re.compile(r"^#+\s+(?:table of )?contents\b",
@@ -832,6 +851,23 @@ def _length_check(field: str, value: str, limit: int) -> CheckResult:
         f"{field} <= {limit} chars", f"{len(value)} chars")
 
 
+def _yaml_plain_scalar_safety_check(field: str, value: str) -> CheckResult:
+    colon_hit = UNSAFE_COLON_RE.search(value)
+    comment_hit = None if colon_hit else UNSAFE_COMMENT_RE.search(value)
+    ok = colon_hit is None and comment_hit is None
+    if colon_hit:
+        evidence = f"unquoted ': ' or trailing ':' at char {colon_hit.start()}"
+    elif comment_hit:
+        evidence = f"unquoted ' #' or leading '#' at char {comment_hit.start()}"
+    else:
+        evidence = "safe"
+    return CheckResult(
+        f"{field}-yaml-safe", ok,
+        f"{field} (an unquoted YAML plain scalar) has no ': ', trailing "
+        "':', or ' #'/leading '#' that would break or silently truncate "
+        "under a real YAML parser", evidence)
+
+
 def _resolve_skill_md(target: Path) -> Path:
     return target / "SKILL.md" if target.is_dir() else target
 
@@ -856,6 +892,7 @@ def check_shape(target: Path) -> list[CheckResult]:
         results.append(_no_xml_check("description", description))
         results.append(_length_check(
             "description", description, DESCRIPTION_MAX_CHARS))
+        results.append(_yaml_plain_scalar_safety_check("description", description))
 
     name = fields.get("name")
     if name:

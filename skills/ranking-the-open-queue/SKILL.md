@@ -1,6 +1,6 @@
 ---
 name: ranking-the-open-queue
-description: Sweep the backlog of already-known open issues/PRs and hand the operator a decision-ready ranked queue -- scored on severity, staleness, blockage, and actionability -- when deciding what to act on first across many items, not a single already-selected one. Read-only: never labels, comments, or otherwise mutates an issue or PR; see `responding-to-a-fresh-arrival` for a single newly-arrived item's initial response, and `screening-a-low-trust-contribution` for diff-level threat screening of an unknown author's contribution, instead.
+description: Sweep the backlog of already-known open issues/PRs and hand the operator a decision-ready ranked queue -- scored on severity, staleness, blockage, and actionability -- when deciding what to act on first across many items, not a single already-selected one. Read-only -- never labels, comments, or otherwise mutates an issue or PR; see `responding-to-a-fresh-arrival` for a single newly-arrived item's initial response, and `screening-a-low-trust-contribution` for diff-level threat screening of an unknown author's contribution, instead.
 ---
 
 # Ranking the Open Queue
