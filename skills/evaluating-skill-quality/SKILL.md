@@ -225,6 +225,48 @@ Authors still declare one of these three levels correctly now -- the
 detail: [references/rubric.md](references/rubric.md)'s Capability
 assumption section.
 
+## Lifecycle
+
+Optional. Two independent sub-blocks under `spec.lifecycle` in the
+skill's `metadata/gitapex.yaml` sidecar (the `lifecycle-well-formed`
+shape check enforces their shape when present) -- neither implies nor
+excludes the other, and a skill declaring neither is implicitly
+**Stable**, the state every skill in this repository is in today:
+
+```yaml
+spec:
+  lifecycle:
+    experimental:
+      reason: why this skill is not yet proven
+      trackingIssue: "#123"      # tracks graduation to Stable
+      since: "2026-07-21"        # optional, YYYY-MM-DD
+    deprecated:
+      reason: why this skill is deprecated
+      replacement: name-of-sibling-skill
+      since: "2026-07-21"        # optional, YYYY-MM-DD
+      removeAfter: "2026-10-01"  # optional, YYYY-MM-DD, documentation only
+```
+
+- **`experimental`**: `reason` and `trackingIssue` are required once this
+  block is present at all; `since` is optional. `trackingIssue` must be
+  an anchored `#123` or `owner/repo#123` reference.
+- **`deprecated`**: `reason` and `replacement` are required once this
+  block is present at all; `since`/`removeAfter` are optional.
+  `replacement` must name an existing sibling skill directory (the
+  `lifecycle-deprecated-replacement-resolves` shape check enforces this
+  -- the same dangling-reference gate `spec.skillDependencies` uses).
+- `since`/`removeAfter`, when given, must be real `YYYY-MM-DD` dates.
+  `removeAfter` documents an intended removal date only; no automation in
+  this repository deletes a skill once that date passes, and no
+  automation graduates a skill out of `experimental` when its
+  `trackingIssue` closes.
+- Neither declaration changes how any of the nine dimensions grade, and
+  no skill's own runtime procedure may read or branch on either -- this
+  is metadata only, same as Portability level and Capability assumption.
+
+Full rationale: [references/rubric.md](references/rubric.md)'s Lifecycle
+section.
+
 ## Procedure
 
 Steps 1-4 are this review's precondition, step 6 its postcondition --

@@ -32,6 +32,7 @@ skill's own folder.
   - [Tool-capability verification](#tool-capability-verification)
 - [Portability level](#portability-level)
 - [Capability assumption](#capability-assumption)
+- [Lifecycle](#lifecycle)
 - [1. Discovery -- name and description](#1-discovery----name-and-description)
 - [2. Conciseness](#2-conciseness)
 - [3. Degree of freedom](#3-degree-of-freedom)
@@ -637,6 +638,45 @@ itself contradicts.
     bullet already rewards as a dimension-5 finding too; each dimension
     keeps its own question (2: is the body concise; 5: is the split real
     and reachable).
+
+## Lifecycle
+
+Unlike Portability level and Capability assumption, this field has no
+per-dimension grading effect -- declaring `spec.lifecycle` does not
+change how any of the nine dimensions grade. It exists as structured,
+checkable bookkeeping for a skill not yet proven, or superseded by
+another, gated with the same rigor as the two grading-affecting
+declarations above because a wrong or dangling lifecycle record is
+actively misleading to a maintainer deciding whether a skill is safe to
+adopt or remove.
+
+Two independent, optional sub-blocks under `spec.lifecycle` -- neither
+implies nor excludes the other, and there is no mutual-exclusion gate
+between them:
+
+- **`experimental`** -- the entry side: a skill not yet proven. `reason`
+  and `trackingIssue` are required non-empty strings once this block is
+  declared at all; `since`, if present, must be a real calendar date in
+  strict `YYYY-MM-DD` shape. `trackingIssue` must be an anchored `#123`
+  or `owner/repo#123` reference (shape-only -- never resolved against a
+  live GitHub API call).
+- **`deprecated`** -- the exit side: a skill superseded by another or
+  slated for removal. `reason` and `replacement` are required non-empty
+  strings once this block is declared at all. `replacement` must name an
+  existing sibling skill directory -- enforced by
+  `lifecycle-deprecated-replacement-resolves`, the same
+  dangling-reference gate `spec.skillDependencies.requires`/`relatedTo`
+  already use. `since`/`removeAfter`, if present, must be real calendar
+  dates in strict `YYYY-MM-DD` shape. `removeAfter` is documentation
+  only: no CI step in this repository deletes a skill once that date
+  passes.
+- A present-but-incomplete block (missing a required field), an unknown
+  key directly under `spec.lifecycle`, or an unknown field inside either
+  sub-block fails `lifecycle-well-formed`, the same treatment
+  `spec.skillDependencies` gives an unrecognized sibling key.
+- Per the sidecar's own behavior-neutrality invariant, `spec.lifecycle`
+  is metadata only: no skill's own runtime procedure may read or branch
+  on either sub-block.
 
 ## 1. Discovery -- name and description
 
