@@ -432,11 +432,29 @@ HEDGE_PHRASES = (
 # very shape check's rule stated in prose (e.g. "A bare GitHub issue/PR-
 # number citation (#149, owner/repo#149) is barred ..."), the same way the
 # module docstring above states it, just duplicated for the model reader.
-# Both phrases are this repository's own already-established phrasing, not
-# invented for this check.
+# Both of the above are this repository's own already-established phrasing,
+# not invented for this check.
+#
+# "hex color" / "css color" are different in kind from the two phrases
+# above: a pre-emptive escape hatch for a known, unresolved limitation
+# (issue #272) rather than a hedge drawn from existing in-repo prose --
+# ISSUE_CITATION_RE (`#\d+`) cannot syntactically distinguish a real issue
+# number from a decimal-digit-only CSS hex color (`#123456`, `#123`,
+# `#000000` are all valid CSS, all also valid GitHub issue-number shapes).
+# This repository has no web-design skill yet (issue #271), but a future
+# one documenting a literal color value would hit this false positive with
+# no natural way to phrase around it otherwise. Naming the color's own
+# nature ("the hex color `#123456`", "this CSS color") is how such a skill
+# would phrase it anyway, so the escape hatch costs no awkward wording.
+# Reserved in advance of that skill landing, not drawn from existing
+# content the way the two phrases above are. Does not replace the deeper,
+# still-open fix tracked in #272 (context-aware classification instead of
+# a hedge word).
 ISSUE_CITATION_HEDGE_PHRASES = (
     "must be an anchored",
     "issue/pr-number citation",
+    "hex color",
+    "css color",
 )
 
 

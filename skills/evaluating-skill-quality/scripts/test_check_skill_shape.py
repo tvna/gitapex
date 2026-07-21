@@ -1041,11 +1041,33 @@ def test_portable_unhedged_inline_qualified_issue_citation_fails(tmp_path):
     # as rule documentation rather than worked-example bookkeeping.
     "A bare GitHub issue/PR-number citation (`#149`, `owner/repo#149`) "
     "is barred from SKILL.md/references/*.md at every level.",
-], ids=["trackingIssue-shape", "self-referential-rule-statement"])
+    # Pre-emptive escape hatch (issue #271) for a known, unresolved
+    # limitation (issue #272): ISSUE_CITATION_RE cannot syntactically
+    # distinguish a real issue number from a decimal-digit-only CSS hex
+    # color. No web-design skill exists in this repo yet, but this is how
+    # one would naturally phrase a color worked example.
+    "Set the accent to the hex color `#123456` for the primary button.",
+    "The theme defines this CSS color: `#123`.",
+], ids=["trackingIssue-shape", "self-referential-rule-statement",
+       "hex-color-escape-hatch", "css-color-escape-hatch"])
 def test_approved_issue_hedge_phrase_passes(tmp_path, body):
     d = _write_raw(tmp_path, _portable_body(body))
     result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-issue-citation"]
     assert result.passed is True
+
+
+def test_unhedged_css_shaped_number_still_flagged(tmp_path):
+    # The escape hatch above requires the author to actually name the
+    # color's nature -- an unhedged decimal-digit-only token still reads as
+    # a possible issue/PR citation and must still fail (issue #272 is the
+    # deeper, still-open fix for this false-positive shape; this test only
+    # guards that the interim hedge phrases in issue #271 don't silently
+    # exempt every digit-only inline-code token).
+    d = _write_raw(tmp_path, _portable_body(
+        "Set the accent to `#123456` for the primary button."))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-issue-citation"]
+    assert result.passed is False
+    assert "#123456" in result.evidence
 
 
 def test_bare_hedge_word_does_not_exempt_a_real_citation(tmp_path):
