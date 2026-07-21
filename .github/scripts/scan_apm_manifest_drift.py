@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+"""Guard the plugin-identity single-source-of-truth invariant.
+
+``.claude-plugin/plugin.json`` is the version source of truth for the gitapex
+plugin (see ``docs/repository-layout.md``). ``apm.yml`` must also carry ``name``
+and ``version`` -- apm's manifest schema requires both -- which duplicates that
+identity into a second tracked file. Left unguarded, the two copies drift: a
+release bumps ``plugin.json`` while ``apm.yml`` keeps the stale version.
+
+This scanner is the drift gate shipped alongside that duplication: it fails if
+``apm.yml``'s ``name`` or ``version`` disagrees with ``plugin.json``. It does not
+invent a value -- ``plugin.json`` stays authoritative; ``apm.yml`` mirrors it.
+
+Run standalone (exit 1 on drift) or via the pytest gate in
+``tests/test_scan_apm_manifest_drift.py``.
+"""
+
+from __future__ import annotations
+
+import json
+import pathlib
+import sys
+
+import yaml
+
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
+APM_MANIFEST = REPO_ROOT / "apm.yml"
+PLUGIN_MANIFEST = REPO_ROOT / ".claude-plugin" / "plugin.json"
+
+# Fields that both manifests declare and must therefore agree on. plugin.json is
+# authoritative; apm.yml mirrors it.
+MIRRORED_FIELDS = ("name", "version")
+
+
+def find_drift(
+    apm_manifest: pathlib.Path = APM_MANIFEST,
+    plugin_manifest: pathlib.Path = PLUGIN_MANIFEST,
+) -> list[tuple[str, str, str]]:
+    """Return (field, plugin_json_value, apm_yml_value) for each mirrored field
+    whose two copies disagree. Empty list means the manifests are in lockstep.
+
+    Fails loudly (raises) if either manifest is missing or a mirrored field is
+    absent -- a silent skip would let the gate pass on a broken manifest.
+    """
+    apm_data = yaml.safe_load(apm_manifest.read_text()) or {}
+    plugin_data = json.loads(plugin_manifest.read_text())
+
+    findings: list[tuple[str, str, str]] = []
+    for field in MIRRORED_FIELDS:
+        if field not in plugin_data:
+            raise KeyError(f"{plugin_manifest}: missing required field '{field}'")
+        if field not in apm_data:
+            raise KeyError(f"{apm_manifest}: missing required field '{field}'")
+        plugin_value = str(plugin_data[field])
+        apm_value = str(apm_data[field])
+        if plugin_value != apm_value:
+            findings.append((field, plugin_value, apm_value))
+    return findings
+
+
+def main() -> int:
+    findings = find_drift()
+    if findings:
+        print(
+            "apm manifest drift: apm.yml must mirror .claude-plugin/plugin.json "
+            "(the version source of truth):"
+        )
+        for field, plugin_value, apm_value in findings:
+            print(f"  {field}: plugin.json={plugin_value!r} != apm.yml={apm_value!r}")
+        return 1
+    print("No apm manifest drift found.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

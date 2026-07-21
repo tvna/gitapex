@@ -3,3 +3,14 @@ __pycache__/
 *.pyc
 .coverage
 coverage.xml
+
+# APM dependencies: apm_modules/ is apm's package cache; the .claude/ entries are
+# what `apm install` deploys from apm.lock.yaml (obra/superpowers, tvna/clairvoyance)
+# -- the skills, their hooks, and the settings/hook manifests that point at those
+# hooks. All are reproducible from the lockfile, and settings.json/apm-hooks.json
+# reference the gitignored hooks, so committing them would break a fresh checkout.
+apm_modules/
+/.claude/skills/
+/.claude/hooks/
+/.claude/settings.json
+/.claude/apm-hooks.json
