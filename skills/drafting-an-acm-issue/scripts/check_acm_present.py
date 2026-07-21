@@ -10,7 +10,9 @@ should be scripted instead. Standard library only.
 This is a self-contained duplicate of a sibling skill's own ACM-presence
 check (same header regex) -- no skill in this repository shares a
 scripts/ directory with another, so each ships its own copy rather than
-importing across skill boundaries.
+importing across skill boundaries. If the ACM table's header row ever
+changes shape, update both copies together -- nothing enforces they
+stay in sync automatically.
 """
 
 from __future__ import annotations

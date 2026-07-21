@@ -261,12 +261,66 @@ in both directions:
 | Dim 17 (structured-output injection) | Step 4 now requires escaping/neutralizing pipe characters and control sequences before they enter a table cell. |
 | Blind Spot (secret/PII carry-through) | Step 3 and Stop boundaries now require scanning for and redacting secrets/credentials/PII before citing the requester's words verbatim. |
 
-Neither adversarial dispatch was re-run against the fixed version in
-this pass (explicit operator decision); the fixes above were
-self-verified against each finding's own quoted pass criteria and the
-deterministic shape checker, not re-graded by a fresh dispatch. A
-formal re-run remains available as a follow-up if independent
-re-certification is wanted.
+**Contamination caveat and clean re-run.** The two dispatches above ran
+as ordinary in-session subagents with this repository's own `CLAUDE.md`
+in context -- the same auto-loaded project-instruction mechanism this
+session itself receives. `battle-testing-a-skill`'s own precedent
+(`references/provenance-and-caveats.md`) treats this as a real
+methodological gap for a "cold" adversarial read and has, in an earlier
+verification, both run a `CLAUDE.md`-free clean-copy pass (via headless
+`claude -p` against a scratch copy with no `CLAUDE.md`/`AGENTS.md`
+anywhere in its directory ancestry) and explicitly disclosed when a
+verification did *not* do so. The two dispatches above did not disclose
+this, which this section corrects.
+
+Both were re-run this same pass in a genuinely clean environment: a
+scratch copy of `skills/drafting-an-acm-issue/`, `skills/issue-to-branch/`,
+`skills/battle-testing-a-skill/`, `skills/evaluating-skill-quality/`, and
+`evals/drafting-an-acm-issue/` under `/tmp`, confirmed to have no
+`CLAUDE.md`/`AGENTS.md` anywhere from the scratch root up to `/`, driven
+by headless `claude -p --tools "Read,Glob,Grep"` (read-only, no bypass
+flag -- `--dangerously-skip-permissions`/`bypassPermissions` is refused
+when running as root in this environment, and was not needed).
+
+- **battle-testing-a-skill, clean: overall PASS.** All 17 applicable
+  dimensions (1-17) graded PASS, including the 8 that failed pre-fix;
+  dimensions 18-22 correctly N/A (no citation, monetary, regulatory,
+  compliance-audit, or licensed-professional surface).
+- **evaluating-skill-quality, clean: well-formed, still not mature** --
+  dimension 6 (the original blocker) now clears, but two *new* findings
+  surfaced, both self-inflicted by the fix pass itself: dimension 2
+  (Conciseness) flagged the "draft, never pre-verified" rule restated
+  near-verbatim three times (intro, Step 8, Stop boundaries) instead of
+  stated once with pointers; dimension 4 (Clarity/structure) flagged a
+  missing tie-break for a request genuinely ambiguous between a
+  proceeding classification (feature/fix/refactor) and a stopping one
+  (chore/docs/tracking). The Blind Spot pass also named a new gap this
+  rubric does not cover: `drafting-an-acm-issue`'s and
+  `issue-to-branch`'s independently duplicated `check_acm_present.py`
+  copies share a data contract (the ACM header shape) with nothing
+  enforcing they stay in sync if one is edited without the other.
+  Mechanism fit separately noted the secret/PII Stop boundary (Step 3)
+  is prose-only, with no hook/permission backing visible -- correctly
+  attributed to this skill's own Portable design (claiming a specific
+  origin-repo hook would itself be a portability violation) rather than
+  treated as a defect to fix here.
+
+All three new findings were closed in the same pass: the triple
+restatement was cut to one full statement (Step 8) plus two brief
+pointers (intro, Stop boundaries); Step 2 gained an explicit tie-break
+(classify by the requester's stated intent, else defer to Step 7); both
+`check_acm_present.py` copies' docstrings now say to update both
+together if the header shape ever changes. One fix attempt
+(`chore/docs/tracking`, slash-joined) tripped the shape checker's own
+`portable-no-repo-path-citation` scan by accidentally forming the
+substring `docs/tracking`, caught immediately by re-running the checker
+and corrected to a comma-separated list. The unbacked-Stop-boundary
+Mechanism-fit finding was not "fixed" -- it is correctly inherent to
+being Portable, and is recorded as a Known limitation below instead of
+force-fitting a hook this skill cannot own on the calling repository's
+behalf. Neither dispatch was run a third time against these follow-up
+fixes; they were self-verified against the clean dispatches' own quoted
+criteria plus the deterministic shape checker and full `pytest` suite.
 
 ## Known limitations (product-management lens, named not closed)
 
@@ -289,6 +343,19 @@ re-certification is wanted.
   (`drafting-an-acm-issue`, `issue-to-branch`, `issue-to-fix`). Prose
   cross-links exist, but nothing routes a user who doesn't already know
   the taxonomy to the right one.
+- **Secret/PII redaction is prose-only, correctly so for a Portable
+  skill.** Step 3's redaction Stop boundary has no hook or permission
+  backing anywhere in this skill (a specific origin-repo hook would
+  itself violate the Portable declaration). A repository that deploys
+  this skill and wants deterministic backing must add its own hook or
+  permission rule; this skill only states the rule.
+- **Cross-skill script drift is mitigated by a note, not prevented.**
+  `drafting-an-acm-issue`'s and `issue-to-branch`'s `check_acm_present.py`
+  copies now each say to update both together if the ACM header shape
+  changes, but nothing mechanically enforces that -- a future edit to
+  one copy's regex with no corresponding edit to the other would go
+  undetected until a real drafted body fails one checker and passes the
+  other.
 - **No adoption/impact metric.** The eval suite measures this skill's own
   output quality, not whether using it measurably lightens
   `issue-to-branch`'s Step 4 in practice.

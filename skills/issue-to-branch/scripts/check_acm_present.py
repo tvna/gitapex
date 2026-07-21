@@ -5,6 +5,11 @@ Acceptance Criteria Map (see ../references/acceptance-criteria-map.md), not
 just a description of the diff. Re-checking "does this body have the table"
 by re-reading prose each run is exactly the kind of repeated, multi-rule,
 error-prone match that should be scripted instead. Standard library only.
+
+drafting-an-acm-issue ships an independent copy of this exact checker
+(same table shape, same header regex) rather than importing across skill
+boundaries. If the ACM table's header row ever changes shape, update
+both copies together -- nothing enforces they stay in sync automatically.
 """
 
 from __future__ import annotations

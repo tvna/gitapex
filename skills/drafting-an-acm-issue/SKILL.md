@@ -10,10 +10,8 @@ already carries an Acceptance Criteria Map (ACM). When the calling
 repository has a sibling skill that builds and validates the same ACM
 shape from an existing issue (for example, issue-to-branch in this
 repository), producing the map here can save that skill from
-constructing one from scratch. The map produced here is always a
-draft, never pre-verified: any skill or reviewer that reads it later
-must independently re-check it against the issue's own stated facts
-rather than trusting it merely for being well-formed (Step 8).
+constructing one from scratch -- but the map is always a draft, never
+pre-verified (Step 8 states the full rule; it is not repeated here).
 
 ## Steps
 
@@ -35,7 +33,12 @@ rather than trusting it merely for being well-formed (Step 8).
    scope. If the request carries no substantive change description at
    all (for example, only "open an issue" with nothing else), ask for
    the change before drafting anything -- see Stop boundaries; an
-   empty request is not a criterion to classify.
+   empty request is not a criterion to classify. If the request is
+   genuinely ambiguous between a classification that proceeds (feature,
+   fix, or refactor) and one that stops (chore, docs-only, or tracking),
+   classify by the requester's own stated intent; if the requester's
+   words do not settle it either, treat this as Step 7's ambiguity
+   case rather than guessing a category to keep moving.
 3. Draft Facts (only what the requester actually stated, cited to
    their own words) and Requested outcome (one to two sentences).
    Before citing anything verbatim, scan it for what looks like a
@@ -130,9 +133,8 @@ Map** -> **Constraints** -> **Non-goals** -> **Next Move**. Insert
   declared meaning differs (Step 8's field-population rule).
 - Do not carry a secret, credential, token, or personal data from the
   requester's own words into the drafted issue -- redact it (Step 3).
-- Do not present the drafted Acceptance Criteria Map as pre-verified;
-  it is a draft that any downstream reader, including a sibling skill,
-  must independently re-check (Step 8).
+- Do not present the drafted Acceptance Criteria Map as pre-verified
+  (Step 8's draft-labeling rule).
 - Do not implement the change or open a branch/PR as part of this
   skill; it authors an issue, nothing past that.
 - Do not create the issue before `check_acm_present.py` passes on the
@@ -146,9 +148,7 @@ Map** -> **Constraints** -> **Non-goals** -> **Next Move**. Insert
   when the issue does not already carry one. This skill runs earlier,
   at issue-authoring time, and can save that skill from constructing
   the map from scratch when the issue already carries one drafted here
-  -- but the map is a draft either way (Step 8), so that skill's own
-  map-building step becomes a re-check of an existing draft, never an
-  unconditional read.
+  -- always as a draft to re-check, not an unconditional read (Step 8).
 - **vs. `issue-to-fix`:** that skill starts from a bare defect report
   and reproduces/fixes it; it does not author issues. This skill can
   produce the fix-type issue that skill would then start from.
