@@ -15,6 +15,13 @@ import sys
 from collections.abc import Mapping
 from pathlib import Path
 
+# 3 is this skill's own harness-owned execution-budget ceiling for a
+# model-aware Codex run (SKILL.md's "Connection to the held-out gate":
+# "the router's `requested_trials` count is a hard execution contract,
+# bounded to three trials") -- not a Codex platform limit, a cost/latency
+# cap this skill sets for itself. DEFAULT_TRIALS starts a caller at the
+# ceiling rather than below it, since a caller that wants fewer trials
+# already has an explicit way to ask (the CLI's --trials flag).
 DEFAULT_TRIALS = 3
 MAX_TRIALS = 3
 

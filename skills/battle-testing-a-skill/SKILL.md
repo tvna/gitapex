@@ -65,7 +65,18 @@ limits.
    equivalent) -- a dispatch that inherits the calling repository's own
    instructions is not the neutral, portable evaluation this step requires,
    and the omission does not get to surface only when a human happens to
-   ask about it directly. After each dispatch starts, capture
+   ask about it directly. Requesting the exclusion is not proof it held:
+   before treating the dispatch as ready, confirm with an observable check
+   (e.g. list or search the chosen scratch location and its full directory
+   ancestry for `CLAUDE.md`/`AGENTS.md` and require the result to be empty)
+   rather than trusting intent. If the harness offers none of the listed
+   mechanisms, that is itself a blocker -- stop and escalate rather than
+   dispatching into a contaminated context. Whether this exclusion carries
+   real deterministic backing (a hook, a permission rule) or is enforced by
+   this instruction alone depends on the environment the dispatch actually
+   runs in -- check directly rather than assuming either way; an absent
+   backing is itself worth naming as a gap, not silently assumed away.
+   After each dispatch starts, capture
    `observed_tester_model` from trusted runtime metadata and require it to
    equal `selected_tester_model`; missing metadata or a mismatch makes that
    trial `INDETERMINATE`. Use the twenty-two in the Quick reference; add any
@@ -162,7 +173,13 @@ must be independent and retained; the count is never report-only metadata.
   repository's own project-instruction file (`CLAUDE.md`, `AGENTS.md`, or
   equivalent). Strip it via the harness's own means -- a clean scratch copy,
   an auto-load-disabling flag, an isolated invocation -- before the dispatch
-  starts, not after a human catches the contamination by asking.
+  starts, not after a human catches the contamination by asking. Do not
+  treat requesting the strip as proof it held -- confirm it with the
+  observable check Procedure step 1 requires. Whether this boundary carries
+  real deterministic backing or is enforced by this instruction alone
+  depends on the running environment; check directly rather than assuming
+  either way, and name an absent backing as a gap rather than assuming it
+  away.
 - Do not re-grade or revise a verdict in the main thread after a dispatch
   returns it. Cross-trial disagreement follows step 5 and remains
   `INDETERMINATE`. Any later rerun is a separate retained run, never an extra
