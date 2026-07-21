@@ -12,6 +12,7 @@ spec:
     - "Neither is authoritative for how a model actually reasons about adversarial skill-testing; the source of record for the skill is the observed cross-model behavior recorded in `skills/battle-testing-a-skill/references/provenance-and-caveats.md`."
     - "For readers working in this repository (gitapex), dimensions 11-17 of that catalog were added by a comparative review tracked in gitapex#74, checking coverage against obra/superpowers and microsoft/waza (the same two side-references above). See the references file's \"Comparative review\" section for what that review verified directly versus what remains unmeasured or secondary-sourced."
     - "SKILL.md's \"Connection to the held-out gate\" section names `scorer-gated-skill-edits` as this repo's example of a skill consuming a battle-test verdict as a scorer, without an issue citation (kept portable). For readers working in this repository: that connection traces to gitapex#25 (closed design issue, \"design a held-out-gated skill-training loop, scoped to verifiable tasks\"), whose component 2 this skill implements; `scorer-gated-skill-edits` itself is the component-1 implementation, landed via PR #29."
+    - "For readers working in this repository (gitapex): the CLAUDE.md-contamination incident recorded in provenance-and-caveats.md's 'Variance re-measurement' section is gitapex#242 (retrospective, Repairs item 3); the Procedure step 1 exclusion requirement it produced landed via gitapex#250."
   skillDependencies:
     requires: []
     relatedTo:

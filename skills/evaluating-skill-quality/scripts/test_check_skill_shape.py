@@ -722,8 +722,8 @@ def test_portable_bare_issue_citation_fails(tmp_path):
         "The ambiguous-timezone edge case first reported in issue #149 of "
         "this project defaults to the most common value."))
     res = _by_name(css.check_shape(d))
-    assert res["portable-no-issue-citation"].passed is False
-    assert "#149" in res["portable-no-issue-citation"].evidence
+    assert res["no-bare-issue-citation"].passed is False
+    assert "#149" in res["no-bare-issue-citation"].evidence
     assert css.main([str(d)]) == 1
 
 
@@ -732,8 +732,8 @@ def test_portable_qualified_issue_citation_fails(tmp_path):
     d = _write_raw(tmp_path, _portable_body(
         "Provenance: owner/repo#149 recorded the original decision."))
     res = _by_name(css.check_shape(d))
-    assert res["portable-no-issue-citation"].passed is False
-    assert "owner/repo#149" in res["portable-no-issue-citation"].evidence
+    assert res["no-bare-issue-citation"].passed is False
+    assert "owner/repo#149" in res["no-bare-issue-citation"].evidence
 
 
 def test_portable_unhedged_repo_path_citation_fails(tmp_path):
@@ -759,7 +759,7 @@ def test_portable_inline_code_citation_is_excluded(tmp_path):
         "No bare (`#149`) or fully-qualified (`owner/repo#149`) citation, and "
         "no `evals/foo/bar.yaml` path, belongs in portable content."))
     res = _by_name(css.check_shape(d))
-    assert res["portable-no-issue-citation"].passed is True
+    assert res["no-bare-issue-citation"].passed is True
     assert res["portable-no-repo-path-citation"].passed is True
     assert res["portable-no-unhedged-inline-path-citation"].passed is False
 
@@ -771,7 +771,7 @@ def test_portable_fenced_illustrative_citation_is_excluded(tmp_path):
         "Bad-example target content under review:\n\n"
         "```\nreported in issue #88 of this project; see evals/x/y.yaml\n```"))
     res = _by_name(css.check_shape(d))
-    assert res["portable-no-issue-citation"].passed is True
+    assert res["no-bare-issue-citation"].passed is True
     assert res["portable-no-repo-path-citation"].passed is True
 
 
@@ -780,7 +780,7 @@ def test_portable_linked_issue_citation_is_excluded(tmp_path):
     d = _write_raw(tmp_path, _portable_body(
         "Merged in [PR #2][pr2] -- kept as a worked example.\n\n"
         "[pr2]: https://github.com/tvna/gitapex/pull/2"))
-    assert _by_name(css.check_shape(d))["portable-no-issue-citation"].passed is True
+    assert _by_name(css.check_shape(d))["no-bare-issue-citation"].passed is True
 
 
 def test_portable_url_path_is_excluded(tmp_path):
@@ -789,23 +789,26 @@ def test_portable_url_path_is_excluded(tmp_path):
     assert _by_name(css.check_shape(d))["portable-no-repo-path-citation"].passed is True
 
 
-def test_non_portable_skill_skips_citation_scan(tmp_path):
-    # A Mixed skill legitimately cites repo paths/issues, so the scan does
-    # not run at all -- its checks are absent from the result set.
+def test_non_portable_skill_skips_path_scan_but_not_issue_scan(tmp_path):
+    # A Mixed skill legitimately cites repo paths, so the two path checks
+    # do not run at all -- absent from the result set. The bare-issue-
+    # citation check is different (issue #254): it still runs and fails,
+    # since a bare issue number is barred at every portability level.
     d = _write_raw(tmp_path, _portable_body(
         "Handled in evals/foo/bar.yaml, first reported in issue #149.",
         marker="**Portability: Mixed.** Repo-specific detail is split out."))
     names = _by_name(css.check_shape(d))
-    assert "portable-no-issue-citation" not in names
     assert "portable-no-repo-path-citation" not in names
     assert "portable-no-unhedged-inline-path-citation" not in names
+    assert names["no-bare-issue-citation"].passed is False
+    assert "#149" in names["no-bare-issue-citation"].evidence
 
 
 def test_portable_citation_in_reference_file_fails(tmp_path):
     # The scan covers references/*.md, not just SKILL.md, and labels the file.
     d = _write_raw(tmp_path, _portable_body("Clean body."),
                    references={"notes.md": "First reported in issue #149.\n"})
-    result = _by_name(css.check_shape(d))["portable-no-issue-citation"]
+    result = _by_name(css.check_shape(d))["no-bare-issue-citation"]
     assert result.passed is False
     assert "references/notes.md:#149" in result.evidence
 
@@ -814,7 +817,7 @@ def test_portable_clean_skill_passes_citation_scan(tmp_path):
     d = _write_raw(tmp_path, _portable_body(
         "A clean portable body: no issue numbers, no repo paths."))
     res = _by_name(css.check_shape(d))
-    assert res["portable-no-issue-citation"].passed is True
+    assert res["no-bare-issue-citation"].passed is True
     assert res["portable-no-repo-path-citation"].passed is True
 
 
@@ -826,21 +829,22 @@ def test_wrapped_portable_marker_still_runs_citation_scan(tmp_path):
         "---\nname: s\ndescription: d. Use when x.\n---\n\n"
         "**Portability:**\nPortable. Self-contained.\n\n"
         "First reported in issue #149 of this project.\n")
-    assert _by_name(css.check_shape(d))["portable-no-issue-citation"].passed is False
+    assert _by_name(css.check_shape(d))["no-bare-issue-citation"].passed is False
 
 
-def test_wrapped_mixed_marker_still_skips_citation_scan(tmp_path):
-    # The same wrap, but a Mixed level: the scan must stay skipped, since
-    # Mixed skills legitimately cite repo paths/issues.
+def test_wrapped_mixed_marker_still_skips_path_scan_but_not_issue_scan(tmp_path):
+    # The same wrap, but a Mixed level: the two path checks stay skipped
+    # (Mixed skills legitimately cite repo paths), while the bare-issue-
+    # citation check still runs and fails (issue #254).
     d = _write_raw(
         tmp_path,
         "---\nname: s\ndescription: d. Use when x.\n---\n\n"
         "**Portability:**\nMixed. Repo detail is split out.\n\n"
         "Handled in evals/foo/bar.yaml, first reported in issue #149.\n")
     names = _by_name(css.check_shape(d))
-    assert "portable-no-issue-citation" not in names
     assert "portable-no-repo-path-citation" not in names
     assert "portable-no-unhedged-inline-path-citation" not in names
+    assert names["no-bare-issue-citation"].passed is False
 
 
 # ---- Portable inline-code repo-path citation hedge scan (issue #220) ----
@@ -983,9 +987,12 @@ def test_unhedged_inline_repo_path_in_reference_file_fails(tmp_path):
 
 # ---- Portability source precedence: sidecar first, body marker as fallback ----
 
-_CITATION_CHECKS = ("portable-no-issue-citation",
-                    "portable-no-repo-path-citation",
-                    "portable-no-unhedged-inline-path-citation")
+# The two Portable-only repo-path checks -- gated by _is_portable, unlike
+# no-bare-issue-citation, which is asserted separately in each test below
+# since it is present regardless of the portability source under test
+# (issue #254).
+_PATH_CITATION_CHECKS = ("portable-no-repo-path-citation",
+                         "portable-no-unhedged-inline-path-citation")
 
 
 def _write_sidecar(skill_dir, portability):
@@ -1005,30 +1012,35 @@ def _write_sidecar(skill_dir, portability):
 def test_sidecar_portable_without_body_marker_runs_citation_scan(tmp_path):
     # The declaration form every skill in this repo now uses: the enum lives
     # only in the sidecar and the body carries no marker at all. The scan
-    # must still run -- otherwise main's two checks silently never fire.
+    # must still run -- otherwise main's two path checks silently never fire.
     d = _write_sidecar(_write_raw(
         tmp_path,
         "---\nname: s\ndescription: d. Use when x.\n---\n\n"
         "Self-contained body with no portability marker.\n"), "Portable")
     names = _by_name(css.check_shape(d))
-    for check in _CITATION_CHECKS:
+    for check in _PATH_CITATION_CHECKS:
         assert check in names, check
+    assert "no-bare-issue-citation" in names
 
 
-def test_sidecar_mixed_without_body_marker_skips_citation_scan(tmp_path):
+def test_sidecar_mixed_without_body_marker_skips_path_scan_but_not_issue_scan(tmp_path):
     d = _write_sidecar(_write_raw(
         tmp_path,
         "---\nname: s\ndescription: d. Use when x.\n---\n\n"
         "Handled in evals/foo/bar.yaml, first reported in issue #149.\n"),
         "Mixed")
     names = _by_name(css.check_shape(d))
-    for check in _CITATION_CHECKS:
+    for check in _PATH_CITATION_CHECKS:
         assert check not in names, check
+    # Mixed skips the two path checks, but not the bare-issue-citation scan
+    # (issue #254): it runs regardless of portability and fails here.
+    assert names["no-bare-issue-citation"].passed is False
 
 
 def test_sidecar_beats_conflicting_body_marker(tmp_path):
     # Precedence, not mere presence: the body marker says Portable while the
-    # sidecar says Mixed. The sidecar must win, so the scan stays skipped.
+    # sidecar says Mixed. The sidecar must win, so the path scan stays
+    # skipped (the bare-issue-citation scan runs and fails either way).
     d = _write_sidecar(_write_raw(
         tmp_path,
         "---\nname: s\ndescription: d. Use when x.\n---\n\n"
@@ -1036,8 +1048,9 @@ def test_sidecar_beats_conflicting_body_marker(tmp_path):
         "Handled in evals/foo/bar.yaml, first reported in issue #149.\n"),
         "Mixed")
     names = _by_name(css.check_shape(d))
-    for check in _CITATION_CHECKS:
+    for check in _PATH_CITATION_CHECKS:
         assert check not in names, check
+    assert names["no-bare-issue-citation"].passed is False
 
 
 def test_body_marker_used_when_no_sidecar_present(tmp_path):
@@ -1050,8 +1063,9 @@ def test_body_marker_used_when_no_sidecar_present(tmp_path):
         "A clean portable body.\n")
     assert not (d / "metadata/gitapex.yaml").exists()
     names = _by_name(css.check_shape(d))
-    for check in _CITATION_CHECKS:
+    for check in _PATH_CITATION_CHECKS:
         assert check in names, check
+    assert "no-bare-issue-citation" in names
 
 
 def test_unusable_sidecar_portability_runs_scan_regardless_of_body_marker(tmp_path):
@@ -1060,7 +1074,7 @@ def test_unusable_sidecar_portability_runs_scan_regardless_of_body_marker(tmp_pa
     # consulting the body marker -- a present sidecar is authoritative even
     # when broken (see _is_portable's docstring, state 3). Here the body
     # marker says Mixed; if the old fall-back-to-body-marker behavior were
-    # still in effect, the scan would be skipped. It must not be.
+    # still in effect, the path scan would be skipped. It must not be.
     d = _write_sidecar(_write_raw(
         tmp_path,
         "---\nname: s\ndescription: d. Use when x.\n---\n\n"
@@ -1068,9 +1082,9 @@ def test_unusable_sidecar_portability_runs_scan_regardless_of_body_marker(tmp_pa
         "Handled in evals/foo/bar.yaml, first reported in issue #149.\n"),
         "SomewhatPortable")
     names = _by_name(css.check_shape(d))
-    for check in _CITATION_CHECKS:
+    for check in _PATH_CITATION_CHECKS:
         assert check in names, check
-    assert names["portable-no-issue-citation"].passed is False
+    assert names["no-bare-issue-citation"].passed is False
     assert names["portable-no-repo-path-citation"].passed is False
 
 
@@ -1078,24 +1092,25 @@ def test_typo_portability_does_not_skip_citation_scan(tmp_path):
     # Confirmed defect this pass fixes: a typo'd spec.portability value
     # (e.g. "Portible") used to make the old _sidecar_portability() return
     # None, so _is_portable fell back to the (in this repo, always absent)
-    # body marker and the Portable citation scan was silently skipped. Now
-    # an unusable sidecar runs the scan unconditionally, so a bare #149
-    # citation is caught, and portability-declared also fails -- the skill
-    # is red on both checks instead of silently green on one of them.
+    # body marker and the Portable path-citation scan was silently skipped.
+    # Now an unusable sidecar runs the scan unconditionally, so a bare #149
+    # citation is caught (as it always would be, regardless of portability,
+    # per issue #254), and portability-declared also fails -- the skill is
+    # red on both checks instead of silently green on one of them.
     d = _write_sidecar(_write_raw(
         tmp_path,
         "---\nname: s\ndescription: d. Use when x.\n---\n\n"
         "First reported in issue #149 of this project.\n"), "Portible")
     by = _by_name(css.check_shape(d))
     assert by["portability-declared"].passed is False
-    assert "portable-no-issue-citation" in by
-    assert by["portable-no-issue-citation"].passed is False
-    assert "#149" in by["portable-no-issue-citation"].evidence
+    assert "no-bare-issue-citation" in by
+    assert by["no-bare-issue-citation"].passed is False
+    assert "#149" in by["no-bare-issue-citation"].evidence
 
     # 3. sidecar absent + body marker Portable -> fallback still runs the
     #    scan: covered by test_body_marker_used_when_no_sidecar_present.
     # 4. sidecar Mixed while body marker says Portable -> sidecar wins,
-    #    citation checks absent: covered by
+    #    path-citation checks absent: covered by
     #    test_sidecar_beats_conflicting_body_marker.
 
 

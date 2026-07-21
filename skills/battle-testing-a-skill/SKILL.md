@@ -5,10 +5,6 @@ description: Use when adversarially stress-testing whether a SKILL.md holds up u
 
 # Battle-testing a skill
 
-This skill's procedure is portable; the repo-specific detail (this
-repo's sibling skills, its GitHub project, corroborating side-projects)
-lives only in the references files below.
-
 ## Overview
 
 Battle-testing asks one question a style review does not: **does this
@@ -184,3 +180,10 @@ must be independent and retained; the count is never report-only metadata.
   returns it. Cross-trial disagreement follows step 5 and remains
   `INDETERMINATE`. Any later rerun is a separate retained run, never an extra
   unbudgeted dispatch or an in-place patch to the current run.
+
+## Notes
+
+This skill's procedure is portable; the repo-specific detail (this repo's
+sibling skills, its GitHub project, corroborating side-projects) lives only
+in the references files below. The declared level itself lives in
+`metadata/gitapex.yaml`.

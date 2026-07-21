@@ -133,15 +133,15 @@ reviewer context so each target was judged on its SKILL.md alone, read-only.
 At the time of this run, that CLAUDE.md-free clean-copy practice existed
 only as descriptive precedent in this file -- a record of what one
 verification happened to do, not a requirement `SKILL.md`'s own Procedure
-enforced on every dispatch. A later incident (gitapex#242, Repairs item 3)
-found exactly that gap: an ordinary in-session dispatch inherited this
-repository's own CLAUDE.md undisclosed, caught only because a human asked
-directly. `SKILL.md`'s Procedure step 1 now requires excluding the calling
+enforced on every dispatch. A later incident in this repository (tracked in
+this skill's `metadata/gitapex.yaml` `spec.references`) found exactly that
+gap: an ordinary in-session dispatch inherited this repository's own
+CLAUDE.md undisclosed, caught only because a human asked directly.
+`SKILL.md`'s Procedure step 1 now requires excluding the calling
 repository's own project-instruction file(s) from every dispatch as a
-standard step, not merely as color carried by this reference file
-(gitapex#250). This section continues to record the historical run below;
-read it as the origin of that requirement, not as the requirement's only
-enforcement.
+standard step, not merely as color carried by this reference file. This
+section continues to record the historical run below; read it as the
+origin of that requirement, not as the requirement's only enforcement.
 
 - Full pass: the seventeen dimensions applied once to all skills in this
   repository at the time.
@@ -268,9 +268,8 @@ CLAUDE.md still in the reviewing subagent's context, unlike the
 CLAUDE.md-free clean-copy run -- narrower verification than that
 precedent's, not claimed parity. This is a historical record, not
 retroactively corrected: it is exactly the class of gap `SKILL.md`
-Procedure step 1's now-required exclusion step (gitapex#250) exists to
-close on every future dispatch, not just this repository's own future
-verifications.
+Procedure step 1's now-required exclusion step exists to close on every
+future dispatch, not just this repository's own future verifications.
 
 Review-round correction (dimensions 18, 21): the Task 5 live
 verification (table above) ran an out-of-domain control -- the full
