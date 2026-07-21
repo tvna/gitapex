@@ -9,16 +9,18 @@ Read-only: reads the target skill's files only. No writes, no network,
 no mutation. Effects are limited to stdout and the process exit code.
 
 Checks (the canonical list -- the manual fallback is to apply these):
-  - description: present/non-empty, no XML tags, <= 1024 chars, and safe as
-    an unquoted YAML plain scalar -- no ": " (colon + whitespace) or
-    trailing ":" (either reads as the start of a new mapping key to a real
-    YAML parser and breaks parsing), and no " #" or leading "#" (reads as
-    a comment marker and silently truncates the rest of the value). Every
-    SKILL.md in this repository writes description as an unquoted
-    single-line scalar, so this failure mode is real, not theoretical --
-    this checker's own frontmatter parser is deliberately lenient and does
-    not reproduce it, so this is a dedicated check rather than a side
-    effect of parsing.
+  - description: present/non-empty, no XML tags, <= 1024 chars, and --
+    only when actually written as an unquoted YAML plain scalar in the
+    source (the form every SKILL.md in this repository currently uses) --
+    safe against ": " (colon + whitespace) or a trailing ":" (either reads
+    as the start of a new mapping key to a real YAML parser and breaks
+    parsing), and against " #" or a leading "#" (reads as a comment marker
+    and silently truncates the rest of the value). A description that is
+    instead quoted or a block scalar (">"/"|") is exempt from this specific
+    check, since those forms are already safe under a real YAML parser
+    regardless of content. This checker's own frontmatter parser is
+    deliberately lenient and does not reproduce either failure on its own,
+    so this is a dedicated check rather than a side effect of parsing.
   - name (only if present): lowercase-hyphenated, <= 64 chars,
     no XML tags, contains no reserved word (anthropic, claude)
   - SKILL.md body: <= 500 lines
@@ -270,25 +272,43 @@ class CheckResult:
     evidence: str
 
 
-def _parse_frontmatter(text: str) -> dict[str, str]:
+@dataclass(frozen=True)
+class FrontmatterParse:
+    """Result of ``_parse_frontmatter``: the parsed top-level scalar fields,
+    plus which of them were written as an unquoted YAML plain scalar rather
+    than quoted or a block scalar (``>``/``|``).
+
+    Only a plain scalar is at risk of the ": "/trailing ":"/" #" hazard
+    ``_yaml_plain_scalar_safety_check`` exists to catch -- a quoted or
+    block-scalar value is already safe under a real YAML parser regardless
+    of what characters it contains, so a caller needs to know which form a
+    field actually used, not just its already-unquoted/already-joined
+    value in ``fields``.
+    """
+    fields: dict[str, str]
+    plain_fields: frozenset[str]
+
+
+def _parse_frontmatter(text: str) -> FrontmatterParse:
     """Extract top-level 'key: value' pairs from a leading --- block.
 
     Handles the scalar forms real SKILL.md files use: plain, single/double
     quoted, and YAML block scalars (folded '>' and literal '|', whose
     indented continuation lines are joined). Strips a leading UTF-8 BOM and
     requires a closing '---'; without one the frontmatter is treated as
-    malformed (returns {}), rather than reading body lines as fields. No
-    external YAML dependency.
+    malformed (returns an empty result), rather than reading body lines as
+    fields. No external YAML dependency.
     """
     text = text.lstrip("\ufeff")
     if not text.startswith("---"):
-        return {}
+        return FrontmatterParse(fields={}, plain_fields=frozenset())
     lines = text.splitlines()
     end = next((i for i in range(1, len(lines))
                 if lines[i].strip() == "---"), None)
     if end is None:
-        return {}
+        return FrontmatterParse(fields={}, plain_fields=frozenset())
     fields: dict[str, str] = {}
+    plain_fields: set[str] = set()
     i = 1
     while i < end:
         m = re.match(r"([A-Za-z0-9_-]+):\s*(.*)$", lines[i])
@@ -306,9 +326,13 @@ def _parse_frontmatter(text: str) -> dict[str, str]:
             joiner = "\n" if value[0] == "|" else " "
             fields[key] = joiner.join(block).strip()
             continue
+        is_quoted = (len(value) >= 2 and value[0] == value[-1]
+                     and value[0] in "\"'")
         fields[key] = _unquote(value)
+        if not is_quoted:
+            plain_fields.add(key)
         i += 1
-    return fields
+    return FrontmatterParse(fields=fields, plain_fields=frozenset(plain_fields))
 
 
 def _unquote(value: str) -> str:
@@ -851,21 +875,33 @@ def _length_check(field: str, value: str, limit: int) -> CheckResult:
         f"{field} <= {limit} chars", f"{len(value)} chars")
 
 
-def _yaml_plain_scalar_safety_check(field: str, value: str) -> CheckResult:
+def _yaml_plain_scalar_safety_check(field: str, value: str,
+                                    is_plain_scalar: bool) -> CheckResult:
+    rule = (f"{field} (an unquoted YAML plain scalar) has no ': ', trailing "
+            "':', or ' #'/leading '#' that would break or silently "
+            "truncate under a real YAML parser")
+    if not is_plain_scalar:
+        # A quoted or block-scalar (>/|) value is already safe under a real
+        # YAML parser regardless of what characters it contains -- the
+        # hazard this check exists for is specific to the unquoted plain
+        # scalar form (the one every SKILL.md in this repository currently
+        # uses), so a quoted/block-scalar field is exempt rather than
+        # scanned against already-unquoted/already-joined text that no
+        # longer reflects how it was actually written.
+        return CheckResult(f"{field}-yaml-safe", True, rule,
+                            "safe (quoted or block scalar in source)")
     colon_hit = UNSAFE_COLON_RE.search(value)
-    comment_hit = None if colon_hit else UNSAFE_COMMENT_RE.search(value)
-    ok = colon_hit is None and comment_hit is None
-    if colon_hit:
-        evidence = f"unquoted ': ' or trailing ':' at char {colon_hit.start()}"
+    comment_hit = UNSAFE_COMMENT_RE.search(value)
+    # Report whichever hazard occurs first in the string -- a real YAML
+    # parser stops at the first one it hits, so that is also the one a
+    # maintainer needs to see in order to fix the value.
+    if colon_hit and (comment_hit is None or colon_hit.start() <= comment_hit.start()):
+        ok, evidence = False, f"unquoted ': ' or trailing ':' at char {colon_hit.start()}"
     elif comment_hit:
-        evidence = f"unquoted ' #' or leading '#' at char {comment_hit.start()}"
+        ok, evidence = False, f"unquoted ' #' or leading '#' at char {comment_hit.start()}"
     else:
-        evidence = "safe"
-    return CheckResult(
-        f"{field}-yaml-safe", ok,
-        f"{field} (an unquoted YAML plain scalar) has no ': ', trailing "
-        "':', or ' #'/leading '#' that would break or silently truncate "
-        "under a real YAML parser", evidence)
+        ok, evidence = True, "safe"
+    return CheckResult(f"{field}-yaml-safe", ok, rule, evidence)
 
 
 def _resolve_skill_md(target: Path) -> Path:
@@ -878,7 +914,8 @@ def check_shape(target: Path) -> list[CheckResult]:
     results: list[CheckResult] = []
 
     text = skill_md.read_text(encoding="utf-8")
-    fields = _parse_frontmatter(text)
+    frontmatter = _parse_frontmatter(text)
+    fields = frontmatter.fields
 
     description = fields.get("description", "")
     if not description:
@@ -892,7 +929,9 @@ def check_shape(target: Path) -> list[CheckResult]:
         results.append(_no_xml_check("description", description))
         results.append(_length_check(
             "description", description, DESCRIPTION_MAX_CHARS))
-        results.append(_yaml_plain_scalar_safety_check("description", description))
+        results.append(_yaml_plain_scalar_safety_check(
+            "description", description,
+            "description" in frontmatter.plain_fields))
 
     name = fields.get("name")
     if name:
