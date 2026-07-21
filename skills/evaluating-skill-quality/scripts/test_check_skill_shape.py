@@ -1923,6 +1923,94 @@ def test_lifecycle_renamed_from_empty_string_fails_well_formed(tmp_path):
     assert css.main([str(d)]) == 1
 
 
+def test_lifecycle_unquoted_tracking_issue_is_read_as_bare_comment(tmp_path):
+    # Regression guard (adversarial review finding): an unquoted value
+    # that is nothing but a comment (starts with "#") must read as
+    # absent, not as the literal string -- real YAML treats
+    # "trackingIssue: #123" as trackingIssue: null, not "#123", even
+    # though "#123" happens to be this exact field's valid shape.
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n"
+        "    experimental:\n"
+        "      reason: not yet proven\n"
+        "      trackingIssue: #123\n")
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is False
+    assert "trackingIssue is missing" in by["lifecycle-well-formed"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_lifecycle_quoted_tracking_issue_starting_with_hash_still_valid(tmp_path):
+    # Companion to the bare-comment regression above: a QUOTED value
+    # starting with "#" is a real string in YAML, not a comment, and must
+    # still validate normally.
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n"
+        "    experimental:\n"
+        "      reason: not yet proven\n"
+        "      trackingIssue: \"#123\"\n")
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is True
+    assert css.main([str(d)]) == 0
+
+
+def test_lifecycle_renamed_from_given_a_block_fails_well_formed(tmp_path):
+    # Regression guard (adversarial review finding): renamedFrom is
+    # documented as a plain scalar, not a sub-block -- a nested mapping
+    # given where a scalar is expected must fail the same way
+    # "experimental: true" (a scalar given where a mapping is expected)
+    # already does, not silently vanish as "not declared".
+    (tmp_path / "other-skill").mkdir()
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n"
+        "    renamedFrom:\n"
+        "      old: name\n"
+        "    deprecated:\n"
+        "      reason: superseded\n"
+        "      replacement: other-skill\n")
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is False
+    assert "renamedFrom is not a non-empty string" in by["lifecycle-well-formed"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_lifecycle_renamed_from_only_evidence_names_it(tmp_path):
+    # Regression guard (adversarial review finding): the "declared"
+    # evidence string must name renamedFrom when it is the only field
+    # present, not report "no keys declared" for a sidecar that did
+    # declare something.
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n"
+        "    renamedFrom: old-skill-name\n")
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is True
+    assert "renamedFrom" in by["lifecycle-well-formed"].evidence
+    assert by["lifecycle-well-formed"].evidence != "no keys declared"
+
+
+def test_lifecycle_stable_and_deprecated_coexist(tmp_path):
+    # A graduated skill later superseded by another is a normal lifecycle
+    # progression -- only experimental+stable is gated, not
+    # deprecated+stable.
+    (tmp_path / "other-skill").mkdir()
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n"
+        "    stable:\n"
+        "      since: \"2026-01-01\"\n"
+        "    deprecated:\n"
+        "      reason: superseded\n"
+        "      replacement: other-skill\n")
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is True
+    assert by["experimental-stable-compatible"].passed is True
+    assert css.main([str(d)]) == 0
+
+
 def test_lifecycle_checks_fail_when_sidecar_unreadable(tmp_path):
     d = _write_skill(tmp_path)
     sidecar = d / "metadata/gitapex.yaml"

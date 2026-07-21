@@ -408,6 +408,31 @@ def _unquote(value: str) -> str:
     return value
 
 
+def _strip_bare_comment(value: str) -> str:
+    """Return ``value`` unchanged, unless it is an UNQUOTED value that
+    starts with ``#`` -- real YAML never allows an unquoted scalar to
+    start with ``#`` (that always opens a comment, making the actual
+    value null/absent), so such a ``value`` must read as empty here too.
+
+    This parser otherwise deliberately does not strip inline comments
+    (see ``_parse_manifest``'s docstring: trailing ``# comment`` text
+    after a real value is read as part of that value, "safe" because it
+    fails closed against the expected enum/literal). That reasoning does
+    NOT hold when the field's own valid shape can itself start with
+    ``#`` -- e.g. ``spec.lifecycle.experimental.trackingIssue: #123``
+    (unquoted) is real YAML for "trackingIssue is null", not the literal
+    string ``"#123"``, yet ``"#123"`` is exactly this field's valid
+    shape, so the old fails-closed argument fails open here instead.
+    Used only by the three ``spec.lifecycle`` value-extraction sites
+    (block-open decision, leaf fields, ``renamedFrom``) -- not applied
+    to every other sidecar scalar, since none of their valid shapes start
+    with ``#`` the way an issue reference does, and rewriting the whole
+    parser's comment handling is a larger, separate change than this
+    field's specific collision.
+    """
+    return "" if value.startswith("#") else value
+
+
 @dataclass(frozen=True)
 class ManifestParse:
     """Result of ``_parse_manifest``: the parsed top-level mapping plus any
@@ -439,16 +464,18 @@ class ManifestParse:
     ``unknown_lifecycle_keys`` and ``unknown_lifecycle_fields`` are
     spec.lifecycle's equivalents, one nesting level deeper again:
     ``unknown_lifecycle_keys`` holds each key found directly under
-    spec.lifecycle that is not ``experimental`` or ``deprecated`` (trimmed
-    line); ``unknown_lifecycle_fields`` holds each key found inside either
-    of those sub-blocks that is not one of its own recognized fields
-    (e.g. "extra: foo" under experimental). Both empty when the field is
-    absent or parsed cleanly. There is no malformed-item channel for
-    spec.lifecycle the way spec.references/spec.skillDependencies have
-    one for list items -- every leaf under spec.lifecycle is a plain
-    scalar, so a wrong-type value is simply stored as the raw string by
-    the field parser and fails the downstream well-formed check on shape,
-    with nothing that needs a separate parse-time detection channel.
+    spec.lifecycle that is not ``experimental``, ``deprecated``,
+    ``stable``, or ``renamedFrom`` (trimmed line); ``unknown_lifecycle_fields``
+    holds each key found inside any of the three block sub-keys
+    (``experimental``/``deprecated``/``stable``) that is not one of its
+    own recognized fields (e.g. "extra: foo" under experimental). Both
+    empty when the field is absent or parsed cleanly. There is no
+    malformed-item channel for spec.lifecycle the way
+    spec.references/spec.skillDependencies have one for list items --
+    every leaf under spec.lifecycle is a plain scalar, so a wrong-type
+    value is simply stored as the raw string by the field parser and
+    fails the downstream well-formed check on shape, with nothing that
+    needs a separate parse-time detection channel.
     """
     root: dict[str, object]
     malformed_lines: list[str]
@@ -485,33 +512,51 @@ def _parse_manifest(text: str) -> ManifestParse:
       a real shape defect the checker is expected to catch, not reserved
       space.
     - spec.lifecycle (and only that key, and only directly under spec) is
-      read as a mapping with exactly two recognized sub-blocks,
-      ``experimental`` and ``deprecated``, each -- at exactly 4-space
-      indent -- an empty value opening a nested block of scalar fields at
-      exactly 6-space indent (``reason``/``trackingIssue``/``since`` for
-      ``experimental``; ``reason``/``replacement``/``since``/
-      ``removeAfter`` for ``deprecated``). One nesting level deeper than
-      spec.skillDependencies, but with scalar leaves instead of a list --
-      there is no list-item shape inside spec.lifecycle at all. A key
-      directly under spec.lifecycle other than ``experimental``/
-      ``deprecated`` is collected into
-      ``ManifestParse.unknown_lifecycle_keys``; a key inside either
-      sub-block that is not one of its own recognized fields is collected
-      into ``ManifestParse.unknown_lifecycle_fields`` -- both instead of
-      being silently skipped, for the same reason
-      ``unknown_skill_dependency_keys`` exists. A sub-block header written
-      as an inline scalar instead of opening a block (e.g.
+      read as a mapping with exactly three recognized block sub-keys --
+      ``experimental``, ``deprecated``, ``stable`` -- plus one recognized
+      plain scalar key, ``renamedFrom``. Each block sub-key, at exactly
+      4-space indent, is an empty value opening a nested block of scalar
+      fields at exactly 6-space indent (``reason``/``trackingIssue``/
+      ``since`` for ``experimental``; ``reason``/``replacement``/
+      ``since``/``removeAfter`` for ``deprecated``; ``since``/
+      ``compatibilityGuarantee`` for ``stable``). ``renamedFrom``, also
+      at 4-space indent, takes an inline scalar value directly instead of
+      opening a block -- structurally like ``metadata.name`` under
+      ``metadata:``, not like the other three. One nesting level deeper
+      than spec.skillDependencies, but with scalar leaves instead of a
+      list -- there is no list-item shape inside spec.lifecycle at all. A
+      key directly under spec.lifecycle other than one of these four is
+      collected into ``ManifestParse.unknown_lifecycle_keys``; a key
+      inside any of the three block sub-keys that is not one of its own
+      recognized fields is collected into
+      ``ManifestParse.unknown_lifecycle_fields`` -- both instead of being
+      silently skipped, for the same reason
+      ``unknown_skill_dependency_keys`` exists. A block sub-key header
+      written as an inline scalar instead of opening a block (e.g.
       ``experimental: true``) is stored as that raw scalar under its own
       key, exactly as spec.skillDependencies' non-list scalar fallback
-      works, so the checker layer reports it as the wrong type rather than
-      silently dropping it.
+      works, so the checker layer reports it as the wrong type rather
+      than silently dropping it -- and symmetrically, ``renamedFrom``
+      given a block instead of a scalar (e.g. nested children under
+      ``renamedFrom:``) is detected one line later (see
+      ``lifecycle_scalar_pending`` in the parsing loop below) and stored
+      as an empty mapping, so it fails the same way in reverse.
 
     Every other nested map or list (e.g. spec.evalStatus) is still
     deliberately skipped, exactly as before: skipping keeps this
     stdlib-only with no YAML dependency. Inline '# comment' text after a
     value on the same line is not stripped -- it is read as part of the
     value, which is safe (fails closed against the expected enum/literal)
-    but is not a supported way to annotate a sidecar field.
+    but is not a supported way to annotate a sidecar field. Exception:
+    the three ``spec.lifecycle`` value-extraction sites strip a value
+    that is NOTHING BUT a comment (starts with ``#`` unquoted) down to
+    empty via ``_strip_bare_comment``, since real YAML never allows an
+    unquoted scalar to start with ``#`` (it always opens a comment there)
+    -- the general "fails closed" reasoning above does not hold when a
+    field's own valid shape can itself start with ``#``, as
+    ``experimental.trackingIssue``'s ``#123``/``owner/repo#123`` shape
+    does; an unquoted ``trackingIssue: #123`` must read as absent, not as
+    the literal string ``"#123"`` a quoted value would give.
 
     A top-level (column-0) line that is not blank, not a '#' comment, not a
     YAML document marker ('---' or '...'), and does not match the top-level
@@ -551,6 +596,14 @@ def _parse_manifest(text: str) -> ManifestParse:
     lifecycle_field_buffer: dict[str, object] = {}
     unknown_lifecycle_keys: list[str] = []
     unknown_lifecycle_fields: list[str] = []
+    # Set when a scalar-only lifecycle key (currently only renamedFrom) is
+    # seen with a blank/comment-only value -- deferred one line, since that
+    # shape is ambiguous until the next line is known: it is either a
+    # legitimately absent declaration (next line dedents or is a sibling),
+    # or the start of a wrongly block-shaped value (next line is more
+    # deeply indented than spec.lifecycle's own 4-space level). See the
+    # "if lifecycle_scalar_pending is not None:" handling below.
+    lifecycle_scalar_pending: str | None = None
 
     def _finalize_refs() -> None:
         nonlocal collecting_refs, refs_indent
@@ -674,7 +727,7 @@ def _parse_manifest(text: str) -> ManifestParse:
         if lifecycle_subkey is not None:
             field = LIFECYCLE_FIELD_RE.match(line)
             if field:
-                key, value = field.group(1), field.group(2).strip()
+                key, value = field.group(1), _strip_bare_comment(field.group(2).strip())
                 if key in LIFECYCLE_FIELDS.get(lifecycle_subkey, ()):
                     if value:
                         lifecycle_field_buffer[key] = _unquote(value)
@@ -694,10 +747,30 @@ def _parse_manifest(text: str) -> ManifestParse:
             # the other sub-block's header, or a dedent out of lifecycle
             # entirely).
             _finalize_lifecycle_subkey()
+        if lifecycle_scalar_pending is not None:
+            indent = len(line) - len(line.lstrip(" "))
+            if line[:1] in (" ", "\t") and indent > 4:
+                # A block followed a scalar-only key (e.g. renamedFrom
+                # given nested children instead of a plain value) -- the
+                # wrong type, not the documented plain scalar. Store a
+                # non-string sentinel so the checker layer reports it as
+                # such; deeper sibling lines of this same mistaken block
+                # are then silently absorbed by the existing "stray
+                # content" fallback below (their own internal shape does
+                # not matter -- the type error is already captured).
+                lifecycle[lifecycle_scalar_pending] = {}
+                lifecycle_scalar_pending = None
+                continue
+            # Not more deeply indented: the key really was declared blank
+            # (or comment-only) with nothing following -- matches this
+            # parser's "blank scalar assignment means not declared"
+            # convention. Fall through to process the current line
+            # normally below.
+            lifecycle_scalar_pending = None
         if in_lifecycle:
             subkey = LIFECYCLE_SUBKEY_RE.match(line)
             if subkey:
-                key, value = subkey.group(1), subkey.group(2).strip()
+                key, value = subkey.group(1), _strip_bare_comment(subkey.group(2).strip())
                 if value:
                     # Not opening a block -- a bare scalar written where a
                     # mapping is expected (e.g. "experimental: true").
@@ -712,12 +785,14 @@ def _parse_manifest(text: str) -> ManifestParse:
                 continue
             scalar = LIFECYCLE_SCALAR_KEY_RE.match(line)
             if scalar:
-                key, value = scalar.group(1), scalar.group(2).strip()
+                key, value = scalar.group(1), _strip_bare_comment(scalar.group(2).strip())
                 if value:
                     lifecycle[key] = _unquote(value)
-                # Blank value: store nothing, exactly like the generic
-                # 2-space nested-scalar rule elsewhere in this parser (a
-                # blank scalar assignment reads as "not declared").
+                else:
+                    # Blank (or comment-only) value: ambiguous until the
+                    # next line is seen -- see the
+                    # "lifecycle_scalar_pending is not None" handling above.
+                    lifecycle_scalar_pending = key
                 continue
             unknown = LIFECYCLE_UNKNOWN_SUBKEY_RE.match(line)
             if unknown:
@@ -1169,10 +1244,12 @@ def check_shape(target: Path) -> list[CheckResult]:
             results.append(CheckResult(
                 "lifecycle-well-formed", False,
                 "spec.lifecycle, if present, is a mapping with only "
-                "experimental/deprecated keys, each -- if present -- a "
-                "mapping of its own recognized scalar fields with required "
-                "fields non-empty and since/removeAfter, if present, real "
-                "YYYY-MM-DD dates", evidence))
+                "experimental/deprecated/stable/renamedFrom keys, each "
+                "block sub-key (experimental/deprecated/stable) -- if "
+                "present -- a mapping of its own recognized scalar fields "
+                "with required fields non-empty and since/removeAfter, if "
+                "present, real YYYY-MM-DD dates, and renamedFrom, if "
+                "present, a non-empty scalar string", evidence))
             results.append(CheckResult(
                 "lifecycle-deprecated-replacement-resolves", False,
                 "spec.lifecycle.deprecated.replacement, if a non-empty "
@@ -1648,6 +1725,8 @@ def _lifecycle_checks(spec_is_mapping: bool, spec_raw: object,
                                 "; ".join(problems))]
     else:
         declared = [k for k in LIFECYCLE_SUBKEYS if k in sub_blocks]
+        if "renamedFrom" in lifecycle:
+            declared.append("renamedFrom")
         evidence = f"{', '.join(declared)} declared" if declared else "no keys declared"
         results = [CheckResult("lifecycle-well-formed", True, well_formed_rule,
                                 evidence)]
