@@ -52,7 +52,7 @@ def _line_pattern(name, verdicts):
         + re.escape(name)
         + r"`?[ \t]*:[ \t]*(?:(?:"
         + verdict_alt
-        + r")|WAIVED[ \t]*:[ \t]*\S.*)[ \t]*$",
+        + r")\b(?:[ \t]+\S.*)?|WAIVED[ \t]*:[ \t]*\S.*)[ \t]*$",
         re.IGNORECASE | re.MULTILINE,
     )
 
@@ -72,7 +72,11 @@ def _extract_section(body_text):
 
 def find_missing_disclosures(body_text):
     """Return the list of audit names with no valid disclosure line in body_text."""
-    body_text = body_text or ""
+    # Normalize CRLF/CR line endings before matching: GitHub is known to
+    # deliver github.event.pull_request.body with CRLF endings for PRs
+    # authored/edited via the web UI, and the heading/line regexes below
+    # assume bare LF.
+    body_text = (body_text or "").replace("\r\n", "\n").replace("\r", "\n")
     section = _extract_section(body_text)
     if section is None:
         return list(_VERDICTS)

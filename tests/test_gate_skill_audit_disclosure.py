@@ -170,3 +170,33 @@ def test_main_fails_with_missing_disclosure(capsys):
 def test_main_reports_error_for_missing_file(capsys):
     assert gate.main(["--body", "/no/such/file.md"]) == 1
     assert "not found" in capsys.readouterr().err
+
+
+def test_crlf_line_endings_do_not_break_the_heading_match():
+    body = _VALID_SECTION.replace("\n", "\r\n")
+    assert gate.find_missing_disclosures(body) == []
+
+
+def test_bare_cr_line_endings_do_not_break_the_heading_match():
+    body = _VALID_SECTION.replace("\n", "\r")
+    assert gate.find_missing_disclosures(body) == []
+
+
+def test_verdict_line_accepts_trailing_annotation_text():
+    body = """\
+## Skill audit evidence
+
+- battle-testing-a-skill: PASS (22/22 dimensions clear, see appendix)
+- evaluating-skill-quality: WELL-FORMED-AND-MATURE
+"""
+    assert gate.find_missing_disclosures(body) == []
+
+
+def test_near_miss_verdict_token_does_not_false_match():
+    body = """\
+## Skill audit evidence
+
+- battle-testing-a-skill: PASSED
+- evaluating-skill-quality: WELL-FORMED-AND-MATURE
+"""
+    assert gate.find_missing_disclosures(body) == ["battle-testing-a-skill"]

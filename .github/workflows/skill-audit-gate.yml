@@ -38,7 +38,11 @@ jobs:
       # both audits' outcome (or an explicit waiver) in its body. A pure
       # deletion of a SKILL.md has no new content to audit, so it is
       # excluded here rather than at the workflow `paths` trigger, which
-      # cannot distinguish add/modify from delete.
+      # cannot distinguish add/modify from delete. A byte-identical rename
+      # (git's "R100" status) is excluded the same way -- same rationale,
+      # no new content. A three-dot (merge-base) diff is used, not a
+      # two-dot direct diff, so a SKILL.md change merged to the base
+      # branch after this PR forked is never misattributed to this PR.
       - name: Determine changed SKILL.md files
         id: diff
         env:
@@ -46,7 +50,11 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          changed=$(git diff --name-status "$BASE_SHA" "$HEAD_SHA" -- 'skills/*/SKILL.md' | grep -v '^D' || true)
+          if ! diff_output=$(git diff --name-status "$BASE_SHA...$HEAD_SHA" -- 'skills/*/SKILL.md'); then
+            echo "::error::git diff failed between $BASE_SHA and $HEAD_SHA" >&2
+            exit 1
+          fi
+          changed=$(printf '%s\n' "$diff_output" | grep -vE '^(D|R100)[[:space:]]' || true)
           if [ -z "$changed" ]; then
             echo "No added/modified skills/*/SKILL.md in this diff; skipping disclosure check."
             echo "applicable=false" >> "$GITHUB_OUTPUT"

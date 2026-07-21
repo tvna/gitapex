@@ -39,11 +39,16 @@ repository invokes a model/LLM as part of a CI run today.
 
 ## Decisions (confirmed with the operator before implementation)
 
-### 1. Gate mechanism: disclosure-evidence presence, CI-enforced (blocking)
+### 1. Gate mechanism: disclosure-evidence presence, CI-enforced (blocking once branch protection is configured)
 
-A new CI job blocks the PR unless its body carries a `## Skill audit
+A new CI job fails unless the PR body carries a `## Skill audit
 evidence` section citing a verdict, or an explicit waiver with a reason,
-for both audits. This grades *disclosure* -- that the audits were actually
+for both audits. This job's failure only actually blocks the merge
+button once the repo owner marks it a required status check in branch
+protection (see Open item below, unresolved as of this writing) -- until
+then it fails loudly but does not itself prevent a merge, the same gap
+this initiative exists to close for the two audits themselves. This grades
+*disclosure* -- that the audits were actually
 run and their outcome recorded -- never the audit's *content*. Grading
 content (whether a FAIL should really have blocked the merge) is exactly
 the model judgment neither audit can be reduced away from; a CI job that
@@ -66,8 +71,9 @@ Two other options were considered and rejected:
 The chosen design still adds a procedural nudge (see section 3 below) so
 an agent following `issue-to-branch` runs both audits *before* opening the
 PR rather than reactively, after the CI job's rejection message prompts
-it -- but the CI job is what actually blocks the merge path regardless of
-whether that procedure was followed.
+it -- but the CI job's own failure is the check that actually fires
+regardless of whether that procedure was followed (again, contingent on
+the Open item below being resolved to make that failure merge-blocking).
 
 ### 2. Trigger scope: any add or modified `skills/*/SKILL.md`
 
@@ -161,15 +167,23 @@ despite overlapping triggers).
   where an expression embedded in shell text can break out of its intended
   context.
 - No `continue-on-error` anywhere in this job -- unlike `waza-check.yml`'s
-  job, this one is meant to actually fail the check.
+  job, this one is meant to actually fail (exit non-zero) on missing
+  disclosure, rather than always reporting success regardless of content.
 
 ### `skills/issue-to-branch` procedural nudge
 
 Both edited files stay Portable-compliant: no bare `#NNN` issue citation
 (the shape checker's Portable self-citation scan would flag it), and no
-path reference into `.github/scripts/...`, which lives outside this
-skill's own directory and would itself be a Portable violation if the
-skill's procedure depended on reading it.
+path reference into `.github/scripts/...`. A dependency on that path would
+be a Portable violation by the declaration's own definition (every
+instruction controlling the skill's behavior must resolve inside its own
+folder) regardless of whether any script catches it -- and, checked
+directly, none currently would: `check_skill_shape.py`'s
+`REPO_PATH_CITATION_RE` only matches `evals/`- or `docs/`-rooted paths, not
+`.github/`, so this specific violation shape has no automated backstop
+today. The two edited files avoid it by construction (neither cites the
+gate script's path at all), not because a scanner would catch it if they
+did.
 
 - `SKILL.md` gains **Step 9**, after the existing ACM-validation Step 8:
   disclose, in the PR body, which skill-quality/adversarial audits were run

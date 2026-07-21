@@ -68,12 +68,15 @@ without losing the issue's acceptance criteria.
 - **Branch Plan:** branch name, commit scope, PR title/body outline.
 - **Verification Plan:** the deterministic gates from Step 6 and how each
   mapped criterion will be proven.
+- **Skill Audit Evidence:** only when Step 9 applies (the PR adds or
+  modifies a skill's `SKILL.md`); the disclosed verdicts or waivers, omit
+  otherwise.
 - **Human Decision:** only when Step 7 applies; omit otherwise.
 - **Next Move:** the concrete next action.
 
 Pattern: **Facts** -> **Assumptions** -> **Acceptance Criteria Map** ->
 **Branch Plan** -> **Verification Plan** -> **Next Move**. Insert
-**Human Decision** only when needed.
+**Skill Audit Evidence** and **Human Decision** only when needed.
 
 ## Stop boundaries
 
