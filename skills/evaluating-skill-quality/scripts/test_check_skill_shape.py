@@ -916,6 +916,59 @@ def test_approved_hedge_phrase_passes(tmp_path, body):
     assert result.passed is True
 
 
+def test_leading_hedge_covers_a_list_of_different_paths(tmp_path):
+    # Real content in this repository (worked-example-self-review.md, "in
+    # this repository's own bookkeeping ...: `evals/.../split.md`'s
+    # Kept-edit log and `docs/skill-eval-status.md`.") uses ONE leading
+    # hedge to introduce a comma-joined list of TWO DIFFERENT path
+    # citations in a single clause -- this must keep passing. A stricter
+    # per-citation windowing design (tried and reverted while closing a
+    # Codex-reported issue-citation exploit on PR #273) broke this exact
+    # pattern, which is why the fix for that exploit is a conditional
+    # bridging-semicolon split (see _split_at_bridging_semicolon) plus a
+    # "previous clause already cites something" guard, not per-citation
+    # isolation within one clause.
+    d = _write_raw(tmp_path, _portable_body(
+        "In this repository's own bookkeeping: `evals/x/split.md`'s "
+        "Kept-edit log and `docs/skill-eval-status.md`."))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-path-citation"]
+    assert result.passed is True
+
+
+def test_semicolon_inside_one_citations_own_aside_does_not_split(tmp_path):
+    # Real, pre-existing content in this repository
+    # (worked-example-explaining-the-work.md) uses a semicolon INSIDE a
+    # single parenthetical aside about ONE citation, with the hedge word
+    # landing after the semicolon: "`docs/adr/NNNN-*.md` (line 24;
+    # gitapex's own state on this path is covered under Portability level
+    # above), uses forward slashes." A blanket semicolon split (a second
+    # cut of the #273 fix, after the bare-word-hedge fix) broke this by
+    # separating the citation from its own hedge; splitting only when a
+    # citation appears on BOTH sides of the semicolon (there is no second
+    # citation here) fixes it without reopening the Codex-reported case.
+    d = _write_raw(tmp_path, _portable_body(
+        "The one path in the skill, `docs/adr/NNNN-*.md` (line 24; "
+        "gitapex's own state on this path is covered elsewhere), uses "
+        "forward slashes."))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-path-citation"]
+    assert result.passed is True
+
+
+def test_semicolon_with_citations_on_both_sides_still_splits(tmp_path):
+    # The other half of the same fix: when a citation genuinely does
+    # appear on both sides of a semicolon, it must still split -- this is
+    # exactly Codex's reported shape, generalized to the repo-path spec so
+    # both specs' behavior stays consistent (specs share the same clause
+    # splitter, see _inline_citation_offenders's own docstring).
+    d = _write_raw(tmp_path, _portable_body(
+        "This repository has also recorded `docs/a.md`; see `docs/b.md` "
+        "for the unrelated details."))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-path-citation"]
+    assert result.passed is False
+    assert "docs/b.md" in result.evidence
+    assert "docs/a.md" not in result.evidence
+
+
 def test_hedge_in_different_paragraph_does_not_count(tmp_path):
     # Bounded distance, not whole-document: a hedge phrase two paragraphs
     # away must not exempt an unrelated citation in its own paragraph.
@@ -1144,6 +1197,66 @@ def test_one_citations_own_text_cannot_hedge_a_different_citation(tmp_path):
     assert result.passed is False
     assert "#42" in result.evidence
     assert "#100" in result.evidence
+
+
+def test_color_hedge_does_not_exempt_a_different_real_citation_same_sentence(tmp_path):
+    # Regression guard for a Codex review finding on PR #273: because the
+    # hedge search originally covered the WHOLE sentence, a legitimate
+    # color hedge for one citation silently exempted a completely
+    # different, genuinely unhedged issue/PR citation sitting in the same
+    # sentence -- exactly the gate-weakening failure #263 exists to
+    # prevent. The two citations here have different numbers (123456 vs
+    # 42), so they are different groups: the color citation must pass, and
+    # the real citation must still fail.
+    d = _write_raw(tmp_path, _portable_body(
+        "Use the hex color `#123456`; see PR `#42` for the implementation "
+        "history."))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-issue-citation"]
+    assert result.passed is False
+    assert "#42" in result.evidence
+    assert "#123456" not in result.evidence
+
+
+def test_comma_joined_different_citations_share_the_clause_hedge(tmp_path):
+    # A known, DELIBERATELY ACCEPTED residual (issue #263/#273's own
+    # docstring rationale), not a guarantee: two different citations
+    # joined within one clause by a comma/apposition (no semicolon) still
+    # share that clause's hedge search, so an unhedged real citation can
+    # slip through alongside a legitimately hedged one. An earlier, more
+    # aggressive per-citation windowing design closed this specific case,
+    # but broke a real, legitimate pattern already in this repository's own
+    # content (see test_leading_hedge_covers_a_list_of_different_paths):
+    # one leading hedge introducing a LIST of several different citations,
+    # comma-joined, with no semicolon between them. Distinguishing "a list"
+    # from "an unrelated aside" from punctuation alone is exactly the kind
+    # of natural-language judgment this deterministic checker's own
+    # docstring says it does not attempt -- the semicolon-based clause
+    # split (issue #273) closes the actually-reported (Codex, PR #269/#273)
+    # exploit shape; this narrower one is intentionally left to the
+    # model-judged rubric dimension as the backstop.
+    d = _write_raw(tmp_path, _portable_body(
+        "See `#123456`, a hex color reference, followed by the real bug "
+        "`#42`."))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-issue-citation"]
+    assert result.passed is True
+
+
+def test_color_hedge_in_previous_sentence_does_not_exempt_next_sentence_citation(tmp_path):
+    # Same conflation as the two tests above, recurring across a sentence
+    # boundary: the "previous sentence" fallback exists for a pure hedge
+    # sentence with NO citation of its own (see
+    # test_hedge_in_next_sentence_of_same_paragraph_does_not_count's own
+    # fixture for the established pattern). When the previous sentence
+    # instead has its OWN single citation, that sentence's hedge is already
+    # "spent" justifying it and must not leak into an unrelated citation in
+    # the very next sentence.
+    d = _write_raw(tmp_path, _portable_body(
+        "Use the hex color `#123456` for the button. See PR `#42` for the "
+        "implementation history."))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-issue-citation"]
+    assert result.passed is False
+    assert "#42" in result.evidence
+    assert "#123456" not in result.evidence
 
 
 def test_issue_hedge_wrapped_across_lines_within_paragraph_counts(tmp_path):
