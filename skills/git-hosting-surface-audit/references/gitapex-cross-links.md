@@ -1,41 +1,32 @@
-# gitapex-specific cross-links (read only when this is gitapex's own copy)
+# gitapex-specific cross-links
 
-Read this ONLY when *this copy of the skill* lives in the gitapex
-repository -- not when the repository being *audited* happens to be
-gitapex (the two are unrelated: gitapex's own copy of this skill uses
-the pointers below no matter which platform or repository is under
-audit). A copy of this skill vendored into a different repository drops
-this file entirely and substitutes its own governance issue, instruction
-file, and script precedent for the three pointers below -- nothing else
-in this skill depends on this file existing.
+Loaded by Step 2 only when this copy of the skill's own files lives in
+the gitapex repository -- see SKILL.md's Portability note for why that
+is a different condition from "the repository being audited is gitapex,"
+and for what a copy vendored elsewhere does instead (its own hosting
+repository's tracking issue and instruction file where they exist,
+omitted where they don't). A vendored copy never reads this file.
 
 ## Gap cross-link target
 
-Every checklist item marked Gap in `references/github-surface-checklist.md`
-or `references/gitlab-surface-checklist.md` cross-links **gitapex CLI
-governance issue #82**. #82 is the umbrella tracking issue for gitapex's
-approved read-only gh wrapper -- it has no single "landed" state of its
-own. The approved wrapper that would close each Gap is an unfiled
-candidate child issue under #82, not #82 itself. Word every cross-link
-that way ("consumer of an unfiled candidate child issue under #82"), not
-as "blocked on #82 landing."
+gitapex's tracking issue for approved-but-unbuilt tooling is **issue
+#82**. #82 is the umbrella tracking issue for gitapex's approved
+read-only gh wrapper -- it has no single "landed" state of its own. The
+approved wrapper that would close each Gap is an unfiled candidate child
+issue under #82, not #82 itself. Word every cross-link that way
+("consumer of an unfiled candidate child issue under #82"), not as
+"blocked on #82 landing."
 
 ## Read-only stop-boundary authority
 
 This skill never takes a write action (change branch protection, revoke
-a webhook, rotate a deploy key) -- those stay human decisions **per this
-repo's own `CLAUDE.md`, section 4** ("Simplicity, Bounded by Safety"). A
-copy vendored into a different repository cites whatever instruction
-file *that hosting repository* has for the same rule, if any; the
-read-only principle itself still applies even with no file to cite.
+a webhook, rotate a deploy key) -- those stay human decisions per this
+repo's own `CLAUDE.md`, section 4 ("Simplicity, Bounded by Safety").
 
 ## Unpinned-actions script precedent
 
 `scripts/scan_unpinned_actions.py` reuses
-**`.github/scripts/scan_toolchain_pin_drift.py`**'s walk/report/exit-code
+`.github/scripts/scan_toolchain_pin_drift.py`'s walk/report/exit-code
 shape rather than inventing a second, divergent detector -- that script
 is this repo's own existing drift-scan precedent (it guards a different
-invariant: Class B toolchain tool pins, not action pins). This is cited
-here as the origin of `scan_unpinned_actions.py`'s own design; a vendored
-copy has no obligation to match that file's shape and does not need it
-to exist.
+invariant: Class B toolchain tool pins, not action pins).

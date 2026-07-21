@@ -7,15 +7,17 @@ description: Use when auditing a GitHub or GitLab repository's hosting-platform 
 
 **Portability: Mixed.** The procedure, the coverage-honesty rule, and
 both platform checklists work identically no matter which GitHub/GitLab
-repo is being *audited*. The handful of pointers into gitapex's own
-governance issue, instruction file, and script precedent are isolated in
-`references/gitapex-cross-links.md` -- read only when *this copy of the
-skill* lives in the gitapex repository (a vendored copy, installed into
-some other repository, drops that one file and substitutes its own
-targets instead). This is about where the skill itself is installed, not
-about which repository is under audit: gitapex's own copy still applies
-those pointers when auditing a GitHub or GitLab target that has nothing
-to do with gitapex. Nothing else in this skill depends on the file.
+repo is being *audited*. The one exception: the Gap cross-link target
+depends on where *this copy of the skill's own files* live, never on
+which repository is under audit -- gitapex's own copy always cross-links
+gitapex's own tracking issue, even when auditing a target that has
+nothing to do with gitapex. If this copy lives in gitapex itself, Step 2
+below loads `references/gitapex-cross-links.md` for gitapex's own
+target, instruction-file citation, and script precedent. A copy vendored
+into a different repository drops that file and instead uses that
+hosting repository's own tracking issue and instruction file where they
+exist -- omitting the cross-link or citation where they don't, never
+fabricating one. Nothing else in this skill depends on the file.
 
 Audits a repository's hosting-platform *configuration* surface (not its
 code) and reports what was actually checked versus what could not be
@@ -44,10 +46,15 @@ it never changes branch protection, revokes a webhook, or rotates a key.
    3. If both markers are present, or neither the remote nor a directory
       marker resolves the platform, STOP and ask the operator rather than
       guessing.
-2. **Load ONLY the detected platform's checklist reference.** If GitHub,
-   read `references/github-surface-checklist.md`. If GitLab, read
-   `references/gitlab-surface-checklist.md`. Never open both in the same
-   run (identical rule to `seeding-issue-pr-templates`).
+2. **Load the checklist reference, and the cross-link reference if this
+   is gitapex's own copy.** Read ONLY the detected platform's checklist
+   reference -- `references/github-surface-checklist.md` for GitHub,
+   `references/gitlab-surface-checklist.md` for GitLab -- and never open
+   both in the same run (identical rule to `seeding-issue-pr-templates`).
+   If this copy of the skill's own files lives in the gitapex repository,
+   also read `references/gitapex-cross-links.md`: Step 3's cross-link
+   target comes from it, and skipping this read is what makes a Gap
+   report fall back to a generic, issue-number-free line.
 3. **Run each checklist item at its stated coverage level.** The loaded
    reference's table is the source of truth for what is Covered, Partial,
    or a Gap -- do not upgrade an item's coverage level based on what seems
@@ -55,16 +62,10 @@ it never changes branch protection, revokes a webhook, or rotates a key.
    tool/script and report its actual result. For a **Partial** item, run
    what is available and state precisely what it does and does not verify.
    For a **Gap** item, do not attempt a workaround (an ungoverned direct
-   API call, a scraped web page, a guess) -- report it as a Gap and cross-
-   link the tracking issue for approved-but-unbuilt tooling that belongs
-   to *this skill's own home repository* (not the audited repository --
-   the two are unrelated: gitapex's own copy of this skill always uses
-   gitapex's tracking issue, even when the repo under audit is someone
-   else's GitHub or GitLab project). If this copy of the skill lives in
-   gitapex itself, that target and its exact wording convention are in
-   `references/gitapex-cross-links.md`; a copy vendored into a different
-   repository substitutes that repository's own tracking issue, or omits
-   the cross-link only if that hosting repository has none.
+   API call, a scraped web page, a guess) -- report it as a Gap and
+   cross-link the tracking issue for approved-but-unbuilt tooling (see the
+   Portability note above for whose tracking issue that is, and Step 2 for
+   where it was loaded from).
 4. **Report per item, never as one aggregate verdict.** Every checklist
    item's line states its own coverage level. Do not summarize with a
    single "audit passed" or "N/M checks green" headline -- with 2 of 8
@@ -78,14 +79,12 @@ it never changes branch protection, revokes a webhook, or rotates a key.
   or directory-marker fallback), repo identity.
 - **Per-item results:** one line per checklist item --
   `<item> -- <Covered|Partial|Gap> -- <what was actually run> -- <finding, or "gap: see the tracking issue">`.
-- **Gap summary:** count of Gap items out of total, each cross-linked to
-  the skill's own home repository's tracking issue for approved-but-unbuilt
-  tooling -- not the audited repository's issue tracker (see
-  `references/gitapex-cross-links.md` for gitapex's own target when this
-  is gitapex's copy of the skill).
+- **Gap summary:** count of Gap items out of total, each cross-linked per
+  Step 3.
 - **Next Move:** the concrete next action (e.g. fix a specific unpinned
-  action, or file the approved tooling that would close a named Gap as
-  its own tracked issue).
+  action, or file the approved tooling that would close a named Gap as a
+  child issue under the tracking issue named in Step 3 -- never a new,
+  unrelated standalone issue).
 
 ## Stop boundaries
 
@@ -99,10 +98,9 @@ it never changes branch protection, revokes a webhook, or rotates a key.
 - Never load both platform references in one run.
 - Never take a write action (change branch protection, revoke a webhook,
   rotate a deploy key) -- this skill only reports; those stay human
-  decisions. (When this is gitapex's own copy of the skill: see
-  `references/gitapex-cross-links.md` for gitapex's own instruction-file
-  citation for that rule.)
+  decisions (see `references/gitapex-cross-links.md`, loaded in Step 2,
+  for gitapex's own instruction-file citation for that rule).
 - Never write a second, divergent unpinned-actions detector -- reuse
-  `scripts/scan_unpinned_actions.py`. (When this is gitapex's own copy of
-  the skill: see `references/gitapex-cross-links.md` for the existing
-  drift-scan precedent its shape reuses.)
+  `scripts/scan_unpinned_actions.py` (see `references/gitapex-cross-links.md`,
+  loaded in Step 2, for the existing drift-scan precedent its shape
+  reuses).

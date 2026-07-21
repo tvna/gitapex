@@ -28,19 +28,12 @@ sides, only the coverage level and API differ.
 | 7 | Secret-scanning status (feature enabled, alert count) | **Gap.** No GitLab MCP server in this session. | GitLab's secret-detection/vulnerability-report API. |
 | 8 | Member/permission drift | **Gap.** No GitLab MCP server in this session. | GitLab's project-members API. |
 
-Every row above is a stated consumer of whatever approved tooling would
-close it, once GitLab support for that tooling actually exists --
-cross-link the tracking issue for approved-but-unbuilt tooling in the
-report for each. That tracking issue belongs to *this skill's own home
-repository*, never to the GitLab repository being audited (the two are
-unrelated: this checklist runs precisely because the audit target is a
-GitLab repo, which is never gitapex's own hosting platform -- gitapex's
-copy of this skill still cross-links gitapex's own issue regardless).
-If this copy of the skill lives in gitapex itself, see
-`references/gitapex-cross-links.md` for that tracking issue and its
-exact wording convention ("consumer of an unfiled candidate child
-issue," not "blocked on landing"); a copy vendored into a different
-repository substitutes that repository's own tracking issue instead.
+Every row above cross-links the tracking issue for approved-but-unbuilt
+tooling per SKILL.md Step 3 -- see the Portability note there for whose
+tracking issue that is, and `references/gitapex-cross-links.md` (loaded
+in Step 2, when this is gitapex's own copy) for gitapex's own target and
+its exact wording convention ("consumer of an unfiled candidate child
+issue," not "blocked on landing").
 
 ## Self-check
 

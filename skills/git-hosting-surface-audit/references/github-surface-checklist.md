@@ -20,17 +20,12 @@ round a Gap up because a workaround seems achievable in the moment.
 | 7 | Secret-scanning status (repo feature enabled, alert count) | **Partial.** `mcp__github__run_secret_scanning` scans *given content* for secrets -- useful as a defense-in-depth content check the audit can run itself on tracked files -- but does not report whether the repo's native secret-scanning *feature* is toggled on. State both halves explicitly: what the content scan found, and that feature-toggle status remains a Gap. | Run the content scan; report the feature-toggle status as a Gap, cross-linked to the tracking issue. |
 | 8 | Collaborator/permission drift | **Covered.** `mcp__github__list_repository_collaborators` (with an `affiliation` filter) returns exactly this. | Call the tool; report its result. |
 
-Every **Gap** row above is a stated consumer of whatever approved tooling
-would close it, once that tooling is actually built -- the tracking issue
-to cross-link belongs to *this skill's own home repository*, never to the
-repository being audited (the two are unrelated: even when the audit
-target above is someone else's GitHub project, gitapex's own copy of this
-skill still cross-links gitapex's own issue). If this copy of the skill
-lives in gitapex itself, see `references/gitapex-cross-links.md` for that
-tracking issue and the exact wording convention for the cross-link; a
-copy vendored into a different repository substitutes that repository's
-own tracking issue instead. The unpinned-actions script's borrowed shape
-(item 3) is also documented there.
+Every **Gap** row above cross-links the tracking issue for
+approved-but-unbuilt tooling per SKILL.md Step 3 -- see the Portability
+note there for whose tracking issue that is, and
+`references/gitapex-cross-links.md` (loaded in Step 2, when this is
+gitapex's own copy) for gitapex's own target and the unpinned-actions
+script's borrowed shape (item 3).
 
 ## Self-check
 
