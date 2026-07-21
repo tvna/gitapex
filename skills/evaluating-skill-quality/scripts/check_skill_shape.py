@@ -31,7 +31,32 @@ Checks (the canonical list -- the manual fallback is to apply these):
     either list resolves to an existing sibling skill directory
     (skill-dependencies-resolve); and a non-empty
     spec.skillDependencies.requires is incompatible with
-    spec.portability: Portable (requires-portability-compatible). Other
+    spec.portability: Portable (requires-portability-compatible).
+    spec.lifecycle, if present, is a mapping with only the keys
+    experimental/deprecated/stable/renamedFrom. experimental
+    (reason/trackingIssue required, since optional), deprecated
+    (reason/replacement required, since/removeAfter optional), and stable
+    (since required, compatibilityGuarantee optional) are each -- if
+    present -- a mapping of their own recognized scalar fields;
+    renamedFrom, if present, is a non-empty scalar string (not a
+    sub-block). since/removeAfter, if present, must be real calendar
+    dates in strict YYYY-MM-DD shape; trackingIssue, if present, an
+    anchored #123 or owner/repo#123 reference; compatibilityGuarantee, if
+    present, one of Alpha/Beta/GA (lifecycle-well-formed); and, when
+    deprecated.replacement is a non-empty string, it resolves to an
+    existing sibling skill directory, the same dangling-reference gate
+    spec.skillDependencies uses (lifecycle-deprecated-replacement-resolves).
+    experimental and deprecated are independent and optional -- neither
+    implies nor excludes the other -- but experimental and stable are
+    mutually exclusive: a non-empty spec.lifecycle.experimental cannot
+    coexist with a non-empty spec.lifecycle.stable
+    (experimental-stable-compatible). renamedFrom is deliberately NOT
+    resolved against sibling directories, unlike deprecated.replacement
+    -- it names the skill's own former, now-nonexistent directory name
+    (a git mv target), backward-pointing on the surviving skill rather
+    than a forward-pointing tombstone on a directory that no longer
+    exists. No skill's runtime procedure may read or branch on any part
+    of spec.lifecycle (the sidecar's behavior-neutrality invariant). Other
     ungated sidecar fields (e.g. spec.evalStatus) are parsed into the spec
     map by _parse_manifest only if written as a single inline scalar; a
     nested/block-shaped field (e.g. evalStatus's documented baseline:/lift:
@@ -109,6 +134,7 @@ when no readable SKILL.md is found.
 from __future__ import annotations
 
 import argparse
+import datetime
 import json
 import os.path
 import re
@@ -171,6 +197,73 @@ SKILL_DEPENDENCY_SUBKEYS = ("requires", "relatedTo")
 SKILL_DEP_SUBKEY_RE = re.compile(r"^[ ]{4}(requires|relatedTo):\s*(.*)$")
 SKILL_DEP_UNKNOWN_KEY_RE = re.compile(r"^[ ]{4}([A-Za-z0-9_-]+):")
 SKILL_DEP_LIST_ITEM_RE = re.compile(r"^[ ]{4,}-\s*(.*)$")
+
+# spec.lifecycle's three recognized sub-blocks -- "experimental" (entry
+# side: not yet proven, mirrors Rust's #[unstable(feature, issue)],
+# Python's provisional/PendingDeprecationWarning APIs, Go's
+# GOEXPERIMENT-gated features, Kubernetes' alpha/beta feature gates),
+# "deprecated" (exit side: superseded, mirrors Rust's
+# #[deprecated(since, note)], Go's "// Deprecated:" doc comment, Python's
+# warnings.deprecated/PEP 702, Kubernetes' API deprecation policy), and
+# "stable" (a graduation record, mirrors Rust's
+# #[stable(feature, since)]). experimental and deprecated are independent
+# -- neither implies nor excludes the other. experimental and stable ARE
+# mutually exclusive, though (see EXPERIMENTAL_STABLE_RULE below): "not
+# yet graduated" and "already graduated on some date" cannot both be
+# true, unlike experimental+deprecated which is merely unusual, not
+# contradictory. A skill declaring none of the three is implicitly
+# Stable (every skill in this repository today). One nesting level
+# deeper than spec.skillDependencies: subkeys sit at 4 spaces (same as
+# requires/relatedTo), but each subkey opens ANOTHER nested block of
+# scalar fields at 6 spaces, rather than a list.
+LIFECYCLE_SUBKEYS = ("experimental", "deprecated", "stable")
+LIFECYCLE_FIELDS = {
+    "experimental": ("reason", "trackingIssue", "since"),
+    "deprecated": ("reason", "replacement", "since", "removeAfter"),
+    "stable": ("since", "compatibilityGuarantee"),
+}
+LIFECYCLE_REQUIRED_FIELDS = {
+    "experimental": ("reason", "trackingIssue"),
+    "deprecated": ("reason", "replacement"),
+    "stable": ("since",),
+}
+# Kubernetes' alpha/beta/GA API-stability tiers, borrowed as spec.
+# lifecycle.stable's optional compatibilityGuarantee enum -- shape-gated
+# only; no rule ties a sibling's spec.skillDependencies.requires to this
+# value (that would be new cross-skill coupling beyond what was asked).
+COMPATIBILITY_GUARANTEE_LEVELS = ("Alpha", "Beta", "GA")
+LIFECYCLE_SUBKEY_RE = re.compile(r"^[ ]{4}(experimental|deprecated|stable):\s*(.*)$")
+# spec.lifecycle.renamedFrom is different in kind from the three
+# sub-blocks above: a plain scalar directly under lifecycle: (like
+# metadata.name under metadata:), never opening a nested block. Backward-
+# pointing by deliberate choice -- it lives on the *surviving* (new)
+# skill's sidecar, naming the old, now-nonexistent directory, because
+# `git mv` deletes the old directory itself, leaving nowhere to host a
+# forward-pointing renamedTo/tombstone sidecar. Free-form and NOT
+# resolved against sibling directories (unlike deprecated.replacement) --
+# the whole point is that the old name is expected to no longer exist.
+LIFECYCLE_SCALAR_KEYS = ("renamedFrom",)
+LIFECYCLE_SCALAR_KEY_RE = re.compile(r"^[ ]{4}(renamedFrom):\s*(.*)$")
+LIFECYCLE_UNKNOWN_SUBKEY_RE = re.compile(r"^[ ]{4}([A-Za-z0-9_-]+):")
+# Matches ANY key at this indent, recognized or not -- the handler tells
+# them apart by membership in LIFECYCLE_FIELDS[subkey], the same "match
+# broad, filter narrow" approach SKILL_DEP_UNKNOWN_KEY_RE's sibling
+# SKILL_DEP_SUBKEY_RE takes one level up.
+LIFECYCLE_FIELD_RE = re.compile(r"^[ ]{6}([A-Za-z0-9_-]+):\s*(.*)$")
+# Strict calendar-date shape for spec.lifecycle's since/removeAfter
+# fields: YYYY-MM-DD only. Real-date validity (rejecting e.g. 2026-02-30)
+# is checked separately via datetime.date.fromisoformat in
+# _valid_lifecycle_date -- this regex only gates the shape first, so that
+# lenient ISO-variant parsing in Python 3.11+ never gets a chance to
+# accept an off-shape string.
+LIFECYCLE_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+# A GitHub issue/PR reference anchoring the whole string (unlike
+# ISSUE_CITATION_RE above, which scans for the same shape inside running
+# prose): an optional "owner/repo" prefix, then "#" and a digit run.
+# Shape-only -- never resolved against a live GitHub API call, since this
+# checker is offline/read-only by design.
+LIFECYCLE_ISSUE_REF_RE = re.compile(
+    r"^(?:[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*)?#\d+$")
 
 TAG_RE = re.compile(r"</?[A-Za-z][^>]*>")
 NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
@@ -315,6 +408,31 @@ def _unquote(value: str) -> str:
     return value
 
 
+def _strip_bare_comment(value: str) -> str:
+    """Return ``value`` unchanged, unless it is an UNQUOTED value that
+    starts with ``#`` -- real YAML never allows an unquoted scalar to
+    start with ``#`` (that always opens a comment, making the actual
+    value null/absent), so such a ``value`` must read as empty here too.
+
+    This parser otherwise deliberately does not strip inline comments
+    (see ``_parse_manifest``'s docstring: trailing ``# comment`` text
+    after a real value is read as part of that value, "safe" because it
+    fails closed against the expected enum/literal). That reasoning does
+    NOT hold when the field's own valid shape can itself start with
+    ``#`` -- e.g. ``spec.lifecycle.experimental.trackingIssue: #123``
+    (unquoted) is real YAML for "trackingIssue is null", not the literal
+    string ``"#123"``, yet ``"#123"`` is exactly this field's valid
+    shape, so the old fails-closed argument fails open here instead.
+    Used only by the three ``spec.lifecycle`` value-extraction sites
+    (block-open decision, leaf fields, ``renamedFrom``) -- not applied
+    to every other sidecar scalar, since none of their valid shapes start
+    with ``#`` the way an issue reference does, and rewriting the whole
+    parser's comment handling is a larger, separate change than this
+    field's specific collision.
+    """
+    return "" if value.startswith("#") else value
+
+
 @dataclass(frozen=True)
 class ManifestParse:
     """Result of ``_parse_manifest``: the parsed top-level mapping plus any
@@ -342,12 +460,30 @@ class ManifestParse:
     spec.skillDependencies that is not ``requires`` or ``relatedTo``
     (trimmed line, e.g. "extra: foo"). Both empty when the field is absent
     or parsed cleanly.
+
+    ``unknown_lifecycle_keys`` and ``unknown_lifecycle_fields`` are
+    spec.lifecycle's equivalents, one nesting level deeper again:
+    ``unknown_lifecycle_keys`` holds each key found directly under
+    spec.lifecycle that is not ``experimental``, ``deprecated``,
+    ``stable``, or ``renamedFrom`` (trimmed line); ``unknown_lifecycle_fields``
+    holds each key found inside any of the three block sub-keys
+    (``experimental``/``deprecated``/``stable``) that is not one of its
+    own recognized fields (e.g. "extra: foo" under experimental). Both
+    empty when the field is absent or parsed cleanly. There is no
+    malformed-item channel for spec.lifecycle the way
+    spec.references/spec.skillDependencies have one for list items --
+    every leaf under spec.lifecycle is a plain scalar, so a wrong-type
+    value is simply stored as the raw string by the field parser and
+    fails the downstream well-formed check on shape, with nothing that
+    needs a separate parse-time detection channel.
     """
     root: dict[str, object]
     malformed_lines: list[str]
     malformed_reference_items: list[str]
     malformed_skill_dependency_items: list[str]
     unknown_skill_dependency_keys: list[str]
+    unknown_lifecycle_keys: list[str]
+    unknown_lifecycle_fields: list[str]
 
 
 def _parse_manifest(text: str) -> ManifestParse:
@@ -375,13 +511,52 @@ def _parse_manifest(text: str) -> ManifestParse:
       instead of being silently skipped, since an unrecognized key here is
       a real shape defect the checker is expected to catch, not reserved
       space.
+    - spec.lifecycle (and only that key, and only directly under spec) is
+      read as a mapping with exactly three recognized block sub-keys --
+      ``experimental``, ``deprecated``, ``stable`` -- plus one recognized
+      plain scalar key, ``renamedFrom``. Each block sub-key, at exactly
+      4-space indent, is an empty value opening a nested block of scalar
+      fields at exactly 6-space indent (``reason``/``trackingIssue``/
+      ``since`` for ``experimental``; ``reason``/``replacement``/
+      ``since``/``removeAfter`` for ``deprecated``; ``since``/
+      ``compatibilityGuarantee`` for ``stable``). ``renamedFrom``, also
+      at 4-space indent, takes an inline scalar value directly instead of
+      opening a block -- structurally like ``metadata.name`` under
+      ``metadata:``, not like the other three. One nesting level deeper
+      than spec.skillDependencies, but with scalar leaves instead of a
+      list -- there is no list-item shape inside spec.lifecycle at all. A
+      key directly under spec.lifecycle other than one of these four is
+      collected into ``ManifestParse.unknown_lifecycle_keys``; a key
+      inside any of the three block sub-keys that is not one of its own
+      recognized fields is collected into
+      ``ManifestParse.unknown_lifecycle_fields`` -- both instead of being
+      silently skipped, for the same reason
+      ``unknown_skill_dependency_keys`` exists. A block sub-key header
+      written as an inline scalar instead of opening a block (e.g.
+      ``experimental: true``) is stored as that raw scalar under its own
+      key, exactly as spec.skillDependencies' non-list scalar fallback
+      works, so the checker layer reports it as the wrong type rather
+      than silently dropping it -- and symmetrically, ``renamedFrom``
+      given a block instead of a scalar (e.g. nested children under
+      ``renamedFrom:``) is detected one line later (see
+      ``lifecycle_scalar_pending`` in the parsing loop below) and stored
+      as an empty mapping, so it fails the same way in reverse.
 
     Every other nested map or list (e.g. spec.evalStatus) is still
     deliberately skipped, exactly as before: skipping keeps this
     stdlib-only with no YAML dependency. Inline '# comment' text after a
     value on the same line is not stripped -- it is read as part of the
     value, which is safe (fails closed against the expected enum/literal)
-    but is not a supported way to annotate a sidecar field.
+    but is not a supported way to annotate a sidecar field. Exception:
+    the three ``spec.lifecycle`` value-extraction sites strip a value
+    that is NOTHING BUT a comment (starts with ``#`` unquoted) down to
+    empty via ``_strip_bare_comment``, since real YAML never allows an
+    unquoted scalar to start with ``#`` (it always opens a comment there)
+    -- the general "fails closed" reasoning above does not hold when a
+    field's own valid shape can itself start with ``#``, as
+    ``experimental.trackingIssue``'s ``#123``/``owner/repo#123`` shape
+    does; an unquoted ``trackingIssue: #123`` must read as absent, not as
+    the literal string ``"#123"`` a quoted value would give.
 
     A top-level (column-0) line that is not blank, not a '#' comment, not a
     YAML document marker ('---' or '...'), and does not match the top-level
@@ -415,6 +590,20 @@ def _parse_manifest(text: str) -> ManifestParse:
     dep_list_indent: int | None = None
     malformed_deps: list[str] = []
     unknown_dep_keys: list[str] = []
+    in_lifecycle = False
+    lifecycle: dict[str, object] = {}
+    lifecycle_subkey: str | None = None
+    lifecycle_field_buffer: dict[str, object] = {}
+    unknown_lifecycle_keys: list[str] = []
+    unknown_lifecycle_fields: list[str] = []
+    # Set when a scalar-only lifecycle key (currently only renamedFrom) is
+    # seen with a blank/comment-only value -- deferred one line, since that
+    # shape is ambiguous until the next line is known: it is either a
+    # legitimately absent declaration (next line dedents or is a sibling),
+    # or the start of a wrongly block-shaped value (next line is more
+    # deeply indented than spec.lifecycle's own 4-space level). See the
+    # "if lifecycle_scalar_pending is not None:" handling below.
+    lifecycle_scalar_pending: str | None = None
 
     def _finalize_refs() -> None:
         nonlocal collecting_refs, refs_indent
@@ -438,6 +627,21 @@ def _parse_manifest(text: str) -> ManifestParse:
             current["skillDependencies"] = skill_deps
         in_skill_deps = False
         skill_deps = {}
+
+    def _finalize_lifecycle_subkey() -> None:
+        nonlocal lifecycle_subkey, lifecycle_field_buffer
+        if lifecycle_subkey is not None:
+            lifecycle[lifecycle_subkey] = lifecycle_field_buffer
+        lifecycle_subkey = None
+        lifecycle_field_buffer = {}
+
+    def _finalize_lifecycle() -> None:
+        nonlocal in_lifecycle, lifecycle
+        _finalize_lifecycle_subkey()
+        if in_lifecycle and current is not None:
+            current["lifecycle"] = lifecycle
+        in_lifecycle = False
+        lifecycle = {}
 
     for raw in text.splitlines():
         line = raw.rstrip()
@@ -520,6 +724,90 @@ def _parse_manifest(text: str) -> ManifestParse:
             # here. Finalize it and fall through to process this line
             # normally below.
             _finalize_skill_deps()
+        if lifecycle_subkey is not None:
+            field = LIFECYCLE_FIELD_RE.match(line)
+            if field:
+                key, value = field.group(1), _strip_bare_comment(field.group(2).strip())
+                if key in LIFECYCLE_FIELDS.get(lifecycle_subkey, ()):
+                    if value:
+                        lifecycle_field_buffer[key] = _unquote(value)
+                else:
+                    unknown_lifecycle_fields.append(line.strip())
+                continue
+            indent = len(line) - len(line.lstrip(" "))
+            if line[:1] in (" ", "\t") and indent >= 6:
+                # Stray content deeper inside the sub-block that is not a
+                # recognized field line -- skip silently, consistent with
+                # "indented lines are never malformed" except the
+                # explicit unknown_lifecycle_fields channel above.
+                continue
+            # Dedented below the sub-block's own indent: this
+            # experimental/deprecated block ends here. Finalize it and
+            # fall through to process this line normally below (it may be
+            # the other sub-block's header, or a dedent out of lifecycle
+            # entirely).
+            _finalize_lifecycle_subkey()
+        if lifecycle_scalar_pending is not None:
+            indent = len(line) - len(line.lstrip(" "))
+            if line[:1] in (" ", "\t") and indent > 4:
+                # A block followed a scalar-only key (e.g. renamedFrom
+                # given nested children instead of a plain value) -- the
+                # wrong type, not the documented plain scalar. Store a
+                # non-string sentinel so the checker layer reports it as
+                # such; deeper sibling lines of this same mistaken block
+                # are then silently absorbed by the existing "stray
+                # content" fallback below (their own internal shape does
+                # not matter -- the type error is already captured).
+                lifecycle[lifecycle_scalar_pending] = {}
+                lifecycle_scalar_pending = None
+                continue
+            # Not more deeply indented: the key really was declared blank
+            # (or comment-only) with nothing following -- matches this
+            # parser's "blank scalar assignment means not declared"
+            # convention. Fall through to process the current line
+            # normally below.
+            lifecycle_scalar_pending = None
+        if in_lifecycle:
+            subkey = LIFECYCLE_SUBKEY_RE.match(line)
+            if subkey:
+                key, value = subkey.group(1), _strip_bare_comment(subkey.group(2).strip())
+                if value:
+                    # Not opening a block -- a bare scalar written where a
+                    # mapping is expected (e.g. "experimental: true").
+                    # Store the raw scalar under the subkey itself so the
+                    # checker layer reports it as the wrong type, exactly
+                    # as spec.skillDependencies' non-list scalar fallback
+                    # works.
+                    lifecycle[key] = value
+                else:
+                    lifecycle_subkey = key
+                    lifecycle_field_buffer = {}
+                continue
+            scalar = LIFECYCLE_SCALAR_KEY_RE.match(line)
+            if scalar:
+                key, value = scalar.group(1), _strip_bare_comment(scalar.group(2).strip())
+                if value:
+                    lifecycle[key] = _unquote(value)
+                else:
+                    # Blank (or comment-only) value: ambiguous until the
+                    # next line is seen -- see the
+                    # "lifecycle_scalar_pending is not None" handling above.
+                    lifecycle_scalar_pending = key
+                continue
+            unknown = LIFECYCLE_UNKNOWN_SUBKEY_RE.match(line)
+            if unknown:
+                unknown_lifecycle_keys.append(line.strip())
+                continue
+            indent = len(line) - len(line.lstrip(" "))
+            if line[:1] in (" ", "\t") and indent >= 4:
+                # Stray content deeper inside spec.lifecycle that is not a
+                # recognized sub-block header -- skip silently, same
+                # reserved-field treatment as spec.skillDependencies.
+                continue
+            # Dedented below spec.lifecycle's own indent: the block ends
+            # here. Finalize it and fall through to process this line
+            # normally below.
+            _finalize_lifecycle()
         if line[:1] in (" ", "\t"):
             # Indented: nested/list content this parser does not interpret,
             # except spec.references and spec.skillDependencies (handled
@@ -538,6 +826,9 @@ def _parse_manifest(text: str) -> ManifestParse:
                 elif key == "skillDependencies" and current is root.get("spec") and not value:
                     in_skill_deps = True
                     skill_deps = {}
+                elif key == "lifecycle" and current is root.get("spec") and not value:
+                    in_lifecycle = True
+                    lifecycle = {}
                 elif value:
                     current[key] = _unquote(value)
             continue
@@ -557,10 +848,13 @@ def _parse_manifest(text: str) -> ManifestParse:
         malformed.append(line.strip())
     _finalize_refs()
     _finalize_skill_deps()
+    _finalize_lifecycle()
     return ManifestParse(root=root, malformed_lines=malformed,
                           malformed_reference_items=malformed_refs,
                           malformed_skill_dependency_items=malformed_deps,
-                          unknown_skill_dependency_keys=unknown_dep_keys)
+                          unknown_skill_dependency_keys=unknown_dep_keys,
+                          unknown_lifecycle_keys=unknown_lifecycle_keys,
+                          unknown_lifecycle_fields=unknown_lifecycle_fields)
 
 
 def _body_after_frontmatter(text: str) -> list[str]:
@@ -897,6 +1191,8 @@ def check_shape(target: Path) -> list[CheckResult]:
             malformed_reference_items = parsed.malformed_reference_items
             malformed_skill_dependency_items = parsed.malformed_skill_dependency_items
             unknown_skill_dependency_keys = parsed.unknown_skill_dependency_keys
+            unknown_lifecycle_keys = parsed.unknown_lifecycle_keys
+            unknown_lifecycle_fields = parsed.unknown_lifecycle_fields
             read_error: str | None = None
         except (OSError, UnicodeDecodeError) as exc:
             manifest = None
@@ -904,6 +1200,8 @@ def check_shape(target: Path) -> list[CheckResult]:
             malformed_reference_items = []
             malformed_skill_dependency_items = []
             unknown_skill_dependency_keys = []
+            unknown_lifecycle_keys = []
+            unknown_lifecycle_fields = []
             read_error = type(exc).__name__
 
         if manifest is None:
@@ -943,6 +1241,25 @@ def check_shape(target: Path) -> list[CheckResult]:
                 "requires-portability-compatible", False,
                 "a non-empty spec.skillDependencies.requires is incompatible "
                 "with spec.portability: Portable", evidence))
+            results.append(CheckResult(
+                "lifecycle-well-formed", False,
+                "spec.lifecycle, if present, is a mapping with only "
+                "experimental/deprecated/stable/renamedFrom keys, each "
+                "block sub-key (experimental/deprecated/stable) -- if "
+                "present -- a mapping of its own recognized scalar fields "
+                "with required fields non-empty and since/removeAfter, if "
+                "present, real YYYY-MM-DD dates, and renamedFrom, if "
+                "present, a non-empty scalar string", evidence))
+            results.append(CheckResult(
+                "lifecycle-deprecated-replacement-resolves", False,
+                "spec.lifecycle.deprecated.replacement, if a non-empty "
+                "string, resolves to an existing sibling skill directory",
+                evidence))
+            results.append(CheckResult(
+                "experimental-stable-compatible", False,
+                "spec.lifecycle.experimental and spec.lifecycle.stable "
+                "cannot both be present -- a skill cannot be both "
+                "not-yet-graduated and already graduated", evidence))
             # Deliberately not the body-marker fallback: a present-but-broken
             # sidecar is authoritative-and-failing, not absent. Running the
             # scan (rather than skipping it) lands extra findings on a skill
@@ -1037,6 +1354,9 @@ def check_shape(target: Path) -> list[CheckResult]:
                 spec_is_mapping, spec_raw, spec,
                 malformed_skill_dependency_items, unknown_skill_dependency_keys,
                 skill_dir, portability))
+            results.extend(_lifecycle_checks(
+                spec_is_mapping, spec_raw, spec,
+                unknown_lifecycle_keys, unknown_lifecycle_fields, skill_dir))
             if portability in PORTABILITY_LEVELS:
                 sidecar_portability = SidecarPortability(
                     state="usable", level=portability)
@@ -1244,6 +1564,190 @@ def _skill_dependency_checks(spec_is_mapping: bool, spec_raw: object,
         "ok" if not contradiction
         else f"non-empty requires with portability={portability!r}"))
 
+    return results
+
+
+def _valid_lifecycle_date(value: object) -> bool:
+    """Whether ``value`` is a real calendar date in strict YYYY-MM-DD
+    shape, for spec.lifecycle's since/removeAfter fields.
+
+    Regex first (rejects any non-dashed or wrong-width shape outright),
+    then ``datetime.date.fromisoformat`` (rejects a shape-valid but
+    non-existent date, e.g. "2026-13-45" or "2026-02-30", that a
+    regex-only check would silently accept). Gating the regex first also
+    blocks ``fromisoformat``'s lenient Python 3.11+ ISO-variant parsing
+    from accepting an off-shape string that happens to still be valid
+    ISO 8601.
+    """
+    if not (isinstance(value, str) and LIFECYCLE_DATE_RE.match(value)):
+        return False
+    try:
+        datetime.date.fromisoformat(value)
+    except ValueError:
+        return False
+    return True
+
+
+def _valid_tracking_issue(value: object) -> bool:
+    """Shape-only check for spec.lifecycle.experimental.trackingIssue: an
+    anchored ``#123`` or ``owner/repo#123``. Never resolved against a
+    live GitHub API call -- this checker is offline/read-only by design.
+    """
+    return isinstance(value, str) and bool(LIFECYCLE_ISSUE_REF_RE.match(value))
+
+
+def _lifecycle_checks(spec_is_mapping: bool, spec_raw: object,
+                       spec: dict[str, object],
+                       unknown_keys: list[str],
+                       unknown_fields: list[str],
+                       skill_dir: Path) -> list[CheckResult]:
+    """The three spec.lifecycle checks: ``lifecycle-well-formed`` (shape),
+    ``lifecycle-deprecated-replacement-resolves`` (the dangling-reference
+    gate for ``deprecated.replacement``, mirroring
+    ``skill-dependencies-resolve``), and
+    ``experimental-stable-compatible`` (the one cross-field rule: a skill
+    cannot be simultaneously "not yet graduated" and "already graduated on
+    some date").
+
+    ``experimental``, ``deprecated``, and ``stable`` are independent,
+    optional sub-blocks; ``renamedFrom`` is a plain scalar directly under
+    ``spec.lifecycle``, never a sub-block. ``experimental`` and
+    ``deprecated`` do not exclude each other (an experimental skill can
+    legitimately be superseded by a different experiment) -- but
+    ``experimental`` and ``stable`` are a real logical contradiction, so
+    unlike the ``deprecated`` pairing, that combination is gated. Mirrors
+    the ``_skill_dependency_checks`` cascade: shape is checked first,
+    since a badly-shaped field has nothing sensible to resolve or
+    contradict against -- every early-return branch below reports both
+    ``lifecycle-deprecated-replacement-resolves`` and
+    ``experimental-stable-compatible`` as "nothing to check" rather than
+    silently passing on data that was never actually a mapping.
+    """
+    well_formed_rule = (
+        "spec.lifecycle, if present, is a mapping with only "
+        "experimental/deprecated/stable/renamedFrom keys. experimental "
+        "(reason/trackingIssue required, since optional), deprecated "
+        "(reason/replacement required, since/removeAfter optional), and "
+        "stable (since required, compatibilityGuarantee optional) are "
+        "each -- if present -- a mapping of their own recognized scalar "
+        "fields; renamedFrom, if present, is a non-empty scalar string. "
+        "since/removeAfter, if present, must be real YYYY-MM-DD dates; "
+        "trackingIssue, if present, an anchored #123 or owner/repo#123 "
+        "reference; compatibilityGuarantee, if present, one of "
+        f"{COMPATIBILITY_GUARANTEE_LEVELS}")
+    resolve_rule = (
+        "spec.lifecycle.deprecated.replacement, if a non-empty string, "
+        "resolves to an existing sibling skill directory")
+    contradiction_rule = (
+        "spec.lifecycle.experimental and spec.lifecycle.stable cannot "
+        "both be present -- a skill cannot be both not-yet-graduated and "
+        "already graduated")
+
+    if not spec_is_mapping:
+        evidence = f"spec is not a mapping: {spec_raw!r}"
+        return [
+            CheckResult("lifecycle-well-formed", False, well_formed_rule, evidence),
+            CheckResult("lifecycle-deprecated-replacement-resolves", True,
+                        resolve_rule, "nothing to check (spec is not a mapping)"),
+            CheckResult("experimental-stable-compatible", True,
+                        contradiction_rule, "nothing to check (spec is not a mapping)"),
+        ]
+
+    lifecycle = spec.get("lifecycle")
+    if lifecycle is None:
+        return [
+            CheckResult("lifecycle-well-formed", True, well_formed_rule,
+                        "not declared (optional)"),
+            CheckResult("lifecycle-deprecated-replacement-resolves", True,
+                        resolve_rule, "not declared (optional)"),
+            CheckResult("experimental-stable-compatible", True,
+                        contradiction_rule, "not declared (optional)"),
+        ]
+
+    if not isinstance(lifecycle, dict):
+        evidence = f"not a mapping: {lifecycle!r}"
+        return [
+            CheckResult("lifecycle-well-formed", False, well_formed_rule, evidence),
+            CheckResult("lifecycle-deprecated-replacement-resolves", True,
+                        resolve_rule, "nothing to check (not a mapping)"),
+            CheckResult("experimental-stable-compatible", True,
+                        contradiction_rule, "nothing to check (not a mapping)"),
+        ]
+
+    problems: list[str] = []
+    if unknown_keys:
+        count = len(unknown_keys)
+        problems.append(f"{count} unknown key{'' if count == 1 else 's'}: "
+                         f"{unknown_keys[0]!r}")
+    if unknown_fields:
+        count = len(unknown_fields)
+        problems.append(f"{count} unknown field{'' if count == 1 else 's'}: "
+                         f"{unknown_fields[0]!r}")
+
+    sub_blocks: dict[str, dict[str, object]] = {}
+    for key in LIFECYCLE_SUBKEYS:
+        if key not in lifecycle:
+            continue
+        block = lifecycle[key]
+        if not isinstance(block, dict):
+            problems.append(f"{key} is not a mapping: {block!r}")
+            continue
+        sub_blocks[key] = block
+        for field in LIFECYCLE_REQUIRED_FIELDS[key]:
+            val = block.get(field)
+            if not (isinstance(val, str) and val.strip()):
+                problems.append(
+                    f"{key}.{field} is missing or not a non-empty string: {val!r}")
+        for field in ("since", "removeAfter"):
+            if field in block and not _valid_lifecycle_date(block[field]):
+                problems.append(
+                    f"{key}.{field} is not a YYYY-MM-DD date: {block[field]!r}")
+        if key == "experimental" and "trackingIssue" in block \
+                and not _valid_tracking_issue(block["trackingIssue"]):
+            problems.append(
+                f"experimental.trackingIssue is not a #123 or owner/repo#123 "
+                f"reference: {block['trackingIssue']!r}")
+        if key == "stable" and "compatibilityGuarantee" in block \
+                and block["compatibilityGuarantee"] not in COMPATIBILITY_GUARANTEE_LEVELS:
+            problems.append(
+                f"stable.compatibilityGuarantee is not one of "
+                f"{COMPATIBILITY_GUARANTEE_LEVELS}: "
+                f"{block['compatibilityGuarantee']!r}")
+
+    if "renamedFrom" in lifecycle:
+        renamed_from = lifecycle["renamedFrom"]
+        if not (isinstance(renamed_from, str) and renamed_from.strip()):
+            problems.append(
+                f"renamedFrom is not a non-empty string: {renamed_from!r}")
+
+    if problems:
+        results = [CheckResult("lifecycle-well-formed", False, well_formed_rule,
+                                "; ".join(problems))]
+    else:
+        declared = [k for k in LIFECYCLE_SUBKEYS if k in sub_blocks]
+        if "renamedFrom" in lifecycle:
+            declared.append("renamedFrom")
+        evidence = f"{', '.join(declared)} declared" if declared else "no keys declared"
+        results = [CheckResult("lifecycle-well-formed", True, well_formed_rule,
+                                evidence)]
+
+    deprecated = sub_blocks.get("deprecated")
+    replacement = deprecated.get("replacement") if deprecated else None
+    if isinstance(replacement, str) and replacement.strip():
+        exists = (skill_dir.parent / replacement).is_dir()
+        results.append(CheckResult(
+            "lifecycle-deprecated-replacement-resolves", exists, resolve_rule,
+            "resolves" if exists else f"dangling: {replacement!r}"))
+    else:
+        results.append(CheckResult(
+            "lifecycle-deprecated-replacement-resolves", True, resolve_rule,
+            "nothing to check (replacement missing or invalid)"))
+
+    contradiction = "experimental" in sub_blocks and "stable" in sub_blocks
+    results.append(CheckResult(
+        "experimental-stable-compatible", not contradiction, contradiction_rule,
+        "ok" if not contradiction
+        else "both experimental and stable are present"))
     return results
 
 

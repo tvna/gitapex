@@ -32,6 +32,7 @@ skill's own folder.
   - [Tool-capability verification](#tool-capability-verification)
 - [Portability level](#portability-level)
 - [Capability assumption](#capability-assumption)
+- [Lifecycle](#lifecycle)
 - [1. Discovery -- name and description](#1-discovery----name-and-description)
 - [2. Conciseness](#2-conciseness)
 - [3. Degree of freedom](#3-degree-of-freedom)
@@ -637,6 +638,72 @@ itself contradicts.
     bullet already rewards as a dimension-5 finding too; each dimension
     keeps its own question (2: is the body concise; 5: is the split real
     and reachable).
+
+## Lifecycle
+
+Unlike Portability level and Capability assumption, this field has no
+per-dimension grading effect -- declaring `spec.lifecycle` does not
+change how any of the nine dimensions grade. It exists as structured,
+checkable bookkeeping for a skill not yet proven, or superseded by
+another, gated with the same rigor as the two grading-affecting
+declarations above because a wrong or dangling lifecycle record is
+actively misleading to a maintainer deciding whether a skill is safe to
+adopt or remove.
+
+Three independent, optional sub-blocks plus one plain scalar under
+`spec.lifecycle`:
+
+- **`experimental`** -- the entry side: a skill not yet proven. `reason`
+  and `trackingIssue` are required non-empty strings once this block is
+  declared at all; `since`, if present, must be a real calendar date in
+  strict `YYYY-MM-DD` shape. `trackingIssue` must be an anchored `#123`
+  or `owner/repo#123` reference (shape-only -- never resolved against a
+  live GitHub API call).
+- **`deprecated`** -- the exit side: a skill superseded by another or
+  slated for removal. `reason` and `replacement` are required non-empty
+  strings once this block is declared at all. `replacement` must name an
+  existing sibling skill directory -- enforced by
+  `lifecycle-deprecated-replacement-resolves`, the same
+  dangling-reference gate `spec.skillDependencies.requires`/`relatedTo`
+  already use. `since`/`removeAfter`, if present, must be real calendar
+  dates in strict `YYYY-MM-DD` shape. `removeAfter` is documentation
+  only: no CI step in this repository deletes a skill once that date
+  passes.
+- **`stable`** -- a graduation record, mirroring Rust's
+  `#[stable(feature, since)]`. `since` is a required non-empty string
+  once this block is declared at all, and must be a real calendar date
+  in strict `YYYY-MM-DD` shape. `compatibilityGuarantee`, if present,
+  must be one of `Alpha`/`Beta`/`GA` -- Kubernetes' API-stability tiers,
+  borrowed as a shape-gated enum only; no rule ties this value to a
+  sibling's `spec.skillDependencies.requires` (that would be new
+  cross-skill coupling beyond what this field declares).
+- **`renamedFrom`** -- a plain scalar (not a sub-block) naming this same
+  skill's former, now-nonexistent directory name. Backward-pointing by
+  deliberate design: it lives on the *surviving* (renamed-to) skill's
+  own sidecar, not a forward-pointing record on the old directory, since
+  a `git mv` deletes that directory and leaves nowhere to host one.
+  Unlike `deprecated.replacement`, this value is **not** resolved
+  against sibling directories -- the whole point is that the named
+  directory is expected to no longer exist. A blank `renamedFrom:`
+  assignment reads as "not declared", the same convention every other
+  scalar in this sidecar follows; once declared, it must be a non-empty
+  string.
+- **`experimental` and `stable` are mutually exclusive** -- enforced by
+  `experimental-stable-compatible`, a cross-field check mirroring
+  `requires-portability-compatible`'s independence from the shape check
+  it accompanies (evaluated regardless of whether `lifecycle-well-formed`
+  itself passed). "Not yet graduated" and "already graduated on some
+  date" cannot both be true. `experimental` and `deprecated` are NOT
+  mutually exclusive, by contrast -- an experimental skill can
+  legitimately be superseded by a different experiment, so that pairing
+  stays ungated.
+- A present-but-incomplete block (missing a required field), an unknown
+  key directly under `spec.lifecycle`, or an unknown field inside any
+  sub-block fails `lifecycle-well-formed`, the same treatment
+  `spec.skillDependencies` gives an unrecognized sibling key.
+- Per the sidecar's own behavior-neutrality invariant, `spec.lifecycle`
+  is metadata only: no skill's own runtime procedure may read or branch
+  on any part of it.
 
 ## 1. Discovery -- name and description
 
