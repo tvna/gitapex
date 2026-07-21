@@ -5,9 +5,9 @@ description: Use when auditing a GitHub or GitLab repository's hosting-platform 
 
 # Git Hosting Surface Audit
 
-**Portability: Mixed.** The procedure, the coverage-honesty rule, and
-both platform checklists work identically no matter which GitHub/GitLab
-repo is being *audited*. The one exception: the Gap cross-link target
+The procedure, the coverage-honesty rule, and both platform checklists
+work identically no matter which GitHub/GitLab repo is being *audited*.
+The one exception: the Gap cross-link target
 depends on where *this copy of the skill's own files* live, never on
 which repository is under audit -- gitapex's own copy always cross-links
 gitapex's own tracking issue, even when auditing a target that has
