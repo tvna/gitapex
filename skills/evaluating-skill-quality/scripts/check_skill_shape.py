@@ -324,13 +324,10 @@ def _parse_manifest(text: str) -> ManifestParse:
       ``requires`` and ``relatedTo`` (see the design spec's Sub-project D).
       Each subkey, at exactly 4-space indent, is either an inline empty
       list (``requires: []``) or an empty value opening a block list of
-      "- <value>" items at 5 or more spaces indent -- one nesting level
-      deeper than spec.references' own items, and with the same per-item
-      shape rules (mapping-like-item and indent-consistency detection).
-      Unlike spec.references, this parser accepts only one indent width
-      per level rather than tolerating drift, since every real sidecar is
-      authored fresh in the same change that adds this parser, not
-      migrated from years of pre-existing files. A key inside
+      "- <value>" items at 4 or more spaces indent -- the same depth as
+      the subkey's own line, or deeper, with the same per-item shape rules
+      (mapping-like-item and indent-consistency detection) and the same
+      indent-drift tolerance as spec.references' items. A key inside
       spec.skillDependencies other than ``requires``/``relatedTo`` is
       collected into ``ManifestParse.unknown_skill_dependency_keys``
       instead of being silently skipped, since an unrecognized key here is
