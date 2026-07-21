@@ -1294,6 +1294,25 @@ def test_skill_dependencies_dangling_requires_fails_resolve(tmp_path):
     assert css.main([str(d)]) == 1
 
 
+def test_skill_dependencies_list_item_at_four_space_indent_is_read(tmp_path):
+    # Regression guard: a block-sequence item aligned with its own key
+    # (4-space indent, same as "requires:" itself) is valid YAML and must
+    # be read, not silently dropped as an empty list -- mirrors
+    # test_references_list_item_at_two_space_indent_is_read for the
+    # sibling spec.references parser.
+    d = _write_skill_deps_sidecar(
+        _write_skill(tmp_path),
+        "  skillDependencies:\n"
+        "    requires:\n"
+        "    - ghost-skill\n"
+        "    relatedTo: []\n")
+    by = _by_name(css.check_shape(d))
+    assert by["skill-dependencies-well-formed"].passed is True
+    assert by["skill-dependencies-resolve"].passed is False
+    assert "ghost-skill" in by["skill-dependencies-resolve"].evidence
+    assert css.main([str(d)]) == 1
+
+
 def test_skill_dependencies_dangling_related_to_fails_resolve(tmp_path):
     d = _write_skill_deps_sidecar(
         _write_skill(tmp_path),
