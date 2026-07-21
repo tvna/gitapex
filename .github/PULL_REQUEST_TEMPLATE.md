@@ -1,3 +1,10 @@
+<!--
+This file is hand-maintained pending the planned gitapex CLI (Rust,
+design stage only -- see docs/superpowers/specs/
+2026-07-15-gitapex-cli-governance-design.md). Once that CLI ships, it
+is expected to supply this file's content instead.
+-->
+
 ## Summary
 
 <!-- 1-2 sentences: what changed and why. -->
