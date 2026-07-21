@@ -52,6 +52,12 @@ without losing the issue's acceptance criteria.
    `python3 scripts/check_acm_present.py --body <pr-body-file>` (or pipe
    the drafted body on stdin) rather than re-reasoning it in prose each
    run.
+9. When the PR adds or modifies a skill's `SKILL.md`, disclose in the PR
+   body which skill-quality/adversarial audits were run against it and
+   their verdicts (or an explicit waiver), per
+   [GitHub issue workflow](references/github-issue-workflow.md)'s own
+   convention or the calling repository's equivalent -- rather than
+   depending on CI's rejection to prompt it after the fact.
 
 ## Output
 
@@ -62,12 +68,15 @@ without losing the issue's acceptance criteria.
 - **Branch Plan:** branch name, commit scope, PR title/body outline.
 - **Verification Plan:** the deterministic gates from Step 6 and how each
   mapped criterion will be proven.
+- **Skill Audit Evidence:** only when Step 9 applies (the PR adds or
+  modifies a skill's `SKILL.md`); the disclosed verdicts or waivers, omit
+  otherwise.
 - **Human Decision:** only when Step 7 applies; omit otherwise.
 - **Next Move:** the concrete next action.
 
 Pattern: **Facts** -> **Assumptions** -> **Acceptance Criteria Map** ->
 **Branch Plan** -> **Verification Plan** -> **Next Move**. Insert
-**Human Decision** only when needed.
+**Skill Audit Evidence** and **Human Decision** only when needed.
 
 ## Stop boundaries
 
