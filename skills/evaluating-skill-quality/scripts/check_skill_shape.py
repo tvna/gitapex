@@ -432,11 +432,29 @@ HEDGE_PHRASES = (
 # very shape check's rule stated in prose (e.g. "A bare GitHub issue/PR-
 # number citation (#149, owner/repo#149) is barred ..."), the same way the
 # module docstring above states it, just duplicated for the model reader.
-# Both phrases are this repository's own already-established phrasing, not
-# invented for this check.
+# Both of the above are this repository's own already-established phrasing,
+# not invented for this check.
+#
+# "hex color" / "css color" are different in kind from the two phrases
+# above: a pre-emptive escape hatch for a known, unresolved limitation
+# (issue #272) rather than a hedge drawn from existing in-repo prose --
+# ISSUE_CITATION_RE (`#\d+`) cannot syntactically distinguish a real issue
+# number from a decimal-digit-only CSS hex color (`#123456`, `#123`,
+# `#000000` are all valid CSS, all also valid GitHub issue-number shapes).
+# This repository has no web-design skill yet (issue #271), but a future
+# one documenting a literal color value would hit this false positive with
+# no natural way to phrase around it otherwise. Naming the color's own
+# nature ("the hex color `#123456`", "this CSS color") is how such a skill
+# would phrase it anyway, so the escape hatch costs no awkward wording.
+# Reserved in advance of that skill landing, not drawn from existing
+# content the way the two phrases above are. Does not replace the deeper,
+# still-open fix tracked in #272 (context-aware classification instead of
+# a hedge word).
 ISSUE_CITATION_HEDGE_PHRASES = (
     "must be an anchored",
     "issue/pr-number citation",
+    "hex color",
+    "css color",
 )
 
 
@@ -1146,7 +1164,10 @@ def _blank_fenced_blocks(body_text: str) -> str:
 # abbreviation like "e.g." mid-sentence, but ``_inline_citation_offenders``
 # checks both the current AND the immediately preceding sentence for a
 # hedge, so an over-split still finds a hedge that landed just before the
-# split point -- the failure mode is graceful, not silent.
+# split point -- the failure mode is graceful, not silent. Semicolons are
+# handled separately, by ``_split_at_bridging_semicolon`` below, rather than
+# folded into this regex -- see that function's docstring for why a blanket
+# semicolon split is wrong.
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
 # A blank line (a run of whitespace-only lines) separating paragraphs, and a
 # run of whitespace collapsed to one space -- both precompiled, matching
@@ -1182,6 +1203,46 @@ def _strip_illustrative_spans(defenced_text: str) -> str:
     return "\n".join(out)
 
 
+def _split_at_bridging_semicolon(sentence: str,
+                                 citation_res: tuple[re.Pattern[str], ...]) -> list[str]:
+    """Split ``sentence`` at its first semicolon into two clauses, but ONLY
+    when an inline-code citation (matching any of ``citation_res``, across
+    every spec, not just one) appears on BOTH sides of it -- otherwise
+    return ``[sentence]`` unsplit (issue #273).
+
+    A semicolon is structurally ambiguous in real prose: it can join two
+    independent clauses ("Use the hex color `#123456`; see PR `#42` for
+    the implementation history." -- Codex's exact reported example, PR
+    #269/#273), which must split so the second, unrelated citation does
+    not inherit the first's hedge; or it can sit inside a single
+    parenthetical aside about ONE citation ("`docs/adr/NNNN-*.md` (line
+    24; gitapex's own state on this path is covered under Portability
+    level above), uses forward slashes." -- real, pre-existing content in
+    this repository's own worked-example-explaining-the-work.md), which
+    must NOT split, or the hedge phrase that lands after the semicolon
+    loses the citation it was actually describing. Blanket semicolon
+    splitting (a first cut of this fix) and blanket non-splitting (the
+    original, exploitable design) each broke one of these; requiring a
+    citation on both sides is the narrowest rule that keeps both correct.
+    Only the FIRST semicolon is considered -- multiple semicolons in one
+    sentence are rare enough in this repository's own prose that handling
+    only the common case matches this checker's own established "simple,
+    not a full parser" tolerance elsewhere in this module.
+    """
+    semi = sentence.find(";")
+    if semi == -1:
+        return [sentence]
+    before, after = sentence[:semi + 1], sentence[semi + 1:]
+
+    def _has_citation(text: str) -> bool:
+        return any(cre.search(m.group(2))
+                  for m in INLINE_CODE_RE.finditer(text) for cre in citation_res)
+
+    if _has_citation(before) and _has_citation(after):
+        return [before, after]
+    return [sentence]
+
+
 def _inline_citation_offenders(
         defenced_text: str,
         specs: tuple[tuple[re.Pattern[str], tuple[str, ...]], ...],
@@ -1190,42 +1251,74 @@ def _inline_citation_offenders(
     the list of inline-code citations matching that ``citation_re`` in
     ``defenced_text`` (already fence-blanked via ``_blank_fenced_blocks``)
     that have no phrase from that spec's ``hedge_phrases`` in their own
-    sentence or the sentence immediately before it (see the module
-    docstring's issue #220 and #263 entries for the rationale). The
-    returned list is ordered the same as ``specs``. Shared by the repo-path
-    check (``REPO_PATH_CITATION_RE``/``HEDGE_PHRASES``) and the issue-number
+    sentence (or bridging-semicolon-split clause, see
+    ``_split_at_bridging_semicolon``) or the one immediately before it (see
+    the module docstring's issue #220 and #263 entries for the rationale,
+    and issue #273 for the clause-splitting refinement). The returned list
+    is ordered the same as ``specs``. Shared by the repo-path check
+    (``REPO_PATH_CITATION_RE``/``HEDGE_PHRASES``) and the issue-number
     check (``ISSUE_CITATION_RE``/``ISSUE_CITATION_HEDGE_PHRASES``) -- the
-    citation shape and the hedge vocabulary both differ per spec, but the
+    citation shape and hedge vocabulary differ per spec, but the
     paragraph/sentence tokenization and the inline-code-span search below
     are identical, so both specs are evaluated in one pass over the same
-    tokens rather than one pass per spec (a prior cut of this function took
-    one ``citation_re``/``hedge_phrases`` pair and was called once per spec
-    by the caller, redoing the full paragraph/sentence split for each).
+    tokens rather than one pass per spec (a prior cut of this function
+    took one ``citation_re``/``hedge_phrases`` pair and was called once
+    per spec by the caller, redoing the full paragraph/sentence split for
+    each).
 
     Bounded to a paragraph first (a run of contiguous non-blank lines),
-    then to a sentence within it, via the deliberately simple
-    ``_SENTENCE_SPLIT_RE`` tokenizer -- sentence-level, not paragraph-wide,
-    so a hedge written for one citation cannot silently exempt an unrelated
+    then to a sentence within it via ``_SENTENCE_SPLIT_RE``, each further
+    split at a bridging semicolon (see ``_split_at_bridging_semicolon`` --
+    across every spec's citation shape at once, since clause boundaries
+    are shared infrastructure, not per-spec) -- not paragraph-wide, so a
+    hedge written for one citation cannot silently exempt an unrelated
     citation many sentences later in the same (possibly long, multi-topic)
-    paragraph. Whitespace inside a paragraph is normalized to single spaces
-    first, since Markdown line-wraps a hedge phrase across lines exactly as
-    often as it wraps any other prose (e.g. "the calling\\n   repository's
-    own").
+    paragraph. Whitespace inside a paragraph is normalized to single
+    spaces first, since Markdown line-wraps a hedge phrase across lines
+    exactly as often as it wraps any other prose (e.g. "the calling\\n
+    repository's own").
 
-    Every inline-code span in the sentence -- not just the citation being
-    checked -- is excluded from that sentence's hedge search, so a citation
-    cannot self-satisfy the requirement merely because its own text happens
-    to contain a hedge word (e.g. a path literally named with "gitapex" in
-    it), AND a *different* citation's inline-code text sitting next to it in
-    the same sentence cannot silently hedge it either (a review finding on
-    a first cut of this check: excluding only the current citation's own
-    span left a neighboring citation's span still visible to the search). A
-    hedge is the author's own prose explaining a citation; text inside any
-    backtick span is never that, regardless of which citation it is or
-    whether it happens to match a citation shape at all. This exclusion set
-    -- and therefore the resulting ``local_lower`` -- is the same for every
-    spec in a given sentence, so it is computed once per sentence and
-    shared, not once per spec.
+    Every inline-code span in the clause -- not just the citation being
+    checked -- is blanked out of that clause's hedge search text, so a
+    citation cannot self-satisfy the requirement merely because its own
+    text happens to contain a hedge word (e.g. a path literally named with
+    "gitapex" in it). A hedge is the author's own prose explaining a
+    citation; text inside any backtick span is never that, regardless of
+    which citation it is or whether it happens to match a citation shape
+    at all.
+
+    Two or more citations WITHIN one clause deliberately still share that
+    whole clause's hedge search -- this file's own real content relies on
+    one leading hedge introducing a list of several different citations
+    (e.g. "in this repository's own bookkeeping ...:
+    `evals/.../split.md`'s Kept-edit log and `docs/skill-eval-status.md`."),
+    which a stricter per-citation windowing design (tried and reverted
+    while closing issue #273) broke. The "clause immediately before"
+    fallback is instead the layer doing the real work for the reported
+    exploit shape: it is used ONLY when that previous clause has no
+    citation of its own for this spec -- the established, tested pattern
+    is a pure hedge clause ("This repository has also recorded background
+    context here.") followed by a citation clause, never two back-to-back
+    clauses that each cite something. Without this restriction, a hedge
+    that correctly justifies one clause's own citation (e.g. "Use the hex
+    color `#123456` for the button.") would leak into a completely
+    unrelated citation in the very next clause (e.g. "See PR `#42` for the
+    implementation history.") purely because they are clause-adjacent -- a
+    review finding on an earlier cut of this check that a bare "previous
+    sentence, no further condition" fallback could not tell apart.
+
+    A narrower residual is accepted, not solved, by this design: two
+    DIFFERENT citations within the same clause, comma- or
+    apposition-joined (no bridging semicolon), where only one is
+    genuinely hedged (e.g. "See `#123456`, a hex color reference,
+    followed by the real bug `#42`.") still share the clause-wide hedge
+    and both pass. Distinguishing that shape from the legitimate "one
+    hedge, a list of several citations" shape above would require more
+    than a punctuation-based tokenizer can resolve; this checker is a
+    deliberately simple, practical approximation (see the module's own
+    established tolerance for this tokenizer's "e.g." over-split,
+    elsewhere in this file), not a full parser, and the bridging-semicolon
+    case is the one issue #273 was actually filed to close.
 
     Fenced code blocks are already excluded by the caller via
     ``_blank_fenced_blocks`` -- a citation inside a fenced illustrative
@@ -1234,32 +1327,43 @@ def _inline_citation_offenders(
     result list is order-preserving and deduplicated, matching
     ``_portable_citation_offenders``.
     """
+    citation_res = tuple(citation_re for citation_re, _hedge_phrases in specs)
     offenders_per_spec: list[list[str]] = [[] for _ in specs]
     for para in _PARAGRAPH_SPLIT_RE.split(defenced_text):
         if not para.strip():
             continue
         normalized = _WHITESPACE_RE.sub(" ", para)
-        sentences = _SENTENCE_SPLIT_RE.split(normalized)
-        for i, sentence in enumerate(sentences):
-            code_spans = list(INLINE_CODE_RE.finditer(sentence))
+        clauses: list[str] = []
+        for sentence in _SENTENCE_SPLIT_RE.split(normalized):
+            clauses.extend(_split_at_bridging_semicolon(sentence, citation_res))
+        # Precomputed once per paragraph (not just-in-time per clause) so
+        # the "previous clause has no citation of its own" check below can
+        # look at any earlier clause's code spans without re-scanning.
+        all_code_spans = [list(INLINE_CODE_RE.finditer(c)) for c in clauses]
+        for i, clause in enumerate(clauses):
+            code_spans = all_code_spans[i]
             if not code_spans:
                 continue
-            prev_lower = sentences[i - 1].lower() if i > 0 else ""
-            sentence_lower = sentence.lower()
-            local_parts: list[str] = []
-            prev_end = 0
+            prev_lower = clauses[i - 1].lower() if i > 0 else ""
+            clause_lower = clause.lower()
+            blanked = list(clause_lower)
             for cs in code_spans:
-                local_parts.append(sentence_lower[prev_end:cs.start()])
-                prev_end = cs.end()
-            local_parts.append(sentence_lower[prev_end:])
-            local_lower = "".join(local_parts)
+                for pos in range(cs.start(), cs.end()):
+                    blanked[pos] = " "
+            blanked_lower = "".join(blanked)
             for spec_idx, (citation_re, hedge_phrases) in enumerate(specs):
-                for cs in code_spans:
-                    if not citation_re.search(cs.group(2)):
-                        continue
-                    if not any(phrase in local_lower or phrase in prev_lower
-                              for phrase in hedge_phrases):
-                        offenders_per_spec[spec_idx].append(cs.group(0))
+                spec_matches = [cs for cs in code_spans
+                               if citation_re.search(cs.group(2))]
+                if not spec_matches:
+                    continue
+                prev_has_own_citation = i > 0 and any(
+                    citation_re.search(cs.group(2)) for cs in all_code_spans[i - 1])
+                candidate_prev = "" if prev_has_own_citation else prev_lower
+                hedged = any(phrase in blanked_lower or phrase in candidate_prev
+                            for phrase in hedge_phrases)
+                if not hedged:
+                    offenders_per_spec[spec_idx].extend(
+                        cs.group(0) for cs in spec_matches)
     return [_dedup(offenders) for offenders in offenders_per_spec]
 
 
