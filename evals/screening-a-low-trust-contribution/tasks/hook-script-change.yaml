@@ -23,3 +23,5 @@ expected:
     - "Merged"
     - "no flags"
     - "all clear"
+    - "clear to merge"
+    - "safe to merge"
