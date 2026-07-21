@@ -179,14 +179,15 @@ Verdict on shape alone: **well-formed** (exit code 0).
 
 ### 1. Discovery
 
-Pass, with the description fix above now applied. Current sibling skills
-in this repository (`driving-pr-to-merge`, `establishing-ubiquitous-language`,
-`issue-to-branch`, `merge-retrospective`, `outward-artifact-preflight`,
-`stop-and-replan`, `untrusted-input-triage`, `explaining-the-work`,
-`seeding-issue-pr-templates`) have triggers that do not overlap this
-skill's "reviewing any SKILL.md... before merging, vendoring, or shipping
-it": each targets a different artifact type (a PR, a term, an issue, a
-merged PR's retrospective, any outward-facing artifact broadly, a
+Pass, with the description fix above now applied. Sibling skills in this
+repository as of this review (`driving-pr-to-merge`,
+`establishing-ubiquitous-language`, `issue-to-branch`, `merge-retrospective`,
+`outward-artifact-preflight`, `stop-and-replan`, `untrusted-input-triage`,
+`explaining-the-work`, `seeding-issue-pr-templates` -- retired since,
+commit `7c7ca82`) have triggers that do not overlap this skill's
+"reviewing any SKILL.md... before merging, vendoring, or shipping it":
+each targets a different artifact type (a PR, a term, an issue, a merged
+PR's retrospective, any outward-facing artifact broadly, a
 self-correcting phrase, externally authored text, a comment/commit, an
 issue/PR template) rather than a `SKILL.md`'s own content quality.
 
