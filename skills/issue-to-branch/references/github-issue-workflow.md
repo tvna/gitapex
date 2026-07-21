@@ -4,8 +4,8 @@ Prefer platform-integrated tool calls (a connected GitHub app/MCP) for
 writes — issues, comments, branches, PRs — since a write path commonly
 carries a paired safety check that a raw API call bypasses. An approved
 REST API wrapper is for reads only, to reduce token consumption. Never
-shell out to a command-line GitHub tool directly for a write. Some
-environments back this with a PreToolUse hook (this repository's own
+shell out to a command-line GitHub tool directly, for a read or a write.
+Some environments back the write side with a PreToolUse hook (this repository's own
 `hooks/check-bash-safety.sh` is one example, blocking `gh issue`/`gh pr`
 write subcommands and `gh api -X POST/PUT/PATCH/DELETE` run via Bash);
 apply the underlying preference even where no such hook exists. If no

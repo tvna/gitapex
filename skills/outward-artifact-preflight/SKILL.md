@@ -42,9 +42,10 @@ destined for a public sink.
       convention for PR bodies (for example a fixed "Generated with X"
       trailer), keep it there.
    3. Disclosure does not exempt something from check 3: a disclosed
-      trailer still has to pass the ASCII check, so replace any
-      non-ASCII glyph in it (an emoji, for instance) with an ASCII
-      equivalent.
+      trailer still has to pass whatever check 3 currently requires --
+      by default an ASCII equivalent for any non-ASCII glyph (an emoji,
+      for instance), unless the calling repository's own documented
+      character-set policy (check 3's fallback) already permits it.
    4. Commit messages follow a separate, narrower rule (where installed,
       the explaining-the-work skill routes commit-log content to one
       line plus a `Refs #N` pointer, nothing more) -- do not add a

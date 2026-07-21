@@ -55,7 +55,14 @@ installed, as-is, into an unrelated repository.
 ## 2. Enumeration of targets
 
 All 17 `skills/*/metadata/gitapex.yaml` sidecars were read directly to
-produce this table (2026-07-20, before the rewrite in section 3).
+produce this table (2026-07-20, before the rewrite in section 3). A prior
+survey exists at
+`docs/superpowers/specs/2026-07-19-skill-metadata-sidecar-design.md`
+section 4.3 ("Current declared values to carry over"), from the sidecar
+mechanism's own introduction; that table is a point-in-time snapshot from
+its own sub-project and is not updated here, so this section re-derives
+the current state directly from the tree rather than assuming the two
+stay in sync.
 
 ### 2a. Repository-scoped (4, before this change) -- the actual redistribution risk
 
@@ -145,12 +152,17 @@ the four:
    already used by other Portable skills (e.g. `issue-to-fix`,
    `ranking-the-open-queue`) so a bare number does not live-autolink once
    the file is copied elsewhere.
-4. **`screening-a-low-trust-contribution`**: the header and checks 1-3 now
-   name gitapex's own paths as illustrative examples of a generic category
-   (hook/script directories; dependency manifests) with an explicit
-   substitution clause, rather than the definition of the category. The
-   worked example's bare `PR #211` was wrapped in an inline code span for
-   the same reason as #3.
+4. **`screening-a-low-trust-contribution`**: the header, and checks 2
+   (hook/script directories) and 3 (dependency manifests), now name
+   gitapex's own paths as illustrative examples of a generic category with
+   an explicit substitution clause, rather than the definition of the
+   category. Check 1 (workflow-file edits) is unchanged -- it still names
+   `.github/workflows/**` and `.gitlab-ci.yml`/`.gitlab/**` directly, with
+   no per-check substitution clause of its own, relying only on the
+   header's blanket aside; this is a real gap in the rewrite's coverage,
+   not an intentional omission, and is corrected in this same revision (see
+   the current file for the added clause). The worked example's bare
+   `PR #211` was wrapped in an inline code span for the same reason as #3.
 
 For all four, several other "per this repository's ... rule" asides (about
 treating issue/PR text as untrusted, and about read-only decision
@@ -197,7 +209,9 @@ Same redistribution-risk class as this spec, different artifact type (a hook
 script, not a skill folder, with its own manifest surface). Tracked here as
 a pointer for a follow-up issue; not designed or fixed in this pass.
 
-## 4. Verification (performed)
+## 4. Verification
+
+### Performed (shape/lint only -- see the gap noted below)
 
 - `for d in skills/*/; do python3 skills/evaluating-skill-quality/scripts/check_skill_shape.py "$d"; done`
   -- all 17 pass, including the four newly-`Portable` skills.
@@ -214,7 +228,36 @@ a pointer for a follow-up issue; not designed or fixed in this pass.
   behavior was lost -- only the framing/fallback wording changed, plus the
   two worked-example issue-number citations wrapped in inline code spans.
 
+### Not performed -- disclosed gap, per CLAUDE.md section 1
+
+All of the above is shape/lint verification (type-check-equivalent for
+prose): it proves the rewritten text parses, declares its enum correctly,
+and contains no bare citation the scanner catches. It does **not** prove
+the actual behavioral claim this whole change rests on -- that a model,
+executing one of these four skills inside a foreign repository whose
+convention differs from gitapex's, actually follows the stated fallback
+instead of defaulting to gitapex's own convention. That is a live-proof
+question CLAUDE.md section 1 says a green lint/shape check must not stand
+in for.
+
+A real check exists and was not run: all four skills already have a
+committed eval suite under `evals/<skill-name>/` with a `copilot-sdk`
+executor (three of the four had a live `waza run` recorded on 2026-07-17,
+per `docs/skill-eval-status.md`), but (a) `waza` is not installed in this
+environment (`waza: command not found`), so no suite could be run at all
+in this pass, and (b) none of the existing fixtures test this specific
+new claim (a foreign-repo scenario whose documented convention diverges
+from gitapex's, checking whether the model defers to the skill's inline
+fallback) -- that fixture does not exist yet either. Both are named here
+explicitly rather than left implicit, per CLAUDE.md section 1's "when the
+environment cannot run the check, say so in the plan up front."
+
 ## 5. Open items carried forward
 
 - File a separate issue for the hooks-distribution finding above once this
   change lands -- not filed yet, since this spec's scope is skills only.
+- Add a fallback-divergence fixture to each of the four skills' eval
+  suites (does the model defer to the inline fallback in a foreign-repo
+  scenario, or default to gitapex's convention), and run it with `waza`
+  once available, before treating the Portable reclassification's
+  behavioral claim as proven rather than shape-checked.

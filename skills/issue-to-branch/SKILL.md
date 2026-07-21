@@ -82,6 +82,11 @@ Pattern: **Facts** -> **Assumptions** -> **Acceptance Criteria Map** ->
 ## Notes
 
 [GitHub issue workflow](references/github-issue-workflow.md)'s write-path
-rules (tracking-issue-before-branch, connector-first, no-CLI-fallback) are
-gitapex's own illustrative default; each rule states its own fallback to
-the calling repository's actual convention inline.
+rules: tracking-issue-before-branch is gitapex's own illustrative default
+and states its own fallback to the calling repository's actual convention
+inline. connector-first and no-CLI-fallback are treated as portable
+defaults with no repo-specific substitute -- they match CLAUDE.md's own
+general "do not invoke command-line GitHub tools directly" rule -- and
+escalate to a Human Decision only when no connector or approved wrapper
+covers a needed operation, rather than deferring to a different
+convention.

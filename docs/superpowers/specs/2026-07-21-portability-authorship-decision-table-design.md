@@ -89,6 +89,45 @@ The flagged cell is a candidate for a follow-up fix (e.g. defaulting to
 scope, that fix is not made here; it is recorded so a future change has a
 concrete target instead of a vague "the fallback logic might have gaps."
 
+### 3a. Confirmed follow-up: `REPO_PATH_CITATION_RE`'s scope now matters for two real skills
+
+A code-review pass on PR #224 confirmed a second, related gap in the same
+scan, worth recording here rather than only in a PR comment. `REPO_PATH_CITATION_RE`
+(`check_skill_shape.py:187`) matches only `evals/` and `docs/`-rooted
+paths, by deliberate design (its own comment: "kept deliberately narrow...
+rather than every path shape, so the scan stays a low-false-positive
+backstop, not a general path linter"). `issue-to-branch`'s
+`references/github-issue-workflow.md`'s CLI reads two prefixes; more
+concretely, `screening-a-low-trust-contribution`'s checks 1-3 and
+`responding-to-a-fresh-arrival`'s Step 3 are live procedural steps that
+read/branch on `.github/`, `hooks/`, and `skills/*/scripts/` paths outside
+their own folder -- exactly the shape rubric.md's Portable dimension-6 rule
+targets ("no procedural step reads... a path outside the skill's own
+folder"). Before this PR both skills were `Repository-scoped` and
+categorically exempt from the scan; now they are `Portable`, but the scan
+still cannot see this class of citation, so the dimension-6 rule is
+enforced on them by model judgment alone, with no CI signal if a future
+edit regresses it (e.g. hardening a "substitute yours" clause back into a
+flat, unconditional path assertion).
+
+Two considered fixes, deliberately not applied in this pass:
+
+- **Broaden the regex** to also match `hooks/`, `\.github/`, and
+  `skills/` prefixes. Rejected for now: `skills/` in particular appears
+  routinely in already-Portable skills' prose as a normal cross-reference
+  to a sibling skill by name (e.g. "see `skills/other-skill/..."`), which
+  is not an origin-repo-specific dependency; adding it risks a flood of new
+  false positives across the 13 already-passing Portable skills, requiring
+  careful new test cases per prefix to avoid a regression in the shared,
+  production `check_skill_shape.py` used by all 17 skills. A change with
+  that blast radius needs the operator's explicit review of the
+  false-positive tradeoff, not a reflexive broadening.
+- **Leave the regex as-is, rely on model judgment** (the status quo,
+  matching the tool's own stated philosophy of being "a low-false-positive
+  backstop, not a general path linter" for this specific rule). Accepted
+  as the default for now; recorded here so the gap is visible rather than
+  silently assumed-covered.
+
 ## 4. Table C: portability x requires (non-empty)
 
 Read directly from `_skill_dependency_checks`
@@ -145,6 +184,11 @@ This is a documentation-only change (no code/gate/manifest touched):
   marker -> currently skips the Portable citation scan).
 - Decide whether/when to extend `rubric.md`'s Mixed definition to cover
   Table C's hard-dependency case.
+- Decide whether/when to broaden `REPO_PATH_CITATION_RE` (section 3a) to
+  cover `hooks/`/`.github/`/`skills/` prefixes for the two skills this now
+  concretely affects, weighed against the false-positive risk to the 13
+  already-passing Portable skills; until then, dimension-6 coverage for
+  those two skills' out-of-folder path reads is by model judgment only.
 - The four items already recorded as out of this table's reach (see
   section 1) remain open from the PR #224 retrospective and are not
   duplicated here.

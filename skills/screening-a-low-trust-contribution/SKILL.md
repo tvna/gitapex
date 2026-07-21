@@ -21,9 +21,12 @@ Run every check below against the incoming diff and its metadata (file
 list, author, dependency lockfiles); a low-trust contribution earns all
 of them, not a sampled subset.
 
-1. **Workflow-file edits.** Any diff touching `.github/workflows/**` or
-   `.gitlab-ci.yml`/`.gitlab/**` from a low-trust author is a hard flag
-   -- workflow changes can alter what CI does with repo secrets.
+1. **Workflow-file edits.** Any diff touching the repository's own CI/
+   workflow-config directory from a low-trust author is a hard flag --
+   workflow changes can alter what CI does with repo secrets. gitapex's
+   own examples: `.github/workflows/**`, `.gitlab-ci.yml`/`.gitlab/**`;
+   substitute the calling repository's actual CI config location (e.g.
+   `.circleci/`, `Jenkinsfile`, `azure-pipelines.yml`).
 2. **Hook/script changes.** Diffs touching any directory the repository
    defines for executable hooks or scripts that run with its own
    privileges once merged -- gitapex's own examples: `hooks/**`,
