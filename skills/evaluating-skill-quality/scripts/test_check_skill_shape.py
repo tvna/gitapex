@@ -750,18 +750,21 @@ def test_portable_unhedged_repo_path_citation_fails(tmp_path):
 def test_portable_inline_code_citation_is_excluded(tmp_path):
     # The rubric's own way of quoting a bad-example token: inline code.
     # This exclusion is specific to the two bare-prose checks below --
-    # portable-no-unhedged-inline-path-citation (issue #220) inspects
-    # exactly this kind of inline-code span and DOES flag it, since this
-    # fixture's `evals/foo/bar.yaml` has no hedge phrase nearby; see
-    # test_portable_unhedged_inline_repo_path_fails for that check's own
-    # dedicated fixture.
+    # portable-no-unhedged-inline-path-citation (issue #220) and
+    # portable-no-unhedged-inline-issue-citation (issue #263) both inspect
+    # exactly this kind of inline-code span and DO flag it, since this
+    # fixture's `evals/foo/bar.yaml` and `#149`/`owner/repo#149` citations
+    # have no hedge phrase nearby; see test_portable_unhedged_inline_repo_path_fails
+    # and test_portable_unhedged_inline_issue_citation_fails for those checks'
+    # own dedicated fixtures.
     d = _write_raw(tmp_path, _portable_body(
-        "No bare (`#149`) or fully-qualified (`owner/repo#149`) citation, and "
+        "No bare (`#149`) or fully-qualified (`owner/repo#149`) number, and "
         "no `evals/foo/bar.yaml` path, belongs in portable content."))
     res = _by_name(css.check_shape(d))
     assert res["no-bare-issue-citation"].passed is True
     assert res["portable-no-repo-path-citation"].passed is True
     assert res["portable-no-unhedged-inline-path-citation"].passed is False
+    assert res["portable-no-unhedged-inline-issue-citation"].passed is False
 
 
 def test_portable_fenced_illustrative_citation_is_excluded(tmp_path):
@@ -800,6 +803,7 @@ def test_non_portable_skill_skips_path_scan_but_not_issue_scan(tmp_path):
     names = _by_name(css.check_shape(d))
     assert "portable-no-repo-path-citation" not in names
     assert "portable-no-unhedged-inline-path-citation" not in names
+    assert "portable-no-unhedged-inline-issue-citation" not in names
     assert names["no-bare-issue-citation"].passed is False
     assert "#149" in names["no-bare-issue-citation"].evidence
 
@@ -844,6 +848,7 @@ def test_wrapped_mixed_marker_still_skips_path_scan_but_not_issue_scan(tmp_path)
     names = _by_name(css.check_shape(d))
     assert "portable-no-repo-path-citation" not in names
     assert "portable-no-unhedged-inline-path-citation" not in names
+    assert "portable-no-unhedged-inline-issue-citation" not in names
     assert names["no-bare-issue-citation"].passed is False
 
 
@@ -985,14 +990,198 @@ def test_unhedged_inline_repo_path_in_reference_file_fails(tmp_path):
     assert "references/notes.md:`docs/superpowers/specs/x.md`" in result.evidence
 
 
+# ---- Portable inline-code issue/PR-number citation hedge scan (issue #263) ----
+#
+# #171's illustrative-span exemption treats every inline-code citation as
+# automatically safe. #263's own reported bug is exactly that gap, mirrored
+# from #220's repo-path fix: a fictional worked-example citation like
+# `` `#42` `` sits unflagged in Portable content because it is inline code,
+# even though dimension 6 bans an issue/PR-number citation from Portable
+# content regardless of how it is quoted. Unlike the repo-path check, there
+# is no "deliberate reference to this repository's own file" case to
+# preserve here -- only the narrower "illustrating the citation *syntax*
+# itself" case (evaluating-skill-quality's own `trackingIssue` field
+# documentation, "an anchored `#123` or `owner/repo#123` reference"), hence
+# the separate, narrower ISSUE_CITATION_HEDGE_PHRASES rather than reusing
+# HEDGE_PHRASES. The hedge search shares the same sentence-bounded mechanism
+# as the repo-path check above -- see that section's own comment for why
+# the bound is a citation's own sentence or the one immediately before it,
+# not the whole paragraph.
+
+def test_portable_unhedged_inline_issue_citation_fails(tmp_path):
+    # The reported bug's exact shape: a fictional worked-example citation
+    # with no hedge anywhere nearby.
+    d = _write_raw(tmp_path, _portable_body(
+        "Fictitious PR `#42`, \"Add retry to fetch helper,\" has just been "
+        "opened."))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-issue-citation"]
+    assert result.passed is False
+    assert "#42" in result.evidence
+
+
+def test_portable_unhedged_inline_qualified_issue_citation_fails(tmp_path):
+    d = _write_raw(tmp_path, _portable_body(
+        "See `owner/repo#42` for the original discussion."))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-issue-citation"]
+    assert result.passed is False
+    assert "owner/repo#42" in result.evidence
+
+
+@pytest.mark.parametrize("body", [
+    # evaluating-skill-quality's own SKILL.md/rubric.md phrasing: a
+    # citation-syntax illustration, not a specific issue being cited.
+    "`trackingIssue` must be an anchored `#123` or `owner/repo#123` "
+    "reference.",
+    # A distinct legitimate case discovered while wiring this check up:
+    # evaluating-skill-quality's own SKILL.md/rubric.md restate the
+    # no-bare-issue-citation rule itself in prose (mirroring this module's
+    # own docstring), using `#149`/`owner/repo#149` as the rule's example
+    # numbers -- real text, not a hypothetical. "anchored" does not appear
+    # here; "issue/pr-number citation" is the shared phrase that marks this
+    # as rule documentation rather than worked-example bookkeeping.
+    "A bare GitHub issue/PR-number citation (`#149`, `owner/repo#149`) "
+    "is barred from SKILL.md/references/*.md at every level.",
+], ids=["trackingIssue-shape", "self-referential-rule-statement"])
+def test_approved_issue_hedge_phrase_passes(tmp_path, body):
+    d = _write_raw(tmp_path, _portable_body(body))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-issue-citation"]
+    assert result.passed is True
+
+
+def test_bare_hedge_word_does_not_exempt_a_real_citation(tmp_path):
+    # Regression guard for a review finding on the first cut of this check:
+    # a bare single-word hedge ("anchored"/"citation") is satisfied by
+    # ordinary prose that uses the word while citing a real, banned issue
+    # number -- exactly the defect this check exists to catch. The approved
+    # phrases are full multi-word phrases for this reason; "citation" alone
+    # (not the full "issue/pr-number citation" phrase) must not exempt this.
+    d = _write_raw(tmp_path, _portable_body(
+        "For provenance citation, see PR `#42` which fixed the bug."))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-issue-citation"]
+    assert result.passed is False
+    assert "#42" in result.evidence
+
+
+def test_bare_anchored_word_does_not_exempt_a_real_citation(tmp_path):
+    # Same regression guard, the other bare word: ordinary prose using
+    # "anchored" in an unrelated sense must not exempt a real citation.
+    d = _write_raw(tmp_path, _portable_body(
+        "The review is anchored to PR `#88` for full context."))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-issue-citation"]
+    assert result.passed is False
+    assert "#88" in result.evidence
+
+
+def test_issue_hedge_in_different_paragraph_does_not_count(tmp_path):
+    # Bounded distance, not whole-document: a hedge phrase two paragraphs
+    # away must not exempt an unrelated citation in its own paragraph.
+    d = _write_raw(tmp_path, _portable_body(
+        "This field's value must be an anchored reference, described "
+        "elsewhere.\n\n"
+        "Fictitious PR `#42` has just been opened."))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-issue-citation"]
+    assert result.passed is False
+
+
+def test_issue_hedge_in_next_sentence_of_same_paragraph_does_not_count(tmp_path):
+    # Same regression guard as the repo-path check's own test: a hedge
+    # written for one citation must not silently exempt an unrelated
+    # citation several sentences later in the same paragraph.
+    d = _write_raw(tmp_path, _portable_body(
+        "`trackingIssue` must be an anchored reference. "
+        "A second, unrelated sentence about something else entirely. "
+        "Fictitious PR `#42` has just been opened."))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-issue-citation"]
+    assert result.passed is False
+
+
+def test_issue_citation_text_cannot_self_satisfy_hedge(tmp_path):
+    # Regression guard: the hedge search must exclude the citation's own
+    # matched inline-code text, so an owner/repo naming coincidence cannot
+    # self-satisfy the requirement with no hedge actually written by the
+    # author.
+    d = _write_raw(tmp_path, _portable_body(
+        "See `anchored-org/repo#42` for the original discussion."))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-issue-citation"]
+    assert result.passed is False
+
+
+def test_one_citations_own_text_cannot_hedge_a_different_citation(tmp_path):
+    # Regression guard for a review finding: excluding only the CURRENT
+    # citation's own span from the hedge search left a DIFFERENT citation's
+    # inline-code span still visible -- so one citation's own text (however
+    # implausible) satisfying a hedge phrase could silently exempt an
+    # unrelated, genuinely unhedged citation next to it in the same
+    # sentence. Every inline-code span in the sentence is now excluded from
+    # the search, not just the one being checked, so both citations here
+    # must be flagged.
+    d = _write_raw(tmp_path, _portable_body(
+        "Compare `this must be an anchored citation#42` with `#100` for "
+        "details."))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-issue-citation"]
+    assert result.passed is False
+    assert "#42" in result.evidence
+    assert "#100" in result.evidence
+
+
+def test_issue_hedge_wrapped_across_lines_within_paragraph_counts(tmp_path):
+    # A hedge phrase that Markdown line-wraps across two lines of the same
+    # sentence must still be found -- whitespace is normalized before the
+    # search.
+    d = _write_raw(tmp_path, _portable_body(
+        "`trackingIssue` must be an anchored\n"
+        "`#123` or `owner/repo#123` reference."))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-issue-citation"]
+    assert result.passed is True
+
+
+def test_fenced_inline_issue_citation_still_excluded_from_hedge_scan(tmp_path):
+    # A citation inside a fenced code block stays exempt unconditionally
+    # (issue #171 acceptance criterion 3) -- this new, narrower check must
+    # not reopen that case.
+    d = _write_raw(tmp_path, _portable_body(
+        "Bad-example target content under review:\n\n"
+        "```\nFictitious PR `#42` has just been opened.\n```"))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-issue-citation"]
+    assert result.passed is True
+
+
+def test_unhedged_inline_issue_citation_in_reference_file_fails(tmp_path):
+    # The scan covers references/*.md, not just SKILL.md, and labels the
+    # file, matching the other two Portable citation checks.
+    d = _write_raw(tmp_path, _portable_body("Clean body."),
+                   references={"notes.md":
+                               "Fictitious PR `#42` has just been opened.\n"})
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-issue-citation"]
+    assert result.passed is False
+    assert "references/notes.md:`#42`" in result.evidence
+
+
+def test_double_backtick_code_span_citation_still_flagged(tmp_path):
+    # Regression guard for a review finding: INLINE_CODE_RE's first cut
+    # assumed every code span uses exactly one backtick on each side. A
+    # double-backtick span (Markdown's own escape form for content that
+    # itself needs a literal backtick) reads as two adjacent EMPTY
+    # single-backtick spans under that assumption, so its content was never
+    # inspected -- a citation using two backticks instead of one silently
+    # evaded this check entirely. INLINE_CODE_RE now matches a same-length
+    # closing delimiter run (1-3 backticks), so this must still be flagged.
+    d = _write_raw(tmp_path, _portable_body(
+        "Fictitious PR ``#42`` has just been opened."))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-issue-citation"]
+    assert result.passed is False
+    assert "``#42``" in result.evidence
+
+
 # ---- Portability source precedence: sidecar first, body marker as fallback ----
 
-# The two Portable-only repo-path checks -- gated by _is_portable, unlike
+# The three Portable-only citation checks -- gated by _is_portable, unlike
 # no-bare-issue-citation, which is asserted separately in each test below
 # since it is present regardless of the portability source under test
 # (issue #254).
 _PATH_CITATION_CHECKS = ("portable-no-repo-path-citation",
-                         "portable-no-unhedged-inline-path-citation")
+                         "portable-no-unhedged-inline-path-citation",
+                         "portable-no-unhedged-inline-issue-citation")
 
 
 def _write_sidecar(skill_dir, portability):

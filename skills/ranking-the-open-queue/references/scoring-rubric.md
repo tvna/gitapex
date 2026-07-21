@@ -45,9 +45,10 @@ Scale: **Blocked** (a specific open blocker is named or linked) /
 **Soft-blocked** (the body or comments hint at a dependency but name no
 specific tracked blocker) / **Unblocked** (nothing found blocking it).
 
-Worked example: an issue whose latest comment says "blocked on `#99` (an
-upstream API decision), which is still open" scores **Blocked**, citing
-`#99` as the named blocker.
+Worked example: an issue whose latest comment says "blocked on the upstream
+API decision, which is still open" scores **Blocked**, since a specific
+open blocker is named (a hyperlink to the blocking issue instead of naming
+it in prose would also qualify).
 
 ## Actionability
 
