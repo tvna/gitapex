@@ -52,8 +52,8 @@ what has not been reproduced.
 
 ## Worked example
 
-An already-open issue, "Search returns duplicate results when a query
-matches both title and body."
+An already-open issue titled "Search returns duplicate results when a
+query matches both title and body."
 
 1. Reproduce: run the search endpoint with a query matching both fields
    against the real search path. It does return duplicates -- reproduced.

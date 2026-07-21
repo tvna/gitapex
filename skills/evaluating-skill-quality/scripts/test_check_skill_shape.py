@@ -1027,12 +1027,23 @@ def test_portable_unhedged_inline_qualified_issue_citation_fails(tmp_path):
     assert "owner/repo#42" in result.evidence
 
 
-def test_approved_issue_hedge_phrase_passes(tmp_path):
+@pytest.mark.parametrize("body", [
     # evaluating-skill-quality's own SKILL.md/rubric.md phrasing: a
     # citation-syntax illustration, not a specific issue being cited.
-    d = _write_raw(tmp_path, _portable_body(
-        "`trackingIssue` must be an anchored `#123` or `owner/repo#123` "
-        "reference."))
+    "`trackingIssue` must be an anchored `#123` or `owner/repo#123` "
+    "reference.",
+    # A distinct legitimate case discovered while wiring this check up:
+    # evaluating-skill-quality's own SKILL.md/rubric.md restate the
+    # no-bare-issue-citation rule itself in prose (mirroring this module's
+    # own docstring), using `#149`/`owner/repo#149` as the rule's example
+    # numbers -- real text, not a hypothetical. "anchored" does not appear
+    # here; "issue/pr-number citation" is the shared phrase that marks this
+    # as rule documentation rather than worked-example bookkeeping.
+    "A bare GitHub issue/PR-number citation (`#149`, `owner/repo#149`) "
+    "is barred from SKILL.md/references/*.md at every level.",
+], ids=["trackingIssue-shape", "self-referential-rule-statement"])
+def test_approved_issue_hedge_phrase_passes(tmp_path, body):
+    d = _write_raw(tmp_path, _portable_body(body))
     result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-issue-citation"]
     assert result.passed is True
 
@@ -1059,21 +1070,6 @@ def test_bare_anchored_word_does_not_exempt_a_real_citation(tmp_path):
     result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-issue-citation"]
     assert result.passed is False
     assert "#88" in result.evidence
-
-
-def test_self_referential_rule_statement_with_citation_hedge_passes(tmp_path):
-    # A distinct legitimate case discovered while wiring this check up:
-    # evaluating-skill-quality's own SKILL.md/rubric.md restate the
-    # no-bare-issue-citation rule itself in prose (mirroring this module's
-    # own docstring), using `#149`/`owner/repo#149` as the rule's example
-    # numbers -- real text, not a hypothetical. "anchored" does not appear
-    # here; "citation" is the shared word that marks this as rule
-    # documentation rather than worked-example bookkeeping.
-    d = _write_raw(tmp_path, _portable_body(
-        "A bare GitHub issue/PR-number citation (`#149`, `owner/repo#149`) "
-        "is barred from SKILL.md/references/*.md at every level."))
-    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-issue-citation"]
-    assert result.passed is True
 
 
 def test_issue_hedge_in_different_paragraph_does_not_count(tmp_path):
@@ -1108,6 +1104,24 @@ def test_issue_citation_text_cannot_self_satisfy_hedge(tmp_path):
         "See `anchored-org/repo#42` for the original discussion."))
     result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-issue-citation"]
     assert result.passed is False
+
+
+def test_one_citations_own_text_cannot_hedge_a_different_citation(tmp_path):
+    # Regression guard for a review finding: excluding only the CURRENT
+    # citation's own span from the hedge search left a DIFFERENT citation's
+    # inline-code span still visible -- so one citation's own text (however
+    # implausible) satisfying a hedge phrase could silently exempt an
+    # unrelated, genuinely unhedged citation next to it in the same
+    # sentence. Every inline-code span in the sentence is now excluded from
+    # the search, not just the one being checked, so both citations here
+    # must be flagged.
+    d = _write_raw(tmp_path, _portable_body(
+        "Compare `this must be an anchored citation#42` with `#100` for "
+        "details."))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-issue-citation"]
+    assert result.passed is False
+    assert "#42" in result.evidence
+    assert "#100" in result.evidence
 
 
 def test_issue_hedge_wrapped_across_lines_within_paragraph_counts(tmp_path):
