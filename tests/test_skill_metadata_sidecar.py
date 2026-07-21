@@ -94,7 +94,8 @@ def test_migrated_provenance_stays_populated(skill_name):
     skill_dir = SKILLS_DIR / skill_name
     parsed = css._parse_manifest(
         (skill_dir / css.SIDECAR_RELATIVE_PATH).read_text(encoding="utf-8"))
-    references = parsed.root.get("spec", {}).get("references")
+    spec = parsed.root.get("spec")
+    references = spec.get("references") if isinstance(spec, dict) else None
     assert isinstance(references, list) and references, (
         f"{skill_name}'s metadata/gitapex.yaml lost its migrated "
         "spec.references content (Sub-project C, issue #184); this is the "
