@@ -146,8 +146,8 @@ enforcement.
 - Full pass: the seventeen dimensions applied once to all skills in this
   repository at the time.
 - Variance re-measurement: the same instrument re-run five times each on
-  four low-blast-radius skills (explaining-the-work, scorer-gated-skill-edits,
-  seeding-issue-pr-templates -- retired since, commit 7c7ca82 --, stop-and-replan)
+  four low-blast-radius skills at the time (explaining-the-work,
+  scorer-gated-skill-edits, stop-and-replan, plus one skill retired since)
   -- twenty trials -- to separate a robust cold judgment from run-to-run
   reviewer variance.
 
