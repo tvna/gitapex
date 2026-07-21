@@ -224,6 +224,104 @@ def test_main_rejects_context_costs_without_pruning_declaration(capsys):
     assert "require --pruning-only" in capsys.readouterr().err
 
 
+def test_main_judge_agree_appends_agree_marker(tmp_path, capsys):
+    scores = tmp_path / "scores.txt"
+    scores.write_text("0.9\n1.0\n", encoding="utf-8")
+    rc = score_contract.main(
+        ["--compare-to", "0.9", "--scores", str(scores), "--judge-verdict", "agree"]
+    )
+    assert rc == 0
+    assert capsys.readouterr().out.strip() == "0.950000 KEEP JUDGE_AGREE"
+
+
+def test_main_judge_disagree_appends_review_required_marker(tmp_path, capsys):
+    scores = tmp_path / "scores.txt"
+    scores.write_text("0.9\n1.0\n", encoding="utf-8")
+    rc = score_contract.main(
+        ["--compare-to", "0.9", "--scores", str(scores), "--judge-verdict", "disagree"]
+    )
+    assert rc == 0
+    assert (
+        capsys.readouterr().out.strip()
+        == "0.950000 KEEP JUDGE_DISAGREE_REVIEW_REQUIRED"
+    )
+
+
+def test_main_judge_agree_on_reject_path_does_not_override_verdict(tmp_path, capsys):
+    # 0.95 < 0.99 -> REJECT; a judge "agree" must never flip this to KEEP.
+    # This is the exact override Decision 1 forbids -- caught by mutation
+    # testing during adversarial verification of gitapex#175.
+    scores = tmp_path / "scores.txt"
+    scores.write_text("0.9\n1.0\n", encoding="utf-8")
+    rc = score_contract.main(
+        ["--compare-to", "0.99", "--scores", str(scores), "--judge-verdict", "agree"]
+    )
+    assert rc == 0
+    assert capsys.readouterr().out.strip() == "0.950000 REJECT JUDGE_AGREE"
+
+
+def test_main_judge_disagree_on_reject_path_appends_review_required_marker(
+    tmp_path, capsys
+):
+    scores = tmp_path / "scores.txt"
+    scores.write_text("0.9\n1.0\n", encoding="utf-8")
+    rc = score_contract.main(
+        ["--compare-to", "0.99", "--scores", str(scores), "--judge-verdict", "disagree"]
+    )
+    assert rc == 0
+    assert (
+        capsys.readouterr().out.strip()
+        == "0.950000 REJECT JUDGE_DISAGREE_REVIEW_REQUIRED"
+    )
+
+
+@pytest.mark.parametrize("compare_to,gate_verdict", [("0.9", "KEEP"), ("0.99", "REJECT")])
+@pytest.mark.parametrize("judge_verdict", ["agree", "disagree"])
+def test_main_judge_verdict_never_changes_recorded_mean_or_verdict(
+    tmp_path, capsys, compare_to, gate_verdict, judge_verdict
+):
+    scores = tmp_path / "scores.txt"
+    scores.write_text("0.9\n1.0\n", encoding="utf-8")
+    rc_plain = score_contract.main(["--compare-to", compare_to, "--scores", str(scores)])
+    plain = capsys.readouterr().out.strip()
+    assert plain == f"0.950000 {gate_verdict}"
+    rc_judged = score_contract.main(
+        ["--compare-to", compare_to, "--scores", str(scores), "--judge-verdict", judge_verdict]
+    )
+    judged = capsys.readouterr().out.strip()
+    assert rc_plain == rc_judged == 0
+    assert judged.startswith(plain + " ")
+    assert judged != plain
+
+
+def test_main_rejects_judge_verdict_without_compare_to(capsys):
+    rc = score_contract.main(["--judge-verdict", "agree"])
+    assert rc == 1
+    assert "--judge-verdict requires --compare-to" in capsys.readouterr().err
+
+
+def test_main_rejects_judge_verdict_with_pruning_only(tmp_path, capsys):
+    scores = tmp_path / "scores.txt"
+    scores.write_text("0.9\n0.9\n", encoding="utf-8")
+    rc = score_contract.main(
+        [
+            "--compare-to",
+            "0.9",
+            "--scores",
+            str(scores),
+            "--judge-verdict",
+            "agree",
+            "--pruning-only",
+            "--prior-context-cost",
+            "1400",
+            "--candidate-context-cost",
+            "1120",
+        ]
+    )
+    assert rc == 1
+    assert "not defined for --pruning-only" in capsys.readouterr().err
+
+
 @pytest.mark.parametrize("invalid", ["nan", "inf", "-0.1", "1.1"])
 def test_main_rejects_invalid_correctness_scores(tmp_path, capsys, invalid):
     scores = tmp_path / "scores.txt"

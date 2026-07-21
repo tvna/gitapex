@@ -28,16 +28,16 @@ sides, only the coverage level and API differ.
 | 7 | Secret-scanning status (feature enabled, alert count) | **Gap.** No GitLab MCP server in this session. | GitLab's secret-detection/vulnerability-report API. |
 | 8 | Member/permission drift | **Gap.** No GitLab MCP server in this session. | GitLab's project-members API. |
 
-Every row above is a stated consumer of the approved read-only gh wrapper
-(gitapex CLI governance, #82) once GitLab support is filed as its own
-child issue under #82 and built -- cross-link #82 in the report for each,
-worded as "consumer of an unfiled candidate child issue," not "blocked on
-#82 landing" (#82 is the umbrella tracking issue and has no single
-"landed" state).
+Every row above cross-links the tracking issue for approved-but-unbuilt
+tooling per SKILL.md Step 3 -- see the Portability note there for whose
+tracking issue that is, and `references/gitapex-cross-links.md` (loaded
+in Step 2, when this is gitapex's own copy) for gitapex's own target and
+its exact wording convention ("consumer of an unfiled candidate child
+issue," not "blocked on landing").
 
 ## Self-check
 
 There is nothing to run here today -- every item is a Gap. The
 self-check is procedural: confirm the report states all 8 as Gap,
-individually, with #82 cross-linked on each, rather than one aggregate
-"GitLab: unsupported" line.
+individually, with the tracking issue cross-linked on each, rather than
+one aggregate "GitLab: unsupported" line.

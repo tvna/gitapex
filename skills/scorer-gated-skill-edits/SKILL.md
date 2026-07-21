@@ -88,7 +88,18 @@ evaluation. Name the gap; never fake a score to proceed.
      confirm the judge cited concrete evidence for its verdict instead of
      approving on "looks fine". Keep the edit only if it survives that pass.
      (`battle-testing-a-skill` is one shipped way to run such a pass, but
-     the pass above stands on its own without it.)
+     the pass above stands on its own without it.) This same rule also
+     covers `score_contract.py`'s own optional `--judge-verdict
+     {agree,disagree}` flag. (This repository has also recorded the design
+     spec for that flag, for readers working in this specific repository,
+     at `docs/superpowers/specs/2026-07-20-judge-mode-scorer-design.md`; a
+     vendored copy of this skill has no such file and does not need one --
+     the flag's contract is fully stated below.) It records the outcome of
+     this adversarially-verified pass alongside
+     the substring `--compare-to` verdict -- opt-in, never blending into or
+     overriding the recorded substring mean -- so a disagreement is
+     surfaced as `JUDGE_DISAGREE_REVIEW_REQUIRED` for human review, not
+     silently resolved either way.
 4. **Log rejected edits.** Record each rejected edit and the score change
    it caused, so later iterations do not repeat it. That negative feedback
    is the only value a rejected edit has; discarding it silently wastes it.

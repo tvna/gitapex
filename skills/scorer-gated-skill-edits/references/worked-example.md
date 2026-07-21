@@ -2,8 +2,9 @@
 
 A single iteration of a fictional skill, `summarize-release-notes`, scored
 by the same `output_contains` / `output_not_contains` substring contract
-that `evals/issue-to-branch/` already ships. The skill is fictional so this
-example cannot go stale against any real skill's current text.
+that this repository's own `evals/issue-to-branch/` already ships. The
+skill is fictional so this example cannot go stale against any real
+skill's current text.
 
 ## Contents
 
@@ -18,9 +19,10 @@ example cannot go stale against any real skill's current text.
 ## The scorer
 
 Each task fixture asserts substrings that must (or must not) appear in the
-skill's output, exactly like `evals/issue-to-branch/tasks/*.yaml`. The
-score for a run is the fraction of a task's assertions that hold; the
-score for a split is the mean over its tasks. This is the repeatable
+skill's output, exactly like this repository's own
+`evals/issue-to-branch/tasks/*.yaml`. The score for a run is the fraction
+of a task's assertions that hold; the score for a split is the mean over
+its tasks. This is the repeatable
 `r(s) in [0,1]` the precondition gate requires.
 
 ## The splits

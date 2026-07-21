@@ -32,10 +32,12 @@ Checks (the canonical list -- the manual fallback is to apply these):
     (skill-dependencies-resolve); and a non-empty
     spec.skillDependencies.requires is incompatible with
     spec.portability: Portable (requires-portability-compatible). Other
-    ungated sidecar fields (e.g. spec.evalStatus) ARE parsed into the spec
-    map by _parse_manifest, just not gated/checked here; only nested maps
-    and list items under them are skipped by the parser, and indented
-    lines are never flagged as malformed regardless of shape.
+    ungated sidecar fields (e.g. spec.evalStatus) are parsed into the spec
+    map by _parse_manifest only if written as a single inline scalar; a
+    nested/block-shaped field (e.g. evalStatus's documented baseline:/lift:
+    children) is dropped entirely, not gated/checked here or anywhere --
+    only nested maps and list items under them are skipped by the parser,
+    and indented lines are never flagged as malformed regardless of shape.
   - references/ files: exactly one level deep
   - any references/ file over 100 lines: contains a table of contents
     (a Markdown heading matching "Table of contents" or "Contents",
@@ -74,6 +76,29 @@ Checks (the canonical list -- the manual fallback is to apply these):
     rubric's dimension-6 Portable-skill rule; the semantic judgment of
     whether a citation is illustrative context vs. the skill's own
     bookkeeping stays with that model-judged dimension.
+  - Portable inline-code repo-path citation without a hedge (issue #220,
+    narrowing the blind spot the exemption above leaves open): treating
+    every inline-code path citation as automatically illustrative was
+    itself the gap -- an inline-code `evals/...`/`docs/...` citation reads
+    exactly as authoritative as a bare-prose one to a reader who has no
+    way to tell "illustrative example" from "this repository's own real
+    file" from the backticks alone. This check re-inspects exactly the
+    inline-code spans the bare-prose scan above deliberately skips, and
+    fails one that has no approved hedge phrase (HEDGE_PHRASES) in its own
+    sentence or the sentence immediately before it -- this repository's
+    own established convention for marking such a citation as deliberate
+    rather than a dangling self-reference (see e.g. rubric.md's "This
+    repository has also used ..." and scorer-gated-skill-edits/SKILL.md's
+    "This repository has also recorded ..."). The citation's own inline-code
+    text is excluded from that hedge search, so a citation cannot
+    self-satisfy the requirement merely because its own path happens to
+    contain a hedge word (e.g. a path under `docs/superpowers/specs/`
+    literally named with "gitapex" in it). Fenced code blocks stay exempt
+    unconditionally, as the module docstring above already covers -- this
+    check never runs on blocks, only on inline code, since a worked
+    example's illustrative fenced output is a different, already-settled
+    case (issue #171 acceptance criterion 3) that this issue does not
+    reopen.
 
 Usage:
   python3 check_skill_shape.py <skill-dir-or-SKILL.md>
@@ -135,16 +160,17 @@ REFERENCES_LIST_ITEM_RE = re.compile(r"^[ ]{2,}-\s*(.*)$")
 REFERENCES_MAPPING_LIKE_RE = re.compile(r"^[A-Za-z0-9_.-]+:(\s|$)")
 
 # spec.skillDependencies's two recognized subkeys, and the shape of their
-# lines. Unlike spec.references (which tolerates indent drift from years of
-# pre-existing files), this field is new and every real sidecar is authored
-# in the same change, so the parser accepts exactly one indent: subkeys at
-# 4 spaces (one level under skillDependencies' own 2-space key), list items
-# at 5+ spaces (strictly deeper than the subkey, so a dedented line reliably
-# ends the list).
+# lines. Subkeys sit at 4 spaces (one level under skillDependencies' own
+# 2-space key). List items accept 4 or more spaces -- real YAML allows a
+# block sequence indented level with its own key (4 spaces, same as
+# "requires:"/"relatedTo:" themselves) or further indented (this repo's
+# convention); requiring one exact width would silently drop an otherwise-
+# valid item at a different indent instead of reading it, the same
+# accommodation REFERENCES_LIST_ITEM_RE already makes for spec.references.
 SKILL_DEPENDENCY_SUBKEYS = ("requires", "relatedTo")
 SKILL_DEP_SUBKEY_RE = re.compile(r"^[ ]{4}(requires|relatedTo):\s*(.*)$")
 SKILL_DEP_UNKNOWN_KEY_RE = re.compile(r"^[ ]{4}([A-Za-z0-9_-]+):")
-SKILL_DEP_LIST_ITEM_RE = re.compile(r"^[ ]{5,}-\s*(.*)$")
+SKILL_DEP_LIST_ITEM_RE = re.compile(r"^[ ]{4,}-\s*(.*)$")
 
 TAG_RE = re.compile(r"</?[A-Za-z][^>]*>")
 NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
@@ -196,6 +222,25 @@ BARE_URL_RE = re.compile(r"[a-zA-Z][a-zA-Z0-9+.\-]*://[^\s>)\]]+")
 MD_INLINE_LINK_RE = re.compile(r"\[[^\]]*\]\([^)]*\)")
 MD_REF_LINK_RE = re.compile(r"\[[^\]]*\]\[[^\]]*\]")
 MD_REF_DEF_RE = re.compile(r"^\s{0,3}\[[^\]]+\]:\s.*$")
+
+# Approved hedge phrases for the inline-code repo-path citation check (see
+# the module docstring's issue #220 entry). Matched case-insensitively as a
+# plain substring, not a word-boundary regex, so a longer phrase already in
+# use (e.g. "this repository's own", "this repository has also") is covered
+# by the shorter "this repository" entry without a separate one per variant.
+# "this repository" / "gitapex" mark a citation as a deliberate, known-real
+# reference to this repository's own file; "the calling repository" / "the
+# target repository" mark the opposite -- a generic illustrative path name
+# for whatever repository the skill lands in or reviews. Both directions are
+# already this repository's own established phrasing (rubric.md, worked-
+# example-explaining-the-work.md, establishing-ubiquitous-language), not
+# invented for this check.
+HEDGE_PHRASES = (
+    "this repository",
+    "the calling repository",
+    "the target repository",
+    "gitapex",
+)
 
 
 @dataclass(frozen=True)
@@ -321,13 +366,10 @@ def _parse_manifest(text: str) -> ManifestParse:
       ``requires`` and ``relatedTo`` (see the design spec's Sub-project D).
       Each subkey, at exactly 4-space indent, is either an inline empty
       list (``requires: []``) or an empty value opening a block list of
-      "- <value>" items at 5 or more spaces indent -- one nesting level
-      deeper than spec.references' own items, and with the same per-item
-      shape rules (mapping-like-item and indent-consistency detection).
-      Unlike spec.references, this parser accepts only one indent width
-      per level rather than tolerating drift, since every real sidecar is
-      authored fresh in the same change that adds this parser, not
-      migrated from years of pre-existing files. A key inside
+      "- <value>" items at 4 or more spaces indent -- the same depth as
+      the subkey's own line, or deeper, with the same per-item shape rules
+      (mapping-like-item and indent-consistency detection) and the same
+      indent-drift tolerance as spec.references' items. A key inside
       spec.skillDependencies other than ``requires``/``relatedTo`` is
       collected into ``ManifestParse.unknown_skill_dependency_keys``
       instead of being silently skipped, since an unrecognized key here is
@@ -653,17 +695,17 @@ def _is_portable(body: list[str], sidecar: SidecarPortability) -> bool:
     return False
 
 
-def _strip_illustrative_spans(body_text: str) -> str:
-    """Return ``body_text`` with every span that quotes a token
-    illustratively or externally removed, leaving only bare prose.
+def _blank_fenced_blocks(body_text: str) -> str:
+    """Return ``body_text`` with every fenced code block's lines (the
+    fence markers themselves included) replaced by empty lines, preserving
+    line count and every other line verbatim.
 
-    Removes fenced code blocks wholesale, then per surviving line strips
-    inline code spans, absolute URLs, Markdown inline/reference links, and
-    reference definitions. These are exactly the forms in which this repo's
-    Portable skills already write an issue number or repo path without it
-    resolving live (an inline-code ``#149``, a full URL, a ``[PR #2][pr2]``
-    worked-example link), so what remains is a citation sitting unguarded in
-    running prose -- the shape the historical incidents took.
+    Shared by ``_strip_illustrative_spans`` (which goes on to also strip
+    inline code, URLs, and links) and ``_inline_repo_path_offenders``
+    (which deliberately keeps inline code intact, since it inspects
+    exactly those spans) -- both need fenced blocks excluded the same way,
+    since a fenced code block is "already illustrative" regardless of
+    which citation shape is being scanned for.
     """
     out: list[str] = []
     in_fence = False
@@ -672,9 +714,34 @@ def _strip_illustrative_spans(body_text: str) -> str:
             in_fence = not in_fence
             out.append("")
             continue
-        if in_fence:
-            out.append("")
-            continue
+        out.append("" if in_fence else line)
+    return "\n".join(out)
+
+
+# Sentence-ending punctuation followed by whitespace. A deliberately simple
+# tokenizer (not a full sentence-boundary detector): it can over-split on an
+# abbreviation like "e.g." mid-sentence, but ``_inline_repo_path_offenders``
+# checks both the current AND the immediately preceding sentence for a
+# hedge, so an over-split still finds a hedge that landed just before the
+# split point -- the failure mode is graceful, not silent.
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
+
+
+def _strip_illustrative_spans(defenced_text: str) -> str:
+    """Return ``defenced_text`` (already fence-blanked via
+    ``_blank_fenced_blocks``) with every span that quotes a token
+    illustratively or externally removed, leaving only bare prose.
+
+    Per line, strips inline code spans, absolute URLs, Markdown
+    inline/reference links, and reference definitions. These are exactly
+    the forms in which this repo's Portable skills already write an issue
+    number or repo path without it resolving live (an inline-code
+    ``#149``, a full URL, a ``[PR #2][pr2]`` worked-example link), so what
+    remains is a citation sitting unguarded in running prose -- the shape
+    the historical incidents took.
+    """
+    out: list[str] = []
+    for line in defenced_text.splitlines():
         if MD_REF_DEF_RE.match(line):
             out.append("")
             continue
@@ -686,14 +753,60 @@ def _strip_illustrative_spans(body_text: str) -> str:
     return "\n".join(out)
 
 
-def _portable_citation_offenders(body_text: str) -> tuple[list[str], list[str]]:
-    """Return (issue-number, repo-path) bare-prose citations in ``body_text``.
+def _inline_repo_path_offenders(defenced_text: str) -> list[str]:
+    """Return each inline-code ``evals/``/``docs/`` path citation in
+    ``defenced_text`` (already fence-blanked via ``_blank_fenced_blocks``)
+    that has no approved hedge phrase (see ``HEDGE_PHRASES``) in its own
+    sentence or the sentence immediately before it (see the module
+    docstring's issue #220 entry for the rationale).
+
+    Bounded to a paragraph first (a run of contiguous non-blank lines),
+    then to a sentence within it, via the deliberately simple
+    ``_SENTENCE_SPLIT_RE`` tokenizer -- sentence-level, not paragraph-wide,
+    so a hedge written for one citation cannot silently exempt an unrelated
+    citation many sentences later in the same (possibly long, multi-topic)
+    paragraph. Whitespace inside a paragraph is normalized to single spaces
+    first, since Markdown line-wraps a hedge phrase across lines exactly as
+    often as it wraps any other prose (e.g. "the calling\\n   repository's
+    own"). Each citation's own matched text is excluded from its hedge
+    search, so a citation cannot self-satisfy the requirement merely
+    because its own path text happens to contain a hedge word (e.g. a path
+    literally named with "gitapex" in it). Fenced code blocks are already
+    excluded by the caller via ``_blank_fenced_blocks`` -- a citation
+    inside a fenced illustrative example never reaches this check, matching
+    the module docstring's "fenced code blocks stay exempt unconditionally"
+    note. Order-preserving and deduplicated, matching
+    ``_portable_citation_offenders``.
+    """
+    offenders: list[str] = []
+    for para in re.split(r"\n\s*\n", defenced_text):
+        if not para.strip():
+            continue
+        normalized = re.sub(r"\s+", " ", para)
+        sentences = _SENTENCE_SPLIT_RE.split(normalized)
+        for i, sentence in enumerate(sentences):
+            matches = [m for m in INLINE_CODE_RE.finditer(sentence)
+                       if REPO_PATH_CITATION_RE.search(m.group(0)[1:-1])]
+            if not matches:
+                continue
+            prev_lower = sentences[i - 1].lower() if i > 0 else ""
+            for m in matches:
+                local_lower = (sentence[:m.start()] + sentence[m.end():]).lower()
+                if not any(phrase in local_lower or phrase in prev_lower
+                          for phrase in HEDGE_PHRASES):
+                    offenders.append(m.group(0))
+    return _dedup(offenders)
+
+
+def _portable_citation_offenders(defenced_text: str) -> tuple[list[str], list[str]]:
+    """Return (issue-number, repo-path) bare-prose citations in
+    ``defenced_text`` (already fence-blanked via ``_blank_fenced_blocks``).
 
     Applies the illustrative-span strip first, so only citations left
     unguarded in running prose are reported. Order-preserving and
     deduplicated so the evidence string is stable and terse.
     """
-    prose = _strip_illustrative_spans(body_text)
+    prose = _strip_illustrative_spans(defenced_text)
     issues = _dedup(m.group(0) for m in ISSUE_CITATION_RE.finditer(prose))
     paths = _dedup(m.group(0) for m in REPO_PATH_CITATION_RE.finditer(prose))
     return issues, paths
@@ -989,10 +1102,17 @@ def _portable_citation_checks(skill_md: Path, skill_dir: Path,
 
     issue_hits: list[str] = []
     path_hits: list[str] = []
+    inline_path_hits: list[str] = []
     for label, source_text in sources:
-        issues, paths = _portable_citation_offenders(source_text)
+        # Fence-blanked once and shared -- both offender scans below need
+        # fenced code excluded the same way, and source_text can be a
+        # multi-hundred-line references/ file.
+        defenced = _blank_fenced_blocks(source_text)
+        issues, paths = _portable_citation_offenders(defenced)
         issue_hits += [f"{label}:{c}" for c in issues]
         path_hits += [f"{label}:{c}" for c in paths]
+        inline_path_hits += [f"{label}:{c}"
+                             for c in _inline_repo_path_offenders(defenced)]
 
     return [
         CheckResult(
@@ -1003,6 +1123,13 @@ def _portable_citation_checks(skill_md: Path, skill_dir: Path,
             "portable-no-repo-path-citation", not path_hits,
             "Portable content has no bare-prose origin-repository path citation",
             "none" if not path_hits else "found: " + ", ".join(path_hits)),
+        CheckResult(
+            "portable-no-unhedged-inline-path-citation", not inline_path_hits,
+            "Portable content has no inline-code origin-repository path "
+            f"citation without an approved hedge phrase {HEDGE_PHRASES} in "
+            "its own sentence or the sentence immediately before it",
+            "none" if not inline_path_hits
+            else "found: " + ", ".join(inline_path_hits)),
     ]
 
 

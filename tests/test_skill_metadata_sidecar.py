@@ -94,7 +94,8 @@ def test_migrated_provenance_stays_populated(skill_name):
     skill_dir = SKILLS_DIR / skill_name
     parsed = css._parse_manifest(
         (skill_dir / css.SIDECAR_RELATIVE_PATH).read_text(encoding="utf-8"))
-    references = parsed.root.get("spec", {}).get("references")
+    spec = parsed.root.get("spec")
+    references = spec.get("references") if isinstance(spec, dict) else None
     assert isinstance(references, list) and references, (
         f"{skill_name}'s metadata/gitapex.yaml lost its migrated "
         "spec.references content (Sub-project C, issue #184); this is the "
@@ -195,17 +196,36 @@ def test_find_requires_cycle_handles_relatedto_style_mutual_edges_if_misused():
     assert _find_requires_cycle(graph) is not None
 
 
-def _real_requires_graph() -> dict[str, list[str]]:
+def _real_requires_graph(
+    skill_dirs: list[pathlib.Path] | None = None,
+) -> dict[str, list[str]]:
     graph: dict[str, list[str]] = {}
-    for skill_dir in SKILL_DIRS:
+    for skill_dir in SKILL_DIRS if skill_dirs is None else skill_dirs:
         sidecar = skill_dir / css.SIDECAR_RELATIVE_PATH
         if not sidecar.is_file():
             continue
         parsed = css._parse_manifest(sidecar.read_text(encoding="utf-8"))
-        deps = parsed.root.get("spec", {}).get("skillDependencies")
+        spec = parsed.root.get("spec")
+        deps = spec.get("skillDependencies") if isinstance(spec, dict) else None
         requires = deps.get("requires") if isinstance(deps, dict) else None
         graph[skill_dir.name] = requires if isinstance(requires, list) else []
     return graph
+
+
+def test_real_requires_graph_does_not_crash_on_malformed_spec_scalar(tmp_path):
+    # Regression guard: a future sidecar with `spec:` written as a scalar
+    # (not a mapping) must not crash this repo-wide cycle test with an
+    # opaque AttributeError -- it should be treated as having no
+    # skillDependencies, same as a missing spec.
+    skill_dir = tmp_path / "malformed-skill"
+    (skill_dir / pathlib.Path(css.SIDECAR_RELATIVE_PATH).parent).mkdir(parents=True)
+    (skill_dir / css.SIDECAR_RELATIVE_PATH).write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "spec: not-a-mapping-scalar\n",
+        encoding="utf-8")
+    graph = _real_requires_graph(skill_dirs=[skill_dir])
+    assert graph == {"malformed-skill": []}
 
 
 def test_no_requires_cycle_among_real_skills():

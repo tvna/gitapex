@@ -465,6 +465,18 @@ Anthropic's own field guide on working with Claude models (Thariq Shihipar,
 "A Field Guide to Fable: Finding Your Unknowns"). Advisory naming addition,
 not a new enforced branch, so no new eval fixture was added. Refs #149.
 
+**Issue #175 (judge-mode scoring, deferred from #173 option 1):**
+`score_contract.py` gained an opt-in `--judge-verdict {agree,disagree}` flag,
+recorded alongside the existing `--compare-to` substring gate output as
+`JUDGE_AGREE` / `JUDGE_DISAGREE_REVIEW_REQUIRED`. The flag records the
+outcome of the adversarially-verified judge pass Procedure step 3's
+conditional branch already requires; it does not call a model itself and
+does not change the recorded substring mean or verdict. Design spec:
+`docs/superpowers/specs/2026-07-20-judge-mode-scorer-design.md`. Advisory
+mechanism documentation on an already-required behavioral branch, not a new
+enforced rule, so no new eval fixture was added -- same precedent as #149
+above. Refs #175, #173, #174, #167.
+
 ## issue-to-branch
 
 Only `claude-sonnet-4.6` has been evaluated in `evals/issue-to-branch/`;
@@ -599,6 +611,11 @@ fully-qualified-naming convention followed by sibling skills. Refs #128.
 
 ## screening-a-low-trust-contribution
 
+Note: check numbers cited below are as of each pass's own date; the
+Procedure has since been renumbered (5 steps -> 8 steps across two later
+fix rounds). See `skills/screening-a-low-trust-contribution/SKILL.md`
+for current numbering rather than relying on the numbers below.
+
 A live `waza run` against the committed eval suite
 (`evals/screening-a-low-trust-contribution/`, copilot-sdk executor,
 `claude-sonnet-4.6`, 2026-07-17) scored 4/6 tasks passing. Of the 2 grader
@@ -613,15 +630,17 @@ no-skill baseline is recorded, `trials_per_task` is 1, cross-model behavior
 is unmeasured.
 
 Separately, a 2026-07-17 `battle-testing-a-skill` pass gave a conditional
-pass: its instruction-bearing-content check (check 5) is scoped to new files
-only, missing instructions added to an existing tracked file; its
+pass: its instruction-bearing-content check (check 5 at the time; see the
+note above) is scoped to new files only, missing instructions added to an
+existing tracked file; its
 typosquat/dependency-legitimacy checks rely on prose/memory judgment with no
 deterministic edit-distance computation or homoglyph coverage (converging
 independently with the same finding against `git-hosting-surface-audit`);
 and it screens only a single diff snapshot with no re-screen-on-push
 guidance. A companion `evaluating-skill-quality` pass rated it well-formed
-but not mature, and separately raised a Mechanism-fit finding: checks 1-2's
-"always flag a workflow-file or hook/script edit" guarantee currently
+but not mature, and separately raised a Mechanism-fit finding: checks 1-2 at
+the time (workflow-file and hook/script edits respectively; see the note
+above)'s "always flag a workflow-file or hook/script edit" guarantee currently
 depends entirely on an agent choosing to invoke this skill, with no CI
 path-filter or CODEOWNERS gate in this repository backing it -- the exact
 "missing deterministic gate" pattern CLAUDE.md section 3 names. Refs #128.
