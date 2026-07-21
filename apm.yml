@@ -1,0 +1,7 @@
+# gitapex is normally an apm *provider* (see docs/repository-layout.md); this
+# declares the two plugins its own skills already assume are present
+# (docs/motivation.md), so `apm install` provisions them too.
+dependencies:
+  apm:
+    - obra/superpowers
+    - tvna/clairvoyance
