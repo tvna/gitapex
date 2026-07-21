@@ -164,3 +164,65 @@ would be either untested or dead code.
   paired-heading convention.
 - Full test suite green; `check_skill_shape.py` still stdlib-only,
   read-only, 0/1/2 exit-code contract unchanged.
+
+## Task 3 (Round 2): Extend with `stable`, `compatibilityGuarantee`, `renamedFrom`
+
+Same issue (#236), same design spec (section 8 addendum). Landed after
+Task 1/2 above were already committed and pushed.
+
+- [x] **Step 1: Widen the parser's block-subkey machinery to include
+  `stable`, and add the scalar-only `renamedFrom` path**
+
+  `LIFECYCLE_SUBKEY_RE` widened to match `stable` alongside
+  `experimental`/`deprecated` (reuses the existing block-opening state
+  machine unchanged). New `LIFECYCLE_SCALAR_KEY_RE` for `renamedFrom`,
+  checked in the `in_lifecycle` per-line handler between the
+  block-subkey match and the unknown-key fallback; blank value stores
+  nothing (matches this parser's "blank means not declared" convention).
+
+- [x] **Step 2: Extend `_lifecycle_checks`**
+
+  Add `stable` to `LIFECYCLE_FIELDS`/`LIFECYCLE_REQUIRED_FIELDS` (picked
+  up automatically by the existing sub-block validation loop). Add
+  `compatibilityGuarantee` enum validation specific to `stable`. Add
+  `renamedFrom` non-empty-string validation (no directory resolution).
+  Add the new `experimental-stable-compatible` `CheckResult` in every
+  return branch (mirrors how `lifecycle-deprecated-replacement-resolves`
+  is threaded through every branch already). Add its FAILing fallback
+  entry to the unreadable-sidecar branch in `check_shape()`.
+
+- [x] **Step 3: Update docstrings**
+
+  Module docstring's canonical-checks paragraph and
+  `_lifecycle_checks`'s own docstring, describing all three sub-blocks,
+  `renamedFrom`, and the new contradiction rule.
+
+- [x] **Step 4: Extend the test suite**
+
+  New cases in the existing lifecycle test block (not a new block):
+  `stable`-only valid (with/without `compatibilityGuarantee`); missing
+  `stable.since` fails; invalid `compatibilityGuarantee` fails;
+  `experimental`+`stable` fails `experimental-stable-compatible` while
+  each sub-block is individually well-formed; `renamedFrom` valid does
+  NOT require a sibling directory (explicit regression guard for the
+  asymmetry from `deprecated.replacement`); blank `renamedFrom:` reads as
+  absent; empty-string `renamedFrom: ""` fails. `_LIFECYCLE_CHECKS`
+  tuple extended with `experimental-stable-compatible so the existing
+  unreadable-sidecar and both-blocks-present tests cover it automatically.
+
+  Verify: `uv run pytest skills/evaluating-skill-quality/scripts/test_check_skill_shape.py -q --no-cov`
+  -- 143 passed (135 round-1 + 8 new).
+
+- [x] **Step 5: Run the full suite and commit**
+
+  `uv run pytest -q --no-cov` -- 431 passed, zero regressions. Commit
+  message: `feat(skill-metadata): extend spec.lifecycle with stable and
+  renamedFrom`, `Refs #236`.
+
+- [x] **Step 6: Update `SKILL.md`/`rubric.md`, the design spec (section
+  8 addendum), this plan, and GitHub issue #236**
+
+  Re-run `check_skill_shape.py` against `evaluating-skill-quality`
+  itself (29/29 checks pass, including the Portable self-citation scan
+  against the updated prose) and the full test suite before committing
+  the docs separately, `Refs #236`.

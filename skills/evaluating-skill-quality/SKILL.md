@@ -227,11 +227,11 @@ assumption section.
 
 ## Lifecycle
 
-Optional. Two independent sub-blocks under `spec.lifecycle` in the
-skill's `metadata/gitapex.yaml` sidecar (the `lifecycle-well-formed`
-shape check enforces their shape when present) -- neither implies nor
-excludes the other, and a skill declaring neither is implicitly
-**Stable**, the state every skill in this repository is in today:
+Optional. Three independent sub-blocks plus one plain scalar under
+`spec.lifecycle` in the skill's `metadata/gitapex.yaml` sidecar (the
+`lifecycle-well-formed` shape check enforces their shape when present) --
+a skill declaring none of them is implicitly **Stable**, the state every
+skill in this repository is in today:
 
 ```yaml
 spec:
@@ -245,6 +245,10 @@ spec:
       replacement: name-of-sibling-skill
       since: "2026-07-21"        # optional, YYYY-MM-DD
       removeAfter: "2026-10-01"  # optional, YYYY-MM-DD, documentation only
+    stable:
+      since: "2026-07-21"        # when this skill graduated
+      compatibilityGuarantee: GA # optional: Alpha | Beta | GA
+    renamedFrom: old-skill-name  # optional, this skill's former directory name
 ```
 
 - **`experimental`**: `reason` and `trackingIssue` are required once this
@@ -255,14 +259,28 @@ spec:
   `replacement` must name an existing sibling skill directory (the
   `lifecycle-deprecated-replacement-resolves` shape check enforces this
   -- the same dangling-reference gate `spec.skillDependencies` uses).
+- **`stable`**: `since` is required once this block is present at all
+  (`compatibilityGuarantee`, if given, must be one of `Alpha`/`Beta`/
+  `GA` -- Kubernetes' API-stability tiers). `experimental` and `stable`
+  cannot both be present: "not yet graduated" and "already graduated on
+  some date" are a real contradiction, unlike `experimental`+
+  `deprecated`, which stays ungated (an experimental skill can
+  legitimately be superseded by a different experiment).
+- **`renamedFrom`**: a plain scalar, not a sub-block, naming this same
+  skill's former directory name. Deliberately backward-pointing and
+  **not** resolved against sibling directories, unlike
+  `deprecated.replacement` -- the old name is expected to no longer
+  exist (a `git mv` deletes it), so there is nowhere to host a
+  forward-pointing record on the old side.
 - `since`/`removeAfter`, when given, must be real `YYYY-MM-DD` dates.
   `removeAfter` documents an intended removal date only; no automation in
   this repository deletes a skill once that date passes, and no
   automation graduates a skill out of `experimental` when its
   `trackingIssue` closes.
-- Neither declaration changes how any of the nine dimensions grade, and
-  no skill's own runtime procedure may read or branch on either -- this
-  is metadata only, same as Portability level and Capability assumption.
+- None of these declarations change how any of the nine dimensions
+  grade, and no skill's own runtime procedure may read or branch on any
+  of them -- this is metadata only, same as Portability level and
+  Capability assumption.
 
 Full rationale: [references/rubric.md](references/rubric.md)'s Lifecycle
 section.

@@ -1,7 +1,8 @@
-# Skill lifecycle metadata (`spec.lifecycle`): experimental + deprecated
+# Skill lifecycle metadata (`spec.lifecycle`): experimental + deprecated + stable + renamedFrom
 
 **Date:** 2026-07-21
-**Status:** Design, implemented alongside this spec
+**Status:** Design, implemented alongside this spec (round 1: sections
+1-7; round 2 addendum: section 8)
 **Issue:** #236
 
 ## 1. Motivation
@@ -180,3 +181,73 @@ effect; it is structured bookkeeping, not a rubric input).
 Lands as two commits: (1) parser + checks + docstring + tests together
 (they must be green as a unit), (2) `SKILL.md`/`rubric.md`/this design
 doc's prose, separately. Both cite `Refs #236`.
+
+## 8. Round 2 addendum: `stable`, `compatibilityGuarantee`, `renamedFrom`
+
+After round 1 landed, the requester twice reiterated that "deprecated"
+was only ever meant as one example of the broader migration-lifecycle
+concept, not its boundary. Two further design discussions converged on
+three additions to `spec.lifecycle`, still under this same issue (#236)
+since round 1 was unmerged, in-flight work, not a separate feature.
+
+### 8.1 Schema addition
+
+```yaml
+spec:
+  lifecycle:
+    stable:
+      since: "2026-07-21"        # required once this block is present
+      compatibilityGuarantee: GA # optional: Alpha | Beta | GA
+    renamedFrom: old-skill-name  # optional, free-form, NOT resolved
+```
+
+- **`stable`** -- a graduation record, mirroring Rust's
+  `#[stable(feature, since)]`. `since` is the only required field.
+  `compatibilityGuarantee`, if present, is one of Kubernetes'
+  `Alpha`/`Beta`/`GA` API-stability tiers, shape-gated only -- no rule
+  ties it to a sibling's `spec.skillDependencies.requires` (confirmed
+  non-goal, avoids new cross-skill coupling beyond what was asked).
+- **`renamedFrom`** -- confirmed **backward-pointing**, not a
+  `renamedTo` forward pointer on a tombstone stub. `git mv` deletes the
+  old directory outright, so a forward-pointing sidecar would have
+  nowhere to live; `renamedFrom` instead sits on the *surviving* (new)
+  skill's own sidecar, naming the old, now-nonexistent directory as a
+  free-form, non-empty scalar -- deliberately **not** resolved against
+  sibling directories, unlike `deprecated.replacement`.
+- **New cross-field rule**: `experimental` and `stable` are mutually
+  exclusive (`experimental-stable-compatible`, mirroring
+  `requires-portability-compatible`'s placement and independence from
+  the shape check it accompanies) -- "not yet graduated" and "already
+  graduated on some date" are a real logical contradiction, unlike
+  `experimental`+`deprecated`, which the requester separately confirmed
+  in round 1 should stay ungated (an experimental skill can legitimately
+  be superseded by a different experiment).
+
+### 8.2 Parser mechanics
+
+`stable` reuses the existing `experimental`/`deprecated` block-opening
+state machine unchanged -- it is simply a third member of
+`LIFECYCLE_SUBKEYS`/`LIFECYCLE_FIELDS`/`LIFECYCLE_REQUIRED_FIELDS`.
+`renamedFrom` is structurally different: a plain scalar directly under
+`lifecycle:` (like `metadata.name` under `metadata:`), never opening a
+block, matched by a dedicated `LIFECYCLE_SCALAR_KEY_RE` checked between
+the block-subkey match and the unknown-key fallback in the `in_lifecycle`
+per-line handler. A blank `renamedFrom:` assignment stores nothing,
+mirroring this parser's existing repo-wide convention that a blank
+scalar assignment means "not declared."
+
+### 8.3 Non-goals (confirmed)
+
+- No cross-skill consumer check tying `compatibilityGuarantee` to
+  `skillDependencies.requires`.
+- No tombstone/redirect stub convention, and no `renamedTo` field.
+- No dangling-reference check on `renamedFrom`.
+- No migration of any of the 17 existing skills (unchanged from round 1).
+
+### 8.4 Verification
+
+Same commands as section 6, re-run after the round-2 changes: full test
+suite green (431 tests), `check_skill_shape.py` reports 29/29 checks
+passing against `evaluating-skill-quality` itself, including the two new
+checks (`lifecycle-well-formed` extended, `experimental-stable-compatible`
+new) and the Portable self-citation scan against the updated prose.

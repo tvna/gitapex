@@ -650,9 +650,8 @@ declarations above because a wrong or dangling lifecycle record is
 actively misleading to a maintainer deciding whether a skill is safe to
 adopt or remove.
 
-Two independent, optional sub-blocks under `spec.lifecycle` -- neither
-implies nor excludes the other, and there is no mutual-exclusion gate
-between them:
+Three independent, optional sub-blocks plus one plain scalar under
+`spec.lifecycle`:
 
 - **`experimental`** -- the entry side: a skill not yet proven. `reason`
   and `trackingIssue` are required non-empty strings once this block is
@@ -670,13 +669,41 @@ between them:
   dates in strict `YYYY-MM-DD` shape. `removeAfter` is documentation
   only: no CI step in this repository deletes a skill once that date
   passes.
+- **`stable`** -- a graduation record, mirroring Rust's
+  `#[stable(feature, since)]`. `since` is a required non-empty string
+  once this block is declared at all, and must be a real calendar date
+  in strict `YYYY-MM-DD` shape. `compatibilityGuarantee`, if present,
+  must be one of `Alpha`/`Beta`/`GA` -- Kubernetes' API-stability tiers,
+  borrowed as a shape-gated enum only; no rule ties this value to a
+  sibling's `spec.skillDependencies.requires` (that would be new
+  cross-skill coupling beyond what this field declares).
+- **`renamedFrom`** -- a plain scalar (not a sub-block) naming this same
+  skill's former, now-nonexistent directory name. Backward-pointing by
+  deliberate design: it lives on the *surviving* (renamed-to) skill's
+  own sidecar, not a forward-pointing record on the old directory, since
+  a `git mv` deletes that directory and leaves nowhere to host one.
+  Unlike `deprecated.replacement`, this value is **not** resolved
+  against sibling directories -- the whole point is that the named
+  directory is expected to no longer exist. A blank `renamedFrom:`
+  assignment reads as "not declared", the same convention every other
+  scalar in this sidecar follows; once declared, it must be a non-empty
+  string.
+- **`experimental` and `stable` are mutually exclusive** -- enforced by
+  `experimental-stable-compatible`, a cross-field check mirroring
+  `requires-portability-compatible`'s independence from the shape check
+  it accompanies (evaluated regardless of whether `lifecycle-well-formed`
+  itself passed). "Not yet graduated" and "already graduated on some
+  date" cannot both be true. `experimental` and `deprecated` are NOT
+  mutually exclusive, by contrast -- an experimental skill can
+  legitimately be superseded by a different experiment, so that pairing
+  stays ungated.
 - A present-but-incomplete block (missing a required field), an unknown
-  key directly under `spec.lifecycle`, or an unknown field inside either
+  key directly under `spec.lifecycle`, or an unknown field inside any
   sub-block fails `lifecycle-well-formed`, the same treatment
   `spec.skillDependencies` gives an unrecognized sibling key.
 - Per the sidecar's own behavior-neutrality invariant, `spec.lifecycle`
   is metadata only: no skill's own runtime procedure may read or branch
-  on either sub-block.
+  on any part of it.
 
 ## 1. Discovery -- name and description
 
