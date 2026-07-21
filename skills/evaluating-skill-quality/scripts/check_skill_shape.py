@@ -103,9 +103,12 @@ Checks (the canonical list -- the manual fallback is to apply these):
     content -- sibling-skill names, repo-specific paths/conventions --
     remains legitimate Mixed/Repository-scoped territory; this rule is
     narrowly about issue/PR numbers. Matches inside inline code (`#149`),
-    fenced code blocks, absolute URLs, and Markdown links are excluded --
-    those are the established ways this repo's skills quote such a token
-    illustratively without it resolving live.
+    fenced code blocks, absolute URLs, and Markdown links are excluded from
+    THIS bare-prose scan -- those are the established ways this repo's
+    skills quote such a token illustratively without it resolving live.
+    Inline code is not unconditionally safe, though: for Portable-declared
+    content specifically, the separate check below (issue #263) re-inspects
+    exactly the inline-code spans this scan skips.
   - Portable self-citation, repo-path half (only when the skill declares
     "Portable", not "Mixed" or "Repository-scoped" -- unlike the
     issue-number scan above, these two checks stay level-gated:
@@ -156,6 +159,25 @@ Checks (the canonical list -- the manual fallback is to apply these):
     example's illustrative fenced output is a different, already-settled
     case (issue #171 acceptance criterion 3) that this issue does not
     reopen.
+  - Portable inline-code issue/PR-number citation without a hedge (issue
+    #263, the same blind spot as #220 above but for issue numbers instead
+    of repo paths): the bare-issue-citation scan's inline-code exclusion
+    (see its own entry above) let a fictional worked-example citation like
+    `` `#42` `` or `` `#142` `` sit in Portable content indefinitely, since
+    dimension 6's rubric bans an issue/PR-number citation from Portable
+    content even fully hedged inside inline code -- unlike the repo-path
+    rule, there is no "deliberate reference to this repository's real
+    file" case to preserve for an issue number, only the narrower
+    "illustrating the citation *syntax itself*, not citing a specific
+    issue" case (e.g. documenting that `spec.lifecycle.trackingIssue` must
+    be "an anchored `#123` or `owner/repo#123` reference"). This check
+    re-inspects exactly the inline-code spans the bare-prose scan above
+    deliberately skips, and fails one that has no approved hedge phrase
+    (ISSUE_CITATION_HEDGE_PHRASES) in its own sentence or the sentence
+    immediately before it -- deliberately a narrower, separate phrase list
+    from HEDGE_PHRASES (see ISSUE_CITATION_HEDGE_PHRASES's own comment for
+    why). Portable-gated, alongside the two repo-path checks above, unlike
+    the unconditional bare-prose scan.
 
 Usage:
   python3 check_skill_shape.py <skill-dir-or-SKILL.md>
@@ -377,6 +399,29 @@ HEDGE_PHRASES = (
     "the calling repository",
     "the target repository",
     "gitapex",
+)
+
+# Approved hedge phrases for the inline-code issue/PR-number citation check
+# (see the module docstring's issue #263 entry). Deliberately a separate,
+# narrower list from HEDGE_PHRASES: that list marks a repo-*path* citation as
+# a deliberate reference to a real (or explicitly generic) repository; this
+# one marks an issue-*number* citation as a rule/syntax illustration rather
+# than worked-example bookkeeping -- different questions, so a shared phrase
+# list would blur both.
+# "anchored" is this repository's own established way of describing a
+# trackingIssue field's *shape* (an anchored #123 or owner/repo#123
+# reference) rather than citing a specific issue as content -- see
+# evaluating-skill-quality's own SKILL.md and rubric.md trackingIssue
+# documentation.
+# "citation" catches this skill's own, distinct self-referential case: this
+# very shape check's rule stated in prose (e.g. "A bare GitHub issue/PR-
+# number citation (#149, owner/repo#149) is barred ..."), the same way the
+# module docstring above states it, just duplicated for the model reader.
+# Both phrases are this repository's own already-established phrasing, not
+# invented for this check.
+ISSUE_CITATION_HEDGE_PHRASES = (
+    "anchored",
+    "citation",
 )
 
 
@@ -1064,7 +1109,7 @@ def _blank_fenced_blocks(body_text: str) -> str:
     line count and every other line verbatim.
 
     Shared by ``_strip_illustrative_spans`` (which goes on to also strip
-    inline code, URLs, and links) and ``_inline_repo_path_offenders``
+    inline code, URLs, and links) and ``_inline_citation_offenders``
     (which deliberately keeps inline code intact, since it inspects
     exactly those spans) -- both need fenced blocks excluded the same way,
     since a fenced code block is "already illustrative" regardless of
@@ -1083,7 +1128,7 @@ def _blank_fenced_blocks(body_text: str) -> str:
 
 # Sentence-ending punctuation followed by whitespace. A deliberately simple
 # tokenizer (not a full sentence-boundary detector): it can over-split on an
-# abbreviation like "e.g." mid-sentence, but ``_inline_repo_path_offenders``
+# abbreviation like "e.g." mid-sentence, but ``_inline_citation_offenders``
 # checks both the current AND the immediately preceding sentence for a
 # hedge, so an over-split still finds a hedge that landed just before the
 # split point -- the failure mode is graceful, not silent.
@@ -1116,12 +1161,17 @@ def _strip_illustrative_spans(defenced_text: str) -> str:
     return "\n".join(out)
 
 
-def _inline_repo_path_offenders(defenced_text: str) -> list[str]:
-    """Return each inline-code ``evals/``/``docs/`` path citation in
+def _inline_citation_offenders(defenced_text: str, citation_re: re.Pattern[str],
+                               hedge_phrases: tuple[str, ...]) -> list[str]:
+    """Return each inline-code citation matching ``citation_re`` in
     ``defenced_text`` (already fence-blanked via ``_blank_fenced_blocks``)
-    that has no approved hedge phrase (see ``HEDGE_PHRASES``) in its own
-    sentence or the sentence immediately before it (see the module
-    docstring's issue #220 entry for the rationale).
+    that has no phrase from ``hedge_phrases`` in its own sentence or the
+    sentence immediately before it (see the module docstring's issue #220
+    and #263 entries for the rationale). Shared by the repo-path check
+    (``REPO_PATH_CITATION_RE``/``HEDGE_PHRASES``) and the issue-number check
+    (``ISSUE_CITATION_RE``/``ISSUE_CITATION_HEDGE_PHRASES``) -- the citation
+    shape and the hedge vocabulary both differ per caller, but the
+    paragraph/sentence-bounded search below is identical.
 
     Bounded to a paragraph first (a run of contiguous non-blank lines),
     then to a sentence within it, via the deliberately simple
@@ -1133,7 +1183,7 @@ def _inline_repo_path_offenders(defenced_text: str) -> list[str]:
     often as it wraps any other prose (e.g. "the calling\\n   repository's
     own"). Each citation's own matched text is excluded from its hedge
     search, so a citation cannot self-satisfy the requirement merely
-    because its own path text happens to contain a hedge word (e.g. a path
+    because its own text happens to contain a hedge word (e.g. a path
     literally named with "gitapex" in it). Fenced code blocks are already
     excluded by the caller via ``_blank_fenced_blocks`` -- a citation
     inside a fenced illustrative example never reaches this check, matching
@@ -1149,14 +1199,14 @@ def _inline_repo_path_offenders(defenced_text: str) -> list[str]:
         sentences = _SENTENCE_SPLIT_RE.split(normalized)
         for i, sentence in enumerate(sentences):
             matches = [m for m in INLINE_CODE_RE.finditer(sentence)
-                       if REPO_PATH_CITATION_RE.search(m.group(0)[1:-1])]
+                       if citation_re.search(m.group(0)[1:-1])]
             if not matches:
                 continue
             prev_lower = sentences[i - 1].lower() if i > 0 else ""
             for m in matches:
                 local_lower = (sentence[:m.start()] + sentence[m.end():]).lower()
                 if not any(phrase in local_lower or phrase in prev_lower
-                          for phrase in HEDGE_PHRASES):
+                          for phrase in hedge_phrases):
                     offenders.append(m.group(0))
     return _dedup(offenders)
 
@@ -1549,24 +1599,33 @@ def _issue_citation_checks(skill_md: Path, skill_dir: Path,
 
 def _portable_path_citation_checks(skill_md: Path, skill_dir: Path,
                                    body: list[str]) -> list[CheckResult]:
-    """The two Portable-only repo-path self-citation checks over SKILL.md
-    body and references/*.md. Each source contributes its offenders
-    labelled by file, so a failure points at the exact file to fix. Only
-    called when ``_is_portable`` is true (see ``check_shape``) -- unlike
-    the issue-number scan in ``_issue_citation_checks``, these stay
-    level-gated (see the module docstring's issue #254 entry for why).
+    """The Portable-only repo-path and inline-code-issue-number self-citation
+    checks over SKILL.md body and references/*.md. Each source contributes
+    its offenders labelled by file, so a failure points at the exact file to
+    fix. Only called when ``_is_portable`` is true (see ``check_shape``) --
+    unlike the bare-prose issue-number scan in ``_issue_citation_checks``,
+    every check here stays level-gated (see the module docstring's issue
+    #254 entry for why the bare-prose scan is different, and the #263 entry
+    for why the inline-code issue-number check joins the two repo-path
+    checks here rather than the unconditional one).
     """
     path_hits: list[str] = []
     inline_path_hits: list[str] = []
+    inline_issue_hits: list[str] = []
     for label, source_text in _citation_sources(skill_md, skill_dir, body):
-        # Fence-blanked once and shared -- both offender scans below need
-        # fenced code excluded the same way, and source_text can be a
+        # Fence-blanked once and shared -- all three offender scans below
+        # need fenced code excluded the same way, and source_text can be a
         # multi-hundred-line references/ file.
         defenced = _blank_fenced_blocks(source_text)
         _issues, paths = _portable_citation_offenders(defenced)
         path_hits += [f"{label}:{c}" for c in paths]
         inline_path_hits += [f"{label}:{c}"
-                             for c in _inline_repo_path_offenders(defenced)]
+                             for c in _inline_citation_offenders(
+                                 defenced, REPO_PATH_CITATION_RE, HEDGE_PHRASES)]
+        inline_issue_hits += [f"{label}:{c}"
+                              for c in _inline_citation_offenders(
+                                  defenced, ISSUE_CITATION_RE,
+                                  ISSUE_CITATION_HEDGE_PHRASES)]
 
     return [
         CheckResult(
@@ -1580,6 +1639,13 @@ def _portable_path_citation_checks(skill_md: Path, skill_dir: Path,
             "its own sentence or the sentence immediately before it",
             "none" if not inline_path_hits
             else "found: " + ", ".join(inline_path_hits)),
+        CheckResult(
+            "portable-no-unhedged-inline-issue-citation", not inline_issue_hits,
+            "Portable content has no inline-code issue/PR-number citation "
+            f"without an approved hedge phrase {ISSUE_CITATION_HEDGE_PHRASES} "
+            "in its own sentence or the sentence immediately before it",
+            "none" if not inline_issue_hits
+            else "found: " + ", ".join(inline_issue_hits)),
     ]
 
 

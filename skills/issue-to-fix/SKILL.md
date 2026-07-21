@@ -52,8 +52,8 @@ what has not been reproduced.
 
 ## Worked example
 
-Issue `#142`, "Search returns duplicate results when a query matches both
-title and body."
+An already-open issue, "Search returns duplicate results when a query
+matches both title and body."
 
 1. Reproduce: run the search endpoint with a query matching both fields
    against the real search path. It does return duplicates -- reproduced.
@@ -67,9 +67,9 @@ title and body."
    suite -- no other test regressed.
 
 Contrast: had step 1 failed to reproduce the duplicates against the real
-search path, the correct next move is step 2 -- comment on `#142` stating
-the exact query tried and that no duplicates appeared, then stop. Do not
-guess at a dedupe fix for a defect that did not reproduce.
+search path, the correct next move is step 2 -- comment on the issue
+stating the exact query tried and that no duplicates appeared, then stop.
+Do not guess at a dedupe fix for a defect that did not reproduce.
 
 Contrast (no linked issue): a scheduled nightly workflow fails with no
 issue tracking it, and attempting the same steps that failed in CI does

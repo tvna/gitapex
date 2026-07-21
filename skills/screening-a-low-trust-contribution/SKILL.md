@@ -140,7 +140,7 @@ delegation inherits the extension automatically.
 
 ## Worked example
 
-PR `#211`, opened by a first-time contributor, titled "Speed up checkout
+A PR opened by a first-time contributor, titled "Speed up checkout
 step".
 
 1. Diff completeness and provenance: the literal diff was pulled via a
