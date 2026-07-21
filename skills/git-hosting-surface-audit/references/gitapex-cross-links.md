@@ -9,13 +9,13 @@ omitted where they don't). A vendored copy never reads this file.
 
 ## Gap cross-link target
 
-gitapex's tracking issue for approved-but-unbuilt tooling is **issue
-#82**. #82 is the umbrella tracking issue for gitapex's approved
-read-only gh wrapper -- it has no single "landed" state of its own. The
-approved wrapper that would close each Gap is an unfiled candidate child
-issue under #82, not #82 itself. Word every cross-link that way
-("consumer of an unfiled candidate child issue under #82"), not as
-"blocked on #82 landing."
+gitapex's tracking issue for approved-but-unbuilt tooling is
+[gitapex#82](https://github.com/tvna/gitapex/issues/82). `#82` is the
+umbrella tracking issue for gitapex's approved read-only gh wrapper -- it
+has no single "landed" state of its own. The approved wrapper that would
+close each Gap is an unfiled candidate child issue under `#82`, not `#82`
+itself. Word every cross-link that way ("consumer of an unfiled candidate
+child issue under `#82`"), not as "blocked on `#82` landing."
 
 ## Read-only stop-boundary authority
 

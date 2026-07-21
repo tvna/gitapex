@@ -166,7 +166,7 @@ references-flat                            PASS    flat  (references/ files are 
 toc:rubric.md                              PASS    1135 lines, TOC found  (reference over 100 lines has a TOC)
 toc:worked-example-explaining-the-work.md  PASS    282 lines, TOC found  (reference over 100 lines has a TOC)
 toc:worked-example-self-review.md          PASS    634 lines, TOC found  (reference over 100 lines has a TOC)
-portable-no-issue-citation                 PASS    none  (Portable content has no bare-prose GitHub issue/PR-number citation)
+no-bare-issue-citation                     PASS    none  (No bare-prose GitHub issue/PR-number citation, at any portability level)
 portable-no-repo-path-citation             PASS    none  (Portable content has no bare-prose origin-repository path citation)
 portable-no-unhedged-inline-path-citation  PASS    none  (Portable content has no inline-code origin-repository path citation without an approved hedge phrase ('this repository', 'the calling repository', 'the target repository', 'gitapex') in its own sentence or the sentence immediately before it)
 

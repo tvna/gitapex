@@ -493,6 +493,24 @@ grading below.
   `references/this-repo-only.md`) a consumer can identify and drop, not
   blended into the portable core.
 
+**Bare issue/PR-number citations are barred at every level, not just
+Portable.** A bare GitHub issue/PR-number citation (`#149` or
+`owner/repo#149`) in a skill's `SKILL.md` or `references/*.md` body text is
+a defect regardless of the skill's declared portability level -- Portable,
+Repository-scoped, and Mixed alike. A bare `#N` auto-links relative to
+whichever repository currently hosts the file and silently resolves to the
+wrong issue once the skill is vendored or simply read out of context, and
+that risk does not depend on the declared level. This is narrower than the
+Portable litmus test above: it targets only issue/PR numbers, not repo-
+specific paths or other repo-specific content. Sibling-skill names,
+repo-specific paths, and repo-specific conventions remain legitimate
+Mixed/Repository-scoped territory; a skill's own issue/PR provenance
+belongs in the `metadata/gitapex.yaml` sidecar's `spec.references` instead
+(maintainer-facing, never auto-loaded), not a bare number sitting in prose.
+The `no-bare-issue-citation` shape check enforces this unconditionally,
+while the two repo-path shape checks (`portable-no-repo-path-citation`,
+`portable-no-unhedged-inline-path-citation`) stay gated to Portable only.
+
 ## Capability assumption
 
 Like the portability level, this is a precondition the review establishes

@@ -188,6 +188,11 @@ just to classify it.
 - **Mixed**: a portable core plus repo-specific detail should split the
   two into a clearly named reference file, not blend them.
 
+A bare GitHub issue/PR-number citation (`#149`, `owner/repo#149`) is barred
+from `SKILL.md`/`references/*.md` at every level, Mixed and
+Repository-scoped included -- unlike repo-specific paths and other
+repo-specific content, which stay legitimate at those two levels.
+
 Full rationale and per-dimension grading detail:
 [references/rubric.md](references/rubric.md)'s Portability level section.
 
