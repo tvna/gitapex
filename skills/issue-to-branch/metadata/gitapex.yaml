@@ -7,4 +7,5 @@ spec:
   capabilityAssumption: Broad
   skillDependencies:
     requires: []
-    relatedTo: []
+    relatedTo:
+      - drafting-an-acm-issue

@@ -28,6 +28,12 @@ without losing the issue's acceptance criteria.
 4. Produce an Acceptance Criteria Map before any branch work begins:
    criterion -> interpretation -> planned files/operations -> proof method
    -> residual risk. See [the template](references/acceptance-criteria-map.md).
+   If the issue body already carries an Acceptance Criteria Map (for
+   example, drafted by a skill at issue-creation time), treat it as a
+   draft input, not a pre-verified result -- independently re-check
+   each row against the issue's own stated facts before adopting it,
+   and correct or flag any row that does not hold up rather than
+   accepting it merely for being well-formed.
 5. Propose a branch name, commit scope, PR title, and PR body outline, all
    tied to the issue number.
 6. Identify the deterministic gates the mapped criteria require: tests,

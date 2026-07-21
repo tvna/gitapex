@@ -7,5 +7,4 @@ spec:
   capabilityAssumption: Broad
   skillDependencies:
     requires: []
-    relatedTo:
-      - seeding-issue-pr-templates
+    relatedTo: []

@@ -18,7 +18,7 @@ agent.
 skills/            one directory per skill (SKILL.md, metadata/gitapex.yaml, optionally references/) — deployed by apm/Claude/Codex
   explaining-the-work/  routes code-comment/commit/test explanation responsibility to the right artifact
   issue-to-branch/      turns a GitHub issue into an implementation-ready branch/PR plan with an Acceptance Criteria Map
-  seeding-issue-pr-templates/  creates Issue/PR templates when a repo lacks them; first script-shipping skill (scripts/validate_templates.py)
+  drafting-an-acm-issue/  drafts a new GitHub issue with an Acceptance Criteria Map before creation, so issue-to-branch can read one instead of building it
 docs/              documentation (this file, versioning policy, design specs, motivation.md) — not deployed
 tests/             pytest suite for the internal CI tooling — not deployed
 .github/           CI workflows and their internal tooling (.github/scripts/sync_pr_publish.py) — not deployed
