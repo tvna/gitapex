@@ -31,7 +31,21 @@ Checks (the canonical list -- the manual fallback is to apply these):
     either list resolves to an existing sibling skill directory
     (skill-dependencies-resolve); and a non-empty
     spec.skillDependencies.requires is incompatible with
-    spec.portability: Portable (requires-portability-compatible). Other
+    spec.portability: Portable (requires-portability-compatible).
+    spec.lifecycle, if present, is a mapping with only the keys
+    experimental/deprecated, each -- if present -- a mapping of its own
+    recognized scalar fields (experimental: reason/trackingIssue
+    required, since optional; deprecated: reason/replacement required,
+    since/removeAfter optional), with since/removeAfter, if present, real
+    calendar dates in strict YYYY-MM-DD shape and trackingIssue, if
+    present, an anchored #123 or owner/repo#123 reference
+    (lifecycle-well-formed); and, when deprecated.replacement is a
+    non-empty string, it resolves to an existing sibling skill directory,
+    the same dangling-reference gate spec.skillDependencies uses
+    (lifecycle-deprecated-replacement-resolves). experimental and
+    deprecated are independent and optional -- neither implies nor
+    excludes the other, and no skill's runtime procedure may read or
+    branch on either (the sidecar's behavior-neutrality invariant). Other
     ungated sidecar fields (e.g. spec.evalStatus) are parsed into the spec
     map by _parse_manifest only if written as a single inline scalar; a
     nested/block-shaped field (e.g. evalStatus's documented baseline:/lift:
@@ -109,6 +123,7 @@ when no readable SKILL.md is found.
 from __future__ import annotations
 
 import argparse
+import datetime
 import json
 import os.path
 import re
@@ -171,6 +186,49 @@ SKILL_DEPENDENCY_SUBKEYS = ("requires", "relatedTo")
 SKILL_DEP_SUBKEY_RE = re.compile(r"^[ ]{4}(requires|relatedTo):\s*(.*)$")
 SKILL_DEP_UNKNOWN_KEY_RE = re.compile(r"^[ ]{4}([A-Za-z0-9_-]+):")
 SKILL_DEP_LIST_ITEM_RE = re.compile(r"^[ ]{4,}-\s*(.*)$")
+
+# spec.lifecycle's two recognized sub-blocks -- "experimental" (entry side:
+# not yet proven, mirrors Rust's #[unstable(feature, issue)], Python's
+# provisional/PendingDeprecationWarning APIs, Go's GOEXPERIMENT-gated
+# features, Kubernetes' alpha/beta feature gates) and "deprecated" (exit
+# side: superseded, mirrors Rust's #[deprecated(since, note)], Go's
+# "// Deprecated:" doc comment, Python's warnings.deprecated/PEP 702,
+# Kubernetes' API deprecation policy). The two are independent and
+# optional -- neither implies nor excludes the other, and a skill with
+# neither is implicitly Stable (every skill in this repository today).
+# One nesting level deeper than spec.skillDependencies: subkeys sit at 4
+# spaces (same as requires/relatedTo), but each subkey opens ANOTHER
+# nested block of scalar fields at 6 spaces, rather than a list.
+LIFECYCLE_SUBKEYS = ("experimental", "deprecated")
+LIFECYCLE_FIELDS = {
+    "experimental": ("reason", "trackingIssue", "since"),
+    "deprecated": ("reason", "replacement", "since", "removeAfter"),
+}
+LIFECYCLE_REQUIRED_FIELDS = {
+    "experimental": ("reason", "trackingIssue"),
+    "deprecated": ("reason", "replacement"),
+}
+LIFECYCLE_SUBKEY_RE = re.compile(r"^[ ]{4}(experimental|deprecated):\s*(.*)$")
+LIFECYCLE_UNKNOWN_SUBKEY_RE = re.compile(r"^[ ]{4}([A-Za-z0-9_-]+):")
+# Matches ANY key at this indent, recognized or not -- the handler tells
+# them apart by membership in LIFECYCLE_FIELDS[subkey], the same "match
+# broad, filter narrow" approach SKILL_DEP_UNKNOWN_KEY_RE's sibling
+# SKILL_DEP_SUBKEY_RE takes one level up.
+LIFECYCLE_FIELD_RE = re.compile(r"^[ ]{6}([A-Za-z0-9_-]+):\s*(.*)$")
+# Strict calendar-date shape for spec.lifecycle's since/removeAfter
+# fields: YYYY-MM-DD only. Real-date validity (rejecting e.g. 2026-02-30)
+# is checked separately via datetime.date.fromisoformat in
+# _valid_lifecycle_date -- this regex only gates the shape first, so that
+# lenient ISO-variant parsing in Python 3.11+ never gets a chance to
+# accept an off-shape string.
+LIFECYCLE_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+# A GitHub issue/PR reference anchoring the whole string (unlike
+# ISSUE_CITATION_RE above, which scans for the same shape inside running
+# prose): an optional "owner/repo" prefix, then "#" and a digit run.
+# Shape-only -- never resolved against a live GitHub API call, since this
+# checker is offline/read-only by design.
+LIFECYCLE_ISSUE_REF_RE = re.compile(
+    r"^(?:[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*)?#\d+$")
 
 TAG_RE = re.compile(r"</?[A-Za-z][^>]*>")
 NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
@@ -342,12 +400,28 @@ class ManifestParse:
     spec.skillDependencies that is not ``requires`` or ``relatedTo``
     (trimmed line, e.g. "extra: foo"). Both empty when the field is absent
     or parsed cleanly.
+
+    ``unknown_lifecycle_keys`` and ``unknown_lifecycle_fields`` are
+    spec.lifecycle's equivalents, one nesting level deeper again:
+    ``unknown_lifecycle_keys`` holds each key found directly under
+    spec.lifecycle that is not ``experimental`` or ``deprecated`` (trimmed
+    line); ``unknown_lifecycle_fields`` holds each key found inside either
+    of those sub-blocks that is not one of its own recognized fields
+    (e.g. "extra: foo" under experimental). Both empty when the field is
+    absent or parsed cleanly. There is no malformed-item channel for
+    spec.lifecycle the way spec.references/spec.skillDependencies have
+    one for list items -- every leaf under spec.lifecycle is a plain
+    scalar, so a wrong-type value is simply stored as the raw string by
+    the field parser and fails the downstream well-formed check on shape,
+    with nothing that needs a separate parse-time detection channel.
     """
     root: dict[str, object]
     malformed_lines: list[str]
     malformed_reference_items: list[str]
     malformed_skill_dependency_items: list[str]
     unknown_skill_dependency_keys: list[str]
+    unknown_lifecycle_keys: list[str]
+    unknown_lifecycle_fields: list[str]
 
 
 def _parse_manifest(text: str) -> ManifestParse:
@@ -375,6 +449,27 @@ def _parse_manifest(text: str) -> ManifestParse:
       instead of being silently skipped, since an unrecognized key here is
       a real shape defect the checker is expected to catch, not reserved
       space.
+    - spec.lifecycle (and only that key, and only directly under spec) is
+      read as a mapping with exactly two recognized sub-blocks,
+      ``experimental`` and ``deprecated``, each -- at exactly 4-space
+      indent -- an empty value opening a nested block of scalar fields at
+      exactly 6-space indent (``reason``/``trackingIssue``/``since`` for
+      ``experimental``; ``reason``/``replacement``/``since``/
+      ``removeAfter`` for ``deprecated``). One nesting level deeper than
+      spec.skillDependencies, but with scalar leaves instead of a list --
+      there is no list-item shape inside spec.lifecycle at all. A key
+      directly under spec.lifecycle other than ``experimental``/
+      ``deprecated`` is collected into
+      ``ManifestParse.unknown_lifecycle_keys``; a key inside either
+      sub-block that is not one of its own recognized fields is collected
+      into ``ManifestParse.unknown_lifecycle_fields`` -- both instead of
+      being silently skipped, for the same reason
+      ``unknown_skill_dependency_keys`` exists. A sub-block header written
+      as an inline scalar instead of opening a block (e.g.
+      ``experimental: true``) is stored as that raw scalar under its own
+      key, exactly as spec.skillDependencies' non-list scalar fallback
+      works, so the checker layer reports it as the wrong type rather than
+      silently dropping it.
 
     Every other nested map or list (e.g. spec.evalStatus) is still
     deliberately skipped, exactly as before: skipping keeps this
@@ -415,6 +510,12 @@ def _parse_manifest(text: str) -> ManifestParse:
     dep_list_indent: int | None = None
     malformed_deps: list[str] = []
     unknown_dep_keys: list[str] = []
+    in_lifecycle = False
+    lifecycle: dict[str, object] = {}
+    lifecycle_subkey: str | None = None
+    lifecycle_field_buffer: dict[str, object] = {}
+    unknown_lifecycle_keys: list[str] = []
+    unknown_lifecycle_fields: list[str] = []
 
     def _finalize_refs() -> None:
         nonlocal collecting_refs, refs_indent
@@ -438,6 +539,21 @@ def _parse_manifest(text: str) -> ManifestParse:
             current["skillDependencies"] = skill_deps
         in_skill_deps = False
         skill_deps = {}
+
+    def _finalize_lifecycle_subkey() -> None:
+        nonlocal lifecycle_subkey, lifecycle_field_buffer
+        if lifecycle_subkey is not None:
+            lifecycle[lifecycle_subkey] = lifecycle_field_buffer
+        lifecycle_subkey = None
+        lifecycle_field_buffer = {}
+
+    def _finalize_lifecycle() -> None:
+        nonlocal in_lifecycle, lifecycle
+        _finalize_lifecycle_subkey()
+        if in_lifecycle and current is not None:
+            current["lifecycle"] = lifecycle
+        in_lifecycle = False
+        lifecycle = {}
 
     for raw in text.splitlines():
         line = raw.rstrip()
@@ -520,6 +636,59 @@ def _parse_manifest(text: str) -> ManifestParse:
             # here. Finalize it and fall through to process this line
             # normally below.
             _finalize_skill_deps()
+        if lifecycle_subkey is not None:
+            field = LIFECYCLE_FIELD_RE.match(line)
+            if field:
+                key, value = field.group(1), field.group(2).strip()
+                if key in LIFECYCLE_FIELDS.get(lifecycle_subkey, ()):
+                    if value:
+                        lifecycle_field_buffer[key] = _unquote(value)
+                else:
+                    unknown_lifecycle_fields.append(line.strip())
+                continue
+            indent = len(line) - len(line.lstrip(" "))
+            if line[:1] in (" ", "\t") and indent >= 6:
+                # Stray content deeper inside the sub-block that is not a
+                # recognized field line -- skip silently, consistent with
+                # "indented lines are never malformed" except the
+                # explicit unknown_lifecycle_fields channel above.
+                continue
+            # Dedented below the sub-block's own indent: this
+            # experimental/deprecated block ends here. Finalize it and
+            # fall through to process this line normally below (it may be
+            # the other sub-block's header, or a dedent out of lifecycle
+            # entirely).
+            _finalize_lifecycle_subkey()
+        if in_lifecycle:
+            subkey = LIFECYCLE_SUBKEY_RE.match(line)
+            if subkey:
+                key, value = subkey.group(1), subkey.group(2).strip()
+                if value:
+                    # Not opening a block -- a bare scalar written where a
+                    # mapping is expected (e.g. "experimental: true").
+                    # Store the raw scalar under the subkey itself so the
+                    # checker layer reports it as the wrong type, exactly
+                    # as spec.skillDependencies' non-list scalar fallback
+                    # works.
+                    lifecycle[key] = value
+                else:
+                    lifecycle_subkey = key
+                    lifecycle_field_buffer = {}
+                continue
+            unknown = LIFECYCLE_UNKNOWN_SUBKEY_RE.match(line)
+            if unknown:
+                unknown_lifecycle_keys.append(line.strip())
+                continue
+            indent = len(line) - len(line.lstrip(" "))
+            if line[:1] in (" ", "\t") and indent >= 4:
+                # Stray content deeper inside spec.lifecycle that is not a
+                # recognized sub-block header -- skip silently, same
+                # reserved-field treatment as spec.skillDependencies.
+                continue
+            # Dedented below spec.lifecycle's own indent: the block ends
+            # here. Finalize it and fall through to process this line
+            # normally below.
+            _finalize_lifecycle()
         if line[:1] in (" ", "\t"):
             # Indented: nested/list content this parser does not interpret,
             # except spec.references and spec.skillDependencies (handled
@@ -538,6 +707,9 @@ def _parse_manifest(text: str) -> ManifestParse:
                 elif key == "skillDependencies" and current is root.get("spec") and not value:
                     in_skill_deps = True
                     skill_deps = {}
+                elif key == "lifecycle" and current is root.get("spec") and not value:
+                    in_lifecycle = True
+                    lifecycle = {}
                 elif value:
                     current[key] = _unquote(value)
             continue
@@ -557,10 +729,13 @@ def _parse_manifest(text: str) -> ManifestParse:
         malformed.append(line.strip())
     _finalize_refs()
     _finalize_skill_deps()
+    _finalize_lifecycle()
     return ManifestParse(root=root, malformed_lines=malformed,
                           malformed_reference_items=malformed_refs,
                           malformed_skill_dependency_items=malformed_deps,
-                          unknown_skill_dependency_keys=unknown_dep_keys)
+                          unknown_skill_dependency_keys=unknown_dep_keys,
+                          unknown_lifecycle_keys=unknown_lifecycle_keys,
+                          unknown_lifecycle_fields=unknown_lifecycle_fields)
 
 
 def _body_after_frontmatter(text: str) -> list[str]:
@@ -897,6 +1072,8 @@ def check_shape(target: Path) -> list[CheckResult]:
             malformed_reference_items = parsed.malformed_reference_items
             malformed_skill_dependency_items = parsed.malformed_skill_dependency_items
             unknown_skill_dependency_keys = parsed.unknown_skill_dependency_keys
+            unknown_lifecycle_keys = parsed.unknown_lifecycle_keys
+            unknown_lifecycle_fields = parsed.unknown_lifecycle_fields
             read_error: str | None = None
         except (OSError, UnicodeDecodeError) as exc:
             manifest = None
@@ -904,6 +1081,8 @@ def check_shape(target: Path) -> list[CheckResult]:
             malformed_reference_items = []
             malformed_skill_dependency_items = []
             unknown_skill_dependency_keys = []
+            unknown_lifecycle_keys = []
+            unknown_lifecycle_fields = []
             read_error = type(exc).__name__
 
         if manifest is None:
@@ -943,6 +1122,18 @@ def check_shape(target: Path) -> list[CheckResult]:
                 "requires-portability-compatible", False,
                 "a non-empty spec.skillDependencies.requires is incompatible "
                 "with spec.portability: Portable", evidence))
+            results.append(CheckResult(
+                "lifecycle-well-formed", False,
+                "spec.lifecycle, if present, is a mapping with only "
+                "experimental/deprecated keys, each -- if present -- a "
+                "mapping of its own recognized scalar fields with required "
+                "fields non-empty and since/removeAfter, if present, real "
+                "YYYY-MM-DD dates", evidence))
+            results.append(CheckResult(
+                "lifecycle-deprecated-replacement-resolves", False,
+                "spec.lifecycle.deprecated.replacement, if a non-empty "
+                "string, resolves to an existing sibling skill directory",
+                evidence))
             # Deliberately not the body-marker fallback: a present-but-broken
             # sidecar is authoritative-and-failing, not absent. Running the
             # scan (rather than skipping it) lands extra findings on a skill
@@ -1037,6 +1228,9 @@ def check_shape(target: Path) -> list[CheckResult]:
                 spec_is_mapping, spec_raw, spec,
                 malformed_skill_dependency_items, unknown_skill_dependency_keys,
                 skill_dir, portability))
+            results.extend(_lifecycle_checks(
+                spec_is_mapping, spec_raw, spec,
+                unknown_lifecycle_keys, unknown_lifecycle_fields, skill_dir))
             if portability in PORTABILITY_LEVELS:
                 sidecar_portability = SidecarPortability(
                     state="usable", level=portability)
@@ -1244,6 +1438,148 @@ def _skill_dependency_checks(spec_is_mapping: bool, spec_raw: object,
         "ok" if not contradiction
         else f"non-empty requires with portability={portability!r}"))
 
+    return results
+
+
+def _valid_lifecycle_date(value: object) -> bool:
+    """Whether ``value`` is a real calendar date in strict YYYY-MM-DD
+    shape, for spec.lifecycle's since/removeAfter fields.
+
+    Regex first (rejects any non-dashed or wrong-width shape outright),
+    then ``datetime.date.fromisoformat`` (rejects a shape-valid but
+    non-existent date, e.g. "2026-13-45" or "2026-02-30", that a
+    regex-only check would silently accept). Gating the regex first also
+    blocks ``fromisoformat``'s lenient Python 3.11+ ISO-variant parsing
+    from accepting an off-shape string that happens to still be valid
+    ISO 8601.
+    """
+    if not (isinstance(value, str) and LIFECYCLE_DATE_RE.match(value)):
+        return False
+    try:
+        datetime.date.fromisoformat(value)
+    except ValueError:
+        return False
+    return True
+
+
+def _valid_tracking_issue(value: object) -> bool:
+    """Shape-only check for spec.lifecycle.experimental.trackingIssue: an
+    anchored ``#123`` or ``owner/repo#123``. Never resolved against a
+    live GitHub API call -- this checker is offline/read-only by design.
+    """
+    return isinstance(value, str) and bool(LIFECYCLE_ISSUE_REF_RE.match(value))
+
+
+def _lifecycle_checks(spec_is_mapping: bool, spec_raw: object,
+                       spec: dict[str, object],
+                       unknown_keys: list[str],
+                       unknown_fields: list[str],
+                       skill_dir: Path) -> list[CheckResult]:
+    """The two spec.lifecycle checks: ``lifecycle-well-formed`` (shape) and
+    ``lifecycle-deprecated-replacement-resolves`` (the dangling-reference
+    gate for ``deprecated.replacement``, mirroring
+    ``skill-dependencies-resolve``).
+
+    ``experimental`` and ``deprecated`` are independent, optional
+    sub-blocks -- neither implies nor excludes the other, and there is no
+    mutual-exclusion check between them. Mirrors the
+    ``_skill_dependency_checks`` cascade: shape is checked first, since a
+    badly-shaped field has nothing sensible to resolve against -- every
+    early-return branch below reports ``lifecycle-deprecated-replacement-resolves``
+    as "nothing to check" rather than silently passing on data that was
+    never actually a mapping.
+    """
+    well_formed_rule = (
+        "spec.lifecycle, if present, is a mapping with only "
+        "experimental/deprecated keys, each -- if present -- a mapping of "
+        "its own recognized scalar fields (experimental: reason/"
+        "trackingIssue required, since optional; deprecated: reason/"
+        "replacement required, since/removeAfter optional), with since/"
+        "removeAfter, if present, real YYYY-MM-DD dates and trackingIssue, "
+        "if present, an anchored #123 or owner/repo#123 reference")
+    resolve_rule = (
+        "spec.lifecycle.deprecated.replacement, if a non-empty string, "
+        "resolves to an existing sibling skill directory")
+
+    if not spec_is_mapping:
+        evidence = f"spec is not a mapping: {spec_raw!r}"
+        return [
+            CheckResult("lifecycle-well-formed", False, well_formed_rule, evidence),
+            CheckResult("lifecycle-deprecated-replacement-resolves", True,
+                        resolve_rule, "nothing to check (spec is not a mapping)"),
+        ]
+
+    lifecycle = spec.get("lifecycle")
+    if lifecycle is None:
+        return [
+            CheckResult("lifecycle-well-formed", True, well_formed_rule,
+                        "not declared (optional)"),
+            CheckResult("lifecycle-deprecated-replacement-resolves", True,
+                        resolve_rule, "not declared (optional)"),
+        ]
+
+    if not isinstance(lifecycle, dict):
+        evidence = f"not a mapping: {lifecycle!r}"
+        return [
+            CheckResult("lifecycle-well-formed", False, well_formed_rule, evidence),
+            CheckResult("lifecycle-deprecated-replacement-resolves", True,
+                        resolve_rule, "nothing to check (not a mapping)"),
+        ]
+
+    problems: list[str] = []
+    if unknown_keys:
+        count = len(unknown_keys)
+        problems.append(f"{count} unknown key{'' if count == 1 else 's'}: "
+                         f"{unknown_keys[0]!r}")
+    if unknown_fields:
+        count = len(unknown_fields)
+        problems.append(f"{count} unknown field{'' if count == 1 else 's'}: "
+                         f"{unknown_fields[0]!r}")
+
+    sub_blocks: dict[str, dict[str, object]] = {}
+    for key in LIFECYCLE_SUBKEYS:
+        if key not in lifecycle:
+            continue
+        block = lifecycle[key]
+        if not isinstance(block, dict):
+            problems.append(f"{key} is not a mapping: {block!r}")
+            continue
+        sub_blocks[key] = block
+        for field in LIFECYCLE_REQUIRED_FIELDS[key]:
+            val = block.get(field)
+            if not (isinstance(val, str) and val.strip()):
+                problems.append(
+                    f"{key}.{field} is missing or not a non-empty string: {val!r}")
+        for field in ("since", "removeAfter"):
+            if field in block and not _valid_lifecycle_date(block[field]):
+                problems.append(
+                    f"{key}.{field} is not a YYYY-MM-DD date: {block[field]!r}")
+        if key == "experimental" and "trackingIssue" in block \
+                and not _valid_tracking_issue(block["trackingIssue"]):
+            problems.append(
+                f"experimental.trackingIssue is not a #123 or owner/repo#123 "
+                f"reference: {block['trackingIssue']!r}")
+
+    if problems:
+        results = [CheckResult("lifecycle-well-formed", False, well_formed_rule,
+                                "; ".join(problems))]
+    else:
+        declared = [k for k in LIFECYCLE_SUBKEYS if k in sub_blocks]
+        evidence = f"{', '.join(declared)} declared" if declared else "no keys declared"
+        results = [CheckResult("lifecycle-well-formed", True, well_formed_rule,
+                                evidence)]
+
+    deprecated = sub_blocks.get("deprecated")
+    replacement = deprecated.get("replacement") if deprecated else None
+    if isinstance(replacement, str) and replacement.strip():
+        exists = (skill_dir.parent / replacement).is_dir()
+        results.append(CheckResult(
+            "lifecycle-deprecated-replacement-resolves", exists, resolve_rule,
+            "resolves" if exists else f"dangling: {replacement!r}"))
+    else:
+        results.append(CheckResult(
+            "lifecycle-deprecated-replacement-resolves", True, resolve_rule,
+            "nothing to check (replacement missing or invalid)"))
     return results
 
 

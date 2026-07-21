@@ -1170,6 +1170,58 @@ def test_manifest_parser_parses_spec_skill_dependencies():
     assert parsed.unknown_skill_dependency_keys == []
 
 
+def test_manifest_parser_parses_spec_lifecycle():
+    # One nesting level deeper than spec.skillDependencies: each sub-block
+    # (experimental/deprecated) opens ANOTHER nested block of scalar
+    # fields, rather than a list.
+    text = (
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Mixed\n"
+        "  capabilityAssumption: Broad\n"
+        "  lifecycle:\n"
+        "    experimental:\n"
+        "      reason: not yet proven\n"
+        "      trackingIssue: \"#123\"\n"
+        "    deprecated:\n"
+        "      reason: superseded\n"
+        "      replacement: other-skill\n"
+        "      since: \"2026-07-21\"\n"
+    )
+    parsed = css._parse_manifest(text)
+    assert parsed.root["spec"]["lifecycle"] == {
+        "experimental": {"reason": "not yet proven", "trackingIssue": "#123"},
+        "deprecated": {"reason": "superseded", "replacement": "other-skill",
+                        "since": "2026-07-21"},
+    }
+    assert parsed.malformed_lines == []
+    assert parsed.unknown_lifecycle_keys == []
+    assert parsed.unknown_lifecycle_fields == []
+
+
+def test_manifest_parser_lifecycle_unknown_keys_are_collected():
+    text = (
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Mixed\n"
+        "  capabilityAssumption: Broad\n"
+        "  lifecycle:\n"
+        "    experimental:\n"
+        "      reason: not yet proven\n"
+        "      extraField: foo\n"
+        "    stage: Beta\n"
+    )
+    parsed = css._parse_manifest(text)
+    assert parsed.unknown_lifecycle_fields == ["extraField: foo"]
+    assert parsed.unknown_lifecycle_keys == ["stage: Beta"]
+
+
 def test_manifest_parser_still_ignores_eval_status():
     # Regression guard: spec.skillDependencies gaining a real parser must
     # not widen to spec.evalStatus (reserved for issue #185, untouched by
@@ -1538,3 +1590,240 @@ def test_skill_dependencies_well_formed_fails_when_spec_is_not_a_mapping(tmp_pat
     assert "not a mapping" in by["skill-dependencies-well-formed"].evidence
     assert by["skill-dependencies-resolve"].passed is True
     assert by["requires-portability-compatible"].passed is True
+
+
+# ---- lifecycle-well-formed / lifecycle-deprecated-replacement-resolves ----
+
+_LIFECYCLE_CHECKS = ("lifecycle-well-formed",
+                     "lifecycle-deprecated-replacement-resolves")
+
+
+def _write_lifecycle_sidecar(d, body, *, portability="Mixed"):
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        f"  portability: {portability}\n"
+        "  capabilityAssumption: Broad\n"
+        f"{body}",
+        encoding="utf-8")
+    return d
+
+
+def test_lifecycle_absent_is_well_formed(tmp_path):
+    d = _write_skill(tmp_path)
+    by = _by_name(css.check_shape(d))
+    for check in _LIFECYCLE_CHECKS:
+        assert by[check].passed is True, check
+        assert by[check].evidence == "not declared (optional)"
+    assert css.main([str(d)]) == 0
+
+
+def test_lifecycle_experimental_only_is_well_formed(tmp_path):
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n"
+        "    experimental:\n"
+        "      reason: not yet proven\n"
+        "      trackingIssue: \"#123\"\n")
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is True
+    assert "experimental" in by["lifecycle-well-formed"].evidence
+    assert by["lifecycle-deprecated-replacement-resolves"].passed is True
+    assert css.main([str(d)]) == 0
+
+
+def test_lifecycle_deprecated_only_is_well_formed_and_resolves(tmp_path):
+    (tmp_path / "other-skill").mkdir()
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n"
+        "    deprecated:\n"
+        "      reason: superseded\n"
+        "      replacement: other-skill\n"
+        "      since: \"2026-07-21\"\n"
+        "      removeAfter: \"2026-10-01\"\n")
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is True
+    assert by["lifecycle-deprecated-replacement-resolves"].passed is True
+    assert by["lifecycle-deprecated-replacement-resolves"].evidence == "resolves"
+    assert css.main([str(d)]) == 0
+
+
+def test_lifecycle_both_blocks_present_is_valid(tmp_path):
+    # Confirmed non-goal: no mutual-exclusion gate between experimental and
+    # deprecated -- both present simultaneously is unusual but not an error.
+    (tmp_path / "other-skill").mkdir()
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n"
+        "    experimental:\n"
+        "      reason: not yet proven\n"
+        "      trackingIssue: \"#123\"\n"
+        "    deprecated:\n"
+        "      reason: superseded\n"
+        "      replacement: other-skill\n")
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is True
+    assert by["lifecycle-deprecated-replacement-resolves"].passed is True
+    assert css.main([str(d)]) == 0
+
+
+def test_lifecycle_missing_tracking_issue_fails_well_formed(tmp_path):
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n"
+        "    experimental:\n"
+        "      reason: not yet proven\n")
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is False
+    assert "trackingIssue" in by["lifecycle-well-formed"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_lifecycle_missing_replacement_fails_well_formed(tmp_path):
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n"
+        "    deprecated:\n"
+        "      reason: superseded\n")
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is False
+    assert "replacement" in by["lifecycle-well-formed"].evidence
+    # The malformed sub-block is treated as absent for the resolve gate,
+    # not silently trusted -- no false negative.
+    assert by["lifecycle-deprecated-replacement-resolves"].passed is True
+    assert css.main([str(d)]) == 1
+
+
+def test_lifecycle_unknown_field_fails_well_formed(tmp_path):
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n"
+        "    experimental:\n"
+        "      reason: not yet proven\n"
+        "      trackingIssue: \"#123\"\n"
+        "      extraField: foo\n")
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is False
+    assert "unknown field" in by["lifecycle-well-formed"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_lifecycle_unknown_top_level_key_fails_well_formed(tmp_path):
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n"
+        "    experimental:\n"
+        "      reason: not yet proven\n"
+        "      trackingIssue: \"#123\"\n"
+        "    stage: Beta\n")
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is False
+    assert "unknown key" in by["lifecycle-well-formed"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_lifecycle_dangling_replacement_fails_resolve(tmp_path):
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n"
+        "    deprecated:\n"
+        "      reason: superseded\n"
+        "      replacement: ghost-skill\n")
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is True
+    assert by["lifecycle-deprecated-replacement-resolves"].passed is False
+    assert "ghost-skill" in by["lifecycle-deprecated-replacement-resolves"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_lifecycle_wrong_shape_date_fails_well_formed(tmp_path):
+    (tmp_path / "other-skill").mkdir()
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n"
+        "    deprecated:\n"
+        "      reason: superseded\n"
+        "      replacement: other-skill\n"
+        "      since: \"2026/07/21\"\n")
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is False
+    assert "since" in by["lifecycle-well-formed"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_lifecycle_nonexistent_calendar_date_fails_well_formed(tmp_path):
+    # Regression guard proving the datetime.date.fromisoformat layer, not
+    # just LIFECYCLE_DATE_RE's shape check -- "2026-13-45" matches the
+    # regex but is not a real calendar date.
+    (tmp_path / "other-skill").mkdir()
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n"
+        "    deprecated:\n"
+        "      reason: superseded\n"
+        "      replacement: other-skill\n"
+        "      since: \"2026-13-45\"\n")
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is False
+    assert "since" in by["lifecycle-well-formed"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_lifecycle_malformed_tracking_issue_fails_well_formed(tmp_path):
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n"
+        "    experimental:\n"
+        "      reason: not yet proven\n"
+        "      trackingIssue: \"see the tracker\"\n")
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is False
+    assert "trackingIssue" in by["lifecycle-well-formed"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_lifecycle_whole_field_wrong_type_fails_well_formed(tmp_path):
+    d = _write_lifecycle_sidecar(_write_skill(tmp_path), "  lifecycle: oops\n")
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is False
+    assert "not a mapping" in by["lifecycle-well-formed"].evidence
+    assert by["lifecycle-deprecated-replacement-resolves"].passed is True
+
+
+def test_lifecycle_sub_block_wrong_type_fails_well_formed(tmp_path):
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n"
+        "    experimental: true\n")
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is False
+    assert "experimental is not a mapping" in by["lifecycle-well-formed"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_lifecycle_checks_fail_when_sidecar_unreadable(tmp_path):
+    d = _write_skill(tmp_path)
+    sidecar = d / "metadata/gitapex.yaml"
+    sidecar.write_bytes(b"\xff\xfe\x00\x01invalid")
+    by = _by_name(css.check_shape(d))
+    for check in _LIFECYCLE_CHECKS:
+        assert by[check].passed is False, check
+
+
+def test_lifecycle_well_formed_fails_when_spec_is_not_a_mapping(tmp_path):
+    d = _write_skill(tmp_path)
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec: not-a-mapping-scalar\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is False
+    assert "not a mapping" in by["lifecycle-well-formed"].evidence
+    assert by["lifecycle-deprecated-replacement-resolves"].passed is True
