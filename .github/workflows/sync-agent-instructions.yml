@@ -2,7 +2,10 @@ name: Sync agent instructions
 
 on:
   schedule:
-    - cron: "0 6 * * 1"  # weekly; adjust as needed
+    - cron: "0 6 * * *"  # daily 06:00 UTC. A run with no upstream drift is a
+    # no-op (sync_pr_publish returns "up-to-date": no branch, no commit, no PR),
+    # and an open sync PR is only re-committed on real drift, so daily cadence
+    # surfaces upstream changes faster without churning CI/notifications.
   workflow_dispatch:
 
 permissions:
