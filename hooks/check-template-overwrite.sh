@@ -1,8 +1,10 @@
 #!/bin/bash
-# PreToolUse hook (matcher: Write) backing the approved Major finding:
-#   5. [seeding-issue-pr-templates] SKILL.md -- block Write calls that would
-#      overwrite an EXISTING issue/PR/MR template file (GitHub or GitLab).
-#      A genuinely new template (file does not yet exist) is allowed.
+# PreToolUse hook (matcher: Write) enforcing a standing repository
+# invariant: block Write calls that would overwrite an EXISTING issue/PR/MR
+# template file (GitHub or GitLab). A genuinely new template (file does not
+# yet exist) is allowed. Protects any hand-maintained or agent-authored
+# template from an accidental clobber, regardless of which skill or
+# workflow is touching it.
 #
 # Denies via the PreToolUse hookSpecificOutput JSON on stdout AND exit 2 /
 # stderr (both conventions, for defense in depth -- see plugin-dev's
@@ -60,7 +62,7 @@ is_template_path() {
 
 if is_template_path "$file_path" && [ -f "$file_path" ]; then
   jq -n --arg path "$file_path" \
-    '{"hookSpecificOutput": {"permissionDecision": "deny"}, "systemMessage": ("Blocked by hooks/check-template-overwrite.sh: Write would overwrite an existing template file at " + $path + ". Per the seeding-issue-pr-templates SKILL.md non-destruction stop boundary, never overwrite or \"improve\" existing templates -- their presence ends this skill unless the owner names specific additions.")}' >&2
+    '{"hookSpecificOutput": {"permissionDecision": "deny"}, "systemMessage": ("Blocked by hooks/check-template-overwrite.sh: Write would overwrite an existing template file at " + $path + ". Never overwrite or \"improve\" an existing template via Write -- their presence ends automated generation unless the owner names specific additions; use Edit for a deliberate, reviewed change instead.")}' >&2
   exit 2
 fi
 

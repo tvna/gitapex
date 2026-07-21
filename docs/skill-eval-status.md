@@ -510,14 +510,6 @@ qualitative read (four simultaneous per-item qualitative axis judgments
 applied across a whole backlog -- moderate under-guidance risk on a
 faster/cheaper tier), not measurement.
 
-## seeding-issue-pr-templates
-
-The committed eval suite (`evals/seeding-issue-pr-templates/`) has no
-committed run at its now-declared 3 trials per task and no committed
-without-skill baseline. Only
-`claude-sonnet-4.6` has been evaluated; cross-model behavior is currently
-unmeasured.
-
 ## stop-and-replan
 
 The committed eval suite (`evals/stop-and-replan/`) has no committed run at
