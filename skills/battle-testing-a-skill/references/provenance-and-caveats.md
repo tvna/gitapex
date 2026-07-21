@@ -143,12 +143,13 @@ standard step, not merely as color carried by this reference file
 read it as the origin of that requirement, not as the requirement's only
 enforcement.
 
-- Full pass: the seventeen dimensions applied once to all twelve skills in
-  this repository.
+- Full pass: the seventeen dimensions applied once to all skills in this
+  repository at the time.
 - Variance re-measurement: the same instrument re-run five times each on
-  four low-blast-radius skills (explaining-the-work, scorer-gated-skill-edits,
-  seeding-issue-pr-templates, stop-and-replan) -- twenty trials -- to
-  separate a robust cold judgment from run-to-run reviewer variance.
+  four low-blast-radius skills at the time (explaining-the-work,
+  scorer-gated-skill-edits, stop-and-replan, plus one skill retired since)
+  -- twenty trials -- to separate a robust cold judgment from run-to-run
+  reviewer variance.
 
 Per-dimension verdict distribution across the twenty trials:
 
