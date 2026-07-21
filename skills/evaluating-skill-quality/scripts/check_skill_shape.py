@@ -33,19 +33,30 @@ Checks (the canonical list -- the manual fallback is to apply these):
     spec.skillDependencies.requires is incompatible with
     spec.portability: Portable (requires-portability-compatible).
     spec.lifecycle, if present, is a mapping with only the keys
-    experimental/deprecated, each -- if present -- a mapping of its own
-    recognized scalar fields (experimental: reason/trackingIssue
-    required, since optional; deprecated: reason/replacement required,
-    since/removeAfter optional), with since/removeAfter, if present, real
-    calendar dates in strict YYYY-MM-DD shape and trackingIssue, if
-    present, an anchored #123 or owner/repo#123 reference
-    (lifecycle-well-formed); and, when deprecated.replacement is a
-    non-empty string, it resolves to an existing sibling skill directory,
-    the same dangling-reference gate spec.skillDependencies uses
-    (lifecycle-deprecated-replacement-resolves). experimental and
-    deprecated are independent and optional -- neither implies nor
-    excludes the other, and no skill's runtime procedure may read or
-    branch on either (the sidecar's behavior-neutrality invariant). Other
+    experimental/deprecated/stable/renamedFrom. experimental
+    (reason/trackingIssue required, since optional), deprecated
+    (reason/replacement required, since/removeAfter optional), and stable
+    (since required, compatibilityGuarantee optional) are each -- if
+    present -- a mapping of their own recognized scalar fields;
+    renamedFrom, if present, is a non-empty scalar string (not a
+    sub-block). since/removeAfter, if present, must be real calendar
+    dates in strict YYYY-MM-DD shape; trackingIssue, if present, an
+    anchored #123 or owner/repo#123 reference; compatibilityGuarantee, if
+    present, one of Alpha/Beta/GA (lifecycle-well-formed); and, when
+    deprecated.replacement is a non-empty string, it resolves to an
+    existing sibling skill directory, the same dangling-reference gate
+    spec.skillDependencies uses (lifecycle-deprecated-replacement-resolves).
+    experimental and deprecated are independent and optional -- neither
+    implies nor excludes the other -- but experimental and stable are
+    mutually exclusive: a non-empty spec.lifecycle.experimental cannot
+    coexist with a non-empty spec.lifecycle.stable
+    (experimental-stable-compatible). renamedFrom is deliberately NOT
+    resolved against sibling directories, unlike deprecated.replacement
+    -- it names the skill's own former, now-nonexistent directory name
+    (a git mv target), backward-pointing on the surviving skill rather
+    than a forward-pointing tombstone on a directory that no longer
+    exists. No skill's runtime procedure may read or branch on any part
+    of spec.lifecycle (the sidecar's behavior-neutrality invariant). Other
     ungated sidecar fields (e.g. spec.evalStatus) are parsed into the spec
     map by _parse_manifest only if written as a single inline scalar; a
     nested/block-shaped field (e.g. evalStatus's documented baseline:/lift:
@@ -187,28 +198,52 @@ SKILL_DEP_SUBKEY_RE = re.compile(r"^[ ]{4}(requires|relatedTo):\s*(.*)$")
 SKILL_DEP_UNKNOWN_KEY_RE = re.compile(r"^[ ]{4}([A-Za-z0-9_-]+):")
 SKILL_DEP_LIST_ITEM_RE = re.compile(r"^[ ]{4,}-\s*(.*)$")
 
-# spec.lifecycle's two recognized sub-blocks -- "experimental" (entry side:
-# not yet proven, mirrors Rust's #[unstable(feature, issue)], Python's
-# provisional/PendingDeprecationWarning APIs, Go's GOEXPERIMENT-gated
-# features, Kubernetes' alpha/beta feature gates) and "deprecated" (exit
-# side: superseded, mirrors Rust's #[deprecated(since, note)], Go's
-# "// Deprecated:" doc comment, Python's warnings.deprecated/PEP 702,
-# Kubernetes' API deprecation policy). The two are independent and
-# optional -- neither implies nor excludes the other, and a skill with
-# neither is implicitly Stable (every skill in this repository today).
-# One nesting level deeper than spec.skillDependencies: subkeys sit at 4
-# spaces (same as requires/relatedTo), but each subkey opens ANOTHER
-# nested block of scalar fields at 6 spaces, rather than a list.
-LIFECYCLE_SUBKEYS = ("experimental", "deprecated")
+# spec.lifecycle's three recognized sub-blocks -- "experimental" (entry
+# side: not yet proven, mirrors Rust's #[unstable(feature, issue)],
+# Python's provisional/PendingDeprecationWarning APIs, Go's
+# GOEXPERIMENT-gated features, Kubernetes' alpha/beta feature gates),
+# "deprecated" (exit side: superseded, mirrors Rust's
+# #[deprecated(since, note)], Go's "// Deprecated:" doc comment, Python's
+# warnings.deprecated/PEP 702, Kubernetes' API deprecation policy), and
+# "stable" (a graduation record, mirrors Rust's
+# #[stable(feature, since)]). experimental and deprecated are independent
+# -- neither implies nor excludes the other. experimental and stable ARE
+# mutually exclusive, though (see EXPERIMENTAL_STABLE_RULE below): "not
+# yet graduated" and "already graduated on some date" cannot both be
+# true, unlike experimental+deprecated which is merely unusual, not
+# contradictory. A skill declaring none of the three is implicitly
+# Stable (every skill in this repository today). One nesting level
+# deeper than spec.skillDependencies: subkeys sit at 4 spaces (same as
+# requires/relatedTo), but each subkey opens ANOTHER nested block of
+# scalar fields at 6 spaces, rather than a list.
+LIFECYCLE_SUBKEYS = ("experimental", "deprecated", "stable")
 LIFECYCLE_FIELDS = {
     "experimental": ("reason", "trackingIssue", "since"),
     "deprecated": ("reason", "replacement", "since", "removeAfter"),
+    "stable": ("since", "compatibilityGuarantee"),
 }
 LIFECYCLE_REQUIRED_FIELDS = {
     "experimental": ("reason", "trackingIssue"),
     "deprecated": ("reason", "replacement"),
+    "stable": ("since",),
 }
-LIFECYCLE_SUBKEY_RE = re.compile(r"^[ ]{4}(experimental|deprecated):\s*(.*)$")
+# Kubernetes' alpha/beta/GA API-stability tiers, borrowed as spec.
+# lifecycle.stable's optional compatibilityGuarantee enum -- shape-gated
+# only; no rule ties a sibling's spec.skillDependencies.requires to this
+# value (that would be new cross-skill coupling beyond what was asked).
+COMPATIBILITY_GUARANTEE_LEVELS = ("Alpha", "Beta", "GA")
+LIFECYCLE_SUBKEY_RE = re.compile(r"^[ ]{4}(experimental|deprecated|stable):\s*(.*)$")
+# spec.lifecycle.renamedFrom is different in kind from the three
+# sub-blocks above: a plain scalar directly under lifecycle: (like
+# metadata.name under metadata:), never opening a nested block. Backward-
+# pointing by deliberate choice -- it lives on the *surviving* (new)
+# skill's sidecar, naming the old, now-nonexistent directory, because
+# `git mv` deletes the old directory itself, leaving nowhere to host a
+# forward-pointing renamedTo/tombstone sidecar. Free-form and NOT
+# resolved against sibling directories (unlike deprecated.replacement) --
+# the whole point is that the old name is expected to no longer exist.
+LIFECYCLE_SCALAR_KEYS = ("renamedFrom",)
+LIFECYCLE_SCALAR_KEY_RE = re.compile(r"^[ ]{4}(renamedFrom):\s*(.*)$")
 LIFECYCLE_UNKNOWN_SUBKEY_RE = re.compile(r"^[ ]{4}([A-Za-z0-9_-]+):")
 # Matches ANY key at this indent, recognized or not -- the handler tells
 # them apart by membership in LIFECYCLE_FIELDS[subkey], the same "match
@@ -675,6 +710,15 @@ def _parse_manifest(text: str) -> ManifestParse:
                     lifecycle_subkey = key
                     lifecycle_field_buffer = {}
                 continue
+            scalar = LIFECYCLE_SCALAR_KEY_RE.match(line)
+            if scalar:
+                key, value = scalar.group(1), scalar.group(2).strip()
+                if value:
+                    lifecycle[key] = _unquote(value)
+                # Blank value: store nothing, exactly like the generic
+                # 2-space nested-scalar rule elsewhere in this parser (a
+                # blank scalar assignment reads as "not declared").
+                continue
             unknown = LIFECYCLE_UNKNOWN_SUBKEY_RE.match(line)
             if unknown:
                 unknown_lifecycle_keys.append(line.strip())
@@ -1134,6 +1178,11 @@ def check_shape(target: Path) -> list[CheckResult]:
                 "spec.lifecycle.deprecated.replacement, if a non-empty "
                 "string, resolves to an existing sibling skill directory",
                 evidence))
+            results.append(CheckResult(
+                "experimental-stable-compatible", False,
+                "spec.lifecycle.experimental and spec.lifecycle.stable "
+                "cannot both be present -- a skill cannot be both "
+                "not-yet-graduated and already graduated", evidence))
             # Deliberately not the body-marker fallback: a present-but-broken
             # sidecar is authoritative-and-failing, not absent. Running the
             # scan (rather than skipping it) lands extra findings on a skill
@@ -1475,31 +1524,47 @@ def _lifecycle_checks(spec_is_mapping: bool, spec_raw: object,
                        unknown_keys: list[str],
                        unknown_fields: list[str],
                        skill_dir: Path) -> list[CheckResult]:
-    """The two spec.lifecycle checks: ``lifecycle-well-formed`` (shape) and
+    """The three spec.lifecycle checks: ``lifecycle-well-formed`` (shape),
     ``lifecycle-deprecated-replacement-resolves`` (the dangling-reference
     gate for ``deprecated.replacement``, mirroring
-    ``skill-dependencies-resolve``).
+    ``skill-dependencies-resolve``), and
+    ``experimental-stable-compatible`` (the one cross-field rule: a skill
+    cannot be simultaneously "not yet graduated" and "already graduated on
+    some date").
 
-    ``experimental`` and ``deprecated`` are independent, optional
-    sub-blocks -- neither implies nor excludes the other, and there is no
-    mutual-exclusion check between them. Mirrors the
-    ``_skill_dependency_checks`` cascade: shape is checked first, since a
-    badly-shaped field has nothing sensible to resolve against -- every
-    early-return branch below reports ``lifecycle-deprecated-replacement-resolves``
-    as "nothing to check" rather than silently passing on data that was
-    never actually a mapping.
+    ``experimental``, ``deprecated``, and ``stable`` are independent,
+    optional sub-blocks; ``renamedFrom`` is a plain scalar directly under
+    ``spec.lifecycle``, never a sub-block. ``experimental`` and
+    ``deprecated`` do not exclude each other (an experimental skill can
+    legitimately be superseded by a different experiment) -- but
+    ``experimental`` and ``stable`` are a real logical contradiction, so
+    unlike the ``deprecated`` pairing, that combination is gated. Mirrors
+    the ``_skill_dependency_checks`` cascade: shape is checked first,
+    since a badly-shaped field has nothing sensible to resolve or
+    contradict against -- every early-return branch below reports both
+    ``lifecycle-deprecated-replacement-resolves`` and
+    ``experimental-stable-compatible`` as "nothing to check" rather than
+    silently passing on data that was never actually a mapping.
     """
     well_formed_rule = (
         "spec.lifecycle, if present, is a mapping with only "
-        "experimental/deprecated keys, each -- if present -- a mapping of "
-        "its own recognized scalar fields (experimental: reason/"
-        "trackingIssue required, since optional; deprecated: reason/"
-        "replacement required, since/removeAfter optional), with since/"
-        "removeAfter, if present, real YYYY-MM-DD dates and trackingIssue, "
-        "if present, an anchored #123 or owner/repo#123 reference")
+        "experimental/deprecated/stable/renamedFrom keys. experimental "
+        "(reason/trackingIssue required, since optional), deprecated "
+        "(reason/replacement required, since/removeAfter optional), and "
+        "stable (since required, compatibilityGuarantee optional) are "
+        "each -- if present -- a mapping of their own recognized scalar "
+        "fields; renamedFrom, if present, is a non-empty scalar string. "
+        "since/removeAfter, if present, must be real YYYY-MM-DD dates; "
+        "trackingIssue, if present, an anchored #123 or owner/repo#123 "
+        "reference; compatibilityGuarantee, if present, one of "
+        f"{COMPATIBILITY_GUARANTEE_LEVELS}")
     resolve_rule = (
         "spec.lifecycle.deprecated.replacement, if a non-empty string, "
         "resolves to an existing sibling skill directory")
+    contradiction_rule = (
+        "spec.lifecycle.experimental and spec.lifecycle.stable cannot "
+        "both be present -- a skill cannot be both not-yet-graduated and "
+        "already graduated")
 
     if not spec_is_mapping:
         evidence = f"spec is not a mapping: {spec_raw!r}"
@@ -1507,6 +1572,8 @@ def _lifecycle_checks(spec_is_mapping: bool, spec_raw: object,
             CheckResult("lifecycle-well-formed", False, well_formed_rule, evidence),
             CheckResult("lifecycle-deprecated-replacement-resolves", True,
                         resolve_rule, "nothing to check (spec is not a mapping)"),
+            CheckResult("experimental-stable-compatible", True,
+                        contradiction_rule, "nothing to check (spec is not a mapping)"),
         ]
 
     lifecycle = spec.get("lifecycle")
@@ -1516,6 +1583,8 @@ def _lifecycle_checks(spec_is_mapping: bool, spec_raw: object,
                         "not declared (optional)"),
             CheckResult("lifecycle-deprecated-replacement-resolves", True,
                         resolve_rule, "not declared (optional)"),
+            CheckResult("experimental-stable-compatible", True,
+                        contradiction_rule, "not declared (optional)"),
         ]
 
     if not isinstance(lifecycle, dict):
@@ -1524,6 +1593,8 @@ def _lifecycle_checks(spec_is_mapping: bool, spec_raw: object,
             CheckResult("lifecycle-well-formed", False, well_formed_rule, evidence),
             CheckResult("lifecycle-deprecated-replacement-resolves", True,
                         resolve_rule, "nothing to check (not a mapping)"),
+            CheckResult("experimental-stable-compatible", True,
+                        contradiction_rule, "nothing to check (not a mapping)"),
         ]
 
     problems: list[str] = []
@@ -1559,6 +1630,18 @@ def _lifecycle_checks(spec_is_mapping: bool, spec_raw: object,
             problems.append(
                 f"experimental.trackingIssue is not a #123 or owner/repo#123 "
                 f"reference: {block['trackingIssue']!r}")
+        if key == "stable" and "compatibilityGuarantee" in block \
+                and block["compatibilityGuarantee"] not in COMPATIBILITY_GUARANTEE_LEVELS:
+            problems.append(
+                f"stable.compatibilityGuarantee is not one of "
+                f"{COMPATIBILITY_GUARANTEE_LEVELS}: "
+                f"{block['compatibilityGuarantee']!r}")
+
+    if "renamedFrom" in lifecycle:
+        renamed_from = lifecycle["renamedFrom"]
+        if not (isinstance(renamed_from, str) and renamed_from.strip()):
+            problems.append(
+                f"renamedFrom is not a non-empty string: {renamed_from!r}")
 
     if problems:
         results = [CheckResult("lifecycle-well-formed", False, well_formed_rule,
@@ -1580,6 +1663,12 @@ def _lifecycle_checks(spec_is_mapping: bool, spec_raw: object,
         results.append(CheckResult(
             "lifecycle-deprecated-replacement-resolves", True, resolve_rule,
             "nothing to check (replacement missing or invalid)"))
+
+    contradiction = "experimental" in sub_blocks and "stable" in sub_blocks
+    results.append(CheckResult(
+        "experimental-stable-compatible", not contradiction, contradiction_rule,
+        "ok" if not contradiction
+        else "both experimental and stable are present"))
     return results
 
 

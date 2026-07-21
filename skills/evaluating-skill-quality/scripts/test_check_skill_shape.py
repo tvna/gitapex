@@ -1595,7 +1595,8 @@ def test_skill_dependencies_well_formed_fails_when_spec_is_not_a_mapping(tmp_pat
 # ---- lifecycle-well-formed / lifecycle-deprecated-replacement-resolves ----
 
 _LIFECYCLE_CHECKS = ("lifecycle-well-formed",
-                     "lifecycle-deprecated-replacement-resolves")
+                     "lifecycle-deprecated-replacement-resolves",
+                     "experimental-stable-compatible")
 
 
 def _write_lifecycle_sidecar(d, body, *, portability="Mixed"):
@@ -1654,7 +1655,9 @@ def test_lifecycle_deprecated_only_is_well_formed_and_resolves(tmp_path):
 
 def test_lifecycle_both_blocks_present_is_valid(tmp_path):
     # Confirmed non-goal: no mutual-exclusion gate between experimental and
-    # deprecated -- both present simultaneously is unusual but not an error.
+    # deprecated -- both present simultaneously is unusual but not an error
+    # (unlike experimental+stable, which IS gated -- see
+    # test_lifecycle_experimental_and_stable_fails_compatible below).
     (tmp_path / "other-skill").mkdir()
     d = _write_lifecycle_sidecar(
         _write_skill(tmp_path),
@@ -1668,6 +1671,7 @@ def test_lifecycle_both_blocks_present_is_valid(tmp_path):
     by = _by_name(css.check_shape(d))
     assert by["lifecycle-well-formed"].passed is True
     assert by["lifecycle-deprecated-replacement-resolves"].passed is True
+    assert by["experimental-stable-compatible"].passed is True
     assert css.main([str(d)]) == 0
 
 
@@ -1792,6 +1796,7 @@ def test_lifecycle_whole_field_wrong_type_fails_well_formed(tmp_path):
     assert by["lifecycle-well-formed"].passed is False
     assert "not a mapping" in by["lifecycle-well-formed"].evidence
     assert by["lifecycle-deprecated-replacement-resolves"].passed is True
+    assert by["experimental-stable-compatible"].passed is True
 
 
 def test_lifecycle_sub_block_wrong_type_fails_well_formed(tmp_path):
@@ -1802,6 +1807,119 @@ def test_lifecycle_sub_block_wrong_type_fails_well_formed(tmp_path):
     by = _by_name(css.check_shape(d))
     assert by["lifecycle-well-formed"].passed is False
     assert "experimental is not a mapping" in by["lifecycle-well-formed"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_lifecycle_stable_only_is_well_formed(tmp_path):
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n"
+        "    stable:\n"
+        "      since: \"2026-07-21\"\n")
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is True
+    assert "stable" in by["lifecycle-well-formed"].evidence
+    assert by["experimental-stable-compatible"].passed is True
+    assert css.main([str(d)]) == 0
+
+
+def test_lifecycle_stable_with_compatibility_guarantee_is_well_formed(tmp_path):
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n"
+        "    stable:\n"
+        "      since: \"2026-07-21\"\n"
+        "      compatibilityGuarantee: GA\n")
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is True
+    assert css.main([str(d)]) == 0
+
+
+def test_lifecycle_stable_missing_since_fails_well_formed(tmp_path):
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n"
+        "    stable:\n"
+        "      compatibilityGuarantee: GA\n")
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is False
+    assert "stable.since" in by["lifecycle-well-formed"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_lifecycle_stable_invalid_compatibility_guarantee_fails_well_formed(tmp_path):
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n"
+        "    stable:\n"
+        "      since: \"2026-07-21\"\n"
+        "      compatibilityGuarantee: Delta\n")
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is False
+    assert "compatibilityGuarantee" in by["lifecycle-well-formed"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_lifecycle_experimental_and_stable_fails_compatible(tmp_path):
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n"
+        "    experimental:\n"
+        "      reason: not yet proven\n"
+        "      trackingIssue: \"#123\"\n"
+        "    stable:\n"
+        "      since: \"2026-07-21\"\n")
+    by = _by_name(css.check_shape(d))
+    # Both sub-blocks are individually well-formed -- the contradiction is
+    # its own check, independent of lifecycle-well-formed, mirroring how
+    # requires-portability-compatible is independent of
+    # skill-dependencies-well-formed.
+    assert by["lifecycle-well-formed"].passed is True
+    assert by["experimental-stable-compatible"].passed is False
+    assert "both experimental and stable" in by["experimental-stable-compatible"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_lifecycle_renamed_from_valid_does_not_require_sibling_directory(tmp_path):
+    # Deliberate asymmetry from deprecated.replacement: renamedFrom names
+    # the skill's own former, now-nonexistent directory, so it must NOT be
+    # resolved against sibling directories -- no ghost-skill-style dangling
+    # check applies here.
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n"
+        "    renamedFrom: old-skill-name\n")
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is True
+    assert css.main([str(d)]) == 0
+
+
+def test_lifecycle_renamed_from_blank_is_read_as_absent(tmp_path):
+    # Mirrors this parser's repo-wide convention: a blank scalar assignment
+    # (e.g. "portability:" with nothing after it) reads as "not declared",
+    # not as an explicit empty-string declaration.
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n"
+        "    renamedFrom:\n"
+        "    deprecated:\n"
+        "      reason: superseded\n"
+        "      replacement: other-skill\n")
+    (tmp_path / "other-skill").mkdir()
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert "renamedFrom" not in parsed.root["spec"]["lifecycle"]
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is True
+
+
+def test_lifecycle_renamed_from_empty_string_fails_well_formed(tmp_path):
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n"
+        "    renamedFrom: \"\"\n")
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is False
+    assert "renamedFrom" in by["lifecycle-well-formed"].evidence
     assert css.main([str(d)]) == 1
 
 
@@ -1827,3 +1945,4 @@ def test_lifecycle_well_formed_fails_when_spec_is_not_a_mapping(tmp_path):
     assert by["lifecycle-well-formed"].passed is False
     assert "not a mapping" in by["lifecycle-well-formed"].evidence
     assert by["lifecycle-deprecated-replacement-resolves"].passed is True
+    assert by["experimental-stable-compatible"].passed is True
