@@ -31,7 +31,7 @@
 #
 # Known ceiling, carried forward from hooks/check-bash-safety.sh's own
 # identical disclosure rather than left unstated here (found via a
-# fourth /code-review battle-test trial, confirmed live: `git${IFS}push
+# fourth battle-testing-a-skill trial, confirmed live: `git${IFS}push
 # origin HEAD`, `gi""t push origin HEAD`, `pip${IFS}install foo`, and
 # `p\ip install foo` all ran unblocked): "Obfuscation that hides the
 # verb itself -- base64-piped-to-sh and the like -- is out of reach of
