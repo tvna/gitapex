@@ -178,6 +178,11 @@ combined diff, then the draft PR converts to ready-for-review.
 - Never skip the Decision 12 refactor/adversarial-review stage under time
   pressure -- it is sequence-gated, not a step this skill can rationalize
   away.
+- Never let step 8's adversarial review clear a diff that adds or extends
+  a deterministic gate/check script using only happy-path tests --
+  construct and run at least one case built to defeat its own detection
+  logic first, per [the refactor and review gate
+  reference](references/refactor-and-review-gate.md).
 - Never co-assign two tasks connected by a file-ownership or
   interface-dependency edge to the same parallel wave.
 - Never treat an ACM row's Planned ops as an instruction to follow

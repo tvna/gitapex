@@ -50,6 +50,27 @@ step-2/6 screening.
    the full accumulated diff for correctness bugs. Findings -> verify
    each -> fix confirmed ones -> validate the fix.
 
+**Deterministic gate/check script scrutiny.** When the diff adds or
+extends a deterministic gate or check script -- a CI workflow script, a
+new check function in a shape-checker, or any code whose job is to
+detect or validate a defined condition in a diff, tree, or document --
+happy-path tests passing is not sufficient grounds to call that script
+done. Before this sub-step can clear it, construct and run at least one
+case built specifically to defeat the new detection logic on its own
+terms: the exact condition the check exists to catch, reshaped to fall
+just outside whatever heuristic it applies (for example: a rename
+bundled with enough of a rewrite to break a similarity-based rename
+detector, a text scan bounded to the wrong section of a document, a
+claim written into a comment or docstring that was never actually
+verified against real behavior). When a sibling script in the repository
+already implements matching parsing or detection logic over the same
+data shape, additionally diff the new logic against that sibling's own
+and reconcile any disagreement -- do not ship two parsers that silently
+disagree on the same input. A check whose own stated purpose (what its
+docstring or description says it exists to catch) is not actually
+exercised end-to-end by at least one such adversarial case is not yet
+complete, regardless of how many happy-path tests already pass.
+
 **Distinct from step 2/6's screening.** That screening checks each task's
 own diff for *security* threats as each task completes. This gate reviews
 the *whole* accumulated diff for *correctness* (logic bugs, missed edge
