@@ -25,11 +25,11 @@ description: Use before asserting how an external tool, library, API, platform, 
 - Content already directly observed in the current session (a file just
   read, a command's actual output, code already open) -- that is already
   an observed primary source, not a memory-based claim; re-fetching it
-  from elsewhere adds nothing. This covers local/observable state pasted
-  verbatim, the artifact itself -- a human's account of a *separate
-  external* source's contents is a claim about that source, not the
-  source itself, and falls under Procedure step 2's user-attributed tier
-  instead.
+  from elsewhere adds nothing. This exemption is narrow: it covers
+  local/observable state pasted verbatim, the artifact itself. It does
+  *not* cover a human's account of a separate external source's
+  contents -- that is a claim about the source, not the source itself,
+  and falls under Procedure step 2's user-attributed tier instead.
 - A claim explicitly requested and framed as opinion, estimate, or design
   recommendation, not as a statement of external fact.
 
@@ -61,9 +61,13 @@ description: Use before asserting how an external tool, library, API, platform, 
      neither party's unverified say-so is a primary source. Give it the
      effort step 4 already requires for an unreachable source: attempt
      to independently locate the same or an equivalent legitimate
-     primary source before the claim can carry `Fact:`. Succeed, and
-     cite your own check -- not the paste -- as what grounds it. Cannot
-     verify independently in this session, the claim stays
+     primary source before the claim can carry `Fact:`. Three outcomes,
+     not two: succeed and it matches -- cite your own check, not the
+     paste, as what grounds it. Succeed and it *contradicts* the paste
+     -- your own check governs; state the claim per your finding, flag
+     the conflict with the excerpt you were given, and do not average,
+     split the difference, or lead with the paste's version. Cannot
+     verify independently in this session -- the claim stays
      `Speculation:`, or an attributed form ("the excerpt you supplied
      states X, independently unverified") -- never promoted to `Fact:`
      on the paste's word alone, however plausible.
@@ -122,6 +126,17 @@ Cited: "Independently verified against anthropic 0.34.0's own
 CHANGELOG.md (fetched this session); it matches the excerpt you
 pasted." Fact: supported, grounded in your own check, not the paste.
 
+User-attributed, independently verified and contradicting the paste
+(correct handling): the user pastes an entry claiming `thinking` was
+added in 0.34.0, but fetching the same CHANGELOG.md yourself shows it
+was actually added in 0.35.0. Your own check governs: "Speculation:
+`anthropic==0.34.0` does not support `thinking` per the CHANGELOG.md I
+just fetched -- it lists that addition under 0.35.0, one release later
+than the excerpt you pasted claimed; the pasted excerpt appears stale
+or mistaken." Not `Fact:` for either version -- the pinned version is
+0.34.0, and the agent's own check does not support `thinking` at that
+version.
+
 User-attributed, cannot independently verify (correct handling): same
 user claim and paste, but no network is reachable this session:
 "Speculation: whether 0.34.0 supports `thinking` is unverified -- you
@@ -170,9 +185,11 @@ always-on facts. When it does, that rule holds whether or not this skill
 is invoked -- this skill only turns it into an invocable step-by-step
 procedure for the cases where writing it out explicitly helps, the same
 relationship untrusted-input-triage has to its own always-on
-trust-boundary rule. No hook or permission backs either rule in this
-repository today; both remain prompt-level, not deterministically
-enforced.
+trust-boundary rule. Whether a hook or permission backs either rule
+depends on the harness invoking this skill -- check the invoking
+repository's own hooks/permissions directly rather than assuming
+either way; where none exists, the rule remains prompt-level, not
+deterministically enforced.
 
 Portability rationale: a self-contained claim-verification procedure that
 depends on no particular repository's tooling or instruction files --
