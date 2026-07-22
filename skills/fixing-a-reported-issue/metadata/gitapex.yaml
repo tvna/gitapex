@@ -5,6 +5,8 @@ metadata:
 spec:
   portability: Portable
   capabilityAssumption: Broad
+  lifecycle:
+    renamedFrom: issue-to-fix
   skillDependencies:
     requires: []
     relatedTo:
