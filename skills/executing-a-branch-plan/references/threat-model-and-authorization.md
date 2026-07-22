@@ -175,6 +175,40 @@ actual plugin-agent schema, not a plausible-sounding claim).
      confirming `disallowedTools: mcp__github` actually removes the tool
      from that agent type's registry, not merely from its listing.
 
+   **Second, separate probe: does the hook still fire when the subagent
+   also runs `isolation: 'worktree'` (step 6's actual multi-task-wave
+   configuration, not just `agentType` alone)?** This was flagged as an
+   untested gap after the first probe (that dispatch carried no
+   `isolation` option) -- re-run with `isolation: 'worktree'` added,
+   rather than left as a standing "unknown," since the platform's own
+   `Agent` tool exposes the same option this skill's own Workflow-tool
+   invocation uses. Result: **the hook still fires correctly.**
+   `pwd` inside the worktree-isolated subagent returned a path under
+   `.claude/worktrees/agent-<id>/`, not the main project root, and
+   `printenv CLAUDE_PROJECT_DIR` returned empty (unset) inside that
+   worktree -- so the hook command's own `${CLAUDE_PROJECT_DIR:-$(pwd)}`
+   fallback resolved to the *worktree's own* `$(pwd)`, not the main
+   repository root. `pip install --help` was still denied with the
+   identical `systemMessage` quoted above. This works because a git
+   worktree checks out the full working tree at its own path -- the
+   relative path `skills/executing-a-branch-plan/scripts/check_task_
+   bash_safety.sh` exists inside the worktree copy too, for any branch
+   that has the file committed, so the fallback's own relative-path
+   resolution still finds the script even with `CLAUDE_PROJECT_DIR`
+   unset. This closes the specific residual risk the row-2 ACM entry
+   (see the implementation PR) named as untested; not left open.
+
+   Incidentally, a second, distinct Claude-Code-native guard was also
+   observed during this probe (not part of this skill's own mechanism,
+   named here only because it was directly encountered): a
+   worktree-isolated subagent refused a compound/redirected shell
+   command outright ("too complex to verify that it stays inside the
+   worktree"), independent of this skill's own `check_task_bash_safety.sh`
+   hook. This is an additional platform-level control this skill did not
+   design and should not claim credit for or rely on by name -- noted as
+   an observed fact from this one encounter, not characterized further
+   without its own primary-source documentation lookup.
+
 2. **Plugin-distributed variant** (`agents/branch-plan-task.md` at this
    repository's own plugin root -- the deployment when gitapex is
    installed as a plugin into a different repository, the distribution
