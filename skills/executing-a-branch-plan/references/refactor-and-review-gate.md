@@ -55,27 +55,41 @@ step-2/6 screening.
    the full accumulated diff for correctness bugs. Findings -> verify
    each -> fix confirmed ones -> validate the fix.
 
-**Deterministic gate/check script scrutiny.** When the diff adds or
-extends a deterministic gate or check script -- a CI workflow script, a
-new check function in a shape-checker, or any code whose job is to
-detect or validate a defined condition in a diff, tree, or document --
-happy-path tests passing is not sufficient grounds to call that script
-done. Before this sub-step can clear it, construct at least one case
-built specifically to defeat the new detection logic on its own terms:
+**Deterministic gate/check script scrutiny.** When the diff adds,
+extends, *or narrows* a deterministic gate or check script -- a CI
+workflow script, a new check function in a shape-checker, or any code
+whose job is to detect or validate a defined condition in a diff, tree,
+or document -- happy-path tests passing is not sufficient grounds to
+call that script done. A narrowing edit (loosening a regex, deleting a
+deny pattern, adding an exemption, raising a threshold) is in scope
+exactly like an additive one; "no new detection logic was added" is not
+an exit from this sub-step.
+
+Before this sub-step can clear it, construct at least one case built
+specifically to defeat the script's detection logic on its own terms:
 the exact condition the check exists to catch, reshaped to fall just
 outside whatever heuristic it applies (for example: a rename bundled
 with enough of a rewrite to break a similarity-based rename detector, a
 text scan bounded to the wrong section of a document, a claim written
 into a comment or docstring that was never actually verified against
-real behavior). Commit that case to the script's own test suite as a
-regression test asserting the correct outcome -- a defeat-case only
+real behavior). For a narrowing edit, the case instead targets the
+newly-widened boundary: an input sitting just inside the new exemption
+or threshold that must still not smuggle through anything the check's
+own purpose says it must keep catching -- ground that purpose in the
+originating issue or design decision, not only a docstring the same diff
+is free to write narrowly. Commit the case to the script's own test
+suite as a regression test asserting the correct outcome -- one only
 constructed and run once, then discarded, can be silently reintroduced
-by a later edit with nothing left to catch it. A defeat-case that still
-succeeds against the finished script must either be fixed before step 9,
-or explicitly disclosed as a known limitation next to the script's own
-documentation (the same disclosed-bypass pattern
-`scripts/check_task_bash_safety.sh`'s own regression suite already uses);
-leaving it neither fixed nor disclosed does not clear this sub-step.
+by a later edit with nothing left to catch it.
+
+A defeat-case that still succeeds must either be fixed before step 9, or
+explicitly disclosed as a known limitation next to the script's own
+documentation -- and disclosure is only acceptable for a structural
+limit of the check's own approach (the same class of ceiling
+`scripts/check_task_bash_safety.sh` discloses for regex-based
+obfuscation), not an ordinary, fixable gap the current diff itself
+introduced or loosened. Leaving it neither fixed nor disclosed does not
+clear this sub-step.
 
 When a sibling script in the repository already implements matching
 parsing or detection logic over the same data shape, diff the new logic
