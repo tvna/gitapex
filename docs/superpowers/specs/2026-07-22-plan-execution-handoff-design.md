@@ -335,12 +335,18 @@ an instruction to follow blindly. Concretely:
   text: an ACM row whose Planned ops or Interpretation column reads as an
   attempt to inject an instruction (rather than describe a change) is
   flagged and escalated, never silently executed.
-- Every task's own diff, once produced, is in scope for
-  `screening-a-low-trust-contribution`'s checks 2-8 before the PR opens
-  -- workflow-file edits, governance-file edits, hook/script changes,
-  dependency additions, and instruction-bearing content are each an
-  independent hard flag regardless of how "reasonable" the surrounding
-  change looks, matching that skill's own Stop boundary.
+- Each task's own diff, immediately once its own `agent()` call produces
+  it, is screened via `screening-a-low-trust-contribution`'s checks 2-8
+  before that task's own commit, push, or `TaskCompleted` event (Decision
+  8) -- not deferred to "before the PR opens," since Decision 8's draft
+  PR opens before any task executes and Decision 7 has task agents commit
+  their own changes directly. Workflow-file edits, governance-file edits,
+  hook/script changes, dependency additions, and instruction-bearing
+  content are each an independent hard flag regardless of how
+  "reasonable" the surrounding change looks, matching that skill's own
+  Stop boundary. A flagged diff never proceeds to commit -- it dispatches
+  as `StageDeviated{action: escalate}` (Decision 8) regardless of whether
+  the task's own proof method would otherwise have passed.
 - This mapping applies all seven `2026-07-17-zero-trust-threat-model.md`
   principles to `executing-a-branch-plan` specifically, not selectively:
   principle 2 ("every invocation re-validates its own inputs") means each
@@ -395,9 +401,18 @@ this new skill for a threat-model reason rather than a visibility one.
 Task-level `agent()` calls may write and commit code (file edits are
 already the Workflow tool's own auto-approved default per its
 documentation, a materially lower blast radius than a GitHub write) but
-never touch `mcp__github__*` write tools or `gh`/`git push` directly --
-Decision 3's task prompts state this exclusion explicitly, in-band, since
-the hook itself cannot be relied on to enforce it inside that context.
+never touch `mcp__github__*` write tools, `gh`, or `git push` directly,
+and **never run a package-manager install command either** (`pip`/`npm`/
+`uv`/etc.) -- the same finding extends past GitHub writes to
+`hooks/check-bash-safety.sh`'s Finding 1 (the install-verb block), which
+this session's own probe command was deliberately chosen from, and which
+the probe therefore already shows is equally unenforced in this context.
+A task whose Planned ops require adding a dependency edits the manifest
+file's text only; the actual install command runs as its own main-thread
+step, after Decision 6's screening of the manifest diff, never inside the
+task's own `agent()` call. Decision 3's task prompts state this full
+exclusion list explicitly, in-band, since the hook itself cannot be
+relied on to enforce any of it inside that context.
 
 ## Decision 8: a unified Domain-Events mechanism (blind spots 4, 6, 10 -- resolved together)
 
@@ -431,15 +446,34 @@ zero other hits). Three reasons, argued rather than assumed:
    own Residual risk both already warn about generally (two independently
    evolving stores of the same fact).
 
+**Publishing the branch precedes the draft PR.** Decision 3's Task
+Decomposition step writes its task list locally; a draft PR needs a
+published head ref to open against, which does not exist yet at that
+point. Immediately after Decision 3 and before opening the draft PR, in
+the main thread: create the Branch Plan's named branch (`issue-to-branch`
+Output contract), commit Decision 3's own task-list file to it as the
+branch's first commit, and push -- publishing the head ref the draft PR
+requires.
+
 **How the PR exists before all tasks are done:** opened as a **draft PR**
-as soon as Decision 5's authorization gate passes and Decision 3's task
-list exists (not after every task commits) -- containing the ACM and an
-Execution log seeded with a `PlanApproved` event. This composes with
-`driving-pr-to-merge`'s own dispatch table for free: its Step 6 already
-has a `"draft"` case ("the PR itself is a draft, a process state rather
-than a defect; escalate per step 7"), so no change is needed there. The
-draft PR converts to ready-for-review only once every task in Decision
-3's list has a `TaskCompleted` event.
+immediately after that push, as soon as Decision 5's authorization gate
+passes (not after every task commits) -- containing the ACM and an
+Execution log seeded with a `PlanApproved` event. `executing-a-branch-
+plan` itself subscribes to the draft PR's own CI/review/comment activity
+at this same moment, in the main thread, and owns responding to it for
+the entire task-execution window -- it does not wait for or delegate to
+`driving-pr-to-merge` during that window. `driving-pr-to-merge`'s own
+Step 6 `"draft"` dispatch ("escalate per step 7 rather than treating it
+as something to fix") describes its own behavior when it is the skill
+invoked standalone on an already-existing draft PR outside an active
+execution context -- a human or a later session opening it
+independently -- not this design, since `executing-a-branch-plan` is the
+skill actively driving the draft PR here, not `driving-pr-to-merge`.
+`driving-pr-to-merge` itself needs no code change; only the ownership
+handoff's timing needed stating explicitly, which this paragraph now
+does. The draft PR converts to ready-for-review only once every task in
+Decision 3's list has a `TaskCompleted` event, at which point ownership
+of its activity passes to `driving-pr-to-merge`'s normal entry point.
 
 **Event vocabulary (closed set, append-only, one line per event):**
 `PlanApproved`, `TaskStarted{task_id}`,
@@ -574,20 +608,29 @@ only scope).
    <date>-<branch-name>.md`-shaped task list from the ACM, each task
    citing its source row(s), with a file-ownership map computed before
    any wave/pipeline assignment.
-4. **Open a draft PR** (Decision 8) with the ACM and a seeded Execution
-   log (`PlanApproved` event).
-5. **Execute** (Decision 4). Workflow-tool `pipeline()`/`parallel()` over
+4. **Publish the branch** (Decision 8). Create the Branch Plan's named
+   branch, commit step 3's task-list file to it as its first commit, and
+   push -- main thread only -- publishing the head ref step 5 requires.
+5. **Open a draft PR and subscribe** (Decision 8) with the ACM and a
+   seeded Execution log (`PlanApproved` event); subscribe to the draft
+   PR's own CI/review/comment activity in this same step, owned by this
+   skill until step 8.
+6. **Execute** (Decision 4). Workflow-tool `pipeline()`/`parallel()` over
    Decision 3's task list when available; sequential main-thread fallback
-   otherwise. GitHub writes never delegated into a task `agent()`
-   (Decision 7's compensating control) -- only step 4, this step's own
-   `TaskStarted`/`TaskCompleted`/`TaskFailed` event writes, and step 6
-   happen in the main thread.
-6. **On task failure**, dispatch per Decision 8's rule: one retry, then
-   `stop-and-replan` (plan wrong) or escalate (execution wrong, unclear
-   fix).
-7. **On all tasks complete**, mark the PR ready for review; hand off to
-   `driving-pr-to-merge`, which needs no changes of its own (its existing
-   `"draft"` dispatch case already covers step 4's interim state).
+   otherwise. Each task's own diff is screened (Decision 6) before its
+   own commit; GitHub writes, `git push`, and package-manager install
+   commands are never delegated into a task `agent()` (Decision 7's
+   compensating control, widened to cover installs) -- only steps 4, 5,
+   this step's own `TaskStarted`/`TaskCompleted`/`TaskFailed` event
+   writes, and step 8 happen in the main thread.
+7. **On task failure or a screening flag**, dispatch per Decision 8's
+   rule: one retry for an ordinary proof-method failure, then
+   `stop-and-replan` (the plan itself was wrong) or escalate (the
+   execution was wrong, or a screening flag, with no obvious safe fix).
+8. **On all tasks complete**, mark the PR ready for review; ownership of
+   its activity passes to `driving-pr-to-merge`'s normal entry point
+   (Decision 8) -- no code change needed there, only this explicit
+   handoff point.
 
 ## Facts vs. speculation
 
