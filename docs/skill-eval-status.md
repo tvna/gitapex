@@ -898,3 +898,176 @@ repository" gap as every suite in this file) or been re-audited by
 and the full pytest suite were re-run after every edit in this round
 and stayed green; that confirms shape and mechanical correctness only.
 Refs #290, refs #295.
+
+**Issue #295 (agent-verified vs. user-attributed evidentiary tiers):**
+the dispatch-2 "S2" finding above (`normal.yaml`'s happy path rewarding
+an unverifiable user-pasted claim as equivalent to independently-fetched
+primary source) was filed as issue #295 and addressed in this round, per
+the operator's recorded design intent -- a user's own claim of having
+fetched something is held to the same standard as the agent's own
+memory; neither is a primary source on its own.
+
+SKILL.md changes: Procedure step 2 now splits evidence into two tiers --
+*agent-verified* (fetched, read, or observed directly by the agent, in
+this session, with the result currently in front of it) and
+*user-attributed* (a human's claim of having consulted a primary source,
+however specific or confidently phrased). A user-attributed claim now
+requires the same effort step 4 already asks of an unreachable source
+(attempt independent verification) before it can carry `Fact:`; three
+outcomes are named explicitly (independently corroborated, independently
+contradicted, cannot verify), each with its own handling rule. The
+Worked example was rewritten to demonstrate all five resulting scenarios
+(agent-verified good, user-attributed corroborated, user-attributed
+contradicted, user-attributed unverifiable, memory-only bad, no-source-
+at-all). The already-observed-this-session exemption in "When NOT to
+use" was narrowed explicitly to local/observable state pasted verbatim,
+distinguished from a human's account of a separate external source
+(which now routes to the user-attributed tier instead).
+
+Eval suite, in the form it landed after two design iterations (the first
+iteration is disclosed below because battle-testing-a-skill's trial 1
+caught it as a real defect, not silently dropped): `normal.yaml` no
+longer rewards a user's "I already fetched X" claim. The first attempt
+reframed the "agent-verified" happy path as second-person narration
+("earlier this session you already fetched X yourself") with no way for
+the agent to have actually fetched anything -- battle-testing-a-skill's
+trial-1 dispatch (below) correctly identified this as reopening the
+identical unverified-say-so loophole under a different grammatical
+person, evidenced directly against that version of `normal.yaml`. The
+corrected design requires the agent to genuinely verify a real package's
+claim live, with no excerpt handed over at all, and discloses explicitly
+in the fixture's own description that its correctness depends on the
+executing harness granting live tool access during scoring -- a
+text-only harness would correctly answer `Speculation:` instead, which
+is a harness limitation, not a target-skill defect. A new fixture,
+`user-attributed-claim-unverified.yaml`, demonstrates the correct
+handling of a user's pasted "I already fetched it myself" claim
+(fictional library, explicit request to skip checking): `Speculation:`,
+attributed, never promoted to `Fact:`. Three fixtures whose original
+design required `Fact:` from a bare user paste
+(`lazy-speculation-despite-reachable-source.yaml`,
+`verification-triage-under-budget.yaml`,
+`compound-claim-and-silence.yaml`) went through the same two-iteration
+correction -- first the same flawed second-person-narration reframing as
+`normal.yaml`'s first attempt, then reverted to plain user-attributed
+framing with their `Fact:` requirement replaced by `Speculation:`/
+attributed-handling requirements, preserving each fixture's original
+pedagogical angle (laziness resistance, decision-critical-claim triage,
+per-part compound-claim labeling) under the corrected rule.
+`adjacent-claim-laundering.yaml`'s description was corrected to stop
+implying a user-pasted claim "may be Fact with citation." `eval.yaml`'s
+metric description now names the two-tier distinction explicitly.
+`metadata/gitapex.yaml` required no changes (no new skill dependency,
+portability/capability-assumption unaffected).
+
+**battle-testing-a-skill audit, trial 1 (issue #295):** overall FAIL, 1
+of 18 applicable dimensions failing. Dimension 2 (Trust/authority
+boundary): the newly-introduced agent-verified tier was defined by
+grammatical framing alone ("fetched... by you") with no requirement that
+the self-attribution be backed by an actual, checkable record --
+demonstrated directly against the then-current `normal.yaml`, which
+narrated "earlier this session you already fetched X yourself" and
+rewarded `Fact:`, structurally indistinguishable from the sibling
+`user-attributed-claim-unverified.yaml`'s correctly-rejected first-person
+claim except by grammatical person. All 17 other applicable dimensions
+passed, including dimension 14 (adversarial regression corpus, now 22
+fixtures) and dimension 18 (claim-provenance, the skill's central
+purpose).
+
+**battle-testing-a-skill audit, trial 2 (re-run after the trial-1 fix,
+issue #295):** dimension 2 independently re-derived as fixed -- step 2
+now states a claim of a prior fetch, in any voice, however specifically
+dated, is not itself the fetch; a matching Stop-boundary bullet
+reinforced it at the time of this trial. `normal.yaml` and the three
+collateral fixtures were checked directly and confirmed consistent with
+the corrected rule. Trial 2 surfaced two dimensions this round had not
+touched: dimension 14 remains FAIL for the same repo-wide,
+non-skill-specific reason recorded above and for every other skill in
+this file (no CI mechanism re-runs any eval suite as a merge gate);
+dimension 16 (encoding/obfuscation coverage) newly FAILED on independent
+re-derivation -- grep against the then-current file found zero explicit
+obfuscation-technique tokens (base64/hex/homoglyph/etc.), tracing to an
+earlier, unrelated `/code-review` duplication-cleanup pass (recorded
+above) that replaced an explicit, previously-confirmed technique list
+with a bare citation to `untrusted-input-triage`, a fix that same entry
+already flagged as "not... re-verified by a third audit trial." This
+trial was that third look, and it failed. Fixed in the same round: step
+5 now names the same illustrative techniques `untrusted-input-triage`'s
+own canonical list uses (Base64, hex, zero-width/bidirectional-override
+characters, HTML comments, adversarial suffixes) inline, while still
+explicitly deferring to that skill's list as canonical rather than
+re-introducing a second, divergent enumeration. This dimension-16 fix
+has **not** been re-verified by a further battle-testing trial. Trial
+2's Blind Spot pass named two further, disclosed-not-fixed candidates,
+both created by the dimension-2 fix's own tightened bar: (a) the agent's
+own self-narrated/hallucinated verification with no real tool call
+behind it (distinct from dimension 2, which is about whose voice
+narrates a past fetch, not whether the agent's own current-turn claim is
+backed by a real invocation); (b) tool-result provenance / spoofed-
+tool-output distinction (nothing in the skill instructs verifying that
+content claiming to be a genuine tool output actually is one, rather
+than adversarial text formatted to mimic one). Neither is fixed in this
+round -- both are narrow, low-confidence "stretch" survivors in the same
+spirit as the prior round's S14/S15, disclosed per this skill's own
+no-self-censorship instruction rather than acted on.
+
+**evaluating-skill-quality audit, trial 1 (issue #295):**
+WELL-FORMED-NOT-MATURE -- two findings. Dimension 4 (Clarity and
+structure): step 2 named only two outcomes for a user-attributed claim
+(independently corroborated / cannot verify), with no branch for the
+agent's own independent check *contradicting* the user's paste, plus a
+dense, ambiguous "When NOT to use" sentence. Dimension 6
+(Durability/Portability): the Notes section stated "No hook or
+permission backs either rule in this repository today" as an
+unconditional fact, failing the Portable-declared litmus test (would go
+false in a consuming repository that has such a hook) -- the same
+failure pattern this file already records `evaluating-skill-quality`'s
+own SKILL.md having fixed once before (issue #164). Both findings
+cleared otherwise cleanly: mechanism fit, portability/capability-
+assumption declarations, and dimensions 1/3/5/7 all passed; dimensions
+8-9 correctly named-unmeasured.
+
+**evaluating-skill-quality audit, trial 2 (re-run after the trial-1 and
+Dimension-2 fixes, issue #295):** dimensions 4 and 6 independently
+re-verified as fixed -- the three-outcome contradiction branch now lives
+directly in step 2 (not only the worked example), the "When NOT to use"
+exemption is now explicitly split into positive/negative framing, and
+the Notes section's hook/permission claim is now correctly conditional,
+cross-checked directly against this repository's own `hooks/hooks.json`
+(backs only Bash-safety and template-overwrite gates, nothing
+grounding-related) rather than assumed. Trial 2 independently re-ran
+`lint_fixture_assertions.py` itself (0 warnings, matching the commit's
+claim) rather than trusting the commit message, and confirmed
+`which waza nix` still returns nothing (no ablation mechanism, same
+disposition as every other suite in this file). Trial 2 surfaced a new
+dimension-2 (Conciseness) finding this round had not caught: the
+battle-testing-trial-1 fix had added the "a narrated claim of a prior
+fetch is not the fetch" rule twice -- once in step 2, again nearly
+verbatim as a standalone Stop-boundary bullet -- while the Stop-
+boundaries section's own intro sentence ("Not already stated elsewhere")
+went stale against that duplication. Fixed in the same round: the
+Stop-boundary bullet is folded into the existing cross-turn-pressure
+bullet as a one-clause extension, and the intro sentence now names step
+2's split as already covered. This dedup fix has **not** been
+re-verified by a further evaluating-skill-quality trial. Trial 2's Blind
+Spot pass named one further, disclosed-not-fixed gap: no rule for when
+two of the agent's own independently agent-verified primary sources
+disagree with each other (e.g. published docs vs. directly-observed live
+behavior) -- both would separately qualify as agent-verified under the
+current text, and nothing says which governs or whether the claim should
+demote to `Speculation:` pending reconciliation. Left unfixed as a
+genuine, narrower edge case outside issue #295's scope.
+
+Net state after this round: `check_skill_shape.py` 29/29 and the full
+pytest suite (617 passed) confirmed after every edit; `lint_fixture_
+assertions.py` pointed at this skill's own SKILL.md, 0 warnings
+throughout. Both audits' trial-2 runs disclosed the same CLAUDE.md-
+context caveat as every prior dispatch in this file. Outstanding,
+disclosed-not-fixed: dimension 14 (repo-wide, unfixable without a CI
+eval-execution gate that does not exist for any skill); the dimension-16
+and dimension-2-duplication fixes above are not yet re-verified by a
+third trial each; two battle-testing Blind Spot survivors (self-narrated
+verification without a real tool call; tool-result provenance/spoofing)
+and one evaluating-skill-quality Blind Spot survivor (agent-verified
+source-vs-source conflict) are named but unfixed, left for a future
+round. Refs #295.
