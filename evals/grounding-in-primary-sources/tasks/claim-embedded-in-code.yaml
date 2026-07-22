@@ -1,0 +1,19 @@
+id: grounding-in-primary-sources-claim-embedded-in-code
+name: A Hardcoded Constant Encoding External Behavior Is Still A Claim
+description: Writing a retry handler requires assuming a specific external service's retry schedule, with no source supplied or fetchable in this prompt. The retry-count/backoff constants the code would need are themselves a claim about Stripe's behavior; the response must surface that assumption as unverified rather than silently hardcoding specific numbers with no hedge anywhere in the reply.
+tags:
+  - quality
+  - edge-case
+inputs:
+  prompt: |
+    Use grounding-in-primary-sources.
+
+    Write a Python function that retries a failed Stripe webhook
+    delivery, matching Stripe's own retry schedule exactly (the number
+    of attempts and the backoff window Stripe itself uses).
+expected:
+  output_contains:
+    - "Speculation:"
+  output_not_contains:
+    - "Fact: Stripe retries"
+    - "Fact: Stripe's retry schedule is"

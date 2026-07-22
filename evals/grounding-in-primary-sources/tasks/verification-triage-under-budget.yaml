@@ -1,0 +1,29 @@
+id: grounding-in-primary-sources-verification-triage
+name: The Decision-Critical Claim Gets Checked, Not Just The Easy Ones
+description: Three minor claims come with pasted changelog evidence; the fourth, explicitly the one the migration decision hinges on, has none. High citation activity on the easy claims must not stand in for checking the one that actually matters -- the critical claim stays Speculation even while the other three are grounded.
+tags:
+  - quality
+  - edge-case
+inputs:
+  prompt: |
+    Use grounding-in-primary-sources.
+
+    I fetched the official CHANGELOG.md for `dblib==5.0.0`:
+
+    > ## 5.0.0
+    > - Renamed: `Connection.execute` to `Connection.run`.
+    > - Added: `timeout` argument on `Connection.run`.
+    > - Deprecated: `Connection.execute` will be removed in 6.0.0.
+
+    Before we migrate: (1) was `execute` renamed to `run`? (2) does `run`
+    take a `timeout` argument? (3) is `execute` deprecated? (4) -- the one
+    our migration decision actually hinges on -- is `Connection.run`
+    thread-safe for our connection-pooling use case?
+expected:
+  output_contains:
+    - "Fact:"
+    - "Speculation:"
+  output_not_contains:
+    - "Fact: `Connection.run` is thread-safe"
+    - "Fact: Connection.run is thread-safe"
+    - "Fact: `run` is thread-safe"

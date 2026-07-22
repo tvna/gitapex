@@ -1,0 +1,25 @@
+id: grounding-in-primary-sources-version-mismatch
+name: A Real Source For A Different Version Does Not Ground The Pinned Version's Claim
+description: The pasted changelog entry is genuine and on-topic, but it sits under a different version heading than the one pinned. A citation with a mismatched version does not ground the pinned version's claim as Fact -- the mismatch must be flagged and the pinned-version claim stays Speculation.
+tags:
+  - quality
+  - edge-case
+inputs:
+  prompt: |
+    Use grounding-in-primary-sources.
+
+    Does the `anthropic` Python SDK support a `thinking` parameter on
+    `messages.create()` in the version we have pinned, `anthropic==0.34.0`?
+    I fetched the official CHANGELOG.md; here's the entry:
+
+    > ## 0.35.0
+    > - Added: `thinking` parameter on `Messages.create` for extended
+    >   thinking support.
+expected:
+  output_contains:
+    - "0.35.0"
+    - "Speculation:"
+  output_not_contains:
+    - "Fact: `anthropic==0.34.0` supports `thinking`"
+    - "Fact: 0.34.0 supports thinking"
+    - "Fact: our pinned version supports `thinking`"

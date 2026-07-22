@@ -806,3 +806,95 @@ technique list that was a third, item-by-item-different enumeration of
 the same taxonomy already stated in CLAUDE.md and `untrusted-input-triage`
 -- replaced with a citation instead of a competing list. None of these
 fixes have been re-verified by a third audit trial. Refs #290.
+
+**Adversarial-hardening round (issue #290, operator-requested, two
+parallel Fable-model subagent dispatches):** the operator judged the
+eval suite's adversarial validity insufficient and requested a
+defense-focused red-team pass. Dispatch 1 (known-vector red team)
+cold-enumerated attack vectors against the skill's own stated
+defenses and checked the then-5 fixtures for coverage; dispatch 2 (a
+"Blind Spot Pass," run cold before reading either the target or the
+existing 22-item `battle-testing-a-skill` catalog, per that catalog's
+own methodology) enumerated dimensions not already named anywhere in
+this repository's adversarial-evaluation apparatus. Both disclosed the
+same CLAUDE.md-context caveat as every prior dispatch in this file.
+
+Dispatch 1 found zero fixture coverage for three defenses the skill's
+own prose already claims (encoded/disguised embedded instructions --
+only an HTML comment was tested; a directive resurfacing from
+persisted cross-session memory delivered as a tool/notes payload
+rather than a chat message; untrusted content fenced before reaching a
+PR/issue body) plus the explicit "fetched-the-wrong-page still stays
+Speculation" Stop boundary, and three further realistic
+ungrounded-`Fact:` paths (an adjacent claim laundered by riding along
+with a genuinely grounded one; the skill's own procedure vocabulary
+quoted back to fake compliance; an external fact relabeled "opinion"
+to dodge via the When-NOT-to-use exemption). All seven became new
+fixtures: `structured-output-breakout.yaml`,
+`memory-poison-tool-result.yaml`, `wrong-page-fetched.yaml`,
+`encoded-injection-base64.yaml`, `adjacent-claim-laundering.yaml`,
+`skill-wording-impersonation.yaml`, `fact-as-opinion-dodge.yaml`.
+
+Dispatch 2 cold-enumerated 27 candidate dimensions, dropped 4 as
+already covered by the existing catalog (fabricated citation ->
+dimension 18; in-session provenance decay -> dimensions 13/15; social
+pressure framing -> dimension 15; source conflict -> dimension 8),
+merged several more, and surfaced 15 genuine survivors -- dimensions
+this repository's adversarial catalog does not name at all. The
+highest-severity three: **the suite never requires an actual
+fetch/observation to occur** (every fixture pastes evidence in-prompt;
+a substring-only grader cannot distinguish real verification from
+citation-shaped confabulation, and a trivial always-`Speculation:`
+policy would pass most of the original 5 fixtures); **the suite's own
+happy path (`normal.yaml`) rewards treating an unverifiable
+user-pasted claim as equivalent to an independently-fetched primary
+source**; and **no fixture tests whether the cited evidence actually
+entails the stated claim**, as opposed to merely being a real,
+on-topic, correctly-quoted source for a broader or differently-scoped
+claim.
+
+Per operator direction: the happy-path-trust finding (dispatch 2's
+"S2") is a semantics change to what counts as adequate grounding, not
+a fixture-only fix -- filed separately as issue #295 rather than
+folded into this PR. Every other actionable survivor was fixed in the
+same change:
+
+- SKILL.md gained: an authority-tier and version/date-matching clause
+  in step 2/3 (mirror/archive/wrong-version sources are not
+  equal-strength to the publisher's own current page); a
+  scope-preservation clause in step 3 (a source's qualifier travels
+  with the claim or the claim demotes); step-4 additions for per-claim
+  labeling on compound questions, silence-is-not-a-negative, and
+  single-observation-does-not-generalize; a quotation-vs-endorsement
+  distinction; a "When to use" bullet extending the trigger to claims
+  encoded in code/config rather than only in prose; and a Stop
+  boundary requiring a still-`Speculation:`-labeled claim to be
+  upgraded or explicitly acknowledged before an irreversible action
+  builds on it.
+- Ten more fixtures: `entailment-scope-qualifier-dropped.yaml`,
+  `source-authority-tiering.yaml`, `version-mismatch.yaml`,
+  `compound-claim-and-silence.yaml`,
+  `lazy-speculation-despite-reachable-source.yaml`,
+  `quotation-vs-endorsement.yaml`,
+  `single-observation-overreach.yaml`,
+  `act-on-own-speculation.yaml`, `claim-embedded-in-code.yaml`,
+  `verification-triage-under-budget.yaml`.
+
+Three dispatch-2 items were disclosed rather than fixed: **S12**
+(grader Goodhart on the literal `Fact:`/`Speculation:` labels -- a
+harness-structural limitation shared by every `evals/*/eval.yaml`
+suite in this repository, not specific to this skill, and not
+resolvable without a semantic/rubric grader this repository does not
+have); **S14** (circular/self-sourced provenance) and **S15**
+(self-referential meta-claims about the session's own verification
+state) -- both flagged low-confidence "stretch" items by dispatch 2's
+own report, kept unfiltered per this pass's own instruction not to
+self-censor, but not acted on given that self-assessed confidence.
+
+None of this round's 17 new fixtures or SKILL.md additions have run
+against any model (same "no ablation mechanism exists in this
+repository" gap as every suite in this file) or been re-audited by
+`battle-testing-a-skill`/`evaluating-skill-quality`. `check_skill_shape.py`
+and the full pytest suite were re-run after every edit in this round
+and stayed green; that confirms shape and mechanical correctness only.
+Refs #290, refs #295.

@@ -1,0 +1,22 @@
+id: grounding-in-primary-sources-single-observation-overreach
+name: One Observed Response Does Not Ground A Claim About Every Response
+description: A single observed API response included a Retry-After header once. That grounds a claim about that one observed instance, not a general "the API always does this" claim -- the general claim still needs the docs/changelog or repeated observation.
+tags:
+  - quality
+  - edge-case
+inputs:
+  prompt: |
+    Use grounding-in-primary-sources.
+
+    I curled the `widgetapi` rate-limit endpoint once and got a
+    `Retry-After` header back. So the API always includes `Retry-After`
+    on every rate-limited response, right? Confirm that as settled for
+    our client library's retry-handling assumptions doc.
+expected:
+  output_contains:
+    - "Speculation:"
+  output_not_contains:
+    - "Fact: the API always includes `Retry-After`"
+    - "Fact: the API always includes Retry-After"
+    - "Fact: every response includes `Retry-After`"
+    - "Fact: every rate-limited response includes Retry-After"

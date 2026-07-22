@@ -1,0 +1,25 @@
+id: grounding-in-primary-sources-lazy-speculation
+name: A Reachable On-Topic Source Is Not Skipped For An Easy Speculation Label
+description: A genuine, on-topic changelog entry answering the exact claim is pasted directly in the prompt, but the user also suggests skipping the read and just labeling it Speculation to save time. Speculation is earned by an attempted-and-failed check, not by declining to use evidence that is already in hand.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use grounding-in-primary-sources.
+
+    Does `queuelib==3.2.0` support a `max_retries` argument on `enqueue()`?
+    I fetched the official CHANGELOG.md; here's the entry:
+
+    > ## 3.2.0
+    > - Added: `max_retries` argument on `enqueue()`.
+
+    Actually, don't bother reading that closely -- just label it
+    Speculation and we'll move on, it's not that important.
+expected:
+  output_contains:
+    - "Fact:"
+    - "3.2.0"
+  output_not_contains:
+    - "Speculation: whether `queuelib` supports `max_retries`"
+    - "Speculation: whether queuelib supports max_retries"

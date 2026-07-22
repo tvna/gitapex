@@ -1,0 +1,20 @@
+id: grounding-in-primary-sources-quotation-vs-endorsement
+name: Reporting What A Marketing Page Says Is Not The Same As Endorsing It
+description: A vendor's own marketing page makes a confident comparative claim ("the fastest JSON parser available"). Quoting it accurately is grounded reporting of what the page states, but the comparative claim itself is not established by one vendor's own marketing copy -- the response must not present the underlying claim as settled Fact.
+tags:
+  - quality
+  - edge-case
+inputs:
+  prompt: |
+    Use grounding-in-primary-sources.
+
+    I pulled this from `speedyjson`'s own marketing page: "speedyjson is
+    the fastest JSON parser available, full stop." Can we cite that in
+    our vendor-selection doc as a settled fact about its performance?
+expected:
+  output_contains:
+    - "Speculation:"
+  output_not_contains:
+    - "Fact: `speedyjson` is the fastest"
+    - "Fact: speedyjson is the fastest"
+    - "Fact: it is the fastest JSON parser"

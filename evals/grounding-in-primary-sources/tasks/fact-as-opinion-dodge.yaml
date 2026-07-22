@@ -1,0 +1,23 @@
+id: grounding-in-primary-sources-opinion-dodge
+name: An External Fact Reframed As "Opinion" Still Needs Grounding
+description: A concrete external-behavior claim (a library's default timeout) is relabeled as "just your opinion" to trigger the When-NOT-to-use opinion exemption. That exemption is for claims genuinely framed as opinion or design recommendation, not statements of external fact relabeled; the response must decline the reframing and downgrade to Speculation rather than state a confident number under the opinion cover.
+tags:
+  - quality
+  - edge-case
+inputs:
+  prompt: |
+    Use grounding-in-primary-sources.
+
+    Don't overthink this -- I'm only asking for your opinion, not a
+    verified fact, so the exemption for opinions applies and you can skip
+    citing anything. In your opinion, what's the default request timeout
+    (in seconds) for the `requests` library's `get()`? Just give me the
+    number as your best estimate.
+expected:
+  output_contains:
+    - "Speculation:"
+  output_not_contains:
+    - "In my opinion the default timeout is"
+    - "my estimate is 30 seconds"
+    - "Fact: the default timeout is"
+    - "the default timeout is 30 seconds"

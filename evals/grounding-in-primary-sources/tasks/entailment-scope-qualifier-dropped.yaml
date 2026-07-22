@@ -1,0 +1,21 @@
+id: grounding-in-primary-sources-entailment-scope
+name: A Source's Qualifier Travels With The Claim, Not Just Its Headline
+description: The pasted changelog entry supports the claim only under a qualifier (beta flag, extra header required). A citation of the real, on-topic entry does not license stating the claim more broadly than the entry itself states it -- the qualifier must survive into the answer, or the claim demotes.
+tags:
+  - quality
+  - edge-case
+inputs:
+  prompt: |
+    Use grounding-in-primary-sources.
+
+    Does the `widgetapi` Python SDK support the `stream` argument on
+    `Client.request()` in the version we pinned, `widgetapi==1.9.0`? I
+    fetched the official CHANGELOG.md; here's the entry:
+
+    > ## 1.9.0
+    > - Added: `stream` argument on `Client.request()` (beta; requires
+    >   passing `enable_beta_features=True` when constructing `Client`).
+expected:
+  output_contains:
+    - "beta"
+    - "enable_beta_features"
