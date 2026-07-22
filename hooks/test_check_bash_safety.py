@@ -59,6 +59,11 @@ def assert_denied(command: str) -> None:
 def assert_allowed(command: str) -> None:
     result = run(command)
     assert result.returncode == 0, f"expected allow (exit 0) for {command!r}, got {result.returncode}: stderr={result.stderr!r}"
+    # warn() also exits 0 while emitting a systemMessage on stdout -- exit
+    # code alone can't distinguish a clean allow from a regression that
+    # starts warning on one of these commands, so require silence too.
+    assert result.stdout == "", f"expected no warn output for {command!r}, got stdout={result.stdout!r}"
+    assert result.stderr == ""
 
 
 # --- Finding 1: package/plugin install verbs -------------------------------
@@ -186,6 +191,15 @@ def test_git_push_denied_when_scan_script_missing(tmp_path: Path) -> None:
     assert "scan_provenance.py" in payload["systemMessage"]
 
 
+def _fake_session_url() -> str:
+    # Assembled at runtime rather than written as one contiguous literal:
+    # scan_provenance.py's own "anthropic session domain" pattern would
+    # otherwise match this fixture in this very file's diff, making the
+    # production pre-push hook warn on this test file itself whenever this
+    # commit is part of an outgoing push.
+    return "https://" + "claude.ai" + "/x/session_" + "abc123"
+
+
 def test_git_push_warns_when_scan_flags_a_hit(tmp_path: Path) -> None:
     project_dir = tmp_path / "project"
     scan_dir = project_dir / "skills" / "outward-artifact-preflight" / "scripts"
@@ -193,7 +207,7 @@ def test_git_push_warns_when_scan_flags_a_hit(tmp_path: Path) -> None:
     (scan_dir / "scan_provenance.py").write_text((REPO_ROOT / SCAN_SCRIPT_RELATIVE).read_text())
     _init_repo_with_commit(
         project_dir,
-        second_commit_message="Add feature\n\nSee https://claude.ai/x/session_abc123 for context.",
+        second_commit_message=f"Add feature\n\nSee {_fake_session_url()} for context.",
     )
     result = run(
         "git push origin HEAD",
