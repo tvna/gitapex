@@ -17,7 +17,7 @@ agent.
 .claude-plugin/    marketplace.json + plugin.json (Claude Code/Codex manifests; plugin.json is the version source of truth)
 skills/            one directory per skill (SKILL.md, metadata/gitapex.yaml, optionally references/) — deployed by apm/Claude/Codex
   explaining-the-work/  routes code-comment/commit/test explanation responsibility to the right artifact
-  planning-a-branch-from-an-issue/      turns a GitHub issue into an implementation-ready branch/PR plan with an Acceptance Criteria Map
+  planning-a-branch-from-an-issue/  turns a GitHub issue into an implementation-ready branch/PR plan with an Acceptance Criteria Map
   drafting-an-acm-issue/  drafts a new GitHub issue with an Acceptance Criteria Map before creation, so planning-a-branch-from-an-issue can read one instead of building it
 docs/              documentation (this file, versioning policy, design specs, motivation.md) — not deployed
 tests/             pytest suite for the internal CI tooling — not deployed
