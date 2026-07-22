@@ -541,6 +541,9 @@ def test_fenced_code_block_heading_lookalike_is_not_a_real_anchor(tmp_path):
 
 
 def test_titled_inline_link_fragment_still_resolves(tmp_path):
+    # LINK_RE's own capture group is the whole parenthesized destination
+    # plus optional CommonMark title; without stripping the title first,
+    # the fragment would be 'some-heading "Jump there"' and never match.
     d = _write_raw(
         tmp_path,
         "---\nname: s\ndescription: d. Use when x.\n---\n\n"
@@ -561,6 +564,9 @@ def test_titled_inline_link_fragment_still_fails_when_broken(tmp_path):
 
 
 def test_unicode_heading_letters_preserved_in_slug(tmp_path):
+    # GitHub's real slugger preserves Unicode letters (only a fixed
+    # punctuation set is stripped), so "## Café Notes" anchors as
+    # "#café-notes", not an ASCII-stripped "#caf-notes".
     d = _write_raw(
         tmp_path,
         "---\nname: s\ndescription: d. Use when x.\n---\n\n"
@@ -570,6 +576,7 @@ def test_unicode_heading_letters_preserved_in_slug(tmp_path):
 
 
 def test_indented_atx_heading_recognized(tmp_path):
+    # CommonMark allows 0-3 leading spaces before an ATX heading's '#'s.
     d = _write_raw(
         tmp_path,
         "---\nname: s\ndescription: d. Use when x.\n---\n\n"
@@ -579,6 +586,9 @@ def test_indented_atx_heading_recognized(tmp_path):
 
 
 def test_atx_closing_sequence_does_not_leave_trailing_hyphen(tmp_path):
+    # "## Heading ##" is CommonMark's optional ATX closing sequence; the
+    # slug must be "heading", not "heading-" (the space before the
+    # closing '#'s must not survive into the slug).
     d = _write_raw(
         tmp_path,
         "---\nname: s\ndescription: d. Use when x.\n---\n\n"
@@ -597,6 +607,9 @@ def test_setext_heading_recognized(tmp_path):
 
 
 def test_atx_heading_followed_by_divider_is_not_misread_as_setext(tmp_path):
+    # An ATX heading immediately followed by a "---" section divider must
+    # not be misread as a Setext underline for the whole "## Some Heading"
+    # line (which would wrongly include the '#'s in the slugged text).
     d = _write_raw(
         tmp_path,
         "---\nname: s\ndescription: d. Use when x.\n---\n\n"
@@ -606,6 +619,9 @@ def test_atx_heading_followed_by_divider_is_not_misread_as_setext(tmp_path):
 
 
 def test_dedup_suffix_skips_already_claimed_literal_slug(tmp_path):
+    # Headings "Foo", "Foo-1", "Foo" in that order: GitHub must skip the
+    # already-claimed "foo-1" (taken by the literal "Foo-1" heading) and
+    # slug the third "Foo" as "foo-2", not collide by re-using "foo-1".
     d = _write_raw(
         tmp_path,
         "---\nname: s\ndescription: d. Use when x.\n---\n\n"
@@ -615,6 +631,8 @@ def test_dedup_suffix_skips_already_claimed_literal_slug(tmp_path):
 
 
 def test_out_of_skill_path_fragment_link_skipped_by_anchor_check(tmp_path):
+    # links-inside-skill already flags the escaping path; anchor-targets-
+    # resolve must not additionally fail on the same link.
     d = _write_raw(
         tmp_path,
         "---\nname: s\ndescription: d. Use when x.\n---\n\n"
@@ -635,6 +653,9 @@ def test_absolute_path_fragment_link_skipped_by_anchor_check(tmp_path):
 
 
 def test_nonexistent_target_file_fragment_link_fails(tmp_path):
+    # A dangling target file has no possible real heading to match, so
+    # this must fail rather than silently skip -- it's exactly the kind
+    # of dead link this check exists to catch.
     d = _write_raw(
         tmp_path,
         "---\nname: s\ndescription: d. Use when x.\n---\n\n"
