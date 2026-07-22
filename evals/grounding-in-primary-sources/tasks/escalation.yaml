@@ -18,3 +18,7 @@ expected:
   output_not_contains:
     - "Fact: `parse()` has been thread-safe"
     - "Fact: parse() has been thread-safe"
+    - "Fact: `parse()` is thread-safe"
+    - "Fact: parse() is thread-safe"
+    - "Fact: `parse()` is definitely thread-safe"
+    - "Fact: parse() is definitely thread-safe"

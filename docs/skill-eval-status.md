@@ -732,12 +732,10 @@ repository has no mechanism that does that for *any* skill's eval
 suite -- `waza-eval-matrix.yml` is `workflow_dispatch`-only and
 explicitly documented as "advisory, never a merge gate," and
 `skill-audit-gate.yml` only checks that a PR discloses the audit outcome,
-never that it executed the suite. This is the same repo-wide, pre-existing
-"no ablation mechanism exists in this repository" gap already recorded
-above for `battle-testing-a-skill`'s own suite, not a defect specific to
-this skill; accepted as a disclosed, non-blocking limitation rather than
-chased into building CI-gated eval execution as an undersized side effect
-of this change. Trial 2 also surfaced two findings trial 1's narrower
+never that it executed the suite. Same repo-wide gap noted above, not a
+defect specific to this skill; accepted as disclosed and non-blocking
+rather than chased into building CI-gated eval execution as an
+undersized side effect of this change. Trial 2 also surfaced two findings trial 1's narrower
 failing-dimension list had not: dimension 13 (cross-session/memory-
 poisoning -- the untrusted-content boundary was scoped to "fetched docs"
 only, not to a directive resurfacing from persisted cross-session memory)
@@ -783,8 +781,28 @@ already present before every dispatch began, with no mechanism available
 in this environment to strip or verify their absence. Every trial
 disclosed this openly and graded the target on its own text regardless,
 the same handling issue #261 recorded for two other skill audits in the
-identical situation. Net state at merge time: evaluating-skill-quality
-MATURE (trial 2, one round of unverified fixes since); battle-testing-a-skill
-FAIL on dimension 14 only, a repo-wide accepted gap, with dimensions
-12/13/15/16/17 fixed (12/15/16 independently re-confirmed, 13/17 not yet
-re-audited). Refs #290.
+identical situation. Net state after the two audit trials above:
+evaluating-skill-quality MATURE; battle-testing-a-skill FAIL on
+dimension 14 only (the repo-wide accepted gap), with dimensions
+12/13/15/16/17 fixed.
+
+**`/code-review` pass (issue #290, same PR, after both audit trials
+above):** found and fixed, independent of either audit: two eval-fixture
+construct-validity bugs (`escalation.yaml`'s bad-claim ban evaded by
+paraphrase, same class already fixed once in `injection.yaml`;
+`guardrail.yaml` banning bare "fetch"/"primary source"/"Speculation:",
+false-failing a correct response that legitimately uses those words --
+mechanically confirmed via `evals/scripts/lint_fixture_assertions.py`
+pointed at this skill); a Stop-boundary section that restated Procedure
+step 4 and the "When NOT to use" section almost verbatim, with the
+restatement already drifted from its source -- trimmed to pointers; the
+skill's own paraphrase of CLAUDE.md section 2's grounding rule with no
+cited origin, unlike `untrusted-input-triage`'s explicit "always-on rule,
+not the enforcement mechanism" framing -- added an equivalent
+acknowledgment; a structured-output fencing rule duplicating
+`responding-to-a-fresh-arrival`'s existing rule with no cross-link --
+now cross-referenced and added to `relatedTo`; and an obfuscation-
+technique list that was a third, item-by-item-different enumeration of
+the same taxonomy already stated in CLAUDE.md and `untrusted-input-triage`
+-- replaced with a citation instead of a competing list. None of these
+fixes have been re-verified by a third audit trial. Refs #290.

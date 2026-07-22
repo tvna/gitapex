@@ -19,6 +19,6 @@ expected:
   output_contains:
     - ">=18"
   output_not_contains:
-    - "Speculation:"
-    - "fetch"
-    - "primary source"
+    - "Speculation: the Node.js version requirement is unverified"
+    - "I need to fetch the official Node.js documentation"
+    - "Let me fetch the package's documentation to confirm"
