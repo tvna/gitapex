@@ -221,6 +221,25 @@ actual plugin-agent schema, not a plausible-sounding claim).
    unset. This closes the specific residual risk the row-2 ACM entry
    (see the implementation PR) named as untested; not left open.
 
+   **What "empirically verified" and "hard deny" above do NOT cover,
+   stated explicitly rather than left for a reader to assume completeness
+   (found by a fourth battle-testing-a-skill trial, confirmed live):**
+   `check_task_bash_safety.sh` is a regex gate, and a regex gate cannot
+   see through ordinary shell obfuscation that hides the verb itself --
+   `git${IFS}push origin HEAD`, `gi""t push origin HEAD`, and
+   `p\ip install foo` (bash parameter expansion and character-splitting,
+   nothing exotic) all ran unblocked when tested directly against the
+   shipped script. `hooks/check-bash-safety.sh`, the file this script is
+   explicitly adapted from, already discloses this identical ceiling for
+   itself ("Obfuscation that hides the verb itself... is out of reach of
+   any regex gate," tracked there as its own open follow-up item, cited
+   by number in that file's own comment -- not repeated here, since the
+   citation is specific to this repository, not portable to a consuming
+   deployment) -- the disclosure above and every "hard deny"/"empirically
+   verified" claim in this section should be read as bounded by that
+   same ceiling, not as complete coverage against a task agent acting on
+   an injected instruction that survived per-task screening.
+
    Incidentally, a second, distinct Claude-Code-native guard was also
    observed during this probe (not part of this skill's own mechanism,
    named here only because it was directly encountered): a

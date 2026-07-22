@@ -28,6 +28,26 @@
 # If the ACM table's header row or a shared pattern ever changes shape,
 # update both copies together -- nothing enforces they stay in sync
 # automatically (same caveat check_acm_present.py's own docstring states).
+#
+# Known ceiling, carried forward from hooks/check-bash-safety.sh's own
+# identical disclosure rather than left unstated here (found via a
+# fourth /code-review battle-test trial, confirmed live: `git${IFS}push
+# origin HEAD`, `gi""t push origin HEAD`, `pip${IFS}install foo`, and
+# `p\ip install foo` all ran unblocked): "Obfuscation that hides the
+# verb itself -- base64-piped-to-sh and the like -- is out of reach of
+# any regex gate," tracked there as its own open follow-up item (cited
+# by number in that file's own comment, not repeated here -- specific to
+# this repository, not portable). Ordinary bash parameter-expansion
+# (${IFS}) and character-splitting (empty-string concatenation,
+# backslash-escaped letters) tricks fall in the same class -- a task
+# agent acting on an injected
+# instruction that survived per-task screening could construct one of
+# these and defeat this hook's own "hard deny" claim for git push or an
+# install command. This is a regex gate's own structural limit, not a
+# bug this file can patch its way out of one pattern at a time; treat
+# the "hook-backed, empirically verified" language in
+# references/threat-model-and-authorization.md as bounded by this
+# ceiling, not as complete coverage.
 
 set -euo pipefail
 
