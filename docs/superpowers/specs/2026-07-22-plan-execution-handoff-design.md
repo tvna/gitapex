@@ -195,7 +195,19 @@ becomes an internal execution-ordering detail expressed through the
 Workflow tool's `pipeline()`/`parallel()` primitives (Decision 4), never a
 first-class term in an ACM row, a task, or a PR body. GSD's own
 markdown-file/persistent-state runtime is not adopted at all -- only the
-grouping pattern is, and only at this one boundary.
+grouping pattern is, and only at this one boundary. **Citation correction
+(a Fable-model primary-source pass fetched all three external repos
+directly this session, not from memory):** the originally cited
+`github.com/gsd-build/get-shit-development` [sic -- `get-shit-done`] is
+now archived (2026-06-26) and redirects to its successor,
+`github.com/open-gsd/gsd-core`; row 2's own Residual risk ("primary-
+source drift... the design doc should note its own fetch date") has
+materialized concretely here, not just in the abstract. The mechanism
+description above still holds against the successor, checked directly
+(`/gsd-execute-phase N [--wave N]` computes dependencies and groups
+plans into waves; `.planning/` markdown state confirmed), so the
+Anti-Corruption Layer classification is unaffected -- only the citation
+needed correcting.
 
 **Superpowers -- Anti-Corruption Layer.** The borrowed concept is the
 three-phase shape (brainstorm -> plan -> execute) and
@@ -207,6 +219,23 @@ step: Superpowers' own "task" vocabulary is translated into gitapex's
 already-resolved terms (Decision 10) at the exact moment the new skill
 reads the Branch Plan, not scattered across later steps.
 
+**A tension this design must own, not silently paper over (found by the
+same primary-source pass, reading Superpowers' actual `SKILL.md` files,
+not a summary of them):** `subagent-driven-development`'s own protocol
+states plainly, "No parallel implementers (prevents conflicts)."
+Decision 13 below borrows GSD's parallel-wave execution and pairs it
+with Superpowers' review discipline -- combining two sources that
+disagree with each other on this exact axis. This is not an oversight;
+it is what an Anti-Corruption Layer is for (translating and recombining
+patterns rather than importing either system wholesale), but the
+recombination needs its own argument, not a citation from either source
+alone: Decision 15 below (interface/semantic dependency edges, not just
+file edges) and Decision 13's worktree isolation together are this
+design's answer to the SPECIFIC conflict Superpowers' own rule exists to
+prevent -- see Decision 15 for why file-disjoint parallelism plus
+interface-edge sequencing is judged sufficient here, rather than
+adopting Superpowers' blanket ban wholesale.
+
 **Both ACL relationships share one mapping point, by design** -- this
 directly answers #274's own instruction to name "a single mapping point,
 not scattered across the new skill's steps": Decision 3's Task
@@ -217,12 +246,23 @@ either (Conformist adoption is direct, not translated).
 **GitHub Spec Kit -- Separate Ways.** #274's own Proposed solution
 already states this outcome informally ("Spec Kit's contribution is
 treated as a naming/structural precedent only, not a system to vendor").
-Its `/specify -> /plan -> /tasks -> /implement` sequence is structurally
-similar to gitapex's own existing `issue-to-branch -> executing-a-branch-
-plan -> driving-pr-to-merge` sequence, but no `.specify/` template
-artifact, file, or vocabulary is read, consumed, or referenced anywhere
-in this design. The two models never touch at runtime; the resemblance
-is precedent, not integration.
+**Citation correction (same primary-source pass, fetched the actual
+repo):** the `/specify -> /plan -> /tasks -> /implement` sequence cited
+here is stale -- current Spec Kit commands use a `/speckit.*` prefix,
+starting with `/speckit.constitution`, and the flow has grown validation
+gates this design never weighed at all: `/speckit.clarify`,
+`/speckit.analyze`, `/speckit.checklist`, `/speckit.converge`. The
+Separate Ways classification is unaffected (still no runtime contact --
+no `.specify/`-equivalent artifact, file, or vocabulary is read,
+consumed, or referenced anywhere in this design), but "precedent only"
+was describing a precedent that has since grown real gating machinery
+this design never considered borrowing from. Checked against what this
+design already has, rather than treated as an automatic gap: Spec Kit's
+`/speckit.clarify`/`/speckit.analyze`/`/speckit.checklist` gates
+substantially overlap Decision 6's threat-model triage and Decision 12's
+mandatory adversarial review, both of which already run before/around
+execution -- not vendoring a fourth validation layer on top of those two
+is a considered non-adoption, not an unexamined gap.
 
 **Claude Code Dynamic Workflows -- Conformist.** The borrowed mechanism
 is the actual `Workflow` tool: `agent()`/`pipeline()`/`parallel()`/
@@ -586,12 +626,25 @@ already found and fixed for a different mechanism.
 **What does apply: the general concern the budget-gate lineage and
 CLAUDE.md's own connector-preference-to-reduce-token-consumption rule
 both name** -- subagent-per-task fan-out scales roughly linearly with
-Decision 3's task count, and Decision 4's wave/pipeline parallelism can
-multiply that further. The real, already-existing bound for the Workflow
-path is the tool's own documented cap, confirmed this session, not
-invented: "Up to 16 concurrent agents, fewer on machines with limited CPU
-cores" and "1,000 agents total per run." No additional gitapex-specific
-ceiling is proposed on top of this native one in this pass.
+Decision 3's task count, and Decision 4/16's wave/pipeline parallelism
+can multiply that further. The Workflow tool's own documented caps
+("Up to 16 concurrent agents, fewer on machines with limited CPU cores"
+and "1,000 agents total per run") are real and confirmed, but a
+follow-up primary-source pass (this session, the Japanese docs page)
+found the original phrasing here overstated what they protect: the
+1,000-agent cap is documented as a runaway-loop backstop, not a cost
+bound, and the actual cost-flagging mechanism -- the "Large workflow"
+warning at 25+ agents or a 1.5M+-token projection -- is explicitly
+**informational only, never pauses a run, requires Claude Code
+v2.1.203+, and is suppressed entirely when ultracode is on.** Corrected
+here rather than left overstated: these caps bound a runaway script,
+they do not bound cost. Two real, previously unnamed levers exist
+instead: the `/config` "Dynamic workflow size" guideline (small/medium/
+large agent-count targets Claude aims for, not enforced against a
+larger request) and the documented practice of running a small slice
+first to estimate spend before a full dispatch. Both are named here as
+available controls for the follow-up implementation to configure, not
+as a cost ceiling this design invents on their behalf.
 
 **Following `2026-07-18-llm-budget-gate-design.md`'s own Decision 3
 precedent directly: no numeric cost/token ceiling is invented here.**
@@ -655,12 +708,15 @@ specs/`):
 
 Every row above resolves into one of these six checklist items; "optimal"
 is defined as satisfying all six, not as a single subjective judgment
-call left to the follow-up implementer. (Decisions 12-14 below add three
-later requirements -- mandatory refactor and adversarial review before
-ready-for-review, worktree isolation for parallel task execution, and
-per-task Red-Green discipline -- each sourced from an operator request
-during this design's own review, not from row 4's original six-item
-scope; each is additive to this list, not implied by it.)
+call left to the follow-up implementer. (Decisions 12-19 below add
+further requirements -- mandatory refactor and adversarial review before
+ready-for-review, worktree isolation for parallel task execution,
+per-task Red-Green discipline, interface-dependency edges, per-wave
+Workflow runs, deterministic settings-level enforcement, a rollback
+mechanism, and five smaller safety extensions -- each sourced from an
+operator request during this design's own review, not from row 4's
+original six-item scope; each is additive to this list, not implied by
+it.)
 
 ## Decision 12: mandatory refactor + adversarial code review before ready-for-review (operator-requested addition)
 
@@ -837,6 +893,266 @@ per-task judgment made at Decision 3's own decomposition time, not a
 blanket rule forced onto every task regardless of what its row actually
 asks for.
 
+## Decision 15: interface/semantic dependency edges, not file edges alone (operator-requested primary-source pass)
+
+Found by a fresh Fable-model subagent that fetched and read Superpowers'
+and Spec Kit's actual source repositories this session (not summaries of
+them), specifically to check for productivity/safety gaps this design's
+first four drafts missed -- see the Facts vs. speculation section for
+the full pass's provenance.
+
+**The gap: Decision 3's file-ownership map sequences two tasks only when
+they write the same file.** Superpowers' `writing-plans` requires each
+task to declare "Interfaces (consumed inputs, produced outputs with
+signatures)," and `subagent-driven-development` passes "interfaces from
+prior tasks" into each dispatch precisely because two file-disjoint
+tasks can still have a producer/consumer relationship -- task B reading
+an export task A creates. Under Decision 3/4 as drafted, such a pair is
+file-disjoint and would be assigned to the same parallel wave, where B
+would run before A's output exists.
+
+**Decision: Decision 3's Task Decomposition step records a second
+dependency-edge type alongside the file-ownership map -- an interface
+edge, wherever one task's own Planned ops states or implies it consumes
+something another task's Planned ops produces (a function signature, an
+exported type, a config key, a schema).** Wave/pipeline assignment
+(Decision 4) is computed from the union of both edge types: two tasks
+run in the same parallel wave only when neither a file edge nor an
+interface edge connects them. A task with an interface dependency on
+another runs strictly after it, gated on that task's own `TaskCompleted`
+event (Decision 8), exactly as a file-owning dependency already is.
+
+**This is also this design's answer to the Decision 2 tension with
+Superpowers' "no parallel implementers" rule**, not a second, unrelated
+fix: Superpowers bans parallel implementers specifically to prevent the
+interface-mismatch conflicts an interface-blind file-ownership map
+cannot see. Adding the interface edge closes the exact failure mode that
+rule exists to prevent, which is why this design keeps GSD's parallelism
+plus Decision 13's worktree isolation rather than adopting Superpowers'
+blanket ban -- the two sources' disagreement is resolved by borrowing
+the dependency-completeness Superpowers actually cares about, not by
+picking one source's conclusion over the other's by default.
+
+**Detection method, stated rather than left to model judgment alone:**
+at Decomposition time (Decision 3), each task's own Planned ops is
+checked against every other task's Planned ops for a stated or clearly
+implied producer/consumer relationship; where genuinely ambiguous
+(neither task's own text settles whether an interface edge exists), the
+decomposition step treats the pair as dependent (sequences them) rather
+than assuming independence -- the same fail-closed default this design
+already uses at every other uncertain-classification point (Decision 5,
+6, 7).
+
+## Decision 16: one Workflow run per wave, not one continuous run for the whole task list (operator-requested primary-source pass)
+
+Also found by the same primary-source pass, this time reading the
+Japanese Dynamic Workflows documentation (`https://code.claude.com/docs/
+ja/workflows`, fetched this session) directly rather than relying on the
+English-page facts already in this doc's "Facts vs. speculation"
+section.
+
+**The gap is an architectural contradiction, not a missing nuance.** The
+Workflow tool's own documented constraints, quoted directly: "No direct
+filesystem or shell access from the workflow itself -- Agents read,
+write, and run commands. The script coordinates the agents," and "No
+mid-run user input -- Only agent permission prompts can pause a run. For
+sign-off between stages, run each stage as its own workflow." Decision
+7's "main thread only" framing for GitHub writes, `git push`, worktree
+merge-back, and event-log writes implicitly assumed the orchestrating
+skill's own execution context could freely perform these operations
+*while also* being the thing dispatching task `agent()` calls through
+the Workflow tool. It cannot: the Workflow script itself is JavaScript
+with no filesystem or shell access at all -- it can only call
+`agent()`/`pipeline()`/`parallel()` and read their return values. A bare
+git command or an `mcp__github__*` call cannot execute inside the
+script's own code, only inside an `agent()` call.
+
+**Decision: restructure Decision 4's execution step so each Decision
+3/15 wave is dispatched as its own separate Workflow run, not one
+continuous run spanning the whole task list.** Between runs, the
+orchestrating skill is back in the actual interactive session's own main
+thread (not a script) -- exactly where Decision 6's screening, Decision
+13's worktree merge-back, Decision 8's event-log writes, and any GitHub
+write can genuinely execute directly, with real filesystem/shell/tool
+access, matching the ja docs' own explicit recommendation ("for sign-off
+between stages, run each stage as its own workflow") rather than working
+around a constraint the primary source already names a resolution for.
+Concretely, per wave: dispatch a Workflow run containing only that
+wave's `pipeline()`/`parallel()` task `agent()` calls (each with
+`isolation: 'worktree'` per Decision 13) -> the run returns each task's
+result to the main thread -> the main thread screens each result
+(Decision 6), merges worktrees (Decision 13), writes events (Decision
+8) -> the next wave's Workflow run is dispatched only once this is
+done, so its own tasks see the merged state of every earlier wave.
+
+**This also changes Decision 4's consent/portability math, stated
+explicitly rather than left implicit:** each wave now triggers its own
+launch-time approval prompt in the default/accept-edits permission
+modes (per the ja docs' own consent table) unless "don't ask again for
+this workflow" was already recorded, or the calling session runs in a
+non-interactive mode where no prompt exists at all. A Branch Plan with
+many small waves multiplies this prompt count; Decision 3/15's own wave-
+minimizing effect (grouping everything with no file or interface edge
+into one wave) is therefore also a consent-friction control, not only a
+parallelism-maximizing one -- named here so a future implementer does
+not treat wave-count purely as a performance knob.
+
+**Sequential fallback is unaffected.** Decision 4's non-Workflow-tool
+fallback already runs one task per turn in the actual main thread with
+no script boundary at all, so it never had this problem; this Decision
+narrows to the Workflow-tool path specifically.
+
+## Decision 17: deterministic, settings-level enforcement of Decision 7's exclusion list (operator-requested primary-source pass)
+
+**The gap: Decision 7's ban on GitHub writes, `git push`, and installs
+inside a task `agent()` is currently enforced only as prose in each
+task's own dispatch prompt.** This repository's own rubric already
+names the failure mode this shape has: a prose-only instruction is not a
+deterministic guardrail. The same primary-source pass confirms two
+concrete facts that make this gap actionable rather than abstract,
+quoted from the ja docs: workflow subagents "inherit the session's own
+tool allowlist," and in `claude -p`/Agent SDK (headless) invocation,
+"tool calls follow your configured permission rules without interactive
+confirmation" -- no prompt exists there at all to catch a task agent
+that ignores its own prompt-level instruction.
+
+**Decision: the calling session's own tool-permission configuration
+(a settings-level deny rule on `mcp__github__*` write methods, `gh`,
+`git push`, and package-manager install commands, scoped to task-agent
+dispatch where the platform supports scoping) is the deterministic
+backstop for Decision 7's exclusion list, not a replacement for the
+in-band prompt instruction but its enforcement layer.** This does not
+depend on Decision 7's own open question (whether `hooks/check-bash-
+safety.sh` binds inside a subagent context, still unresolved per
+Decision 7's own corrected finding) -- a settings-level deny rule is a
+platform permission-system mechanism, a different enforcement layer than
+a repository's own PreToolUse hook, and binds according to the ja docs'
+own explicit statement above regardless of that open question's eventual
+answer. The follow-up implementation issue's own setup should configure
+this deny rule and verify it fires (a known-denied probe command
+actually blocked) before relying on the prose-only version as
+sufficient.
+
+## Decision 18: rollback for a partially-executed branch (operator-requested primary-source pass)
+
+**The gap: when `stop-and-replan` fires mid-task-list (Decision 8's
+failure dispatch), the branch already carries however many task commits
+completed before the stop -- and this design defines closing the draft
+PR, but no reverse operation over those already-landed commits.** GSD's
+successor (`open-gsd/gsd-core`, Decision 2's corrected citation) ships
+exactly this as `/gsd-undo [--last N | --phase NN | --plan NN-MM]`,
+described in its own docs as "a safe git revert... using the phase
+manifest with dependency checks and a confirmation gate."
+
+**Decision: Decision 8's own Domain-Events log already records every
+`TaskCompleted{task_id, commit_sha}` -- this is the manifest a revert
+needs, so no new artifact is required, only a new operation that reads
+it.** When `stop-and-replan` fires, before closing the draft PR: offer
+(via the escalation comment Decision 8 already writes) a revert of every
+`TaskCompleted` commit back to the branch's own first commit (Decision
+4's task-list-file commit), using the Execution log's own `commit_sha`
+values as the dependency-ordered manifest GSD's own tool reads from a
+separate file. This is offered, not automatic -- matching CLAUDE.md
+section 4's own "keep confirmations... for any irreversible operation"
+rule, since a revert is itself a git history change on a branch a human
+may already be inspecting.
+
+## Decision 19: smaller safety additions, consolidated (operator-requested primary-source pass)
+
+Four further findings from the same pass, each a bounded extension of
+an existing Decision rather than a new mechanism -- consolidated here
+per CLAUDE.md section 5's proportionality guidance rather than given one
+full Decision heading each.
+
+- **Per-task diff BASE, explicitly defined (extends Decision 6).**
+  Decision 6 screens "each task's own diff" without stating what it is a
+  diff *from*. With Decision 13's worktree merge-backs landing on the
+  shared branch out of task-dispatch order, `HEAD~1` is not reliably that
+  task's own diff. Superpowers' own protocol states the fix directly:
+  record the BASE commit immediately before each task's own dispatch,
+  and screen `BASE..HEAD` from that task's own worktree, never `HEAD~1`
+  -- adopted here verbatim, not reworded.
+- **Dependency-identity verification before the Decision 13/17
+  main-thread install step.** GSD's successor inserts a human-verify
+  checkpoint when its own dependency scan flags a package as suspicious
+  or merely assumed-to-exist, and explicitly does not auto-substitute a
+  similarly-named package on install failure. Decision 6 already hard-
+  flags a dependency addition to escalation; this adds that the escalated
+  human is shown a registry-existence check for the manifest-named
+  package (not just the diff itself), closing a typosquat/hallucinated-
+  package gap Decision 6 names the category for but does not itself
+  verify.
+- **A reversibility check at Decision 3's own decomposition time, not
+  only Decision 5's entry gate.** GSD's successor gates any
+  `one-way`-rated decision behind its own `checkpoint:decision`, on by
+  default. This design's only human gate is Decision 5, at entry --
+  before any task's actual Planned ops (e.g. a schema migration, a data
+  deletion) is known in detail. Decision 3 now also classifies each
+  task's own Planned ops for irreversibility at decomposition time; a
+  task classified irreversible requires the same authorization-gate
+  confirmation Decision 5 already defines, re-run for that specific task,
+  before it dispatches -- matching CLAUDE.md section 4's own
+  confirm-before-irreversible-operations rule at the point the
+  irreversible operation is actually identified, not only at the
+  Branch-Plan-wide entry point.
+- **A `NeedsInput` event, distinct from `TaskFailed` (extends Decision
+  8's closed event vocabulary).** Superpowers' own implementer protocol
+  lets a task return `NEEDS_CONTEXT` (a request for missing information,
+  re-dispatched with that context, not counted as a failure) rather than
+  forcing every incomplete task through the failure path. Decision 8's
+  vocabulary gains `NeedsInput{task_id, question}`: the orchestrating
+  skill answers from the ACM/Branch Plan's own already-stated content
+  when possible, or escalates per Decision 8's existing escalate path
+  when the ACM itself does not settle it -- this does not consume
+  Decision 8's own one-retry budget, since asking for missing context is
+  not the same event as an attempt that ran and failed.
+- **A full re-verification pass after Decision 12's own refactor/fix
+  cycle, before step 9.** Decision 12 requires fixing a CONFIRMED
+  adversarial-review finding, but nothing in the first four drafts re-ran
+  anything afterward. Superpowers' own protocol is explicit here too:
+  after any fix subagent runs, "re-run the implementer's covering tests,
+  then re-review." Decision 12 gains this as its own closing step: after
+  every CONFIRMED finding's fix is applied, re-run every task's own
+  Decision 14 Red-Green test (not just the one test related to the fix)
+  before step 9 -- the last gate before hand-off does not rest on an
+  unverified "the fix didn't break anything else" assumption.
+
+## Considered and not adopted this pass: four productivity items
+
+The same primary-source pass surfaced four productivity-oriented
+mechanisms from GSD's successor, Superpowers, and the Workflow tool
+docs. Named here per this design's own established practice (row 2's
+"adopted, adapted, or rejected with a reason... a named gap, not
+silently dropped"), each with the specific reason it is not built into a
+Decision this pass:
+
+- **Per-task/per-stage model-tier routing** (Superpowers: "use least
+  powerful model per role"; the ja docs: per-stage model routing,
+  `CLAUDE_CODE_SUBAGENT_MODEL`). Not adopted: choosing which model tier
+  each task or Decision 12 review gets is a cost/quality tradeoff the
+  operator should set per deployment, not a default this design should
+  fix -- the mechanism (the Workflow tool's own per-agent `model` option)
+  already exists and needs no new design here to be usable.
+- **Tracer-first execution ordering** (GSD's successor: one end-to-end
+  slice verified before parallel fan-out). Not adopted this pass: it is
+  a genuinely different sequencing strategy from Decision 3/15/16's
+  wave-based one, not a small addition to it, and deserves its own
+  comparison (cost of one extra serial round-trip vs. earlier detection
+  of a wrong plan) rather than being folded in as an afterthought.
+- **A lightweight fast path for trivial Branch Plans** (GSD's successor:
+  `/gsd-fast`, `/gsd-quick`). Not adopted this pass: worth having, but
+  defining "trivial" (one task? one file? no irreversible flag?) is a
+  judgment call this design should not make unreviewed; flagged for the
+  follow-up implementation issue to propose, not decided here by
+  default.
+- **Saved-workflow reuse** (the ja docs: a run's script can be saved to
+  `.claude/workflows/`, invoked as `/<name>` with structured `args`).
+  Not adopted: `executing-a-branch-plan`'s own task list differs by
+  Branch Plan, so the Workflow script Decision 16 dispatches per wave is
+  necessarily regenerated per run, not a fixed script worth checking in
+  -- the reuse mechanism has no natural target here, unlike a fixed,
+  repeated audit task.
+
 ## New skill: consolidated sequence (for the follow-up implementation issue)
 
 Provided so the follow-up issue does not need to re-derive step ordering
@@ -848,43 +1164,58 @@ only scope).
    session. Fail closed on anything less.
 2. **Threat-model triage** (Decision 6). Extract/Ignore/Flag/Tag the ACM's
    own text before treating any of it as executable instruction.
-3. **Task Decomposition** (Decision 3). Write a `docs/superpowers/plans/
-   <date>-<branch-name>.md`-shaped task list from the ACM, each task
-   citing its source row(s), with a file-ownership map computed before
-   any wave/pipeline assignment.
-4. **Publish the branch** (Decision 8). Create the Branch Plan's named
+3. **Task Decomposition** (Decision 3, extended by Decisions 15 and 19).
+   Write a `docs/superpowers/plans/<date>-<branch-name>.md`-shaped task
+   list from the ACM, each task citing its source row(s). Compute a
+   file-ownership map AND an interface-dependency map (Decision 15)
+   before any wave/pipeline assignment -- a task pair connected by
+   either edge type is sequenced, never co-assigned to a parallel wave.
+   Classify each task's own Planned ops for irreversibility (Decision
+   19); a task classified irreversible carries that flag into step 7.
+4. **Publish the branch** (Decision 16). Create the Branch Plan's named
    branch, commit step 3's task-list file to it as its first commit, and
-   push -- main thread only -- publishing the head ref step 5 requires.
+   push -- main thread only -- publishing the head ref step 6 requires.
 5. **Open a draft PR and subscribe** (Decision 8) with the ACM and a
    seeded Execution log (`PlanApproved` event); subscribe to the draft
    PR's own CI/review/comment activity in this same step, owned by this
    skill until step 9.
-6. **Execute** (Decision 4). Workflow-tool `pipeline()`/`parallel()` over
-   Decision 3's task list when available, each parallel task's `agent()`
-   call using `isolation: 'worktree'` (Decision 13); sequential
-   main-thread fallback otherwise (no worktree isolation needed there,
-   Decision 13). Within each task, Red-Green order applies where the
+6. **Execute, one Workflow run per wave** (Decision 16, superseding the
+   original single-run framing; Decisions 4, 13, 14). For each wave
+   computed in step 3: dispatch one Workflow run containing only that
+   wave's task `agent()` calls, each using `isolation: 'worktree'`
+   (Decision 13); sequential main-thread fallback runs one task per turn
+   with no wave/run boundary at all when the Workflow tool is
+   unavailable. Within each task, Red-Green order applies where the
    task's inherited Proof method is an automatable test (Decision 14) --
-   Refactor is not run per task, deferred entirely to step 8. Each task's
-   own diff is screened (Decision 6) before its own commit; a completed
-   worktree task's commit is merged onto the shared branch in the main
-   thread (Decision 13), never by the task agent itself. GitHub writes,
-   `git push`, and package-manager install commands are never delegated
-   into a task `agent()` (Decision 7's compensating control, widened to
-   cover installs) -- only steps 4, 5, this step's own worktree
-   merge-back and `TaskStarted`/`TaskCompleted`/`TaskFailed` event
-   writes, step 7's own `StageDeviated` event write and any close-PR/
-   comment action, and step 9 happen in the main thread.
-7. **On task failure or a screening flag**, dispatch per Decision 8's
-   rule: one retry for an ordinary proof-method failure, then
-   `stop-and-replan` (the plan itself was wrong) or escalate (the
-   execution was wrong, or a screening flag, with no obvious safe fix).
+   Refactor is not run per task, deferred entirely to step 8. Once a
+   wave's run returns, back in the main thread (not the script, which
+   has no filesystem/shell access at all -- Decision 16): each task's
+   own `BASE..HEAD` diff (Decision 19) is screened (Decision 6) before
+   its own commit; a screened worktree task's commit is merged onto the
+   shared branch; `TaskStarted`/`TaskCompleted`/`TaskFailed`/
+   `NeedsInput` events (Decision 8, 19) are written -- all main-thread
+   only, never delegated into a task `agent()` (Decision 7/17). The next
+   wave's run is dispatched only after this settles, so it sees every
+   earlier wave's merged state. An irreversible task (step 3's flag) is
+   preceded by a fresh Decision 5-equivalent confirmation for that
+   specific task before its own wave dispatches (Decision 19).
+7. **On task failure, a `NeedsInput` event, a screening flag, or an
+   irreversible-task confirmation declined**, dispatch per Decision 8's
+   rule: `NeedsInput` answers from the ACM/Branch Plan's own content
+   when possible, without consuming the retry budget (Decision 19);
+   otherwise, one retry for an ordinary proof-method failure, then
+   `stop-and-replan` (the plan itself was wrong -- offer the Decision 18
+   commit-manifest revert before closing the draft PR) or escalate (the
+   execution was wrong, a screening flag, or a declined confirmation,
+   with no obvious safe fix).
 8. **Refactor and adversarially review the accumulated diff** (Decision
    12, mandatory, non-skippable). Two separate fresh subagent
    dispatches over the full diff -- a refactor/simplify pass, then an
    independent adversarial code review -- with findings verified and
-   fixed before proceeding. An outstanding CONFIRMED finding blocks
-   step 9.
+   fixed before proceeding. After every CONFIRMED finding's fix, re-run
+   every task's own Decision 14 test, not only the one related to the
+   fix (Decision 19) -- an outstanding CONFIRMED finding, or a
+   re-verification failure, blocks step 9.
 9. **On all tasks complete and step 8 clean**, mark the PR ready for
    review; ownership of its activity passes to `driving-pr-to-merge`'s
    normal entry point (Decision 8) -- no code change needed there, only
@@ -922,23 +1253,42 @@ Fable-model subagent adversarially verified this doc's own citations,
 overclaims, and internal consistency after the first draft (matching
 #274's own methodology for the issue body itself); the corrections in
 this section and in Decisions 1, 3, 7, and 9 above are its confirmed
-findings, applied.
+findings, applied. **A second, later Fable-model subagent pass
+independently fetched and read GSD's own repository (confirming the
+original `gsd-build/get-shit-done` citation is archived and redirects to
+`open-gsd/gsd-core`, verified from that successor directly), Superpowers'
+own repository (confirming the three cited `SKILL.md` files verbatim,
+including `subagent-driven-development`'s own "No parallel implementers"
+line), GitHub Spec Kit's own repository (confirming the cited command
+sequence is stale -- current commands use a `/speckit.*` prefix), and
+the Japanese Dynamic Workflows documentation
+(`https://code.claude.com/docs/ja/workflows`) directly -- this replaces,
+not merely supplements, the row-2-Residual-risk caveat below for these
+three systems specifically.** Decisions 2 (both citation corrections),
+15, 16, 17, 18, 19, and the "Considered and not adopted" section above
+are this second pass's confirmed findings, applied or explicitly
+declined with a stated reason.
 
-**Speculation, named as such:** GSD's, Superpowers', and Spec Kit's own
-internal mechanics are inherited from #274's own "Primary sources
-consulted this session" table, not independently re-fetched this
-session -- row 2's own Residual risk ("primary-source drift... the design
-doc should note its own fetch date") is accordingly still open for those
-three specifically; this doc's own fetch date for the claims it did
-verify independently is stated above. Decision 7's underlying question
-(do PreToolUse gates bind inside subagent/Workflow execution contexts)
-is now stated as genuinely open, not answered -- this session's evidence
-rules out treating the hook as active at all here, which is weaker
-information than the first draft claimed, not stronger; the compensating
-control is retained on a fail-closed/zero-trust basis, not because the
-gap was proven. Decision 9's "no numeric ceiling" is a deliberate
-non-answer, not an oversight, and should not be read as a lower risk than
-an invented number would imply.
+**Speculation, named as such:** the row-2 Residual risk this doc
+originally flagged ("primary-source drift -- an external plugin's docs/
+behavior can change after this research") has now partly materialized
+(GSD's repo was archived between #274's own citation and this second
+pass) rather than remaining a hypothetical; both GSD and Spec Kit's
+citations are corrected above, but their own future drift past this
+session's fetch date remains an open, standing risk, not resolved once
+and for all by a single verification pass. Decision 7's underlying
+question (do PreToolUse gates bind inside subagent/Workflow execution
+contexts) is still stated as genuinely open, not answered -- this
+session's evidence rules out treating the hook as active at all here,
+which is weaker information than the first draft claimed, not stronger;
+the compensating control is retained on a fail-closed/zero-trust basis,
+not because the gap was proven. Decision 9's "no numeric ceiling" is a
+deliberate non-answer, not an oversight, and should not be read as a
+lower risk than an invented number would imply. Decision 16's per-wave
+Workflow-run restructuring is grounded in the ja docs' own explicit
+guidance, not independently load-tested this session -- whether wave
+count in practice produces an acceptable number of launch-time consent
+prompts (per Decision 16's own consent-friction note) is unverified.
 
 ## Non-goals
 
@@ -1023,6 +1373,32 @@ sourced from #274's blind-spot pass):**
       already-established test-first discipline rather than inventing a
       new one, with an explicit scope boundary for tasks whose Proof
       method is not an automatable test.
+- [x] Interface-dependency edges alongside file-ownership edges: Decision
+      15 -- closes the specific conflict Superpowers' own "no parallel
+      implementers" rule exists to prevent, found by fetching and reading
+      Superpowers' and Spec Kit's actual repositories this session.
+- [x] One Workflow run per wave, not one continuous run: Decision 16 --
+      corrects an architectural impossibility (the Workflow script itself
+      has no filesystem/shell access) the first four drafts did not
+      notice, found by fetching the Japanese Dynamic Workflows docs
+      directly and matching their own "run each stage as its own
+      workflow" guidance.
+- [x] Deterministic settings-level enforcement of Decision 7's exclusion
+      list: Decision 17 -- a backstop independent of Decision 7's own
+      still-open PreToolUse-hook-binding question.
+- [x] Rollback for a partially-executed branch: Decision 18 -- reuses
+      Decision 8's own Domain-Events log as the revert manifest, offered
+      (not automatic) when `stop-and-replan` fires.
+- [x] Five smaller safety extensions, consolidated: Decision 19 --
+      per-task diff BASE, dependency-identity verification before
+      install, a per-task reversibility confirmation, a `NeedsInput`
+      event distinct from failure, and re-verification after Decision
+      12's own fix cycle.
+- [x] Four productivity mechanisms considered and explicitly not
+      adopted this pass, each with a stated reason (not silently
+      dropped): model-tier routing, tracer-first execution ordering, a
+      trivial-Branch-Plan fast path, and saved-workflow reuse -- see
+      "Considered and not adopted this pass" above.
 
 Follow-up implementation PR's own first steps (not this pass, per Non-
 goals above, but listed here so they are not lost between docs):
@@ -1030,6 +1406,9 @@ goals above, but listed here so they are not lost between docs):
 - [ ] Add `Task` and `plan`-superseded-by-`Branch Plan` entries to
       `docs/glossary.md` (Decision 10) before authoring
       `executing-a-branch-plan/SKILL.md`'s own text.
+- [ ] Configure Decision 17's settings-level deny rule and verify it
+      actually fires (a known-denied probe command blocked) before
+      relying on it as the exclusion list's deterministic backstop.
 - [ ] Author `skills/executing-a-branch-plan/SKILL.md` and its
       `references/`, following the consolidated sequence above.
 - [ ] Add a "Related skills" section to `issue-to-branch/SKILL.md`
@@ -1065,3 +1444,16 @@ goals above, but listed here so they are not lost between docs):
 - **Decision 9's numeric ceiling** remains an explicit open input,
   matching `2026-07-18-llm-budget-gate-design.md`'s own precedent, not a
   gap unique to this doc.
+- **GSD's canonical citation already drifted once** (Decision 2:
+  `gsd-build/get-shit-done` archived, redirects to `open-gsd/gsd-core`)
+  between #274's own citation and this design's second review pass --
+  row 2's Residual risk is not a one-time check to close, but a standing
+  risk; re-verify all four systems' citations again before this design
+  is treated as final at implementation time, not only at this pass.
+- **Decision 16's consent-friction claim is unverified in practice.**
+  Whether a real Branch Plan's own wave count produces an acceptable
+  number of launch-time approval prompts (or whether Decision 3/15's
+  wave-minimizing effect is enough to keep it low) has not been measured
+  against a real multi-wave dispatch -- named as a question for the
+  follow-up implementation's own first real run, not assumed answered by
+  this design's reasoning alone.
