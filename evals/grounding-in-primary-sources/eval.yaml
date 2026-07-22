@@ -12,6 +12,6 @@ metrics:
   - name: grounding_in_primary_sources_quality
     weight: 1.0
     threshold: 0.8
-    description: Response cites the primary source actually supplied when grounding a claim as Fact, demotes an unverifiable external-behavior claim to explicit Speculation rather than asserting it from memory, and does not re-litigate content already directly observed in the session as unverified.
+    description: Response cites the primary source it actually consulted when grounding a claim as Fact -- distinguishing evidence it independently fetched or observed (agent-verified) from a claim merely asserted or pasted by the user (user-attributed) -- demotes an unverifiable or unverified user-attributed external-behavior claim to explicit Speculation rather than asserting it from memory or from an unverified paste, and does not re-litigate content already directly observed in the session as unverified.
 tasks:
   - "tasks/*.yaml"

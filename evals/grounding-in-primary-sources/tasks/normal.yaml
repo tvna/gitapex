@@ -1,20 +1,18 @@
 id: grounding-in-primary-sources-normal
-name: Library Version Support Claim With Changelog Excerpt Supplied
-description: Given a primary-source excerpt (a changelog entry) pasted into the prompt, the response cites it explicitly as the grounding evidence and tags the claim Fact, rather than asserting the same fact from memory without citing the source actually consulted.
+name: A Genuinely Agent-Verified Claim Comes From The Agent's Own Live Check, Not A Claim Of One
+description: No excerpt is pasted, and nothing is narrated as already having been fetched in any voice -- the user explicitly asks the agent to verify the claim itself, live, rather than take anyone's word for it. Agent-verified evidence means an actual check the agent performs now, with the result directly in its own context, never a claim (first- or second-person) that such a check already happened. This is the suite's one legitimately agent-verified scenario; its correctness depends on the executing harness actually granting live fetch/tool access during scoring, which this repository's eval tooling cannot itself confirm (see docs/skill-eval-status.md) -- a text-only harness with no tool access cannot pass this fixture's Fact assertion, and would correctly answer Speculation instead per this skill's own step 4, which is the harness limitation, not a target-skill defect.
 tags:
   - quality
 inputs:
   prompt: |
     Use grounding-in-primary-sources.
 
-    I need to know if the `anthropic` Python SDK's `messages.create()`
+    I need to know if the real `anthropic` Python SDK's `messages.create()`
     supports a `thinking` parameter in the version we have pinned,
-    `anthropic==0.34.0`. I already fetched the official CHANGELOG.md for
-    that release; here's the relevant entry:
-
-    > ## 0.34.0
-    > - Added: `thinking` parameter on `Messages.create` for extended
-    >   thinking support.
+    `anthropic==0.34.0`. Don't take my word for it, and don't rely on a
+    claim that you or I already checked this earlier -- go verify it
+    yourself, right now, against the SDK's own CHANGELOG.md. I have no
+    excerpt to hand you.
 
     Does our pinned version support it?
 expected:
