@@ -1,7 +1,6 @@
 ---
 name: grounding-in-primary-sources
 description: Use before asserting how an external tool, library, API, platform, or service behaves -- a version number, a feature's support status, a deprecation, a default, a field's exact semantics, a rate limit, or a comparable factual claim. Requires independently fetching or verifying a primary source (the tool's own docs, its changelog, or the observed live state) before the claim is stated as Fact rather than answered from memory or from someone else's unverified say-so; an unreachable or unverifiable primary source demotes the claim to Speculation instead.
-disallowed-tools: Write Edit NotebookEdit
 ---
 
 # Grounding in Primary Sources
@@ -196,16 +195,6 @@ Not already stated elsewhere:
   to `Fact:`-level action.
 
 ## Notes
-
-`disallowed-tools: Write Edit NotebookEdit` in the frontmatter is a
-per-turn defense-in-depth backstop, not a substitute for step 5's
-untrusted-data triage: this Procedure never mutates a file or notebook
-on its own, so removing that capability for the turn narrows what a
-successful injection could do, without restricting the fetch/read/ask
-tools the Procedure and Worked Example actually need. Like the untrusted-
-data triage it backstops, this clears on the harness's next message
-turn -- it protects the turn evidence is loaded, not the rest of the
-session.
 
 A calling repository's own instruction file may already state "ground
 claims in primary sources" as an always-on rule, the way it states other
