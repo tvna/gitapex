@@ -1,0 +1,17 @@
+name: grounding-in-primary-sources-eval
+description: Quality suite for the gitapex grounding-in-primary-sources skill.
+skill: grounding-in-primary-sources
+version: "0.1.0"
+config:
+  trials_per_task: 3
+  timeout_seconds: 300
+  parallel: false
+  executor: copilot-sdk
+  model: claude-sonnet-4.6
+metrics:
+  - name: grounding_in_primary_sources_quality
+    weight: 1.0
+    threshold: 0.8
+    description: Response cites the primary source actually supplied when grounding a claim as Fact, demotes an unverifiable external-behavior claim to explicit Speculation rather than asserting it from memory, and does not re-litigate content already directly observed in the session as unverified.
+tasks:
+  - "tasks/*.yaml"

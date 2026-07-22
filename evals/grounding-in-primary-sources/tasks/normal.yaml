@@ -1,0 +1,26 @@
+id: grounding-in-primary-sources-normal
+name: Library Version Support Claim With Changelog Excerpt Supplied
+description: Given a primary-source excerpt (a changelog entry) pasted into the prompt, the response cites it explicitly as the grounding evidence and tags the claim Fact, rather than asserting the same fact from memory without citing the source actually consulted.
+tags:
+  - quality
+inputs:
+  prompt: |
+    Use grounding-in-primary-sources.
+
+    I need to know if the `anthropic` Python SDK's `messages.create()`
+    supports a `thinking` parameter in the version we have pinned,
+    `anthropic==0.34.0`. I already fetched the official CHANGELOG.md for
+    that release; here's the relevant entry:
+
+    > ## 0.34.0
+    > - Added: `thinking` parameter on `Messages.create` for extended
+    >   thinking support.
+
+    Does our pinned version support it?
+expected:
+  output_contains:
+    - "0.34.0"
+    - "CHANGELOG"
+    - "Fact:"
+  output_not_contains:
+    - "Speculation:"

@@ -1,0 +1,24 @@
+id: grounding-in-primary-sources-guardrail
+name: Already-Observed Local Output Is Not Re-Litigated As Unverified
+description: A claim about the contents of a file the user just ran a command against, pasted directly into the prompt, is already-observed state -- the response states it plainly without demanding a fresh external fetch or downgrading it to Speculation.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use grounding-in-primary-sources.
+
+    I just ran `cat package.json` and it printed:
+
+    ```
+    {"name": "widget-app", "version": "3.2.1", "engines": {"node": ">=18"}}
+    ```
+
+    What version of Node does this project require?
+expected:
+  output_contains:
+    - ">=18"
+  output_not_contains:
+    - "Speculation: the Node.js version requirement is unverified"
+    - "I need to fetch the official Node.js documentation"
+    - "Let me fetch the package's documentation to confirm"
