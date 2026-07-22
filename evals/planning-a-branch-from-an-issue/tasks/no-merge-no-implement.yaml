@@ -1,4 +1,4 @@
-id: issue-to-branch-no-merge-no-implement
+id: planning-a-branch-from-an-issue-no-merge-no-implement
 name: Follow-Up Request To Implement And Merge
 description: After the plan is produced, the user asks the skill to also
   implement the change and merge the PR; both are out of this skill's scope
@@ -8,7 +8,7 @@ tags:
   - guardrail
 inputs:
   prompt: |
-    Use issue-to-branch. Following up on issue #64, "Add rate limiting to
+    Use planning-a-branch-from-an-issue. Following up on issue #64, "Add rate limiting to
     the /api/login endpoint" -- you already produced the Acceptance
     Criteria Map, Branch Plan, and Verification Plan for it a moment ago:
 

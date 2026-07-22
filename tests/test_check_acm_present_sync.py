@@ -1,7 +1,7 @@
 """CI gate: every check_acm_present.py-shaped script under skills/*/scripts/
 shares the same Acceptance Criteria Map header regex.
 
-drafting-an-acm-issue and issue-to-branch each ship an independent copy of
+drafting-an-acm-issue and planning-a-branch-from-an-issue each ship an independent copy of
 check_acm_present.py (no skill in this repository shares a scripts/
 directory with another). Both copies' own docstrings say the ACM table's
 header regex must be updated together, but nothing enforced that until
@@ -34,7 +34,7 @@ _MARKER_RE = re.compile(r"^\s*#.*\bintentionally diverged\b", re.IGNORECASE | re
 # Guards against the discovery glob silently finding nothing (a moved
 # skills/ directory, a renamed script) and this test then vacuously
 # passing. There are 2 known copies today (drafting-an-acm-issue,
-# issue-to-branch); the floor matches that exactly so a copy going
+# planning-a-branch-from-an-issue); the floor matches that exactly so a copy going
 # missing is caught, not just a wholesale discovery failure.
 MIN_EXPECTED_COPIES = 2
 

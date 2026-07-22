@@ -1,4 +1,4 @@
-id: issue-to-branch-stale-reframed
+id: planning-a-branch-from-an-issue-stale-reframed
 name: Stale Issue Reframed by Comments
 description: A later comment narrows the issue body's original scope; the plan must follow the comment, not the stale body, while still mapping every still-active criterion.
 tags:
@@ -6,7 +6,7 @@ tags:
   - staleness
 inputs:
   prompt: |
-    Use issue-to-branch. Start work on the issue below.
+    Use planning-a-branch-from-an-issue. Start work on the issue below.
 
     Issue #77: Rewrite the auth module
 

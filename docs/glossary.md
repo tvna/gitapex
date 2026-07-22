@@ -9,7 +9,7 @@ procedure, not ad hoc.
 
 A GitHub Issue in this repository: the single term used for any tracked
 unit of work regardless of kind (feature request, chore, defect report,
-tracking umbrella, etc.), as already used throughout `issue-to-branch`,
+tracking umbrella, etc.), as already used throughout `planning-a-branch-from-an-issue`,
 `merge-retrospective`, and `docs/motivation.md`.
 
 Superseded terms: `Bug report` -- surfaced as a candidate synonym while
@@ -17,9 +17,11 @@ naming the autonomous-bug-repair skill proposed in the Fable-assisted
 skill-gap analysis (2026-07-15). Resolved by the repository owner,
 directly, per the Resolve step: "issue" wins, "bug report" retires as a
 synonym for the same concept rather than being kept as a deliberately
-narrower one. The skill in question is named `issue-to-fix`, not
+narrower one. The skill in question is named `fixing-a-reported-issue`, not
 `bug-report-to-fix`, on this basis (see
-`docs/superpowers/specs/2026-07-15-issue-to-fix-design.md`).
+`docs/superpowers/specs/2026-07-15-issue-to-fix-design.md`, unrenamed --
+that path is a dated design-record filename, out of scope for the
+`issue-to-fix` -> `fixing-a-reported-issue` rename per #281).
 
 ## `Task`
 
@@ -40,7 +42,7 @@ so this is a fresh-term-minting case, not a conflict resolution.
 
 ## `Branch Plan`
 
-The output of `issue-to-branch/SKILL.md`: a branch name, commit scope,
+The output of `planning-a-branch-from-an-issue/SKILL.md`: a branch name, commit scope,
 and PR title/body outline derived from an issue's Acceptance Criteria
 Map. This is the sole term for that concept in gitapex's own vocabulary.
 
@@ -48,7 +50,7 @@ Superseded terms: bare `plan` -- surfaced as a candidate synonym from
 GSD's and GitHub Spec Kit's own vocabulary while designing
 `executing-a-branch-plan`
 (`docs/superpowers/specs/2026-07-22-plan-execution-handoff-design.md`,
-Decision 10). Resolved per the Resolve step: `issue-to-branch`'s own
+Decision 10). Resolved per the Resolve step: `planning-a-branch-from-an-issue`'s own
 Output contract already named this concept "Branch Plan" first, so that
 term wins; bare "plan" retires as an ambiguous synonym in any new skill
 text rather than being introduced as a second name for the same thing.

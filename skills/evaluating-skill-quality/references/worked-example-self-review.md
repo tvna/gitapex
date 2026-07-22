@@ -181,7 +181,7 @@ Verdict on shape alone: **well-formed** (exit code 0).
 
 Pass, with the description fix above now applied. Sibling skills in this
 repository as of this review (`driving-pr-to-merge`,
-`establishing-ubiquitous-language`, `issue-to-branch`, `merge-retrospective`,
+`establishing-ubiquitous-language`, `planning-a-branch-from-an-issue`, `merge-retrospective`,
 `outward-artifact-preflight`, `stop-and-replan`, `untrusted-input-triage`,
 `explaining-the-work`) have triggers that do not overlap this skill's
 "reviewing any SKILL.md... before merging, vendoring, or shipping it":

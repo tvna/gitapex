@@ -1,11 +1,12 @@
 apiVersion: gitapex.io/v1alpha1
 kind: SkillMetadata
 metadata:
-  name: issue-to-branch
+  name: fixing-a-reported-issue
 spec:
   portability: Portable
   capabilityAssumption: Broad
   skillDependencies:
     requires: []
     relatedTo:
-      - drafting-an-acm-issue
+      - driving-pr-to-merge
+      - planning-a-branch-from-an-issue

@@ -477,9 +477,9 @@ mechanism documentation on an already-required behavioral branch, not a new
 enforced rule, so no new eval fixture was added -- same precedent as #149
 above. Refs #175, #173, #174, #167.
 
-## issue-to-branch
+## planning-a-branch-from-an-issue
 
-Only `claude-sonnet-4.6` has been evaluated in `evals/issue-to-branch/`;
+Only `claude-sonnet-4.6` has been evaluated in `evals/planning-a-branch-from-an-issue/`;
 cross-model behavior is currently unmeasured.
 
 ## merge-retrospective
@@ -553,9 +553,9 @@ rather than isolated to a reference file), and the bundled script's
 missing/empty-directory false-clean is untested by its own test suite. Refs
 #128.
 
-## issue-to-fix
+## fixing-a-reported-issue
 
-A live `waza run` against the committed eval suite (`evals/issue-to-fix/`,
+A live `waza run` against the committed eval suite (`evals/fixing-a-reported-issue/`,
 copilot-sdk executor, `claude-sonnet-4.6`, 2026-07-17) scored 0/4 on the
 grader, but manual review of all 4 transcripts found every response
 semantically correct (the guardrail task explicitly refused to skip the

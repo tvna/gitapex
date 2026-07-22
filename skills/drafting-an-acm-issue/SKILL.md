@@ -1,6 +1,6 @@
 ---
 name: drafting-an-acm-issue
-description: Use when the user wants to open, file, or draft a brand-new GitHub issue for a feature, fix, or refactor and no issue exists yet. Elicits the change from the requester and drafts an Acceptance Criteria Map before the issue is created, so issue-to-branch can read it instead of building one from scratch. Distinct from issue-to-branch (starts from an existing issue, plans a branch/PR) and issue-to-fix (reproduces and fixes a defect); this skill only authors the issue.
+description: Use when the user wants to open, file, or draft a brand-new GitHub issue for a feature, fix, or refactor and no issue exists yet. Elicits the change from the requester and drafts an Acceptance Criteria Map before the issue is created, so planning-a-branch-from-an-issue can read it instead of building one from scratch. Distinct from planning-a-branch-from-an-issue (starts from an existing issue, plans a branch/PR) and fixing-a-reported-issue (reproduces and fixes a defect); this skill only authors the issue.
 ---
 
 # Drafting an ACM Issue
@@ -8,7 +8,7 @@ description: Use when the user wants to open, file, or draft a brand-new GitHub 
 Turns an unstructured change request into a new GitHub issue whose body
 already carries an Acceptance Criteria Map (ACM). When the calling
 repository has a sibling skill that builds and validates the same ACM
-shape from an existing issue (for example, issue-to-branch in this
+shape from an existing issue (for example, planning-a-branch-from-an-issue in this
 repository), producing the map here can save that skill from
 constructing one from scratch -- but the map is always a draft, never
 pre-verified (Step 8 states the full rule; it is not repeated here).
@@ -142,14 +142,14 @@ Map** -> **Constraints** -> **Non-goals** -> **Next Move**. Insert
 
 ## Related skills
 
-- **vs. `issue-to-branch`:** when the calling repository has that
+- **vs. `planning-a-branch-from-an-issue`:** when the calling repository has that
   skill (or an equivalent), it starts from an existing issue and
   produces a branch/PR plan, building its own Acceptance Criteria Map
   when the issue does not already carry one. This skill runs earlier,
   at issue-authoring time, and can save that skill from constructing
   the map from scratch when the issue already carries one drafted here
   -- always as a draft to re-check, not an unconditional read (Step 8).
-- **vs. `issue-to-fix`:** that skill starts from a bare defect report
+- **vs. `fixing-a-reported-issue`:** that skill starts from a bare defect report
   and reproduces/fixes it; it does not author issues. This skill can
   produce the fix-type issue that skill would then start from.
 

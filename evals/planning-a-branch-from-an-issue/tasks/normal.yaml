@@ -1,11 +1,11 @@
-id: issue-to-branch-normal
-name: Standard Issue-to-Branch Request
+id: planning-a-branch-from-an-issue-normal
+name: Standard Planning-a-Branch-from-an-Issue Request
 description: Produces a full plan with an Acceptance Criteria Map before any branch work.
 tags:
   - quality
 inputs:
   prompt: |
-    Use issue-to-branch. Start work on the issue below.
+    Use planning-a-branch-from-an-issue. Start work on the issue below.
 
     Issue #42: Add a `--dry-run` flag to the export command
 

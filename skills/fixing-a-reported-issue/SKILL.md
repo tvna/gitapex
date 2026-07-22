@@ -1,9 +1,9 @@
 ---
-name: issue-to-fix
-description: Use when given a bare issue reporting a defect (or a CI failure with no scoped fix yet), before writing any fix code. Reproduces the issue live, escalates explicitly if reproduction fails, writes a failing test before touching the fix, applies the minimal fix, then verifies the test flips with no regressions. Distinct from driving-pr-to-merge (fixes CI on an already-open PR with a fix already in flight) and issue-to-branch (plans a branch/PR from an issue without reproducing or fixing).
+name: fixing-a-reported-issue
+description: Use when given a bare issue reporting a defect (or a CI failure with no scoped fix yet), before writing any fix code. Reproduces the issue live, escalates explicitly if reproduction fails, writes a failing test before touching the fix, applies the minimal fix, then verifies the test flips with no regressions. Distinct from driving-pr-to-merge (fixes CI on an already-open PR with a fix already in flight) and planning-a-branch-from-an-issue (plans a branch/PR from an issue without reproducing or fixing).
 ---
 
-# Issue to Fix
+# Fixing a Reported Issue
 
 This skill depends only on a connected GitHub MCP server (a general
 product capability) for the Step 2 escalation action (commenting
@@ -93,9 +93,9 @@ exact steps attempted and that they did not reproduce, then stop.
   where a fix is already in flight; this skill starts from a bare issue
   with no fix yet, and produces the PR `driving-pr-to-merge` would then
   take over.
-- **vs. `issue-to-branch`:** that skill produces an implementation-ready
+- **vs. `planning-a-branch-from-an-issue`:** that skill produces an implementation-ready
   branch/PR plan with an Acceptance Criteria Map; it does not itself
-  reproduce or fix a defect. `issue-to-fix` is the skill that actually
+  reproduce or fix a defect. `fixing-a-reported-issue` is the skill that actually
   reproduces and fixes, for the specific case of a reported defect (as
-  opposed to `issue-to-branch`'s general issue-to-plan scope, which also
+  opposed to `planning-a-branch-from-an-issue`'s general issue-to-plan scope, which also
   covers features and chores).

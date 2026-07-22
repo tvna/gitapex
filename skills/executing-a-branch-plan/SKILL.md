@@ -1,6 +1,6 @@
 ---
 name: executing-a-branch-plan
-description: Use when a Branch Plan and Acceptance Criteria Map (from issue-to-branch) are approved and ready to execute -- decomposes the ACM into tasks, dispatches them (Workflow tool per wave, or a sequential fallback), and opens the PR driving-pr-to-merge then takes over. Distinct from issue-to-branch (produces the Branch Plan, explicitly does not implement) and issue-to-fix (reproduces and fixes a bare defect report, not a decomposed multi-task Branch Plan).
+description: Use when a Branch Plan and Acceptance Criteria Map (from planning-a-branch-from-an-issue) are approved and ready to execute -- decomposes the ACM into tasks, dispatches them (Workflow tool per wave, or a sequential fallback), and opens the PR driving-pr-to-merge then takes over. Distinct from planning-a-branch-from-an-issue (produces the Branch Plan, explicitly does not implement) and fixing-a-reported-issue (reproduces and fixes a bare defect report, not a decomposed multi-task Branch Plan).
 ---
 
 # Executing a Branch Plan
@@ -188,12 +188,12 @@ combined diff, then the draft PR converts to ready-for-review.
 
 ## Related skills
 
-- **vs. `issue-to-branch`:** that skill stops at the Branch Plan/ACM and
+- **vs. `planning-a-branch-from-an-issue`:** that skill stops at the Branch Plan/ACM and
   explicitly does not implement. This skill starts exactly where that one
-  stops -- it never re-derives an ACM, it consumes the one `issue-to-branch`
+  stops -- it never re-derives an ACM, it consumes the one `planning-a-branch-from-an-issue`
   already produced (or independently re-verifies a stale one, per that
   skill's own Step 4 draft-not-pre-verified rule).
-- **vs. `issue-to-fix`:** that skill is scoped to "a bare issue reporting
+- **vs. `fixing-a-reported-issue`:** that skill is scoped to "a bare issue reporting
   a defect" -- live reproduction, one failing test, one minimal fix, no
   task decomposition or wave parallelism. This skill is the general
   (feature/chore/refactor) case, for a Branch Plan whose ACM may have many
