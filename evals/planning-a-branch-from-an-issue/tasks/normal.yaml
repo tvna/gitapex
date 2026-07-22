@@ -1,5 +1,5 @@
 id: planning-a-branch-from-an-issue-normal
-name: Standard Planning-a-Branch-from-an-Issue Request
+name: Standard Branch-Planning Request
 description: Produces a full plan with an Acceptance Criteria Map before any branch work.
 tags:
   - quality
