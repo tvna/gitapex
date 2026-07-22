@@ -142,7 +142,8 @@ and test explanation responsibility to the right artifact -- not the
 contract-join gate shown above directly.
 
 The to-be diagram's `issue-to-branch` skill lane is now implemented
-(`skills/issue-to-branch/`, tvna/gitapex#4). The contract-join gate +
+(`skills/planning-a-branch-from-an-issue/`, tvna/gitapex#4, renamed from
+`issue-to-branch` in #281). The contract-join gate +
 criteria-freeze CI work it depends on is not: that remains a separate,
 larger initiative, tracked as a 1 tracking-issue + 5 children plan (not
 yet filed). See the "Open items carried forward" section of

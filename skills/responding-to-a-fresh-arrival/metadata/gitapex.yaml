@@ -8,6 +8,6 @@ spec:
   skillDependencies:
     requires: []
     relatedTo:
-      - issue-to-branch
+      - planning-a-branch-from-an-issue
       - ranking-the-open-queue
       - screening-a-low-trust-contribution

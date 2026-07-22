@@ -29,7 +29,7 @@ is expected to supply this file's content instead.
 
 <!--
 If this PR closes an issue with an Acceptance Criteria Map (see the
-issue-to-branch skill), restate it here row by row: criterion -> proof
+planning-a-branch-from-an-issue skill), restate it here row by row: criterion -> proof
 method -> result. Otherwise, list the command(s) run and their output.
 -->
 

@@ -1,10 +1,12 @@
 apiVersion: gitapex.io/v1alpha1
 kind: SkillMetadata
 metadata:
-  name: issue-to-branch
+  name: planning-a-branch-from-an-issue
 spec:
   portability: Portable
   capabilityAssumption: Broad
+  lifecycle:
+    renamedFrom: issue-to-branch
   skillDependencies:
     requires: []
     relatedTo:

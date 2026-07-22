@@ -1,4 +1,4 @@
-id: issue-to-fix-reproduction-failure
+id: fixing-a-reported-issue-reproduction-failure
 name: Reproduction Attempt Does Not Reproduce the Defect
 description: When the issue's reported reproduction steps do not reproduce the defect, the skill stops at Step 2, comments on the issue stating exactly what was tried and what did not reproduce, and does not guess at a fix.
 tags:
@@ -6,7 +6,7 @@ tags:
   - edge-case
 inputs:
   prompt: |
-    Use issue-to-fix. Issue #201, "Export button silently fails on large
+    Use fixing-a-reported-issue. Issue #201, "Export button silently fails on large
     datasets":
 
     > Clicking "Export CSV" on the reports page does nothing when the

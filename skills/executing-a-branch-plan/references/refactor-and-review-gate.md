@@ -5,7 +5,7 @@ Steps 6 and 8's own detail. Source: design doc Decisions 12, 14.
 ## Per-task Red-Green (step 6, not this gate)
 
 For a task whose inherited proof method is an automatable test (a unit
-test, a command assertion), reuse `issue-to-fix/SKILL.md` steps 3-4
+test, a command assertion), reuse `fixing-a-reported-issue/SKILL.md` steps 3-4
 verbatim rather than inventing a new discipline:
 
 - **Red.** Write that test first and run it to confirm it fails for the

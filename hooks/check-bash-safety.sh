@@ -4,9 +4,9 @@
 #
 #   1. [evaluating-skill-quality] SKILL.md -- block package/plugin install
 #      commands run via Bash.
-#   2. [issue-to-branch] SKILL.md -- block enabling auto-merge (a subset of
+#   2. [planning-a-branch-from-an-issue] SKILL.md -- block enabling auto-merge (a subset of
 #      the `gh pr merge` deny rule below; --auto is not special-cased).
-#   3. [issue-to-branch] references/github-issue-workflow.md -- block direct
+#   3. [planning-a-branch-from-an-issue] references/github-issue-workflow.md -- block direct
 #      CLI GitHub write commands (gh issue/pr create|edit|close|comment|merge,
 #      gh api -X POST/PUT/PATCH/DELETE).
 #   4. [outward-artifact-preflight] SKILL.md -- before `git push`, run
@@ -116,19 +116,19 @@ gh_api_write_method_re='(-x[[:space:]]*=?[[:space:]]*|--method[[:space:]=]+)(pos
 gh_api_graphql_re="${cmd_boundary}gh[[:space:]]+api[[:space:]]+graphql([[:space:]]|\$)"
 
 if [[ "$lc_command" =~ $gh_issue_re ]]; then
-  deny "Blocked by hooks/check-bash-safety.sh: direct 'gh issue' write command. Per issue-to-branch/references/github-issue-workflow.md, prefer the platform-integrated tool call (connected GitHub app/MCP) instead of shelling out to the gh CLI for writes."
+  deny "Blocked by hooks/check-bash-safety.sh: direct 'gh issue' write command. Per planning-a-branch-from-an-issue/references/github-issue-workflow.md, prefer the platform-integrated tool call (connected GitHub app/MCP) instead of shelling out to the gh CLI for writes."
 fi
 
 if [[ "$lc_command" =~ $gh_pr_re ]]; then
-  deny "Blocked by hooks/check-bash-safety.sh: direct 'gh pr' write command (create/edit/close/comment/merge, including auto-merge via 'gh pr merge --auto'). Per issue-to-branch/SKILL.md and references/github-issue-workflow.md, merging (including enabling auto-merge) and other PR writes are a separate, explicit human or CI decision -- use the platform-integrated tool call instead of the gh CLI."
+  deny "Blocked by hooks/check-bash-safety.sh: direct 'gh pr' write command (create/edit/close/comment/merge, including auto-merge via 'gh pr merge --auto'). Per planning-a-branch-from-an-issue/SKILL.md and references/github-issue-workflow.md, merging (including enabling auto-merge) and other PR writes are a separate, explicit human or CI decision -- use the platform-integrated tool call instead of the gh CLI."
 fi
 
 if [[ "$lc_command" =~ $gh_api_re ]] && [[ "$lc_command" =~ $gh_api_write_method_re ]]; then
-  deny "Blocked by hooks/check-bash-safety.sh: 'gh api' write call (-X/--method POST/PUT/PATCH/DELETE). Per issue-to-branch/references/github-issue-workflow.md, never shell out to a command-line GitHub tool directly for writes -- use the platform-integrated tool call or an approved read-only wrapper."
+  deny "Blocked by hooks/check-bash-safety.sh: 'gh api' write call (-X/--method POST/PUT/PATCH/DELETE). Per planning-a-branch-from-an-issue/references/github-issue-workflow.md, never shell out to a command-line GitHub tool directly for writes -- use the platform-integrated tool call or an approved read-only wrapper."
 fi
 
 if [[ "$lc_command" =~ $gh_api_graphql_re ]] && [[ "$lc_command" == *mutation* ]]; then
-  deny "Blocked by hooks/check-bash-safety.sh: 'gh api graphql' call containing a 'mutation' keyword. GraphQL mutations are writes regardless of the missing -X/--method flag. Per issue-to-branch/references/github-issue-workflow.md, never shell out to a command-line GitHub tool directly for writes -- use the platform-integrated tool call or an approved read-only wrapper."
+  deny "Blocked by hooks/check-bash-safety.sh: 'gh api graphql' call containing a 'mutation' keyword. GraphQL mutations are writes regardless of the missing -X/--method flag. Per planning-a-branch-from-an-issue/references/github-issue-workflow.md, never shell out to a command-line GitHub tool directly for writes -- use the platform-integrated tool call or an approved read-only wrapper."
 fi
 
 # Finding: `gh api <endpoint> -f key=val` (or -F/--field/--raw-field) performs
@@ -142,7 +142,7 @@ fi
 gh_api_field_flag_re='(^|[[:space:]])(-f|--field|--raw-field)([[:space:]=]|[a-z_]|$)'
 
 if [[ "$lc_command" =~ $gh_api_re ]] && ! [[ "$lc_command" =~ $gh_api_graphql_re ]] && [[ "$lc_command" =~ $gh_api_field_flag_re ]]; then
-  deny "Blocked by hooks/check-bash-safety.sh: 'gh api' call with a field flag (-f/-F/--field/--raw-field). Field flags imply an implicit POST/write in gh's own convention, with no -X/--method flag required. Per issue-to-branch/references/github-issue-workflow.md, never shell out to a command-line GitHub tool directly for writes -- use the platform-integrated tool call or an approved read-only wrapper."
+  deny "Blocked by hooks/check-bash-safety.sh: 'gh api' call with a field flag (-f/-F/--field/--raw-field). Field flags imply an implicit POST/write in gh's own convention, with no -X/--method flag required. Per planning-a-branch-from-an-issue/references/github-issue-workflow.md, never shell out to a command-line GitHub tool directly for writes -- use the platform-integrated tool call or an approved read-only wrapper."
 fi
 
 # --- Finding 4: git push gated on scan_provenance.py -----------------------

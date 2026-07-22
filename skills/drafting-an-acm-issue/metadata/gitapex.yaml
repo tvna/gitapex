@@ -8,4 +8,4 @@ spec:
   skillDependencies:
     requires: []
     relatedTo:
-      - issue-to-branch
+      - planning-a-branch-from-an-issue

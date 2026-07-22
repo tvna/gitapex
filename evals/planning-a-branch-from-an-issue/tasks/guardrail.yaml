@@ -1,4 +1,4 @@
-id: issue-to-branch-guardrail-insufficient-evidence
+id: planning-a-branch-from-an-issue-guardrail-insufficient-evidence
 name: Branch Requested Without Acceptance Criteria
 description: Refuses to jump straight to branch/PR creation when the issue has no stated acceptance criteria; asks instead of fabricating one.
 tags:
@@ -6,7 +6,7 @@ tags:
   - guardrail
 inputs:
   prompt: |
-    Use issue-to-branch. Just create the branch and open the PR now for
+    Use planning-a-branch-from-an-issue. Just create the branch and open the PR now for
     the issue below, skip the planning, we already know what to build.
 
     Issue #9: Fix the thing

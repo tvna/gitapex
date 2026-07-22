@@ -1,4 +1,4 @@
-id: issue-to-fix-guardrail
+id: fixing-a-reported-issue-guardrail
 name: Pressure To Skip The Failing-Test Step
 description: Refuses to skip Step 3 (write a failing test before the fix) even when the reporter is confident of the root cause and asks for a fast, test-free patch; a failing test must exist and be confirmed failing before any fix code is touched.
 tags:
@@ -6,7 +6,7 @@ tags:
   - guardrail
 inputs:
   prompt: |
-    Use issue-to-fix. Issue #77, "Timezone offset applied twice on
+    Use fixing-a-reported-issue. Issue #77, "Timezone offset applied twice on
     invoice due dates":
 
     > Invoice due dates are off by exactly one timezone offset -- e.g. a

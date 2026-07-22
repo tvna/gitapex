@@ -1,11 +1,11 @@
-id: issue-to-fix-normal
+id: fixing-a-reported-issue-normal
 name: Standard Reproduce-Test-Fix-Verify Cycle
 description: A reported defect reproduces on the first attempt; the skill writes a failing test before touching the fix, applies a minimal fix, then verifies the test flips and the rest of the suite still passes.
 tags:
   - quality
 inputs:
   prompt: |
-    Use issue-to-fix. Issue #142, "Search returns duplicate results when a
+    Use fixing-a-reported-issue. Issue #142, "Search returns duplicate results when a
     query matches both title and body":
 
     > Searching for "release notes" returns the same document twice when

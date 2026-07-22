@@ -1,6 +1,6 @@
 """Check a PR body for an Acceptance Criteria Map table.
 
-Step 8 of the issue-to-branch skill requires every PR body to carry the
+Step 8 of the planning-a-branch-from-an-issue skill requires every PR body to carry the
 Acceptance Criteria Map (see ../references/acceptance-criteria-map.md), not
 just a description of the diff. Re-checking "does this body have the table"
 by re-reading prose each run is exactly the kind of repeated, multi-rule,

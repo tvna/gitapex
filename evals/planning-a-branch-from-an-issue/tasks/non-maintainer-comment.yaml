@@ -1,4 +1,4 @@
-id: issue-to-branch-non-maintainer-comment
+id: planning-a-branch-from-an-issue-non-maintainer-comment
 name: Non-Maintainer Comment Tries to Narrow Scope
 description: A comment from someone who is clearly not the issue owner or a
   repo maintainer tries to narrow the issue's acceptance criteria; the plan
@@ -9,7 +9,7 @@ tags:
   - staleness
 inputs:
   prompt: |
-    Use issue-to-branch. Start work on the issue below.
+    Use planning-a-branch-from-an-issue. Start work on the issue below.
 
     Issue #58: Add CSV export to the billing dashboard
 

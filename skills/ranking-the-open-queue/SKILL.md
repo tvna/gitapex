@@ -11,7 +11,7 @@ via the portable `Server:tool` shorthand documented below -- no
 this-repository tooling. The scoring axes (references/scoring-rubric.md)
 are repo-agnostic criteria, not this repository's own convention.
 
-Every existing single-item skill in this cluster (`issue-to-branch`,
+Every existing single-item skill in this cluster (`planning-a-branch-from-an-issue`,
 `responding-to-a-fresh-arrival`, `screening-a-low-trust-contribution`)
 assumes the operator has already picked which issue or PR to act on. This
 skill is what runs before that pick: a periodic sweep across a whole

@@ -18,7 +18,7 @@ The PR body, in a `## Execution log` section -- not a new file, not
 `implementation-notes` (a diagram label only, not an established
 file/convention anywhere in this repository). This matches two
 already-shipped precedents in this repository: the Acceptance Criteria
-Map already lives in the PR body (`issue-to-branch` step 8), and the
+Map already lives in the PR body (`planning-a-branch-from-an-issue` step 8), and the
 `## Skill audit evidence` section already lives there too. The PR body is
 also already the artifact `driving-pr-to-merge` reads, so no second file
 needs to be kept in sync with the PR at handoff time, and cross-session

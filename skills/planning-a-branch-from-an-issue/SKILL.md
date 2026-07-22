@@ -1,9 +1,9 @@
 ---
-name: issue-to-branch
+name: planning-a-branch-from-an-issue
 description: Use when starting work from a GitHub issue, creating a branch from an issue, preparing a PR from an issue, or turning an issue into an implementation plan. Produces an Acceptance Criteria Map before any branch or PR work begins.
 ---
 
-# Issue to Branch
+# Planning a Branch from an Issue
 
 This skill's Steps/Output are general. The write-path rules in
 references/github-issue-workflow.md state gitapex's own convention as an
@@ -104,7 +104,7 @@ Pattern: **Facts** -> **Assumptions** -> **Acceptance Criteria Map** ->
   independently re-verifies a stale one, per this skill's own Step 4
   draft-not-pre-verified rule), decomposes the ACM into tasks, executes
   them, and opens the PR `driving-pr-to-merge` then takes over.
-- **vs. `issue-to-fix`:** that skill is scoped to "a bare issue reporting
+- **vs. `fixing-a-reported-issue`:** that skill is scoped to "a bare issue reporting
   a defect" and both reproduces and fixes it directly, without this
   skill's own Acceptance-Criteria-Map-then-plan shape. Distinct from
   `executing-a-branch-plan` too, which handles the general

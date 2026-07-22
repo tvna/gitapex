@@ -17,7 +17,7 @@ skill's own directory: both declare a portability level whose procedure
 must not depend on this repository's specific tooling, and parsing this
 repository's PR-body convention is exactly such repository-specific glue.
 
-Mirrors skills/issue-to-branch/scripts/check_acm_present.py's CLI shape
+Mirrors skills/planning-a-branch-from-an-issue/scripts/check_acm_present.py's CLI shape
 (--body <path> or stdin, PASS/FAIL output, same exit-code convention)
 without importing or duplicating it -- different section, different
 verdict vocabulary, no shared contract between the two checks.
