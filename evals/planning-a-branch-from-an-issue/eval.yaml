@@ -1,5 +1,5 @@
 name: planning-a-branch-from-an-issue-eval
-description: Quality suite for the gitapex planning-a-branch-from-an-issue planning skill.
+description: Quality suite for the gitapex planning-a-branch-from-an-issue skill.
 skill: planning-a-branch-from-an-issue
 version: "0.1.0"
 config:
