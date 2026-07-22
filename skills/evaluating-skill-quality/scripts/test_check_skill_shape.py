@@ -453,6 +453,138 @@ def test_reference_style_angle_bracket_target_fails(tmp_path):
     assert "../../docs/runbook.md" in result.evidence
 
 
+def test_same_file_bare_fragment_matching_heading_passes(tmp_path):
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "## Some Heading\n\nJump to [it](#some-heading) above.\n")
+    assert _result(css.check_shape(d), "anchor-targets-resolve").passed
+
+
+def test_same_file_bare_fragment_not_matching_heading_fails(tmp_path):
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "## Some Heading\n\nJump to [the checklist](#checklist) below.\n")
+    result = _result(css.check_shape(d), "anchor-targets-resolve")
+    assert not result.passed
+    assert "#checklist" in result.evidence
+
+
+def test_cross_file_path_fragment_matching_heading_passes(tmp_path):
+    # Regression test for the exact PR #279 bug shape: SKILL.md linking
+    # into a references/*.md file's own heading anchor.
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "See [failure dispatch]"
+        "(references/domain-events.md#failure-dispatch-step-7).\n",
+        references={"domain-events.md": "## Failure dispatch (step 7)\n"})
+    assert _result(css.check_shape(d), "anchor-targets-resolve").passed
+
+
+def test_cross_file_path_fragment_not_matching_heading_fails(tmp_path):
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "See [failure dispatch]"
+        "(references/domain-events.md#failure-dispatch).\n",
+        references={"domain-events.md": "## Failure dispatch (step 7)\n"})
+    result = _result(css.check_shape(d), "anchor-targets-resolve")
+    assert not result.passed
+    assert "references/domain-events.md#failure-dispatch" in result.evidence
+
+
+def test_reference_style_broken_anchor_fails(tmp_path):
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "See the [background][b] for context.\n\n"
+        "[b]: references/foo.md#missing\n",
+        references={"foo.md": "## Present Heading\n"})
+    result = _result(css.check_shape(d), "anchor-targets-resolve")
+    assert not result.passed
+    assert "references/foo.md#missing" in result.evidence
+
+
+def test_duplicate_heading_dedup_suffix_resolves_correctly(tmp_path):
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "## Notes\n\n"
+        "First: [ok](#notes). Second: [also ok](#notes-1).\n\n"
+        "## Notes\n")
+    assert _result(css.check_shape(d), "anchor-targets-resolve").passed
+
+
+def test_duplicate_heading_dedup_suffix_mismatch_fails(tmp_path):
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "## Notes\n\n"
+        "[wrong](#notes-2) does not exist.\n\n"
+        "## Notes\n")
+    result = _result(css.check_shape(d), "anchor-targets-resolve")
+    assert not result.passed
+    assert "#notes-2" in result.evidence
+
+
+def test_fenced_code_block_heading_lookalike_is_not_a_real_anchor(tmp_path):
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "```\n## Fake Heading\n```\n\n"
+        "[jump](#fake-heading) there.\n")
+    result = _result(css.check_shape(d), "anchor-targets-resolve")
+    assert not result.passed
+    assert "#fake-heading" in result.evidence
+
+
+def test_out_of_skill_path_fragment_link_skipped_by_anchor_check(tmp_path):
+    # links-inside-skill already flags the escaping path; anchor-targets-
+    # resolve must not additionally fail on the same link.
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "See [design doc](../../docs/foo.md#anything) for context.\n")
+    results = css.check_shape(d)
+    assert not _result(results, "links-inside-skill").passed
+    assert _result(results, "anchor-targets-resolve").passed
+
+
+def test_absolute_path_fragment_link_skipped_by_anchor_check(tmp_path):
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "See [system config](/etc/passwd#anything) for context.\n")
+    results = css.check_shape(d)
+    assert not _result(results, "links-inside-skill").passed
+    assert _result(results, "anchor-targets-resolve").passed
+
+
+def test_nonexistent_target_file_fragment_link_skipped(tmp_path):
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "See [ghost](references/nope.md#anything) for context.\n")
+    assert _result(css.check_shape(d), "anchor-targets-resolve").passed
+
+
+def test_anchor_check_runs_per_reference_file(tmp_path):
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n",
+        references={
+            "good.md": "## Heading\n\n[ok](#heading)\n",
+            "bad.md": "## Heading\n\n[broken](#nope)\n",
+        })
+    results = css.check_shape(d)
+    assert _result(results, "anchor-targets-resolve:good.md").passed
+    bad_result = _result(results, "anchor-targets-resolve:bad.md")
+    assert not bad_result.passed
+    assert "#nope" in bad_result.evidence
+
+
 def test_sidecar_checks_pass_on_good_skill(tmp_path):
     d = _write_skill(tmp_path)
     by = _by_name(css.check_shape(d))

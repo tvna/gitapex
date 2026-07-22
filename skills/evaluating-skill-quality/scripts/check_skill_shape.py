@@ -88,6 +88,39 @@ Checks (the canonical list -- the manual fallback is to apply these):
     gives the skill's own "Portable" self-declaration (whose definition
     already requires every instruction to resolve inside the skill's own
     folder) a deterministic backstop.
+  - Markdown anchor-fragment resolution (anchor-targets-resolve, issue
+    #280 row 11 / issue #289): every Markdown link's ``#fragment`` --
+    inline or reference-style, same as the check above -- must match a
+    real heading anchor GitHub's own renderer would generate for the
+    link's target file (the link's own file, when no path is given, or
+    the resolved path otherwise). Runs on SKILL.md (bare check name,
+    mirroring links-inside-skill's own SKILL.md-only scope) and
+    independently on every references/*.md file (``anchor-targets-
+    resolve:{ref.name}``, mirroring toc:{ref.name}'s per-file naming and
+    loop, but unconditionally -- not gated on the 100-line TOC threshold,
+    since an anchor mismatch is not correlated with file length). Reuses
+    this check's own link-gathering rules verbatim (same absolute-URL/
+    scheme skip, same reference-style-definition support); a link whose
+    path resolves outside the skill directory is silently skipped here
+    too -- that is links-inside-skill's own separate failure, not
+    duplicated by this check. A target file that cannot be read (missing,
+    binary, non-UTF-8) is likewise skipped, matching this file's
+    established "don't abort the run on unreadable junk" tolerance
+    (see the references/ TOC check above). GitHub's real heading-slug
+    algorithm: lowercase the heading text, strip every character except
+    ASCII letters/digits/underscore/hyphen/space (underscore is
+    deliberately preserved -- GitHub's own slugger strips a fixed
+    punctuation set, not underscore; empirically confirmed against this
+    repository's own hand-written "## Contents" TOCs, none of which
+    currently need Unicode beyond ASCII), then each surviving space
+    becomes its own literal ``-`` (adjacent stripped punctuation is not
+    collapsed first, so e.g. "Trust & authority" -> "trust--authority",
+    a real in-repo example), and a slug that repeats a prior heading's
+    slug earns a ``-1``, ``-2``, ... suffix, counted across every heading
+    in the target document in order -- not only the ones actually linked.
+    A heading-shaped line inside a fenced code block is never treated as
+    a real heading (the same fence-blanking already used for the citation
+    checks below).
   - Bare issue/PR-number citation (no-bare-issue-citation, issue #254):
     no bare-prose GitHub issue/PR-number citation (#149 or owner/repo#149)
     in SKILL.md or references/*.md body text. Runs unconditionally on
@@ -1056,6 +1089,173 @@ def _out_of_skill_link_targets(body_text: str, skill_dir: Path) -> list[str]:
     return offenders
 
 
+# A Markdown ATX heading line: 1-6 '#' at column 0, a space, then the
+# heading text (trailing whitespace stripped by the regex itself; a
+# trailing closing '#' run per CommonMark's optional-closing-sequence form
+# is not stripped here, since no heading in this repository uses it and
+# ANCHOR_SLUG_STRIP_RE would delete the '#' characters anyway once the
+# slug is computed). Applied only to fence-blanked text (see
+# _heading_slugs) so a heading-shaped line inside a fenced code example is
+# never read as a real heading.
+HEADING_RE = re.compile(r"^#{1,6}[ \t]+(.+?)[ \t]*$", re.MULTILINE)
+# GitHub's own heading-to-anchor slug punctuation strip set. Deliberately
+# preserves underscore (unlike a naive "alphanumeric and hyphen/space
+# only" reading): GitHub's real slugger strips a fixed punctuation set,
+# not underscore, so a heading like "## `check_skill_shape.py`" keeps its
+# underscore in the rendered anchor. Empirically validated -- not just
+# reasoned about -- against every real hand-written "## Contents" TOC in
+# this repository today (battle-testing-a-skill, executing-a-branch-plan,
+# scorer-gated-skill-edits references/*.md); none currently need Unicode
+# beyond ASCII or contain an underscore, so this choice changes zero
+# existing check results either way.
+ANCHOR_SLUG_STRIP_RE = re.compile(r"[^a-z0-9_\- ]")
+
+
+def _github_slug(heading: str, counts: dict[str, int]) -> str:
+    """Return the GitHub-rendered anchor slug for one ``heading``'s text,
+    given ``counts`` (a same-document-wide tally of slugs seen so far,
+    mutated in place by this call).
+
+    Lowercase, strip via ANCHOR_SLUG_STRIP_RE, then each surviving space
+    becomes its own literal '-' -- adjacent punctuation removed by the
+    strip step is NOT collapsed first, so "Trust & authority" becomes
+    "trust  authority" (two spaces where '&' was deleted) and then
+    "trust--authority", a real slug already in this repository's own
+    executing-a-branch-plan TOC-validated data. A slug that repeats an
+    earlier heading's slug in the same document earns a '-1', '-2', ...
+    suffix -- ``counts`` must be threaded across every heading in that
+    document, in order, not reset per link, since GitHub's own dedup
+    counts every rendered heading, not only the ones some other document
+    happens to link to.
+    """
+    slug = ANCHOR_SLUG_STRIP_RE.sub("", heading.lower()).replace(" ", "-")
+    n = counts.get(slug, 0)
+    counts[slug] = n + 1
+    return slug if n == 0 else f"{slug}-{n}"
+
+
+def _heading_slugs(text: str) -> frozenset[str]:
+    """Return every GitHub-rendered anchor slug ``text`` (a Markdown
+    document body) would expose, in heading order, deduplicated exactly
+    as GitHub's own renderer does (see ``_github_slug``).
+
+    Fenced code blocks are blanked first via ``_blank_fenced_blocks`` (the
+    same helper the citation checks already share) so an illustrative
+    heading-shaped line inside a worked example is never treated as a
+    real heading.
+    """
+    defenced = _blank_fenced_blocks(text)
+    counts: dict[str, int] = {}
+    return frozenset(
+        _github_slug(m.group(1), counts) for m in HEADING_RE.finditer(defenced))
+
+
+def _resolve_anchor_link_file(raw_path: str, source_dir: Path,
+                              skill_norm: str) -> Path | None:
+    """Resolve a Markdown link's path portion to the file it actually
+    points at, for the purpose of validating its ``#fragment`` -- real
+    relative-link semantics, resolved against ``source_dir`` (the
+    directory of the file that CONTAINS the link), not against the skill
+    root the way ``_out_of_skill_link_targets`` resolves paths.
+
+    That existing helper's skill-root-relative resolution is only ever
+    exercised against SKILL.md, which happens to sit at the skill root --
+    so "relative to the containing file" and "relative to the skill root"
+    coincide there and the difference was never actually observable. This
+    check also runs per references/*.md file, which does not sit at the
+    skill root, so the two resolution rules would diverge for a
+    cross-reference link written there; this function uses the real,
+    file-relative rule so it stays correct in both places.
+
+    Returns ``None`` when the resolved path falls outside the skill
+    directory -- deliberately out of scope for this check: an escaping
+    path is a distinct defect class links-inside-skill (for SKILL.md)
+    already owns separately, not one this anchor check duplicates or
+    re-flags.
+    """
+    if os.path.isabs(raw_path):
+        resolved = os.path.normpath(raw_path)
+    else:
+        resolved = os.path.normpath(os.path.join(str(source_dir), raw_path))
+    if resolved != skill_norm and not resolved.startswith(skill_norm + os.sep):
+        return None
+    return Path(resolved)
+
+
+def _cached_target_heading_slugs(
+        path: Path, cache: dict[Path, "frozenset[str] | None"]) -> "frozenset[str] | None":
+    """Return ``path``'s heading-slug set (see ``_heading_slugs``), reading
+    and parsing the file at most once per ``check_shape`` run -- ``cache``
+    is shared across the SKILL.md check and every references/*.md check in
+    one call, since more than one link can point at the same target file.
+
+    Returns ``None`` (a cached miss) when ``path`` cannot be read as UTF-8
+    text (missing, a directory, binary, or non-UTF-8) -- the caller treats
+    that as "nothing to check" rather than a failure, matching this file's
+    established tolerance for unreadable junk (see the references/ TOC
+    check's own "skip binary/unreadable junk, don't abort the run").
+    """
+    if path in cache:
+        return cache[path]
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        cache[path] = None
+        return None
+    body = "\n".join(_body_after_frontmatter(text))
+    slugs = _heading_slugs(body)
+    cache[path] = slugs
+    return slugs
+
+
+def _broken_anchor_targets(
+        body_text: str, source_path: Path, skill_dir: Path,
+        cache: dict[Path, "frozenset[str] | None"]) -> list[str]:
+    """Return each Markdown link target in ``body_text`` (the body of
+    ``source_path``) whose ``#fragment`` does not match any real
+    GitHub-rendered heading anchor in its target file.
+
+    Mirrors ``_out_of_skill_link_targets``'s own link-gathering exactly
+    (same LINK_RE/REFDEF_RE sources, same ``<...>``-unwrap, same
+    SCHEME_RE absolute-URL/scheme skip) but inspects the fragment instead
+    of validating the path. A target with no ``#`` or an empty fragment
+    (path-only, or a bare trailing ``#``) has nothing to check and is
+    skipped. A bare fragment (``#section``, no path) resolves against
+    ``source_path`` itself; otherwise the path portion resolves via
+    ``_resolve_anchor_link_file`` -- a path that escapes the skill
+    directory, or a target file that cannot be read, is silently skipped
+    (see those functions' own docstrings for why), not flagged here.
+    """
+    skill_norm = os.path.normpath(str(skill_dir))
+    source_dir = source_path.parent
+    raw_targets = [m.group(1) for m in LINK_RE.finditer(body_text)]
+    raw_targets += [m.group(1) for m in REFDEF_RE.finditer(body_text)]
+    offenders = []
+    for raw in raw_targets:
+        target = raw.strip()
+        if len(target) >= 2 and target[0] == "<" and target[-1] == ">":
+            target = target[1:-1].strip()
+        if SCHEME_RE.match(target):
+            continue
+        path_part, _sep, fragment = target.partition("#")
+        path_part = path_part.split("?", 1)[0].strip()
+        fragment = fragment.strip()
+        if not fragment:
+            continue  # path-only, query-only, or bare trailing '#'
+        if path_part:
+            resolved = _resolve_anchor_link_file(path_part, source_dir, skill_norm)
+            if resolved is None:
+                continue  # escapes the skill dir -- a different check's concern
+        else:
+            resolved = source_path
+        slugs = _cached_target_heading_slugs(resolved, cache)
+        if slugs is None:
+            continue  # target unreadable/binary/missing -- nothing to check
+        if fragment not in slugs:
+            offenders.append(target)
+    return offenders
+
+
 @dataclass(frozen=True)
 class SidecarPortability:
     """Three-state summary of the sidecar's portability declaration.
@@ -1679,6 +1879,20 @@ def check_shape(target: Path) -> list[CheckResult]:
         "Markdown link targets resolve inside the skill's own directory",
         "all inside" if not offenders else "outside: " + ", ".join(offenders)))
 
+    # Shared across the SKILL.md anchor check below and every
+    # references/*.md anchor check in the loop that follows -- more than
+    # one link (in either file) can point at the same target file, and
+    # each target's heading-slug set only needs computing once per run.
+    anchor_slug_cache: dict[Path, "frozenset[str] | None"] = {}
+    broken_anchors = _broken_anchor_targets(
+        "\n".join(body), skill_md, skill_dir, anchor_slug_cache)
+    results.append(CheckResult(
+        "anchor-targets-resolve", not broken_anchors,
+        "Markdown link #fragments resolve to a real heading anchor in "
+        "their target file",
+        "all resolve" if not broken_anchors
+        else "broken: " + ", ".join(broken_anchors)))
+
     refs_dir = skill_dir / "references"
     if refs_dir.is_dir():
         nested = sorted(
@@ -1702,6 +1916,15 @@ def check_shape(target: Path) -> list[CheckResult]:
                     f"toc:{ref.name}", has_toc,
                     f"reference over {TOC_MIN_LINES} lines has a TOC",
                     f"{n} lines, " + ("TOC found" if has_toc else "no TOC")))
+            ref_body = "\n".join(_body_after_frontmatter(ref_text))
+            ref_broken_anchors = _broken_anchor_targets(
+                ref_body, ref, skill_dir, anchor_slug_cache)
+            results.append(CheckResult(
+                f"anchor-targets-resolve:{ref.name}", not ref_broken_anchors,
+                "Markdown link #fragments resolve to a real heading anchor "
+                "in their target file",
+                "all resolve" if not ref_broken_anchors
+                else "broken: " + ", ".join(ref_broken_anchors)))
 
     results.extend(_issue_citation_checks(skill_md, skill_dir, body))
     if _is_portable(body, sidecar_portability):
