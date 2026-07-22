@@ -1,6 +1,16 @@
-# Execution and Waves
+# Execution and Dispatch
 
 Step 6's own detail. Source: design doc Decisions 4, 13, 16.
+
+Renamed from "Execution and Waves" (found via `/code-review`): design doc
+Decision 2/10 resolved "wave" as "not adopted as a named term; described
+in prose only... never surfaces as a first-class term" -- a file titled
+after the word, and a formal quoted definition once given for it
+elsewhere in this skill, both formalized it past that resolution. Ordinary
+lowercase "wave"/"per wave" usage below is unchanged, matching how the
+design doc's own Decisions 3/4/13/16 use the identical word as plain
+prose throughout -- that is the resolution's own intended shape, not a
+violation of it.
 
 ## Contents
 

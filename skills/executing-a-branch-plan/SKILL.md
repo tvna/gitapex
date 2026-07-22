@@ -90,7 +90,7 @@ first, not skimmed.
    only once this settles. An irreversible task (step 3's flag) gets a fresh step-1-
    equivalent confirmation for that specific task before its own wave
    dispatches. Full execution/wave/worktree mechanics: [execution and
-   waves reference](references/execution-and-waves.md).
+   dispatch reference](references/execution-and-dispatch.md).
 7. **On task failure, a `NeedsInput` event, a screening flag, or a
    declined irreversible-task confirmation**, dispatch per the failure
    rule: `NeedsInput` answers from the ACM/Branch Plan's own content
@@ -100,7 +100,7 @@ first, not skimmed.
    closing the draft PR) or escalate (the execution was wrong, a
    screening flag, or a declined confirmation, with no obvious safe fix).
    Full dispatch table: [domain events and failure-handling
-   reference](references/domain-events-and-failure-handling.md#failure-dispatch).
+   reference](references/domain-events-and-failure-handling.md#failure-dispatch-step-7).
 8. **Refactor and adversarially review the accumulated diff** (Decision
    12, mandatory, non-skippable). Two separate fresh subagent dispatches
    over the full diff -- a refactor/simplify pass (behavior-preserving
@@ -153,9 +153,9 @@ sites, document it) decomposes into 4 tasks: one owns the config-schema
 file, two own the disjoint call sites (no shared file, no interface edge
 between them -- same wave), one owns the docs file but has an interface
 edge on the schema task (must read the field's final name) -- sequenced
-after it. Wave 1: schema task alone. Wave 2: both call-site tasks in
+after it. wave 1: schema task alone. wave 2: both call-site tasks in
 parallel (`isolation: 'worktree'`), each `agentType: 'branch-plan-task'`.
-Wave 3: docs task, reading the merged schema. Each wave's Workflow run
+wave 3: docs task, reading the merged schema. Each wave's Workflow run
 returns to the main thread, which screens, merges, and logs
 `TaskCompleted` before dispatching the next wave. After wave 3, the
 aggregate refactor/adversarial-review pass runs once over all four tasks'
@@ -227,7 +227,7 @@ to any agent platform (it uses no Claude-Code-specific primitive),
 degraded but not blocked, matching design doc Decision 4's own
 portability answer. This is a structural claim, not an empirically
 verified one on any platform besides Claude Code itself -- see
-[execution-and-waves.md](references/execution-and-waves.md#sequential-fallback)
+[execution-and-dispatch.md](references/execution-and-dispatch.md#sequential-fallback)
 for the specific attempt to verify it against OpenAI Codex (blocked by
 this authoring session's own network policy, not resolved either way).
 Steps 1, 2, 4, 5, 7, 8, 9 use only GitHub-connector calls and

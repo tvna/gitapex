@@ -85,10 +85,12 @@ both directions.
    other uncertain-classification point.
 
 A task pair connected by either edge type is sequenced, never co-assigned
-to the same parallel wave. A "wave" is the set of tasks with no edge of
-either type between any pair, computed from this step's own output --
-not a separately named concept elsewhere in this skill's vocabulary (see
-`docs/glossary.md`'s `Task` entry).
+to the same parallel wave -- each wave, in this sense, is simply the set
+of tasks with no edge of either type between any pair, a plain
+consequence of this step's own output, not a separately named concept
+elsewhere in this skill's vocabulary (see `docs/glossary.md`'s `Task`
+entry; design doc Decision 10 resolves "wave" itself the same way --
+described in prose only, never adopted as a formal term).
 
 ## Irreversibility classification
 
@@ -120,7 +122,7 @@ ACM row: "add a config field, wire it into two call sites, document it."
 - Task D: document the field (interface edge on Task A; no edge with B or
   C).
 
-Wave 1: {A}. Wave 2: {B, C} (no edge between them). Wave 3: {D} (edge on
+wave 1: {A}. wave 2: {B, C} (no edge between them). wave 3: {D} (edge on
 A only, but A already completed by wave 1 -- D could in principle join
 wave 2 if its own interface edge is only on A, not on B/C; whether D
 joins wave 2 or gets its own wave 3 depends on whether D's own Planned

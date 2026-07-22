@@ -640,31 +640,39 @@ path-filter or CODEOWNERS gate in this repository backing it -- the exact
 ## executing-a-branch-plan
 
 A committed eval suite exists from this skill's own authoring pass
-(`evals/executing-a-branch-plan/`, 7 tasks: normal execution, no-
+(`evals/executing-a-branch-plan/`, 8 tasks: normal execution, no-
 authorization guardrail, malformed-ACM guardrail, plain and base64-
 obfuscated injection-in-ACM-row, an oversized-ACM fan-out-bound
-guardrail, and a tampered-Execution-log-resume integrity check), but no
-`waza run` against it has executed yet -- `trials_per_task: 3`,
-`claude-sonnet-4.6` only, is a config declaration, not a measurement, per
-this file's own cross-model-matrix-scaffolding note above. No no-skill
-baseline is recorded.
+guardrail, a staged multi-turn-escalation guardrail, and a
+tampered-Execution-log-resume integrity check), but no `waza run`
+against it has executed yet -- `trials_per_task: 3`, `claude-sonnet-4.6`
+only, is a config declaration, not a measurement, per this file's own
+cross-model-matrix-scaffolding note above. No no-skill baseline is
+recorded.
 
-A `battle-testing-a-skill` pass (2026-07-22) gave an initial overall FAIL
-across 9 of 23 applied dimensions (including a self-identified Blind Spot
-Pass addition: fan-out/resource-exhaustion bounding, not in the fixed
-22-item catalog) -- 9 clear PASSes (injection resistance, trust/authority
-boundary, trigger/scope precision, success-criteria rigor, fail-open
-bias, rejection-path completeness, evidence in output, escalation-on-
-uncertainty, tool/privilege scope) alongside real, addressed gaps
-(degenerate-ACM input validation, cross-skill composition trust,
-install-time provenance, cross-session log tampering, the missing
-`evals/` directory the pass itself was flagging, encoding/obfuscation
-coverage, structured-output/PR-body injection, and the fan-out bound).
-Every one of these was fixed in the same authoring pass (see the git
-history for `skills/executing-a-branch-plan/` and `evals/executing-a-
-branch-plan/`) rather than only disclosed; a second trial was not
-re-run to confirm full convergence before this PR opened -- flagged here
-as a residual gap, not silently assumed closed.
+Three `battle-testing-a-skill` trials ran against this skill during its
+own authoring pass (2026-07-22), converging round by round rather than
+passing on the first attempt -- recorded here in full rather than only
+the final verdict:
+
+- **Trial 1**: overall FAIL across 9 of 23 applied dimensions (dimensions
+  9, 11, 12, 13, 14, 15, 16, 17, plus a self-identified Blind Spot Pass
+  addition -- fan-out/resource-exhaustion bounding, not in the fixed
+  22-item catalog): degenerate-ACM input validation, cross-skill
+  composition trust, install-time provenance, cross-session log
+  tampering, the missing `evals/` directory the pass itself was
+  flagging, multi-turn/escalating adversarial patterns, encoding/
+  obfuscation coverage, structured-output/PR-body injection, and the
+  fan-out bound. All 9 were addressed, not only disclosed.
+- **Trial 2** (after those fixes): FAIL on 2 of 23 -- multi-turn
+  escalation resistance still incomplete (no eval fixture for a staged,
+  multi-turn social-engineering attempt against the authorization gate)
+  and the fan-out-bound fix itself overclaimed scope relative to what
+  design doc Decision 9 actually resolved (it bounds task/wave headcount
+  only, not token/turn/wall-clock consumption). Both fixed.
+- **Trial 3** (after those fixes): PASS, 0 of 22 applicable dimensions
+  failing, both trial-2 findings independently confirmed resolved with
+  quoted evidence.
 
 A companion `evaluating-skill-quality` pass rated the skill well-formed
 and mature, but raised two Mechanism-fit findings that must travel with

