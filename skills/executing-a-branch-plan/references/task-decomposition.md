@@ -26,9 +26,20 @@ assumed-empty task list or a silently-skipped row).
 
 ## Fan-out bound (blast-radius control, checked once the task list exists)
 
-A single ACM -- ultimately sourced from issue-body text this skill
-already treats as untrusted -- should not be able to drive unbounded
-autonomous dispatch. Two concrete caps:
+**Scope, stated precisely rather than implied broader than it is:** the
+two caps below bound task/wave *headcount* and *re-plan recurrence*
+only. They do not bound actual token, turn, or wall-clock consumption
+per task, and neither does anything else in this skill -- design doc
+Decision 9 explicitly and deliberately declines to invent a numeric
+cost/token ceiling ("no numeric cost/token ceiling is invented here ...
+Flagged as an open input, to be measured from a real dry run"), the same
+precedent `2026-07-18-llm-budget-gate-design.md` already set. A 5-task
+ACM well under the count threshold below whose Planned-ops text induces
+one task to consume unusually many turns before hitting its one-retry-
+then-escalate failure path is not caught by either cap -- this is a
+named, accepted residual gap, not a solved one, tracked as an open input
+in the design doc rather than invented here. Two concrete caps for what
+*is* bounded:
 
 - **Task/wave count.** If decomposition would produce more tasks than
   the Workflow tool's own documented "Large workflow" informational
