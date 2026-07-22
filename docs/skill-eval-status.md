@@ -698,3 +698,13 @@ evaluate whether an arbitrary comment's text actually approves a
 specific Branch Plan -- documented explicitly in `references/threat-
 model-and-authorization.md` rather than left as an implicit gap. Refs
 #278, refs #274.
+
+## grounding-in-primary-sources
+
+The eval suite (`evals/grounding-in-primary-sources/`) has no committed
+no-skill baseline run, and only `claude-sonnet-4.6` has been evaluated --
+cross-model behavior is currently unmeasured. This environment has no
+nix/waza binary, so the suite has not been executed here at all; its
+3 fixtures (normal, edge, guardrail) are unrun against any model, same
+"declared, not measured" caveat this file's Cross-model matrix
+scaffolding section states for every suite. Refs #290.

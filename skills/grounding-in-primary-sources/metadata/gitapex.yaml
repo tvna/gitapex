@@ -1,0 +1,11 @@
+apiVersion: gitapex.io/v1alpha1
+kind: SkillMetadata
+metadata:
+  name: grounding-in-primary-sources
+spec:
+  portability: Portable
+  capabilityAssumption: Broad
+  skillDependencies:
+    requires: []
+    relatedTo:
+      - untrusted-input-triage
