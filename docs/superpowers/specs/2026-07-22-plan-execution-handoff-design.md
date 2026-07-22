@@ -655,7 +655,75 @@ specs/`):
 
 Every row above resolves into one of these six checklist items; "optimal"
 is defined as satisfying all six, not as a single subjective judgment
-call left to the follow-up implementer.
+call left to the follow-up implementer. (Decision 12 below adds a
+seventh, later requirement -- mandatory refactor and adversarial review
+before ready-for-review -- sourced from an operator request during this
+design's own review, not from row 4's original six-item scope; it is
+additive to this list, not implied by it.)
+
+## Decision 12: mandatory refactor + adversarial code review before ready-for-review (operator-requested addition)
+
+`docs/motivation.md`'s own to-be diagram already names a step this
+design's first draft omitted entirely: "diff correctness review:
+requesting-code-review [superpowers, Task subagent] -> findings -> fix
+[validate -> fix]. Just before PR creation, or just before merge." The
+consolidated sequence below went straight from "all tasks complete" to
+"mark ready for review" with no such gate. This Decision closes that
+gap. Flagged during this design's own review, not derived from a blind
+spot #274 itself named -- see the Acceptance criteria checklist's own
+note below for this item's provenance outside #274's 14-row ACM.
+
+**Decision: insert a mandatory, non-skippable refactor-and-adversarial-
+review stage between "all tasks complete" and "mark ready for review"**
+(the consolidated sequence's new step 8, below). Two sub-steps, both
+required:
+
+1. **Refactor/simplify pass**, over the full accumulated diff (all of
+   Decision 3's tasks combined), not per-task. A fresh subagent dispatch,
+   distinct from the task agents that wrote the code -- the same agent
+   grading its own homework is a weaker check than an independent one,
+   matching this doc's own Decision 7 reasoning for keeping GitHub writes
+   out of task agents. This pass finds and fixes reuse, redundancy, and
+   dead code that Decision 4's parallel/pipeline task execution can hide
+   (two tasks independently touching related code with no visibility
+   into each other's diff), but may not change behavior -- any
+   behavior-affecting finding is out of this sub-step's scope and routes
+   to sub-step 2 instead.
+2. **Adversarial code review**, a separate fresh subagent dispatch (not
+   the refactor pass's own subagent, for the same independence reason)
+   reviewing the full accumulated diff for correctness bugs -- matching
+   this very design doc's own precedent (an adversarial subagent pass
+   was applied to this doc itself, see the Facts vs. speculation section
+   above). Findings -> verify each -> fix confirmed ones -> validate the
+   fix, mirroring `docs/motivation.md`'s own "findings -> fix [validate ->
+   fix]" phrasing exactly, not reworded.
+
+**Enforcement, not convention.** The consolidated sequence's step 9
+(mark ready for review) is sequence-gated on both sub-steps completing
+with no outstanding CONFIRMED finding -- the same fail-closed shape as
+Decision 5's authorization gate and Decision 6's per-task screening, not
+a step the orchestrating skill can rationalize skipping under time
+pressure. An outstanding CONFIRMED adversarial-review finding blocks
+step 9 exactly as an unresolved Decision 6 screening flag already blocks
+a task's own commit.
+
+**Distinct from Decision 6's per-task screening.** Decision 6 screens
+each task's own diff for *security* threats (workflow-file edits,
+governance-file edits, hook/script changes, dependency additions,
+instruction-bearing content) as each task completes. This Decision
+reviews the *whole* accumulated diff for *correctness* (logic bugs,
+missed edge cases, inconsistency introduced by independently-executed
+parallel tasks) once, after all tasks are done. Both run; neither
+substitutes for the other, mirroring this repository's own established
+`screening-a-low-trust-contribution` + `responding-to-a-fresh-arrival`
+co-firing pattern (apply both, neither substitutes for the other).
+
+**Not itself parallelized -- distinct from Decision 4's parallel task
+execution.** This stage runs once, after Decision 4's `pipeline()`/
+`parallel()` task execution has already completed: a single reviewer
+needs the full accumulated diff to catch the cross-task inconsistencies
+Decision 4's own per-task parallelism cannot see from inside any one
+task's own context.
 
 ## New skill: consolidated sequence (for the follow-up implementation issue)
 
@@ -678,7 +746,7 @@ only scope).
 5. **Open a draft PR and subscribe** (Decision 8) with the ACM and a
    seeded Execution log (`PlanApproved` event); subscribe to the draft
    PR's own CI/review/comment activity in this same step, owned by this
-   skill until step 8.
+   skill until step 9.
 6. **Execute** (Decision 4). Workflow-tool `pipeline()`/`parallel()` over
    Decision 3's task list when available; sequential main-thread fallback
    otherwise. Each task's own diff is screened (Decision 6) before its
@@ -687,15 +755,21 @@ only scope).
    compensating control, widened to cover installs) -- only steps 4, 5,
    this step's own `TaskStarted`/`TaskCompleted`/`TaskFailed` event
    writes, step 7's own `StageDeviated` event write and any close-PR/
-   comment action, and step 8 happen in the main thread.
+   comment action, and step 9 happen in the main thread.
 7. **On task failure or a screening flag**, dispatch per Decision 8's
    rule: one retry for an ordinary proof-method failure, then
    `stop-and-replan` (the plan itself was wrong) or escalate (the
    execution was wrong, or a screening flag, with no obvious safe fix).
-8. **On all tasks complete**, mark the PR ready for review; ownership of
-   its activity passes to `driving-pr-to-merge`'s normal entry point
-   (Decision 8) -- no code change needed there, only this explicit
-   handoff point.
+8. **Refactor and adversarially review the accumulated diff** (Decision
+   12, mandatory, non-skippable). Two separate fresh subagent
+   dispatches over the full diff -- a refactor/simplify pass, then an
+   independent adversarial code review -- with findings verified and
+   fixed before proceeding. An outstanding CONFIRMED finding blocks
+   step 9.
+9. **On all tasks complete and step 8 clean**, mark the PR ready for
+   review; ownership of its activity passes to `driving-pr-to-merge`'s
+   normal entry point (Decision 8) -- no code change needed there, only
+   this explicit handoff point.
 
 ## Facts vs. speculation
 
@@ -809,6 +883,16 @@ Mapped to #274's own 14-row Acceptance Criteria Map, in row order:
       explicit deliverable this row itself names.
 - [x] Row 14 / blind spot 10 (unified Domain-Events mechanism): Decision
       8 -- the explicit deliverable this row itself names.
+
+**Additional item, outside #274's own 14-row ACM (added during this
+design's own PR review, at the repository owner's explicit request, not
+sourced from #274's blind-spot pass):**
+
+- [x] Mandatory refactor + adversarial code review before the PR is
+      marked ready for review: Decision 12 -- closes a gap against
+      `docs/motivation.md`'s own already-documented "diff correctness
+      review... just before PR creation, or just before merge" step,
+      which the first draft of the consolidated sequence omitted.
 
 Follow-up implementation PR's own first steps (not this pass, per Non-
 goals above, but listed here so they are not lost between docs):
