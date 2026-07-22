@@ -1,0 +1,55 @@
+name: Retrospective gate-drift meta-check
+
+on:
+  schedule:
+    - cron: "0 7 * * *"  # daily 07:00 UTC, offset from sync-agent-instructions.yml's 06:00
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  retrospective-gate-drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
+        with:
+          egress-policy: audit
+
+      # Pinned to main explicitly: workflow_dispatch checks out whatever
+      # ref the operator selected in the UI, which defaults to the
+      # currently-viewed branch, not necessarily main. Without this pin, a
+      # manual run from a feature branch would scan that branch's history
+      # (a false pass on an unmerged citation, or a false failure on a
+      # stale branch) while the report text still claims it evaluated main.
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          ref: main
+          persist-credentials: false
+          fetch-depth: 0
+
+      # Issue #297 (refs #187, #242, #246): mechanizes merge-retrospective's
+      # Step 0 (retrospective-labelled issues with no citing commit on
+      # main) instead of leaving it a manual audit every cycle. No
+      # continue-on-error here -- unlike waza-check.yml, this job is meant
+      # to actually fail when the backlog grows past its threshold. See
+      # docs/superpowers/specs/2026-07-22-retrospective-gate-drift-design.md.
+      - name: Scan for retrospective citation drift
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -o pipefail
+          python3 .github/scripts/scan_retrospective_gate_drift.py \
+            --owner tvna --repo gitapex --ref HEAD --threshold 20 \
+            | tee -a "$GITHUB_STEP_SUMMARY"
