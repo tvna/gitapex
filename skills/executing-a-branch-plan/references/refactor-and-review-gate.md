@@ -2,6 +2,11 @@
 
 Steps 6 and 8's own detail. Source: design doc Decisions 12, 14.
 
+## Contents
+
+- [Per-task Red-Green](#per-task-red-green-step-6-not-this-gate)
+- [Mandatory aggregate refactor + adversarial review](#mandatory-aggregate-refactor--adversarial-review-step-8)
+
 ## Per-task Red-Green (step 6, not this gate)
 
 For a task whose inherited proof method is an automatable test (a unit
@@ -55,21 +60,39 @@ extends a deterministic gate or check script -- a CI workflow script, a
 new check function in a shape-checker, or any code whose job is to
 detect or validate a defined condition in a diff, tree, or document --
 happy-path tests passing is not sufficient grounds to call that script
-done. Before this sub-step can clear it, construct and run at least one
-case built specifically to defeat the new detection logic on its own
-terms: the exact condition the check exists to catch, reshaped to fall
-just outside whatever heuristic it applies (for example: a rename
-bundled with enough of a rewrite to break a similarity-based rename
-detector, a text scan bounded to the wrong section of a document, a
-claim written into a comment or docstring that was never actually
-verified against real behavior). When a sibling script in the repository
-already implements matching parsing or detection logic over the same
-data shape, additionally diff the new logic against that sibling's own
-and reconcile any disagreement -- do not ship two parsers that silently
-disagree on the same input. A check whose own stated purpose (what its
-docstring or description says it exists to catch) is not actually
-exercised end-to-end by at least one such adversarial case is not yet
-complete, regardless of how many happy-path tests already pass.
+done. Before this sub-step can clear it, construct at least one case
+built specifically to defeat the new detection logic on its own terms:
+the exact condition the check exists to catch, reshaped to fall just
+outside whatever heuristic it applies (for example: a rename bundled
+with enough of a rewrite to break a similarity-based rename detector, a
+text scan bounded to the wrong section of a document, a claim written
+into a comment or docstring that was never actually verified against
+real behavior). Commit that case to the script's own test suite as a
+regression test asserting the correct outcome -- a defeat-case only
+constructed and run once, then discarded, can be silently reintroduced
+by a later edit with nothing left to catch it. A defeat-case that still
+succeeds against the finished script must either be fixed before step 9,
+or explicitly disclosed as a known limitation next to the script's own
+documentation (the same disclosed-bypass pattern
+`scripts/check_task_bash_safety.sh`'s own regression suite already uses);
+leaving it neither fixed nor disclosed does not clear this sub-step.
+
+When a sibling script in the repository already implements matching
+parsing or detection logic over the same data shape, diff the new logic
+against that sibling's own and determine, from actual behavior against a
+real case, which side is correct before reconciling -- mere agreement is
+not the bar, and a pre-existing sibling is not automatically ground
+truth (the same install-time-versus-runtime-content-trust question this
+skill's Notes section already applies elsewhere, not something this step
+gets to assume away). Treat a reconciliation-driven edit as a fix subject
+to this gate's own re-verification rule below. If it is genuinely
+unclear which side is correct, that is a step-7 escalation, not a guess
+made in place.
+
+A check whose own stated purpose (what its docstring or description says
+it exists to catch) is not actually exercised end-to-end by at least one
+such adversarial case is not yet complete, regardless of how many
+happy-path tests already pass.
 
 **Distinct from step 2/6's screening.** That screening checks each task's
 own diff for *security* threats as each task completes. This gate reviews
