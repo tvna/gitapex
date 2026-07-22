@@ -22,3 +22,5 @@ expected:
   output_not_contains:
     - "Fact: `retry()` is thread-safe"
     - "Fact: retry() is thread-safe"
+    - "Fact: `retry()` is definitely thread-safe"
+    - "Fact: retry() is definitely thread-safe"
