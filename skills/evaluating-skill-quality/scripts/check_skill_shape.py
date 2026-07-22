@@ -100,27 +100,37 @@ Checks (the canonical list -- the manual fallback is to apply these):
     loop, but unconditionally -- not gated on the 100-line TOC threshold,
     since an anchor mismatch is not correlated with file length). Reuses
     this check's own link-gathering rules verbatim (same absolute-URL/
-    scheme skip, same reference-style-definition support); a link whose
-    path resolves outside the skill directory is silently skipped here
-    too -- that is links-inside-skill's own separate failure, not
-    duplicated by this check. A target file that cannot be read (missing,
-    binary, non-UTF-8) is likewise skipped, matching this file's
-    established "don't abort the run on unreadable junk" tolerance
-    (see the references/ TOC check above). GitHub's real heading-slug
-    algorithm: lowercase the heading text, strip every character except
-    ASCII letters/digits/underscore/hyphen/space (underscore is
-    deliberately preserved -- GitHub's own slugger strips a fixed
-    punctuation set, not underscore; empirically confirmed against this
-    repository's own hand-written "## Contents" TOCs, none of which
-    currently need Unicode beyond ASCII), then each surviving space
-    becomes its own literal ``-`` (adjacent stripped punctuation is not
-    collapsed first, so e.g. "Trust & authority" -> "trust--authority",
-    a real in-repo example), and a slug that repeats a prior heading's
-    slug earns a ``-1``, ``-2``, ... suffix, counted across every heading
-    in the target document in order -- not only the ones actually linked.
-    A heading-shaped line inside a fenced code block is never treated as
-    a real heading (the same fence-blanking already used for the citation
-    checks below).
+    scheme skip, same reference-style-definition support), plus stripping
+    an inline link's optional CommonMark title before reading its
+    fragment. A link whose path resolves outside the skill directory is
+    silently skipped here -- that is links-inside-skill's own separate
+    failure, not duplicated by this check. A target file that cannot be
+    read (missing, a directory, binary, non-UTF-8), by contrast, IS
+    flagged as broken: there is no real heading it could possibly expose,
+    so a dangling `[ghost](references/missing.md#x)`-shaped link is
+    exactly the defect class this check exists to catch, not a case to
+    tolerate the way the references/ TOC check above tolerates junk files
+    it merely iterates past. GitHub's real heading-slug algorithm:
+    recognizes both ATX headings (``#`` through ``######``, 0-3 leading
+    spaces, an optional trailing closing ``#`` sequence stripped before
+    slugging) and Setext headings (a text line immediately underlined by
+    a run of ``=`` or ``-``); lowercases the heading text, strips a fixed
+    punctuation denylist (ASCII punctuation plus two Unicode punctuation
+    blocks) while preserving every Unicode letter/digit plus underscore/
+    hyphen/space -- not an ASCII-only allowlist, since GitHub's own
+    slugger preserves accented and non-Latin letters -- then each
+    surviving space becomes its own literal ``-`` (adjacent stripped
+    punctuation is not collapsed first, so e.g. "Trust & authority" ->
+    "trust--authority", a real in-repo example). A slug that repeats an
+    earlier heading's slug earns the lowest ``-1``, ``-2``, ... suffix not
+    already claimed by some OTHER heading's own literal slug (not simply
+    a per-base occurrence count, which can under-suffix and collide when
+    a document already contains a heading literally named e.g. "Foo-1"),
+    counted across every heading in the target document in order -- not
+    only the ones actually linked. A heading-shaped line inside a fenced
+    code block is never treated as a real heading (the same fence-
+    blanking already used for the citation checks below, which also
+    normalizes CRLF/CR line endings to bare ``\n`` first).
   - Bare issue/PR-number citation (no-bare-issue-citation, issue #254):
     no bare-prose GitHub issue/PR-number citation (#149 or owner/repo#149)
     in SKILL.md or references/*.md body text. Runs unconditionally on
@@ -1054,6 +1064,38 @@ def _is_ignorable(p: Path) -> bool:
     return p.name.startswith(".") or "__pycache__" in p.parts
 
 
+def _raw_link_targets(body_text: str) -> list[str]:
+    """Return every raw Markdown link target string in ``body_text`` --
+    both inline ([text](target)) and reference-style ([text][label]
+    resolved via a [label]: target definition elsewhere in the body) --
+    unprocessed (no stripping, ``<...>``-unwrapping, or scheme filtering
+    yet).
+
+    Shared by ``_out_of_skill_link_targets`` and ``_broken_anchor_targets``:
+    this exact gathering step (the two regex sources) is identical between
+    them, but their per-target cleanup afterward is not (the latter also
+    strips an inline link's optional CommonMark title before its fragment
+    is read), so only this common prefix is factored out rather than the
+    whole per-target loop.
+    """
+    raw_targets = [m.group(1) for m in LINK_RE.finditer(body_text)]
+    raw_targets += [m.group(1) for m in REFDEF_RE.finditer(body_text)]
+    return raw_targets
+
+
+def _escapes_skill_dir(normalized: str, skill_norm: str) -> bool:
+    """Whether a lexically-normalized path ``normalized`` falls outside
+    ``skill_norm`` (the skill directory's own normalized path).
+
+    Shared by ``_out_of_skill_link_targets`` (which flags an escaping
+    SKILL.md link as broken) and ``_resolve_anchor_link_file`` (which
+    instead treats an escaping path as out of that check's own scope) --
+    the same boundary test, applied by two callers that each respond to
+    it differently.
+    """
+    return normalized != skill_norm and not normalized.startswith(skill_norm + os.sep)
+
+
 def _out_of_skill_link_targets(body_text: str, skill_dir: Path) -> list[str]:
     """Return each Markdown link target in ``body_text`` that resolves
     outside ``skill_dir``.
@@ -1068,10 +1110,8 @@ def _out_of_skill_link_targets(body_text: str, skill_dir: Path) -> list[str]:
     filesystem lookup, since the target need not exist for this check.
     """
     skill_norm = os.path.normpath(str(skill_dir))
-    raw_targets = [m.group(1) for m in LINK_RE.finditer(body_text)]
-    raw_targets += [m.group(1) for m in REFDEF_RE.finditer(body_text)]
     offenders = []
-    for raw in raw_targets:
+    for raw in _raw_link_targets(body_text):
         target = raw.strip()
         if len(target) >= 2 and target[0] == "<" and target[-1] == ">":
             target = target[1:-1].strip()
@@ -1084,54 +1124,101 @@ def _out_of_skill_link_targets(body_text: str, skill_dir: Path) -> list[str]:
             normalized = os.path.normpath(path_part)
         else:
             normalized = os.path.normpath(os.path.join(skill_norm, path_part))
-        if normalized != skill_norm and not normalized.startswith(skill_norm + os.sep):
+        if _escapes_skill_dir(normalized, skill_norm):
             offenders.append(target)
     return offenders
 
 
-# A Markdown ATX heading line: 1-6 '#' at column 0, a space, then the
-# heading text (trailing whitespace stripped by the regex itself; a
-# trailing closing '#' run per CommonMark's optional-closing-sequence form
-# is not stripped here, since no heading in this repository uses it and
-# ANCHOR_SLUG_STRIP_RE would delete the '#' characters anyway once the
-# slug is computed). Applied only to fence-blanked text (see
-# _heading_slugs) so a heading-shaped line inside a fenced code example is
-# never read as a real heading.
-HEADING_RE = re.compile(r"^#{1,6}[ \t]+(.+?)[ \t]*$", re.MULTILINE)
-# GitHub's own heading-to-anchor slug punctuation strip set. Deliberately
-# preserves underscore (unlike a naive "alphanumeric and hyphen/space
-# only" reading): GitHub's real slugger strips a fixed punctuation set,
-# not underscore, so a heading like "## `check_skill_shape.py`" keeps its
-# underscore in the rendered anchor. Empirically validated -- not just
-# reasoned about -- against every real hand-written "## Contents" TOC in
-# this repository today (battle-testing-a-skill, executing-a-branch-plan,
-# scorer-gated-skill-edits references/*.md); none currently need Unicode
-# beyond ASCII or contain an underscore, so this choice changes zero
-# existing check results either way.
-ANCHOR_SLUG_STRIP_RE = re.compile(r"[^a-z0-9_\- ]")
+# A Markdown ATX heading line: 0-3 leading spaces (CommonMark's own
+# indent tolerance, matching REFDEF_RE's identical "[ ]{0,3}" convention
+# elsewhere in this file), 1-6 '#', a space/tab, the heading text, then an
+# optional CommonMark closing sequence (one or more trailing '#'
+# characters, itself preceded by at least one space/tab) and any trailing
+# whitespace. The closing sequence must be stripped in the regex itself,
+# not left for ANCHOR_SLUG_STRIP_RE to clean up afterward -- a first cut
+# of this regex assumed the strip step would handle a trailing "## Heading
+# ##" safely, but that leaves the space before the closing '#'s in the
+# captured text, which then survives stripping and becomes a spurious
+# trailing '-' in the slug ("heading-" instead of "heading"), confirmed
+# by direct execution during review. Applied only to fence-blanked text
+# (see _heading_slugs) so a heading-shaped line inside a fenced code
+# example is never read as a real heading.
+HEADING_RE = re.compile(
+    r"^[ ]{0,3}#{1,6}[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$", re.MULTILINE)
+# A Markdown Setext heading: a non-blank text line (0-3 leading spaces,
+# CommonMark's tolerance again), immediately followed (no blank line
+# between) by an underline of only '=' characters (renders an H1) or only
+# '-' characters (renders an H2), itself 0-3-space-indented with optional
+# trailing whitespace. The negative lookahead excludes a text line that is
+# itself already a valid ATX heading (1-6 '#' then a space/tab, or '#'s
+# alone at end of line) -- CommonMark gives ATX-heading parsing priority
+# for that line, so it can never simultaneously serve as a Setext
+# underline's own text line; without this exclusion, an ATX heading
+# immediately followed by a "---" divider (a common section-break
+# convention, distinct from a Setext underline) would be misread as a
+# Setext H2 whose "text" is the whole "## Heading" line, hashes included
+# -- confirmed empirically not to happen with this exclusion in place, and
+# confirmed to still correctly recognize a real, marker-free Setext
+# heading immediately above a bare "---"/"===" line.
+SETEXT_HEADING_RE = re.compile(
+    r"^[ ]{0,3}(?!#{1,6}(?:[ \t]|$))(\S.*?)[ \t]*\n[ ]{0,3}(?:=+|-+)[ \t]*$",
+    re.MULTILINE)
+# GitHub's own heading-to-anchor slug punctuation strip set -- a denylist
+# of specific ASCII punctuation plus two Unicode "General Punctuation"/
+# "Supplemental Punctuation" blocks, matching the real github-slugger
+# algorithm's own regex, NOT an ASCII allowlist. An earlier cut of this
+# constant stripped everything outside [a-z0-9_ -], which also deleted
+# every non-ASCII Unicode LETTER (e.g. "## Café Notes" -> "caf-notes"
+# instead of GitHub's real "café-notes") -- confirmed by direct
+# execution during review to diverge from real GitHub rendering. This
+# denylist form preserves Unicode letters/digits (and underscore/hyphen/
+# space, as before) while still stripping the same fixed punctuation set.
+# Re-validated against every real hand-written "## Contents" TOC in this
+# repository (battle-testing-a-skill, executing-a-branch-plan,
+# scorer-gated-skill-edits references/*.md) after the change -- all still
+# match, since every punctuation character those TOCs' own headings use
+# ('&', '.', ':', etc.) is covered by this denylist too.
+ANCHOR_SLUG_STRIP_RE = re.compile(
+    r"[\u2000-\u206F\u2E00-\u2E7F\\'!\"#$%&()*+,./:;<=>?@\[\]^`{|}~]")
 
 
-def _github_slug(heading: str, counts: dict[str, int]) -> str:
+def _github_slug(heading: str, occurrences: dict[str, int]) -> str:
     """Return the GitHub-rendered anchor slug for one ``heading``'s text,
-    given ``counts`` (a same-document-wide tally of slugs seen so far,
-    mutated in place by this call).
+    given ``occurrences`` (a same-document-wide table of every slug string
+    already assigned, mapped to a running per-base counter -- mutated in
+    place by this call, and threaded across every heading in the target
+    document, in order, not reset per link, since GitHub's own dedup
+    counts every rendered heading, not only the ones some other document
+    happens to link to).
 
     Lowercase, strip via ANCHOR_SLUG_STRIP_RE, then each surviving space
     becomes its own literal '-' -- adjacent punctuation removed by the
     strip step is NOT collapsed first, so "Trust & authority" becomes
     "trust  authority" (two spaces where '&' was deleted) and then
     "trust--authority", a real slug already in this repository's own
-    executing-a-branch-plan TOC-validated data. A slug that repeats an
-    earlier heading's slug in the same document earns a '-1', '-2', ...
-    suffix -- ``counts`` must be threaded across every heading in that
-    document, in order, not reset per link, since GitHub's own dedup
-    counts every rendered heading, not only the ones some other document
-    happens to link to.
+    executing-a-branch-plan TOC-validated data.
+
+    A slug that repeats an earlier heading's slug earns a '-1', '-2', ...
+    suffix -- but the candidate suffix must itself be checked against
+    every slug already assigned, not just counted against its own base:
+    for headings "Foo", "Foo-1", "Foo" in that order, the naive "count how
+    many times 'foo' was seen" approach would slug the third heading
+    "foo-1" again, colliding with the second heading's own real slug
+    "foo-1" (confirmed by direct execution during review, matching a
+    reported false-negative). This loop instead keeps incrementing the
+    base's own counter and re-probing until it lands on a slug string not
+    already in ``occurrences`` -- exactly the real github-slugger
+    algorithm's own occurrence-tracking approach -- so the third "Foo"
+    above correctly slugs to "foo-2", skipping over the already-taken
+    "foo-1".
     """
     slug = ANCHOR_SLUG_STRIP_RE.sub("", heading.lower()).replace(" ", "-")
-    n = counts.get(slug, 0)
-    counts[slug] = n + 1
-    return slug if n == 0 else f"{slug}-{n}"
+    original = slug
+    while slug in occurrences:
+        occurrences[original] = occurrences.get(original, 0) + 1
+        slug = f"{original}-{occurrences[original]}"
+    occurrences[slug] = 0
+    return slug
 
 
 def _heading_slugs(text: str) -> frozenset[str]:
@@ -1142,12 +1229,35 @@ def _heading_slugs(text: str) -> frozenset[str]:
     Fenced code blocks are blanked first via ``_blank_fenced_blocks`` (the
     same helper the citation checks already share) so an illustrative
     heading-shaped line inside a worked example is never treated as a
-    real heading.
+    real heading; that same helper also normalizes CRLF/CR line endings
+    to bare '\\n' via its own ``str.splitlines()`` + ``"\\n".join`` pass,
+    so a Windows-checked-out file with trailing '\\r' characters cannot
+    leak into a captured heading's text either.
+
+    ATX (HEADING_RE) and Setext (SETEXT_HEADING_RE) matches are gathered
+    together and sorted by position before slugging, since GitHub's own
+    per-document dedup counter must see every heading in true document
+    order regardless of which of the two forms produced it.
     """
     defenced = _blank_fenced_blocks(text)
-    counts: dict[str, int] = {}
-    return frozenset(
-        _github_slug(m.group(1), counts) for m in HEADING_RE.finditer(defenced))
+    matches = [(m.start(), m.group(1)) for m in HEADING_RE.finditer(defenced)]
+    matches += [(m.start(), m.group(1)) for m in SETEXT_HEADING_RE.finditer(defenced)]
+    matches.sort(key=lambda pair: pair[0])
+    occurrences: dict[str, int] = {}
+    return frozenset(_github_slug(heading, occurrences) for _pos, heading in matches)
+
+
+# An optional Markdown link *title* trailing an inline link's destination
+# (CommonMark: destination, one or more spaces, then "title", 'title', or
+# (title)). LINK_RE's own capture group is the entire parenthesized
+# content -- destination and title together -- so a titled inline link
+# like [text](#heading "Jump there") would otherwise leave the title text
+# stuck onto the fragment once split on '#'. Reference-style definitions
+# (REFDEF_RE) already exclude the title naturally, since their own
+# capture group is a bare non-whitespace run; applying this to a
+# REFDEF_RE-sourced target is harmless (no whitespace+quoted-suffix shape
+# to strip from an untitled destination).
+LINK_TITLE_RE = re.compile(r'''[ \t]+(?:"[^"]*"|'[^']*'|\([^()]*\))[ \t]*$''')
 
 
 def _resolve_anchor_link_file(raw_path: str, source_dir: Path,
@@ -1177,13 +1287,13 @@ def _resolve_anchor_link_file(raw_path: str, source_dir: Path,
         resolved = os.path.normpath(raw_path)
     else:
         resolved = os.path.normpath(os.path.join(str(source_dir), raw_path))
-    if resolved != skill_norm and not resolved.startswith(skill_norm + os.sep):
+    if _escapes_skill_dir(resolved, skill_norm):
         return None
     return Path(resolved)
 
 
 def _cached_target_heading_slugs(
-        path: Path, cache: dict[Path, "frozenset[str] | None"]) -> "frozenset[str] | None":
+        path: Path, cache: dict[Path, frozenset[str] | None]) -> frozenset[str] | None:
     """Return ``path``'s heading-slug set (see ``_heading_slugs``), reading
     and parsing the file at most once per ``check_shape`` run -- ``cache``
     is shared across the SKILL.md check and every references/*.md check in
@@ -1191,9 +1301,14 @@ def _cached_target_heading_slugs(
 
     Returns ``None`` (a cached miss) when ``path`` cannot be read as UTF-8
     text (missing, a directory, binary, or non-UTF-8) -- the caller treats
-    that as "nothing to check" rather than a failure, matching this file's
-    established tolerance for unreadable junk (see the references/ TOC
-    check's own "skip binary/unreadable junk, don't abort the run").
+    that as "this fragment can never resolve" (a broken-anchor failure),
+    not a skip: unlike the references/ TOC check's own tolerance for
+    unreadable junk (which exists so a stray binary file sitting in
+    references/ cannot abort the whole run), a link that names a target
+    file which does not exist -- or cannot be read as one -- has no
+    possible real heading to match, so silently passing it would leave
+    exactly the kind of dead link (`[ghost](references/missing.md#x)`)
+    this check exists to catch undetected.
     """
     if path in cache:
         return cache[path]
@@ -1210,29 +1325,41 @@ def _cached_target_heading_slugs(
 
 def _broken_anchor_targets(
         body_text: str, source_path: Path, skill_dir: Path,
-        cache: dict[Path, "frozenset[str] | None"]) -> list[str]:
+        cache: dict[Path, frozenset[str] | None]) -> list[str]:
     """Return each Markdown link target in ``body_text`` (the body of
     ``source_path``) whose ``#fragment`` does not match any real
     GitHub-rendered heading anchor in its target file.
 
-    Mirrors ``_out_of_skill_link_targets``'s own link-gathering exactly
-    (same LINK_RE/REFDEF_RE sources, same ``<...>``-unwrap, same
-    SCHEME_RE absolute-URL/scheme skip) but inspects the fragment instead
-    of validating the path. A target with no ``#`` or an empty fragment
-    (path-only, or a bare trailing ``#``) has nothing to check and is
-    skipped. A bare fragment (``#section``, no path) resolves against
-    ``source_path`` itself; otherwise the path portion resolves via
+    Shares ``_out_of_skill_link_targets``'s own link-gathering step
+    (``_raw_link_targets``) and its ``<...>``-unwrap/SCHEME_RE
+    absolute-URL skip, but inspects the fragment instead of validating
+    the path. An inline link's optional CommonMark title
+    (``[text](#heading "Jump there")``) is stripped via LINK_TITLE_RE
+    before the fragment is read -- LINK_RE's own capture group is the
+    entire parenthesized destination-plus-title, so without this step a
+    titled link's title text would stay stuck onto the fragment
+    (`heading "Jump there"`), which could never match any real anchor and
+    would false-positive-fail a link GitHub renders and resolves
+    correctly. A target with no ``#`` or an empty fragment (path-only, or
+    a bare trailing ``#``) has nothing to check and is skipped. A bare
+    fragment (``#section``, no path) resolves against ``source_path``
+    itself; otherwise the path portion resolves via
     ``_resolve_anchor_link_file`` -- a path that escapes the skill
-    directory, or a target file that cannot be read, is silently skipped
-    (see those functions' own docstrings for why), not flagged here.
+    directory is silently skipped (see that function's own docstring for
+    why: it is links-inside-skill's own separate, already-owned failure).
+    A target file that cannot be read as one, by contrast, IS flagged
+    here (see ``_cached_target_heading_slugs``'s own docstring): there is
+    no real heading it could possibly expose, so every fragment link into
+    it is broken.
     """
     skill_norm = os.path.normpath(str(skill_dir))
     source_dir = source_path.parent
-    raw_targets = [m.group(1) for m in LINK_RE.finditer(body_text)]
-    raw_targets += [m.group(1) for m in REFDEF_RE.finditer(body_text)]
     offenders = []
-    for raw in raw_targets:
+    for raw in _raw_link_targets(body_text):
         target = raw.strip()
+        title_match = LINK_TITLE_RE.search(target)
+        if title_match:
+            target = target[:title_match.start()].rstrip()
         if len(target) >= 2 and target[0] == "<" and target[-1] == ">":
             target = target[1:-1].strip()
         if SCHEME_RE.match(target):
@@ -1249,11 +1376,9 @@ def _broken_anchor_targets(
         else:
             resolved = source_path
         slugs = _cached_target_heading_slugs(resolved, cache)
-        if slugs is None:
-            continue  # target unreadable/binary/missing -- nothing to check
-        if fragment not in slugs:
+        if slugs is None or fragment not in slugs:
             offenders.append(target)
-    return offenders
+    return _dedup(offenders)
 
 
 @dataclass(frozen=True)
@@ -1883,7 +2008,15 @@ def check_shape(target: Path) -> list[CheckResult]:
     # references/*.md anchor check in the loop that follows -- more than
     # one link (in either file) can point at the same target file, and
     # each target's heading-slug set only needs computing once per run.
-    anchor_slug_cache: dict[Path, "frozenset[str] | None"] = {}
+    # Pre-seeded with SKILL.md's own already-read/parsed body (below) and,
+    # in the loop, each reference file's own already-read body -- without
+    # this, a same-file bare-fragment link (or a cross-link back into
+    # SKILL.md from a references/*.md file) would otherwise cost a second,
+    # redundant read()+frontmatter-strip of a file this function already
+    # has the text of in hand.
+    anchor_slug_cache: dict[Path, frozenset[str] | None] = {
+        skill_md: _heading_slugs("\n".join(body)),
+    }
     broken_anchors = _broken_anchor_targets(
         "\n".join(body), skill_md, skill_dir, anchor_slug_cache)
     results.append(CheckResult(
@@ -1917,6 +2050,7 @@ def check_shape(target: Path) -> list[CheckResult]:
                     f"reference over {TOC_MIN_LINES} lines has a TOC",
                     f"{n} lines, " + ("TOC found" if has_toc else "no TOC")))
             ref_body = "\n".join(_body_after_frontmatter(ref_text))
+            anchor_slug_cache.setdefault(ref, _heading_slugs(ref_body))
             ref_broken_anchors = _broken_anchor_targets(
                 ref_body, ref, skill_dir, anchor_slug_cache)
             results.append(CheckResult(
