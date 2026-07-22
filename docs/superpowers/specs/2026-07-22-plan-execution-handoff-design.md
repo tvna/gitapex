@@ -76,6 +76,26 @@ this substitution explicitly ("instead of the current ad hoc 'adopted,
 adapted, or rejected' phrasing in the second Acceptance-criteria row
 above"), so it is not a correction this doc is making unilaterally.
 
+After the first draft was written, a fresh Fable-model subagent
+adversarially verified this doc itself against the repository's actual
+files -- the same technique #274's own body applied to its blind-spot
+pass, now applied to this doc. It confirmed nine concrete discrepancies:
+stale step numbering (Decisions 3, 5, 6 referenced a 0-based sequence
+against the consolidated sequence's 1-based numbering), a fabricated
+naming precedent misattributed to `2026-07-15-issue-to-fix-design.md`
+(Decision 1), a wrong gerund-family skill count (7 claimed, 9 actual), an
+overclaim about `docs/superpowers/plans/*.md` coverage ("every" pass, not
+true), a missing positive control in Decision 7's empirical test (fixed
+by re-running the probe in the main thread, which surfaced a more
+fundamental finding -- see Decision 7), two Workflow-tool documentation
+claims that were not carried into the Facts list, a section-name
+misattribution in Decision 9, an incomplete main-thread-only enumeration
+in the consolidated sequence's step 6, and an overstated exact-match
+claim against `stop-and-replan`'s own trigger. All nine are corrected in
+place below and in the Facts vs. speculation section; none required
+reopening an ACM row, since all were internal-to-this-doc errors, not
+misreadings of #274 itself.
+
 ## Decision 1: a new skill, not an `issue-to-branch` extension
 
 **Decision: a new skill**, working name `executing-a-branch-plan`
@@ -97,8 +117,9 @@ trigger so generic it would also match a sibling's request" --
 
 **Working name rationale.** `executing-a-branch-plan`:
 
-- Matches the gerund-first naming family already used by 7 of this
-  repository's 17 skills (`drafting-an-acm-issue`,
+- Matches the gerund-first naming family already used by 9 of this
+  repository's 17 skills (`battle-testing-a-skill`,
+  `drafting-an-acm-issue`, `driving-pr-to-merge`,
   `establishing-ubiquitous-language`, `evaluating-skill-quality`,
   `explaining-the-work`, `ranking-the-open-queue`,
   `responding-to-a-fresh-arrival`, `screening-a-low-trust-contribution`).
@@ -116,9 +137,13 @@ Two alternatives were considered and rejected:
   `issue-to-fix`). Rejected: "-to-pr" oversells the PR as the sole
   deliverable, when per Decision 3 below the bulk of the skill's own work
   is task decomposition and per-task execution, with PR-opening as one
-  step among several -- `issue-to-fix` made the identical naming choice
-  for the identical reason (named for the work, "to-fix," not the
-  artifact, "to-pr").
+  step among several. (Checked `2026-07-15-issue-to-fix-design.md` for a
+  supporting precedent before citing one, rather than assuming it: that
+  doc's own recorded naming rationale is "same input noun (`issue`),
+  different terminal artifact (`branch`/plan vs. `fix`)" -- the opposite
+  framing, treating `fix` itself as the terminal artifact -- so this
+  rejection rests on its own reasoning stated here, not on a borrowed
+  precedent that does not actually say this.)
 - `driving-a-branch-plan-to-pr` (mirroring `driving-pr-to-merge`).
   Rejected: `driving-pr-to-merge`'s own naming names a skill that starts
   from an already-existing PR and pushes it to completion; this new
@@ -204,8 +229,9 @@ is the actual `Workflow` tool: `agent()`/`pipeline()`/`parallel()`/
 `phase()`, used as-is. Unlike the other three, this is not an external
 system being ported into gitapex's own model -- it is a native platform
 capability, already first-class in this environment, requiring no
-install (confirmed this session: available on all paid plans, Claude
-Code v2.1.154+). Building an Anti-Corruption Layer over a native
+install (fetched from the same `https://code.claude.com/docs/en/
+workflows` source this session, 2026-07-22: available on all paid plans,
+Claude Code v2.1.154+). Building an Anti-Corruption Layer over a native
 primitive gitapex can call directly would be exactly the unneeded
 abstraction CLAUDE.md section 4 warns against, so Decision 4's execution
 step calls the tool's own primitives directly, in its own vocabulary,
@@ -221,14 +247,16 @@ not assumed: `docs/superpowers/plans/*.md` already carries exactly the
 bite-sized, file-scoped, step-by-step shape Superpowers' `writing-plans`
 exists to produce -- for example `docs/superpowers/plans/2026-07-12-
 issue-to-branch-skill.md`'s own "Task N" / "Files" / numbered "Step"
-structure, already used for every design-then-implement pass this
-repository has done. Blind spot 3's "insert a decomposition layer" is
+structure, already used for many of this repository's design-then-
+implement passes (though not all -- e.g. the skill-audit merge gate and
+the OWASP mapping gates shipped without a corresponding
+`docs/superpowers/plans/*.md` file). Blind spot 3's "insert a decomposition layer" is
 therefore not a new invention -- it is making this already-established
 but only-informally-followed convention an explicit, required step of
 `executing-a-branch-plan`, keyed off the ACM rather than a free-form plan
 document written from scratch each time.
 
-**Decision: `executing-a-branch-plan`'s own Step 2 (see consolidated
+**Decision: `executing-a-branch-plan`'s own step 3 (see consolidated
 sequence below) decomposes the ACM into a task list before any execution
 begins**, writing it in the same `docs/superpowers/plans/<date>-<branch-
 name>.md` shape this repository already uses, with one addition: each
@@ -300,7 +328,7 @@ self-reported claim in text.**
 `Contributor-->>Author: approved -> start implementation`, and this
 design cannot wait on the separate, larger Design-by-Contract criteria-
 freeze initiative #274's own Non-goals explicitly excludes. The interim
-mechanism: `executing-a-branch-plan`'s Step 0 (below) checks, via
+mechanism: `executing-a-branch-plan`'s step 1 (below) checks, via
 `mcp__github__issue_read` method `get_comments` (or `get`, if the
 approval is the issue body/state itself), for either:
 
@@ -316,14 +344,14 @@ approval is the issue body/state itself), for either:
    section 4) -- since opening commits and a PR from autonomous execution
    is exactly that kind of action.
 
-Absent either, Step 0 stops and escalates rather than proceeding --
+Absent either, step 1 stops and escalates rather than proceeding --
 matching zero-trust principle 6 ("fail closed, including on
 INDETERMINATE"): an unclear authorization state is a deny, not an
 assume-approved.
 
 ## Decision 6: threat-model mapping (blind spot 2)
 
-`executing-a-branch-plan`'s Step 0 (and every later step) treats ACM row
+`executing-a-branch-plan`'s step 1 (and every later step) treats ACM row
 content -- ultimately sourced from issue-body text, which `issue-to-
 branch` Step 1 already treats as untrusted -- through the same lens
 `untrusted-input-triage` and `screening-a-low-trust-contribution` already
@@ -361,7 +389,9 @@ PR -- and is treated as such here, not as a lighter-weight case.
 
 ## Decision 7: does this repository's PreToolUse hook bind inside a subagent context? (blind spot 5)
 
-**Empirically tested this session, not assumed.** A fresh subagent
+**Empirically tested this session, not assumed -- including a positive
+control this doc's first draft omitted, added after an adversarial
+Fable-model review pass caught the gap (see Method).** A fresh subagent
 (dispatched via the Agent tool -- the same "fresh context window"
 category of mechanism the Workflow tool's own `agent()` primitive uses,
 though not the literal `Workflow` tool call itself, which requires its
@@ -372,26 +402,50 @@ match `hooks/check-bash-safety.sh`'s own install-verb deny pattern
 successfully (no package name given, so nothing installs; it only prints
 help text).
 
-**Result: not blocked.** The subagent's Bash call ran with no permission
-denial, no hook `systemMessage`, no "Blocked by" text, and no non-zero
-exit code -- `pip install --help` executed normally (exit 0, full help
-text returned) exactly as it would with no hook installed at all.
+**Result: not blocked, in either context tested.** The subagent's Bash
+call ran with no permission denial, no hook `systemMessage`, no "Blocked
+by" text, and no non-zero exit code -- `pip install --help` executed
+normally (exit 0, full help text returned) exactly as it would with no
+hook installed at all. The identical command was then re-run directly in
+this session's own main thread, as the positive control the first draft
+lacked: also not blocked, also exit 0, identical output.
 
-**Design constraint (stated as a verified fact, per row's own
-instruction, not an assumption):** `hooks/check-bash-safety.sh` does not
-currently fire for a Bash call made from inside a spawned subagent's own
-tool-call context in this environment. This confirms blind spot 5's own
-suspicion directly rather than leaving it open. The scope of this finding
-is stated precisely: it is verified for the Agent-tool subagent dispatch
-mechanism tested; it is not independently verified for the Workflow
-tool's own `agent()` primitive specifically, though both are fresh-
-context subagent dispatch and there is no design-level reason to expect
-divergent hook-binding behavior between them -- named as residual risk
-below, not asserted as identically proven.
+**Root cause identified, not left as an unresolved confound.**
+`hooks/hooks.json` registers `check-bash-safety.sh` via
+`"$CLAUDE_PLUGIN_ROOT/hooks/check-bash-safety.sh"`; `echo
+"${CLAUDE_PLUGIN_ROOT:-<unset>}"` run in this session's main thread
+returns `<unset>`. This session is a plain clone of gitapex's own source
+repository, not an environment with gitapex installed as a Claude Code
+plugin, so the hook was never wired into this session's tool-call path at
+all -- main thread or subagent. The original single-probe result could
+not distinguish "hook unbound in subagent contexts specifically" from
+"hook inactive in this session entirely"; the positive control resolves
+that ambiguity in favor of the second, weaker explanation, which the
+first draft's single-probe design could not have ruled out.
+
+**Design constraint (revised): blind spot 5's own question is not
+answered "no" by this session's evidence -- it remains genuinely
+unresolved, and is treated accordingly, not overstated as a confirmed
+finding.** This session cannot demonstrate `hooks/check-bash-safety.sh`
+binding to *any* tool-call context, so whether gates bind inside a real
+plugin-installed deployment's subagent/Workflow execution contexts is
+still open. Zero-trust principle 6 ("fail closed, including on
+INDETERMINATE") governs exactly this state: an unresolved binding
+question is treated as a deny, not an assume-protected, which yields the
+same practical conclusion the first draft reached from a stronger,
+now-corrected premise -- `executing-a-branch-plan` must not assume
+`hooks/check-bash-safety.sh` (or any other PreToolUse gate) protects a
+task-level `agent()` call, in any execution context, main thread
+included, without first confirming the hook actually fires there. The
+follow-up implementation's own setup should include this exact check
+(verify `CLAUDE_PLUGIN_ROOT` or equivalent is set and the hook denies a
+known probe, in both the main thread and a spawned subagent, in the real
+target deployment) rather than inherit this session's inconclusive
+result as settled fact.
 
 **Compensating control, following directly from this finding (zero-trust
-principle 2, "never assume the calling environment already filtered
-anything"):** `executing-a-branch-plan` never delegates a GitHub write
+principles 2 and 6, "never assume the calling environment already
+filtered anything" and "fail closed on INDETERMINATE"):** `executing-a-branch-plan` never delegates a GitHub write
 (opening the PR, commenting, updating issue state) to a spawned task
 `agent()`. Every GitHub write happens in the main thread only --
 mirroring `docs/motivation.md`'s own to-be diagram note for
@@ -399,8 +453,10 @@ mirroring `docs/motivation.md`'s own to-be diagram note for
 hermetic-criteria authoring (visible, no subagent)"), now extended to
 this new skill for a threat-model reason rather than a visibility one.
 Task-level `agent()` calls may write and commit code (file edits are
-already the Workflow tool's own auto-approved default per its
-documentation, a materially lower blast radius than a GitHub write) but
+already the Workflow tool's own auto-approved default -- same
+2026-07-22 fetch: "subagents ... run in acceptEdits mode ... File edits
+are auto-approved" -- a materially lower blast radius than a GitHub
+write) but
 never touch `mcp__github__*` write tools, `gh`, or `git push` directly,
 and **never run a package-manager install command either** (`pip`/`npm`/
 `uv`/etc.) -- the same finding extends past GitHub writes to
@@ -489,12 +545,19 @@ aversion to unbounded fan-out, see Decision 9). If the retry also fails,
 dispatch on what actually failed:
 
 - The *plan* was wrong (this task's own Interpretation/Planned ops does
-  not fit what the row actually needed) -> `stop-and-replan` fires
-  exactly as that skill already defines it: close the draft PR with a
+  not fit what the row actually needed) -> `stop-and-replan`'s own Stop
+  action applies, extended to a new trigger: that skill's literal trigger
+  is detecting a self-correcting phrase about to be written into a PR
+  body or commit (`SKILL.md`'s own "Trigger phrases" section); a task's
+  own retry-then-plan-wrong diagnosis is a related but new trigger for
+  the identical Stop action -- close the draft PR with a
   `StageDeviated{action: stop-and-replan}` event and rationale, comment
-  the same rationale on the parent issue, re-plan from there. This is a
-  direct match for that skill's own trigger language ("the plan missed
-  the issue, not that the prose describing it was clumsy").
+  the same rationale on the parent issue, re-plan from there -- not a
+  literal instance of the phrase-detection trigger itself. The Stop
+  action's own rationale sentence ("the plan missed the issue, not that
+  the prose describing it was clumsy") applies here by the same logic,
+  even though this is not the trigger `stop-and-replan` was originally
+  written to detect.
 - The *execution* was wrong but the fix is not obvious -> escalate: a
   `StageDeviated{action: escalate}` event, plus a comment on the (still
   draft) PR naming exactly what was tried, matching
@@ -516,8 +579,9 @@ interactive/agentic session via the Agent or Workflow tool, never through
 a `.github/workflows/*.yml` file, so no marker this gate scans for would
 ever fire on it, and no marker should be added there to force a match --
 that would be the same "ships a gate that... never fires on the one real
-case" mistake `2026-07-18-llm-budget-gate-design.md`'s own "Why this doc
-exists" section already found and fixed for a different mechanism.
+case" mistake `2026-07-18-llm-budget-gate-design.md`'s own "Verified
+finding: the marker list must be extended, not ported verbatim" section
+already found and fixed for a different mechanism.
 
 **What does apply: the general concern the budget-gate lineage and
 CLAUDE.md's own connector-preference-to-reduce-token-consumption rule
@@ -622,7 +686,8 @@ only scope).
    commands are never delegated into a task `agent()` (Decision 7's
    compensating control, widened to cover installs) -- only steps 4, 5,
    this step's own `TaskStarted`/`TaskCompleted`/`TaskFailed` event
-   writes, and step 8 happen in the main thread.
+   writes, step 7's own `StageDeviated` event write and any close-PR/
+   comment action, and step 8 happen in the main thread.
 7. **On task failure or a screening flag**, dispatch per Decision 8's
    rule: one retry for an ordinary proof-method failure, then
    `stop-and-replan` (the plan itself was wrong) or escalate (the
@@ -635,31 +700,52 @@ only scope).
 ## Facts vs. speculation
 
 **Facts, verified this session:** `CLAUDE_CODE_DISABLE_WORKFLOWS=1` and
-its documented effects, fetched from `https://code.claude.com/docs/en/
-workflows` (2026-07-22); the Workflow tool's documented concurrency caps
-(16 concurrent, 1,000 total per run); `hooks/check-bash-safety.sh` does
-not fire for a Bash call made from inside an Agent-tool-dispatched
-subagent (live probe, this session); `docs/superpowers/plans/*.md`'s
-existing Task/Files/Step shape (read directly, e.g. `2026-07-12-issue-to-
-branch-skill.md`); `implementation-notes` has zero hits outside
-`docs/motivation.md`'s two diagram-note lines (grepped this session); all
-14 of #274's own ACM rows and both DDD blind spots (9, 10) checked
-against #274's own stated facts and the current repository tree, per
-`issue-to-branch` Step 4.
+its documented effects, the Workflow tool's documented concurrency caps
+(16 concurrent, 1,000 total per run), that Workflow tool subagents
+require no install and run in `acceptEdits` mode with file edits
+auto-approved, and the workflows feature's own version/plan gating --
+all fetched from `https://code.claude.com/docs/en/workflows`
+(2026-07-22); `pip install --help` (matching `hooks/check-bash-
+safety.sh`'s `install_re` deny pattern) was not blocked when run from an
+Agent-tool-dispatched subagent, nor when re-run directly in this
+session's own main thread as a positive control (both live probes, this
+session); `CLAUDE_PLUGIN_ROOT` is unset in this session's main thread
+(checked directly), which is what `hooks/hooks.json` requires to resolve
+the hook's own command path -- together these three facts support the
+narrower, corrected conclusion in Decision 7 (hook binding is unresolved
+in this session, not confirmed absent specifically in subagent contexts);
+`docs/superpowers/plans/*.md`'s existing Task/Files/Step shape (read
+directly, e.g. `2026-07-12-issue-to-branch-skill.md`); `implementation-
+notes` has zero hits outside `docs/motivation.md`'s two diagram-note
+lines (grepped this session); `2026-07-15-issue-to-fix-design.md`'s own
+recorded naming rationale ("same input noun... different terminal
+artifact"), checked before Decision 1 cited it as a precedent, found not
+to support the originally-drafted claim, and corrected there rather than
+left as stated; the gerund-first skill count (9 of 17, not 7 -- named
+explicitly in Decision 1); all 14 of #274's own ACM rows and both DDD
+blind spots (9, 10) checked against #274's own stated facts and the
+current repository tree, per `issue-to-branch` Step 4. A fresh
+Fable-model subagent adversarially verified this doc's own citations,
+overclaims, and internal consistency after the first draft (matching
+#274's own methodology for the issue body itself); the corrections in
+this section and in Decisions 1, 3, 7, and 9 above are its confirmed
+findings, applied.
 
 **Speculation, named as such:** GSD's, Superpowers', and Spec Kit's own
 internal mechanics are inherited from #274's own "Primary sources
 consulted this session" table, not independently re-fetched this
 session -- row 2's own Residual risk ("primary-source drift... the design
 doc should note its own fetch date") is accordingly still open for those
-three specifically; this doc's own fetch date for the one claim it did
-verify independently is stated above. Decision 7's finding is verified
-for Agent-tool subagent dispatch specifically, not literally re-tested
-against the Workflow tool's own `agent()` primitive (which this session
-had no standing opt-in to invoke) -- treated as a strong, not certain,
-signal for that primitive too, named as residual risk below. Decision 9's
-"no numeric ceiling" is a deliberate non-answer, not an oversight, and
-should not be read as a lower risk than an invented number would imply.
+three specifically; this doc's own fetch date for the claims it did
+verify independently is stated above. Decision 7's underlying question
+(do PreToolUse gates bind inside subagent/Workflow execution contexts)
+is now stated as genuinely open, not answered -- this session's evidence
+rules out treating the hook as active at all here, which is weaker
+information than the first draft claimed, not stronger; the compensating
+control is retained on a fail-closed/zero-trust basis, not because the
+gap was proven. Decision 9's "no numeric ceiling" is a deliberate
+non-answer, not an oversight, and should not be read as a lower risk than
+an invented number would imply.
 
 ## Non-goals
 
@@ -750,12 +836,18 @@ goals above, but listed here so they are not lost between docs):
   naming is exactly the kind of choice `establishing-ubiquitous-language`
   reserves for explicit confirmation once it is about to become load-
   bearing across multiple files.
-- **Decision 7's scope gap**: re-verify (once a standing workflow opt-in
-  exists for this kind of check) whether the Workflow tool's own
-  `agent()` primitive specifically -- not just the Agent-tool subagent
-  dispatch tested this session -- also fails to fire the PreToolUse hook,
-  before treating Decision 7's compensating control as covering every
-  execution path Decision 4 describes.
+- **Decision 7's underlying question remains genuinely open, not
+  answered "no"**: this session could not demonstrate
+  `hooks/check-bash-safety.sh` binding to any tool-call context at all
+  (main thread or subagent), because `CLAUDE_PLUGIN_ROOT` was unset here
+  -- i.e. gitapex was not installed as a plugin in this session, which is
+  itself the likely reason, not a subagent-specific gap. Before treating
+  Decision 7's compensating control as covering every execution path
+  Decision 4 describes, re-run both probes (main thread and a spawned
+  subagent, including the Workflow tool's own `agent()` primitive
+  specifically) in a real plugin-installed deployment with
+  `CLAUDE_PLUGIN_ROOT` set, and confirm the hook actually denies a known
+  probe in at least one context before relying on it anywhere.
 - **Decision 9's numeric ceiling** remains an explicit open input,
   matching `2026-07-18-llm-budget-gate-design.md`'s own precedent, not a
   gap unique to this doc.
