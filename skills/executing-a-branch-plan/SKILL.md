@@ -74,10 +74,17 @@ first, not skimmed.
    entirely to step 8. Once a wave's run returns, in the main thread (the
    Workflow script itself has no filesystem/shell access): screen each
    task's own `BASE..HEAD` diff, merge the worktree-isolated commit onto
-   the shared branch, write `TaskStarted`/`TaskCompleted`/`TaskFailed`/
-   `NeedsInput` events. All of this is main-thread-only, never delegated
-   into a task `agent()`. The next wave's run dispatches only once this
-   settles. An irreversible task (step 3's flag) gets a fresh step-1-
+   the shared branch, **push the shared branch to the remote**, write
+   `TaskStarted`/`TaskCompleted`/`TaskFailed`/`NeedsInput` events. Pushing
+   after every wave (not only once, at step 4) keeps the draft PR's own
+   diff and the Execution log's `commit_sha` references pointing at
+   commits that actually exist on the remote -- a wave merged locally but
+   never pushed would leave the draft PR showing only step 4's initial
+   task-list commit regardless of how much task work actually completed
+   (found by a Codex review pass on this PR; step 4's own push is the
+   *first* push, not the *only* one). All of this is main-thread-only,
+   never delegated into a task `agent()`. The next wave's run dispatches
+   only once this settles. An irreversible task (step 3's flag) gets a fresh step-1-
    equivalent confirmation for that specific task before its own wave
    dispatches. Full execution/wave/worktree mechanics: [execution and
    waves reference](references/execution-and-waves.md).
@@ -97,10 +104,16 @@ first, not skimmed.
    only), then an independent adversarial code review -- findings
    verified and fixed before proceeding. After every CONFIRMED finding's
    fix, re-run every task's own Red-Green test, not only the one related
-   to the fix. An outstanding CONFIRMED finding, or a re-verification
-   failure, blocks step 9. Detail: [refactor and review gate
-   reference](references/refactor-and-review-gate.md).
-9. **On all tasks complete and step 8 clean**, mark the PR ready for
+   to the fix. **Push every fix commit to the remote branch as it lands**
+   -- same reasoning as step 6's per-wave push: a fix applied only
+   locally would leave the ready-for-review PR (step 9) not actually
+   containing the fix it claims to. An outstanding CONFIRMED finding, or
+   a re-verification failure, blocks step 9. Detail: [refactor and review
+   gate reference](references/refactor-and-review-gate.md).
+9. **On all tasks complete, step 8 clean, and the branch's remote state
+   confirmed to match local** (a final `git status`/push-state check --
+   not assumed from step 6/8's own per-step pushes alone), mark the PR
+   ready for
    review. This "ready for review" marking is a handoff signal, not a
    self-certifying guarantee `driving-pr-to-merge` is expected to trust
    blindly: that skill's own step 5 ("verify `mergeable_state` directly

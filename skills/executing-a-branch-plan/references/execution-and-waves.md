@@ -2,6 +2,12 @@
 
 Step 6's own detail. Source: design doc Decisions 4, 13, 16.
 
+## Contents
+
+- [Primary path: one Workflow run per wave](#primary-path-one-workflow-run-per-wave)
+- [Git worktree isolation for parallel task execution](#git-worktree-isolation-for-parallel-task-execution)
+- [Sequential fallback](#sequential-fallback)
+
 ## Primary path: one Workflow run per wave
 
 The Workflow tool executes [task-decomposition.md](task-decomposition.md)'s
@@ -27,9 +33,15 @@ Per wave: dispatch a Workflow run containing only that wave's
 The run returns each task's result to the main thread. The main thread
 then, per task: screens the `BASE..HEAD` diff (task-decomposition.md's
 own BASE convention), merges the worktree-isolated commit onto the
-shared branch, writes `TaskStarted`/`TaskCompleted`/`TaskFailed`/
-`NeedsInput` events. The next wave's Workflow run dispatches only once
-this settles, so its own tasks see every earlier wave's merged state.
+shared branch, **pushes the shared branch to the remote**, writes
+`TaskStarted`/`TaskCompleted`/`TaskFailed`/`NeedsInput` events. Step 4's
+own push publishes the branch initially; it is not the only push --
+every wave's own merge-back is followed by its own push, so the draft
+PR's diff and the Execution log's `commit_sha` references always point
+at commits genuinely on the remote, not only what happens to be sitting
+in the local working copy. The next wave's Workflow run dispatches only
+once this settles, so its own tasks see every earlier wave's merged
+state.
 
 **Consent/portability note.** Each wave's own Workflow run triggers its
 own launch-time approval prompt in default/accept-edits permission modes

@@ -68,3 +68,9 @@ the one related to the fix -- before step 9. The last gate before
 hand-off does not rest on an unverified "the fix didn't break anything
 else" assumption. An outstanding CONFIRMED finding, or a re-verification
 failure, blocks step 9.
+
+**Push every fix commit as it lands, same as step 6's per-wave push.** A
+fix applied and verified only in the local working copy leaves the
+ready-for-review PR (step 9) not actually containing what it claims to
+-- step 9's own remote-state check exists specifically to catch a fix
+commit that never made it to the remote.

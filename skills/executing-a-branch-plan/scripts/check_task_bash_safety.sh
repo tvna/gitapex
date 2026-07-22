@@ -64,8 +64,12 @@ deny() {
 cmd_boundary='(^|[^[:alnum:]_.-])([[:alnum:]_.-]*/)*'
 
 # --- Package/plugin install verbs (adapted from hooks/check-bash-safety.sh
-# Finding 1 verbatim) --------------------------------------------------
-install_re="${cmd_boundary}(pip3?[[:space:]]+install|npm[[:space:]]+install|npm[[:space:]]+i|yarn[[:space:]]+add|pnpm[[:space:]]+add|go[[:space:]]+install|brew[[:space:]]+install|apt(-get)?[[:space:]]+install|gem[[:space:]]+install|cargo[[:space:]]+install|uv[[:space:]]+pip[[:space:]]+install|uv[[:space:]]+install|uv[[:space:]]+add|plugin[[:space:]]+install)([[:space:]]|\$)"
+# Finding 1, plus `npm ci` -- a clean-install verb that does not contain
+# the word "install" at all and so is not covered by that pattern; found
+# by a Codex review pass on this PR, confirmed live (`npm ci --help`:
+# "Clean install a project", ran unblocked before this fix) rather than
+# accepted on the review comment's own word) --------------------------
+install_re="${cmd_boundary}(pip3?[[:space:]]+install|npm[[:space:]]+install|npm[[:space:]]+i|npm[[:space:]]+ci|yarn[[:space:]]+add|pnpm[[:space:]]+add|go[[:space:]]+install|brew[[:space:]]+install|apt(-get)?[[:space:]]+install|gem[[:space:]]+install|cargo[[:space:]]+install|uv[[:space:]]+pip[[:space:]]+install|uv[[:space:]]+install|uv[[:space:]]+add|plugin[[:space:]]+install)([[:space:]]|\$)"
 
 if [[ "$lc_command" =~ $install_re ]]; then
   deny "Blocked by executing-a-branch-plan's task-agent Bash gate (design doc Decision 17): package/plugin install commands are not permitted inside a task-level agent. Edit the manifest file's text only; the actual install runs as its own main-thread step, after Decision 6 screening (design doc Decision 7)."
@@ -79,7 +83,15 @@ if [[ "$lc_command" =~ $gh_re ]]; then
 fi
 
 # --- git push: hard deny, no warn-only exception ------------------------
-push_re="${cmd_boundary}git[[:space:]]+push([[:space:]]|\$)"
+# Skips zero or more git global options between `git` and the `push`
+# subcommand (`-C <path>`, `-c <key>=<value>`, `--git-dir=<path>`, etc.)
+# -- git's own usage explicitly permits `git [-C <path>] <command>`, so
+# `git -C "$repo" push origin HEAD` is a supported invocation form, not
+# shell trickery, and the original bare `git[[:space:]]+push` pattern
+# missed it entirely (found by a Codex review pass on this PR, confirmed
+# live: that exact command ran unblocked before this fix).
+git_global_opt='(-[a-z]([[:space:]]+[^[:space:]]+)?|--[a-z-]+(=[^[:space:]]+)?)'
+push_re="${cmd_boundary}git([[:space:]]+${git_global_opt})*[[:space:]]+push([[:space:]]|\$)"
 
 if [[ "$lc_command" =~ $push_re ]]; then
   deny "Blocked by executing-a-branch-plan's task-agent Bash gate (design doc Decision 17): git push is not permitted inside a task-level agent. Worktree merge-back and branch publish are main-thread-only steps (design doc Decision 13)."
