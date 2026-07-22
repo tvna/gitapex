@@ -702,9 +702,52 @@ model-and-authorization.md` rather than left as an implicit gap. Refs
 ## grounding-in-primary-sources
 
 The eval suite (`evals/grounding-in-primary-sources/`) has no committed
-no-skill baseline run, and only `claude-sonnet-4.6` has been evaluated --
-cross-model behavior is currently unmeasured. This environment has no
-nix/waza binary, so the suite has not been executed here at all; its
-3 fixtures (normal, edge, guardrail) are unrun against any model, same
-"declared, not measured" caveat this file's Cross-model matrix
-scaffolding section states for every suite. Refs #290.
+run against any model, and cross-model behavior is currently unmeasured.
+Per the issue #185 ablation-capability distinction: this is **"no
+ablation mechanism exists in this repository,"** not "ablation-capable,
+not yet run" -- `which waza nix` returns nothing in this environment, the
+same gap already recorded for `battle-testing-a-skill` above. Its 5
+fixtures (normal, edge, guardrail, injection, escalation) are unrun
+against any model, same "declared, not measured" caveat this file's
+Cross-model matrix scaffolding section states for every suite.
+
+**battle-testing-a-skill audit (issue #290, dispatched live against this
+skill):** overall FAIL, 4 of 22 applicable dimensions failing on first
+trial -- no install/vendoring-time-provenance note despite declaring
+`Portable` (dimension 12), an eval corpus that existed but was entirely
+non-adversarial at the time of that trial (dimension 14), no procedural
+guard against staged multi-turn pressure to skip verification (dimension
+15), and injection-resistance guidance that deferred obfuscation
+handling to a cited sibling skill with no explicit mention of encoding
+techniques (dimension 16). All four addressed in the same change: an
+install-time-provenance sentence in Notes, two new adversarial fixtures
+(`injection.yaml`, `escalation.yaml`), a Stop-boundary clause for
+cross-turn pressure, and explicit Base64/hex/homoglyph/hidden-comment
+naming in Procedure step 5 -- not independently re-verified by a second
+audit trial after the fix (a known limitation of this cycle, not a
+claimed re-pass).
+
+**evaluating-skill-quality audit (issue #290, same live dispatch):**
+WELL-FORMED-NOT-MATURE on first trial -- one dimension-2 (conciseness)
+finding: Procedure step 5 verbatim-duplicated a CLAUDE.md section 2/4
+sentence with no cited owner. Fixed in the same change by trimming the
+duplicated clause rather than restating it. Also flagged a secondary,
+non-blocking documentation gap (this section's prior "no committed
+no-skill baseline run" phrasing predated the issue #185 sub-check) and a
+blind-spot note (a "content already observed this session" exemption has
+no staleness bound in a long-running session) -- the documentation gap is
+fixed by this entry's rewrite above; the staleness blind spot is
+recorded here as an accepted, unfixed limitation rather than silently
+dropped.
+
+Both audits ran as a subagent dispatch inside this same repository's
+Claude Code session and could not confirm isolation from this
+repository's own `CLAUDE.md`/`AGENTS.md` -- both context files were
+already present before either dispatch began, with no mechanism
+available in this environment to strip or verify their absence. Both
+audits disclosed this openly and graded the target on its own text
+regardless, the same handling issue #261 recorded for two other skill
+audits in the identical situation. Neither the FAIL nor the
+WELL-FORMED-NOT-MATURE verdict has been re-run after the fixes above;
+treat this skill as reviewed-and-repaired-once, not re-confirmed passing.
+Refs #290.
