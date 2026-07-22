@@ -39,6 +39,7 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import http.client
 import json
 import os
 import re
@@ -155,9 +156,16 @@ def _fetch_issues_page(
         except urllib.error.HTTPError as error:
             last_code = int(error.code)
             last_body = error.read().decode("utf-8", errors="replace")
-        except urllib.error.URLError as error:
+        except (OSError, http.client.IncompleteRead) as error:
+            # Covers urllib.error.URLError (an OSError subclass, e.g. DNS/
+            # connection failures) and TimeoutError/ConnectionError, plus a
+            # body read that starts (headers arrive, `last_code` gets set)
+            # but stalls or is cut short -- IncompleteRead is not an OSError
+            # subclass, so it needs its own arm. Without this, a body-read
+            # failure escapes retry entirely and crashes the whole scan
+            # instead of getting the three attempts promised below.
             last_code = 0
-            last_body = str(error.reason)
+            last_body = str(error)
 
         if 200 <= last_code < 300:
             return json.loads(last_body)

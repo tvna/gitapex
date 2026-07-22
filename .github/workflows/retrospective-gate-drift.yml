@@ -26,9 +26,16 @@ jobs:
         with:
           egress-policy: audit
 
+      # Pinned to main explicitly: workflow_dispatch checks out whatever
+      # ref the operator selected in the UI, which defaults to the
+      # currently-viewed branch, not necessarily main. Without this pin, a
+      # manual run from a feature branch would scan that branch's history
+      # (a false pass on an unmerged citation, or a false failure on a
+      # stale branch) while the report text still claims it evaluated main.
       - name: Checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
+          ref: main
           persist-credentials: false
           fetch-depth: 0
 

@@ -13,6 +13,7 @@ own fixture style.
 
 from __future__ import annotations
 
+import http.client
 import subprocess
 import urllib.error
 import urllib.request
@@ -191,6 +192,45 @@ def test_list_labelled_issues_raises_on_persistent_4xx():
 
     with pytest.raises(gate.GitHubApiError):
         gate.list_labelled_issues("tvna", "gitapex", "retrospective", "tok", opener=opener)
+
+
+def test_list_labelled_issues_retries_incomplete_body_read_then_succeeds():
+    # Headers arrive (status set) but the body read itself fails -- not an
+    # HTTPError or URLError, so it must still hit the retry path rather
+    # than escaping uncaught.
+    class FlakyResponse(Response):
+        def read(self) -> bytes:
+            raise http.client.IncompleteRead(b"partial")
+
+    responses = [FlakyResponse(200), Response(200, "[]")]
+    sleeps: list[float] = []
+
+    def opener(request: urllib.request.Request) -> Response:
+        return responses.pop(0)
+
+    result = gate.list_labelled_issues(
+        "tvna", "gitapex", "retrospective", "tok", opener=opener, sleeper=sleeps.append
+    )
+    assert result == []
+    assert sleeps == [5]
+
+
+def test_list_labelled_issues_retries_body_read_timeout_then_succeeds():
+    class TimingOutResponse(Response):
+        def read(self) -> bytes:
+            raise TimeoutError("timed out")
+
+    responses = [TimingOutResponse(200), Response(200, "[]")]
+    sleeps: list[float] = []
+
+    def opener(request: urllib.request.Request) -> Response:
+        return responses.pop(0)
+
+    result = gate.list_labelled_issues(
+        "tvna", "gitapex", "retrospective", "tok", opener=opener, sleeper=sleeps.append
+    )
+    assert result == []
+    assert sleeps == [5]
 
 
 def test_list_labelled_issues_raises_after_repeated_network_failure():
