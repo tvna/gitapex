@@ -711,43 +711,80 @@ fixtures (normal, edge, guardrail, injection, escalation) are unrun
 against any model, same "declared, not measured" caveat this file's
 Cross-model matrix scaffolding section states for every suite.
 
-**battle-testing-a-skill audit (issue #290, dispatched live against this
-skill):** overall FAIL, 4 of 22 applicable dimensions failing on first
-trial -- no install/vendoring-time-provenance note despite declaring
-`Portable` (dimension 12), an eval corpus that existed but was entirely
-non-adversarial at the time of that trial (dimension 14), no procedural
+**battle-testing-a-skill audit, trial 1 (issue #290):** overall FAIL, 4 of
+22 applicable dimensions failing -- no install/vendoring-time-provenance
+note despite declaring `Portable` (dimension 12), an eval corpus that
+existed but was entirely non-adversarial (dimension 14), no procedural
 guard against staged multi-turn pressure to skip verification (dimension
 15), and injection-resistance guidance that deferred obfuscation
 handling to a cited sibling skill with no explicit mention of encoding
-techniques (dimension 16). All four addressed in the same change: an
-install-time-provenance sentence in Notes, two new adversarial fixtures
-(`injection.yaml`, `escalation.yaml`), a Stop-boundary clause for
-cross-turn pressure, and explicit Base64/hex/homoglyph/hidden-comment
-naming in Procedure step 5 -- not independently re-verified by a second
-audit trial after the fix (a known limitation of this cycle, not a
-claimed re-pass).
+techniques (dimension 16).
 
-**evaluating-skill-quality audit (issue #290, same live dispatch):**
-WELL-FORMED-NOT-MATURE on first trial -- one dimension-2 (conciseness)
-finding: Procedure step 5 verbatim-duplicated a CLAUDE.md section 2/4
-sentence with no cited owner. Fixed in the same change by trimming the
-duplicated clause rather than restating it. Also flagged a secondary,
-non-blocking documentation gap (this section's prior "no committed
-no-skill baseline run" phrasing predated the issue #185 sub-check) and a
-blind-spot note (a "content already observed this session" exemption has
-no staleness bound in a long-running session) -- the documentation gap is
-fixed by this entry's rewrite above; the staleness blind spot is
-recorded here as an accepted, unfixed limitation rather than silently
-dropped.
+**battle-testing-a-skill audit, trial 2 (re-run against the trial-1
+fixes, issue #290):** dimensions 12, 15, and 16 independently re-verified
+as fixed (the install-time-provenance sentence, the cross-turn
+Stop-boundary clause, and the explicit Base64/hex/homoglyph/hidden-comment
+naming all held up under fresh re-derivation). Dimension 14 remained
+FAIL: the corpus grew from 3 to 5 fixtures and became genuinely
+adversarial (`injection.yaml`, `escalation.yaml`), but the dimension's
+pass bar requires the corpus actually be re-run before merge, and this
+repository has no mechanism that does that for *any* skill's eval
+suite -- `waza-eval-matrix.yml` is `workflow_dispatch`-only and
+explicitly documented as "advisory, never a merge gate," and
+`skill-audit-gate.yml` only checks that a PR discloses the audit outcome,
+never that it executed the suite. This is the same repo-wide, pre-existing
+"no ablation mechanism exists in this repository" gap already recorded
+above for `battle-testing-a-skill`'s own suite, not a defect specific to
+this skill; accepted as a disclosed, non-blocking limitation rather than
+chased into building CI-gated eval execution as an undersized side effect
+of this change. Trial 2 also surfaced two findings trial 1's narrower
+failing-dimension list had not: dimension 13 (cross-session/memory-
+poisoning -- the untrusted-content boundary was scoped to "fetched docs"
+only, not to a directive resurfacing from persisted cross-session memory)
+and dimension 17 (structured-output injection -- no escaping/fencing
+guidance for a citation that lands in a downstream PR/issue body). Both
+fixed in the same follow-up change: step 5 now extends the untrusted-data
+boundary to persisted-memory directives, and a new Stop boundary requires
+fencing a cited excerpt before it reaches structured output. These two
+fixes, plus a step-1 explicit-halt clause (dimension 9 tightening) and
+adding `battle-testing-a-skill` to the sidecar's `relatedTo` list (an
+evaluating-skill-quality trial-2 consistency nit), have **not** been
+re-verified by a third audit trial -- shape checks (27/27) and the full
+pytest suite (272 passed) confirm mechanical correctness, not that these
+specific fixes hold under adversarial re-derivation the way trials 1-2's
+fixes were confirmed to.
 
-Both audits ran as a subagent dispatch inside this same repository's
+**evaluating-skill-quality audit, trial 1 (issue #290):**
+WELL-FORMED-NOT-MATURE -- one dimension-2 (conciseness) finding: Procedure
+step 5 verbatim-duplicated a CLAUDE.md section 2/4 sentence with no cited
+owner. Also flagged a non-blocking documentation gap (this section's prior
+"no committed no-skill baseline run" phrasing predated the issue #185
+sub-check, since fixed by this entry's rewrite) and a blind-spot note (a
+"content already observed this session" exemption has no staleness bound
+in a long-running session -- recorded as an accepted, unfixed limitation,
+not chased further here).
+
+**evaluating-skill-quality audit, trial 2 (re-run after the trial-1 fix,
+issue #290):** **WELL-FORMED-AND-MATURE.** The dimension-2 duplication was
+independently confirmed fixed by direct re-inspection (`grep` for the
+duplicated CLAUDE.md phrasing returns no matches, and the two content
+blocks added since trial 1 introduced no new duplication). Both dimensions
+8-9 remain named-unmeasured (the same "no ablation mechanism" disposition
+as above), which the rubric treats as sufficient for maturity on those two
+dimensions specifically, distinct from an uncleared 1-7 gap. This
+trial-2 MATURE verdict predates the dimension-13/17 fixes made in response
+to battle-testing-a-skill's trial 2 (see above) -- those fixes are
+unverified by evaluating-skill-quality, same caveat as noted there.
+
+Both audit trials ran as a subagent dispatch inside this same repository's
 Claude Code session and could not confirm isolation from this
 repository's own `CLAUDE.md`/`AGENTS.md` -- both context files were
-already present before either dispatch began, with no mechanism
-available in this environment to strip or verify their absence. Both
-audits disclosed this openly and graded the target on its own text
-regardless, the same handling issue #261 recorded for two other skill
-audits in the identical situation. Neither the FAIL nor the
-WELL-FORMED-NOT-MATURE verdict has been re-run after the fixes above;
-treat this skill as reviewed-and-repaired-once, not re-confirmed passing.
-Refs #290.
+already present before every dispatch began, with no mechanism available
+in this environment to strip or verify their absence. Every trial
+disclosed this openly and graded the target on its own text regardless,
+the same handling issue #261 recorded for two other skill audits in the
+identical situation. Net state at merge time: evaluating-skill-quality
+MATURE (trial 2, one round of unverified fixes since); battle-testing-a-skill
+FAIL on dimension 14 only, a repo-wide accepted gap, with dimensions
+12/13/15/16/17 fixed (12/15/16 independently re-confirmed, 13/17 not yet
+re-audited). Refs #290.

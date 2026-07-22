@@ -9,3 +9,4 @@ spec:
     requires: []
     relatedTo:
       - untrusted-input-triage
+      - battle-testing-a-skill
