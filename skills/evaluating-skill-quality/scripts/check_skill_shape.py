@@ -335,6 +335,19 @@ LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 # [text][label] reference resolves to. Up to 3 leading spaces per
 # CommonMark; destination is either <...>-wrapped or a bare non-space run.
 REFDEF_RE = re.compile(r"^[ ]{0,3}\[[^\]]+\]:\s*(<[^>]*>|\S+)", re.MULTILINE)
+# The "Related skills" bullet convention this repo's own skills use to name
+# a sibling skill by directory name: "**vs. `name`:**", optionally two
+# names separated by " / " (e.g. "**vs. `a` / `b`:**"). Captures everything
+# between "vs." and the closing ":**" so BACKTICK_SKILL_NAME_RE can pull out
+# one or more backtick-quoted names from it. Deliberately narrower than "any
+# backtick-quoted kebab-case token in the body" -- that broader scan has a
+# high false-positive rate (CI-gate names, shape-checker check IDs, subagent
+# names, executor names, filenames, and sibling/external-project skill names
+# all appear in backticks elsewhere in skill prose without being a
+# same-repo skill-directory reference); this bullet is the one
+# consistently-used, low-ambiguity convention for one skill naming another.
+RELATED_SKILL_BULLET_RE = re.compile(r"\*\*vs\.\s+([^*]+?):\*\*")
+BACKTICK_SKILL_NAME_RE = re.compile(r"`([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)`")
 # An absolute-URL scheme (http:, https:, mailto:, ftp:, ...) -- anything
 # matching this is external, not a same-repo relative path.
 SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.\-]*:")
@@ -1056,6 +1069,25 @@ def _out_of_skill_link_targets(body_text: str, skill_dir: Path) -> list[str]:
     return offenders
 
 
+def _stale_related_skill_references(body_text: str, skill_dir: Path) -> list[str]:
+    """Return each skill name referenced by a "**vs. `name`:**" Related-skills
+    bullet in ``body_text`` that does not resolve to an existing sibling
+    skill directory.
+
+    A rename that updates every skill's own Steps/Output but misses one
+    sibling's "vs. `old-name`:" cross-reference leaves prose that reads
+    fine in isolation but names a directory that no longer exists -- this
+    is a purely static, single-tree-state check (no git history needed):
+    every currently-committed bullet's name must resolve right now.
+    """
+    offenders: list[str] = []
+    for heading_match in RELATED_SKILL_BULLET_RE.finditer(body_text):
+        for name in BACKTICK_SKILL_NAME_RE.findall(heading_match.group(1)):
+            if not (skill_dir.parent / name).is_dir():
+                offenders.append(name)
+    return offenders
+
+
 @dataclass(frozen=True)
 class SidecarPortability:
     """Three-state summary of the sidecar's portability declaration.
@@ -1678,6 +1710,13 @@ def check_shape(target: Path) -> list[CheckResult]:
         "links-inside-skill", not offenders,
         "Markdown link targets resolve inside the skill's own directory",
         "all inside" if not offenders else "outside: " + ", ".join(offenders)))
+
+    stale_refs = _stale_related_skill_references("\n".join(body), skill_dir)
+    results.append(CheckResult(
+        "related-skill-references-resolve", not stale_refs,
+        "every '**vs. `name`:**' Related-skills bullet name resolves to "
+        "an existing sibling skill directory",
+        "all resolve" if not stale_refs else "dangling: " + ", ".join(stale_refs)))
 
     refs_dir = skill_dir / "references"
     if refs_dir.is_dir():

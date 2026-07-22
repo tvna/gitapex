@@ -1,0 +1,77 @@
+name: Skill rename lifecycle gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "skills/**/SKILL.md"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  skill-rename-lifecycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      # Refs #285 (repair 2): git's own rename detection (-M, similarity
+      # threshold 50% by default) on skills/*/SKILL.md is the deterministic
+      # signal that a skill directory was renamed in this PR -- content is
+      # never byte-identical after a rename (frontmatter name: and the #
+      # heading always change at minimum), so this always shows as an
+      # R<NN> status, never R100. A three-dot (merge-base) diff is used,
+      # not a two-dot direct diff, for the same reason skill-audit-gate.yml
+      # uses one: a rename merged to the base branch after this PR forked
+      # must never be misattributed to this PR.
+      - name: Determine renamed skill directories
+        id: diff
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if ! diff_output=$(git diff --name-status -M "$BASE_SHA...$HEAD_SHA" -- 'skills/*/SKILL.md'); then
+            echo "::error::git diff failed between $BASE_SHA and $HEAD_SHA" >&2
+            exit 1
+          fi
+          pairs_file="$RUNNER_TEMP/skill_rename_pairs.txt"
+          printf '%s\n' "$diff_output" | awk -F'\t' '
+            $1 ~ /^R/ {
+              old = $2; new = $3
+              sub(/^skills\//, "", old); sub(/\/SKILL\.md$/, "", old)
+              sub(/^skills\//, "", new); sub(/\/SKILL\.md$/, "", new)
+              print old, new
+            }
+          ' > "$pairs_file"
+          echo "pairs_file=$pairs_file" >> "$GITHUB_OUTPUT"
+          if [ -s "$pairs_file" ]; then
+            echo "Renamed skill directories in this diff:"
+            cat "$pairs_file"
+            echo "applicable=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No renamed skills/*/SKILL.md in this diff; skipping."
+            echo "applicable=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check renamedFrom is recorded
+        if: steps.diff.outputs.applicable == 'true'
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/gate_skill_rename_lifecycle.py --pairs "${{ steps.diff.outputs.pairs_file }}"

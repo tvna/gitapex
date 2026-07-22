@@ -453,6 +453,64 @@ def test_reference_style_angle_bracket_target_fails(tmp_path):
     assert "../../docs/runbook.md" in result.evidence
 
 
+# ---- related-skill-references-resolve ----
+
+def test_related_skill_reference_absent_passes(tmp_path):
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "## Notes\n\nNo cross-references here.\n")
+    result = _result(css.check_shape(d), "related-skill-references-resolve")
+    assert result.passed
+    assert result.evidence == "all resolve"
+
+
+def test_related_skill_reference_resolves_passes(tmp_path):
+    (tmp_path / "sibling-skill").mkdir()
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "## Related skills\n\n"
+        "- **vs. `sibling-skill`:** does something else entirely.\n")
+    assert _result(css.check_shape(d), "related-skill-references-resolve").passed
+
+
+def test_related_skill_reference_dangling_fails(tmp_path):
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "## Related skills\n\n"
+        "- **vs. `renamed-away-skill`:** used to exist, doesn't anymore.\n")
+    result = _result(css.check_shape(d), "related-skill-references-resolve")
+    assert not result.passed
+    assert "renamed-away-skill" in result.evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_related_skill_reference_dual_name_bullet_both_resolve(tmp_path):
+    (tmp_path / "sibling-a").mkdir()
+    (tmp_path / "sibling-b").mkdir()
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "## Related skills\n\n"
+        "- **vs. `sibling-a` / `sibling-b`:** both distinct from this one.\n")
+    assert _result(css.check_shape(d), "related-skill-references-resolve").passed
+
+
+def test_related_skill_reference_dual_name_bullet_one_dangling_fails(tmp_path):
+    (tmp_path / "sibling-a").mkdir()
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "## Related skills\n\n"
+        "- **vs. `sibling-a` / `ghost-sibling`:** one real, one stale.\n")
+    result = _result(css.check_shape(d), "related-skill-references-resolve")
+    assert not result.passed
+    assert "ghost-sibling" in result.evidence
+    assert "sibling-a" not in result.evidence  # resolves fine, not dangling
+
+
 def test_sidecar_checks_pass_on_good_skill(tmp_path):
     d = _write_skill(tmp_path)
     by = _by_name(css.check_shape(d))
