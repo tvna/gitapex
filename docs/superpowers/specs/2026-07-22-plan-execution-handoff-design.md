@@ -655,11 +655,12 @@ specs/`):
 
 Every row above resolves into one of these six checklist items; "optimal"
 is defined as satisfying all six, not as a single subjective judgment
-call left to the follow-up implementer. (Decision 12 below adds a
-seventh, later requirement -- mandatory refactor and adversarial review
-before ready-for-review -- sourced from an operator request during this
-design's own review, not from row 4's original six-item scope; it is
-additive to this list, not implied by it.)
+call left to the follow-up implementer. (Decisions 12-14 below add three
+later requirements -- mandatory refactor and adversarial review before
+ready-for-review, worktree isolation for parallel task execution, and
+per-task Red-Green discipline -- each sourced from an operator request
+during this design's own review, not from row 4's original six-item
+scope; each is additive to this list, not implied by it.)
 
 ## Decision 12: mandatory refactor + adversarial code review before ready-for-review (operator-requested addition)
 
@@ -725,6 +726,117 @@ needs the full accumulated diff to catch the cross-task inconsistencies
 Decision 4's own per-task parallelism cannot see from inside any one
 task's own context.
 
+## Decision 13: git worktree isolation for parallel task execution (operator-requested addition)
+
+`docs/motivation.md` does not name this concern, and neither did this
+design's first two drafts -- flagged directly during this design's own
+review, not sourced from #274's blind-spot pass (see the Acceptance
+criteria checklist's own provenance note below).
+
+**The gap: Decision 3's file-ownership map prevents two parallel tasks
+from touching the same file, but says nothing about the git-level race
+of two `agent()` calls committing to the same branch/working directory
+concurrently.** Concurrent `git add`/`git commit`/`git status` against
+one shared working directory is not safe even when the files touched are
+disjoint -- a working directory's index and HEAD are single, shared,
+mutable state.
+
+**Decision: every task dispatched via Decision 4's parallel/pipeline
+path runs with the Workflow tool's own `isolation: 'worktree'` option**
+(`agent(..., {isolation: 'worktree'})`), not a bespoke isolation
+mechanism. This is the option's own documented use case, quoted verbatim
+from this environment's own tool definition: "runs the agent in a fresh
+git worktree -- EXPENSIVE (~200-500ms setup + disk per agent), use ONLY
+when agents mutate files in parallel and would otherwise conflict; the
+worktree is auto-removed if unchanged." Decision 3's own file-ownership
+map is exactly what makes this cost-justified per the tool's own "ONLY
+when... would otherwise conflict" guidance -- a task that will not
+conflict on file content (file-disjoint by Decision 3's construction)
+still races at the git-mechanics level without isolation, which is
+precisely what this option exists to close, and Decision 3 already
+restricts parallel batches to exactly this shape.
+
+**Merge-back is a main-thread step, not delegated to the task agent.**
+After a worktree-isolated task's own `agent()` call reports completion
+(post-screening, per Decision 6), the orchestrating skill -- in the main
+thread, per Decision 7's own "never delegate a git write to a task
+agent" reasoning, extended here from `git push` to this equally
+git-mechanics-sensitive operation -- merges that task's worktree commit
+onto the shared feature branch published in step 4. Because Decision 3
+already guarantees file-disjointness within a parallel batch, this merge
+is conflict-free by construction, not a merge requiring manual
+resolution; it stays main-thread-only because it still mutates the one
+shared branch multiple parallel worktrees would each otherwise try to
+update concurrently.
+
+**Distinct from `EnterWorktree`/`ExitWorktree`.** Checked directly:
+those are a session-level tool pair that move the whole interactive
+session into one worktree, gated by their own tool description to fire
+"ONLY when explicitly instructed... by the user directly, or by project
+instructions (CLAUDE.md / memory)." `executing-a-branch-plan`'s own
+main-thread git operations (Decision 4's branch publish, this Decision's
+merge-back) do not call `EnterWorktree` by default -- gitapex's own
+`CLAUDE.md` names no such instruction today, so doing so would violate
+that tool's own explicit gating rather than follow it. A calling
+repository whose own `CLAUDE.md` does direct worktree use for this kind
+of task is free to extend this design accordingly, matching this
+document's own repeated "illustrative gitapex default, substitute the
+calling repository's own convention" pattern.
+
+**Sequential fallback needs none of this.** Decision 4's sequential
+main-thread fallback (used when the Workflow tool is unavailable) runs
+one task per turn with no concurrency -- there is no concurrent write to
+isolate against, so applying worktree isolation there would be exactly
+the unneeded complexity CLAUDE.md section 4 warns against, not a missing
+safeguard.
+
+**Open item, not resolved here:** the Workflow tool's own documented
+behavior states a worktree is "auto-removed if unchanged"; it does not
+state what happens to a worktree that DID accumulate changes (every task
+worktree, by definition, since a task's whole purpose is to produce a
+diff) after its own merge-back completes. The follow-up implementation
+should verify this directly against the tool's actual runtime behavior,
+not assume it, before relying on automatic cleanup.
+
+## Decision 14: per-task Red-Green discipline; Refactor stays in Decision 12, not duplicated per task (operator-requested addition)
+
+Also flagged during this design's own review, also outside #274's
+original scope (same provenance note as Decisions 12-13).
+
+**The gap: Decision 3 decomposes an ACM row's own Proof method into each
+task, and Decision 6 screens the resulting diff, but nothing in the
+first two drafts stated the order in which a task writes its test
+versus its implementation.** This repository already has an established
+answer for exactly this question -- `issue-to-fix/SKILL.md` Steps 3-5 --
+reused here rather than inventing a new discipline:
+
+- **Red**, matching `issue-to-fix` Step 3: for a task whose inherited
+  Proof method is an automatable test (a unit test, a command assertion),
+  write that test first and run it to confirm it fails for the right
+  reason, before touching any implementation code.
+- **Green**, matching `issue-to-fix` Step 4: implement the smallest
+  change that makes the test pass -- "no surrounding refactor, no
+  unrelated cleanup bundled in," the same constraint `issue-to-fix`
+  already states, reused rather than restated in different words.
+- **Refactor is deliberately NOT per-task.** Doing it inside each task's
+  own isolated context would duplicate Decision 12's own aggregate
+  refactor pass and reintroduce the exact blind spot Decision 12 already
+  argued against: a task refactoring only what it can see cannot catch
+  the cross-task redundancy Decision 12's own rationale names ("reuse,
+  redundancy, and dead code that Decision 4's parallel/pipeline task
+  execution can hide"). Refactor happens exactly once, in Decision 12's
+  own aggregate pass after all tasks complete -- not duplicated per task
+  and not skipped.
+
+**Scope boundary, stated rather than left implicit:** not every task's
+inherited Proof method is an automatable test -- a task decomposed from
+an ACM row whose Proof method is inherently manual (e.g. "design doc
+reviewed and approved") has no Red step to run. Red-Green applies only
+when the inherited Proof method is genuinely code-verifiable; this is a
+per-task judgment made at Decision 3's own decomposition time, not a
+blanket rule forced onto every task regardless of what its row actually
+asks for.
+
 ## New skill: consolidated sequence (for the follow-up implementation issue)
 
 Provided so the follow-up issue does not need to re-derive step ordering
@@ -748,12 +860,19 @@ only scope).
    PR's own CI/review/comment activity in this same step, owned by this
    skill until step 9.
 6. **Execute** (Decision 4). Workflow-tool `pipeline()`/`parallel()` over
-   Decision 3's task list when available; sequential main-thread fallback
-   otherwise. Each task's own diff is screened (Decision 6) before its
-   own commit; GitHub writes, `git push`, and package-manager install
-   commands are never delegated into a task `agent()` (Decision 7's
-   compensating control, widened to cover installs) -- only steps 4, 5,
-   this step's own `TaskStarted`/`TaskCompleted`/`TaskFailed` event
+   Decision 3's task list when available, each parallel task's `agent()`
+   call using `isolation: 'worktree'` (Decision 13); sequential
+   main-thread fallback otherwise (no worktree isolation needed there,
+   Decision 13). Within each task, Red-Green order applies where the
+   task's inherited Proof method is an automatable test (Decision 14) --
+   Refactor is not run per task, deferred entirely to step 8. Each task's
+   own diff is screened (Decision 6) before its own commit; a completed
+   worktree task's commit is merged onto the shared branch in the main
+   thread (Decision 13), never by the task agent itself. GitHub writes,
+   `git push`, and package-manager install commands are never delegated
+   into a task `agent()` (Decision 7's compensating control, widened to
+   cover installs) -- only steps 4, 5, this step's own worktree
+   merge-back and `TaskStarted`/`TaskCompleted`/`TaskFailed` event
    writes, step 7's own `StageDeviated` event write and any close-PR/
    comment action, and step 9 happen in the main thread.
 7. **On task failure or a screening flag**, dispatch per Decision 8's
@@ -893,6 +1012,17 @@ sourced from #274's blind-spot pass):**
       `docs/motivation.md`'s own already-documented "diff correctness
       review... just before PR creation, or just before merge" step,
       which the first draft of the consolidated sequence omitted.
+- [x] git worktree isolation for parallel task execution: Decision 13 --
+      closes a git-mechanics race the file-ownership map (Decision 3)
+      alone does not prevent, using the Workflow tool's own
+      `isolation: 'worktree'` option rather than a bespoke mechanism, and
+      distinguished explicitly from the unrelated session-level
+      `EnterWorktree`/`ExitWorktree` tool pair.
+- [x] Red-Green discipline per task, Refactor kept exclusive to Decision
+      12: Decision 14 -- reuses `issue-to-fix/SKILL.md` Steps 3-5's
+      already-established test-first discipline rather than inventing a
+      new one, with an explicit scope boundary for tasks whose Proof
+      method is not an automatable test.
 
 Follow-up implementation PR's own first steps (not this pass, per Non-
 goals above, but listed here so they are not lost between docs):
