@@ -138,7 +138,23 @@ actual plugin-agent schema, not a plausible-sounding claim).
    safety.sh` -- scoped, per Claude Code's own subagent-hooks
    documentation, to fire only while that specific subagent type is
    active, not session-wide, and independent of `CLAUDE_PLUGIN_ROOT`
-   (Decision 7's own open question). **Empirically verified live in this
+   (Decision 7's own open question).
+
+   **Scope of the empirical verification below, stated precisely rather
+   than left ambiguous:** the probes were run via the top-level `Agent`
+   tool's `subagent_type` parameter, not via a literal `Workflow` tool
+   script calling `agent(..., {agentType: 'branch-plan-task'})` -- the
+   actual invocation step 6 describes. The `Workflow` tool's own
+   documentation states `agentType` "resolves from the same registry as
+   the Agent tool," which is why this substitution is treated as a valid
+   proxy rather than a different mechanism entirely, but it was never
+   literally exercised through the `Workflow` tool itself (which
+   requires its own explicit user opt-in this skill's own authoring
+   session did not have -- the identical constraint design doc Decision
+   7's own investigation names for the same reason). Re-run this probe
+   through an actual `Workflow` script before treating step 6's own
+   literal invocation path as covered by the same evidence, not only the
+   `Agent`-tool proxy for it. **Empirically verified live in this
    skill's own authoring session** (mirroring Decision 7's own "test,
    don't assume" method), quoted, not summarized:
    - `pip install --help` -> denied, `systemMessage`: "Blocked by

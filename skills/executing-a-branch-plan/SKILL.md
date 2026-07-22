@@ -64,7 +64,10 @@ first, not skimmed.
    tools available to it in either deployment; a hook-backed, empirically
    verified `gh`/`git push`/install exclusion in the project-local
    variant, a weaker prompt-plus-session-hook exclusion in the
-   plugin-distributed variant -- see [the threat-model
+   plugin-distributed variant -- verified via the `Agent` tool's own
+   `subagent_type` parameter, a documented but not literally exercised
+   proxy for the `Workflow` tool's own `agentType` option this step
+   actually uses -- see [the threat-model
    reference](references/threat-model-and-authorization.md#the-branch-plan-task-subagent-type)
    for the full, honest accounting of both) and `isolation: 'worktree'`. Use the sequential main-thread fallback
    (one task per turn, no wave/run boundary) when the Workflow tool is
@@ -219,10 +222,16 @@ shape-check convention. Step 6's primary path (`Workflow` tool,
 `branch-plan-task` subagent-type definition are Claude-Code-specific.
 The sequential main-thread fallback in step 6 (one task per turn, no
 Workflow tool, no worktree isolation, no `agentType` scoping -- a task's
-exclusion list is prompt-only in that path) is portable to any agent
-platform, degraded but not blocked, matching design doc Decision 4's own
-portability answer. Steps 1, 2, 4, 5, 7, 8, 9 use only GitHub-connector
-calls and skill-to-skill reuse, both portable.
+exclusion list is prompt-only in that path) is *architecturally* portable
+to any agent platform (it uses no Claude-Code-specific primitive),
+degraded but not blocked, matching design doc Decision 4's own
+portability answer. This is a structural claim, not an empirically
+verified one on any platform besides Claude Code itself -- see
+[execution-and-waves.md](references/execution-and-waves.md#sequential-fallback)
+for the specific attempt to verify it against OpenAI Codex (blocked by
+this authoring session's own network policy, not resolved either way).
+Steps 1, 2, 4, 5, 7, 8, 9 use only GitHub-connector calls and
+skill-to-skill reuse, both portable.
 
 Install/vendoring-time integrity (whether this SKILL.md, its
 `references/`, its bundled `scripts/check_task_bash_safety.sh`, and both

@@ -44,15 +44,19 @@ once this settles, so its own tasks see every earlier wave's merged
 state.
 
 **Consent/portability note.** Each wave's own Workflow run triggers its
-own launch-time approval prompt in default/accept-edits permission modes
-(unless already recorded, or the session runs non-interactively). A
-Branch Plan with many small waves multiplies this prompt count --
+own launch-time approval prompt in default/accept-edits permission
+modes, confirmed via a direct fetch of Claude Code's own primary
+documentation (`code.claude.com/docs/en/workflows`, this skill's own
+authoring session, not inherited from the design doc's earlier fetch
+unverified): "Default, accept edits: **Every run**, unless you've
+selected 'Yes, and don't ask again' for that workflow in this project."
+A Branch Plan with many small waves multiplies this prompt count --
 task-decomposition.md's own wave-minimizing effect (grouping everything
 with no file or interface edge into one wave) is therefore also a
-consent-friction control, not only a parallelism-maximizing one. This is
-unverified in practice against a real multi-wave dispatch as of this
-skill's authoring -- flagged for the first real run to measure, not
-assumed low-friction.
+consent-friction control, not only a parallelism-maximizing one. The
+*count* of prompts a real multi-wave dispatch produces, and whether that
+count is acceptable in practice, is unverified -- flagged for the first
+real run to measure, not assumed low-friction.
 
 ## Git worktree isolation for parallel task execution
 
@@ -105,6 +109,24 @@ exclusion list is prompt-only in this path, not structurally enforced)
 but not blocked. No wave/run boundary exists in this path at all -- there
 is no concurrent write to isolate against, so applying worktree isolation
 here would be unneeded complexity, not a missing safeguard.
+
+**"Portable to any agent platform" scope, stated precisely rather than
+implied broader than verified.** This path is *architecturally*
+platform-agnostic because it deliberately avoids every Claude-Code-
+specific primitive (no `Workflow` tool, no `agentType`, no
+`isolation: 'worktree'`) -- it needs nothing beyond a plain conversational
+loop and file/git tools any coding agent has. That is a structural
+argument, not an empirical one: this skill's own authoring session tried
+to verify the claim against a concrete other platform (OpenAI Codex,
+since it is an active participant in this repository as an automated PR
+reviewer) and could not -- the relevant primary documentation
+(`developers.openai.com`) was unreachable from that session's own network
+policy. Whether Codex's actual execution model (its own sandbox/approval
+mechanics, whether it has a persistent "main thread" concept at all)
+genuinely behaves the way this fallback assumes is therefore **not
+verified, on any platform other than Claude Code itself**, and should not
+be read as confirmed portability -- only as an architecture that avoids
+the specific dependencies that would obviously break it.
 
 What does not change between the two paths: the task list itself, the
 step-1 authorization gate, the event log and PR handoff. Only the *how*
