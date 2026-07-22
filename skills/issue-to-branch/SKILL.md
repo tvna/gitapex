@@ -94,6 +94,28 @@ Pattern: **Facts** -> **Assumptions** -> **Acceptance Criteria Map** ->
   Step 4 — an Acceptance Criteria Map is required first regardless of how
   the request is phrased.
 
+## Related skills
+
+- **vs. `executing-a-branch-plan`:** this skill stops at the Branch Plan
+  and Acceptance Criteria Map -- its own Stop boundaries state plainly
+  "Do not implement the issue as part of this skill; it produces a plan,
+  not code." `executing-a-branch-plan` starts exactly where this skill
+  stops: it consumes the Branch Plan and ACM this skill produces (or
+  independently re-verifies a stale one, per this skill's own Step 4
+  draft-not-pre-verified rule), decomposes the ACM into tasks, executes
+  them, and opens the PR `driving-pr-to-merge` then takes over.
+- **vs. `issue-to-fix`:** that skill is scoped to "a bare issue reporting
+  a defect" and both reproduces and fixes it directly, without this
+  skill's own Acceptance-Criteria-Map-then-plan shape. Distinct from
+  `executing-a-branch-plan` too, which handles the general
+  (feature/chore/refactor) case this skill plans for, not a bare defect
+  report.
+- **vs. `drafting-an-acm-issue`:** that skill authors a brand-new issue,
+  already carrying an Acceptance Criteria Map, before this skill's own
+  Step 1 ever runs -- this skill starts from an existing issue, drafting
+  or independently re-checking that skill's own ACM draft rather than
+  authoring the issue itself.
+
 ## Notes
 
 [GitHub issue workflow](references/github-issue-workflow.md)'s write-path
