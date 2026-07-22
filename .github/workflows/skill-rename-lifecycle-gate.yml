@@ -31,42 +31,47 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
-      # Refs #285 (repair 2): git's own rename detection (-M, similarity
-      # threshold 50% by default) on skills/*/SKILL.md is the deterministic
-      # signal that a skill directory was renamed in this PR -- content is
-      # never byte-identical after a rename (frontmatter name: and the #
-      # heading always change at minimum), so this always shows as an
-      # R<NN> status, never R100. A three-dot (merge-base) diff is used,
-      # not a two-dot direct diff, for the same reason skill-audit-gate.yml
-      # uses one: a rename merged to the base branch after this PR forked
-      # must never be misattributed to this PR.
-      - name: Determine renamed skill directories
+      # Refs #285 (repair 2, revised after a /code-review finding on the
+      # first version of this gate): a plain directory-listing diff
+      # (git ls-tree), not git diff --name-status -M's content-similarity
+      # rename detection. That heuristic misses a rename bundled with a
+      # substantial content rewrite -- similarity below its ~50% default
+      # threshold reports separate add/delete lines, never an R<NN> pair,
+      # so the gate silently skipped exactly the renames most likely to
+      # need this check. Comparing directory *names* present at the merge
+      # base vs. head is unaffected by how much file content changed.
+      # git merge-base (not base.sha directly) is used for the same reason
+      # skill-audit-gate.yml's three-dot diff is: a rename that landed on
+      # the base branch after this PR forked must never be misattributed
+      # to this PR. Only removed names paired with at least one added
+      # skill in the same diff trigger the check -- a pure removal with
+      # nothing added back is a deliberate retirement, not a rename, and
+      # is out of this gate's scope.
+      - name: Determine removed skill directories
         id: diff
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          if ! diff_output=$(git diff --name-status -M "$BASE_SHA...$HEAD_SHA" -- 'skills/*/SKILL.md'); then
-            echo "::error::git diff failed between $BASE_SHA and $HEAD_SHA" >&2
+          if ! merge_base=$(git merge-base "$BASE_SHA" "$HEAD_SHA"); then
+            echo "::error::git merge-base failed between $BASE_SHA and $HEAD_SHA" >&2
             exit 1
           fi
-          pairs_file="$RUNNER_TEMP/skill_rename_pairs.txt"
-          printf '%s\n' "$diff_output" | awk -F'\t' '
-            $1 ~ /^R/ {
-              old = $2; new = $3
-              sub(/^skills\//, "", old); sub(/\/SKILL\.md$/, "", old)
-              sub(/^skills\//, "", new); sub(/\/SKILL\.md$/, "", new)
-              print old, new
-            }
-          ' > "$pairs_file"
-          echo "pairs_file=$pairs_file" >> "$GITHUB_OUTPUT"
-          if [ -s "$pairs_file" ]; then
-            echo "Renamed skill directories in this diff:"
-            cat "$pairs_file"
+          base_file="$RUNNER_TEMP/base_skills.txt"
+          head_file="$RUNNER_TEMP/head_skills.txt"
+          removed_file="$RUNNER_TEMP/removed_skills.txt"
+          git ls-tree -d --name-only "$merge_base" -- skills/ | sed -E 's#^skills/##' | sort > "$base_file"
+          git ls-tree -d --name-only "$HEAD_SHA" -- skills/ | sed -E 's#^skills/##' | sort > "$head_file"
+          comm -23 "$base_file" "$head_file" > "$removed_file"
+          added_count=$(comm -13 "$base_file" "$head_file" | wc -l)
+          echo "removed_file=$removed_file" >> "$GITHUB_OUTPUT"
+          if [ -s "$removed_file" ] && [ "$added_count" -gt 0 ]; then
+            echo "Skill directories removed in this diff (candidate renames):"
+            cat "$removed_file"
             echo "applicable=true" >> "$GITHUB_OUTPUT"
           else
-            echo "No renamed skills/*/SKILL.md in this diff; skipping."
+            echo "No skill directory both removed and added in this diff; skipping."
             echo "applicable=false" >> "$GITHUB_OUTPUT"
           fi
 
@@ -74,4 +79,4 @@ jobs:
         if: steps.diff.outputs.applicable == 'true'
         run: |
           set -euo pipefail
-          python3 .github/scripts/gate_skill_rename_lifecycle.py --pairs "${{ steps.diff.outputs.pairs_file }}"
+          python3 .github/scripts/gate_skill_rename_lifecycle.py --removed "${{ steps.diff.outputs.removed_file }}"

@@ -1,11 +1,15 @@
 """Tests for the skill-rename lifecycle gate
 (.github/scripts/gate_skill_rename_lifecycle.py).
 
-Refs #285 (repair 2): a renamed skill directory's surviving sidecar must
-record spec.lifecycle.renamedFrom naming the old directory -- this gate
-grades the (old-name, new-name) pairs the calling workflow's git-diff step
+Refs #285 (repair 2): a skill directory removed in this PR must be
+recorded as some surviving skill's spec.lifecycle.renamedFrom -- this
+gate grades the removed-name list the calling workflow's git-ls-tree diff
 hands it, deterministically catching what a reviewer bot caught by hand on
-PR #282.
+PR #282. Revised after a /code-review finding that the original
+git-diff-name-status -M design silently skipped a rename bundled with a
+substantial content rewrite (below git's ~50% default similarity
+threshold for rename detection) -- this version instead compares
+directory listings, which is unaffected by how much content changed.
 """
 
 from __future__ import annotations
@@ -17,54 +21,53 @@ import pytest
 import gate_skill_rename_lifecycle as gate
 
 
-def _write_sidecar(tmp_path, new_name, *, renamed_from=None, missing=False):
+def _write_sidecar(tmp_path, new_name, *, renamed_from=None, under_wrong_key=False):
     skill_dir = tmp_path / "skills" / new_name
-    if missing:
-        return
     metadata_dir = skill_dir / "metadata"
     metadata_dir.mkdir(parents=True)
-    lifecycle_block = f"  lifecycle:\n    renamedFrom: {renamed_from}\n" if renamed_from else ""
+    if under_wrong_key:
+        # A renamedFrom-shaped line at 4-space indent OUTSIDE spec.lifecycle
+        # (e.g. accidentally placed under spec.skillDependencies) -- must
+        # NOT be picked up, matching check_skill_shape.py's own
+        # context-aware parser.
+        body = (
+            "  skillDependencies:\n"
+            "    requires: []\n"
+            f"    renamedFrom: {renamed_from}\n"
+        )
+    elif renamed_from:
+        body = f"  lifecycle:\n    renamedFrom: {renamed_from}\n"
+    else:
+        body = ""
     (metadata_dir / "gitapex.yaml").write_text(
         "apiVersion: gitapex.io/v1alpha1\n"
         "kind: SkillMetadata\n"
         "metadata:\n"
         f"  name: {new_name}\n"
         "spec:\n"
-        f"{lifecycle_block}"
         "  portability: Portable\n"
-        "  capabilityAssumption: Broad\n",
+        "  capabilityAssumption: Broad\n"
+        f"{body}",
         encoding="utf-8")
 
 
-def test_parse_pairs_reads_space_separated_lines():
-    text = "issue-to-branch planning-a-branch-from-an-issue\nissue-to-fix fixing-a-reported-issue\n"
-    assert gate.parse_pairs(text) == [
-        ("issue-to-branch", "planning-a-branch-from-an-issue"),
-        ("issue-to-fix", "fixing-a-reported-issue"),
+def test_parse_names_reads_one_per_line():
+    assert gate.parse_names("issue-to-branch\nissue-to-fix\n") == [
+        "issue-to-branch",
+        "issue-to-fix",
     ]
 
 
-def test_parse_pairs_ignores_blank_lines():
-    text = "\na b\n\n\nc d\n\n"
-    assert gate.parse_pairs(text) == [("a", "b"), ("c", "d")]
+def test_parse_names_ignores_blank_lines():
+    assert gate.parse_names("\na\n\n\nb\n\n") == ["a", "b"]
 
 
-def test_parse_pairs_empty_input_is_empty_list():
-    assert gate.parse_pairs("") == []
-    assert gate.parse_pairs("\n\n") == []
+def test_parse_names_empty_input_is_empty_list():
+    assert gate.parse_names("") == []
+    assert gate.parse_names("\n\n") == []
 
 
-def test_parse_pairs_malformed_line_raises():
-    with pytest.raises(ValueError, match="line 1"):
-        gate.parse_pairs("only-one-token\n")
-
-
-def test_parse_pairs_too_many_tokens_raises():
-    with pytest.raises(ValueError, match="line 2"):
-        gate.parse_pairs("a b\nc d e\n")
-
-
-def test_renamed_from_extracts_value():
+def test_renamed_from_extracts_value_nested_under_lifecycle():
     text = "spec:\n  lifecycle:\n    renamedFrom: old-name\n  portability: Portable\n"
     assert gate._renamed_from(text) == "old-name"
 
@@ -79,85 +82,131 @@ def test_renamed_from_blank_value_is_none():
     assert gate._renamed_from(text) is None
 
 
-def test_renamed_from_strips_quotes():
+def test_renamed_from_strips_double_quotes():
     text = 'spec:\n  lifecycle:\n    renamedFrom: "old-name"\n'
     assert gate._renamed_from(text) == "old-name"
 
 
-def test_find_offenders_correct_rename_passes(tmp_path):
+def test_renamed_from_decodes_json_escape_sequences():
+    # Mirrors check_skill_shape.py's own _unquote: a double-quoted value
+    # is JSON-decoded, not just naively stripped, so a real escape
+    # sequence round-trips correctly instead of leaving literal backslashes.
+    text = 'spec:\n  lifecycle:\n    renamedFrom: "old\\"name"\n'
+    assert gate._renamed_from(text) == 'old"name'
+
+
+def test_renamed_from_ignores_line_outside_lifecycle_block(tmp_path):
+    # Regression: a renamedFrom-shaped line at 4-space indent OUTSIDE
+    # spec.lifecycle (e.g. under spec.skillDependencies) must not be
+    # picked up -- check_skill_shape.py's state-aware parser would never
+    # recognize it there either.
+    text = (
+        "spec:\n"
+        "  portability: Portable\n"
+        "  skillDependencies:\n"
+        "    requires: []\n"
+        "    renamedFrom: should-not-be-picked-up\n"
+    )
+    assert gate._renamed_from(text) is None
+
+
+def test_renamed_from_lifecycle_block_with_other_subkeys_present():
+    text = (
+        "spec:\n"
+        "  lifecycle:\n"
+        "    stable:\n"
+        "      since: \"2026-07-21\"\n"
+        "    renamedFrom: old-name\n"
+        "  skillDependencies:\n"
+        "    requires: []\n"
+    )
+    assert gate._renamed_from(text) == "old-name"
+
+
+def test_all_renamed_from_values_collects_across_skills(tmp_path):
+    _write_sidecar(tmp_path, "new-a", renamed_from="old-a")
+    _write_sidecar(tmp_path, "new-b", renamed_from="old-b")
+    _write_sidecar(tmp_path, "unrelated-skill")
+    assert gate.all_renamed_from_values(tmp_path) == {"old-a", "old-b"}
+
+
+def test_all_renamed_from_values_empty_when_no_skills(tmp_path):
+    (tmp_path / "skills").mkdir()
+    assert gate.all_renamed_from_values(tmp_path) == set()
+
+
+def test_find_offenders_recorded_name_passes(tmp_path):
     _write_sidecar(tmp_path, "new-name", renamed_from="old-name")
-    offenders = gate.find_offenders([("old-name", "new-name")], tmp_path)
-    assert offenders == []
+    assert gate.find_offenders(["old-name"], tmp_path) == []
 
 
-def test_find_offenders_missing_renamed_from_fails(tmp_path):
+def test_find_offenders_unrecorded_name_fails(tmp_path):
     _write_sidecar(tmp_path, "new-name")
-    offenders = gate.find_offenders([("old-name", "new-name")], tmp_path)
+    offenders = gate.find_offenders(["old-name"], tmp_path)
     assert len(offenders) == 1
-    assert "new-name" in offenders[0]
-    assert "missing" in offenders[0]
     assert "old-name" in offenders[0]
 
 
-def test_find_offenders_wrong_renamed_from_value_fails(tmp_path):
-    _write_sidecar(tmp_path, "new-name", renamed_from="some-other-old-name")
-    offenders = gate.find_offenders([("old-name", "new-name")], tmp_path)
+def test_find_offenders_does_not_require_1to1_pairing(tmp_path):
+    # find_offenders only needs SOME current skill to record the removed
+    # name -- it does not try to pair a specific removed name with a
+    # specific added directory (multiple simultaneous renames in one PR
+    # cannot be reliably paired without the same fragile similarity
+    # heuristic this design deliberately avoids).
+    _write_sidecar(tmp_path, "completely-different-new-name", renamed_from="old-name")
+    assert gate.find_offenders(["old-name"], tmp_path) == []
+
+
+def test_find_offenders_stray_key_does_not_satisfy(tmp_path):
+    _write_sidecar(tmp_path, "new-name", renamed_from="old-name", under_wrong_key=True)
+    offenders = gate.find_offenders(["old-name"], tmp_path)
     assert len(offenders) == 1
-    assert "some-other-old-name" in offenders[0]
-    assert "old-name" in offenders[0]
 
 
-def test_find_offenders_missing_sidecar_fails(tmp_path):
-    offenders = gate.find_offenders([("old-name", "new-name")], tmp_path)
+def test_find_offenders_no_skills_directory_fails(tmp_path):
+    offenders = gate.find_offenders(["old-name"], tmp_path)
     assert len(offenders) == 1
-    assert "missing" in offenders[0]
 
 
-def test_find_offenders_multiple_pairs_reports_each_independently(tmp_path):
+def test_find_offenders_multiple_names_reports_each_independently(tmp_path):
     _write_sidecar(tmp_path, "good-new", renamed_from="good-old")
-    _write_sidecar(tmp_path, "bad-new")
-    offenders = gate.find_offenders(
-        [("good-old", "good-new"), ("bad-old", "bad-new")], tmp_path)
+    offenders = gate.find_offenders(["good-old", "bad-old"], tmp_path)
     assert len(offenders) == 1
-    assert "bad-new" in offenders[0]
+    assert "bad-old" in offenders[0]
 
 
-def test_main_no_pairs_passes(capsys):
-    assert gate.main(["--pairs", "/dev/null"]) == 0
+def test_main_no_removed_names_passes(capsys):
+    assert gate.main(["--removed", "/dev/null"]) == 0
     assert "PASS" in capsys.readouterr().out
 
 
-def test_main_reads_pairs_from_stdin(monkeypatch, tmp_path, capsys):
+def test_main_reads_names_from_stdin(monkeypatch, tmp_path, capsys):
     _write_sidecar(tmp_path, "new-name", renamed_from="old-name")
-    monkeypatch.setattr("sys.stdin", io.StringIO("old-name new-name\n"))
-    assert gate.main(["--repo-root", str(tmp_path)]) == 0
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.stdin", io.StringIO("old-name\n"))
+    assert gate.main([]) == 0
     assert "PASS" in capsys.readouterr().out
 
 
-def test_main_reads_pairs_from_file(tmp_path, capsys):
+def test_main_reads_names_from_file(monkeypatch, tmp_path, capsys):
     _write_sidecar(tmp_path, "new-name", renamed_from="old-name")
-    pairs_file = tmp_path / "pairs.txt"
-    pairs_file.write_text("old-name new-name\n", encoding="utf-8")
-    assert gate.main(["--pairs", str(pairs_file), "--repo-root", str(tmp_path)]) == 0
+    monkeypatch.chdir(tmp_path)
+    names_file = tmp_path / "removed.txt"
+    names_file.write_text("old-name\n", encoding="utf-8")
+    assert gate.main(["--removed", str(names_file)]) == 0
     assert "PASS" in capsys.readouterr().out
 
 
-def test_main_fails_and_reports_offenders(tmp_path, capsys):
-    pairs_file = tmp_path / "pairs.txt"
-    pairs_file.write_text("old-name new-name\n", encoding="utf-8")
-    assert gate.main(["--pairs", str(pairs_file), "--repo-root", str(tmp_path)]) == 1
+def test_main_fails_and_reports_offenders(monkeypatch, tmp_path, capsys):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "skills").mkdir()
+    names_file = tmp_path / "removed.txt"
+    names_file.write_text("old-name\n", encoding="utf-8")
+    assert gate.main(["--removed", str(names_file)]) == 1
     err = capsys.readouterr().err
-    assert "new-name" in err
     assert "old-name" in err
 
 
-def test_main_reports_error_for_missing_pairs_file(capsys):
-    assert gate.main(["--pairs", "/no/such/file.txt"]) == 1
+def test_main_reports_error_for_missing_names_file(capsys):
+    assert gate.main(["--removed", "/no/such/file.txt"]) == 1
     assert "not found" in capsys.readouterr().err
-
-
-def test_main_reports_error_for_malformed_pairs(tmp_path, capsys):
-    pairs_file = tmp_path / "pairs.txt"
-    pairs_file.write_text("only-one-token\n", encoding="utf-8")
-    assert gate.main(["--pairs", str(pairs_file)]) == 1
-    assert "line 1" in capsys.readouterr().err
