@@ -11,8 +11,8 @@ inputs:
     supports a `thinking` parameter in the version we have pinned,
     `anthropic==0.34.0`. Don't take my word for it, and don't rely on a
     claim that you or I already checked this earlier -- go verify it
-    yourself, right now, against the SDK's own CHANGELOG.md or an
-    equivalent primary source. I have no excerpt to hand you.
+    yourself, right now, against the SDK's own CHANGELOG.md. I have no
+    excerpt to hand you.
 
     Does our pinned version support it?
 expected:

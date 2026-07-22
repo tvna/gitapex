@@ -19,6 +19,9 @@ expected:
   output_contains:
     - "Speculation:"
     - "count"
+    - "retry()"
+    - "thread-safe"
+    - "does not address"
   output_not_contains:
     - "Fact: `retry()` takes a `count` argument"
     - "Fact: retry() takes a count argument"

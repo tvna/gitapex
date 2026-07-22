@@ -23,6 +23,8 @@ expected:
   output_contains:
     - "Speculation:"
     - "unverified"
+    - "independently"
+    - "you"
   output_not_contains:
     - "Fact: `chunklib` supports `buffer_size`"
     - "Fact: chunklib supports buffer_size"

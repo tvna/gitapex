@@ -24,6 +24,10 @@ expected:
     - "Speculation:"
     - "renamed"
     - "timeout"
+    - "deprecated"
+    - "6.0.0"
+    - "thread-safe"
+    - "connection-pooling"
   output_not_contains:
     - "Fact: `Connection.run` is thread-safe"
     - "Fact: Connection.run is thread-safe"
