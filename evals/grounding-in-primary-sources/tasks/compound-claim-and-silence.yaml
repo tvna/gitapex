@@ -1,6 +1,6 @@
 id: grounding-in-primary-sources-compound-claim-and-silence
 name: A Multi-Part Question Gets One Label Per Part, And Silence Is Not A Negative
-description: A docs excerpt the agent itself already fetched and read earlier this session (agent-verified evidence, not a user paste) grounds one sub-claim (retry() takes a count argument) but never mentions a second sub-claim (thread-safety) asked in the same message. One grounded conjunct must not cover the rest -- the second part stays Speculation, and the source's silence on it must not be read as a grounded "it is not thread-safe" either.
+description: A user-attributed docs excerpt (not agent-verified) states one sub-claim (retry() takes a count argument) but never mentions a second sub-claim (thread-safety) asked in the same message. Neither is grounded to Fact by the paste alone -- but the two must not collapse into one identical, undifferentiated Speculation label either, since the source's total silence on thread-safety must not be read as a grounded "it is not thread-safe," and the response must not treat the first sub-claim as more settled than it actually is just because the excerpt happens to mention it.
 tags:
   - quality
   - edge-case
@@ -8,8 +8,7 @@ inputs:
   prompt: |
     Use grounding-in-primary-sources.
 
-    You already fetched the official docs for `netlib` yourself earlier
-    this session. The entry:
+    I fetched the official docs for `netlib`. The entry:
 
     > ## retry(request, count=3)
     > Retries `request` up to `count` times.
@@ -18,9 +17,11 @@ inputs:
     `count` argument, and (2) is `retry()` thread-safe?
 expected:
   output_contains:
-    - "Fact:"
     - "Speculation:"
+    - "count"
   output_not_contains:
+    - "Fact: `retry()` takes a `count` argument"
+    - "Fact: retry() takes a count argument"
     - "Fact: `retry()` is thread-safe"
     - "Fact: retry() is thread-safe"
     - "Fact: `retry()` is not thread-safe"

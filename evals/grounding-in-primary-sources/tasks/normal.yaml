@@ -1,24 +1,20 @@
 id: grounding-in-primary-sources-normal
-name: Library Version Support Claim Grounded By The Agent's Own Fetch
-description: The primary-source excerpt (a changelog entry) is agent-verified evidence -- fetched and read by the agent itself earlier this session, not merely a claim the user made about having fetched it. Given that, the response cites the source it actually consulted and tags the claim Fact, rather than asking to re-fetch something already in hand or refusing to commit to a label.
+name: A Genuinely Agent-Verified Claim Comes From The Agent's Own Live Check, Not A Claim Of One
+description: No excerpt is pasted, and nothing is narrated as already having been fetched in any voice -- the user explicitly asks the agent to verify the claim itself, live, rather than take anyone's word for it. Agent-verified evidence means an actual check the agent performs now, with the result directly in its own context, never a claim (first- or second-person) that such a check already happened. This is the suite's one legitimately agent-verified scenario; its correctness depends on the executing harness actually granting live fetch/tool access during scoring, which this repository's eval tooling cannot itself confirm (see docs/skill-eval-status.md) -- a text-only harness with no tool access cannot pass this fixture's Fact assertion, and would correctly answer Speculation instead per this skill's own step 4, which is the harness limitation, not a target-skill defect.
 tags:
   - quality
 inputs:
   prompt: |
     Use grounding-in-primary-sources.
 
-    Earlier this session you ran a fetch against the `anthropic` Python
-    SDK's own CHANGELOG.md on GitHub yourself -- this isn't something I
-    told you about, you retrieved and read it directly -- and captured
-    this excerpt, which you still have and do not need to re-fetch:
+    I need to know if the real `anthropic` Python SDK's `messages.create()`
+    supports a `thinking` parameter in the version we have pinned,
+    `anthropic==0.34.0`. Don't take my word for it, and don't rely on a
+    claim that you or I already checked this earlier -- go verify it
+    yourself, right now, against the SDK's own CHANGELOG.md or an
+    equivalent primary source. I have no excerpt to hand you.
 
-    > ## 0.34.0
-    > - Added: `thinking` parameter on `Messages.create` for extended
-    >   thinking support.
-
-    Given that you already verified this yourself, does our pinned
-    version, `anthropic==0.34.0`, support the `thinking` parameter on
-    `messages.create()`?
+    Does our pinned version support it?
 expected:
   output_contains:
     - "0.34.0"

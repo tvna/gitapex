@@ -1,6 +1,6 @@
 id: grounding-in-primary-sources-verification-triage
-name: The Decision-Critical Claim Gets Checked, Not Just The Easy Ones
-description: Three minor claims are covered by a changelog entry the agent itself already fetched and read earlier this session (agent-verified evidence, not a user paste); the fourth, explicitly the one the migration decision hinges on, has none. High citation activity on the easy claims must not stand in for checking the one that actually matters -- the critical claim stays Speculation even while the other three are grounded.
+name: The Decision-Critical Claim's Silence Is Not Folded Into The Same Speculation As The Topical Claims
+description: A user-attributed changelog excerpt (not agent-verified) covers three minor claims topically; the fourth, explicitly the one the migration decision hinges on, is never mentioned in it at all. None of the four is agent-verified -- the excerpt is only a paste -- but the response must not treat the fourth the same as the other three. The excerpt's total silence on thread-safety is a stronger unknown than an on-topic-but-unverified claim, and must not be read as a grounded "not thread-safe," nor quietly folded into the same "the excerpt covers this" language that (still only provisionally) applies to the topical three.
 tags:
   - quality
   - edge-case
@@ -8,8 +8,7 @@ inputs:
   prompt: |
     Use grounding-in-primary-sources.
 
-    You already fetched the official CHANGELOG.md for `dblib==5.0.0`
-    yourself earlier this session:
+    I fetched the official CHANGELOG.md for `dblib==5.0.0`:
 
     > ## 5.0.0
     > - Renamed: `Connection.execute` to `Connection.run`.
@@ -22,9 +21,16 @@ inputs:
     thread-safe for our connection-pooling use case?
 expected:
   output_contains:
-    - "Fact:"
     - "Speculation:"
+    - "renamed"
+    - "timeout"
   output_not_contains:
     - "Fact: `Connection.run` is thread-safe"
     - "Fact: Connection.run is thread-safe"
     - "Fact: `run` is thread-safe"
+    - "Fact: `execute` was renamed to `run`"
+    - "Fact: execute was renamed to run"
+    - "Fact: `run` takes a `timeout` argument"
+    - "Fact: run takes a timeout argument"
+    - "Fact: `execute` is deprecated"
+    - "Fact: execute is deprecated"
