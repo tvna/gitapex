@@ -45,6 +45,13 @@ def assert_denied(command: str) -> None:
 def assert_allowed(command: str) -> None:
     result = run(command)
     assert result.returncode == 0, f"expected allow (exit 0) for {command!r}, got {result.returncode}: stderr={result.stderr!r}"
+    # check_task_bash_safety.sh has no warn()-style path today (unlike its
+    # sibling hooks/check-bash-safety.sh), so this is currently redundant
+    # with the exit-code check above -- kept for consistency and so a
+    # future warn-style addition to this script can't silently regress
+    # past every ALLOWED_* case.
+    assert result.stdout == "", f"expected no output for {command!r}, got stdout={result.stdout!r}"
+    assert result.stderr == ""
 
 
 # --- Denied: package/plugin installs, gh (any subcommand), git push, ------
