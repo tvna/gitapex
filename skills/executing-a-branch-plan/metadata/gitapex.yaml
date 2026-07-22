@@ -1,0 +1,17 @@
+apiVersion: gitapex.io/v1alpha1
+kind: SkillMetadata
+metadata:
+  name: executing-a-branch-plan
+spec:
+  portability: Mixed
+  capabilityAssumption: Frontier
+  skillDependencies:
+    requires:
+      - issue-to-branch
+    relatedTo:
+      - issue-to-branch
+      - issue-to-fix
+      - driving-pr-to-merge
+      - stop-and-replan
+      - untrusted-input-triage
+      - screening-a-low-trust-contribution

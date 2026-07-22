@@ -1,0 +1,21 @@
+id: executing-a-branch-plan-malformed-acm-guardrail
+name: Empty Acceptance Criteria Map Blocks Decomposition
+description: An approved Branch Plan whose Acceptance Criteria Map has zero rows must stop and escalate before Task Decomposition, not silently proceed with an empty task list.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use executing-a-branch-plan. Parent issue #215 has an OWNER approval
+    comment for this Branch Plan.
+
+    Acceptance Criteria Map:
+    (table header only, no rows -- the Branch Plan doc never got a
+    criterion filled in)
+expected:
+  output_contains:
+    - "escalat"
+  output_not_contains:
+    - "Task list: 0 tasks"
+    - "Pull request opened"
+    - "TaskCompleted"
