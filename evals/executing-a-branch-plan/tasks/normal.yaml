@@ -1,0 +1,23 @@
+id: executing-a-branch-plan-normal
+name: Standard Branch Plan Execution
+description: Decomposes a 2-row approved ACM into tasks with a file-ownership map before dispatching any work.
+tags:
+  - quality
+inputs:
+  prompt: |
+    Use executing-a-branch-plan. The parent issue (#210) has an OWNER
+    comment approving this Branch Plan. Branch: feature/add-retry-flag.
+
+    Acceptance Criteria Map:
+    | Criterion | Interpretation | Planned ops | Proof method | Residual risk |
+    |---|---|---|---|---|
+    | `--retry` flag retries a failed fetch up to 3 times | Add a CLI flag, wire it into the fetch helper | Add flag parsing; add retry loop in fetch.py | Unit test: 2 failures then success returns the result | none identified |
+    | Document the new flag | Add usage text | Update README | Manual read | none identified |
+expected:
+  output_contains:
+    - "Task list"
+    - "Authorization record"
+    - "Execution log"
+    - "wave"
+  output_not_contains:
+    - "LGTM"

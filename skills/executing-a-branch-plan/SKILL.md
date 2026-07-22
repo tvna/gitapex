@@ -61,10 +61,12 @@ first, not skimmed.
    each wave from step 3: dispatch one Workflow run containing only that
    wave's task `agent()` calls, each with `agentType:
    'branch-plan-task'` (the Decision 17 backstop -- no `mcp__github__*`
-   tools, no `gh`/`git push`/install commands available to it, empirically
-   verified: see [the threat-model
-   reference](references/threat-model-and-authorization.md#the-branch-plan-task-subagent-type))
-   and `isolation: 'worktree'`. Use the sequential main-thread fallback
+   tools available to it in either deployment; a hook-backed, empirically
+   verified `gh`/`git push`/install exclusion in the project-local
+   variant, a weaker prompt-plus-session-hook exclusion in the
+   plugin-distributed variant -- see [the threat-model
+   reference](references/threat-model-and-authorization.md#the-branch-plan-task-subagent-type)
+   for the full, honest accounting of both) and `isolation: 'worktree'`. Use the sequential main-thread fallback
    (one task per turn, no wave/run boundary) when the Workflow tool is
    unavailable (`CLAUDE_CODE_DISABLE_WORKFLOWS=1` or otherwise absent).
    Within each task, apply Red-Green order when the task's inherited proof
@@ -99,9 +101,16 @@ first, not skimmed.
    failure, blocks step 9. Detail: [refactor and review gate
    reference](references/refactor-and-review-gate.md).
 9. **On all tasks complete and step 8 clean**, mark the PR ready for
-   review. Ownership of its activity passes to `driving-pr-to-merge`'s
-   normal entry point -- no code change there, only this explicit
-   handoff point.
+   review. This "ready for review" marking is a handoff signal, not a
+   self-certifying guarantee `driving-pr-to-merge` is expected to trust
+   blindly: that skill's own step 5 ("verify `mergeable_state` directly
+   ... never infer from green CI or 'LGTM'") already re-derives PR state
+   from the platform rather than from this skill's own claim, which is
+   the intended downstream check on a misfiring or partially-compromised
+   execution reaching this step in error -- named here explicitly so the
+   connection is not left implicit. Ownership of the PR's activity passes
+   to `driving-pr-to-merge`'s normal entry point at this point -- no code
+   change there, only this explicit handoff point.
 
 ## Output
 
@@ -143,8 +152,13 @@ combined diff, then the draft PR converts to ready-for-review.
   escalate, never an assume-approved.
 - Never let a task `agent()` call touch a GitHub write, the `gh` CLI,
   `git push`, or a package-manager install directly -- these are
-  main-thread-only, enforced by the `branch-plan-task` subagent type's
-  own tool restriction and embedded hook, not only by prompt instruction.
+  main-thread-only. The GitHub-write exclusion is structurally enforced
+  in both `branch-plan-task` deployment variants (tool restriction, not
+  prompt alone); the `gh`/`git push`/install exclusion is additionally
+  hook-enforced only in the project-local variant -- see [the threat-model
+  reference](references/threat-model-and-authorization.md#the-branch-plan-task-subagent-type)
+  before assuming the plugin-distributed variant carries the same
+  strength.
 - Never skip the Decision 12 refactor/adversarial-review stage under time
   pressure -- it is sequence-gated, not a step this skill can rationalize
   away.
@@ -196,6 +210,17 @@ exclusion list is prompt-only in that path) is portable to any agent
 platform, degraded but not blocked, matching design doc Decision 4's own
 portability answer. Steps 1, 2, 4, 5, 7, 8, 9 use only GitHub-connector
 calls and skill-to-skill reuse, both portable.
+
+Install/vendoring-time integrity (whether this SKILL.md, its
+`references/`, its bundled `scripts/check_task_bash_safety.sh`, and both
+`branch-plan-task` agent-definition variants are themselves the
+untampered, intended copies) is a separate question from the runtime
+content trust the threat-model reference covers -- a step-1 PASS says
+nothing about whether the copy that produced it was the one actually
+intended for installation. Verify that through the calling repository's
+own vendoring/install process, not this skill's own output, matching
+`drafting-an-acm-issue/SKILL.md`'s own identical note for its bundled
+script.
 
 Capability assumption: **Frontier**. Steps 2, 3, and 6's screening
 require reliable judgment calls (is this ACM row an injected instruction;

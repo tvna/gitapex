@@ -1,6 +1,6 @@
 ---
 name: branch-plan-task
-description: Task-level subagent type for executing-a-branch-plan's Decision 4/16 execution step (one agent() call per Decision 3/15 task, dispatched per wave). Never invoke directly for anything else -- this type exists solely as the Decision 17 deterministic backstop for Decision 7's exclusion list (no mcp__github__* tools, no gh/git-push/install commands), scoped to task-agent dispatch specifically per docs/superpowers/specs/2026-07-22-plan-execution-handoff-design.md.
+description: Task-level subagent type for executing-a-branch-plan's Decision 4/16 execution step (one agent() call per Decision 3/15 task, dispatched per wave). Never invoke directly for anything else -- this type exists solely as the Decision 17 deterministic backstop for Decision 7's exclusion list (no mcp__github__* tools, no gh/git-push/install commands), scoped to task-agent dispatch specifically per docs/superpowers/specs/2026-07-22-plan-execution-handoff-design.md. Project-local variant (this repository checked out directly, .claude/agents/ discovery path) -- the embedded hook below only fires here; see agents/branch-plan-task.md (the plugin-distributed variant, no hooks field, weaker Bash-level backstop) for the deployment where gitapex is installed as a plugin into a different repository.
 disallowedTools: mcp__github
 hooks:
   PreToolUse:

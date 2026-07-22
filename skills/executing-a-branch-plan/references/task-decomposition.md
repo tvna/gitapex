@@ -2,6 +2,47 @@
 
 Step 3's own detail. Source: design doc Decisions 3, 15, 19.
 
+## Contents
+
+- [Malformed or empty ACM](#malformed-or-empty-acm-precondition-checked-before-any-of-the-below)
+- [Fan-out bound](#fan-out-bound-blast-radius-control-checked-once-the-task-list-exists)
+- [Row-to-task mapping](#row-to-task-mapping-many-to-many-not-one-to-one)
+- [Two dependency-edge types](#two-dependency-edge-types-both-computed-before-wave-assignment)
+- [Irreversibility classification](#irreversibility-classification)
+- [Per-task diff BASE](#per-task-diff-base-screening-precondition-used-at-step-6)
+- [Worked example](#worked-example)
+
+## Malformed or empty ACM (precondition, checked before any of the below)
+
+Before building the row-to-task mapping, verify the ACM itself is
+well-formed: at least one row, and every row carries a non-empty
+Criterion, Interpretation, and Planned ops column (a Proof method or
+Residual risk column reading "unknown, pending X" is fine -- an
+`issue-to-branch`/`drafting-an-acm-issue` convention, not malformed; a
+genuinely empty or missing column is). An ACM with zero rows, or any row
+missing a required column, is not decomposed -- stop and escalate the
+same way an absent step-1 authorization signal does (fail closed, not an
+assumed-empty task list or a silently-skipped row).
+
+## Fan-out bound (blast-radius control, checked once the task list exists)
+
+A single ACM -- ultimately sourced from issue-body text this skill
+already treats as untrusted -- should not be able to drive unbounded
+autonomous dispatch. Two concrete caps:
+
+- **Task/wave count.** If decomposition would produce more tasks than
+  the Workflow tool's own documented "Large workflow" informational
+  threshold (25+ agents, per design doc Decision 9), treat that as a
+  signal requiring the same authorization-gate confirmation an
+  irreversible task requires below -- not a hard block, since a
+  genuinely large Branch Plan is a real, legitimate case, but not a
+  silent auto-proceed either.
+- **Re-plan recurrence.** `stop-and-replan` firing more than once for
+  the same parent issue/Branch Plan (design doc Decision 8's failure
+  dispatch) escalates instead of re-planning a third time -- a Branch
+  Plan that fails to converge after one correction is a signal for human
+  judgment, not another autonomous attempt.
+
 ## Row-to-task mapping (many-to-many, not one-to-one)
 
 - One ACM row decomposes into more than one task when its Planned ops
