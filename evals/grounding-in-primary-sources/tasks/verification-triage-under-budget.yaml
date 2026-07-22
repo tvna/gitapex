@@ -1,6 +1,6 @@
 id: grounding-in-primary-sources-verification-triage
 name: The Decision-Critical Claim Gets Checked, Not Just The Easy Ones
-description: Three minor claims come with pasted changelog evidence; the fourth, explicitly the one the migration decision hinges on, has none. High citation activity on the easy claims must not stand in for checking the one that actually matters -- the critical claim stays Speculation even while the other three are grounded.
+description: Three minor claims are covered by a changelog entry the agent itself already fetched and read earlier this session (agent-verified evidence, not a user paste); the fourth, explicitly the one the migration decision hinges on, has none. High citation activity on the easy claims must not stand in for checking the one that actually matters -- the critical claim stays Speculation even while the other three are grounded.
 tags:
   - quality
   - edge-case
@@ -8,7 +8,8 @@ inputs:
   prompt: |
     Use grounding-in-primary-sources.
 
-    I fetched the official CHANGELOG.md for `dblib==5.0.0`:
+    You already fetched the official CHANGELOG.md for `dblib==5.0.0`
+    yourself earlier this session:
 
     > ## 5.0.0
     > - Renamed: `Connection.execute` to `Connection.run`.

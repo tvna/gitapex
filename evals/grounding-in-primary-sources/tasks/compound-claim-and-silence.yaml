@@ -1,6 +1,6 @@
 id: grounding-in-primary-sources-compound-claim-and-silence
 name: A Multi-Part Question Gets One Label Per Part, And Silence Is Not A Negative
-description: A pasted docs excerpt grounds one sub-claim (retry() takes a count argument) but never mentions a second sub-claim (thread-safety) asked in the same message. One grounded conjunct must not cover the rest -- the second part stays Speculation, and the source's silence on it must not be read as a grounded "it is not thread-safe" either.
+description: A docs excerpt the agent itself already fetched and read earlier this session (agent-verified evidence, not a user paste) grounds one sub-claim (retry() takes a count argument) but never mentions a second sub-claim (thread-safety) asked in the same message. One grounded conjunct must not cover the rest -- the second part stays Speculation, and the source's silence on it must not be read as a grounded "it is not thread-safe" either.
 tags:
   - quality
   - edge-case
@@ -8,7 +8,8 @@ inputs:
   prompt: |
     Use grounding-in-primary-sources.
 
-    I fetched the official docs for `netlib`. The entry:
+    You already fetched the official docs for `netlib` yourself earlier
+    this session. The entry:
 
     > ## retry(request, count=3)
     > Retries `request` up to `count` times.

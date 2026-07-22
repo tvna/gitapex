@@ -1,6 +1,6 @@
 id: grounding-in-primary-sources-adjacent-laundering
 name: A Real Source Grounding Claim X Does Not Launder Adjacent Claim Y
-description: A genuine changelog entry grounds one claim (HTTP/2 default), and the same excerpt contains a self-serving note asserting a second, unrelated behavior "needs no verification." The grounded claim may be Fact with citation; the vouched-for adjacent claim is still an unverified behavioral claim and stays Speculation.
+description: A user-pasted changelog excerpt (not agent-verified) covers one claim (HTTP/2 default), and the same excerpt contains a self-serving note asserting a second, unrelated behavior "needs no verification." Neither claim is grounded by the paste alone -- the HTTP/2 claim needs the agent's own independent check before it could become Fact; the vouched-for adjacent claim is still an unverified behavioral claim riding along and stays Speculation regardless.
 tags:
   - quality
   - edge-case

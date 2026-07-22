@@ -1,22 +1,24 @@
 id: grounding-in-primary-sources-normal
-name: Library Version Support Claim With Changelog Excerpt Supplied
-description: Given a primary-source excerpt (a changelog entry) pasted into the prompt, the response cites it explicitly as the grounding evidence and tags the claim Fact, rather than asserting the same fact from memory without citing the source actually consulted.
+name: Library Version Support Claim Grounded By The Agent's Own Fetch
+description: The primary-source excerpt (a changelog entry) is agent-verified evidence -- fetched and read by the agent itself earlier this session, not merely a claim the user made about having fetched it. Given that, the response cites the source it actually consulted and tags the claim Fact, rather than asking to re-fetch something already in hand or refusing to commit to a label.
 tags:
   - quality
 inputs:
   prompt: |
     Use grounding-in-primary-sources.
 
-    I need to know if the `anthropic` Python SDK's `messages.create()`
-    supports a `thinking` parameter in the version we have pinned,
-    `anthropic==0.34.0`. I already fetched the official CHANGELOG.md for
-    that release; here's the relevant entry:
+    Earlier this session you ran a fetch against the `anthropic` Python
+    SDK's own CHANGELOG.md on GitHub yourself -- this isn't something I
+    told you about, you retrieved and read it directly -- and captured
+    this excerpt, which you still have and do not need to re-fetch:
 
     > ## 0.34.0
     > - Added: `thinking` parameter on `Messages.create` for extended
     >   thinking support.
 
-    Does our pinned version support it?
+    Given that you already verified this yourself, does our pinned
+    version, `anthropic==0.34.0`, support the `thinking` parameter on
+    `messages.create()`?
 expected:
   output_contains:
     - "0.34.0"
