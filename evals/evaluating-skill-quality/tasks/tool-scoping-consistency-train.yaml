@@ -1,0 +1,41 @@
+id: evaluating-skill-quality-tool-scoping-consistency-train
+name: A Whole-Turn Write Restriction Conflicts With The Skill's Own Documented Code-Writing Branch
+description: Mirrors a real incident -- a claim-verification skill declares disallowed-tools Write and Edit in its frontmatter, but its own "When to use" section and Procedure explicitly cover surfacing a hedged claim inside written code, which requires Write. disallowed-tools has no step-level scoping (whole-turn only, per Claude Code's own frontmatter reference), so the restriction is wrong for the entire skill, not just its fetch-and-verify branch. The review must flag this as a Tool-scoping consistency finding rather than approving the restriction as hardening.
+tags:
+  - quality
+  - mechanism-fit
+  - tool-scoping-consistency
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "fact-check-before-commit". Is this a good skill?
+
+    ---
+    name: fact-check-before-commit
+    description: Verify an external API's documented behavior before asserting it as fact, including when the assertion is encoded as a hardcoded constant in code you are about to write. Use before asserting a library or API's default value or behavior.
+    disallowed-tools: Write Edit
+    ---
+
+    # Fact Check Before Commit
+
+    ## When to use
+
+    - About to state a fact about an external library or API's behavior.
+    - About to encode such a fact in code -- a hardcoded timeout, retry
+      count, or default value assumes specific external behavior; surface
+      the assumption in a code comment next to the constant rather than
+      silently baking it in.
+
+    ## Procedure
+
+    1. Identify the claim.
+    2. Fetch or cite a primary source.
+    3. Write the code (or comment) that encodes or states the claim,
+       citing the source inline.
+expected:
+  output_contains:
+    - "Tool-scoping consistency"
+    - "code comment"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"

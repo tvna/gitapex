@@ -1,0 +1,37 @@
+id: evaluating-skill-quality-tool-scoping-consistency-justified
+name: A Tool Restriction With No Conflicting Use Case Or Subsuming Alternative Is Not Flagged
+description: The skill disallows AskUserQuestion for an explicitly autonomous, scheduled background-loop use case -- the canonical legitimate use of disallowed-tools per Claude Code's own frontmatter reference. No Procedure branch needs it, and no other available tool substitutes for interactive user input. The Tool-scoping consistency check must recognize this as justified and say so explicitly rather than flagging a restriction that already meets the criteria or silently skipping the question.
+tags:
+  - quality
+  - mechanism-fit
+  - tool-scoping-consistency
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "nightly-queue-drain". Is this a good skill?
+
+    ---
+    name: nightly-queue-drain
+    description: Autonomously drain the overnight retry queue on a scheduled trigger with no human present to answer questions. Use only as a scheduled background task, never interactively.
+    disallowed-tools: AskUserQuestion
+    ---
+
+    # Nightly Queue Drain
+
+    ## When to use
+
+    - Only as a scheduled, unattended background trigger. Never invoke
+      this interactively.
+
+    ## Procedure
+
+    1. Read the retry queue.
+    2. Retry each item per its own documented backoff policy.
+    3. Log failures; never pause to ask a question, since no human is
+       present to answer one.
+expected:
+  output_contains:
+    - "justified"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"
