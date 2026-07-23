@@ -438,7 +438,7 @@ not by itself block a *mature* verdict.
 
 ### Tool-scoping consistency
 
-A fourth Mechanism-fit check, distinct from the three above: not whether
+A seventh Mechanism-fit check, distinct from the six above: not whether
 the target chose the right artifact, the right model/effort tier, or made
 a verified tool-capability claim, but whether an `allowed-tools`/
 `disallowed-tools` frontmatter declaration the target's own content
@@ -446,11 +446,11 @@ makes, if any, is consistent with what that same content documents
 elsewhere as necessary, and honest about what it actually contains.
 Labelled here as this repository's own reasoned extension rather than an
 Anthropic-sourced claim, grounded directly against Claude Code's own
-frontmatter reference ([cc]): `disallowed-tools` "removes tools from
-Claude's available pool while this skill is active," for "the turn that
-invokes this skill," clearing "when you send your next message" -- a
-whole-turn restriction with no step-level scope, not something a skill's
-own procedure can partially opt out of for one branch.
+frontmatter reference ([cc]), quoted verbatim from its `disallowed-tools`
+row: "Tools removed from Claude's available pool while this skill is
+active... The restriction clears when you send your next message." --
+a whole-turn restriction with no step-level scope, not something a
+skill's own procedure can partially opt out of for one branch.
 
 **Applicability.** Fires only when the target's frontmatter declares
 `allowed-tools` or `disallowed-tools`. Most skills correctly declare
