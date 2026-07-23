@@ -460,64 +460,90 @@ equivalent) pip dependency. Checked, not assumed:
   **0.971154** (the #200 entry's after-score above). That part of #319's
   own premise is real and unchanged.
 - The literal ask -- installing and running the *automated* SkillOpt
-  optimizer package itself -- is a different thing, and its own
-  precondition does not hold today, for three independent reasons:
-  1. **Unverified provenance.** A package literally named `skillopt`
-     exists on PyPI (v0.2.0, uploaded 2026-07-02, author "SkillOpt Team",
-     claiming `Homepage`/`Repository`: `github.com/microsoft/SkillOpt`,
-     confirmed live via `https://pypi.org/pypi/skillopt/json`), but no
-     primary source reachable from this session corroborates that this
-     specific release is an authentic Microsoft-published artifact
-     rather than a name-matched package from an unrelated party --
-     exactly the risk CLAUDE.md section 3's supply-chain discipline and
-     this issue's own third acceptance criterion (checksum pin plus a
-     documented issuance/provenance note) exist to gate on. Installing
-     and executing unverified third-party optimizer code against this
+  optimizer package itself -- is a different thing. The first pass at
+  this analysis gave three reasons its precondition does not hold; on
+  review against the actual cited evidence, only the first survives as
+  an independent blocker, and the other two are corrected below rather
+  than carried forward unchanged:
+  1. **Unverified provenance (holds).** A package literally named
+     `skillopt` exists on PyPI (v0.2.0, uploaded 2026-07-02, author
+     "SkillOpt Team", claiming `Homepage`/`Repository`:
+     `github.com/microsoft/SkillOpt`, confirmed live via
+     `https://pypi.org/pypi/skillopt/json`), but no primary source
+     reachable from this session corroborates that this specific
+     release is an authentic Microsoft-published artifact rather than a
+     name-matched package from an unrelated party -- exactly the risk
+     CLAUDE.md section 3's supply-chain discipline and this issue's own
+     third acceptance criterion (checksum pin plus a documented
+     issuance/provenance note) exist to gate on. Installing and
+     executing unverified third-party optimizer code against this
      repository's skills is an irreversible action outside what a
-     provenance check has cleared, so no dependency was added.
-  2. **Scale precondition, as the issue's own tracking-doc correction
-     required measuring before proceeding.** SkillOpt's default regime
-     assumes tens-to-hundreds of tasks x 4 rollout epochs, costing
-     0.6M-46.4M tokens per accepted improvement (paper Table 6).
-     Measured against this repository's own record: 37 fixtures total
-     (13 selection) is one to two orders of magnitude below that, and
-     the six hand-applied iterations already logged above each needed
-     roughly 10-20 live dispatches for one non-automated edit round --
-     a real 4-epoch automated rollout loop would be grossly
-     disproportionate to a 13-fixture selection split at this corpus
-     size. This is the AC2 measurement #319 asked for; the finding is
-     negative at current scale.
-  3. **Standing design decision.** `skills/scorer-gated-skill-edits/
-     references/skillopt-mapping.md`'s own "Not adapted" section states
-     plainly that gitapex applies SkillOpt's discipline by hand and
-     deliberately does not build the paper's rollout/optimizer machinery
-     ("this skill is the manual procedure, not a runner"). Building or
-     invoking an automated SkillOpt runner would reverse that
-     already-made decision, not extend it.
-- A fourth, session-level constraint (distinct from the three above):
-  this session had no isolated fresh-subagent-dispatch capability
-  available (no registered `Skill` invocation for `evaluating-skill-
-  quality`, no generic task-dispatch tool), so re-running the existing
-  hand-applied gate with a genuinely neutral before/after score was not
-  achievable with integrity here either -- the reviewing context had
-  already read the full rubric and its iteration history. Rather than
-  fabricate a contaminated gate result, **no new `references/rubric.md`
-  edit is proposed by this pass.**
+     provenance check has cleared, so no dependency was added. This
+     reason alone is sufficient to keep the automated run from
+     proceeding.
+  2. **Scale precondition -- corrected, does not hold.** The first pass
+     compared gitapex's corpus to SkillOpt's default regime (paper
+     Table 6: tens-to-hundreds of tasks x 4 rollout epochs, 0.6M-46.4M
+     tokens per accepted improvement) and concluded 37 fixtures (13
+     selection) were "one to two orders of magnitude below" that
+     regime. Recomputed: 37 is itself a "tens" quantity, so it sits
+     within the low end of the paper's own stated tens-to-hundreds
+     range, not below it -- the arithmetic in the first pass was wrong,
+     not just imprecise. The first pass also claimed the six
+     hand-applied iterations "each needed roughly 10-20 live dispatches
+     per iteration"; checked against the committed record for the most
+     recently detailed iteration
+     (`evals/evaluating-skill-quality/split.md:808-843,890-901`, issue
+     #185), that round used 4 fresh before/after dispatches plus 1
+     restraint-check dispatch (5 total), reusing 8 prior scores
+     unchanged -- well under the claimed 10-20, and other iterations in
+     the same file range up toward ~20 depending on how many selection
+     fixtures needed a genuine fresh pair, so "roughly 10-20" does not
+     hold as a uniform per-iteration figure either. With both inputs to
+     the comparison wrong, corpus scale is not, on the actual numbers,
+     an independent reason the automated pilot's precondition fails.
+     The paper's own per-improvement token-cost figures remain real and
+     worth owner budget awareness before running a genuine 4-epoch
+     rollout, but that is a cost question to weigh once provenance is
+     cleared, not a scale-precondition failure.
+  3. **Standing design decision -- corrected, does not hold.**
+     `skills/scorer-gated-skill-edits/references/skillopt-mapping.md:
+     126-131`'s "Not adapted" section states that `scorer-gated-skill-
+     edits` itself applies SkillOpt's discipline by hand and does not
+     build the paper's rollout/optimizer machinery ("this skill is the
+     manual procedure, not a runner"). That is a scope boundary for
+     that one skill, not a prohibition on a separate, explicitly
+     requested one-off pilot -- #319 asks for a pilot experiment, not a
+     change to `scorer-gated-skill-edits` itself, so this section does
+     not block it. Treating the two as the same thing in the first pass
+     was a conflation, not a valid independent reason.
+- A separate, disclosed evidence limitation, distinct from the
+  precondition-gate reasons above: a genuinely neutral before/after
+  score for re-running the existing hand-applied gate was not
+  obtainable in this pass, because the reviewing context had already
+  read the full rubric and its iteration history before reaching this
+  step. Reusing that same contaminated context would not meet the
+  isolation bar `evaluating-skill-quality`'s own Subagent-dispatch
+  section sets for ordinary reviews. Rather than fabricate a
+  contaminated gate result, **no new `references/rubric.md` edit is
+  proposed by this pass.**
 
 No pip dependency was added (trivially satisfies AC3: nothing was
-installed without a pin, because nothing was installed). Unblocking a
-real automated pilot needs, at minimum, an owner-reviewed and
-provenance-verified `skillopt` (or equivalent) release pinned
-declaratively in `pyproject.toml`'s `dependencies` (`uv`-managed,
-hash-locked via `uv.lock`, per CLAUDE.md section 3) plus either a
-fixture corpus one to two orders of magnitude larger or an explicit
-owner sign-off accepting the paper's disproportionate token cost at
-gitapex's current scale. Until one of those holds, the existing
-hand-applied `scorer-gated-skill-edits` procedure -- already run to
-completion six times against this exact rubric -- remains the correct,
-already-adopted mechanism for the same underlying discipline (real
-scorer, real held-out split, strict improve-or-reject) without either
-risk. Refs #319, #310.
+installed without a pin, because nothing was installed). On the
+corrected analysis, unblocking a real automated pilot needs, at
+minimum, an owner-reviewed and provenance-verified `skillopt` (or
+equivalent) release pinned declaratively in `pyproject.toml`'s
+`dependencies` (`uv`-managed, hash-locked via `uv.lock`, per CLAUDE.md
+section 3). Corpus scale is not itself a precondition to satisfy first
+-- 37 fixtures already sit within SkillOpt's own stated regime -- so
+growing the fixture corpus is not a prerequisite for a future pilot;
+the paper's per-improvement token cost is a separate, real budget
+question for the owner to weigh once provenance is cleared. Until
+provenance is verified, the existing hand-applied `scorer-gated-skill-
+edits` procedure -- already run to completion six times against this
+exact rubric -- remains the correct, already-adopted mechanism for the
+same underlying discipline (real scorer, real held-out split, strict
+improve-or-reject) without the unverified-code risk. Refs #319, #310.
 
 ## explaining-the-work
 
