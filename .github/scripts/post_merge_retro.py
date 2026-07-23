@@ -5,11 +5,13 @@ Issue #314 (sub-issue of #140): the minimal, GITHUB_TOKEN-only slice of
 #140's post-merge-auto-retro gate cluster. On a PR closing with
 ``merged == true``, this script:
 
-1. Searches for an existing retrospective issue for that PR, using the
-   exact query shape #140 documents (imported, never re-derived):
-   ``repo:{owner}/{repo} type:issue in:title "PR #{n}" "retro"``,
-   unfiltered by state (open+closed) -- an interactive agent session may
-   already have filed one via skills/merge-retrospective/SKILL.md.
+1. Searches for an existing retrospective issue for that PR, matching the
+   same title/label identity predicate used at creation time (this
+   module's own ``open_retro_issue``, and skills/merge-retrospective's
+   own convention): exact-phrase title ``Merge retrospective: PR #{n}``
+   plus the ``retrospective`` label -- unfiltered by state (open+closed)
+   -- an interactive agent session may already have filed one via
+   skills/merge-retrospective/SKILL.md.
 2. If none is found, opens one titled ``Merge retrospective: PR #{n}``
    labeled ``retrospective`` -- reusing merge-retrospective's own
    title/label identity convention exactly (#140 calls this predicate
@@ -32,8 +34,12 @@ Untrusted input note: ``--pr-title`` carries attacker-influenced text (a
 PR title, from a possibly-untrusted fork). It never touches a shell
 command in this script or its caller workflow -- the workflow passes it
 through an intermediate ``env:`` var (never spliced into a ``run:``
-string), and this script only ever places it inside a JSON request body,
-never a shell invocation -- so no command-injection surface exists.
+string) -- so no command-injection surface exists. It is also never
+placed in the opened issue's body: republishing a fork-controlled title
+verbatim into a bot-authored issue would let an ``@user``/``@org``
+mention or Markdown in the title inject formatting or trigger unwanted
+notifications, so ``open_retro_issue`` accepts and discards it rather
+than embedding it.
 
 Usage::
 
@@ -94,14 +100,21 @@ def _call(
     opener: Callable[[urllib.request.Request], Any],
     sleeper: Callable[[float], None],
     body: dict[str, Any] | None = None,
+    max_attempts: int = 3,
 ) -> dict[str, Any]:
     """Call the GitHub API, retrying transient (network / 5xx) failures up
-    to three attempts -- mirrors scan_retrospective_gate_drift.py's own
-    `_fetch_issues_page` retry shape."""
+    to `max_attempts` attempts -- mirrors scan_retrospective_gate_drift.py's
+    own `_fetch_issues_page` retry shape.
+
+    `max_attempts` defaults to 3 for idempotent (GET/search) calls. The
+    issue-creation POST is not idempotent -- a lost or truncated response
+    after GitHub has already created the issue would otherwise retry into
+    a duplicate -- so its caller passes `max_attempts=1` to disable retry
+    for that specific call (RFC 9110 SS9.2.2)."""
     data = json.dumps(body).encode("utf-8") if body is not None else None
     last_code = 0
     last_body = ""
-    for attempt in range(1, 4):
+    for attempt in range(1, max_attempts + 1):
         request = urllib.request.Request(url, data=data, method=method)  # noqa: S310 -- fixed https://api.github.com URL
         request.add_header("Authorization", f"Bearer {token}")
         request.add_header("Accept", "application/vnd.github+json")
@@ -128,16 +141,22 @@ def _call(
         print(f"Attempt {attempt}: HTTP {_format_code(last_code)} for {method} {url}", file=sys.stderr)
         if last_code != 0 and last_code < 500:
             break
-        if attempt < 3:
+        if attempt < max_attempts:
             sleeper(attempt * 5)
 
     raise GitHubApiError(f"{method} {url} failed: HTTP {_format_code(last_code)}: {last_body}")
 
 
 def dedup_query(owner: str, repo: str, pr_number: int) -> str:
-    """The exact search-query shape #140 documents (imported, not
-    re-derived): ``repo:{repo} type:issue in:title "PR #{n}" "retro"``."""
-    return f'repo:{owner}/{repo} type:issue in:title "PR #{pr_number}" "retro"'
+    """Match the same title/label identity predicate used at creation
+    time (this module's own `open_retro_issue`, and
+    skills/merge-retrospective's own convention): the standalone token
+    "retro" does not prefix-match "retrospective" under GitHub's
+    exact-match query syntax, so search the real title phrase --
+    ``in:title "Merge retrospective: PR #{n}"`` -- combined with
+    ``label:retrospective``."""
+    title = f"Merge retrospective: PR #{pr_number}"
+    return f'repo:{owner}/{repo} type:issue in:title "{title}" label:{_RETRO_LABEL}'
 
 
 def find_existing_retro_issue(
@@ -173,11 +192,20 @@ def open_retro_issue(
     merge-retrospective's own identity convention (imported verbatim, never
     re-derived): title ``Merge retrospective: PR #N``, label
     ``retrospective``. The body is an unfilled stub -- enumerating repairs
-    is explicitly out of scope for this slice (see #314's own deferrals)."""
+    is explicitly out of scope for this slice (see #314's own deferrals).
+
+    `pr_title` is accepted (kept in the CLI/API surface for callers that
+    already pass it) but deliberately never placed in the issue body: it
+    is untrusted, fork-controlled text, and republishing it verbatim would
+    let an `@user`/`@org` mention or Markdown in a PR title inject
+    formatting or trigger unwanted notifications in this bot-authored
+    issue. `pr_url` is safe to include as-is -- a GitHub PR URL is not
+    free text."""
+    del pr_title  # untrusted; deliberately not embedded in the issue body
     sleeper = sleeper if sleeper is not None else time.sleep
     title = f"Merge retrospective: PR #{pr_number}"
     body = (
-        f'Retrospective for PR #{pr_number} ("{pr_title}").\n\n'
+        f"Retrospective for PR #{pr_number}.\n\n"
         f"Refs #{pr_number}\n"
         f"PR: {pr_url}\n\n"
         "Automated stub opened by the post-merge-auto-retro gate "
@@ -188,7 +216,10 @@ def open_retro_issue(
     )
     url = f"{_API_ROOT}/repos/{owner}/{repo}/issues"
     payload = {"title": title, "body": body, "labels": [_RETRO_LABEL]}
-    result = _call("POST", url, token, opener, sleeper, body=payload)
+    # max_attempts=1: issue creation is not idempotent -- see _call's
+    # docstring -- so a lost/truncated response is never retried into a
+    # duplicate issue.
+    result = _call("POST", url, token, opener, sleeper, body=payload, max_attempts=1)
     return int(result["number"])
 
 

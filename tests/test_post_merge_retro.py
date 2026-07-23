@@ -47,9 +47,12 @@ def http_error(code: int, body: str = "") -> urllib.error.HTTPError:
 # ---------------------------------------------------------------------------
 
 
-def test_dedup_query_matches_documented_shape():
+def test_dedup_query_matches_creation_identity_predicate():
     query = pmr.dedup_query("tvna", "gitapex", 314)
-    assert query == 'repo:tvna/gitapex type:issue in:title "PR #314" "retro"'
+    assert query == (
+        'repo:tvna/gitapex type:issue in:title "Merge retrospective: PR #314" '
+        "label:retrospective"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -156,7 +159,28 @@ def test_open_retro_issue_posts_expected_title_and_label():
     assert captured["payload"]["title"] == "Merge retrospective: PR #314"
     assert captured["payload"]["labels"] == ["retrospective"]
     assert "#314" in captured["payload"]["body"]
-    assert "feat: thing" in captured["payload"]["body"]
+
+
+def test_open_retro_issue_never_republishes_the_untrusted_pr_title():
+    """A fork-controlled PR title (with an @mention / Markdown) must never
+    reach the issue body -- see the mention/markdown-injection finding."""
+    captured: dict = {}
+
+    def opener(request: urllib.request.Request) -> Response:
+        captured["payload"] = json.loads(request.data.decode())
+        return Response(201, json.dumps({"number": 99}))
+
+    pmr.open_retro_issue(
+        "tvna",
+        "gitapex",
+        314,
+        "@evil-org/team please **look** at this",
+        "https://github.com/tvna/gitapex/pull/314",
+        "tok",
+        opener=opener,
+    )
+    assert "@evil-org/team" not in captured["payload"]["body"]
+    assert "**look**" not in captured["payload"]["body"]
 
 
 def test_open_retro_issue_raises_on_api_error():
@@ -167,6 +191,24 @@ def test_open_retro_issue_raises_on_api_error():
         pmr.open_retro_issue(
             "tvna", "gitapex", 314, "t", "u", "tok", opener=opener, sleeper=lambda _: None
         )
+
+
+def test_open_retro_issue_does_not_retry_the_non_idempotent_post():
+    """Issue creation must not be blindly retried: a lost/truncated
+    response after GitHub already created the issue would otherwise
+    retry into a duplicate."""
+    calls = 0
+
+    def opener(request: urllib.request.Request) -> Response:
+        nonlocal calls
+        calls += 1
+        raise http_error(503, "server error")
+
+    with pytest.raises(pmr.GitHubApiError):
+        pmr.open_retro_issue(
+            "tvna", "gitapex", 314, "t", "u", "tok", opener=opener, sleeper=lambda _: None
+        )
+    assert calls == 1
 
 
 # ---------------------------------------------------------------------------
