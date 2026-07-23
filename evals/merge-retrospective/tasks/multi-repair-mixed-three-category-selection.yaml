@@ -1,0 +1,48 @@
+id: merge-retrospective-multi-repair-mixed-three-category
+name: Three-Repair Cycle Spanning All Three Taxonomy Categories
+description: A distinct multi-repair scenario from the train-split two-repair fixture -- three repairs in one cycle, one of each taxonomy category, each classified and listed on its own line rather than collapsed into a single summary.
+tags:
+  - quality
+inputs:
+  prompt: |
+    Use merge-retrospective. PR #240 ("feat: add bulk-delete endpoint to
+    the admin API") just merged into main. Here is the full history
+    between open and merge -- three repairs occurred:
+
+    1. CI run #1 failed: `mypy` reported
+       `Argument 1 to "bulk_delete" has incompatible type "list[str]";
+       expected "list[UUID]"` in `admin/handlers.py`. The author pushed a
+       follow-up commit converting the incoming IDs to `UUID` before
+       calling `bulk_delete`, and CI run #2 passed clean.
+    2. A human reviewer commented that the new endpoint's error response
+       used `{"error": "not found"}`, while every other endpoint in the
+       same API returns `{"detail": "not found", "code": "..."}`. The
+       author pushed a follow-up commit matching the existing response
+       shape.
+    3. Partway through review, a third-party rate-limiting library this
+       API depends on (but does not own) released a major version that
+       renamed its `Limiter.check()` method to `Limiter.allow()`; CI run
+       #2 [before repair 2 landed] failed separately on the upgraded
+       transitive dependency. There were two reasonable paths: pin the
+       old major version to avoid the rename, or adopt the new version
+       and update every call site. No repo policy dictated which; the
+       author and reviewer discussed it and chose to adopt the new
+       version, updating the three affected call sites in a follow-up
+       commit. CI run #3 passed clean.
+
+    Run the retrospective now that PR #240 has merged.
+expected:
+  classification:
+    - missing-deterministic-gate
+    - unclear-agent-instruction
+    - external-human-decision
+  repair_count: 3
+  retro_stub_expected: false
+  output_contains:
+    - "missing deterministic gate"
+    - "unclear agent instruction"
+    - "external/human decision"
+    - "Refs #240"
+  output_not_contains:
+    - "Three minor issues were fixed before merge"
+    - "all three fixed by follow-up commits and the PR is clean"

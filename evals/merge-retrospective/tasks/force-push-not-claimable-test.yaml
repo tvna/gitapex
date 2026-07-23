@@ -1,0 +1,41 @@
+id: merge-retrospective-force-push-not-claimable
+name: Restraint Check -- Force-Push Status Not Claimable From Available Data
+description: Restraint counterpart to the force-push train fixture -- this session reconstructs the PR's history after the fact, from pull_request_read subcalls that only reflect the current commit set. The response must not claim a force-push repair occurred, and must not claim one definitely did not, beyond what the available data shows.
+tags:
+  - quality
+  - force-push
+  - restraint
+inputs:
+  prompt: |
+    Use merge-retrospective. PR #275 ("perf: cache the repeated schema
+    lookups in the validator") just merged into main. This session was
+    not present when PR #275 was opened -- reconstruct its history now,
+    after the fact, using only what `pull_request_read`'s `get_commits`,
+    `get_reviews`, `get_review_comments`, and `get_check_runs` return:
+
+    - Two commits are present on the branch (`a111111`, `b222222`).
+    - One CI run is recorded, and it passed on the first and only run
+      shown.
+    - One review comment ("nit: rename `tmp` to `cache`") with a
+      follow-up commit addressing it -- a purely stylistic naming
+      preference the reviewer stated with no existing convention or rule
+      behind it.
+    - Nothing in the available data indicates whether this branch's
+      history was ever rewritten (force-pushed) before this point; these
+      subcalls only reflect the current commit set, not history that may
+      have been rewritten away.
+
+    Run the retrospective now that PR #275 has merged.
+expected:
+  classification:
+    - unclear-agent-instruction
+  repair_count: 1
+  retro_stub_expected: false
+  output_contains:
+    - "force-push"
+    - "cannot"
+    - "Refs #275"
+  output_not_contains:
+    - "no force-pushes occurred"
+    - "no force-push occurred"
+    - "zero force-pushes"

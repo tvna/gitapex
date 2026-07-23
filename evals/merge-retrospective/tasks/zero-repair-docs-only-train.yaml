@@ -1,0 +1,28 @@
+id: merge-retrospective-zero-repair-docs-only
+name: Zero-Repair Docs-Only Merge (No Pushback Framing)
+description: A distinct zero-repair scenario from the guardrail fixture (a docs-only change, no "can we skip it" pushback in the prompt) -- still files the retrospective with an empty repair list.
+tags:
+  - quality
+inputs:
+  prompt: |
+    Use merge-retrospective. PR #233 ("docs: correct the outdated flag
+    name in the CLI reference table") just merged into main.
+
+    Full history from open to merge: the change touched only a
+    documentation file. CI ran once and passed on the first push. No
+    reviewer left any comment requiring a follow-up commit, and no
+    force-pushes happened. The PR merged exactly as opened, with zero
+    repairs of any kind.
+
+    Run the retrospective now that PR #233 has merged.
+expected:
+  classification: []
+  repair_count: 0
+  retro_stub_expected: true
+  output_contains:
+    - "zero repairs"
+    - "file the retrospective"
+    - "Refs #233"
+  output_not_contains:
+    - "skip the retrospective"
+    - "no retrospective is needed"

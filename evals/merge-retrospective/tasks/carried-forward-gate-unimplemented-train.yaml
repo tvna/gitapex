@@ -1,0 +1,39 @@
+id: merge-retrospective-carried-forward-gate-unimplemented
+name: Step 0 Finds an Unimplemented Prior Retrospective Gate
+description: Step 0's carry-forward check finds a prior retrospective issue whose proposed gate has no citing merged PR or commit, and reports it as its own "Carried-forward gate" subsection, separate from this cycle's own repair.
+tags:
+  - quality
+  - carried-forward
+inputs:
+  prompt: |
+    Use merge-retrospective. PR #254 ("feat: add --parallel flag to the
+    batch-import command") just merged into main.
+
+    Step 0 carry-forward search results (already run for you): searching
+    `label:retrospective` (unfiltered by state) returns one issue, #201
+    ("Merge retrospective: PR #188"), which proposed adding a `commitlint`
+    pre-commit hook enforcing conventional-commit message format. A search
+    for a merged PR or commit citing "#201" (`Refs #201`, `Closes #201`,
+    `Fixes #201`, or a bare `#201`) returns no results -- the hook was
+    never implemented.
+
+    Here is the one repair that happened between open and merge for PR
+    #254 itself: CI run #1 failed -- `pytest -k batch_import` timed out
+    because the new `--parallel` flag spawned unbounded worker threads
+    with no cap. The author pushed a follow-up commit adding a
+    `max_workers` default cap, and CI run #2 passed clean.
+
+    Run the retrospective now that PR #254 has merged.
+expected:
+  classification:
+    - missing-deterministic-gate
+  repair_count: 1
+  retro_stub_expected: false
+  output_contains:
+    - "missing deterministic gate"
+    - "## Carried-forward gate"
+    - "#201"
+    - "Refs #254"
+  output_not_contains:
+    - "Classification: unclear agent instruction"
+    - "Classification: external/human decision"

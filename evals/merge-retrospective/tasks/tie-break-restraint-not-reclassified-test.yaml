@@ -1,0 +1,38 @@
+id: merge-retrospective-tie-break-restraint-not-reclassified
+name: Restraint Check -- Superficially Reclassifiable Repair That Should Stay Unclear-Agent-Instruction
+description: Restraint counterpart to the tie-break fixture -- a repair that superficially resembles "a lint rule could have caught this earlier" must NOT be reclassified as missing deterministic gate, because judging whether a commit message's rationale is substantively convincing is not a pattern any static check can encode.
+tags:
+  - quality
+  - edge-case
+  - restraint
+inputs:
+  prompt: |
+    Use merge-retrospective. PR #247 ("refactor: rename the internal `Foo`
+    struct fields for consistency with the public API") just merged into
+    main. Here is the one repair that happened between open and merge:
+
+    A human reviewer commented that the PR's commit message ("renamed
+    some fields") didn't explain *why* the rename was needed -- a
+    public-API-consistency argument the reviewer had to ask for in a
+    follow-up comment -- and asked the author to amend the commit message
+    to state the rationale for future `git blame` readers. The author
+    amended the message. This repo already has a commit-msg hook that
+    enforces conventional-commit *structure* (a type prefix, a subject
+    line under 72 characters); that hook ran clean on the original
+    message. There is no way to statically check whether a commit
+    message's stated rationale is *substantively convincing* -- that is a
+    judgment about the message's content, not a structural pattern any
+    linter could enforce.
+
+    Run the retrospective now that PR #247 has merged.
+expected:
+  classification:
+    - unclear-agent-instruction
+  repair_count: 1
+  retro_stub_expected: false
+  output_contains:
+    - "unclear agent instruction"
+    - "Refs #247"
+    - "commit message"
+  output_not_contains:
+    - "Classification: missing deterministic gate"

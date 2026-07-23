@@ -1,0 +1,43 @@
+id: merge-retrospective-force-push-observed
+name: Directly-Observed Force-Push Correcting a Leaked Credential
+description: A force-push made during the same session to remove an accidentally-committed credential is enumerated as its own repair (not silently dropped) and classified as missing deterministic gate, alongside a separate CI-failure repair in the same cycle.
+tags:
+  - quality
+  - force-push
+inputs:
+  prompt: |
+    Use merge-retrospective. PR #268 ("feat: add --dry-run mode to the
+    migration-runner CLI") just merged into main. This session was present
+    for the whole cycle, so both of the following were observed directly:
+
+    1. The author's first commit accidentally included a local
+       `.env.local` file containing a placeholder database URL with an
+       embedded password (`postgres://admin:hunter2@localhost/dev`).
+       Noticed within this same session before merge, the author
+       force-pushed a corrected commit history with that file removed
+       from every commit -- not merely a later commit deleting it, the
+       file never appears in the final history. No secret-scanning
+       pre-commit hook or CI check exists in this repo to catch a
+       committed credential before it reaches a push.
+    2. Separately, CI run #1 failed: `pytest` reported
+       `AssertionError: expected dry-run output to skip the actual
+       migration write` because the new `--dry-run` flag's early-return
+       check was placed after the write call instead of before it. The
+       author's follow-up commit moved the early-return above the write
+       call, and CI run #2 passed clean.
+
+    Run the retrospective now that PR #268 has merged.
+expected:
+  classification:
+    - missing-deterministic-gate
+    - missing-deterministic-gate
+  repair_count: 2
+  retro_stub_expected: false
+  output_contains:
+    - "missing deterministic gate"
+    - "force-push"
+    - "credential"
+    - "Refs #268"
+  output_not_contains:
+    - "Classification: unclear agent instruction"
+    - "Classification: external/human decision"
