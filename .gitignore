@@ -14,3 +14,7 @@ apm_modules/
 /.claude/hooks/
 /.claude/settings.json
 /.claude/apm-hooks.json
+
+# Transient git worktrees created by Agent-tool `isolation: worktree` dispatches
+# (one per parallel task); reproducible on demand, never meant to be committed.
+/.claude/worktrees/
