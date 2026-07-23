@@ -444,6 +444,81 @@ entry above found a genuine "no ablation mechanism exists" gap,
 demonstrating the check end to end against a real skill, not only the
 synthetic gate fixtures. Refs #185.
 
+**Issue #319 (SkillOpt pilot, precondition-check finding, no edit
+applied):** #319 (a sub-task of the RSI-loop backlog, #310) proposed
+piloting the real automated SkillOpt optimizer (microsoft/SkillOpt,
+arXiv:2605.23904) against this skill's `references/rubric.md`,
+PR-proposal-only, gated on a new checksum-pinned `skillopt` (or
+equivalent) pip dependency. Checked, not assumed:
+
+- `scorer-gated-skill-edits`'s own precondition gate (a real scorer plus a
+  held-out split) for *hand-applied* edits to this rubric is already
+  satisfied and has been for six prior iterations (#149, #155, #165,
+  #183, #185, #200 above) -- `skills/scorer-gated-skill-edits/scripts/
+  score_contract.py` plus `evals/evaluating-skill-quality/split.md`'s
+  37-fixture, 16:13:8 split, current selection-split baseline
+  **0.971154** (the #200 entry's after-score above). That part of #319's
+  own premise is real and unchanged.
+- The literal ask -- installing and running the *automated* SkillOpt
+  optimizer package itself -- is a different thing, and its own
+  precondition does not hold today, for three independent reasons:
+  1. **Unverified provenance.** A package literally named `skillopt`
+     exists on PyPI (v0.2.0, uploaded 2026-07-02, author "SkillOpt Team",
+     claiming `Homepage`/`Repository`: `github.com/microsoft/SkillOpt`,
+     confirmed live via `https://pypi.org/pypi/skillopt/json`), but no
+     primary source reachable from this session corroborates that this
+     specific release is an authentic Microsoft-published artifact
+     rather than a name-matched package from an unrelated party --
+     exactly the risk CLAUDE.md section 3's supply-chain discipline and
+     this issue's own third acceptance criterion (checksum pin plus a
+     documented issuance/provenance note) exist to gate on. Installing
+     and executing unverified third-party optimizer code against this
+     repository's skills is an irreversible action outside what a
+     provenance check has cleared, so no dependency was added.
+  2. **Scale precondition, as the issue's own tracking-doc correction
+     required measuring before proceeding.** SkillOpt's default regime
+     assumes tens-to-hundreds of tasks x 4 rollout epochs, costing
+     0.6M-46.4M tokens per accepted improvement (paper Table 6).
+     Measured against this repository's own record: 37 fixtures total
+     (13 selection) is one to two orders of magnitude below that, and
+     the six hand-applied iterations already logged above each needed
+     roughly 10-20 live dispatches for one non-automated edit round --
+     a real 4-epoch automated rollout loop would be grossly
+     disproportionate to a 13-fixture selection split at this corpus
+     size. This is the AC2 measurement #319 asked for; the finding is
+     negative at current scale.
+  3. **Standing design decision.** `skills/scorer-gated-skill-edits/
+     references/skillopt-mapping.md`'s own "Not adapted" section states
+     plainly that gitapex applies SkillOpt's discipline by hand and
+     deliberately does not build the paper's rollout/optimizer machinery
+     ("this skill is the manual procedure, not a runner"). Building or
+     invoking an automated SkillOpt runner would reverse that
+     already-made decision, not extend it.
+- A fourth, session-level constraint (distinct from the three above):
+  this session had no isolated fresh-subagent-dispatch capability
+  available (no registered `Skill` invocation for `evaluating-skill-
+  quality`, no generic task-dispatch tool), so re-running the existing
+  hand-applied gate with a genuinely neutral before/after score was not
+  achievable with integrity here either -- the reviewing context had
+  already read the full rubric and its iteration history. Rather than
+  fabricate a contaminated gate result, **no new `references/rubric.md`
+  edit is proposed by this pass.**
+
+No pip dependency was added (trivially satisfies AC3: nothing was
+installed without a pin, because nothing was installed). Unblocking a
+real automated pilot needs, at minimum, an owner-reviewed and
+provenance-verified `skillopt` (or equivalent) release pinned
+declaratively in `pyproject.toml`'s `dependencies` (`uv`-managed,
+hash-locked via `uv.lock`, per CLAUDE.md section 3) plus either a
+fixture corpus one to two orders of magnitude larger or an explicit
+owner sign-off accepting the paper's disproportionate token cost at
+gitapex's current scale. Until one of those holds, the existing
+hand-applied `scorer-gated-skill-edits` procedure -- already run to
+completion six times against this exact rubric -- remains the correct,
+already-adopted mechanism for the same underlying discipline (real
+scorer, real held-out split, strict improve-or-reject) without either
+risk. Refs #319, #310.
+
 ## explaining-the-work
 
 The committed eval suite (`evals/explaining-the-work/`) has no committed run
