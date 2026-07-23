@@ -506,6 +506,52 @@ iteration named it as a still-open gap). Full record, per-fixture
 scores, and the transfer-check detail: `evals/evaluating-skill-quality/
 split.md`'s Kept-edit log. Refs #307.
 
+**battle-testing-a-skill audit, trial 1 (issue #307), applied to
+`evaluating-skill-quality` itself:** overall **FAIL**. Two findings were
+caused directly by this edit and fixed in the same PR: Dimension 18
+(claim-provenance/source-grounding) -- the new Tool-scoping consistency
+section's own citation of Claude Code's frontmatter reference blended
+phrasing from two different frontmatter fields' table rows
+(`disallowed-tools`' "Tools removed from Claude's available pool..." and
+`allowed-tools`' "the turn that invokes this skill") into one string
+presented as a single direct quote; verified directly against the
+fetched primary source, neither half was actually verbatim -- fixed to
+quote only the `disallowed-tools` row's own text, verbatim. A
+self-referential structural-claim defect (Blind Spot finding, not one of
+the fixed 22 dimensions): the new section opened "A fourth Mechanism-fit
+check, distinct from the three above," breaking the established
+cumulative-count pattern the three prior secondary checks all follow
+(confirmed directly via `grep`: fourth/three -> fifth/four -> sixth/five)
+-- corrected to "A seventh ... distinct from the six above."
+
+The remaining findings (dimensions 1, 2, 9, 10, 11, 12, 13, 15, 16, 17 --
+injection resistance, trust/authority boundary, degenerate-input
+handling, tool/privilege scope on the reviewer's own dispatch, cross-skill
+composition, install-time provenance, cross-session memory-poisoning,
+multi-turn escalation, encoding/obfuscation coverage, and structured-
+output injection) are pre-existing, role-independent properties of the
+whole skill that predate this change -- `evaluating-skill-quality` is, by
+its own stated purpose, a reader and grader of untrusted user-submitted
+"draft SKILL.md excerpt" content, with no data/command boundary stated
+anywhere for that content. Out of scope for issue #307's narrow addition
+of one Mechanism-fit check; filed separately as issue #308 rather than
+silently expanded into here. Dimension 14 (adversarial regression corpus)
+passed, with a caveat: 37 fixtures, genuinely growing and gated, but none
+plant an actual injection/obfuscation payload inside a submitted draft --
+the same gap issue #308 exists to close. Same same-repository-checkout
+CLAUDE.md-context caveat disclosed as every prior dispatch in this file.
+
+No `evaluating-skill-quality` self-audit was run for this change (the
+skill reviewing its own rubric edit is circular in a way
+`battle-testing-a-skill` reviewing it is not, and this exact skill's
+rubric changes have never used a self-audit in this file's history --
+every one of the 11 prior iterations recorded in
+`evals/evaluating-skill-quality/split.md` relies on the scorer-gated-
+skill-edits held-out gate instead, which this change also went through
+in full, including a real transfer check). Disclosed as `WAIVED` in the
+PR body's Skill audit evidence section, citing the gate above as the
+substituted validation.
+
 ## explaining-the-work
 
 The committed eval suite (`evals/explaining-the-work/`) has no committed run
