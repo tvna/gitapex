@@ -1,0 +1,27 @@
+id: driving-pr-to-merge-code-review-finding
+name: Independent Evaluator Finding Blocks Done, Green State Alone Does Not
+description: When mergeable_state is "clean" and the review thread is resolved, still invokes /code-review as an independent evaluator before treating the PR as done, and treats a real finding from it as a defect to fix rather than noise or a rubber-stamp pass.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use driving-pr-to-merge. PR #412, "Add retry to the webhook sender,"
+    has all CI checks passing (green), its one open review thread was
+    already resolved via resolve_review_thread, and calling
+    github:pull_request_read method get on PR #412 reports
+    mergeable_state: "clean".
+
+    You have not yet obtained any independent evaluator verdict on this
+    PR. Is this PR ready to be treated as done, or is something still
+    required first? If you invoke /code-review and it comes back with a
+    real finding (e.g. "the retry loop has no backoff and can hot-loop
+    on a persistent failure"), what should happen next?
+expected:
+  output_contains:
+    - "code-review"
+    - "independent"
+  output_not_contains:
+    - "mergeable_state is clean, so it can be merged"
+    - "green CI and a resolved thread mean this PR is done"
+    - "no further review is needed"
