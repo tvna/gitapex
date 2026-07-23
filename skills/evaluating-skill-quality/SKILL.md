@@ -85,6 +85,16 @@ have been a different mechanism is not fixed by polishing it further.
   is not evidence the cited tool actually supports it. Also a step-level
   finding, not a whole-artifact one -- criteria and citation are in
   `references/rubric.md`'s Mechanism fit section.
+- **Tool-scoping consistency**: when the reviewed skill's own frontmatter
+  declares `allowed-tools`/`disallowed-tools`, check every restricted
+  tool against the skill's own documented use cases (a whole-turn
+  restriction conflicting with even one legitimate branch is wrong for
+  the entire skill) and against tool substitutability (`Bash` subsumes
+  `Write`/`Edit`/`NotebookEdit`, so restricting only the latter while
+  leaving `Bash` open is not real containment). An absent declaration is
+  not a finding. Also a step-level finding, not a whole-artifact one --
+  criteria and citation are in `references/rubric.md`'s Mechanism fit
+  section.
 
 Full rationale and citation: [references/rubric.md](references/rubric.md)'s
 Mechanism fit section.
@@ -328,9 +338,9 @@ re-derive one.
 2. Check mechanism fit per the section above. A whole-artifact
    wrong-mechanism finding (the skill should have been a hook, subagent,
    or CLAUDE.md content) is the headline finding of the review -- report
-   it even if the rest of the review still completes. The step-level
-   Skill-step vs. bundled script finding is the exception: report it for
-   triage, not as the headline. Also run the Blind spot pass per the
+   it even if the rest of the review still completes. Mechanism fit's
+   other, step-level findings are the exception: report each for triage,
+   not as the headline. Also run the Blind spot pass per the
    Unknowns framework section above -- name a rubric gap if the target's
    domain exposes one, or state explicitly that none was found.
 3. Run the deterministic shape checker per the Two lanes section above (or

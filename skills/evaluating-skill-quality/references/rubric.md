@@ -30,6 +30,7 @@ skill's own folder.
   - [Skill-step vs. bundled script](#skill-step-vs-bundled-script)
   - [Model/effort tier fit](#modeleffort-tier-fit)
   - [Tool-capability verification](#tool-capability-verification)
+  - [Tool-scoping consistency](#tool-scoping-consistency)
 - [Portability level](#portability-level)
 - [Capability assumption](#capability-assumption)
 - [Lifecycle](#lifecycle)
@@ -251,10 +252,9 @@ headline finding regardless of how the rest of the review scores, per
 `SKILL.md`'s Procedure step 2 and Stop boundaries.
 
 This describes a *whole-artifact* wrong-mechanism finding (the skill should
-have been a hook, subagent, or CLAUDE.md content). The Skill-step vs.
-bundled script and Model/effort tier fit checks below are the exceptions:
-their findings are step-level, reported for triage, and are neither a
-headline nor a *mature* blocker.
+have been a hook, subagent, or CLAUDE.md content). Mechanism fit's other,
+step-level checks below are the exceptions: their findings are step-level,
+reported for triage, and are neither a headline nor a *mature* blocker.
 
 A recorded mechanism-fit decision for the *reviewed* skill -- the "keep
 vs. retire, and why" rationale once a wrong-mechanism finding has been
@@ -435,6 +435,65 @@ A finding here is a **step-level** mechanism finding, the same standing as
 Skill-step vs. bundled script and Model/effort tier fit above -- report it
 when it fires, but it is not by itself the whole-review headline and does
 not by itself block a *mature* verdict.
+
+### Tool-scoping consistency
+
+A fourth Mechanism-fit check, distinct from the three above: not whether
+the target chose the right artifact, the right model/effort tier, or made
+a verified tool-capability claim, but whether an `allowed-tools`/
+`disallowed-tools` frontmatter declaration the target's own content
+makes, if any, is consistent with what that same content documents
+elsewhere as necessary, and honest about what it actually contains.
+Labelled here as this repository's own reasoned extension rather than an
+Anthropic-sourced claim, grounded directly against Claude Code's own
+frontmatter reference ([cc]): `disallowed-tools` "removes tools from
+Claude's available pool while this skill is active," for "the turn that
+invokes this skill," clearing "when you send your next message" -- a
+whole-turn restriction with no step-level scope, not something a skill's
+own procedure can partially opt out of for one branch.
+
+**Applicability.** Fires only when the target's frontmatter declares
+`allowed-tools` or `disallowed-tools`. Most skills correctly declare
+neither, and an absent declaration is not a finding.
+
+**Check, two independent failure directions:**
+
+- **Breaks a documented use case.** Cross-reference every tool named in
+  `disallowed-tools` against the target's own "When to use" bullets,
+  Procedure steps, and Worked Example. If any of those sections requires,
+  implies, or is exercised by a committed eval fixture using a tool the
+  frontmatter removes, the restriction is a functional regression
+  disguised as hardening, not a real improvement. Because the restriction
+  is whole-turn, one conflicting branch is enough to make it wrong for
+  the entire skill -- there is no partial fix that keeps the restriction
+  for only the branches that don't need the tool.
+- **Illusory containment.** A restriction earns a hardening framing only
+  if no tool the frontmatter leaves available trivially achieves the same
+  effect. `Bash` in particular subsumes `Write`/`Edit`/`NotebookEdit` for
+  filesystem mutation -- disallowing the structured editors while leaving
+  `Bash` open provides no real containment against a successful prompt
+  injection, and describing it as one is a citable overclaim independent
+  of whether the first bullet also applies. Check the target's own Notes
+  or Stop-boundary prose for exactly this framing.
+
+**Fail:** a `disallowed-tools` entry that conflicts with the target's own
+documented or tested scope (first bullet), or prose that frames a
+restriction as meaningful containment when a broader, unrestricted tool
+subsumes it (second bullet).
+
+**Pass:** every restricted tool has no conflicting documented use case
+anywhere in the target's own content, and any containment claim about the
+restriction is accurate given what tools remain available. **When a
+restriction is found justified, say so explicitly** -- the same restraint
+dimension 8's "silence is not evidence" rule and Model/effort tier fit's
+own justified-pin guidance already apply elsewhere in this rubric; a
+restriction existing is not itself a finding.
+
+A finding here is a **step-level** mechanism finding, the same standing as
+Skill-step vs. bundled script, Model/effort tier fit, and Tool-capability
+verification above -- report it when it fires, but it is not by itself
+the whole-review headline and does not by itself block a *mature*
+verdict.
 
 ## Portability level
 
@@ -1149,9 +1208,9 @@ kinds of changes.
 
 **Well-formed** and **mature** both presuppose *whole-artifact* mechanism
 fit -- the skill is the right container (not better as a hook, subagent, or
-CLAUDE.md content). A step-level finding (Skill-step vs. bundled script, or
-Model/effort tier fit) is reported for triage but does not by itself block
-either verdict.
+CLAUDE.md content). A step-level Mechanism-fit finding (see Mechanism
+fit's step-level checks above) is reported for triage but does not by
+itself block either verdict.
 
 A skill can be well-formed or even mature by every dimension below and
 still be the wrong artifact -- content that should be a hook, CLAUDE.md, or a
