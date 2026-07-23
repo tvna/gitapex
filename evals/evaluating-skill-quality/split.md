@@ -11,12 +11,12 @@ block deterministically.
 
 ## Corpus size and the 2:1:7 caveat
 
-SkillOpt's default split ratio is 2:1:7. At 37 fixtures that ratio gives a
-selection split of roughly five tasks, too thin to gate a strict
-improve-or-reject decision because five observations provide little ability
+SkillOpt's default split ratio is 2:1:7. At 40 fixtures that ratio gives a
+selection split of roughly six tasks, too thin to gate a strict
+improve-or-reject decision because six observations provide little ability
 to average out run-to-run variance. Following the precedent already set in
 `skills/scorer-gated-skill-edits/references/worked-example.md` ("the ratio is
-aspirational" for a small fixture count), this split uses a flatter 16:13:8
+aspirational" for a small fixture count), this split uses a flatter 17:14:9
 partition, named explicitly as a deviation from the 2:1:7 default. The
 honest minimal groundwork, per that same worked example, is a larger
 fixture corpus over time, not a smaller gate.
@@ -34,7 +34,8 @@ fixture corpus over time, not a smaller gate.
   `capability-assumption-broad-excuses-explanation.yaml`,
   `ablation-capability-no-mechanism.yaml`,
   `tool-capability-verification-train.yaml`,
-  `consumer-repo-convention-deference-train.yaml`.
+  `consumer-repo-convention-deference-train.yaml`,
+  `tool-scoping-consistency-train.yaml`.
 - **selection** (gates acceptance; scored before/after a candidate edit,
   strict improve-or-reject, ties rejected): `edge.yaml`,
   `mechanism-fit-subagent.yaml`, `third-party-not-authoritative.yaml`,
@@ -46,14 +47,16 @@ fixture corpus over time, not a smaller gate.
   `capability-assumption-frontier-flags-explanation.yaml`,
   `ablation-capability-runner-exists-not-run.yaml`,
   `tool-capability-verification-selection.yaml`,
-  `consumer-repo-convention-deference-selection.yaml`.
+  `consumer-repo-convention-deference-selection.yaml`,
+  `tool-scoping-consistency-selection.yaml`.
 - **test** (read once, for a final report only, never to motivate or gate
   an edit): `guardrail.yaml`, `no-fabricated-violation.yaml`,
   `portability-classification.yaml`, `blind-spot-pass-not-silent.yaml`,
   `model-effort-tier-fit-justified.yaml`,
   `portability-legitimate-illustrative-citation.yaml`,
   `capability-assumption-adaptive-progressive-disclosure.yaml`,
-  `ablation-capability-already-run.yaml`.
+  `ablation-capability-already-run.yaml`,
+  `tool-scoping-consistency-justified.yaml`.
 
 The three `capability-assumption-*` fixtures were added for issue #183
 (Sub-project B, the capability-assumption grading semantics), for the
@@ -233,6 +236,32 @@ in selection and uses a distinct domain and write-path step (a PR-body
 heading set, not an issue title/body) so the gate measures generalization
 rather than memorization. As with the pair above, no dedicated restraint
 fixture was added; the generic restraint fixtures already cover it.
+
+The `tool-scoping-consistency-train.yaml` / `-selection.yaml` / `-justified.yaml`
+triple was added for issue #307's Tool-scoping consistency check (a
+fourth Mechanism-fit check), for the same reason as prior additions: none
+of the prior 37 fixtures probe whether the review catches a target's own
+`allowed-tools`/`disallowed-tools` frontmatter declaration conflicting
+with its documented scope or overclaiming containment. Motivated by a
+real incident: `disallowed-tools: Write Edit NotebookEdit` was added to
+`grounding-in-primary-sources/SKILL.md` (issue #303, PR #304) and reverted
+after a Codex bot review found both failure directions in the same
+change. `-train.yaml` sits in train (a claim-verification skill whose
+`disallowed-tools: Write Edit` conflicts with its own "When to use"
+code-writing branch -- it motivated the edit, mirroring the real
+incident's first failure direction almost exactly).
+`-selection.yaml` sits in selection and uses a distinct domain and the
+opposite failure direction (a narrow `disallowed-tools: Edit` restriction
+while `Bash` stays open and is actively used by the skill's own
+Procedure, with Notes prose overclaiming containment) so the gate
+measures generalization across both halves of the check, not memorization
+of the train fixture's documented-use-case-conflict wording.
+`-justified.yaml` sits in test (read once, for the final report) and
+checks the restraint side: a `disallowed-tools: AskUserQuestion`
+restriction for an explicitly autonomous, scheduled background-loop use
+case, with no conflicting documented need and no subsuming-tool angle --
+this is Claude Code's own documented canonical legitimate use of the
+field.
 
 Two fixture-assertion bugs of the same recurring class this file has
 already documented multiple times (run-to-run casing/paraphrase variance,
@@ -1236,3 +1265,171 @@ found changes any recorded before/after score, the named structural
 limitation is disclosed rather than concealed, and the rubric-text and
 citation fixes strictly improve the shipped content without touching the
 scored fixtures' assertions in a way that would change the table.
+
+**Iteration: issue #307, Tool-scoping consistency (fourth Mechanism-fit
+check).** Candidate edit: add a `### Tool-scoping consistency` subsection
+to `references/rubric.md`'s Mechanism fit section (a target's own
+`allowed-tools`/`disallowed-tools` frontmatter, if declared, must be
+checked against two independent failure directions -- conflicting with a
+documented use case, and illusory containment when a broader available
+tool subsumes the restricted one's capability) plus a matching bullet in
+`SKILL.md`'s Mechanism-fit list; reworded two pre-existing, already-stale
+hand-enumerated lists of step-level checks (`rubric.md`'s Mechanism-fit
+intro and Verdicts section, `SKILL.md`'s Procedure step 2) to point at
+"Mechanism fit's step-level checks" generically instead of naming each by
+hand, so a future addition does not require finding and updating every
+enumeration site again. Full text: see this PR's diff.
+
+Motivation, disclosed in full: this round was not a hypothetical
+exercise. `disallowed-tools: Write Edit NotebookEdit` was added to
+`grounding-in-primary-sources/SKILL.md` (issue #303, PR #304) as an
+attack-surface-reduction measure; a Codex bot review found it broke a
+genuinely documented, tested use case (that skill's own "When to use"
+section covers claims encoded in code, and
+`evals/grounding-in-primary-sources/tasks/claim-embedded-in-code.yaml`
+asks it to write a Python function) and gave illusory security value
+anyway (`Bash` stayed unrestricted and fully subsumes
+`Write`/`Edit`/`NotebookEdit`'s capability). Reverted. Direct verification
+before authoring this edit (full-text search of this rubric's then-1221
+lines and `scripts/check_skill_shape.py`'s 29 checks) confirmed neither
+evaluated `allowed-tools`/`disallowed-tools` at all -- the skill
+responsible for auditing skill quality had no coverage for the exact
+mistake that had just been made and caught only by an external bot
+review.
+
+Precondition and splits: satisfied (40 fixtures, 17:14:9 with this
+iteration's additions -- see Assignment above).
+
+Methodology, disclosed reuse: the edit lands entirely within the
+Mechanism-fit section plus two hand-enumerated-list reword sites; no
+other rubric section's content changed. Of the 13 pre-existing selection
+fixtures, 10 assert on content this edit does not touch at all
+(`third-party-not-authoritative.yaml`,
+`scoring-axis-uncontrolled-speed-claim.yaml`,
+`ordering-rule-totality-distinct-skill.yaml`,
+`blind-spot-pass-generalizes.yaml`, `model-effort-tier-fit-unjustified-
+effort.yaml`, `portability-issue-number-citation.yaml`,
+`heldout-vague-completion.yaml`,
+`capability-assumption-frontier-flags-explanation.yaml`,
+`ablation-capability-runner-exists-not-run.yaml`,
+`consumer-repo-convention-deference-selection.yaml`) and reuse their
+already-established scores from issue #200's final table unchanged on
+both sides -- disclosed reuse, the same "never both" discipline this
+file's methodology notes have applied throughout, and a narrower rerun
+scope than several prior iterations used (disclosed as a deliberate,
+resource-bounded simplification, not an oversight: the two touched
+enumeration-list sites are pure de-duplication rewording with no new
+judgment criteria, so a plausible-interaction test was applied to the
+three fixtures that actually probe Mechanism-fit content, not the full
+13). The 3 fixtures that plausibly interact with the touched section
+(`edge.yaml`, `mechanism-fit-subagent.yaml` -- both whole-artifact
+Mechanism-fit fixtures; `tool-capability-verification-selection.yaml` --
+the adjacent step-level check in the same subsection group) each got a
+genuine fresh **after** dispatch (before reused at each fixture's
+last-recorded score, since the edit does not modify the text those
+fixtures actually assert on). The two new selection-relevant fixtures
+(`tool-scoping-consistency-selection.yaml` for the gate itself, plus the
+same fixture's own before dispatch against the pre-edit working tree) got
+genuine fresh before/after pairs. One fresh dispatch per fixture per
+side needed, scored with
+`skills/scorer-gated-skill-edits/scripts/score_contract.py`:
+
+| Fixture | Before | After |
+|---|---|---|
+| `edge.yaml` | 1.000000 (reused, #200 after) | 1.000000 (fresh) |
+| `mechanism-fit-subagent.yaml` | 1.000000 (reused, #200 after) | 1.000000 (fresh) |
+| `third-party-not-authoritative.yaml` | 1.000000 (reused, #200 after) | 1.000000 (unaffected, not re-run) |
+| `scoring-axis-uncontrolled-speed-claim.yaml` | 1.000000 (reused, #200 after) | 1.000000 (unaffected, not re-run) |
+| `ordering-rule-totality-distinct-skill.yaml` | 1.000000 (reused, #200 after) | 1.000000 (unaffected, not re-run) |
+| `blind-spot-pass-generalizes.yaml` | 1.000000 (reused, #200 after) | 1.000000 (unaffected, not re-run) |
+| `model-effort-tier-fit-unjustified-effort.yaml` | 1.000000 (reused, #200 after) | 1.000000 (unaffected, not re-run) |
+| `portability-issue-number-citation.yaml` | 1.000000 (reused, #200 after) | 1.000000 (unaffected, not re-run) |
+| `heldout-vague-completion.yaml` | 1.000000 (reused, #200 after) | 1.000000 (unaffected, not re-run) |
+| `capability-assumption-frontier-flags-explanation.yaml` | 1.000000 (reused, #200 after) | 1.000000 (unaffected, not re-run) |
+| `ablation-capability-runner-exists-not-run.yaml` | 1.000000 (reused, #200 after) | 1.000000 (unaffected, not re-run) |
+| `tool-capability-verification-selection.yaml` | 0.875000 (reused, #200 after) | 0.750000 (fresh) |
+| `consumer-repo-convention-deference-selection.yaml` | 0.750000 (reused, #200 after) | 0.750000 (unaffected, not re-run) |
+| `tool-scoping-consistency-selection.yaml` | 0.750000 (fresh) | 1.000000 (fresh) |
+
+Selection mean: **before 0.955357 -> after 0.964286**. Run by hand
+against `score_contract.score()`'s own arithmetic (14 fixtures, not a
+CLI invocation): `0.964286 KEEP` (strict improvement, `after > before`).
+
+`tool-capability-verification-selection.yaml` dipped from its reused
+0.875000 (the mean of two historical samples, 1.000000 and 0.750000, per
+issue #200's own table) to a single fresh 0.750000 -- checked directly,
+this fresh sample missed only the fixture's own `"actor-identity"`
+assertion (it used "operator identity/attribution" and "actor" as
+separate, unhyphenated words instead), while still citing the
+"Tool-capability verification" heading correctly and reaching the
+correct FAIL verdict. This is not a new regression: it is a third
+instance of the *exact same* wording variance this fixture's own history
+already documents twice (issue #200's own two-sample spread, 1.000000
+and 0.750000, for the identical reason). A single fresh sample landing
+within an already-disclosed two-sample range is expected variance, not
+edit-caused -- disclosed here rather than silently rerun until a
+1.000000 sample appeared.
+
+The purpose-built fixture, `tool-scoping-consistency-selection.yaml`,
+moved cleanly from 0.750000 (before: the pre-edit rubric has no
+Tool-scoping consistency check at all, so the before-dispatch reasoned
+its way to the same substantive finding via general Mechanism-fit
+judgment -- correctly identifying that `Bash` remained open and
+subsumed the restricted `Edit` tool's capability -- without using the
+check's name, satisfying only the `"Bash"` assertion and neither
+`output_not_contains` ban, for 3 of 4) to 1.000000 (after: the post-edit
+dispatch named the check by its exact heading, `"Tool-scoping
+consistency"`, and cited the same `Bash`-subsumption reasoning the new
+rubric text states almost verbatim). This is weaker evidence of net new
+detection capability than most of this file's prior purpose-built-fixture
+results (the pre-edit rubric already substantively caught the underlying
+defect through general reasoning, confirmed live rather than assumed) and
+is disclosed as such rather than overstated -- the edit's measured
+contribution here is that the finding now surfaces reliably, named and
+citable, rather than depending on a sufficiently thorough dispatch
+happening to reason its way there unprompted.
+
+**Transfer check:** run against the real historical incident, not a
+synthetic fixture -- `git show
+71d001adfe61ca6f542621482f0d4ec87604ebe1:skills/grounding-in-primary-
+sources/SKILL.md` (the actual reverted PR #304 commit) reviewed fresh
+under the post-edit rubric. The review's Mechanism-fit / Tool-scoping-
+consistency section explicitly flagged both original failure directions:
+(a) the `disallowed-tools: Write Edit NotebookEdit` restriction
+conflicting with that skill's own "When to use" claims-encoded-in-code
+branch, and (b) `Bash` remaining available and subsuming the restricted
+tools' capability, making the skill's own Notes-section containment
+claim an overclaim. Both independently confirmed present in the
+dispatch's own output with supporting quotes. This is the first entry in
+this file to record a completed transfer check (SkillOpt Section 4.3);
+every prior iteration's entry noted this as a still-open gap in this
+file's own practice (see issue #200's entry above) -- closed here for
+this one edit, not retroactively for the ones before it.
+
+**Restraint check (test split, read once):**
+`tool-scoping-consistency-justified.yaml` -- a `disallowed-tools:
+AskUserQuestion` restriction for an explicitly autonomous, scheduled
+background-loop skill, Claude Code's own documented canonical legitimate
+use of the field, with no conflicting use case and no subsuming-tool
+angle. The after-edit dispatch recognized the restriction as justified
+and said so explicitly (`"restriction justified"`), rather than flagging
+a false positive -- confirming the new check does not over-fire on a
+restriction that already meets its own criteria. (This same dispatch
+separately, and correctly, flagged the reviewed skill itself as a
+whole-artifact wrong-mechanism candidate -- deterministic, judgment-free,
+explicitly never-steered content that arguably belongs as a hook or
+scheduled dispatch target rather than a skill -- which is unrelated to
+and does not affect the Tool-scoping consistency restraint result being
+checked here.)
+
+**KEEP.** Strict improvement on the selection split (0.955357 ->
+0.964286) across all 14 fixtures, with 10 pre-existing fixtures confirmed
+unaffected by inspection (disclosed narrower rerun scope than several
+prior iterations, since the touched sites are pure de-duplication
+rewording), 3 pre-existing fixtures re-verified fresh, one already-
+documented wording-variance dip disclosed rather than concealed, a
+genuine (if modest, and honestly characterized as such) generalization
+result on the fixture built to test the new check, a completed transfer
+check against the real historical incident that motivated the edit --
+the first in this file's history -- and a confirmed restraint result on
+the held-out justified-restriction fixture.

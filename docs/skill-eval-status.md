@@ -246,8 +246,8 @@ change that introduced it, recorded in
 not by the committed suite.
 
 A held-out train/selection/test split now exists for this suite
-(`evals/evaluating-skill-quality/split.md`), covering 30 fixtures across
-13 train, 10 selection, and 7 test cases. It exists to satisfy
+(`evals/evaluating-skill-quality/split.md`), covering 40 fixtures across
+17 train, 14 selection, and 9 test cases. It exists to satisfy
 `scorer-gated-skill-edits`' precondition gate before any iterative edit to
 `references/rubric.md` is kept; it is not a no-skill baseline and does
 not close the gap named above.
@@ -443,6 +443,68 @@ sub-check applied live to this repository's own `battle-testing-a-skill`
 entry above found a genuine "no ablation mechanism exists" gap,
 demonstrating the check end to end against a real skill, not only the
 synthetic gate fixtures. Refs #185.
+
+(Note: this file's own record skipped one intervening iteration --
+`split.md`'s issue #200 entry, Tool-capability verification + a
+consumer-repo issue/PR-convention Dimension 6 bullet, landed with no
+matching summary here. Named as a pre-existing gap in this file's own
+practice rather than backfilled retroactively as part of an unrelated
+change; see `split.md` directly for that iteration's full record.)
+
+**Issue #307 (Tool-scoping consistency, fourth Mechanism-fit check):**
+motivated by a real incident, not a hypothetical -- `disallowed-tools:
+Write Edit NotebookEdit` was added to `grounding-in-primary-sources/
+SKILL.md` (issue #303, PR #304) as an attack-surface-reduction measure,
+and a Codex bot review found it broke a genuinely documented, tested use
+case (that skill's own "When to use" section covers claims encoded in
+code) while giving illusory security value anyway (`Bash` stayed
+unrestricted and fully subsumes `Write`/`Edit`/`NotebookEdit`'s
+capability) -- reverted. Direct verification before authoring this edit
+confirmed neither this rubric nor `check_skill_shape.py` evaluated
+`allowed-tools`/`disallowed-tools` at all: the skill responsible for
+auditing skill quality had no coverage for the exact mistake that had
+just been made.
+
+`references/rubric.md` gained a `### Tool-scoping consistency`
+subsection (two independent failure directions: conflicts with a
+documented use case; illusory containment when a broader available tool
+subsumes the restricted one). Two pre-existing, already-stale
+hand-enumerated lists of step-level checks (this rubric's Mechanism-fit
+intro and Verdicts section, `SKILL.md`'s Procedure step 2) were reworded
+to point at "Mechanism fit's step-level checks" generically instead of
+naming each by hand, closing the same duplication/staleness pattern this
+repository's own retrospective process flagged twice in a single prior
+session (issue #305's Repair 4).
+
+Went through `scorer-gated-skill-edits`' own held-out gate: 3 new
+fixtures added to `split.md`'s split (40 total, 17:14:9). 10 of the 13
+pre-existing selection fixtures reused their issue #200 after-scores
+unchanged (disclosed reuse, and a narrower rerun scope than several prior
+iterations -- the touched enumeration-list sites are pure
+de-duplication rewording with no new judgment criteria); the 3 that
+plausibly interact with the touched Mechanism-fit section got fresh
+after-dispatches. Selection mean: **0.955357 -> 0.964286, KEEP** (by-hand
+`score_contract.score()` arithmetic, strict improvement). One
+already-documented wording-variance dip (`tool-capability-verification-
+selection.yaml`, a third instance of a variance this fixture's own
+history already recorded twice) was disclosed rather than concealed. The
+purpose-built selection fixture moved 0.750000 -> 1.000000, honestly
+characterized as modest evidence: the pre-edit rubric already
+substantively caught the underlying `Bash`-subsumption defect through
+general Mechanism-fit reasoning in the before-dispatch, just without
+naming it -- the edit's measured contribution is that the finding now
+surfaces reliably and citably, not that it went from undetected to
+detected. A restraint check on the held-out justified fixture (a
+`disallowed-tools: AskUserQuestion` restriction for an autonomous
+background-loop skill, Claude Code's own documented canonical legitimate
+use) confirmed no false positive. A transfer check against the real
+historical incident -- the actual reverted PR #304 commit, not a
+synthetic fixture -- confirmed the edited rubric flags both original
+failure directions when applied to it directly; this is the first
+completed transfer check recorded in `split.md`'s history (every prior
+iteration named it as a still-open gap). Full record, per-fixture
+scores, and the transfer-check detail: `evals/evaluating-skill-quality/
+split.md`'s Kept-edit log. Refs #307.
 
 ## explaining-the-work
 
