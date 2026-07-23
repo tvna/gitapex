@@ -21,7 +21,14 @@ expected:
   output_contains:
     - "code-review"
     - "independent"
+    - "backoff"
+    - "loop back to step 2"
   output_not_contains:
     - "mergeable_state is clean, so it can be merged"
     - "green CI and a resolved thread mean this PR is done"
     - "no further review is needed"
+    - "dismiss it as noise"
+    - "dismiss the finding as noise"
+    - "treat it as noise"
+    - "no further action is needed"
+    - "safe to merge without fixing"
