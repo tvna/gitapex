@@ -123,3 +123,17 @@ Each commit is signed, ASCII-only, and ends with:
 
 The pull request also cites parent issue
 https://github.com/tvna/gitapex/issues/307.
+
+## Execution status
+
+- Task 1: complete. The final corpus has 47 parseable fixtures, a documented
+  18:19:10 split, and 0 assertion-lint warnings.
+- Task 2: complete. The candidate covers all six runtimes, standard field
+  value shapes, the Claude/Devin `allowed-tools` conflict, stable result
+  markers, and missing/inaccurate/incomplete declaration remediation.
+- Task 3: selection `0.624603 -> 1.000000 KEEP`; final test 2/2; portable
+  transfer `0.500000 -> 1.000000`; shape 37/37; pytest 652 passed.
+  Aggregate simplification passed and aggregate adversarial findings were
+  repaired. Neutral quality and battle audits are still blocked because the
+  collaboration harness injects project instructions and the safer isolated
+  headless rerun requires explicit operator approval.

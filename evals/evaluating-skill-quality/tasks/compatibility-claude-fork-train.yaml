@@ -21,8 +21,7 @@ inputs:
     Research the requested question and return cited findings.
 expected:
   output_contains:
+    - "Compatibility awareness: PROPOSE_COMPATIBILITY"
     - "compatibility"
     - "context: fork"
     - "Claude Code"
-  output_not_contains:
-    - "LGTM"

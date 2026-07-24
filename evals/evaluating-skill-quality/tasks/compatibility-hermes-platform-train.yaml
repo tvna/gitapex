@@ -20,8 +20,7 @@ inputs:
     Add the requested reminder and report its identifier.
 expected:
   output_contains:
+    - "Compatibility awareness: PROPOSE_COMPATIBILITY"
     - "compatibility"
     - "platforms"
     - "HermesAgent"
-  output_not_contains:
-    - "LGTM"

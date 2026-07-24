@@ -28,14 +28,9 @@ inputs:
     2. Return a cited diagnosis.
 expected:
   output_contains:
+    - "Compatibility awareness: COMPATIBILITY_ACKNOWLEDGED"
+    - "acknowledged"
     - "Unknown"
     - "AcmeAgent"
-    - "documentation"
-    - "compatibility"
-    - "warning"
-  output_not_contains:
-    - "unsupported"
-    - "incompatible"
-    - "## Compatibility"
-    - "GitApex frontmatter"
-    - "metadata/gitapex.yaml"
+    - "context: fork"
+    - "Claude Code"

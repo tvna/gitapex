@@ -523,25 +523,31 @@ not another name for Portability level.
   discloses dependence on a runtime's parsing or execution semantics.
 
 Use [runtime-compatibility.md](runtime-compatibility.md) as the versioned
-baseline. Compare every top-level frontmatter key with the Agent Skills
-specification, then compare the target's behavior claims with each material
-runtime row.
+baseline. Compare every top-level frontmatter key and its value shape with
+the Agent Skills specification, then compare the target's behavior claims
+with each material runtime row.
 
 Report exactly one state:
 
 - **No compatibility warning**: no runtime-specific dependency is
-  established.
-- **Compatibility warning**: the dependency is undeclared. Name the exact
-  field or behavior, affected runtime, evidence state (Documented, Unknown,
-  or Conflict), and a concrete standard `compatibility` value.
+  established. Emit
+  `Compatibility awareness: NO_COMPATIBILITY_WARNING`.
+- **Compatibility warning**: the declaration is missing, inaccurate, or
+  incomplete. Name the exact field or behavior, affected runtime, evidence
+  state (Documented, Unknown, or Conflict), and emit
+  `Compatibility awareness: PROPOSE_COMPATIBILITY` with a corrected standard
+  `compatibility` value.
 - **Compatibility acknowledged**: standard `compatibility` frontmatter
-  already states the limitation accurately. Do not request duplicate prose.
+  already states the limitation accurately. Emit
+  `Compatibility awareness: COMPATIBILITY_ACKNOWLEDGED`; do not request
+  duplicate prose.
 
 A top-level field outside the standard is evidence of an extension, not an
-automatic defect. A nested runtime namespace under standard `metadata` uses
-standard placement but can still create a runtime-specific behavioral
-dependency. Conversely, documentation silence is **Unknown**, not proof of
-rejection or non-support.
+automatic defect. The standard `metadata` value is a string-to-string map, so
+a nested runtime namespace has a standard top-level key but a non-standard
+value structure and can create a runtime-specific behavioral dependency.
+Conversely, documentation silence is **Unknown**, not proof of rejection or
+non-support.
 
 For an undeclared dependency, propose a concise self-declaration such as:
 

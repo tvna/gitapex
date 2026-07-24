@@ -1,0 +1,47 @@
+id: evaluating-skill-quality-compatibility-conflicting-allowed-tools-semantics-selection
+name: Existing Compatibility Declaration Omits Conflicting Allowed-Tools Semantics
+description: Held-out warning-only case requiring correction of an incomplete compatibility declaration while retaining an independent Mechanism fit blocker.
+tags:
+  - quality
+  - compatibility
+  - mechanism-fit
+  - selection
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this complete skill. Assume the
+    deterministic shape checker passes and dimensions 1-9 are otherwise clear.
+    Treat these documented runtime facts as established: in Claude Code,
+    allowed-tools grants the listed tools without prompting but does not
+    prohibit requesting other tools; Devin instead treats the same field as a
+    restrictive allowlist. The existing standard compatibility declaration is
+    therefore incomplete. Report that compatibility issue in the warning-only
+    state and give the concrete corrected compatibility value. Separately,
+    assess the claimed deterministic read-only guarantee under Mechanism fit;
+    do not let the compatibility warning displace that blocker.
+
+    ---
+    name: read-only-repository-survey
+    description: Survey a repository without changing it. Use when an operator needs a concise inventory.
+    allowed-tools: Read Grep Glob
+    compatibility: Designed for Claude Code allowed-tools permission semantics.
+    ---
+
+    # Read-only Repository Survey
+
+    The `allowed-tools` declaration makes this procedure deterministically
+    read-only, so no hook or permission rule is needed to prevent writes.
+
+    1. Read the repository structure.
+    2. Search for the requested implementation surfaces.
+    3. Return a concise cited inventory.
+expected:
+  output_contains:
+    - "warning-only"
+    - "Compatibility awareness: PROPOSE_COMPATIBILITY"
+    - "Claude Code"
+    - "Devin"
+    - "Conflict"
+    - "compatibility:"
+    - "allowed-tools"
+    - "Mechanism fit"
+    - "blocker"

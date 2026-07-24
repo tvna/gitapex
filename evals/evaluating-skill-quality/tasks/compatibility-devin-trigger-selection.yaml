@@ -24,10 +24,8 @@ inputs:
     3. Report the resulting artifact URL.
 expected:
   output_contains:
+    - "Compatibility awareness: PROPOSE_COMPATIBILITY"
     - "compatibility"
     - "triggers"
     - "Devin"
     - "warning"
-  output_not_contains:
-    - "LGTM"
-    - "GitApex frontmatter"

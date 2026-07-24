@@ -206,16 +206,19 @@ standard and the documented runtime behavior.
 
 - **No compatibility warning**: the target uses only standard fields and
   portable behavior, or no runtime-specific dependency is established.
+  Emit `Compatibility awareness: NO_COMPATIBILITY_WARNING`.
 - **Compatibility warning**: name the exact non-standard field or
   runtime-specific behavior, the affected runtime, and whether the evidence
   is Documented, Unknown, or Conflict. Documentation silence is Unknown, not
-  proof that a runtime rejects the feature.
+  proof that a runtime rejects the feature. When the declaration is missing,
+  inaccurate, or incomplete, emit
+  `Compatibility awareness: PROPOSE_COMPATIBILITY` and propose a corrected
+  1-500 character `compatibility` value. Add a body `## Compatibility`
+  section only when the field cannot express the necessary detail concisely.
 - **Compatibility acknowledged**: when the target's standard
   `compatibility` frontmatter already states the limitation accurately,
-  report it as acknowledged without proposing duplicate prose.
-- **Undeclared**: propose a concrete 1-500 character `compatibility` value.
-  Add a body `## Compatibility` section only when the field cannot express
-  the necessary detail concisely.
+  emit `Compatibility awareness: COMPATIBILITY_ACKNOWLEDGED` without
+  proposing duplicate prose.
 
 This axis is warning-only. It never lowers a score and cannot by itself
 block **Well-formed** or **Mature**. Evidence that independently proves a

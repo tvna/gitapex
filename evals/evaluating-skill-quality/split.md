@@ -11,14 +11,14 @@ block deterministically.
 
 ## Corpus size and the 2:1:7 caveat
 
-SkillOpt's default split ratio is 2:1:7. At 46 fixtures that ratio gives a
+SkillOpt's default split ratio is 2:1:7. At 47 fixtures that ratio gives a
 selection split of roughly five tasks, too thin to gate a strict
 improve-or-reject decision because five observations provide little ability
 to average out run-to-run variance. Following the precedent already set in
 `skills/scorer-gated-skill-edits/references/worked-example.md` ("the ratio is
 aspirational" for a small fixture count), this split uses a flatter 16:13:8
-base partition plus a scoped 2:5:2 compatibility addition, for a resulting
-18:18:10 partition. This is named explicitly as a deviation from the 2:1:7
+base partition plus a scoped 2:6:2 compatibility addition, for a resulting
+18:19:10 partition. This is named explicitly as a deviation from the 2:1:7
 default. The
 honest minimal groundwork, per that same worked example, is a larger
 fixture corpus over time, not a smaller gate.
@@ -54,6 +54,7 @@ fixture corpus over time, not a smaller gate.
   `compatibility-devin-trigger-selection.yaml`,
   `compatibility-openclaw-gate-selection.yaml`,
   `compatibility-independent-blocker-selection.yaml`,
+  `compatibility-conflicting-allowed-tools-semantics-selection.yaml`,
   `compatibility-documentation-silence-unknown-selection.yaml`,
   `compatibility-undeclared-runtime-extension-selection.yaml`.
 - **test** (read once, for a final report only, never to motivate or gate
@@ -76,7 +77,17 @@ disclosed ties. One bounded retry added two independently authored held-out
 fixtures whose author saw only the issue criteria, fixture conventions, and
 the pinned pre-edit skill -- never the candidate. These distinguish merely
 noticing a risk from the issue's required remediation and evidence-state
-discipline.
+discipline. After the first candidate run, deterministic lint and independent
+aggregate review found assertion defects: one paraphrase-drift phrase,
+negation traps, missing nested-value-shape coverage, and missing
+Claude/Devin conflict coverage. The fixture prompts stayed unchanged. An
+independent repair pass that did not see the candidate rewrote the two retry
+contracts as positive-only assertions; the other two contracts were narrowed
+to the omitted acceptance-criteria facts. A second independent author, also
+without candidate access, added the incomplete-declaration case after
+aggregate review found that state missing. The complete pre-edit and
+candidate selection runs recorded in `docs/skill-eval-status.md` use only
+these corrected contracts, not the invalidated earlier scores.
 
 - Non-standard top-level frontmatter: Claude Code and HermesAgent examples
   motivate the edit in train; a distinct Devin field gates it in selection.
@@ -94,7 +105,9 @@ discipline.
   frontmatter.
 - Remediation and evidence-state discrimination: the retry fixtures require
   standard `compatibility` self-declaration and Unknown restraint rather than
-  generic compatibility prose.
+  generic compatibility prose. The independently authored conflicting-
+  semantics fixture covers an existing but incomplete declaration and keeps
+  its separate Mechanism-fit blocker.
 
 Blind spot pass: the corpus covers declared and undeclared limitations,
 standard and non-standard placement, warning-only severity, a mixed blocker,

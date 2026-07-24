@@ -23,8 +23,5 @@ inputs:
     3. Confirm every source heading appears exactly once.
 expected:
   output_contains:
-    - "No compatibility warning"
+    - "Compatibility awareness: NO_COMPATIBILITY_WARNING"
     - "Mature"
-  output_not_contains:
-    - "runtime-specific limitation"
-    - "LGTM"

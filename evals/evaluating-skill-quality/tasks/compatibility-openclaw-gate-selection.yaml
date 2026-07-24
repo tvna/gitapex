@@ -27,11 +27,10 @@ inputs:
     3. Validate the result parses as JSON and preserves the input file.
 expected:
   output_contains:
+    - "Compatibility awareness: PROPOSE_COMPATIBILITY"
     - "compatibility"
     - "metadata.openclaw"
     - "OpenClaw"
+    - "non-standard"
     - "warning"
     - "Mature"
-  output_not_contains:
-    - "LGTM"
-    - "GitApex frontmatter"

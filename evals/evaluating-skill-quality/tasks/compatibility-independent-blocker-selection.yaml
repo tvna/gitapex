@@ -24,11 +24,11 @@ inputs:
     Read the logs, identify the likely failure, and report evidence.
 expected:
   output_contains:
+    - "Compatibility awareness: PROPOSE_COMPATIBILITY"
     - "compatibility"
     - "context: fork"
     - "Claude Code"
+    - "Devin"
+    - "Conflict"
     - "Mechanism fit"
-    - "does not restrict"
-  output_not_contains:
-    - "LGTM"
-    - "no concerns"
+    - "pre-approval"

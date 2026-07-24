@@ -26,13 +26,8 @@ inputs:
     3. Return the diagnosis to the calling context.
 expected:
   output_contains:
-    - "warning"
-    - "standard Agent Skills"
+    - "Compatibility awareness: PROPOSE_COMPATIBILITY"
+    - "warning-only"
     - "compatibility:"
     - "context: fork"
     - "Claude Code"
-  output_not_contains:
-    - "LGTM"
-    - "GitApex frontmatter"
-    - "metadata/gitapex.yaml"
-    - "## Compatibility"

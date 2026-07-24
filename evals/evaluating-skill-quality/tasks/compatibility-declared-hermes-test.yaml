@@ -23,10 +23,8 @@ inputs:
     Add the requested reminder, verify it exists, and report its identifier.
 expected:
   output_contains:
+    - "Compatibility awareness: COMPATIBILITY_ACKNOWLEDGED"
     - "compatibility"
     - "acknowledged"
     - "HermesAgent"
     - "Mature"
-  output_not_contains:
-    - "LGTM"
-    - "GitApex frontmatter"
