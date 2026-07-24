@@ -23,7 +23,7 @@ inputs:
     3. Confirm every source heading appears exactly once.
 expected:
   output_contains:
-    - "no compatibility warning"
+    - "No compatibility warning"
     - "Mature"
   output_not_contains:
     - "runtime-specific limitation"
