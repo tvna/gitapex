@@ -1,0 +1,38 @@
+id: evaluating-skill-quality-compatibility-undeclared-runtime-extension-selection
+name: Undeclared Runtime Extension Needs Standard Compatibility Frontmatter
+description: Held-out warning-only case requiring an actionable standard Agent Skills compatibility declaration rather than generic cross-runtime caution.
+tags:
+  - quality
+  - compatibility
+  - selection
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this complete skill. Assume the
+    deterministic shape checker passes, dimensions 1-9 otherwise clear, and
+    the runtime extension behaves as stated on Claude Code. Focus on whether
+    the artifact communicates its runtime assumptions and give the concrete
+    author-facing correction.
+
+    ---
+    name: isolated-log-review
+    description: Review logs in an isolated worker. Use when diagnosis should not consume the main context.
+    context: fork
+    ---
+
+    # Isolated Log Review
+
+    1. Read the supplied logs in the forked context.
+    2. Identify the most likely failure and cite evidence.
+    3. Return the diagnosis to the calling context.
+expected:
+  output_contains:
+    - "warning"
+    - "standard Agent Skills"
+    - "compatibility:"
+    - "context: fork"
+    - "Claude Code"
+  output_not_contains:
+    - "LGTM"
+    - "GitApex frontmatter"
+    - "metadata/gitapex.yaml"
+    - "## Compatibility"
