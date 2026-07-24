@@ -7,6 +7,7 @@ spec:
   capabilityAssumption: Broad
   references:
     - "For readers working in this repository (gitapex), the worked example in `skills/evaluating-skill-quality/references/worked-example-self-review.md` notes that this skill's own deterministic shape lane was delegated to `scripts/check_skill_shape.py`; that delegation was made in gitapex#32. This is provenance for maintainers of this specific repository, not something the worked example depends on."
+    - "The warning-only compatibility baseline was verified on 2026-07-25 against the Agent Skills specification and primary documentation for Claude Code, Codex, Gemini CLI, Devin, OpenClaw, and HermesAgent. The portable evidence summary lives in `references/runtime-compatibility.md`; implementation provenance is tracked in gitapex#332."
   skillDependencies:
     requires: []
     relatedTo:

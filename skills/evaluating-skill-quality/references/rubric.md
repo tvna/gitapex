@@ -31,6 +31,7 @@ skill's own folder.
   - [Model/effort tier fit](#modeleffort-tier-fit)
   - [Tool-capability verification](#tool-capability-verification)
 - [Portability level](#portability-level)
+- [Compatibility awareness](#compatibility-awareness)
 - [Capability assumption](#capability-assumption)
 - [Lifecycle](#lifecycle)
 - [1. Discovery -- name and description](#1-discovery----name-and-description)
@@ -510,6 +511,65 @@ belongs in the `metadata/gitapex.yaml` sidecar's `spec.references` instead
 The `no-bare-issue-citation` shape check enforces this unconditionally,
 while the two repo-path shape checks (`portable-no-repo-path-citation`,
 `portable-no-unhedged-inline-path-citation`) stay gated to Portable only.
+
+## Compatibility awareness
+
+This is a warning-only evaluation axis, not a tenth maturity dimension and
+not another name for Portability level.
+
+- **Portability** asks whether the procedure depends on its origin
+  repository.
+- **Compatibility awareness** asks whether the artifact accurately
+  discloses dependence on a runtime's parsing or execution semantics.
+
+Use [runtime-compatibility.md](runtime-compatibility.md) as the versioned
+baseline. Compare every top-level frontmatter key with the Agent Skills
+specification, then compare the target's behavior claims with each material
+runtime row.
+
+Report exactly one state:
+
+- **No compatibility warning**: no runtime-specific dependency is
+  established.
+- **Compatibility warning**: the dependency is undeclared. Name the exact
+  field or behavior, affected runtime, evidence state (Documented, Unknown,
+  or Conflict), and a concrete standard `compatibility` value.
+- **Compatibility acknowledged**: standard `compatibility` frontmatter
+  already states the limitation accurately. Do not request duplicate prose.
+
+A top-level field outside the standard is evidence of an extension, not an
+automatic defect. A nested runtime namespace under standard `metadata` uses
+standard placement but can still create a runtime-specific behavioral
+dependency. Conversely, documentation silence is **Unknown**, not proof of
+rejection or non-support.
+
+For an undeclared dependency, propose a concise self-declaration such as:
+
+```yaml
+compatibility: Designed for Claude Code; uses context: fork for isolated execution.
+```
+
+The standard field is limited to 500 characters. Recommend a body
+`## Compatibility` section only when accurate limitations cannot fit there.
+Never propose a GitApex-specific `SKILL.md` key:
+`metadata/gitapex.yaml` is the repository-side structured evidence surface,
+while `compatibility` is the portable self-declaration.
+
+### Severity and precedence
+
+The axis is warning-only:
+
+- it does not change any dimension verdict or numeric score;
+- it cannot by itself block **Well-formed** or **Mature**;
+- it does not prove that the declared requirement is enforced.
+
+Classify independent evidence independently. For example, `context: fork`
+without a declaration earns a compatibility warning; a separate false claim
+that `allowed-tools` makes every other tool unavailable remains a
+Mechanism-fit or correctness finding under its existing rules. Report both.
+Never downgrade the blocker because the same lines also triggered this
+warning, and never upgrade the warning into a blocker merely because another
+finding exists nearby.
 
 ## Capability assumption
 
@@ -1138,6 +1198,10 @@ is labeled as such.
 
 A verdict without cited evidence per dimension is not a review -- it is a
 guess wearing a review's shape.
+
+The Compatibility awareness axis is reported alongside the verdict but
+never participates in it. A skill can therefore be **Mature** with a
+compatibility warning when every existing maturity requirement clears.
 
 A **mature** verdict is bounded by what the target repository can currently
 measure: when dimensions 8-9 are named as unmeasured rather than passed,

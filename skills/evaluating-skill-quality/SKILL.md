@@ -127,9 +127,9 @@ verdict itself would still be grading from a contaminated context.
   rather than having it re-run the script itself (Contract discipline's
   "never both" rule, `references/rubric.md`).
 - Require the dispatch to return the full structured report -- mechanism
-  fit, portability level, all nine dimensions with quoted evidence, and
-  the verdict -- not a bare summary; a postcondition with no cited
-  evidence is not a review.
+  fit, portability level, compatibility-awareness result, all nine
+  dimensions with quoted evidence, and the verdict -- not a bare summary;
+  a postcondition with no cited evidence is not a review.
 - When the target has Stop boundaries or Mechanism-fit prose, instruct
   the dispatch explicitly to check each such sentence against *both*
   Mechanism fit's "is this backed" question and the portability litmus
@@ -195,6 +195,38 @@ repo-specific content, which stay legitimate at those two levels.
 
 Full rationale and per-dimension grading detail:
 [references/rubric.md](references/rubric.md)'s Portability level section.
+
+## Compatibility awareness
+
+A warning-only axis, separate from Portability level and the nine maturity
+dimensions. Read the versioned
+[runtime compatibility baseline](references/runtime-compatibility.md), then
+compare the target's frontmatter and procedure with both the Agent Skills
+standard and the documented runtime behavior.
+
+- **No compatibility warning**: the target uses only standard fields and
+  portable behavior, or no runtime-specific dependency is established.
+- **Compatibility warning**: name the exact non-standard field or
+  runtime-specific behavior, the affected runtime, and whether the evidence
+  is Documented, Unknown, or Conflict. Documentation silence is Unknown, not
+  proof that a runtime rejects the feature.
+- **Compatibility acknowledged**: when the target's standard
+  `compatibility` frontmatter already states the limitation accurately,
+  report it as acknowledged without proposing duplicate prose.
+- **Undeclared**: propose a concrete 1-500 character `compatibility` value.
+  Add a body `## Compatibility` section only when the field cannot express
+  the necessary detail concisely.
+
+This axis is warning-only. It never lowers a score and cannot by itself
+block **Well-formed** or **Mature**. Evidence that independently proves a
+security, correctness, portability, durability, or Mechanism-fit defect
+retains that axis's normal severity; the warning neither suppresses nor
+duplicates it.
+
+GitApex-specific structured evidence belongs in
+`metadata/gitapex.yaml`, never in a custom `SKILL.md` frontmatter field.
+The standard `compatibility` field is a self-declaration, not proof that a
+runtime parses, enforces, or satisfies it.
 
 ## Unknowns framework
 
@@ -346,7 +378,10 @@ re-derive one.
    from a repository that has not adopted this convention), establish
    both by reading the target's content instead -- the same way an
    undeclared level is read today -- and note the sidecar's absence as
-   context, not as a finding.
+   context, not as a finding. Then run the Compatibility awareness axis
+   against the target frontmatter and behavior using
+   `references/runtime-compatibility.md`; keep its result separate from
+   portability and the verdict.
 5. Walk all nine dimensions in `references/rubric.md`, in order (including
    8-9), quoting the specific text that earns each verdict; assume steps
    1-4 hold rather than re-deriving them. No cited evidence means no
@@ -421,6 +456,8 @@ actually specifies.
 - Never leave the Blind spot pass unaddressed -- an explicit "no gap found"
   and a silently skipped question are not the same thing; the latter is
   not a completed review.
+- Never turn an Unknown compatibility state into a flat unsupported claim,
+  and never let a compatibility warning change the existing quality verdict.
 
 ## Notes
 
