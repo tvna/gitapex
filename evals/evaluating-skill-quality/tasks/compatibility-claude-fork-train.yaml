@@ -25,3 +25,6 @@ expected:
     - "compatibility"
     - "context: fork"
     - "Claude Code"
+  output_not_contains:
+    - "Compatibility awareness: COMPATIBILITY_ACKNOWLEDGED"
+    - "Compatibility awareness: NO_COMPATIBILITY_WARNING"

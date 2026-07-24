@@ -28,3 +28,6 @@ expected:
     - "acknowledged"
     - "HermesAgent"
     - "Mature"
+  output_not_contains:
+    - "Compatibility awareness: PROPOSE_COMPATIBILITY"
+    - "Compatibility awareness: NO_COMPATIBILITY_WARNING"

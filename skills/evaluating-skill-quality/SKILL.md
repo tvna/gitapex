@@ -204,10 +204,13 @@ dimensions. Read the versioned
 compare the target's frontmatter and procedure with both the Agent Skills
 standard and the documented runtime behavior.
 
-- **No compatibility warning**: the target uses only standard fields and
-  portable behavior, or no runtime-specific dependency is established.
+- **No compatibility warning**: no runtime-specific dependency is
+  established; a standard environment requirement alone does not select the
+  acknowledged runtime-dependency branch.
   Emit `Compatibility awareness: NO_COMPATIBILITY_WARNING`.
-- **Compatibility warning**: name the exact non-standard field or
+- **Compatibility warning**: a runtime-specific dependency is established
+  and its declaration is missing, inaccurate, or incomplete. Name the exact
+  non-standard field or
   runtime-specific behavior, the affected runtime, and whether the evidence
   is Documented, Unknown, or Conflict. Documentation silence is Unknown, not
   proof that a runtime rejects the feature. When the declaration is missing,
@@ -215,10 +218,11 @@ standard and the documented runtime behavior.
   `Compatibility awareness: PROPOSE_COMPATIBILITY` and propose a corrected
   1-500 character `compatibility` value. Add a body `## Compatibility`
   section only when the field cannot express the necessary detail concisely.
-- **Compatibility acknowledged**: when the target's standard
-  `compatibility` frontmatter already states the limitation accurately,
-  emit `Compatibility awareness: COMPATIBILITY_ACKNOWLEDGED` without
-  proposing duplicate prose.
+- **Compatibility acknowledged**: a runtime-specific dependency is
+  established and the target's standard `compatibility` frontmatter states
+  every material limitation accurately and completely. Emit
+  `Compatibility awareness: COMPATIBILITY_ACKNOWLEDGED` without proposing
+  duplicate prose.
 
 This axis is warning-only. It never lowers a score and cannot by itself
 block **Well-formed** or **Mature**. Evidence that independently proves a

@@ -24,3 +24,6 @@ expected:
     - "compatibility"
     - "platforms"
     - "HermesAgent"
+  output_not_contains:
+    - "Compatibility awareness: COMPATIBILITY_ACKNOWLEDGED"
+    - "Compatibility awareness: NO_COMPATIBILITY_WARNING"

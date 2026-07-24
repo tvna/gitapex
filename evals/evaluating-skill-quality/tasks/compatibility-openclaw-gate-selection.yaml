@@ -34,3 +34,6 @@ expected:
     - "non-standard"
     - "warning"
     - "Mature"
+  output_not_contains:
+    - "Compatibility awareness: COMPATIBILITY_ACKNOWLEDGED"
+    - "Compatibility awareness: NO_COMPATIBILITY_WARNING"

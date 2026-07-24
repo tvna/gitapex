@@ -1095,11 +1095,11 @@ The ordinary candidate passed the corrected six-fixture selection gate:
 - pinned pre-edit commit:
   `aa6ea019ee806c3150ba22b30c27796fab42c256`;
 - pre-edit scores:
-  `0.800000, 0.714286, 0.500000, 0.666667, 0.400000, 0.666667`;
-- pre-edit mean: `0.624603`;
+  `0.857143, 0.777778, 0.600000, 0.750000, 0.571429, 0.727273`;
+- pre-edit mean: `0.713937`;
 - candidate scores: six `1.000000` results;
 - candidate mean: `1.000000`;
-- `score_contract.py --compare-to 0.624603`: `KEEP`.
+- `score_contract.py --compare-to 0.713937`: `KEEP`.
 
 Earlier selection scores are invalidated and excluded. Independent review
 found paraphrase drift, negation traps, missing nested-value-shape coverage,

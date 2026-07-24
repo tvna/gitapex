@@ -34,3 +34,6 @@ expected:
     - "AcmeAgent"
     - "context: fork"
     - "Claude Code"
+  output_not_contains:
+    - "Compatibility awareness: PROPOSE_COMPATIBILITY"
+    - "Compatibility awareness: NO_COMPATIBILITY_WARNING"

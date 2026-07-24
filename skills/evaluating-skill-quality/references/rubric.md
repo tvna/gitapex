@@ -530,15 +530,18 @@ with each material runtime row.
 Report exactly one state:
 
 - **No compatibility warning**: no runtime-specific dependency is
-  established. Emit
+  established. A standard environment requirement alone does not select the
+  acknowledged runtime-dependency branch. Emit
   `Compatibility awareness: NO_COMPATIBILITY_WARNING`.
-- **Compatibility warning**: the declaration is missing, inaccurate, or
-  incomplete. Name the exact field or behavior, affected runtime, evidence
-  state (Documented, Unknown, or Conflict), and emit
+- **Compatibility warning**: a runtime-specific dependency is established
+  and its declaration is missing, inaccurate, or incomplete. Name the exact
+  field or behavior, affected runtime, evidence state (Documented, Unknown,
+  or Conflict), and emit
   `Compatibility awareness: PROPOSE_COMPATIBILITY` with a corrected standard
   `compatibility` value.
-- **Compatibility acknowledged**: standard `compatibility` frontmatter
-  already states the limitation accurately. Emit
+- **Compatibility acknowledged**: a runtime-specific dependency is
+  established and standard `compatibility` frontmatter states every material
+  limitation accurately and completely. Emit
   `Compatibility awareness: COMPATIBILITY_ACKNOWLEDGED`; do not request
   duplicate prose.
 

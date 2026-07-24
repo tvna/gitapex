@@ -25,3 +25,6 @@ expected:
   output_contains:
     - "Compatibility awareness: NO_COMPATIBILITY_WARNING"
     - "Mature"
+  output_not_contains:
+    - "Compatibility awareness: PROPOSE_COMPATIBILITY"
+    - "Compatibility awareness: COMPATIBILITY_ACKNOWLEDGED"
