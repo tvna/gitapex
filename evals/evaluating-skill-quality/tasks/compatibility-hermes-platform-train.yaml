@@ -1,0 +1,27 @@
+id: evaluating-skill-quality-compatibility-hermes-platform-train
+name: Hermes Platform Gate Is Undeclared
+description: Motivates compatibility awareness with HermesAgent OS gating expressed through a non-standard top-level field.
+tags:
+  - quality
+  - compatibility
+  - train
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt.
+
+    ---
+    name: macos-reminder
+    description: Add a reminder through the local macOS integration. Use when the user asks to create a reminder.
+    platforms: [macos]
+    ---
+
+    # macOS Reminder
+
+    Add the requested reminder and report its identifier.
+expected:
+  output_contains:
+    - "compatibility"
+    - "platforms"
+    - "HermesAgent"
+  output_not_contains:
+    - "LGTM"

@@ -1,0 +1,34 @@
+id: evaluating-skill-quality-compatibility-independent-blocker-selection
+name: Compatibility Warning Does Not Hide Permission Overclaim
+description: Held-out mixed case requiring both a Claude-specific compatibility warning and the independent mechanism-fit blocker caused by a false permission claim.
+tags:
+  - quality
+  - compatibility
+  - selection
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt.
+
+    ---
+    name: safe-log-reader
+    description: Inspect application logs without changing files. Use for read-only log diagnosis.
+    context: fork
+    allowed-tools: Read Grep
+    ---
+
+    # Safe Log Reader
+
+    Because allowed-tools lists only Read and Grep, every other tool is
+    unavailable and the forked worker cannot modify the repository.
+
+    Read the logs, identify the likely failure, and report evidence.
+expected:
+  output_contains:
+    - "compatibility"
+    - "context: fork"
+    - "Claude Code"
+    - "Mechanism fit"
+    - "does not restrict"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"

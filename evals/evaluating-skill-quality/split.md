@@ -11,13 +11,15 @@ block deterministically.
 
 ## Corpus size and the 2:1:7 caveat
 
-SkillOpt's default split ratio is 2:1:7. At 37 fixtures that ratio gives a
+SkillOpt's default split ratio is 2:1:7. At 44 fixtures that ratio gives a
 selection split of roughly five tasks, too thin to gate a strict
 improve-or-reject decision because five observations provide little ability
 to average out run-to-run variance. Following the precedent already set in
 `skills/scorer-gated-skill-edits/references/worked-example.md` ("the ratio is
 aspirational" for a small fixture count), this split uses a flatter 16:13:8
-partition, named explicitly as a deviation from the 2:1:7 default. The
+base partition plus a scoped 2:3:2 compatibility addition, for a resulting
+18:16:10 partition. This is named explicitly as a deviation from the 2:1:7
+default. The
 honest minimal groundwork, per that same worked example, is a larger
 fixture corpus over time, not a smaller gate.
 
@@ -34,7 +36,9 @@ fixture corpus over time, not a smaller gate.
   `capability-assumption-broad-excuses-explanation.yaml`,
   `ablation-capability-no-mechanism.yaml`,
   `tool-capability-verification-train.yaml`,
-  `consumer-repo-convention-deference-train.yaml`.
+  `consumer-repo-convention-deference-train.yaml`,
+  `compatibility-claude-fork-train.yaml`,
+  `compatibility-hermes-platform-train.yaml`.
 - **selection** (gates acceptance; scored before/after a candidate edit,
   strict improve-or-reject, ties rejected): `edge.yaml`,
   `mechanism-fit-subagent.yaml`, `third-party-not-authoritative.yaml`,
@@ -46,14 +50,45 @@ fixture corpus over time, not a smaller gate.
   `capability-assumption-frontier-flags-explanation.yaml`,
   `ablation-capability-runner-exists-not-run.yaml`,
   `tool-capability-verification-selection.yaml`,
-  `consumer-repo-convention-deference-selection.yaml`.
+  `consumer-repo-convention-deference-selection.yaml`,
+  `compatibility-devin-trigger-selection.yaml`,
+  `compatibility-openclaw-gate-selection.yaml`,
+  `compatibility-independent-blocker-selection.yaml`.
 - **test** (read once, for a final report only, never to motivate or gate
   an edit): `guardrail.yaml`, `no-fabricated-violation.yaml`,
   `portability-classification.yaml`, `blind-spot-pass-not-silent.yaml`,
   `model-effort-tier-fit-justified.yaml`,
   `portability-legitimate-illustrative-citation.yaml`,
   `capability-assumption-adaptive-progressive-disclosure.yaml`,
-  `ablation-capability-already-run.yaml`.
+  `ablation-capability-already-run.yaml`,
+  `compatibility-declared-hermes-test.yaml`,
+  `compatibility-portable-standard-test.yaml`.
+
+## Compatibility-awareness branch coverage
+
+The seven `compatibility-*` fixtures were frozen before the candidate skill
+edit for issue #332.
+
+- Non-standard top-level frontmatter: Claude Code and HermesAgent examples
+  motivate the edit in train; a distinct Devin field gates it in selection.
+- Runtime-specific semantics inside standard `metadata`: an OpenClaw
+  load-time eligibility gate is held out in selection.
+- Warning-only verdict interaction: the OpenClaw selection fixture is
+  otherwise Mature and must retain that verdict.
+- Accurate self-declaration: the HermesAgent test fixture requires an
+  acknowledged limitation rather than a duplicate remediation proposal.
+- Independent blockers: the mixed Claude Code selection fixture combines a
+  runtime extension with an inaccurate permission-containment claim.
+- Non-trigger restraint: the portable-standard test fixture requires an
+  explicit absence of a compatibility warning.
+- GitApex boundary: held-out fixtures reject a proposal for custom GitApex
+  frontmatter.
+
+Blind spot pass: the corpus covers declared and undeclared limitations,
+standard and non-standard placement, warning-only severity, a mixed blocker,
+and a portable non-trigger. It does not prove how an undocumented future
+runtime field behaves; the compatibility baseline must label such cases
+Unknown and must be refreshed as product documentation changes.
 
 The three `capability-assumption-*` fixtures were added for issue #183
 (Sub-project B, the capability-assumption grading semantics), for the

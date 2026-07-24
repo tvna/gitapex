@@ -1,0 +1,37 @@
+id: evaluating-skill-quality-compatibility-openclaw-gate-selection
+name: OpenClaw Eligibility Gate Is Warning Only
+description: Held-out semantic case where a standard metadata container carries runtime-specific load-time gating for an otherwise mature skill.
+tags:
+  - quality
+  - compatibility
+  - selection
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this complete skill. Assume the
+    deterministic shape checker passes, dimensions 1-9 otherwise clear, and
+    behavioral evidence plus transfer evidence are recorded.
+
+    ---
+    name: json-transform
+    description: Transform JSON with jq. Use when a request needs a deterministic JSON rewrite.
+    metadata:
+      openclaw:
+        requires:
+          bins: [jq]
+    ---
+
+    # JSON Transform
+
+    1. Confirm the requested transformation and expected output shape.
+    2. Run jq against the supplied file.
+    3. Validate the result parses as JSON and preserves the input file.
+expected:
+  output_contains:
+    - "compatibility"
+    - "metadata.openclaw"
+    - "OpenClaw"
+    - "warning"
+    - "Mature"
+  output_not_contains:
+    - "LGTM"
+    - "GitApex frontmatter"

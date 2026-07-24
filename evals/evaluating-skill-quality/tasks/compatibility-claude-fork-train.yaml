@@ -1,0 +1,28 @@
+id: evaluating-skill-quality-compatibility-claude-fork-train
+name: Claude Fork Extension Is Undeclared
+description: Motivates compatibility awareness with a Claude Code-only execution field that is absent from the Agent Skills standard and has no self-declaration.
+tags:
+  - quality
+  - compatibility
+  - train
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt.
+
+    ---
+    name: isolated-research
+    description: Research a codebase question in an isolated worker. Use when a request needs a focused investigation.
+    context: fork
+    agent: Explore
+    ---
+
+    # Isolated Research
+
+    Research the requested question and return cited findings.
+expected:
+  output_contains:
+    - "compatibility"
+    - "context: fork"
+    - "Claude Code"
+  output_not_contains:
+    - "LGTM"

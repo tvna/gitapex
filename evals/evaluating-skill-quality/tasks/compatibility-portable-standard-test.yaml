@@ -1,0 +1,30 @@
+id: evaluating-skill-quality-compatibility-portable-standard-test
+name: Standard Portable Skill Needs No Warning
+description: Test-only non-trigger case proving standard frontmatter and portable prose do not receive a fabricated compatibility limitation.
+tags:
+  - quality
+  - compatibility
+  - test
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this complete skill. Assume the
+    deterministic shape checker passes, dimensions 1-9 clear, and behavioral
+    evidence plus transfer evidence are recorded.
+
+    ---
+    name: markdown-outline
+    description: Build a Markdown heading outline. Use when a document needs a concise structural summary.
+    ---
+
+    # Markdown Outline
+
+    1. Read the supplied Markdown document.
+    2. List each heading in source order with its nesting depth.
+    3. Confirm every source heading appears exactly once.
+expected:
+  output_contains:
+    - "no compatibility warning"
+    - "Mature"
+  output_not_contains:
+    - "runtime-specific limitation"
+    - "LGTM"

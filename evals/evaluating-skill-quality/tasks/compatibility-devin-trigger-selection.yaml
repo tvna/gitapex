@@ -1,0 +1,33 @@
+id: evaluating-skill-quality-compatibility-devin-trigger-selection
+name: Devin Invocation Extension Needs Disclosure
+description: Held-out non-standard-frontmatter case using Devin invocation semantics rather than either training runtime.
+tags:
+  - quality
+  - compatibility
+  - selection
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt. The
+    body is concise and complete; focus on whether the artifact communicates
+    its runtime assumptions.
+
+    ---
+    name: manual-release
+    description: Run the release checklist. Use when an operator explicitly requests a release.
+    triggers: ["user"]
+    ---
+
+    # Manual Release
+
+    1. Verify the release tag.
+    2. Run the published release command.
+    3. Report the resulting artifact URL.
+expected:
+  output_contains:
+    - "compatibility"
+    - "triggers"
+    - "Devin"
+    - "warning"
+  output_not_contains:
+    - "LGTM"
+    - "GitApex frontmatter"
