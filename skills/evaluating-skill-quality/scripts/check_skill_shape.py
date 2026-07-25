@@ -285,8 +285,6 @@ REFERENCES_MAPPING_LIKE_RE = re.compile(r"^[A-Za-z0-9_.-]+:(\s|$)")
 # valid item at a different indent instead of reading it, the same
 # accommodation REFERENCES_LIST_ITEM_RE already makes for spec.references.
 SKILL_DEPENDENCY_SUBKEYS = ("requires", "relatedTo")
-SKILL_DEP_SUBKEY_RE = re.compile(r"^[ ]{4}(requires|relatedTo):\s*(.*)$")
-SKILL_DEP_UNKNOWN_KEY_RE = re.compile(r"^[ ]{4}([A-Za-z0-9_-]+):")
 SKILL_DEP_LIST_ITEM_RE = re.compile(r"^[ ]{4,}-\s*(.*)$")
 
 # spec.lifecycle's three recognized sub-blocks -- "experimental" (entry
@@ -323,7 +321,6 @@ LIFECYCLE_REQUIRED_FIELDS = {
 # only; no rule ties a sibling's spec.skillDependencies.requires to this
 # value (that would be new cross-skill coupling beyond what was asked).
 COMPATIBILITY_GUARANTEE_LEVELS = ("Alpha", "Beta", "GA")
-LIFECYCLE_SUBKEY_RE = re.compile(r"^[ ]{4}(experimental|deprecated|stable):\s*(.*)$")
 # spec.lifecycle.renamedFrom is different in kind from the three
 # sub-blocks above: a plain scalar directly under lifecycle: (like
 # metadata.name under metadata:), never opening a nested block. Backward-
@@ -334,13 +331,6 @@ LIFECYCLE_SUBKEY_RE = re.compile(r"^[ ]{4}(experimental|deprecated|stable):\s*(.
 # resolved against sibling directories (unlike deprecated.replacement) --
 # the whole point is that the old name is expected to no longer exist.
 LIFECYCLE_SCALAR_KEYS = ("renamedFrom",)
-LIFECYCLE_SCALAR_KEY_RE = re.compile(r"^[ ]{4}(renamedFrom):\s*(.*)$")
-LIFECYCLE_UNKNOWN_SUBKEY_RE = re.compile(r"^[ ]{4}([A-Za-z0-9_-]+):")
-# Matches ANY key at this indent, recognized or not -- the handler tells
-# them apart by membership in LIFECYCLE_FIELDS[subkey], the same "match
-# broad, filter narrow" approach SKILL_DEP_UNKNOWN_KEY_RE's sibling
-# SKILL_DEP_SUBKEY_RE takes one level up.
-LIFECYCLE_FIELD_RE = re.compile(r"^[ ]{6}([A-Za-z0-9_-]+):\s*(.*)$")
 # Strict calendar-date shape for spec.lifecycle's since/removeAfter
 # fields: YYYY-MM-DD only. Real-date validity (rejecting e.g. 2026-02-30)
 # is checked separately via datetime.date.fromisoformat in
@@ -355,6 +345,28 @@ LIFECYCLE_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 # checker is offline/read-only by design.
 LIFECYCLE_ISSUE_REF_RE = re.compile(
     r"^(?:[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*)?#\d+$")
+
+# A YAML mapping key at a given indent, however it was written: a bare
+# scalar key (any run of characters up to the first unquoted ":" that
+# does not start with whitespace, a quote, or "#") or a single/double-
+# quoted string key. Shared by every gated block's key-recognition site
+# (spec.skillDependencies' requires/relatedTo, spec.lifecycle's
+# experimental/deprecated/stable/renamedFrom and their own nested fields).
+# Earlier per-field pairs -- a specific-name alternation regex for
+# recognized keys, plus a [A-Za-z0-9_-]+ catch-all for unrecognized ones --
+# shared one blind spot: a quoted key (`"extra": foo`) or a key containing
+# a character outside that narrow class matched NEITHER regex, so it fell
+# through both checks into the "stray content, skip silently" branch
+# instead of ever reaching unknown-key detection (issue #356). Matching
+# broadly here and leaving "recognized vs. unknown" entirely to the
+# caller's own membership check closes that gap: every syntactically
+# key-shaped line at this indent is now seen as A key, so an unrecognized
+# one can no longer hide behind a narrow character class the way a
+# recognized one never had to.
+KEY_LINE_RE_4 = re.compile(
+    r'^[ ]{4}(?:"([^"]*)"|\'([^\']*)\'|([^\s"\'#][^:]*?)):[ \t]*(.*)$')
+KEY_LINE_RE_6 = re.compile(
+    r'^[ ]{6}(?:"([^"]*)"|\'([^\']*)\'|([^\s"\'#][^:]*?)):[ \t]*(.*)$')
 
 TAG_RE = re.compile(r"</?[A-Za-z][^>]*>")
 # A YAML plain (unquoted) scalar cannot safely contain ": " (colon followed
@@ -639,6 +651,27 @@ def _strip_bare_comment(value: str) -> str:
     return "" if value.startswith("#") else value
 
 
+def _match_key_line(pattern: re.Pattern[str], line: str) -> tuple[str, str] | None:
+    """Match ``line`` against ``pattern`` (``KEY_LINE_RE_4`` or
+    ``KEY_LINE_RE_6``). Returns ``(key, value)`` with the key already
+    unquoted (a quoted key's own quote characters are never part of the
+    key name) and the value right-stripped, or ``None`` if ``line`` is not
+    a key-shaped line at that indent. The one shared recognition site
+    every gated block's key handling uses (issue #356) -- callers decide
+    "recognized vs. unknown" themselves via membership in their own set of
+    valid names; this function only decides "is this syntactically a key
+    at all," so an unrecognized key can never again bypass detection by
+    virtue of being quoted or containing a character a narrower per-field
+    regex did not anticipate.
+    """
+    m = pattern.match(line)
+    if not m:
+        return None
+    key = m.group(1) if m.group(1) is not None else (
+        m.group(2) if m.group(2) is not None else m.group(3))
+    return key, m.group(4).strip()
+
+
 @dataclass(frozen=True)
 class ManifestParse:
     """Result of ``_parse_manifest``: the parsed top-level mapping plus any
@@ -716,7 +749,18 @@ def _parse_manifest(text: str) -> ManifestParse:
       collected into ``ManifestParse.unknown_skill_dependency_keys``
       instead of being silently skipped, since an unrecognized key here is
       a real shape defect the checker is expected to catch, not reserved
-      space.
+      space. Every gated block's key recognition (this one, spec.lifecycle's
+      below, and any future one) shares one key-line matcher,
+      ``_match_key_line`` over ``KEY_LINE_RE_4``/``KEY_LINE_RE_6`` --
+      it recognizes a bare OR quoted YAML key as A key regardless of its
+      characters, leaving "recognized vs. unknown" entirely to the
+      caller's own membership check. A narrower, name-specific regex used
+      to do both jobs at once (matching only the recognized names, with a
+      separate ``[A-Za-z0-9_-]+`` catch-all for everything else); a quoted
+      key (``"extra": foo``) or a key containing a character outside that
+      narrow class matched neither regex and fell through both into the
+      "stray content, skip silently" branch instead of ever reaching
+      unknown-key detection (issue #356).
     - spec.lifecycle (and only that key, and only directly under spec) is
       read as a mapping with exactly three recognized block sub-keys --
       ``experimental``, ``deprecated``, ``stable`` -- plus one recognized
@@ -899,10 +943,12 @@ def _parse_manifest(text: str) -> ManifestParse:
             # Not a list item: this requires/relatedTo list ends here.
             _finalize_dep_list()
         if in_skill_deps:
-            subkey = SKILL_DEP_SUBKEY_RE.match(line)
-            if subkey:
-                key, value = subkey.group(1), subkey.group(2).strip()
-                if value == "[]":
+            matched = _match_key_line(KEY_LINE_RE_4, line)
+            if matched:
+                key, value = matched
+                if key not in SKILL_DEPENDENCY_SUBKEYS:
+                    unknown_dep_keys.append(line.strip())
+                elif value == "[]":
                     skill_deps[key] = []
                 elif not value:
                     collecting_dep_list = []
@@ -914,10 +960,6 @@ def _parse_manifest(text: str) -> ManifestParse:
                     # the shape gate can fail it as the wrong type rather
                     # than silently dropping it.
                     skill_deps[key] = value
-                continue
-            unknown = SKILL_DEP_UNKNOWN_KEY_RE.match(line)
-            if unknown:
-                unknown_dep_keys.append(line.strip())
                 continue
             indent = len(line) - len(line.lstrip(" "))
             if line[:1] in (" ", "\t") and indent >= 4:
@@ -931,9 +973,10 @@ def _parse_manifest(text: str) -> ManifestParse:
             # normally below.
             _finalize_skill_deps()
         if lifecycle_subkey is not None:
-            field = LIFECYCLE_FIELD_RE.match(line)
-            if field:
-                key, value = field.group(1), _strip_bare_comment(field.group(2).strip())
+            matched = _match_key_line(KEY_LINE_RE_6, line)
+            if matched:
+                key, value = matched
+                value = _strip_bare_comment(value)
                 if key in LIFECYCLE_FIELDS.get(lifecycle_subkey, ()):
                     if value:
                         lifecycle_field_buffer[key] = _unquote(value)
@@ -974,35 +1017,32 @@ def _parse_manifest(text: str) -> ManifestParse:
             # normally below.
             lifecycle_scalar_pending = None
         if in_lifecycle:
-            subkey = LIFECYCLE_SUBKEY_RE.match(line)
-            if subkey:
-                key, value = subkey.group(1), _strip_bare_comment(subkey.group(2).strip())
-                if value:
-                    # Not opening a block -- a bare scalar written where a
-                    # mapping is expected (e.g. "experimental: true").
-                    # Store the raw scalar under the subkey itself so the
-                    # checker layer reports it as the wrong type, exactly
-                    # as spec.skillDependencies' non-list scalar fallback
-                    # works.
-                    lifecycle[key] = value
+            matched = _match_key_line(KEY_LINE_RE_4, line)
+            if matched:
+                key, value = matched
+                value = _strip_bare_comment(value)
+                if key in LIFECYCLE_SUBKEYS:
+                    if value:
+                        # Not opening a block -- a bare scalar written where a
+                        # mapping is expected (e.g. "experimental: true").
+                        # Store the raw scalar under the subkey itself so the
+                        # checker layer reports it as the wrong type, exactly
+                        # as spec.skillDependencies' non-list scalar fallback
+                        # works.
+                        lifecycle[key] = value
+                    else:
+                        lifecycle_subkey = key
+                        lifecycle_field_buffer = {}
+                elif key in LIFECYCLE_SCALAR_KEYS:
+                    if value:
+                        lifecycle[key] = _unquote(value)
+                    else:
+                        # Blank (or comment-only) value: ambiguous until the
+                        # next line is seen -- see the
+                        # "lifecycle_scalar_pending is not None" handling above.
+                        lifecycle_scalar_pending = key
                 else:
-                    lifecycle_subkey = key
-                    lifecycle_field_buffer = {}
-                continue
-            scalar = LIFECYCLE_SCALAR_KEY_RE.match(line)
-            if scalar:
-                key, value = scalar.group(1), _strip_bare_comment(scalar.group(2).strip())
-                if value:
-                    lifecycle[key] = _unquote(value)
-                else:
-                    # Blank (or comment-only) value: ambiguous until the
-                    # next line is seen -- see the
-                    # "lifecycle_scalar_pending is not None" handling above.
-                    lifecycle_scalar_pending = key
-                continue
-            unknown = LIFECYCLE_UNKNOWN_SUBKEY_RE.match(line)
-            if unknown:
-                unknown_lifecycle_keys.append(line.strip())
+                    unknown_lifecycle_keys.append(line.strip())
                 continue
             indent = len(line) - len(line.lstrip(" "))
             if line[:1] in (" ", "\t") and indent >= 4:

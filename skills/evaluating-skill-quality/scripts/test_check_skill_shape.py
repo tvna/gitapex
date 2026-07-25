@@ -2153,6 +2153,37 @@ def test_skill_dependencies_unknown_key_fails_well_formed(tmp_path):
     assert css.main([str(d)]) == 1
 
 
+def test_skill_dependencies_quoted_unknown_key_fails_well_formed(tmp_path):
+    # Regression guard (issue #356): a quoted unknown key must not bypass
+    # detection just because it does not match the old [A-Za-z0-9_-]+
+    # catch-all -- it has to be reported the same as an unquoted one.
+    d = _write_skill_deps_sidecar(
+        _write_skill(tmp_path),
+        "  skillDependencies:\n"
+        "    requires: []\n"
+        "    \"extra\": foo\n")
+    by = _by_name(css.check_shape(d))
+    assert by["skill-dependencies-well-formed"].passed is False
+    assert "unknown key" in by["skill-dependencies-well-formed"].evidence
+    assert css.main([str(d)]) == 1
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.unknown_skill_dependency_keys == ['"extra": foo']
+
+
+def test_skill_dependencies_symbol_bearing_unknown_key_fails_well_formed(tmp_path):
+    # A key containing a character outside [A-Za-z0-9_-] (here a space and
+    # "!") is equally unrecognized-but-undetected under the old regex.
+    d = _write_skill_deps_sidecar(
+        _write_skill(tmp_path),
+        "  skillDependencies:\n"
+        "    requires: []\n"
+        "    'weird key!': foo\n")
+    by = _by_name(css.check_shape(d))
+    assert by["skill-dependencies-well-formed"].passed is False
+    assert "unknown key" in by["skill-dependencies-well-formed"].evidence
+    assert css.main([str(d)]) == 1
+
+
 def test_skill_dependencies_non_list_scalar_fails_well_formed(tmp_path):
     d = _write_skill_deps_sidecar(
         _write_skill(tmp_path),
@@ -2451,6 +2482,40 @@ def test_lifecycle_unknown_top_level_key_fails_well_formed(tmp_path):
     by = _by_name(css.check_shape(d))
     assert by["lifecycle-well-formed"].passed is False
     assert "unknown key" in by["lifecycle-well-formed"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_lifecycle_quoted_unknown_top_level_key_fails_well_formed(tmp_path):
+    # Regression guard (issue #356): same defect class as
+    # test_skill_dependencies_quoted_unknown_key_fails_well_formed, one
+    # nesting level up -- a quoted key directly under spec.lifecycle must
+    # not bypass detection.
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n"
+        "    experimental:\n"
+        "      reason: not yet proven\n"
+        "      trackingIssue: \"#123\"\n"
+        "    'stage': Beta\n")
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is False
+    assert "unknown key" in by["lifecycle-well-formed"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_lifecycle_quoted_unknown_field_fails_well_formed(tmp_path):
+    # Same defect class one nesting level deeper still -- a quoted
+    # unrecognized field inside experimental/deprecated/stable.
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n"
+        "    experimental:\n"
+        "      reason: not yet proven\n"
+        "      trackingIssue: \"#123\"\n"
+        "      \"extra field\": foo\n")
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is False
+    assert "unknown field" in by["lifecycle-well-formed"].evidence
     assert css.main([str(d)]) == 1
 
 
