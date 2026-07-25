@@ -2228,6 +2228,42 @@ def test_skill_dependencies_blank_block_is_null_fails_well_formed(tmp_path):
     assert css.main([str(d)]) == 1
 
 
+def test_skill_dependencies_block_header_trailing_comment_still_opens(tmp_path):
+    # Regression guard (code review finding), same defect class as the
+    # executionRequirements block-header case: "skillDependencies:  #
+    # comment" must still open the block -- before this fix, the comment
+    # text was read as the literal (wrong-type) value, discarding
+    # requires/relatedTo underneath entirely.
+    d = _write_skill_deps_sidecar(
+        _write_skill(tmp_path),
+        "  skillDependencies:  # not yet declared for real\n"
+        "    requires: []\n"
+        "    relatedTo: []\n")
+    by = _by_name(css.check_shape(d))
+    assert by["skill-dependencies-well-formed"].passed is True
+    assert css.main([str(d)]) == 0
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.root["spec"]["skillDependencies"] == {"requires": [], "relatedTo": []}
+
+
+def test_skill_dependencies_requires_trailing_comment_still_opens(tmp_path):
+    # Same bug, one level deeper: "requires:  # comment" must still be
+    # read as blank and open the list, not stored as the literal comment
+    # string.
+    (tmp_path / "other-skill").mkdir()
+    d = _write_skill_deps_sidecar(
+        _write_skill(tmp_path),
+        "  skillDependencies:\n"
+        "    requires:  # inline comment\n"
+        "      - other-skill\n"
+        "    relatedTo: []\n")
+    by = _by_name(css.check_shape(d))
+    assert by["skill-dependencies-well-formed"].passed is True
+    assert css.main([str(d)]) == 0
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.root["spec"]["skillDependencies"]["requires"] == ["other-skill"]
+
+
 def test_skill_dependencies_valid_resolves_and_is_well_formed(tmp_path):
     (tmp_path / "other-skill").mkdir()
     d = _write_skill_deps_sidecar(
@@ -3122,6 +3158,48 @@ def test_execution_requirements_blank_block_is_null_fails_well_formed(tmp_path):
     assert result.passed is False
     assert "not a mapping: None" in result.evidence
     assert css.main([str(d)]) == 1
+
+
+def test_execution_requirements_block_header_trailing_comment_still_opens(tmp_path):
+    # Regression guard (code review finding): "executionRequirements:  #
+    # comment" must still open the block -- a value that is NOTHING BUT
+    # a comment is blank under real YAML, exactly like a bare blank
+    # value. Before this fix, the comment text ("# not yet fully
+    # specified") was read as the literal (wrong-type) value, so the
+    # block never opened and the entire tools/read block underneath it
+    # was silently discarded.
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:  # not yet fully specified\n"
+        "    tools:\n"
+        "      read:\n"
+        "        - foo\n")
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is True
+    assert result.evidence == "tools.read declared"
+    assert css.main([str(d)]) == 0
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.root["spec"]["executionRequirements"]["tools"]["read"] == ["foo"]
+
+
+def test_execution_requirements_tools_subkey_trailing_comment_still_opens(tmp_path):
+    # Same bug, one level deeper: "read:  # comment" opening tools.read
+    # must still be read as blank and open the list, not be stored as
+    # the literal comment string.
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:\n"
+        "    tools:\n"
+        "      read:  # comment\n"
+        "        - foo\n")
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is True
+    assert result.evidence == "tools.read declared"
+    assert css.main([str(d)]) == 0
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.root["spec"]["executionRequirements"]["tools"]["read"] == ["foo"]
 
 
 def test_execution_requirements_tools_all_subkeys_declared(tmp_path):

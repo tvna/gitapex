@@ -961,14 +961,25 @@ def _parse_manifest(text: str) -> ManifestParse:
     value on the same line is not stripped -- it is read as part of the
     value, which is safe (fails closed against the expected enum/literal)
     but is not a supported way to annotate a sidecar field. Exception:
-    the three ``spec.lifecycle`` value-extraction sites strip a value
-    that is NOTHING BUT a comment (starts with ``#`` unquoted) down to
-    empty via ``_strip_bare_comment``, since real YAML never allows an
-    unquoted scalar to start with ``#`` (it always opens a comment there)
-    -- the general "fails closed" reasoning above does not hold when a
-    field's own valid shape can itself start with ``#``, as
+    every gated-block-opening site (the top-level ``nested`` dispatch for
+    spec.references/skillDependencies/lifecycle/executionRequirements;
+    spec.skillDependencies' own requires/relatedTo; spec.lifecycle's
+    experimental/deprecated/stable and their own value-extraction sites;
+    spec.executionRequirements' own tools; and tools' own
+    read/write/shell) strips a value that is NOTHING BUT a comment
+    (starts with ``#`` unquoted) down to empty via
+    ``_strip_bare_comment`` before deciding whether that value is blank,
+    since real YAML never allows an unquoted scalar to start with ``#``
+    (it always opens a comment there) -- the general "fails closed"
+    reasoning above does not hold when a blank-vs-not decision gates
+    whether a whole nested block opens at all: a code-review finding
+    caught that ``executionRequirements:  # not yet fully specified``
+    (and the equivalent for every other gated block/list-opening key)
+    read the comment as a literal, wrong-type scalar value instead of a
+    blank one, silently discarding everything nested underneath it
+    before this fix. Applies one level deeper too, for the same reason:
     ``experimental.trackingIssue``'s ``#123``/``owner/repo#123`` shape
-    does; an unquoted ``trackingIssue: #123`` must read as absent, not as
+    means an unquoted ``trackingIssue: #123`` must read as absent, not as
     the literal string ``"#123"`` a quoted value would give.
 
     A top-level (column-0) line that is not blank, not a '#' comment, not a
@@ -1198,6 +1209,13 @@ def _parse_manifest(text: str) -> ManifestParse:
             if matched:
                 skill_deps_has_content = True
                 key, value = matched
+                # A value that is NOTHING BUT a comment (e.g. "requires:
+                # # comment") must read as blank/absent, not as the
+                # literal comment text -- otherwise it neither opens the
+                # list nor equals "[]" and is instead stored as a raw,
+                # wrong-type scalar (found by review: "requires:  #
+                # inline comment" silently discarded the whole list).
+                value = _strip_bare_comment(value)
                 if key not in SKILL_DEPENDENCY_SUBKEYS:
                     unknown_dep_keys.append(line.strip())
                 elif value == "[]":
@@ -1347,6 +1365,9 @@ def _parse_manifest(text: str) -> ManifestParse:
             if matched:
                 exec_tools_has_content = True
                 key, value = matched
+                # Same comment-only-value fix as spec.skillDependencies'
+                # equivalent branch above (e.g. "read:  # comment").
+                value = _strip_bare_comment(value)
                 if key not in EXEC_REQ_TOOLS_SUBKEYS:
                     unknown_exec_tools_keys.append(line.strip())
                 elif value == "[]":
@@ -1379,6 +1400,9 @@ def _parse_manifest(text: str) -> ManifestParse:
             if matched:
                 exec_req_has_content = True
                 key, value = matched
+                # Same comment-only-value fix as spec.skillDependencies'
+                # equivalent branch above (e.g. "tools:  # comment").
+                value = _strip_bare_comment(value)
                 if key != "tools":
                     unknown_exec_req_keys.append(line.strip())
                 elif value:
@@ -1412,6 +1436,14 @@ def _parse_manifest(text: str) -> ManifestParse:
             nested = re.match(r"[ ]{2}([A-Za-z0-9_-]+):\s*(.*)$", line)
             if nested and current is not None:
                 key, value = nested.group(1), nested.group(2).strip()
+                # A value that is NOTHING BUT a comment (e.g.
+                # "executionRequirements:  # not yet fully specified")
+                # must read as blank, the same way a real YAML parser
+                # reads it -- otherwise `not value` is False, none of
+                # these four gated blocks ever opens, and the entire
+                # nested block underneath is discarded as a raw,
+                # wrong-type scalar string instead (found by review).
+                value = _strip_bare_comment(value)
                 # current is root["spec"] by identity exactly while inside
                 # the spec: block, so this is "are we directly under spec"
                 # without tracking a separate current-top-key variable.
