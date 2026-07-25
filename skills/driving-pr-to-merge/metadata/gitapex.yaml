@@ -9,3 +9,5 @@ spec:
     requires: []
     relatedTo:
       - stop-and-replan
+      - untrusted-input-triage
+      - outward-artifact-preflight
