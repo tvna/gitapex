@@ -1,0 +1,48 @@
+id: evaluating-skill-quality-cohesion-independently-changeable-branches-train
+name: Repo-Hygiene Toolkit Bundles Three Unrelated Procedures
+description: Motivates the Skill vs. multiple skills / cohesion Mechanism-fit check -- the target bundles API-key rotation, commit-message reformatting, and changelog generation under one skill with no shared invariant, no data relationship between branches, and each branch independently triggerable and independently changeable. The review must name this a whole-artifact cohesion finding and recommend a split, not accept it because each individual branch is well-written.
+tags:
+  - quality
+  - mechanism-fit
+  - cohesion
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "repo-hygiene-toolkit". Is this a good skill?
+
+    ---
+    name: repo-hygiene-toolkit
+    description: Rotate leaked API keys, reformat commit messages to conventional-commits style, and generate changelog entries from merged PR titles. Use when the user asks to rotate a key, fix a commit message, or update the changelog.
+    ---
+
+    # Repo Hygiene Toolkit
+
+    ## Procedure
+
+    Pick the branch matching the user's request; the three are unrelated
+    and can be run in any order or independently.
+
+    ### Branch A: Rotate a leaked API key
+
+    1. Call the secret-rotation tool to issue a new key.
+    2. Revoke the old key.
+    3. Update the vault entry.
+
+    ### Branch B: Reformat a commit message
+
+    1. Read the commit message the user supplies.
+    2. Rewrite it to conventional-commits style (`type(scope): summary`).
+    3. Return the rewritten message.
+
+    ### Branch C: Generate a changelog entry
+
+    1. List merged PR titles since the last release tag.
+    2. Group them by conventional-commit type.
+    3. Emit a changelog section.
+expected:
+  output_contains:
+    - "Skill vs. multiple skills"
+    - "split"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"

@@ -27,6 +27,7 @@ skill's own folder.
   - [Blind spot pass](#blind-spot-pass)
 - [Contract discipline](#contract-discipline)
 - [Mechanism fit](#mechanism-fit)
+  - [Skill vs. multiple skills / cohesion](#skill-vs-multiple-skills--cohesion)
   - [Skill-step vs. bundled script](#skill-step-vs-bundled-script)
   - [Model/effort tier fit](#modeleffort-tier-fit)
   - [Tool-capability verification](#tool-capability-verification)
@@ -245,32 +246,138 @@ itself needs isolation, not the review's visibility to the human. This
 skill applies the pattern to itself; see `SKILL.md`'s Subagent dispatch
 section.
 
-A wrong-mechanism finding is not one of the nine dimensions and is not
-folded into the well-formed/mature ladder: report it as the review's
-headline finding regardless of how the rest of the review scores, per
-`SKILL.md`'s Procedure step 2 and Stop boundaries.
+A wrong-mechanism or low-cohesion finding is not one of the nine
+dimensions and is not folded into the well-formed/mature ladder: report it
+as the review's headline finding regardless of how the rest of the review
+scores, per `SKILL.md`'s Procedure step 2 and Stop boundaries.
 
-This describes a *whole-artifact* wrong-mechanism finding (the skill should
-have been a hook, subagent, or CLAUDE.md content). The Skill-step vs.
-bundled script and Model/effort tier fit checks below are the exceptions:
-their findings are step-level, reported for triage, and are neither a
-headline nor a *mature* blocker.
+This describes a *whole-artifact* finding -- either a wrong-mechanism
+finding (the skill should have been a hook, subagent, or CLAUDE.md
+content) or the low-cohesion finding [Skill vs. multiple skills /
+cohesion](#skill-vs-multiple-skills--cohesion) below produces (the skill
+should be split into several). The Skill-step vs. bundled script,
+Model/effort tier fit, and Tool-capability verification checks further
+below are the exceptions: their findings are step-level, reported for
+triage, and are neither a headline nor a *mature* blocker.
 
 A recorded mechanism-fit decision for the *reviewed* skill -- the "keep
-vs. retire, and why" rationale once a wrong-mechanism finding has been
-weighed -- belongs in that skill's footer `## Notes` section, not
-front-loaded above its procedure; the same placement convention that
-keeps portability declarations terse up top applies here.
+vs. retire, and why" rationale once a wrong-mechanism or low-cohesion
+finding has been weighed -- belongs in that skill's footer `## Notes`
+section, not front-loaded above its procedure; the same placement
+convention that keeps portability declarations terse up top applies here.
+
+### Skill vs. multiple skills / cohesion
+
+A fourth whole-artifact check, alongside the three above: not which *kind*
+of mechanism a target should be, but whether a target correctly scoped as
+a skill is *one* skill or should split into several. Adapted, for skill
+artifacts, from structured design's classic cohesion spectrum -- Stevens,
+Myers, and Constantine's original six-way taxonomy (coincidental, logical,
+temporal, communicational, sequential, functional) from their 1974 paper
+introducing structured design ([sd]), extended to seven by Yourdon and
+Constantine's later addition of *procedural* cohesion in their 1978 book
+([ycsd]) -- applied here to a `SKILL.md`'s mandatory content and procedure
+branches rather than a program module's statements. Labelled here as this
+repository's own reasoned extension rather than an Anthropic-sourced
+claim, the same disclosure Tool-capability verification below already
+uses for content this file did not ground in [steering] or another
+Anthropic primary source.
+
+**Check.** Map the target's mandatory content (the parts every invocation
+reads, not an optional branch) and its enumerated procedure branches to:
+one user-visible outcome, the invariants every branch shares, and the
+reasons the file would ever change. Enumerate the branches directly here
+rather than waiting on dimension 4's own branch-trigger walk: this check
+runs at Procedure step 2, before the nine-dimension walk (step 5) reaches
+dimension 4, so no branch inventory yet exists to reuse at this point --
+dimension 4 is the one that reuses this check's enumeration later,
+per Contract discipline's "never both" rule (see this dimension's own
+cross-reference below), not the reverse. Report the dominant cohesion type
+with cited
+evidence -- quote the specific text that shows the mapping -- and name a
+secondary type only when the target genuinely mixes patterns; never infer
+cohesion from how well-written the prose is. A reviewer stating the
+skill's purpose too abstractly ("helps with quality") can make almost any
+artifact look cohesive -- ground the type in what the branches actually
+do, not in a generously abstract restatement of them.
+
+**Taxonomy, worst to best, with a skill-shaped tell for each:**
+
+- **Coincidental** -- branches share no relationship beyond living in the
+  same file; nothing but authoring convenience put them together.
+- **Logical** -- branches are grouped by category ("all the validation
+  checks") but a caller must pass a flag or condition to pick one; the
+  branches do not cooperate toward one outcome.
+- **Temporal** -- branches run because of *when* they happen ("do this at
+  startup," "do this on release day"), not because they serve the same
+  result.
+- **Procedural** -- branches follow a fixed order because the author chose
+  that order, not because a later branch consumes an earlier branch's
+  output.
+- **Communicational/informational** -- branches operate on the same data
+  but produce independently useful, unrelated results from it.
+- **Sequential** -- a branch's output is the next branch's input, all
+  converging on one user-visible outcome (a pipeline; this skill's own
+  `SKILL.md` Procedure steps 1-6 are a worked instance of this shape).
+- **Functional** -- every part exists for exactly one, single, well-defined
+  outcome; the strongest form, but not the only acceptable one for
+  skills -- see the decision rule below.
+
+**Decision.**
+
+- **Functional or single-outcome sequential cohesion clears** -- an
+  orchestrator with several ordered steps that all serve one outcome is
+  not low cohesion merely for having steps; do not split a skill for
+  having a multi-step Procedure when every step exists for the same
+  result.
+- **Procedural, temporal, or logical grouping is a split finding** when the
+  branches are independently triggerable, independently usable, or
+  independently changeable -- a maintainer could edit or invoke one branch
+  without the others ever mattering. Report it as a whole-artifact
+  Mechanism-fit finding naming the specific split this implies (candidate
+  skill boundaries), with the same headline standing as a wrong-mechanism
+  finding: reported per `SKILL.md`'s Procedure step 2 and Stop boundaries
+  regardless of how the rest of the review scores, never folded into the
+  well-formed/mature ladder.
+- **Coincidental grouping fails** outright -- the same headline standing as
+  above, with no split-worth-considering hedge: nothing ties the content
+  together at all.
+- **Communicational/informational cohesion is a case-by-case call**, not an
+  automatic pass or an automatic split: operating on the same data while
+  producing independently useful, unrelated results is a real warning sign
+  the branches may not need each other, but a skill whose single stated
+  outcome genuinely is "produce this whole set of related facts from this
+  one input" (not several unrelated outcomes) can still clear -- weigh it
+  with the same independently-triggerable/usable/changeable test as the
+  procedural/temporal/logical bullet above, rather than treating the type
+  label alone as decisive.
+
+**Restraint.** A cohesive orchestrator is not split merely because it has
+several steps, several branches, or ships more than one reference file --
+dimension 5 (progressive disclosure) already owns whether that content is
+laid out well; this check owns only whether the content belongs in one
+artifact at all. When no split is warranted, say so explicitly the same
+"silence is not evidence" way dimension 8 already requires -- e.g. "no
+cohesion split finding; branches share invariant *X* and converge on
+outcome *Y*."
+
+This check has exactly one owner, per Contract discipline's "never both"
+rule: it decides the whole-artifact boundary once, here. It does not
+re-run inside dimension 4's per-branch trigger-distinctness check (which
+asks whether branches are individually well-specified, not whether they
+belong together) or dimension 5's progressive-disclosure split (which
+asks how content already agreed to belong together should be laid out).
 
 ### Skill-step vs. bundled script
 
-The three checks above ask whether a skill is the right *artifact*. This
-fourth asks, within a correctly-chosen skill, whether a given *step* is
-best done by model reasoning or delegated to a bundled script the skill
-calls. It is distinct from the hook check: a hook is event-bound; a step
-inside a skill's procedure fires when the model reaches it, not on an
-event, so a hook cannot own it -- the mechanism choice for such a step is
-model-reasoning vs. a bundled script.
+The four checks above ask whether a skill is the right *artifact*, or, for
+the cohesion check, the right artifact *boundary*. This fifth asks, within
+a correctly-scoped skill, whether a given *step* is best done by model
+reasoning or delegated to a bundled script the skill calls. It is distinct
+from the hook check: a hook is event-bound; a step inside a skill's
+procedure fires when the model reaches it, not on an event, so a hook
+cannot own it -- the mechanism choice for such a step is model-reasoning
+vs. a bundled script.
 
 Delegation is favoured on three converging grounds -- correctness,
 consistency, and cost -- when the step is deterministic:
@@ -317,7 +424,7 @@ than a reviewed one -- an intentional parallel, not the same check.
 
 ### Model/effort tier fit
 
-A fifth Mechanism-fit check, distinct from the four above: not whether
+A sixth Mechanism-fit check, distinct from the five above: not whether
 the skill is the right *artifact*, but whether a model-tier or
 reasoning-effort *pin* the skill's own content makes -- in prose
 instructions to the invoking agent, or in a bundled Workflow script's
@@ -383,7 +490,7 @@ owner rather than being duplicated in both places.
 
 ### Tool-capability verification
 
-A sixth Mechanism-fit check, distinct from the five above: not whether the
+A seventh Mechanism-fit check, distinct from the six above: not whether the
 target chose the right kind of artifact, or the right model/effort tier,
 but whether a claim the target's own content makes about what a named tool
 or MCP subcall *can do* is actually true. A Stop boundary or guardrail step
@@ -834,7 +941,10 @@ safe way.
   is a hard contract, a "sensible default, use judgment" template where
   adaptation helps.
 - **Branch triggers are distinct and complete** -- enumerate every actual
-  procedure branch, including reject/stop/escalate routes. Each branch has
+  procedure branch, including reject/stop/escalate routes; reuse the branch
+  enumeration [Skill vs. multiple skills / cohesion](#skill-vs-multiple-skills--cohesion)
+  already produced at Procedure step 2 rather than re-deriving it here at
+  step 5, per Contract discipline's "never both" rule. Each branch has
   one checkable entry condition that no sibling branch duplicates; flag a
   branch with no trigger, two branches selected by the same trigger, or an
   input state that matches none or several.
@@ -1148,18 +1258,22 @@ live-proof check the reviewing repository applies before landing other
 kinds of changes.
 
 **Well-formed** and **mature** both presuppose *whole-artifact* mechanism
-fit -- the skill is the right container (not better as a hook, subagent, or
-CLAUDE.md content). A step-level finding (Skill-step vs. bundled script, or
-Model/effort tier fit) is reported for triage but does not by itself block
-either verdict.
+fit and adequate cohesion -- the skill is the right container (not better
+as a hook, subagent, or CLAUDE.md content), and its content is not a
+coincidental or independently-triggerable/usable/changeable grouping that
+should split into several skills. A step-level finding (Skill-step vs.
+bundled script, Model/effort tier fit, or Tool-capability verification) is
+reported for triage but does not by itself block either verdict.
 
 A skill can be well-formed or even mature by every dimension below and
-still be the wrong artifact -- content that should be a hook, CLAUDE.md, or a
-subagent, dressed up as a well-written skill. A wrong-mechanism finding
-(see [Mechanism fit](#mechanism-fit)) is reported alongside, not
-replaced by, the well-formed/mature verdict: naming both is more useful
-than picking one, since a reviewer fixing the mechanism still needs to
-know whether the content itself was any good.
+still be the wrong artifact, or the wrong boundary -- content that should be
+a hook, CLAUDE.md, or a subagent, or a bundle of unrelated responsibilities
+that should be several skills, dressed up as a well-written skill. A
+wrong-mechanism or low-cohesion finding (see [Mechanism
+fit](#mechanism-fit)) is reported alongside, not replaced by, the
+well-formed/mature verdict: naming both is more useful than picking one,
+since a reviewer fixing the mechanism or boundary still needs to know
+whether the content itself was any good.
 
 ## References
 
@@ -1179,6 +1293,17 @@ Every inline `[label]` citation above resolves to the source below.
 - **[dbc]** Bertrand Meyer, Applying "Design by Contract", IEEE Computer
   25(10):40-51, October 1992.
   <https://se.inf.ethz.ch/~meyer/publications/computer/contract.pdf>
+- **[sd]** W. P. Stevens, G. J. Myers, and L. L. Constantine, Structured
+  Design, IBM Systems Journal 13(2):115-139, 1974 -- the original
+  coupling/cohesion paper; introduces six of the seven cohesion types
+  (coincidental, logical, temporal, communicational, sequential,
+  functional).
+  <https://dl.acm.org/doi/10.5555/1241515.1241533>
+- **[ycsd]** Edward Yourdon and Larry L. Constantine, Structured Design:
+  Fundamentals of a Discipline of Computer Program and Systems Design,
+  Yourdon Press, 1978 -- adds the seventh cohesion type, procedural, to
+  [sd]'s original six.
+  <https://dl.acm.org/doi/book/10.5555/578522>
 - **[soc]** E. W. Dijkstra, On the role of scientific thought (EWD447), 1974;
   reprinted in Selected Writings on Computing: A Personal Perspective,
   Springer-Verlag, 1982.
@@ -1214,6 +1339,8 @@ Every inline `[label]` citation above resolves to the source below.
 [passk]: https://arxiv.org/abs/2107.03374 "Chen et al. -- Evaluating Large Language Models Trained on Code, OpenAI, 2021 (arXiv:2107.03374)"
 [metrrct]: https://arxiv.org/abs/2507.09089 "Becker, Rush, Barnes, Rein -- Measuring the Impact of Early-2025 AI on Experienced Open-Source Developer Productivity, METR, 2025 (arXiv:2507.09089)"
 [dbc]: https://se.inf.ethz.ch/~meyer/publications/computer/contract.pdf "Bertrand Meyer, Applying \"Design by Contract\", IEEE Computer 25(10):40-51, October 1992"
+[sd]: https://dl.acm.org/doi/10.5555/1241515.1241533 "W. P. Stevens, G. J. Myers, and L. L. Constantine, Structured Design, IBM Systems Journal 13(2):115-139, 1974"
+[ycsd]: https://dl.acm.org/doi/book/10.5555/578522 "Edward Yourdon and Larry L. Constantine, Structured Design: Fundamentals of a Discipline of Computer Program and Systems Design, Yourdon Press, 1978"
 [soc]: https://www.cs.utexas.edu/~EWD/transcriptions/EWD04xx/EWD447.html "E. W. Dijkstra, On the role of scientific thought (EWD447), 1974; reprinted in Selected Writings on Computing: A Personal Perspective, Springer-Verlag, 1982"
 [steering]: https://claude.com/blog/steering-claude-code-skills-hooks-rules-subagents-and-more "Anthropic -- Steering Claude Code: skills, hooks, subagents and more"
 [fable]: https://claude.com/blog/a-field-guide-to-claude-fable-finding-your-unknowns "Thariq Shihipar, Anthropic -- A Field Guide to Fable: Finding Your Unknowns"

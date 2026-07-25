@@ -60,6 +60,19 @@ have been a different mechanism is not fixed by polishing it further.
   invoked. Static facts with no real steps probably belong in CLAUDE.md
   instead; a multi-step procedure crammed into CLAUDE.md is the
   mirror-image mistake.
+- **Skill vs. multiple skills / cohesion**: a correctly-scoped skill can
+  still bundle several independently-triggerable responsibilities under
+  one artifact. Map the target's mandatory content and procedure branches
+  to one user-visible outcome, the invariants they share, and the reasons
+  the file would change; report the dominant cohesion type (functional,
+  sequential, communicational/informational, procedural, temporal,
+  logical, coincidental) with cited evidence. Functional or
+  single-outcome sequential cohesion clears; procedural/temporal/logical
+  grouping whose branches are independently triggerable, usable, or
+  changeable, and coincidental grouping, are whole-artifact findings with
+  the same headline standing as a wrong-mechanism finding. An orchestrator
+  is not split merely for having several steps. Full taxonomy and decision
+  rule: `references/rubric.md`'s Mechanism fit section.
 - **Skill-step vs. bundled script**: a deterministic step *inside* a
   skill's procedure is not event-bound, so a hook cannot own it; delegate
   it to a bundled script the skill calls, rather than re-reasoning it in
@@ -327,12 +340,14 @@ re-derive one.
    dimension-5 finding).
 2. Check mechanism fit per the section above. A whole-artifact
    wrong-mechanism finding (the skill should have been a hook, subagent,
-   or CLAUDE.md content) is the headline finding of the review -- report
-   it even if the rest of the review still completes. The step-level
-   Skill-step vs. bundled script finding is the exception: report it for
-   triage, not as the headline. Also run the Blind spot pass per the
-   Unknowns framework section above -- name a rubric gap if the target's
-   domain exposes one, or state explicitly that none was found.
+   or CLAUDE.md content) or a whole-artifact low-cohesion finding (the
+   skill should be split into several) is the headline finding of the
+   review -- report it even if the rest of the review still completes.
+   The step-level Skill-step vs. bundled script, Model/effort tier fit,
+   and Tool-capability verification findings are the exception: report
+   them for triage, not as the headline. Also run the Blind spot pass per
+   the Unknowns framework section above -- name a rubric gap if the
+   target's domain exposes one, or state explicitly that none was found.
 3. Run the deterministic shape checker per the Two lanes section above (or
    apply its checks by hand where Python is unavailable); cite the exact
    violation.
@@ -398,9 +413,10 @@ actually specifies.
   a wrong precondition (steps 1-4). Redo the precondition instead -- the
   bug lives where the wrong assumption was made (rubric.md, Contract
   discipline).
-- Never let a strong nine-dimension score excuse a wrong-mechanism
-  finding (step 2). A well-formed, mature skill that should have been a
-  hook or CLAUDE.md content is still the wrong artifact.
+- Never let a strong nine-dimension score excuse a wrong-mechanism or
+  low-cohesion finding (step 2). A well-formed, mature skill that should
+  have been a hook or CLAUDE.md content, or split into several skills, is
+  still the wrong artifact or the wrong boundary.
 - Never include the calling conversation's framing, prior discussion, or
   opinion of the target in the subagent dispatch prompt -- pass only the
   target's path/content and this skill's own reference material.
