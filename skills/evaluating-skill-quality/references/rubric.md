@@ -34,6 +34,7 @@ skill's own folder.
 - [Portability level](#portability-level)
 - [Capability assumption](#capability-assumption)
 - [Lifecycle](#lifecycle)
+- [Execution requirements](#execution-requirements)
 - [1. Discovery -- name and description](#1-discovery----name-and-description)
 - [2. Conciseness](#2-conciseness)
 - [3. Degree of freedom](#3-degree-of-freedom)
@@ -829,6 +830,50 @@ Three independent, optional sub-blocks plus one plain scalar under
 - Per the sidecar's own behavior-neutrality invariant, `spec.lifecycle`
   is metadata only: no skill's own runtime procedure may read or branch
   on any part of it.
+
+## Execution requirements
+
+Like Lifecycle, this field has no per-dimension grading effect --
+declaring `spec.executionRequirements` does not change how any of the
+nine dimensions grade. It is structured bookkeeping recording what a
+skill's own procedure actually touches at runtime (tools, filesystem
+paths, network/MCP access, credentials, main-conversation/isolation
+context), gated by the same shape-check rigor as every other sidecar
+field, because a wrongly-shaped or silently-accepted-unknown declaration
+here would be actively misleading to whatever later tooling consumes it.
+
+This is the first slice of a larger, multi-issue schema: only one
+category is recognized so far, `tools`, under one optional block,
+`spec.executionRequirements`:
+
+- **`tools`** -- a mapping with up to three recognized subkeys, `read`,
+  `write`, `shell`, each optional and independent. If present, each is a
+  list of non-empty scalar strings (free-form capability tags -- no fixed
+  vocabulary is defined yet). An absent `tools` block, or an absent
+  subkey within a declared `tools` block, means "not yet declared" --
+  distinct from an explicit empty list (e.g. `read: []`), which means
+  "declared, and zero tools of that kind are needed." The evidence string
+  `execution-requirements-well-formed` reports names exactly which
+  subkeys were declared, so this distinction is visible in the check's
+  own output, not only in the parsed data.
+- **Unknown keys fail closed** -- any key directly under
+  `executionRequirements` other than `tools`, or directly under `tools`
+  other than `read`/`write`/`shell`, fails `execution-requirements-well-formed`,
+  the same treatment `spec.skillDependencies` and `spec.lifecycle` give
+  their own unrecognized keys. Further categories this field will
+  eventually cover -- filesystem, network, MCP, credentials, browser,
+  external services, main-conversation/isolation context -- are deferred
+  to later child issues under the same tracking issue; until each lands,
+  its key name is unknown here, not reserved space.
+- No cross-field or dangling-reference rule exists for this field yet --
+  unlike `spec.skillDependencies`/`spec.lifecycle.deprecated.replacement`,
+  a tool capability tag is free-form and does not resolve against a
+  sibling skill directory.
+- No skill in this repository declares this field yet; absence is every
+  skill's current, unchanged state.
+- Per the sidecar's own behavior-neutrality invariant,
+  `spec.executionRequirements` is metadata only: no skill's own runtime
+  procedure may read or branch on any part of it.
 
 ## 1. Discovery -- name and description
 

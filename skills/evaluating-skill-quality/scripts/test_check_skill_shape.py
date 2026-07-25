@@ -2757,4 +2757,231 @@ def test_lifecycle_well_formed_fails_when_spec_is_not_a_mapping(tmp_path):
     assert by["lifecycle-well-formed"].passed is False
     assert "not a mapping" in by["lifecycle-well-formed"].evidence
     assert by["lifecycle-deprecated-replacement-resolves"].passed is True
+
+
+# ---- execution-requirements-well-formed (issue #349, #307 Workstream W1
+# first slice: the executionRequirements envelope + tools category) ----
+
+def _write_exec_req_sidecar(d, body, *, portability="Mixed"):
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        f"  portability: {portability}\n"
+        "  capabilityAssumption: Broad\n"
+        f"{body}",
+        encoding="utf-8")
+    return d
+
+
+def test_execution_requirements_absent_is_well_formed(tmp_path):
+    d = _write_skill(tmp_path)
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is True
+    assert result.evidence == "not declared (optional)"
+    assert css.main([str(d)]) == 0
+
+
+def test_execution_requirements_declared_with_no_tools_is_well_formed(tmp_path):
+    # Present but empty is a valid, distinct state from absent: nothing
+    # has been declared yet, but the block itself was opened. This parser
+    # has no inline flow-mapping ("tools: {}") support anywhere -- same as
+    # spec.skillDependencies -- so "declared, nothing inside" is written
+    # as a block header with no subkeys following, not a flow scalar.
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:\n"
+        "    tools:\n")
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is True
+    assert result.evidence == "no keys declared"
+    assert css.main([str(d)]) == 0
+
+
+def test_execution_requirements_tools_all_subkeys_declared(tmp_path):
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:\n"
+        "    tools:\n"
+        "      read:\n"
+        "        - files\n"
+        "        - search\n"
+        "      write:\n"
+        "        - files\n"
+        "      shell:\n"
+        "        - bash\n")
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is True
+    assert result.evidence == "tools.read, tools.write, tools.shell declared"
+    assert css.main([str(d)]) == 0
+
+
+def test_execution_requirements_empty_list_distinguished_from_absent(tmp_path):
+    # Regression guard: an explicit "read: []" must be reported as
+    # declared, not conflated with the subkey being entirely absent --
+    # the whole point of the required/optional/prohibited distinction
+    # #307 asks for.
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:\n"
+        "    tools:\n"
+        "      read: []\n")
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is True
+    assert result.evidence == "tools.read declared"
+    assert result.evidence != "no keys declared"
+    assert css.main([str(d)]) == 0
+
+
+def test_execution_requirements_tools_not_a_mapping_fails(tmp_path):
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:\n"
+        "    tools: not-a-mapping-scalar\n")
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "tools is not a mapping" in result.evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_execution_requirements_not_a_mapping_fails(tmp_path):
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements: not-a-mapping-scalar\n")
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "not a mapping" in result.evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_execution_requirements_unknown_top_level_key_fails(tmp_path):
+    # #307's security invariant 4: unknown capabilities fail closed. Only
+    # "tools" is recognized so far -- "network" is a real #307 W1
+    # category, but deferred to a sibling child issue, so it must be
+    # rejected here, not silently accepted as reserved space.
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:\n"
+        "    network:\n"
+        "      mode: disabled\n"
+        "    tools:\n"
+        "      read: []\n")
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "unknown key" in result.evidence
+    assert "network" in result.evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_execution_requirements_unknown_tools_key_fails(tmp_path):
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:\n"
+        "    tools:\n"
+        "      read: []\n"
+        "      bogus:\n"
+        "        - x\n")
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "unknown tools key" in result.evidence
+    assert "bogus" in result.evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_execution_requirements_mapping_shaped_list_item_fails(tmp_path):
+    # Regression guard for the same defect class
+    # test_references_mapping_shaped_item_fails_well_formed covers one
+    # level shallower: an unquoted "key: value" list item must not be
+    # silently truncated into a garbled scalar and certified well-formed.
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:\n"
+        "    tools:\n"
+        "      read:\n"
+        "        - path: sneaky\n")
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "malformed tools entry" in result.evidence
+    assert "path: sneaky" in result.evidence
+    assert css.main([str(d)]) == 1
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.malformed_execution_requirement_tools_items == ["- path: sneaky"]
+    assert parsed.root["spec"]["executionRequirements"]["tools"]["read"] == []
+
+
+def test_execution_requirements_inconsistent_indent_item_fails(tmp_path):
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:\n"
+        "    tools:\n"
+        "      read:\n"
+        "        - \"a\"\n"
+        "      - \"b\"\n")
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert css.main([str(d)]) == 1
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.root["spec"]["executionRequirements"]["tools"]["read"] == ["a"]
+    assert parsed.malformed_execution_requirement_tools_items == ['- "b"']
+
+
+def test_execution_requirements_checks_fail_when_sidecar_unreadable(tmp_path):
+    d = _write_skill(tmp_path)
+    sidecar = d / "metadata/gitapex.yaml"
+    sidecar.write_bytes(b"\xff\xfe\x00\x01invalid")
+    by = _by_name(css.check_shape(d))
+    assert by["execution-requirements-well-formed"].passed is False
+    assert "UnicodeDecodeError" in by["execution-requirements-well-formed"].evidence
+
+
+def test_execution_requirements_well_formed_fails_when_spec_is_not_a_mapping(tmp_path):
+    d = _write_skill(tmp_path)
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec: not-a-mapping-scalar\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["execution-requirements-well-formed"].passed is False
+    assert "not a mapping" in by["execution-requirements-well-formed"].evidence
+
+
+def test_execution_requirements_nesting_never_flagged_as_malformed_top_level(tmp_path):
+    # Parallel to test_legitimate_deeper_nesting_passes_manifest_parsable:
+    # the new nested block's own indented lines must never trip the
+    # unrelated manifest-parsable (top-level line) gate.
+    d = _write_skill(tmp_path)
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  executionRequirements:\n"
+        "    tools:\n"
+        "      read: []\n"
+        "      write:\n"
+        "        - files\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["manifest-parsable"].passed is True
+    assert by["manifest-parsable"].evidence == "no malformed lines"
+    assert by["execution-requirements-well-formed"].passed is True
+    assert css.main([str(d)]) == 0
     assert by["experimental-stable-compatible"].passed is True
