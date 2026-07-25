@@ -1253,6 +1253,13 @@ is labeled as such.
 - **Well-formed** -- clears every deterministic shape check (frontmatter,
   naming, description shape, body length, reference depth/TOC). Says
   nothing about whether the skill is good.
+- **Not-well-formed** -- fails one or more deterministic shape checks. The
+  named rejection token this section provides (`battle-testing-a-skill`'s
+  adversarial-dimensions catalog, dimensions 6 and 8, applied to this
+  rubric's own Verdicts section): a shape failure is a real, structured
+  verdict a downstream consumer can rely on by name, not merely the
+  absence of a passing verdict. State the specific failing check(s) from
+  step 3's shape-checker output as the reason.
 - **Mature** -- well-formed, and every dimension 1-7 clears cleanly with no
   named gap (a "minor" gap still means that dimension has not cleared).
   Dimensions 8-9 are the one exception: because they depend on tooling a
@@ -1260,6 +1267,29 @@ is labeled as such.
   as an unmeasured gap (never silently assumed) is sufficient for them
   specifically -- naming the gap does not, on its own, block "mature" the
   way an uncleared dimension 1-7 gap does.
+- **Indeterminate** -- this review's own precondition (Contract
+  discipline's steps 1-4) could not be established because there was no
+  readable file to grade at all: the target is missing, empty, or
+  unreadable (`SKILL.md`'s Procedure step 1) -- the same failure shape
+  `scripts/check_skill_shape.py` itself treats as a hard stop distinct
+  from an ordinary check failure (a missing target exits non-zero with no
+  result list at all, per its own tests, rather than reporting a normal
+  per-check FAIL). A target that exists and is readable but has malformed
+  or missing frontmatter is **not** this case: `check_skill_shape.py`
+  grades that gracefully as ordinary FAILing checks (e.g.
+  `description-present`), so it earns Not-well-formed, not Indeterminate
+  -- the target was read and graded, it just failed. Distinct from
+  Not-well-formed, which requires the target to have actually been read
+  and graded against the shape checks -- Indeterminate means no dimension
+  verdict, including well-formed or mature, can be honestly issued at all.
+  State the concrete blocking cause rather than defaulting silently to
+  either other verdict. This is a
+  reviewer-facing state, not a fourth entry in a calling repository's own
+  disclosure-line vocabulary (if one exists) -- a repository's own gate may
+  still only recognize a closed set of tokens for that line; disclose an
+  Indeterminate review through whatever escape hatch that gate provides
+  (for example, an explicit waiver with a stated reason) rather than
+  assuming the gate accepts this word verbatim.
 
 A verdict without cited evidence per dimension is not a review -- it is a
 guess wearing a review's shape.
