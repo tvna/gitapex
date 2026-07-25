@@ -336,7 +336,7 @@ schema (a GitApex tracking issue's Workstream W1): only one category,
 spec:
   executionRequirements:
     tools:
-      read: []      # optional, list of free-form capability tags
+      read: []
       write: []
       shell: []
 ```
