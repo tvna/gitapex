@@ -455,6 +455,9 @@ actually specifies.
 ## Notes
 
 Portability rationale: self-contained -- carries its own rubric and bundled
-read-only `check_skill_shape.py`; cites only general Anthropic product
-docs, no this-repository tooling. The declared level itself lives in
-`metadata/gitapex.yaml`.
+read-only `check_skill_shape.py`. Its content cites this-repository design
+docs in a few places (e.g. rubric.md's Execution requirements section),
+but always through the approved hedge convention that marks such a
+citation as deliberate, acknowledged provenance rather than an
+operational dependency this skill's own procedure needs to resolve. The
+declared level itself lives in `metadata/gitapex.yaml`.
