@@ -354,6 +354,29 @@ YAML_NON_STRING_SCALAR_RE = re.compile(
     r"|[-+]?[0-9]+"
     r"|[-+]?(?:[0-9]+\.[0-9]*|\.[0-9]+)(?:[eE][-+]?[0-9]+)?"
     r"|[-+]?\.(?:inf|Inf|INF)|\.(?:nan|NaN|NAN))$")
+# A real YAML comment: an unquoted "#" preceded by start-of-string or
+# whitespace -- YAML never treats a "#" glued directly onto a preceding
+# non-space character as a comment marker (e.g. "true#tag" is the
+# literal string "true#tag", not "true" plus a comment). Used only to
+# strip a trailing comment before classifying an unquoted list item's own
+# scalar type in _is_non_string_plain_scalar below -- the item's stored
+# value is unaffected either way, only the type classification is (Codex
+# review on this PR: a comment-bearing item such as "true # rationale"
+# defeated YAML_NON_STRING_SCALAR_RE's own full-string anchor on its own,
+# silently certifying a real YAML boolean/null/numeric as a string
+# whenever it carried a trailing comment).
+_INLINE_COMMENT_RE = re.compile(r"(?:^|\s)#.*$")
+
+
+def _is_non_string_plain_scalar(raw_text: str) -> bool:
+    """Whether an UNQUOTED list item's raw text is a YAML null/boolean/
+    numeric scalar rather than a string, comment stripped first the same
+    way a real YAML parser would before resolving the item's type.
+    Shared by every gated list-of-scalar-strings site (spec.references;
+    spec.skillDependencies.requires/relatedTo;
+    spec.executionRequirements.tools.read/write/shell)."""
+    stripped = _INLINE_COMMENT_RE.sub("", raw_text).strip()
+    return bool(YAML_NON_STRING_SCALAR_RE.match(stripped))
 
 # spec.skillDependencies's two recognized subkeys, and the shape of their
 # lines. Subkeys sit at 4 spaces (one level under skillDependencies' own
@@ -1139,7 +1162,7 @@ def _parse_manifest(text: str) -> ManifestParse:
                     # parser understands; flag it rather than silently
                     # truncating the mapping into a garbled string.
                     malformed_refs.append(line.strip())
-                elif not is_quoted and YAML_NON_STRING_SCALAR_RE.match(raw_text):
+                elif not is_quoted and _is_non_string_plain_scalar(raw_text):
                     # An unquoted null/boolean/numeric scalar -- real YAML
                     # resolves this to that type, not a string (issue #356).
                     malformed_refs.append(line.strip())
@@ -1163,7 +1186,7 @@ def _parse_manifest(text: str) -> ManifestParse:
                              and raw_text[0] in "\"'")
                 if not is_quoted and REFERENCES_MAPPING_LIKE_RE.match(raw_text):
                     malformed_deps.append(line.strip())
-                elif not is_quoted and YAML_NON_STRING_SCALAR_RE.match(raw_text):
+                elif not is_quoted and _is_non_string_plain_scalar(raw_text):
                     malformed_deps.append(line.strip())
                 else:
                     collecting_dep_list.append(_unquote(raw_text))
@@ -1312,7 +1335,7 @@ def _parse_manifest(text: str) -> ManifestParse:
                              and raw_text[0] in "\"'")
                 if not is_quoted and REFERENCES_MAPPING_LIKE_RE.match(raw_text):
                     malformed_exec_tools_items.append(line.strip())
-                elif not is_quoted and YAML_NON_STRING_SCALAR_RE.match(raw_text):
+                elif not is_quoted and _is_non_string_plain_scalar(raw_text):
                     malformed_exec_tools_items.append(line.strip())
                 else:
                     collecting_exec_tools_list.append(_unquote(raw_text))

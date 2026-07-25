@@ -1023,6 +1023,58 @@ def test_references_quoted_scalar_looking_item_still_a_valid_string(tmp_path):
     assert parsed.root["spec"]["references"] == ["true", "123"]
 
 
+def test_references_non_string_scalar_with_trailing_comment_still_fails(tmp_path):
+    # Regression guard (Codex review on this PR): a trailing inline
+    # comment must not defeat the non-string-scalar classifier -- real
+    # YAML resolves "true # rationale" to the boolean true (the comment
+    # is not part of the value), so this must fail exactly like the bare
+    # "true" case, not be silently accepted as the string
+    # "true # rationale" because the comment broke the classifier's own
+    # full-string match.
+    d = _write_skill(tmp_path)
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  references:\n"
+        "    - true # rationale\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["references-well-formed"].passed is False
+    assert css.main([str(d)]) == 1
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.malformed_reference_items == ["- true # rationale"]
+    assert parsed.root["spec"]["references"] == []
+
+
+def test_references_string_item_with_glued_hash_is_not_a_comment(tmp_path):
+    # Companion regression guard: a "#" NOT preceded by whitespace is not
+    # a YAML comment marker at all -- "true#tag" is the literal string
+    # "true#tag", so it must still pass as an ordinary reference string,
+    # not be misclassified as the boolean true with a comment stripped.
+    d = _write_skill(tmp_path)
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  references:\n"
+        "    - true#tag\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["references-well-formed"].passed is True
+    assert css.main([str(d)]) == 0
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.root["spec"]["references"] == ["true#tag"]
+
+
 def test_references_inconsistent_indent_item_fails_well_formed(tmp_path):
     # Regression guard: real YAML rejects a block sequence whose items are
     # not all at the same indent. A well-formed item followed by one at a
