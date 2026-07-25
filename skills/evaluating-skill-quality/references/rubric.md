@@ -1268,13 +1268,22 @@ is labeled as such.
   specifically -- naming the gap does not, on its own, block "mature" the
   way an uncleared dimension 1-7 gap does.
 - **Indeterminate** -- this review's own precondition (Contract
-  discipline's steps 1-4) could not be established: the target is missing,
-  empty, unreadable, or does not parse as a `SKILL.md` (`SKILL.md`'s
-  Procedure step 1). Distinct from Not-well-formed, which requires the
-  target to have actually been read and graded against the shape checks --
-  Indeterminate means no dimension verdict, including well-formed or
-  mature, can be honestly issued at all. State the concrete blocking cause
-  rather than defaulting silently to either other verdict. This is a
+  discipline's steps 1-4) could not be established because there was no
+  readable file to grade at all: the target is missing, empty, or
+  unreadable (`SKILL.md`'s Procedure step 1) -- the same failure shape
+  `scripts/check_skill_shape.py` itself treats as a hard stop distinct
+  from an ordinary check failure (a missing target exits non-zero with no
+  result list at all, per its own tests, rather than reporting a normal
+  per-check FAIL). A target that exists and is readable but has malformed
+  or missing frontmatter is **not** this case: `check_skill_shape.py`
+  grades that gracefully as ordinary FAILing checks (e.g.
+  `description-present`), so it earns Not-well-formed, not Indeterminate
+  -- the target was read and graded, it just failed. Distinct from
+  Not-well-formed, which requires the target to have actually been read
+  and graded against the shape checks -- Indeterminate means no dimension
+  verdict, including well-formed or mature, can be honestly issued at all.
+  State the concrete blocking cause rather than defaulting silently to
+  either other verdict. This is a
   reviewer-facing state, not a fourth entry in a calling repository's own
   disclosure-line vocabulary (if one exists) -- a repository's own gate may
   still only recognize a closed set of tokens for that line; disclose an

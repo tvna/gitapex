@@ -148,11 +148,10 @@ verdict itself would still be grading from a contaminated context.
 - Require the dispatch to return the full structured report -- mechanism
   fit, portability level, all nine dimensions with quoted evidence, and
   the verdict -- not a bare summary; a postcondition with no cited
-  evidence is not a review. Quote that evidence through a fenced code
-  block or an escaped inline-code span, never raw-interpolated into the
-  report (see
+  evidence is not a review. Quote that evidence delimiter-safely, never
+  raw-interpolated into the report (see
   [references/adversarial-self-audit.md](references/adversarial-self-audit.md)'s
-  structured-output-injection section).
+  structured-output-injection section for how).
 - When the target has Stop boundaries or Mechanism-fit prose, instruct
   the dispatch explicitly to check each such sentence against *both*
   Mechanism fit's "is this backed" question and the portability litmus
