@@ -46,3 +46,45 @@ expected:
   output_not_contains:
     - "Three minor issues were fixed before merge"
     - "all three fixed by follow-up commits and the PR is clean"
+  # Bind each classification to its own repair's content, not just require
+  # all three category labels to appear anywhere in the output -- a swapped
+  # assignment (e.g. "repair 1 is unclear agent instruction; repair 2 is
+  # external/human decision; repair 3 is missing deterministic gate")
+  # previously scored 1.000000 against this fixture despite assigning every
+  # repair to the wrong category (see PR #328's review finding). Each repair
+  # has a unique content keyword from its own prompt paragraph above: repair
+  # 1 is the only one mentioning "mypy", repair 2 the only one mentioning
+  # "not found", repair 3 the only one mentioning "rate-limiting". The real
+  # discriminator is the blank-line check score_contract.py's
+  # output_contains_near now applies (no "\n\n" between the two occurrences,
+  # matching merge-retrospective/SKILL.md's own one-blank-line-separated
+  # numbered item per repair); window 600 is a generous backstop only, sized
+  # to comfortably fit a full verbose repair paragraph.
+  output_contains_near:
+    - all: ["mypy", "missing deterministic gate"]
+      window: 600
+    - all: ["not found", "unclear agent instruction"]
+      window: 600
+    - all: ["rate-limiting", "external/human decision"]
+      window: 600
+  # A positive near-check alone is not sufficient: a compact enough response
+  # can still satisfy the correct-pairing window by coincidence even while
+  # ALSO satisfying a wrong pairing's window (both spans can be short in a
+  # terse response). Explicitly ban each repair's keyword from being bound to
+  # either of the other two (wrong) classifications, so a compact but
+  # mis-bound response (e.g. "repair 1 (mypy failure) is unclear agent
+  # instruction") is rejected even when it would otherwise slip past the
+  # positive checks above.
+  output_not_contains_near:
+    - all: ["mypy", "unclear agent instruction"]
+      window: 600
+    - all: ["mypy", "external/human decision"]
+      window: 600
+    - all: ["not found", "missing deterministic gate"]
+      window: 600
+    - all: ["not found", "external/human decision"]
+      window: 600
+    - all: ["rate-limiting", "missing deterministic gate"]
+      window: 600
+    - all: ["rate-limiting", "unclear agent instruction"]
+      window: 600

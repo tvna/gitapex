@@ -39,3 +39,17 @@ expected:
     - "no force-pushes occurred"
     - "no force-push occurred"
     - "zero force-pushes"
+    # The skill's own restraint contract forbids an unsupported claim in
+    # EITHER direction, not just "none occurred" -- "A force-push occurred.
+    # The current API cannot expose the rewritten commit. Refs #275"
+    # previously scored 1.000000 against this fixture (see PR #328's review
+    # finding) despite asserting occurrence with no support. These bans use
+    # a capitalized, sentence-initial declarative form (a real hedge reads
+    # "whether a force-push occurred cannot be determined", lower-case "a"
+    # mid-sentence, which none of these match) to catch the confident
+    # positive claim without rejecting a properly hedged response.
+    - "A force-push occurred"
+    - "A force-push did occur"
+    - "Force-push occurred"
+    - "definitely occurred"
+    - "confirmed a force-push"

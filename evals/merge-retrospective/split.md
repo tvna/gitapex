@@ -13,7 +13,7 @@ was needed.
 
 ## Corpus size and the 2:1:7 caveat
 
-SkillOpt's default split ratio is 2:1:7. At 16 fixtures that ratio gives a
+SkillOpt's default split ratio is 2:1:7. At 18 fixtures that ratio gives a
 selection split of roughly two tasks -- too thin to gate a strict
 improve-or-reject decision, since one outlier score alone would swing the
 selection mean by 50%. This is the same caveat
@@ -23,21 +23,25 @@ decision source) states directly: "held-out 5件未満は『たまたま1件外�
 20%以上振れる』茶番になり、20件超は誰も頼んでいないベンチマーク構築にな
 る" (fewer than 5 held-out fixtures is theater that swings 20%+ on one
 fluke; more than 20 is an unrequested benchmark-building exercise). This
-split uses a flatter **8:5:3** partition (train:selection:test) instead,
-named explicitly as a deviation from the 2:1:7 default, with 8 held-out
+split uses a flatter **9:6:3** partition (train:selection:test) instead,
+named explicitly as a deviation from the 2:1:7 default, with 9 held-out
 fixtures (selection + test) sitting inside that issue's stated 5-8 target
-band.
+band -- one over the 8-fixture upper end, from PR #328's own follow-up fix
+adding class 9 (see below) after a Codex review found the original
+16-fixture corpus left it uncovered; a single fixture pair over the stated
+band is not renegotiated back down, since the alternative is leaving a
+named coverage gap open.
 
 ## Equivalence classes
 
-Eight equivalence classes cover the taxonomy's three categories
+Nine equivalence classes cover the taxonomy's three categories
 (missing-deterministic-gate / unclear-agent-instruction /
 external-human-decision) crossed with zero-repair, multi-repair-mixed, and
-three procedural edge cases the skill's own text calls out by name (the
-tie-break rule, the Step 0 carry-forward check, and the force-push
-enumeration caveat). Every class has at least one fixture in train and at
-least one in held-out (selection or test); no class exists only on one
-side.
+four procedural edge cases the skill's own text calls out by name (the
+tie-break rule, the Step 0 carry-forward check, the force-push
+enumeration caveat, and Step 4's template/title-convention precedence
+rule). Every class has at least one fixture in train and at least one in
+held-out (selection or test); no class exists only on one side.
 
 | # | Class | Train | Held-out |
 |---|---|---|---|
@@ -49,14 +53,30 @@ side.
 | 6 | Tie-break: a repair fitting two categories resolves to the earliest pipeline point | `edge.yaml` | `tie-break-restraint-not-reclassified-test.yaml` (test, restraint) |
 | 7 | Step 0 carry-forward check (prior retrospective's proposed gate) | `carried-forward-gate-unimplemented-train.yaml` | `carried-forward-gate-implemented-test.yaml` (test, restraint) |
 | 8 | Force-push enumerated as its own repair, only when directly observed | `force-push-observed-train.yaml` | `force-push-not-claimable-test.yaml` (test, restraint) |
+| 9 | Step 4: repo's own title convention takes precedence over the skill's fallback shape | `title-convention-precedence-train.yaml` | `no-title-convention-fallback-selection.yaml` (selection, non-trigger) |
 
 Class 1's train exemplar (`propose-dont-implement.yaml`) and class 5's
 train exemplar (`normal.yaml`) also incidentally exercise class 2's
 classification vocabulary (`normal.yaml` contains one gate repair and one
 instruction repair together); this is intentional reuse, not
 double-counting -- their own listed classes above are what motivated each
-fixture's construction and none of the eight classes is represented on
+fixture's construction and none of the nine classes is represented on
 only one side because of the reuse.
+
+Class 9 was added after the original 16-fixture corpus shipped (PR #328's
+own review round): the blind spot pass below had explicitly named "no
+fixture exercises a repo with its own issue template or title convention
+overriding the skill's fallback shape" as a known, undosed gap, and Codex
+independently flagged the same gap as a P1 finding, citing
+`scorer-gated-skill-edits`' own requirement that every actual trigger
+branch get both a positive and a negative/non-trigger fixture before a
+split counts as satisfying the precondition gate. Unlike classes 6-8 (all
+restraint checks pairing a train positive with a held-out
+superficially-similar-but-different-conclusion case), class 9's held-out
+fixture is a genuine **non-trigger** counterpart: it is not trying to trick
+the skill into over-applying the precedence rule, it verifies the fallback
+shape remains correct behavior when a repo genuinely has no convention to
+defer to -- exactly the negative case `scorer-gated-skill-edits` asks for.
 
 Every held-out fixture pairs with its train counterpart on a **distinct
 domain** (different language, different subsystem, different failure
@@ -79,18 +99,20 @@ same edit that motivated it.
 ## Assignment
 
 - **train** (motivates edits; read for evidence, never scored for
-  acceptance), 8 fixtures: `normal.yaml`, `edge.yaml`,
+  acceptance), 9 fixtures: `normal.yaml`, `edge.yaml`,
   `propose-dont-implement.yaml`, `external-human-decision.yaml`,
   `zero-repair-docs-only-train.yaml`,
   `instruction-error-message-wording-train.yaml`,
   `carried-forward-gate-unimplemented-train.yaml`,
-  `force-push-observed-train.yaml`.
+  `force-push-observed-train.yaml`,
+  `title-convention-precedence-train.yaml`.
 - **selection** (gates acceptance; scored before/after a candidate edit,
-  strict improve-or-reject, ties rejected), 5 fixtures: `guardrail.yaml`,
+  strict improve-or-reject, ties rejected), 6 fixtures: `guardrail.yaml`,
   `gate-lint-unused-import-selection.yaml`,
   `instruction-naming-convention-selection.yaml`,
   `external-decision-reviewer-style-tradeoff-selection.yaml`,
-  `multi-repair-mixed-three-category-selection.yaml`.
+  `multi-repair-mixed-three-category-selection.yaml`,
+  `no-title-convention-fallback-selection.yaml`.
 - **test** (read once, for a final report only, never to motivate or gate
   an edit), 3 fixtures: `tie-break-restraint-not-reclassified-test.yaml`,
   `carried-forward-gate-implemented-test.yaml`,
@@ -116,12 +138,16 @@ corpus does *not* cover rather than leaving the question unaddressed:
 - No fixture combines the Step 0 carry-forward check with a zero-repair
   cycle in the same PR (Step 0 always runs regardless of this cycle's own
   repair count, per the skill's own Procedure ordering).
-- No fixture exercises a repo with its own issue template or title
-  convention overriding the skill's fallback shape (`SKILL.md` Step 4
-  states template/title-convention precedence, but every fixture here
-  assumes the fallback, matching this repository's own actual
-  `.github/ISSUE_TEMPLATE/` state at the time of writing).
 - No fixture probes non-English review comments or commit messages.
+
+**Closed since this file's original version:** "No fixture exercises a
+repo with its own issue template or title convention overriding the
+skill's fallback shape" was named as a gap here and independently flagged
+by Codex review on PR #328 as a P1 finding. Class 9
+(`title-convention-precedence-train.yaml` /
+`no-title-convention-fallback-selection.yaml`) closes it -- kept here,
+struck from the open list above rather than silently deleted, so the
+history of what was found and closed stays visible.
 
 These are named as known gaps for a future iteration to close, not
 fabricated as covered.
@@ -131,27 +157,28 @@ fabricated as covered.
 `evals/scripts/lint_fixture_assertions.py --tasks-glob
 "evals/merge-retrospective/tasks/*.yaml" --rubric
 skills/merge-retrospective/SKILL.md --skill skills/merge-retrospective/SKILL.md`
-was run against the full sixteen-fixture corpus and reported 18
-case-sensitivity warnings, all of the same shape: a lowercase
-`output_contains` (`"missing deterministic gate"`, `"unclear agent
-instruction"`, `"external/human decision"`, `"file the retrospective"`)
-flagged against the script's chosen anchor, `SKILL.md`'s bold enumeration
-heading (`**Missing deterministic gate**`, capitalized). Checked directly
-against `SKILL.md`'s own primary text rather than accepted at face value:
-the frontmatter `description` field and the Step 4 prose (lines 124-128)
-already use the identical lowercase phrasing in running text
-(`"a missing deterministic gate"`, `"an unclear agent instruction"`, `"an
-external/human decision"`), and the worked example's own inline
-classification sentences use it too -- `"Classification: missing
-deterministic gate."` and `"Classification: unclear agent instruction"`
-(`SKILL.md` lines 192 and 201, verbatim, lowercase). A real dispatch
-classifying a repair is far more likely to echo this inline
+was run against the full eighteen-fixture corpus (re-run after PR #328's
+class-9 addition; the 2 new fixtures added 2 more of the same warning
+shape, 18 -> 20) and reported 20 case-sensitivity warnings, all of the
+same shape: a lowercase `output_contains` (`"missing deterministic gate"`,
+`"unclear agent instruction"`, `"external/human decision"`, `"file the
+retrospective"`) flagged against the script's chosen anchor, `SKILL.md`'s
+bold enumeration heading (`**Missing deterministic gate**`, capitalized).
+Checked directly against `SKILL.md`'s own primary text rather than
+accepted at face value: the frontmatter `description` field and the
+Step 4 prose (lines 124-128) already use the identical lowercase phrasing
+in running text (`"a missing deterministic gate"`, `"an unclear agent
+instruction"`, `"an external/human decision"`), and the worked example's
+own inline classification sentences use it too -- `"Classification:
+missing deterministic gate."` and `"Classification: unclear agent
+instruction"` (`SKILL.md` lines 192 and 201, verbatim, lowercase). A real
+dispatch classifying a repair is far more likely to echo this inline
 `"Classification: <lowercase phrase>"` convention than to reproduce the
 enumeration heading's bold Title Case, so the lowercase assertions are
 grounded in the skill's own primary usage, not a miscasing bug -- no
-fixture change made for these 17 of 18 warnings. The 18th
+fixture change made for these 19 of 20 warnings. The 20th
 (`"file the retrospective"`, in the pre-existing `guardrail.yaml` and this
-split's new `zero-repair-docs-only-train.yaml`) is a plausible paraphrase
+split's `zero-repair-docs-only-train.yaml`) is a plausible paraphrase
 of `SKILL.md`'s own `"filing the retrospective"` (Stop boundary) and
 `"File the retrospective issue"` (Step 4 heading) rather than a verbatim
 quote of either; this is the same class of run-to-run wording risk
