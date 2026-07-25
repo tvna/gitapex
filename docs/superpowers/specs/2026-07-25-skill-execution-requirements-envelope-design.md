@@ -85,7 +85,7 @@ envelope plus one category, `tools`.
 
 ## 4. Design
 
-### 4.1 Schema
+### 4.1 Schema and semantics
 
 ```yaml
 spec:
@@ -100,10 +100,59 @@ All three `tools` subkeys are optional and independent. `read`, `write`,
 and `shell` are free-form: this slice does not define what values are
 valid tool-capability tags (that vocabulary question belongs to a later
 workstream, once the runtime compatibility matrix exists to ground it
-against). An absent `tools` block, or an absent subkey within a declared
-`tools` block, means "not yet declared" for that category -- distinct from
-an explicit `read: []`, which means "declared, and zero read tools are
-needed."
+against).
+
+**Required/optional/prohibited semantics (owner review finding, addressed
+before this schema slice lands).** An earlier draft of this design left
+one question unanswered: does `read: []` mean "read tools are merely
+optional, adapters may still grant them" or "read tools are prohibited,
+an adapter must deny them"? Leaving that ambiguous would defeat the whole
+purpose of #307's required/optional/prohibited distinction -- a later
+adapter (#307 W4) cannot derive a least-privilege policy from a statement
+that could mean either. This slice resolves it explicitly: once `tools`
+is declared at all, each of its three subkeys -- if present -- is a
+**complete, closed allowlist** for that category, not a hint:
+
+- **Absent** (`executionRequirements` missing, `tools` missing, or a
+  given subkey missing from a present `tools` block) means **not yet
+  declared** -- no policy statement has been made. A W4 adapter MUST
+  treat this the same as "unknown," not as "permitted": #307's own
+  security invariant 4 (fail closed on unsupported capabilities) applies
+  here exactly as it does to an unrecognized key. Resolving "not yet
+  declared" into an enforceable default is #307's W3 (inventory) /
+  W4 (adapters) job, not this schema's.
+- **Present and non-empty** (e.g. `read: [files, search]`) means these
+  are the complete, exhaustive set of `read`-category capabilities this
+  skill uses -- **required and exclusively permitted**. A W4 adapter must
+  grant exactly this set, no more.
+- **Present and empty** (`read: []`) means **prohibited** -- the skill
+  declares zero need for that category, and a W4 adapter must deny all
+  capabilities of that kind. This is the answer to the ambiguity above:
+  an empty list is not "optional, decide later," it is an explicit,
+  enforceable zero.
+
+There is deliberately no separate "optional" state at the per-capability
+level: a free-form capability tag has no per-tag cardinality of its own
+(unlike, say, a required-vs-optional field in a struct), so the only
+three states this schema needs to distinguish are declared-non-empty
+(required/permitted), declared-empty (prohibited), and undeclared (not
+yet known) -- exactly the three the checker's evidence text already
+reports (`"tools.read declared"` vs. `"no keys declared"` vs. `"not
+declared (optional)"` at the block level). That evidence string's own
+"(optional)" refers to a different, schema-level optionality -- a skill
+is never required to write an `executionRequirements` block at all -- not
+a fourth semantic state alongside the three above; once the block and a
+given subkey ARE present, the three-state rule applies with no further
+ambiguity.
+
+An absent subkey therefore is not silently "safe" or "unsafe" by this
+schema's own authority -- it is unresolved, and #307's later workstreams
+are exactly where that resolution happens: W3's inventory work is
+expected to require every skill to eventually declare
+`executionRequirements` (turning every remaining "not yet declared" into
+one of the two closed-allowlist states above), and W4's adapters are
+expected to fail closed (deny) against an undeclared skill until that
+inventory covers it, consistent with security invariant 4.
 
 ### 4.2 Parser changes (`check_skill_shape.py`)
 

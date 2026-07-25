@@ -325,39 +325,17 @@ section.
 
 ## Execution requirements
 
-Optional. `spec.executionRequirements` in the skill's `metadata/gitapex.yaml`
-sidecar records what a skill's own procedure actually touches at runtime
--- the `execution-requirements-well-formed` shape check enforces its
-shape when present. This is the first slice of a larger, multi-issue
-schema (a GitApex tracking issue's Workstream W1): only one category,
-`tools`, is recognized so far.
-
-```yaml
-spec:
-  executionRequirements:
-    tools:
-      read: []
-      write: []
-      shell: []
-```
-
-- `read`/`write`/`shell` are each optional; if present, a list of
-  non-empty strings. An absent key means "not yet declared"; an explicit
-  empty list means "declared, zero tools of that kind needed" -- a
-  deliberate statement, not the same as absence.
-- Any key under `executionRequirements` other than `tools`, or under
-  `tools` other than `read`/`write`/`shell`, fails the shape check --
-  further categories (filesystem, network, MCP, credentials, browser,
-  external services, main-conversation/isolation context) are deferred to
-  later child issues, not silently accepted as reserved space.
-- No skill in this repository declares this field yet; absence is the
-  default, unchanged state for all of them.
-- This declaration changes no dimension's grading and no skill's own
-  runtime procedure may read or branch on it -- metadata only, same as
-  Portability level, Capability assumption, and Lifecycle.
-
-Full rationale: [references/rubric.md](references/rubric.md)'s Execution
-requirements section.
+Optional. `spec.executionRequirements.tools` in the skill's
+`metadata/gitapex.yaml` sidecar records what a skill's own procedure
+touches at runtime (`read`/`write`/`shell` capability-tag lists); the
+`execution-requirements-well-formed` shape check enforces its shape and
+fails closed on any unrecognized key. No behavior change: no skill in
+this repository declares it yet, and no skill's own runtime procedure
+may read or branch on it, same as Portability level, Capability
+assumption, and Lifecycle. Full schema, the required/optional/prohibited
+semantics each subkey carries, and rationale:
+[references/rubric.md](references/rubric.md)'s Execution requirements
+section and the design doc it cites.
 
 ## Procedure
 
