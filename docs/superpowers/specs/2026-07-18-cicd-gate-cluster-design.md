@@ -168,15 +168,37 @@ the match, "so the gate can never drift from the detectors it protects").
 ```toml
 # .gitapex/policies/retro-identity.toml
 [retro_issue]
-title_pattern = '(?i)^Merge retrospective: PR #\d+'
+title_pattern = '(?i)^chore\(retrospective\): merge retrospective for PR #\d+'
 label = "retrospective"
 [reserved]                     # agent-mintable NEVER; auto-retro CI job only
-title_prefixes = ["Merge retrospective:"]
+title_prefixes = ["chore(retrospective): merge retrospective for PR #"]
 [retro_close_pr]
 title_pattern = '(?i)^chore\(retro-close\):'
 [closing_keywords]
 keywords = ["close", "closes", "closed", "fix", "fixes", "fixed", "resolve", "resolves", "resolved"]
 ```
+
+**Correction (2026-07-25, issues #341/#342):** the `title_pattern` and
+`title_prefixes` above were originally `'(?i)^Merge retrospective: PR
+#\d+'` / `["Merge retrospective:"]`, on this doc's own claim (line 59-60
+above) of having cross-checked gitapex's "REAL existing convention"
+against `skills/merge-retrospective/SKILL.md`. That check itself was
+wrong: it read the SKILL.md's own generic *fallback* title shape (which
+the SKILL.md text explicitly labels as "only a fallback for repos that
+have neither" a template nor their own convention) as if it were this
+repo's actual practice, without checking real prior retrospective issues.
+Issue #118 (2026-07-16, predating this design doc by two days) already
+used the real, established convention: `chore(retrospective): merge
+retrospective for PR #N`. `.github/scripts/post_merge_retro.py` (#314's
+already-shipped minimal slice) inherited this doc's original mistake and
+was corrected in #341/#342 to match the real convention -- the TOML above
+is updated to match so that if this cluster is ever implemented from this
+doc, its reserved-title gate would actually recognize the issues the
+shipped code creates, instead of silently failing to reserve/protect them.
+The surrounding prose in this section is left as the historical record of
+what was decided and why at the time; only the machine-readable pattern
+values are corrected, since those are meant to be copied verbatim into a
+future real policy file.
 
 **(a) `retro-reserved-title-issue-create`** adapts `gate_reserved_retro_scope.py`
 (incident #1395: an agent-titled issue satisfying the retro predicate
