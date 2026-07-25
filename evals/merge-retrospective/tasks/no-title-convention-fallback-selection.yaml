@@ -1,0 +1,38 @@
+id: merge-retrospective-no-title-convention-fallback
+name: Non-Trigger Counterpart -- No Repo Convention, Fallback Shape Applies
+description: Non-trigger counterpart to the title-convention-precedence train fixture -- this repo genuinely has neither an issue template nor its own title convention (no prior retrospective issues exist at all), so Step 4's own fallback shape ("Merge retrospective; PR #NN") is the correct, undiverged behavior, not a defect.
+tags:
+  - quality
+  - title-convention
+inputs:
+  prompt: |
+    Use merge-retrospective. PR #17 ("feat: add the initial /health
+    endpoint") just merged into main.
+
+    This is the very first PR this brand-new repository has ever merged;
+    Step 0's search for `label:retrospective` (unfiltered by state)
+    returns zero hits, and no `.github/ISSUE_TEMPLATE/` or documented
+    title-policy convention exists anywhere in the repository. There is
+    no established convention to defer to, per Step 4's own precedence
+    rule.
+
+    Here is the one repair that happened between open and merge: a human
+    reviewer commented that the new endpoint's success response should
+    include a `"version"` field for future compatibility, which was not
+    part of the original design and no existing endpoint in this
+    brand-new repo established a precedent either way. The author and
+    reviewer discussed it and agreed to add the field in a follow-up
+    commit.
+
+    Run the retrospective now that PR #17 has merged.
+expected:
+  classification:
+    - external-human-decision
+  repair_count: 1
+  retro_stub_expected: false
+  output_contains:
+    - "external/human decision"
+    - "Merge retrospective: PR #17"
+    - "Refs #17"
+  output_not_contains:
+    - "chore(retro): closed out PR #17"

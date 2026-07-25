@@ -1,0 +1,36 @@
+id: merge-retrospective-instruction-naming-convention
+name: Isolated Unclear-Agent-Instruction Repair (Abbreviated Helper Name, No Feasible Gate)
+description: A single review-comment repair in a distinct domain from the train-split instruction fixture; unlike the tie-break fixture's interface{}-vs-any case, no static rule could feasibly decide whether a name "reads as too abbreviated," so this repair stays classified as unclear agent instruction rather than being reclassified.
+tags:
+  - quality
+  - instruction
+inputs:
+  prompt: |
+    Use merge-retrospective. PR #219 ("refactor: extract the retry-backoff
+    calculation into its own helper") just merged into main. Here is the
+    one repair that happened between open and merge:
+
+    A human reviewer commented that the new helper function was named
+    `calcBackoff`, while every other helper already in the module spells
+    names out in full (`calculateBackoff`, `calculateJitter`). The author
+    pushed a follow-up commit renaming it to `calculateBackoff`. Unlike a
+    banned-token substitution (e.g. `interface{}` vs `any`), there is no
+    fixed, enumerable list of "abbreviated" tokens a lint rule could check
+    against here -- deciding whether a given name "reads as too
+    abbreviated" next to the module's existing names is a subjective
+    judgment call, not a pattern a static check could encode; it was only
+    caught because the reviewer read the diff.
+
+    Run the retrospective now that PR #219 has merged.
+expected:
+  classification:
+    - unclear-agent-instruction
+  repair_count: 1
+  retro_stub_expected: false
+  output_contains:
+    - "unclear agent instruction"
+    - "Refs #219"
+    - "calcBackoff"
+  output_not_contains:
+    - "Classification: missing deterministic gate"
+    - "Classification: external/human decision"

@@ -1,0 +1,31 @@
+id: merge-retrospective-gate-lint-unused-import
+name: Isolated Missing-Deterministic-Gate Repair (Lint Failure, Distinct Domain)
+description: A single CI-failure repair, in isolation and in a different domain from the train-split gate fixtures (JS lint, not a Python ImportError or Go vet), classified as missing deterministic gate with a proposed pre-commit lint check.
+tags:
+  - quality
+  - gate
+inputs:
+  prompt: |
+    Use merge-retrospective. PR #205 ("fix: correct off-by-one in the
+    pagination cursor") just merged into main. Here is the one repair
+    that happened between open and merge:
+
+    CI run #1 failed: ESLint reported
+    `no-unused-vars: 'formatCursor' is defined but never used` in
+    `pagination/cursor.js`, because a helper import was left over from an
+    earlier draft of the fix. The author pushed a follow-up commit
+    removing the unused import, and CI run #2 passed clean.
+
+    Run the retrospective now that PR #205 has merged.
+expected:
+  classification:
+    - missing-deterministic-gate
+  repair_count: 1
+  retro_stub_expected: false
+  output_contains:
+    - "missing deterministic gate"
+    - "Refs #205"
+    - "no-unused-vars"
+  output_not_contains:
+    - "Classification: unclear agent instruction"
+    - "Classification: external/human decision"

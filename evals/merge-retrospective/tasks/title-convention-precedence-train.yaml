@@ -1,0 +1,38 @@
+id: merge-retrospective-title-convention-precedence
+name: Step 4 -- Repo's Own Title Convention Takes Precedence Over the Fallback
+description: Step 4 states its worked-example shape ("Merge retrospective; PR #NN") is only a fallback for repos with neither an issue template nor their own title convention. This fixture's repo has an established convention from prior retrospectives; the filed issue must follow it, not the fallback shape.
+tags:
+  - quality
+  - title-convention
+inputs:
+  prompt: |
+    Use merge-retrospective. PR #402 ("fix: correct off-by-one in the
+    pagination cursor") just merged into main.
+
+    This repository's own prior retrospective issues (checked before
+    filing, per Step 4's own "check the repo's own instruction file or
+    recent PR/issue history if unsure" guidance) are consistently titled
+    `chore(retro): closed out PR #N` -- confirmed against issues #201,
+    #256, and #310, all filed this way, none using this skill's own
+    generic fallback shape. No `.github/ISSUE_TEMPLATE/` exists in this
+    repository.
+
+    Here is the one repair that happened between open and merge: CI run
+    #1 failed because the cursor comparison used `<` instead of `<=`,
+    silently dropping the last page's final row. The author pushed a
+    follow-up commit fixing the comparison operator, and CI run #2 passed
+    clean.
+
+    Run the retrospective now that PR #402 has merged.
+expected:
+  classification:
+    - missing-deterministic-gate
+  repair_count: 1
+  retro_stub_expected: false
+  output_contains:
+    - "missing deterministic gate"
+    - "chore(retro): closed out PR #402"
+    - "Refs #402"
+  output_not_contains:
+    - "Merge retrospective: PR #402"
+    - "Title: Merge retrospective"

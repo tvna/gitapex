@@ -1,0 +1,90 @@
+id: merge-retrospective-multi-repair-mixed-three-category
+name: Three-Repair Cycle Spanning All Three Taxonomy Categories
+description: A distinct multi-repair scenario from the train-split two-repair fixture -- three repairs in one cycle, one of each taxonomy category, each classified and listed on its own line rather than collapsed into a single summary.
+tags:
+  - quality
+inputs:
+  prompt: |
+    Use merge-retrospective. PR #240 ("feat: add bulk-delete endpoint to
+    the admin API") just merged into main. Here is the full history
+    between open and merge -- three repairs occurred:
+
+    1. CI run #1 failed: `mypy` reported
+       `Argument 1 to "bulk_delete" has incompatible type "list[str]";
+       expected "list[UUID]"` in `admin/handlers.py`. The author pushed a
+       follow-up commit converting the incoming IDs to `UUID` before
+       calling `bulk_delete`, and CI run #2 passed clean.
+    2. A human reviewer commented that the new endpoint's error response
+       used `{"error": "not found"}`, while every other endpoint in the
+       same API returns `{"detail": "not found", "code": "..."}`. The
+       author pushed a follow-up commit matching the existing response
+       shape.
+    3. Partway through review, a third-party rate-limiting library this
+       API depends on (but does not own) released a major version that
+       renamed its `Limiter.check()` method to `Limiter.allow()`; CI run
+       #2 [before repair 2 landed] failed separately on the upgraded
+       transitive dependency. There were two reasonable paths: pin the
+       old major version to avoid the rename, or adopt the new version
+       and update every call site. No repo policy dictated which; the
+       author and reviewer discussed it and chose to adopt the new
+       version, updating the three affected call sites in a follow-up
+       commit. CI run #3 passed clean.
+
+    Run the retrospective now that PR #240 has merged.
+expected:
+  classification:
+    - missing-deterministic-gate
+    - unclear-agent-instruction
+    - external-human-decision
+  repair_count: 3
+  retro_stub_expected: false
+  output_contains:
+    - "missing deterministic gate"
+    - "unclear agent instruction"
+    - "external/human decision"
+    - "Refs #240"
+  output_not_contains:
+    - "Three minor issues were fixed before merge"
+    - "all three fixed by follow-up commits and the PR is clean"
+  # Bind each classification to its own repair's content, not just require
+  # all three category labels to appear anywhere in the output -- a swapped
+  # assignment (e.g. "repair 1 is unclear agent instruction; repair 2 is
+  # external/human decision; repair 3 is missing deterministic gate")
+  # previously scored 1.000000 against this fixture despite assigning every
+  # repair to the wrong category (see PR #328's review finding). Each repair
+  # has a unique content keyword from its own prompt paragraph above: repair
+  # 1 is the only one mentioning "mypy", repair 2 the only one mentioning
+  # "not found", repair 3 the only one mentioning "rate-limiting". The real
+  # discriminator is the blank-line check score_contract.py's
+  # output_contains_near now applies (no "\n\n" between the two occurrences,
+  # matching merge-retrospective/SKILL.md's own one-blank-line-separated
+  # numbered item per repair); window 600 is a generous backstop only, sized
+  # to comfortably fit a full verbose repair paragraph.
+  output_contains_near:
+    - all: ["mypy", "missing deterministic gate"]
+      window: 600
+    - all: ["not found", "unclear agent instruction"]
+      window: 600
+    - all: ["rate-limiting", "external/human decision"]
+      window: 600
+  # A positive near-check alone is not sufficient: a compact enough response
+  # can still satisfy the correct-pairing window by coincidence even while
+  # ALSO satisfying a wrong pairing's window (both spans can be short in a
+  # terse response). Explicitly ban each repair's keyword from being bound to
+  # either of the other two (wrong) classifications, so a compact but
+  # mis-bound response (e.g. "repair 1 (mypy failure) is unclear agent
+  # instruction") is rejected even when it would otherwise slip past the
+  # positive checks above.
+  output_not_contains_near:
+    - all: ["mypy", "unclear agent instruction"]
+      window: 600
+    - all: ["mypy", "external/human decision"]
+      window: 600
+    - all: ["not found", "missing deterministic gate"]
+      window: 600
+    - all: ["not found", "external/human decision"]
+      window: 600
+    - all: ["rate-limiting", "missing deterministic gate"]
+      window: 600
+    - all: ["rate-limiting", "unclear agent instruction"]
+      window: 600

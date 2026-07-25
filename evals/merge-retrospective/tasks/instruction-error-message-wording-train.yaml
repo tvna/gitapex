@@ -1,0 +1,34 @@
+id: merge-retrospective-instruction-error-message-wording
+name: Isolated Unclear-Agent-Instruction Repair (Error Message Wording)
+description: A single review-comment repair, in isolation (no other repair in the same cycle), classified as unclear agent instruction because no lint rule enforces prose-message house style.
+tags:
+  - quality
+  - instruction
+inputs:
+  prompt: |
+    Use merge-retrospective. PR #212 ("feat: add --retry flag to the sync
+    command") just merged into main. Here is the one repair that happened
+    between open and merge:
+
+    A human reviewer commented that the new `--retry` flag's failure
+    message ("retry exhausted") didn't match the existing convention every
+    other flag in the same command uses for its own failure output
+    ("sync: retry limit reached, no changes applied"). The author pushed a
+    follow-up commit rewording the message to match. There is no lint rule
+    or CI check in this repo that enforces error-message wording
+    consistency; it was only caught because the reviewer happened to read
+    the diff closely.
+
+    Run the retrospective now that PR #212 has merged.
+expected:
+  classification:
+    - unclear-agent-instruction
+  repair_count: 1
+  retro_stub_expected: false
+  output_contains:
+    - "unclear agent instruction"
+    - "Refs #212"
+    - "retry exhausted"
+  output_not_contains:
+    - "Classification: missing deterministic gate"
+    - "Classification: external/human decision"
