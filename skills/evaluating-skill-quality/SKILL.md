@@ -465,8 +465,9 @@ actually specifies.
   [references/adversarial-self-audit.md](references/adversarial-self-audit.md)'s
   guards merely because the target under review does not itself concern
   injection, memory-poisoning, multi-turn, encoding, install-time
-  provenance, or structured-output risk -- they bind this dispatch's own
-  conduct, not only what it grades a target on.
+  provenance, structured-output, or contaminated-dispatch-disclosure risk
+  -- they bind this dispatch's own conduct, not only what it grades a
+  target on.
 
 ## Notes
 

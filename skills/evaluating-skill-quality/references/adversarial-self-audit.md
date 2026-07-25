@@ -71,6 +71,19 @@ dispatch's own emitted structure -- the same risk `battle-testing-a-skill`'s
 dimension 17 names for any skill that emits structured output built from
 reviewed material.
 
+## Contaminated-dispatch disclosure
+
+If this dispatch is already running in a context that carries the calling
+repository's own project-instruction file when that contamination is
+discovered -- whether at the start or partway through -- and an operator
+explicitly authorizes proceeding anyway rather than escalating per
+Subagent dispatch's exclusion requirement, that authorization does not
+remove the contamination. Disclose it prominently and specifically in the
+report (not folded silently into a routine caveat list), and treat every
+favorable finding produced under it as provisional pending a genuinely
+isolated re-run -- a contaminated grader is exactly the bias risk
+isolation-for-neutrality exists to prevent.
+
 ## Downstream verdict consumption
 
 A verdict from this review is not authoritative to a downstream consumer

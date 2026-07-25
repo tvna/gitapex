@@ -67,7 +67,14 @@ limits.
    ancestry for `CLAUDE.md`/`AGENTS.md` and require the result to be empty)
    rather than trusting intent. If the harness offers none of the listed
    mechanisms, that is itself a blocker -- stop and escalate rather than
-   dispatching into a contaminated context. Whether this exclusion carries
+   dispatching into a contaminated context. If an operator explicitly
+   authorizes proceeding anyway rather than escalating, that authorization
+   does not remove the contamination: disclose it prominently and
+   specifically in the trial's own report (not folded silently into a
+   routine caveat list), and grade every PASS finding from that trial as
+   provisional pending a genuinely isolated re-run -- a contaminated
+   grader is exactly the rubber-stamp risk dimension 5 warns against.
+   Whether this exclusion carries
    real deterministic backing (a hook, a permission rule) or is enforced by
    this instruction alone depends on the environment the dispatch actually
    runs in -- check directly rather than assuming either way; an absent
