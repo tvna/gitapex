@@ -12,8 +12,8 @@ block deterministically.
 ## Corpus size and the 2:1:7 caveat
 
 SkillOpt's default split ratio is 2:1:7. At 40 fixtures that ratio gives a
-selection split of roughly six tasks, too thin to gate a strict
-improve-or-reject decision because six observations provide little ability
+selection split of roughly four tasks, too thin to gate a strict
+improve-or-reject decision because four observations provide little ability
 to average out run-to-run variance. Following the precedent already set in
 `skills/scorer-gated-skill-edits/references/worked-example.md` ("the ratio is
 aspirational" for a small fixture count), this split uses a flatter 17:14:9

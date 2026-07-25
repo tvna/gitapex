@@ -70,7 +70,7 @@ reached its current state, in this repository's own bookkeeping:
 
 **Skill-step vs. bundled script**: passes. This skill's own deterministic
 shape lane was delegated to `scripts/check_skill_shape.py`, so applying
-the fourth Mechanism-fit check to this skill's own procedure finds no
+the fifth Mechanism-fit check to this skill's own procedure finds no
 remaining step-level delegate-to-script finding.
 
 ## Portability level

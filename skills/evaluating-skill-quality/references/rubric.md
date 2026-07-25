@@ -284,11 +284,16 @@ uses for content this file did not ground in [steering] or another
 Anthropic primary source.
 
 **Check.** Map the target's mandatory content (the parts every invocation
-reads, not an optional branch) and its enumerated procedure branches
-(dimension 4's branch inventory -- read from that inventory rather than
-re-derived, per Contract discipline's "never both" rule) to: one
-user-visible outcome, the invariants every branch shares, and the reasons
-the file would ever change. Report the dominant cohesion type with cited
+reads, not an optional branch) and its enumerated procedure branches to:
+one user-visible outcome, the invariants every branch shares, and the
+reasons the file would ever change. Enumerate the branches directly here
+rather than waiting on dimension 4's own branch-trigger walk: this check
+runs at Procedure step 2, before the nine-dimension walk (step 5) reaches
+dimension 4, so no branch inventory yet exists to reuse at this point --
+dimension 4 is the one that reuses this check's enumeration later,
+per Contract discipline's "never both" rule (see this dimension's own
+cross-reference below), not the reverse. Report the dominant cohesion type
+with cited
 evidence -- quote the specific text that shows the mapping -- and name a
 secondary type only when the target genuinely mixes patterns; never infer
 cohesion from how well-written the prose is. A reviewer stating the
@@ -936,7 +941,10 @@ safe way.
   is a hard contract, a "sensible default, use judgment" template where
   adaptation helps.
 - **Branch triggers are distinct and complete** -- enumerate every actual
-  procedure branch, including reject/stop/escalate routes. Each branch has
+  procedure branch, including reject/stop/escalate routes; reuse the branch
+  enumeration [Skill vs. multiple skills / cohesion](#skill-vs-multiple-skills--cohesion)
+  already produced at Procedure step 2 rather than re-deriving it here at
+  step 5, per Contract discipline's "never both" rule. Each branch has
   one checkable entry condition that no sibling branch duplicates; flag a
   branch with no trigger, two branches selected by the same trigger, or an
   input state that matches none or several.
