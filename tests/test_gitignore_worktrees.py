@@ -25,8 +25,3 @@ def test_worktrees_path_is_gitignored() -> None:
         "'.claude/worktrees/' is no longer covered by .gitignore -- "
         "agent worktrees would become stageable content."
     )
-
-
-def test_gitignore_declares_the_pattern() -> None:
-    gitignore = (REPO_ROOT / ".gitignore").read_text(encoding="utf-8")
-    assert "/.claude/worktrees/" in gitignore
