@@ -53,10 +53,11 @@ which in turn outranks "external decision."
 
 ## Repair record format
 
-Every repair entry in the Repairs section, and every carried-forward gate
-entry, uses this fixed structure -- not a free paragraph -- so a future
-drift-check script can extract classification and gate status without an
-LLM:
+Every repair entry in the Repairs section uses this fixed structure --
+not a free paragraph -- so a future drift-check script can extract
+classification and gate status without an LLM. Carried-forward gate
+entries (Step 0) use a related but distinct schema, defined further down
+this section:
 
 ```
 N. [one-line label] <what happened and how it was fixed, in prose>
@@ -81,10 +82,22 @@ N. [one-line label] <what happened and how it was fixed, in prose>
   repair (Step 4 already limits gate proposals to that category); omit
   the line entirely for the other two categories rather than writing
   "N/A".
-- A **Carried-forward gate** entry (Step 0) uses the same shape, with
-  `Status` fixed to `carried-forward` instead of a classification slug,
-  so a drift-check can tell a fresh proposal from a still-unimplemented
-  one at a glance.
+- A **Carried-forward gate** entry (Step 0) uses a narrower two-field
+  schema, not the three-category shape above -- it is re-reporting a
+  prior issue's still-unimplemented gate, not classifying a new repair
+  against this cycle's taxonomy:
+  ```
+  - <what the prior issue proposed, which prior issue number it came
+    from, and what this cycle's re-check found, in prose>
+    Status: `carried-forward`
+    Proposed gate: <the durable gate text, restated -- the field label
+    is always exactly "Proposed gate:"; put the prior issue's number in
+    the prose above, never appended to the field label itself (e.g.
+    never "Proposed gate (repeated from issue #N):"), so a drift-check
+    can match the literal field name>
+  ```
+  It never carries a `Classification` line -- there is nothing to
+  classify this cycle, only a status to re-report.
 - The `Classification:`/`Status:`/`Proposed gate:` lines are always
   agent-authored from this skill's own fixed vocabulary (one of the three
   taxonomy phrases, one of the three fixed slugs, or `carried-forward`) --
@@ -204,13 +217,26 @@ such taxonomy applies only `retrospective`, unchanged from before.
      **and** Step 0 found nothing to carry forward, file a single-line
      issue body instead of the full Repairs shape above -- state the PR
      number, that zero repairs occurred, and that this is being recorded
-     as evidence the process worked this cycle -- then close the issue
-     immediately in the same step. This is a deliberate, visible,
-     searchable immediate close, not a silent skip: the issue still
-     exists, still carries `retrospective` (and any secondary lifecycle
-     label), and is still searchable like any other retrospective; only
-     its lifecycle is fast-tracked, because there is no repair content
-     left needing follow-on tracking. A cycle with even one repair
+     as evidence the process worked this cycle. Confirm the zero-repair
+     conclusion before the close call fires, rather than closing on it
+     unchecked: when an operator is present to respond (an interactive
+     session), preview the exact drafted body and the zero-repair
+     conclusion it rests on, and wait for an explicit go-ahead before
+     calling close -- this is exactly the checkpoint that catches a
+     wrong call from, for example, the force-push blind spot Step 1
+     already names (a rewritten history is not always observable). When
+     running fully unattended with no operator able to respond (for
+     instance, an automated CI-triggered flow with no interactive
+     channel), file the issue but leave it open instead of closing it,
+     and let a human close it after review; never let a fully automated
+     context both draft the zero-repair conclusion and act on it in the
+     same step with nobody positioned to catch a wrong call. This is a
+     deliberate, visible, searchable close once confirmed, not a silent
+     skip: the issue still exists, still carries `retrospective` (and
+     any secondary lifecycle label), and is still searchable like any
+     other retrospective; only its lifecycle is fast-tracked once
+     confirmed, because there is no repair content left needing
+     follow-on tracking. A cycle with even one repair
      always gets the full Repairs section above, never this fast-close
      path -- and so does a zero-repair cycle that still has a
      Carried-forward gate to report: fast-closing must never be the
@@ -226,10 +252,13 @@ such taxonomy applies only `retrospective`, unchanged from before.
    title-policy gate the repo enforces (no rejection or auto-edit), and
    that the PR cross-link from Step 5 resolves to the correct PR. A
    silent write failure or a title-policy rejection is not "filed." When
-   the zero-repair fast-close path applied, also confirm the close call
-   itself actually took effect (re-fetch the issue's state, not just its
-   existence) -- a filed-but-still-open issue after a fast-close is a
-   silent failure of the close half of the operation, not a completed
+   the zero-repair fast-close path applied and a close call was actually
+   issued (an operator confirmed it, per Step 4 above -- not the
+   unattended case, which intentionally leaves the issue open with no
+   close call to verify), also confirm the close call itself actually
+   took effect (re-fetch the issue's state, not just its existence) -- a
+   filed-but-still-open issue after a confirmed close is a silent
+   failure of the close half of the operation, not a completed
    fast-close. If the re-fetch still shows it open, retry the close call
    once; if it is still open after that retry, stop treating the cycle
    as fast-closed, report the stuck-open issue number, and leave it for a
@@ -241,13 +270,15 @@ such taxonomy applies only `retrospective`, unchanged from before.
 - **Never skip filing the retrospective because the merge looked
   clean.** A zero-repair cycle is itself worth recording -- it is
   evidence the current process was sufficient for that cycle. File the
-  one-line issue and close it immediately (Step 4's zero-repair
-  fast-close path) rather than skipping: this is a deliberate, visible,
-  immediate close, not a silent skip -- a merge with nothing to repair is
-  exactly the small, already-clean change most likely to recur, and
-  skipping it silently would remove the feedback loop the retrospective
-  exists to keep. Closing it immediately only fast-tracks the issue's own
-  lifecycle once filed; it never shortens the record to nothing.
+  one-line issue immediately, then close it once confirmed (Step 4's
+  zero-repair fast-close path, including its confirm-or-leave-open rule)
+  rather than skipping the filing: this is a deliberate, visible close,
+  not a silent skip -- a merge with nothing to repair is exactly the
+  small, already-clean change most likely to recur, and skipping it
+  silently would remove the feedback loop the retrospective exists to
+  keep. Filing always happens regardless of confirmation; only the close
+  half waits on it (or is left open when unattended), and it never
+  shortens the record to nothing.
 - Never invent a fourth taxonomy category, and never leave a repair
   unclassified.
 - Do not implement the durable gates proposed here in the same cycle --
@@ -339,8 +370,8 @@ Three repairs occurred between PR open and merge.
   silently; implementing it remains separate follow-on work, same as any
   gate proposed in this cycle's own Repairs section above.
   Status: `carried-forward`
-  Proposed gate (repeated from issue #31): a pre-commit hook enforcing
-  conventional-commit message format.
+  Proposed gate: a pre-commit hook enforcing conventional-commit message
+  format.
 
 ## Notes
 
