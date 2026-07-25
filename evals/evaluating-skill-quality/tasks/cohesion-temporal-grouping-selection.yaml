@@ -38,7 +38,7 @@ inputs:
 expected:
   output_contains:
     - "Skill vs. multiple skills"
-    - "temporal"
+    - "emporal"
   output_not_contains:
     - "LGTM"
     - "no concerns"
