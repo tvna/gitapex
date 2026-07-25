@@ -362,7 +362,17 @@ LIFECYCLE_ISSUE_REF_RE = re.compile(
 # caller's own membership check closes that gap: every syntactically
 # key-shaped line at this indent is now seen as A key, so an unrecognized
 # one can no longer hide behind a narrow character class the way a
-# recognized one never had to.
+# recognized one never had to. Still not a real YAML string lexer, though
+# -- it has no escape-sequence support and requires the closing quote to
+# be immediately followed by ":" -- so a key using an escaped quote
+# (`"ex\"tra": foo`) or whitespace before its colon (`"extra" : foo`) does
+# not match this regex either. Each of this regex's three call sites
+# handles that residual gap the same way: a line at the gated indent that
+# matches neither a list item currently being collected nor this key
+# pattern is itself flagged as unknown/malformed, not silently skipped --
+# rejecting every unmatched line at that indent, rather than only the
+# ones this regex happens to parse, is the actual fail-closed contract
+# (Codex review on #356's own PR).
 KEY_LINE_RE_4 = re.compile(
     r'^[ ]{4}(?:"([^"]*)"|\'([^\']*)\'|([^\s"\'#][^:]*?)):[ \t]*(.*)$')
 KEY_LINE_RE_6 = re.compile(
@@ -963,10 +973,17 @@ def _parse_manifest(text: str) -> ManifestParse:
                 continue
             indent = len(line) - len(line.lstrip(" "))
             if line[:1] in (" ", "\t") and indent >= 4:
-                # Stray content deeper inside the block that is not a
-                # recognized subkey or list-item line -- skip silently,
-                # consistent with "indented lines are never malformed"
-                # except the explicit channels above.
+                # An indented line reaching here is neither an active list
+                # item nor a key line KEY_LINE_RE_4 recognizes -- including
+                # a key using YAML quoting/escaping that regex cannot
+                # parse (an escaped quote, or whitespace between a closing
+                # quote and its colon). spec.skillDependencies has no
+                # legitimate reserved nested structure beyond its own two
+                # list-valued keys, so flag it as unknown rather than
+                # silently tolerating it: rejecting every unmatched line at
+                # this indent, not just the ones a regex happens to parse,
+                # is the actual fail-closed contract (issue #356 follow-up).
+                unknown_dep_keys.append(line.strip())
                 continue
             # Dedented below the block's own indent: skillDependencies ends
             # here. Finalize it and fall through to process this line
@@ -985,10 +1002,11 @@ def _parse_manifest(text: str) -> ManifestParse:
                 continue
             indent = len(line) - len(line.lstrip(" "))
             if line[:1] in (" ", "\t") and indent >= 6:
-                # Stray content deeper inside the sub-block that is not a
-                # recognized field line -- skip silently, consistent with
-                # "indented lines are never malformed" except the
-                # explicit unknown_lifecycle_fields channel above.
+                # Same fail-closed reasoning as spec.skillDependencies'
+                # equivalent branch above -- an unmatched line at this
+                # indent (including one KEY_LINE_RE_6 cannot parse due to
+                # quoting/escaping) is flagged, not silently tolerated.
+                unknown_lifecycle_fields.append(line.strip())
                 continue
             # Dedented below the sub-block's own indent: this
             # experimental/deprecated block ends here. Finalize it and
@@ -1046,9 +1064,9 @@ def _parse_manifest(text: str) -> ManifestParse:
                 continue
             indent = len(line) - len(line.lstrip(" "))
             if line[:1] in (" ", "\t") and indent >= 4:
-                # Stray content deeper inside spec.lifecycle that is not a
-                # recognized sub-block header -- skip silently, same
-                # reserved-field treatment as spec.skillDependencies.
+                # Same fail-closed reasoning as spec.skillDependencies'
+                # equivalent branch above.
+                unknown_lifecycle_keys.append(line.strip())
                 continue
             # Dedented below spec.lifecycle's own indent: the block ends
             # here. Finalize it and fall through to process this line

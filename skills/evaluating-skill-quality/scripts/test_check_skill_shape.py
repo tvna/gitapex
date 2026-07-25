@@ -2184,6 +2184,39 @@ def test_skill_dependencies_symbol_bearing_unknown_key_fails_well_formed(tmp_pat
     assert css.main([str(d)]) == 1
 
 
+def test_skill_dependencies_space_before_colon_key_fails_closed(tmp_path):
+    # Regression guard (Codex review on #358): a quoted key with
+    # whitespace between the closing quote and its colon ("extra" : foo)
+    # is valid YAML but KEY_LINE_RE_4 cannot parse it -- it must still
+    # fail closed via the indent-level fallback, not silently skip.
+    d = _write_skill_deps_sidecar(
+        _write_skill(tmp_path),
+        "  skillDependencies:\n"
+        "    requires: []\n"
+        "    \"extra\" : foo\n")
+    by = _by_name(css.check_shape(d))
+    assert by["skill-dependencies-well-formed"].passed is False
+    assert "unknown key" in by["skill-dependencies-well-formed"].evidence
+    assert css.main([str(d)]) == 1
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.unknown_skill_dependency_keys == ['"extra" : foo']
+
+
+def test_skill_dependencies_escaped_quote_key_fails_closed(tmp_path):
+    # Regression guard (Codex review on #358): an escaped quote inside a
+    # quoted key ("ex\"tra": foo) is valid YAML but KEY_LINE_RE_4 has no
+    # escape support -- must still fail closed, not silently skip.
+    d = _write_skill_deps_sidecar(
+        _write_skill(tmp_path),
+        "  skillDependencies:\n"
+        "    requires: []\n"
+        '    "ex\\"tra": foo\n')
+    by = _by_name(css.check_shape(d))
+    assert by["skill-dependencies-well-formed"].passed is False
+    assert "unknown key" in by["skill-dependencies-well-formed"].evidence
+    assert css.main([str(d)]) == 1
+
+
 def test_skill_dependencies_non_list_scalar_fails_well_formed(tmp_path):
     d = _write_skill_deps_sidecar(
         _write_skill(tmp_path),
@@ -2516,6 +2549,24 @@ def test_lifecycle_quoted_unknown_field_fails_well_formed(tmp_path):
     by = _by_name(css.check_shape(d))
     assert by["lifecycle-well-formed"].passed is False
     assert "unknown field" in by["lifecycle-well-formed"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_lifecycle_space_before_colon_key_fails_closed(tmp_path):
+    # Regression guard (Codex review on #358), one nesting level up from
+    # the skillDependencies case: a key KEY_LINE_RE_4 cannot parse (space
+    # before the colon) must fail closed via the indent fallback rather
+    # than being silently tolerated as reserved nested content.
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n"
+        "    experimental:\n"
+        "      reason: not yet proven\n"
+        "      trackingIssue: \"#123\"\n"
+        "    \"stage\" : Beta\n")
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is False
+    assert "unknown key" in by["lifecycle-well-formed"].evidence
     assert css.main([str(d)]) == 1
 
 
