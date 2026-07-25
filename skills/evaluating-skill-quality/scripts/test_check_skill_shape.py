@@ -3014,6 +3014,42 @@ def test_execution_requirements_unknown_tools_key_fails(tmp_path):
     assert css.main([str(d)]) == 1
 
 
+def test_execution_requirements_quoted_unknown_top_level_key_fails(tmp_path):
+    # Regression guard (issue #356, blocking finding on this PR's own
+    # review): a quoted unknown key ("network": {}) must not bypass
+    # detection -- the exact shape the review cited as unmet before the
+    # shared KEY_LINE_RE_4/_match_key_line fix landed.
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:\n"
+        "    \"network\": {}\n"
+        "    tools:\n"
+        "      read: []\n")
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "unknown key" in result.evidence
+    assert css.main([str(d)]) == 1
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.unknown_execution_requirement_keys == ['"network": {}']
+
+
+def test_execution_requirements_unmatched_key_line_fails_closed(tmp_path):
+    # Regression guard for the residual gap KEY_LINE_RE_4/6 itself cannot
+    # parse (whitespace before a quoted key's colon) -- must still fail
+    # closed via the fallback, not silently skip.
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:\n"
+        "    tools:\n"
+        "      \"read\" : []\n")
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "unknown tools key" in result.evidence
+    assert css.main([str(d)]) == 1
+
+
 def test_execution_requirements_mapping_shaped_list_item_fails(tmp_path):
     # Regression guard for the same defect class
     # test_references_mapping_shaped_item_fails_well_formed covers one
