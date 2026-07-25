@@ -1,8 +1,11 @@
 """Tests for the post-merge-auto-retro minimal slice
 (.github/scripts/post_merge_retro.py).
 
-Refs #314 (sub-issue of #140): opens (with dedup) a `Merge retrospective:
-PR #N` issue, labeled `retrospective`, when a PR merges.
+Refs #314 (sub-issue of #140), #341: opens (with dedup) a
+`chore(retrospective): merge retrospective for PR #N` issue -- this
+repository's own actual title convention, not
+skills/merge-retrospective/SKILL.md's generic fallback shape -- labeled
+`retrospective`, when a PR merges.
 
 No test in this file makes a real network call -- the network layer is
 exercised through an injected `opener`, mirroring
@@ -50,9 +53,38 @@ def http_error(code: int, body: str = "") -> urllib.error.HTTPError:
 def test_dedup_query_matches_creation_identity_predicate():
     query = pmr.dedup_query("tvna", "gitapex", 314)
     assert query == (
-        'repo:tvna/gitapex type:issue in:title "Merge retrospective: PR #314" '
+        'repo:tvna/gitapex type:issue in:title '
+        '"chore(retrospective): merge retrospective for PR #314" '
         "label:retrospective"
     )
+
+
+def test_retro_title_matches_this_repos_actual_convention_not_the_skill_fallback():
+    """Issue #341: the shape `Merge retrospective: PR #N` is
+    skills/merge-retrospective/SKILL.md's generic *fallback* title, not
+    this repository's own convention (established since issue #118). This
+    guards against reverting to that mistaken shape."""
+    title = pmr._retro_title(314)
+    assert title == "chore(retrospective): merge retrospective for PR #314"
+    assert title != "Merge retrospective: PR #314"
+
+
+def test_dedup_query_and_open_retro_issue_title_cannot_diverge():
+    """Regression for issue #341: both functions must derive the title
+    phrase from the same `_retro_title` source, so a future edit to one
+    cannot silently leave the other searching for/creating a different
+    string than the one actually used."""
+    captured: dict = {}
+
+    def opener(request: urllib.request.Request) -> Response:
+        captured["payload"] = json.loads(request.data.decode())
+        return Response(201, json.dumps({"number": 99}))
+
+    pmr.open_retro_issue(
+        "tvna", "gitapex", 314, "t", "https://github.com/tvna/gitapex/pull/314", "tok", opener=opener
+    )
+    created_title = captured["payload"]["title"]
+    assert f'"{created_title}"' in pmr.dedup_query("tvna", "gitapex", 314)
 
 
 # ---------------------------------------------------------------------------
@@ -156,7 +188,7 @@ def test_open_retro_issue_posts_expected_title_and_label():
     assert result == 99
     assert captured["method"] == "POST"
     assert captured["url"] == "https://api.github.com/repos/tvna/gitapex/issues"
-    assert captured["payload"]["title"] == "Merge retrospective: PR #314"
+    assert captured["payload"]["title"] == "chore(retrospective): merge retrospective for PR #314"
     assert captured["payload"]["labels"] == ["retrospective"]
     assert "#314" in captured["payload"]["body"]
 

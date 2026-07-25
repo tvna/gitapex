@@ -7,15 +7,26 @@ Issue #314 (sub-issue of #140): the minimal, GITHUB_TOKEN-only slice of
 
 1. Searches for an existing retrospective issue for that PR, matching the
    same title/label identity predicate used at creation time (this
-   module's own ``open_retro_issue``, and skills/merge-retrospective's
-   own convention): exact-phrase title ``Merge retrospective: PR #{n}``
-   plus the ``retrospective`` label -- unfiltered by state (open+closed)
-   -- an interactive agent session may already have filed one via
-   skills/merge-retrospective/SKILL.md.
-2. If none is found, opens one titled ``Merge retrospective: PR #{n}``
-   labeled ``retrospective`` -- reusing merge-retrospective's own
-   title/label identity convention exactly (#140 calls this predicate
-   ``retro-identity``).
+   module's own ``open_retro_issue``, via the shared ``_retro_title``):
+   exact-phrase title ``chore(retrospective): merge retrospective for PR
+   #{n}`` plus the ``retrospective`` label -- unfiltered by state
+   (open+closed) -- an interactive agent session may already have filed
+   one via skills/merge-retrospective/SKILL.md.
+2. If none is found, opens one titled the same way, labeled
+   ``retrospective``.
+
+Issue #341: the title used here previously was the literal
+``Merge retrospective: PR #{n}`` shape, on the mistaken belief (inherited
+from #140's own text) that this was "gitapex's own existing retro
+convention." ``skills/merge-retrospective/SKILL.md`` itself says that
+exact shape is only its generic *fallback* title, for repos with neither
+an issue template nor their own convention -- and this repo has had its
+own convention since issue #118 (2026-07-16, predating #140/#314):
+``chore(retrospective): merge retrospective for PR #{n}``. Both the
+title and the dedup search phrase are derived from the single
+``_retro_title`` function below so they cannot re-diverge silently the
+way they did before (the title and the query phrase, and their
+docstrings, are the two `see also #341` regression is guarding against).
 
 Explicitly out of scope for this slice (see #314's own "Explicitly
 deferred" section): the trusted-bot allowlist, the false-positive-prior
@@ -147,15 +158,26 @@ def _call(
     raise GitHubApiError(f"{method} {url} failed: HTTP {_format_code(last_code)}: {last_body}")
 
 
+def _retro_title(pr_number: int) -> str:
+    """The single source of truth for this repository's actual
+    retrospective title convention (established since issue #118,
+    2026-07-16): ``chore(retrospective): merge retrospective for PR #N``.
+
+    Both `dedup_query` and `open_retro_issue` call this function rather
+    than each formatting their own title literal, so the search phrase and
+    the created title can never re-diverge the way they did before issue
+    #341's fix (both previously hardcoded the wrong, SKILL.md-fallback-only
+    shape ``Merge retrospective: PR #N`` independently)."""
+    return f"chore(retrospective): merge retrospective for PR #{pr_number}"
+
+
 def dedup_query(owner: str, repo: str, pr_number: int) -> str:
     """Match the same title/label identity predicate used at creation
-    time (this module's own `open_retro_issue`, and
-    skills/merge-retrospective's own convention): the standalone token
-    "retro" does not prefix-match "retrospective" under GitHub's
-    exact-match query syntax, so search the real title phrase --
-    ``in:title "Merge retrospective: PR #{n}"`` -- combined with
-    ``label:retrospective``."""
-    title = f"Merge retrospective: PR #{pr_number}"
+    time (this module's own `open_retro_issue`, via `_retro_title`): the
+    standalone token "retro" does not prefix-match "retrospective" under
+    GitHub's exact-match query syntax, so search the real title phrase
+    combined with ``label:retrospective``."""
+    title = _retro_title(pr_number)
     return f'repo:{owner}/{repo} type:issue in:title "{title}" label:{_RETRO_LABEL}'
 
 
@@ -188,11 +210,12 @@ def open_retro_issue(
     opener: Callable[[urllib.request.Request], Any] = _default_opener,
     sleeper: Callable[[float], None] | None = None,
 ) -> int:
-    """Open a retrospective issue for `pr_number`, titled and labeled per
-    merge-retrospective's own identity convention (imported verbatim, never
-    re-derived): title ``Merge retrospective: PR #N``, label
-    ``retrospective``. The body is an unfilled stub -- enumerating repairs
-    is explicitly out of scope for this slice (see #314's own deferrals).
+    """Open a retrospective issue for `pr_number`, titled per
+    `_retro_title` (this repository's actual established convention, not
+    skills/merge-retrospective/SKILL.md's generic fallback shape) and
+    labeled ``retrospective``. The body is an unfilled stub -- enumerating
+    repairs is explicitly out of scope for this slice (see #314's own
+    deferrals).
 
     `pr_title` is accepted (kept in the CLI/API surface for callers that
     already pass it) but deliberately never placed in the issue body: it
@@ -203,7 +226,7 @@ def open_retro_issue(
     free text."""
     del pr_title  # untrusted; deliberately not embedded in the issue body
     sleeper = sleeper if sleeper is not None else time.sleep
-    title = f"Merge retrospective: PR #{pr_number}"
+    title = _retro_title(pr_number)
     body = (
         f"Retrospective for PR #{pr_number}.\n\n"
         f"Refs #{pr_number}\n"
