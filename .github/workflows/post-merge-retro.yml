@@ -1,5 +1,32 @@
 name: Post-merge retrospective
 
+# #318 (P6(i), sub-task of #310): per-run caps and the permanent human-review
+# posture, recorded here before this workflow's first unattended run as its
+# own review discipline requires.
+#
+# Per-run caps -- this job is a deterministic GITHUB_TOKEN-authenticated CI
+# script (post_merge_retro.py), not an agent/LLM dispatch, so an LLM
+# token/cost budget (the kind #124/#153's own llm-budget-gate design covers)
+# does not apply to it. The caps that DO apply, both already in force and
+# restated here rather than left implicit:
+#   - Job-level `timeout-minutes: 10` below bounds total wall-clock time
+#     per run regardless of what the script does internally.
+#   - The script's own `_call()` retry ceiling (see
+#     .github/scripts/post_merge_retro.py's docstring and `_call` signature)
+#     caps GitHub API retries at 3 attempts for idempotent GET/search calls
+#     and 1 attempt (no retry) for the non-idempotent issue-creation POST,
+#     per RFC 9110 SS9.2.2 -- a lost/truncated response after GitHub already
+#     created the issue must not retry into a duplicate.
+#
+# Permanent human-review-of-merge posture -- stated explicitly so a future
+# editor does not mistake it for removable scaffolding: this workflow may
+# only ever OPEN a retrospective issue. It has `issues: write` permission
+# and explicitly does NOT have, and must never be given, `pull-requests:
+# write` or any merge capability. 100% human review before any PR merges in
+# this repository is a PERMANENT architectural feature, not an interim
+# measure pending "established trust" -- this workflow, and #315's
+# ranking-the-open-queue Routine alike, may never merge a pull request
+# themselves, full stop.
 on:
   # pull_request_target (not pull_request): a fork PR's merge must still be
   # able to open a retro issue with the base repo's write-scoped token --
