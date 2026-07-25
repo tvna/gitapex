@@ -1,0 +1,44 @@
+id: evaluating-skill-quality-cohesion-temporal-grouping-selection
+name: Release-Day Ops Bundles Deploy, Standup Summary, and Log Cleanup By Timing Alone
+description: A different domain and a different cohesion sub-type from the train fixture -- the target bundles a production deploy, an unrelated Slack standup-summary post, and unrelated log archival, grouped only because they all happen to run on release day (temporal cohesion), not because any branch's output feeds another or they serve one outcome. The gate measures whether the cohesion check generalizes to a distinct sub-type (temporal, not the train fixture's coincidental/logical grouping) rather than memorizing the train fixture's domain or wording.
+tags:
+  - quality
+  - mechanism-fit
+  - cohesion
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "release-day-ops". Is this a good skill?
+
+    ---
+    name: release-day-ops
+    description: Deploy the production build, post the team's daily standup summary to Slack, and archive logs older than 30 days. Use on release day.
+    ---
+
+    # Release-Day Ops
+
+    ## Procedure
+
+    These three tasks all run on release day, so they live in one skill:
+
+    ### Deploy
+
+    1. Run the production deploy pipeline.
+    2. Confirm the health check passes.
+
+    ### Standup summary
+
+    1. Collect yesterday's merged PRs and open incidents.
+    2. Post the summary to the team's Slack channel.
+
+    ### Log archival
+
+    1. Find log files older than 30 days.
+    2. Move them to cold storage.
+expected:
+  output_contains:
+    - "Skill vs. multiple skills"
+    - "temporal"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"
