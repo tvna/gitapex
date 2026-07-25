@@ -972,6 +972,57 @@ def test_references_mapping_shaped_item_fails_well_formed(tmp_path):
     assert parsed.root["spec"]["references"] == []
 
 
+def test_references_non_string_scalar_item_fails_well_formed(tmp_path):
+    # Regression guard (issue #356, ACM row 3): an unquoted YAML scalar
+    # that resolves to null/boolean/numeric, not a string, must not be
+    # silently certified as a valid reference string -- "Unquoted YAML
+    # scalars such as true, 123, and null are converted to strings in
+    # list-valued fields and pass a list-of-strings check."
+    d = _write_skill(tmp_path)
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  references:\n"
+        "    - true\n"
+        "    - 123\n"
+        "    - null\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["references-well-formed"].passed is False
+    assert css.main([str(d)]) == 1
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.malformed_reference_items == ["- true", "- 123", "- null"]
+    assert parsed.root["spec"]["references"] == []
+
+
+def test_references_quoted_scalar_looking_item_still_a_valid_string(tmp_path):
+    # A quoted item is a deliberate string regardless of its contents --
+    # real YAML never resolves a quoted scalar to null/boolean/numeric.
+    d = _write_skill(tmp_path)
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  references:\n"
+        "    - \"true\"\n"
+        "    - \"123\"\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["references-well-formed"].passed is True
+    assert css.main([str(d)]) == 0
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.root["spec"]["references"] == ["true", "123"]
+
+
 def test_references_inconsistent_indent_item_fails_well_formed(tmp_path):
     # Regression guard: real YAML rejects a block sequence whose items are
     # not all at the same indent. A well-formed item followed by one at a
@@ -2109,6 +2160,22 @@ def test_skill_dependencies_absent_is_well_formed(tmp_path):
     assert css.main([str(d)]) == 0
 
 
+def test_skill_dependencies_blank_block_is_null_fails_well_formed(tmp_path):
+    # Regression guard (issue #356, ACM row 2): skillDependencies declared
+    # blank with no requires/relatedTo key at all is real YAML null, not
+    # an empty-but-present mapping -- distinct from
+    # test_skill_dependencies_absent_is_well_formed (the key never
+    # mentioned at all: still "not declared").
+    d = _write_skill_deps_sidecar(
+        _write_skill(tmp_path),
+        "  skillDependencies:\n")
+    by = _by_name(css.check_shape(d))
+    result = by["skill-dependencies-well-formed"]
+    assert result.passed is False
+    assert "not a mapping: None" in result.evidence
+    assert css.main([str(d)]) == 1
+
+
 def test_skill_dependencies_valid_resolves_and_is_well_formed(tmp_path):
     (tmp_path / "other-skill").mkdir()
     d = _write_skill_deps_sidecar(
@@ -2240,6 +2307,22 @@ def test_skill_dependencies_mapping_shaped_item_fails_well_formed(tmp_path):
         "    requires: []\n"
         "    relatedTo:\n"
         "      - name: other-skill\n")
+    by = _by_name(css.check_shape(d))
+    assert by["skill-dependencies-well-formed"].passed is False
+    assert "malformed entry" in by["skill-dependencies-well-formed"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_skill_dependencies_non_string_scalar_item_fails_well_formed(tmp_path):
+    # Regression guard (issue #356, ACM row 3), one level deeper than
+    # spec.references: an unquoted null/boolean/numeric scalar in
+    # relatedTo must fail, not be certified as a valid dependency name.
+    d = _write_skill_deps_sidecar(
+        _write_skill(tmp_path),
+        "  skillDependencies:\n"
+        "    requires: []\n"
+        "    relatedTo:\n"
+        "      - true\n")
     by = _by_name(css.check_shape(d))
     assert by["skill-dependencies-well-formed"].passed is False
     assert "malformed entry" in by["skill-dependencies-well-formed"].evidence
@@ -2408,6 +2491,38 @@ def test_lifecycle_absent_is_well_formed(tmp_path):
         assert by[check].passed is True, check
         assert by[check].evidence == "not declared (optional)"
     assert css.main([str(d)]) == 0
+
+
+def test_lifecycle_blank_block_is_null_fails_well_formed(tmp_path):
+    # Regression guard (issue #356, ACM row 2): lifecycle declared blank
+    # with no experimental/deprecated/stable/renamedFrom key at all is
+    # real YAML null, not an empty-but-present mapping -- distinct from
+    # test_lifecycle_absent_is_well_formed (the key never mentioned at
+    # all: still "not declared").
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n")
+    by = _by_name(css.check_shape(d))
+    result = by["lifecycle-well-formed"]
+    assert result.passed is False
+    assert "not a mapping: None" in result.evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_lifecycle_blank_experimental_is_null_fails_well_formed(tmp_path):
+    # Same bug, one level deeper: an experimental sub-block header with no
+    # reason/trackingIssue/since field at all under it is null, and must
+    # fail as the wrong type -- not the "reason is missing" message a real
+    # (if empty) mapping would produce, and not a silent pass.
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n"
+        "    experimental:\n")
+    by = _by_name(css.check_shape(d))
+    result = by["lifecycle-well-formed"]
+    assert result.passed is False
+    assert "experimental is not a mapping: None" in result.evidence
+    assert css.main([str(d)]) == 1
 
 
 def test_lifecycle_experimental_only_is_well_formed(tmp_path):
@@ -2901,21 +3016,60 @@ def test_execution_requirements_absent_is_well_formed(tmp_path):
     assert css.main([str(d)]) == 0
 
 
-def test_execution_requirements_declared_with_no_tools_is_well_formed(tmp_path):
-    # Present but empty is a valid, distinct state from absent: nothing
-    # has been declared yet, but the block itself was opened. This parser
-    # has no inline flow-mapping ("tools: {}") support anywhere -- same as
-    # spec.skillDependencies -- so "declared, nothing inside" is written
-    # as a block header with no subkeys following, not a flow scalar.
+def test_execution_requirements_blank_tools_is_null_fails_well_formed(tmp_path):
+    # Regression guard (issue #356, ACM row 2): a block header with
+    # nothing under it is real YAML null, not an empty-but-present
+    # mapping. This exact fixture used to be certified well-formed with
+    # evidence "no keys declared" -- conflating "tools was declared null"
+    # with "tools was declared, zero subkeys said anything", the reported
+    # bug ("A blank tools: value is YAML null, but the parser converts it
+    # to an empty mapping and passes"). tools must now fail as the wrong
+    # type. Contrast with test_execution_requirements_absent_is_well_formed
+    # (no executionRequirements block at all: still passes, "not
+    # declared") and test_execution_requirements_declared_with_no_tools_
+    # is_well_formed (tools present with a real, if empty, subkey list:
+    # still passes) -- three distinct states, not two.
     d = _write_exec_req_sidecar(
         _write_skill(tmp_path),
         "  executionRequirements:\n"
         "    tools:\n")
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "tools is not a mapping: None" in result.evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_execution_requirements_declared_with_no_tools_is_well_formed(tmp_path):
+    # Present but empty is a valid, distinct state from absent or null:
+    # a real (if empty) subkey was declared under tools, so tools itself
+    # is a genuine, non-null mapping -- unlike the blank-tools-header case
+    # above, which has no subkey at all and is null instead.
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:\n"
+        "    tools:\n"
+        "      read: []\n")
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
     assert result.passed is True
-    assert result.evidence == "no keys declared"
+    assert result.evidence == "tools.read declared"
     assert css.main([str(d)]) == 0
+
+
+def test_execution_requirements_blank_block_is_null_fails_well_formed(tmp_path):
+    # Same null-vs-empty-mapping bug, one level up: executionRequirements
+    # itself declared blank with no tools key at all is null, not "no
+    # keys declared" (the well-formed evidence a real empty-but-present
+    # mapping would carry).
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:\n")
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "not a mapping: None" in result.evidence
+    assert css.main([str(d)]) == 1
 
 
 def test_execution_requirements_tools_all_subkeys_declared(tmp_path):
@@ -3072,6 +3226,25 @@ def test_execution_requirements_mapping_shaped_list_item_fails(tmp_path):
     assert parsed.root["spec"]["executionRequirements"]["tools"]["read"] == []
 
 
+def test_execution_requirements_non_string_scalar_item_fails(tmp_path):
+    # Regression guard (issue #356, ACM row 3), one level deeper again:
+    # an unquoted null/boolean/numeric scalar in tools.read must fail,
+    # not be certified as a valid capability tag string.
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:\n"
+        "    tools:\n"
+        "      read:\n"
+        "        - null\n")
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "malformed tools entry" in result.evidence
+    assert css.main([str(d)]) == 1
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.malformed_execution_requirement_tools_items == ["- null"]
+
+
 def test_execution_requirements_inconsistent_indent_item_fails(tmp_path):
     d = _write_exec_req_sidecar(
         _write_skill(tmp_path),
@@ -3137,3 +3310,44 @@ def test_execution_requirements_nesting_never_flagged_as_malformed_top_level(tmp
     assert by["execution-requirements-well-formed"].passed is True
     assert css.main([str(d)]) == 0
     assert by["experimental-stable-compatible"].passed is True
+
+
+def test_null_vs_empty_mapping_matches_real_yaml_semantics():
+    # Differential test against a real YAML parser (issue #356, ACM row
+    # 2's own proof method), across every gated mapping-valued block: a
+    # blank block header must classify as None here exactly when PyYAML
+    # itself resolves the same YAML text to null, and as a real dict here
+    # exactly when PyYAML resolves it to a real (non-null) mapping. Not
+    # run against spec.references/skillDependencies.requires-relatedTo/
+    # executionRequirements.tools.read-write-shell -- those are list-
+    # valued, and this parser's blank-list-header-means-empty-list
+    # semantics are deliberately unchanged (see the module docstring's
+    # own "This distinction does NOT extend to list-valued keys" note).
+    import yaml
+
+    manifest_prefix = (
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n")
+    cases = [
+        ("skillDependencies", "  skillDependencies:\n"),
+        ("skillDependencies", "  skillDependencies:\n    requires: []\n"),
+        ("lifecycle", "  lifecycle:\n"),
+        ("lifecycle", "  lifecycle:\n    renamedFrom: old-name\n"),
+        ("executionRequirements", "  executionRequirements:\n"),
+        ("executionRequirements",
+         "  executionRequirements:\n    tools:\n      read: []\n"),
+    ]
+    for key, body in cases:
+        text = manifest_prefix + body
+        real_value = yaml.safe_load(text)["spec"].get(key)
+        parsed_value = css._parse_manifest(text).root["spec"][key]
+        if real_value is None:
+            assert parsed_value is None, (key, body, parsed_value)
+        else:
+            assert isinstance(real_value, dict), (key, body)
+            assert isinstance(parsed_value, dict), (key, body, parsed_value)
