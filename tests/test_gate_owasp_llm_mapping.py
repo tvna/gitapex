@@ -20,7 +20,9 @@ TABLE_HEADER = "| LLM | Status | Rationale |\n|---|---|---|\n"
 
 
 def _complete_rows() -> str:
-    return "".join(f"| LLM{i:02d} Some Category | covered | Because reasons #{100 + i}. |\n" for i in range(1, 11))
+    return "".join(
+        f"| LLM{i:02d} Some Category | covered | [allow] Because reasons #{100 + i}. |\n" for i in range(1, 11)
+    )
 
 
 def _write(tmp_path: pathlib.Path, body: str) -> pathlib.Path:
@@ -133,6 +135,46 @@ def test_unrecognized_id_is_drift(tmp_path):
     path = _write(tmp_path, _complete_rows() + "| LLM11 Not A Real Category | covered | N/A. |\n")
     problems = gate.find_drift(path)
     assert any("LLM11: not a recognized LLM01-10 ID" in p for p in problems)
+
+
+def test_missing_classification_tag_is_drift(tmp_path):
+    """Per #311, every row's rationale must carry a leading [deny]/
+    [require_approval]/[allow] tag. A row that drops the tag entirely
+    must surface as drift."""
+    rows = _complete_rows().replace("[allow] Because reasons #101.", "Because reasons #101.", 1)
+    path = _write(tmp_path, rows)
+    problems = gate.find_drift(path)
+    assert any("LLM01: rationale missing a leading classification tag" in p for p in problems)
+
+
+def test_misspelled_classification_tag_is_drift(tmp_path):
+    """A malformed/misspelled tag (wrong case here) must not be silently
+    accepted as valid -- it should read the same as a missing tag."""
+    rows = _complete_rows().replace("[allow] Because reasons #101.", "[Allow] Because reasons #101.", 1)
+    path = _write(tmp_path, rows)
+    problems = gate.find_drift(path)
+    assert any("LLM01: rationale missing a leading classification tag" in p for p in problems)
+
+
+def test_duplicate_classification_tag_is_drift(tmp_path):
+    """Two tags on the same row (e.g. a bad merge leaving both the old and
+    new tag) must surface as drift instead of the first one silently
+    winning."""
+    rows = _complete_rows().replace(
+        "[allow] Because reasons #101.", "[allow] [deny] Because reasons #101.", 1
+    )
+    path = _write(tmp_path, rows)
+    problems = gate.find_drift(path)
+    assert any("LLM01" in p and "classification tags" in p and "expected exactly 1" in p for p in problems)
+
+
+def test_complete_table_with_all_three_tags_has_no_drift(tmp_path):
+    """A passing case exercising all three valid tags, not just [allow]."""
+    rows = _complete_rows()
+    rows = rows.replace("[allow] Because reasons #102.", "[deny] Because reasons #102.", 1)
+    rows = rows.replace("[allow] Because reasons #103.", "[require_approval] Because reasons #103.", 1)
+    path = _write(tmp_path, rows)
+    assert gate.find_drift(path) == []
 
 
 def test_main_returns_nonzero_on_drift(tmp_path, monkeypatch, capsys):
