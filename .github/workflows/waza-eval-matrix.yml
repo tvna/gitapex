@@ -10,6 +10,26 @@
 # endpoint secrets (see the preflight step). Until then a dispatch fails loudly
 # at preflight rather than running against a missing endpoint -- no silent
 # no-op, no fabricated readiness (CLAUDE.md sections 1 and 4).
+#
+# `eval-matrix-hf-gemma4` (issue #317, sub-task of #310) is an additive,
+# independent lane, not a replacement of `eval-matrix` above: it answers a
+# different question (does this skill survive on a structurally different,
+# non-frontier-scale model?) than the Claude-tier consistency lane (do Claude
+# opus/sonnet/haiku behave consistently?). Model: google/gemma-4-31B-it, the
+# largest Gemma 4 variant on Hugging Face whose published (bf16 safetensors)
+# weights are <=100GB -- confirmed 62.6GB total (49.8GB + 12.8GB across two
+# safetensors shards) at https://huggingface.co/google/gemma-4-31B-it, larger
+# than the other four Gemma 4 sizes (E2B, E4B, 12B, 26B-A4B). Serving
+# mechanism: a Hugging Face Inference Endpoint, reusing this repo's own
+# COPILOT_BASE_URL/COPILOT_PROVIDER_BASE_URL custom-provider override point
+# (same fail-loud-at-preflight, advisory-only, never-merge-gating posture) --
+# not a new self-hosted runner or GPU, avoiding the standing operational
+# burden Ollama would add to a single-maintainer public repo. See the PR body
+# for the full decision trail and an explicitly disclosed assumption this
+# lane rests on (unverified until a credentialed dispatch): that waza's
+# copilot-sdk executor, when pointed at a custom base URL, treats the target
+# as a generic OpenAI/Copilot-compatible chat endpoint reachable with the
+# same COPILOT_SDK_TOKEN auth waza's own docs name for that executor.
 name: Waza eval matrix (cross-model, advisory)
 
 on:
@@ -24,6 +44,17 @@ on:
           the committed suites already pin.
         required: false
         default: '["claude-sonnet-4.6"]'
+      run_hf_gemma4:
+        description: >-
+          Set to "true" to also run the eval-matrix-hf-gemma4 lane. Defaults
+          to "false": without this explicit opt-in, a plain dispatch of this
+          workflow (e.g. for the Claude-tier eval-matrix job) would otherwise
+          also schedule the separately-billed HF Inference Endpoint job every
+          time, and would fail loudly at its own preflight step until
+          HF_INFERENCE_ENDPOINT_URL/HF_API_TOKEN are provisioned even when
+          only the Claude lane was actually wanted.
+        required: false
+        default: 'false'
 
 permissions:
   contents: read
@@ -107,6 +138,127 @@ jobs:
             # A failed override must not fall through to `waza run`: that would
             # execute the suite at its committed default model yet record it
             # under this matrix tier -- a silently mislabelled result.
+            if ! python3 evals/scripts/set_config_model.py "$suite" "$MODEL"; then
+              echo "| ${skill} | FAIL (model override) |" >> "$GITHUB_STEP_SUMMARY"
+              failed=1
+              continue
+            fi
+            if nix run .#waza -- run "$skill" -o "results/${MODEL}/${skill}.json"; then
+              echo "| ${skill} | pass |" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "| ${skill} | FAIL |" >> "$GITHUB_STEP_SUMMARY"
+              failed=1
+            fi
+          done
+          exit "$failed"
+
+  # Additive cross-vendor portability lane (issue #317, sub-task of #310).
+  # Answers a different question than eval-matrix above (Claude-tier
+  # consistency): does this skill survive on a structurally different,
+  # non-frontier-scale model? Same fail-loud-at-preflight / advisory-only /
+  # never-merge-gating shape as eval-matrix, reusing its own committed
+  # set_config_model.py override script unmodified -- no new files, no new
+  # self-hosted runner (see the header comment above for the model-size and
+  # serving-mechanism decision trail and citations).
+  eval-matrix-hf-gemma4:
+    # Explicit opt-in only: a plain dispatch of this workflow (e.g. to run
+    # the existing Claude-tier eval-matrix job) must not also silently
+    # schedule this separately-billed HF lane or fail it at preflight for
+    # secrets nobody asked to use this time.
+    if: ${{ github.event.inputs.run_hf_gemma4 == 'true' }}
+    runs-on: ubuntu-latest
+    # 45m (eval-matrix's own budget, copied here originally) is not enough:
+    # this job loops over all committed suites sequentially in one runner
+    # (no parallel: true anywhere in this repo's suites), and as of this
+    # writing that is 19 suites / 183 tasks (`ls evals/*/eval.yaml`,
+    # `ls evals/*/tasks/*.yaml`) -- under 15s/task budget at 45m once
+    # checkout, Nix install, 19 separate `nix run` cold starts, and HF
+    # endpoint latency are subtracted. This 180m figure is a conservative,
+    # UNMEASURED estimate sized off that suite/task count, not a verified
+    # figure from a real timed dispatch (this environment cannot execute
+    # waza -- see the PR body's disclosed residual risk). Adjust down once
+    # a live dispatch (after secrets are provisioned) reports an actual
+    # runtime.
+    timeout-minutes: 180
+    permissions:
+      contents: read
+    env:
+      HF_GEMMA4_MODEL: google/gemma-4-31B-it
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          persist-credentials: false
+
+      # waza is provisioned from this repo's flake (SSoT), never re-installed
+      # by hand -- same rule eval-matrix and waza-check.yml follow. See
+      # flake.nix + #57.
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25  # v22
+        with:
+          extra-conf: "experimental-features = nix-command flakes"
+
+      # Fail loudly if the HF Inference Endpoint credentials are not
+      # configured, before any run is attempted. Presence is checked; values
+      # are never printed (CLAUDE.md section 4 -- secrets must not reach a
+      # log). See the PR body for the exact issuance path (creation
+      # location, minimum scope, rotation).
+      - name: Preflight -- require HF Inference Endpoint secrets
+        env:
+          HF_INFERENCE_ENDPOINT_URL: ${{ secrets.HF_INFERENCE_ENDPOINT_URL }}
+          HF_API_TOKEN: ${{ secrets.HF_API_TOKEN }}
+        run: |
+          if [ -z "$HF_INFERENCE_ENDPOINT_URL" ] || [ -z "$HF_API_TOKEN" ]; then
+            echo "::error::No Hugging Face Inference Endpoint configured. Set" \
+              "repository secrets HF_INFERENCE_ENDPOINT_URL and HF_API_TOKEN" \
+              "under Settings -> Secrets and variables -> Actions before" \
+              "dispatching. See issue #317 / this lane's PR body for the" \
+              "issuance path."
+            exit 1
+          fi
+
+      # For each committed suite: rewrite its config.model to the confirmed
+      # Gemma 4 model id (same set_config_model.py the eval-matrix job uses,
+      # unmodified), then run it against the HF Inference Endpoint. The edit
+      # lands only on this ephemeral checkout; committed suites stay pinned
+      # to their default. HF_INFERENCE_ENDPOINT_URL is passed as
+      # COPILOT_BASE_URL/COPILOT_PROVIDER_BASE_URL, this repo's own
+      # already-established custom-provider override point for the
+      # copilot-sdk executor (see this workflow's header comment); the token
+      # is passed as COPILOT_SDK_TOKEN, the auth environment variable
+      # waza's own docs name for that executor. This assumes the executor
+      # treats a custom base URL as a generic OpenAI/Copilot-compatible chat
+      # endpoint -- disclosed explicitly rather than asserted as confirmed,
+      # since this repository cannot execute waza to verify it, the same
+      # unexecuted status the eval-matrix job above has carried since #106.
+      - name: Run suites against the HF Gemma 4 endpoint
+        env:
+          MODEL: ${{ env.HF_GEMMA4_MODEL }}
+          COPILOT_BASE_URL: ${{ secrets.HF_INFERENCE_ENDPOINT_URL }}
+          COPILOT_PROVIDER_BASE_URL: ${{ secrets.HF_INFERENCE_ENDPOINT_URL }}
+          COPILOT_SDK_TOKEN: ${{ secrets.HF_API_TOKEN }}
+        run: |
+          set -u
+          mkdir -p "results/${MODEL}"
+          failed=0
+          {
+            echo "## Waza eval matrix -- HF Inference Endpoint model: ${MODEL}"
+            echo ""
+            echo "| skill | result |"
+            echo "| --- | --- |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          # Enumerate by eval.yaml so non-suite dirs (e.g. evals/scripts/)
+          # are excluded; the skill name is the suite directory's basename.
+          for suite in evals/*/eval.yaml; do
+            skill="$(basename "$(dirname "$suite")")"
+            # A failed override must not fall through to `waza run`: that would
+            # execute the suite at its committed default model yet record it
+            # under this lane -- a silently mislabelled result.
             if ! python3 evals/scripts/set_config_model.py "$suite" "$MODEL"; then
               echo "| ${skill} | FAIL (model override) |" >> "$GITHUB_STEP_SUMMARY"
               failed=1
