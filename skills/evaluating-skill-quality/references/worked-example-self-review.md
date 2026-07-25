@@ -381,6 +381,37 @@ codes, and the full check list. **Verifiable intermediate outputs for
 high-stakes batch work** -- not applicable; this is a single read-only
 pass/fail check, not a plan -> validate -> execute batch pattern.
 
+**Test methodology** (`scripts/test_check_skill_shape.py`, 219 test
+functions as of this snapshot): **test levels** -- unit-level only, every
+case constructs fixtures via `_write_skill()` and calls the module's
+functions directly (`css.check(...)` and friends); none invoke the actual
+CLI entry point as a subprocess, so argv parsing and the exit-code
+contract (0/1/2) that "solve, don't punt" above credits are exercised
+indirectly, not at integration level -- a real, named gap, not a
+hypothetical one. **Test design technique diversity** -- black-box
+coverage is genuinely broad: equivalence partitioning across description,
+name, reference-link, and sidecar validity classes; boundary value
+analysis is present and concrete, e.g. `test_overlong_description_fails`
+uses `DESCRIPTION_MAX_CHARS + 1` and
+`test_quoted_description_excludes_surrounding_quotes` targets "exactly
+the cap once quotes drop"; error-guessing/experience-based cases are
+present too (BOM-prefixed files, malformed fences, symlink-basename
+mismatches). What is missing: no decision-table treatment of the
+portability x capability-assumption x lifecycle combination space --
+each sidecar field's valid/invalid values are tested, but not the
+combinations, so a real interaction bug between two fields could pass
+every existing test. **White-box coverage is unmeasured, not stated** --
+`pyproject.toml` has no `pytest-cov` or coverage configuration, confirmed
+by directory search; the 219-test count is real breadth, not a coverage
+proxy. **Static testing** -- PR review is this script's technical review
+per this repository's own workflow; no linter or type-checker is
+configured for it specifically. **Risk-based prioritization** -- the
+heaviest technique density (equivalence classes plus boundary values) is
+already on the highest-risk logic (description/name length and
+YAML-safety parsing, the fail-closed checks a malformed skill would most
+plausibly trip), which is the right allocation even though it was not
+framed this way before this pass.
+
 ### 8. Behavioural evidence
 
 Unmeasured for pass/fail, not skipped: as of this snapshot, this
