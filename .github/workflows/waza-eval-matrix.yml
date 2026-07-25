@@ -44,6 +44,17 @@ on:
           the committed suites already pin.
         required: false
         default: '["claude-sonnet-4.6"]'
+      run_hf_gemma4:
+        description: >-
+          Set to "true" to also run the eval-matrix-hf-gemma4 lane. Defaults
+          to "false": without this explicit opt-in, a plain dispatch of this
+          workflow (e.g. for the Claude-tier eval-matrix job) would otherwise
+          also schedule the separately-billed HF Inference Endpoint job every
+          time, and would fail loudly at its own preflight step until
+          HF_INFERENCE_ENDPOINT_URL/HF_API_TOKEN are provisioned even when
+          only the Claude lane was actually wanted.
+        required: false
+        default: 'false'
 
 permissions:
   contents: read
@@ -150,8 +161,25 @@ jobs:
   # self-hosted runner (see the header comment above for the model-size and
   # serving-mechanism decision trail and citations).
   eval-matrix-hf-gemma4:
+    # Explicit opt-in only: a plain dispatch of this workflow (e.g. to run
+    # the existing Claude-tier eval-matrix job) must not also silently
+    # schedule this separately-billed HF lane or fail it at preflight for
+    # secrets nobody asked to use this time.
+    if: ${{ github.event.inputs.run_hf_gemma4 == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # 45m (eval-matrix's own budget, copied here originally) is not enough:
+    # this job loops over all committed suites sequentially in one runner
+    # (no parallel: true anywhere in this repo's suites), and as of this
+    # writing that is 19 suites / 183 tasks (`ls evals/*/eval.yaml`,
+    # `ls evals/*/tasks/*.yaml`) -- under 15s/task budget at 45m once
+    # checkout, Nix install, 19 separate `nix run` cold starts, and HF
+    # endpoint latency are subtracted. This 180m figure is a conservative,
+    # UNMEASURED estimate sized off that suite/task count, not a verified
+    # figure from a real timed dispatch (this environment cannot execute
+    # waza -- see the PR body's disclosed residual risk). Adjust down once
+    # a live dispatch (after secrets are provisioned) reports an actual
+    # runtime.
+    timeout-minutes: 180
     permissions:
       contents: read
     env:
