@@ -1395,22 +1395,37 @@ different sub-type, different domain, no memorized wording.
 `new-service-onboarding` orchestrator whose four steps (register in
 catalog, provision database, configure monitoring, write runbook) each
 explicitly consume the prior step's output and converge on one outcome,
-crossing four different systems. Confirmed directly against the two
-other after-dispatches run in this same iteration (`mechanism-fit-
-subagent.yaml`'s and `model-effort-tier-fit-unjustified-effort.yaml`'s
-targets both also happen to be single-outcome sequential pipelines): both
-independently and correctly found **no cohesion split finding**, one
-explicitly citing this skill's own `SKILL.md` Procedure steps 1-6 as the
-rubric's own worked instance of the same shape, and the other naming the
-shared invariant and converging outcome explicitly, matching the
-Restraint paragraph's own suggested phrasing almost verbatim. This
-fixture's own transcript was not separately dispatched in this
-iteration's live gate run (it is read once, for the final report, per
-the test-split rule) -- the restraint behavior it is designed to check is
-already independently demonstrated, unprompted, by two of this same
-iteration's other after-dispatches, which is stronger evidence than a
-single purpose-built sample would be on its own, since neither of those
-two dispatches was told this iteration was testing cohesion restraint.
+crossing four different systems.
+
+**Correction (found by an independent `/code-review` pass, external to
+this session's own gate-scoring work):** the first version of this entry
+substituted indirect corroboration from two unrelated selection-split
+after-dispatches (`mechanism-fit-subagent.yaml`'s and
+`model-effort-tier-fit-unjustified-effort.yaml`'s, whose targets happen
+to also be sequential pipelines) for an actual dispatch of this fixture's
+own target -- the first entry in this log's history to skip that step;
+every prior Kept-edit restraint check (issues #149, #155, #165, #183)
+dispatched its own purpose-built fixture. Fixed by actually running the
+fixture: one fresh, isolated dispatch against the post-edit rubric,
+scored with `score_contract.py` against the fixture's own
+`output_contains: ["no cohesion split finding"]` assertion.
+
+The after-edit dispatch correctly found **no cohesion split finding**,
+writing verbatim: *"Per the decision rule, functional or single-outcome
+sequential cohesion clears -- an orchestrator is not split merely for
+having steps. **No cohesion split finding.**"* It independently derived
+single-outcome sequential cohesion from the target's own text -- the
+explicit data-dependency chain (the catalog's generated service ID
+propagated through steps 2-4) ruling out procedural cohesion (order
+without consumption), and the closing sentence *"a partially-run subset
+... is not a usable end state on its own"* ruling out
+communicational/informational cohesion (independently useful outputs) --
+rather than pattern-matching the Restraint paragraph's own suggested
+phrasing. Score: **1.000000** (both assertions satisfied). This
+genuine, purpose-built-fixture result replaces the indirect corroboration
+the first version of this entry relied on; the two other after-dispatches'
+independent restraint findings, cited above, still stand as additional,
+not substitute, corroborating evidence.
 
 **Transfer check:** not run this iteration, consistent with every prior
 entry in this log -- named as a pre-existing, still-open gap in this
