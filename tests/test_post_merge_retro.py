@@ -16,8 +16,11 @@ from __future__ import annotations
 
 import http.client
 import json
+import pathlib
 import urllib.error
 import urllib.request
+
+import yaml
 
 import post_merge_retro as pmr
 import pytest
@@ -283,3 +286,93 @@ def test_main_exits_one_on_github_api_error(monkeypatch):
 
     monkeypatch.setattr(pmr, "find_existing_retro_issue", raise_api_error)
     assert pmr.main(["--owner", "tvna", "--repo", "gitapex", "--pr-number", "314"]) == 1
+
+
+# ---------------------------------------------------------------------------
+# Drift gate: the workflow's own "permanent human-review-of-merge" posture
+# (issue #318's own commit on post-merge-retro.yml) is enforced here, not
+# just stated in a comment. Per Codex review on PR #354: nothing previously
+# guarded this workflow's permissions or steps -- a future edit adding
+# `pull-requests: write` or a merge-capable step could ship green despite
+# violating the declared permanent architecture. This asserts it directly
+# against the real workflow file.
+# ---------------------------------------------------------------------------
+
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
+WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "post-merge-retro.yml"
+
+# Any of these appearing in a step's `run:` string or `uses:` action ref is
+# treated as a merge capability -- deliberately broad substrings (not an
+# exhaustive parse of every possible merge mechanism) so a new merge-shaped
+# step is more likely to trip this than to slip through unnoticed.
+_MERGE_CAPABLE_MARKERS = (
+    "gh pr merge",
+    "gh pr merge --auto",
+    "merge_pull_request",
+    "enable_pr_auto_merge",
+    "/merge",  # e.g. a raw REST call to PUT /repos/.../pulls/{n}/merge
+    "pulls/merge",
+)
+
+
+def _load_workflow():
+    return yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
+
+
+def _iter_permissions_blocks(workflow):
+    """Yield every `permissions:` mapping in the workflow -- the top-level
+    one and each job's own, since either scope could grant a capability."""
+    top_level = workflow.get("permissions")
+    if top_level is not None:
+        yield "top-level", top_level
+    for job_name, job in (workflow.get("jobs") or {}).items():
+        job_permissions = job.get("permissions")
+        if job_permissions is not None:
+            yield f"job:{job_name}", job_permissions
+
+
+def test_workflow_file_exists_and_parses():
+    assert WORKFLOW_PATH.is_file(), f"expected {WORKFLOW_PATH} to exist"
+    workflow = _load_workflow()
+    assert workflow.get("jobs"), f"{WORKFLOW_PATH} has no jobs -- parse likely broke"
+
+
+def test_workflow_never_grants_pull_requests_write():
+    workflow = _load_workflow()
+    offenders = []
+    for scope_name, permissions in _iter_permissions_blocks(workflow):
+        if not isinstance(permissions, dict):
+            # A bare `permissions: write-all` (or similar scalar) implicitly
+            # grants everything, including pull-requests -- treat any
+            # non-mapping form as an offender rather than trying to parse
+            # GitHub Actions' shorthand scalar forms.
+            offenders.append((scope_name, permissions))
+            continue
+        pr_permission = permissions.get("pull-requests")
+        if pr_permission is not None and pr_permission != "read" and pr_permission != "none":
+            offenders.append((scope_name, permissions))
+    assert not offenders, (
+        f"{WORKFLOW_PATH} grants pull-requests write (or an unparseable "
+        f"blanket permission) in: {offenders} -- this workflow's own header "
+        "comment declares it may only ever open an issue; a merge-capable "
+        "permission here would violate that permanently-declared invariant."
+    )
+
+
+def test_workflow_has_no_merge_capable_step():
+    workflow = _load_workflow()
+    offenders = []
+    for job_name, job in (workflow.get("jobs") or {}).items():
+        for step in job.get("steps") or []:
+            haystack = " ".join(
+                str(step.get(key, "")) for key in ("run", "uses", "with")
+            ).lower()
+            hits = [marker for marker in _MERGE_CAPABLE_MARKERS if marker in haystack]
+            if hits:
+                offenders.append((job_name, step.get("name", "<unnamed step>"), hits))
+    assert not offenders, (
+        f"{WORKFLOW_PATH} has a step that looks merge-capable: {offenders} -- "
+        "this workflow's own header comment declares 100% human review of "
+        "merges as a permanent architectural feature; it may never merge a "
+        "pull request itself."
+    )
