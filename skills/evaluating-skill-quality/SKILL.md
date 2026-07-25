@@ -323,6 +323,20 @@ spec:
 Full rationale: [references/rubric.md](references/rubric.md)'s Lifecycle
 section.
 
+## Execution requirements
+
+Optional. `spec.executionRequirements.tools` in the skill's
+`metadata/gitapex.yaml` sidecar records what a skill's own procedure
+touches at runtime (`read`/`write`/`shell` capability-tag lists); the
+`execution-requirements-well-formed` shape check enforces its shape and
+fails closed on any unrecognized key. No behavior change: no skill in
+this repository declares it yet, and no skill's own runtime procedure
+may read or branch on it, same as Portability level, Capability
+assumption, and Lifecycle. Full schema, the required/optional/prohibited
+semantics each subkey carries, and rationale:
+[references/rubric.md](references/rubric.md)'s Execution requirements
+section and the design doc it cites.
+
 ## Procedure
 
 Steps 1-4 are this review's precondition, step 6 its postcondition --
@@ -441,6 +455,9 @@ actually specifies.
 ## Notes
 
 Portability rationale: self-contained -- carries its own rubric and bundled
-read-only `check_skill_shape.py`; cites only general Anthropic product
-docs, no this-repository tooling. The declared level itself lives in
-`metadata/gitapex.yaml`.
+read-only `check_skill_shape.py`. Its content cites this-repository design
+docs in a few places (e.g. rubric.md's Execution requirements section),
+but always through the approved hedge convention that marks such a
+citation as deliberate, acknowledged provenance rather than an
+operational dependency this skill's own procedure needs to resolve. The
+declared level itself lives in `metadata/gitapex.yaml`.

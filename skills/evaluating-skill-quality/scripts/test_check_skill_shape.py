@@ -2153,6 +2153,70 @@ def test_skill_dependencies_unknown_key_fails_well_formed(tmp_path):
     assert css.main([str(d)]) == 1
 
 
+def test_skill_dependencies_quoted_unknown_key_fails_well_formed(tmp_path):
+    # Regression guard (issue #356): a quoted unknown key must not bypass
+    # detection just because it does not match the old [A-Za-z0-9_-]+
+    # catch-all -- it has to be reported the same as an unquoted one.
+    d = _write_skill_deps_sidecar(
+        _write_skill(tmp_path),
+        "  skillDependencies:\n"
+        "    requires: []\n"
+        "    \"extra\": foo\n")
+    by = _by_name(css.check_shape(d))
+    assert by["skill-dependencies-well-formed"].passed is False
+    assert "unknown key" in by["skill-dependencies-well-formed"].evidence
+    assert css.main([str(d)]) == 1
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.unknown_skill_dependency_keys == ['"extra": foo']
+
+
+def test_skill_dependencies_symbol_bearing_unknown_key_fails_well_formed(tmp_path):
+    # A key containing a character outside [A-Za-z0-9_-] (here a space and
+    # "!") is equally unrecognized-but-undetected under the old regex.
+    d = _write_skill_deps_sidecar(
+        _write_skill(tmp_path),
+        "  skillDependencies:\n"
+        "    requires: []\n"
+        "    'weird key!': foo\n")
+    by = _by_name(css.check_shape(d))
+    assert by["skill-dependencies-well-formed"].passed is False
+    assert "unknown key" in by["skill-dependencies-well-formed"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_skill_dependencies_space_before_colon_key_fails_closed(tmp_path):
+    # Regression guard (Codex review on #358): a quoted key with
+    # whitespace between the closing quote and its colon ("extra" : foo)
+    # is valid YAML but KEY_LINE_RE_4 cannot parse it -- it must still
+    # fail closed via the indent-level fallback, not silently skip.
+    d = _write_skill_deps_sidecar(
+        _write_skill(tmp_path),
+        "  skillDependencies:\n"
+        "    requires: []\n"
+        "    \"extra\" : foo\n")
+    by = _by_name(css.check_shape(d))
+    assert by["skill-dependencies-well-formed"].passed is False
+    assert "unknown key" in by["skill-dependencies-well-formed"].evidence
+    assert css.main([str(d)]) == 1
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.unknown_skill_dependency_keys == ['"extra" : foo']
+
+
+def test_skill_dependencies_escaped_quote_key_fails_closed(tmp_path):
+    # Regression guard (Codex review on #358): an escaped quote inside a
+    # quoted key ("ex\"tra": foo) is valid YAML but KEY_LINE_RE_4 has no
+    # escape support -- must still fail closed, not silently skip.
+    d = _write_skill_deps_sidecar(
+        _write_skill(tmp_path),
+        "  skillDependencies:\n"
+        "    requires: []\n"
+        '    "ex\\"tra": foo\n')
+    by = _by_name(css.check_shape(d))
+    assert by["skill-dependencies-well-formed"].passed is False
+    assert "unknown key" in by["skill-dependencies-well-formed"].evidence
+    assert css.main([str(d)]) == 1
+
+
 def test_skill_dependencies_non_list_scalar_fails_well_formed(tmp_path):
     d = _write_skill_deps_sidecar(
         _write_skill(tmp_path),
@@ -2448,6 +2512,58 @@ def test_lifecycle_unknown_top_level_key_fails_well_formed(tmp_path):
         "      reason: not yet proven\n"
         "      trackingIssue: \"#123\"\n"
         "    stage: Beta\n")
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is False
+    assert "unknown key" in by["lifecycle-well-formed"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_lifecycle_quoted_unknown_top_level_key_fails_well_formed(tmp_path):
+    # Regression guard (issue #356): same defect class as
+    # test_skill_dependencies_quoted_unknown_key_fails_well_formed, one
+    # nesting level up -- a quoted key directly under spec.lifecycle must
+    # not bypass detection.
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n"
+        "    experimental:\n"
+        "      reason: not yet proven\n"
+        "      trackingIssue: \"#123\"\n"
+        "    'stage': Beta\n")
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is False
+    assert "unknown key" in by["lifecycle-well-formed"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_lifecycle_quoted_unknown_field_fails_well_formed(tmp_path):
+    # Same defect class one nesting level deeper still -- a quoted
+    # unrecognized field inside experimental/deprecated/stable.
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n"
+        "    experimental:\n"
+        "      reason: not yet proven\n"
+        "      trackingIssue: \"#123\"\n"
+        "      \"extra field\": foo\n")
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is False
+    assert "unknown field" in by["lifecycle-well-formed"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_lifecycle_space_before_colon_key_fails_closed(tmp_path):
+    # Regression guard (Codex review on #358), one nesting level up from
+    # the skillDependencies case: a key KEY_LINE_RE_4 cannot parse (space
+    # before the colon) must fail closed via the indent fallback rather
+    # than being silently tolerated as reserved nested content.
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n"
+        "    experimental:\n"
+        "      reason: not yet proven\n"
+        "      trackingIssue: \"#123\"\n"
+        "    \"stage\" : Beta\n")
     by = _by_name(css.check_shape(d))
     assert by["lifecycle-well-formed"].passed is False
     assert "unknown key" in by["lifecycle-well-formed"].evidence
@@ -2757,4 +2873,267 @@ def test_lifecycle_well_formed_fails_when_spec_is_not_a_mapping(tmp_path):
     assert by["lifecycle-well-formed"].passed is False
     assert "not a mapping" in by["lifecycle-well-formed"].evidence
     assert by["lifecycle-deprecated-replacement-resolves"].passed is True
+
+
+# ---- execution-requirements-well-formed (issue #349, #307 Workstream W1
+# first slice: the executionRequirements envelope + tools category) ----
+
+def _write_exec_req_sidecar(d, body, *, portability="Mixed"):
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        f"  portability: {portability}\n"
+        "  capabilityAssumption: Broad\n"
+        f"{body}",
+        encoding="utf-8")
+    return d
+
+
+def test_execution_requirements_absent_is_well_formed(tmp_path):
+    d = _write_skill(tmp_path)
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is True
+    assert result.evidence == "not declared (optional)"
+    assert css.main([str(d)]) == 0
+
+
+def test_execution_requirements_declared_with_no_tools_is_well_formed(tmp_path):
+    # Present but empty is a valid, distinct state from absent: nothing
+    # has been declared yet, but the block itself was opened. This parser
+    # has no inline flow-mapping ("tools: {}") support anywhere -- same as
+    # spec.skillDependencies -- so "declared, nothing inside" is written
+    # as a block header with no subkeys following, not a flow scalar.
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:\n"
+        "    tools:\n")
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is True
+    assert result.evidence == "no keys declared"
+    assert css.main([str(d)]) == 0
+
+
+def test_execution_requirements_tools_all_subkeys_declared(tmp_path):
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:\n"
+        "    tools:\n"
+        "      read:\n"
+        "        - files\n"
+        "        - search\n"
+        "      write:\n"
+        "        - files\n"
+        "      shell:\n"
+        "        - bash\n")
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is True
+    assert result.evidence == "tools.read, tools.write, tools.shell declared"
+    assert css.main([str(d)]) == 0
+
+
+def test_execution_requirements_empty_list_distinguished_from_absent(tmp_path):
+    # Regression guard: an explicit "read: []" must be reported as
+    # declared, not conflated with the subkey being entirely absent --
+    # the whole point of the required/optional/prohibited distinction
+    # #307 asks for.
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:\n"
+        "    tools:\n"
+        "      read: []\n")
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is True
+    assert result.evidence == "tools.read declared"
+    assert result.evidence != "no keys declared"
+    assert css.main([str(d)]) == 0
+
+
+def test_execution_requirements_tools_not_a_mapping_fails(tmp_path):
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:\n"
+        "    tools: not-a-mapping-scalar\n")
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "tools is not a mapping" in result.evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_execution_requirements_not_a_mapping_fails(tmp_path):
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements: not-a-mapping-scalar\n")
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "not a mapping" in result.evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_execution_requirements_unknown_top_level_key_fails(tmp_path):
+    # #307's security invariant 4: unknown capabilities fail closed. Only
+    # "tools" is recognized so far -- "network" is a real #307 W1
+    # category, but deferred to a sibling child issue, so it must be
+    # rejected here, not silently accepted as reserved space.
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:\n"
+        "    network:\n"
+        "      mode: disabled\n"
+        "    tools:\n"
+        "      read: []\n")
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "unknown key" in result.evidence
+    assert "network" in result.evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_execution_requirements_unknown_tools_key_fails(tmp_path):
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:\n"
+        "    tools:\n"
+        "      read: []\n"
+        "      bogus:\n"
+        "        - x\n")
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "unknown tools key" in result.evidence
+    assert "bogus" in result.evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_execution_requirements_quoted_unknown_top_level_key_fails(tmp_path):
+    # Regression guard (issue #356, blocking finding on this PR's own
+    # review): a quoted unknown key ("network": {}) must not bypass
+    # detection -- the exact shape the review cited as unmet before the
+    # shared KEY_LINE_RE_4/_match_key_line fix landed.
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:\n"
+        "    \"network\": {}\n"
+        "    tools:\n"
+        "      read: []\n")
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "unknown key" in result.evidence
+    assert css.main([str(d)]) == 1
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.unknown_execution_requirement_keys == ['"network": {}']
+
+
+def test_execution_requirements_unmatched_key_line_fails_closed(tmp_path):
+    # Regression guard for the residual gap KEY_LINE_RE_4/6 itself cannot
+    # parse (whitespace before a quoted key's colon) -- must still fail
+    # closed via the fallback, not silently skip.
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:\n"
+        "    tools:\n"
+        "      \"read\" : []\n")
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "unknown tools key" in result.evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_execution_requirements_mapping_shaped_list_item_fails(tmp_path):
+    # Regression guard for the same defect class
+    # test_references_mapping_shaped_item_fails_well_formed covers one
+    # level shallower: an unquoted "key: value" list item must not be
+    # silently truncated into a garbled scalar and certified well-formed.
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:\n"
+        "    tools:\n"
+        "      read:\n"
+        "        - path: sneaky\n")
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "malformed tools entry" in result.evidence
+    assert "path: sneaky" in result.evidence
+    assert css.main([str(d)]) == 1
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.malformed_execution_requirement_tools_items == ["- path: sneaky"]
+    assert parsed.root["spec"]["executionRequirements"]["tools"]["read"] == []
+
+
+def test_execution_requirements_inconsistent_indent_item_fails(tmp_path):
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:\n"
+        "    tools:\n"
+        "      read:\n"
+        "        - \"a\"\n"
+        "      - \"b\"\n")
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert css.main([str(d)]) == 1
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.root["spec"]["executionRequirements"]["tools"]["read"] == ["a"]
+    assert parsed.malformed_execution_requirement_tools_items == ['- "b"']
+
+
+def test_execution_requirements_checks_fail_when_sidecar_unreadable(tmp_path):
+    d = _write_skill(tmp_path)
+    sidecar = d / "metadata/gitapex.yaml"
+    sidecar.write_bytes(b"\xff\xfe\x00\x01invalid")
+    by = _by_name(css.check_shape(d))
+    assert by["execution-requirements-well-formed"].passed is False
+    assert "UnicodeDecodeError" in by["execution-requirements-well-formed"].evidence
+
+
+def test_execution_requirements_well_formed_fails_when_spec_is_not_a_mapping(tmp_path):
+    d = _write_skill(tmp_path)
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec: not-a-mapping-scalar\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["execution-requirements-well-formed"].passed is False
+    assert "not a mapping" in by["execution-requirements-well-formed"].evidence
+
+
+def test_execution_requirements_nesting_never_flagged_as_malformed_top_level(tmp_path):
+    # Parallel to test_legitimate_deeper_nesting_passes_manifest_parsable:
+    # the new nested block's own indented lines must never trip the
+    # unrelated manifest-parsable (top-level line) gate.
+    d = _write_skill(tmp_path)
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  executionRequirements:\n"
+        "    tools:\n"
+        "      read: []\n"
+        "      write:\n"
+        "        - files\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["manifest-parsable"].passed is True
+    assert by["manifest-parsable"].evidence == "no malformed lines"
+    assert by["execution-requirements-well-formed"].passed is True
+    assert css.main([str(d)]) == 0
     assert by["experimental-stable-compatible"].passed is True

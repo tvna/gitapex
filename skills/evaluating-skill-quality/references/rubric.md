@@ -34,6 +34,7 @@ skill's own folder.
 - [Portability level](#portability-level)
 - [Capability assumption](#capability-assumption)
 - [Lifecycle](#lifecycle)
+- [Execution requirements](#execution-requirements)
 - [1. Discovery -- name and description](#1-discovery----name-and-description)
 - [2. Conciseness](#2-conciseness)
 - [3. Degree of freedom](#3-degree-of-freedom)
@@ -829,6 +830,20 @@ Three independent, optional sub-blocks plus one plain scalar under
 - Per the sidecar's own behavior-neutrality invariant, `spec.lifecycle`
   is metadata only: no skill's own runtime procedure may read or branch
   on any part of it.
+
+## Execution requirements
+
+Like Lifecycle, this field has no per-dimension grading effect. It is
+structured bookkeeping (`spec.executionRequirements.tools`:
+`read`/`write`/`shell` capability-tag lists so far), gated by the same
+shape-check rigor and unknown-key fail-closed treatment as every other
+sidecar field, and behavior-neutral like the rest of this sidecar. Once
+declared, each subkey is a complete, closed allowlist for that category:
+non-empty means required/exclusively-permitted, an explicit empty list
+means prohibited, and an absent subkey means not yet declared (not the
+same as either). This repository has also recorded the full schema,
+semantics, and rationale at
+`docs/superpowers/specs/2026-07-25-skill-execution-requirements-envelope-design.md`.
 
 ## 1. Discovery -- name and description
 
