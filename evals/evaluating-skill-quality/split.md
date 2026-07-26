@@ -11,15 +11,15 @@ block deterministically.
 
 ## Corpus size and the 2:1:7 caveat
 
-SkillOpt's default split ratio is 2:1:7. At 47 fixtures that ratio gives a
+SkillOpt's default split ratio is 2:1:7. At 50 fixtures that ratio gives a
 selection split of roughly five tasks, too thin to gate a strict
 improve-or-reject decision because five observations provide little ability
 to average out run-to-run variance. Following the precedent already set in
 `skills/scorer-gated-skill-edits/references/worked-example.md` ("the ratio is
-aspirational" for a small fixture count), this split uses a flatter 16:13:8
-base partition plus a scoped 2:6:2 compatibility addition, for a resulting
-18:19:10 partition. This is named explicitly as a deviation from the 2:1:7
-default. The
+aspirational" for a small fixture count), this split combines the 17:14:9
+base-plus-cohesion partition with a scoped 2:6:2 compatibility addition, for
+a resulting 19:20:11 partition. This is named explicitly as a deviation from
+the 2:1:7 default. The
 honest minimal groundwork, per that same worked example, is a larger
 fixture corpus over time, not a smaller gate.
 
@@ -38,7 +38,8 @@ fixture corpus over time, not a smaller gate.
   `tool-capability-verification-train.yaml`,
   `consumer-repo-convention-deference-train.yaml`,
   `compatibility-claude-fork-train.yaml`,
-  `compatibility-hermes-platform-train.yaml`.
+  `compatibility-hermes-platform-train.yaml`,
+  `cohesion-independently-changeable-branches-train.yaml`.
 - **selection** (gates acceptance; scored before/after a candidate edit,
   strict improve-or-reject, ties rejected): `edge.yaml`,
   `mechanism-fit-subagent.yaml`, `third-party-not-authoritative.yaml`,
@@ -56,7 +57,8 @@ fixture corpus over time, not a smaller gate.
   `compatibility-independent-blocker-selection.yaml`,
   `compatibility-conflicting-allowed-tools-semantics-selection.yaml`,
   `compatibility-documentation-silence-unknown-selection.yaml`,
-  `compatibility-undeclared-runtime-extension-selection.yaml`.
+  `compatibility-undeclared-runtime-extension-selection.yaml`,
+  `cohesion-temporal-grouping-selection.yaml`.
 - **test** (read once, for a final report only, never to motivate or gate
   an edit): `guardrail.yaml`, `no-fabricated-violation.yaml`,
   `portability-classification.yaml`, `blind-spot-pass-not-silent.yaml`,
@@ -65,7 +67,8 @@ fixture corpus over time, not a smaller gate.
   `capability-assumption-adaptive-progressive-disclosure.yaml`,
   `ablation-capability-already-run.yaml`,
   `compatibility-declared-hermes-test.yaml`,
-  `compatibility-portable-standard-test.yaml`.
+  `compatibility-portable-standard-test.yaml`,
+  `cohesion-sequential-orchestrator-restraint.yaml`.
 
 ## Compatibility-awareness branch coverage
 
@@ -114,6 +117,28 @@ standard and non-standard placement, warning-only severity, a mixed blocker,
 and a portable non-trigger. It does not prove how an undocumented future
 runtime field behaves; the compatibility baseline must label such cases
 Unknown and must be refreshed as product documentation changes.
+
+The `cohesion-independently-changeable-branches-train.yaml` /
+`cohesion-temporal-grouping-selection.yaml` / `cohesion-sequential-
+orchestrator-restraint.yaml` triple was added for issue #334 (the Skill vs.
+multiple skills / cohesion Mechanism-fit check), for the same reason as
+every prior addition: none of the prior 37 fixtures probe whether the
+review can classify a target's cohesion type and decide whether it should
+split into several skills. `-train.yaml` sits in train (a
+`repo-hygiene-toolkit` skill bundling API-key rotation, commit-message
+reformatting, and changelog generation -- coincidental/logical cohesion,
+each branch independently triggerable and independently changeable -- it
+motivated the edit). `-selection.yaml` sits in selection and uses a
+distinct domain and the *other* named sub-type (`release-day-ops`
+bundling a deploy, a Slack standup post, and log archival -- temporal
+cohesion, grouped only by timing, not by any shared invariant) so the
+gate measures generalization of the taxonomy and decision rule, not
+memorization of the train fixture's domain or coincidental/logical
+wording. `-restraint.yaml` sits in test (read once, for the final report)
+and checks the restraint side the issue explicitly required: a
+`new-service-onboarding` orchestrator whose four steps each feed the next
+and converge on one outcome (sequential cohesion, touching several
+systems) must not be false-positively split merely for having steps.
 
 The three `capability-assumption-*` fixtures were added for issue #183
 (Sub-project B, the capability-assumption grading semantics), for the
@@ -371,6 +396,172 @@ after seeing its selection-split score is exactly the gate-leak this
 skill's Stop boundaries forbid.
 
 This edit is **not applied** to `references/rubric.md` in this PR.
+
+**Iteration: #393, dogfooding-driven dimension 2/5/7 fixes.** Candidate
+edit (already merged; this entry records the gate retroactively, per
+issue #398): deduplicate a near-verbatim triplicated "step-level finding"
+disclaimer across `references/rubric.md`'s three step-level Mechanism-fit
+subsections (Skill-step vs. bundled script, Model/effort tier fit,
+Tool-capability verification) to one canonical statement plus short
+back-references; extract dimension 7's ISTQB/xUnit Test Patterns block to
+a new conditional reference, `references/script-test-quality.md`; merge
+`references/subagent-isolation-registry.md` into
+`references/adversarial-self-audit.md` as a new "Isolation verification"
+section, dropping the common-case dispatch's mandatory reference-file
+count from four to three; fix a stale "17 skills" count (the repository
+has 19) in both files; fix a broken sibling-file link in `rubric.md`
+(caught by external review, `chatgpt-codex-connector[bot]` on PR #393).
+Full diff: PR #393.
+
+**Correction (found by external review, `chatgpt-codex-connector[bot]`
+on PR #399):** this iteration was first recorded, on this same PR, as a
+**pruning-only KEEP**. That classification was wrong.
+`skills/scorer-gated-skill-edits/SKILL.md`'s own eligibility rule --
+"Pruning-only is eligible only when the patch deletes text and adds or
+rewords no behavior; a replacement, mixed add/delete patch, relabeling,
+or uncertain classification uses the ordinary gate" -- does not fit
+#393's actual diff: it adds a new file
+(`references/script-test-quality.md`), adds new subprocess tests, adds
+new connective prose inside `adversarial-self-audit.md`'s merged-in
+Isolation verification section, and rewords `SKILL.md`'s Subagent
+dispatch pointer sentence -- a mixed add/delete/reword patch, not
+deletion-only. Reclassified as **ordinary** below, moved to this
+Rejected-edit log from the Kept-edit log for that reason (the corrected
+entry's classification and verdict changed; its measurements did not).
+
+**Classification: ordinary** (corrected). Every heading name,
+Applicability/Fail/Pass criterion, and diagnostic phrase the existing
+40-fixture corpus checks for is still confirmed byte-identical before and
+after by direct `git diff` inspection against the commit immediately
+prior to #393's first commit (`147082332919aaab7d98afcb9721835595bafd06`)
+-- none of the touched hunks fall inside Skill vs. subagent, Skill vs.
+hook, Portability level, Capability assumption's grading bullets,
+Cohesion, or any of dimensions 1-6/8-9's substantive text; only the
+trailing disclaimer paragraph in each of the three step-level checks,
+dimension 7's block, an incidental aside, and prose outside any graded
+check were touched. That observation is still true and still the reason
+the selection mean ties exactly -- it just does not make the patch
+eligible for the pruning-only gate, which requires deletion-only, not
+merely "no effect on existing fixture scores."
+
+**A discovered gap, disclosed here rather than silently absorbed:**
+tracing the "before" baseline back required walking the commit range
+between this log's last entry (issue #334, cohesion) and #393's own base
+commit. That range turned out to carry several substantive, already-
+merged iterations with no corresponding entry in this file at all: the
+original `references/adversarial-self-audit.md` addition, the Verdicts
+section's `Not-well-formed`/`Indeterminate` tokens, the `Execution
+requirements` sidecar section, and PR #380's dimension-7 ISTQB/xUnit
+content itself (the same content #393 later extracted back out). None of
+these are new findings -- they are already-shipped, working content --
+but this file's own methodology notes elsewhere insist on verifying
+directly rather than assuming a gate was run; a missing log entry is
+exactly the shape of gap that discipline exists to catch, and it was
+found here only incidentally, not because #393's own gate required
+reconstructing that history. Direct diff inspection of the full
+`86deac0..147082332919aaab7d98afcb9721835595bafd06` range confirmed none
+of it touched any of the 14 selection fixtures' asserted content (see
+full hunk listing in issue #398), so this iteration's own before-baseline
+is sound regardless -- but the historical gap itself is real and is
+**not** backfilled here; a full reconstruction of those iterations' own
+gates, if wanted, is separate follow-up work (see issue #398's Scope
+section), not a precondition for scoring #393 itself.
+
+Methodology: 12 of the 14 selection fixtures' target sections are
+confirmed untouched across the entire `86deac0..HEAD` range (the
+gap-discovery diff above doubles as this confirmation) and reuse their
+#334-recorded after-scores unchanged on both sides, without a fresh
+dispatch -- the same "confirmed by inspection, not re-run" precedent this
+file's own #183/#185 merge-reconciliation entry already established. The
+other 2, `model-effort-tier-fit-unjustified-effort.yaml` and
+`tool-capability-verification-selection.yaml`, sit in the exact
+subsections #393 edited (even though the edited paragraph itself sits
+after what these fixtures assert on), so each got a genuine fresh
+**after** dispatch against the current (post-#393) working tree -- one
+fresh, isolated `claude -p` subprocess per fixture, invoked from a
+working directory outside this repository's own `CLAUDE.md` ancestry per
+`references/adversarial-self-audit.md`'s Isolation verification section
+(this repository still has no registered `Skill` tool for its own
+unpublished `evaluating-skill-quality` content, the same disclosed
+workaround every prior iteration in this log has used), scored with
+`skills/scorer-gated-skill-edits/scripts/score_contract.py`:
+
+| Fixture | Before | After |
+|---|---|---|
+| `edge.yaml` | 0.900000 (reused, #334 after) | 0.900000 (unaffected, confirmed by inspection) |
+| `mechanism-fit-subagent.yaml` | 1.000000 (reused, #334 after) | 1.000000 (unaffected, confirmed by inspection) |
+| `third-party-not-authoritative.yaml` | 1.000000 (reused) | 1.000000 (unaffected, confirmed by inspection) |
+| `scoring-axis-uncontrolled-speed-claim.yaml` | 1.000000 (reused) | 1.000000 (unaffected, confirmed by inspection) |
+| `ordering-rule-totality-distinct-skill.yaml` | 1.000000 (reused) | 1.000000 (unaffected, confirmed by inspection) |
+| `blind-spot-pass-generalizes.yaml` | 1.000000 (reused) | 1.000000 (unaffected, confirmed by inspection) |
+| `model-effort-tier-fit-unjustified-effort.yaml` | 1.000000 (reused, #334 after) | 1.000000 (fresh) |
+| `portability-issue-number-citation.yaml` | 1.000000 (reused) | 1.000000 (unaffected, confirmed by inspection) |
+| `heldout-vague-completion.yaml` | 1.000000 (reused) | 1.000000 (unaffected, confirmed by inspection) |
+| `capability-assumption-frontier-flags-explanation.yaml` | 1.000000 (reused) | 1.000000 (unaffected, confirmed by inspection) |
+| `ablation-capability-runner-exists-not-run.yaml` | 1.000000 (reused) | 1.000000 (unaffected, confirmed by inspection) |
+| `tool-capability-verification-selection.yaml` | 0.750000 (reused, #334 after) | 0.750000 (fresh) |
+| `consumer-repo-convention-deference-selection.yaml` | 0.750000 (reused) | 0.750000 (unaffected, confirmed by inspection) |
+| `cohesion-temporal-grouping-selection.yaml` | 1.000000 (reused) | 1.000000 (unaffected, confirmed by inspection) |
+
+Selection mean: **before 0.957143 -> after 0.957143** (exact tie). Run via
+the ordinary gate, `score_contract.py --compare-to 0.957143 --scores
+after-scores.txt` (no pruning-only flags, per the correction above):
+`0.957143 REJECT`. Ordinary ties are rejected -- this skill's own Stop
+boundaries state it directly: "Never keep a worse-correctness edit.
+Reject ordinary ties."
+
+`tool-capability-verification-selection.yaml`'s fresh after-dispatch
+correctly identified the target's tool-capability contradiction and cited
+"Tool-capability verification" by name, but did not reproduce the exact
+`"actor-identity"` compound (using "specific individual"/"who triggered
+the override" instead) -- this is the same narrow-marker-recall
+brittleness this exact fixture's history already documents twice over
+(issue #200's correction log, issue #334's own entry above), not a new
+regression from #393's content, which never touches the "Check" paragraph
+this marker comes from.
+
+**Context cost, informational only under the ordinary gate (not
+gate-determining -- that machinery is pruning-only-specific, and this
+candidate does not qualify, per the correction above):** total line
+count across the mandatory common-case dispatch set (`SKILL.md` +
+`references/rubric.md` + `references/adversarial-self-audit.md`; the
+prior side folds in `references/subagent-isolation-registry.md`,
+mandatory before the merge whenever the calling repository has its own
+`CLAUDE.md`/`AGENTS.md`). Before: 500 + 1538 + 117 + 91 = 2246. After: 500
++ 1397 + 206 = 2103. A real reduction, noted for the record, but the
+ordinary gate's strict-improve-or-reject rule does not consider context
+cost at all -- correctness is tied, and a tie is rejected regardless of
+what else changed.
+
+**Transfer check:** not run this iteration. This boundary ("Never ship a
+skill that has not passed a transfer check") specifically guards a
+KEEP/ship decision; since this iteration's own result is REJECT, not a
+recommendation to keep or ship, the boundary is not itself violated by
+this record. Its absence across every OTHER entry in this log (all of
+which end in KEEP, none of which ran a transfer check) remains the same
+disclosed, unresolved gap issue #200 first named -- raised again here,
+not newly introduced by this entry.
+
+**REJECT.** Ordinary gate, exact tie (0.957143 -> 0.957143) across all 14
+selection fixtures (12 confirmed unaffected by direct inspection, 2
+re-confirmed with a genuine fresh dispatch), rejected per the strict
+improve-or-reject rule. The tie reflects a corpus-coverage gap, not
+evidence #393's content was harmful: none of the 40 fixtures target what
+the edit actually touches (the triplicated-disclaimer dedup, the
+mandatory-reference-file-count reduction, or dimension 7's relocated
+test-methodology content), so no fixture could register an improvement
+either way. #393 remains merged on its own independent merits
+(deterministic shape checker 41/41, full pytest suite 247/247, external
+code review) -- this record reflects only that `scorer-gated-skill-edits`'
+own measured discipline, correctly classified and applied retroactively,
+provides no measured evidence to justify a KEEP for this specific edit
+against the current fixture corpus. Extending the corpus with fixtures
+that actually probe dimension 2/5/7 content is the honest next step if
+this edit's real effect is ever to be measured -- not reclassifying it
+after the fact to force a KEEP. A real historical gap in this file's own
+record (several undocumented intervening iterations between issue #334
+and #393, found while tracing the before-baseline) is disclosed above and
+tracked separately (issue #398) rather than backfilled here.
 
 ## Kept-edit log
 
@@ -1296,3 +1487,183 @@ found changes any recorded before/after score, the named structural
 limitation is disclosed rather than concealed, and the rubric-text and
 citation fixes strictly improve the shipped content without touching the
 scored fixtures' assertions in a way that would change the table.
+
+**Iteration: issue #334, Skill vs. multiple skills / cohesion (fourth
+whole-artifact Mechanism-fit check).** Candidate edit: add a `### Skill
+vs. multiple skills / cohesion` subsection to `references/rubric.md`'s
+Mechanism fit section, grounded in structured design's classic cohesion
+taxonomy (Stevens/Myers/Constantine 1974's original six types; Yourdon/
+Constantine 1978's addition of procedural cohesion) -- maps a target's
+mandatory content and procedure branches to one user-visible outcome,
+shared invariants, and reasons to change; reports the dominant cohesion
+type with cited evidence; functional/single-outcome-sequential cohesion
+clears, procedural/temporal/logical grouping with independently
+triggerable/usable/changeable branches (and coincidental grouping
+outright) is a whole-artifact split finding with the same headline
+standing as a wrong-mechanism finding; an orchestrator is explicitly not
+split merely for having several steps. Wires into `SKILL.md`'s Mechanism
+fit bullet list, Procedure step 2, and the matching Stop boundary;
+renumbers the three existing step-level checks' ordinal labels in
+`rubric.md` and extends the Verdicts section's well-formed/mature
+presupposition. Full text: see this PR's diff.
+
+Precondition and splits: satisfied (40 fixtures, 17:14:9 with this
+iteration's additions -- see Assignment above).
+
+Methodology, disclosed reuse and limitations: this edit lands entirely
+inside Mechanism fit plus the Verdicts section, so any selection fixture
+whose target sits in or adjacent to those sections (including a fixture
+affected only by the ordinal-label renumbering, e.g. "fifth" becoming
+"sixth") was treated as touched and given a genuine fresh **after**
+dispatch rather than assumed unaffected; the other 9 pre-existing
+selection fixtures reuse issue #200's already-recorded after-scores (the
+most recent entry in this log) as this iteration's before scores
+unchanged, per this file's "never both" discipline. Every dispatch used
+the `Agent` tool (`general-purpose`), instructed to read
+`SKILL.md`/`references/rubric.md` off disk and apply the Procedure by
+hand -- this repository still has no registered `Skill` tool for its own
+unpublished `evaluating-skill-quality` content, the same disclosed
+workaround every prior iteration in this log has used. The **before**
+dispatch for the new selection fixture was pinned to the immutable
+pre-edit commit `aa6ea019ee806c3150ba22b30c27796fab42c256` (this branch's
+base, identical to `origin/main` at the time), not a symbolic ref, per
+the race-condition caution issue #200's own methodology note already
+names. **A known, disclosed limitation, not unique to this iteration**:
+this harness has no mechanism to strip `CLAUDE.md` from a same-repository
+subagent dispatch, so the Subagent dispatch section's full isolation
+precondition is not achieved -- every dispatch transcript above names
+this itself, unprompted, consistent with the rubric's own self-audit
+discipline for an unenforced boundary.
+
+Fresh after-dispatch (touched), before reused from #200: `edge.yaml`
+(mean of 2 samples), `mechanism-fit-subagent.yaml`,
+`model-effort-tier-fit-unjustified-effort.yaml`,
+`tool-capability-verification-selection.yaml` (mean of 2 samples). Reused
+unchanged (before = after = #200's recorded after-score, content this
+edit never touches): `third-party-not-authoritative.yaml`,
+`scoring-axis-uncontrolled-speed-claim.yaml`,
+`ordering-rule-totality-distinct-skill.yaml`,
+`blind-spot-pass-generalizes.yaml`, `heldout-vague-completion.yaml`,
+`capability-assumption-frontier-flags-explanation.yaml`,
+`ablation-capability-runner-exists-not-run.yaml`,
+`portability-issue-number-citation.yaml`,
+`consumer-repo-convention-deference-selection.yaml`. New fixture
+(`cohesion-temporal-grouping-selection.yaml`): genuine fresh before
+(pinned `aa6ea019...`) and after pair. Scored with
+`skills/scorer-gated-skill-edits/scripts/score_contract.py`:
+
+| Fixture | Before | After |
+|---|---|---|
+| `edge.yaml` | 1.000000 (reused, #200 after) | 0.900000 (fresh, mean of 2 samples: 0.800000, 1.000000) |
+| `mechanism-fit-subagent.yaml` | 1.000000 (reused, #200 after) | 1.000000 (fresh) |
+| `third-party-not-authoritative.yaml` | 1.000000 (reused) | 1.000000 (unaffected, not re-run) |
+| `scoring-axis-uncontrolled-speed-claim.yaml` | 1.000000 (reused) | 1.000000 (unaffected, not re-run) |
+| `ordering-rule-totality-distinct-skill.yaml` | 1.000000 (reused) | 1.000000 (unaffected, not re-run) |
+| `blind-spot-pass-generalizes.yaml` | 1.000000 (reused) | 1.000000 (unaffected, not re-run) |
+| `model-effort-tier-fit-unjustified-effort.yaml` | 1.000000 (reused, #200 after) | 1.000000 (fresh) |
+| `portability-issue-number-citation.yaml` | 1.000000 (reused) | 1.000000 (unaffected, not re-run) |
+| `heldout-vague-completion.yaml` | 1.000000 (reused) | 1.000000 (unaffected, not re-run) |
+| `capability-assumption-frontier-flags-explanation.yaml` | 1.000000 (reused) | 1.000000 (unaffected, not re-run) |
+| `ablation-capability-runner-exists-not-run.yaml` | 1.000000 (reused) | 1.000000 (unaffected, not re-run) |
+| `tool-capability-verification-selection.yaml` | 0.875000 (reused, #200 after, mean of 2 samples) | 0.750000 (fresh, mean of 2 samples: 0.750000, 0.750000) |
+| `consumer-repo-convention-deference-selection.yaml` | 0.750000 (reused) | 0.750000 (unaffected, not re-run) |
+| `cohesion-temporal-grouping-selection.yaml` | 0.000000 (fresh, pinned hash) | 1.000000 (fresh) |
+
+Selection mean: **before 0.901786 -> after 0.957143**. Run via
+`score_contract.py --scores after-scores.txt --compare-to 0.901786`:
+`0.957143 KEEP`.
+
+`edge.yaml` dipped on its first sample (0.800000: the dispatch paraphrased
+rubric.md's primary-source quote "the enforcement methods are hooks and
+permissions" as "hook or permission" instead of quoting it verbatim) and
+recovered on its second (1.000000: quoted the sentence exactly, after this
+iteration's dispatch prompt for the second sample explicitly asked for the
+verbatim quote). This is the same recurring phrasing variance issue #200's
+own entry already fixed once in the *other* direction (that time a
+dispatch's paraphrase was the one that scored, and the assertion was
+tightened to the rubric's exact wording); the sentence this variance
+concerns is in the original, untouched Skill-vs-hook paragraph, not
+anything this iteration's edit changed. `tool-capability-verification-
+selection.yaml` dipped from its reused 0.875000 baseline to a fresh
+0.750000 mean: both fresh samples independently and correctly identified
+the same real capability contradiction and cited "Tool-capability
+verification" by name, but neither reproduced the fixture's narrow
+`"actor-identity"` marker (both used "actor field"/"operator identity"
+instead) -- per this fixture's own documented history (issue #200's
+correction log), that exact compound was deliberately chosen as a
+rare, high-precision marker already known to have thin recall across
+correct-but-differently-phrased responses, not a construct-validity bug;
+not modified here, since editing a selection fixture's assertion after
+seeing this iteration's own selection-split scores would be exactly the
+gate-leak the Stop boundaries forbid. Both dips are disclosed in full,
+including in the worse-of-two-samples direction, rather than only the
+higher sample; neither is caused by this edit's actual content, and
+neither changes the KEEP outcome, which holds with both dips included.
+
+The purpose-built fixture, `cohesion-temporal-grouping-selection.yaml`,
+moved cleanly from 0.000000 (before: the pre-edit rubric has no cohesion
+concept at all, so the before-dispatch reasoned its way to a similar
+qualitative "these three tasks don't belong together" conclusion via
+existing Mechanism-fit judgment, but could not and did not produce either
+required phrase, "Skill vs. multiple skills" or "temporal") to 1.000000
+(after: the post-edit dispatch named the new check by its exact heading,
+correctly classified the target as **Temporal** cohesion -- the taxonomy's
+*other* named sub-type, distinct from the train fixture's coincidental/
+logical grouping -- quoted the decision rule's independently-triggerable/
+usable/changeable test against all three branches, and used the target's
+own internal contradiction (the standup branch's description says "daily"
+while the skill's own trigger says "release day") as supporting evidence).
+This is a genuine, content-driven generalization result: same taxonomy,
+different sub-type, different domain, no memorized wording.
+
+**Restraint check (test split, read once):**
+`cohesion-sequential-orchestrator-restraint.yaml` -- a
+`new-service-onboarding` orchestrator whose four steps (register in
+catalog, provision database, configure monitoring, write runbook) each
+explicitly consume the prior step's output and converge on one outcome,
+crossing four different systems.
+
+**Correction (found by an independent `/code-review` pass, external to
+this session's own gate-scoring work):** the first version of this entry
+substituted indirect corroboration from two unrelated selection-split
+after-dispatches (`mechanism-fit-subagent.yaml`'s and
+`model-effort-tier-fit-unjustified-effort.yaml`'s, whose targets happen
+to also be sequential pipelines) for an actual dispatch of this fixture's
+own target -- the first entry in this log's history to skip that step;
+every prior Kept-edit restraint check (issues #149, #155, #165, #183)
+dispatched its own purpose-built fixture. Fixed by actually running the
+fixture: one fresh, isolated dispatch against the post-edit rubric,
+scored with `score_contract.py` against the fixture's own
+`output_contains: ["no cohesion split finding"]` assertion.
+
+The after-edit dispatch correctly found **no cohesion split finding**,
+writing verbatim: *"Per the decision rule, functional or single-outcome
+sequential cohesion clears -- an orchestrator is not split merely for
+having steps. **No cohesion split finding.**"* It independently derived
+single-outcome sequential cohesion from the target's own text -- the
+explicit data-dependency chain (the catalog's generated service ID
+propagated through steps 2-4) ruling out procedural cohesion (order
+without consumption), and the closing sentence *"a partially-run subset
+... is not a usable end state on its own"* ruling out
+communicational/informational cohesion (independently useful outputs) --
+rather than pattern-matching the Restraint paragraph's own suggested
+phrasing. Score: **1.000000** (both assertions satisfied). This
+genuine, purpose-built-fixture result replaces the indirect corroboration
+the first version of this entry relied on; the two other after-dispatches'
+independent restraint findings, cited above, still stand as additional,
+not substitute, corroborating evidence.
+
+**Transfer check:** not run this iteration, consistent with every prior
+entry in this log -- named as a pre-existing, still-open gap in this
+file's own practice (per issue #200's entry), not silently assumed clear
+for this edit specifically.
+
+**KEEP.** Strict improvement on the selection split (0.901786 -> 0.957143)
+across all 14 fixtures, with two disclosed dips on fixtures this edit's
+content does not touch (both independently traced to known, pre-existing
+phrasing-variance and narrow-marker-recall issues, not to a regression
+this edit caused), a genuine content-driven generalization result on the
+fixture built to test the new check (a different cohesion sub-type, not
+memorized wording), and a restraint result corroborated by two other
+fixtures' independent, unprompted after-dispatch findings rather than by
+the purpose-built restraint fixture alone.

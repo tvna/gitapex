@@ -1,6 +1,6 @@
 id: driving-pr-to-merge-draft-state
 name: Mergeable State "draft" Is A Process State, Not A Defect
-description: When mergeable_state reads "draft", escalates to the owner per step 7 as a process state rather than hunting for a code or review defect to fix.
+description: When mergeable_state reads "draft", escalates to the owner per step 8 as a process state rather than hunting for a code or review defect to fix.
 tags:
   - quality
   - edge-case

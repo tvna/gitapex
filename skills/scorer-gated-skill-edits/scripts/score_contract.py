@@ -1,11 +1,47 @@
 """Deterministic substring-contract scorer for a held-out gate.
 
 Given a task's substring assertions (``output_contains`` /
-``output_not_contains``) and a run's output text, returns the fraction of
-assertions satisfied as a deterministic ``float`` in ``[0, 1]``. Standard
-library only, so the scorer stays self-contained with no external
-dependency. Producing the run output is out of scope: only the scoring step
-is made deterministic here.
+``output_not_contains`` / ``output_contains_near``) and a run's output text,
+returns the fraction of assertions satisfied as a deterministic ``float`` in
+``[0, 1]``. Standard library only, so the scorer stays self-contained with no
+external dependency. Producing the run output is out of scope: only the
+scoring step is made deterministic here.
+
+``output_contains``/``output_not_contains`` check presence/absence anywhere
+in the text, independently of each other -- they cannot verify that two
+substrings are actually *bound together* (e.g. that a specific repair's own
+description sits next to its own classification label, rather than each
+merely appearing somewhere in the output). ``output_contains_near`` (added
+for issue #328's fix to gitapex#312) closes half of that gap: each entry is
+``{"all": [s1, s2, ...], "window": int}`` and is satisfied only when every
+listed substring's first occurrence falls within a ``window``-character span
+of every other -- i.e. they co-occur in roughly the same sentence/paragraph,
+not merely somewhere in the same document. ``window`` defaults to 400 when
+omitted.
+
+Requiring the *right* pairing alone is not sufficient: a short enough
+response can still accidentally satisfy a `near` window for the wrong
+pairing too (a positive-only check cannot distinguish "these are correctly
+bound" from "the whole response was too terse to separate them"). Pair each
+`output_contains_near` requirement (this keyword IS near its correct label)
+with `output_not_contains_near` entries banning that same keyword from also
+being near each of the *other* possible labels, so a swapped assignment is
+rejected even when it is compact. `output_not_contains_near` shares the
+same ``{"all": [...], "window": int}`` shape and is satisfied when the
+entry's pairing does *not* hold.
+
+A raw character count alone cannot cleanly separate "these two substrings
+are bound in the same logical unit" from "they merely happen to be within N
+characters of each other" -- a verbose correct paragraph and a terse
+adjacent (but unrelated) one can straddle any fixed window either way (this
+was measured directly against real fixture text while building this
+feature, not assumed). "Near" therefore means two things together, both
+required: (1) within ``window`` characters (a loose backstop, default 400),
+AND (2) no blank line (``"\n\n"``, this repository's own established
+paragraph/list-item separator -- see `merge-retrospective/SKILL.md`'s own
+worked example, one blank-line-separated numbered item per repair) between
+the two occurrences. The blank-line check is what actually carries the
+distinction in practice; the character window is a secondary sanity bound.
 """
 
 from __future__ import annotations
@@ -36,12 +72,56 @@ def _assertion_list(assertions, key):
     return value
 
 
+def _near_entry_list(assertions, key="output_contains_near"):
+    value = assertions.get(key)
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ValueError(f"{key} must be a list of {{'all': [...], 'window': int}} objects")
+    return value
+
+
+_DEFAULT_NEAR_WINDOW = 400
+
+
+def _near_satisfied(text, entry):
+    """One ``output_contains_near`` entry is satisfied iff every substring in
+    ``entry["all"]`` occurs in ``text`` (each at its first occurrence), the
+    whole span from the earliest start to the latest end is no wider than
+    ``entry.get("window", 400)`` characters, AND no blank line separates the
+    occurrences (see this module's docstring for why both checks are used
+    together, not the character window alone)."""
+    if not isinstance(entry, Mapping):
+        raise ValueError(
+            f"output_contains_near entries must be mappings, got {type(entry).__name__}"
+        )
+    substrings = entry.get("all")
+    if not isinstance(substrings, list) or len(substrings) < 2:
+        raise ValueError("output_contains_near entries need an 'all' list of >= 2 substrings")
+    window = entry.get("window", _DEFAULT_NEAR_WINDOW)
+    spans = []
+    for substring in substrings:
+        index = text.find(substring)
+        if index == -1:
+            return False
+        spans.append((index, index + len(substring)))
+    span_start = min(start for start, _ in spans)
+    span_end = max(end for _, end in spans)
+    if (span_end - span_start) > window:
+        return False
+    return "\n\n" not in text[span_start:span_end]
+
+
 def score(output_text, assertions):
     """Return the fraction of substring assertions satisfied, in ``[0, 1]``.
 
     ``assertions`` is a mapping with optional ``output_contains`` (each
-    substring must appear in ``output_text``) and ``output_not_contains``
-    (each must be absent). Identical inputs always produce the same value.
+    substring must appear in ``output_text``), ``output_not_contains`` (each
+    must be absent), ``output_contains_near`` (each entry's substrings must
+    co-occur within a character window), and ``output_not_contains_near``
+    (each entry's substrings must NOT co-occur within a character window --
+    see this module's docstring for both `near` forms). Identical inputs
+    always produce the same value.
 
     A ``None`` ``output_text`` is treated as the empty string. Each list
     entry is one assertion, so a duplicated substring is weighted twice and
@@ -56,14 +136,22 @@ def score(output_text, assertions):
         )
     contains = _assertion_list(assertions, "output_contains")
     not_contains = _assertion_list(assertions, "output_not_contains")
-    total = len(contains) + len(not_contains)
+    near = _near_entry_list(assertions, "output_contains_near")
+    not_near = _near_entry_list(assertions, "output_not_contains_near")
+    total = len(contains) + len(not_contains) + len(near) + len(not_near)
     if total == 0:
         raise ValueError(
-            "empty assertion set: a fixture with no output_contains or "
-            "output_not_contains cannot score a run"
+            "empty assertion set: a fixture with no output_contains, "
+            "output_not_contains, output_contains_near, or "
+            "output_not_contains_near cannot score a run"
         )
     text = output_text or ""
-    satisfied = sum(s in text for s in contains) + sum(s not in text for s in not_contains)
+    satisfied = (
+        sum(s in text for s in contains)
+        + sum(s not in text for s in not_contains)
+        + sum(_near_satisfied(text, entry) for entry in near)
+        + sum(not _near_satisfied(text, entry) for entry in not_near)
+    )
     return satisfied / total
 
 

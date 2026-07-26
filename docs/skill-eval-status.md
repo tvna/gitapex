@@ -444,6 +444,107 @@ entry above found a genuine "no ablation mechanism exists" gap,
 demonstrating the check end to end against a real skill, not only the
 synthetic gate fixtures. Refs #185.
 
+**Issue #319 (SkillOpt pilot, precondition-check finding, no edit
+applied):** #319 (a sub-task of the RSI-loop backlog, #310) proposed
+piloting the real automated SkillOpt optimizer (microsoft/SkillOpt,
+arXiv:2605.23904) against this skill's `references/rubric.md`,
+PR-proposal-only, gated on a new checksum-pinned `skillopt` (or
+equivalent) pip dependency. Checked, not assumed:
+
+- `scorer-gated-skill-edits`'s own precondition gate (a real scorer plus a
+  held-out split) for *hand-applied* edits to this rubric is already
+  satisfied and has been for six prior iterations (#149, #155, #165,
+  #183, #185, #200 above) -- `skills/scorer-gated-skill-edits/scripts/
+  score_contract.py` plus `evals/evaluating-skill-quality/split.md`'s
+  37-fixture, 16:13:8 split, current selection-split baseline
+  **0.971154** (the #200 entry's after-score above). That part of #319's
+  own premise is real and unchanged.
+- The literal ask -- installing and running the *automated* SkillOpt
+  optimizer package itself -- is a different thing. The first pass at
+  this analysis gave three reasons its precondition does not hold; on
+  review against the actual cited evidence, only the first survives as
+  an independent blocker, and the other two are corrected below rather
+  than carried forward unchanged:
+  1. **Unverified provenance (holds).** A package literally named
+     `skillopt` exists on PyPI (v0.2.0, uploaded 2026-07-02, author
+     "SkillOpt Team", claiming `Homepage`/`Repository`:
+     `github.com/microsoft/SkillOpt`, confirmed live via
+     `https://pypi.org/pypi/skillopt/json`), but no primary source
+     reachable from this session corroborates that this specific
+     release is an authentic Microsoft-published artifact rather than a
+     name-matched package from an unrelated party -- exactly the risk
+     CLAUDE.md section 3's supply-chain discipline and this issue's own
+     third acceptance criterion (checksum pin plus a documented
+     issuance/provenance note) exist to gate on. Installing and
+     executing unverified third-party optimizer code against this
+     repository's skills is an irreversible action outside what a
+     provenance check has cleared, so no dependency was added. This
+     reason alone is sufficient to keep the automated run from
+     proceeding.
+  2. **Scale precondition -- corrected, does not hold.** The first pass
+     compared gitapex's corpus to SkillOpt's default regime (paper
+     Table 6: tens-to-hundreds of tasks x 4 rollout epochs, 0.6M-46.4M
+     tokens per accepted improvement) and concluded 37 fixtures (13
+     selection) were "one to two orders of magnitude below" that
+     regime. Recomputed: 37 is itself a "tens" quantity, so it sits
+     within the low end of the paper's own stated tens-to-hundreds
+     range, not below it -- the arithmetic in the first pass was wrong,
+     not just imprecise. The first pass also claimed the six
+     hand-applied iterations "each needed roughly 10-20 live dispatches
+     per iteration"; checked against the committed record for the most
+     recently detailed iteration
+     (`evals/evaluating-skill-quality/split.md:808-843,890-901`, issue
+     #185), that round used 4 fresh before/after dispatches plus 1
+     restraint-check dispatch (5 total), reusing 8 prior scores
+     unchanged -- well under the claimed 10-20, and other iterations in
+     the same file range up toward ~20 depending on how many selection
+     fixtures needed a genuine fresh pair, so "roughly 10-20" does not
+     hold as a uniform per-iteration figure either. With both inputs to
+     the comparison wrong, corpus scale is not, on the actual numbers,
+     an independent reason the automated pilot's precondition fails.
+     The paper's own per-improvement token-cost figures remain real and
+     worth owner budget awareness before running a genuine 4-epoch
+     rollout, but that is a cost question to weigh once provenance is
+     cleared, not a scale-precondition failure.
+  3. **Standing design decision -- corrected, does not hold.**
+     `skills/scorer-gated-skill-edits/references/skillopt-mapping.md:
+     126-131`'s "Not adapted" section states that `scorer-gated-skill-
+     edits` itself applies SkillOpt's discipline by hand and does not
+     build the paper's rollout/optimizer machinery ("this skill is the
+     manual procedure, not a runner"). That is a scope boundary for
+     that one skill, not a prohibition on a separate, explicitly
+     requested one-off pilot -- #319 asks for a pilot experiment, not a
+     change to `scorer-gated-skill-edits` itself, so this section does
+     not block it. Treating the two as the same thing in the first pass
+     was a conflation, not a valid independent reason.
+- A separate, disclosed evidence limitation, distinct from the
+  precondition-gate reasons above: a genuinely neutral before/after
+  score for re-running the existing hand-applied gate was not
+  obtainable in this pass, because the reviewing context had already
+  read the full rubric and its iteration history before reaching this
+  step. Reusing that same contaminated context would not meet the
+  isolation bar `evaluating-skill-quality`'s own Subagent-dispatch
+  section sets for ordinary reviews. Rather than fabricate a
+  contaminated gate result, **no new `references/rubric.md` edit is
+  proposed by this pass.**
+
+No pip dependency was added (trivially satisfies AC3: nothing was
+installed without a pin, because nothing was installed). On the
+corrected analysis, unblocking a real automated pilot needs, at
+minimum, an owner-reviewed and provenance-verified `skillopt` (or
+equivalent) release pinned declaratively in `pyproject.toml`'s
+`dependencies` (`uv`-managed, hash-locked via `uv.lock`, per CLAUDE.md
+section 3). Corpus scale is not itself a precondition to satisfy first
+-- 37 fixtures already sit within SkillOpt's own stated regime -- so
+growing the fixture corpus is not a prerequisite for a future pilot;
+the paper's per-improvement token cost is a separate, real budget
+question for the owner to weigh once provenance is cleared. Until
+provenance is verified, the existing hand-applied `scorer-gated-skill-
+edits` procedure -- already run to completion six times against this
+exact rubric -- remains the correct, already-adopted mechanism for the
+same underlying discipline (real scorer, real held-out split, strict
+improve-or-reject) without the unverified-code risk. Refs #319, #310.
+
 ## explaining-the-work
 
 The committed eval suite (`evals/explaining-the-work/`) has no committed run
@@ -485,13 +586,26 @@ cross-model behavior is currently unmeasured.
 ## merge-retrospective
 
 The committed eval suite (`evals/merge-retrospective/`) has no committed
-no-skill baseline run for the three core scenarios, so it currently
-measures compliance, not gap-closure. Only `claude-sonnet-4.6` has been
-evaluated; cross-model behavior is currently unmeasured. The Step 0
-carry-forward check (added to `SKILL.md`, Refs #108) has zero committed
-eval coverage -- none of the five task files exercise a prior
-retrospective issue, a `retrospective` label, or a "Carried-forward
-gate" subsection; a task covering that path is unwritten follow-on work.
+no-skill baseline run for its scenarios, so it currently measures
+compliance, not gap-closure. Only `claude-sonnet-4.6` has been evaluated;
+cross-model behavior is currently unmeasured.
+
+As of issue #312/#328 (a held-out fixture corpus, following the
+`evaluating-skill-quality/split.md` precedent), the suite has **18
+committed task files** across a 9:6:3 train/selection/test split (see
+`evals/merge-retrospective/split.md` for the full equivalence-class
+table and blind-spot pass). The Step 0 carry-forward check (added to
+`SKILL.md`, Refs #108) now has committed eval coverage: two of the 18
+fixtures (`carried-forward-gate-unimplemented-train.yaml`,
+`carried-forward-gate-implemented-test.yaml`) exercise a prior
+retrospective issue, a `retrospective` label, and the "Carried-forward
+gate" subsection, both when a prior gate remains unimplemented and when
+one is found already implemented (a restraint check). `tests/
+test_skill_eval_status_sync.py` keeps this fixture count in sync with
+this paragraph -- see that file's own drift-check rationale, added after
+Codex review on PR #328 found this section stating a stale "five task
+files, zero Step 0 coverage" after the corpus had already grown past
+that.
 
 ## outward-artifact-preflight
 

@@ -1,0 +1,40 @@
+id: merge-retrospective-external-decision-reviewer-style-tradeoff
+name: Isolated External/Human-Decision Repair (In-Repo Design Tradeoff, No Upstream Change)
+description: A distinct external/human-decision case from the train-split fixture -- the tradeoff here comes from an internal, no-precedent design choice discussed purely in review comments, not a third-party API changing shape, so the gate must generalize past "upstream schema change" to any judgment call no repo policy dictates.
+tags:
+  - quality
+  - external-decision
+inputs:
+  prompt: |
+    Use merge-retrospective. PR #226 ("feat: add configurable timeout to
+    the export job") just merged into main. Here is the one repair that
+    happened between open and merge:
+
+    A reviewer raised a genuine design tradeoff: should a timeout of `0`
+    mean "no timeout" (matching how the `fetch` wrapper elsewhere in this
+    codebase treats `0`), or should `0` be rejected as an invalid config
+    value with a validation error, since a silent "0 means forever"
+    reading is easy to misconfigure by accident? Both readings are
+    internally consistent conventions already used elsewhere in this
+    codebase for different config keys, and there is no existing rule,
+    style guide, or lint check saying which convention a *new* config key
+    must follow. No CI failure occurred -- the discussion happened
+    entirely in review comments. The author and reviewer discussed the
+    tradeoff and agreed to reject `0` with a validation error, favoring
+    the safer default; the author's follow-up commit added the
+    validation.
+
+    Run the retrospective now that PR #226 has merged.
+expected:
+  classification:
+    - external-human-decision
+  repair_count: 1
+  retro_stub_expected: false
+  output_contains:
+    - "external/human decision"
+    - "Refs #226"
+    - "timeout"
+  output_not_contains:
+    - "Classification: missing deterministic gate"
+    - "Classification: unclear agent instruction"
+    - "Proposed gate"

@@ -1,0 +1,41 @@
+id: merge-retrospective-carried-forward-gate-implemented
+name: Restraint Check -- Step 0 Finds a Prior Gate Already Implemented
+description: Restraint counterpart to the carried-forward train fixture -- Step 0's search finds a citing commit for the prior retrospective issue's proposed gate, so no "Carried-forward gate" subsection should be produced for it (closing that issue was not itself proof; the citing commit is).
+tags:
+  - quality
+  - carried-forward
+  - restraint
+inputs:
+  prompt: |
+    Use merge-retrospective. PR #261 ("fix: correct rounding error in the
+    invoice-total calculator") just merged into main.
+
+    Step 0 carry-forward search results (already run for you): searching
+    `label:retrospective` (unfiltered by state) returns one issue, #175
+    ("Merge retrospective: PR #160"), which proposed a `pre-commit` hook
+    running `black --check` before every commit. A search for a merged PR
+    or commit citing "#175" finds commit `a1b2c3d`, message
+    "style(tooling): add black --check pre-commit hook (Refs #175)",
+    merged in PR #179 three weeks ago -- the gate was implemented.
+
+    Here is the one repair that happened between open and merge for PR
+    #261 itself: CI run #1 failed because the invoice-total calculator
+    rounded `19.995` down to `19.99` instead of up to `20.00` due to
+    floating-point truncation, instead of using the repo's existing
+    `Decimal`-based rounding helper. The author pushed a follow-up commit
+    switching to the helper, and CI run #2 passed clean.
+
+    Run the retrospective now that PR #261 has merged.
+expected:
+  classification:
+    - missing-deterministic-gate
+  repair_count: 1
+  retro_stub_expected: false
+  output_contains:
+    - "missing deterministic gate"
+    - "Refs #261"
+    - "#175"
+  output_not_contains:
+    - "## Carried-forward gate"
+    - "Classification: unclear agent instruction"
+    - "Classification: external/human decision"

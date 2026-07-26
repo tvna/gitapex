@@ -33,22 +33,36 @@ Checks (the canonical list -- the manual fallback is to apply these):
     of Portable/Repository-scoped/Mixed; spec.capabilityAssumption is one
     of Broad/Frontier/Adaptive; spec.references, if present, is a non-empty
     list of non-empty scalar strings, each item consistently indented with
-    its own list and not an unquoted YAML mapping key such as "path: foo"
+    its own list, not an unquoted YAML mapping key such as "path: foo", and
+    not an unquoted null/boolean/numeric scalar such as "null"/"true"/"123"
+    (issue #356: a real YAML parser resolves such a plain scalar to that
+    type, not a string, so it must fail rather than be silently accepted
+    as one; a quoted item, e.g. "\"true\"", is unaffected -- it is a
+    deliberate string regardless of its contents)
     (references-well-formed); spec.skillDependencies, if present, is a
-    mapping with only the keys requires/relatedTo, each -- if present -- a
+    mapping -- itself never real YAML null (a block header with no
+    requires/relatedTo key at all under it fails as the wrong type rather
+    than being read as "declared, nothing inside": see the
+    absent-vs-null-vs-empty paragraph below) -- with only the keys
+    requires/relatedTo, each -- if present -- a
     list of non-empty scalar strings with the same per-item shape rules as
-    spec.references, except an empty list is valid here, unlike
+    spec.references (including the same null/boolean/numeric-scalar
+    rejection), except an empty list is valid here, unlike
     spec.references (skill-dependencies-well-formed); every name listed in
     either list resolves to an existing sibling skill directory
     (skill-dependencies-resolve); and a non-empty
     spec.skillDependencies.requires is incompatible with
     spec.portability: Portable (requires-portability-compatible).
-    spec.lifecycle, if present, is a mapping with only the keys
+    spec.lifecycle, if present, is a mapping -- likewise never real YAML
+    null, per the same rule -- with only the keys
     experimental/deprecated/stable/renamedFrom. experimental
     (reason/trackingIssue required, since optional), deprecated
     (reason/replacement required, since/removeAfter optional), and stable
     (since required, compatibilityGuarantee optional) are each -- if
-    present -- a mapping of their own recognized scalar fields;
+    present -- a mapping of their own recognized scalar fields (each,
+    like spec.lifecycle itself, failing as the wrong type rather than
+    passing as an empty mapping when its own header is left blank with
+    no field at all under it);
     renamedFrom, if present, is a non-empty scalar string (not a
     sub-block). since/removeAfter, if present, must be real calendar
     dates in strict YYYY-MM-DD shape; trackingIssue, if present, an
@@ -67,7 +81,51 @@ Checks (the canonical list -- the manual fallback is to apply these):
     (a git mv target), backward-pointing on the surviving skill rather
     than a forward-pointing tombstone on a directory that no longer
     exists. No skill's runtime procedure may read or branch on any part
-    of spec.lifecycle (the sidecar's behavior-neutrality invariant). Other
+    of spec.lifecycle (the sidecar's behavior-neutrality invariant).
+    spec.executionRequirements, if present, is a mapping with only the
+    tools key so far (issue #349, GitApex sidecar execution-requirement
+    schema, Workstream W1 first slice of the parent tracking issue --
+    filesystem/network/mcp/credentials/browser/externalServices/context
+    categories are deferred to sibling child issues and, until they land,
+    any key other than tools here is an unknown key, not reserved space);
+    tools, if present, is itself a mapping -- like spec.executionRequirements
+    itself, never real YAML null -- with only the keys
+    read/write/shell, each -- if present -- a list of non-empty scalar
+    strings (free-form capability tags; this issue does not define a
+    fixed vocabulary), with the same per-item shape rules
+    (mapping-like-item, indent-consistency, and null/boolean/numeric-scalar
+    detection) spec.references and spec.skillDependencies items already use
+    (execution-requirements-well-formed). An absent executionRequirements
+    block, an absent tools block, or an absent read/write/shell key each
+    mean "not yet declared"; an explicit empty list (e.g. read: [])
+    means "declared, zero tools of that kind needed" -- a deliberate
+    statement, not the same as absence.
+
+    Three-way absent/null/empty-mapping distinction (issue #356, ACM row
+    2), shared by every gated *mapping*-valued block above
+    (spec.skillDependencies, spec.lifecycle and each of its
+    experimental/deprecated/stable sub-blocks, spec.executionRequirements,
+    and spec.executionRequirements.tools): the key never appearing at all
+    means "not declared" (optional, passes); the key appearing with a
+    blank value and no child key ever following at the next indent level
+    is real YAML null -- a real YAML parser never reads a bare block
+    header followed by a dedent as an empty mapping, so this checker
+    fails it as the wrong type rather than reading it as "declared,
+    nothing inside" (the bug the issue reported: "A blank tools: value is
+    YAML null, but the parser converts it to an empty mapping and
+    passes"); and the key appearing with at least one real child key
+    (however that child's own value turns out) is a genuine, non-null
+    mapping, checked normally -- there is no way to spell "declared, but
+    deliberately an empty mapping" in this parser's supported block-style
+    subset (it has no inline flow-mapping "{}" support anywhere), so that
+    third state does not exist for these fields the way an explicit empty
+    *list* (read: []) does for list-valued fields. This distinction does
+    NOT extend to list-valued keys (spec.references;
+    spec.skillDependencies.requires/relatedTo;
+    spec.executionRequirements.tools.read/write/shell) -- a blank list
+    header is still read as an empty list, unchanged, matching each
+    field's own already-established "explicit empty list is a deliberate
+    statement" semantics documented above. Other
     ungated sidecar fields (e.g. spec.evalStatus) are parsed into the spec
     map by _parse_manifest only if written as a single inline scalar; a
     nested/block-shaped field (e.g. evalStatus's documented baseline:/lift:
@@ -275,6 +333,50 @@ REFERENCES_LIST_ITEM_RE = re.compile(r"^[ ]{2,}-\s*(.*)$")
 # this same text (e.g. "\"path: something\"") is a deliberate scalar and
 # is excluded by the caller checking for a wrapping quote first.
 REFERENCES_MAPPING_LIKE_RE = re.compile(r"^[A-Za-z0-9_.-]+:(\s|$)")
+# An unquoted plain scalar that YAML's core schema resolves to something
+# OTHER than a string -- null, boolean, or numeric -- rather than the
+# string every list-of-scalar-strings field (spec.references,
+# spec.skillDependencies.requires/relatedTo,
+# spec.executionRequirements.tools.read/write/shell) assumes each of its
+# items is (issue #356: "Unquoted YAML scalars such as true, 123, and
+# null are converted to strings in list-valued fields and pass a
+# list-of-strings check"). Deliberately the common, uncontroversial
+# subset -- not YAML 1.1's yes/no/on/off, which are also ordinary English
+# words a legitimate capability-tag or reference string could contain --
+# rather than a full type resolver. Checked only against an UNQUOTED
+# item's raw text; a caller already tests for a wrapping quote first (the
+# same way REFERENCES_MAPPING_LIKE_RE above is only checked when
+# unquoted), since a quoted item (e.g. "\"true\"") is a deliberate string
+# regardless of its contents.
+YAML_NON_STRING_SCALAR_RE = re.compile(
+    r"^(?:~|[Nn]ull|NULL"
+    r"|[Tt]rue|TRUE|[Ff]alse|FALSE"
+    r"|[-+]?[0-9]+"
+    r"|[-+]?(?:[0-9]+\.[0-9]*|\.[0-9]+)(?:[eE][-+]?[0-9]+)?"
+    r"|[-+]?\.(?:inf|Inf|INF)|\.(?:nan|NaN|NAN))$")
+# A real YAML comment: an unquoted "#" preceded by start-of-string or
+# whitespace -- YAML never treats a "#" glued directly onto a preceding
+# non-space character as a comment marker (e.g. "true#tag" is the
+# literal string "true#tag", not "true" plus a comment). Used only to
+# strip a trailing comment before classifying an unquoted list item's own
+# scalar type in _is_non_string_plain_scalar below -- the item's stored
+# value is unaffected either way, only the type classification is (Codex
+# review on this PR: a comment-bearing item such as "true # rationale"
+# defeated YAML_NON_STRING_SCALAR_RE's own full-string anchor on its own,
+# silently certifying a real YAML boolean/null/numeric as a string
+# whenever it carried a trailing comment).
+_INLINE_COMMENT_RE = re.compile(r"(?:^|\s)#.*$")
+
+
+def _is_non_string_plain_scalar(raw_text: str) -> bool:
+    """Whether an UNQUOTED list item's raw text is a YAML null/boolean/
+    numeric scalar rather than a string, comment stripped first the same
+    way a real YAML parser would before resolving the item's type.
+    Shared by every gated list-of-scalar-strings site (spec.references;
+    spec.skillDependencies.requires/relatedTo;
+    spec.executionRequirements.tools.read/write/shell)."""
+    stripped = _INLINE_COMMENT_RE.sub("", raw_text).strip()
+    return bool(YAML_NON_STRING_SCALAR_RE.match(stripped))
 
 # spec.skillDependencies's two recognized subkeys, and the shape of their
 # lines. Subkeys sit at 4 spaces (one level under skillDependencies' own
@@ -285,8 +387,6 @@ REFERENCES_MAPPING_LIKE_RE = re.compile(r"^[A-Za-z0-9_.-]+:(\s|$)")
 # valid item at a different indent instead of reading it, the same
 # accommodation REFERENCES_LIST_ITEM_RE already makes for spec.references.
 SKILL_DEPENDENCY_SUBKEYS = ("requires", "relatedTo")
-SKILL_DEP_SUBKEY_RE = re.compile(r"^[ ]{4}(requires|relatedTo):\s*(.*)$")
-SKILL_DEP_UNKNOWN_KEY_RE = re.compile(r"^[ ]{4}([A-Za-z0-9_-]+):")
 SKILL_DEP_LIST_ITEM_RE = re.compile(r"^[ ]{4,}-\s*(.*)$")
 
 # spec.lifecycle's three recognized sub-blocks -- "experimental" (entry
@@ -323,7 +423,6 @@ LIFECYCLE_REQUIRED_FIELDS = {
 # only; no rule ties a sibling's spec.skillDependencies.requires to this
 # value (that would be new cross-skill coupling beyond what was asked).
 COMPATIBILITY_GUARANTEE_LEVELS = ("Alpha", "Beta", "GA")
-LIFECYCLE_SUBKEY_RE = re.compile(r"^[ ]{4}(experimental|deprecated|stable):\s*(.*)$")
 # spec.lifecycle.renamedFrom is different in kind from the three
 # sub-blocks above: a plain scalar directly under lifecycle: (like
 # metadata.name under metadata:), never opening a nested block. Backward-
@@ -334,13 +433,6 @@ LIFECYCLE_SUBKEY_RE = re.compile(r"^[ ]{4}(experimental|deprecated|stable):\s*(.
 # resolved against sibling directories (unlike deprecated.replacement) --
 # the whole point is that the old name is expected to no longer exist.
 LIFECYCLE_SCALAR_KEYS = ("renamedFrom",)
-LIFECYCLE_SCALAR_KEY_RE = re.compile(r"^[ ]{4}(renamedFrom):\s*(.*)$")
-LIFECYCLE_UNKNOWN_SUBKEY_RE = re.compile(r"^[ ]{4}([A-Za-z0-9_-]+):")
-# Matches ANY key at this indent, recognized or not -- the handler tells
-# them apart by membership in LIFECYCLE_FIELDS[subkey], the same "match
-# broad, filter narrow" approach SKILL_DEP_UNKNOWN_KEY_RE's sibling
-# SKILL_DEP_SUBKEY_RE takes one level up.
-LIFECYCLE_FIELD_RE = re.compile(r"^[ ]{6}([A-Za-z0-9_-]+):\s*(.*)$")
 # Strict calendar-date shape for spec.lifecycle's since/removeAfter
 # fields: YYYY-MM-DD only. Real-date validity (rejecting e.g. 2026-02-30)
 # is checked separately via datetime.date.fromisoformat in
@@ -355,6 +447,51 @@ LIFECYCLE_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 # checker is offline/read-only by design.
 LIFECYCLE_ISSUE_REF_RE = re.compile(
     r"^(?:[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*)?#\d+$")
+
+# A YAML mapping key at a given indent, however it was written: a bare
+# scalar key (any run of characters up to the first unquoted ":" that
+# does not start with whitespace, a quote, or "#") or a single/double-
+# quoted string key. Shared by every gated block's key-recognition site
+# (spec.skillDependencies' requires/relatedTo, spec.lifecycle's
+# experimental/deprecated/stable/renamedFrom and their own nested fields).
+# Earlier per-field pairs -- a specific-name alternation regex for
+# recognized keys, plus a [A-Za-z0-9_-]+ catch-all for unrecognized ones --
+# shared one blind spot: a quoted key (`"extra": foo`) or a key containing
+# a character outside that narrow class matched NEITHER regex, so it fell
+# through both checks into the "stray content, skip silently" branch
+# instead of ever reaching unknown-key detection (issue #356). Matching
+# broadly here and leaving "recognized vs. unknown" entirely to the
+# caller's own membership check closes that gap: every syntactically
+# key-shaped line at this indent is now seen as A key, so an unrecognized
+# one can no longer hide behind a narrow character class the way a
+# recognized one never had to. Still not a real YAML string lexer, though
+# -- it has no escape-sequence support and requires the closing quote to
+# be immediately followed by ":" -- so a key using an escaped quote
+# (`"ex\"tra": foo`) or whitespace before its colon (`"extra" : foo`) does
+# not match this regex either. Each of this regex's three call sites
+# handles that residual gap the same way: a line at the gated indent that
+# matches neither a list item currently being collected nor this key
+# pattern is itself flagged as unknown/malformed, not silently skipped --
+# rejecting every unmatched line at that indent, rather than only the
+# ones this regex happens to parse, is the actual fail-closed contract
+# (Codex review on #356's own PR).
+KEY_LINE_RE_4 = re.compile(
+    r'^[ ]{4}(?:"([^"]*)"|\'([^\']*)\'|([^\s"\'#][^:]*?)):[ \t]*(.*)$')
+KEY_LINE_RE_6 = re.compile(
+    r'^[ ]{6}(?:"([^"]*)"|\'([^\']*)\'|([^\s"\'#][^:]*?)):[ \t]*(.*)$')
+
+# spec.executionRequirements' one recognized subkey so far (issue #349,
+# #307 Workstream W1 first slice): "tools", at 4-space indent -- same
+# depth as spec.skillDependencies' requires/relatedTo and
+# spec.lifecycle's experimental/deprecated/stable. Recognized via the
+# same shared KEY_LINE_RE_4 matcher those two fields use (issue #356),
+# not a field-specific regex -- consistency across all three gated
+# blocks, per #356's own constraint against patching just the newest one.
+EXEC_REQ_TOOLS_SUBKEYS = ("read", "write", "shell")
+# List items accept 6 or more spaces -- the same indent-drift tolerance
+# REFERENCES_LIST_ITEM_RE/SKILL_DEP_LIST_ITEM_RE already give their own
+# lists (an item at their own subkey's depth, or deeper).
+EXEC_REQ_TOOLS_LIST_ITEM_RE = re.compile(r"^[ ]{6,}-\s*(.*)$")
 
 TAG_RE = re.compile(r"</?[A-Za-z][^>]*>")
 # A YAML plain (unquoted) scalar cannot safely contain ": " (colon followed
@@ -639,6 +776,27 @@ def _strip_bare_comment(value: str) -> str:
     return "" if value.startswith("#") else value
 
 
+def _match_key_line(pattern: re.Pattern[str], line: str) -> tuple[str, str] | None:
+    """Match ``line`` against ``pattern`` (``KEY_LINE_RE_4`` or
+    ``KEY_LINE_RE_6``). Returns ``(key, value)`` with the key already
+    unquoted (a quoted key's own quote characters are never part of the
+    key name) and the value right-stripped, or ``None`` if ``line`` is not
+    a key-shaped line at that indent. The one shared recognition site
+    every gated block's key handling uses (issue #356) -- callers decide
+    "recognized vs. unknown" themselves via membership in their own set of
+    valid names; this function only decides "is this syntactically a key
+    at all," so an unrecognized key can never again bypass detection by
+    virtue of being quoted or containing a character a narrower per-field
+    regex did not anticipate.
+    """
+    m = pattern.match(line)
+    if not m:
+        return None
+    key = m.group(1) if m.group(1) is not None else (
+        m.group(2) if m.group(2) is not None else m.group(3))
+    return key, m.group(4).strip()
+
+
 @dataclass(frozen=True)
 class ManifestParse:
     """Result of ``_parse_manifest``: the parsed top-level mapping plus any
@@ -682,6 +840,20 @@ class ManifestParse:
     value is simply stored as the raw string by the field parser and
     fails the downstream well-formed check on shape, with nothing that
     needs a separate parse-time detection channel.
+
+    ``unknown_execution_requirement_keys``, ``unknown_execution_requirement_tools_keys``,
+    and ``malformed_execution_requirement_tools_items`` are
+    spec.executionRequirements' equivalents (issue #349, #307 Workstream
+    W1 first slice): the first holds each key found directly under
+    spec.executionRequirements that is not ``tools`` (only one recognized
+    key exists so far -- further categories are deferred to sibling child
+    issues, and any other key here is unknown, not reserved space); the
+    second holds each key found directly under ``tools`` that is not
+    ``read``, ``write``, or ``shell``; the third holds each
+    read/write/shell list item that is mapping-shaped or inconsistently
+    indented, the same rule ``malformed_reference_items``/
+    ``malformed_skill_dependency_items`` use one nesting level shallower.
+    All three empty when the field is absent or parsed cleanly.
     """
     root: dict[str, object]
     malformed_lines: list[str]
@@ -690,6 +862,9 @@ class ManifestParse:
     unknown_skill_dependency_keys: list[str]
     unknown_lifecycle_keys: list[str]
     unknown_lifecycle_fields: list[str]
+    unknown_execution_requirement_keys: list[str]
+    unknown_execution_requirement_tools_keys: list[str]
+    malformed_execution_requirement_tools_items: list[str]
 
 
 def _parse_manifest(text: str) -> ManifestParse:
@@ -716,7 +891,18 @@ def _parse_manifest(text: str) -> ManifestParse:
       collected into ``ManifestParse.unknown_skill_dependency_keys``
       instead of being silently skipped, since an unrecognized key here is
       a real shape defect the checker is expected to catch, not reserved
-      space.
+      space. Every gated block's key recognition (this one, spec.lifecycle's
+      below, and any future one) shares one key-line matcher,
+      ``_match_key_line`` over ``KEY_LINE_RE_4``/``KEY_LINE_RE_6`` --
+      it recognizes a bare OR quoted YAML key as A key regardless of its
+      characters, leaving "recognized vs. unknown" entirely to the
+      caller's own membership check. A narrower, name-specific regex used
+      to do both jobs at once (matching only the recognized names, with a
+      separate ``[A-Za-z0-9_-]+`` catch-all for everything else); a quoted
+      key (``"extra": foo``) or a key containing a character outside that
+      narrow class matched neither regex and fell through both into the
+      "stray content, skip silently" branch instead of ever reaching
+      unknown-key detection (issue #356).
     - spec.lifecycle (and only that key, and only directly under spec) is
       read as a mapping with exactly three recognized block sub-keys --
       ``experimental``, ``deprecated``, ``stable`` -- plus one recognized
@@ -747,6 +933,27 @@ def _parse_manifest(text: str) -> ManifestParse:
       ``renamedFrom:``) is detected one line later (see
       ``lifecycle_scalar_pending`` in the parsing loop below) and stored
       as an empty mapping, so it fails the same way in reverse.
+    - spec.executionRequirements (and only that key, and only directly
+      under spec) is read as a mapping with exactly one recognized
+      block sub-key so far, ``tools`` (issue #349, #307 Workstream W1
+      first slice -- further categories are deferred to sibling child
+      issues). ``tools``, at exactly 4-space indent, is an empty value
+      opening a nested block of list-of-scalars fields at exactly
+      6-space indent: ``read``/``write``/``shell``, each either an
+      inline empty list (``read: []``) or an empty value opening a
+      block list of "- <value>" items at 6 or more spaces indent -- the
+      same per-item shape rules and indent-drift tolerance
+      spec.skillDependencies' requires/relatedTo already use, one
+      nesting level deeper. A key directly under
+      spec.executionRequirements other than ``tools`` is collected into
+      ``ManifestParse.unknown_execution_requirement_keys``; a key inside
+      ``tools`` other than ``read``/``write``/``shell`` is collected into
+      ``ManifestParse.unknown_execution_requirement_tools_keys`` -- both
+      instead of being silently skipped, for the same reason
+      ``unknown_skill_dependency_keys`` exists. A malformed (mapping-shaped
+      or inconsistently indented) list item under any of the three tools
+      subkeys is collected into
+      ``ManifestParse.malformed_execution_requirement_tools_items``.
 
     Every other nested map or list (e.g. spec.evalStatus) is still
     deliberately skipped, exactly as before: skipping keeps this
@@ -754,14 +961,25 @@ def _parse_manifest(text: str) -> ManifestParse:
     value on the same line is not stripped -- it is read as part of the
     value, which is safe (fails closed against the expected enum/literal)
     but is not a supported way to annotate a sidecar field. Exception:
-    the three ``spec.lifecycle`` value-extraction sites strip a value
-    that is NOTHING BUT a comment (starts with ``#`` unquoted) down to
-    empty via ``_strip_bare_comment``, since real YAML never allows an
-    unquoted scalar to start with ``#`` (it always opens a comment there)
-    -- the general "fails closed" reasoning above does not hold when a
-    field's own valid shape can itself start with ``#``, as
+    every gated-block-opening site (the top-level ``nested`` dispatch for
+    spec.references/skillDependencies/lifecycle/executionRequirements;
+    spec.skillDependencies' own requires/relatedTo; spec.lifecycle's
+    experimental/deprecated/stable and their own value-extraction sites;
+    spec.executionRequirements' own tools; and tools' own
+    read/write/shell) strips a value that is NOTHING BUT a comment
+    (starts with ``#`` unquoted) down to empty via
+    ``_strip_bare_comment`` before deciding whether that value is blank,
+    since real YAML never allows an unquoted scalar to start with ``#``
+    (it always opens a comment there) -- the general "fails closed"
+    reasoning above does not hold when a blank-vs-not decision gates
+    whether a whole nested block opens at all: a code-review finding
+    caught that ``executionRequirements:  # not yet fully specified``
+    (and the equivalent for every other gated block/list-opening key)
+    read the comment as a literal, wrong-type scalar value instead of a
+    blank one, silently discarding everything nested underneath it
+    before this fix. Applies one level deeper too, for the same reason:
     ``experimental.trackingIssue``'s ``#123``/``owner/repo#123`` shape
-    does; an unquoted ``trackingIssue: #123`` must read as absent, not as
+    means an unquoted ``trackingIssue: #123`` must read as absent, not as
     the literal string ``"#123"`` a quoted value would give.
 
     A top-level (column-0) line that is not blank, not a '#' comment, not a
@@ -777,10 +995,33 @@ def _parse_manifest(text: str) -> ManifestParse:
     spec.skillDependencies list items are the exceptions with their own
     malformed channels: an unquoted item shaped like a YAML mapping key
     ("path: foo", real YAML would read that as a nested mapping, not a
-    scalar) or an item indented inconsistently with the rest of its own
-    list is collected (trimmed) into ``ManifestParse.malformed_reference_items``
+    scalar), an item indented inconsistently with the rest of its own
+    list, or an unquoted null/boolean/numeric scalar (issue #356: real
+    YAML resolves e.g. "true"/"123"/"null" to that type, not a string) is
+    collected (trimmed) into ``ManifestParse.malformed_reference_items``
     or ``ManifestParse.malformed_skill_dependency_items`` respectively,
-    instead of being silently accepted as a garbled scalar string.
+    instead of being silently accepted as a garbled or wrongly-typed
+    scalar string.
+
+    Every gated *mapping*-valued block (spec.skillDependencies,
+    spec.lifecycle and its experimental/deprecated/stable sub-blocks,
+    spec.executionRequirements, spec.executionRequirements.tools) stores
+    ``None`` -- real YAML null -- rather than ``{}`` when its own block
+    header was seen with zero child key lines ever following it at the
+    next indent level (issue #356, ACM row 2): a bare block header
+    immediately followed by a dedent is null under any real YAML parser,
+    never an empty-but-present mapping, so this parser must not silently
+    promote that shape to ``{}`` the way an earlier version of it did. A
+    block that does see at least one child key line (however that
+    child's own value turns out) still stores a real, non-null ``dict``.
+    This null/non-null distinction is orthogonal to whether the key
+    appears in its parent dict at all -- a key that never appears means
+    "not declared" (the pre-existing, unaffected "absent" state); only a
+    key that DOES appear, with nothing under it, newly resolves to
+    ``None`` instead of ``{}``. List-valued keys under these same blocks
+    (requires/relatedTo, tools.read/write/shell) are NOT affected by this
+    change -- a blank list header still parses to ``[]``, per each
+    field's own pre-existing "explicit empty list" semantics.
     """
     text = text.lstrip("\ufeff")  # strip a leading UTF-8 BOM, as _parse_frontmatter does
     root: dict[str, object] = {}
@@ -791,6 +1032,16 @@ def _parse_manifest(text: str) -> ManifestParse:
     malformed_refs: list[str] = []
     in_skill_deps = False
     skill_deps: dict[str, object] = {}
+    # Whether spec.skillDependencies has seen at least one real child line
+    # (a recognized or unknown key) since it was opened -- distinguishes a
+    # block header left with nothing under it (real YAML null) from one
+    # that genuinely has content, however malformed (issue #356: a blank
+    # mapping header used to always finalize to {}, an empty-but-present
+    # mapping, conflating "declared null" with "declared, zero subkeys").
+    # Mirrored by lifecycle_has_content/lifecycle_subkey_has_content/
+    # exec_req_has_content/exec_tools_has_content below, one per gated
+    # mapping block.
+    skill_deps_has_content = False
     collecting_dep_list: list[str] | None = None
     collecting_dep_key: str | None = None
     dep_list_indent: int | None = None
@@ -798,8 +1049,10 @@ def _parse_manifest(text: str) -> ManifestParse:
     unknown_dep_keys: list[str] = []
     in_lifecycle = False
     lifecycle: dict[str, object] = {}
+    lifecycle_has_content = False
     lifecycle_subkey: str | None = None
     lifecycle_field_buffer: dict[str, object] = {}
+    lifecycle_subkey_has_content = False
     unknown_lifecycle_keys: list[str] = []
     unknown_lifecycle_fields: list[str] = []
     # Set when a scalar-only lifecycle key (currently only renamedFrom) is
@@ -810,6 +1063,18 @@ def _parse_manifest(text: str) -> ManifestParse:
     # deeply indented than spec.lifecycle's own 4-space level). See the
     # "if lifecycle_scalar_pending is not None:" handling below.
     lifecycle_scalar_pending: str | None = None
+    in_execution_requirements = False
+    execution_requirements: dict[str, object] = {}
+    exec_req_has_content = False
+    in_exec_tools = False
+    exec_tools: dict[str, object] = {}
+    exec_tools_has_content = False
+    collecting_exec_tools_list: list[str] | None = None
+    collecting_exec_tools_key: str | None = None
+    exec_tools_list_indent: int | None = None
+    malformed_exec_tools_items: list[str] = []
+    unknown_exec_req_keys: list[str] = []
+    unknown_exec_tools_keys: list[str] = []
 
     def _finalize_refs() -> None:
         nonlocal collecting_refs, refs_indent
@@ -827,27 +1092,62 @@ def _parse_manifest(text: str) -> ManifestParse:
         dep_list_indent = None
 
     def _finalize_skill_deps() -> None:
-        nonlocal in_skill_deps, skill_deps
+        nonlocal in_skill_deps, skill_deps, skill_deps_has_content
         _finalize_dep_list()
         if in_skill_deps and current is not None:
-            current["skillDependencies"] = skill_deps
+            # A block header with zero real children ever seen is real
+            # YAML null, not an empty-but-present mapping (issue #356).
+            current["skillDependencies"] = (
+                skill_deps if skill_deps_has_content else None)
         in_skill_deps = False
         skill_deps = {}
+        skill_deps_has_content = False
 
     def _finalize_lifecycle_subkey() -> None:
-        nonlocal lifecycle_subkey, lifecycle_field_buffer
+        nonlocal lifecycle_subkey, lifecycle_field_buffer, lifecycle_subkey_has_content
         if lifecycle_subkey is not None:
-            lifecycle[lifecycle_subkey] = lifecycle_field_buffer
+            lifecycle[lifecycle_subkey] = (
+                lifecycle_field_buffer if lifecycle_subkey_has_content else None)
         lifecycle_subkey = None
         lifecycle_field_buffer = {}
+        lifecycle_subkey_has_content = False
 
     def _finalize_lifecycle() -> None:
-        nonlocal in_lifecycle, lifecycle
+        nonlocal in_lifecycle, lifecycle, lifecycle_has_content
         _finalize_lifecycle_subkey()
         if in_lifecycle and current is not None:
-            current["lifecycle"] = lifecycle
+            current["lifecycle"] = lifecycle if lifecycle_has_content else None
         in_lifecycle = False
         lifecycle = {}
+        lifecycle_has_content = False
+
+    def _finalize_exec_tools_list() -> None:
+        nonlocal collecting_exec_tools_list, collecting_exec_tools_key, exec_tools_list_indent
+        if collecting_exec_tools_list is not None and collecting_exec_tools_key is not None:
+            exec_tools[collecting_exec_tools_key] = collecting_exec_tools_list
+        collecting_exec_tools_list = None
+        collecting_exec_tools_key = None
+        exec_tools_list_indent = None
+
+    def _finalize_exec_tools() -> None:
+        nonlocal in_exec_tools, exec_tools, exec_tools_has_content
+        _finalize_exec_tools_list()
+        if in_exec_tools:
+            execution_requirements["tools"] = (
+                exec_tools if exec_tools_has_content else None)
+        in_exec_tools = False
+        exec_tools = {}
+        exec_tools_has_content = False
+
+    def _finalize_execution_requirements() -> None:
+        nonlocal in_execution_requirements, execution_requirements, exec_req_has_content
+        _finalize_exec_tools()
+        if in_execution_requirements and current is not None:
+            current["executionRequirements"] = (
+                execution_requirements if exec_req_has_content else None)
+        in_execution_requirements = False
+        execution_requirements = {}
+        exec_req_has_content = False
 
     for raw in text.splitlines():
         line = raw.rstrip()
@@ -873,6 +1173,10 @@ def _parse_manifest(text: str) -> ManifestParse:
                     # parser understands; flag it rather than silently
                     # truncating the mapping into a garbled string.
                     malformed_refs.append(line.strip())
+                elif not is_quoted and _is_non_string_plain_scalar(raw_text):
+                    # An unquoted null/boolean/numeric scalar -- real YAML
+                    # resolves this to that type, not a string (issue #356).
+                    malformed_refs.append(line.strip())
                 else:
                     collecting_refs.append(_unquote(raw_text))
                 continue
@@ -893,16 +1197,28 @@ def _parse_manifest(text: str) -> ManifestParse:
                              and raw_text[0] in "\"'")
                 if not is_quoted and REFERENCES_MAPPING_LIKE_RE.match(raw_text):
                     malformed_deps.append(line.strip())
+                elif not is_quoted and _is_non_string_plain_scalar(raw_text):
+                    malformed_deps.append(line.strip())
                 else:
                     collecting_dep_list.append(_unquote(raw_text))
                 continue
             # Not a list item: this requires/relatedTo list ends here.
             _finalize_dep_list()
         if in_skill_deps:
-            subkey = SKILL_DEP_SUBKEY_RE.match(line)
-            if subkey:
-                key, value = subkey.group(1), subkey.group(2).strip()
-                if value == "[]":
+            matched = _match_key_line(KEY_LINE_RE_4, line)
+            if matched:
+                skill_deps_has_content = True
+                key, value = matched
+                # A value that is NOTHING BUT a comment (e.g. "requires:
+                # # comment") must read as blank/absent, not as the
+                # literal comment text -- otherwise it neither opens the
+                # list nor equals "[]" and is instead stored as a raw,
+                # wrong-type scalar (found by review: "requires:  #
+                # inline comment" silently discarded the whole list).
+                value = _strip_bare_comment(value)
+                if key not in SKILL_DEPENDENCY_SUBKEYS:
+                    unknown_dep_keys.append(line.strip())
+                elif value == "[]":
                     skill_deps[key] = []
                 elif not value:
                     collecting_dep_list = []
@@ -915,25 +1231,31 @@ def _parse_manifest(text: str) -> ManifestParse:
                     # than silently dropping it.
                     skill_deps[key] = value
                 continue
-            unknown = SKILL_DEP_UNKNOWN_KEY_RE.match(line)
-            if unknown:
-                unknown_dep_keys.append(line.strip())
-                continue
             indent = len(line) - len(line.lstrip(" "))
             if line[:1] in (" ", "\t") and indent >= 4:
-                # Stray content deeper inside the block that is not a
-                # recognized subkey or list-item line -- skip silently,
-                # consistent with "indented lines are never malformed"
-                # except the explicit channels above.
+                # An indented line reaching here is neither an active list
+                # item nor a key line KEY_LINE_RE_4 recognizes -- including
+                # a key using YAML quoting/escaping that regex cannot
+                # parse (an escaped quote, or whitespace between a closing
+                # quote and its colon). spec.skillDependencies has no
+                # legitimate reserved nested structure beyond its own two
+                # list-valued keys, so flag it as unknown rather than
+                # silently tolerating it: rejecting every unmatched line at
+                # this indent, not just the ones a regex happens to parse,
+                # is the actual fail-closed contract (issue #356 follow-up).
+                skill_deps_has_content = True
+                unknown_dep_keys.append(line.strip())
                 continue
             # Dedented below the block's own indent: skillDependencies ends
             # here. Finalize it and fall through to process this line
             # normally below.
             _finalize_skill_deps()
         if lifecycle_subkey is not None:
-            field = LIFECYCLE_FIELD_RE.match(line)
-            if field:
-                key, value = field.group(1), _strip_bare_comment(field.group(2).strip())
+            matched = _match_key_line(KEY_LINE_RE_6, line)
+            if matched:
+                lifecycle_subkey_has_content = True
+                key, value = matched
+                value = _strip_bare_comment(value)
                 if key in LIFECYCLE_FIELDS.get(lifecycle_subkey, ()):
                     if value:
                         lifecycle_field_buffer[key] = _unquote(value)
@@ -942,10 +1264,12 @@ def _parse_manifest(text: str) -> ManifestParse:
                 continue
             indent = len(line) - len(line.lstrip(" "))
             if line[:1] in (" ", "\t") and indent >= 6:
-                # Stray content deeper inside the sub-block that is not a
-                # recognized field line -- skip silently, consistent with
-                # "indented lines are never malformed" except the
-                # explicit unknown_lifecycle_fields channel above.
+                # Same fail-closed reasoning as spec.skillDependencies'
+                # equivalent branch above -- an unmatched line at this
+                # indent (including one KEY_LINE_RE_6 cannot parse due to
+                # quoting/escaping) is flagged, not silently tolerated.
+                lifecycle_subkey_has_content = True
+                unknown_lifecycle_fields.append(line.strip())
                 continue
             # Dedented below the sub-block's own indent: this
             # experimental/deprecated block ends here. Finalize it and
@@ -974,46 +1298,134 @@ def _parse_manifest(text: str) -> ManifestParse:
             # normally below.
             lifecycle_scalar_pending = None
         if in_lifecycle:
-            subkey = LIFECYCLE_SUBKEY_RE.match(line)
-            if subkey:
-                key, value = subkey.group(1), _strip_bare_comment(subkey.group(2).strip())
-                if value:
-                    # Not opening a block -- a bare scalar written where a
-                    # mapping is expected (e.g. "experimental: true").
-                    # Store the raw scalar under the subkey itself so the
-                    # checker layer reports it as the wrong type, exactly
-                    # as spec.skillDependencies' non-list scalar fallback
-                    # works.
-                    lifecycle[key] = value
+            matched = _match_key_line(KEY_LINE_RE_4, line)
+            if matched:
+                lifecycle_has_content = True
+                key, value = matched
+                value = _strip_bare_comment(value)
+                if key in LIFECYCLE_SUBKEYS:
+                    if value:
+                        # Not opening a block -- a bare scalar written where a
+                        # mapping is expected (e.g. "experimental: true").
+                        # Store the raw scalar under the subkey itself so the
+                        # checker layer reports it as the wrong type, exactly
+                        # as spec.skillDependencies' non-list scalar fallback
+                        # works.
+                        lifecycle[key] = value
+                    else:
+                        lifecycle_subkey = key
+                        lifecycle_field_buffer = {}
+                elif key in LIFECYCLE_SCALAR_KEYS:
+                    if value:
+                        lifecycle[key] = _unquote(value)
+                    else:
+                        # Blank (or comment-only) value: ambiguous until the
+                        # next line is seen -- see the
+                        # "lifecycle_scalar_pending is not None" handling above.
+                        lifecycle_scalar_pending = key
                 else:
-                    lifecycle_subkey = key
-                    lifecycle_field_buffer = {}
-                continue
-            scalar = LIFECYCLE_SCALAR_KEY_RE.match(line)
-            if scalar:
-                key, value = scalar.group(1), _strip_bare_comment(scalar.group(2).strip())
-                if value:
-                    lifecycle[key] = _unquote(value)
-                else:
-                    # Blank (or comment-only) value: ambiguous until the
-                    # next line is seen -- see the
-                    # "lifecycle_scalar_pending is not None" handling above.
-                    lifecycle_scalar_pending = key
-                continue
-            unknown = LIFECYCLE_UNKNOWN_SUBKEY_RE.match(line)
-            if unknown:
-                unknown_lifecycle_keys.append(line.strip())
+                    unknown_lifecycle_keys.append(line.strip())
                 continue
             indent = len(line) - len(line.lstrip(" "))
             if line[:1] in (" ", "\t") and indent >= 4:
-                # Stray content deeper inside spec.lifecycle that is not a
-                # recognized sub-block header -- skip silently, same
-                # reserved-field treatment as spec.skillDependencies.
+                # Same fail-closed reasoning as spec.skillDependencies'
+                # equivalent branch above.
+                lifecycle_has_content = True
+                unknown_lifecycle_keys.append(line.strip())
                 continue
             # Dedented below spec.lifecycle's own indent: the block ends
             # here. Finalize it and fall through to process this line
             # normally below.
             _finalize_lifecycle()
+        if collecting_exec_tools_list is not None:
+            item = EXEC_REQ_TOOLS_LIST_ITEM_RE.match(line)
+            if item:
+                item_indent = len(line) - len(line.lstrip(" "))
+                if exec_tools_list_indent is None:
+                    exec_tools_list_indent = item_indent
+                if item_indent != exec_tools_list_indent:
+                    # Same list, different indent than its own first item --
+                    # real YAML would reject this outright.
+                    malformed_exec_tools_items.append(line.strip())
+                    continue
+                raw_text = item.group(1).strip()
+                is_quoted = (len(raw_text) >= 2 and raw_text[0] == raw_text[-1]
+                             and raw_text[0] in "\"'")
+                if not is_quoted and REFERENCES_MAPPING_LIKE_RE.match(raw_text):
+                    malformed_exec_tools_items.append(line.strip())
+                elif not is_quoted and _is_non_string_plain_scalar(raw_text):
+                    malformed_exec_tools_items.append(line.strip())
+                else:
+                    collecting_exec_tools_list.append(_unquote(raw_text))
+                continue
+            # Not a list item: this read/write/shell list ends here.
+            _finalize_exec_tools_list()
+        if in_exec_tools:
+            matched = _match_key_line(KEY_LINE_RE_6, line)
+            if matched:
+                exec_tools_has_content = True
+                key, value = matched
+                # Same comment-only-value fix as spec.skillDependencies'
+                # equivalent branch above (e.g. "read:  # comment").
+                value = _strip_bare_comment(value)
+                if key not in EXEC_REQ_TOOLS_SUBKEYS:
+                    unknown_exec_tools_keys.append(line.strip())
+                elif value == "[]":
+                    exec_tools[key] = []
+                elif not value:
+                    collecting_exec_tools_list = []
+                    collecting_exec_tools_key = key
+                    exec_tools_list_indent = None
+                else:
+                    # Not an empty list and not "[]" -- no flow-sequence
+                    # support; store the raw scalar so the shape gate can
+                    # fail it as the wrong type rather than silently
+                    # dropping it, exactly as spec.skillDependencies does.
+                    exec_tools[key] = value
+                continue
+            indent = len(line) - len(line.lstrip(" "))
+            if line[:1] in (" ", "\t") and indent >= 6:
+                # Same fail-closed reasoning as spec.skillDependencies'/
+                # spec.lifecycle's equivalent branches -- an unmatched
+                # line at this indent is flagged, not silently tolerated.
+                exec_tools_has_content = True
+                unknown_exec_tools_keys.append(line.strip())
+                continue
+            # Dedented below tools' own indent: the block ends here.
+            # Finalize it and fall through to process this line normally
+            # below.
+            _finalize_exec_tools()
+        if in_execution_requirements:
+            matched = _match_key_line(KEY_LINE_RE_4, line)
+            if matched:
+                exec_req_has_content = True
+                key, value = matched
+                # Same comment-only-value fix as spec.skillDependencies'
+                # equivalent branch above (e.g. "tools:  # comment").
+                value = _strip_bare_comment(value)
+                if key != "tools":
+                    unknown_exec_req_keys.append(line.strip())
+                elif value:
+                    # Not opening a block -- a bare scalar written where a
+                    # mapping is expected (e.g. "tools: true"). Store the
+                    # raw scalar so the checker layer reports it as the
+                    # wrong type rather than silently dropping it.
+                    execution_requirements[key] = value
+                else:
+                    in_exec_tools = True
+                    exec_tools = {}
+                continue
+            indent = len(line) - len(line.lstrip(" "))
+            if line[:1] in (" ", "\t") and indent >= 4:
+                # Same fail-closed reasoning as spec.skillDependencies'/
+                # spec.lifecycle's equivalent branches.
+                exec_req_has_content = True
+                unknown_exec_req_keys.append(line.strip())
+                continue
+            # Dedented below spec.executionRequirements' own indent: the
+            # block ends here. Finalize it and fall through to process
+            # this line normally below.
+            _finalize_execution_requirements()
         if line[:1] in (" ", "\t"):
             # Indented: nested/list content this parser does not interpret,
             # except spec.references and spec.skillDependencies (handled
@@ -1024,6 +1436,14 @@ def _parse_manifest(text: str) -> ManifestParse:
             nested = re.match(r"[ ]{2}([A-Za-z0-9_-]+):\s*(.*)$", line)
             if nested and current is not None:
                 key, value = nested.group(1), nested.group(2).strip()
+                # A value that is NOTHING BUT a comment (e.g.
+                # "executionRequirements:  # not yet fully specified")
+                # must read as blank, the same way a real YAML parser
+                # reads it -- otherwise `not value` is False, none of
+                # these four gated blocks ever opens, and the entire
+                # nested block underneath is discarded as a raw,
+                # wrong-type scalar string instead (found by review).
+                value = _strip_bare_comment(value)
                 # current is root["spec"] by identity exactly while inside
                 # the spec: block, so this is "are we directly under spec"
                 # without tracking a separate current-top-key variable.
@@ -1035,6 +1455,9 @@ def _parse_manifest(text: str) -> ManifestParse:
                 elif key == "lifecycle" and current is root.get("spec") and not value:
                     in_lifecycle = True
                     lifecycle = {}
+                elif key == "executionRequirements" and current is root.get("spec") and not value:
+                    in_execution_requirements = True
+                    execution_requirements = {}
                 elif value:
                     current[key] = _unquote(value)
             continue
@@ -1055,12 +1478,32 @@ def _parse_manifest(text: str) -> ManifestParse:
     _finalize_refs()
     _finalize_skill_deps()
     _finalize_lifecycle()
+    _finalize_execution_requirements()
     return ManifestParse(root=root, malformed_lines=malformed,
                           malformed_reference_items=malformed_refs,
                           malformed_skill_dependency_items=malformed_deps,
                           unknown_skill_dependency_keys=unknown_dep_keys,
                           unknown_lifecycle_keys=unknown_lifecycle_keys,
-                          unknown_lifecycle_fields=unknown_lifecycle_fields)
+                          unknown_lifecycle_fields=unknown_lifecycle_fields,
+                          unknown_execution_requirement_keys=unknown_exec_req_keys,
+                          unknown_execution_requirement_tools_keys=unknown_exec_tools_keys,
+                          malformed_execution_requirement_tools_items=malformed_exec_tools_items)
+
+
+def spec_of(parsed: ManifestParse) -> dict[str, object] | None:
+    """Return ``parsed.root["spec"]`` if present and a mapping, else None.
+
+    A malformed sidecar can write ``spec:`` as a scalar or list rather than
+    a mapping; every consumer that only cares about "does this sidecar have
+    a real spec mapping" needs the same isinstance guard around
+    ``root.get("spec")``, and inlining it separately at each call site let
+    the exact same unguarded pattern regress twice in one file within a
+    single PR (issue #228 repairs 2/3). Callers outside this module (e.g.
+    tests/test_skill_metadata_sidecar.py) should use this instead of
+    inlining ``parsed.root.get("spec")`` themselves.
+    """
+    spec = parsed.root.get("spec")
+    return spec if isinstance(spec, dict) else None
 
 
 def _body_after_frontmatter(text: str) -> list[str]:
@@ -1865,6 +2308,9 @@ def check_shape(target: Path) -> list[CheckResult]:
             unknown_skill_dependency_keys = parsed.unknown_skill_dependency_keys
             unknown_lifecycle_keys = parsed.unknown_lifecycle_keys
             unknown_lifecycle_fields = parsed.unknown_lifecycle_fields
+            unknown_execution_requirement_keys = parsed.unknown_execution_requirement_keys
+            unknown_execution_requirement_tools_keys = parsed.unknown_execution_requirement_tools_keys
+            malformed_execution_requirement_tools_items = parsed.malformed_execution_requirement_tools_items
             read_error: str | None = None
         except (OSError, UnicodeDecodeError) as exc:
             manifest = None
@@ -1874,6 +2320,9 @@ def check_shape(target: Path) -> list[CheckResult]:
             unknown_skill_dependency_keys = []
             unknown_lifecycle_keys = []
             unknown_lifecycle_fields = []
+            unknown_execution_requirement_keys = []
+            unknown_execution_requirement_tools_keys = []
+            malformed_execution_requirement_tools_items = []
             read_error = type(exc).__name__
 
         if manifest is None:
@@ -1932,6 +2381,12 @@ def check_shape(target: Path) -> list[CheckResult]:
                 "spec.lifecycle.experimental and spec.lifecycle.stable "
                 "cannot both be present -- a skill cannot be both "
                 "not-yet-graduated and already graduated", evidence))
+            results.append(CheckResult(
+                "execution-requirements-well-formed", False,
+                "spec.executionRequirements, if present, is a mapping with "
+                "only the tools key; tools, if present, is a mapping with "
+                "only read/write/shell keys, each -- if present -- a list "
+                "of non-empty strings", evidence))
             # Deliberately not the body-marker fallback: a present-but-broken
             # sidecar is authoritative-and-failing, not absent. Running the
             # scan (rather than skipping it) lands extra findings on a skill
@@ -2029,6 +2484,11 @@ def check_shape(target: Path) -> list[CheckResult]:
             results.extend(_lifecycle_checks(
                 spec_is_mapping, spec_raw, spec,
                 unknown_lifecycle_keys, unknown_lifecycle_fields, skill_dir))
+            results.extend(_execution_requirements_checks(
+                spec_is_mapping, spec_raw, spec,
+                unknown_execution_requirement_keys,
+                unknown_execution_requirement_tools_keys,
+                malformed_execution_requirement_tools_items))
             if portability in PORTABILITY_LEVELS:
                 sidecar_portability = SidecarPortability(
                     state="usable", level=portability)
@@ -2265,8 +2725,7 @@ def _skill_dependency_checks(spec_is_mapping: bool, spec_raw: object,
                         "nothing to check (spec is not a mapping)"),
         ]
 
-    deps = spec.get("skillDependencies")
-    if deps is None:
+    if "skillDependencies" not in spec:
         return [
             CheckResult("skill-dependencies-well-formed", True,
                         well_formed_rule, "not declared (optional)"),
@@ -2276,6 +2735,12 @@ def _skill_dependency_checks(spec_is_mapping: bool, spec_raw: object,
                         contradiction_rule, "not declared (optional)"),
         ]
 
+    deps = spec.get("skillDependencies")
+    # deps is None here means the key was present with a blank (YAML null)
+    # value, not absent -- distinct from the "not in spec" case above
+    # (issue #356). isinstance(None, dict) is already False, so the
+    # existing "not a mapping" branch below fails it correctly without
+    # further special-casing.
     if not isinstance(deps, dict):
         evidence = f"not a mapping: {deps!r}"
         return [
@@ -2416,8 +2881,7 @@ def _lifecycle_checks(spec_is_mapping: bool, spec_raw: object,
                         contradiction_rule, "nothing to check (spec is not a mapping)"),
         ]
 
-    lifecycle = spec.get("lifecycle")
-    if lifecycle is None:
+    if "lifecycle" not in spec:
         return [
             CheckResult("lifecycle-well-formed", True, well_formed_rule,
                         "not declared (optional)"),
@@ -2427,6 +2891,10 @@ def _lifecycle_checks(spec_is_mapping: bool, spec_raw: object,
                         contradiction_rule, "not declared (optional)"),
         ]
 
+    lifecycle = spec.get("lifecycle")
+    # lifecycle is None here means present-but-blank (YAML null), distinct
+    # from absent above (issue #356) -- isinstance(None, dict) is already
+    # False, so the existing "not a mapping" branch below fails it.
     if not isinstance(lifecycle, dict):
         evidence = f"not a mapping: {lifecycle!r}"
         return [
@@ -2512,6 +2980,107 @@ def _lifecycle_checks(spec_is_mapping: bool, spec_raw: object,
         "ok" if not contradiction
         else "both experimental and stable are present"))
     return results
+
+
+def _valid_execution_requirements_tools_list(value: object) -> bool:
+    """Whether ``value`` is a valid tools.read/write/shell list: a list of
+    non-empty strings. Mirrors ``_valid_skill_dependency_list`` -- an empty
+    list is valid here too, since it is a deliberate "zero tools of this
+    kind needed" statement, distinct from the subkey being absent
+    entirely."""
+    return isinstance(value, list) and all(
+        isinstance(v, str) and v.strip() for v in value)
+
+
+def _execution_requirements_checks(spec_is_mapping: bool, spec_raw: object,
+                                    spec: dict[str, object],
+                                    unknown_keys: list[str],
+                                    unknown_tools_keys: list[str],
+                                    malformed_tools_items: list[str]
+                                    ) -> list[CheckResult]:
+    """The one spec.executionRequirements check landed so far (issue #349,
+    #307 Workstream W1 first slice): ``execution-requirements-well-formed``.
+
+    Mirrors ``_skill_dependency_checks``'s early-return ladder (spec not a
+    mapping / not declared / not a mapping) before real validation, and its
+    problem-accumulation-then-single-CheckResult pattern. Unlike
+    spec.skillDependencies or spec.lifecycle, this field has only one
+    recognized top-level subkey so far, ``tools`` -- the remaining #307 W1
+    categories (filesystem, network, mcp, credentials, browser,
+    externalServices, context) are deferred to sibling child issues, and
+    any key here other than ``tools`` fails closed via ``unknown_keys``
+    rather than being silently accepted as reserved space, per #307's
+    security invariant 4. There is no dangling-reference or cross-field
+    check the way spec.skillDependencies/spec.lifecycle have one each --
+    tools' read/write/shell entries are free-form capability tags, not
+    names that resolve against sibling skill directories, and no rule
+    ties this field to portability/capabilityAssumption/lifecycle.
+    """
+    well_formed_rule = ("spec.executionRequirements, if present, is a "
+                         "mapping with only the tools key; tools, if "
+                         "present, is a mapping with only read/write/shell "
+                         "keys, each -- if present -- a list of non-empty "
+                         "strings")
+
+    if not spec_is_mapping:
+        return [CheckResult(
+            "execution-requirements-well-formed", False, well_formed_rule,
+            f"spec is not a mapping: {spec_raw!r}")]
+
+    if "executionRequirements" not in spec:
+        return [CheckResult(
+            "execution-requirements-well-formed", True, well_formed_rule,
+            "not declared (optional)")]
+
+    execution_requirements = spec.get("executionRequirements")
+    # None here means present-but-blank (YAML null), distinct from absent
+    # above (issue #356) -- isinstance(None, dict) is already False, so
+    # the existing "not a mapping" branch below fails it correctly.
+    if not isinstance(execution_requirements, dict):
+        return [CheckResult(
+            "execution-requirements-well-formed", False, well_formed_rule,
+            f"not a mapping: {execution_requirements!r}")]
+
+    problems: list[str] = []
+    if unknown_keys:
+        count = len(unknown_keys)
+        problems.append(f"{count} unknown key{'' if count == 1 else 's'}: "
+                         f"{unknown_keys[0]!r}")
+
+    tools_present = "tools" in execution_requirements
+    tools = execution_requirements.get("tools")
+    # tools_present with tools is None means present-but-blank (YAML
+    # null), distinct from tools being absent entirely -- previously both
+    # fell through this elif ladder untouched and passed silently
+    # (issue #356: "A blank tools: value is YAML null, but the parser
+    # converts it to an empty mapping and passes").
+    if tools_present and not isinstance(tools, dict):
+        problems.append(f"tools is not a mapping: {tools!r}")
+    elif isinstance(tools, dict):
+        if unknown_tools_keys:
+            count = len(unknown_tools_keys)
+            problems.append(
+                f"{count} unknown tools key{'' if count == 1 else 's'}: "
+                f"{unknown_tools_keys[0]!r}")
+        if malformed_tools_items:
+            count = len(malformed_tools_items)
+            problems.append(
+                f"{count} malformed tools entr{'y' if count == 1 else 'ies'}: "
+                f"{malformed_tools_items[0]!r}")
+        for key in EXEC_REQ_TOOLS_SUBKEYS:
+            if key in tools and not _valid_execution_requirements_tools_list(tools[key]):
+                problems.append(f"tools.{key} is not a list of non-empty "
+                                 f"strings: {tools[key]!r}")
+
+    if problems:
+        return [CheckResult("execution-requirements-well-formed", False,
+                             well_formed_rule, "; ".join(problems))]
+
+    declared = ([f"tools.{k}" for k in EXEC_REQ_TOOLS_SUBKEYS if k in tools]
+                if isinstance(tools, dict) else [])
+    evidence = ", ".join(declared) + " declared" if declared else "no keys declared"
+    return [CheckResult("execution-requirements-well-formed", True,
+                         well_formed_rule, evidence)]
 
 
 def format_report(results: list[CheckResult]) -> str:
