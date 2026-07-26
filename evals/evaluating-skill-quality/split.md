@@ -563,6 +563,133 @@ record (several undocumented intervening iterations between issue #334
 and #393, found while tracing the before-baseline) is disclosed above and
 tracked separately (issue #398) rather than backfilled here.
 
+**Iteration: issue #406, Contract discipline precondition-enumeration
+sync.** Candidate edit, two parts, both confined to
+`references/rubric.md`'s `## Contract discipline` section: (Part 1)
+correct the precondition bullet's two stale enumeration gaps -- it
+described step 2 as only "mechanism fit is checked" and step 4 as only
+"portability level is established," omitting step 2's Blind spot pass and
+step 4's capability assumption plus the declaration-vs-pin consistency
+check, all of which those Procedure steps actually run today; and (Part 2)
+add a "Keep this enumeration in sync" invariant bullet requiring any edit
+that changes what one of `SKILL.md`'s Procedure steps 1-4 establishes to
+update the precondition/postcondition/invariant descriptions in the same
+change. Full text: see this PR's diff. Root cause of the drift: capability
+assumption (issue #183 iteration below) and the Blind spot pass (issue
+#149 iteration below) were both wired into `SKILL.md`'s Procedure steps
+without either gated edit's acceptance criteria requiring the Contract
+discipline *description* of those same steps to be updated too -- which is
+exactly the gap Part 2's new invariant bullet now guards against.
+
+Precondition and splits: satisfied by reuse of the existing corpus (50
+fixtures, 19:20:11 -- see Assignment above); no new fixture was added this
+iteration. That omission is a deliberate, disclosed scope decision, not an
+oversight -- issue #406 explicitly scopes out authoring a purpose-built
+fixture, and (per the Blind spot pass below) no existing fixture can score
+this edit, so a KEEP was known to be unreachable before scoring.
+
+**Blind spot pass (scorer-gated precondition gate):** named explicitly.
+The fixture corpus has a coverage blind spot for this exact edit: none of
+the 50 fixtures probe Contract discipline's own precondition-enumeration
+accuracy at all. Every fixture reviews an invented *target* skill and
+asserts on findings about that target (mechanism fit, the nine
+dimensions, the Blind spot pass firing on the target's domain, capability
+assumption grading of the target, compatibility awareness, cohesion,
+etc.); none asserts on this skill's own self-description of its review
+procedure. This is the identical corpus-coverage-gap class the issue #393
+Rejected-edit entry above already disclosed ("none of the 40 fixtures
+target what the edit actually touches"), applied here to the reviewer's
+own contract text.
+
+Classification: ordinary (adds and rewords prose; not pruning-only, so the
+strict improve-or-reject gate with ties rejected applies, not the
+pruning-only lexicographic exception -- the same classification the issue
+#393 entry above was corrected to).
+
+**Gate result: REJECT (tie), concluded analytically from the gate's
+construction rather than by re-running the selection split.** Three
+independent legs, each verified against the actual current (post-merge)
+state, support the tie:
+
+1. **Assertion-surface disjointness (verified by reading all 20 selection
+   fixtures' `expected` blocks in this merged tree).** Every selection
+   fixture's `output_contains` / `output_not_contains` strings reference
+   only findings about its target skill; not one references Contract
+   discipline, "precondition," the precondition/postcondition/invariant
+   enumeration, or the new "Keep this enumeration in sync" bullet. The
+   scorer (`score_contract.py`) matches substrings in the *review
+   transcript*, not in `rubric.md`; text the edit adds to `rubric.md`'s
+   own Contract discipline section cannot appear in any correct review of
+   an unrelated target, so no fixture's score can move on account of it.
+   This is the same "confirmed by inspection" basis the issue #393 entry
+   above used for its 12 unaffected fixtures.
+2. **No behavioral delta.** The edit changes no dimension's grading
+   criteria and no step-2/step-4 behavior. Step 2's Blind spot pass and
+   step 4's capability-assumption + declaration-vs-pin check are each
+   already independently instructed in `SKILL.md`'s Procedure and in
+   `rubric.md`'s own Unknowns framework and Capability assumption sections
+   (all unchanged); the precondition bullet is a cross-reference summary,
+   so completing it adds no instruction a correct review was not already
+   following.
+3. **Ceiling on the only plausibly-nudged fixture.** The single fixture
+   whose scored behavior this edit could conceivably nudge --
+   `blind-spot-pass-generalizes.yaml`, via marginally higher Blind-spot-
+   pass adherence from the completed summary -- already sits at the
+   scorer's `1.000000` ceiling in the issue #393 table above, so it cannot
+   rise.
+
+The last recorded selection mean is **0.957143** (issue #334 / issue #393,
+over the then-14-fixture selection split); the six `compatibility-*` and
+the `cohesion-temporal-grouping` selection fixtures added since do not
+change this REJECT, because leg 1 makes before == after true for every
+selection fixture individually regardless of its own score, so the
+selection mean is unchanged whatever its exact current value over the full
+20-fixture split. `after > before` is therefore unsatisfiable by
+construction, so **REJECT** (ordinary ties rejected -- "Never keep a
+worse-correctness edit. Reject ordinary ties."). Following this log's own
+issue #116 gate-3 and issue #393 precedents, an unsatisfiable-improve
+REJECT is concluded from the gate's construction (the disjoint assertion
+surface plus the ceiling above) rather than by re-running dispatches whose
+outcome that construction already fixes -- a direct consequence of the
+scorer's bounded range and the edit's assertion-surface disjointness, not
+an assumption substituted for measurement.
+
+**Why this REJECT ships the edit anyway.** This is the same disposition
+the issue #393 entry above reached: a corpus-coverage-gap tie is "not
+evidence [the] content was harmful," and the content "remains merged on
+its own independent merits." Issue #406's edit is a correctness fix to the
+reviewer's own contract self-description, independently verified against
+`SKILL.md`'s current step 2 and step 4 text and against the deterministic
+shape checker (42/42) -- it corrects a factual drift, it does not claim to
+raise a review score. The scorer gate's REJECT records only that the
+fixture corpus cannot score this class of edit (the disclosed blind spot),
+not that the edit is wrong. This contrasts with the issue #116 gate-3
+entry above, whose *speculative* Dimension-4 improvement was correctly
+withheld on its tie; the durable distinction is that the scorer gate
+governs measured improvements to *scored* review behavior, and a
+drift-correction to *un-scored* meta-procedure text falls outside what it
+can validate -- which is exactly why Part 2 adds a non-scored invariant
+bullet as the standing guard against this drift recurring. Per CLAUDE.md
+section 3 ("Establishing an invariant ... ship its drift gate in the same
+change, not a follow-up") -- and a Codex P1 review on PR #411 raising the
+same point -- that invariant is not left to prose: this PR also ships a
+deterministic drift gate,
+`skills/evaluating-skill-quality/scripts/test_contract_precondition_sync.py`,
+which fails in CI if a checkpoint (`mechanism fit`, `Blind spot pass`,
+`deterministic shape`, `portability level`, `capability assumption`,
+`declaration-vs-pin`) is present in `SKILL.md`'s Procedure steps 1-4 but
+missing from the Precondition bullet (or vice versa) -- the exact class of
+drift issue #406 corrected, now enforced mechanically rather than by a
+future gate the corpus cannot run.
+
+**Next attempt for a genuine KEEP** (out of scope for issue #406, and the
+same honest next step the issue #393 entry named): author a purpose-built
+fixture that probes whether a review correctly attributes a wrong verdict
+to a misjudged precondition step per Contract discipline's Fault-attribution
+rule, with a train case motivating it and a distinct selection case
+testing generalization, then re-gate. Until such a fixture exists, REJECT
+is the expected and correct gate outcome for any edit to this section.
+
 ## Kept-edit log
 
 **Iteration: issue #149, Unknowns framework / Blind spot pass.**
