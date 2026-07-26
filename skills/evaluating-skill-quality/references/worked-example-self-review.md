@@ -388,17 +388,29 @@ this repository's root `pyproject.toml` and got both numbers wrong; fixed
 here with measured data rather than left standing, the same discipline
 this section's own N/A-to-Applicable correction above already applied).
 **Test levels** -- `main(argv: list[str] | None = None) -> int` is a
-directly and thoroughly tested entry point, not merely internals: 11+
-assertions call `css.main([...])` with real argv-equivalent lists and
-check its exit codes (0/1/2), so the exit-code contract "solve, don't
-punt" above credits is genuinely exercised, not merely implied. The one
-sliver still untested is the literal `sys.argv`-extraction and real
-OS-process invocation inside `if __name__ == "__main__":` -- but this
-repository's own `pyproject.toml` coverage config already excludes that
-exact line from measurement (`exclude_lines = ["if __name__ ==
-.__main__.:"]`, a standard idiom for an untestable one-line dispatch, not
-an oversight), so this is a much narrower gap than "unit-level only"
-would suggest, not a named integration-level defect. **Test design
+directly and thoroughly tested *function*: 11+ assertions call
+`css.main([...])` with real argv-equivalent lists and check its exit
+codes (0/1/2), so `main()`'s own internal logic, including the exit-code
+contract "solve, don't punt" above credits, is genuinely exercised at
+component/unit level. But per this dimension's own definition above
+("integration-level: the script exercised end-to-end through its actual
+CLI entry point -- argv parsing, exit codes, stdout contract"), calling
+`css.main([...])` in-process is not that: it bypasses `sys.argv`
+extraction, the `if __name__ == "__main__":` wrapper, and real
+OS-process exit/stdout/stderr behavior entirely -- the real command
+boundary this dimension asks about. No test in this file spawns the
+script as an actual subprocess, so this remains a genuine, still-open
+integration-level gap, not one narrowed away by how thoroughly `main()`
+itself is unit-tested. (This repository's own `pyproject.toml` coverage
+config does separately exclude the two-line `if __name__ ==
+"__main__":` dispatch from statement-coverage measurement -- a standard
+idiom, and accurate on its own terms -- but that is a coverage-accounting
+convention, unrelated to whether integration-level testing occurred; the
+two questions were wrongly conflated in an earlier pass of this section,
+corrected here. The lines actually reported missing near there,
+`3095-3097`, are a different and separately real gap: `main()`'s own
+`except (OSError, UnicodeDecodeError)` handler for a read failure
+mid-`check_shape()` call, also untested.) **Test design
 technique diversity** -- black-box coverage is genuinely broad:
 equivalence partitioning across description, name, reference-link, and
 sidecar validity classes; boundary value analysis is present and
@@ -407,12 +419,22 @@ concrete, e.g. `test_overlong_description_fails` uses
 `test_quoted_description_excludes_surrounding_quotes` targets "exactly
 the cap once quotes drop"; error-guessing/experience-based cases are
 present too (BOM-prefixed files, malformed fences, symlink-basename
-mismatches). What is still missing: no decision-table treatment of the
-portability x capability-assumption x lifecycle combination space --
-confirmed still absent after re-checking against the current test file --
-each sidecar field's valid/invalid values are tested, but not the
-combinations, so a real interaction bug between two fields could pass
-every existing test. **White-box coverage is measured, not stated as
+mismatches). No decision-table gap here, corrected from an earlier pass
+of this section that named one without checking the underlying code: a
+decision table is for logic that actually *combines* independent
+conditions into one branch, and `check_skill_shape.py`'s own validation
+does not do that for portability/capabilityAssumption/lifecycle --
+`portability-declared` and `capability-assumption-declared` each check
+only their own single field against its own allowed set with no
+reference to the other two, `requires-portability-compatible` pairs
+portability with `skillDependencies.requires` only, and
+`experimental-stable-compatible` is a check internal to lifecycle's own
+sub-blocks. No joint three-way (or even any two-way among these three
+specific fields) branch exists anywhere to have an untested combination
+of, so naming one would describe a bug class the code cannot exhibit --
+this dimension's own "no cohesion split finding" restraint discipline
+applies equally here: say so explicitly rather than invent a gap.
+**White-box coverage is measured, not stated as
 absent** -- this repository's own `pyproject.toml` already configures
 `pytest-cov` for exactly this path (`--cov=skills/evaluating-skill-quality/scripts`);
 running it (`uv run pytest ... --cov-report=term-missing`) reports 98%
