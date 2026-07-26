@@ -125,31 +125,31 @@ verdict itself would still be grading from a contaminated context.
 - Required, not optional: when the calling repository carries its own
   project-instruction file (for example `CLAUDE.md` or `AGENTS.md`),
   exclude that file from the dispatch's context before dispatching. Which
-  mechanism actually achieves this is a fact about the current platform's
-  dispatch tooling, not a fixed choice this skill can hardcode -- consult
-  [references/subagent-isolation-registry.md](references/subagent-isolation-registry.md)
-  for the current platform's verified mechanism before dispatching. If the
-  current platform has no recorded entry, run that file's Verification
-  procedure yourself and add an entry before trusting any dispatch. A
-  dispatch that inherits the calling repository's own instructions is not
-  the neutral grading context this section exists to guarantee, and the
-  omission must not depend on a human asking whether it happened.
-  Requesting the exclusion is not proof it held, and a filesystem-only
-  check (e.g. confirming a scratch copy's own directory ancestry contains
-  no `CLAUDE.md`/`AGENTS.md`) is not proof either -- one platform's dispatch
-  tool has been confirmed to leak the calling repository's `CLAUDE.md` into
-  a subagent's context regardless of which paths the dispatch prompt
-  references, so an ancestry check alone would have missed it (see the
-  registry's Known entries). Only the registry's own two-part behavioral
-  test (does the dispatched agent's own self-report actually change between
-  a positive- and negative-control location) counts as verification. If no
+  mechanism achieves this is a fact about the current platform's dispatch
+  tooling, not a fixed choice this skill can hardcode -- consult
+  [references/adversarial-self-audit.md](references/adversarial-self-audit.md)'s
+  Isolation verification section for the current platform's verified
+  mechanism before dispatching, running its Verification procedure and
+  recording a new entry yourself if none exists yet. A dispatch that
+  inherits the calling repository's own instructions is not the neutral
+  grading context this section exists to guarantee, and the omission must
+  not depend on a human asking whether it happened. Requesting the
+  exclusion is not proof it held, and a filesystem-only check (e.g.
+  confirming a scratch copy's own directory ancestry contains no
+  `CLAUDE.md`/`AGENTS.md`) is not proof either -- one platform's dispatch
+  tool has been confirmed to leak the calling repository's `CLAUDE.md`
+  into a subagent's context regardless of which paths the dispatch prompt
+  references, so an ancestry check alone would have missed it (see that
+  section's Known entries). Only its own two-part behavioral test (does
+  the dispatched agent's own self-report actually change between a
+  positive- and negative-control location) counts as verification. If no
   platform mechanism can be verified this way, that is itself a blocker --
   stop and escalate rather than dispatching into a contaminated context.
-  Whether the exclusion, once verified, carries real deterministic backing
-  (a hook, a permission rule) or is enforced by this instruction alone
-  still depends on the environment -- check directly rather than assuming
-  either way, the same self-audit this skill already applies to its
-  eval-tooling-install Stop boundary below.
+  Whether the exclusion, once verified, carries real deterministic
+  backing (a hook, a permission rule) or is enforced by this instruction
+  alone still depends on the environment -- check directly rather than
+  assuming either way, the same self-audit this skill already applies to
+  its eval-tooling-install Stop boundary below.
 - Hand the dispatch step 3's shape-checker output as an established fact
   rather than having it re-run the script itself (Contract discipline's
   "never both" rule, `references/rubric.md`).
@@ -257,7 +257,7 @@ section.
 Distinct from Mechanism fit's Model/effort tier fit check: that judges a
 model or effort *pin the skill's own content makes*, which the invoking
 agent acts on at runtime, and fires only when such a pin actually exists
-(most skills correctly have none, and zero of this repository's 17 skills
+(most skills correctly have none, and none of this repository's skills
 do today). This declaration pins nothing and never executes -- it
 recalibrates the *reviewer's* grading strictness and has full coverage
 over every skill regardless of whether that skill pins anything. The two
