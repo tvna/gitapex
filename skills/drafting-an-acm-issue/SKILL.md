@@ -1,6 +1,6 @@
 ---
 name: drafting-an-acm-issue
-description: Use when the user wants to open, file, or draft a brand-new GitHub issue for a feature, fix, or refactor and no issue exists yet. Elicits the change from the requester and drafts an Acceptance Criteria Map before the issue is created, so planning-a-branch-from-an-issue can read it instead of building one from scratch. Distinct from planning-a-branch-from-an-issue (starts from an existing issue, plans a branch/PR) and fixing-a-reported-issue (reproduces and fixes a defect); this skill only authors the issue.
+description: Use when the user -- or the current workflow itself, mid-task -- needs to open, file, or draft a brand-new GitHub issue for a feature, fix, or refactor and no issue exists yet. Elicits the change from the requester and drafts an Acceptance Criteria Map before the issue is created, so planning-a-branch-from-an-issue can read it instead of building one from scratch. Distinct from planning-a-branch-from-an-issue (starts from an existing issue, plans a branch/PR) and fixing-a-reported-issue (reproduces and fixes a defect); this skill only authors the issue.
 ---
 
 # Drafting an ACM Issue
