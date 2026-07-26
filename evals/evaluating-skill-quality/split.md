@@ -312,6 +312,121 @@ skill's Stop boundaries forbid.
 
 This edit is **not applied** to `references/rubric.md` in this PR.
 
+**Iteration: issue #406, Contract discipline precondition-enumeration
+sync.** Candidate edit, two parts, both confined to
+`references/rubric.md`'s `## Contract discipline` section: (Part 1)
+correct the precondition bullet's two stale enumeration gaps -- it
+described step 2 as only "mechanism fit is checked" and step 4 as only
+"portability level is established," omitting step 2's Blind spot pass and
+step 4's capability assumption plus the declaration-vs-pin consistency
+check, all of which those Procedure steps actually run today; and (Part 2)
+add a "Keep this enumeration in sync" invariant bullet requiring any edit
+that changes what one of `SKILL.md`'s Procedure steps 1-4 establishes to
+update the precondition/postcondition/invariant descriptions in the same
+change. Full text: see this PR's diff. Root cause of the drift: capability
+assumption (issue #183 iteration above) and the Blind spot pass (issue
+#149 iteration above) were both wired into `SKILL.md`'s Procedure steps
+without either gated edit's acceptance criteria requiring the Contract
+discipline *description* of those same steps to be updated too.
+
+Precondition and splits: satisfied by reuse of the existing 37-fixture,
+16:13:8 split (see Assignment above); no new fixture was added this
+iteration. That omission is a deliberate, disclosed scope decision, not an
+oversight -- issue #406 explicitly scopes out authoring a purpose-built
+fixture, and (per the Blind spot pass below) no existing fixture can score
+this edit, so a KEEP was known to be unreachable before scoring.
+
+**Blind spot pass (scorer-gated precondition gate):** named explicitly.
+The fixture corpus has a coverage blind spot for this exact edit: none of
+the 37 fixtures probe Contract discipline's own precondition-enumeration
+accuracy at all. Every fixture reviews an invented *target* skill and
+asserts on findings about that target (mechanism fit, the nine
+dimensions, the Blind spot pass firing on the target's domain, capability
+assumption grading of the target, etc.); none asserts on this skill's own
+self-description of its review procedure. This is the same
+corpus-coverage-gap class this log has disclosed before, applied here to
+the reviewer's own contract text.
+
+Classification: ordinary (adds and rewords prose; not pruning-only, so the
+strict improve-or-reject gate with ties rejected applies, not the
+pruning-only lexicographic exception).
+
+**Gate result: REJECT (tie), concluded analytically from the gate's
+construction rather than by re-running the selection split.** Three
+independent legs, each verified against the actual current state, support
+the tie:
+
+1. **Assertion-surface disjointness (verified by reading all 13 selection
+   fixtures' `expected` blocks).** Every selection fixture's
+   `output_contains` / `output_not_contains` strings reference only
+   findings about its target skill; not one references Contract
+   discipline, "precondition," the precondition/postcondition/invariant
+   enumeration, or the new "Keep this enumeration in sync" bullet. The
+   scorer (`score_contract.py`) matches substrings in the *review
+   transcript*, not in `rubric.md`; text the edit adds to `rubric.md`'s
+   own Contract discipline section cannot appear in any correct review of
+   an unrelated target, so no fixture's score can move on account of it.
+2. **No behavioral delta.** The edit changes no dimension's grading
+   criteria and no step-2/step-4 behavior. Step 2's Blind spot pass and
+   step 4's capability-assumption + declaration-vs-pin check are each
+   already independently instructed in `SKILL.md`'s Procedure and in
+   `rubric.md`'s own Unknowns framework and Capability assumption sections
+   (all unchanged); the precondition bullet is a cross-reference summary,
+   so completing it adds no instruction a correct review was not already
+   following.
+3. **Ceiling on the only plausibly-nudged fixture.** The single fixture
+   whose scored behavior this edit could conceivably nudge --
+   `blind-spot-pass-generalizes.yaml`, via marginally higher Blind-spot-
+   pass adherence from the completed summary -- already sits at the
+   scorer's `1.000000` ceiling in the issue #200 iteration's table above,
+   so it cannot rise. The two sub-ceiling selection fixtures
+   (`tool-capability-verification-selection.yaml` 0.875000,
+   `consumer-repo-convention-deference-selection.yaml` 0.750000) sit in
+   the Mechanism-fit and Dimension-6 sections, which this edit does not
+   touch.
+
+Selection mean therefore stays **0.954-class == before == after**
+(the issue #200 iteration recorded 0.971154 across these 13 fixtures);
+`after > before` is unsatisfiable by construction, so **REJECT** (ordinary
+ties rejected). Following this log's own issue #116 gate-3 precedent, an
+unsatisfiable-improve REJECT is concluded from the gate's construction
+(the ceiling plus the disjoint assertion surface above) rather than by
+re-running 26 dispatches whose outcome that construction already fixes --
+this is a direct consequence of the scorer's bounded range and the
+edit's assertion-surface disjointness, not an assumption substituted for
+measurement.
+
+**Precedent-citation discrepancy, recorded for accuracy.** Issue #406
+cites "PR #393/#399 (issue #398)" as the existing precedent for recording
+an honest tie. No such Rejected-edit entry exists in this file; the only
+prior Rejected-edit entry is the issue #116 gate-3 entry above, which is
+the actual precedent used here. (The issue also states "40 fixtures"; the
+corpus is 37.) Both are stale figures in the issue body, noted rather than
+propagated.
+
+**Why this REJECT ships the edit anyway -- how it differs from issue
+#116.** Issue #116's gate-3 candidate was a *speculative* Dimension-4
+improvement, correctly withheld when it tied. Issue #406's edit is a
+*correctness fix* to the reviewer's own contract self-description,
+independently verified against `SKILL.md`'s current step 2 and step 4
+text -- it corrects a factual drift, it does not claim to raise a review
+score. The scorer gate's REJECT here records only that the fixture corpus
+cannot score this class of edit (the disclosed blind spot), not that the
+edit is wrong; the fix is applied in this PR on its verified-correctness
+merit. The durable finding is the distinction itself: the scorer gate
+governs measured improvements to *scored* review behavior, and a
+drift-correction to *un-scored* meta-procedure text falls outside what it
+can validate -- which is exactly why Part 2 adds a non-scored invariant
+bullet as the standing guard against this drift recurring.
+
+**Next attempt for a genuine KEEP** (out of scope for issue #406): author
+a purpose-built fixture that probes whether a review correctly attributes
+a wrong verdict to a misjudged precondition step per Contract discipline's
+Fault-attribution rule, with a train case motivating it and a distinct
+selection case testing generalization, then re-gate. Until such a fixture
+exists, REJECT is the expected and correct gate outcome for any edit to
+this section.
+
 ## Kept-edit log
 
 **Iteration: issue #149, Unknowns framework / Blind spot pass.**

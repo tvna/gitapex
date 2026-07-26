@@ -136,10 +136,13 @@ fixes where a fault actually lives when a review goes wrong.
 
 - **Precondition** -- what `SKILL.md`'s Procedure steps 1-4 establish
   before dimension grading starts: the target has actually been read
-  (step 1), its mechanism fit is checked (step 2, see below), its
-  deterministic shape is checked (step 3), and its portability level is
-  established (step 4, see below). Per Meyer: "the precondition expresses
-  requirements that any call must satisfy if it is to be correct."
+  (step 1), its mechanism fit is checked and the Blind spot pass is run
+  (step 2, see below and the Unknowns framework section above), its
+  deterministic shape is checked (step 3), and its portability level and
+  capability assumption are established, including the declaration-vs-pin
+  consistency check (step 4, see below and the Capability assumption
+  section above). Per Meyer: "the precondition expresses requirements that
+  any call must satisfy if it is to be correct."
 - **Postcondition** -- what step 6 delivers *if the precondition held*: a
   verdict with cited evidence per dimension. Per Meyer: "the postcondition
   expresses properties that are ensured in return for the call."
@@ -149,6 +152,15 @@ fixes where a fault actually lives when a review goes wrong.
   step -- a Stop boundary is not a step-5-only rule; it binds during
   mechanism-fit checking, shape-checking, portability classification, and
   the dimension walk alike.
+- **Keep this enumeration in sync.** Whenever an edit changes what one of
+  `SKILL.md`'s Procedure steps 1-4 establishes -- adding a
+  precondition-establishing check to steps 1-4, or an invariant-scope Stop
+  boundary -- the same change must also update the precondition,
+  postcondition, and invariant descriptions above to match, verified
+  explicitly before that edit is treated as complete. The formal contract
+  describes the executable procedure; a description left to drift out of
+  sync misdirects exactly the fault attribution the operational rules below
+  depend on.
 
 Two operational rules follow directly, quoted from the same source:
 
