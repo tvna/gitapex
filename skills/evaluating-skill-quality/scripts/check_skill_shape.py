@@ -8,10 +8,10 @@ deliberately NOT implemented here.
 Read-only: reads the target skill's files only. No writes, no network,
 no mutation. Effects are limited to stdout and the process exit code.
 The CLI's ``--allowed-root`` guard rejects targets outside a caller-approved
-root and rejects symlinks anywhere in the target skill before reading it.
-The caller must supply an immutable/read-only snapshot; this preflight does
-not claim to defeat a concurrent filesystem mutation between validation and
-later reads.
+root and rejects symlinks and special files (FIFOs, sockets, devices)
+anywhere in the target skill before reading it. The caller must supply an
+immutable/read-only snapshot; this preflight does not claim to defeat a
+concurrent filesystem mutation between validation and later reads.
 
 Checks (the canonical list -- the manual fallback is to apply these):
   - description: present/non-empty, no XML tags, <= 1024 chars, and --
@@ -2275,10 +2275,17 @@ def _validate_read_scope(target: Path, allowed_root: Path) -> None:
 
     skill_dir = candidate.parent
     for directory, dirnames, filenames in os.walk(skill_dir, followlinks=False):
-        for name in (*dirnames, *filenames):
+        for name in dirnames:
             path = Path(directory) / name
             if path.is_symlink():
                 raise ValueError(f"symlink is not allowed in target skill: {path}")
+        for name in filenames:
+            path = Path(directory) / name
+            if path.is_symlink():
+                raise ValueError(f"symlink is not allowed in target skill: {path}")
+            if not path.is_file():
+                raise ValueError(
+                    f"special file is not allowed in target skill: {path}")
 
 
 def check_shape(target: Path) -> list[CheckResult]:

@@ -43,6 +43,7 @@ def _symlinks_supported():
 
 
 _SYMLINKS_SUPPORTED = _symlinks_supported()
+_FIFO_SUPPORTED = hasattr(os, "mkfifo")
 
 
 def _write_skill(tmp_path, *, name="good-skill",
@@ -153,6 +154,19 @@ def test_allowed_root_rejects_symlink_inside_skill(tmp_path, capsys):
         "--allowed-root", str(tmp_path), str(d),
     ]) == 2
     assert "symlink is not allowed" in capsys.readouterr().err
+
+
+@pytest.mark.skipif(not _FIFO_SUPPORTED,
+                    reason="platform cannot create FIFOs")
+def test_allowed_root_rejects_fifo_inside_skill(tmp_path, capsys):
+    d = _write_skill(tmp_path)
+    refs = d / "references"
+    refs.mkdir()
+    os.mkfifo(refs / "evil.fifo")
+    assert css.main([
+        "--allowed-root", str(tmp_path), str(d),
+    ]) == 2
+    assert "special file is not allowed" in capsys.readouterr().err
 
 
 def test_relative_target_matches_dir_name(tmp_path, monkeypatch):

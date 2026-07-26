@@ -656,7 +656,7 @@ non-support.
 For an undeclared dependency, propose a concise self-declaration such as:
 
 ```yaml
-compatibility: Designed for Claude Code; uses context: fork for isolated execution.
+compatibility: "Designed for Claude Code; uses context: fork for isolated execution."
 ```
 
 The standard field is limited to 500 characters. Recommend a body
