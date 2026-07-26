@@ -1067,6 +1067,66 @@ one read.
 - **Verifiable intermediate outputs** for high-stakes batch work -- a
   plan -> validate -> execute pattern with a machine-checkable plan file.
 
+**Test methodology, when the script ships its own test suite.** The five
+bullets above grade the script's code quality; this block grades the
+*test suite's* rigor, using ISTQB's ([istqb]) systematized categories
+rather than an ad hoc "are there tests" check. This content is drawn from
+established knowledge of the ISTQB CTFL syllabus rather than a live fetch
+of the primary PDF -- confirm specific technique wording against the
+current official syllabus before treating any phrase below as a verbatim
+quote from it.
+
+- **Test levels named explicitly.** Component/unit-level (the script's
+  functions exercised in isolation, e.g. via direct import) is not the
+  same claim as integration-level (the script exercised end-to-end
+  through its actual CLI entry point -- argv parsing, exit codes, stdout
+  contract) or system-level (the whole skill procedure invoking it as
+  written). A test suite that only ever imports internals and never
+  invokes the real CLI path has an unstated integration-level gap, even
+  if unit coverage is thorough.
+- **Test design technique diversity**, across ISTQB's three categories --
+  a large suite that only ever varies one dimension is not automatically
+  a mature one:
+  - *Black-box*: equivalence partitioning (valid and invalid input
+    classes named as classes, not just "some passing and some failing
+    cases"); boundary value analysis (exact-limit, one-under, and
+    one-over cases for every numeric or length constant the script
+    enforces); decision table testing (when the script's logic branches
+    on a combination of independent conditions, a table names the
+    combinations actually exercised rather than a handful of ad hoc
+    cases); state transition testing (for a script with sequential or
+    stateful behavior).
+  - *White-box*: statement/branch coverage as a measurable floor, not
+    "we wrote a lot of tests" -- name the coverage tool and threshold if
+    one is configured; if none is, say coverage is unmeasured rather than
+    silently treating test count as a coverage proxy (the same
+    never-silently-skip discipline dimension 8 applies to unmeasured
+    behavioural evidence).
+  - *Experience-based*: error guessing and exploratory probing for
+    inputs the author expects to break the script (malformed encoding,
+    adversarial fixtures) -- complementary to the systematic techniques
+    above, not a substitute for them.
+  - Fail: a suite that is large but single-dimensional (all valid-input
+    variants with no boundary or invalid-class case, or the reverse).
+    Pass: the suite's cases are traceable to which technique(s) produced
+    them, even briefly, so coverage-by-design is inspectable rather than
+    incidental.
+- **Static testing as a distinct, prior layer.** ISTQB's review taxonomy
+  (informal review, walkthrough, technical review, inspection -- in
+  increasing formality) and static analysis (linting, type-checking) both
+  catch defects before the script ever runs, cheaper than a dynamic test
+  run. Name which layer(s) actually apply to the script under review
+  (e.g. "PR review is this script's technical review; no linter or
+  type-checker is configured" is a specific, legitimate answer) rather
+  than treating the dynamic test suite as the only quality gate.
+- **Risk-based prioritization.** Deeper technique coverage (more
+  boundary and decision-table cases) belongs on the script's
+  highest-risk logic -- fail-closed parsing, anything security- or
+  data-integrity relevant -- with lighter coverage on low-risk paths.
+  The same principle the existing "verifiable intermediate outputs for
+  high-stakes... work" bullet above already applies to output artifacts,
+  extended here to how test effort itself is allocated.
+
 ## 8. Behavioural evidence
 
 Anthropic's standard is evaluation-*driven* development, not evaluation as
@@ -1372,6 +1432,9 @@ Every inline `[label]` citation above resolves to the source below.
   Early-2025 AI on Experienced Open-Source Developer Productivity, METR,
   2025 (arXiv:2507.09089).
   <https://arxiv.org/abs/2507.09089>
+- **[istqb]** ISTQB (International Software Testing Qualifications
+  Board) -- Certified Tester Foundation Level Syllabus, v4.0, 2023.
+  <https://istqb.org/certifications/certified-tester-foundation-level-ctfl-v4-0/>
 
 <!-- Link reference definitions below power the inline [label] shortcuts; keep in sync with the visible list above. -->
 
@@ -1383,6 +1446,7 @@ Every inline `[label]` citation above resolves to the source below.
 [kapoor]: https://arxiv.org/abs/2407.01502 "Kapoor, Stroebl, Siegel, Nadgir, Narayanan -- AI Agents That Matter, 2024 (arXiv:2407.01502)"
 [passk]: https://arxiv.org/abs/2107.03374 "Chen et al. -- Evaluating Large Language Models Trained on Code, OpenAI, 2021 (arXiv:2107.03374)"
 [metrrct]: https://arxiv.org/abs/2507.09089 "Becker, Rush, Barnes, Rein -- Measuring the Impact of Early-2025 AI on Experienced Open-Source Developer Productivity, METR, 2025 (arXiv:2507.09089)"
+[istqb]: https://istqb.org/certifications/certified-tester-foundation-level-ctfl-v4-0/ "ISTQB -- Certified Tester Foundation Level Syllabus, v4.0, 2023"
 [dbc]: https://se.inf.ethz.ch/~meyer/publications/computer/contract.pdf "Bertrand Meyer, Applying \"Design by Contract\", IEEE Computer 25(10):40-51, October 1992"
 [sd]: https://dl.acm.org/doi/10.5555/1241515.1241533 "W. P. Stevens, G. J. Myers, and L. L. Constantine, Structured Design, IBM Systems Journal 13(2):115-139, 1974"
 [ycsd]: https://dl.acm.org/doi/book/10.5555/578522 "Edward Yourdon and Larry L. Constantine, Structured Design: Fundamentals of a Discipline of Computer Program and Systems Design, Yourdon Press, 1978"
