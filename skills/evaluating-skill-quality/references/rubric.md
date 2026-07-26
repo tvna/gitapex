@@ -1070,7 +1070,7 @@ vocabulary rather than an ad hoc "are there tests" or "the tests look
 clean" check. Only apply this when the reviewed skill actually ships a
 script with its own test suite; most skills do not, and skipping it is
 not itself a finding. Full detail:
-[references/script-test-quality.md](references/script-test-quality.md).
+[script-test-quality.md](script-test-quality.md).
 
 ## 8. Behavioural evidence
 
