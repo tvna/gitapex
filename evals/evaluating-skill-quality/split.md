@@ -669,8 +669,18 @@ withheld on its tie; the durable distinction is that the scorer gate
 governs measured improvements to *scored* review behavior, and a
 drift-correction to *un-scored* meta-procedure text falls outside what it
 can validate -- which is exactly why Part 2 adds a non-scored invariant
-bullet as the standing guard against this drift recurring, rather than
-leaving it to a future gate the corpus cannot run.
+bullet as the standing guard against this drift recurring. Per CLAUDE.md
+section 3 ("Establishing an invariant ... ship its drift gate in the same
+change, not a follow-up") -- and a Codex P1 review on PR #411 raising the
+same point -- that invariant is not left to prose: this PR also ships a
+deterministic drift gate,
+`skills/evaluating-skill-quality/scripts/test_contract_precondition_sync.py`,
+which fails in CI if a checkpoint (`mechanism fit`, `Blind spot pass`,
+`deterministic shape`, `portability level`, `capability assumption`,
+`declaration-vs-pin`) is present in `SKILL.md`'s Procedure steps 1-4 but
+missing from the Precondition bullet (or vice versa) -- the exact class of
+drift issue #406 corrected, now enforced mechanically rather than by a
+future gate the corpus cannot run.
 
 **Next attempt for a genuine KEEP** (out of scope for issue #406, and the
 same honest next step the issue #393 entry named): author a purpose-built
