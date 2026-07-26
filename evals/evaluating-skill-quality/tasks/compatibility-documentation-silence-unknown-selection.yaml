@@ -19,7 +19,7 @@ inputs:
     name: isolated-triage
     description: Triage an incident in an isolated worker. Use when the main context must remain small.
     context: fork
-    compatibility: Requires Claude Code support for the context: fork extension.
+    compatibility: "Requires Claude Code support for the context: fork extension."
     ---
 
     # Isolated Triage
