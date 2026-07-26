@@ -583,6 +583,39 @@ above. Refs #175, #173, #174, #167.
 Only `claude-sonnet-4.6` has been evaluated in `evals/planning-a-branch-from-an-issue/`;
 cross-model behavior is currently unmeasured.
 
+## drafting-an-acm-issue
+
+The committed eval suite (`evals/drafting-an-acm-issue/`) has 9 task files
+under `tasks/` and no committed no-skill baseline run; only
+`claude-sonnet-4.6` has been evaluated -- cross-model behavior is
+currently unmeasured. Every committed task's own prompt explicitly
+force-names the skill (`Use drafting-an-acm-issue.`), and the suite's
+`eval.yaml` fixes a top-level `skill: drafting-an-acm-issue` field that
+forces dispatch regardless of prompt content -- this suite tests
+behavioral quality once the skill is already selected, not
+discovery/routing.
+
+**Discovery-trigger verification (issue #420):** when PR #418 broadened
+this skill's frontmatter `description` to also cover agent-initiated,
+mid-task issue creation, no committed eval or structural test could
+exercise whether that description would actually cause a live,
+multi-skill router to select this skill from an unnamed prompt --
+building that would need eval-harness capability this repository does not
+have (see Cross-model matrix scaffolding above: no committed file/script
+here performs live model execution, no waza binary, no credentialed
+dispatch endpoint). Given that constraint, this repository's accepted
+method for verifying a discovery/trigger-wording change is a fresh,
+independent review against `evaluating-skill-quality/references/
+rubric.md`'s Dimension 1 (Discovery) criteria -- scoped to the changed
+clause, not a full multi-dimension audit -- rather than an automated eval
+task. PR #418's own review found the broadened clause
+WELL-FORMED-AND-MATURE against Dimension 1 and PASS against
+battle-testing-a-skill's mis-routing lens, both scoped to that one
+clause. This is a standing method for any skill's discovery-surface
+change in this repository until real live-dispatch eval capability
+exists (tracked in the Cross-model matrix scaffolding section above), not
+one-off reasoning specific to that PR.
+
 ## merge-retrospective
 
 The committed eval suite (`evals/merge-retrospective/`) has no committed
