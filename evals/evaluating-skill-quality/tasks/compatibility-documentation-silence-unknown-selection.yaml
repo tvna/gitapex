@@ -1,0 +1,39 @@
+id: evaluating-skill-quality-compatibility-documentation-silence-unknown-selection
+name: Documentation Silence Is Unknown Rather Than Unsupported
+description: Held-out warning-only case requiring uncertainty discipline when another runtime does not document a runtime-specific extension.
+tags:
+  - quality
+  - compatibility
+  - selection
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this complete skill. Assume the
+    deterministic shape checker passes, dimensions 1-9 otherwise clear, and
+    the declared compatibility sentence is accurate for Claude Code. The
+    available AcmeAgent documentation does not mention the context key at all;
+    there is no behavioral test or explicit statement that AcmeAgent rejects
+    it. Focus on the cross-runtime conclusion and whether any further
+    disclosure is justified.
+
+    ---
+    name: isolated-triage
+    description: Triage an incident in an isolated worker. Use when the main context must remain small.
+    context: fork
+    compatibility: Requires Claude Code support for the context: fork extension.
+    ---
+
+    # Isolated Triage
+
+    1. Inspect the incident evidence in the forked context.
+    2. Return a cited diagnosis.
+expected:
+  output_contains:
+    - "Compatibility awareness: COMPATIBILITY_ACKNOWLEDGED"
+    - "acknowledged"
+    - "Unknown"
+    - "AcmeAgent"
+    - "context: fork"
+    - "Claude Code"
+  output_not_contains:
+    - "Compatibility awareness: PROPOSE_COMPATIBILITY"
+    - "Compatibility awareness: NO_COMPATIBILITY_WARNING"

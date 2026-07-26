@@ -32,6 +32,7 @@ skill's own folder.
   - [Model/effort tier fit](#modeleffort-tier-fit)
   - [Tool-capability verification](#tool-capability-verification)
 - [Portability level](#portability-level)
+- [Compatibility awareness](#compatibility-awareness)
 - [Capability assumption](#capability-assumption)
 - [Lifecycle](#lifecycle)
 - [Execution requirements](#execution-requirements)
@@ -611,6 +612,74 @@ belongs in the `metadata/gitapex.yaml` sidecar's `spec.references` instead
 The `no-bare-issue-citation` shape check enforces this unconditionally,
 while the two repo-path shape checks (`portable-no-repo-path-citation`,
 `portable-no-unhedged-inline-path-citation`) stay gated to Portable only.
+
+## Compatibility awareness
+
+This is a warning-only evaluation axis, not a tenth maturity dimension and
+not another name for Portability level.
+
+- **Portability** asks whether the procedure depends on its origin
+  repository.
+- **Compatibility awareness** asks whether the artifact accurately
+  discloses dependence on a runtime's parsing or execution semantics.
+
+Use [runtime-compatibility.md](runtime-compatibility.md) as the versioned
+baseline. Compare every top-level frontmatter key and its value shape with
+the Agent Skills specification, then compare the target's behavior claims
+with each material runtime row.
+
+Report exactly one state:
+
+- **No compatibility warning**: no runtime-specific dependency is
+  established. A standard environment requirement alone does not select the
+  acknowledged runtime-dependency branch. Emit
+  `Compatibility awareness: NO_COMPATIBILITY_WARNING`.
+- **Compatibility warning**: a runtime-specific dependency is established
+  and its declaration is missing, inaccurate, or incomplete. Name the exact
+  field or behavior, affected runtime, evidence state (Documented, Unknown,
+  or Conflict), and emit
+  `Compatibility awareness: PROPOSE_COMPATIBILITY` with a corrected standard
+  `compatibility` value.
+- **Compatibility acknowledged**: a runtime-specific dependency is
+  established and standard `compatibility` frontmatter states every material
+  limitation accurately and completely. Emit
+  `Compatibility awareness: COMPATIBILITY_ACKNOWLEDGED`; do not request
+  duplicate prose.
+
+A top-level field outside the standard is evidence of an extension, not an
+automatic defect. The standard `metadata` value is a string-to-string map, so
+a nested runtime namespace has a standard top-level key but a non-standard
+value structure and can create a runtime-specific behavioral dependency.
+Conversely, documentation silence is **Unknown**, not proof of rejection or
+non-support.
+
+For an undeclared dependency, propose a concise self-declaration such as:
+
+```yaml
+compatibility: Designed for Claude Code; uses context: fork for isolated execution.
+```
+
+The standard field is limited to 500 characters. Recommend a body
+`## Compatibility` section only when accurate limitations cannot fit there.
+Never propose a GitApex-specific `SKILL.md` key:
+`metadata/gitapex.yaml` is the repository-side structured evidence surface,
+while `compatibility` is the portable self-declaration.
+
+### Severity and precedence
+
+The axis is warning-only:
+
+- it does not change any dimension verdict or numeric score;
+- it cannot by itself block **Well-formed** or **Mature**;
+- it does not prove that the declared requirement is enforced.
+
+Classify independent evidence independently. For example, `context: fork`
+without a declaration earns a compatibility warning; a separate false claim
+that `allowed-tools` makes every other tool unavailable remains a
+Mechanism-fit or correctness finding under its existing rules. Report both.
+Never downgrade the blocker because the same lines also triggered this
+warning, and never upgrade the warning into a blocker merely because another
+finding exists nearby.
 
 ## Capability assumption
 
@@ -1298,6 +1367,10 @@ is labeled as such.
 
 A verdict without cited evidence per dimension is not a review -- it is a
 guess wearing a review's shape.
+
+The Compatibility awareness axis is reported alongside the verdict but
+never participates in it. A skill can therefore be **Mature** with a
+compatibility warning when every existing maturity requirement clears.
 
 A **mature** verdict is bounded by what the target repository can currently
 measure: when dimensions 8-9 are named as unmeasured rather than passed,

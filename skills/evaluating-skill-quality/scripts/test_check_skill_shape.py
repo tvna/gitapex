@@ -105,6 +105,56 @@ def test_accepts_skill_md_path_directly(tmp_path):
     assert css.main([str(d / "SKILL.md")]) == 0
 
 
+def test_allowed_root_accepts_contained_regular_skill(tmp_path):
+    d = _write_skill(tmp_path)
+    assert css.main([
+        "--allowed-root", str(tmp_path), str(d),
+    ]) == 0
+
+
+def test_allowed_root_rejects_target_escape(tmp_path, capsys):
+    approved = tmp_path / "approved"
+    approved.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    d = _write_skill(outside)
+    assert css.main([
+        "--allowed-root", str(approved), str(d),
+    ]) == 2
+    assert "outside allowed root" in capsys.readouterr().err
+
+
+@pytest.mark.skipif(not _SYMLINKS_SUPPORTED,
+                    reason="platform cannot create symlinks")
+def test_allowed_root_rejects_symlinked_target(tmp_path, capsys):
+    real_parent = tmp_path / "real"
+    real_parent.mkdir()
+    real = _write_skill(real_parent)
+    approved = tmp_path / "approved"
+    approved.mkdir()
+    link = approved / "linked-skill"
+    os.symlink(real, link, target_is_directory=True)
+    assert css.main([
+        "--allowed-root", str(approved), str(link),
+    ]) == 2
+    assert "symlink is not allowed" in capsys.readouterr().err
+
+
+@pytest.mark.skipif(not _SYMLINKS_SUPPORTED,
+                    reason="platform cannot create symlinks")
+def test_allowed_root_rejects_symlink_inside_skill(tmp_path, capsys):
+    d = _write_skill(tmp_path)
+    refs = d / "references"
+    refs.mkdir()
+    outside = tmp_path / "outside.md"
+    outside.write_text("# outside\n", encoding="utf-8")
+    os.symlink(outside, refs / "linked.md")
+    assert css.main([
+        "--allowed-root", str(tmp_path), str(d),
+    ]) == 2
+    assert "symlink is not allowed" in capsys.readouterr().err
+
+
 def test_relative_target_matches_dir_name(tmp_path, monkeypatch):
     # A relative invocation (e.g. "." from inside the skill directory, or a
     # bare "SKILL.md") must not collapse skill_dir.name to "" -- the

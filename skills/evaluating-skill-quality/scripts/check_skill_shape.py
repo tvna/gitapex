@@ -7,6 +7,11 @@ deliberately NOT implemented here.
 
 Read-only: reads the target skill's files only. No writes, no network,
 no mutation. Effects are limited to stdout and the process exit code.
+The CLI's ``--allowed-root`` guard rejects targets outside a caller-approved
+root and rejects symlinks anywhere in the target skill before reading it.
+The caller must supply an immutable/read-only snapshot; this preflight does
+not claim to defeat a concurrent filesystem mutation between validation and
+later reads.
 
 Checks (the canonical list -- the manual fallback is to apply these):
   - description: present/non-empty, no XML tags, <= 1024 chars, and --
@@ -2241,6 +2246,41 @@ def _resolve_skill_md(target: Path) -> Path:
     return target / "SKILL.md" if target.is_dir() else target
 
 
+def _validate_read_scope(target: Path, allowed_root: Path) -> None:
+    """Reject an escaped or symlinked CLI target before reading any content."""
+    root = Path(os.path.abspath(allowed_root))
+    if not root.is_dir():
+        raise ValueError(f"allowed root is not a directory: {allowed_root}")
+
+    candidate = _resolve_skill_md(Path(os.path.abspath(target)))
+    try:
+        relative = candidate.relative_to(root)
+    except ValueError as exc:
+        raise ValueError(
+            f"target is outside allowed root: {target}") from exc
+
+    current = root
+    for part in relative.parts:
+        current = current / part
+        if current.is_symlink():
+            raise ValueError(f"symlink is not allowed in target path: {current}")
+
+    root_real = root.resolve(strict=True)
+    candidate_real = candidate.resolve(strict=True)
+    try:
+        candidate_real.relative_to(root_real)
+    except ValueError as exc:
+        raise ValueError(
+            f"resolved target is outside allowed root: {target}") from exc
+
+    skill_dir = candidate.parent
+    for directory, dirnames, filenames in os.walk(skill_dir, followlinks=False):
+        for name in (*dirnames, *filenames):
+            path = Path(directory) / name
+            if path.is_symlink():
+                raise ValueError(f"symlink is not allowed in target skill: {path}")
+
+
 def check_shape(target: Path) -> list[CheckResult]:
     skill_md = _resolve_skill_md(target)
     skill_dir = skill_md.parent
@@ -3099,9 +3139,20 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Check a SKILL.md's deterministic shape (read-only).")
     parser.add_argument(
+        "--allowed-root",
+        help="Caller-approved directory that must contain the target; "
+        "also rejects symlinks in the target skill. The caller must keep "
+        "the snapshot immutable while the check runs.")
+    parser.add_argument(
         "target", help="Path to a skill directory or a SKILL.md file.")
     args = parser.parse_args(argv)
     target = Path(args.target)
+    if args.allowed_root:
+        try:
+            _validate_read_scope(target, Path(args.allowed_root))
+        except (OSError, ValueError) as exc:
+            print(f"error: unsafe target path: {exc}", file=sys.stderr)
+            return 2
     skill_md = _resolve_skill_md(target)
     if not skill_md.is_file():
         print(f"error: no SKILL.md found at: {target}", file=sys.stderr)

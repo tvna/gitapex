@@ -1185,3 +1185,71 @@ verification without a real tool call; tool-result provenance/spoofing)
 and one evaluating-skill-quality Blind Spot survivor (agent-verified
 source-vs-source conflict) are named but unfixed, left for a future
 round. Refs #295.
+
+## evaluating-skill-quality compatibility awareness (issue #332)
+
+The skill now reports a warning-only runtime-compatibility state separately
+from repository portability and the nine-dimension maturity verdict. The
+three stable result markers are
+`NO_COMPATIBILITY_WARNING`, `PROPOSE_COMPATIBILITY`, and
+`COMPATIBILITY_ACKNOWLEDGED`. Missing, inaccurate, or incomplete declarations
+propose a corrected standard `compatibility` value; accurate declarations
+are acknowledged without duplicate prose. GitApex-only structured evidence
+remains in `metadata/gitapex.yaml`.
+
+The 2026-07-25 primary-source baseline covers Claude Code, Codex, Gemini CLI,
+Devin, OpenClaw, and HermesAgent. It records Agent Skills `metadata` as a
+string-to-string map, so nested OpenClaw and Hermes namespaces are
+non-standard value structures. It also records the documented
+`allowed-tools` conflict: Claude Code pre-approves listed tools without
+restricting others, while Devin treats the field as restrictive.
+
+The ordinary candidate passed the corrected six-fixture selection gate:
+
+- pinned pre-edit commit:
+  `aa6ea019ee806c3150ba22b30c27796fab42c256`;
+- pre-edit scores:
+  `0.857143, 0.777778, 0.600000, 0.750000, 0.571429, 0.727273`;
+- pre-edit mean: `0.713937`;
+- candidate scores: six `1.000000` results;
+- candidate mean: `1.000000`;
+- `score_contract.py --compare-to 0.713937`: `KEEP`.
+
+Earlier selection scores are invalidated and excluded. Independent review
+found paraphrase drift, negation traps, missing nested-value-shape coverage,
+missing Claude/Devin conflict coverage, and an incomplete-declaration branch.
+The fixture prompts stayed unchanged except for the new incomplete-
+declaration fixture, which an independent author produced without candidate
+access. The final gate reran both sides against only the corrected contracts.
+
+The final test report scored both compatibility fixtures `1.000000`: an
+accurate HermesAgent declaration was acknowledged and a portable
+standard-only skill emitted `NO_COMPATIBILITY_WARNING`. A first test read had
+occurred before independent aggregate review changed the candidate; it did
+not motivate any edit and was invalidated. The final-candidate test rerun is
+the report above. On the same portable nearby task, the no-skill baseline
+scored `0.500000` and the unchanged candidate scored `1.000000`, so transfer
+did not regress below baseline.
+
+Deterministic verification after the final content edits:
+
+- skill shape: 37/37;
+- fixture assertion lint: 0 warnings;
+- fixture YAML parse: 47/47;
+- full pytest: 652 passed, 97 percent coverage.
+
+Aggregate simplification review passed after repairs. Aggregate adversarial
+review confirmed the standard metadata shape, Claude/Devin conflict,
+Unknown restraint, warning-only severity, independent blocker precedence,
+and sidecar boundary; its remaining stable-marker and state-totality findings
+were repaired in the final candidate.
+
+The required neutral skill-quality and battle-test audits remain blocked in
+this execution environment. A clean scratch tree excluded every
+`AGENTS.md`/`CLAUDE.md` file, but the collaboration harness still injected
+the parent task's project instructions. The retained three-trial battle run
+therefore aggregated to `INDETERMINATE`. A headless, ephemeral, read-only
+Codex rerun with project/user instruction loading disabled was rejected
+because transmitting the public repository target to that separate model
+execution requires explicit operator approval. No PASS is claimed for those
+audits. Refs #332.
