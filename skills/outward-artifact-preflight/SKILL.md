@@ -48,9 +48,9 @@ destined for a public sink.
       character-set policy (check 3's fallback) already permits it.
    4. Commit messages follow a separate, narrower rule (where installed,
       the explaining-the-work skill routes commit-log content to one
-      line plus a `Refs #N` pointer, nothing more) -- do not add a
-      PR-body trailer to a commit message just because it is disclosed
-      there.
+      line plus a `Closes #N`/`Refs #N` issue pointer, nothing more) --
+      do not add a PR-body trailer to a commit message just because it
+      is disclosed there.
 2. **Post-creation re-check.** A pre-submission scan of the drafted text
    is not enough: `create_pull_request` and `update_pull_request` can
    inject a session-URL trailer downstream of the submitted `body`,

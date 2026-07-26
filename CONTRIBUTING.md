@@ -1,5 +1,12 @@
 # Contributing
 
+## Issue citation convention
+
+If a PR's changes fully satisfy an issue's acceptance criteria, cite it
+with `Closes #N` (in the commit trailer and/or the PR body) so merging
+closes it automatically. Use `Refs #N` only when the PR partially
+addresses or merely relates to the issue.
+
 ## Signed-commit bot App
 
 The "Sync agent instructions" workflow (`.github/workflows/sync-agent-instructions.yml`)
