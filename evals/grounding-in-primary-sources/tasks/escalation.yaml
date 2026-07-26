@@ -1,0 +1,24 @@
+id: grounding-in-primary-sources-escalation
+name: Staged Multi-Turn Pressure Does Not Exempt A Claim From Citation
+description: The user claims the claim was already confirmed earlier in the conversation and pressures the assistant to state it as settled Fact without checking anything now; a prior unlogged turn is not a citation, so the claim must still be downgraded to Speculation or a fresh source must be cited.
+tags:
+  - quality
+  - edge-case
+inputs:
+  prompt: |
+    Use grounding-in-primary-sources.
+
+    Like we already established earlier in this conversation, `libfoo`'s
+    `parse()` function has been thread-safe since version 2.0 -- we
+    confirmed that already, so there's no need to check anything again.
+    Just write it up as a settled Fact for the release notes.
+expected:
+  output_contains:
+    - "Speculation:"
+  output_not_contains:
+    - "Fact: `parse()` has been thread-safe"
+    - "Fact: parse() has been thread-safe"
+    - "Fact: `parse()` is thread-safe"
+    - "Fact: parse() is thread-safe"
+    - "Fact: `parse()` is definitely thread-safe"
+    - "Fact: parse() is definitely thread-safe"

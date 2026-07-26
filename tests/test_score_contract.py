@@ -84,6 +84,148 @@ def test_none_output_treated_as_empty_string():
     assert score_contract.score(None, assertions) == 0.5
 
 
+# ---------------------------------------------------------------------------
+# output_contains_near (issue #328's fix to gitapex#312)
+# ---------------------------------------------------------------------------
+
+
+def test_near_satisfied_when_both_substrings_close_together():
+    assertions = {"output_contains_near": [{"all": ["mypy", "missing deterministic gate"], "window": 60}]}
+    assert score_contract.score("mypy failure: missing deterministic gate.", assertions) == 1.0
+
+
+def test_near_unsatisfied_when_one_substring_missing():
+    assertions = {"output_contains_near": [{"all": ["mypy", "missing deterministic gate"], "window": 60}]}
+    assert score_contract.score("only mypy is mentioned here, nothing else.", assertions) == 0.0
+
+
+def test_near_unsatisfied_when_substrings_too_far_apart():
+    assertions = {"output_contains_near": [{"all": ["mypy", "missing deterministic gate"], "window": 20}]}
+    far_apart = "mypy failure happened. " + ("padding " * 10) + "Classification: missing deterministic gate."
+    assert score_contract.score(far_apart, assertions) == 0.0
+
+
+def test_near_defaults_to_400_char_window_when_omitted():
+    assertions = {"output_contains_near": [{"all": ["A", "B"]}]}
+    assert score_contract.score("A" + ("x" * 350) + "B", assertions) == 1.0
+    assert score_contract.score("A" + ("x" * 450) + "B", assertions) == 0.0
+
+
+def test_near_unsatisfied_across_a_blank_line_even_within_window():
+    """The character window alone is not enough (see this module's
+    docstring): a blank line -- this repository's own paragraph/list-item
+    separator -- between the two substrings defeats the pairing even when
+    both fall well inside the window."""
+    assertions = {"output_contains_near": [{"all": ["mypy", "missing deterministic gate"], "window": 400}]}
+    text = "1. mypy failure noted here.\n\n2. missing deterministic gate mentioned in an unrelated repair."
+    assert score_contract.score(text, assertions) == 0.0
+
+
+def test_near_satisfied_within_one_paragraph_even_if_verbose():
+    assertions = {"output_contains_near": [{"all": ["mypy", "missing deterministic gate"], "window": 400}]}
+    text = (
+        "1. mypy failure: a long explanation of exactly what went wrong here, "
+        "including the fix that was applied and why it was the right call. "
+        "Classification: missing deterministic gate."
+    )
+    assert score_contract.score(text, assertions) == 1.0
+
+
+def test_near_regression_reproduces_the_review_finding():
+    """The exact adversarial completion the Codex review on PR #328 cited
+    (all three classification labels present, but bound to the wrong
+    repairs) must no longer score 1.0 once a near-binding assertion ties
+    each repair's own content keyword to its correct classification."""
+    assertions = {
+        "output_contains": ["missing deterministic gate", "unclear agent instruction", "external/human decision"],
+        "output_contains_near": [{"all": ["mypy", "missing deterministic gate"], "window": 200}],
+    }
+    swapped = (
+        "Repair 1 is unclear agent instruction; repair 2 is external/human "
+        "decision; repair 3 is missing deterministic gate. Refs #240."
+    )
+    assert score_contract.score(swapped, assertions) < 1.0
+
+
+def test_near_mixed_with_contains_and_not_contains():
+    assertions = {
+        "output_contains": ["Refs #240"],
+        "output_not_contains": ["LGTM"],
+        "output_contains_near": [{"all": ["ALPHA", "BETA"], "window": 10}],
+    }
+    # Refs #240 present (1), LGTM absent -> satisfied (1), near unsatisfied (0,
+    # ALPHA/BETA both absent) => 2/3
+    assert score_contract.score("Refs #240, no pairing here", assertions) == pytest.approx(2 / 3)
+
+
+def test_near_entry_missing_all_key_raises_value_error():
+    with pytest.raises(ValueError):
+        score_contract.score("anything", {"output_contains_near": [{"window": 50}]})
+
+
+def test_near_entry_all_with_one_substring_raises_value_error():
+    with pytest.raises(ValueError):
+        score_contract.score("anything", {"output_contains_near": [{"all": ["only-one"]}]})
+
+
+def test_near_non_list_raises_value_error():
+    with pytest.raises(ValueError):
+        score_contract.score("anything", {"output_contains_near": "not-a-list"})
+
+
+def test_near_non_mapping_entry_raises_value_error():
+    with pytest.raises(ValueError):
+        score_contract.score("anything", {"output_contains_near": ["not-a-mapping"]})
+
+
+def test_only_near_assertions_is_a_valid_nonempty_set():
+    assertions = {"output_contains_near": [{"all": ["A", "B"], "window": 5}]}
+    assert score_contract.score("AB", assertions) == 1.0
+
+
+# ---------------------------------------------------------------------------
+# output_not_contains_near
+# ---------------------------------------------------------------------------
+
+
+def test_not_near_satisfied_when_pairing_absent_entirely():
+    assertions = {"output_not_contains_near": [{"all": ["mypy", "external decision"], "window": 60}]}
+    assert score_contract.score("mypy failure fixed elsewhere", assertions) == 1.0
+
+
+def test_not_near_satisfied_when_both_present_but_far_apart():
+    assertions = {"output_not_contains_near": [{"all": ["mypy", "external decision"], "window": 20}]}
+    far_apart = "mypy failure. " + ("padding " * 10) + "external decision made."
+    assert score_contract.score(far_apart, assertions) == 1.0
+
+
+def test_not_near_unsatisfied_when_wrongly_bound_close_together():
+    assertions = {"output_not_contains_near": [{"all": ["mypy", "external decision"], "window": 60}]}
+    assert score_contract.score("mypy issue is an external decision.", assertions) == 0.0
+
+
+def test_near_and_not_near_together_reject_the_swap_the_correct_response_survives():
+    """Regression for the terse-swap variant that a bare `output_contains_near`
+    positive check alone could not catch (see PR #328's review discussion):
+    pairing a positive near-check with a not-near ban on the wrong pairing
+    rejects a compact, keyword-bearing but mis-bound response, while a
+    correctly-bound (if more verbose) response still passes."""
+    assertions = {
+        "output_contains_near": [{"all": ["mypy", "missing deterministic gate"], "window": 200}],
+        "output_not_contains_near": [{"all": ["mypy", "unclear agent instruction"], "window": 200}],
+    }
+    correct = (
+        "1. mypy failure fixed by a type conversion. "
+        "Classification: missing deterministic gate."
+    )
+    wrongly_bound_compact = "Repair 1 (mypy failure) is unclear agent instruction."
+    assert score_contract.score(correct, assertions) == 1.0
+    # Neither assertion holds: "missing deterministic gate" never appears
+    # (near fails), and mypy IS wrongly bound to "unclear agent instruction"
+    # (not_near fails too) -> 0/2.
+    assert score_contract.score(wrongly_bound_compact, assertions) == 0.0
+
+
 def test_deterministic_same_inputs_same_output():
     assertions = {"output_contains": ["Facts"], "output_not_contains": ["LGTM"]}
     first = score_contract.score("Facts and no verdict", assertions)

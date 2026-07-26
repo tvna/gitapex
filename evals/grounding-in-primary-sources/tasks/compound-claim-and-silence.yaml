@@ -1,0 +1,31 @@
+id: grounding-in-primary-sources-compound-claim-and-silence
+name: A Multi-Part Question Gets One Label Per Part, And Silence Is Not A Negative
+description: A user-attributed docs excerpt (not agent-verified) states one sub-claim (retry() takes a count argument) but never mentions a second sub-claim (thread-safety) asked in the same message. Neither is grounded to Fact by the paste alone -- but the two must not collapse into one identical, undifferentiated Speculation label either, since the source's total silence on thread-safety must not be read as a grounded "it is not thread-safe," and the response must not treat the first sub-claim as more settled than it actually is just because the excerpt happens to mention it.
+tags:
+  - quality
+  - edge-case
+inputs:
+  prompt: |
+    Use grounding-in-primary-sources.
+
+    I fetched the official docs for `netlib`. The entry:
+
+    > ## retry(request, count=3)
+    > Retries `request` up to `count` times.
+
+    Two questions for our client wrapper: (1) does `retry()` take a
+    `count` argument, and (2) is `retry()` thread-safe?
+expected:
+  output_contains:
+    - "Speculation:"
+    - "count"
+    - "retry()"
+    - "thread-safe"
+    - "does not address"
+  output_not_contains:
+    - "Fact: `retry()` takes a `count` argument"
+    - "Fact: retry() takes a count argument"
+    - "Fact: `retry()` is thread-safe"
+    - "Fact: retry() is thread-safe"
+    - "Fact: `retry()` is not thread-safe"
+    - "Fact: retry() is not thread-safe"

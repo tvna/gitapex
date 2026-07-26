@@ -1,0 +1,33 @@
+id: evaluating-skill-quality-compatibility-declared-hermes-test
+name: Accurate Hermes Limitation Is Acknowledged
+description: Test-only restraint case for a runtime-specific extension whose limitation is already self-declared through standard compatibility metadata.
+tags:
+  - quality
+  - compatibility
+  - test
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this complete skill. Assume the
+    deterministic shape checker passes, dimensions 1-9 otherwise clear, and
+    behavioral evidence plus transfer evidence are recorded.
+
+    ---
+    name: macos-reminder
+    description: Add a reminder through the local macOS integration. Use when the user asks to create a reminder.
+    compatibility: Designed for HermesAgent on macOS; uses HermesAgent platform gating.
+    platforms: [macos]
+    ---
+
+    # macOS Reminder
+
+    Add the requested reminder, verify it exists, and report its identifier.
+expected:
+  output_contains:
+    - "Compatibility awareness: COMPATIBILITY_ACKNOWLEDGED"
+    - "compatibility"
+    - "acknowledged"
+    - "HermesAgent"
+    - "Mature"
+  output_not_contains:
+    - "Compatibility awareness: PROPOSE_COMPATIBILITY"
+    - "Compatibility awareness: NO_COMPATIBILITY_WARNING"

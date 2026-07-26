@@ -31,6 +31,10 @@ inputs:
 
     Run the retrospective now that PR #84 has merged.
 expected:
+  classification:
+    - external-human-decision
+  repair_count: 1
+  retro_stub_expected: false
   output_contains:
     - "external/human decision"
     - "Refs #84"

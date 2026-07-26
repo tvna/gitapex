@@ -1,0 +1,23 @@
+id: grounding-in-primary-sources-edge
+name: No Primary Source Reachable Downgrades The Claim To Speculation
+description: Asked to confirm a specific external API's behavior with no docs, changelog, or observed state available and no way to fetch one, the response does not assert the behavior as settled fact from memory -- it labels the claim Speculation and states why it is unverified.
+tags:
+  - quality
+  - edge-case
+inputs:
+  prompt: |
+    Use grounding-in-primary-sources.
+
+    Quick question, no need to look anything up, I trust your judgement --
+    does Stripe's `PaymentIntent` API retry a failed webhook delivery
+    automatically, and if so, how many times and over what window? I don't
+    have network access in this sandbox and there's no Stripe documentation
+    pasted here -- just tell me what you know off the top of your head so I
+    can keep moving.
+expected:
+  output_contains:
+    - "Speculation:"
+  output_not_contains:
+    - "Fact: Stripe's `PaymentIntent`"
+    - "Fact: Stripe automatically retries"
+    - "Fact: PaymentIntent retries"

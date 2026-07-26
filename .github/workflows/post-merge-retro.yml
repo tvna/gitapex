@@ -1,0 +1,104 @@
+name: Post-merge retrospective
+
+# #318 (P6(i), sub-task of #310): per-run caps and the permanent human-review
+# posture, recorded here before this workflow's first unattended run as its
+# own review discipline requires.
+#
+# Per-run caps -- this job is a deterministic GITHUB_TOKEN-authenticated CI
+# script (post_merge_retro.py), not an agent/LLM dispatch, so an LLM
+# token/cost budget (the kind #124/#153's own llm-budget-gate design covers)
+# does not apply to it. The caps that DO apply, both already in force and
+# restated here rather than left implicit:
+#   - Job-level `timeout-minutes: 10` below bounds total wall-clock time
+#     per run regardless of what the script does internally.
+#   - The script's own `_call()` retry ceiling (see
+#     .github/scripts/post_merge_retro.py's docstring and `_call` signature)
+#     caps GitHub API retries at 3 attempts for idempotent GET/search calls
+#     and 1 attempt (no retry) for the non-idempotent issue-creation POST,
+#     per RFC 9110 SS9.2.2 -- a lost/truncated response after GitHub already
+#     created the issue must not retry into a duplicate.
+#
+# Permanent human-review-of-merge posture -- stated explicitly so a future
+# editor does not mistake it for removable scaffolding: this workflow may
+# only ever OPEN a retrospective issue. It has `issues: write` permission
+# and explicitly does NOT have, and must never be given, `pull-requests:
+# write` or any merge capability. 100% human review before any PR merges in
+# this repository is a PERMANENT architectural feature, not an interim
+# measure pending "established trust" -- this workflow, and #315's
+# ranking-the-open-queue Routine alike, may never merge a pull request
+# themselves, full stop.
+on:
+  # pull_request_target (not pull_request): a fork PR's merge must still be
+  # able to open a retro issue with the base repo's write-scoped token --
+  # pull_request would run with a read-only token against a fork PR and
+  # could never create the issue. Trigger shape matches #140's own
+  # documented `post-merge-auto-retro` design exactly.
+  pull_request_target:
+    types: [closed]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  # Scoped per-PR, not per-workflow: two different PRs closing at the same
+  # time must not cancel each other's retro-issue run.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  post-merge-retro:
+    # `closed` fires on every PR close, merged or not -- this repo's own
+    # #140 design and #314's trigger spec both gate on `merged == true`
+    # specifically, so an unmerged close (abandoned/rejected PR) is a no-op
+    # rather than getting a spurious retro issue.
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
+        with:
+          egress-policy: audit
+
+      # Pinned to main explicitly: pull_request_target's default checkout
+      # context is already the base ref (not the PR head), but this repo's
+      # own retrospective-gate-drift.yml pins `ref: main` explicitly rather
+      # than relying on that default implicitly, so this workflow matches
+      # that same paranoid convention -- only this repo's own trusted
+      # post_merge_retro.py ever executes, never PR-head-controlled code.
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+
+      # Issue #314 (sub-issue of #140): minimal post-merge-auto-retro slice
+      # -- open + dedup only, GITHUB_TOKEN-only, no new secret. The
+      # trusted-bot allowlist, FP-prior skip, ledger, rescan, and
+      # `.gitapex/ssot.json` wiring are explicitly deferred to later #140
+      # slices; see post_merge_retro.py's own docstring.
+      #
+      # PR title/URL are untrusted (fork-controlled) text -- they travel
+      # through `env:` here rather than being spliced into this `run:`
+      # string, so they can never be reinterpreted as shell commands. The
+      # script itself only ever places them inside a JSON request body.
+      - name: Open (with dedup) a merge retrospective issue
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO_OWNER: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.event.repository.name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/post_merge_retro.py \
+            --owner "$REPO_OWNER" \
+            --repo "$REPO_NAME" \
+            --pr-number "$PR_NUMBER" \
+            --pr-title "$PR_TITLE" \
+            --pr-url "$PR_URL"

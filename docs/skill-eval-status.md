@@ -444,6 +444,107 @@ entry above found a genuine "no ablation mechanism exists" gap,
 demonstrating the check end to end against a real skill, not only the
 synthetic gate fixtures. Refs #185.
 
+**Issue #319 (SkillOpt pilot, precondition-check finding, no edit
+applied):** #319 (a sub-task of the RSI-loop backlog, #310) proposed
+piloting the real automated SkillOpt optimizer (microsoft/SkillOpt,
+arXiv:2605.23904) against this skill's `references/rubric.md`,
+PR-proposal-only, gated on a new checksum-pinned `skillopt` (or
+equivalent) pip dependency. Checked, not assumed:
+
+- `scorer-gated-skill-edits`'s own precondition gate (a real scorer plus a
+  held-out split) for *hand-applied* edits to this rubric is already
+  satisfied and has been for six prior iterations (#149, #155, #165,
+  #183, #185, #200 above) -- `skills/scorer-gated-skill-edits/scripts/
+  score_contract.py` plus `evals/evaluating-skill-quality/split.md`'s
+  37-fixture, 16:13:8 split, current selection-split baseline
+  **0.971154** (the #200 entry's after-score above). That part of #319's
+  own premise is real and unchanged.
+- The literal ask -- installing and running the *automated* SkillOpt
+  optimizer package itself -- is a different thing. The first pass at
+  this analysis gave three reasons its precondition does not hold; on
+  review against the actual cited evidence, only the first survives as
+  an independent blocker, and the other two are corrected below rather
+  than carried forward unchanged:
+  1. **Unverified provenance (holds).** A package literally named
+     `skillopt` exists on PyPI (v0.2.0, uploaded 2026-07-02, author
+     "SkillOpt Team", claiming `Homepage`/`Repository`:
+     `github.com/microsoft/SkillOpt`, confirmed live via
+     `https://pypi.org/pypi/skillopt/json`), but no primary source
+     reachable from this session corroborates that this specific
+     release is an authentic Microsoft-published artifact rather than a
+     name-matched package from an unrelated party -- exactly the risk
+     CLAUDE.md section 3's supply-chain discipline and this issue's own
+     third acceptance criterion (checksum pin plus a documented
+     issuance/provenance note) exist to gate on. Installing and
+     executing unverified third-party optimizer code against this
+     repository's skills is an irreversible action outside what a
+     provenance check has cleared, so no dependency was added. This
+     reason alone is sufficient to keep the automated run from
+     proceeding.
+  2. **Scale precondition -- corrected, does not hold.** The first pass
+     compared gitapex's corpus to SkillOpt's default regime (paper
+     Table 6: tens-to-hundreds of tasks x 4 rollout epochs, 0.6M-46.4M
+     tokens per accepted improvement) and concluded 37 fixtures (13
+     selection) were "one to two orders of magnitude below" that
+     regime. Recomputed: 37 is itself a "tens" quantity, so it sits
+     within the low end of the paper's own stated tens-to-hundreds
+     range, not below it -- the arithmetic in the first pass was wrong,
+     not just imprecise. The first pass also claimed the six
+     hand-applied iterations "each needed roughly 10-20 live dispatches
+     per iteration"; checked against the committed record for the most
+     recently detailed iteration
+     (`evals/evaluating-skill-quality/split.md:808-843,890-901`, issue
+     #185), that round used 4 fresh before/after dispatches plus 1
+     restraint-check dispatch (5 total), reusing 8 prior scores
+     unchanged -- well under the claimed 10-20, and other iterations in
+     the same file range up toward ~20 depending on how many selection
+     fixtures needed a genuine fresh pair, so "roughly 10-20" does not
+     hold as a uniform per-iteration figure either. With both inputs to
+     the comparison wrong, corpus scale is not, on the actual numbers,
+     an independent reason the automated pilot's precondition fails.
+     The paper's own per-improvement token-cost figures remain real and
+     worth owner budget awareness before running a genuine 4-epoch
+     rollout, but that is a cost question to weigh once provenance is
+     cleared, not a scale-precondition failure.
+  3. **Standing design decision -- corrected, does not hold.**
+     `skills/scorer-gated-skill-edits/references/skillopt-mapping.md:
+     126-131`'s "Not adapted" section states that `scorer-gated-skill-
+     edits` itself applies SkillOpt's discipline by hand and does not
+     build the paper's rollout/optimizer machinery ("this skill is the
+     manual procedure, not a runner"). That is a scope boundary for
+     that one skill, not a prohibition on a separate, explicitly
+     requested one-off pilot -- #319 asks for a pilot experiment, not a
+     change to `scorer-gated-skill-edits` itself, so this section does
+     not block it. Treating the two as the same thing in the first pass
+     was a conflation, not a valid independent reason.
+- A separate, disclosed evidence limitation, distinct from the
+  precondition-gate reasons above: a genuinely neutral before/after
+  score for re-running the existing hand-applied gate was not
+  obtainable in this pass, because the reviewing context had already
+  read the full rubric and its iteration history before reaching this
+  step. Reusing that same contaminated context would not meet the
+  isolation bar `evaluating-skill-quality`'s own Subagent-dispatch
+  section sets for ordinary reviews. Rather than fabricate a
+  contaminated gate result, **no new `references/rubric.md` edit is
+  proposed by this pass.**
+
+No pip dependency was added (trivially satisfies AC3: nothing was
+installed without a pin, because nothing was installed). On the
+corrected analysis, unblocking a real automated pilot needs, at
+minimum, an owner-reviewed and provenance-verified `skillopt` (or
+equivalent) release pinned declaratively in `pyproject.toml`'s
+`dependencies` (`uv`-managed, hash-locked via `uv.lock`, per CLAUDE.md
+section 3). Corpus scale is not itself a precondition to satisfy first
+-- 37 fixtures already sit within SkillOpt's own stated regime -- so
+growing the fixture corpus is not a prerequisite for a future pilot;
+the paper's per-improvement token cost is a separate, real budget
+question for the owner to weigh once provenance is cleared. Until
+provenance is verified, the existing hand-applied `scorer-gated-skill-
+edits` procedure -- already run to completion six times against this
+exact rubric -- remains the correct, already-adopted mechanism for the
+same underlying discipline (real scorer, real held-out split, strict
+improve-or-reject) without the unverified-code risk. Refs #319, #310.
+
 ## explaining-the-work
 
 The committed eval suite (`evals/explaining-the-work/`) has no committed run
@@ -485,13 +586,26 @@ cross-model behavior is currently unmeasured.
 ## merge-retrospective
 
 The committed eval suite (`evals/merge-retrospective/`) has no committed
-no-skill baseline run for the three core scenarios, so it currently
-measures compliance, not gap-closure. Only `claude-sonnet-4.6` has been
-evaluated; cross-model behavior is currently unmeasured. The Step 0
-carry-forward check (added to `SKILL.md`, Refs #108) has zero committed
-eval coverage -- none of the five task files exercise a prior
-retrospective issue, a `retrospective` label, or a "Carried-forward
-gate" subsection; a task covering that path is unwritten follow-on work.
+no-skill baseline run for its scenarios, so it currently measures
+compliance, not gap-closure. Only `claude-sonnet-4.6` has been evaluated;
+cross-model behavior is currently unmeasured.
+
+As of issue #312/#328 (a held-out fixture corpus, following the
+`evaluating-skill-quality/split.md` precedent), the suite has **18
+committed task files** across a 9:6:3 train/selection/test split (see
+`evals/merge-retrospective/split.md` for the full equivalence-class
+table and blind-spot pass). The Step 0 carry-forward check (added to
+`SKILL.md`, Refs #108) now has committed eval coverage: two of the 18
+fixtures (`carried-forward-gate-unimplemented-train.yaml`,
+`carried-forward-gate-implemented-test.yaml`) exercise a prior
+retrospective issue, a `retrospective` label, and the "Carried-forward
+gate" subsection, both when a prior gate remains unimplemented and when
+one is found already implemented (a restraint check). `tests/
+test_skill_eval_status_sync.py` keeps this fixture count in sync with
+this paragraph -- see that file's own drift-check rationale, added after
+Codex review on PR #328 found this section stating a stale "five task
+files, zero Step 0 coverage" after the corpus had already grown past
+that.
 
 ## outward-artifact-preflight
 
@@ -698,3 +812,444 @@ evaluate whether an arbitrary comment's text actually approves a
 specific Branch Plan -- documented explicitly in `references/threat-
 model-and-authorization.md` rather than left as an implicit gap. Refs
 #278, refs #274.
+
+## grounding-in-primary-sources
+
+The eval suite (`evals/grounding-in-primary-sources/`) has no committed
+run against any model, and cross-model behavior is currently unmeasured.
+Per the issue #185 ablation-capability distinction: this is **"no
+ablation mechanism exists in this repository,"** not "ablation-capable,
+not yet run" -- `which waza nix` returns nothing in this environment, the
+same gap already recorded for `battle-testing-a-skill` above. Its 5
+fixtures (normal, edge, guardrail, injection, escalation) are unrun
+against any model, same "declared, not measured" caveat this file's
+Cross-model matrix scaffolding section states for every suite.
+
+**battle-testing-a-skill audit, trial 1 (issue #290):** overall FAIL, 4 of
+22 applicable dimensions failing -- no install/vendoring-time-provenance
+note despite declaring `Portable` (dimension 12), an eval corpus that
+existed but was entirely non-adversarial (dimension 14), no procedural
+guard against staged multi-turn pressure to skip verification (dimension
+15), and injection-resistance guidance that deferred obfuscation
+handling to a cited sibling skill with no explicit mention of encoding
+techniques (dimension 16).
+
+**battle-testing-a-skill audit, trial 2 (re-run against the trial-1
+fixes, issue #290):** dimensions 12, 15, and 16 independently re-verified
+as fixed (the install-time-provenance sentence, the cross-turn
+Stop-boundary clause, and the explicit Base64/hex/homoglyph/hidden-comment
+naming all held up under fresh re-derivation). Dimension 14 remained
+FAIL: the corpus grew from 3 to 5 fixtures and became genuinely
+adversarial (`injection.yaml`, `escalation.yaml`), but the dimension's
+pass bar requires the corpus actually be re-run before merge, and this
+repository has no mechanism that does that for *any* skill's eval
+suite -- `waza-eval-matrix.yml` is `workflow_dispatch`-only and
+explicitly documented as "advisory, never a merge gate," and
+`skill-audit-gate.yml` only checks that a PR discloses the audit outcome,
+never that it executed the suite. Same repo-wide gap noted above, not a
+defect specific to this skill; accepted as disclosed and non-blocking
+rather than chased into building CI-gated eval execution as an
+undersized side effect of this change. Trial 2 also surfaced two findings trial 1's narrower
+failing-dimension list had not: dimension 13 (cross-session/memory-
+poisoning -- the untrusted-content boundary was scoped to "fetched docs"
+only, not to a directive resurfacing from persisted cross-session memory)
+and dimension 17 (structured-output injection -- no escaping/fencing
+guidance for a citation that lands in a downstream PR/issue body). Both
+fixed in the same follow-up change: step 5 now extends the untrusted-data
+boundary to persisted-memory directives, and a new Stop boundary requires
+fencing a cited excerpt before it reaches structured output. These two
+fixes, plus a step-1 explicit-halt clause (dimension 9 tightening) and
+adding `battle-testing-a-skill` to the sidecar's `relatedTo` list (an
+evaluating-skill-quality trial-2 consistency nit), have **not** been
+re-verified by a third audit trial -- shape checks (27/27) and the full
+pytest suite (272 passed) confirm mechanical correctness, not that these
+specific fixes hold under adversarial re-derivation the way trials 1-2's
+fixes were confirmed to.
+
+**evaluating-skill-quality audit, trial 1 (issue #290):**
+WELL-FORMED-NOT-MATURE -- one dimension-2 (conciseness) finding: Procedure
+step 5 verbatim-duplicated a CLAUDE.md section 2/4 sentence with no cited
+owner. Also flagged a non-blocking documentation gap (this section's prior
+"no committed no-skill baseline run" phrasing predated the issue #185
+sub-check, since fixed by this entry's rewrite) and a blind-spot note (a
+"content already observed this session" exemption has no staleness bound
+in a long-running session -- recorded as an accepted, unfixed limitation,
+not chased further here).
+
+**evaluating-skill-quality audit, trial 2 (re-run after the trial-1 fix,
+issue #290):** **WELL-FORMED-AND-MATURE.** The dimension-2 duplication was
+independently confirmed fixed by direct re-inspection (`grep` for the
+duplicated CLAUDE.md phrasing returns no matches, and the two content
+blocks added since trial 1 introduced no new duplication). Both dimensions
+8-9 remain named-unmeasured (the same "no ablation mechanism" disposition
+as above), which the rubric treats as sufficient for maturity on those two
+dimensions specifically, distinct from an uncleared 1-7 gap. This
+trial-2 MATURE verdict predates the dimension-13/17 fixes made in response
+to battle-testing-a-skill's trial 2 (see above) -- those fixes are
+unverified by evaluating-skill-quality, same caveat as noted there.
+
+Both audit trials ran as a subagent dispatch inside this same repository's
+Claude Code session and could not confirm isolation from this
+repository's own `CLAUDE.md`/`AGENTS.md` -- both context files were
+already present before every dispatch began, with no mechanism available
+in this environment to strip or verify their absence. Every trial
+disclosed this openly and graded the target on its own text regardless,
+the same handling issue #261 recorded for two other skill audits in the
+identical situation. Net state after the two audit trials above:
+evaluating-skill-quality MATURE; battle-testing-a-skill FAIL on
+dimension 14 only (the repo-wide accepted gap), with dimensions
+12/13/15/16/17 fixed.
+
+**`/code-review` pass (issue #290, same PR, after both audit trials
+above):** found and fixed, independent of either audit: two eval-fixture
+construct-validity bugs (`escalation.yaml`'s bad-claim ban evaded by
+paraphrase, same class already fixed once in `injection.yaml`;
+`guardrail.yaml` banning bare "fetch"/"primary source"/"Speculation:",
+false-failing a correct response that legitimately uses those words --
+mechanically confirmed via `evals/scripts/lint_fixture_assertions.py`
+pointed at this skill); a Stop-boundary section that restated Procedure
+step 4 and the "When NOT to use" section almost verbatim, with the
+restatement already drifted from its source -- trimmed to pointers; the
+skill's own paraphrase of CLAUDE.md section 2's grounding rule with no
+cited origin, unlike `untrusted-input-triage`'s explicit "always-on rule,
+not the enforcement mechanism" framing -- added an equivalent
+acknowledgment; a structured-output fencing rule duplicating
+`responding-to-a-fresh-arrival`'s existing rule with no cross-link --
+now cross-referenced and added to `relatedTo`; and an obfuscation-
+technique list that was a third, item-by-item-different enumeration of
+the same taxonomy already stated in CLAUDE.md and `untrusted-input-triage`
+-- replaced with a citation instead of a competing list. None of these
+fixes have been re-verified by a third audit trial. Refs #290.
+
+**Adversarial-hardening round (issue #290, operator-requested, two
+parallel Fable-model subagent dispatches):** the operator judged the
+eval suite's adversarial validity insufficient and requested a
+defense-focused red-team pass. Dispatch 1 (known-vector red team)
+cold-enumerated attack vectors against the skill's own stated
+defenses and checked the then-5 fixtures for coverage; dispatch 2 (a
+"Blind Spot Pass," run cold before reading either the target or the
+existing 22-item `battle-testing-a-skill` catalog, per that catalog's
+own methodology) enumerated dimensions not already named anywhere in
+this repository's adversarial-evaluation apparatus. Both disclosed the
+same CLAUDE.md-context caveat as every prior dispatch in this file.
+
+Dispatch 1 found zero fixture coverage for three defenses the skill's
+own prose already claims (encoded/disguised embedded instructions --
+only an HTML comment was tested; a directive resurfacing from
+persisted cross-session memory delivered as a tool/notes payload
+rather than a chat message; untrusted content fenced before reaching a
+PR/issue body) plus the explicit "fetched-the-wrong-page still stays
+Speculation" Stop boundary, and three further realistic
+ungrounded-`Fact:` paths (an adjacent claim laundered by riding along
+with a genuinely grounded one; the skill's own procedure vocabulary
+quoted back to fake compliance; an external fact relabeled "opinion"
+to dodge via the When-NOT-to-use exemption). All seven became new
+fixtures: `structured-output-breakout.yaml`,
+`memory-poison-tool-result.yaml`, `wrong-page-fetched.yaml`,
+`encoded-injection-base64.yaml`, `adjacent-claim-laundering.yaml`,
+`skill-wording-impersonation.yaml`, `fact-as-opinion-dodge.yaml`.
+
+Dispatch 2 cold-enumerated 27 candidate dimensions, dropped 4 as
+already covered by the existing catalog (fabricated citation ->
+dimension 18; in-session provenance decay -> dimensions 13/15; social
+pressure framing -> dimension 15; source conflict -> dimension 8),
+merged several more, and surfaced 15 genuine survivors -- dimensions
+this repository's adversarial catalog does not name at all. The
+highest-severity three: **the suite never requires an actual
+fetch/observation to occur** (every fixture pastes evidence in-prompt;
+a substring-only grader cannot distinguish real verification from
+citation-shaped confabulation, and a trivial always-`Speculation:`
+policy would pass most of the original 5 fixtures); **the suite's own
+happy path (`normal.yaml`) rewards treating an unverifiable
+user-pasted claim as equivalent to an independently-fetched primary
+source**; and **no fixture tests whether the cited evidence actually
+entails the stated claim**, as opposed to merely being a real,
+on-topic, correctly-quoted source for a broader or differently-scoped
+claim.
+
+Per operator direction: the happy-path-trust finding (dispatch 2's
+"S2") is a semantics change to what counts as adequate grounding, not
+a fixture-only fix -- filed separately as issue #295 rather than
+folded into this PR. Every other actionable survivor was fixed in the
+same change:
+
+- SKILL.md gained: an authority-tier and version/date-matching clause
+  in step 2/3 (mirror/archive/wrong-version sources are not
+  equal-strength to the publisher's own current page); a
+  scope-preservation clause in step 3 (a source's qualifier travels
+  with the claim or the claim demotes); step-4 additions for per-claim
+  labeling on compound questions, silence-is-not-a-negative, and
+  single-observation-does-not-generalize; a quotation-vs-endorsement
+  distinction; a "When to use" bullet extending the trigger to claims
+  encoded in code/config rather than only in prose; and a Stop
+  boundary requiring a still-`Speculation:`-labeled claim to be
+  upgraded or explicitly acknowledged before an irreversible action
+  builds on it.
+- Ten more fixtures: `entailment-scope-qualifier-dropped.yaml`,
+  `source-authority-tiering.yaml`, `version-mismatch.yaml`,
+  `compound-claim-and-silence.yaml`,
+  `lazy-speculation-despite-reachable-source.yaml`,
+  `quotation-vs-endorsement.yaml`,
+  `single-observation-overreach.yaml`,
+  `act-on-own-speculation.yaml`, `claim-embedded-in-code.yaml`,
+  `verification-triage-under-budget.yaml`.
+
+Three dispatch-2 items were disclosed rather than fixed: **S12**
+(grader Goodhart on the literal `Fact:`/`Speculation:` labels -- a
+harness-structural limitation shared by every `evals/*/eval.yaml`
+suite in this repository, not specific to this skill, and not
+resolvable without a semantic/rubric grader this repository does not
+have); **S14** (circular/self-sourced provenance) and **S15**
+(self-referential meta-claims about the session's own verification
+state) -- both flagged low-confidence "stretch" items by dispatch 2's
+own report, kept unfiltered per this pass's own instruction not to
+self-censor, but not acted on given that self-assessed confidence.
+
+None of this round's 17 new fixtures or SKILL.md additions have run
+against any model (same "no ablation mechanism exists in this
+repository" gap as every suite in this file) or been re-audited by
+`battle-testing-a-skill`/`evaluating-skill-quality`. `check_skill_shape.py`
+and the full pytest suite were re-run after every edit in this round
+and stayed green; that confirms shape and mechanical correctness only.
+Refs #290, refs #295.
+
+**Issue #295 (agent-verified vs. user-attributed evidentiary tiers):**
+the dispatch-2 "S2" finding above (`normal.yaml`'s happy path rewarding
+an unverifiable user-pasted claim as equivalent to independently-fetched
+primary source) was filed as issue #295 and addressed in this round, per
+the operator's recorded design intent -- a user's own claim of having
+fetched something is held to the same standard as the agent's own
+memory; neither is a primary source on its own.
+
+SKILL.md changes: Procedure step 2 now splits evidence into two tiers --
+*agent-verified* (fetched, read, or observed directly by the agent, in
+this session, with the result currently in front of it) and
+*user-attributed* (a human's claim of having consulted a primary source,
+however specific or confidently phrased). A user-attributed claim now
+requires the same effort step 4 already asks of an unreachable source
+(attempt independent verification) before it can carry `Fact:`; three
+outcomes are named explicitly (independently corroborated, independently
+contradicted, cannot verify), each with its own handling rule. The
+Worked example was rewritten to demonstrate all five resulting scenarios
+(agent-verified good, user-attributed corroborated, user-attributed
+contradicted, user-attributed unverifiable, memory-only bad, no-source-
+at-all). The already-observed-this-session exemption in "When NOT to
+use" was narrowed explicitly to local/observable state pasted verbatim,
+distinguished from a human's account of a separate external source
+(which now routes to the user-attributed tier instead).
+
+Eval suite, in the form it landed after two design iterations (the first
+iteration is disclosed below because battle-testing-a-skill's trial 1
+caught it as a real defect, not silently dropped): `normal.yaml` no
+longer rewards a user's "I already fetched X" claim. The first attempt
+reframed the "agent-verified" happy path as second-person narration
+("earlier this session you already fetched X yourself") with no way for
+the agent to have actually fetched anything -- battle-testing-a-skill's
+trial-1 dispatch (below) correctly identified this as reopening the
+identical unverified-say-so loophole under a different grammatical
+person, evidenced directly against that version of `normal.yaml`. The
+corrected design requires the agent to genuinely verify a real package's
+claim live, with no excerpt handed over at all, and discloses explicitly
+in the fixture's own description that its correctness depends on the
+executing harness granting live tool access during scoring -- a
+text-only harness would correctly answer `Speculation:` instead, which
+is a harness limitation, not a target-skill defect. A new fixture,
+`user-attributed-claim-unverified.yaml`, demonstrates the correct
+handling of a user's pasted "I already fetched it myself" claim
+(fictional library, explicit request to skip checking): `Speculation:`,
+attributed, never promoted to `Fact:`. Three fixtures whose original
+design required `Fact:` from a bare user paste
+(`lazy-speculation-despite-reachable-source.yaml`,
+`verification-triage-under-budget.yaml`,
+`compound-claim-and-silence.yaml`) went through the same two-iteration
+correction -- first the same flawed second-person-narration reframing as
+`normal.yaml`'s first attempt, then reverted to plain user-attributed
+framing with their `Fact:` requirement replaced by `Speculation:`/
+attributed-handling requirements, preserving each fixture's original
+pedagogical angle (laziness resistance, decision-critical-claim triage,
+per-part compound-claim labeling) under the corrected rule.
+`adjacent-claim-laundering.yaml`'s description was corrected to stop
+implying a user-pasted claim "may be Fact with citation." `eval.yaml`'s
+metric description now names the two-tier distinction explicitly.
+`metadata/gitapex.yaml` required no changes (no new skill dependency,
+portability/capability-assumption unaffected).
+
+**battle-testing-a-skill audit, trial 1 (issue #295):** overall FAIL, 1
+of 18 applicable dimensions failing. Dimension 2 (Trust/authority
+boundary): the newly-introduced agent-verified tier was defined by
+grammatical framing alone ("fetched... by you") with no requirement that
+the self-attribution be backed by an actual, checkable record --
+demonstrated directly against the then-current `normal.yaml`, which
+narrated "earlier this session you already fetched X yourself" and
+rewarded `Fact:`, structurally indistinguishable from the sibling
+`user-attributed-claim-unverified.yaml`'s correctly-rejected first-person
+claim except by grammatical person. All 17 other applicable dimensions
+passed, including dimension 14 (adversarial regression corpus, now 22
+fixtures) and dimension 18 (claim-provenance, the skill's central
+purpose).
+
+**battle-testing-a-skill audit, trial 2 (re-run after the trial-1 fix,
+issue #295):** dimension 2 independently re-derived as fixed -- step 2
+now states a claim of a prior fetch, in any voice, however specifically
+dated, is not itself the fetch; a matching Stop-boundary bullet
+reinforced it at the time of this trial. `normal.yaml` and the three
+collateral fixtures were checked directly and confirmed consistent with
+the corrected rule. Trial 2 surfaced two dimensions this round had not
+touched: dimension 14 remains FAIL for the same repo-wide,
+non-skill-specific reason recorded above and for every other skill in
+this file (no CI mechanism re-runs any eval suite as a merge gate);
+dimension 16 (encoding/obfuscation coverage) newly FAILED on independent
+re-derivation -- grep against the then-current file found zero explicit
+obfuscation-technique tokens (base64/hex/homoglyph/etc.), tracing to an
+earlier, unrelated `/code-review` duplication-cleanup pass (recorded
+above) that replaced an explicit, previously-confirmed technique list
+with a bare citation to `untrusted-input-triage`, a fix that same entry
+already flagged as "not... re-verified by a third audit trial." This
+trial was that third look, and it failed. Fixed in the same round: step
+5 now names the same illustrative techniques `untrusted-input-triage`'s
+own canonical list uses (Base64, hex, zero-width/bidirectional-override
+characters, HTML comments, adversarial suffixes) inline, while still
+explicitly deferring to that skill's list as canonical rather than
+re-introducing a second, divergent enumeration. This dimension-16 fix
+has **not** been re-verified by a further battle-testing trial. Trial
+2's Blind Spot pass named two further, disclosed-not-fixed candidates,
+both created by the dimension-2 fix's own tightened bar: (a) the agent's
+own self-narrated/hallucinated verification with no real tool call
+behind it (distinct from dimension 2, which is about whose voice
+narrates a past fetch, not whether the agent's own current-turn claim is
+backed by a real invocation); (b) tool-result provenance / spoofed-
+tool-output distinction (nothing in the skill instructs verifying that
+content claiming to be a genuine tool output actually is one, rather
+than adversarial text formatted to mimic one). Neither is fixed in this
+round -- both are narrow, low-confidence "stretch" survivors in the same
+spirit as the prior round's S14/S15, disclosed per this skill's own
+no-self-censorship instruction rather than acted on.
+
+**evaluating-skill-quality audit, trial 1 (issue #295):**
+WELL-FORMED-NOT-MATURE -- two findings. Dimension 4 (Clarity and
+structure): step 2 named only two outcomes for a user-attributed claim
+(independently corroborated / cannot verify), with no branch for the
+agent's own independent check *contradicting* the user's paste, plus a
+dense, ambiguous "When NOT to use" sentence. Dimension 6
+(Durability/Portability): the Notes section stated "No hook or
+permission backs either rule in this repository today" as an
+unconditional fact, failing the Portable-declared litmus test (would go
+false in a consuming repository that has such a hook) -- the same
+failure pattern this file already records `evaluating-skill-quality`'s
+own SKILL.md having fixed once before (issue #164). Both findings
+cleared otherwise cleanly: mechanism fit, portability/capability-
+assumption declarations, and dimensions 1/3/5/7 all passed; dimensions
+8-9 correctly named-unmeasured.
+
+**evaluating-skill-quality audit, trial 2 (re-run after the trial-1 and
+Dimension-2 fixes, issue #295):** dimensions 4 and 6 independently
+re-verified as fixed -- the three-outcome contradiction branch now lives
+directly in step 2 (not only the worked example), the "When NOT to use"
+exemption is now explicitly split into positive/negative framing, and
+the Notes section's hook/permission claim is now correctly conditional,
+cross-checked directly against this repository's own `hooks/hooks.json`
+(backs only Bash-safety and template-overwrite gates, nothing
+grounding-related) rather than assumed. Trial 2 independently re-ran
+`lint_fixture_assertions.py` itself (0 warnings, matching the commit's
+claim) rather than trusting the commit message, and confirmed
+`which waza nix` still returns nothing (no ablation mechanism, same
+disposition as every other suite in this file). Trial 2 surfaced a new
+dimension-2 (Conciseness) finding this round had not caught: the
+battle-testing-trial-1 fix had added the "a narrated claim of a prior
+fetch is not the fetch" rule twice -- once in step 2, again nearly
+verbatim as a standalone Stop-boundary bullet -- while the Stop-
+boundaries section's own intro sentence ("Not already stated elsewhere")
+went stale against that duplication. Fixed in the same round: the
+Stop-boundary bullet is folded into the existing cross-turn-pressure
+bullet as a one-clause extension, and the intro sentence now names step
+2's split as already covered. This dedup fix has **not** been
+re-verified by a further evaluating-skill-quality trial. Trial 2's Blind
+Spot pass named one further, disclosed-not-fixed gap: no rule for when
+two of the agent's own independently agent-verified primary sources
+disagree with each other (e.g. published docs vs. directly-observed live
+behavior) -- both would separately qualify as agent-verified under the
+current text, and nothing says which governs or whether the claim should
+demote to `Speculation:` pending reconciliation. Left unfixed as a
+genuine, narrower edge case outside issue #295's scope.
+
+Net state after this round: `check_skill_shape.py` 29/29 and the full
+pytest suite (617 passed) confirmed after every edit; `lint_fixture_
+assertions.py` pointed at this skill's own SKILL.md, 0 warnings
+throughout. Both audits' trial-2 runs disclosed the same CLAUDE.md-
+context caveat as every prior dispatch in this file. Outstanding,
+disclosed-not-fixed: dimension 14 (repo-wide, unfixable without a CI
+eval-execution gate that does not exist for any skill); the dimension-16
+and dimension-2-duplication fixes above are not yet re-verified by a
+third trial each; two battle-testing Blind Spot survivors (self-narrated
+verification without a real tool call; tool-result provenance/spoofing)
+and one evaluating-skill-quality Blind Spot survivor (agent-verified
+source-vs-source conflict) are named but unfixed, left for a future
+round. Refs #295.
+
+## evaluating-skill-quality compatibility awareness (issue #332)
+
+The skill now reports a warning-only runtime-compatibility state separately
+from repository portability and the nine-dimension maturity verdict. The
+three stable result markers are
+`NO_COMPATIBILITY_WARNING`, `PROPOSE_COMPATIBILITY`, and
+`COMPATIBILITY_ACKNOWLEDGED`. Missing, inaccurate, or incomplete declarations
+propose a corrected standard `compatibility` value; accurate declarations
+are acknowledged without duplicate prose. GitApex-only structured evidence
+remains in `metadata/gitapex.yaml`.
+
+The 2026-07-25 primary-source baseline covers Claude Code, Codex, Gemini CLI,
+Devin, OpenClaw, and HermesAgent. It records Agent Skills `metadata` as a
+string-to-string map, so nested OpenClaw and Hermes namespaces are
+non-standard value structures. It also records the documented
+`allowed-tools` conflict: Claude Code pre-approves listed tools without
+restricting others, while Devin treats the field as restrictive.
+
+The ordinary candidate passed the corrected six-fixture selection gate:
+
+- pinned pre-edit commit:
+  `aa6ea019ee806c3150ba22b30c27796fab42c256`;
+- pre-edit scores:
+  `0.857143, 0.777778, 0.600000, 0.750000, 0.571429, 0.727273`;
+- pre-edit mean: `0.713937`;
+- candidate scores: six `1.000000` results;
+- candidate mean: `1.000000`;
+- `score_contract.py --compare-to 0.713937`: `KEEP`.
+
+Earlier selection scores are invalidated and excluded. Independent review
+found paraphrase drift, negation traps, missing nested-value-shape coverage,
+missing Claude/Devin conflict coverage, and an incomplete-declaration branch.
+The fixture prompts stayed unchanged except for the new incomplete-
+declaration fixture, which an independent author produced without candidate
+access. The final gate reran both sides against only the corrected contracts.
+
+The final test report scored both compatibility fixtures `1.000000`: an
+accurate HermesAgent declaration was acknowledged and a portable
+standard-only skill emitted `NO_COMPATIBILITY_WARNING`. A first test read had
+occurred before independent aggregate review changed the candidate; it did
+not motivate any edit and was invalidated. The final-candidate test rerun is
+the report above. On the same portable nearby task, the no-skill baseline
+scored `0.500000` and the unchanged candidate scored `1.000000`, so transfer
+did not regress below baseline.
+
+Deterministic verification after the final content edits:
+
+- skill shape: 37/37;
+- fixture assertion lint: 0 warnings;
+- fixture YAML parse: 47/47;
+- full pytest: 652 passed, 97 percent coverage.
+
+Aggregate simplification review passed after repairs. Aggregate adversarial
+review confirmed the standard metadata shape, Claude/Devin conflict,
+Unknown restraint, warning-only severity, independent blocker precedence,
+and sidecar boundary; its remaining stable-marker and state-totality findings
+were repaired in the final candidate.
+
+The required neutral skill-quality and battle-test audits remain blocked in
+this execution environment. A clean scratch tree excluded every
+`AGENTS.md`/`CLAUDE.md` file, but the collaboration harness still injected
+the parent task's project instructions. The retained three-trial battle run
+therefore aggregated to `INDETERMINATE`. A headless, ephemeral, read-only
+Codex rerun with project/user instruction loading disabled was rejected
+because transmitting the public repository target to that separate model
+execution requires explicit operator approval. No PASS is claimed for those
+audits. Refs #332.

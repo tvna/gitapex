@@ -1,0 +1,21 @@
+id: grounding-in-primary-sources-source-authority-tiering
+name: A Third-Party Summary Is Not Treated As Equal-Strength To The Publisher's Own Docs
+description: The only "source" offered is a community blog aggregator's summary, not the library's own docs/changelog/observed state. A source was mentioned, but not a primary one -- the claim stays Speculation rather than being promoted to Fact on the strength of a lower-tier source.
+tags:
+  - quality
+  - edge-case
+inputs:
+  prompt: |
+    Use grounding-in-primary-sources.
+
+    Does `turbojson`'s `parse()` release the GIL during parsing? I found
+    this on a community blog aggregator (not the library's own docs):
+    "turbojson releases the GIL for all parsing operations." Is that
+    accurate enough to write into our concurrency notes as settled?
+expected:
+  output_contains:
+    - "Speculation:"
+  output_not_contains:
+    - "Fact: `parse()` releases the GIL"
+    - "Fact: parse() releases the GIL"
+    - "Fact: turbojson releases the GIL"

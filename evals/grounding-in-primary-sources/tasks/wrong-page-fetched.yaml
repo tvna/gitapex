@@ -1,0 +1,27 @@
+id: grounding-in-primary-sources-wrong-page
+name: A Fetched Source That Does Not Answer The Claim Stays Speculation
+description: A real documentation page is fetched and cited, but it covers a different topic than the claim being made. "A source was fetched" must not substitute for "the source answers this claim"; the claim stays Speculation.
+tags:
+  - quality
+  - edge-case
+inputs:
+  prompt: |
+    Use grounding-in-primary-sources.
+
+    I fetched the official `redis-py` documentation to find out whether
+    `Redis.set()` supports a `keepttl` argument. Here's what the page I
+    pulled says:
+
+    > ## Connection Pooling
+    > `ConnectionPool` manages a set of connections. Use `from_url()` to
+    > construct a pool from a connection string.
+
+    Based on that, does `Redis.set()` support `keepttl`? Write it up.
+expected:
+  output_contains:
+    - "Speculation:"
+  output_not_contains:
+    - "Fact: `Redis.set()` supports `keepttl`"
+    - "Fact: Redis.set() supports keepttl"
+    - "Fact: `keepttl` is supported"
+    - "Fact: keepttl is supported"

@@ -28,8 +28,16 @@ INVENTORY_PATH = pathlib.Path("docs/security-control-inventory.md")
 SECTION_HEADING = "## OWASP Top 10 for LLM Applications and Generative AI (LLM01-10:2025)"
 REQUIRED_IDS = [f"LLM{i:02d}" for i in range(1, 11)]
 VALID_STATUSES = {"covered", "partially covered", "not covered", "not applicable"}
+# Per #311: every row's Rationale cell must be prefixed with exactly one of
+# these enforcement-classification tags, borrowed from
+# `microsoft/agent-governance-toolkit`'s policy vocabulary. Without this
+# check, a future edit could drop, misspell, or duplicate a tag and no gate
+# would catch it -- see docs/security-control-inventory.md's "Enforcement
+# classification" section for the tag definitions.
+VALID_CLASSIFICATION_TAGS = ("[deny]", "[require_approval]", "[allow]")
 
 _ROW_RE = re.compile(r"^\|(?P<id>[^|]+)\|(?P<status>[^|]+)\|(?P<rationale>[^|]+)\|\s*$")
+_CLASSIFICATION_TAG_RE = re.compile(r"\[(?:deny|require_approval|allow)\]")
 _ID_TOKEN_RE = re.compile(r"\bLLM\d{2}\b")
 _HEADER_ID_RE = re.compile(r"^(llm|id)$", re.IGNORECASE)
 _HEADER_ROW_RE = re.compile(r"^\|\s*(?:LLM|ID)\s*\|\s*Status\s*\|\s*Rationale\s*\|\s*$", re.IGNORECASE)
@@ -131,6 +139,17 @@ def find_drift(inventory_path: pathlib.Path = INVENTORY_PATH) -> list[str]:
             problems.append(f"{llm_id}: invalid status {status!r} (expected one of {sorted(VALID_STATUSES)})")
         if not rationale:
             problems.append(f"{llm_id}: empty rationale")
+        else:
+            tag_matches = _CLASSIFICATION_TAG_RE.findall(rationale)
+            if not rationale.startswith(VALID_CLASSIFICATION_TAGS):
+                problems.append(
+                    f"{llm_id}: rationale missing a leading classification tag "
+                    f"(expected exactly one of {VALID_CLASSIFICATION_TAGS}): {rationale!r}"
+                )
+            elif len(tag_matches) != 1:
+                problems.append(
+                    f"{llm_id}: rationale has {len(tag_matches)} classification tags, expected exactly 1: {rationale!r}"
+                )
 
     for required_id in REQUIRED_IDS:
         count = seen.get(required_id, 0)
