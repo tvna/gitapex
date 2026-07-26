@@ -450,6 +450,88 @@ logic (description/name length and YAML-safety parsing, the fail-closed
 checks a malformed skill would most plausibly trip), which is the right
 allocation even though it was not framed this way before this pass.
 
+**Test code structure and design (xUnit Test Patterns)**, walked against
+this same file (3483 lines, 235 `def test_` functions, 243 collected via
+two `@pytest.mark.parametrize` blocks -- `test_approved_hedge_phrase_passes`
+with 6 cases and `test_approved_issue_hedge_phrase_passes` with 4,
+reconciling exactly with the 243 figure the Test levels paragraph above
+already cites). **Fixture design** -- Fresh Fixture throughout: every test
+builds its own isolated tree under pytest's `tmp_path`, and the module's
+own docstring states the design intent directly ("Fixtures are synthesized
+in tmp_path so the test is self-contained and travels with the skill on
+vendoring"), which is also a direct anti-Mystery-Guest statement, not just
+an absence of the smell. Teardown is automatic (`tmp_path`'s own cleanup),
+never manual. No Shared Fixture and no cross-test ordering dependency were
+found -- confirmed by inspection, not merely absence of an obvious one: no
+module-level mutable state is written by one test and read by another, so
+**Interacting Tests** does not apply. **Test-double usage** -- zero classic
+test doubles in the whole file, correctly. `monkeypatch.chdir` in
+`test_relative_target_matches_dir_name` does not qualify as a Stub on
+inspection against this dimension's own definition above: a Stub
+substitutes a collaborator and returns canned answers when the SUT calls
+it; `chdir` instead mutates real process state (the actual OS working
+directory) before the call and restores it after, with no substituted
+object and no interface the SUT calls into -- environment setup, not a
+test double. (An earlier pass of this section misclassified it as a Stub;
+corrected here on inspection, not left standing.) No Mock, Spy, or Fake
+either, and that absence is explained rather than an unstated gap:
+`check_skill_shape.py` under test is a pure filesystem-read-and-parse
+script with no injected collaborator to substitute -- there is nothing
+here any test double would stand in for.
+**Named test smells** -- Mystery Guest and Interacting Tests: not present
+(see fixture design above). **Test Code Duplication**: avoided by a
+consistent family of Creation Methods -- `_write_skill`, `_write_raw`,
+`_write_sidecar`, `_write_skill_deps_sidecar`, `_write_lifecycle_sidecar`,
+and `_write_exec_req_sidecar` each take only the parameters relevant to
+what a given test varies and default the rest, exactly the pattern this
+dimension's new criteria credit explicitly; `_by_name` and `_result` are a
+second, distinct pair of reusable accessor helpers that keep individual
+assertions short. **Eager Test**: the general case is a clean pass -- most
+tests assert one to three tightly-related facts about a single named
+check. **Conditional Test Logic**: a full pass over the module (every
+`for`/`if`/`elif`/`while` at test-body indentation, not a sampled subset)
+finds exactly 13 test functions containing a loop in their own body --
+lines 215, 779, 856, 1768, 1780, 1798, 1813, 1832, 2209, 2534, 2578, 3062,
+and 3475 -- all real, low-severity instances of this smell by this
+dimension's own definition, named completely rather than as a partial
+illustration. (An earlier pass of this section cited only 7 of these 13
+under this smell and discussed two more, lines 779 and 856, only under
+Eager Test without cross-tagging them here -- an inconsistency with this
+dimension's own rule, corrected now with the full count rather than left
+standing.) Twelve of the 13 (all but line 3475) share one shape: `for
+check in <fixed-tuple-or-name-list>: assert ...`, iterating a hardcoded
+literal with one uniform assertion per item -- mild by this dimension's
+own distinction (no data-dependent branching), but still the named smell
+in its literal form, not excused for looking tame; two of these twelve
+(779, 856) are the same tests already noted above as Eager-Test-adjacent,
+and clear that smell for the same reason (every assertion traces to one
+root cause) without that clearing their separate Conditional Test Logic
+citation, since the two questions are independent. The 13th,
+`test_null_vs_empty_mapping_matches_real_yaml_semantics` (line 3445), is
+the one clearer case: it loops over six `(key, body)` differential-test
+cases with a genuine `if real_value is None: ... else: ...` branch inside
+the loop body -- real conditional logic inside a test, and, per this
+dimension's own preference for a harness's real data-driven-test mechanism
+over a manual loop, a missed opportunity: the file already uses
+`pytest.mark.parametrize` correctly twice (the two parametrized tests
+counted above), so the precedent for converting this loop into a third
+parametrized test already exists in the same file. A single failing case
+in the current loop form also does not isolate which of the six pairs
+failed as cleanly as `parametrize`'s own per-case reporting would -- a
+real, if minor, diagnostic cost, not merely a style preference. Net read
+across all 13: uniformly mild, no case rises to a blocking finding, but
+naming all 13 rather than a partial sample is what this dimension's own
+"never silently skip" discipline requires. **Assertion Roulette**: not present
+as a general pattern -- most multi-part assertions in this file carry an
+explicit message argument identifying the case (e.g. `assert parsed_value
+is None, (key, body, parsed_value)`), which is this dimension's own
+prescribed mitigation already in active use. Net read: strong on fixture
+isolation and Creation Method discipline, and zero classic test doubles
+correctly rather than by omission; the 13 Conditional Test Logic instances
+named above are real but uniformly mild, with one (the manual
+differential-test loop) a concrete follow-up candidate -- worth recording,
+not a blocking gap for this dimension.
+
 ### 8. Behavioural evidence
 
 Unmeasured for pass/fail, not skipped: as of this snapshot, this

@@ -1127,6 +1127,84 @@ quote from it.
   high-stakes... work" bullet above already applies to output artifacts,
   extended here to how test effort itself is allocated.
 
+**Test code structure and design (xUnit Test Patterns), when the script
+ships its own test suite.** The block above grades *which* cases a test
+suite covers; this one grades a distinct question -- how the test *code
+itself* is structured -- using Gerard Meszaros's xUnit Test Patterns
+([xunittestpatterns]) catalog: fixture setup/teardown patterns, test-double
+usage, and named test smells, rather than an ad hoc "the tests look clean"
+read. This content is drawn from established knowledge of the book's
+catalog rather than a live fetch of the primary text -- the book is not a
+freely fetchable web document, and the two primary sources tried for this
+content in this session (the author's own companion site and the
+publisher's listing page) both returned a network-policy denial, the same
+egress-blocked pattern the ISTQB block above already documents for its own
+sources -- confirm specific pattern names and definitions against the book
+before treating any phrase below as a verbatim quote from it.
+
+- **Fixture design.** Fresh Fixture (each test builds and tears down its
+  own isolated test data) vs. Shared Fixture (fixture state persists or is
+  deliberately reused across tests, typically for performance) -- a suite
+  that claims isolation while actually sharing mutable fixture state across
+  tests is a real defect (Interacting Tests, below), not a style choice.
+  Prefer automatic teardown (a fixture-scoped mechanism the harness runs
+  regardless of pass/fail) over manual teardown code an author must
+  remember to write and that a failing assertion can skip entirely.
+- **Test-double usage**, matched to what the double actually needs to do: a
+  Dummy (never used, only fills a required parameter), a Stub (returns
+  canned answers, no interaction verification), a Spy (records calls for
+  the test to inspect afterward), a Mock (pre-programmed with expectations,
+  fails the test itself if the expected interaction does not occur), and a
+  Fake (a working but simplified stand-in, e.g. an in-memory store for a
+  real database). Reaching for a Mock where a Stub would do -- asserting on
+  incidental interaction detail no requirement actually cares about --
+  couples the test to implementation rather than behavior; reaching for a
+  Stub where the test's actual point is verifying an interaction happened
+  is the opposite miss. Where the code under test has no external
+  collaborator to substitute at all (pure functions, or I/O confined to a
+  harness-provided sandbox), say so explicitly rather than treating an
+  absence of test doubles as an unexplained gap.
+- **Named test smells** -- treat each as a specific, citable defect, not a
+  vague "could be cleaner":
+  - *Mystery Guest*: the test depends on external state invisible in the
+    test itself (a file elsewhere on disk, a database row, an environment
+    variable) that a reader cannot see by reading the test alone.
+  - *Eager Test*: one test method exercises several unrelated behaviors, so
+    a failure does not say which behavior broke without reading the
+    assertion that tripped. A test that asserts several *related*
+    consequences of one root cause is not this smell by itself -- the
+    question is whether the assertions trace to one cause, not their count.
+  - *Test Code Duplication*: the same setup or assertion logic copy-pasted
+    across tests instead of factored into a shared Creation Method (a
+    parameterized helper that builds a ready-to-use fixture, taking only
+    the parameters relevant to what a given test varies) or Custom
+    Assertion.
+  - *Conditional Test Logic*: an `if`, loop, or other branch inside a
+    test's own body, which makes the test's own correctness something that
+    now needs testing. A loop iterating a fixed, hardcoded literal with an
+    identical per-item assertion is a milder instance of this than
+    data-dependent branching, but is still the named smell in its literal
+    form -- cite it as such rather than waving it through because it looks
+    tame. Prefer a real parameterized test (the harness's own
+    data-driven-test mechanism, e.g. `pytest.mark.parametrize`) over a
+    manual loop with inline branching: it also isolates and reports which
+    specific case failed, which a bare loop does not.
+  - *Assertion Roulette*: several assertions in one test with no
+    distinguishing message, so a failure does not say which one fired.
+  - *Interacting Tests*: a test's outcome depends on another test having
+    run first (order-dependent shared state), so tests fail differently in
+    isolation than in the full suite.
+- Fail: fixture state leaks between tests with no stated reason, a test
+  double is used purely because it is the most capable option regardless of
+  what the test needs, a named smell above is present with no mitigation,
+  or setup is duplicated ad hoc across tests with no Creation Method
+  emerging. Pass: fixtures are fresh and self-contained (or a Shared
+  Fixture's reuse is deliberate and stated), test doubles are the least
+  powerful kind that gets the job done (or their absence is explained by
+  the code under test having no collaborator to substitute), and repeated
+  setup has been factored into a named, reusable helper rather than
+  copy-pasted.
+
 ## 8. Behavioural evidence
 
 Anthropic's standard is evaluation-*driven* development, not evaluation as
@@ -1435,6 +1513,9 @@ Every inline `[label]` citation above resolves to the source below.
 - **[istqb]** ISTQB (International Software Testing Qualifications
   Board) -- Certified Tester Foundation Level Syllabus, v4.0, 2023.
   <https://istqb.org/certifications/certified-tester-foundation-level-ctfl-v4-0/>
+- **[xunittestpatterns]** Gerard Meszaros -- xUnit Test Patterns:
+  Refactoring Test Code, Addison-Wesley, 2007.
+  <http://xunitpatterns.com>
 
 <!-- Link reference definitions below power the inline [label] shortcuts; keep in sync with the visible list above. -->
 
@@ -1447,6 +1528,7 @@ Every inline `[label]` citation above resolves to the source below.
 [passk]: https://arxiv.org/abs/2107.03374 "Chen et al. -- Evaluating Large Language Models Trained on Code, OpenAI, 2021 (arXiv:2107.03374)"
 [metrrct]: https://arxiv.org/abs/2507.09089 "Becker, Rush, Barnes, Rein -- Measuring the Impact of Early-2025 AI on Experienced Open-Source Developer Productivity, METR, 2025 (arXiv:2507.09089)"
 [istqb]: https://istqb.org/certifications/certified-tester-foundation-level-ctfl-v4-0/ "ISTQB -- Certified Tester Foundation Level Syllabus, v4.0, 2023"
+[xunittestpatterns]: http://xunitpatterns.com "Gerard Meszaros -- xUnit Test Patterns: Refactoring Test Code, Addison-Wesley, 2007"
 [dbc]: https://se.inf.ethz.ch/~meyer/publications/computer/contract.pdf "Bertrand Meyer, Applying \"Design by Contract\", IEEE Computer 25(10):40-51, October 1992"
 [sd]: https://dl.acm.org/doi/10.5555/1241515.1241533 "W. P. Stevens, G. J. Myers, and L. L. Constantine, Structured Design, IBM Systems Journal 13(2):115-139, 1974"
 [ycsd]: https://dl.acm.org/doi/book/10.5555/578522 "Edward Yourdon and Larry L. Constantine, Structured Design: Fundamentals of a Discipline of Computer Program and Systems Design, Yourdon Press, 1978"
