@@ -13,6 +13,7 @@ offending skill directly rather than reporting one opaque aggregate result.
 from __future__ import annotations
 
 import pathlib
+import re
 
 import pytest
 
@@ -94,8 +95,8 @@ def test_migrated_provenance_stays_populated(skill_name):
     skill_dir = SKILLS_DIR / skill_name
     parsed = css._parse_manifest(
         (skill_dir / css.SIDECAR_RELATIVE_PATH).read_text(encoding="utf-8"))
-    spec = parsed.root.get("spec")
-    references = spec.get("references") if isinstance(spec, dict) else None
+    spec = css.spec_of(parsed)
+    references = spec.get("references") if spec is not None else None
     assert isinstance(references, list) and references, (
         f"{skill_name}'s metadata/gitapex.yaml lost its migrated "
         "spec.references content (Sub-project C, issue #184); this is the "
@@ -205,8 +206,8 @@ def _real_requires_graph(
         if not sidecar.is_file():
             continue
         parsed = css._parse_manifest(sidecar.read_text(encoding="utf-8"))
-        spec = parsed.root.get("spec")
-        deps = spec.get("skillDependencies") if isinstance(spec, dict) else None
+        spec = css.spec_of(parsed)
+        deps = spec.get("skillDependencies") if spec is not None else None
         requires = deps.get("requires") if isinstance(deps, dict) else None
         graph[skill_dir.name] = requires if isinstance(requires, list) else []
     return graph
@@ -234,4 +235,32 @@ def test_no_requires_cycle_among_real_skills():
         f"requires cycle found: {' -> '.join(cycle)} -- a requires cycle is "
         "an error per #188's scope item 4 (see the module docstring above): "
         "no skill in the cycle could ever function standalone."
+    )
+
+
+# ---- no-bare-spec-get lint (issue #228 repair 2, tracked via #396) ----
+#
+# `css.spec_of(parsed)` centralizes the isinstance(spec, dict) guard a
+# malformed sidecar's `spec:` scalar/list needs. Inlining a bare get call
+# for the spec key directly is exactly the pattern that regressed twice in
+# one file within a single PR (#228 repairs 2 and 3) before that guard
+# existed everywhere it was needed. This scans every test module for a
+# reintroduced bare chain rather than relying on a reviewer to notice a new
+# inline occurrence.
+
+_BARE_GET_SPEC_RE = re.compile(r"""\.get\(\s*["']spec["']""")
+
+
+def test_no_bare_get_spec_chain_in_tests():
+    offenders: list[str] = []
+    for test_file in sorted(REPO_ROOT.glob("tests/*.py")):
+        text = test_file.read_text(encoding="utf-8")
+        for lineno, line in enumerate(text.splitlines(), start=1):
+            if _BARE_GET_SPEC_RE.search(line):
+                offenders.append(f"{test_file.relative_to(REPO_ROOT)}:{lineno}")
+    assert not offenders, (
+        "bare get-on-spec chain found outside css.spec_of() -- use "
+        "css.spec_of(parsed) instead, which guards against a malformed "
+        "sidecar's spec: being a non-mapping scalar/list (issue #228 "
+        f"repairs 2/3): {offenders}"
     )

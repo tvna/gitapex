@@ -1490,6 +1490,22 @@ def _parse_manifest(text: str) -> ManifestParse:
                           malformed_execution_requirement_tools_items=malformed_exec_tools_items)
 
 
+def spec_of(parsed: ManifestParse) -> dict[str, object] | None:
+    """Return ``parsed.root["spec"]`` if present and a mapping, else None.
+
+    A malformed sidecar can write ``spec:`` as a scalar or list rather than
+    a mapping; every consumer that only cares about "does this sidecar have
+    a real spec mapping" needs the same isinstance guard around
+    ``root.get("spec")``, and inlining it separately at each call site let
+    the exact same unguarded pattern regress twice in one file within a
+    single PR (issue #228 repairs 2/3). Callers outside this module (e.g.
+    tests/test_skill_metadata_sidecar.py) should use this instead of
+    inlining ``parsed.root.get("spec")`` themselves.
+    """
+    spec = parsed.root.get("spec")
+    return spec if isinstance(spec, dict) else None
+
+
 def _body_after_frontmatter(text: str) -> list[str]:
     """Lines after the closing frontmatter '---'. If there is no
     frontmatter, the whole text is the body."""
