@@ -450,6 +450,71 @@ logic (description/name length and YAML-safety parsing, the fail-closed
 checks a malformed skill would most plausibly trip), which is the right
 allocation even though it was not framed this way before this pass.
 
+**Test code structure and design (xUnit Test Patterns)**, walked against
+this same file (3483 lines, 235 `def test_` functions, 243 collected via
+two `@pytest.mark.parametrize` blocks -- `test_approved_hedge_phrase_passes`
+with 6 cases and `test_approved_issue_hedge_phrase_passes` with 4,
+reconciling exactly with the 243 figure the Test levels paragraph above
+already cites). **Fixture design** -- Fresh Fixture throughout: every test
+builds its own isolated tree under pytest's `tmp_path`, and the module's
+own docstring states the design intent directly ("Fixtures are synthesized
+in tmp_path so the test is self-contained and travels with the skill on
+vendoring"), which is also a direct anti-Mystery-Guest statement, not just
+an absence of the smell. Teardown is automatic (`tmp_path`'s own cleanup),
+never manual. No Shared Fixture and no cross-test ordering dependency were
+found -- confirmed by inspection, not merely absence of an obvious one: no
+module-level mutable state is written by one test and read by another, so
+**Interacting Tests** does not apply. **Test-double usage** -- exactly one
+test double in the whole file, `monkeypatch.chdir` in
+`test_relative_target_matches_dir_name` (a Stub substituting the process's
+working directory). No Mock, Spy, or Fake anywhere, and that absence is
+explained rather than an unstated gap: `check_skill_shape.py` under test is
+a pure filesystem-read-and-parse script with no injected collaborator to
+substitute -- there is nothing here a Mock or Fake would stand in for.
+**Named test smells** -- Mystery Guest and Interacting Tests: not present
+(see fixture design above). **Test Code Duplication**: avoided by a
+consistent family of Creation Methods -- `_write_skill`, `_write_raw`,
+`_write_sidecar`, `_write_skill_deps_sidecar`, `_write_lifecycle_sidecar`,
+and `_write_exec_req_sidecar` each take only the parameters relevant to
+what a given test varies and default the rest, exactly the pattern this
+dimension's new criteria credit explicitly; `_by_name` and `_result` are a
+second, distinct pair of reusable accessor helpers that keep individual
+assertions short. **Eager Test**: the general case is a clean pass -- most
+tests assert one to three tightly-related facts about a single named
+check. Two tests read as borderline on a first pass but do not cross the
+line on inspection: `test_sidecar_checks_pass_on_good_skill` and
+`test_non_utf8_sidecar_fails_checks_not_exit_2` each loop over five or six
+check names asserting the same outcome, but every assertion in both traces
+to one root cause (a well-formed sidecar; a corrupt one), which is exactly
+the "related consequences of one cause" case this dimension's own Eager
+Test bullet says is not the smell -- not a finding. **Conditional Test
+Logic**: real, low-severity instances exist and are named rather than
+passed over. Seven tests contain a `for check in <fixed-tuple>: assert ...`
+loop over a hardcoded, literal set of check names (e.g. lines 1768, 1780,
+1798, 2209, 2534, 2578, 3062) -- mild by this dimension's own distinction
+(a fixed literal, one uniform assertion per item, no data-dependent
+branching), but still the named smell in its literal form, so named here
+rather than excused for looking tame. One instance is a clearer case:
+`test_null_vs_empty_mapping_matches_real_yaml_semantics` (line 3445) loops
+over six `(key, body)` differential-test cases with a genuine `if
+real_value is None: ... else: ...` branch inside the loop body -- real
+conditional logic inside a test, and, per this dimension's own preference
+for a harness's real data-driven-test mechanism over a manual loop, a
+missed opportunity: the file already uses `pytest.mark.parametrize`
+correctly twice (the two parametrized tests counted above), so the
+precedent for converting this loop into a third parametrized test already
+exists in the same file. A single failing case in the current loop form
+also does not isolate which of the six pairs failed as cleanly as
+`parametrize`'s own per-case reporting would -- a real, if minor, diagnostic
+cost, not merely a style preference. **Assertion Roulette**: not present
+as a general pattern -- most multi-part assertions in this file carry an
+explicit message argument identifying the case (e.g. `assert parsed_value
+is None, (key, body, parsed_value)`), which is this dimension's own
+prescribed mitigation already in active use. Net read: strong on fixture
+isolation and Creation Method discipline, with one specific, real, minor
+Conditional Test Logic finding (the manual differential-test loop) worth a
+follow-up rather than a blocking gap for this dimension.
+
 ### 8. Behavioural evidence
 
 Unmeasured for pass/fail, not skipped: as of this snapshot, this
