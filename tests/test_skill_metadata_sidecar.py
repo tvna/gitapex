@@ -342,12 +342,19 @@ def test_skill_dep_list_item_re_indent_matches_its_docstrings():
     )
 
     docstring = css._parse_manifest.__doc__
-    # The docstring also describes spec.references' own "2 or more spaces"
-    # rule earlier in the same paragraph list; scope the search to the
-    # spec.skillDependencies bullet specifically so that earlier, unrelated
-    # numeral is not matched instead.
+    # The docstring also describes spec.references' "2 or more spaces" rule
+    # before this bullet and spec.executionRequirements.tools' "6 or more
+    # spaces" rule after it; bound the search to the spec.skillDependencies
+    # bullet's own span (up to the next "- spec.*" bullet, or end of string
+    # if it is the last one) so neither neighbor's unrelated numeral can be
+    # matched instead if this bullet's own numeral goes missing (Codex
+    # review, PR #402).
     skill_deps_index = docstring.index("spec.skillDependencies")
-    docstring_stated = _STATED_MIN_INDENT_RE.search(docstring, skill_deps_index)
+    next_bullet = re.search(r"\n {4}- spec\.\w+", docstring[skill_deps_index:])
+    skill_deps_end = (skill_deps_index + next_bullet.start() if next_bullet
+                       else len(docstring))
+    docstring_stated = _STATED_MIN_INDENT_RE.search(
+        docstring, skill_deps_index, skill_deps_end)
     assert docstring_stated is not None, (
         "_parse_manifest's docstring no longer states an 'N or more spaces' "
         "minimum indent for spec.skillDependencies list items -- update "
