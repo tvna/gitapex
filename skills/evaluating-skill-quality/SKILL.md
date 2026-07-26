@@ -257,7 +257,7 @@ section.
 Distinct from Mechanism fit's Model/effort tier fit check: that judges a
 model or effort *pin the skill's own content makes*, which the invoking
 agent acts on at runtime, and fires only when such a pin actually exists
-(most skills correctly have none, and zero of this repository's 17 skills
+(most skills correctly have none, and none of this repository's skills
 do today). This declaration pins nothing and never executes -- it
 recalibrates the *reviewer's* grading strictness and has full coverage
 over every skill regardless of whether that skill pins anything. The two
