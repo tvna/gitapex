@@ -337,6 +337,172 @@ skill's Stop boundaries forbid.
 
 This edit is **not applied** to `references/rubric.md` in this PR.
 
+**Iteration: #393, dogfooding-driven dimension 2/5/7 fixes.** Candidate
+edit (already merged; this entry records the gate retroactively, per
+issue #398): deduplicate a near-verbatim triplicated "step-level finding"
+disclaimer across `references/rubric.md`'s three step-level Mechanism-fit
+subsections (Skill-step vs. bundled script, Model/effort tier fit,
+Tool-capability verification) to one canonical statement plus short
+back-references; extract dimension 7's ISTQB/xUnit Test Patterns block to
+a new conditional reference, `references/script-test-quality.md`; merge
+`references/subagent-isolation-registry.md` into
+`references/adversarial-self-audit.md` as a new "Isolation verification"
+section, dropping the common-case dispatch's mandatory reference-file
+count from four to three; fix a stale "17 skills" count (the repository
+has 19) in both files; fix a broken sibling-file link in `rubric.md`
+(caught by external review, `chatgpt-codex-connector[bot]` on PR #393).
+Full diff: PR #393.
+
+**Correction (found by external review, `chatgpt-codex-connector[bot]`
+on PR #399):** this iteration was first recorded, on this same PR, as a
+**pruning-only KEEP**. That classification was wrong.
+`skills/scorer-gated-skill-edits/SKILL.md`'s own eligibility rule --
+"Pruning-only is eligible only when the patch deletes text and adds or
+rewords no behavior; a replacement, mixed add/delete patch, relabeling,
+or uncertain classification uses the ordinary gate" -- does not fit
+#393's actual diff: it adds a new file
+(`references/script-test-quality.md`), adds new subprocess tests, adds
+new connective prose inside `adversarial-self-audit.md`'s merged-in
+Isolation verification section, and rewords `SKILL.md`'s Subagent
+dispatch pointer sentence -- a mixed add/delete/reword patch, not
+deletion-only. Reclassified as **ordinary** below, moved to this
+Rejected-edit log from the Kept-edit log for that reason (the corrected
+entry's classification and verdict changed; its measurements did not).
+
+**Classification: ordinary** (corrected). Every heading name,
+Applicability/Fail/Pass criterion, and diagnostic phrase the existing
+40-fixture corpus checks for is still confirmed byte-identical before and
+after by direct `git diff` inspection against the commit immediately
+prior to #393's first commit (`147082332919aaab7d98afcb9721835595bafd06`)
+-- none of the touched hunks fall inside Skill vs. subagent, Skill vs.
+hook, Portability level, Capability assumption's grading bullets,
+Cohesion, or any of dimensions 1-6/8-9's substantive text; only the
+trailing disclaimer paragraph in each of the three step-level checks,
+dimension 7's block, an incidental aside, and prose outside any graded
+check were touched. That observation is still true and still the reason
+the selection mean ties exactly -- it just does not make the patch
+eligible for the pruning-only gate, which requires deletion-only, not
+merely "no effect on existing fixture scores."
+
+**A discovered gap, disclosed here rather than silently absorbed:**
+tracing the "before" baseline back required walking the commit range
+between this log's last entry (issue #334, cohesion) and #393's own base
+commit. That range turned out to carry several substantive, already-
+merged iterations with no corresponding entry in this file at all: the
+original `references/adversarial-self-audit.md` addition, the Verdicts
+section's `Not-well-formed`/`Indeterminate` tokens, the `Execution
+requirements` sidecar section, and PR #380's dimension-7 ISTQB/xUnit
+content itself (the same content #393 later extracted back out). None of
+these are new findings -- they are already-shipped, working content --
+but this file's own methodology notes elsewhere insist on verifying
+directly rather than assuming a gate was run; a missing log entry is
+exactly the shape of gap that discipline exists to catch, and it was
+found here only incidentally, not because #393's own gate required
+reconstructing that history. Direct diff inspection of the full
+`86deac0..147082332919aaab7d98afcb9721835595bafd06` range confirmed none
+of it touched any of the 14 selection fixtures' asserted content (see
+full hunk listing in issue #398), so this iteration's own before-baseline
+is sound regardless -- but the historical gap itself is real and is
+**not** backfilled here; a full reconstruction of those iterations' own
+gates, if wanted, is separate follow-up work (see issue #398's Scope
+section), not a precondition for scoring #393 itself.
+
+Methodology: 12 of the 14 selection fixtures' target sections are
+confirmed untouched across the entire `86deac0..HEAD` range (the
+gap-discovery diff above doubles as this confirmation) and reuse their
+#334-recorded after-scores unchanged on both sides, without a fresh
+dispatch -- the same "confirmed by inspection, not re-run" precedent this
+file's own #183/#185 merge-reconciliation entry already established. The
+other 2, `model-effort-tier-fit-unjustified-effort.yaml` and
+`tool-capability-verification-selection.yaml`, sit in the exact
+subsections #393 edited (even though the edited paragraph itself sits
+after what these fixtures assert on), so each got a genuine fresh
+**after** dispatch against the current (post-#393) working tree -- one
+fresh, isolated `claude -p` subprocess per fixture, invoked from a
+working directory outside this repository's own `CLAUDE.md` ancestry per
+`references/adversarial-self-audit.md`'s Isolation verification section
+(this repository still has no registered `Skill` tool for its own
+unpublished `evaluating-skill-quality` content, the same disclosed
+workaround every prior iteration in this log has used), scored with
+`skills/scorer-gated-skill-edits/scripts/score_contract.py`:
+
+| Fixture | Before | After |
+|---|---|---|
+| `edge.yaml` | 0.900000 (reused, #334 after) | 0.900000 (unaffected, confirmed by inspection) |
+| `mechanism-fit-subagent.yaml` | 1.000000 (reused, #334 after) | 1.000000 (unaffected, confirmed by inspection) |
+| `third-party-not-authoritative.yaml` | 1.000000 (reused) | 1.000000 (unaffected, confirmed by inspection) |
+| `scoring-axis-uncontrolled-speed-claim.yaml` | 1.000000 (reused) | 1.000000 (unaffected, confirmed by inspection) |
+| `ordering-rule-totality-distinct-skill.yaml` | 1.000000 (reused) | 1.000000 (unaffected, confirmed by inspection) |
+| `blind-spot-pass-generalizes.yaml` | 1.000000 (reused) | 1.000000 (unaffected, confirmed by inspection) |
+| `model-effort-tier-fit-unjustified-effort.yaml` | 1.000000 (reused, #334 after) | 1.000000 (fresh) |
+| `portability-issue-number-citation.yaml` | 1.000000 (reused) | 1.000000 (unaffected, confirmed by inspection) |
+| `heldout-vague-completion.yaml` | 1.000000 (reused) | 1.000000 (unaffected, confirmed by inspection) |
+| `capability-assumption-frontier-flags-explanation.yaml` | 1.000000 (reused) | 1.000000 (unaffected, confirmed by inspection) |
+| `ablation-capability-runner-exists-not-run.yaml` | 1.000000 (reused) | 1.000000 (unaffected, confirmed by inspection) |
+| `tool-capability-verification-selection.yaml` | 0.750000 (reused, #334 after) | 0.750000 (fresh) |
+| `consumer-repo-convention-deference-selection.yaml` | 0.750000 (reused) | 0.750000 (unaffected, confirmed by inspection) |
+| `cohesion-temporal-grouping-selection.yaml` | 1.000000 (reused) | 1.000000 (unaffected, confirmed by inspection) |
+
+Selection mean: **before 0.957143 -> after 0.957143** (exact tie). Run via
+the ordinary gate, `score_contract.py --compare-to 0.957143 --scores
+after-scores.txt` (no pruning-only flags, per the correction above):
+`0.957143 REJECT`. Ordinary ties are rejected -- this skill's own Stop
+boundaries state it directly: "Never keep a worse-correctness edit.
+Reject ordinary ties."
+
+`tool-capability-verification-selection.yaml`'s fresh after-dispatch
+correctly identified the target's tool-capability contradiction and cited
+"Tool-capability verification" by name, but did not reproduce the exact
+`"actor-identity"` compound (using "specific individual"/"who triggered
+the override" instead) -- this is the same narrow-marker-recall
+brittleness this exact fixture's history already documents twice over
+(issue #200's correction log, issue #334's own entry above), not a new
+regression from #393's content, which never touches the "Check" paragraph
+this marker comes from.
+
+**Context cost, informational only under the ordinary gate (not
+gate-determining -- that machinery is pruning-only-specific, and this
+candidate does not qualify, per the correction above):** total line
+count across the mandatory common-case dispatch set (`SKILL.md` +
+`references/rubric.md` + `references/adversarial-self-audit.md`; the
+prior side folds in `references/subagent-isolation-registry.md`,
+mandatory before the merge whenever the calling repository has its own
+`CLAUDE.md`/`AGENTS.md`). Before: 500 + 1538 + 117 + 91 = 2246. After: 500
++ 1397 + 206 = 2103. A real reduction, noted for the record, but the
+ordinary gate's strict-improve-or-reject rule does not consider context
+cost at all -- correctness is tied, and a tie is rejected regardless of
+what else changed.
+
+**Transfer check:** not run this iteration. This boundary ("Never ship a
+skill that has not passed a transfer check") specifically guards a
+KEEP/ship decision; since this iteration's own result is REJECT, not a
+recommendation to keep or ship, the boundary is not itself violated by
+this record. Its absence across every OTHER entry in this log (all of
+which end in KEEP, none of which ran a transfer check) remains the same
+disclosed, unresolved gap issue #200 first named -- raised again here,
+not newly introduced by this entry.
+
+**REJECT.** Ordinary gate, exact tie (0.957143 -> 0.957143) across all 14
+selection fixtures (12 confirmed unaffected by direct inspection, 2
+re-confirmed with a genuine fresh dispatch), rejected per the strict
+improve-or-reject rule. The tie reflects a corpus-coverage gap, not
+evidence #393's content was harmful: none of the 40 fixtures target what
+the edit actually touches (the triplicated-disclaimer dedup, the
+mandatory-reference-file-count reduction, or dimension 7's relocated
+test-methodology content), so no fixture could register an improvement
+either way. #393 remains merged on its own independent merits
+(deterministic shape checker 41/41, full pytest suite 247/247, external
+code review) -- this record reflects only that `scorer-gated-skill-edits`'
+own measured discipline, correctly classified and applied retroactively,
+provides no measured evidence to justify a KEEP for this specific edit
+against the current fixture corpus. Extending the corpus with fixtures
+that actually probe dimension 2/5/7 content is the honest next step if
+this edit's real effect is ever to be measured -- not reclassifying it
+after the fact to force a KEEP. A real historical gap in this file's own
+record (several undocumented intervening iterations between issue #334
+and #393, found while tracing the before-baseline) is disclosed above and
+tracked separately (issue #398) rather than backfilled here.
+
 ## Kept-edit log
 
 **Iteration: issue #149, Unknowns framework / Blind spot pass.**
@@ -1442,131 +1608,3 @@ memorized wording), and a restraint result corroborated by two other
 fixtures' independent, unprompted after-dispatch findings rather than by
 the purpose-built restraint fixture alone.
 
-**Iteration: #393, dogfooding-driven dimension 2/5/7 fixes.** Candidate
-edit (already merged; this entry records the gate retroactively, per
-issue #398): deduplicate a near-verbatim triplicated "step-level finding"
-disclaimer across `references/rubric.md`'s three step-level Mechanism-fit
-subsections (Skill-step vs. bundled script, Model/effort tier fit,
-Tool-capability verification) to one canonical statement plus short
-back-references; extract dimension 7's ISTQB/xUnit Test Patterns block to
-a new conditional reference, `references/script-test-quality.md`; merge
-`references/subagent-isolation-registry.md` into
-`references/adversarial-self-audit.md` as a new "Isolation verification"
-section, dropping the common-case dispatch's mandatory reference-file
-count from four to three; fix a stale "17 skills" count (the repository
-has 19) in both files; fix a broken sibling-file link in `rubric.md`
-(caught by external review, `chatgpt-codex-connector[bot]` on PR #393).
-Full diff: PR #393.
-
-**Classification: pruning-only**, predeclared before scoring per this
-skill's own precondition. The whole diff deletes/consolidates text and
-rewords no grading behavior: every heading name, Applicability/Fail/Pass
-criterion, and diagnostic phrase the existing 40-fixture corpus checks
-for is confirmed byte-identical before and after by direct `git diff`
-inspection against the commit immediately prior to #393's first commit
-(`147082332919aaab7d98afcb9721835595bafd06`) -- none of the touched
-hunks fall inside Skill vs. subagent, Skill vs. hook, Portability level,
-Capability assumption's grading bullets, Cohesion, or any of dimensions
-1-6/8-9's substantive text; only the trailing disclaimer paragraph in
-each of the three step-level checks, dimension 7's block, an incidental
-aside, and prose outside any graded check were touched.
-
-**A discovered gap, disclosed here rather than silently absorbed:**
-tracing the "before" baseline back required walking the commit range
-between this log's last entry (issue #334, cohesion) and #393's own base
-commit. That range turned out to carry several substantive, already-
-merged iterations with no corresponding entry in this file at all: the
-original `references/adversarial-self-audit.md` addition, the Verdicts
-section's `Not-well-formed`/`Indeterminate` tokens, the `Execution
-requirements` sidecar section, and PR #380's dimension-7 ISTQB/xUnit
-content itself (the same content #393 later extracted back out). None of
-these are new findings -- they are already-shipped, working content --
-but this file's own methodology notes elsewhere insist on verifying
-directly rather than assuming a gate was run; a missing log entry is
-exactly the shape of gap that discipline exists to catch, and it was
-found here only incidentally, not because #393's own gate required
-reconstructing that history. Direct diff inspection of the full
-`86deac0..147082332919aaab7d98afcb9721835595bafd06` range confirmed none
-of it touched any of the 14 selection fixtures' asserted content (see
-full hunk listing in issue #398), so this iteration's own before-baseline
-is sound regardless -- but the historical gap itself is real and is
-**not** backfilled here; a full reconstruction of those iterations' own
-gates, if wanted, is separate follow-up work (see issue #398's Scope
-section), not a precondition for scoring #393 itself.
-
-Methodology: 12 of the 14 selection fixtures' target sections are
-confirmed untouched across the entire `86deac0..HEAD` range (the
-gap-discovery diff above doubles as this confirmation) and reuse their
-#334-recorded after-scores unchanged on both sides, without a fresh
-dispatch -- the same "confirmed by inspection, not re-run" precedent this
-file's own #183/#185 merge-reconciliation entry already established. The
-other 2, `model-effort-tier-fit-unjustified-effort.yaml` and
-`tool-capability-verification-selection.yaml`, sit in the exact
-subsections #393 edited (even though the edited paragraph itself sits
-after what these fixtures assert on), so each got a genuine fresh
-**after** dispatch against the current (post-#393) working tree -- one
-fresh, isolated `claude -p` subprocess per fixture, invoked from a
-working directory outside this repository's own `CLAUDE.md` ancestry per
-`references/adversarial-self-audit.md`'s Isolation verification section
-(this repository still has no registered `Skill` tool for its own
-unpublished `evaluating-skill-quality` content, the same disclosed
-workaround every prior iteration in this log has used), scored with
-`skills/scorer-gated-skill-edits/scripts/score_contract.py`:
-
-| Fixture | Before | After |
-|---|---|---|
-| `edge.yaml` | 0.900000 (reused, #334 after) | 0.900000 (unaffected, confirmed by inspection) |
-| `mechanism-fit-subagent.yaml` | 1.000000 (reused, #334 after) | 1.000000 (unaffected, confirmed by inspection) |
-| `third-party-not-authoritative.yaml` | 1.000000 (reused) | 1.000000 (unaffected, confirmed by inspection) |
-| `scoring-axis-uncontrolled-speed-claim.yaml` | 1.000000 (reused) | 1.000000 (unaffected, confirmed by inspection) |
-| `ordering-rule-totality-distinct-skill.yaml` | 1.000000 (reused) | 1.000000 (unaffected, confirmed by inspection) |
-| `blind-spot-pass-generalizes.yaml` | 1.000000 (reused) | 1.000000 (unaffected, confirmed by inspection) |
-| `model-effort-tier-fit-unjustified-effort.yaml` | 1.000000 (reused, #334 after) | 1.000000 (fresh) |
-| `portability-issue-number-citation.yaml` | 1.000000 (reused) | 1.000000 (unaffected, confirmed by inspection) |
-| `heldout-vague-completion.yaml` | 1.000000 (reused) | 1.000000 (unaffected, confirmed by inspection) |
-| `capability-assumption-frontier-flags-explanation.yaml` | 1.000000 (reused) | 1.000000 (unaffected, confirmed by inspection) |
-| `ablation-capability-runner-exists-not-run.yaml` | 1.000000 (reused) | 1.000000 (unaffected, confirmed by inspection) |
-| `tool-capability-verification-selection.yaml` | 0.750000 (reused, #334 after) | 0.750000 (fresh) |
-| `consumer-repo-convention-deference-selection.yaml` | 0.750000 (reused) | 0.750000 (unaffected, confirmed by inspection) |
-| `cohesion-temporal-grouping-selection.yaml` | 1.000000 (reused) | 1.000000 (unaffected, confirmed by inspection) |
-
-Selection mean: **before 0.957143 -> after 0.957143** (exact tie). Run via
-`score_contract.py --pruning-only --compare-to 0.957143 --scores
-after-scores.txt --prior-context-cost 2246 --candidate-context-cost 2103`:
-`0.957143 KEEP`.
-
-`tool-capability-verification-selection.yaml`'s fresh after-dispatch
-correctly identified the target's tool-capability contradiction and cited
-"Tool-capability verification" by name, but did not reproduce the exact
-`"actor-identity"` compound (using "specific individual"/"who triggered
-the override" instead) -- this is the same narrow-marker-recall
-brittleness this exact fixture's history already documents twice over
-(issue #200's correction log, issue #334's own entry above), not a new
-regression from #393's content, which never touches the "Check" paragraph
-this marker comes from.
-
-**Predeclared context-cost measure:** total line count across the
-mandatory common-case dispatch set (`SKILL.md` + `references/rubric.md` +
-`references/adversarial-self-audit.md`; the prior side folds in
-`references/subagent-isolation-registry.md`, mandatory before the merge
-whenever the calling repository has its own `CLAUDE.md`/`AGENTS.md`).
-Before: 500 + 1538 + 117 + 91 = 2246. After: 500 + 1397 + 206 = 2103 (one
-fewer file; `subagent-isolation-registry.md`'s content now lives inside
-`adversarial-self-audit.md`). Strict decrease, satisfying the pruning-only
-gate's lexicographic exception at matched correctness.
-
-**Transfer check:** not run this iteration, consistent with every prior
-entry in this log -- named as a pre-existing, still-open gap in this
-file's own practice (per issue #200's entry), not silently assumed clear
-for this edit specifically.
-
-**KEEP.** Matched correctness on the selection split (0.957143 tie across
-all 14 fixtures, 12 confirmed unaffected by direct inspection and 2
-re-confirmed with a genuine fresh dispatch) plus a strict context-cost
-decrease (2246 -> 2103) on this predeclared pruning-only candidate. One
-fixture's already-documented marker-recall brittleness reproduced again
-(disclosed, not a new regression), and a real historical gap in this
-file's own record (several undocumented intervening iterations between
-issue #334 and #393) found and disclosed rather than silently passed
-over, with backfilling that history tracked separately (issue #398)
-rather than treated as a precondition for scoring #393 itself.
