@@ -1178,14 +1178,25 @@ task run, a previously-failing case, a fresh no-edit baseline) shows the
 change is actually better, not merely different.
 
 **A TMMi-grounded process-maturity vocabulary for this dimension's own
-continuum, not a new sub-check.** TMMi (Test Maturity Model integration,
-[tmmi]) stages organizational test-process maturity from Initial through
-Optimization, with process areas (test policy, test planning, test
-monitoring and control, and, at its top two levels, defect prevention and
-test process optimization) assessed across an organization's projects over
-time. Most of that apparatus has no referent here: this dimension reviews
-one skill's own eval process, not an organization's test department, so
-there is no test policy document distinct from the skill itself, no named
+continuum, not a new sub-check.** Caveat first, before any specific
+mapping claim, matching this rubric's own established convention for
+exactly this failure mode (the ISTQB and xUnit Test Patterns citations
+elsewhere in this file, and in `script-test-quality.md`, already use it):
+this session's own fetch of TMMi Foundation's freely published model
+(tmmi.org) returned an HTTP 403, so every level name and process-area
+grouping below is drawn from established knowledge of the framework, not
+a live read -- confirm each against TMMi Foundation's current published
+model before treating it as verbatim, and do not let the mapping below be
+dispositive on its own for any single target's verdict.
+
+TMMi (Test Maturity Model integration, [tmmi]) stages organizational
+test-process maturity from Initial through Optimization, with process
+areas (test policy, test planning, test monitoring and control, and, at
+its top two levels, defect prevention and test process optimization)
+assessed across an organization's projects over time. Most of that
+apparatus has no referent here: this dimension reviews one skill's own
+eval process, not an organization's test department, so there is no test
+policy document distinct from the skill itself, no named
 test-organization role, no test training program, and no cross-project
 population to stage against -- importing TMMi's levels wholesale or
 labelling a single review snapshot "TMMi Level N" would be the same
@@ -1202,15 +1213,9 @@ of TMMi's higher-maturity Test Measurement and Test Process Optimization
 process areas -- quantified, gated control of the process rather than an
 ad hoc rerun. Naming a target's position on that continuum in this
 vocabulary is a convenience for evidence this dimension already collects,
-not an additional item to check for or a new pass/fail gate on its own.
-This session's own fetch of TMMi Foundation's freely published model
-(tmmi.org) returned an HTTP 403 -- the same egress-blocked pattern prior
-sessions hit fetching ISTQB's and xUnit Test Patterns' primary sources for
-this rubric's other body-of-knowledge citations -- so the level names and
-process-area groupings above are drawn from established knowledge of the
-framework rather than a live read; confirm specific level or process-area
-names against TMMi Foundation's current published model before treating
-any phrase above as verbatim.
+not an additional item to check for or a new pass/fail gate on its own --
+the mapping's specific TMMi terminology is illustrative, hedged above,
+and never itself dispositive.
 
 **When a committed eval suite records a numeric score, gate acceptance on
 success/correctness first, and never on elapsed time or token/API cost
