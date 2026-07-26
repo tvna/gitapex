@@ -74,6 +74,26 @@ from it.
   The same principle rubric.md's dimension-7 "verifiable intermediate
   outputs for high-stakes... work" bullet already applies to output
   artifacts, extended here to how test effort itself is allocated.
+- **Defect-to-regression traceability** -- a narrow, single-script echo of
+  one TMMi ([tmmi]) process area (Defect Prevention: root-causing a found
+  defect and feeding it back into the test process so it cannot recur),
+  not the staged organizational framework TMMi actually is -- see
+  rubric.md's dimension 8 for where that fuller maturity-staging concept
+  applies instead, and why TMMi's organizational apparatus (test policy,
+  test-organization roles, cross-project staging) has no referent at this
+  single-script scale. At this scale the citable form is simple: does a
+  regression test name the specific defect or review finding it exists to
+  prevent recurrence of (e.g. a comment citing the issue or PR where the
+  defect was found), so a future reader can tell a case is a deliberate
+  regression guard rather than incidental coverage. This is not
+  hypothetical for this repository -- its own script test suites already
+  do this pervasively, e.g. `test_check_skill_shape.py`'s many
+  `# Regression guard (issue #N)` / `# Regression (Codex review on PR
+  #N)` comments. Fail: a regression-motivated test with no stated defect
+  provenance, indistinguishable from an arbitrarily added case. Pass: the
+  provenance is visible in the test itself (a comment or name), not only
+  in an external PR description a future reader of the test file would
+  never see.
 
 ## Test code structure and design
 
@@ -163,8 +183,15 @@ Every inline `[label]` citation above resolves to the source below.
 - **[xunittestpatterns]** Gerard Meszaros -- xUnit Test Patterns:
   Refactoring Test Code, Addison-Wesley, 2007.
   <http://xunitpatterns.com>
+- **[tmmi]** TMMi Foundation -- Test Maturity Model integration (TMMi).
+  Version unverified against the publisher -- this session's fetch of
+  tmmi.org returned HTTP 403, the same egress-blocked pattern this file's
+  ISTQB and xUnit Test Patterns sources already hit; confirm the current
+  release before citing a specific number.
+  <https://www.tmmi.org/tmmi-model/>
 
 <!-- Link reference definitions below power the inline [label] shortcuts; keep in sync with the visible list above. -->
 
 [istqb]: https://istqb.org/certifications/certified-tester-foundation-level-ctfl-v4-0/ "ISTQB -- Certified Tester Foundation Level Syllabus, v4.0, 2023"
 [xunittestpatterns]: http://xunitpatterns.com "Gerard Meszaros -- xUnit Test Patterns: Refactoring Test Code, Addison-Wesley, 2007"
+[tmmi]: https://www.tmmi.org/tmmi-model/ "TMMi Foundation -- Test Maturity Model integration (TMMi); version unverified, tmmi.org fetch returned HTTP 403 this session"

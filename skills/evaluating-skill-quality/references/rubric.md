@@ -1177,6 +1177,41 @@ edit to an *existing* skill, still ask what held-out evidence (a fresh
 task run, a previously-failing case, a fresh no-edit baseline) shows the
 change is actually better, not merely different.
 
+**A TMMi-grounded process-maturity vocabulary for this dimension's own
+continuum, not a new sub-check.** TMMi (Test Maturity Model integration,
+[tmmi]) stages organizational test-process maturity from Initial through
+Optimization, with process areas (test policy, test planning, test
+monitoring and control, and, at its top two levels, defect prevention and
+test process optimization) assessed across an organization's projects over
+time. Most of that apparatus has no referent here: this dimension reviews
+one skill's own eval process, not an organization's test department, so
+there is no test policy document distinct from the skill itself, no named
+test-organization role, no test training program, and no cross-project
+population to stage against -- importing TMMi's levels wholesale or
+labelling a single review snapshot "TMMi Level N" would be the same
+category error dimension 7's single-script unit already rules out for
+this same framework (see `script-test-quality.md`'s narrower use of TMMi's
+defect-prevention idea). What does transfer is the *staging concept
+itself*, applied to this dimension's existing continuum rather than
+imported as a new one: "no ablation mechanism exists" reads as TMMi's own
+Initial (no repeatable process), "ablation-capable, not yet run" as a
+process that exists but is not yet exercised on this skill, and the
+SkillOpt held-out-gate discipline above (score on disjoint data, require a
+strict improvement, never accept a tie) as this dimension's own instance
+of TMMi's higher-maturity Test Measurement and Test Process Optimization
+process areas -- quantified, gated control of the process rather than an
+ad hoc rerun. Naming a target's position on that continuum in this
+vocabulary is a convenience for evidence this dimension already collects,
+not an additional item to check for or a new pass/fail gate on its own.
+This session's own fetch of TMMi Foundation's freely published model
+(tmmi.org) returned an HTTP 403 -- the same egress-blocked pattern prior
+sessions hit fetching ISTQB's and xUnit Test Patterns' primary sources for
+this rubric's other body-of-knowledge citations -- so the level names and
+process-area groupings above are drawn from established knowledge of the
+framework rather than a live read; confirm specific level or process-area
+names against TMMi Foundation's current published model before treating
+any phrase above as verbatim.
+
 **When a committed eval suite records a numeric score, gate acceptance on
 success/correctness first, and never on elapsed time or token/API cost
 alone** -- a faster or cheaper run that did not solve the task is not a
@@ -1340,6 +1375,11 @@ Every inline `[label]` citation above resolves to the source below.
 - **[skillopt]** Yang et al., SkillOpt: Executive Strategy for Self-Evolving
   Agent Skills, Microsoft, 2026 (arXiv:2605.23904).
   <https://arxiv.org/abs/2605.23904>
+- **[tmmi]** TMMi Foundation -- Test Maturity Model integration (TMMi).
+  Version unverified against the publisher -- this session's fetch of
+  tmmi.org returned HTTP 403; confirm the current release before citing a
+  specific number.
+  <https://www.tmmi.org/tmmi-model/>
 - **[dbc]** Bertrand Meyer, Applying "Design by Contract", IEEE Computer
   25(10):40-51, October 1992.
   <https://se.inf.ethz.ch/~meyer/publications/computer/contract.pdf>
@@ -1385,6 +1425,7 @@ Every inline `[label]` citation above resolves to the source below.
 [cc]: https://code.claude.com/docs/en/skills "Anthropic -- Claude Code skills"
 [cce]: https://code.claude.com/docs/en/skills#evaluate-and-iterate-on-a-skill "Anthropic -- Claude Code skills, Evaluate and iterate on a skill"
 [skillopt]: https://arxiv.org/abs/2605.23904 "Yang et al., SkillOpt: Executive Strategy for Self-Evolving Agent Skills, Microsoft, 2026 (arXiv:2605.23904)"
+[tmmi]: https://www.tmmi.org/tmmi-model/ "TMMi Foundation -- Test Maturity Model integration (TMMi); version unverified, tmmi.org fetch returned HTTP 403 this session"
 [kapoor]: https://arxiv.org/abs/2407.01502 "Kapoor, Stroebl, Siegel, Nadgir, Narayanan -- AI Agents That Matter, 2024 (arXiv:2407.01502)"
 [passk]: https://arxiv.org/abs/2107.03374 "Chen et al. -- Evaluating Large Language Models Trained on Code, OpenAI, 2021 (arXiv:2107.03374)"
 [metrrct]: https://arxiv.org/abs/2507.09089 "Becker, Rush, Barnes, Rein -- Measuring the Impact of Early-2025 AI on Experienced Open-Source Developer Productivity, METR, 2025 (arXiv:2507.09089)"
