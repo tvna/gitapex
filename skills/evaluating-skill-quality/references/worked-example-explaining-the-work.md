@@ -1,10 +1,10 @@
 # Worked example: reviewing `skills/explaining-the-work/`
 
 A real nine-dimension review, run per [rubric.md](rubric.md), against
-`skills/explaining-the-work/SKILL.md` (merged in [PR #2][pr2]). Kept as a
-concrete example, not restated in `SKILL.md`, per the progressive-disclosure
-dimension it demonstrates. Reference URLs are collected under
-[References](#references) at the end of this file.
+`skills/explaining-the-work/SKILL.md`. Kept as a concrete example, not
+restated in `SKILL.md`, per the progressive-disclosure dimension it
+demonstrates. Reference URLs are collected under [References](#references)
+at the end of this file.
 
 **Dated snapshot:** this review reflects the target skill and the
 repository's committed eval tooling as observed at the time it was
@@ -77,7 +77,7 @@ Run the bundled checker rather than computing by hand (from the repo root,
 using the checker's path within this skill):
 
 ```
-$ python3 skills/evaluating-skill-quality/scripts/check_skill_shape.py skills/explaining-the-work
+$ python3 skills/evaluating-skill-quality/scripts/check_skill_shape.py --allowed-root . skills/explaining-the-work
 CHECK                RESULT  EVIDENCE (rule)
 description-present  PASS    present  (description present and non-empty)
 description-no-xml   PASS    no tags  (description has no XML tags)
@@ -278,5 +278,3 @@ and nothing about 8-9, which gitapex's tooling genuinely cannot measure
 yet -- would clear the mature bar.
 
 ## References
-
-[pr2]: https://github.com/tvna/gitapex/pull/2 "gitapex PR #2 -- merged explaining-the-work"

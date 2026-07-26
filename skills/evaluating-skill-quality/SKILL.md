@@ -14,7 +14,7 @@ skill artifact itself is good, not whether a change is correct.
 - **Deterministic shape** -- fixed rules a script decides, not judgment.
   Run the bundled checker on the target skill dir, giving both paths from
   the same working directory -- e.g. from the repo root:
-  `python3 skills/evaluating-skill-quality/scripts/check_skill_shape.py <skill-dir>`
+  `python3 skills/evaluating-skill-quality/scripts/check_skill_shape.py --allowed-root <approved-root> <skill-dir>`
   (stdlib-only, read-only). It is the single source of truth for the exact
   rules and limits and prints PASS/FAIL per check. On a
   Python-less surface, apply the same rules by reading that script's
@@ -154,8 +154,8 @@ verdict itself would still be grading from a contaminated context.
   rather than having it re-run the script itself (Contract discipline's
   "never both" rule, `references/rubric.md`).
 - Require the dispatch to return the full structured report -- mechanism
-  fit, portability level, compatibility-awareness result, all nine
-  dimensions with quoted evidence, and the verdict -- not a bare summary;
+  fit, portability and compatibility-awareness results, all nine dimensions
+  with quoted evidence, and the verdict -- not a bare summary;
   a postcondition with no cited evidence is not a review. Quote that
   evidence delimiter-safely, never raw-interpolated into the report (see
   [references/adversarial-self-audit.md](references/adversarial-self-audit.md)'s
@@ -228,55 +228,17 @@ Full rationale and per-dimension grading detail:
 
 ## Compatibility awareness
 
-A warning-only axis, separate from Portability level and the nine maturity
-dimensions. Read the versioned
-[runtime compatibility baseline](references/runtime-compatibility.md), then
-compare the target's frontmatter and procedure with both the Agent Skills
-standard and the documented runtime behavior.
-
-- **No compatibility warning**: no runtime-specific dependency is
-  established; a standard environment requirement alone does not select the
-  acknowledged runtime-dependency branch.
-  Emit `Compatibility awareness: NO_COMPATIBILITY_WARNING`.
-- **Compatibility warning**: a runtime-specific dependency is established
-  and its declaration is missing, inaccurate, or incomplete. Name the exact
-  non-standard field or
-  runtime-specific behavior, the affected runtime, and whether the evidence
-  is Documented, Unknown, or Conflict. Documentation silence is Unknown, not
-  proof that a runtime rejects the feature. When the declaration is missing,
-  inaccurate, or incomplete, emit
-  `Compatibility awareness: PROPOSE_COMPATIBILITY` and propose a corrected
-  1-500 character `compatibility` value. Add a body `## Compatibility`
-  section only when the field cannot express the necessary detail concisely.
-- **Compatibility acknowledged**: a runtime-specific dependency is
-  established and the target's standard `compatibility` frontmatter states
-  every material limitation accurately and completely. Emit
-  `Compatibility awareness: COMPATIBILITY_ACKNOWLEDGED` without proposing
-  duplicate prose.
-
-This axis is warning-only. It never lowers a score and cannot by itself
-block **Well-formed** or **Mature**. Evidence that independently proves a
-security, correctness, portability, durability, or Mechanism-fit defect
-retains that axis's normal severity; the warning neither suppresses nor
-duplicates it.
-
-GitApex-specific structured evidence belongs in
-`metadata/gitapex.yaml`, never in a custom `SKILL.md` frontmatter field.
-The standard `compatibility` field is a self-declaration, not proof that a
-runtime parses, enforces, or satisfies it.
+A warning-only axis, separate from Portability and the nine dimensions. Apply
+the classifications, evidence states, output tokens, and remediation rules in
+the [runtime compatibility baseline](references/runtime-compatibility.md).
+Never change the verdict solely for this warning. Put GitApex-only evidence in `metadata/gitapex.yaml`; reserve `compatibility` for the skill's declaration.
 
 ## Unknowns framework
 
-Full rationale: [references/rubric.md](references/rubric.md)'s Unknowns
-framework section. Four kinds of gap between what a `SKILL.md` states and
-what this review actually checks -- known knowns, known unknowns, unknown
-knowns, unknown unknowns (adapted from Anthropic's own field guide on
-working with Claude models, cited in rubric.md) -- and the **Blind spot
-pass**: before walking the nine dimensions (Procedure step 2, alongside
-Mechanism fit), name explicitly whether the target's domain exposes a
-rubric gap none of dimensions 1-9, Mechanism fit, or Portability level
-already covers, or state explicitly that none was found. Not a tenth
-dimension; the fixed nine-dimension count is unchanged.
+Apply [references/rubric.md](references/rubric.md)'s Unknowns framework
+and Blind spot pass before the nine dimensions: name a domain gap the
+rubric does not cover, or state that none was found. This remains separate
+from the fixed nine-dimension score.
 
 ## Capability assumption
 
@@ -405,14 +367,12 @@ after the dispatch returns is to relay its report (including the
 verdict it already issued) verbatim -- never to independently issue or
 re-derive one.
 
-1. Read the target `SKILL.md` and every file in its `references/`
-   directory (not only linked ones -- an unlinked file is itself a
-   dimension-5 finding). Confirm the target is actually readable first --
-   see
-   [references/adversarial-self-audit.md](references/adversarial-self-audit.md)'s
-   input-validation section; an unread target draws the Indeterminate
-   verdict (`references/rubric.md`'s Verdicts section), never a fabricated
-   one.
+1. Review only a caller-created immutable/read-only snapshot beneath the
+   approved root. Reject traversal, symlinks, special files, unreadable or
+   malformed content; never execute target code. Read `SKILL.md` and every
+   file in `references/` (an unlinked file is a dimension-5 finding). Apply
+   [input validation](references/adversarial-self-audit.md); an unread target
+   draws an Indeterminate verdict, never a fabricated one.
 2. Check mechanism fit per the section above. A whole-artifact
    wrong-mechanism finding (the skill should have been a hook, subagent,
    or CLAUDE.md content) or a whole-artifact low-cohesion finding (the
@@ -436,10 +396,8 @@ re-derive one.
    from a repository that has not adopted this convention), establish
    both by reading the target's content instead -- the same way an
    undeclared level is read today -- and note the sidecar's absence as
-   context, not as a finding. Then run the Compatibility awareness axis
-   against the target frontmatter and behavior using
-   `references/runtime-compatibility.md`; keep its result separate from
-   portability and the verdict.
+   context, not as a finding. Run Compatibility awareness from its baseline,
+   keeping the warning separate from portability and the verdict.
 5. Walk all nine dimensions in `references/rubric.md`, in order (including
    8-9), quoting the specific text that earns each verdict; assume steps
    1-4 hold rather than re-deriving them. No cited evidence means no
@@ -510,8 +468,6 @@ actually specifies.
 - Never leave the Blind spot pass unaddressed -- an explicit "no gap found"
   and a silently skipped question are not the same thing; the latter is
   not a completed review.
-- Never turn an Unknown compatibility state into a flat unsupported claim,
-  and never let a compatibility warning change the existing quality verdict.
 - Never skip
   [references/adversarial-self-audit.md](references/adversarial-self-audit.md)'s
   guards merely because the target under review does not itself concern
