@@ -4,12 +4,29 @@ Fixtures are synthesized in tmp_path so the test is self-contained and
 travels with the skill on vendoring.
 """
 import os
+import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
 import pytest
 
 import check_skill_shape as css
+
+_SCRIPT_PATH = Path(css.__file__).resolve()
+
+
+def _run_cli(*args):
+    """Invoke the checker as a real OS process (its actual CLI entry point),
+    not by calling ``css.main`` in-process. Covers the integration-level gap
+    the in-process tests below cannot: real argv parsing, a real process exit
+    code, and stdout/stderr as an external caller (SKILL.md's own documented
+    ``python3 check_skill_shape.py <skill-dir>`` usage) actually observes
+    them, distinct from ``main()``'s Python-level return value and
+    ``SystemExit`` raised in the same interpreter."""
+    return subprocess.run(
+        [sys.executable, str(_SCRIPT_PATH), *args],
+        capture_output=True, text=True, timeout=30)
 
 
 def _symlinks_supported():
@@ -260,6 +277,43 @@ def test_missing_argument_exits_2(tmp_path):
 
 def test_nonexistent_target_returns_2(tmp_path):
     assert css.main([str(tmp_path / "nope")]) == 2
+
+
+def test_cli_subprocess_well_formed_skill_exits_0(tmp_path):
+    # System-level: the real process exit code and stdout contract, not
+    # main()'s in-process return value -- covers the integration-level gap
+    # (real argv parsing, real exit code, real stdout) the in-process
+    # main()-call tests above and below do not exercise.
+    d = _write_skill(tmp_path)
+    result = _run_cli(str(d))
+    assert result.returncode == 0, result.stderr
+    assert "checks passed" in result.stdout
+    assert "FAIL" not in result.stdout
+
+
+def test_cli_subprocess_failing_skill_exits_1(tmp_path):
+    d = _write_skill(tmp_path, description=None)
+    result = _run_cli(str(d))
+    assert result.returncode == 1, result.stderr
+    assert "FAIL" in result.stdout
+    assert "description-present" in result.stdout
+
+
+def test_cli_subprocess_nonexistent_target_exits_2(tmp_path):
+    result = _run_cli(str(tmp_path / "nope"))
+    assert result.returncode == 2
+    assert "no SKILL.md found" in result.stderr
+    assert result.stdout == ""
+
+
+def test_cli_subprocess_missing_argument_exits_2(tmp_path):
+    # No target positional at all -- argparse's own usage-error exit, only
+    # observable as a real process exit code from outside the interpreter
+    # (in-process, this is a caught SystemExit instead; see
+    # test_missing_argument_exits_2 above).
+    result = _run_cli()
+    assert result.returncode == 2
+    assert result.stderr != ""
 
 
 def test_overlong_name_fails(tmp_path):

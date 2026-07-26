@@ -413,10 +413,9 @@ saves) or when it needs judgment or context (then it is not deterministic
 and belongs to the nine dimensions). Cost is never a standalone trigger:
 without one of these conditions, leave the step in prose.
 
-A finding here is a **step-level** mechanism finding -- report it when it
-fires, but it is not the whole-review headline and does not by itself
-block a *mature* verdict; it feeds triage. Because it fires only when the
-break-even clearly favours a script, a capable model is not pushed to
+A finding here is a **step-level** mechanism finding, per the standing
+already established above -- it feeds triage. Because it fires only when
+the break-even clearly favours a script, a capable model is not pushed to
 script trivial work (dimension 2). This check decides *whether* a script
 should exist; dimension 7 grades the quality of one that does. The
 'two lanes' split of this review's own procedure (deterministic shape vs
@@ -475,10 +474,7 @@ pin justified -- <reason>"), the same restraint discipline dimension 8's
 skill's own stated reason already matches the source's criteria is not a
 review, it is noise.
 
-A finding here is a **step-level** mechanism finding, the same standing
-as Skill-step vs. bundled script above -- report it when it fires, but it
-is not the whole-review headline and does not by itself block a *mature*
-verdict.
+Step-level finding, the same standing as above.
 
 This check never cross-references the target's declared
 `capabilityAssumption` -- it runs at Procedure step 2, before the sidecar
@@ -539,10 +535,7 @@ verified against the tool's actual schema/docs, or explicitly hedged as
 unverified ("confirm this against the tool's current schema before relying
 on it") rather than asserted as flat fact.
 
-A finding here is a **step-level** mechanism finding, the same standing as
-Skill-step vs. bundled script and Model/effort tier fit above -- report it
-when it fires, but it is not by itself the whole-review headline and does
-not by itself block a *mature* verdict.
+Step-level finding, the same standing as the two checks above.
 
 ## Portability level
 
