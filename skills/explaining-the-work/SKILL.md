@@ -20,8 +20,10 @@ into the wrong artifact.
   only when the test name itself cannot carry an issue reference.
 - **Commit log -> not the place for Why.** The real Why lives in the
   issue/PR body, tagged Fact (verified/observed) or Speculation
-  (unverified) rather than blended. A commit is a subject line plus a
-  `Refs #N` pointer, with any repo-mandated trailers (e.g.
+  (unverified) rather than blended. A commit is a subject line plus an
+  issue pointer -- `Closes #N` when the change fully satisfies #N's
+  acceptance criteria, `Refs #N` when it only partially addresses or
+  relates to it -- with any repo-mandated trailers (e.g.
   `Co-Authored-By`) excepted — nothing else.
 - **Code comments -> Why-not / durable constraints only**, one-line form:
 
@@ -55,6 +57,6 @@ precedence over this skill. Do not enumerate exceptions to those gates here.
 ## Notes
 
 Portability: the why-not comment's `docs/adr/NNNN-*.md` path and the
-"commit + `Refs #N`" convention are this repository's own conventions;
-adapt the literal path/trailer form to whatever issue and ADR conventions
-the calling repository actually uses.
+"commit + `Closes #N`/`Refs #N`" convention are this repository's own
+conventions; adapt the literal path/trailer form to whatever issue and
+ADR conventions the calling repository actually uses.
