@@ -69,6 +69,19 @@ scope" gate 3(a) below reserves the *title prefix* `Merge retrospective:`
 for the CI job only, not a `(auto-retro)` Conventional Commit scope —
 adapt the mechanism, not the literal string.
 
+**Correction (2026-07-25, issue #361):** the title prefix named just
+above is the same now-known-wrong string the "Correction (2026-07-25,
+issues #341/#342)" note further down this file already fixes in the
+`retro-identity.toml` spec block — that note only cited its own source
+claim (line 59-60 above) and did not flag this paragraph, leaving it as
+an unmarked, live directive with the stale value. The corrected title
+prefix gate 3(a) should reserve, if implemented from this doc, is
+`chore(retrospective): merge retrospective for PR #` (see the
+`retro-identity.toml` block's `[reserved] title_prefixes` below for the
+authoritative value). The paragraph above is left as the historical
+record of the divergence decision; only the literal prefix it names is
+superseded.
+
 ## 1. Auto-retro core cluster (verified 2026-07-18 against `auto_retro.py` et al.)
 
 Post-merge trigger that opens the retrospective issue, an in-process dedup
