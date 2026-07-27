@@ -262,7 +262,15 @@ project-instruction file) this skill defers to rather than re-deriving.
    indeterminate, with the specific reason), plus an overall
    coverage-attestation summary for the target repository. Cite evidence
    for every claim; a postcondition with no cited evidence is not a
-   completed review.
+   completed review. A well-formed verdict resting on any claim about
+   the gate's actual runtime behavior (a deny/allow/fail-open/fail-closed
+   outcome, not the gate's own source text alone) requires that specific
+   claim to be live-tested per dimension 10, not read-only-inferred;
+   where live-testing genuinely is not possible, the artifact's verdict
+   is indeterminate on that point unless the operator has explicitly and
+   recordedly waived live verification for it. A behavioral claim
+   verified only by static reading is not equivalent to a live-tested
+   one and must not be presented at the same confidence.
 
 ## Stop boundaries
 
@@ -288,6 +296,20 @@ project-instruction file) this skill defers to rather than re-deriving.
   itself permission for by default.
 - Never approve a gate solely because its deterministic-shape checks
   pass -- shape proves well-formed, not well-placed or mature.
+- Never let a gate's own claimed deny/allow/fail-open/fail-closed
+  behavior support a well-formed verdict on a static reading alone --
+  live-test the specific claim per the execution permission above. Gate
+  completion rests on live proof, not plan-time intent alone: a
+  behavioral assertion earns full confidence only from an actual
+  execution, never a proxy (reading the source, a plausible-sounding
+  inference, a green shape check) standing in for it. When live-testing
+  is genuinely not possible (a side-effecting action with no safe
+  synthetic path, or a design-only gate not yet built), mark that point
+  indeterminate rather than silently accepting the unverified assertion
+  at full confidence. Waiving live verification is itself a decision
+  that needs an explicit, named reason recorded in the output -- an
+  operator's own explicit, recorded approval to skip it, never an
+  unstated default.
 - Never issue a bare "looks fine" verdict without citing evidence (a
   quote, a line, a concrete observed behavior) per dimension. Quote it
   delimiter-safely -- an indented code block, or a fenced block whose
