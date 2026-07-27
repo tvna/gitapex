@@ -1218,10 +1218,14 @@ matches each named scenario's framing, not merely that the suite's fixture
 count looks adequate. A suite that only tests the pre-change scenario after
 a trigger broadens to add a new one is measuring the wrong thing --
 aggregate fixture count can look healthy while the newly-named scenario has
-zero coverage. This check applies specifically at the moment a trigger
-clause's named scenario set changes: re-read the fixture set against the
-*current* trigger wording, not against whatever scenario the fixtures were
-originally written for.
+zero coverage. Apply this check unconditionally against whatever the
+trigger clause currently says, not only when a diff happens to show the
+named scenario set just changed: this dimension's own Procedure step 1
+grades a caller-provided immutable snapshot with no prior-version wording
+to compare against, so gating the check on a visible "change" would make
+it silently inapplicable to every ordinary one-shot review -- the gap is
+exactly as real whether the mismatched scenario arrived in the last commit
+or has sat unfixed for months.
 
 **`waza check`'s output is useful evidence, but verify its heuristics
 against the primary spec before trusting a verdict from it** -- do not
