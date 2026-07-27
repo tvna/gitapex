@@ -14,6 +14,13 @@ from). Quotes below were independently re-verified against the live
 repository files during that report's own review rounds, not merely
 copied from the report's own text.
 
+## Contents
+
+1. [Worked example: Reproducibility / Domain-coverage axis](#worked-example-reproducibility--domain-coverage-axis-argued-multi-domain-coverage)
+2. [Worked example: retrospective-identity, single-source-of-truth predicate](#worked-example-retrospective-identity-single-source-of-truth-predicate)
+3. [Worked example: dimension 12 and sibling-repository provenance](#worked-example-dimension-12-deployment-mode-portability-and-sibling-repository-provenance)
+4. [Smoke test: this skill applied to a real Domain-2 gate](#smoke-test-this-skill-applied-to-a-real-domain-2-gate)
+
 ## Worked example: Reproducibility / Domain-coverage axis (argued, multi-domain coverage)
 
 The ACM-disclosure policy -- "does an issue body carry an Acceptance
@@ -83,8 +90,123 @@ Recorded below after this skill's own build: a fresh, isolated dispatch
 followed this skill's procedure (`SKILL.md`) against
 `hooks/check-issue-acm-disclosure.sh` and
 `hooks/check_acm_present_or_waiver.py`, given only this skill's own files
--- not this build's own conversation history -- as input. This is the
-live proof the built procedure is actually followable and produces real,
-evidence-cited output, not only that the files parse.
+(`SKILL.md`, `references/dimensions.md`, `references/mechanism-fit.md` --
+this file was deliberately withheld from that dispatch to avoid
+contaminating a fresh grading pass with pre-cooked answers) -- not this
+build's own conversation history -- as input. This is the live proof the
+built procedure is actually followable and produces real, evidence-cited
+output, not only that the files parse. The dispatch ran live commands
+(including piping malformed input directly into the hook script) and
+fetched Claude Code's own primary documentation rather than relying on
+memory -- it found a genuine, previously-undocumented bug in the graded
+hook, which is exactly the kind of real finding a smoke test is meant to
+prove the procedure can surface, not something staged for this record.
 
-<!-- SMOKE-TEST-OUTPUT-PLACEHOLDER -->
+### Smoke-test verdict, quoted in full
+
+**Target:** `hooks/check-issue-acm-disclosure.sh` +
+`hooks/check_acm_present_or_waiver.py` (Domain 2, agent-harness hook).
+
+**Step 1, Discover:** `hooks/hooks.json` registers this hook under
+`PreToolUse`, matcher `mcp__github__issue_write`, timeout 10s. Its
+top-level `description` states it "backs issue `#413` (sub-issue of
+`#357`): blocking a new-issue-creation tool call whose body lacks an
+Acceptance Criteria Map or an explicit waiver." The hook shells out to
+its sibling `check_acm_present_or_waiver.py` and denies via `exit 2` if
+absent. This is a Domain-2 artifact paired with a documented Domain-3 CI
+backstop (`.github/workflows/acm-issue-gate.yml` +
+`.github/scripts/gate_acm_issue_disclosure.py`, issue `#414`).
+
+**Step 2, Mechanism-fit check:** all six criteria PASS, well-argued --
+reversibility window (only a pre-action hook can block issue creation
+before it happens), capability match (the paired CI gate's own comment
+states it "can only comment/label after the fact, never block it"),
+credential/trust asymmetry (Domain 2 fails cheap, Domain 3 holds
+`GITHUB_TOKEN` as the guaranteed-credential backstop), tool-surface
+availability, precedent reuse (an identical `deny()` pattern is shared
+with the sibling `Bash`-matcher hook, confirmed byte-for-byte), and
+prose-rule-to-gate mapping. The framework's own named gap
+(client-independence) is filled correctly here: the CI backstop triggers
+on the raw `issues:` webhook, independent of which client created the
+issue. **Verdict: correct domain, deliberately paired, argued rather
+than accidental.**
+
+**Step 3, Two-lane walk -- headline findings only (full 6+11 walk
+available in this dispatch's own retained report):**
+
+- Deterministic-shape checks 1, 3, 4, 5, 6: PASS.
+- Deterministic-shape check 2 (dual-signal deny): **FAIL.** The script's
+  own header comment claims it denies "via the PreToolUse
+  hookSpecificOutput JSON on stdout AND exit 2 / stderr (both
+  conventions...)," but the code only ever writes JSON to stderr (`>&2`),
+  never stdout -- and Claude Code's own live-fetched docs state that on
+  an `exit 2` path, "Claude Code ignores stdout and any JSON in it...
+  stderr text is fed back to Claude as an error message," not parsed as
+  structured data. Only one real channel fires; the header's "both
+  conventions" claim is inaccurate, though the deny itself still works.
+- Dimension 15 (fail-closed default on malformed input): **FAIL,
+  live-verified.** The dispatch ran
+  `printf 'not valid json{{{' | bash hooks/check-issue-acm-disclosure.sh`
+  directly against the real script. `jq`'s parse failure propagates
+  through `set -euo pipefail` as exit code 5, not exit code 2 -- and per
+  Claude Code's own docs, "any other exit code is a non-blocking error
+  for most hook events... execution continues." **Malformed stdin JSON
+  causes this gate to fail open, letting the tool call through
+  unchecked** -- the opposite of the fail-closed behavior dimension 15
+  requires, and untested by the hook's own bundled test file (every
+  fixture there uses well-formed JSON).
+- Dimension 16 (runtime tamper-detection): named gap, no signature/hash
+  check found.
+- Dimensions 7, 8, 11, 12, 17: PASS, several strongly evidenced (e.g.
+  deployment-mode portability has a real test exercising the
+  plugin-distributed path with `CLAUDE_PROJECT_DIR` pointed elsewhere;
+  duplication/drift risk is explicitly named in the companion script's
+  own docstring and floor-guarded by a sync test).
+- Dimension 9, 10: mixed -- the known-limitation disclosure and the
+  plugin-bundle regression test are both genuine, but the inaccurate
+  "dual-channel" claim above was never itself empirically verified by
+  the artifact's own authors.
+- Dimension 13: N/A (single decision channel, no separate side effect to
+  decouple).
+
+**Step 4, cross-cutting axes:** Compatibility awareness flags an
+undocumented gap -- nothing in `hooks/` states whether this gate fires
+under a non-Claude-Code agent-tool session. Reproducibility/
+Domain-coverage: 2 of 4 domains, argued rather than accidental (Domain 3
+exists specifically to catch what Domain 2 cannot); Domains 1 and 4 show
+zero coverage but are structurally inapplicable here, not unnoticed
+gaps. Blast-radius/trust-classification: reconstructable but not
+concentrated in one place -- a reader of the hook script alone would not
+find the consequence-of-bypass statement without also reading the paired
+CI workflow's own comment.
+
+**Step 5, coverage attestation (explicitly scoped, not a full pass):**
+`CLAUDE.md` was checked directly and contains zero mentions of "ACM" or
+"Acceptance Criteria Map" -- this invariant's real source is the cited
+issues and design docs, not the top-level contributor-instruction file.
+Within that narrow scope: 2 deterministic domains cover this policy,
+replacing what the CI gate's own docstring calls a prior "per-session
+skill-trigger (probabilistic)" mechanism alone. The dispatch was explicit
+that this is not a full coverage-attestation pass, which needs the
+target's complete invariant list -- out of scope for a single-artifact
+smoke test.
+
+**Step 6, final verdict: well-formed and well-placed, with named,
+evidence-cited maturity gaps** -- the fail-open-on-malformed-JSON bug
+above, the inaccurate dual-channel claim, the undocumented cross-runtime
+applicability, and the absent tamper-detection layer. None of these
+overturn the mechanism-fit verdict; per this skill's own Stop boundaries,
+a strong placement verdict does not excuse glossing over live-verified
+maturity failures.
+
+### Disposition of the live-verified bug this smoke test found
+
+The fail-open-on-malformed-stdin-JSON finding is a real defect in an
+existing, previously-shipped hook, discovered as a side effect of
+proving this skill's own procedure works -- not something introduced by
+this skill's build. Fixing `hooks/check-issue-acm-disclosure.sh` itself
+is out of this PR's own scope (a different artifact, a different
+concern, and CLAUDE.md's own "touch only what the active task requires"
+convention) -- filed instead as its own follow-up issue, `#436`, per
+this repository's own "open a GitHub issue before any branch, commit, or
+PR" convention.
