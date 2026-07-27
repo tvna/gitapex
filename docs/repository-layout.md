@@ -1,6 +1,12 @@
 # Repository layout
 
-gitapex is a Claude Code / Codex plugin. The plugin lives at the
+gitapex is a Claude Code / Codex plugin. This is one of four distinct
+"which agent products does GitApex support" questions this repository
+answers differently; see
+[`agent-product-scope.md`](agent-product-scope.md) (Axis A) for the
+full breakdown against the enforcement-adapter target set, the
+skill-quality-review evidence baseline, and the proposed hook-quality
+evidence baseline. The plugin lives at the
 **repository root** (`source: "./"` in `.claude-plugin/marketplace.json`),
 the layout apm requires: it discovers and deploys skills from `skills/`
 (and, in the future, hooks from `hooks/`) at the package root, so those

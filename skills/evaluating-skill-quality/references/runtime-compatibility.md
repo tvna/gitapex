@@ -7,6 +7,13 @@ axis. It is not an enforcement adapter and does not claim that a runtime
 rejects every undocumented field. Product documentation changes; refresh the
 relevant row before making a current behavior claim.
 
+## Contents
+
+1. [Standard baseline](#standard-baseline)
+2. [Runtime matrix](#runtime-matrix)
+3. [Primary sources](#primary-sources)
+4. [Review rules](#review-rules)
+
 ## Standard baseline
 
 The [Agent Skills specification](https://agentskills.io/specification)
