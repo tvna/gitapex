@@ -70,10 +70,13 @@ Classification uses three evidence states:
 - Cursor Agent Skills:
   <https://cursor.com/docs/skills>
 - GitHub Copilot agent skills:
-  <https://docs.github.com/en/copilot/concepts/agents/about-agent-skills> and
-  <https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-cloud-agent/add-skills>
+  <https://docs.github.com/en/copilot/concepts/agents/about-agent-skills>,
+  <https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-cloud-agent/add-skills>,
+  and (Copilot SDK, a separate product from the CLI/cloud-agent docs above)
+  <https://github.com/github/copilot-sdk/blob/main/docs/features/skills.md>
 - Kiro Agent Skills:
-  <https://kiro.dev/docs/skills/>
+  <https://kiro.dev/docs/skills/> and (CLI-specific `skill://` resource
+  loading) <https://kiro.dev/docs/cli/skills/>
 
 ## Review rules
 
