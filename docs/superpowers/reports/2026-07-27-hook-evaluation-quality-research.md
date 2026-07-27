@@ -394,20 +394,44 @@ HermesAgent), same three evidence states. Like its skill-side
 counterpart, this axis never changes a hook's own pass/fail verdict on
 its own; it is a disclosure requirement layered on top.
 
-### One semantics inversion versus the skill-side axis, named explicitly
+### Why this is not a "Portability" axis, named explicitly
 
-For `evaluating-skill-quality`, "Portable" (working unmodified wherever
-it is vendored) is close to an unqualified virtue. A hook's entire
-purpose is the opposite: enforcing *this specific repository's* policy
-deterministically. Cross-tool portability is therefore not the same
-kind of virtue for a hook -- the question a hook-quality rubric actually
-needs to ask is not "does this hook script run unmodified under Gemini
-CLI or Codex," but **"if this repository is worked on via a different
-tool, does an equivalent deterministic gate still exist there, or does
-the safety-critical prohibition this hook backs silently become
-unenforced prose the moment the tool changes?"** This reframing is
-itself an open design question this report surfaces, not a settled
-answer -- see [Open questions](#open-questions--blind-spots).
+`evaluating-skill-quality` keeps two axes deliberately separate:
+**Portability level** (does *this skill's own text* run unmodified
+wherever it is vendored -- a property of the artifact's own reusability)
+and **Compatibility awareness** (do *this skill's own claims* about
+external runtime behavior hold up against the tracked runtime matrix --
+a factual-accuracy check, not a reusability goal). This section is a
+hook-side analogue of the second axis only. It should not borrow
+"Portable" as a label at all, for a reason worth stating plainly rather
+than glossing over: a skill's portability *compounds* -- the same
+unmodified text pays for itself again, at no extra authoring or
+verification cost, every additional repository or harness it is vendored
+into. Cross-tool coverage for a hook has no such compounding return. Per
+the divergences the runtime matrix below documents (OpenClaw's blocking
+decision is an in-process SDK return value, not an external process plus
+exit code; HermesAgent's blocking authority is the JSON payload's own
+field, with exit code carrying none), a hook enforcing the same policy
+under a different tool is not "the same artifact reused" -- it is a
+**separate, independently authored and independently verified
+mechanism**, paid for again in full each time. Pursuing "compatibility"
+here does not compound the way pursuing skill portability does; it is a
+linear, per-tool cost, so this section deliberately does not score
+"Portable" as a virtue and does not propose a Portability-level-style
+declared axis for hooks at all.
+
+This axis is, like its skill-side counterpart, **a lens applied to the
+specific hook under review** -- grading whether *that hook's* own
+documentation or comments correctly state which enforcement signal is
+authoritative, which transport it assumes, and what happens to its own
+policy if the repository were worked on through a different tool --
+never a requirement that some future `evaluating-hook-quality` skill (or
+this report itself) be usable across those other tools. That latter
+question, if it ever matters, is `evaluating-skill-quality`'s own job
+once such a skill exists and is reviewed by it (every skill in this
+repository already declares its own Portability level and Compatibility
+posture) -- it is not a property this axis needs to invent a second
+time under a different name.
 
 ### Agent-tool runtime matrix
 
@@ -600,21 +624,11 @@ Blind spot pass), named explicitly rather than left implicit:
   already hard-flags any hook/script diff) or a new dimension bolted onto
   `evaluating-skill-quality` itself**, is an open mechanism-fit question
   this report does not resolve -- see [Next steps](#next-steps-decision-ready-options).
-- **The "Portable" semantics inversion between skills and hooks (see
-  Compatibility awareness above) is named but not resolved.** Whether a
-  future rubric should score cross-tool portability as a virtue, a
-  neutral fact, or largely irrelevant for a hook is a real design
-  question this report surfaces rather than settles.
 - **Devin's own hook mechanism is Unknown, not confirmed either way**,
   because this session's outbound proxy policy blocked every fetch
   attempt against `docs.devin.ai`. A follow-up pass with different
   network access could resolve this rather than leaving it Unknown
   indefinitely.
-- **The agent-tool and middleware research above has not itself been
-  through the same adversarial verification pass** the rest of this
-  report's citations already went through (see the commit history on
-  this file) -- an explicit gap, named per this report's own Unknowns
-  framework rather than silently assumed clean.
 
 ## Explicitly out of scope for this pass
 
