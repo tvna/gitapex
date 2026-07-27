@@ -313,7 +313,15 @@ claim while the shipping commit's own message said the audit was still
 "in progress" -- an unsubstantiated-at-the-time claim, now corrected to
 describe what the rounds actually found; (2) the worked example above
 described its two cited source documents abstractly rather than naming
-their real paths -- now fixed, both cited by path directly.
+their real paths -- now fixed, both cited by path directly. A third,
+out-of-scope finding from the same dispatch -- the execution-safety Stop
+boundary is prose-only in this repository's own environment (no hook
+backs it, confirmed by reading `hooks/hooks.json`), with no hedge
+acknowledging that, unlike `evaluating-skill-quality`'s own analogous
+boundary -- was not fixed here: filed instead as its own follow-up issue
+(recorded in this skill's own `metadata/gitapex.yaml` sidecar), matching
+this skill's own established disposition pattern for an out-of-scope bug
+found as a side effect of a review.
 
 `battle-testing-a-skill` returned aggregate **INDETERMINATE**: its own
 runtime had no isolated-per-trial dispatch tooling available (it could
