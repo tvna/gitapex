@@ -1609,6 +1609,39 @@ eventual skill actually needs at runtime must be copied into the
 skill's own `references/`, not left as a pointer into gitapex's own
 dev-only tree.
 
+### Division of responsibility: the skill vs. the gitapex single binary
+
+Correction from the requester, folded in explicitly rather than left as
+an implicit tension in the section above: the redistribution gap just
+named -- Domains 1, 3, and 4 enforcement not traveling with the Claude
+Code plugin's `skills`/`hooks` channel -- **is not a problem the
+eventual skill needs to solve.** It is gitapex's own design-only
+single-binary architecture's stated responsibility (items 21-22 above):
+"a single static binary CLI (Rust provisional/Go later)... REDISTRIBUTED:
+independent organizations run their own copy against their own repos,
+with their own adopter-authored `.rego` policy files" -- a *separate*
+redistributed artifact from the Claude Code plugin, installed and run
+independently, whose entire reason to exist already matches the guiding
+principle above: one policy schema, evaluated identically regardless of
+which of the four domains invokes it. That binary, once built, is the
+mechanism that loosely couples to whatever's environment-optimal and
+guarantees reproducibility across domains -- not the Claude-Code-native
+skill; the skill and the single binary are two separate redistributed
+artifacts with two separate scopes, not one artifact wearing two hats.
+
+This resets the eventual skill's own proper scope, narrower than the
+previous section's own wording might otherwise suggest: it is a
+Domain-2-native artifact, carried by the channel that actually
+redistributes it (the plugin's `skills`/`hooks`), and its job is to
+*grade* whatever deterministic-gate artifacts a target repository
+already has -- including Domain-1/3/4 ones, read for audit purposes, if
+the target repo happens to have them -- not to *become* the mechanism
+that redistributes cross-domain enforcement itself. Auditing a target's
+existing Domain-3 CI config or Domain-4 MCP config is a much smaller
+task than being the thing that makes such enforcement reproducible
+across environments in the first place; that larger task belongs to
+the single binary, once it exists, not to this skill.
+
 ### Portability level the eventual skill must declare, and why it is Mixed
 
 The eventual skill is itself a skill, so it is subject to
@@ -1647,11 +1680,18 @@ own paths exist there.
 
 ### Candidate specification points for the eventual skill's own build
 
-- **Discovery step, not hardcoded paths.** Before grading, the skill
-  must locate the target repository's own Domain-2/3/4 artifacts (its
-  own hook config, its own CI gate scripts, its own MCP config if any)
-  -- gitapex's own layout is one illustrative case, never assumed as
-  the target's shape.
+- **Discovery step, not hardcoded paths -- for grading, not for
+  building enforcement.** Before grading, the skill must locate the
+  target repository's own Domain-2/3/4 artifacts (its own hook config,
+  its own CI gate scripts, its own MCP config if any) -- gitapex's own
+  layout is one illustrative case, never assumed as the target's shape.
+  Per the Division of responsibility above, this discovery step exists
+  only to *find what to audit*; it is not the skill's job to supply or
+  redistribute the cross-domain enforcement itself where a target lacks
+  it -- that gap, if a target repo has one, is out of scope for a
+  grading skill and belongs to whatever plays the single-binary role
+  for that repository's own ecosystem, not something this skill should
+  attempt to fill in.
 - **Declare Portable/Mixed, not silently assume Portable.** Per the
   section above, the honest declaration is Mixed -- the skill's own
   shape checker (mirroring `evaluating-skill-quality`'s own
