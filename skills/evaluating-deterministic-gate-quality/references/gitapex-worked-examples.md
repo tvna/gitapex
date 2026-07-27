@@ -262,35 +262,49 @@ correct Domain-2 exit-2 deny signal is used) -- so Foundation-tier
 input-validation coverage for this specific policy is honestly claimable
 in principle.
 
-**Floor-or-scalable classification:** this control is **tier-scalable,
-not floor-class**. The cited design doc's own floors table names no
+**Floor-or-scalable classification, at the category level:** the
+ACM-disclosure *policy's own category* is **tier-scalable, not
+floor-class**. The cited design doc's own floors table names no
 ACM-shaped requirement among this repository's non-negotiable floors; the
-ACM-disclosure check is friction-class (it raises the cost of an
-under-specified issue slipping through; it does not remove an attack
-path an agentic actor has no other route around -- a determined caller
-could still supply a syntactically valid but hollow waiver line and
-pass). Naming it tier-scalable surfaces a real gap on its own: nothing
-currently escalates its strictness at a higher tier.
+requirement to disclose an ACM at all is friction-class (it raises the
+cost of an under-specified issue slipping through; it does not remove an
+attack path an agentic actor has no other route around -- a determined
+caller could still supply a syntactically valid but hollow waiver line
+and pass). Naming the category tier-scalable surfaces a real gap on its
+own: nothing currently escalates its strictness at a higher tier. This is
+a separate question from whether *this specific gate's own behavior*
+meets the cross-cutting floors below -- see
+[references/security-level.md](security-level.md)'s own warning against
+conflating the two.
 
-**Overclaim check, reusing the smoke test's already-live-verified
-finding:** the smoke test above found, live-verified, that malformed
-stdin JSON causes this same hook to fail OPEN (dimension 15: FAIL) rather
-than deny. Any description of this control as reliably Foundation-tier
-"schema validation everywhere input enters" is therefore an **overclaim**
-on the specific malformed-input path today, since the "everywhere" claim
-does not hold there. This is the same defect the smoke test already found
-and filed as its own follow-up issue (recorded in this skill's own
+**Floor violation, at the gate level -- this is not merely an overclaim
+to cap, it disqualifies the gate from Foundation entirely:** the smoke
+test above found, live-verified, that malformed stdin JSON causes this
+same hook to fail OPEN (dimension 15: FAIL) rather than deny.
+Fail-closed-on-malformed-input is a cross-cutting floor that gates every
+tier regardless of category (per
+[references/security-level.md](security-level.md)'s impossible-vs-tedious
+test) -- so this is not a category-ceiling question the tier ladder
+merely caps lower; it is a floor violation that means **no tier is
+honestly claimable for this control today**, not even Foundation, until
+the fail-open defect is fixed. This matches
+`docs/security-control-inventory.md`'s own, independently derived
+verdict for this exact hook (`LLM05 Improper Output Handling`:
+`partially covered`, coverage scoped to specific sinks with named gaps) --
+the security-level axis's own verdict is corroborated by, not contradicted
+by, the already-shipped control inventory. The defect is already filed as
+its own follow-up issue (recorded in this skill's own
 `metadata/gitapex.yaml` sidecar, per this skill's own no-bare-citation
-rule for body prose), recast here as a tier-honesty finding: dimension
-15's live-verified failure caps what this axis can honestly credit until
-that fix lands, regardless of what any tier-facing documentation
-elsewhere might claim.
+rule for body prose).
 
-**Verdict:** Foundation-tier input-validation coverage is the honestly
-claimable ceiling for this policy today -- not because the tier ladder
-disallows more, but because dimension 15's live-verified gap caps it
-there. Tier-scalable, not floor-class. No Enterprise/Advanced-tier
-escalation exists or is claimed for this control.
+**Verdict:** This control does **not** honestly clear Foundation today.
+The ACM-disclosure category itself is tier-scalable and, once the
+fail-open defect above is fixed, Foundation-tier coverage for it would be
+honestly reachable (dimension 1 already passes: the correct Domain-2
+exit-2 deny signal is used on the well-formed path) -- but a live-tested
+floor violation disqualifies a gate from any tier, it does not cap it at
+one. No Enterprise/Advanced-tier escalation exists or is claimed either
+way.
 
 ## Audit history: Security-level axis hardening round
 

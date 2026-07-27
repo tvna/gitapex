@@ -70,6 +70,17 @@ long its audit trail is retained) at the same time -- classify each
 property this axis actually checks separately rather than assigning one
 single tier label to the whole gate.
 
+Do not conflate a policy category's own tier-scalability with whether the
+specific gate under review meets the cross-cutting floors that gate every
+tier regardless of category (fail-closed on malformed/indeterminate input,
+a non-bypassable deny path). The category question and the floor question
+are independent: a tier-scalable category can still be blocked by a
+gate-specific floor violation. A gate whose own live-tested behavior
+violates such a floor does not get capped at a lower tier for that
+property -- it fails to honestly clear Foundation at all until the floor
+is restored, since Foundation's own definition is "every non-negotiable
+floor holds already," not "the lowest tier, floors included or not."
+
 ## Reuse, never re-derive
 
 This axis does not build a private, per-review tier taxonomy. Applying it
