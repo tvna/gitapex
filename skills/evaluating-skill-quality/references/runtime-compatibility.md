@@ -1,6 +1,6 @@
 # Runtime compatibility baseline
 
-Snapshot date: 2026-07-25.
+Snapshot date: 2026-07-27.
 
 This is an evidence baseline for the warning-only compatibility-awareness
 axis. It is not an enforcement adapter and does not claim that a runtime
@@ -41,6 +41,7 @@ Classification uses three evidence states:
 | Devin | Official documentation says skills follow the Agent Skills standard. | Devin says `allowed-tools` restricts the active skill to the listed tools; it also adds `argument-hint` and `triggers`, and expands arguments plus command-output substitutions at invocation. | The restrictive Devin meaning conflicts with Claude Code's pre-approval meaning for the same experimental field. Behavior for other vendor extensions is Unknown. |
 | OpenClaw | Official documentation says OpenClaw follows the Agent Skills specification. | Product eligibility uses a nested `metadata.openclaw` map, including binary, environment, config, OS, and install hints. This is a non-standard value structure under the standard `metadata` key. Product command fields also exist. | A standard `compatibility` declaration is not documented as enforcing these gates. |
 | HermesAgent | Official documentation says the skill system is compatible with the Agent Skills open standard. | Top-level `platforms` hides skills on incompatible operating systems. Hermes-specific tags, categories, toolset requirements, and config use a nested `metadata.hermes` map, a non-standard value structure under the standard `metadata` key. | Behavior for other vendor extensions is Unknown. |
+| Kimi CLI | Official MoonshotAI documentation states Kimi CLI loads Agent Skills from a directory containing `SKILL.md` and documents `name`, `description`, `license`, `compatibility`, and `metadata` with the standard shapes. | On startup Kimi CLI injects each skill's name, path, and description into the system prompt; the agent decides whether to read the full `SKILL.md` body. A Kimi-specific `type: flow` value designates a "flow skill" that embeds an Agent Flow diagram for multi-step automation and is invoked with `/flow:<name>` instead of the standard `/skill:<name>`. Tool access is documented as a separate `plugin.json` mechanism; the skills documentation does not mention `allowed-tools`. | The Agent Skills standard does not define `type: flow` or the plugin/skill tool-access split. Behavior if an `allowed-tools` field is present in frontmatter (ignored vs. rejected) is Unknown. |
 
 ## Primary sources
 
@@ -58,6 +59,8 @@ Classification uses three evidence states:
   <https://github.com/openclaw/openclaw/blob/main/docs/tools/skills.md>
 - HermesAgent Skills System:
   <https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/skills.md>
+- Kimi CLI Agent Skills:
+  <https://github.com/MoonshotAI/kimi-cli/blob/main/docs/en/customization/skills.md>
 
 ## Review rules
 
