@@ -54,7 +54,29 @@ guarantees is **reproducibility of the decision**, not reuse of one
 literal artifact. Every axis and dimension below is an operationalization
 of this one principle, not an independent list of unrelated concerns.
 
+## Mechanism-fit test
+
+Two questions, checked in order, before anything below this section:
+whether a deterministic gate is the right mechanism for a given policy at
+all, and only if so, which of the four domains above should own it. A
+well-implemented gate in the wrong domain -- or a gate built for a policy
+that was never gate material to begin with -- is not fixed by polishing
+its implementation further, the same way a well-written skill that should
+have been a hook is not fixed by improving its prose
+(`evaluating-skill-quality`'s own Mechanism fit section makes the
+identical move for skills). Full test, both questions:
+[references/mechanism-fit.md](references/mechanism-fit.md).
+
+**When the first question concludes no gate is warranted, stop here.**
+Report that as the finding directly and skip Evaluation model structure
+and its axes, Three-way division of responsibility, Subagent dispatch,
+and the Procedure below for that policy -- none of them apply to a policy
+correctly left ungated.
+
 ## Evaluation model structure
+
+Applies once Mechanism-fit test above has already concluded a
+deterministic gate is warranted for the policy under review.
 
 - **Two-lane split**: deterministic-shape checks (fixed rules) vs.
   probabilistic-maturity dimensions (need judgment). Full list:
@@ -73,78 +95,34 @@ of this one principle, not an independent list of unrelated concerns.
   Foundation/Enterprise/Advanced tier ceiling can a gate's control
   honestly claim, cross-checked against the target's own established
   ceiling documentation rather than a re-derived taxonomy? See below.
-- **Mechanism-fit test**: "which domain should own this policy?" -- a
-  six-criterion test applied before grading a specific realization's
-  quality. Full test: [references/mechanism-fit.md](references/mechanism-fit.md).
 
 ### Axis: Compatibility awareness
 
 A warning-only axis, separate from the two-lane split and from the
-verdict -- never change a verdict solely because of this axis. Ask: does
-this gate's own behavior (its trigger semantics, its exit/deny contract,
-its I/O format) actually differ across the specific agent-tool runtimes
-or dependent middleware versions it is meant to run under? A gate whose
-behavior is silently runtime-specific, with no documentation of that
-fact, is a compatibility-awareness finding even if the gate works
-correctly on whichever runtime its author tested against. This skill does
-not ship a pre-verified cross-runtime compatibility matrix (see Lifecycle
-note below) -- apply this axis by checking the gate's own documentation
-for an explicit compatibility statement, and by testing on more than one
-runtime/middleware version where that is feasible, rather than assuming
-single-runtime behavior generalizes.
+verdict -- never change a verdict solely because of this axis. Asks
+whether a gate's own behavior actually differs, undocumented, across the
+specific agent-tool runtimes or dependent middleware it is meant to run
+under. Full test:
+[references/cross-cutting-axes.md](references/cross-cutting-axes.md#axis-compatibility-awareness).
 
 ### Axis: Reproducibility / Domain-coverage
 
-For a given policy, this axis asks: in how many of the four domains is it
-realized, with what trust/coverage properties, and is the resulting
-overlap (or gap) a deliberate, argued decision or an unnoticed accident?
-
-Candidate checks:
-
-- **Domain-count disclosure.** Does the gate's own documentation state,
-  or can a reviewer determine, how many domains realize the same policy
-  -- one or several -- rather than assuming single-domain coverage is
-  either always sufficient or always insufficient without checking?
-- **Argued vs. accidental coverage.** Where multiple domains realize the
-  same policy, does something (a docstring, a design doc, a registry
-  entry) state *why* -- defense-in-depth against a specific named failure
-  mode, layered coverage at different pipeline stages, a credential/
-  reversibility asymmetry between layers, per the six mechanism-fit
-  criteria -- rather than the multiplicity being an unexplained accident
-  of history?
-- **Single source of truth for the policy's own identity.** Where a
-  policy needs the same predicate evaluated in more than one domain, is
-  that predicate defined once and imported/referenced, or re-derived
-  independently in each realization, risking silent drift between
-  copies?
-- **Reversibility-driven placement, not just presence.** Where an
-  earlier-domain realization exists specifically because a later domain's
-  own detection would already be too late, does the gate's own
-  documentation say so, rather than leaving the reader to guess why the
-  same policy is not simply realized once, later?
-- **The zero-domain case, named explicitly rather than left to read as
-  "nothing to report."** A stated invariant with *zero* domains covering
-  it is a distinct, more severe finding than single-domain coverage that
-  merely lacks an argued rationale -- absence of coverage is a
-  fail-closed finding in its own right. This is the specific gap the
-  [coverage attestation](#three-way-division-of-responsibility) step in
-  the Procedure below exists to catch systematically, not something this
-  axis alone should be relied on to notice per-policy.
-
-A concrete worked example of this axis applied to a real, multi-domain
-policy: [references/gitapex-worked-examples.md](references/gitapex-worked-examples.md).
+For a given policy, asks in how many of the four domains it is realized,
+with what trust/coverage properties, and whether the resulting overlap or
+gap is a deliberate, argued decision or an unnoticed accident. Five
+candidate checks, including the zero-domain case (a stated invariant with
+no covering domain is a fail-closed finding in its own right, not an
+absence of a finding) and a concrete worked example: full detail in
+[references/cross-cutting-axes.md](references/cross-cutting-axes.md#axis-reproducibility--domain-coverage).
 
 ### Axis: Blast-radius / trust classification
 
 Does the gate's own documentation (or this review's own report on it)
-state explicitly what the gate can do -- or fail to prevent -- if it is
+state explicitly what the gate can do -- or fail to prevent -- if
 bypassed, misconfigured, or simply absent, rather than leaving that
-implicit? A gate that silently assumes its own reader already understands
-its stakes is harder to prioritize correctly against other findings, and
-harder to reason about when deciding whether a proposed change to it is
-safe. Grade this the same way regardless of which of the four domains the
-gate lives in -- the question ("what happens if this gate is not here,
-or lies") does not depend on the realization mechanism.
+implicit? Graded the same way regardless of which domain the gate lives
+in. Full test:
+[references/cross-cutting-axes.md](references/cross-cutting-axes.md#axis-blast-radius--trust-classification).
 
 ### Axis: Security-level / Zero-Trust maturity classification
 
@@ -165,15 +143,6 @@ test, and reuse-never-re-derive procedure with content-trust discipline:
 worked example applying it against this repository's own established
 ceiling:
 [references/gitapex-worked-examples.md](references/gitapex-worked-examples.md).
-
-## Mechanism-fit test
-
-Before grading a specific gate's own implementation quality, check that
-its domain placement is the right one in the first place -- a
-well-implemented gate in the wrong domain is not fixed by polishing its
-implementation further. Full six-criterion test, plus two secondary
-criteria and a named gap in the framework itself:
-[references/mechanism-fit.md](references/mechanism-fit.md).
 
 ## Three-way division of responsibility
 
@@ -244,11 +213,19 @@ project-instruction file) this skill defers to rather than re-deriving.
    division above). Never assume any specific path exists merely because
    this skill's own worked-examples file names one -- confirm the
    target's actual layout directly.
-2. **Mechanism-fit check.** For each discovered artifact, apply
-   [references/mechanism-fit.md](references/mechanism-fit.md) to check
-   its domain placement before grading its implementation quality. A
-   whole-artifact wrong-domain finding is the headline finding for that
-   artifact -- report it even if the rest of the review still completes.
+2. **Mechanism-fit check.** For each discovered artifact (and, when
+   scoping a new or proposed policy rather than an existing artifact, for
+   that policy directly), apply
+   [references/mechanism-fit.md](references/mechanism-fit.md): first
+   Gate vs. no gate -- is a deterministic gate even warranted, or is this
+   policy a judgment call that belongs in prose instead -- then, only if
+   a gate is warranted, Domain placement, before grading a specific
+   realization's implementation quality. A whole-artifact wrong-domain
+   finding, or a no-gate-warranted finding, is the headline finding for
+   that artifact or policy -- report it even if the rest of the review
+   still completes, and skip steps 3-6 below for that specific item when
+   the verdict is no-gate-warranted, per mechanism-fit.md's own
+   short-circuit.
 3. **Two-lane walk.** For each discovered artifact, walk the
    deterministic-shape checks and probabilistic-maturity dimensions in
    [references/dimensions.md](references/dimensions.md), applying each
@@ -265,11 +242,10 @@ project-instruction file) this skill defers to rather than re-deriving.
 5. **Coverage attestation.** Enumerate the target repository's own stated
    invariants (from its own contributor-instruction file, design docs, or
    a baseline checklist if it has none of its own), then filter to the
-   ones the mechanism-fit criteria above would even suggest deterministic
-   backing for -- a prose invariant that is inherently a matter of human
-   judgment or communication (e.g. "explain trade-offs," "reach real
-   understanding before signing off") is not a coverage-attestation
-   finding merely for lacking a script; only a filtered invariant is
+   ones [references/mechanism-fit.md](references/mechanism-fit.md)'s Gate
+   vs. no gate test would even suggest deterministic backing for -- that
+   test's own judgment-call filter applies here at repo-sweep scale,
+   rather than being restated independently; only a filtered invariant is
    cross-checked against what steps 1-4 actually found covered. Filter by
    subject matter, not surface wording -- a softly phrased policy ("use
    good judgment") is not thereby proven inherently a judgment call;
@@ -454,10 +430,12 @@ project-instruction file) this skill defers to rather than re-deriving.
 
 First version of a new skill category, declared `experimental` in
 `metadata/gitapex.yaml`. Full build and hardening history -- the initial
-three-round audit, the fourth axis's own two follow-up rounds, every
-fixed and deferred item -- lives in `metadata/gitapex.yaml`'s
-`spec.lifecycle.experimental.reason` (maintainer-facing, not auto-loaded,
-not access-restricted -- see the Stop boundary above) and in
+three-round audit, the fourth axis's own two follow-up rounds, and a
+later restructuring front-loading a Gate-vs-no-gate question into
+Mechanism-fit test and moving that section earlier in this file -- lives
+in `metadata/gitapex.yaml`'s `spec.lifecycle.experimental.reason`
+(maintainer-facing, not auto-loaded, not access-restricted -- see the
+Stop boundary above) and in
 [references/gitapex-worked-examples.md](references/gitapex-worked-examples.md#audit-history-security-level-axis-hardening-round),
 not restated here: paying a per-invocation prose cost for provenance
 content with no bearing on grading an actual target gate is exactly the
@@ -479,11 +457,15 @@ than fixed -- full table:
 ## Notes
 
 Portability: **Mixed**. The portable core above -- the four-domain scope,
-the guiding principle, the two-lane structure, the four axes, the
-mechanism-fit test, and the three-way division of responsibility -- names
-no path or issue number specific to this skill's own authoring
-repository. This skill's own authoring repository's worked examples and
-provenance live separately, explicitly repository-scoped, in
+the guiding principle, the two-lane structure, the mechanism-fit test
+(full detail in [mechanism-fit.md](references/mechanism-fit.md)), the
+four axes (three in
+[cross-cutting-axes.md](references/cross-cutting-axes.md), the fourth in
+[security-level.md](references/security-level.md)), and the three-way
+division of responsibility -- names no path or issue number specific to
+this skill's own authoring repository. This skill's own authoring
+repository's worked examples and provenance live separately, explicitly
+repository-scoped, in
 [gitapex-worked-examples.md](references/gitapex-worked-examples.md),
 [owasp-coverage.md](references/owasp-coverage.md), and
 `metadata/gitapex.yaml`.
