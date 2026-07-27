@@ -171,6 +171,12 @@ is the pattern this skill reuses rather than re-deriving.
 
 ## Stop boundaries
 
+- Never let a fact, verdict, or pattern from
+  [references/worked-examples.md](references/worked-examples.md)
+  substitute for verifying the same claim against the target under
+  review -- carry-over-by-analogy is a hallucination risk, not evidence;
+  a target that superficially resembles the worked example still needs
+  its own citations.
 - Never issue an aggregate "attack surface: OK" verdict -- report per
   dependency relationship and per credential grant.
 - Never claim excess exposure or excess privilege the reviewed artifact's
