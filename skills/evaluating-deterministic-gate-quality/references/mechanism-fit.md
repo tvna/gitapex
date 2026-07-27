@@ -73,3 +73,11 @@ framework does not by itself answer whether a given policy needs
 independent, client-agnostic coverage -- that question is the
 [Reproducibility / Domain-coverage axis](../SKILL.md#axis-reproducibility--domain-coverage)'s
 job, not this test's.
+
+Nor does it decide how strong a specific realization's control is on an
+external Foundation/Enterprise/Advanced maturity ladder, or whether that
+strength is honestly claimed for its category -- that classification is
+the [Security-level / Zero-Trust maturity classification
+axis](../SKILL.md#axis-security-level--zero-trust-maturity-classification)'s
+job, not this test's own, even though criteria 1 and 3 above already
+reason in the same impossible-vs-tedious terms that axis names explicitly.

@@ -20,6 +20,7 @@ copied from the report's own text.
 2. [Worked example: retrospective-identity, single-source-of-truth predicate](#worked-example-retrospective-identity-single-source-of-truth-predicate)
 3. [Worked example: dimension 12 and sibling-repository provenance](#worked-example-dimension-12-deployment-mode-portability-and-sibling-repository-provenance)
 4. [Smoke test: this skill applied to a real Domain-2 gate](#smoke-test-this-skill-applied-to-a-real-domain-2-gate)
+5. [Worked example: Security-level / Zero-Trust maturity classification axis](#worked-example-security-level--zero-trust-maturity-classification-axis-this-repositorys-own-established-ceiling)
 
 ## Worked example: Reproducibility / Domain-coverage axis (argued, multi-domain coverage)
 
@@ -223,3 +224,66 @@ convention) -- filed instead as its own follow-up issue (recorded in
 this skill's own `metadata/gitapex.yaml` sidecar, per this skill's own
 no-bare-citation rule for body prose) per this repository's own "open a
 GitHub issue before any branch, commit, or PR" convention.
+
+## Worked example: Security-level / Zero-Trust maturity classification axis (this repository's own established ceiling)
+
+Applies the axis to the same Domain-2 gate pair already graded in the
+smoke test above (`hooks/check-issue-acm-disclosure.sh` +
+`hooks/check_acm_present_or_waiver.py`, paired with the Domain-3 CI
+backstop) -- reusing that smoke test's already-live-verified findings
+rather than re-testing. This worked example recasts existing evidence
+through a new lens; it makes no new live-tested claim.
+
+This repository's own established tier/ceiling documentation, per the
+reuse-not-re-derive procedure in
+[references/security-level.md](security-level.md): a design doc adapting
+Anthropic's Zero Trust tier framework onto this repository's own `init`
+scaffolding, and a separate, already-shipped control-coverage inventory
+mapping this repository's design onto external security taxonomies. Both
+are consumed here as already-settled input, not re-derived.
+
+**Category placement:** primarily **input validation and output
+controls** (validating an issue-creation tool call's own body content
+before the write proceeds), with a secondary touch on **AI governance
+policies** (documenting an approver-facing acceptance-criteria
+convention).
+
+**Honest-ceiling cross-check:** the tier-design doc's input-validation
+category table tags Foundation-tier input validation as schema/enum/size
+validation everywhere input enters, its `configure`-class (an enforced,
+not merely documented, obligation). The ACM-disclosure hook is exactly
+this pattern -- a schema-shaped presence/waiver check on a tool call's
+own body field, deterministically enforced (dimension 1: PASS, the
+correct Domain-2 exit-2 deny signal is used) -- so Foundation-tier
+input-validation coverage for this specific policy is honestly claimable
+in principle.
+
+**Floor-or-scalable classification:** this control is **tier-scalable,
+not floor-class**. The cited design doc's own floors table names no
+ACM-shaped requirement among this repository's non-negotiable floors; the
+ACM-disclosure check is friction-class (it raises the cost of an
+under-specified issue slipping through; it does not remove an attack
+path an agentic actor has no other route around -- a determined caller
+could still supply a syntactically valid but hollow waiver line and
+pass). Naming it tier-scalable surfaces a real gap on its own: nothing
+currently escalates its strictness at a higher tier.
+
+**Overclaim check, reusing the smoke test's already-live-verified
+finding:** the smoke test above found, live-verified, that malformed
+stdin JSON causes this same hook to fail OPEN (dimension 15: FAIL) rather
+than deny. Any description of this control as reliably Foundation-tier
+"schema validation everywhere input enters" is therefore an **overclaim**
+on the specific malformed-input path today, since the "everywhere" claim
+does not hold there. This is the same defect the smoke test already found
+and filed as its own follow-up issue (recorded in this skill's own
+`metadata/gitapex.yaml` sidecar, per this skill's own no-bare-citation
+rule for body prose), recast here as a tier-honesty finding: dimension
+15's live-verified failure caps what this axis can honestly credit until
+that fix lands, regardless of what any tier-facing documentation
+elsewhere might claim.
+
+**Verdict:** Foundation-tier input-validation coverage is the honestly
+claimable ceiling for this policy today -- not because the tier ladder
+disallows more, but because dimension 15's live-verified gap caps it
+there. Tier-scalable, not floor-class. No Enterprise/Advanced-tier
+escalation exists or is claimed for this control.

@@ -34,6 +34,17 @@ this list into its own axis in `SKILL.md`, since it earns the same
 cross-cutting treatment as Compatibility awareness and Reproducibility,
 not a single-artifact check.
 
+A fourth cross-cutting axis, Security-level / Zero-Trust maturity
+classification, was added later still, directly in `SKILL.md` -- not
+promoted out of this numbered list, since it was never one of these
+dimensions. It classifies a gate's control strength against an external
+Foundation/Enterprise/Advanced maturity ladder, a different question from
+dimension 1 (non-bypassable deny path) or dimension 15 (fail-closed
+default) below: those ask whether a gate's own mechanics realize a
+property at all; the axis asks where the resulting control honestly sits
+on that ladder given that they do or don't. See `SKILL.md`'s own axis
+section and `references/security-level.md` for the full test.
+
 ## Deterministic-shape checks
 
 1. **Deny path is non-bypassable-by-default, not silently downgraded to

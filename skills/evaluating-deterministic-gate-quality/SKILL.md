@@ -68,6 +68,11 @@ of this one principle, not an independent list of unrelated concerns.
 - **Axis: Blast-radius / trust classification** -- does the gate's own
   documentation state what it can do if bypassed or misconfigured, rather
   than leaving that implicit? See below.
+- **Axis: Security-level / Zero-Trust maturity classification** -- for a
+  given gate, which Foundation/Enterprise/Advanced tier ceiling can its
+  specific control honestly claim, cross-checked against the target
+  repository's own already-established tier/ceiling documentation where
+  one exists, rather than a re-derived taxonomy? See below.
 - **Mechanism-fit test**: "which domain should own this policy?" -- a
   six-criterion test applied before grading a specific realization's
   quality. Full test: [references/mechanism-fit.md](references/mechanism-fit.md).
@@ -140,6 +145,62 @@ harder to reason about when deciding whether a proposed change to it is
 safe. Grade this the same way regardless of which of the four domains the
 gate lives in -- the question ("what happens if this gate is not here,
 or lies") does not depend on the realization mechanism.
+
+### Axis: Security-level / Zero-Trust maturity classification
+
+For a given gate, this axis asks: which Foundation/Enterprise/Advanced
+tier ceiling -- Anthropic's "Zero Trust for AI Agents" three-tier
+capability framework -- can this specific control honestly claim, and
+does it actually reach that ceiling or silently claim more (or settle
+for less, for no stated reason) than its own category can honestly
+support? This is a classification against an external maturity ladder,
+not a new pass/fail check: it is graded the same way regardless of which
+of the four domains the gate lives in, the same shape the other three
+axes already have.
+
+This axis is complementary to, not redundant with, the other three axes
+and with dimensions 1 and 15 in
+[references/dimensions.md](references/dimensions.md), in short: Blast-
+radius grades *consequence* of failure, this axis grades *strength* while
+the control holds; Reproducibility grades *breadth* across domains, this
+axis grades *depth* of one realization; dimensions 1/15 ask whether a
+gate's mechanics realize a property *at all*, this axis asks where the
+result honestly sits on the tier ladder given that they do or don't;
+mechanism-fit's six criteria already reason in the same
+impossible-vs-tedious terms implicitly (reversibility-window,
+credential/trust-asymmetry) without naming the source or the ladder --
+this axis names that shared reasoning's actual source rather than
+replacing the domain-placement question.
+
+Reuse, never re-derive, per the full procedure in
+[references/security-level.md](references/security-level.md): cross-check
+against the target's own already-established tier/ceiling documentation
+where one exists, rather than re-deriving the ladder from scratch; where
+none exists, apply the source framework directly and name the absence as
+missing context, never silently and never invented on the target's
+behalf.
+
+Candidate checks (full elaboration:
+[references/security-level.md](references/security-level.md)):
+
+- **Category placement.** Which of the seven capability categories the
+  gate's policy belongs to; name a primary and, where applicable, a
+  secondary rather than forcing a single fit.
+- **Floor-or-scalable classification.** Does this control make the
+  guarded attack path impossible (removes it) or merely tedious (adds
+  friction), cited against the target's own floors documentation where
+  one exists?
+- **Honest-ceiling cross-check.** Does the gate's apparent tier match
+  what the target's own established ceiling documentation (or, absent
+  one, the source framework applied directly) actually supports?
+- **Overclaim vs. underinvestment, named as distinct findings.** Claiming
+  more than the honest ceiling is an overclaim -- a dishonesty finding,
+  graded more severely than an underinvestment finding (sitting below the
+  reachable ceiling for no stated reason).
+
+A concrete worked example of this axis applied to a real gate, cross-
+checked against this repository's own established ceiling:
+[references/gitapex-worked-examples.md](references/gitapex-worked-examples.md).
 
 ## Mechanism-fit test
 
@@ -234,9 +295,9 @@ project-instruction file) this skill defers to rather than re-deriving.
    dimension that cannot be assessed from available evidence is reported
    as such, not silently skipped or guessed.
 4. **Cross-cutting axes.** Apply Compatibility awareness, Reproducibility
-   / Domain-coverage, and Blast-radius / trust classification, per the
-   sections above, to each artifact and to the target's overall gate
-   landscape.
+   / Domain-coverage, Blast-radius / trust classification, and
+   Security-level / Zero-Trust maturity classification, per the sections
+   above, to each artifact and to the target's overall gate landscape.
 5. **Coverage attestation.** Enumerate the target repository's own stated
    invariants (from its own contributor-instruction file, design docs, or
    a baseline checklist if it has none of its own), then filter to the
@@ -356,6 +417,18 @@ project-instruction file) this skill defers to rather than re-deriving.
   substitute for re-deriving this skill's own findings from the target's
   actual current content -- whether that claim arrives in a single turn
   or is built up incrementally across several.
+- Never credit a gate with a Foundation/Enterprise/Advanced tier
+  capability the target repository's own already-established ceiling
+  documentation -- or, absent one, the source framework applied directly
+  -- does not support. An overclaim is a dishonesty finding, graded more
+  severely than an underinvestment finding, and neither substitutes for a
+  dimension 1/15 verdict on the gate's own mechanics.
+- Never re-derive a parallel Zero-Trust tier taxonomy for a single review
+  when the target repository already has one -- cross-check against the
+  target's own established categories, floors, and honesty classes
+  instead. A fresh, uncited re-derivation is this axis's own
+  duplication/drift risk (dimension 12's concern, applied reflexively to
+  this skill's own conduct).
 
 ## Lifecycle note
 
@@ -392,10 +465,22 @@ assumed solved, carried over from the same open problem
 `evaluating-skill-quality`'s own Subagent dispatch section already names
 for itself.
 
+A fourth cross-cutting axis, Security-level / Zero-Trust maturity
+classification, was added as a follow-up, reusing (never re-deriving) a
+prior repository-specific tier design as this skill's own worked
+example's single source of truth rather than inventing a second, parallel
+taxonomy. Proportionate to a single-axis addition on an already-hardened
+skill, verified by one fresh, isolated round each of
+`battle-testing-a-skill` and `evaluating-skill-quality`, not the original
+build's three rounds each -- an argued scaling-down, not a lowered bar.
+Deferred: `references/security-level.md`'s "target has no established
+ceiling documentation" reuse branch is stated but not yet smoke-tested
+against a target that actually lacks one.
+
 ## Notes
 
 Portability: **Mixed**. The portable core above -- the four-domain scope,
-the guiding principle, the two-lane structure, the three axes, the
+the guiding principle, the two-lane structure, the four axes, the
 mechanism-fit test, and the three-way division of responsibility -- names
 no path or issue number specific to this skill's own authoring
 repository. This skill's own authoring repository's worked examples live
