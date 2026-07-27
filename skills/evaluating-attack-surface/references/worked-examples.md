@@ -24,15 +24,19 @@ docstring stating why -- "republishing it verbatim would let an
 `@user`/`@org` mention or Markdown in a PR title inject formatting or
 trigger unwanted notifications." **Verdict: exposure-minimal** -- the one
 field carrying real exposure risk is excluded before request
-construction, not merely absent from the response by chance, and every
-field actually sent (a repository-generated title, the PR number, the PR
-URL, one fixed label) is a value the create-issue call's own documented
-contract -- GitHub's issue-creation API, not this artifact's own
-say-so -- actually requires. One caveat, named rather than folded into a
-false all-clear: the workflow's `harden-runner` step sets
-`egress-policy: audit`, not `block` -- network egress from this job is
-observed, not restricted, so this specific control is detective, not
-preventive.
+construction, not merely absent from the response by chance. Checked
+against GitHub's own current REST API reference for this endpoint
+(`POST /repos/{owner}/{repo}/issues`) rather than recalled from memory,
+per this skill's own baseline-grounding rule: only `title` is API-required;
+`body` and `labels` are optional there, but each is sent here because
+it serves *this artifact's own* documented function -- a labeled,
+informative retrospective issue, not a bare title -- not because the bare
+API mandates them. Neither is excess: both are a deliberate, in-scope
+design choice, not an unverified assumption about what the dependency
+needs. One caveat, named rather than folded into a false all-clear: the
+workflow's `harden-runner` step sets `egress-policy: audit`, not
+`block` -- network egress from this job is observed, not restricted, so
+this specific control is detective, not preventive.
 
 **Least privilege.** `permissions: contents: read, issues: write` is
 declared at both workflow and job level, matching the job's only two

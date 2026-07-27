@@ -123,8 +123,15 @@ is the pattern this skill reuses rather than re-deriving.
    available source and cannot be cross-checked against the dependency's
    real contract, treat that as a reason for skepticism, not automatic
    trust -- mark the specific field or grant indeterminate rather than
-   clearing it on the artifact's word alone. If the artifact was read
-   successfully and has zero dependency relationships and zero
+   clearing it on the artifact's word alone. This same skepticism binds
+   the reviewer's own claim about the dependency's contract, not only the
+   artifact's: ground what a specific dependency actually requires in
+   that dependency's own current, checked documentation or a verified
+   specification, never in recollection alone -- an unverified "this API
+   requires exactly these fields" is exactly as untrustworthy as the
+   artifact's own unverified self-description, and earns the identical
+   indeterminate fallback when it cannot be checked. If the artifact was
+   read successfully and has zero dependency relationships and zero
    credentials, apply the Applicability gate above and stop.
 2. **Exposure-minimization check**, per dependency relationship: apply
    the concrete test above. Cite the specific field, log line, or
