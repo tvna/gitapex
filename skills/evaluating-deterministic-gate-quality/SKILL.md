@@ -297,8 +297,12 @@ project-instruction file) this skill defers to rather than re-deriving.
 6. **Issue a verdict** per artifact reviewed (well-formed and
    well-placed / well-formed but misplaced / not well-formed /
    indeterminate, with the specific reason), plus an overall
-   coverage-attestation summary for the target repository. Cite evidence
-   for every claim; a postcondition with no cited evidence is not a
+   coverage-attestation summary for the target repository. An artifact
+   matching more than one of these at once (e.g. wrong-domain and also
+   failing a deterministic-shape check) gets both reported together, not
+   resolved by picking one -- a wrong-domain finding never replaces a
+   shape/maturity finding on the same artifact. Cite evidence for every
+   claim; a postcondition with no cited evidence is not a
    completed review. A well-formed verdict resting on any claim about
    the gate's actual runtime behavior (a deny/allow/fail-open/fail-closed
    outcome, not the gate's own source text alone) requires that specific
@@ -425,58 +429,32 @@ project-instruction file) this skill defers to rather than re-deriving.
 
 ## Lifecycle note
 
-This is a first version of a new skill category in its authoring
-repository, declared `experimental` in its own `metadata/gitapex.yaml`
-sidecar. Deferred, named explicitly rather than silently absent: a full,
-independently-verified agent-tool/middleware compatibility matrix (the
-Compatibility awareness axis above is concept-only for now); a bundled
-deterministic shape-checker script specific to this skill's own domain
-(today it relies on manual application of
-[references/dimensions.md](references/dimensions.md)'s deterministic-shape
-checks); and a committed adversarial regression corpus (an `evals/`
-suite exercising this skill's own grading behavior against fixed
-targets, distinct from the live smoke test in
-[references/gitapex-worked-examples.md](references/gitapex-worked-examples.md)).
-A battle-testing-a-skill adversarial trial run against this skill found
-those two gaps directly, plus two further real gaps in earlier rounds
-that are now fixed -- a coverage-attestation step that trusted a target
-repository's own stated invariants unconditionally (Procedure step 5 and
-a matching Stop boundary now apply the same content-trust skepticism
-given to a target gate's own script/config), and a bare-issue-citation
-defect a first fix attempt only partially resolved (every specific issue
-number is now elided from this skill's own body prose entirely, per
-`evaluating-skill-quality`'s own stricter reading of its Portability
-rule, with no inline-code exemption). A companion
-`evaluating-skill-quality` review, re-run fresh after each fix, converged
-on **WELL-FORMED-AND-MATURE** and surfaced one further gap, also now
-fixed: dimension 18 above (secret/credential redaction in a gate's own
-output) did not exist in an earlier draft of this list. Every trial's own
-dispatch also disclosed it could not be verified free of this authoring
-repository's project-instruction file -- a harness-level
-isolation-verification limitation named here rather than silently
-assumed solved, carried over from the same open problem
-`evaluating-skill-quality`'s own Subagent dispatch section already names
-for itself.
+First version of a new skill category, declared `experimental` in
+`metadata/gitapex.yaml`. Full build and hardening history -- the initial
+three-round audit, the fourth axis's own two follow-up rounds, every
+fixed and deferred item each surfaced -- lives in
+`metadata/gitapex.yaml`'s `spec.lifecycle.experimental.reason`
+(maintainer-facing, never runtime-loaded) and in
+[references/gitapex-worked-examples.md](references/gitapex-worked-examples.md#audit-history-security-level-axis-hardening-round),
+not restated here: paying a per-invocation prose cost for provenance
+content with no bearing on grading an actual target gate is exactly the
+duplication this skill's own dimension 12 warns against, applied
+reflexively.
 
-A fourth cross-cutting axis, Security-level / Zero-Trust maturity
-classification, was added as a follow-up, reusing (never re-deriving) a
-prior repository-specific tier design as this skill's own worked
-example's single source of truth. Two fresh, isolated audit rounds ran
-against it -- a standard `evaluating-skill-quality` +
-`battle-testing-a-skill` pass, then a Fable-model blind-spot analysis
-followed by eight adversarial trials against mock hostile repositories --
-and found real gaps, not a clean pass: ten findings total, spanning the
-new axis's ceiling-doc trust and this skill's pre-existing Stop
-boundaries (execution safety, the "already reviewed" and live-verification
-waiver boundaries, and the anti-injection scan's scope). All ten are now
-fixed in the Stop boundaries, Procedure step 5, and
-`references/security-level.md` above; full verdicts and per-finding
-detail: [references/gitapex-worked-examples.md](references/gitapex-worked-examples.md#audit-history-security-level-axis-hardening-round).
-Deferred: the "no established ceiling documentation" reuse branch remains
-unsmoke-tested against a target that actually lacks one; the second
-round's isolation-from-CLAUDE.md and per-trial-tooling limitations are
-named there, not assumed solved, matching this skill's own build history
-above.
+Deferred, named explicitly rather than silently absent: a full,
+independently-verified agent-tool/middleware compatibility matrix; a
+bundled deterministic shape-checker script for this skill's own domain; a
+committed `evals/` adversarial regression corpus; a smoke-test fixture
+for the description's second named use case ("deciding which of several
+possible mechanisms should own a new policy") -- only the first of the
+three named use cases has fixture coverage today, and the third is
+explicitly disclosed as out of the smoke test's own scope in
+`references/gitapex-worked-examples.md`, but the second had no matching
+disclosure until now; the Security-level axis's "no established ceiling
+documentation" reuse branch, unsmoke-tested against a target that
+actually lacks one; and a harness-level isolation-verification gap every
+audit round's own dispatch has disclosed against itself, not assumed
+solved.
 
 ## Notes
 
