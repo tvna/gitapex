@@ -7,13 +7,15 @@
 # Only fires when tool_input.method == "create" -- an "update" call edits
 # an issue that already exists and is out of scope for this row.
 #
-# Reuses .github/scripts/gate_acm_issue_disclosure.py's own --check-only
-# mode (no network calls, no side effects) instead of a fourth copy of the
-# ACM-header/waiver regex: that script already carries the exact
-# disclosure-or-`ACM: not-applicable (chore|docs|tracking): <reason>`
-# vocabulary issue #357 names for this row, and
-# tests/test_check_acm_present_sync.py already keeps its header regex in
-# sync with the two skills/*/scripts/check_acm_present.py copies.
+# Checks via hooks/check_acm_present_or_waiver.py, a self-contained sibling
+# script bundled beside this hook (not .github/scripts/gate_acm_issue_disclosure.py,
+# a prior version's mistake -- per docs/repository-layout.md, only skills/
+# and hooks/ are deployed with the plugin, .github/ never is, so a
+# CLAUDE_PROJECT_DIR-relative .github/ lookup always misses in an
+# installed-plugin consumer checkout; caught by a Codex review on PR #433,
+# reproduced denying even a valid ACM/waiver body). Resolved relative to
+# this script's own location so it travels with the hook regardless of
+# CLAUDE_PROJECT_DIR/CLAUDE_PLUGIN_ROOT.
 #
 # Denies via the PreToolUse hookSpecificOutput JSON on stdout AND exit 2 /
 # stderr (both conventions, for defense in depth -- see plugin-dev's
@@ -39,8 +41,8 @@ fi
 
 body=$(printf '%s' "$input" | jq -r '.tool_input.body // empty')
 
-project_dir="${CLAUDE_PROJECT_DIR:-$(pwd)}"
-check_script="$project_dir/.github/scripts/gate_acm_issue_disclosure.py"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+check_script="$script_dir/check_acm_present_or_waiver.py"
 
 deny() {
   local reason="$1"
@@ -50,10 +52,10 @@ deny() {
 }
 
 if [ ! -f "$check_script" ]; then
-  deny "Blocked by hooks/check-issue-acm-disclosure.sh: cannot verify ACM disclosure -- gate_acm_issue_disclosure.py was not found at $check_script."
+  deny "Blocked by hooks/check-issue-acm-disclosure.sh: cannot verify ACM disclosure -- check_acm_present_or_waiver.py was not found at $check_script (corrupted or incomplete plugin bundle)."
 fi
 
-if printf '%s' "$body" | python3 "$check_script" --check-only >/dev/null 2>&1; then
+if printf '%s' "$body" | python3 "$check_script" >/dev/null 2>&1; then
   exit 0
 fi
 
