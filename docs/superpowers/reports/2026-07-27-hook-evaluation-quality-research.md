@@ -161,6 +161,22 @@ claims are this report's own synthesis and are marked as such.
     for the word "hook", turned up **zero** existing issues and no plan,
     spec, or note proposing a hook-quality rubric -- Fact: this is
     genuinely open territory in this repository, not duplicate work.
+13. **Middleware/toolchain dependencies, observed directly across all
+    four shipped hook scripts** -- Fact: every one of
+    `hooks/check-bash-safety.sh`, `hooks/check-issue-acm-disclosure.sh`,
+    `hooks/check-template-overwrite.sh`, and
+    `skills/executing-a-branch-plan/scripts/check_task_bash_safety.sh`
+    declares `#!/bin/bash` and uses `set -euo pipefail` plus `[[ ]]`
+    conditionals -- bash-specific syntax, not POSIX `sh` -- and every one
+    invokes `jq` to parse stdin JSON and construct output JSON. Two of
+    the four (`check-bash-safety.sh`, `check-issue-acm-disclosure.sh`)
+    additionally shell out to `python3` (`scan_provenance.py`,
+    `check_acm_present_or_waiver.py` respectively); one
+    (`check-bash-safety.sh`) additionally invokes `git` directly
+    (`rev-parse`, `merge-base`, `log`) for its push-time provenance scan.
+    None of `bash`, `jq`, `python3`, or `git` are guaranteed present by
+    Claude Code itself -- they are environment dependencies the hook
+    author must ensure exist.
 
 ### External: Anthropic's official Claude Code documentation (fetched this session)
 
@@ -273,6 +289,190 @@ claims are this report's own synthesis and are marked as such.
   verification against Claude Code's plugin-reference documentation
   rather than re-deriving it, and flags it as a citation this report
   did not re-check first-hand.
+
+### External: other agent-tool hook mechanisms (fetched this session)
+
+Researched at the requester's own direction, mirroring the scope
+`evaluating-skill-quality`'s own `references/runtime-compatibility.md`
+already tracks for skills: Claude Code, Codex, Gemini CLI, Devin,
+OpenClaw, and HermesAgent. Each finding below uses that same document's
+three evidence states (Documented / Unknown / Conflict), and every
+runtime was checked against its own official docs or source repository,
+not a memory or a third-party summary, per this session's own
+`grounding-in-primary-sources` discipline.
+
+- Fact, per `github.com/openai/codex` (`docs/config.md`,
+  `codex-rs/hooks/src/**`, `codex-rs/core/src/hook_runtime.rs`, and the
+  generated JSON schema `codex-rs/hooks/schema/generated/pre-tool-use.
+  command.output.schema.json`, all fetched this session): **Documented.**
+  Codex has an 11-value `HookEventName` enum (including `PreToolUse`,
+  `PostToolUse`, `SessionStart`, `SessionEnd`), regex matchers on 9 of the
+  11 events, a `PreToolUseHookResult::Blocked` variant, and a JSON output
+  contract using the identical field name
+  `hookSpecificOutput.permissionDecision: "allow"|"deny"` Claude Code
+  uses. Codex's own source names its lineage directly:
+  `codex-rs/features/src/lib.rs` reads "Enable Claude-style lifecycle
+  hooks loaded from hooks.json files."
+- Fact, per `google-gemini/gemini-cli`'s official docs
+  (`docs/hooks/{index,reference,writing-hooks}.md`, fetched this
+  session): **Documented.** "Hooks run synchronously as part of the
+  agent loop -- when a hook event fires, Gemini CLI waits for all
+  matching hooks to complete before continuing." Named events
+  (`BeforeTool`/`AfterTool` etc.) map closely to Claude Code's
+  Pre/PostToolUse; blocking uses `"decision": "deny"` (aliased
+  `"block"`); exit codes carry the same 0/2/other semantics. The docs
+  define a `CLAUDE_PROJECT_DIR` alias environment variable "provided for
+  compatibility" -- an explicit, named interoperability gesture toward
+  Claude Code specifically.
+- **Unknown** for Devin (Cognition): this session's own outbound proxy
+  policy blocked every fetch attempt against `docs.devin.ai` (a
+  CONNECT-stage 403, not a site-side failure). Search-index page titles
+  suggest hooks documentation exists there, but per this report's own
+  sourcing discipline an indexed title and a search engine's own summary
+  paraphrase are not a primary source -- this is recorded as an
+  environment-caused verification gap, not as evidence the mechanism is
+  absent, and not upgraded to Documented on an unverified paraphrase.
+- Fact, per `openclaw/openclaw`'s official docs
+  (`docs/automation/hooks.md`, `docs/plugins/hooks.md`, fetched this
+  session): **Documented**, with a structural divergence worth flagging
+  on its own. OpenClaw splits its mechanism into "internal hooks"
+  (event-driven, explicitly side-effect-only, cannot block) and "typed
+  plugin hooks" (registered via a Plugin SDK call, `before_tool_call` can
+  return `{block: true, blockReason}`). Unlike Claude Code, Codex, Gemini
+  CLI, and HermesAgent -- all of which transport a blocking decision via
+  an external process reading JSON on stdin and signaling via exit
+  code/stdout JSON -- OpenClaw's blocking path is an **in-process
+  JS/TS function return value**, a different transport model entirely.
+  The same source material also surfaced two historical bug reports
+  (`openclaw/openclaw` issues #5943, #5513) that `before_tool_call` was
+  "defined... but never called" in an earlier version, reportedly
+  addressed later -- a documented design contract is not the same claim
+  as verified current live behavior, and this report does not conflate
+  the two.
+- Fact, per `NousResearch/hermes-agent`'s official docs
+  (`website/docs/user-guide/features/hooks.md`, fetched this session):
+  **Documented**, with a second structural divergence. Hermes's Shell
+  Hooks explicitly accept Claude Code's own JSON shape as an alternate
+  input format -- the doc's own comment reads `// Claude-Code style` next
+  to `{"decision": "block", "reason": "..."}` -- a direct, named
+  cross-vendor compatibility gesture. But Hermes's blocking is driven
+  **purely by the JSON payload's `action`/`decision` field**: a nonzero
+  exit code, a malformed response, or a timeout is only logged as a
+  warning and never blocks anything, the inverse of Claude Code's
+  exit-code-2-is-authoritative convention. A hook script written to rely
+  on Claude Code's exit-code contract would silently stop enforcing its
+  policy if the same check needed to run under Hermes's own hook system.
+- Fact, per a dedicated search this session (queries including
+  "agentskills.io hooks specification" and "AI agent lifecycle hooks
+  standard"): **no open cross-vendor hooks specification exists**,
+  unlike Agent Skills' `agentskills.io`, which all six runtimes above
+  separately claim compatibility with. A small number of early,
+  unadopted proposals exist (AgentHook, a v0.2 draft self-described as
+  "not yet endorsed by any external runtime"; the Agent Control Standard,
+  a v0.1 public preview with no vendor implementations; the Standard
+  Agent Specification) but none has a single confirmed vendor adopter.
+  Practically: two of the five other tools researched this session
+  (Codex, HermesAgent) explicitly name Claude Code's own hook shape in
+  their own source or docs as something they converged toward or
+  interoperate with, so Claude Code's contract already functions as a
+  de facto reference shape industry-wide, without a governing spec
+  enforcing that convergence stays exact.
+
+## Compatibility awareness (agent-tool axis and dependent middleware)
+
+A warning-only axis, proposed here to mirror `evaluating-skill-quality`'s
+own explicitly separate "Compatibility awareness" axis (its
+`references/runtime-compatibility.md`) rather than folding it into the
+numbered dimensions above -- same structural choice, same scope of
+runtimes tracked (Claude Code, Codex, Gemini CLI, Devin, OpenClaw,
+HermesAgent), same three evidence states. Like its skill-side
+counterpart, this axis never changes a hook's own pass/fail verdict on
+its own; it is a disclosure requirement layered on top.
+
+### One semantics inversion versus the skill-side axis, named explicitly
+
+For `evaluating-skill-quality`, "Portable" (working unmodified wherever
+it is vendored) is close to an unqualified virtue. A hook's entire
+purpose is the opposite: enforcing *this specific repository's* policy
+deterministically. Cross-tool portability is therefore not the same
+kind of virtue for a hook -- the question a hook-quality rubric actually
+needs to ask is not "does this hook script run unmodified under Gemini
+CLI or Codex," but **"if this repository is worked on via a different
+tool, does an equivalent deterministic gate still exist there, or does
+the safety-critical prohibition this hook backs silently become
+unenforced prose the moment the tool changes?"** This reframing is
+itself an open design question this report surfaces, not a settled
+answer -- see [Open questions](#open-questions--blind-spots).
+
+### Agent-tool runtime matrix
+
+| Agent tool | Deterministic hook-equivalent exists? | Structural comparison to Claude Code hooks | Evidence state |
+|---|---|---|---|
+| Codex (OpenAI) | Yes | Own source calls it "Claude-style lifecycle hooks"; 11 named events; regex matchers on 9/11; `hookSpecificOutput.permissionDecision` field name identical to Claude Code's; exit 0 success / nonzero failure. | Documented |
+| Gemini CLI | Yes | Named events map closely to Pre/PostToolUse; `decision: "deny"/"block"`; exit-code 0/2/other convention identical in shape; defines a `CLAUDE_PROJECT_DIR` alias "provided for compatibility." | Documented |
+| Devin (Cognition) | Indexed doc titles suggest yes | Not independently verified this session -- the primary-source domain was blocked by this session's own outbound proxy policy, not by any evidence the mechanism is absent. | Unknown |
+| OpenClaw | Yes, split into two layers | Blocking layer ("typed plugin hooks") transports its decision as an **in-process SDK function return value**, not an external process + JSON/exit-code, unlike every other runtime in this table; a documented historical bug shows the design contract and verified live behavior are not automatically the same claim. | Documented (design); live behavior unverified beyond docs |
+| HermesAgent | Yes | Explicitly accepts Claude Code's own JSON shape as an alternate format ("`// Claude-Code style`"); blocking is JSON-payload-driven only -- exit code carries **no** blocking meaning, the inverse of Claude Code's own convention. | Documented |
+| *(no open cross-vendor spec)* | -- | Unlike Agent Skills' `agentskills.io`, no governing standard exists; convergence toward Claude Code's shape (Codex, HermesAgent) is voluntary, not spec-enforced. | Documented (absence confirmed by search) |
+
+### Candidate compatibility-awareness checks
+
+- **Transport-model disclosure.** Does the hook's own documentation state
+  whether its blocking mechanism is external-process-plus-exit-code
+  (Claude Code, Codex, Gemini CLI, HermesAgent's Shell Hooks) or
+  in-process-SDK-return-value (OpenClaw's typed plugin hooks)? A rubric
+  built only against Claude Code's own contract would silently assume
+  the wrong transport if the same policy needed porting.
+- **Blocking-signal-of-record disclosure.** Does the hook state which
+  signal is authoritative for blocking -- exit code (Claude Code) or the
+  JSON payload's own field (HermesAgent, where exit code is
+  non-authoritative)? Porting a hook that only sets exit code 2, with no
+  JSON payload, to a Hermes-style runtime would silently stop enforcing
+  it.
+- **Documented-vs-verified distinction, carried into the hook's own
+  claims.** Per OpenClaw's own historical `before_tool_call` bug: a
+  runtime's documentation describing a blocking contract is not proof
+  that contract is live in the currently-installed version. A rubric
+  could ask whether a hook's own claims about *any* runtime's behavior
+  (including Claude Code's) cite a verified, current observation
+  (per this repository's own `threat-model-and-authorization.md`
+  precedent, item 7 above) rather than the runtime's documentation
+  alone.
+
+### Dependent middleware
+
+Grounded in the internal inventory above (item 13): every hook script
+this repository ships already depends on external binaries Claude Code
+itself does not guarantee -- `bash` specifically (not POSIX `sh`), `jq`
+universally, `python3` in two of four scripts, and `git` in one. This is
+not hypothetical: Anthropic's own hooks-guide troubleshooting section
+names both failure modes directly as known issues, not edge cases --
+"`jq`: command not found... install `jq` or use Python/Node.js for JSON
+parsing," and, on Windows specifically, that Git Bash "still source[s]
+your profile. If that profile contains unconditional `echo` statements,
+the output gets prepended to your hook's JSON" and breaks JSON parsing
+entirely.
+
+- **Candidate check: middleware dependency is stated, not assumed.**
+  Does the hook's own comments or documentation name every external
+  binary it shells out to, so a consumer repository (or a different
+  deployment image, container, or CI runner) can verify each is present
+  before relying on the hook, rather than discovering a silent failure
+  the first time the binary is missing?
+- **Candidate check: shell-portability is a deliberate choice, not a
+  default.** A `#!/bin/bash` shebang using `set -euo pipefail` and
+  `[[ ]]`/array syntax is a deliberate choice to require bash over
+  POSIX `sh` -- does the hook's own documentation say so, given bash is
+  not universally preinstalled (minimal container images, some CI
+  runners) the way `sh` typically is?
+- **Candidate check: Windows-specific execution-model awareness.**
+  Given the official docs' own -- confirmed this session -- statements
+  that (a) Windows exec-form hooks cannot spawn `.cmd`/`.bat` shims
+  (`npm`, `npx`, `eslint`, etc.) without going through `node` directly,
+  and (b) Git Bash's profile-sourcing behavior can silently corrupt a
+  hook's JSON output, does a hook likely to run on Windows disclose
+  either constraint, rather than being authored and tested on
+  macOS/Linux only and assumed portable?
 
 ## Candidate quality dimensions (research proposal, not a shipped rubric)
 
@@ -395,6 +595,21 @@ Blind spot pass), named explicitly rather than left implicit:
   already hard-flags any hook/script diff) or a new dimension bolted onto
   `evaluating-skill-quality` itself**, is an open mechanism-fit question
   this report does not resolve -- see [Next steps](#next-steps-decision-ready-options).
+- **The "Portable" semantics inversion between skills and hooks (see
+  Compatibility awareness above) is named but not resolved.** Whether a
+  future rubric should score cross-tool portability as a virtue, a
+  neutral fact, or largely irrelevant for a hook is a real design
+  question this report surfaces rather than settles.
+- **Devin's own hook mechanism is Unknown, not confirmed either way**,
+  because this session's outbound proxy policy blocked every fetch
+  attempt against `docs.devin.ai`. A follow-up pass with different
+  network access could resolve this rather than leaving it Unknown
+  indefinitely.
+- **The agent-tool and middleware research above has not itself been
+  through the same adversarial verification pass** the rest of this
+  report's citations already went through (see the commit history on
+  this file) -- an explicit gap, named per this report's own Unknowns
+  framework rather than silently assumed clean.
 
 ## Explicitly out of scope for this pass
 
@@ -403,6 +618,10 @@ Blind spot pass), named explicitly rather than left implicit:
 - No changes to `hooks/hooks.json` or any existing hook script.
 - No eval suite is created for the candidate dimensions above; none of
   them have been battle-tested against a real hook contribution yet.
+- No `references/runtime-compatibility.md`-equivalent baseline document
+  is created for hooks in this pass; the Compatibility awareness section
+  above is this report's own inline research, not a maintained,
+  separately-versioned baseline file the way the skill-side rubric has.
 
 ## Next steps (decision-ready options)
 
@@ -411,14 +630,20 @@ decision-ready" convention, three concrete, named options for whoever
 picks up this research next -- not an open-ended "what should we do":
 
 - **(a) Build a new `evaluating-hook-quality` skill**, mirroring
-  `evaluating-skill-quality`'s two-lane structure, using the candidate
-  dimensions above as a starting rubric, scoped explicitly to `type:
-  "command"` hooks only (deferring the `prompt`/`agent`-type question).
+  `evaluating-skill-quality`'s two-lane structure plus its separate
+  Compatibility awareness axis, using the candidate dimensions and the
+  agent-tool/middleware matrix above as a starting point, scoped
+  explicitly to `type: "command"` hooks only (deferring the
+  `prompt`/`agent`-type question) and turning the Compatibility
+  awareness section above into a maintained
+  `references/runtime-compatibility.md`-equivalent baseline file rather
+  than leaving it as this report's own inline research.
 - **(b) Same as (a), but resolve the `prompt`/`agent` hook-type mechanism-
   fit question first**, as its own small design spike, before the rubric
   is written, since it changes what dimension 8 above even means.
 - **(c) A narrower step**: extend `screening-a-low-trust-contribution`
   check 4 (currently a hard-flag-and-nothing-more) into a fuller checklist
   using the deterministic-shape checks above, without building a whole new
-  sibling skill yet -- deferring the probabilistic-maturity dimensions to
-  a later pass once (a)/(b) above are picked.
+  sibling skill yet -- deferring the probabilistic-maturity and
+  Compatibility awareness dimensions to a later pass once (a)/(b) above
+  are picked.
