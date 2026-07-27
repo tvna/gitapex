@@ -313,7 +313,10 @@ axis was first added, per this skill's own Subagent-dispatch requirement
 (never the authoring context grading its own work). Both found real
 gaps, not a clean pass -- recorded here in full since the Lifecycle note
 in `SKILL.md` only summarizes. All findings below are now fixed in
-`SKILL.md`'s Stop boundaries and Procedure step 5, and in
+`SKILL.md`'s Stop boundaries, in `references/grading-procedure.md`
+(Procedure step 5's coverage-attestation detail and the grading-specific
+Stop boundaries both now live there, moved out of `SKILL.md`'s own
+wholesale-loaded body during a later restructuring), and in
 `references/security-level.md` and `references/dimensions.md`.
 
 ### Round 1: standard `evaluating-skill-quality` + `battle-testing-a-skill`
@@ -352,7 +355,8 @@ indeterminate discipline everywhere else (dimension 8); and the
 requirement, reachable by a reviewer who simply never looked (dimensions
 2/3 interaction). All three are now fixed in
 `references/security-level.md`'s "Reuse, never re-derive" section and in
-`SKILL.md`'s matching Stop boundaries.
+`references/grading-procedure.md`'s matching (Security-level-specific)
+Stop boundaries.
 
 ### Round 2: Fable-model blind-spot analysis, then eight adversarial trials
 
