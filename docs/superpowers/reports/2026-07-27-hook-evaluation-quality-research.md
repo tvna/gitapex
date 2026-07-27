@@ -166,10 +166,15 @@ claims are this report's own synthesis and are marked as such.
     `hooks/check-bash-safety.sh`, `hooks/check-issue-acm-disclosure.sh`,
     `hooks/check-template-overwrite.sh`, and
     `skills/executing-a-branch-plan/scripts/check_task_bash_safety.sh`
-    declares `#!/bin/bash` and uses `set -euo pipefail` plus `[[ ]]`
-    conditionals -- bash-specific syntax, not POSIX `sh` -- and every one
-    invokes `jq` to parse stdin JSON and construct output JSON. Two of
-    the four (`check-bash-safety.sh`, `check-issue-acm-disclosure.sh`)
+    declares `#!/bin/bash` and uses `set -euo pipefail`, and every one
+    invokes `jq` to parse stdin JSON and construct output JSON. Only two
+    of the four (`check-bash-safety.sh`,
+    `check_task_bash_safety.sh`) additionally use bash-specific `[[ ]]`
+    conditionals; the other two (`check-issue-acm-disclosure.sh`,
+    `check-template-overwrite.sh`) stay within POSIX-compatible `[ ]`
+    tests and `case` statements, so `#!/bin/bash` there is a looser
+    dependency than the `[[ ]]`-using pair's. Two of the four
+    (`check-bash-safety.sh`, `check-issue-acm-disclosure.sh`)
     additionally shell out to `python3` (`scan_provenance.py`,
     `check_acm_present_or_waiver.py` respectively); one
     (`check-bash-safety.sh`) additionally invokes `git` directly
