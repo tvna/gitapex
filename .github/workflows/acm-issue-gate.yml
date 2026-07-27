@@ -1,0 +1,75 @@
+name: ACM issue disclosure gate
+
+# Issue #414 (sub-issue of #357): CI-side backstop for missing Acceptance
+# Criteria Map (ACM) disclosure on issue bodies -- the shape
+# skills/drafting-an-acm-issue/SKILL.md exists to produce. No workflow
+# under .github/workflows/ previously triggered on `issues:` events
+# (grep-confirmed during #357's own investigation), so this catches what
+# #413's PreToolUse hook (a sibling sub-issue) cannot: a session working
+# in a bare checkout of this repository with no hook harness loaded --
+# the exact environment #357's own incident happened in. Necessarily
+# post-hoc: GitHub has no required-check equivalent for issue creation,
+# so this workflow can only comment/label after the fact, never block it.
+#
+# Decision (issue #414's own Non-goals: "deciding whether human-authored
+# issues get exempted -- name the decision explicitly in the
+# implementation, do not silently default either way"): NO carve-out for
+# human-authored issues. This gate applies uniformly to every
+# opened/edited issue regardless of apparent authorship. GitHub's
+# `issues` webhook payload carries no field that reliably distinguishes
+# an issue drafted by an agent from one typed directly by a human under
+# the same account -- every issue in this repository, agent-drafted or
+# not, surfaces the same user.login/author_association (issue #414
+# itself: login "tvna", author_association "OWNER"). An authorship-based
+# carve-out would be unenforceable from the webhook payload alone, and
+# since this gate only comments/labels (never blocks issue creation),
+# applying it uniformly costs nothing beyond a label on an issue whose
+# author had no ACM convention in mind.
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  contents: read
+
+concurrency:
+  # Scoped per-issue: two different issues opened/edited at the same
+  # time must not cancel each other's run; re-edits of the same issue
+  # in quick succession should still cancel-and-rerun on the latest body.
+  group: ${{ github.workflow }}-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  acm-issue-disclosure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      # ISSUE_BODY carries untrusted external text (anyone who can open or
+      # edit an issue controls it) -- passed via env, never interpolated
+      # directly into this step's shell script, mirroring
+      # skill-audit-gate.yml's own PR_BODY handling. The check-and-act
+      # script itself only ever places it inside its own read (never a
+      # shell command or a URL), same as post_merge_retro.py's own
+      # untrusted-input handling.
+      - name: Check ACM disclosure and flag if missing
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$ISSUE_BODY" | python3 .github/scripts/gate_acm_issue_disclosure.py \
+            --owner tvna --repo gitapex --issue-number "$ISSUE_NUMBER"
