@@ -1,0 +1,18 @@
+apiVersion: gitapex.io/v1alpha1
+kind: SkillMetadata
+metadata:
+  name: evaluating-deterministic-gate-quality
+spec:
+  portability: Mixed
+  capabilityAssumption: Adaptive
+  references:
+    - "This skill's own model (the four-domain scope, the guiding principle, the two-lane split, the three axes, and the mechanism-fit test) was finalized in gitapex#435's own research pass, committed as docs/superpowers/reports/2026-07-27-hook-evaluation-quality-research.md and adversarially verified across multiple independent rounds before this skill was built from it. This is provenance for maintainers of this specific repository, not something SKILL.md or references/dimensions.md or references/mechanism-fit.md depend on to function."
+    - "references/gitapex-worked-examples.md carries this repository's own worked examples and its live smoke-test output, both gathered during the gitapex#435 build; substitute the target repository's own equivalents when applying this skill elsewhere."
+  skillDependencies:
+    relatedTo:
+      - evaluating-skill-quality
+      - screening-a-low-trust-contribution
+  lifecycle:
+    experimental:
+      reason: "First version of a new skill category, built in one pass from gitapex#435's research report. Deferred, named explicitly: a full independently-verified agent-tool/dependent-middleware compatibility matrix (Compatibility awareness axis is concept-only for now, unlike evaluating-skill-quality's own verified 6-vendor matrix); a bundled deterministic shape-checker script specific to this skill's own domain (dimensions.md's shape checks are applied manually today); an eval suite; a full adversarial-isolation hardening pass beyond SKILL.md's Stop boundaries; and independent re-derivation of each dimension's domain-generalization tag against real Domain-1/3/4 artifacts beyond the reasoning applied during this build."
+      trackingIssue: "#435"
