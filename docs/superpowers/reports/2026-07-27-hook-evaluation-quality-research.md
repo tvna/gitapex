@@ -383,6 +383,83 @@ not a memory or a third-party summary, per this session's own
   de facto reference shape industry-wide, without a governing spec
   enforcing that convergence stays exact.
 
+### External: vendor rationale and design-philosophy statements (fetched this session)
+
+A follow-up sweep, distinct from the structural comparison above: not
+"does an equivalent mechanism exist" but "does this vendor's own prose
+say *why* it exists, or state a hook-writing philosophy the way
+Anthropic's own docs do (`grounded above`)." Same five other runtimes,
+same primary-source discipline -- a claim not found in the fetched text
+is reported as absent, never invented to fill the question.
+
+- Fact: Codex's own accessible sources (`docs/config.md`, the entire
+  `codex-rs/hooks` crate's doc comments) are **silent** on rationale --
+  no "why hooks exist," no hook-vs-model-judgment framing, no
+  best-practices prose anywhere found. The only hooks-related prose in
+  `docs/config.md` is a two-sentence admin-config note about
+  `allow_managed_hooks_only`. (`developers.openai.com/codex/hooks`, a
+  separately hosted docs site that might carry more, was blocked by this
+  session's own network policy and remains unverified.)
+- Fact, per `google-gemini/gemini-cli`'s own docs: frames hooks around
+  extensibility, not determinism-over-judgment -- "allowing you to
+  intercept and customize behavior without modifying the CLI's source
+  code," with named use cases "Validate actions: ...block potentially
+  dangerous operations" and "Enforce policies: ...security scanners and
+  compliance checks." Two concrete, vendor-original design points not
+  found in Anthropic's own docs: (a) a strict I/O-hygiene rule --
+  "**Silence is Mandatory**: Your script must not print any plain text
+  to stdout other than the final JSON object. Even a single `echo` or
+  `print` call before the JSON will break parsing"; (b) a runtime
+  tamper-detection mechanism -- project-level hooks are **fingerprinted**,
+  and "if a hook's name or command changes (for example, via `git
+  pull`), it is treated as a new, untrusted hook" requiring re-approval
+  before it next executes. A named risk statement: "Hooks execute
+  arbitrary code with your user privileges."
+- Fact, per `openclaw/openclaw`'s own docs: no "why" framing either, but
+  concrete, vendor-original hook-writing guidance -- "Keep handlers
+  fast," "Handle errors gracefully. Wrap risky operations in try/catch;
+  do not throw so other handlers can run," "Filter events early," "Keep
+  the allowlists conservative." One principle independently converges
+  with this repository's own zero-trust doctrine
+  (`threat-model-and-authorization.md`'s "fail closed, including on
+  INDETERMINATE"): "**Missing fields are unproven, not false
+  assurances; fail closed when policy requires them.**" A named risk:
+  "A timed-out handler promise continues running because hook callbacks
+  do not receive a cancellation signal."
+- Fact, per `NousResearch/hermes-agent`'s own docs: also no explicit
+  determinism-vs-judgment framing, but one genuine design-philosophy
+  statement, recounting a past mistake -- an earlier Hermes version
+  "shipped this as a built-in hook and silently spawned an agent with
+  bare defaults on every gateway boot. That surprised users... Keeping
+  it as a documented pattern -- built by you, in your hooks directory --
+  means you see exactly what it does and opt in by writing the files."
+  A named risk, stated as a direct analogy: "Shell hooks run with your
+  full user credentials -- same trust boundary as a cron entry or a
+  shell alias." A concrete idempotency rule: "Make it idempotent: the
+  hook re-fires after each nudge, so gate on `attempt`... otherwise it
+  just nudges until the bound is hit."
+- **Unverified** for Cursor: every fetch attempt against `cursor.com`
+  and `docs.cursor.com` was blocked by this session's own outbound
+  network policy (confirmed as a general egress restriction, not a
+  Cursor-specific block, via a control fetch to an unrelated blocked
+  domain and a successful fetch to an allowed one). Third-party blog
+  summaries paraphrase Cursor's hooks as "deterministic" against
+  AI-interpreted "suggestions," but that phrasing was never independently
+  confirmed against Cursor's own primary text this session, so it is not
+  reported as a vendor quote.
+- Cross-cutting finding, not attributable to any single vendor: **none
+  of the five other runtimes researched this session articulate an
+  explicit hook-vs-model-judgment philosophy the way Anthropic's own
+  docs do** ("deterministic control... rather than relying on the LLM to
+  choose to run them," already grounded above) or the way this
+  repository's own `evaluating-skill-quality` rubric independently does
+  ("Skill vs. hook" mechanism-fit test). Their documented guidance is
+  overwhelmingly mechanical or narrowly practical (I/O hygiene, error
+  handling, idempotency) rather than doctrinal. This repository's own
+  explicit mechanism-fit doctrine is closer to an outlier than an
+  industry norm -- worth naming plainly rather than assuming the rest of
+  the field already agrees on it.
+
 ## Compatibility awareness (agent-tool axis and dependent middleware)
 
 A warning-only axis, proposed here to mirror `evaluating-skill-quality`'s
@@ -596,6 +673,60 @@ none of these are enforced anywhere yet.
     suppress side effects in another" fact -- not yet triggered by any
     hook in this repository, but a real dimension for the first hook that
     logs, notifies, or writes as well as classifies.
+15. **Stdout hygiene: nothing but the intended JSON reaches stdout.**
+    Grounded in Gemini CLI's own documented rule ("Silence is Mandatory
+    ... Even a single `echo` or `print` call before the JSON will break
+    parsing") and, independently, Claude Code's own hooks-guide
+    troubleshooting entry for the identical failure mode (a shell profile's
+    unconditional `echo` corrupting a hook's JSON output, in the Dependent
+    middleware section above) -- two independently-designed tools naming
+    the same concrete risk is stronger evidence than either alone that
+    this is a real, not hypothetical, failure mode. Does a hook's own
+    script route every diagnostic/log line to stderr, leaving stdout for
+    the final JSON only?
+16. **Fail-closed default on incomplete or malformed input.** Grounded in
+    OpenClaw's own stated principle ("Missing fields are unproven, not
+    false assurances; fail closed when policy requires them"), which
+    independently converges with this repository's own
+    `threat-model-and-authorization.md` ("fail closed, including on
+    INDETERMINATE" -- zero-trust principle 6, item 7 above). Does a
+    hook's own script default to deny (or escalate) when its input is
+    malformed, a field it depends on is missing, or a script/binary it
+    shells out to is absent -- rather than silently defaulting to allow?
+    This repository's own `check-issue-acm-disclosure.sh` already gets
+    this right (item 3 above: it denies, with a named reason, if its own
+    companion `check_acm_present_or_waiver.py` is not found) -- a rubric
+    could make this an explicit, checkable expectation rather than an
+    incidental property of the scripts that happen to have it.
+17. **Runtime tamper-awareness of a hook's own definition, distinct from
+    review-time screening.** This repository already hard-flags a
+    hook/script diff at review time (`screening-a-low-trust-contribution`
+    check 4, item 10 above) -- a human/agent gate on an *incoming PR*.
+    Gemini CLI's own documented mechanism is a different, complementary
+    layer operating at a different time: it fingerprints a project-level
+    hook's own name/command and treats any change (e.g. via `git pull`)
+    as "a new, untrusted hook" requiring re-approval before it next
+    executes, independent of whether any human reviewed that change. This
+    repository has no analogous *runtime* check today -- review-time
+    screening catches an incoming PR; it says nothing about a hook
+    definition changing through any other path (a later commit an
+    earlier review already passed, a local edit, a plugin update). A
+    rubric could name this gap explicitly rather than treating
+    review-time screening as complete coverage on its own.
+18. **Discoverability: a hook's existence and purpose is not silent
+    magic.** Grounded in HermesAgent's own recounted design mistake and
+    its fix -- an earlier version "silently spawned an agent with bare
+    defaults on every gateway boot," which "surprised users"; the fix
+    was requiring the behavior to be "a documented pattern... built by
+    you, in your hooks directory," so "you see exactly what it does and
+    opt in by writing the files." This repository's own shipped hooks
+    already partially satisfy this independently -- every entry in
+    `hooks/hooks.json` and every hook script carries a header comment
+    naming which finding or design-doc decision it backs (items 1-4, 6-7
+    above). A rubric could make this an explicit, checkable expectation
+    -- a hook with no comment or description explaining what it does or
+    why -- rather than an incidental convention this repository happens
+    to already follow.
 
 ## Open questions / blind spots
 
@@ -629,6 +760,12 @@ Blind spot pass), named explicitly rather than left implicit:
   attempt against `docs.devin.ai`. A follow-up pass with different
   network access could resolve this rather than leaving it Unknown
   indefinitely.
+- **Cursor's own hooks documentation is unverified for the same reason**
+  (this session's network policy blocked `cursor.com` and
+  `docs.cursor.com` entirely) -- named here rather than silently
+  omitted, since Cursor is a prominent enough tool that its absence from
+  the agent-tool research above could otherwise read as an oversight
+  rather than a stated access limitation.
 
 ## Explicitly out of scope for this pass
 
