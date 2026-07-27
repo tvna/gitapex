@@ -197,3 +197,30 @@ Once created, record the resulting `trigger_id` here so future readers of
 this doc do not need to re-run `list_triggers` to find it:
 
 - **`trigger_id`:** _(fill in after live creation)_
+
+### Retry from an interactive session (2026-07-27) -- still blocked
+
+A follow-up session picked up this residual risk under the assumption
+that an *interactive* session (a human actively chatting, unlike the
+original PR-authoring session) might surface the `-32003` gate as a
+normal permission dialog the human could approve in real time. Both
+calls were retried here, live, with the human present and watching:
+
+- `list_triggers` (read-only, no arguments beyond `limit`): rejected with
+  the identical `MCP error -32003: MCP tool call requires approval`.
+- `create_trigger`, with every parameter above reproduced verbatim (name,
+  `0 0 * * 1` cron, `create_new_session_on_fire: true`,
+  `notifications: {"push": false, "email": false}`, the full prompt
+  block): rejected with the identical `MCP error -32003: MCP tool call
+  requires approval`.
+
+Neither call surfaced a permission dialog the human could act on --
+the rejection happened at the MCP protocol layer before this session's
+own tool-permission UI was ever engaged. This rules out "no interactive
+channel" as the actual cause; the gate is enforced somewhere outside this
+session's control regardless of interactivity. The Routine's live
+creation remains a **Human Decision requiring an out-of-session step**:
+the repository owner needs to either grant `Claude_Code_Remote`
+(`create_trigger`/`list_triggers`) approval through that MCP server's own
+settings/allowlist (outside this chat), or confirm a different
+approval path exists, before either call can succeed from any session.
