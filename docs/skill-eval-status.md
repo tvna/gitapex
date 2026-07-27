@@ -585,7 +585,7 @@ cross-model behavior is currently unmeasured.
 
 ## drafting-an-acm-issue
 
-The committed eval suite (`evals/drafting-an-acm-issue/`) has 9 task files
+The committed eval suite (`evals/drafting-an-acm-issue/`) has 10 task files
 under `tasks/` and no committed no-skill baseline run; only
 `claude-sonnet-4.6` has been evaluated -- cross-model behavior is
 currently unmeasured. Every committed task's own prompt explicitly
@@ -608,13 +608,28 @@ method for verifying a discovery/trigger-wording change is a fresh,
 independent review against `evaluating-skill-quality/references/
 rubric.md`'s Dimension 1 (Discovery) criteria -- scoped to the changed
 clause, not a full multi-dimension audit -- rather than an automated eval
-task. PR #418's own review found the broadened clause
-WELL-FORMED-AND-MATURE against Dimension 1 and PASS against
-battle-testing-a-skill's mis-routing lens, both scoped to that one
-clause. This is a standing method for any skill's discovery-surface
-change in this repository until real live-dispatch eval capability
-exists (tracked in the Cross-model matrix scaffolding section above), not
-one-off reasoning specific to that PR.
+task. This is a standing method for any skill's discovery-surface change
+in this repository until real live-dispatch eval capability exists
+(tracked in the Cross-model matrix scaffolding section above), not
+one-off reasoning specific to any one PR.
+
+**Behavioral coverage of the broadened scenario:** distinct from the
+still-unclosed discovery/routing gap above, `tasks/workflow-initiated.yaml`
+(added alongside the broadened trigger, PR #418) exercises the behavior
+this suite's forced-dispatch shape CAN test: given a prompt framed as an
+agent mid-task opening a follow-up issue on its own initiative (matching
+the broadened clause's own named scenario), the skill still drafts a
+full, correct Acceptance Criteria Map rather than skipping steps because
+no human phrased the request. This closes the "no fixture even resembles
+the new scenario" gap; it does not and cannot close the discovery/routing
+gap above, since `eval.yaml`'s forced `skill:` field still dispatches
+this fixture regardless of its prompt framing.
+
+PR #418's own review separately found the broadened description clause
+WELL-FORMED-AND-MATURE against Dimension 1 (scoped to that one clause),
+and a full, independent battle-testing-a-skill audit of the entire
+SKILL.md (not scoped to the clause) returned an overall PASS across all
+17 applicable dimensions.
 
 ## merge-retrospective
 
