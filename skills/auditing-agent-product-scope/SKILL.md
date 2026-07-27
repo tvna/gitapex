@@ -88,8 +88,8 @@ its own owning issues/files, never gitapex's.
    not silently resolve a contradiction this candidate surfaces between
    two axes, or between an axis and its own owning doc -- name it in
    the axis section and leave the underlying decision to the
-   repository owner (`references/gitapex-cross-links.md` has a worked
-   example of this from gitapex's own history).
+   repository owner (in gitapex, the scope map's own Maintenance
+   section has a worked example of this from gitapex's own history).
 8. **Run the shape checks before committing:** this repository's own
    skill-shape checker against any skill whose files changed
    (`references/gitapex-cross-links.md` names gitapex's own command),

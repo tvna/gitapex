@@ -36,10 +36,10 @@ waza/apm/rtk/betterleaks)."
 | `python312` | A (nixpkgs) | Runtime for every Python script and test in this repository | Base interpreter only; `uv` manages the actual dependency versions on top of it | Dependabot `nix` ecosystem |
 | `bun` | A (nixpkgs) | A JS/TS runtime and package manager, per the toolchain's own stated scope | Provisioned in the dev shell; no `package.json` or JS/TS source exists in this repository, and no script or workflow invokes it beyond `toolchain-nix.yml`'s own build-and-version smoke test | Dependabot `nix` ecosystem |
 | `lychee` | A (nixpkgs) | A link checker, per its own project purpose | Same as `bun` -- provisioned and version-smoke-tested only; no link-checking workflow runs it against this repository's docs today | Dependabot `nix` ecosystem |
-| `waza` | B (SHA256-pinned release binary, `microsoft/waza`) | Microsoft's skill/eval-running CLI | Invoked as `nix run .#waza -- check` (or `run`); see the dedicated [waza](#waza) section below for how CI actually wires it | Excluded from Dependabot; tracked separately, [gitapex#57](https://github.com/tvna/gitapex/issues/57) |
-| `apm` | B (SHA256-pinned release binary, `microsoft/apm`) | Regenerates `CLAUDE.md`/`AGENTS.md` via `apm compile` | See the dedicated [apm](#apm) section below | Excluded from Dependabot; tracked separately, [gitapex#57](https://github.com/tvna/gitapex/issues/57) |
-| `rtk` | B (SHA256-pinned release binary, `rtk-ai/rtk`) | "CLI proxy that reduces LLM token consumption by 60-90% on common dev commands" (the project's own README) | Provisioned and version-checked by `toolchain-nix.yml`'s own smoke test; no script, hook, or workflow in this repository invokes it today | Excluded from Dependabot; tracked separately, [gitapex#57](https://github.com/tvna/gitapex/issues/57) |
-| `betterleaks` | B (SHA256-pinned release binary, `betterleaks/betterleaks`) | "A configurable, fast, and thorough secrets scanner" (the project's own README) | Same as `rtk` -- provisioned and smoke-tested only, no consuming script, hook, or workflow in this repository today | Excluded from Dependabot; tracked separately, [gitapex#57](https://github.com/tvna/gitapex/issues/57) |
+| `waza` | B (SHA256-pinned release binary, `microsoft/waza`) | Microsoft's skill/eval-running CLI | Invoked as `nix run .#waza -- check` (or `run`); see the dedicated [waza](#waza) section below for how CI actually wires it | Excluded from Dependabot -- see [Supply-chain coverage summary](#supply-chain-coverage-summary) |
+| `apm` | B (SHA256-pinned release binary, `microsoft/apm`) | Regenerates `CLAUDE.md`/`AGENTS.md` via `apm compile` | See the dedicated [apm](#apm) section below | Excluded from Dependabot -- see [Supply-chain coverage summary](#supply-chain-coverage-summary) |
+| `rtk` | B (SHA256-pinned release binary, `rtk-ai/rtk`) | "CLI proxy that reduces LLM token consumption by 60-90% on common dev commands" (the project's own README) | Provisioned and version-checked by `toolchain-nix.yml`'s own smoke test; no script, hook, or workflow in this repository invokes it today | Excluded from Dependabot -- see [Supply-chain coverage summary](#supply-chain-coverage-summary) |
+| `betterleaks` | B (SHA256-pinned release binary, `betterleaks/betterleaks`) | "A configurable, fast, and thorough secrets scanner" (the project's own README) | Same as `rtk` -- provisioned and smoke-tested only, no consuming script, hook, or workflow in this repository today | Excluded from Dependabot -- see [Supply-chain coverage summary](#supply-chain-coverage-summary) |
 
 `flake.lock` separately pins the `nixpkgs` input itself to
 `github:NixOS/nixpkgs/nixos-26.05`; each Class B binary's exact pinned
@@ -121,9 +121,9 @@ Class B mechanism above), invoked as `nix run .#waza -- <check|run>`.
 `.github/dependabot.yml`'s own header comment states plainly what is
 **not** covered: "the Class B release binaries (waza/apm/rtk/betterleaks)
 are pinned in flake.nix, outside any Dependabot ecosystem," tracked
-instead on a separate Renovate/custom track per the toolchain design
-spec and a sub-task of
-[gitapex#57](https://github.com/tvna/gitapex/issues/57).
+instead on a separate Renovate/custom track (`docs/agent-product-scope.md`'s
+own Axis F Boundary names the tracking issue for this gap, so it is
+not duplicated here).
 `.github/scripts/scan_toolchain_pin_drift.py` is the deterministic
 check that guards the Class B pins themselves staying in sync with
 `flake.nix`'s own declared values.

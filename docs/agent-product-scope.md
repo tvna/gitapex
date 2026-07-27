@@ -147,7 +147,10 @@ reframed).
 **Boundary:** unlike Axis A-D, this axis's primary source is the
 observed repository state itself (the dependency-declaring files), not
 third-party vendor documentation. Adding a middleware entry here does
-not imply anything about Axis A-E.
+not imply anything about Axis A-E. The Class B release binaries
+(`waza`/`apm`/`rtk`/`betterleaks`) have no Dependabot ecosystem
+coverage today; that gap is tracked separately as a sub-task of
+gitapex#57, not by this axis's own evidence file.
 
 ## Non-conflation rule
 
@@ -173,3 +176,17 @@ point-in-time decisions, not living docs; this file is the living
 cross-reference instead. `python3 skills/auditing-agent-product-scope/scripts/check_axis_shape.py docs/agent-product-scope.md`
 verifies every axis section still carries its four required fields
 after an edit.
+
+This file's own history, kept here rather than in the maintaining
+skill's own reference files (which are read on every invocation,
+including a vendored copy elsewhere, and should stay free of history
+that does not change what the Procedure does): this doc originally
+shipped as a hand-written reconciliation of four never-reconciled
+axes (gitapex#443, gitapex#444); gitapex#445 then reframed that
+one-off doc into the `auditing-agent-product-scope` skill formalizing
+the same research-classify-document procedure and adding Axis E/F.
+Axis A's Claude-Code-vs-Codex contradiction (see that axis's own
+Current scope above) was surfaced rather than resolved directly in
+its axis section during PR #447's review -- the worked precedent for
+how a future candidate's own surfaced contradiction should be
+recorded, per this skill's SKILL.md Step 7.

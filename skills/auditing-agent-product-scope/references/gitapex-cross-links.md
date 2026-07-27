@@ -15,7 +15,6 @@ cross-link where they don't, never fabricating one.
 3. [Middleware dependency-declaring files](#middleware-dependency-declaring-files)
 4. [Platform-axis handoff target](#platform-axis-handoff-target)
 5. [Skill-shape-checker command](#skill-shape-checker-command)
-6. [Tracking issues](#tracking-issues)
 
 ## The scope map and its six axes
 
@@ -42,9 +41,11 @@ requires confirming one exists before going further. Per axis:
   expanding it is the larger Axis-A decision the scope map's own
   Non-goals leave to the repository owner. STOP per Step 2.
 - **Axis B** (enforcement-adapter target set): no writable evidence
-  file. [gitapex#307](https://github.com/tvna/gitapex/issues/307) is
-  future enforcement-adapter engineering, not a file this skill writes
-  research findings into. STOP per Step 2.
+  file -- its own Owning issue (`docs/agent-product-scope.md`'s Axis B
+  section names the current tracking issue; read it there rather than
+  duplicating the number here) is future enforcement-adapter
+  engineering, not a file this skill writes research findings into.
+  STOP per Step 2.
 - **Axis C** (skill-quality-review evidence baseline): writable. A
   finding goes to
   `skills/evaluating-skill-quality/references/runtime-compatibility.md`.
@@ -53,9 +54,9 @@ requires confirming one exists before going further. Per axis:
   there rather than re-deriving it. This is the only agent-tool axis
   this skill's Procedure currently writes candidate findings into.
 - **Axis D** (hook-quality evidence baseline): no writable evidence
-  file. [gitapex#435](https://github.com/tvna/gitapex/issues/435) is a
-  research report only; no skill has shipped an evidence file for this
-  axis yet. STOP per Step 2.
+  file -- its own Owning issue (`docs/agent-product-scope.md`'s Axis D
+  section names it) is a research report only; no skill has shipped an
+  evidence file for this axis yet. STOP per Step 2.
 - **Axis F** (dependency middleware): writable. A finding goes to this
   skill's own `references/middleware-inventory.md`.
 
@@ -73,29 +74,13 @@ before researching a candidate that might already be covered there.
 
 ## Platform-axis handoff target
 
-Axis E candidates are handed off to `git-hosting-surface-audit`
-([gitapex#82](https://github.com/tvna/gitapex/issues/82)) rather than
-researched here -- see that skill's own SKILL.md for its checklists
-and platform-detection logic.
+Axis E candidates are handed off to `git-hosting-surface-audit` --
+`docs/agent-product-scope.md`'s own Axis E section names its Owning
+skill and tracking issue -- rather than researched here; see that
+skill's own SKILL.md for its checklists and platform-detection logic.
 
 ## Skill-shape-checker command
 
 `python3 skills/evaluating-skill-quality/scripts/check_skill_shape.py <touched-skill-dir>`
 is gitapex's own deterministic skill-shape checker, run against any
 skill whose files a candidate's research touched.
-
-## Tracking issues
-
-- [gitapex#445](https://github.com/tvna/gitapex/issues/445) (reframed):
-  this skill's own origin issue.
-- [gitapex#307](https://github.com/tvna/gitapex/issues/307): Axis B's
-  parent tracking issue.
-- [gitapex#332](https://github.com/tvna/gitapex/issues/332),
-  [gitapex#443](https://github.com/tvna/gitapex/issues/443),
-  [gitapex#444](https://github.com/tvna/gitapex/issues/444): Axis C's
-  growth history.
-- [PR #447](https://github.com/tvna/gitapex/pull/447): the worked
-  example of a contradiction surfaced (not resolved) directly in an
-  axis section -- Axis A's Claude-Code-vs-Codex inconsistency -- cited
-  in SKILL.md Step 7 as the precedent for how to handle a similar
-  contradiction found by a future candidate.
