@@ -93,8 +93,12 @@ its own owning issues/files, never gitapex's.
 8. **Run the shape checks before committing:** this repository's own
    skill-shape checker against any skill whose files changed
    (`references/gitapex-cross-links.md` names gitapex's own command),
-   and this skill's own axis-shape checker:
-   `python3 scripts/check_axis_shape.py <path-to-your-scope-map>`.
+   this skill's own axis-shape checker:
+   `python3 scripts/check_axis_shape.py <path-to-your-scope-map>`, and
+   -- if the edit touched a table-rendered evidence file such as this
+   skill's own `references/middleware-inventory.md` -- its table-shape
+   checker (`scripts/check_middleware_table_shape.py`), pointed at that
+   same file.
 
 ## Output
 
@@ -171,15 +175,20 @@ skill-shape-checker invocation) into one file, mirroring
 pattern -- a vendored copy drops that one file rather than hand-editing
 every section.
 
-In gitapex, Step 8's axis-shape check is not only a manual pre-commit
-step: `tests/test_agent_product_scope_shape.py` runs the same
-`check_axis_shape.py` against the live scope map as part of the
-repository's own enforced `pytest` suite, so an author skipping Step 8
-locally does not let a dropped field or an invalid axis merge silently.
+In gitapex, Step 8's shape checks are not only a manual pre-commit
+step: `tests/test_agent_product_scope_shape.py` runs
+`check_axis_shape.py` against the live scope map, and
+`tests/test_middleware_table_shape.py` runs
+`check_middleware_table_shape.py` against the live
+`references/middleware-inventory.md`, both as part of the repository's
+own enforced `pytest` suite, so an author skipping Step 8 locally does
+not let a dropped field, an invalid axis, or a collapsed table column
+merge silently.
 
 Install/vendoring-time integrity (whether this `SKILL.md` and its
-bundled `scripts/check_axis_shape.py` are themselves the untampered,
-intended copies) is a separate question from the runtime content trust
+bundled `scripts/check_axis_shape.py`/`check_middleware_table_shape.py`
+are themselves the untampered, intended copies) is a separate question
+from the runtime content trust
 Steps 4-6 cover -- a runtime PASS from Step 8 says nothing about
 whether the copy that produced it was the one actually intended for
 installation. Verify that through the calling repository's own
