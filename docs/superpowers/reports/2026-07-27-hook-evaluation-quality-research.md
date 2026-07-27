@@ -33,10 +33,16 @@ claims are this report's own synthesis and are marked as such.
    is wired at the plugin level today.
 2. **`hooks/check-bash-safety.sh`** -- Fact: a `Bash`-matcher `PreToolUse`
    hook denying (a) package/plugin install verbs, (b) direct `gh issue`/
-   `gh pr` write subcommands and `gh api` write calls (including a
-   `-X`/`--method`/field-flag/`graphql mutation` bypass class fixed after a
-   security review caught it), and (c) warning, not denying, on `git push`
-   by shelling out to `outward-artifact-preflight`'s `scan_provenance.py`.
+   `gh pr` write subcommands and `gh api` write calls -- including a
+   `-X`/`--method` flag-syntax bypass (`--method=POST`, `-XPOST`), an
+   absolute-path-prefix bypass, and a `gh api graphql` mutation bypass, all
+   three caught by a security review (opus) before the hooks shipped per
+   `docs/superpowers/reports/2026-07-13-skill-gap-triage.md`'s Final
+   outcome section, plus a separate field-flag (`-f`/`--field`/
+   `--raw-field` implicit-POST) bypass the script's own comments present
+   as its own standalone finding, not one credited to that security
+   review -- and (c) warning, not denying, on `git push` by shelling out
+   to `outward-artifact-preflight`'s `scan_provenance.py`.
    Its own comments explicitly disclose a known ceiling: "Obfuscation that
    hides the verb itself -- base64-piped-to-sh and the like -- is out of
    reach of any regex gate," tracked as an open item in issue #55 (bare
@@ -63,11 +69,16 @@ claims are this report's own synthesis and are marked as such.
 5. **Bundled tests**: `hooks/test_check_bash_safety.py` (303 lines),
    `hooks/test_check_issue_acm_disclosure.py` (173 lines), and
    `skills/executing-a-branch-plan/scripts/test_check_task_bash_safety.py`
-   (143 lines) -- Fact: every shipped hook script in this repository has a
-   pytest suite committed beside it. This is a testability convention
-   already established for hooks, distinct from (and, unlike)
-   `evaluating-skill-quality`'s own dimension 7 (bundled scripts), which
-   grades a *skill's* bundled script, not a hook.
+   (143 lines) -- Fact: a pytest suite is committed beside most, but not
+   all, shipped hook scripts. `hooks/check-bash-safety.sh` and
+   `hooks/check-issue-acm-disclosure.sh` each have one; the third
+   `hooks.json`-wired script, `hooks/check-template-overwrite.sh`, has
+   **no test file anywhere in this repository** (confirmed by listing
+   `hooks/` and grepping the repository for any test referencing it) --
+   a gap in an otherwise-established testability convention for hooks,
+   itself distinct from (and, unlike) `evaluating-skill-quality`'s own
+   dimension 7 (bundled scripts), which grades a *skill's* bundled
+   script, not a hook.
 6. **`skills/executing-a-branch-plan/scripts/check_task_bash_safety.sh`**
    -- Fact: a second, independent hook (bound via
    `.claude/agents/branch-plan-task.md`'s own frontmatter `hooks.PreToolUse`
@@ -76,8 +87,13 @@ claims are this report's own synthesis and are marked as such.
    entirely, hard-denies `git push` with no warn-only exception). Its own
    comments document three distinct bypass classes found and fixed after
    the fact via `/code-review` and a Codex review pass: a bare
-   `npm ci`/`pnpm install`/`yarn install` gap (none of which contain the
-   literal word "install" in the verb a naive check might grep for), a
+   `npm ci`/`pnpm install`/`yarn install` gap -- per the script's own
+   comment, `npm ci` is a clean-install verb containing no literal
+   "install" substring at all, so it slipped past a pattern grepping for
+   that word, while `pnpm install`/`yarn install` were missed for a
+   narrower, different reason: `check-bash-safety.sh`'s existing
+   install-verb pattern covered only the "add" forms (`pnpm add`,
+   `yarn add`), not either command's own primary install verb -- a
    fetch-and-execute gap (`curl|wget` piped to a shell, and `npx`), and a
    `git` global-option gap (`git -C <path> push` was not anchored). It
    discloses the identical regex-gate obfuscation ceiling as
@@ -177,19 +193,25 @@ claims are this report's own synthesis and are marked as such.
   meant to enforce a policy, use `exit 2`." Every deny path read directly
   in this repository's own `hooks/*.sh` (item 2-4 above) already uses
   `exit 2` correctly.
+- Fact, per <https://code.claude.com/docs/en/hooks-guide> (fetched
+  2026-07-27, "How hooks work" / "Combine results from multiple hooks"
+  sections): hooks matching the same event "run in parallel, and
+  identical hook commands are automatically deduplicated"; "One hook
+  returning `deny` doesn't stop sibling hooks from executing. Don't rely
+  on one hook's `deny` to suppress side effects in another hook." (The
+  hooks *reference* page, <https://code.claude.com/docs/en/hooks>, states
+  the same dedup behavior in different words -- "identical handlers are
+  deduplicated automatically... by command string and `args`" -- the
+  quotes above are the guide page's own wording specifically.) None of
+  this repository's current hooks have a side effect independent of
+  their own deny decision (each is a pure classifier), so this has not
+  yet surfaced as a live bug here, but it is a real dimension for any
+  future hook with a logging/notification side effect.
 - Fact, per <https://code.claude.com/docs/en/hooks> (fetched 2026-07-27):
-  hooks matching the same event "run in parallel, and identical hook
-  commands are automatically deduplicated"; "One hook returning `deny`
-  doesn't stop sibling hooks from executing. Don't rely on one hook's
-  `deny` to suppress side effects in another hook." None of this
-  repository's current hooks have a side effect independent of their own
-  deny decision (each is a pure classifier), so this has not yet
-  surfaced as a live bug here, but it is a real dimension for any future
-  hook with a logging/notification side effect.
-- Fact, same source: exec form vs. shell form -- "Set `args` whenever the
-  hook references a path placeholder, since each element is passed as one
-  argument with no quoting" (exec form is the documented safer default for
-  path interpolation). This repository's `hooks/hooks.json` uses shell-form
+  exec form vs. shell form -- "Set `args` whenever the hook references a
+  path placeholder, since each element is passed as one argument with no
+  quoting" (exec form is the documented safer default for path
+  interpolation). This repository's `hooks/hooks.json` uses shell-form
   commands with a manually, correctly quoted path
   (`"\"$CLAUDE_PLUGIN_ROOT/hooks/check-bash-safety.sh\""`, confirmed by
   direct read) rather than the `args`-array exec form. Speculation: this is
@@ -197,7 +219,16 @@ claims are this report's own synthesis and are marked as such.
   still grade "does a shell-form hook command quote every interpolated
   path/variable" as a deterministic-shape check, given exec form removes
   the class of bug entirely.
-- Fact, same source, on the *different* `if`-field filter (not used by any
+- Fact, per <https://code.claude.com/docs/en/hooks> (fetched 2026-07-27),
+  on timeout configuration: defaults are "600 for `command`, `http`,
+  `mcp_tool`; 30 for `prompt`; 60 for `agent`" (seconds), independently
+  corroborated on <https://code.claude.com/docs/en/hooks-guide>'s
+  Limitations section ("`command`, `http`, `mcp_tool`: 10 minutes...
+  `prompt`: 30 seconds... `agent`: 60 seconds"). This repository's own
+  hooks declare an explicit, much shorter `timeout` (10-30s) rather than
+  inheriting the 600s/10-minute default.
+- Fact, per <https://code.claude.com/docs/en/hooks> (fetched 2026-07-27),
+  on the *different* `if`-field filter (not used by any
   hook in this repository, which instead parses `tool_input.command`
   itself inside each script): "The filter also fails open, running your
   hook regardless of pattern, when the Bash command can't be parsed...
@@ -208,24 +239,30 @@ claims are this report's own synthesis and are marked as such.
   splitting/base64 obfuscation) is exactly a fail-open mode on unparseable
   or disguised input, already self-disclosed in both scripts' own comments
   per item 2 and 6 above.
-- Fact, same source: "When multiple `PreToolUse` hooks return `updatedInput`
-  to rewrite a tool's arguments, the last one to finish takes effect.
-  Since hooks run in parallel, the order is non-deterministic. Avoid
-  having more than one hook modify the same tool's input." Not yet
-  triggered by any hook in this repository (none use `updatedInput`), but
-  a candidate dimension once one does.
-- Fact, same source: "`PreToolUse` hooks fire before any permission-mode
-  check, in every permission mode, including `dontAsk`. A hook that returns
-  `permissionDecision: "deny"` blocks the tool even in `bypassPermissions`
-  mode... The reverse is not true: a hook returning `"allow"` doesn't
-  bypass deny rules from settings." This confirms the specific strength
-  this repository's `PreToolUse` hooks are already relying on
+- Fact, per <https://code.claude.com/docs/en/hooks-guide> (fetched
+  2026-07-27, Limitations section): "When multiple `PreToolUse` hooks
+  return `updatedInput` to rewrite a tool's arguments, the last one to
+  finish takes effect. Since hooks run in parallel, the order is
+  non-deterministic. Avoid having more than one hook modify the same
+  tool's input." Not yet triggered by any hook in this repository (none
+  use `updatedInput`), but a candidate dimension once one does.
+- Fact, per <https://code.claude.com/docs/en/hooks-guide> (fetched
+  2026-07-27, "Hooks and permission modes" section): "`PreToolUse` hooks
+  fire before any permission-mode check, in every permission mode,
+  including `dontAsk`. A hook that returns `permissionDecision: "deny"`
+  blocks the tool even in `bypassPermissions` mode... The reverse is not
+  true: a hook returning `"allow"` doesn't bypass deny rules from
+  settings." This confirms the specific strength this repository's
+  `PreToolUse` hooks are already relying on
   (`threat-model-and-authorization.md`'s "empirically verified... hard
   deny" language, item 7 above) is grounded in the platform's own
   documented guarantee, not an assumption.
-- Fact, same source, on plugin-shipped agents: hooks/frontmatter hooks
-  "merge with your user and project hooks" when a plugin is enabled, and
-  hooks are supported "in skill and subagent YAML frontmatter." The
+- Fact, per <https://code.claude.com/docs/en/hooks> (fetched 2026-07-27),
+  on plugin-shipped agents: "When a plugin is enabled, its hooks merge
+  with your user and project hooks" (an exact quote), and, separately,
+  that the same page documents hooks being definable directly in skill
+  and subagent YAML frontmatter (this report's own paraphrase of that
+  section, not a verbatim quotation). The
   specific claim in `threat-model-and-authorization.md` that plugin-
   *shipped agents* cannot carry their own `hooks` field (item 7 above) was
   not directly re-confirmed by the two pages fetched this session (the
@@ -258,9 +295,10 @@ none of these are enforced anywhere yet.
    field, not just relying on the `hooks.json` matcher.** Grounded in item
    11 -- likewise already a convention here, not yet a named check.
 4. **A bundled test file exists beside the hook script.** Grounded in item
-   5 -- this repository already does this for every hook it ships;
-   `evaluating-skill-quality` dimension 7 has no direct hook analogue
-   today.
+   5 -- this repository already does this for most, but not every, hook
+   it ships (`hooks/check-template-overwrite.sh` is the current
+   exception); `evaluating-skill-quality` dimension 7 has no direct hook
+   analogue today.
 5. **Shell-form commands in `hooks.json`/frontmatter quote every path/
    variable interpolation; or the hook uses exec-form `args` instead.**
    Grounded in the exec-form-vs-shell-form primary source above.
