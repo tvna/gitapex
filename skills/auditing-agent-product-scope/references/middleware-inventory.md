@@ -29,10 +29,11 @@ Two tool classes:
   `actionlint`, `python312`, `bun`, `lychee`.
 - **Class B** (SHA256-pinned prebuilt release binaries, fetched
   directly from a GitHub release URL via a shared `mkReleaseBinary`
-  helper): `waza` 0.38.0 (`microsoft/waza`), `apm` 0.25.0
-  (`microsoft/apm`), `rtk` 0.43.0 (`rtk-ai/rtk`), `betterleaks` 1.6.1
-  (`betterleaks/betterleaks`). Versions confirmed directly against
-  `flake.nix`'s own `pname`/`version` fields.
+  helper): `waza` (`microsoft/waza`), `apm` (`microsoft/apm`), `rtk`
+  (`rtk-ai/rtk`), `betterleaks` (`betterleaks/betterleaks`). Each
+  binary's exact pinned version is declared in `flake.nix`'s own
+  `pname`/`version` fields -- read it there rather than restating a
+  value here that would drift the moment a pin bumps.
 - `flake.lock` pins the `nixpkgs` input to
   `github:NixOS/nixpkgs/nixos-26.05`.
 
@@ -42,14 +43,14 @@ Two tool classes:
 *consumer* of two plugins its own skills assume:
 `obra/superpowers` and `tvna/clairvoyance`.
 
-`apm.lock.yaml` (confirmed directly): `apm_version: 0.23.1`;
-`superpowers` resolves to `host: github.com`, a pinned commit, version
-`6.1.1`; `clairvoyance` resolves to `host: github.com`, a pinned
-commit, version `0.6.0`. Both dependencies are pinned to
-`host: github.com` specifically -- apm's own lockfile format is
-GitHub-host-typed, a fact relevant to Axis E (git-hosting platform) but
-recorded here since it is apm's own behavior, not a platform-audit
-finding.
+`apm.lock.yaml` (confirmed directly) pins apm's own tool version and
+both plugin dependencies (`superpowers`, `clairvoyance`) each to a
+specific version and commit -- read the exact values there rather than
+restating them here, where they would go stale on the next lockfile
+bump. Both dependencies are pinned to `host: github.com` specifically
+-- apm's own lockfile format is GitHub-host-typed, a fact relevant to
+Axis E (git-hosting platform) but recorded here since it is apm's own
+behavior, not a platform-audit finding.
 
 ## Python dev tooling
 
