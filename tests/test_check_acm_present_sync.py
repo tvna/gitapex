@@ -1,5 +1,5 @@
-"""CI gate: every check_acm_present.py-shaped script under skills/*/scripts/
-shares the same Acceptance Criteria Map header regex.
+"""CI gate: every script that checks for the Acceptance Criteria Map
+header shares the same regex for it.
 
 drafting-an-acm-issue and planning-a-branch-from-an-issue each ship an independent copy of
 check_acm_present.py (no skill in this repository shares a scripts/
@@ -8,6 +8,13 @@ header regex must be updated together, but nothing enforced that until
 now -- a PR editing one copy's header shape could merge green while the
 other copy silently kept checking the old shape. This closes that gap
 (PR #238 retrospective, issue #242, repair 5; tracked as issue #245).
+
+.github/scripts/gate_acm_issue_disclosure.py (issue #414) is a third,
+differently-named, differently-located copy of the same header check
+(plus its own additional waiver vocabulary, out of this test's scope) --
+added to `_EXTRA_ACM_CHECKER_SCRIPTS` explicitly below rather than
+matched by the skills/*/scripts/ glob, per a Codex review finding on PR
+#425 that this drift gate would otherwise miss it silently.
 """
 
 from __future__ import annotations
@@ -31,18 +38,24 @@ SKILLS_DIR = REPO_ROOT / "skills"
 # discusses or warns against divergence.
 _MARKER_RE = re.compile(r"^\s*#.*\bintentionally diverged\b", re.IGNORECASE | re.MULTILINE)
 
-# Guards against the discovery glob silently finding nothing (a moved
-# skills/ directory, a renamed script) and this test then vacuously
-# passing. There are 2 known copies today (drafting-an-acm-issue,
-# planning-a-branch-from-an-issue); the floor matches that exactly so a copy going
-# missing is caught, not just a wholesale discovery failure.
-MIN_EXPECTED_COPIES = 2
+# Explicit extra copies that the skills/*/scripts/ glob below cannot find
+# (different filename, different directory). Each entry's own module must
+# still expose a module-level `_HEADER_RE` for test_all_copies_expose_a_header_regex
+# and test_header_regex_stays_in_sync_across_all_copies to pick it up.
+_EXTRA_ACM_CHECKER_SCRIPTS = (REPO_ROOT / ".github" / "scripts" / "gate_acm_issue_disclosure.py",)
+
+# Guards against discovery silently finding nothing (a moved skills/
+# directory, a renamed script) and this test then vacuously passing.
+# There are 3 known copies today (drafting-an-acm-issue,
+# planning-a-branch-from-an-issue, and gate_acm_issue_disclosure.py); the
+# floor matches that exactly so a copy going missing is caught, not just a
+# wholesale discovery failure.
+MIN_EXPECTED_COPIES = 3
 
 
 def _discover_acm_checker_scripts() -> list[pathlib.Path]:
-    if not SKILLS_DIR.is_dir():
-        return []
-    return sorted(SKILLS_DIR.glob("*/scripts/check_acm_present.py"))
+    glob_matches = SKILLS_DIR.glob("*/scripts/check_acm_present.py") if SKILLS_DIR.is_dir() else []
+    return sorted({*glob_matches, *(p for p in _EXTRA_ACM_CHECKER_SCRIPTS if p.is_file())})
 
 
 ACM_CHECKER_SCRIPTS = _discover_acm_checker_scripts()
@@ -68,8 +81,9 @@ def _has_diverged_marker(path: pathlib.Path) -> bool:
 
 def test_discovery_found_the_expected_number_of_copies():
     assert len(ACM_CHECKER_SCRIPTS) >= MIN_EXPECTED_COPIES, (
-        f"expected at least {MIN_EXPECTED_COPIES} check_acm_present.py "
-        f"copies under {SKILLS_DIR}, found {len(ACM_CHECKER_SCRIPTS)}: "
+        f"expected at least {MIN_EXPECTED_COPIES} ACM-header-checking copies "
+        f"under {SKILLS_DIR} plus {_EXTRA_ACM_CHECKER_SCRIPTS}, found "
+        f"{len(ACM_CHECKER_SCRIPTS)}: "
         f"{[str(p.relative_to(REPO_ROOT)) for p in ACM_CHECKER_SCRIPTS]}. "
         "This usually means discovery is broken (moved skills/ directory, "
         "renamed script), not that copies were actually removed."
