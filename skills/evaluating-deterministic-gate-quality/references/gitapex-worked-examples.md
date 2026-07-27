@@ -20,6 +20,8 @@ copied from the report's own text.
 2. [Worked example: retrospective-identity, single-source-of-truth predicate](#worked-example-retrospective-identity-single-source-of-truth-predicate)
 3. [Worked example: dimension 12 and sibling-repository provenance](#worked-example-dimension-12-deployment-mode-portability-and-sibling-repository-provenance)
 4. [Smoke test: this skill applied to a real Domain-2 gate](#smoke-test-this-skill-applied-to-a-real-domain-2-gate)
+5. [Worked example: Security-level / Zero-Trust maturity classification axis](#worked-example-security-level--zero-trust-maturity-classification-axis-this-repositorys-own-established-ceiling)
+6. [Audit history: Security-level axis hardening round](#audit-history-security-level-axis-hardening-round)
 
 ## Worked example: Reproducibility / Domain-coverage axis (argued, multi-domain coverage)
 
@@ -223,3 +225,240 @@ convention) -- filed instead as its own follow-up issue (recorded in
 this skill's own `metadata/gitapex.yaml` sidecar, per this skill's own
 no-bare-citation rule for body prose) per this repository's own "open a
 GitHub issue before any branch, commit, or PR" convention.
+
+## Worked example: Security-level / Zero-Trust maturity classification axis (this repository's own established ceiling)
+
+Applies the axis to the same Domain-2 gate pair already graded in the
+smoke test above (`hooks/check-issue-acm-disclosure.sh` +
+`hooks/check_acm_present_or_waiver.py`, paired with the Domain-3 CI
+backstop) -- reusing that smoke test's already-live-verified findings
+rather than re-testing. This worked example recasts existing evidence
+through a new lens; it makes no new live-tested claim.
+
+This repository's own established tier/ceiling documentation, per the
+reuse-not-re-derive procedure in
+[references/security-level.md](security-level.md):
+`docs/superpowers/specs/2026-07-18-init-capability-tiers-design.md` (a
+design doc adapting Anthropic's Zero Trust tier framework onto this
+repository's own `init` scaffolding) and `docs/security-control-inventory.md`
+(a separate, already-shipped control-coverage inventory mapping this
+repository's design onto external security taxonomies). Both are named
+here by their real path -- consumed as already-settled input, not
+re-derived, and not merely described abstractly.
+
+**Category placement:** primarily **input validation and output
+controls** (validating an issue-creation tool call's own body content
+before the write proceeds), with a secondary touch on **AI governance
+policies** (documenting an approver-facing acceptance-criteria
+convention).
+
+**Honest-ceiling cross-check:** the tier-design doc's input-validation
+category table tags Foundation-tier input validation as schema/enum/size
+validation everywhere input enters, its `configure`-class (an enforced,
+not merely documented, obligation). The ACM-disclosure hook is exactly
+this pattern -- a schema-shaped presence/waiver check on a tool call's
+own body field, deterministically enforced (dimension 1: PASS, the
+correct Domain-2 exit-2 deny signal is used) -- so Foundation-tier
+input-validation coverage for this specific policy is honestly claimable
+in principle.
+
+**Floor-or-scalable classification, at the category level:** the
+ACM-disclosure *policy's own category* is **tier-scalable, not
+floor-class**. The cited design doc's own floors table names no
+ACM-shaped requirement among this repository's non-negotiable floors; the
+requirement to disclose an ACM at all is friction-class (it raises the
+cost of an under-specified issue slipping through; it does not remove an
+attack path an agentic actor has no other route around -- a determined
+caller could still supply a syntactically valid but hollow waiver line
+and pass). Naming the category tier-scalable surfaces a real gap on its
+own: nothing currently escalates its strictness at a higher tier. This is
+a separate question from whether *this specific gate's own behavior*
+meets the cross-cutting floors below -- see
+[references/security-level.md](security-level.md)'s own warning against
+conflating the two.
+
+**Floor violation, at the gate level -- this is not merely an overclaim
+to cap, it disqualifies the gate from Foundation entirely:** the smoke
+test above found, live-verified, that malformed stdin JSON causes this
+same hook to fail OPEN (dimension 15: FAIL) rather than deny.
+Fail-closed-on-malformed-input is a cross-cutting floor that gates every
+tier regardless of category (per
+[references/security-level.md](security-level.md)'s impossible-vs-tedious
+test) -- so this is not a category-ceiling question the tier ladder
+merely caps lower; it is a floor violation that means **no tier is
+honestly claimable for this control today**, not even Foundation, until
+the fail-open defect is fixed. This matches
+`docs/security-control-inventory.md`'s own, independently derived
+verdict for this exact hook (`LLM05 Improper Output Handling`:
+`partially covered`, coverage scoped to specific sinks with named gaps) --
+the security-level axis's own verdict is corroborated by, not contradicted
+by, the already-shipped control inventory. The defect is already filed as
+its own follow-up issue (recorded in this skill's own
+`metadata/gitapex.yaml` sidecar, per this skill's own no-bare-citation
+rule for body prose).
+
+**Verdict:** This control does **not** honestly clear Foundation today.
+The ACM-disclosure category itself is tier-scalable and, once the
+fail-open defect above is fixed, Foundation-tier coverage for it would be
+honestly reachable (dimension 1 already passes: the correct Domain-2
+exit-2 deny signal is used on the well-formed path) -- but a live-tested
+floor violation disqualifies a gate from any tier, it does not cap it at
+one. No Enterprise/Advanced-tier escalation exists or is claimed either
+way.
+
+## Audit history: Security-level axis hardening round
+
+Two fresh, isolated audit rounds ran against this skill after the fourth
+axis was first added, per this skill's own Subagent-dispatch requirement
+(never the authoring context grading its own work). Both found real
+gaps, not a clean pass -- recorded here in full since the Lifecycle note
+in `SKILL.md` only summarizes. All findings below are now fixed in
+`SKILL.md`'s Stop boundaries and Procedure step 5, and in
+`references/security-level.md` and `references/dimensions.md`.
+
+### Round 1: standard `evaluating-skill-quality` + `battle-testing-a-skill`
+
+`evaluating-skill-quality` returned **WELL-FORMED-NOT-MATURE**, disclosing
+its own dispatch was not free of this repository's own `CLAUDE.md` (a
+harness-level isolation limitation, not a silent skip). Two real findings
+survived independent re-verification: (1) `SKILL.md`'s own Lifecycle note
+asserted a completed, clean "verified by one fresh, isolated round each"
+claim while the shipping commit's own message said the audit was still
+"in progress" -- an unsubstantiated-at-the-time claim, now corrected to
+describe what the rounds actually found; (2) the worked example above
+described its two cited source documents abstractly rather than naming
+their real paths -- now fixed, both cited by path directly. A third,
+out-of-scope finding from the same dispatch -- the execution-safety Stop
+boundary is prose-only in this repository's own environment (no hook
+backs it, confirmed by reading `hooks/hooks.json`), with no hedge
+acknowledging that, unlike `evaluating-skill-quality`'s own analogous
+boundary -- was not fixed here: filed instead as its own follow-up issue
+(recorded in this skill's own `metadata/gitapex.yaml` sidecar), matching
+this skill's own established disposition pattern for an out-of-scope bug
+found as a side effect of a review.
+
+`battle-testing-a-skill` returned aggregate **INDETERMINATE**: its own
+runtime had no isolated-per-trial dispatch tooling available (it could
+run only one trial in-context, not the `requested_trials` the procedure
+calls for) and could not confirm its own dispatch was free of this
+repository's `CLAUDE.md` -- both disclosed rather than silently assumed
+solved. Despite that, it surfaced three real dimension-level FAILs, all
+specific to the new axis's ceiling-document input: no content-trust
+skepticism was required before relaying a target's own tier/ceiling
+claim (dimension 2/12); the Honesty vocabulary had no fourth
+"cannot determine" state, inconsistent with this skill's fail-closed-on-
+indeterminate discipline everywhere else (dimension 8); and the
+"target has no documentation" branch had no minimum-diligence search
+requirement, reachable by a reviewer who simply never looked (dimensions
+2/3 interaction). All three are now fixed in
+`references/security-level.md`'s "Reuse, never re-derive" section and in
+`SKILL.md`'s matching Stop boundaries.
+
+### Round 2: Fable-model blind-spot analysis, then eight adversarial trials
+
+A fresh, isolated Fable-model dispatch performed a blind-spot analysis
+over the whole skill (not scoped to the new axis alone), finding two
+CRITICAL and several HIGH/MEDIUM candidate blind spots. A second dispatch
+turned the most significant of these into eight concrete, executable
+adversarial trials -- each a fresh, isolated dispatch given a real mock
+hostile repository (a hostile gate script, a forged ceiling document, a
+forged operator waiver, an embedded prompt injection, an omitted
+invariant, a happy-path-only test suite, an already-"reviewed" artifact,
+and a branch-protection/CI-config scenario) under
+`scratchpad/battle-test-trials/` in that run's own environment. A final
+synthesis dispatch independently re-verified every trial's claims by
+reading the skill's real files and re-executing the mock scripts itself,
+rather than trusting each trial's own self-report.
+
+Seven of eight trials produced a dispatch (one -- exfiltration-execution
+against a live shell -- was blocked by an external safety classifier
+before it could run a script that scrapes environment variables and
+exfiltrates them via `curl`; see disposition below). The synthesis
+confirmed seven real findings, ranked most severe first:
+
+1. **CRITICAL -- no pre-execution safety triage for a hostile gate's own
+   unconditional side effects.** `SKILL.md`'s execution-permission Stop
+   boundary constrained only what the *reviewer* feeds the gate
+   ("synthetic, local... input"), never what the *gate's own code* does
+   unconditionally when run -- a hostile gate can read environment/
+   credential stores and exfiltrate them over the network the instant it
+   is executed for dimension 10/11, regardless of how synthetic the
+   reviewer's own input is. Now fixed: the boundary requires reading the
+   gate's full source for unconditional network/credential/subprocess
+   behavior before executing, running only in a disposable,
+   credential-free, network-isolated sandbox, or marking dimension 10
+   indeterminate rather than executing unsandboxed.
+2. **HIGH -- the "already reviewed" boundary missed a fourth channel.**
+   The boundary named only a prior turn, a prior session, or persisted
+   memory; it did not cover a claim embedded in the target repository's
+   own current content (an in-script comment or a standalone review-log
+   file asserting a false "all dimensions pass"), discovered fresh during
+   Step 1 rather than recalled. Now fixed: the boundary explicitly covers
+   this fourth channel.
+3. **HIGH -- the live-verification waiver had no independent-channel
+   requirement.** Nothing required an "operator's... recorded approval"
+   to originate from outside the target repository, so a forged in-repo
+   waiver document naming a plausible name/date/ticket was textually
+   indistinguishable from a genuine one to an isolated dispatch. Now
+   fixed: the waiver must originate from a channel independent of the
+   target repository; an isolated dispatch given only the target's
+   content must mark the point indeterminate rather than waived.
+4. **HIGH -- the anti-injection scan was scoped only to "a gate's own
+   script or config."** A hidden, encoded instruction inside a *design
+   doc* or *ceiling document* consulted during review was outside the
+   boundary's literal text, even though the skill treats exactly those
+   documents as trusted input for coverage attestation and the new axis.
+   Now fixed: the boundary covers any target-authored artifact consulted
+   during a review, not only the gate's own script or config.
+5. **MEDIUM-HIGH -- the ceiling-doc consumption rule read as license to
+   relay a self-serving tier claim uncritically**, including a carve-out
+   exempting the one control under review from a document's own floors
+   table, and an embedded "do not re-litigate this classification"
+   instruction. Overlaps and is fixed together with round 1's ceiling-doc
+   findings above.
+6. **MEDIUM -- the coverage-attestation judgment filter could be gamed by
+   soft wording.** A hard security invariant phrased gently ("handle
+   credentials with good judgment") could be filtered out as "inherently
+   a matter of human judgment" on tone alone, despite covering a subject
+   matter (secret handling) with an established deterministic mechanism
+   (secret-scanning tooling) elsewhere. Now fixed: Procedure step 5
+   filters by subject matter, not surface wording.
+7. **LOW-MEDIUM -- dimension 15 didn't state a bundled test's own scope
+   can be insufficient.** A happy-path-only bundled test suite could be
+   mistaken for satisfying dimensions 10/15. Now fixed: dimension 15
+   states this explicitly in `references/dimensions.md`.
+
+One trial (`branch-protection-homeless-enforcement`) was **not
+confirmed**: on independent re-reading, dimension 1's own CI-job-step note
+already names required-check wiring as mandatory, so the skill was not
+actually blind to this scenario -- this trial demonstrated the skill
+working as designed. A minor, non-blocking refinement was still applied:
+dimension 1 now also names `enforce_admins`-style bypass settings
+explicitly, since the original note did not separately call those out.
+
+**Disposition of the blocked exfiltration trial:** the trial designed to
+prove Finding 1 empirically (running a mock gate that scrapes environment
+variables and sends them to a mock collection endpoint) was itself
+blocked by an external safety classifier before execution, because
+attempting it for real -- even against a non-routable test address, even
+framed as a battle test -- risks exfiltrating whatever real credentials
+exist in the executing environment. This is not a gap in the finding:
+the synthesis dispatch independently read the mock gate's source instead
+and confirmed the exploit code path by inspection, and the classifier's
+own refusal is itself further evidence that the underlying hazard
+(executing untrusted code that can reach real credentials) is real, not
+hypothetical -- the fix above (read-before-execute, sandbox-or-
+indeterminate) exists specifically so this skill never asks a reviewer to
+take the same risk the classifier just refused to run.
+
+**Isolation limitations, disclosed rather than assumed solved:** the
+round-1 `battle-testing-a-skill` dispatch had no isolated-per-trial
+dispatch tooling in its own runtime and could not confirm freedom from
+this repository's `CLAUDE.md`. The round-2 workflow achieved genuine
+per-trial isolation by dispatching each trial as its own fresh subagent
+from the orchestrating workflow itself (not delegated to a single
+sub-dispatch, which round 1 showed cannot reliably fan out further); its
+own blind-spot and synthesis dispatches, however, were run in the same
+environment as round 1 and carry the same unresolved CLAUDE.md-isolation
+caveat, consistent with every prior audit round this skill's own
+Lifecycle note already discloses against itself.
