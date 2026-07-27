@@ -327,10 +327,23 @@ suite exercising this skill's own grading behavior against fixed
 targets, distinct from the live smoke test in
 [references/gitapex-worked-examples.md](references/gitapex-worked-examples.md)).
 A battle-testing-a-skill adversarial trial run against this skill found
-those two gaps directly and also surfaced that its own dispatch could not
-be verified free of this authoring repository's project-instruction file
--- a harness-level isolation-verification limitation named here rather
-than silently assumed solved, carried over from the same open problem
+those two gaps directly, plus two further real gaps in earlier rounds
+that are now fixed -- a coverage-attestation step that trusted a target
+repository's own stated invariants unconditionally (Procedure step 5 and
+a matching Stop boundary now apply the same content-trust skepticism
+given to a target gate's own script/config), and a bare-issue-citation
+defect a first fix attempt only partially resolved (every specific issue
+number is now elided from this skill's own body prose entirely, per
+`evaluating-skill-quality`'s own stricter reading of its Portability
+rule, with no inline-code exemption). A companion
+`evaluating-skill-quality` review, re-run fresh after each fix, converged
+on **WELL-FORMED-AND-MATURE** and surfaced one further gap, also now
+fixed: dimension 18 above (secret/credential redaction in a gate's own
+output) did not exist in an earlier draft of this list. Every trial's own
+dispatch also disclosed it could not be verified free of this authoring
+repository's project-instruction file -- a harness-level
+isolation-verification limitation named here rather than silently
+assumed solved, carried over from the same open problem
 `evaluating-skill-quality`'s own Subagent dispatch section already names
 for itself.
 

@@ -6,7 +6,7 @@ Two lanes, mirroring `evaluating-skill-quality`'s own split:
   grade these mechanically if one existed for the target's own tooling.
   No bundled checker ships with this skill yet (see `SKILL.md`'s Lifecycle
   note); apply these by direct inspection.
-- **Probabilistic-maturity dimensions** (7-17) -- need judgment; walk all
+- **Probabilistic-maturity dimensions** (7-18) -- need judgment; walk all
   of them, quoting the specific evidence that earns each verdict.
 
 Every dimension is tagged with its own **domain-generalization scope**,
@@ -199,3 +199,16 @@ not a single-artifact check.
     find it -- rather than a behavior that surprises whoever encounters
     it for the first time, with no visible trace of why it exists?
     *Domains:* generalizes directly.
+18. **Secret/credential redaction in the gate's own output.** Distinct
+    from dimension 14 (which asks whether a structured channel is kept
+    parse-clean, not what it contains): where a gate's own check logic
+    handles a secret, token, or credential value (validating one, or
+    reading one to reach the resource it checks), does its own
+    diagnostic output, deny message, or log line redact that value
+    rather than echoing it -- into a place a lower-trust reader of the
+    gate's own output (a CI log, a PR comment, a chat transcript) might
+    see it?
+    *Domains:* generalizes directly -- a CI job step's own log output,
+    an agent-harness hook's own stderr message, and an MCP server's own
+    error response are all readable by someone or something with less
+    trust than the credential itself carries.
