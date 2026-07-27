@@ -57,12 +57,81 @@ jobs:
           changed=$(printf '%s\n' "$diff_output" | grep -vE '^(D|R100)[[:space:]]' || true)
           if [ -z "$changed" ]; then
             echo "No added/modified skills/*/SKILL.md in this diff; skipping disclosure check."
-            echo "applicable=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "Added/modified SKILL.md files requiring disclosure:"
-            echo "$changed"
-            echo "applicable=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "applicable=false"
+              echo "description-changed-skills="
+              echo "needs-eval-coverage-skills="
+            } >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          echo "Added/modified SKILL.md files requiring disclosure:"
+          echo "$changed"
+
+          # Issue #427 (refs #422): for each changed SKILL.md whose own
+          # frontmatter `description:` field's parsed value changed, compute
+          # (a) whether this PR's diff also touches that skill's
+          # evals/<skill>/tasks/ or docs/skill-eval-status.md, and hand both
+          # skill-name lists to the gate script -- git access stays in this
+          # workflow step, the script only grades PR-body text against these
+          # workflow-supplied facts.
+          #
+          # description-changed detection delegates to skill_description_diff.py
+          # (git show + parsed-value comparison) rather than a `git diff -U0 |
+          # grep` line match: two PR #428 review findings showed the line-match
+          # approach misses a YAML block-scalar description whose edit is
+          # confined to continuation lines
+          # (https://github.com/tvna/gitapex/pull/428#discussion_r3654041059),
+          # and false-positives on a byte-identical rename under a
+          # single-pathspec diff
+          # (https://github.com/tvna/gitapex/pull/428#discussion_r3654041064).
+          # Comparing against the merge-base (not $BASE_SHA's own tip) keeps
+          # this consistent with the three-dot diff above: a description
+          # change merged to the base branch after this PR forked must not be
+          # misattributed to this PR either.
+          merge_base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
+          all_changed=$(git diff --name-only "$BASE_SHA...$HEAD_SHA")
+          description_changed_skills=""
+          needs_eval_coverage_skills=""
+          while IFS=$'\t' read -r status path newpath; do
+            [ -z "$status" ] && continue
+            case "$status" in
+              R*) old_path="$path"; new_path="$newpath" ;;
+              *) old_path="$path"; new_path="$path" ;;
+            esac
+            skill=$(printf '%s\n' "$new_path" | sed -E 's#^skills/([^/]+)/SKILL\.md$#\1#')
+            # Skill names get written to $GITHUB_OUTPUT and interpolated into
+            # a grep -E pattern below; a PR author fully controls this
+            # directory name in their own diff, so validate it first rather
+            # than trusting an arbitrary string into either sink.
+            if ! printf '%s' "$skill" | grep -E '^[A-Za-z0-9_-]+$' >/dev/null; then
+              echo "::error::unsupported skill directory name for signal computation: $new_path" >&2
+              exit 1
+            fi
+            # `grep -q` closes its stdin as soon as it finds a match, which
+            # can SIGPIPE a still-writing upstream process; combined with
+            # `pipefail` (set above) that turns a real match into a false
+            # "not found" whenever the upstream process's own nonzero SIGPIPE
+            # exit status outranks grep's own zero exit in the pipeline's
+            # reported status
+            # (https://github.com/tvna/gitapex/pull/428#discussion_r3654041066).
+            # Every grep below drops `-q` and redirects to /dev/null instead,
+            # so it always reads its input to completion.
+            description_result=$(python3 .github/scripts/skill_description_diff.py \
+              --base-rev "$merge_base" --head-rev "$HEAD_SHA" \
+              --base-path "$old_path" --head-path "$new_path")
+            if [ "$description_result" = "changed" ]; then
+              description_changed_skills="${description_changed_skills}${description_changed_skills:+,}${skill}"
+              if ! printf '%s\n' "$all_changed" | grep -E "^evals/${skill}/tasks/" >/dev/null \
+                 && ! printf '%s\n' "$all_changed" | grep -xF 'docs/skill-eval-status.md' >/dev/null; then
+                needs_eval_coverage_skills="${needs_eval_coverage_skills}${needs_eval_coverage_skills:+,}${skill}"
+              fi
+            fi
+          done <<< "$changed"
+          {
+            echo "applicable=true"
+            echo "description-changed-skills=${description_changed_skills}"
+            echo "needs-eval-coverage-skills=${needs_eval_coverage_skills}"
+          } >> "$GITHUB_OUTPUT"
 
       # PR_BODY carries untrusted external text (anyone with PR-author
       # access controls it) -- passed via env, never interpolated
@@ -72,6 +141,10 @@ jobs:
         if: steps.diff.outputs.applicable == 'true'
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
+          DESCRIPTION_CHANGED_SKILLS: ${{ steps.diff.outputs.description-changed-skills }}
+          NEEDS_EVAL_COVERAGE_SKILLS: ${{ steps.diff.outputs.needs-eval-coverage-skills }}
         run: |
           set -euo pipefail
-          printf '%s' "$PR_BODY" | python3 .github/scripts/gate_skill_audit_disclosure.py
+          printf '%s' "$PR_BODY" | python3 .github/scripts/gate_skill_audit_disclosure.py \
+            --description-changed-skills "$DESCRIPTION_CHANGED_SKILLS" \
+            --needs-eval-coverage-skills "$NEEDS_EVAL_COVERAGE_SKILLS"
