@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Find third-party GitHub Actions pinned to a mutable ref instead of a SHA.
 
-This is the one git-hosting-surface-audit checklist item with real,
+This is the one auditing-git-hosting-surface checklist item with real,
 existing precedent in this repo: `.github/scripts/scan_toolchain_pin_drift.py`
 already walks `.github/workflows/*.yml` line by line looking for a drift
 pattern and reports `(file, line_number, line)` tuples with a 0/1 exit-code
@@ -11,7 +11,7 @@ to a tag or branch (`@v4`, `@main`) rather than a full 40-character commit
 SHA. A mutable ref lets the action's upstream owner change what code runs on
 the next build without the consuming workflow's diff showing it.
 
-Scope: GitHub Actions workflow files only. The git-hosting-surface-audit
+Scope: GitHub Actions workflow files only. The auditing-git-hosting-surface
 design doc marks the equivalent GitLab CI `include:` check as a stated gap
 (no GitLab MCP server in this environment) -- this script does not attempt
 that check.

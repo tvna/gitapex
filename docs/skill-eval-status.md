@@ -688,10 +688,10 @@ task. Only
 `claude-sonnet-4.6` has been evaluated; cross-model behavior is currently
 unmeasured.
 
-## git-hosting-surface-audit
+## auditing-git-hosting-surface
 
 A live `waza run` against the committed eval suite
-(`evals/git-hosting-surface-audit/`, copilot-sdk executor, `claude-sonnet-4.6`,
+(`evals/auditing-git-hosting-surface/`, copilot-sdk executor, `claude-sonnet-4.6`,
 2026-07-17) scored 3/4 tasks passing; the 4th (guardrail) is a grader
 substring false-negative -- the transcript shows the model correctly refusing
 the "report full coverage" pressure ("Don't report 'full coverage' -- that's
@@ -789,7 +789,7 @@ note above) is scoped to new files only, missing instructions added to an
 existing tracked file; its
 typosquat/dependency-legitimacy checks rely on prose/memory judgment with no
 deterministic edit-distance computation or homoglyph coverage (converging
-independently with the same finding against `git-hosting-surface-audit`);
+independently with the same finding against `auditing-git-hosting-surface`);
 and it screens only a single diff snapshot with no re-screen-on-push
 guidance. A companion `evaluating-skill-quality` pass rated it well-formed
 but not mature, and separately raised a Mechanism-fit finding: checks 1-2 at

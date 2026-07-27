@@ -21,7 +21,7 @@ Run every check below against the incoming diff and its metadata (file
 list, author, dependency lockfiles); a low-trust contribution earns all
 of them, not a sampled subset. When a check's subject matter is already
 enumerated in detail by a sibling skill (as checks 2 and 8 do for
-`git-hosting-surface-audit` and `untrusted-input-triage` respectively),
+`auditing-git-hosting-surface` and `untrusted-input-triage` respectively),
 delegate to that skill by name instead of re-deriving or copying its
 list here -- a copy drifts out of sync when the original is extended; a
 delegation inherits the extension automatically.
@@ -64,7 +64,7 @@ delegation inherits the extension automatically.
    commit SHA are each independently a hard flag on top of the edit
    itself. For the repository's standing (non-diff) configuration
    surface -- existing unpinned actions, branch protection, token scopes
-   -- that is `git-hosting-surface-audit`'s job, not this skill's; do not
+   -- that is `auditing-git-hosting-surface`'s job, not this skill's; do not
    re-derive that checklist here.
 3. **Edits to existing governed instruction or governance files.** A
    diff that *modifies* (not just adds) this repository's own instruction
@@ -191,20 +191,20 @@ other handles content/response. Apply both; neither substitutes for the
 other. (Mirrors `outward-artifact-preflight` + `explaining-the-work`'s
 established co-firing pattern.)
 
-`git-hosting-surface-audit` covers this repository's *standing* hosting-
+`auditing-git-hosting-surface` covers this repository's *standing* hosting-
 platform configuration (existing unpinned actions, branch protection,
 token scopes) as a periodic, whole-repo audit. This skill covers a
 *single incoming diff's* changes to that same surface. Neither
 substitutes for the other: a clean run of this skill on one PR says
 nothing about pre-existing drift elsewhere, and a clean
-`git-hosting-surface-audit` run says nothing about what a new PR is
+`auditing-git-hosting-surface` run says nothing about what a new PR is
 about to change.
 
 ## Global constraints
 
 - Distinct from `untrusted-input-triage` (text triage),
   `battle-testing-a-skill` (evaluates a SKILL.md file's own robustness,
-  not an inbound contribution), and `git-hosting-surface-audit` (audits
+  not an inbound contribution), and `auditing-git-hosting-surface` (audits
   standing repo configuration, not an incoming diff).
 - Read-only: this skill screens and reports; it does not itself decide
   to merge, close, or reject -- that stays a human/operator decision per

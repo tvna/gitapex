@@ -10,5 +10,5 @@ spec:
   skillDependencies:
     requires: []
     relatedTo:
-      - git-hosting-surface-audit
+      - auditing-git-hosting-surface
       - evaluating-skill-quality

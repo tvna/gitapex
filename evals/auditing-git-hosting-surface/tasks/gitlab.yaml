@@ -1,11 +1,11 @@
-id: git-hosting-surface-audit-gitlab
+id: auditing-git-hosting-surface-gitlab
 name: GitLab repo, all-gap report
 description: Detects GitLab from the remote, loads only the GitLab checklist reference, and reports all 8 items individually as Gap (no GitLab MCP server exists) rather than one blanket "unsupported" line.
 tags:
   - quality
 inputs:
   prompt: |
-    Use git-hosting-surface-audit. The remote is
+    Use auditing-git-hosting-surface. The remote is
     git@gitlab.com:example-group/example-repo.git. Audit this repo's
     hosting-platform configuration surface.
 expected:

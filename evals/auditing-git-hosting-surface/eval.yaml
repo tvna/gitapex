@@ -1,6 +1,6 @@
-name: git-hosting-surface-audit-eval
-description: Quality suite for the gitapex git-hosting-surface-audit skill.
-skill: git-hosting-surface-audit
+name: auditing-git-hosting-surface-eval
+description: Quality suite for the gitapex auditing-git-hosting-surface skill.
+skill: auditing-git-hosting-surface
 version: "0.1.0"
 config:
   trials_per_task: 1

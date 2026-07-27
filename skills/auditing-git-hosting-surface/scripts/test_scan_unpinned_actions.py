@@ -5,7 +5,7 @@ travels with the skill on vendoring (same approach as
 evaluating-skill-quality/scripts/test_check_skill_shape.py). Not wired into
 the root pyproject.toml testpaths -- this skill's checklist item is meant to
 stand alone; run directly with:
-    python3 -m pytest skills/git-hosting-surface-audit/scripts/
+    python3 -m pytest skills/auditing-git-hosting-surface/scripts/
 """
 
 from pathlib import Path
