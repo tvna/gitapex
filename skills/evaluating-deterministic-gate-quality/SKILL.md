@@ -363,19 +363,16 @@ instead, so a no-gate-warranted verdict never pays for loading them.
 ## Lifecycle note
 
 First version of a new skill category, declared `experimental` in
-`metadata/gitapex.yaml`. Full build and hardening history -- the initial
-three-round audit, the fourth axis's own two follow-up rounds, and a
-later two-part Mechanism-fit-test restructuring (rationale for the
-second part's `references/grading-procedure.md` split: this file's own
-Notes section below) -- lives in
+`metadata/gitapex.yaml`. Full build and hardening history lives in
 `metadata/gitapex.yaml`'s `spec.lifecycle.experimental.reason`
 (maintainer-facing, not auto-loaded, not access-restricted -- see the
-Stop boundary above) and in
-[references/gitapex-worked-examples.md](references/gitapex-worked-examples.md#audit-history-security-level-axis-hardening-round),
-not restated here: paying a per-invocation prose cost for provenance
-content with no bearing on grading an actual target gate is exactly the
-duplication this skill's own dimension 12 warns against, applied
-reflexively.
+Stop boundary above), not restated here: paying a per-invocation prose
+cost for provenance content with no bearing on grading an actual target
+gate is exactly the duplication this skill's own dimension 12 warns
+against, applied reflexively -- the same reason
+[references/gitapex-worked-examples.md](references/gitapex-worked-examples.md#audit-history-security-level-axis-hardening-round)'s
+own Audit history section stays a short pointer rather than a
+round-by-round narrative.
 
 Deferred, named explicitly: an independently-verified compatibility
 matrix; a bundled shape-checker script; a committed `evals/` regression
