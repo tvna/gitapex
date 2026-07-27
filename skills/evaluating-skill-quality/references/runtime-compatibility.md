@@ -42,6 +42,7 @@ Classification uses three evidence states:
 | OpenClaw | Official documentation says OpenClaw follows the Agent Skills specification. | Product eligibility uses a nested `metadata.openclaw` map, including binary, environment, config, OS, and install hints. This is a non-standard value structure under the standard `metadata` key. Product command fields also exist. | A standard `compatibility` declaration is not documented as enforcing these gates. |
 | HermesAgent | Official documentation says the skill system is compatible with the Agent Skills open standard. | Top-level `platforms` hides skills on incompatible operating systems. Hermes-specific tags, categories, toolset requirements, and config use a nested `metadata.hermes` map, a non-standard value structure under the standard `metadata` key. | Behavior for other vendor extensions is Unknown. |
 | Kimi CLI | Official MoonshotAI documentation states Kimi CLI loads Agent Skills from a directory containing `SKILL.md` and documents `name`, `description`, `license`, `compatibility`, and `metadata` with the standard shapes. | On startup Kimi CLI injects each skill's name, path, and description into the system prompt; the agent decides whether to read the full `SKILL.md` body. A Kimi-specific `type: flow` value designates a "flow skill" that embeds an Agent Flow diagram for multi-step automation and is invoked with `/flow:<name>` instead of the standard `/skill:<name>`. Tool access is documented as a separate `plugin.json` mechanism; the skills documentation does not mention `allowed-tools`. | The Agent Skills standard does not define `type: flow` or the plugin/skill tool-access split. Behavior if an `allowed-tools` field is present in frontmatter (ignored vs. rejected) is Unknown. |
+| Cursor | Official documentation states "Agent Skills is an open standard" and links to agentskills.io. | Cursor auto-discovers skills at startup from `.cursor/skills/` and `.agents/skills/` (both project- and user-level, e.g. `~/.cursor/skills/`), and separately loads `.claude/skills/` and `.codex/skills/` (plus their home-directory equivalents) "for compatibility" with Claude Code and Codex. Its documented frontmatter table lists only `name` (required), `description` (required), a Cursor-specific `paths` field (glob patterns that scope the skill to matching files), a Cursor-specific `disable-model-invocation` field (forces manual-only invocation via `/skill-name`), and `metadata`. Skill directories may nest arbitrarily for organization; identity comes from the immediate folder name, not the category path. Cursor also ships its own built-in skills (e.g. `/create-skill`, `/migrate-to-skills`) that appear alongside user-authored ones. | The documented frontmatter table does not mention `license`, `compatibility`, or the experimental `allowed-tools` field at all; whether Cursor recognizes, silently ignores, or rejects them is Unknown. |
 
 ## Primary sources
 
@@ -61,6 +62,8 @@ Classification uses three evidence states:
   <https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/skills.md>
 - Kimi CLI Agent Skills:
   <https://github.com/MoonshotAI/kimi-cli/blob/main/docs/en/customization/skills.md>
+- Cursor Agent Skills:
+  <https://cursor.com/docs/skills>
 
 ## Review rules
 
