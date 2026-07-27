@@ -58,11 +58,48 @@ jobs:
           if [ -z "$changed" ]; then
             echo "No added/modified skills/*/SKILL.md in this diff; skipping disclosure check."
             echo "applicable=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "Added/modified SKILL.md files requiring disclosure:"
-            echo "$changed"
-            echo "applicable=true" >> "$GITHUB_OUTPUT"
+            echo "description-changed-skills=" >> "$GITHUB_OUTPUT"
+            echo "needs-eval-coverage-skills=" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          echo "Added/modified SKILL.md files requiring disclosure:"
+          echo "$changed"
+          echo "applicable=true" >> "$GITHUB_OUTPUT"
+
+          # Issue #427 (refs #422): for each changed SKILL.md whose own
+          # frontmatter `description:` line changed, compute (a) whether this
+          # PR's diff also touches that skill's evals/<skill>/tasks/ or
+          # docs/skill-eval-status.md, and hand both skill-name lists to the
+          # gate script -- git access stays in this workflow step, the script
+          # only grades PR-body text against these workflow-supplied facts.
+          all_changed=$(git diff --name-only "$BASE_SHA...$HEAD_SHA")
+          description_changed_skills=""
+          needs_eval_coverage_skills=""
+          while IFS=$'\t' read -r status path newpath; do
+            [ -z "$status" ] && continue
+            case "$status" in
+              R*) target="$newpath" ;;
+              *) target="$path" ;;
+            esac
+            skill=$(printf '%s\n' "$target" | sed -E 's#^skills/([^/]+)/SKILL\.md$#\1#')
+            # Skill names get written to $GITHUB_OUTPUT and interpolated into
+            # a grep -E pattern below; a PR author fully controls this
+            # directory name in their own diff, so validate it first rather
+            # than trusting an arbitrary string into either sink.
+            if ! printf '%s' "$skill" | grep -qE '^[A-Za-z0-9_-]+$'; then
+              echo "::error::unsupported skill directory name for signal computation: $target" >&2
+              exit 1
+            fi
+            if git diff -U0 "$BASE_SHA...$HEAD_SHA" -- "$target" | grep -qE '^[+-]description:'; then
+              description_changed_skills="${description_changed_skills}${description_changed_skills:+,}${skill}"
+              if ! printf '%s\n' "$all_changed" | grep -qE "^evals/${skill}/tasks/" \
+                 && ! printf '%s\n' "$all_changed" | grep -qxF 'docs/skill-eval-status.md'; then
+                needs_eval_coverage_skills="${needs_eval_coverage_skills}${needs_eval_coverage_skills:+,}${skill}"
+              fi
+            fi
+          done <<< "$changed"
+          echo "description-changed-skills=${description_changed_skills}" >> "$GITHUB_OUTPUT"
+          echo "needs-eval-coverage-skills=${needs_eval_coverage_skills}" >> "$GITHUB_OUTPUT"
 
       # PR_BODY carries untrusted external text (anyone with PR-author
       # access controls it) -- passed via env, never interpolated
@@ -72,6 +109,10 @@ jobs:
         if: steps.diff.outputs.applicable == 'true'
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
+          DESCRIPTION_CHANGED_SKILLS: ${{ steps.diff.outputs.description-changed-skills }}
+          NEEDS_EVAL_COVERAGE_SKILLS: ${{ steps.diff.outputs.needs-eval-coverage-skills }}
         run: |
           set -euo pipefail
-          printf '%s' "$PR_BODY" | python3 .github/scripts/gate_skill_audit_disclosure.py
+          printf '%s' "$PR_BODY" | python3 .github/scripts/gate_skill_audit_disclosure.py \
+            --description-changed-skills "$DESCRIPTION_CHANGED_SKILLS" \
+            --needs-eval-coverage-skills "$NEEDS_EVAL_COVERAGE_SKILLS"
