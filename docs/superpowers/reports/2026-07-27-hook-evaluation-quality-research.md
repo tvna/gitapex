@@ -1,28 +1,161 @@
-# Hook Evaluation Quality Research (2026-07-27)
+# Deterministic Gate Quality Research (2026-07-27)
+
+*Provenance note: this report began scoped to Claude Code hooks only
+(original title: "Hook Evaluation Quality Research"). Per the
+requester's own direction mid-session, it is reframed to cover
+**deterministic gates** generally -- of which a Claude Code hook is one
+realization among several. The filename is unchanged from its original
+creation date/topic for git-history continuity; the content below is
+current as of this reframe.*
 
 ## Scope
 
-This repository has `evaluating-skill-quality` (a nine-dimension rubric plus a
-deterministic shape checker for judging `SKILL.md` artifacts) but no sibling
-skill for judging the quality of a *hook* -- `hooks/hooks.json` and the
-scripts it wires in, or a skill/subagent's own embedded `hooks.PreToolUse`
-frontmatter block. This report is research only: it inventories primary
-sources (this repository's own hook artifacts and design history, plus
-Anthropic's official Claude Code hooks documentation, fetched this session)
-and proposes candidate quality dimensions a future `evaluating-hook-quality`
-skill could grade against. **It does not create that skill.** Building it --
-`SKILL.md`, a rubric, a shape checker -- is explicitly out of scope here and
-deferred to a follow-up issue once an owner picks among the options in
-[Next steps](#next-steps-decision-ready-options).
+This repository has `evaluating-skill-quality` (a nine-dimension rubric
+plus a deterministic shape checker for judging `SKILL.md` artifacts) but
+no sibling skill for judging the quality of a **deterministic gate** --
+a mechanism that enforces a policy decision without relying on model
+choice. This report is research only: it inventories primary sources
+(this repository's own gate artifacts and design history across every
+realization it has, plus Anthropic's official Claude Code hooks
+documentation and five other agent-tool vendors' own hook-equivalent
+mechanisms, all fetched this session) and proposes an evaluation model a
+future skill could apply. **It does not create that skill.** Building
+it -- `SKILL.md`, a rubric, a shape checker -- is explicitly out of scope
+here and deferred to a follow-up issue once an owner picks among the
+options in [Next steps](#next-steps-decision-ready-options).
 
-Labeled per `grounding-in-primary-sources`: `Fact:` claims are grounded in a
-citation given alongside them (a file:line read this session, or a URL
-fetched this session with the source's own text quoted); `Speculation:`
-claims are this report's own synthesis and are marked as such.
+Labeled per `grounding-in-primary-sources`: `Fact:` claims are grounded
+in a citation given alongside them (a file:line read this session, or a
+URL fetched this session with the source's own text quoted);
+`Speculation:` claims are this report's own synthesis and are marked as
+such.
+
+## Guiding principle (Decision, 2026-07-27)
+
+Per the requester's own direction, stated as the model's central,
+governing principle rather than one candidate dimension among many:
+
+> A good deterministic gate is not defined by which specific mechanism
+> realizes it. It must not assume a specific interface or workload; it
+> loosely couples to whichever middleware or service is optimal for a
+> given environment; its own implementation stays thin -- the minimum
+> necessary to invoke that environment's mechanism and interpret its
+> answer; and what it guarantees is **reproducibility of the decision**,
+> not reuse of one literal artifact.
+
+This is not invented from nothing. It converges, independently, with
+three things this repository's own design history already states:
+
+- Fact, `docs/superpowers/specs/2026-07-17-gate-audit-trail-tradeoff.md`
+  (Addendum, "Write path -- one algorithm, per-context sink", read this
+  session): "Not one universal path... **One feature, not two: entry
+  schema, hash chain, append logic, and verify logic are identical
+  everywhere; only the resolved sink directory and the anchoring step
+  differ per context.**" This is the same principle, already applied to
+  one sub-layer (the audit trail) of a gate, across the same four
+  contexts named below.
+- Fact, `docs/superpowers/specs/2026-07-18-cicd-gate-cluster-design.md`
+  (read this session, lines 172-179): "an issue or PR is a retrospective
+  if and only if the single registered retro-identity predicate --
+  defined once ... and imported by every consumer -- says so; the
+  auto-retro mechanism, all three gates below, and any CI backstop
+  evaluate that one predicate and never re-derive it." And (lines
+  66-70): "adapt the mechanism, not the literal string" -- an explicit
+  mechanism-is-portable/literal-values-are-not split.
+- Fact, the same design doc (lines 441-461): candidates are accepted or
+  rejected in direct proportion to how "redistributable," "portable," or
+  "environment-specific" they are -- commit signing is rejected outright
+  because it "serves the sibling's remote-session signer program... too
+  environment-specific to redistribute," while a registry-validation
+  candidate is called "essential" precisely because "it is itself
+  redistributable to every consumer repo."
+
+**Speculation, flagged as such:** this repository's own design-only
+future architecture (see
+[Internal: gitapex's own design-only future architecture](#internal-gitapexs-own-design-only-future-architecture-all-four-domains-not-yet-built)
+below) -- an embedded Rego policy engine evaluated identically regardless
+of which of four contexts invoked it -- reads as the fullest possible
+realization of this exact principle, though this report does not claim
+the requester's own principle was drawn from that specific doc; the
+convergence is offered as corroborating precedent, not as the principle's
+origin.
+
+## Scope: four realization domains
+
+Rather than inventing new vocabulary, this report reuses this
+repository's own already-named taxonomy verbatim. Fact, per
+`docs/superpowers/specs/2026-07-17-zero-trust-threat-model.md:41-51`
+(read this session):
+
+> "Four distinct invocation contexts, each a different implicit trust
+> level:
+> 1. A git hook subprocess (pre-commit/pre-push), local machine or CI.
+> 2. A Claude-Code-style PreToolUse/PostToolUse/Stop/SessionStart/
+>    UserPromptSubmit hook subprocess.
+> 3. A CI job step (ephemeral runner).
+> 4. An MCP server subprocess (stdio only, #126) -- the least-trusted-by-
+>    default context: the caller is an arbitrary MCP client, not the
+>    agent harness itself..."
+
+This report maps the requester's own scope directly onto these four,
+already-established domains:
+
+- **Domain 2** ("hooks"): the original scope of this report, covering
+  Claude Code hooks and five other agent-tool vendors' equivalents
+  (Codex, Gemini CLI, Devin, OpenClaw, HermesAgent) -- see
+  [Internal: gitapex's own hook artifacts](#internal-gitapexs-own-hook-artifacts-and-design-history-domain-2-case-study)
+  and the External subsections below.
+- **Domain 3** ("CI/CD"): this repository's own `.github/scripts/`
+  gate cluster -- see
+  [Internal: gitapex's own CI/CD gate cluster](#internal-gitapexs-own-cicd-gate-cluster-domain-3-case-study)
+  below.
+- **Domain 4** ("MCP configuration"): thin in this repository's own
+  shipped artifacts -- see
+  [Internal: MCP-level gating](#internal-mcp-level-gating-domain-4)
+  below, which states this gap explicitly rather than papering over it.
+- **Domain 1** ("git hooks" -- pre-commit/pre-push): out of scope for
+  this pass; this repository's own `pyproject.toml` lists `prek` (a
+  pre-commit-hook runner) as a dev dependency, but no pre-commit/pre-push
+  hook configuration was researched this session -- named here as an
+  explicit gap, not silently omitted.
+
+**Middleware is not a fifth domain.** `bash`, `jq`, `python3`, `git`, and
+any cloud service a gate delegates to are a cross-cutting dependency
+layer any of the four domains above may lean on -- see
+[Dependent middleware](#dependent-middleware) below, which already
+documents this for Domain 2 and is extended to Domain 3 in the CI/CD
+inventory.
+
+## Evaluation model structure
+
+Mirrors `evaluating-skill-quality`'s own proven structure (a two-lane
+split plus cross-cutting axes), extended with one new axis this report
+proposes as central to the guiding principle above:
+
+- **Two-lane split**: deterministic-shape checks (a script could grade
+  these) vs. probabilistic-maturity dimensions (need judgment) -- see
+  [Candidate quality dimensions](#candidate-quality-dimensions-research-proposal-not-a-shipped-rubric).
+- **Axis: Compatibility awareness** -- already built for Domain 2 (the
+  agent-tool matrix and dependent-middleware findings below); not yet
+  extended to Domains 3-4 in this pass.
+- **Axis: Reproducibility / Domain-coverage** (new, central to the
+  guiding principle) -- for a given policy, how many of the four domains
+  realize it, with what trust/coverage properties, and is that
+  intentional defense-in-depth or an unnoticed gap? See
+  [Reproducibility / Domain-coverage axis](#reproducibility--domain-coverage-axis)
+  below.
+- **Axis: Blast-radius / trust classification** -- carried over from the
+  Domain-2-only draft (dimension 9 below), not yet generalized to all
+  four domains explicitly.
+- **Mechanism-fit test**: "which domain(s) should own this policy?" --
+  reuses six criteria this repository's own CI/CD design doc already
+  argues from, rather than inventing new ones; see
+  [Mechanism-fit: which domain should own a policy?](#mechanism-fit-which-domain-should-own-a-policy)
+  below.
 
 ## Primary sources consulted
 
-### Internal: this repository's own hook artifacts and design history
+### Internal: gitapex's own hook artifacts and design history (Domain 2 case study)
 
 1. **`hooks/hooks.json`** -- Fact: declares exactly three `PreToolUse`
    entries (matchers `Bash`, `Write`, `mcp__github__issue_write`), each
@@ -61,7 +194,9 @@ claims are this report's own synthesis and are marked as such.
    regex copies, synchronized only by a test, not a shared import), because
    a prior version that shelled out cross-directory to `.github/scripts/`
    caused a real false-deny once the repo was consumed as an installed
-   plugin (caught by a Codex review on PR #433).
+   plugin (caught by a Codex review on PR #433). **This policy's own
+   third realization -- the CI/CD gate `gate_acm_issue_disclosure.py` --
+   is the central worked example of the new Reproducibility axis below.**
 4. **`hooks/check-template-overwrite.sh`** -- Fact: a `Write`-matcher hook
    blocking any `Write` call that would overwrite an existing issue/PR/MR
    template path, case-insensitive, covering both directory-based and
@@ -183,6 +318,228 @@ claims are this report's own synthesis and are marked as such.
     Claude Code itself -- they are environment dependencies the hook
     author must ensure exist.
 
+### Internal: gitapex's own CI/CD gate cluster (Domain 3 case study)
+
+Researched this session, at the requester's own direction, to ground
+Domain 3 with the same rigor as Domain 2 above.
+
+14. **`docs/superpowers/specs/2026-07-18-cicd-gate-cluster-design.md`**
+    (504 lines) -- Fact: a design doc analyzing "the sibling" repository
+    (identified below, item 17) and proposing which of its already-built
+    CI/CD gates to port into gitapex. **Confirmed unimplemented as
+    described**: this repository has no `.gitapex/` directory, and none
+    of the scripts the doc names as core/protection gates
+    (`scripts/auto_retro.py`, `hooks/gate_merge_safety.py`,
+    `hooks/gate_gh_cli.py`, `scripts/scan_ssot_schema.py`,
+    `scripts/scan_ssot_drift.py`) exist anywhere in the checked-out repo
+    (confirmed by direct `find`/`grep` this session). The doc's own
+    governing principle -- separate mechanism (portable) from literal
+    policy value (not portable), quoted in the Guiding principle section
+    above -- and its explicit adoption filter ("redistributable" /
+    "environment-specific") are the clearest existing articulation, in
+    this repository's own words, of the guiding principle this report
+    now adopts. Two internal inconsistencies the doc itself does not
+    resolve, worth carrying forward rather than silently smoothing over:
+    a checklist claims "seven" retro-family gates import one shared
+    identity predicate, but nine of the doc's own gate blocks list that
+    import (lines 490-491 vs. the registry data itself); and "candidate
+    8," a "registry-hygiene lint" the doc's own Case-C rationale depends
+    on to verify a declared backstop actually exists, is referenced but
+    never defined anywhere in the 504 lines.
+15. **What actually shipped instead, in `.github/scripts/`** -- Fact:
+    11 real scripts exist (`gate_acm_issue_disclosure.py`,
+    `gate_skill_audit_disclosure.py`, `gate_skill_rename_lifecycle.py`,
+    `scan_retrospective_gate_drift.py`, `scan_toolchain_pin_drift.py`,
+    `scan_apm_manifest_drift.py`, `gate_owasp_asi_mapping.py`,
+    `gate_owasp_llm_mapping.py`, `sync_pr_publish.py`,
+    `post_merge_retro.py`, `skill_description_diff.py`), none matching
+    item 14's proposed names. `post_merge_retro.py`'s own docstring
+    states plainly what happened to the big proposal: "Issue #314
+    (sub-issue of #140): the minimal, GITHUB_TOKEN-only slice of #140's
+    post-merge-auto-retro gate cluster." The full 15-gate registry
+    architecture was scoped down to a much smaller, incrementally-shipped
+    reality.
+16. **`scan_retrospective_gate_drift.py` -- a textbook bottom-up gate
+    origin, in this repository's own words.** Fact, its own docstring:
+    "Issue #297 (refs #187, #242, #246): `merge-retrospective`'s Step 0
+    requires, every cycle, a manual search of every `retrospective`-
+    labelled issue for a commit on `main` citing it. Issue #187 proposed
+    automating this as a meta-gate; #242 and #246 each ran that search by
+    hand again and confirmed the meta-gate itself was never built." A
+    proposal sat unbuilt through two separate incidents of repeated
+    manual pain before the gate was actually written -- the precise
+    incident-driven, bottom-up pattern the requester asked to have
+    verified for the sibling repository, found instead already
+    documented inside gitapex's own history.
+17. **Explicit ports from `tvna/claude-md`** -- Fact, per
+    `gate_owasp_asi_mapping.py`'s own docstring (line 4): "Issue #144
+    ports `tvna/claude-md`'s OWASP Agentic Top 10 mapping" -- naming the
+    sibling repository directly, by name, independent of the design
+    doc's own repeated "the sibling" references (item 14).
+    `gate_owasp_llm_mapping.py`'s own docstring (lines 6-11) names issue
+    #145 and calls itself "a **sibling** gate to
+    `gate_owasp_asi_mapping.py`, not an extension of it... Same
+    discipline as the ASI gate" -- it does not name `tvna/claude-md`
+    directly itself; that attribution for the LLM gate holds only by
+    chaining through its stated sibling relationship to the ASI gate,
+    not as an independent naming. **This session could not independently verify
+    `tvna/claude-md`'s own repository content directly**: `add_repo` was
+    called three times at the requester's own request and each attempt
+    returned "MCP tool call requires approval" without resolving --
+    everything in items 14-17 about the sibling's own gates is therefore
+    *attributed to gitapex's own citations of it*, not independently
+    confirmed against `tvna/claude-md` itself. Named as an open
+    verification gap in
+    [Open questions](#open-questions--blind-spots) below, not silently
+    upgraded to independently-confirmed fact.
+18. **The ACM-disclosure policy's third realization --
+    `gate_acm_issue_disclosure.py`.** Fact, its own docstring (lines
+    5-13): "#357's own investigation found that no workflow in this
+    repository triggers on `issues:` events, so a missing ACM on an issue
+    body... had no universal, environment-independent backstop -- only a
+    per-session skill-trigger (probabilistic) and a PreToolUse hook
+    (#413, which only fires where this repo's own hook harness is
+    loaded). This script is that backstop's check-and-act half." This is
+    the single clearest, already-real example in this repository of the
+    guiding principle above: one policy (does an issue body carry an
+    ACM), three independent realizations with three different trust
+    properties (skill-trigger: probabilistic; hook: Domain-2-scoped;
+    CI/CD gate: Domain-3, environment-independent), each compensating for
+    what the others cannot guarantee. Developed further as the worked
+    example for the new
+    [Reproducibility / Domain-coverage axis](#reproducibility--domain-coverage-axis)
+    below.
+19. **Middleware/dependency consistency across the 8 gates most closely
+    inventoried this session** (`gate_acm_issue_disclosure.py`,
+    `gate_skill_audit_disclosure.py`, `gate_skill_rename_lifecycle.py`,
+    `scan_retrospective_gate_drift.py`, `scan_toolchain_pin_drift.py`,
+    `scan_apm_manifest_drift.py`, `gate_owasp_asi_mapping.py`,
+    `gate_owasp_llm_mapping.py`) -- Fact: the "thin, stdlib-only, no
+    network calls" pattern `hooks/check_acm_present_or_waiver.py` claims
+    for itself does **not** hold uniformly on the CI/CD side. 5 of 8 are
+    stdlib-only with zero network calls; 2 of 8
+    (`gate_acm_issue_disclosure.py`, `scan_retrospective_gate_drift.py`)
+    make live calls to `api.github.com` and require `GITHUB_TOKEN` --
+    an inherent property of being check-*and*-act gates, not pure
+    checks; and 1 of 8 (`scan_apm_manifest_drift.py`) imports PyYAML, a
+    third-party dependency, breaking the stdlib-only claim outright
+    despite its own docstring saying it can "run standalone." Separately,
+    none of the 8 scripts (nor the workflows invoking four of them
+    directly) pin a Python interpreter version, while `pyproject.toml`
+    declares `requires-python = ">=3.12"` -- honored only when the same
+    scripts run through their pytest counterparts under `uv run --frozen
+    pytest`, meaning the same script executes under two different,
+    unpinned-vs-pinned Python provenances depending on entry point.
+20. **CI-gate-to-CI-gate duplication, and issue-citation convention
+    consistency.** Fact: `gate_owasp_asi_mapping.py` and
+    `gate_owasp_llm_mapping.py` are near-identical structurally and
+    textually (`_validate_table_header`, `_parse_rows`,
+    `VALID_STATUSES`), explicitly framed by the LLM gate's own docstring
+    as deliberate ("a **sibling** gate... not an extension of it"). Of
+    the 8 gates inventoried, 7 name a specific backing issue/PR/finding
+    in their own header, matching the same issue-citing convention
+    already observed on the hook side (items 1, 3, 6, 8 above);
+    `scan_apm_manifest_drift.py` is the one outlier, framed purely as
+    protecting a "single-source-of-truth invariant" with no issue number
+    -- the same "standing invariant, no issue cited" pattern already seen
+    on the hook side (`hooks/check-template-overwrite.sh`, item 4 above),
+    so this pattern is not unique to either domain.
+
+### Internal: gitapex's own design-only future architecture (all four domains, not yet built)
+
+**Everything in this subsection is confirmed design-only, not shipped**:
+this repository has no `.gitapex/` directory, `pyproject.toml` declares
+no Rust/Go/`regorus` dependency, and a repository-wide search for
+`regorus`/`.rego` outside `docs/` finds nothing (all confirmed by direct
+inspection this session). Read carefully to avoid the mistake of citing
+this material as describing gitapex's current behavior.
+
+21. **`docs/superpowers/specs/2026-07-17-zero-trust-threat-model.md`**
+    (198 lines) -- Fact, its own "Design-only scope" section (lines
+    11-18): "No sandboxing, verification, or input-validation code is
+    written by this pass." It describes a future gitapex as "a single
+    static binary CLI (Rust provisional/Go later)... REDISTRIBUTED:
+    independent organizations run their own copy against their own
+    repos, with their own adopter-authored `.rego` policy files" -- an
+    embedded Rego (Open Policy Agent-family) policy-evaluation engine,
+    entirely unbuilt today. It is also the source of the four-domain
+    taxonomy this report adopts (see
+    [Scope: four realization domains](#scope-four-realization-domains)
+    above) and all seven zero-trust principles quoted where relevant
+    throughout this report (lines 78-92: no implicit trust from
+    location/ancestry; every invocation re-validates its own inputs;
+    least privilege everywhere; assume breach; verified identity over
+    asserted identity; fail closed including on INDETERMINATE; minimize
+    information disclosure -- "applied as one... not selectively invoked
+    to justify a decision already made on other grounds," lines 94-97).
+    Its own "Consolidated findings" section records, for the
+    MCP-server-mode design specifically (#126): "MCP mode inherits the
+    CLI's full ambient privileges (env vars, credentials) though the
+    advisory tools need only repo-tree read and local Rego evaluation" --
+    one of several places this design-only material speaks directly to
+    Domain 4, alongside the four-invocation-contexts list itself (which
+    names the MCP server subprocess as "the least-trusted-by-default
+    context," already quoted above) and its own `#126`
+    Consolidated-findings subsection's other bullets (stdio parentage
+    not being an implicit trust boundary, an `explain_denial`
+    gate-evasion-oracle risk over MCP, and a trust-on-first-use
+    bootstrapping gap in its tool-poisoning allowlist).
+22. **`docs/superpowers/specs/2026-07-17-gate-audit-trail-tradeoff.md`**
+    (344 lines) -- Fact: designs an audit-trail schema (hash-chained
+    JSONL, a `policy_version` content hash, a `verified`/`asserted`
+    identity split) that a gate must produce to prove it actually ran
+    and what it decided -- not merely that it is configured to exist.
+    Its own F5 finding makes this a precondition, not an aspiration:
+    "audit-write failure MUST deny the gated operation... This creates a
+    real, deliberate availability-vs-security tradeoff... record it as
+    an accepted, explicit tradeoff." Eight distinct tradeoffs are named
+    explicitly in the doc (hash-chaining vs. Merkle+Ed25519;
+    mandatory-vs-optional extension tiers; zero-server JSONL vs. a REST
+    collector; commit-to-git vs. `.gitignore`; availability vs. security
+    on audit-write failure; signature non-repudiation vs. content
+    truthfulness; file-mode 0600 vs. hash-chain integrity; and
+    `policy_version` self-reporting's own blind spot against a
+    compromised evaluator). Its "one algorithm, per-context sink"
+    passage, already quoted in full in the Guiding principle section
+    above, is this repository's own clearest existing precedent for the
+    requester's proposed principle.
+
+### Internal: MCP-level gating (Domain 4)
+
+**Genuinely thin, named as a real gap rather than papered over.** This
+repository has no `.mcp.json` or other committed MCP server
+configuration (confirmed by a repository-wide search this session), so
+Domain 4 has no shipped gitapex artifact to inventory the way Domains 2
+and 3 do. What exists instead:
+
+- Fact: `hooks/check-issue-acm-disclosure.sh`'s matcher is
+  `mcp__github__issue_write` (item 3 above) -- this is a **Domain-2**
+  artifact (a Claude Code hook) that happens to intercept an MCP tool
+  call; it is not a Domain-4 artifact (an MCP server itself enforcing
+  something), and this report does not conflate the two.
+- Fact, per <https://code.claude.com/docs/en/hooks-guide> (fetched
+  2026-07-27; two separate passages from the page, quoted separately
+  rather than stitched into one, since they are not adjacent). The
+  "Hooks and permission modes" section: a hook returning `"allow"`
+  "doesn't bypass deny rules from settings, and it can't suppress the
+  prompt for connector tools... or MCP tools marked
+  `requiresUserInteraction`." A separate, earlier paragraph near the
+  `"allow"`/`"deny"`/`"ask"` decision-value list makes the same point in
+  different words: "...and so are connector tools [your organization
+  set to `ask`] and MCP tools marked [`requiresUserInteraction`]. This
+  means deny rules from any settings scope, including [managed
+  settings], always take precedence over hook approvals." Together, both
+  passages establish that this is Domain-4-adjacent gating this
+  repository does not own or control -- it is imposed by whichever
+  organization's own connector/managed settings apply to a given
+  session, external to any file in this repository.
+- Fact, per item 21 above: the design-only zero-trust doc calls the MCP
+  server subprocess context "the least-trusted-by-default context" and
+  records that its own #126 design currently "inherits the CLI's full
+  ambient privileges" rather than a scoped subset -- a named,
+  unaddressed risk in the design-only material, not a shipped
+  mitigation.
+
 ### External: Anthropic's official Claude Code documentation (fetched this session)
 
 - Fact, per <https://code.claude.com/docs/en/hooks-guide> (fetched
@@ -277,7 +634,11 @@ claims are this report's own synthesis and are marked as such.
   `PreToolUse` hooks are already relying on
   (`threat-model-and-authorization.md`'s "empirically verified... hard
   deny" language, item 7 above) is grounded in the platform's own
-  documented guarantee, not an assumption.
+  documented guarantee, not an assumption. (See also
+  [Internal: MCP-level gating](#internal-mcp-level-gating-domain-4)
+  above for a separate, related passage's connector/MCP-tool
+  implications -- drawn from a different paragraph of the same page,
+  not this same one.)
 - Fact, per <https://code.claude.com/docs/en/hooks> (fetched 2026-07-27),
   on plugin-shipped agents: "When a plugin is enabled, its hooks merge
   with your user and project hooks" (an exact quote), and, separately,
@@ -388,9 +749,19 @@ not a memory or a third-party summary, per this session's own
 A follow-up sweep, distinct from the structural comparison above: not
 "does an equivalent mechanism exist" but "does this vendor's own prose
 say *why* it exists, or state a hook-writing philosophy the way
-Anthropic's own docs do (`grounded above`)." Same five other runtimes,
-same primary-source discipline -- a claim not found in the fetched text
-is reported as absent, never invented to fill the question.
+Anthropic's own docs do (`grounded above`)." **Scope note, stated
+explicitly rather than left to look like an unbroken continuation of
+the same five-vendor set:** this sweep covers Codex, Gemini CLI,
+OpenClaw, and HermesAgent (four of the original five, re-researched for
+rationale specifically) plus **Cursor**, a sixth vendor added only for
+this follow-up sweep, not part of the structural-comparison section's
+five. Devin is not re-attempted here -- its primary-source domain was
+already confirmed blocked in the structural comparison above, and this
+sweep did not re-attempt it; see
+[Open questions](#open-questions--blind-spots) below, which already
+names Devin's own hook mechanism as unresolved. Same primary-source
+discipline throughout: a claim not found in the fetched text is
+reported as absent, never invented to fill the question.
 
 - Fact: Codex's own accessible sources (`docs/config.md`, the entire
   `codex-rs/hooks` crate's doc comments) are **silent** on rationale --
@@ -425,8 +796,9 @@ is reported as absent, never invented to fill the question.
   do not throw so other handlers can run," "Filter events early," "Keep
   the allowlists conservative." One principle independently converges
   with this repository's own zero-trust doctrine
-  (`threat-model-and-authorization.md`'s "fail closed, including on
-  INDETERMINATE"): "**Missing fields are unproven, not false
+  (`docs/superpowers/specs/2026-07-17-zero-trust-threat-model.md`'s own
+  principle 6, "fail closed, including on INDETERMINATE," item 21
+  below): "**Missing fields are unproven, not false
   assurances; fail closed when policy requires them.**" A named risk:
   "A timed-out handler promise continues running because hook callbacks
   do not receive a cancellation signal."
@@ -466,7 +838,8 @@ is reported as absent, never invented to fill the question.
 
 ## Compatibility awareness (agent-tool axis and dependent middleware)
 
-A warning-only axis, proposed here to mirror `evaluating-skill-quality`'s
+**Scoped to Domain 2 only in this pass** -- not yet extended to Domains
+3-4. A warning-only axis, proposed here to mirror `evaluating-skill-quality`'s
 own explicitly separate "Compatibility awareness" axis (its
 `references/runtime-compatibility.md`) rather than folding it into the
 numbered dimensions above -- same structural choice, same scope of
@@ -551,24 +924,28 @@ time under a different name.
 
 ### Dependent middleware
 
-Grounded in the internal inventory above (item 13): every hook script
-this repository ships already depends on external binaries Claude Code
-itself does not guarantee -- `bash` specifically (not POSIX `sh`), `jq`
-universally, `python3` in two of four scripts, and `git` in one. This is
-not hypothetical: Anthropic's own hooks-guide troubleshooting section
-names both failure modes directly as known issues, not edge cases --
-"`jq`: command not found... install `jq` or use Python/Node.js for JSON
-parsing," and, on Windows specifically, that Git Bash "still source[s]
-your profile. If that profile contains unconditional `echo` statements,
-the output gets prepended to your hook's JSON" and breaks JSON parsing
-entirely.
+Grounded in the internal inventory above (item 13, extended to Domain 3
+by item 19): every hook script this repository ships already depends on
+external binaries Claude Code itself does not guarantee -- `bash`
+specifically (not POSIX `sh`), `jq` universally, `python3` in two of
+four scripts, and `git` in one. This is not hypothetical: Anthropic's
+own hooks-guide troubleshooting section names both failure modes
+directly as known issues, not edge cases -- "`jq`: command not found...
+install `jq` or use Python/Node.js for JSON parsing," and, on Windows
+specifically, that Git Bash "still source[s] your profile. If that
+profile contains unconditional `echo` statements, the output gets
+prepended to your hook's JSON" and breaks JSON parsing entirely. On the
+CI/CD side, the same "thin, no third-party dependency" property holds
+for 5 of 8 gates inventoried but is broken outright by
+`scan_apm_manifest_drift.py`'s `import yaml` (item 19) -- middleware
+dependency is a real, cross-domain concern, not one confined to Domain 2.
 
 - **Candidate check: middleware dependency is stated, not assumed.**
-  Does the hook's own comments or documentation name every external
-  binary it shells out to, so a consumer repository (or a different
-  deployment image, container, or CI runner) can verify each is present
-  before relying on the hook, rather than discovering a silent failure
-  the first time the binary is missing?
+  Does the gate's own comments or documentation name every external
+  binary or third-party package it depends on, so a consumer repository
+  (or a different deployment image, container, or CI runner) can verify
+  each is present before relying on the gate, rather than discovering a
+  silent failure the first time the dependency is missing?
 - **Candidate check: shell-portability is a deliberate choice, not a
   default.** A `#!/bin/bash` shebang using `set -euo pipefail` and
   `[[ ]]`/array syntax is a deliberate choice to require bash over
@@ -583,12 +960,284 @@ entirely.
   hook's JSON output, does a hook likely to run on Windows disclose
   either constraint, rather than being authored and tested on
   macOS/Linux only and assumed portable?
+- **Candidate check: interpreter/runtime version pinning.** Grounded in
+  item 19's finding that the same CI/CD gate scripts run under two
+  different, unpinned-vs-pinned Python provenances depending on entry
+  point -- does a gate's own execution environment pin the interpreter
+  version its author actually tested against, or silently inherit
+  whatever the invoking context's own default happens to be?
+
+## Reproducibility / Domain-coverage axis
+
+**New axis, central to the guiding principle above.** For a given
+policy, this axis asks: in how many of the four domains is it realized,
+with what trust/coverage properties, and is the resulting overlap (or
+gap) a deliberate, argued decision or an unnoticed accident?
+
+### Worked example: the ACM-disclosure policy (item 18)
+
+The clearest case already real in this repository. One policy -- "does
+an issue body carry an Acceptance Criteria Map or an explicit waiver" --
+realized three times:
+
+| Realization | Domain | Trust/coverage property |
+|---|---|---|
+| `skills/drafting-an-acm-issue/SKILL.md` | (per-session, not domain-scoped) | Probabilistic -- depends on the agent choosing to invoke the skill |
+| `hooks/check-issue-acm-disclosure.sh` | 2 (Claude Code hook) | Environment-scoped -- fires only where this repository's own hook harness is loaded (confirmed by its own matcher, item 3) |
+| `gate_acm_issue_disclosure.py` | 3 (CI/CD) | Environment-independent -- fires on the `issues` webhook regardless of which client created the issue (item 18) |
+
+The gate script's own docstring states the rationale for needing all
+three explicitly (quoted in full at item 18): the skill trigger alone is
+probabilistic, the hook alone is environment-scoped, so only the CI/CD
+gate closes the "created via a different client entirely" gap. This is
+**deliberate, argued, three-domain coverage** -- the model for what a
+"good" Reproducibility score looks like.
+
+### Two counter-examples: real, currently-unargued single-domain coverage
+
+Contrast, found directly in this session's own research, not invented
+to fill out the table:
+
+- **Install/`gh`-CLI safety** (items 2, 6): realized in Domain 2 only,
+  twice over (`hooks/check-bash-safety.sh` for the main thread,
+  `check_task_bash_safety.sh` for task-agent dispatch) -- but with
+  **no Domain-3 backstop**. If the same install/`gh`-write policy needed
+  enforcing against a change made through a non-Claude-Code path (a
+  direct push, a different tool), nothing in this repository's own
+  `.github/scripts/` catches it. This report does not know whether that
+  gap is deliberate (accepted, since the policy is about *live agent
+  action*, not repository *state*) or simply unconsidered -- named as an
+  open question below, not resolved here.
+- **Retrospective identity** (items 14-17): the *design-only* material
+  proposes multi-domain coverage (a Domain-2 issue-creation-time hook
+  plus a Domain-3 CI backstop, per item 14's Case C), but what actually
+  *shipped* (`post_merge_retro.py`, `scan_retrospective_gate_drift.py`,
+  item 15-16) is Domain-3 only -- no Domain-2 hook exists today gating
+  retrospective-identity-adjacent actions in a live session. The
+  *proposed* architecture had multi-domain coverage as an explicit,
+  argued design goal; the *shipped* reality does not yet have it.
+
+### Candidate checks
+
+- **Domain-count disclosure.** Does a gate's own documentation state, or
+  can a reviewer determine, how many domains realize the same policy --
+  one or several -- rather than assuming single-domain coverage is
+  either always sufficient or always insufficient without checking?
+- **Argued vs. accidental coverage.** Where multiple domains realize the
+  same policy, does something (a docstring, a design doc, a registry
+  entry) state *why* -- defense-in-depth against a specific named
+  failure mode, layered coverage at different pipeline stages, a
+  credential/reversibility asymmetry between layers -- per the six
+  criteria in
+  [Mechanism-fit](#mechanism-fit-which-domain-should-own-a-policy)
+  below, rather than the multiplicity being an unexplained accident of
+  history?
+- **Single source of truth for the policy's own identity.** Grounded in
+  item 14's central principle (quoted in the Guiding principle section):
+  where a policy needs the same predicate evaluated in multiple domains
+  (e.g., "is this an ACM-exempt chore issue," "is this a retrospective
+  issue"), is that predicate defined once and imported, or re-derived
+  independently in each realization -- risking exactly the kind of
+  silent drift the four-way ACM-regex duplication (item 3) already
+  accepts as a known, test-gated risk rather than an unmanaged one?
+- **Reversibility-driven placement, not just presence.** Per item 14's
+  Criterion 1 (quoted in full under Mechanism-fit below): where a Domain
+  2 realization exists specifically because CI-time detection would
+  already be too late (the guarded action is irreversible by the time a
+  CI job could see it), does the gate's own documentation say so, rather
+  than leaving the reader to guess why the same policy is not simply a
+  CI/CD gate alone?
+
+## Mechanism-fit: which domain should own a policy?
+
+Not invented for this report -- reused directly from the six criteria
+`docs/superpowers/specs/2026-07-18-cicd-gate-cluster-design.md` already
+argues from, case by case, across its own gate-placement decisions (item
+14 above), generalized here from "hook vs. CI" to "which of the four
+domains":
+
+1. **Reversibility window.** Place the check at the earliest domain
+   where the wrong action is still cheaply reversible; a domain that
+   only sees the damage after it is already irreversible is too late,
+   regardless of how clean its own implementation would be (design doc
+   lines 238-262, quoted at item 14).
+2. **Capability match.** A domain that cannot perform the I/O a check
+   needs (e.g., a live remote lookup) cannot own that check, independent
+   of timing (same passage).
+3. **Credential/trust asymmetry.** Pair an earlier, lower-credential
+   domain that can fail open (nothing irreversible happens yet) with a
+   later domain that has guaranteed credentials and can fail closed as
+   the backstop (design doc lines 250-254).
+4. **Tool-surface availability.** Place the check at whichever domain
+   actually has a chokepoint for the guarded action -- if only one
+   domain exposes the relevant tool call at all, the choice is not
+   really a choice (design doc lines 220-224).
+5. **Precedent reuse, adapted for local constraints.** Prefer a
+   placement a comparable, already-battle-tested gate already uses
+   elsewhere (in this repository, or -- per item 17's caveat -- in the
+   sibling repository, attributed rather than independently confirmed),
+   adjusted for constraints the precedent's own origin did not have
+   (design doc lines 172-231).
+6. **Prose-rule-to-gate mapping, by action kind.** Rules about *live
+   agent-session actions* map to Domain 2 (hooks); rules about
+   *repository/file state* map to Domain 3 (CI + pre-commit), since they
+   do not require an active session to evaluate; rules about *aggregate,
+   noisy signals over time* map to scheduled/advisory CI only,
+   deliberately non-blocking (design doc lines 372-436, synthesis).
+
+Two additional, named-but-secondary criteria from the same source:
+**zero-I/O gates are structurally safer** (a pure local predicate has no
+INDETERMINATE state to fail open or closed on at all -- design doc lines
+248-249), and **staged rollout** (a new gate can start advisory and be
+promoted to blocking once proven clean, rather than the placement
+decision being binary from day one -- design doc line 365).
+
+**What this framework does not cover, named explicitly rather than
+silently assumed solved:** the design doc never states a general
+principle for "does this policy need a Domain-3 backstop because Domain
+2 is Claude-Code-specific and a different client could bypass it
+entirely" (confirmed absent by a full-text search this session, item
+14) -- the property exists incidentally in one gate (the ACM
+worked-example's Case C-equivalent) but is argued there on
+credential/reversibility grounds, not client-independence grounds. A
+future rubric applying this framework needs its own position on
+client-independence as a first-class criterion, not an assumption that
+criteria 1-6 already cover it.
+
+## Top-down model, bottom-up discovery
+
+Named explicitly, at the requester's own prompting, rather than left as
+an unstated tension: **this evaluation model is being finalized
+top-down, in this research pass, before further gate implementation
+work proceeds** -- the requester's own stated reason for prioritizing it
+this way. That does not mean every future gate must originate top-down.
+This repository already has a proven, working **bottom-up** mechanism
+for *discovering* which gates are needed: `merge-retrospective` and
+`scan_retrospective_gate_drift.py`'s own history (item 16) -- a proposal
+sits unbuilt until repeated real incidents make the pain concrete enough
+to justify building it. `gate_skill_audit_disclosure.py` and
+`gate_skill_rename_lifecycle.py` (item 20) also cite specific incident
+issue numbers in their own headers, the same pattern --
+`scan_apm_manifest_drift.py` is the one gate among those inventoried
+that does not (item 20's own outlier), framed instead around a standing
+invariant with no incident cited.
+
+This model does not replace that discovery mechanism. It is positioned
+as **the yardstick applied once a gate (however discovered) is being
+judged for quality** -- top-down in the sense that the yardstick itself
+is fixed now, not in the sense that every gate it measures must have
+been designed top-down. A gate born from three repeated incidents
+(bottom-up discovery) and a gate born from a comprehensive design doc
+(top-down design, item 14) are graded by the same model once built; the
+model has no opinion on which origin story is better, only on whether
+the resulting artifact is reproducible, thin, environment-appropriate,
+and honestly scoped.
+
+### Precedent from manufacturing and logistics
+
+Researched at the requester's own direction, to back the
+top-down-model-first sequencing above with established industrial-
+engineering doctrine rather than leaving it as an unsupported analogy.
+
+**Sourcing tier, stated upfront rather than left implicit:** this
+session's outbound network policy blocked direct `WebFetch`/`curl`
+access to every external source below (`global.toyota`, `lean.org`,
+`deming.org`, MIT Press, Wikipedia, `archive.org`) -- the same
+allowlist-driven pattern already disclosed for Devin and Cursor
+elsewhere in this report. Every quote in this subsection was obtained
+through `WebSearch` result synthesis, not a byte-level page fetch this
+session could independently verify character-for-character or pin to
+an exact page number. This is a **weaker evidentiary tier** than the
+rest of this report's citations, per this session's own
+`grounding-in-primary-sources` discipline -- treat the quotes below as
+well-corroborated (independently returned by multiple searches, in
+each case) rather than as fully agent-verified primary-source fact.
+
+- **Jidoka (自働化).** Toyota Motor Corporation's own official global
+  site (per `WebSearch` synthesis, not independently fetched):
+  "Jidoka -- which can be loosely translated as 'automation with a
+  human touch' -- is based on the concepts of stopping immediately when
+  abnormalities are detected to prevent defective products from being
+  produced..." (the source continues: "and improving productivity to
+  eliminate the need for people to be simply watching over machines").
+  Named one of TPS's two pillars alongside Just-in-Time.
+  This is, in a manufacturing vocabulary, close to a direct restatement
+  of what this report already calls a deterministic gate: a mechanism
+  that halts a bad outcome the instant it is detected, rather than
+  letting it propagate and relying on downstream inspection (or model
+  judgment) to catch it later.
+- **Poka-yoke (mistake-proofing).** Shigeo Shingo, in the work that
+  formalized the concept (via a secondary reproduction of his own
+  words, `Zero Quality Control: Source Inspection and the Poka-Yoke
+  System`, Productivity Press, 1986): "mistakes will not turn into
+  defects if worker errors are discovered and eliminated beforehand" --
+  devices and process designs engineered to catch or prevent an error
+  at its source, rather than relying on vigilance after the fact.
+- **Standardized work as the precondition for kaizen, with an
+  important nuance.** The popular aphorism "where there is no standard,
+  there can be no kaizen," widely attributed to Taiichi Ohno, could not
+  be traced this session to a page-cited original sentence -- flagged
+  explicitly as Speculation, not asserted as a verified quote. A
+  citable substitute, from the same tradition: "The standard is only
+  the baseline for doing further kaizen" (Taiichi Ohno, *Taiichi Ohno's
+  Workplace Management*, trans. Jon Miller, Gemba Press / McGraw-Hill).
+  **The more load-bearing finding is a nuance, not the aphorism itself:
+  Toyota's own doctrine is not purely top-down.** System-level design --
+  that a process halts immediately on any detected abnormality, as a
+  non-negotiable standard -- is a management/engineering decision, made
+  top-down. But the *specific* poka-yoke devices and stopping mechanisms
+  that satisfy that standard are documented as routinely proposed
+  bottom-up, by shop-floor workers, through kaizen and Toyota's own
+  suggestion system, operating *inside* the standard the top-down
+  decision already fixed. This maps directly onto the position already
+  taken above: the evaluation *model* (the standard -- what "good" means,
+  fixed now) is top-down; *which specific gates* satisfy it can still be
+  discovered bottom-up (`scan_retrospective_gate_drift.py`'s own
+  incident-driven origin, item 16, is this repository's own instance of
+  exactly this pattern, independently arrived at before this
+  manufacturing precedent was researched).
+- **Deming's statistical process control.** W. Edwards Deming, *Out of
+  the Crisis* (MIT Center for Advanced Engineering Study, 1986),
+  Chapter 11 (page not independently confirmed this session): "Without
+  statistical control, the process was in unstable chaos, the noise of
+  which would mask the effect of any attempt to bring improvement." A
+  process must first be brought into a stable, standardized state before
+  any change in its output can be attributed to a real improvement
+  rather than noise -- the same load-bearing idea as standardized work,
+  from a different tradition.
+- **Logistics: the control-tower pattern.** DHL's own glossary: "A
+  control tower is a central hub offering end-to-end supply chain
+  visibility and real-time analytics to manage logistics performance
+  and control costs." IBM's own materials describe a control tower
+  replacing a prior state
+  where supply-chain data was "scattered across organizational silos,"
+  each node keeping its own copy, out of sync with the others. This is
+  the same "single source of truth, imported not re-derived" principle
+  this report's own Guiding principle section already grounds in
+  `docs/superpowers/specs/2026-07-18-cicd-gate-cluster-design.md`
+  (item 14) -- found independently in a different industry's own
+  vocabulary, not introduced here for the first time.
+
+**Synthesis, this report's own, not a quote:** across three independent
+traditions (Toyota's TPS, Deming's SPC, logistics control-tower design),
+the same shape recurs -- a fixed, top-down-set standard or single source
+of truth is what makes local variation *measurable and correctable* in
+the first place, while the specific mechanisms satisfying that standard
+are routinely improved or discovered bottom-up, inside the boundary the
+standard fixes. This is offered as corroborating precedent for
+finalizing the evaluation model now, before further gate implementation
+-- not as proof the requester's own principle was derived from these
+sources, and not as license to treat every future gate's own design as
+needing top-down authorship.
 
 ## Candidate quality dimensions (research proposal, not a shipped rubric)
 
-Modeled on `evaluating-skill-quality`'s own two-lane split. Every dimension
-below is a candidate for a future rubric to accept, reject, or refine --
-none of these are enforced anywhere yet.
+Modeled on `evaluating-skill-quality`'s own two-lane split. Derived from
+Domain-2 (hook) research specifically -- generalizing every dimension to
+Domains 3-4 explicitly is future work, not completed in this pass (see
+[Open questions](#open-questions--blind-spots)). Every dimension below
+is a candidate for a future rubric to accept, reject, or refine -- none
+of these are enforced anywhere yet.
 
 ### Candidate deterministic-shape checks (a script could grade these)
 
@@ -692,8 +1341,8 @@ none of these are enforced anywhere yet.
     OpenClaw's own stated principle ("Missing fields are unproven, not
     false assurances; fail closed when policy requires them"), which
     independently converges with this repository's own
-    `threat-model-and-authorization.md` ("fail closed, including on
-    INDETERMINATE" -- zero-trust principle 6, item 7 above). Does a
+    `zero-trust-threat-model.md` ("fail closed, including on
+    INDETERMINATE" -- zero-trust principle 6, item 21 above). Does a
     hook's own script default to deny (or escalate) when its input is
     malformed, a field it depends on is missing, or a script/binary it
     shells out to is absent -- rather than silently defaulting to allow?
@@ -750,73 +1399,112 @@ none of these are enforced anywhere yet.
 Per this repository's own Unknowns framework (`evaluating-skill-quality`'s
 Blind spot pass), named explicitly rather than left implicit:
 
-- **No behavioral-evidence convention exists for hooks the way it does for
-  skills.** `evaluating-skill-quality` dimension 8 asks for an eval suite
-  and a no-skill baseline; no `evals/*/eval.yaml` precedent exists for a
-  *hook* today (the closest is
+- **`tvna/claude-md` (the sibling) was never independently verified this
+  session.** Three `add_repo` attempts each returned "MCP tool call
+  requires approval" without resolving. Everything this report says
+  about the sibling's own gate cluster, its incident-driven history
+  (implied by "incident #1395" and similar citations inside gitapex's
+  own design doc), or its bottom-up-vs-top-down development style is
+  *attributed to gitapex's own citations of it*, not independently read.
+  This is the single largest unverified claim class in this report --
+  named here explicitly, not smoothed over by the volume of indirect
+  evidence gathered instead.
+- **Dimensions 1-18 above were derived from Domain 2 research and have
+  not been re-derived for Domains 3 or 4.** Some generalize immediately
+  (fail-closed defaults, middleware disclosure); others may not transfer
+  cleanly (e.g., "exit code 2" is Domain-2-specific vocabulary with no
+  obvious Domain-3 or Domain-4 analogue argued in this report). A future
+  pass should re-walk each dimension against Domain 3's own real
+  artifacts (item 14-20) and Domain 4's thin ones, rather than assuming
+  Domain-2 language ports unchanged.
+- **The Reproducibility axis's own worked examples (ACM: 3 domains;
+  install-safety: 1 domain with no argued gap-acceptance; retrospective:
+  proposed multi-domain, shipped single-domain) were not battle-tested
+  against a case this report did not already know about.** Whether the
+  axis actually surfaces new gaps on a policy this report has not yet
+  looked at is untested.
+- **No behavioral-evidence convention exists for gates the way it does
+  for skills.** `evaluating-skill-quality` dimension 8 asks for an eval
+  suite and a no-skill baseline; no `evals/*/eval.yaml` precedent exists
+  for a *gate* today (the closest is
   `evals/screening-a-low-trust-contribution/tasks/hook-script-change.yaml`,
-  which tests contribution screening, not the hook's own correctness).
-  What would "behavioral evidence for a hook" even mean -- a fixed corpus
-  of allow/deny commands run against the script directly (which is what
-  `hooks/test_check_bash_safety.py` already does), or something broader
-  covering the live-execution-context checks item 10 names?
-- **The `prompt`/`agent` hook-type question (dimension 8 above) is
-  unresolved, not just unaddressed.** This report surfaces it as a real
-  design fork, not a settled position.
-- **This report's own external-source coverage has one unverified
-  cross-check**, named in the External sources list above (the plugin-
-  shipped-agent hooks restriction) -- flagged rather than silently
-  presented as independently confirmed.
-- **Whether a hook-quality skill should be a new skill at all, versus an
-  extension of `screening-a-low-trust-contribution` check 4 (which
-  already hard-flags any hook/script diff) or a new dimension bolted onto
-  `evaluating-skill-quality` itself**, is an open mechanism-fit question
-  this report does not resolve -- see [Next steps](#next-steps-decision-ready-options).
-- **Devin's own hook mechanism is Unknown, not confirmed either way**,
-  because this session's outbound proxy policy blocked every fetch
-  attempt against `docs.devin.ai`. A follow-up pass with different
-  network access could resolve this rather than leaving it Unknown
-  indefinitely.
-- **Cursor's own hooks documentation is unverified for the same reason**
-  (this session's network policy blocked `cursor.com` and
-  `docs.cursor.com` entirely) -- named here rather than silently
-  omitted, since Cursor is a prominent enough tool that its absence from
-  the agent-tool research above could otherwise read as an oversight
-  rather than a stated access limitation.
+  which tests contribution screening, not a gate's own correctness).
+- **The `prompt`/`agent` hook-type question (dimension 8) is unresolved,
+  not just unaddressed.** This report surfaces it as a real design fork,
+  not a settled position.
+- **This report's own external-source coverage has several unverified
+  cross-checks**: the plugin-shipped-agent hooks restriction (External
+  sources list above), Devin's own hook mechanism (proxy-blocked,
+  `docs.devin.ai`), Cursor's (proxy-blocked, `cursor.com`/
+  `docs.cursor.com`) -- named rather than silently presented as
+  independently confirmed.
+- **The entire "Precedent from manufacturing and logistics" subsection
+  rests on a weaker evidentiary tier than the rest of this report.**
+  This session's network policy blocked direct `WebFetch` access to
+  every source cited there (Toyota's own site, Shingo, Ohno, Deming,
+  DHL, IBM); every quote came from `WebSearch` synthesis, not an
+  independently fetched and read page. The quotes are well-corroborated
+  (consistent across repeated searches) but not agent-verified the way
+  this report's other citations are -- named explicitly in that
+  subsection itself, and repeated here per this report's own Unknowns
+  framework.
+- **Whether a deterministic-gate-quality skill should be a new skill at
+  all, versus an extension of `screening-a-low-trust-contribution` check
+  4 (which already hard-flags any hook/script diff) or a new dimension
+  bolted onto `evaluating-skill-quality` itself**, is an open
+  mechanism-fit question this report does not resolve -- see
+  [Next steps](#next-steps-decision-ready-options).
+- **The design-only future architecture (items 21-22) and the shipped
+  reality (items 1-20) are evaluated by this report as if they will
+  eventually need the same model, but that is this report's own
+  assumption, not a decision the requester has made.** Whether the
+  eventual Rego-based engine changes what "good" means for a gate (e.g.,
+  making Domain-coverage automatic rather than something each gate
+  author argues for individually) is unexamined.
 
 ## Explicitly out of scope for this pass
 
-- No `skills/evaluating-hook-quality/` directory, `SKILL.md`, rubric, or
-  shape checker is created by this report.
-- No changes to `hooks/hooks.json` or any existing hook script.
+- No `skills/evaluating-deterministic-gate-quality/` directory,
+  `SKILL.md`, rubric, or shape checker is created by this report.
+- No changes to `hooks/hooks.json`, any existing hook script, or any
+  `.github/scripts/` gate.
 - No eval suite is created for the candidate dimensions above; none of
-  them have been battle-tested against a real hook contribution yet.
+  them have been battle-tested against a real gate contribution yet.
 - No `references/runtime-compatibility.md`-equivalent baseline document
-  is created for hooks in this pass; the Compatibility awareness section
+  is created for gates in this pass; the Compatibility awareness section
   above is this report's own inline research, not a maintained,
   separately-versioned baseline file the way the skill-side rubric has.
+- Dimensions 1-18 are not re-derived for Domains 3-4 in this pass (named
+  explicitly above, not silently assumed complete).
+- `tvna/claude-md` is not independently read in this pass (access
+  blocked; named explicitly above).
 
 ## Next steps (decision-ready options)
 
 Per this repository's own "never hand a human a decision that is not
-decision-ready" convention, three concrete, named options for whoever
+decision-ready" convention, four concrete, named options for whoever
 picks up this research next -- not an open-ended "what should we do":
 
-- **(a) Build a new `evaluating-hook-quality` skill**, mirroring
-  `evaluating-skill-quality`'s two-lane structure plus its separate
-  Compatibility awareness axis, using the candidate dimensions and the
-  agent-tool/middleware matrix above as a starting point, scoped
-  explicitly to `type: "command"` hooks only (deferring the
-  `prompt`/`agent`-type question) and turning the Compatibility
-  awareness section above into a maintained
-  `references/runtime-compatibility.md`-equivalent baseline file rather
-  than leaving it as this report's own inline research.
-- **(b) Same as (a), but resolve the `prompt`/`agent` hook-type mechanism-
-  fit question first**, as its own small design spike, before the rubric
-  is written, since it changes what dimension 8 above even means.
-- **(c) A narrower step**: extend `screening-a-low-trust-contribution`
-  check 4 (currently a hard-flag-and-nothing-more) into a fuller checklist
-  using the deterministic-shape checks above, without building a whole new
-  sibling skill yet -- deferring the probabilistic-maturity and
-  Compatibility awareness dimensions to a later pass once (a)/(b) above
-  are picked.
+- **(a) Build a new `evaluating-deterministic-gate-quality` skill now**,
+  using this report's model as-is: the guiding principle, the four-domain
+  taxonomy, the two-lane split, three axes (Compatibility awareness,
+  Reproducibility/Domain-coverage, Blast-radius), and the six-criterion
+  mechanism-fit test, with dimensions 1-18 generalized from Domain 2 to
+  all four domains as part of the build itself.
+- **(b) Retry `tvna/claude-md` access first**, then build (a) -- since
+  the sibling's own gate cluster is this repository's single richest
+  precedent for multi-domain, incident-driven gate design and is
+  currently only known second-hand.
+- **(c) Resolve the `prompt`/`agent` hook-type mechanism-fit question
+  first**, as its own small design spike, before generalizing dimension
+  8 to the other three domains, since it changes what "deterministic"
+  even means once a domain's own hook-equivalent mechanism supports a
+  judgment-calling variant (Domain 2's `prompt`/`agent` hooks; an
+  analogous question may exist for Domain 3 CI steps that call an LLM,
+  or Domain 4 MCP tools that do the same).
+- **(d) A narrower step**: extend `screening-a-low-trust-contribution`
+  check 4 (currently a hard-flag-and-nothing-more, Domain-2-scoped) into
+  a fuller, cross-domain checklist using the deterministic-shape checks
+  above, without building a whole new sibling skill yet -- deferring the
+  probabilistic-maturity, Compatibility-awareness, and Reproducibility
+  dimensions to a later pass once (a)/(b)/(c) above are picked.
