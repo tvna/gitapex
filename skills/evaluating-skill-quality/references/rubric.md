@@ -481,7 +481,7 @@ finding.
   justified.
 
 **When a pin is found justified, say so explicitly** (e.g. "model/effort
-pin justified -- <reason>"), the same restraint discipline dimension 8's
+pin justified -- REASON"), the same restraint discipline dimension 8's
 "silence is not evidence" rule already applies elsewhere in this rubric
 -- a pin existing is not itself a finding, and inventing one where the
 skill's own stated reason already matches the source's criteria is not a

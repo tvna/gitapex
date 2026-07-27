@@ -105,8 +105,9 @@ delegation inherits the extension automatically.
    the *newly added or version-bumped dependency's own* manifest, not
    only this repository's manifest diff -- a malicious `postinstall`
    payload lives in the dependency's package, not in the incoming diff,
-   and must be checked via the registry/package metadata (e.g. `npm view
-   <pkg> scripts`) whenever that lookup is available. This sub-check
+   and must be checked via the registry/package metadata (e.g.
+   `npm view <pkg> scripts`) whenever that lookup is available. This
+   sub-check
    applies only when a dependency entry is new or its version changed in
    the diff -- a diff touching no dependency manifest never triggers it.
    Within that scope, do not skip the lookup for an apparently low-risk

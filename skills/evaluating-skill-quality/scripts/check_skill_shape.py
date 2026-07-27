@@ -278,6 +278,30 @@ Checks (the canonical list -- the manual fallback is to apply these):
     full rationale, including why its phrase list is separate from and
     narrower than HEDGE_PHRASES) nearby. Portable-gated, alongside the two
     repo-path checks above, unlike the unconditional bare-prose scan.
+  - Illustrative model identifier (no-illustrative-model-identifier,
+    docs/skill-authoring-standards.md rule 1): no real, current Claude model
+    identifier (ILLUSTRATIVE_MODEL_ID_RE: "claude-" plus a known
+    model-family word -- opus/sonnet/haiku/fable/instant -- plus a
+    version-like digit, e.g. "claude-sonnet-5") anywhere in SKILL.md or
+    references/*.md body text, including inside a fenced code block or
+    inline code span -- unlike every citation check above, this one does
+    NOT exempt code, since the rule it enforces is about the identifier
+    ever appearing as illustrative content at all, not about it resolving
+    live. A placeholder such as "claude-example-model" never matches (no
+    recognized family word immediately follows "claude-"), so it stays the
+    sanctioned way to write a flagged "bad example" needing a model name.
+  - Raw angle-bracket placeholder (no-raw-angle-bracket-placeholder,
+    docs/skill-authoring-standards.md rule 4): no "<name>"-shaped
+    placeholder in SKILL.md or references/*.md bare prose (fenced code
+    blocks, inline code spans, absolute URLs, and Markdown links all
+    excluded, same as the citation checks above -- placeholder text inside
+    any of those renders literally and is safe). A placeholder with a
+    matching "</name>" closing tag elsewhere in the same bare prose is
+    exempt: that shape is a deliberate open/close tag pair (e.g. this
+    repository's own untrusted-input-triage worked example, which quotes a
+    fake "<system-reminder>...</system-reminder>" payload as
+    adversarial-input content, not a fill-in-the-blank placeholder), not the
+    unclosed fill-in-the-blank shape this check exists to catch.
 
 Usage:
   python3 check_skill_shape.py <skill-dir-or-SKILL.md>
@@ -568,6 +592,29 @@ ISSUE_CITATION_RE = re.compile(
 # the historical incidents used -- rather than every path shape, so the scan
 # stays a low-false-positive backstop, not a general path linter.
 REPO_PATH_CITATION_RE = re.compile(r"(?:evals|docs)/[A-Za-z0-9._/-]+")
+# A real, versioned Claude model identifier: "claude-" plus a known
+# model-family word (opus/sonnet/haiku/fable/instant) plus a version-like
+# digit, e.g. "claude-sonnet-5", "claude-opus-4.7",
+# "claude-haiku-4-5-20251001". Deliberately narrower than
+# outward-artifact-preflight/scripts/scan_provenance.py's bare
+# "claude-[a-z0-9.-]+" match (a different check, scanning outgoing artifact
+# text for undisclosed disclosure -- a different false-positive budget):
+# requiring a family word immediately after "claude-" excludes this
+# repository's own legitimate non-model tokens already in skills/ content
+# today, e.g. "claude-code", "claude-plugin", or a descriptive title like
+# "claude-fable-finding-your-unknowns" (starts with a family word but has no
+# version digit after it) -- none of these name an actual model. A
+# placeholder like "claude-example-model" never matches either, since
+# "example" is not a recognized family word.
+ILLUSTRATIVE_MODEL_ID_RE = re.compile(
+    r"\bclaude-(?:opus|sonnet|haiku|fable|instant)-?[0-9][a-z0-9.\-]*\b",
+    re.IGNORECASE)
+# An opening angle-bracket placeholder token in raw prose: "<" then a single
+# word of letters/digits/underscore/hyphen (no "/" or ":"), then ">". The
+# no-"/"-or-":" restriction means a GFM autolink ("<https://example.com>")
+# can never match -- that syntax is already a real, safe Markdown form, not
+# the defect this check exists to catch.
+RAW_PLACEHOLDER_OPEN_RE = re.compile(r"<([A-Za-z][A-Za-z0-9_-]*)>")
 # A run of Markdown "already illustrative / already external" syntax whose
 # contents must not be scanned: a fenced code block (``` ... ```), an inline
 # code span (`...`), an absolute URL, an inline link ([text](target)), a
@@ -2614,6 +2661,8 @@ def check_shape(target: Path) -> list[CheckResult]:
                 else "broken: " + ", ".join(ref_broken_anchors)))
 
     results.extend(_issue_citation_checks(skill_md, skill_dir, body))
+    results.extend(_illustrative_model_id_checks(skill_md, skill_dir, body))
+    results.extend(_raw_placeholder_checks(skill_md, skill_dir, body))
     if _is_portable(body, sidecar_portability):
         results.extend(_portable_path_citation_checks(skill_md, skill_dir, body))
 
@@ -2660,6 +2709,64 @@ def _issue_citation_checks(skill_md: Path, skill_dir: Path,
             "No bare-prose GitHub issue/PR-number citation, at any "
             "portability level",
             "none" if not issue_hits else "found: " + ", ".join(issue_hits)),
+    ]
+
+
+def _illustrative_model_id_checks(skill_md: Path, skill_dir: Path,
+                                  body: list[str]) -> list[CheckResult]:
+    """docs/skill-authoring-standards.md rule 1: no real, current Claude
+    model identifier as illustrative content in SKILL.md or references/*.md,
+    even inside a fenced "bad example" that is itself flagged and fixed.
+    Unlike every citation check in this module, this deliberately does NOT
+    strip fenced code blocks or inline code spans first: rule 1 is about the
+    identifier ever appearing as illustrative content at all, not about it
+    resolving live, so a real model ID inside a worked example is exactly
+    what this check exists to catch, not something to exempt.
+    """
+    offenders = _dedup(
+        f"{label}:{m.group(0)}"
+        for label, text in _citation_sources(skill_md, skill_dir, body)
+        for m in ILLUSTRATIVE_MODEL_ID_RE.finditer(text))
+    return [
+        CheckResult(
+            "no-illustrative-model-identifier", not offenders,
+            "No real, current Claude model identifier as illustrative "
+            "content (docs/skill-authoring-standards.md rule 1)",
+            "none" if not offenders else "found: " + ", ".join(offenders)),
+    ]
+
+
+def _raw_placeholder_checks(skill_md: Path, skill_dir: Path,
+                            body: list[str]) -> list[CheckResult]:
+    """docs/skill-authoring-standards.md rule 4: no angle-bracket
+    placeholder ("<NAME>") in raw prose -- outside a code span or fenced
+    code block -- in SKILL.md or references/*.md. GitHub's Markdown/HTML
+    rendering drops an unescaped "<NAME>" silently, corrupting the
+    surrounding text.
+
+    A placeholder whose matching closing tag ("</name>", same name,
+    case-insensitive) also appears in the same bare prose is exempt: that
+    open/close pairing marks a genuine HTML-shaped tag being quoted as
+    content, not an unclosed fill-in-the-blank placeholder -- e.g. this
+    repository's own untrusted-input-triage worked example, which
+    deliberately quotes a fake "<system-reminder>...</system-reminder>"
+    payload as adversarial-input content.
+    """
+    offenders: list[str] = []
+    for label, text in _citation_sources(skill_md, skill_dir, body):
+        bare = _strip_illustrative_spans(_blank_fenced_blocks(text))
+        lowered = bare.lower()
+        for match in RAW_PLACEHOLDER_OPEN_RE.finditer(bare):
+            if f"</{match.group(1).lower()}>" in lowered:
+                continue
+            offenders.append(f"{label}:{match.group(0)}")
+    offenders = _dedup(offenders)
+    return [
+        CheckResult(
+            "no-raw-angle-bracket-placeholder", not offenders,
+            "No angle-bracket placeholder in raw prose "
+            "(docs/skill-authoring-standards.md rule 4)",
+            "none" if not offenders else "found: " + ", ".join(offenders)),
     ]
 
 

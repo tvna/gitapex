@@ -70,8 +70,8 @@ evaluation. Name the gap; never fake a score to proceed.
    context cost must strictly decrease. This does not turn a style-only or
    ordinary scalar tie into a keep. When per-task scores come from
    `scripts/score_contract.py`, use `--compare-to <prior_mean>` for the
-   ordinary gate; add `--pruning-only --prior-context-cost <n>
-   --candidate-context-cost <n>` only for the predeclared pruning gate.
+   ordinary gate; add `--pruning-only --prior-context-cost <n>` and
+   `--candidate-context-cost <n>` only for the predeclared pruning gate.
    The script reads one task score per line from `--scores` or stdin and
    requires `--compare-to` to be the exact six-decimal baseline it previously
    printed, then compares the candidate at that same published precision.
