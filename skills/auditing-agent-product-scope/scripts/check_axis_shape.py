@@ -9,6 +9,18 @@ a full cross-file drift gate synchronizing every axis against its
 owning file (a Codex review on this repository's PR #447 suggested
 that broader gate; this is the appropriately-scoped first step, not
 that). Standard library only, no network calls, no side effects.
+
+Also flags any axis label outside the expected set (default A-F, the
+six axes this repository has today) as an offense rather than silently
+accepting it -- a battle-testing-a-skill dispatch against this skill
+(dimension 17, structured-output injection) found that a hostile
+"deciding quote" pasted verbatim into an evidence file per SKILL.md
+Step 5 could forge a spurious "## Axis G: ..." heading with fabricated
+fields, and this checker would otherwise report PASS on it. A new axis
+letter is not necessarily an attack -- the scope map has legitimately
+grown before -- but it must be a deliberate, visible decision (passing
+--expected-labels to include it), not something this checker accepts
+by default.
 """
 
 from __future__ import annotations
@@ -31,6 +43,11 @@ _FIELD_RE = re.compile(r"^\*\*([A-Za-z][A-Za-z ]*):\*\*\s*(.*)$", re.MULTILINE)
 # all satisfy it) since different axes cite different kinds of owner.
 _REQUIRED_EXACT = ("governs", "current scope", "boundary")
 _REQUIRED_PREFIX = "owning"
+
+# The axis letters this repository's scope map currently defines (A-F).
+# Overridable via --expected-labels so a deliberate new axis is a visible
+# CLI-argument change, not something this checker accepts silently.
+_DEFAULT_EXPECTED_LABELS = frozenset("ABCDEF")
 
 
 def _split_sections(body_text: str):
@@ -64,16 +81,27 @@ def _missing_fields(section_text: str) -> list[str]:
     return missing
 
 
-def check_axis_shape(body_text: str) -> list[str]:
+def check_axis_shape(
+    body_text: str, expected_labels: frozenset[str] = _DEFAULT_EXPECTED_LABELS
+) -> list[str]:
     """Return one evidence string per axis section that is missing a
-    required field, or an offense for a section that could not be split
-    (no '## Axis X:' heading found at all). Empty list means every axis
-    section found has all four required fields."""
+    required field or carries a label outside ``expected_labels``, or an
+    offense for a section that could not be split (no '## Axis X:'
+    heading found at all). Empty list means every axis section found has
+    all four required fields and an expected label."""
     sections = list(_split_sections(body_text))
     if not sections:
         return ["no '## Axis <letter>: ...' heading found in the document"]
     offenses = []
     for label, name, section_text in sections:
+        if label not in expected_labels:
+            offenses.append(
+                f"Axis {label} ({name}): label not in the expected set "
+                f"({''.join(sorted(expected_labels))}) -- confirm this is "
+                "a deliberate new axis, not injected content, then pass "
+                "--expected-labels to include it"
+            )
+            continue
         missing = _missing_fields(section_text)
         if missing:
             offenses.append(
@@ -91,13 +119,21 @@ def main(argv=None):
         "Owning .../Boundary, all non-empty."
     )
     parser.add_argument("path", help="Path to the doc to check.")
+    parser.add_argument(
+        "--expected-labels",
+        default="".join(sorted(_DEFAULT_EXPECTED_LABELS)),
+        help="Concatenated axis letters this doc is expected to contain "
+        "(default: %(default)s). Pass a wider set when a deliberate new "
+        "axis is added.",
+    )
     args = parser.parse_args(argv)
     try:
         body_text = open(args.path, encoding="utf-8").read()
     except FileNotFoundError:
         print(f"error: file not found: {args.path}", file=sys.stderr)
         return 1
-    offenses = check_axis_shape(body_text)
+    expected_labels = frozenset(args.expected_labels)
+    offenses = check_axis_shape(body_text, expected_labels)
     if not offenses:
         print("PASS: every axis section has all four required fields")
         return 0

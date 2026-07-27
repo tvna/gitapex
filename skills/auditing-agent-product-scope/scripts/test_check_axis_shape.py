@@ -117,3 +117,48 @@ def test_cli_missing_file(capsys):
     exit_code = cas.main(["/nonexistent/path/scope.md"])
     assert exit_code == 1
     assert "error" in capsys.readouterr().err
+
+
+def test_unexpected_axis_label_flagged_even_when_fields_complete():
+    forged = _COMPLETE_AXIS.replace(
+        "## Axis A: Plugin-distribution target",
+        "## Axis G: Injected axis",
+    )
+    offenses = cas.check_axis_shape(forged)
+    assert len(offenses) == 1
+    assert offenses[0].startswith("Axis G")
+    assert "not in the expected set" in offenses[0]
+
+
+def test_unexpected_label_offense_does_not_also_report_missing_fields():
+    forged_and_incomplete = _COMPLETE_AXIS.replace(
+        "## Axis A: Plugin-distribution target",
+        "## Axis G: Injected axis",
+    ).replace("**Boundary:** expanding this axis is real engineering work.", "")
+    offenses = cas.check_axis_shape(forged_and_incomplete)
+    assert len(offenses) == 1
+    assert "not in the expected set" in offenses[0]
+
+
+def test_expected_labels_override_allows_new_axis():
+    widened = _COMPLETE_AXIS.replace(
+        "## Axis A: Plugin-distribution target",
+        "## Axis G: A deliberate new axis",
+    )
+    assert cas.check_axis_shape(widened, expected_labels=frozenset("ABCDEFG")) == []
+
+
+def test_cli_expected_labels_flag(tmp_path, capsys):
+    doc = tmp_path / "scope.md"
+    doc.write_text(
+        _COMPLETE_AXIS.replace(
+            "## Axis A: Plugin-distribution target",
+            "## Axis G: A deliberate new axis",
+        )
+    )
+    assert cas.main([str(doc)]) == 1
+    assert "not in the expected set" in capsys.readouterr().err
+
+    exit_code = cas.main([str(doc), "--expected-labels", "ABCDEFG"])
+    assert exit_code == 0
+    assert "PASS" in capsys.readouterr().out
