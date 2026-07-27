@@ -64,9 +64,10 @@ in the design doc rather than invented here. Two concrete caps for what
   would write the same file are merged into one task or made
   sequential-dependent, never run in the same parallel wave.
 
-Write the task list in the same `docs/superpowers/plans/<date>-<branch-
-name>.md` shape this repository already uses for other design-then-
-implement passes (Task / Files / numbered Step). Each task line cites the
+Write the task list in the same
+`docs/superpowers/plans/<date>-<branch-name>.md` shape this repository
+already uses for other design-then-implement passes (Task / Files /
+numbered Step). Each task line cites the
 ACM row(s) it satisfies, so the row-to-task mapping stays traceable in
 both directions.
 

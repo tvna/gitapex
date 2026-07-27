@@ -498,13 +498,14 @@ illustration. (An earlier pass of this section cited only 7 of these 13
 under this smell and discussed two more, lines 779 and 856, only under
 Eager Test without cross-tagging them here -- an inconsistency with this
 dimension's own rule, corrected now with the full count rather than left
-standing.) Twelve of the 13 (all but line 3475) share one shape: `for
-check in <fixed-tuple-or-name-list>: assert ...`, iterating a hardcoded
-literal with one uniform assertion per item -- mild by this dimension's
-own distinction (no data-dependent branching), but still the named smell
-in its literal form, not excused for looking tame; two of these twelve
-(779, 856) are the same tests already noted above as Eager-Test-adjacent,
-and clear that smell for the same reason (every assertion traces to one
+standing.) Twelve of the 13 (all but line 3475) share one shape:
+`for check in <fixed-tuple-or-name-list>: assert ...`, iterating a
+hardcoded literal with one uniform assertion per item -- mild by this
+dimension's own distinction (no data-dependent branching), but still the
+named smell in its literal form, not excused for looking tame; two of
+these twelve (779, 856) are the same tests already noted above as
+Eager-Test-adjacent, and clear that smell for the same reason (every
+assertion traces to one
 root cause) without that clearing their separate Conditional Test Logic
 citation, since the two questions are independent. The 13th,
 `test_null_vs_empty_mapping_matches_real_yaml_semantics` (line 3445), is
