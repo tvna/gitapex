@@ -1047,6 +1047,17 @@ to fill out the table:
   CI job could see it), does the gate's own documentation say so, rather
   than leaving the reader to guess why the same policy is not simply a
   CI/CD gate alone?
+- **The zero-domain case, named explicitly rather than left to read as
+  "nothing to report."** Everything above assumes a policy already has
+  at least one realization to characterize. A stated invariant with
+  *zero* domains covering it is a distinct, more severe finding this
+  axis must not silently fold into "single-domain, no argued gap" --
+  per zero-trust principle 6 (item 21), absence of coverage is a
+  fail-closed finding in its own right, not the same case as coverage
+  that merely lacks an argued rationale. This is the specific gap the
+  [coverage attestation](#three-way-division-of-responsibility-skill-single-binary-coverage-attestation)
+  component below exists to catch systematically, rather than relying
+  on this axis alone to notice it per-policy.
 
 ## Mechanism-fit: which domain should own a policy?
 
@@ -1609,7 +1620,7 @@ eventual skill actually needs at runtime must be copied into the
 skill's own `references/`, not left as a pointer into gitapex's own
 dev-only tree.
 
-### Division of responsibility: the skill vs. the gitapex single binary
+### Three-way division of responsibility: skill, single binary, coverage attestation
 
 Correction from the requester, folded in explicitly rather than left as
 an implicit tension in the section above: the redistribution gap just
@@ -1626,21 +1637,89 @@ principle above: one policy schema, evaluated identically regardless of
 which of the four domains invokes it. That binary, once built, is the
 mechanism that loosely couples to whatever's environment-optimal and
 guarantees reproducibility across domains -- not the Claude-Code-native
-skill; the skill and the single binary are two separate redistributed
-artifacts with two separate scopes, not one artifact wearing two hats.
+skill.
 
-This resets the eventual skill's own proper scope, narrower than the
-previous section's own wording might otherwise suggest: it is a
-Domain-2-native artifact, carried by the channel that actually
-redistributes it (the plugin's `skills`/`hooks`), and its job is to
-*grade* whatever deterministic-gate artifacts a target repository
-already has -- including Domain-1/3/4 ones, read for audit purposes, if
-the target repo happens to have them -- not to *become* the mechanism
-that redistributes cross-domain enforcement itself. Auditing a target's
-existing Domain-3 CI config or Domain-4 MCP config is a much smaller
-task than being the thing that makes such enforcement reproducible
-across environments in the first place; that larger task belongs to
-the single binary, once it exists, not to this skill.
+**A second correction from the requester: two parties are not enough.**
+A skill that only grades what already exists, paired with a binary
+that only enforces where it is actually installed, leaves a real,
+zero-trust-relevant blind spot between them -- **the case where a
+target repository has neither.** No artifact for the skill to grade, no
+single binary installed to provide cross-domain enforcement, and
+nothing in either party's own scope is responsible for noticing that
+absence and saying so. Silence there reads as "nothing to report,"
+which is exactly the INDETERMINATE-defaults-to-clean failure mode
+zero-trust principle 6 exists to forbid (item 21 above: "an inability
+to verify is a deny, not an assume-clean"). A third, named component is
+required specifically to catch what the other two, between them,
+cannot see by construction.
+
+**Third component: coverage attestation.** Its job, distinct from both
+of the other two: for a target repository, enumerate which policies
+*ought* to have deterministic-gate coverage (drawn from that
+repository's own stated invariants -- its `CLAUDE.md`, its design docs,
+or a baseline checklist where the target has none of its own) and
+cross-check that list against what the skill actually found (existing
+graded artifacts) plus what the single binary actually enforces, if
+installed. Anything neither covers is an explicit, named finding --
+fail-closed, not silently passed over as if absence of a finding meant
+absence of a gap.
+
+**Not a new idea invented here -- already anticipated, twice, in this
+repository's own history, and left unbuilt both times.** Item 14 above
+records a "registry-hygiene lint (see candidate 8 below)" that the
+CI/CD design doc's own Case C explicitly depends on ("the registry
+entry must name its backstop, and a registry-hygiene lint... verifies
+the named backstop gate actually exists") -- but, as already flagged in
+item 14, no "candidate 8" is ever defined anywhere in that document's
+504 lines. Items 21 and 22 above independently record a structurally
+identical principle one layer down. Item 21's own `#130` consolidated
+finding: "`policy_version` is self-reported by the same process (and
+dependency) it exists to keep honest -- the design needs to state this
+limit explicitly and add an independent recomputation/cross-check
+pass." Item 22's own F4 finding states the same point in its own
+words, closing it a different way: "`policy_version` is self-reported
+by the same process it exists to keep honest... state it explicitly in
+the design... then close what is closable -- F2's verification pass,
+run as a separate, less-privileged process or a differently-provisioned
+CI step." Both converge on the same shape: a self-reported field cannot
+be trusted to notice its own gaps, so a separate, less-privileged
+verifier is required. The requester's own third-axis correction is the same
+principle, applied one level higher: not "does this one audit entry lie
+about itself" (F4's own scope) but "does the combination of
+skill-grading and binary-enforcement lie about *total coverage* by
+omission." Naming it now, explicitly, as a required third component
+closes a gap this repository's own design history already surfaced
+twice and left open both times.
+
+**Where coverage attestation itself should live, reasoning from this
+report's own model rather than inventing a fourth category:** it is
+itself a policy ("every stated invariant has coverage") that the
+Reproducibility/Domain-coverage axis above would ask to be realized
+more than once, not left single-point. A one-time pass belongs inside
+the skill's own grading procedure (comparing declared invariants
+against found coverage is itself an act of grading, squarely inside
+the skill's Domain-2-native scope from the paragraph above); a
+*standing*, drift-detecting version of the same check belongs as its
+own Domain-3 meta-gate in the target repository, mirroring
+`scan_retrospective_gate_drift.py`'s own already-real pattern (item
+16) and closing the specific "candidate 8" gap item 14 names. Neither
+alone is sufficient by this report's own Reproducibility-axis
+reasoning; both together is the same argued, multi-domain coverage
+this report already recommends for any other policy, applied
+reflexively to the coverage-checking function itself.
+
+This resets the eventual skill's own proper scope: a Domain-2-native
+artifact, carried by the channel that actually redistributes it (the
+plugin's `skills`/`hooks`), whose job is to (a) *grade* whatever
+deterministic-gate artifacts a target repository already has --
+including Domain-1/3/4 ones, read for audit purposes, if the target
+repo happens to have them -- and (b) perform the one-time coverage-
+attestation pass above, comparing declared invariants against found
+coverage and flagging gaps explicitly. Neither of these requires the
+skill to *become* the mechanism that redistributes cross-domain
+enforcement itself, nor to build the standing meta-gate on the target
+repository's behalf -- those remain the single binary's and the
+target's own Domain-3 gate's jobs respectively, not this skill's.
 
 ### Portability level the eventual skill must declare, and why it is Mixed
 
@@ -1692,6 +1771,18 @@ own paths exist there.
   grading skill and belongs to whatever plays the single-binary role
   for that repository's own ecosystem, not something this skill should
   attempt to fill in.
+- **Coverage attestation is a required output, not an optional extra.**
+  Per the Three-way division above, the skill's own procedure must end
+  with an explicit pass comparing the target repository's own stated
+  invariants against what was actually found covered (skill-graded or
+  binary-enforced), and must report every uncovered item as a named
+  finding -- fail-closed on absence, per zero-trust principle 6 -- rather
+  than a review that only lists what it found wrong with existing
+  artifacts and stays silent about invariants with no artifact at all.
+  The skill should also recommend, not silently omit, that the target
+  repository build its own standing Domain-3 coverage-drift gate
+  (mirroring `scan_retrospective_gate_drift.py`, item 16) rather than
+  relying on a one-time audit alone.
 - **Declare Portable/Mixed, not silently assume Portable.** Per the
   section above, the honest declaration is Mixed -- the skill's own
   shape checker (mirroring `evaluating-skill-quality`'s own
