@@ -1562,6 +1562,117 @@ Blind spot pass), named explicitly rather than left implicit:
 - `tvna/claude-md` is not independently read in this pass (access
   blocked; named explicitly above).
 
+## Redistribution requirements for the eventual skill
+
+Per the requester's own framing of gitapex's mission: "CLI proxy and
+agentic skills for git effectively workflow optimization serving as an
+apex operational weapon for rapid issue and pull request triage,
+autonomous bug repair, and layered Git defense." gitapex's own reason
+to exist is to be redistributed and used to harden *other*
+repositories' git workflows, not only gitapex's own. Every worked
+example in this report (items 1-22 above) audits gitapex's own gates;
+the eventual skill has to work when auditing an adopter's gates
+instead, or it fails that stated mission on its first real use.
+
+### What actually gets redistributed, confirmed by primary source
+
+Fact, per `docs/repository-layout.md` (read this session): "Only
+skills (and, later, hooks) are deployed as runtime primitives;
+everything else -- contributor instructions..., CI tooling, tests, and
+docs -- is carried in the repository for development but is never
+deployed into a consumer's agent." Its own layout table states
+explicitly: `.github/` ("CI workflows and their internal tooling...
+-- not deployed"), `docs/` ("not deployed"), `tests/` ("not
+deployed"); only `skills/` is confirmed deployed by apm/Claude/Codex,
+with `hooks/` deployment described in that same sentence as "in the
+future" for **apm's own discovery mechanism specifically** --
+separately, Claude Code's own native plugin-hook loading already reads
+`hooks/hooks.json` today (confirmed by `hooks.json`'s own working
+`$CLAUDE_PLUGIN_ROOT`-relative paths, exercised throughout this
+report's Domain-2 research), so hooks already travel with the plugin
+through that channel even where apm's own discovery of them remains
+pending -- this report does not conflate the two distribution paths.
+
+**Consequence, stated plainly:** items 14-22 -- the entire CI/CD gate
+cluster case study, the entire design-only future-architecture
+material, and this report itself -- live under `docs/` or effectively
+document `.github/`, **none of which ever reaches a consumer
+repository that installs gitapex as a plugin.** A future
+`evaluating-deterministic-gate-quality` skill's own bundled content is
+the only part of this research that will ever travel with gitapex once
+redistributed. Citing this report by path from inside the skill ("see
+`docs/superpowers/reports/...`") would be exactly the portability
+failure `evaluating-skill-quality`'s own rubric already names and
+prohibits (a reference the *procedure* depends on to function, outside
+the skill's own folder, fails Portable) -- any finding here the
+eventual skill actually needs at runtime must be copied into the
+skill's own `references/`, not left as a pointer into gitapex's own
+dev-only tree.
+
+### Portability level the eventual skill must declare, and why it is Mixed
+
+The eventual skill is itself a skill, so it is subject to
+`evaluating-skill-quality`'s own axis, not exempt from it because it
+happens to grade other artifacts. Per that rubric's own three-way
+split (read this session): "**Mixed**: a portable core plus
+repo-specific detail should split the two into a clearly named
+reference file, not blend them." This report's own material already
+sorts cleanly into that split:
+
+- **Portable core** (belongs in the skill's own `SKILL.md`/bundled
+  `references/`, travels with every install): the Guiding principle,
+  the four-domain taxonomy (git hooks / agent-harness hooks / CI job /
+  MCP server), the two-lane structure, the Reproducibility axis's
+  *concept*, and the six mechanism-fit criteria -- none of these name a
+  gitapex-specific file path or issue number in their own statement.
+- **Repository-scoped detail** (gitapex's own worked examples only,
+  must not be assumed present in a target repo): the ACM-disclosure
+  three-domain case study, the OWASP-mapping ports from
+  `tvna/claude-md`, the retrospective-identity bottom-up-origin story,
+  and every specific script name (`gate_acm_issue_disclosure.py`,
+  `hooks/check-bash-safety.sh`) cited throughout items 1-22.
+
+`screening-a-low-trust-contribution`'s own already-established
+convention for exactly this split (read this session) is the direct
+precedent to follow, not a new pattern to invent: "This skill's checks
+are general categories. The specific paths named below
+(`.github/workflows/**`, `hooks/**`, `pyproject.toml`/`uv.lock`) are
+gitapex's own illustrative examples of each category -- substitute the
+calling repository's actual equivalents." The eventual gate-quality
+skill needs the same discipline: name domains and criteria
+generically, illustrate each with gitapex's own example *labeled as an
+example*, and instruct the invoking session to discover the target
+repository's own actual realizations rather than assuming gitapex's
+own paths exist there.
+
+### Candidate specification points for the eventual skill's own build
+
+- **Discovery step, not hardcoded paths.** Before grading, the skill
+  must locate the target repository's own Domain-2/3/4 artifacts (its
+  own hook config, its own CI gate scripts, its own MCP config if any)
+  -- gitapex's own layout is one illustrative case, never assumed as
+  the target's shape.
+- **Declare Portable/Mixed, not silently assume Portable.** Per the
+  section above, the honest declaration is Mixed -- the skill's own
+  shape checker (mirroring `evaluating-skill-quality`'s own
+  `check_skill_shape.py`) should fail closed if a future edit blends
+  repo-specific gitapex detail back into the portable core.
+- **The Reproducibility axis's own worked-example table must be
+  replaced per target, not reused.** The ACM/install-safety/
+  retrospective-identity table in this report is gitapex's own
+  evidence; a target repository's own policy-to-domain coverage table
+  has to be built fresh from that repository's own artifacts,
+  following the same method, not copied from this report.
+- **Serves gitapex's own stated mission directly, not incidentally.**
+  Per the requester's own framing of gitapex as an "apex operational
+  weapon for rapid issue and pull request triage, autonomous bug
+  repair, and layered Git defense" -- deployed into adopter repos, not
+  used only on itself -- a gate-quality skill that only works when
+  auditing gitapex's own gates fails that mission on its first real
+  use. This is not a nice-to-have generalization; it is the specific
+  reason this skill needs to exist as a redistributable artifact at
+  all, per gitapex's own reason for existing.
+
 ## Next steps (decision-ready options)
 
 Per this repository's own "never hand a human a decision that is not
@@ -1573,7 +1684,12 @@ picks up this research next -- not an open-ended "what should we do":
   taxonomy, the two-lane split, three axes (Compatibility awareness,
   Reproducibility/Domain-coverage, Blast-radius), and the six-criterion
   mechanism-fit test, with dimensions 1-18 generalized from Domain 2 to
-  all four domains as part of the build itself.
+  all four domains as part of the build itself, and built Mixed from the
+  start per
+  [Redistribution requirements](#redistribution-requirements-for-the-eventual-skill)
+  above -- portable core in `SKILL.md`, gitapex's own worked examples
+  moved into a clearly named, explicitly repo-scoped reference file
+  rather than left inline.
 - **(b) Retry `tvna/claude-md` access first**, then build (a) -- since
   the sibling's own gate cluster is this repository's single richest
   precedent for multi-domain, incident-driven gate design and is
