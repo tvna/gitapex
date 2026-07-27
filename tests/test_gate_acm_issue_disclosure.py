@@ -18,6 +18,7 @@ import http.client
 import json
 import pathlib
 import urllib.error
+import urllib.parse
 import urllib.request
 
 import gate_acm_issue_disclosure as gate
@@ -247,6 +248,38 @@ def test_has_marker_comment_true_when_present():
 def test_has_marker_comment_false_when_absent():
     def opener(request: urllib.request.Request) -> Response:
         return Response(200, json.dumps([{"body": "unrelated comment"}]))
+
+    assert gate.has_marker_comment("tvna", "gitapex", 414, "tok", opener=opener) is False
+
+
+def test_has_marker_comment_paginates_past_a_full_first_page():
+    """Regression for a Codex review finding on PR #425: a full first page
+    (== _COMMENTS_PAGE_SIZE items, none matching) must not be treated as
+    "no marker" -- it must fetch page 2, where the marker actually is."""
+    full_page = [{"body": f"filler {i}"} for i in range(gate._COMMENTS_PAGE_SIZE)]
+    second_page = [{"body": f"hello {gate._MARKER}"}]
+    pages = {1: full_page, 2: second_page}
+    requested_pages = []
+
+    def opener(request: urllib.request.Request) -> Response:
+        query = urllib.parse.parse_qs(urllib.parse.urlparse(request.full_url).query)
+        page = int(query["page"][0])
+        requested_pages.append(page)
+        return Response(200, json.dumps(pages[page]))
+
+    assert gate.has_marker_comment("tvna", "gitapex", 414, "tok", opener=opener) is True
+    assert requested_pages == [1, 2]
+
+
+def test_has_marker_comment_returns_false_after_exhausting_all_pages():
+    full_page = [{"body": f"filler {i}"} for i in range(gate._COMMENTS_PAGE_SIZE)]
+    partial_last_page = [{"body": "filler last"}]
+    pages = {1: full_page, 2: partial_last_page}
+
+    def opener(request: urllib.request.Request) -> Response:
+        query = urllib.parse.parse_qs(urllib.parse.urlparse(request.full_url).query)
+        page = int(query["page"][0])
+        return Response(200, json.dumps(pages[page]))
 
     assert gate.has_marker_comment("tvna", "gitapex", 414, "tok", opener=opener) is False
 

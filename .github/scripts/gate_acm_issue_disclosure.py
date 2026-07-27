@@ -26,12 +26,12 @@ disclosure-or-``WAIVED:``-reason shape, applied to a different section
 of a different document.
 
 This is *not* a fourth copy of check_acm_present.py: it accepts an
-additional waiver form those two copies don't (and isn't discovered by
-tests/test_check_acm_present_sync.py, which only globs
-skills/*/scripts/check_acm_present.py). If the ACM table's header row
-shape ever changes, update this file's _ACM_HEADER_RE alongside both
-check_acm_present.py copies -- nothing enforces that beyond this
-docstring note.
+additional waiver form those two copies don't, and is named differently.
+It IS discovered by tests/test_check_acm_present_sync.py's drift gate
+(explicitly listed there alongside the skills/*/scripts/ glob) via its
+own module-level `_HEADER_RE`, so a future header-shape change that
+updates this file but not both check_acm_present.py copies (or vice
+versa) fails that test instead of silently diverging.
 
 Decision, named explicitly per issue #414's own Non-goals ("deciding
 whether human-authored issues get exempted -- name the decision
@@ -102,7 +102,14 @@ _MARKER = "<!-- acm-issue-gate:414 -->"
 # Same table header shape as skills/drafting-an-acm-issue/scripts/check_acm_present.py
 # and skills/planning-a-branch-from-an-issue/scripts/check_acm_present.py. Match loosely
 # (any whitespace around pipes) so reasonable Markdown re-formatting still passes.
-_ACM_HEADER_RE = re.compile(
+#
+# Named `_HEADER_RE` (not `_ACM_HEADER_RE`) so this module is discoverable by
+# tests/test_check_acm_present_sync.py's drift gate alongside the two
+# skills/*/scripts/check_acm_present.py copies -- a Codex review finding on
+# PR #425 noted that gate only globbed skills/*/scripts/, so a divergence
+# here would have gone silently unnoticed by it. Do not rename this without
+# also updating that discovery list.
+_HEADER_RE = re.compile(
     r"\|\s*Criterion\s*\|\s*Interpretation\s*\|\s*Planned ops\s*\|"
     r"\s*Proof method\s*\|\s*Residual risk\s*\|",
     re.IGNORECASE,
@@ -129,7 +136,7 @@ def has_acm_disclosure(body_text: str | None) -> bool:
     # gate_skill_audit_disclosure.py's find_missing_disclosures: GitHub is
     # known to deliver web-UI-authored bodies with CRLF endings.
     normalized = (body_text or "").replace("\r\n", "\n").replace("\r", "\n")
-    return bool(_ACM_HEADER_RE.search(normalized) or _ACM_WAIVER_RE.search(normalized))
+    return bool(_HEADER_RE.search(normalized) or _ACM_WAIVER_RE.search(normalized))
 
 
 # ---------------------------------------------------------------------------
@@ -250,6 +257,9 @@ def remove_label(
             raise
 
 
+_COMMENTS_PAGE_SIZE = 100
+
+
 def has_marker_comment(
     owner: str,
     repo: str,
@@ -260,11 +270,27 @@ def has_marker_comment(
 ) -> bool:
     """Return True iff this gate has already commented on this issue --
     checked via `_MARKER`, so a repeated `edited` event on a still-failing
-    issue does not spam a new comment every time."""
+    issue does not spam a new comment every time.
+
+    Paginates through every comments page rather than checking page 1
+    alone (a Codex review finding on PR #425): on an issue with more than
+    `_COMMENTS_PAGE_SIZE` comments where this gate's own marker comment
+    has scrolled past the first page, checking only page 1 would
+    conclude the marker is absent and re-post on every subsequent
+    `edited` event, spamming the issue."""
     sleeper = sleeper if sleeper is not None else time.sleep
-    url = f"{_API_ROOT}/repos/{owner}/{repo}/issues/{issue_number}/comments?per_page=100"
-    comments = _call("GET", url, token, opener, sleeper)
-    return any(_MARKER in comment.get("body", "") for comment in comments)
+    page = 1
+    while True:
+        url = (
+            f"{_API_ROOT}/repos/{owner}/{repo}/issues/{issue_number}/comments"
+            f"?per_page={_COMMENTS_PAGE_SIZE}&page={page}"
+        )
+        comments = _call("GET", url, token, opener, sleeper)
+        if any(_MARKER in comment.get("body", "") for comment in comments):
+            return True
+        if len(comments) < _COMMENTS_PAGE_SIZE:
+            return False
+        page += 1
 
 
 def post_comment(
