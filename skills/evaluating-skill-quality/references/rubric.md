@@ -1209,6 +1209,20 @@ task with the skill withheld. This sub-check does not, on its own, block a
 measured-vs-named-unmeasured evidence generally; it exists so an unactionable
 "no baseline" stops reading identically to an actionable one.
 
+**When a skill's trigger clause names or implies distinct scenarios, check
+that each named scenario has a matching fixture, not just that fixtures
+exist in aggregate.** A trigger phrased as, for example, "the user -- or
+the current workflow itself" names two distinct callers; before scoring
+this dimension, confirm at least one committed task's prompt actually
+matches each named scenario's framing, not merely that the suite's fixture
+count looks adequate. A suite that only tests the pre-change scenario after
+a trigger broadens to add a new one is measuring the wrong thing --
+aggregate fixture count can look healthy while the newly-named scenario has
+zero coverage. This check applies specifically at the moment a trigger
+clause's named scenario set changes: re-read the fixture set against the
+*current* trigger wording, not against whatever scenario the fixtures were
+originally written for.
+
 **`waza check`'s output is useful evidence, but verify its heuristics
 against the primary spec before trusting a verdict from it** -- do not
 treat a third-party tool's score as equivalent to Anthropic's own bar any
