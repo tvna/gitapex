@@ -1230,6 +1230,77 @@ finalizing the evaluation model now, before further gate implementation
 sources, and not as license to treat every future gate's own design as
 needing top-down authorship.
 
+### Decision-derivation logic for the standard itself
+
+A gap the requester's own follow-up question named precisely: the
+material above corroborates *that* a top-down-set standard is a
+recognized pattern; it does not supply the *decision-making logic* by
+which such a standard should itself be derived. Two findings, of very
+different evidentiary strength.
+
+**Candidate Lean vocabulary for this, sourced far more weakly than
+anything else in this report -- disclosed in full rather than
+downgraded quietly.** Researched this session: Hoshin Kanri (policy
+deployment) and its "catchball" process, Toyota-lineage Lean's own
+answer to "how is a cascading standard actually derived, and by whom."
+This session's outbound network policy blocked `WebFetch` **for every
+single domain attempted this time, confirmed at the proxy/gateway level
+as a policy denial, not a partial or domain-specific block** -- a
+strictly worse access state than the manufacturing/logistics research
+above, which at least corroborated wording across repeated independent
+searches. No claim below should be read as a verified quote; none of
+it could be checked against a primary text (Yoji Akao's own book,
+*Hoshin Kanri: Policy Deployment for Successful TQM*, was unreachable
+in every attempted form). Even surface facts conflict across sources
+found this session -- Bridgestone Tire Corporation's founding study is
+dated 1965 by some search results and 1968 by others; Akao's own book
+is dated 1988, 1989, or 1991 depending on source. **Everything in this
+paragraph is Speculation, not Fact, per this session's own
+`grounding-in-primary-sources` discipline**, offered only because the
+underlying *concept* -- a target proposed top-down is met with a
+feasibility/means counter-proposal from below, negotiated iteratively
+("tossed back and forth like a ball") until both sides agree, *before*
+the standard is finalized, explicitly distinct from either pure
+top-down dictation or pure bottom-up aggregation -- is coherent and
+useful vocabulary even where this session could not pin down a citable
+sentence for it.
+
+**The stronger finding: this session's own conduct, fully verifiable
+because it requires no external source at all.** The Guiding principle
+above was not, in fact, derived by pure top-down dictation. Read back
+what actually happened, in order: earlier rounds of this same session
+(the agent-tool compatibility axis, dependent middleware) already
+established a working pattern of proposal-then-grounding-check before
+anything was accepted; when the requester then stated the Guiding
+principle's own candidate wording specifically, this report checked it
+against this repository's own internal precedent (the audit-trail and
+CI/CD design docs) for convergence *before* accepting it as the model's
+own Decision; the requester then posed further questions of the
+finalized model itself (the Lean/manufacturing grounding request, this
+very derivation-logic question) that were answered by further grounding
+passes, each of which fed back into revising the report; several rounds
+of adversarial verification then caught and forced correction of
+specific overclaims the model-in-progress had made. That sequence -- a
+proposed standard, a feasibility/convergence check against what already
+exists, negotiation through further questions and corrections, repeated
+until both sides hold -- **is
+catchball's own described shape, independent of whether this report's
+weakly-sourced citations for the term itself hold up.** This report
+does not need the Hoshin Kanri citations to be strong for this
+conclusion to stand: the decision-derivation logic actually used to
+reach the Guiding principle above is observable directly in this
+session's own history, not asserted from an unverifiable external
+source.
+
+**What this means as the report's own answer to "how is the standard's
+own derivation logic handled":** not by the requester's authority
+alone, and not by this report's own research alone, but by iterating
+the two against each other -- a proposed standard is only finalized
+once it survives being checked against existing precedent and
+challenged by further questions, the same shape Lean's own catchball
+concept describes for cascading a standard through an organization,
+applied here to deriving one at all.
+
 ## Candidate quality dimensions (research proposal, not a shipped rubric)
 
 Modeled on `evaluating-skill-quality`'s own two-lane split. Derived from
@@ -1448,6 +1519,18 @@ Blind spot pass), named explicitly rather than left implicit:
   this report's other citations are -- named explicitly in that
   subsection itself, and repeated here per this report's own Unknowns
   framework.
+- **The Hoshin Kanri / catchball material in "Decision-derivation logic
+  for the standard itself" is sourced weaker still -- Speculation, not
+  Fact, explicitly.** This session's `WebFetch` was blocked for every
+  domain attempted (a session-wide policy denial, confirmed at the
+  proxy level), not merely the partial block the manufacturing/
+  logistics subsection hit. No quote there could be checked against a
+  primary text, and even basic facts (Bridgestone's founding-study
+  date, Akao's own book's publication year) conflict across sources.
+  The section's own load-bearing conclusion does not depend on this
+  material holding up -- it rests instead on this session's own directly
+  observable conduct -- but the Hoshin Kanri vocabulary itself should
+  not be cited onward from this report as verified.
 - **Whether a deterministic-gate-quality skill should be a new skill at
   all, versus an extension of `screening-a-low-trust-contribution` check
   4 (which already hard-flags any hook/script diff) or a new dimension
