@@ -7,14 +7,6 @@ axis. It is not an enforcement adapter and does not claim that a runtime
 rejects every undocumented field. Product documentation changes; refresh the
 relevant row before making a current behavior claim.
 
-In this repository (gitapex), this baseline is one of four distinct
-"which agent products does GitApex support" questions the repository
-answers differently; see
-[agent-product-scope.md](../../../docs/agent-product-scope.md) (Axis C)
-for how it relates to the plugin-distribution target and the
-enforcement-adapter target set. Growing this baseline's runtime list
-does not change either of those.
-
 ## Contents
 
 1. [Standard baseline](#standard-baseline)
