@@ -19,11 +19,11 @@ package = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "skills/battle-testing-a-skill/scripts", "skills/evaluating-skill-quality/scripts", "skills/executing-a-branch-plan/scripts", "hooks"]
-pythonpath = [".github/scripts", "skills/battle-testing-a-skill/scripts", "skills/scorer-gated-skill-edits/scripts", "skills/evaluating-skill-quality/scripts", "evals/scripts"]
-addopts = "--cov=.github/scripts --cov=skills/battle-testing-a-skill/scripts --cov=skills/scorer-gated-skill-edits/scripts --cov=skills/evaluating-skill-quality/scripts --cov=evals/scripts --cov-report=term-missing"
+pythonpath = [".github/scripts", "skills/battle-testing-a-skill/scripts", "skills/scorer-gated-skill-edits/scripts", "skills/evaluating-skill-quality/scripts", "skills/auditing-agent-product-scope/scripts", "evals/scripts"]
+addopts = "--cov=.github/scripts --cov=skills/battle-testing-a-skill/scripts --cov=skills/scorer-gated-skill-edits/scripts --cov=skills/evaluating-skill-quality/scripts --cov=skills/auditing-agent-product-scope/scripts --cov=evals/scripts --cov-report=term-missing"
 
 [tool.coverage.run]
-source = [".github/scripts", "skills/battle-testing-a-skill/scripts", "skills/scorer-gated-skill-edits/scripts", "skills/evaluating-skill-quality/scripts", "evals/scripts"]
+source = [".github/scripts", "skills/battle-testing-a-skill/scripts", "skills/scorer-gated-skill-edits/scripts", "skills/evaluating-skill-quality/scripts", "skills/auditing-agent-product-scope/scripts", "evals/scripts"]
 
 [tool.coverage.report]
 exclude_lines = [

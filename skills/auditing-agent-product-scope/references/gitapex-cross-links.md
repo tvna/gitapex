@@ -33,13 +33,35 @@ gitapex's scope map is
 
 ## Evidence-file targets
 
-- An agent-tool finding (Axis A-D) goes to
+Not every axis has a writable evidence file today -- SKILL.md Step 2
+requires confirming one exists before going further. Per axis:
+
+- **Axis A** (plugin-distribution target): no writable evidence file.
+  `docs/repository-layout.md`'s current-scope statement is a single
+  claim, not a file this skill's Procedure adds candidate rows to;
+  expanding it is the larger Axis-A decision the scope map's own
+  Non-goals leave to the repository owner. STOP per Step 2.
+- **Axis B** (enforcement-adapter target set): no writable evidence
+  file. [gitapex#307](https://github.com/tvna/gitapex/issues/307) is
+  future enforcement-adapter engineering, not a file this skill writes
+  research findings into. STOP per Step 2.
+- **Axis C** (skill-quality-review evidence baseline): writable. A
+  finding goes to
   `skills/evaluating-skill-quality/references/runtime-compatibility.md`.
   That file's own "Classification uses three evidence states" section
   is the canonical Documented/Unknown/Conflict definition -- read it
-  there rather than re-deriving it.
-- A middleware finding (Axis F) goes to this skill's own
-  `references/middleware-inventory.md`.
+  there rather than re-deriving it. This is the only agent-tool axis
+  this skill's Procedure currently writes candidate findings into.
+- **Axis D** (hook-quality evidence baseline): no writable evidence
+  file. [gitapex#435](https://github.com/tvna/gitapex/issues/435) is a
+  research report only; no skill has shipped an evidence file for this
+  axis yet. STOP per Step 2.
+- **Axis F** (dependency middleware): writable. A finding goes to this
+  skill's own `references/middleware-inventory.md`.
+
+(Axis E, git-hosting platform, is not listed here -- it is handed off
+to `git-hosting-surface-audit` per SKILL.md Step 3, not written to a
+file by this skill's own Procedure at all.)
 
 ## Middleware dependency-declaring files
 
@@ -75,5 +97,5 @@ skill whose files a candidate's research touched.
 - [PR #447](https://github.com/tvna/gitapex/pull/447): the worked
   example of a contradiction surfaced (not resolved) directly in an
   axis section -- Axis A's Claude-Code-vs-Codex inconsistency -- cited
-  in SKILL.md Step 6 as the precedent for how to handle a similar
+  in SKILL.md Step 7 as the precedent for how to handle a similar
   contradiction found by a future candidate.

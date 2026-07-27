@@ -1,7 +1,7 @@
 """Check that every axis section in an agent-product-scope-shaped doc
 carries its four required fields, non-empty.
 
-SKILL.md Step 6 requires updating "the relevant axis section" when a
+SKILL.md Step 7 requires updating "the relevant axis section" when a
 candidate's research changes one -- this is a narrow, deterministic
 check that the section still has the shape a reader depends on
 (Governs / Current scope / an Owning reference / Boundary), rather than
@@ -15,12 +15,23 @@ six axes this repository has today) as an offense rather than silently
 accepting it -- a battle-testing-a-skill dispatch against this skill
 (dimension 17, structured-output injection) found that a hostile
 "deciding quote" pasted verbatim into an evidence file per SKILL.md
-Step 5 could forge a spurious "## Axis G: ..." heading with fabricated
+Step 6 could forge a spurious "## Axis G: ..." heading with fabricated
 fields, and this checker would otherwise report PASS on it. A new axis
 letter is not necessarily an attack -- the scope map has legitimately
 grown before -- but it must be a deliberate, visible decision (passing
 --expected-labels to include it), not something this checker accepts
 by default.
+
+Also verifies every expected label appears exactly once -- a Codex
+review on this repository's PR #451 found that checking only "no
+unexpected label" let a document missing axes B-F (only a complete
+Axis A left) or a duplicated Axis A heading both pass with no
+offenses, despite the checker's advertised six-axis invariant. And
+each axis section is now bounded by the next '## ' heading of any
+kind, not only the next '## Axis' heading -- the same review found that
+the final axis's own missing field could otherwise be silently
+"supplied" by a same-named field label appearing in an unrelated later
+section (e.g. '## Maintenance').
 """
 
 from __future__ import annotations
@@ -32,6 +43,12 @@ import sys
 # A "## Axis <letter>: <name>" heading. Case-sensitive "Axis" by design --
 # every section in docs/agent-product-scope.md uses this exact casing.
 _AXIS_HEADING_RE = re.compile(r"^## Axis ([A-Za-z0-9]+): (.+)$", re.MULTILINE)
+
+# Any level-two heading at all -- used only to find where an axis section
+# ends: at the next heading of ANY kind, not only the next axis heading, so
+# a non-axis section immediately after the last axis (e.g. '## Maintenance')
+# is never scanned as if it were still part of that axis's own content.
+_ANY_H2_RE = re.compile(r"^## ", re.MULTILINE)
 
 # A bolded field label at the start of a line, e.g. "**Governs:**" or
 # "**Owning skill:**". Captures the label text (without the surrounding
@@ -53,11 +70,12 @@ _DEFAULT_EXPECTED_LABELS = frozenset("ABCDEF")
 def _split_sections(body_text: str):
     """Yield (axis_label, axis_name, section_text) for every '## Axis X:'
     heading in ``body_text``, where ``section_text`` runs to the next
-    '## ' heading or end of file."""
-    matches = list(_AXIS_HEADING_RE.finditer(body_text))
-    for i, m in enumerate(matches):
+    '## ' heading of any kind (axis or not) or end of file."""
+    axis_matches = list(_AXIS_HEADING_RE.finditer(body_text))
+    h2_starts = [m.start() for m in _ANY_H2_RE.finditer(body_text)]
+    for m in axis_matches:
         start = m.end()
-        end = matches[i + 1].start() if i + 1 < len(matches) else len(body_text)
+        end = next((s for s in h2_starts if s > m.start()), len(body_text))
         yield m.group(1), m.group(2), body_text[start:end]
 
 
@@ -84,16 +102,19 @@ def _missing_fields(section_text: str) -> list[str]:
 def check_axis_shape(
     body_text: str, expected_labels: frozenset[str] = _DEFAULT_EXPECTED_LABELS
 ) -> list[str]:
-    """Return one evidence string per axis section that is missing a
-    required field or carries a label outside ``expected_labels``, or an
-    offense for a section that could not be split (no '## Axis X:'
-    heading found at all). Empty list means every axis section found has
-    all four required fields and an expected label."""
+    """Return one evidence string per offense found: a required field
+    missing from an axis section, a label outside ``expected_labels``, an
+    expected label that never appears, a label appearing more than once,
+    or (if no '## Axis X:' heading exists at all) that single top-level
+    offense. Empty list means every expected label appears exactly once,
+    each with all four required fields."""
     sections = list(_split_sections(body_text))
     if not sections:
         return ["no '## Axis <letter>: ...' heading found in the document"]
     offenses = []
+    seen_labels = []
     for label, name, section_text in sections:
+        seen_labels.append(label)
         if label not in expected_labels:
             offenses.append(
                 f"Axis {label} ({name}): label not in the expected set "
@@ -106,6 +127,19 @@ def check_axis_shape(
         if missing:
             offenses.append(
                 f"Axis {label} ({name}): missing {', '.join(missing)}"
+            )
+    seen_set = set(seen_labels)
+    for expected in sorted(expected_labels):
+        if expected not in seen_set:
+            offenses.append(
+                f"Axis {expected}: expected but no '## Axis {expected}:' "
+                "heading found in the document"
+            )
+    for label in sorted(seen_set):
+        count = seen_labels.count(label)
+        if count > 1:
+            offenses.append(
+                f"Axis {label}: appears {count} times, expected exactly once"
             )
     return offenses
 
