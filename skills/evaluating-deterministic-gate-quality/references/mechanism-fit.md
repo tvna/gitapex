@@ -52,6 +52,25 @@ the same decision every time -- gate material. "Explain the trade-offs of
 this design to the user" has no fixed correct output -- prose material,
 never a gate.
 
+A policy that reads as one judgment call at first glance can still
+decompose into a deterministic part and a judgmental part -- do not let
+the judgmental part crowd out a real deterministic requirement sitting
+alongside it. "A production deployment requires an independent approval"
+is not one fact but two: whether *an* approval was actually recorded
+before the deployment proceeded is a fixed, reproducible check a gate can
+verify (a required-reviewers rule, a recorded approval label, a signed
+sign-off) -- gate material, even though whether *that specific
+deployment* should have been approved is exactly the kind of judgment
+this test routes to prose. Apply the reproduces-the-same-decision test to
+each constituent fact separately, never to a policy's surface-level label
+as a whole: a no-gate verdict for the substantive judgment does not
+license removing a requiredness backstop that was never the judgmental
+part to begin with -- collapsing a deterministic layer into pure prose
+just to simplify the verdict is exactly the failure mode a
+defense-in-depth discipline exists to forbid, whatever the target
+repository's own contributor-instruction file happens to call that
+principle.
+
 **When this check concludes no gate is warranted, stop here.** Report
 that as the finding directly -- the policy should be (or remain) a skill,
 CLAUDE.md content, or a human review step, not a deterministic gate; this
