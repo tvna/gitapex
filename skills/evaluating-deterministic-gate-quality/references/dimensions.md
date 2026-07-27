@@ -57,7 +57,10 @@ section and `references/security-level.md` for the full test.
    structured field) must be used, not a generic non-zero exit that
    degrades to non-blocking. CI job step: the job must both fail *and*
    be wired as a required check the merge path cannot bypass -- a red job
-   that is not required blocks nothing. Git hook subprocess: the hook
+   that is not required blocks nothing, and an admin-bypass setting (e.g.
+   `enforce_admins: false`) makes even a required check optional for some
+   actors; check the platform's branch-protection configuration directly,
+   not only the workflow YAML. Git hook subprocess: the hook
    must exit non-zero *and* the invocation path must not offer an
    unlogged bypass flag. MCP server subprocess: the response must surface
    as an actual tool error/denial the calling agent cannot route around,
@@ -190,7 +193,11 @@ section and `references/security-level.md` for the full test.
     is absent -- rather than silently defaulting to allow?
     *Domains:* generalizes directly -- this is the same principle as
     "an inability to verify is a deny, not an assume-clean," applied to
-    a specific gate's own input handling.
+    a specific gate's own input handling. A bundled test's own scope does
+    not by itself satisfy this dimension: if it exercises only
+    well-formed, happy-path fixtures, independently construct and run a
+    malformed, boundary, or missing-dependency input directly against the
+    gate before crediting this dimension or dimension 10.
 16. **Runtime tamper-detection awareness, distinct from review-time
     screening.** Review-time screening (a human/agent check on an
     incoming change) is a different, earlier layer from a check that
