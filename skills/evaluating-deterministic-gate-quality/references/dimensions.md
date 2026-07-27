@@ -1,0 +1,216 @@
+# Deterministic-gate quality dimensions
+
+Two lanes, mirroring `evaluating-skill-quality`'s own split:
+
+- **Deterministic-shape checks** (1-6) -- fixed rules; a script could
+  grade these mechanically if one existed for the target's own tooling.
+  No bundled checker ships with this skill yet (see `SKILL.md`'s Lifecycle
+  note); apply these by direct inspection.
+- **Probabilistic-maturity dimensions** (7-18) -- need judgment; walk all
+  of them, quoting the specific evidence that earns each verdict.
+
+Every dimension is tagged with its own **domain-generalization scope**,
+established for this build rather than left implicit:
+
+- **Generalizes directly** -- the dimension's own statement is already
+  domain-generic; apply it unchanged in any of the four domains.
+- **Generalizes with adaptation** -- the underlying concern is
+  domain-general, but the concrete failure mode or fix is domain-specific
+  vocabulary; a per-domain note is given.
+- **Domain-N-only / inapplicable elsewhere** -- the dimension names a
+  mechanism that only exists in one domain, or does not exist by
+  construction in another; graded there only, named explicitly rather
+  than silently skipped.
+
+## Contents
+
+1. [Deterministic-shape checks](#deterministic-shape-checks)
+2. [Probabilistic-maturity dimensions](#probabilistic-maturity-dimensions)
+
+This numbering is a re-derivation for this skill's own build, not a
+verbatim carry-over of any prior draft's numbering -- one dimension from
+an earlier draft (trust/blast-radius classification) was promoted out of
+this list into its own axis in `SKILL.md`, since it earns the same
+cross-cutting treatment as Compatibility awareness and Reproducibility,
+not a single-artifact check.
+
+## Deterministic-shape checks
+
+1. **Deny path is non-bypassable-by-default, not silently downgraded to
+   advisory.** A gate meant to block an action can fail to actually block
+   it without anyone noticing at authoring time -- e.g., a check that
+   reports failure but is not wired into what actually gates the guarded
+   action (a required status, a hard exit, a rejected tool call).
+   *Domains:* generalizes with adaptation. Agent-harness hook: the
+   platform's own deny signal (e.g. a specific exit code, or a specific
+   structured field) must be used, not a generic non-zero exit that
+   degrades to non-blocking. CI job step: the job must both fail *and*
+   be wired as a required check the merge path cannot bypass -- a red job
+   that is not required blocks nothing. Git hook subprocess: the hook
+   must exit non-zero *and* the invocation path must not offer an
+   unlogged bypass flag. MCP server subprocess: the response must surface
+   as an actual tool error/denial the calling agent cannot route around,
+   not merely disregardable text.
+2. **Dual-signal deny (defense in depth across every channel the caller
+   might read).** A deny decision is signaled through every channel the
+   calling context might plausibly consult, not only the one channel a
+   test happens to check.
+   *Domains:* generalizes with adaptation. CI job step: job status
+   *and* a required-check gate *and*, where useful, a visible annotation.
+   Agent-harness hook: a structured decision field *and* a human-readable
+   message on the channel the harness actually surfaces to the caller.
+   Git hook subprocess: exit code is the only hard channel available;
+   any message channel is soft (client-dependent), so this domain has
+   structurally less redundancy available than the others -- note that
+   as a real constraint, not a finding against the gate.
+3. **Self-revalidation of the specific condition being gated.** The gate
+   re-checks the specific condition it exists to enforce, rather than
+   trusting the invocation context's own routing/filter/matcher to have
+   selected correctly.
+   *Domains:* generalizes directly. A CI job re-checks the event/path
+   condition itself rather than trusting a trigger filter alone; an MCP
+   tool handler re-validates the calling tool/method rather than trusting
+   the server's own route dispatch; a hook re-validates its own
+   matcher-relevant field.
+4. **A bundled test exists beside the gate's own logic.** The gate's
+   behavior is exercised by an automated test living alongside it, not
+   only implied by the gate's own prose.
+   *Domains:* generalizes directly.
+5. **Untrusted input is never interpolated unsafely into a shell/command
+   string.** Any value from outside the gate's own trust boundary (a
+   branch name, a PR title, a tool-call argument) that reaches a
+   shell/command invocation is passed through a parameterized/exec-form
+   mechanism, never string-concatenated into an interpretable command.
+   *Domains:* generalizes with adaptation. Agent-harness hook: exec-form
+   argument arrays instead of a shell-form string. CI job step: `env:`
+   indirection instead of directly interpolating an untrusted value into
+   a `run:` block (a well-documented CI-injection class). MCP server
+   subprocess and git hook subprocess: parameterized subprocess
+   invocation, same underlying concern.
+6. **Timeout/budget is set explicitly and is proportionate to the
+   check's actual cost.** An unset timeout silently inherits whatever
+   default ceiling the domain provides -- often much longer than the
+   check actually needs -- which is a long time to block whatever the
+   gate is sitting in front of.
+   *Domains:* generalizes directly, with one domain-specific gap worth
+   naming: a git hook subprocess has no built-in timeout mechanism at
+   all -- if the invoking tooling does not add one, a hung git hook
+   blocks indefinitely. Grading a Domain-1 gate should check whether the
+   surrounding invocation (not the hook script itself) supplies a bound.
+
+## Probabilistic-maturity dimensions
+
+7. **Mechanism fit, trigger/event direction.** Does the specific
+   event/trigger the gate is attached to actually match that domain's own
+   documented semantics for when it fires and what it can still affect
+   (e.g., a trigger that fires only after the guarded action has already
+   completed cannot undo it; a trigger that fires on every occurrence of
+   a broader event, not only the "real" one it is meant to gate)?
+   *Domains:* generalizes with adaptation. Agent-harness hook: does a
+   post-action event get used to attempt something only a pre-action
+   event could actually block? CI job step: does the trigger's own
+   checkout/secret-access semantics (e.g. a fork-triggered vs.
+   target-repository-triggered event) match what the gate assumes about
+   its own credentials and code under test?
+8. **Implementation-mechanism fit: deterministic script vs. model-judged
+   step.** Where a domain offers both a deterministic (script/rule-based)
+   and a model-mediated (LLM-judged) way to implement a check, does the
+   choice match whether the check is actually expressible
+   deterministically, or does a model-mediated choice reintroduce the
+   exact non-determinism a gate exists to avoid for a check that should
+   have stayed deterministic (or been narrowed until it could)?
+   *Domains:* generalizes with adaptation; genuinely inapplicable in a
+   domain that offers no model-mediated variant at all (a plain git hook
+   subprocess, for instance) -- graded as not-applicable there, not
+   silently skipped.
+9. **Known-limitation disclosure.** Rather than presenting untested or
+   partial coverage as complete, does the gate's own documentation state
+   its own bypass class or known gap explicitly, ideally tracked against
+   a specific follow-up?
+   *Domains:* generalizes directly.
+10. **Empirical verification over assumed behavior.** Is a claim that the
+    gate actually denies/allows what it says it does backed by quoted,
+    live evidence gathered in the gate's real execution context, rather
+    than a plausible-sounding but unverified assertion? This dimension's
+    failure or gap blocks a well-formed verdict on that claim -- see
+    `SKILL.md`'s Procedure step 6 and Stop boundaries.
+    *Domains:* generalizes directly.
+11. **Deployment-mode / enforcement-mode portability, disclosed.** Does
+    the gate's own documentation state which deployment or enforcement
+    mode it was actually verified in, and name the gap explicitly where
+    another mode is unverified?
+    *Domains:* generalizes with adaptation. Agent-harness hook:
+    project-local vs. plugin-distributed. CI job step: verified as an
+    actual required check on a protected branch, vs. only observed
+    running (but not required, hence not truly blocking) elsewhere. MCP
+    server subprocess: verified with the server run locally vs.
+    remotely/hosted, which can change trust assumptions.
+12. **Duplication/drift risk, named rather than hidden.** Does the same
+    policy logic exist in more than one place (more than one script, more
+    than one domain) without a synchronization check, risking silent
+    drift between copies?
+    *Domains:* generalizes directly.
+13. **Side-effect independence from the deny decision.** For a gate that
+    also logs, notifies, or writes as well as classifies: does a
+    side-effecting action correctly avoid silently depending on a
+    different gate's own deny decision to suppress it, in a domain where
+    multiple gates or checks can run concurrently?
+    *Domains:* generalizes with adaptation. CI job step: parallel/matrix
+    jobs raise the same concern as concurrent agent-harness hooks. Git
+    hook subprocess: hooks run in a fixed, sequential, well-documented
+    order, which structurally reduces (but does not eliminate) this
+    concern relative to the concurrent domains.
+14. **Structured-output hygiene.** Where the gate communicates its
+    decision over a structured, machine-parsed channel (not just a
+    human-readable log), does the gate route every diagnostic/log line
+    away from that channel, leaving it for the intended structured
+    payload only? A single stray line on the wrong channel can silently
+    corrupt parsing for whatever consumes the gate's decision.
+    *Domains:* generalizes with adaptation. Directly applicable wherever
+    a structured machine-readable channel exists (agent-harness hook
+    stdout-as-JSON, a CI step's machine-parsed output/annotation, an MCP
+    tool's structured response). A plain git hook subprocess that only
+    needs its exit code is not exposed to this failure mode natively --
+    the concern reappears only if something downstream also parses that
+    hook's own stdout.
+15. **Fail-closed default on incomplete or malformed input.** Does the
+    gate default to deny (or escalate) when its own input is malformed,
+    a field it depends on is missing, or a script/binary it shells out to
+    is absent -- rather than silently defaulting to allow?
+    *Domains:* generalizes directly -- this is the same principle as
+    "an inability to verify is a deny, not an assume-clean," applied to
+    a specific gate's own input handling.
+16. **Runtime tamper-detection awareness, distinct from review-time
+    screening.** Review-time screening (a human/agent check on an
+    incoming change) is a different, earlier layer from a check that
+    notices the gate's own definition changing through some other path
+    after it was already reviewed and merged -- a later commit, a local
+    edit, a dependency update. Does anything in the gate's own domain
+    provide (or explicitly lack) this second, later-time layer? Note this
+    is tamper-*detection*, a real but distinct property from
+    tamper-*prevention* -- detecting and warning about a change is not
+    the same as blocking it from taking effect.
+    *Domains:* generalizes directly -- the same question (does anything
+    notice a post-review change to the gate's own definition) applies
+    identically to a local git hook script, a CI workflow file or a
+    reusable-workflow reference, and an MCP server's own config or
+    underlying binary.
+17. **Discoverability: the gate's existence and purpose is not silent
+    magic.** Is the gate's presence, and the specific finding/decision/
+    design rationale it backs, stated somewhere a reader would actually
+    find it -- rather than a behavior that surprises whoever encounters
+    it for the first time, with no visible trace of why it exists?
+    *Domains:* generalizes directly.
+18. **Secret/credential redaction in the gate's own output.** Distinct
+    from dimension 14 (which asks whether a structured channel is kept
+    parse-clean, not what it contains): where a gate's own check logic
+    handles a secret, token, or credential value (validating one, or
+    reading one to reach the resource it checks), does its own
+    diagnostic output, deny message, or log line redact that value
+    rather than echoing it -- into a place a lower-trust reader of the
+    gate's own output (a CI log, a PR comment, a chat transcript) might
+    see it?
+    *Domains:* generalizes directly -- a CI job step's own log output,
+    an agent-harness hook's own stderr message, and an MCP server's own
+    error response are all readable by someone or something with less
+    trust than the credential itself carries.

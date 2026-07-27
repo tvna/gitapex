@@ -1,0 +1,20 @@
+apiVersion: gitapex.io/v1alpha1
+kind: SkillMetadata
+metadata:
+  name: evaluating-deterministic-gate-quality
+spec:
+  portability: Mixed
+  capabilityAssumption: Adaptive
+  references:
+    - "This skill's own model (the four-domain scope, the guiding principle, the two-lane split, the three axes, and the mechanism-fit test) was finalized in gitapex#435's own research pass, committed as docs/superpowers/reports/2026-07-27-hook-evaluation-quality-research.md and adversarially verified across multiple independent rounds before this skill was built from it. This is provenance for maintainers of this specific repository, not something SKILL.md or references/dimensions.md or references/mechanism-fit.md depend on to function."
+    - "references/gitapex-worked-examples.md carries this repository's own worked examples and its live smoke-test output, both gathered during the gitapex#435 build; substitute the target repository's own equivalents when applying this skill elsewhere."
+    - "Backing-issue numbers elided from references/gitapex-worked-examples.md's own body prose, per this skill's own no-bare-citation rule (no exemption for Mixed/Repository-scoped content, nor for a citation wrapped in inline code, per evaluating-skill-quality's references/rubric.md Portability level section): the ACM-disclosure worked example's docstring quote elides gitapex#357 (the investigation) and gitapex#413 (the paired PreToolUse hook); the smoke test's own Step 1 elides the same two plus gitapex#414 (the Domain-3 CI backstop, gate_acm_issue_disclosure.py); the retrospective-identity worked example's docstring quote elides gitapex#297 (refs gitapex#187, gitapex#242, gitapex#246); the sibling-repository-provenance worked example's docstring quote elides gitapex#144 (the OWASP Agentic Top 10 mapping port); the smoke test's own disposition note elides gitapex#436 (the follow-up issue filed for the fail-open bug the smoke test found in hooks/check-issue-acm-disclosure.sh)."
+  skillDependencies:
+    requires:
+      - evaluating-skill-quality
+    relatedTo:
+      - screening-a-low-trust-contribution
+  lifecycle:
+    experimental:
+      reason: "First version of a new skill category, built from gitapex#435's research report and hardened across three rounds of fresh, independent battle-testing-a-skill and evaluating-skill-quality audits (verdicts disclosed in the shipping PR body): round 1 fixed install-provenance, memory-poisoning/multi-turn, encoding/obfuscation, and structured-output-injection Stop-boundary gaps plus a missing Subagent-dispatch section; round 2 fixed a coverage-attestation input-trust gap and a bare-issue-citation defect round 1's own fix had not actually resolved; round 3 converged evaluating-skill-quality to WELL-FORMED-AND-MATURE (surfacing and then closing one further gap, dimension 18's secret/credential-redaction check) and battle-testing-a-skill to INDETERMINATE-only-due-to-harness-isolation-limits, with zero new content defects found. Deferred, named explicitly: a full independently-verified agent-tool/dependent-middleware compatibility matrix (Compatibility awareness axis is concept-only for now, unlike evaluating-skill-quality's own verified 6-vendor matrix); a bundled deterministic shape-checker script specific to this skill's own domain (dimensions.md's shape checks are applied manually today); a committed evals/ adversarial regression corpus (battle-testing-a-skill dimension 14, disclosed as a deliberate waiver, not a silent gap); independent re-derivation of each dimension's domain-generalization tag against real Domain-1/3/4 artifacts beyond the reasoning applied during this build; and a harness-level isolation-verification gap every audit round's own dispatch disclosed against itself -- none could be confirmed free of this repository's own CLAUDE.md, the same open problem evaluating-skill-quality's own Subagent dispatch section already names for itself."
+      trackingIssue: "#435"
