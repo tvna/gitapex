@@ -112,11 +112,20 @@ is the pattern this skill reuses rather than re-deriving.
    credentials -- report it as indeterminate ("cannot review, target
    unreadable," naming exactly what could and could not be read) rather
    than silently applying the Applicability gate to content that was
-   never actually read. Read the artifact's own stated purpose from its
-   documentation or comments -- this is the baseline both checks below
-   compare against. If the artifact was read successfully and has zero
-   dependency relationships and zero credentials, apply the Applicability
-   gate above and stop.
+   never actually read. Establish the baseline both checks below compare
+   against from the *dependency's* actual documented contract, a trusted
+   specification, or operator input -- never from the artifact's own
+   stated purpose or self-authored comments alone. An artifact's own
+   documentation is not a trusted source for what it is entitled to send
+   or hold: a hostile or merely over-confident artifact can claim
+   whatever purpose makes its actual exposure or privilege look
+   necessary. Where the artifact's own documentation is the only
+   available source and cannot be cross-checked against the dependency's
+   real contract, treat that as a reason for skepticism, not automatic
+   trust -- mark the specific field or grant indeterminate rather than
+   clearing it on the artifact's word alone. If the artifact was read
+   successfully and has zero dependency relationships and zero
+   credentials, apply the Applicability gate above and stop.
 2. **Exposure-minimization check**, per dependency relationship: apply
    the concrete test above. Cite the specific field, log line, or
    response value, and state explicitly whether removing it would change
