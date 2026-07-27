@@ -1,5 +1,5 @@
 {
-  "description": "Deterministic PreToolUse gates backing 5 approved Major findings from docs/superpowers/reports/2026-07-13-skill-gap-triage.md: blocking install commands, direct GitHub CLI writes (including auto-merge and gh api field-flag implicit writes), warning (not blocking) on git push when the outward-artifact-preflight provenance scan flags a candidate, and Write calls that would overwrite an existing issue/PR/MR template.",
+  "description": "Deterministic PreToolUse gates backing 5 approved Major findings from docs/superpowers/reports/2026-07-13-skill-gap-triage.md: blocking install commands, direct GitHub CLI writes (including auto-merge and gh api field-flag implicit writes), warning (not blocking) on git push when the outward-artifact-preflight provenance scan flags a candidate, and Write calls that would overwrite an existing issue/PR/MR template. Also backs issue #413 (sub-issue of #357): blocking a new-issue-creation tool call whose body lacks an Acceptance Criteria Map or an explicit waiver.",
   "hooks": {
     "PreToolUse": [
       {
@@ -18,6 +18,16 @@
           {
             "type": "command",
             "command": "\"$CLAUDE_PLUGIN_ROOT/hooks/check-template-overwrite.sh\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__github__issue_write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PLUGIN_ROOT/hooks/check-issue-acm-disclosure.sh\"",
             "timeout": 10
           }
         ]

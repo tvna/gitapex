@@ -15,6 +15,15 @@ differently-named, differently-located copy of the same header check
 added to `_EXTRA_ACM_CHECKER_SCRIPTS` explicitly below rather than
 matched by the skills/*/scripts/ glob, per a Codex review finding on PR
 #425 that this drift gate would otherwise miss it silently.
+
+hooks/check_acm_present_or_waiver.py (issue #413) is a fourth copy, for
+the same reason: a Codex review on PR #433 found that the PreToolUse
+hook cannot depend on .github/scripts/gate_acm_issue_disclosure.py
+(never deployed with the plugin, per docs/repository-layout.md), so it
+carries its own self-contained copy of the header regex (plus the same
+waiver vocabulary as gate_acm_issue_disclosure.py) bundled beside the
+hook script itself. Also added to `_EXTRA_ACM_CHECKER_SCRIPTS` explicitly,
+same reasoning as the third copy above.
 """
 
 from __future__ import annotations
@@ -42,15 +51,18 @@ _MARKER_RE = re.compile(r"^\s*#.*\bintentionally diverged\b", re.IGNORECASE | re
 # (different filename, different directory). Each entry's own module must
 # still expose a module-level `_HEADER_RE` for test_all_copies_expose_a_header_regex
 # and test_header_regex_stays_in_sync_across_all_copies to pick it up.
-_EXTRA_ACM_CHECKER_SCRIPTS = (REPO_ROOT / ".github" / "scripts" / "gate_acm_issue_disclosure.py",)
+_EXTRA_ACM_CHECKER_SCRIPTS = (
+    REPO_ROOT / ".github" / "scripts" / "gate_acm_issue_disclosure.py",
+    REPO_ROOT / "hooks" / "check_acm_present_or_waiver.py",
+)
 
 # Guards against discovery silently finding nothing (a moved skills/
 # directory, a renamed script) and this test then vacuously passing.
-# There are 3 known copies today (drafting-an-acm-issue,
-# planning-a-branch-from-an-issue, and gate_acm_issue_disclosure.py); the
-# floor matches that exactly so a copy going missing is caught, not just a
-# wholesale discovery failure.
-MIN_EXPECTED_COPIES = 3
+# There are 4 known copies today (drafting-an-acm-issue,
+# planning-a-branch-from-an-issue, gate_acm_issue_disclosure.py, and
+# hooks/check_acm_present_or_waiver.py); the floor matches that exactly so
+# a copy going missing is caught, not just a wholesale discovery failure.
+MIN_EXPECTED_COPIES = 4
 
 
 def _discover_acm_checker_scripts() -> list[pathlib.Path]:
