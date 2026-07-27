@@ -351,8 +351,7 @@ instead, so a no-gate-warranted verdict never pays for loading them.
   it, the same discipline dimension 18 requires of a gate's own output,
   applied reflexively.
 - Never let this review request or accept more target-repository access
-  than reading files plus the narrowly-scoped sandboxed execution
-  [references/grading-procedure.md](references/grading-procedure.md#stop-boundaries-grading-specific)
+  than reading files plus the narrowly-scoped sandboxed execution above
   permits -- broader write/administrative access is never a review's own
   default.
 - Never let this review's own resource consumption scale unbounded with
@@ -366,18 +365,9 @@ instead, so a no-gate-warranted verdict never pays for loading them.
 First version of a new skill category, declared `experimental` in
 `metadata/gitapex.yaml`. Full build and hardening history -- the initial
 three-round audit, the fourth axis's own two follow-up rounds, and a
-later two-part restructuring that (1) front-loaded a Gate-vs-no-gate
-question into Mechanism-fit test and moved that section earlier in this
-file, then (2), after review pointed out reordering alone does not
-reduce what a no-gate-warranted verdict pays for (a skill's body loads
-wholesale on trigger, regardless of section order), moved Three-way
-division of responsibility, Procedure step 5's elaboration, and the
-review-quality-only subset of grading-specific Stop boundaries out of
-this file's own wholesale-loaded body into
-`references/grading-procedure.md` -- deliberately keeping the
-execution-safety and live-testing-support Stop boundaries here despite
-the context cost, since those guard an actual dangerous action rather
-than a verdict's quality -- lives in
+later two-part Mechanism-fit-test restructuring (rationale for the
+second part's `references/grading-procedure.md` split: this file's own
+Notes section below) -- lives in
 `metadata/gitapex.yaml`'s `spec.lifecycle.experimental.reason`
 (maintainer-facing, not auto-loaded, not access-restricted -- see the
 Stop boundary above) and in
