@@ -12,8 +12,11 @@ dependency's actual function requires, or it can operate under a
 credential, token, or permission scope broader than its own function
 needs. Neither failure requires the artifact to be bypassed, misconfigured,
 or absent -- both are properties of its normal, correctly-functioning
-design. This skill grades exactly those two properties, for any artifact,
-independent of what kind of artifact it is.
+design. The two checks below are one throughline applied to two
+channels, not two unrelated concerns sharing a file: does the artifact's
+design go no further than its own function requires, on the data it
+sends out and on the privilege it holds. This skill grades exactly that,
+for any artifact, independent of what kind of artifact it is.
 
 ## Generalize and substitute
 
@@ -177,6 +180,13 @@ is the pattern this skill reuses rather than re-deriving.
 - Never take a write action (revoke a token, narrow a permissions block,
   rotate a credential) -- this skill only reads and reports; those stay
   human/operator decisions.
+- Never execute the reviewed artifact to observe its runtime behavior --
+  this skill's own Procedure derives observed/used scope from static
+  reading of the artifact's own code/config, deliberately, so this skill
+  never needs an execution-safety boundary for a possibly-hostile
+  artifact the way a skill that does execute one would. If static
+  reading cannot establish whether a granted scope is actually used, say
+  so explicitly rather than running the artifact to find out.
 - Never treat a privilege-excess or exposure-excess finding here as
   authority to disable, narrow, or revoke anything on this review's own
   initiative -- report it; the operator decides and acts, the same
@@ -194,42 +204,29 @@ is the pattern this skill reuses rather than re-deriving.
   gets read, and report exceeding it as a finding, not silently expanded
   effort.
 
-## Worked example: `.github/workflows/post-merge-retro.yml`
+## Worked example
 
-**Exposure minimization.** The create-issue POST body (built in
-`.github/scripts/post_merge_retro.py`) sends owner, repo, PR number, PR
-title, and PR URL. `pr_title` is received but deliberately never placed
-in the created issue body -- the script's own docstring states why: "it
-is untrusted, fork-controlled text, and republishing it verbatim would
-let an `@user`/`@org` mention or Markdown in the title inject formatting
-or trigger unwanted notifications." **Verdict: exposure-minimal** for the
-issue-body field -- the one plausibly over-exposable field is deliberately
-excluded, with a cited reason, not merely omitted by chance. One
-caveat, named rather than folded into a false all-clear: the workflow's
-`harden-runner` step sets `egress-policy: audit`, not `block` -- network
-egress from this job is observed, not restricted, so this specific
-control is detective, not preventive.
-
-**Least privilege.** `permissions: contents: read, issues: write` is
-declared at both workflow and job level, matching the job's only two
-actions -- checking out code (read) and opening one deduplicated issue
-(write). The workflow's own code comment states the constraint's
-rationale directly: it deliberately does not have, and must never be
-given, `pull-requests: write` or merge capability, because "100% human
-review before any PR merges in this repository is a PERMANENT
-architectural feature." **Verdict: privilege-minimal** -- the granted
-scope traces exactly to the two actions performed, and the boundary's own
-rationale is already documented in the artifact itself rather than left
-for a reviewer to infer.
+A concrete pass of both checks against a real artifact
+(`.github/workflows/post-merge-retro.yml`) in this skill's own authoring
+repository: [references/worked-examples.md](references/worked-examples.md).
 
 ## Notes
 
 Portability: **Mixed**. The portable core above -- the two checks, the
 Applicability gate, the Procedure, the Relationship-to-other-skills
 disambiguation, and the Stop boundaries -- names no path or issue number
-specific to this skill's own authoring repository. The worked example is
+specific to this skill's own authoring repository.
+[references/worked-examples.md](references/worked-examples.md) is
 explicitly repository-scoped: substitute the target repository's own
 equivalent artifact when applying this skill elsewhere.
+
+Capability assumption: **Adaptive**. The body above is complete on its
+own for the common case -- the two concrete tests and the four-step
+Procedure fully specify how to carry out a review without needing to open
+the worked example. The worked example is the deferred depth a weaker
+tier can pull on demand to see the pattern applied end-to-end against a
+real artifact, not required reading for a strong-model reader to complete
+a review correctly.
 
 A verdict from this skill is not itself authoritative for a downstream
 decision to revoke a credential, narrow a permission, or change an
