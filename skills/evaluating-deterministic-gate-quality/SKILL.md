@@ -68,10 +68,10 @@ identical move for skills). Full test, both questions:
 [references/mechanism-fit.md](references/mechanism-fit.md).
 
 **When the first question concludes no gate is warranted, stop here.**
-Report that as the finding directly and skip Evaluation model structure
-and its axes, Three-way division of responsibility, Subagent dispatch,
-and the Procedure below for that policy -- none of them apply to a policy
-correctly left ungated.
+Report that as the finding directly -- this is the policy's own verdict
+(Procedure step 6) -- and skip Evaluation model structure and its axes,
+Three-way division of responsibility, and Procedure steps 3-5 for that
+policy; none of them apply to a policy correctly left ungated.
 
 ## Evaluation model structure
 
@@ -223,9 +223,10 @@ project-instruction file) this skill defers to rather than re-deriving.
    realization's implementation quality. A whole-artifact wrong-domain
    finding, or a no-gate-warranted finding, is the headline finding for
    that artifact or policy -- report it even if the rest of the review
-   still completes, and skip steps 3-6 below for that specific item when
-   the verdict is no-gate-warranted, per mechanism-fit.md's own
-   short-circuit.
+   still completes, and skip steps 3-5 below for that specific item when
+   the verdict is no-gate-warranted (step 6 still applies -- it is where
+   that no-gate finding is formally recorded as the item's verdict), per
+   mechanism-fit.md's own short-circuit.
 3. **Two-lane walk.** For each discovered artifact, walk the
    deterministic-shape checks and probabilistic-maturity dimensions in
    [references/dimensions.md](references/dimensions.md), applying each
@@ -268,15 +269,17 @@ project-instruction file) this skill defers to rather than re-deriving.
    point is reported as partially covered, not covered, in the summary;
    an artifact merely discovered (steps 1-4) is not itself proof its
    claimed behavior holds.
-6. **Issue a verdict** per artifact reviewed (well-formed and
+6. **Issue a verdict** per artifact or policy reviewed (well-formed and
    well-placed / well-formed but misplaced / not well-formed /
-   indeterminate, with the specific reason), plus an overall
-   coverage-attestation summary for the target repository. An artifact
-   matching more than one of these at once (e.g. wrong-domain and also
-   failing a deterministic-shape check) gets both reported together, not
-   resolved by picking one -- a wrong-domain finding never replaces a
-   shape/maturity finding on the same artifact. Cite evidence for every
-   claim; a postcondition with no cited evidence is not a
+   no-gate-warranted / indeterminate, with the specific reason), plus an
+   overall coverage-attestation summary for the target repository. An
+   artifact matching more than one of these at once (e.g. wrong-domain
+   and also failing a deterministic-shape check) gets both reported
+   together, not resolved by picking one -- a wrong-domain finding never
+   replaces a shape/maturity finding on the same artifact; a
+   no-gate-warranted verdict is the exception, since it short-circuits
+   steps 3-5 by construction and so has nothing further to combine with.
+   Cite evidence for every claim; a postcondition with no cited evidence is not a
    completed review. A well-formed verdict resting on any claim about
    the gate's actual runtime behavior (a deny/allow/fail-open/fail-closed
    outcome, not the gate's own source text alone) requires that specific

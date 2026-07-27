@@ -54,12 +54,13 @@ never a gate.
 
 **When this check concludes no gate is warranted, stop here.** Report
 that as the finding directly -- the policy should be (or remain) a skill,
-CLAUDE.md content, or a human review step, not a deterministic gate --
-and do not proceed to Domain placement below, the axes, the three-way
-division of responsibility, or the full six-step Procedure for that
-policy. Continuing past a "no gate" verdict to grade a domain placement
-that was never warranted wastes exactly the context this two-question
-split exists to avoid spending.
+CLAUDE.md content, or a human review step, not a deterministic gate; this
+finding is itself the item's verdict (`SKILL.md` Procedure step 6) -- and
+do not proceed to Domain placement below, the axes, the three-way
+division of responsibility, or Procedure steps 3-5 for that policy.
+Continuing past a "no gate" verdict to grade a domain placement that was
+never warranted wastes exactly the context this two-question split
+exists to avoid spending.
 
 ## Domain placement
 
