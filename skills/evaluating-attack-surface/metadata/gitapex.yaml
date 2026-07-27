@@ -1,0 +1,23 @@
+apiVersion: gitapex.io/v1alpha1
+kind: SkillMetadata
+metadata:
+  name: evaluating-attack-surface
+spec:
+  portability: Mixed
+  capabilityAssumption: Adaptive
+  references:
+    - "This skill's model (exposure minimization and least privilege as two domain-agnostic checks) was designed in gitapex#461, following a gap analysis confirming that evaluating-deterministic-gate-quality's Blast-radius axis, Security-level axis, and dimension 18 of its own references/dimensions.md do not cover an artifact's steady-state exposure or privilege design -- Blast-radius grades bypass consequence, Security-level classifies tier by external category name, dimension 18 covers only output redaction of a secret already held, never the request/grant side of privilege or interface/data minimization toward a dependency."
+    - "Explicitly distinct from docs/agent-product-scope.md's Axis B (gitapex#307): that axis is a future runtime enforcement adapter (least-privilege tool/filesystem/network gating, actual enforcement code); this skill is a review procedure that produces findings, never enforcement, and does not fulfill or duplicate that axis. Named explicitly in SKILL.md's own Relationship to other skills section because the resemblance in name is exactly the kind of conflation docs/agent-product-scope.md's own Non-conflation rule warns against."
+    - "The worked example (.github/workflows/post-merge-retro.yml and .github/scripts/post_merge_retro.py) is this repository's own, explicitly illustrative -- substitute the target's actual equivalents rather than assuming this exact workflow or script exists elsewhere."
+    - "Built as a standalone skill rather than a fifth axis on evaluating-deterministic-gate-quality, decided directly with the operator during gitapex#455/#456's own work: least-privilege review in particular applies to any artifact (subagents, MCP servers, CI workflow permissions, cloud service integrations), not only deterministic gates, matching this repository's existing precedent of adjacent-but-separate security-review skills related via relatedTo rather than merged (screening-a-low-trust-contribution)."
+  skillDependencies:
+    requires:
+      - evaluating-skill-quality
+    relatedTo:
+      - evaluating-deterministic-gate-quality
+      - screening-a-low-trust-contribution
+      - git-hosting-surface-audit
+  lifecycle:
+    experimental:
+      reason: "First version of this skill category, built from a gap analysis conducted directly during this build (gitapex#461) rather than a dedicated pre-written research report -- this repository does not mandate one for every new skill; only evaluating-deterministic-gate-quality's own build did that, confirmed by checking other 'first of category' skills' own lifecycle fields (screening-a-low-trust-contribution, battle-testing-a-skill, scorer-gated-skill-edits, auditing-agent-product-scope all shipped with no lifecycle field at all). Scoped deliberately smaller than evaluating-deterministic-gate-quality's four-axis/eighteen-dimension build: two checks (exposure minimization, least privilege), one worked example, no references/ split yet -- deferred rather than front-loaded, the same way evaluating-deterministic-gate-quality itself grew a fourth axis in a later, separate PR (gitapex#442). Deferred, named explicitly: additional exposure/privilege sub-checks beyond the two shipped; a references/ split once body content grows past what a lean body should carry; a committed evals/ regression corpus (eval-coverage-disclosure WAIVED at launch, matching evaluating-deterministic-gate-quality's own disclosed gap at its own launch)."
+      trackingIssue: "#461"
