@@ -1,6 +1,6 @@
 ---
 name: auditing-agent-product-scope
-description: Use when evaluating which agent tools, git-hosting platforms, or dependency middleware a repository assumes or targets, and updating that repository's own scope-definition doc to match. Formalizes a research-classify-document procedure -- fetch a candidate's primary documentation directly, classify it against the owning evidence file's existing evidence states, add a finding to the axis's owning evidence file, and update the scope map's cross-references. Distinct from `evaluating-skill-quality` (grades a target skill's own quality) and `auditing-git-hosting-surface` (audits one target repository's hosting-platform configuration surface, not which platforms this repository itself assumes).
+description: Use when classifying which agent tools, git-hosting platforms, or dependency middleware a repository assumes or targets, and updating that repository's own scope-definition doc to match. Formalizes a research-classify-document procedure -- fetch a candidate's primary documentation directly, classify it against the owning evidence file's existing evidence states, add a finding to the axis's owning evidence file, and update the scope map's cross-references. Distinct from `evaluating-skill-quality` (grades a target skill's own quality) and `auditing-git-hosting-surface` (audits one target repository's hosting-platform configuration surface, not which platforms this repository itself assumes).
 ---
 
 # Auditing Agent Product Scope

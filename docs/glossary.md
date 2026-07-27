@@ -54,3 +54,32 @@ Decision 10). Resolved per the Resolve step: `planning-a-branch-from-an-issue`'s
 Output contract already named this concept "Branch Plan" first, so that
 term wins; bare "plan" retires as an ambiguous synonym in any new skill
 text rather than being introduced as a second name for the same thing.
+
+## `Evaluating-*` vs. `Auditing-*` (skill-naming verb families)
+
+Two gerund-verb families this repository's skill names split into, each
+with a distinct meaning -- not interchangeable, despite both English words
+casually meaning "review":
+
+- **`Evaluating-*`**: grades a repository-internal artifact (a `SKILL.md`,
+  a deterministic gate) against a fixed-dimension quality rubric, producing
+  a maturity verdict (`WELL-FORMED-AND-MATURE`, `PASS`/`FAIL` per
+  dimension, etc.). Examples: `evaluating-skill-quality`,
+  `evaluating-deterministic-gate-quality`.
+- **`Auditing-*`**: classifies an external-facing configuration surface, or
+  this repository's own scope, against a checklist or axis map, producing a
+  coverage/classification report (`Covered`/`Partial`/`Gap`,
+  `Documented`/`Unknown`/`Conflict`, etc.). Examples:
+  `auditing-git-hosting-surface`, `auditing-agent-product-scope`.
+
+Surfaced as a Detect-step conflict (#462) while renaming
+`git-hosting-surface-audit` -> `auditing-git-hosting-surface` (#459) to
+match the gerund+object convention #281 established: the convention's own
+issue only settled the *structural* pattern, never which of these two
+near-synonym verbs a given skill should use, and
+`auditing-agent-product-scope/SKILL.md`'s own description had drifted to
+open with the other family's verb ("Use when evaluating...") despite its
+name being in the `auditing-*` family. Resolved by the repository owner
+directly, per the Resolve step: the definitions above win, and that one
+drifted description line was corrected to "Use when classifying..." to
+match.
