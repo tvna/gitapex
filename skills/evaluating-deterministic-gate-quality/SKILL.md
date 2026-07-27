@@ -473,11 +473,10 @@ disclosure until now; the Security-level axis's "no established ceiling
 documentation" reuse branch, unsmoke-tested against a target that
 actually lacks one; a harness-level isolation-verification gap every
 audit round's own dispatch has disclosed against itself, not assumed
-solved; behavioral drift/containment for a reviewing agent already
-manipulated mid-review (OWASP ASI10-style, honestly named rather than
-waved off, matching `docs/security-control-inventory.md`'s own
-equivalent gitapex-wide verdict); and a poisoned-fork-of-this-skill
-adversarial trial (OWASP ASI04), which no prior round's trials attempted.
+solved; and two gaps a full ASI01-10/LLM01-10 coverage mapping named
+honestly rather than invented a fix for --
+[references/owasp-coverage.md](references/owasp-coverage.md) carries the
+full table, weakest rows, and threat model.
 
 ## Notes
 
