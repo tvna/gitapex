@@ -9,7 +9,7 @@ config:
   executor: copilot-sdk
   model: claude-sonnet-4.6
 metrics:
-  - name: git_hosting_surface_audit_quality
+  - name: auditing_git_hosting_surface_quality
     weight: 1.0
     threshold: 0.8
     description: Detects platform correctly, loads exactly one platform reference, reports every checklist item's real coverage level (Covered/Partial/Gap) with Gap items cross-linked to #82, and never claims an aggregate "audit passed" or upgrades a Gap to Covered.
