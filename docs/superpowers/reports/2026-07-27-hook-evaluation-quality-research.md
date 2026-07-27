@@ -410,11 +410,15 @@ is reported as absent, never invented to fill the question.
   "**Silence is Mandatory**: Your script must not print any plain text
   to stdout other than the final JSON object. Even a single `echo` or
   `print` call before the JSON will break parsing"; (b) a runtime
-  tamper-detection mechanism -- project-level hooks are **fingerprinted**,
-  and "if a hook's name or command changes (for example, via `git
-  pull`), it is treated as a new, untrusted hook" requiring re-approval
-  before it next executes. A named risk statement: "Hooks execute
-  arbitrary code with your user privileges."
+  tamper-*detection* mechanism, weaker than tamper-*prevention* -- worth
+  stating precisely rather than overclaiming its strength: project-level
+  hooks are **fingerprinted**, and "if a hook's name or command changes
+  (for example, via `git pull`), it is treated as a new, untrusted
+  hook." Per `docs/hooks/best-practices.md`'s own "Project Hook
+  Security" flow, this does **not** gate execution on re-approval -- the
+  documented sequence is detect, warn, then **execute by default**
+  ("unless specific security settings block it"). A named risk
+  statement: "Hooks execute arbitrary code with your user privileges."
 - Fact, per `openclaw/openclaw`'s own docs: no "why" framing either, but
   concrete, vendor-original hook-writing guidance -- "Keep handlers
   fast," "Handle errors gracefully. Wrap risky operations in try/catch;
@@ -694,20 +698,26 @@ none of these are enforced anywhere yet.
     malformed, a field it depends on is missing, or a script/binary it
     shells out to is absent -- rather than silently defaulting to allow?
     This repository's own `check-issue-acm-disclosure.sh` already gets
-    this right (item 3 above: it denies, with a named reason, if its own
-    companion `check_acm_present_or_waiver.py` is not found) -- a rubric
-    could make this an explicit, checkable expectation rather than an
-    incidental property of the scripts that happen to have it.
-17. **Runtime tamper-awareness of a hook's own definition, distinct from
-    review-time screening.** This repository already hard-flags a
-    hook/script diff at review time (`screening-a-low-trust-contribution`
-    check 4, item 10 above) -- a human/agent gate on an *incoming PR*.
-    Gemini CLI's own documented mechanism is a different, complementary
-    layer operating at a different time: it fingerprints a project-level
-    hook's own name/command and treats any change (e.g. via `git pull`)
-    as "a new, untrusted hook" requiring re-approval before it next
-    executes, independent of whether any human reviewed that change. This
-    repository has no analogous *runtime* check today -- review-time
+    this right (confirmed directly in `hooks/check-issue-acm-disclosure.
+    sh:54-56`: it denies, with a named reason, if its own companion
+    `check_acm_present_or_waiver.py` is not found -- a behavior item 3
+    above does not itself narrate, so cite the script directly rather
+    than that item) -- a rubric could make this an explicit, checkable
+    expectation rather than an incidental property of the scripts that
+    happen to have it.
+17. **Runtime tamper-*detection* awareness of a hook's own definition,
+    distinct from review-time screening -- and distinct from
+    tamper-*prevention*, a stronger property this report does not claim
+    exists anywhere.** This repository already hard-flags a hook/script
+    diff at review time (`screening-a-low-trust-contribution` check 4,
+    item 10 above) -- a human/agent gate on an *incoming PR*. Gemini
+    CLI's own documented mechanism is a different, complementary layer
+    operating at a different time: it fingerprints a project-level
+    hook's own name/command and warns when a change is detected (e.g.
+    via `git pull`), though per its own documented flow the hook still
+    executes by default after that warning, unless a separate security
+    setting blocks it -- detection and warning, not a re-approval gate.
+    This repository has no analogous *runtime* check today -- review-time
     screening catches an incoming PR; it says nothing about a hook
     definition changing through any other path (a later commit an
     earlier review already passed, a local edit, a plugin update). A
@@ -720,13 +730,20 @@ none of these are enforced anywhere yet.
     was requiring the behavior to be "a documented pattern... built by
     you, in your hooks directory," so "you see exactly what it does and
     opt in by writing the files." This repository's own shipped hooks
-    already partially satisfy this independently -- every entry in
-    `hooks/hooks.json` and every hook script carries a header comment
-    naming which finding or design-doc decision it backs (items 1-4, 6-7
-    above). A rubric could make this an explicit, checkable expectation
-    -- a hook with no comment or description explaining what it does or
-    why -- rather than an incidental convention this repository happens
-    to already follow.
+    already mostly satisfy this independently, though not uniformly --
+    `hooks/hooks.json`'s own top-level `description` field and three of
+    the four hook scripts (`check-bash-safety.sh`,
+    `check-issue-acm-disclosure.sh`,
+    `check_task_bash_safety.sh`) name the specific finding, issue, or
+    design-doc decision each backs in a header comment; the fourth,
+    `hooks/check-template-overwrite.sh`, has a header comment describing
+    what it does but names no specific backing finding or issue number
+    -- the same script this report's own item 4/5 already flagged as an
+    exception on a different property (no bundled test file). A rubric
+    could make citing a specific backing decision an explicit, checkable
+    expectation -- a hook whose own comment states only what it does,
+    never why or on whose authority -- rather than treating this
+    repository's own mostly-consistent practice as already complete.
 
 ## Open questions / blind spots
 
