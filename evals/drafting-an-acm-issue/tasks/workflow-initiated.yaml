@@ -1,0 +1,27 @@
+id: drafting-an-acm-issue-workflow-initiated
+name: Agent-Initiated Mid-Task Issue Still Produces a Full ACM
+description: Exercises the scenario the broadened trigger (PR #418, issue #416) names -- an ongoing agent workflow opening a follow-up issue on its own initiative mid-task, not a human explicitly requesting it -- and confirms the skill's procedure still drafts a full, correct Acceptance Criteria Map for this framing rather than skipping steps because no human phrased the request.
+tags:
+  - quality
+  - discovery-boundary
+inputs:
+  prompt: |
+    Use drafting-an-acm-issue. (Context: this is an ongoing agent session,
+    mid-task, that just noticed a follow-up gap while doing unrelated work
+    and is opening a new issue on its own initiative to track it -- no
+    human asked for this issue directly.)
+
+    While refactoring the export pipeline I noticed the retry logic does
+    not back off between attempts, hammering the downstream service on
+    every transient failure. This should get its own fix issue: retry
+    attempts need exponential backoff with a capped max delay, and the
+    existing retry-count metric should keep working unchanged.
+expected:
+  output_contains:
+    - "Facts"
+    - "Requested outcome"
+    - "Acceptance Criteria Map"
+    - "Non-goals"
+    - "Next Move"
+  output_not_contains:
+    - "LGTM"
