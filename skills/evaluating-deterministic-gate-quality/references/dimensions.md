@@ -131,7 +131,9 @@ not a single-artifact check.
 10. **Empirical verification over assumed behavior.** Is a claim that the
     gate actually denies/allows what it says it does backed by quoted,
     live evidence gathered in the gate's real execution context, rather
-    than a plausible-sounding but unverified assertion?
+    than a plausible-sounding but unverified assertion? This dimension's
+    failure or gap blocks a well-formed verdict on that claim -- see
+    `SKILL.md`'s Procedure step 6 and Stop boundaries.
     *Domains:* generalizes directly.
 11. **Deployment-mode / enforcement-mode portability, disclosed.** Does
     the gate's own documentation state which deployment or enforcement

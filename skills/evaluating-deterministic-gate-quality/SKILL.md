@@ -256,7 +256,13 @@ project-instruction file) this skill defers to rather than re-deriving.
    ground truth -- an invariant list that reads as implausibly short, or
    inconsistent with invariants implied by the target's own artifacts
    already found in steps 1-4, is itself a coverage-attestation finding,
-   not silently accepted input.
+   not silently accepted input. A policy counted as covered in this pass
+   must trace to an artifact whose own relevant deny/allow claim was
+   live-tested per dimension 10 and step 6's precondition below -- an
+   artifact whose per-artifact verdict came back indeterminate on that
+   point is reported as partially covered, not covered, in the summary;
+   an artifact merely discovered (steps 1-4) is not itself proof its
+   claimed behavior holds.
 6. **Issue a verdict** per artifact reviewed (well-formed and
    well-placed / well-formed but misplaced / not well-formed /
    indeterminate, with the specific reason), plus an overall
