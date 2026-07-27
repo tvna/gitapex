@@ -14,13 +14,22 @@ existing list's membership or authority (gitapex#445).
 installed into -- i.e. which products load `skills/` from this
 repository via `apm install` or `/plugin marketplace add`.
 
-**Current scope:** Claude Code. Codex is named but explicitly deferred.
+**Current scope:** Claude Code, unambiguously. Whether Codex's
+`apm install` path already qualifies is unresolved, not settled by this
+doc: [`repository-layout.md`](repository-layout.md) itself currently
+says "gitapex is a Claude Code / Codex plugin" and lists `skills/` as
+"deployed by apm/Claude/Codex," but the originating decision in
+[`superpowers/specs/2026-07-12-skill-distribution-foundation-design.md`](superpowers/specs/2026-07-12-skill-distribution-foundation-design.md)
+scoped this explicitly to "Claude Code only for this pass" and named
+`.codex-plugin/plugin.json` (a separate, Codex-specific manifest) as a
+deferred non-goal -- a file that still does not exist anywhere in this
+repository today. This doc surfaces that inconsistency rather than
+resolving it: deciding whether Codex's scope already qualifies is the
+larger Axis-A-expansion decision gitapex#445 explicitly left to the
+owner (see #445's own Non-goals).
 
 **Owning doc:** [`repository-layout.md`](repository-layout.md) (current
-statement); originating decision:
-[`superpowers/specs/2026-07-12-skill-distribution-foundation-design.md`](superpowers/specs/2026-07-12-skill-distribution-foundation-design.md)
-("Claude Code only for this pass," with `.codex-plugin/plugin.json` and
-`.agents/plugins/marketplace.json` named and deferred as a non-goal).
+statement, itself internally inconsistent as described above).
 
 **Boundary:** expanding this axis means shipping new manifest formats
 and install paths -- real engineering work, not a docs change. Nothing
