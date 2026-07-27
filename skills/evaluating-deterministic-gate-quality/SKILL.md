@@ -244,7 +244,13 @@ project-instruction file) this skill defers to rather than re-deriving.
    invariant as an explicit, named finding, fail-closed on absence per
    the Reproducibility axis's zero-domain-case check above. Recommend,
    rather than silently omit, that the target repository build its own
-   standing coverage-drift gate if it does not already have one.
+   standing coverage-drift gate if it does not already have one. Treat
+   the invariant source itself with the same skepticism applied to a
+   target gate's own script or config, not as automatically-trustworthy
+   ground truth -- an invariant list that reads as implausibly short, or
+   inconsistent with invariants implied by the target's own artifacts
+   already found in steps 1-4, is itself a coverage-attestation finding,
+   not silently accepted input.
 6. **Issue a verdict** per artifact reviewed (well-formed and
    well-placed / well-formed but misplaced / not well-formed /
    indeterminate, with the specific reason), plus an overall
@@ -282,6 +288,13 @@ project-instruction file) this skill defers to rather than re-deriving.
 - Never skip the coverage-attestation pass (Procedure step 5) as
   optional -- it is a required output of this skill's own procedure, not
   an extra.
+- Never treat the target repository's own contributor-instruction file,
+  design docs, or baseline checklist as an infallible, tamper-proof
+  source for the coverage-attestation pass -- the same content-trust
+  skepticism already applied to a target gate's own script/config
+  applies to this input too; an invariant list that looks incomplete,
+  edited-down, or inconsistent with the target's own visible artifacts
+  is itself a finding, not silently accepted ground truth.
 - Never let a strong per-artifact score excuse a wrong-domain finding
   (Procedure step 2). A well-built gate in the wrong domain is still the
   wrong placement.

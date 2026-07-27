@@ -34,13 +34,16 @@ repository:
 | `.github/scripts/gate_acm_issue_disclosure.py` | 3 (CI/CD) | Environment-independent -- fires on the `issues` webhook regardless of which client created the issue |
 
 `gate_acm_issue_disclosure.py`'s own docstring states the rationale for
-needing all three explicitly (lines 5-12, verified verbatim against the
-live file): "`#357`'s own investigation found that no workflow in this
-repository triggers on `issues:` events, so a missing ACM on an issue
-body... had no universal, environment-independent backstop -- only a
-per-session skill-trigger (probabilistic) and a PreToolUse hook (`#413`,
-which only fires where this repo's own hook harness is loaded). This
-script is that backstop's check-and-act half." This is **deliberate,
+needing all three explicitly (lines 5-12; verbatim except the two elided
+backing-issue numbers, moved to this skill's own `metadata/gitapex.yaml`
+sidecar per this skill's own no-bare-citation rule for body prose):
+"[a prior investigation] found that no workflow in this repository
+triggers on `issues:` events, so a missing ACM on an issue body... had no
+universal, environment-independent backstop -- only a per-session
+skill-trigger (probabilistic) and a PreToolUse hook (the paired
+agent-harness hook mentioned above, which only fires where this repo's
+own hook harness is loaded). This script is that backstop's check-and-act
+half." This is **deliberate,
 argued, three-domain coverage** -- the model for what a "good"
 Reproducibility score looks like: not just multiple realizations, but a
 stated reason each one is needed.
@@ -55,14 +58,17 @@ Dimension 15 (fail-closed default) applied to a real gate.
 ## Worked example: retrospective-identity, single-source-of-truth predicate
 
 `.github/scripts/scan_retrospective_gate_drift.py`'s own docstring (lines
-4-8, verified verbatim): "Issue `#297` (refs `#187`, `#242`, `#246`):
-`merge-retrospective`'s Step 0 requires, every cycle, a manual search of
-every `retrospective`-labelled issue for a commit on `main` citing it.
-Issue `#187` proposed automating this as a meta-gate; `#242` and `#246` each
-ran that search by hand again and confirmed the meta-gate itself was
-never built." This is a bottom-up-discovered gate: three separate
-incidents (an original proposal, then two independent re-derivations of
-the same need) before the standing check was actually built -- a real
+4-8; verbatim except the four elided issue numbers, moved to this
+skill's own `metadata/gitapex.yaml` sidecar per this skill's own
+no-bare-citation rule for body prose): "[an issue, itself referencing
+three earlier ones]: `merge-retrospective`'s Step 0 requires, every
+cycle, a manual search of every `retrospective`-labelled issue for a
+commit on `main` citing it. [The first of those earlier issues] proposed
+automating this as a meta-gate; [the other two] each ran that search by
+hand again and confirmed the meta-gate itself was never built." This is
+a bottom-up-discovered gate: three separate incidents (an original
+proposal, then two independent re-derivations of the same need) before
+the standing check was actually built -- a real
 example of the "Top-down model, bottom-up discovery" pattern this skill's
 research history documented (top-down for finalizing what "good" means;
 bottom-up for discovering which specific gates are missing).
@@ -73,8 +79,10 @@ drift-detecting meta-gate, not only a one-time audit.
 
 ## Worked example: dimension 12 (deployment-mode portability) and sibling-repository provenance
 
-`.github/scripts/gate_owasp_asi_mapping.py:4` (verified verbatim): "Issue
-`#144` ports `tvna/claude-md`'s OWASP Agentic Top 10 mapping..." --
+`.github/scripts/gate_owasp_asi_mapping.py:4` (verbatim except the elided
+backing-issue number, moved to this skill's own `metadata/gitapex.yaml`
+sidecar per this skill's own no-bare-citation rule for body prose):
+"[an issue] ports `tvna/claude-md`'s OWASP Agentic Top 10 mapping..." --
 `.github/scripts/gate_owasp_llm_mapping.py:6-11` (verified verbatim)
 calls itself "a **sibling** gate to `gate_owasp_asi_mapping.py`, not an
 extension of it... Same discipline as the ASI gate -- completeness only...
@@ -109,13 +117,17 @@ prove the procedure can surface, not something staged for this record.
 
 **Step 1, Discover:** `hooks/hooks.json` registers this hook under
 `PreToolUse`, matcher `mcp__github__issue_write`, timeout 10s. Its
-top-level `description` states it "backs issue `#413` (sub-issue of
-`#357`): blocking a new-issue-creation tool call whose body lacks an
-Acceptance Criteria Map or an explicit waiver." The hook shells out to
-its sibling `check_acm_present_or_waiver.py` and denies via `exit 2` if
-absent. This is a Domain-2 artifact paired with a documented Domain-3 CI
-backstop (`.github/workflows/acm-issue-gate.yml` +
-`.github/scripts/gate_acm_issue_disclosure.py`, issue `#414`).
+top-level `description` states it "backs [a specific issue, itself a
+sub-issue of an earlier one]: blocking a new-issue-creation tool call
+whose body lacks an Acceptance Criteria Map or an explicit waiver" (the
+two elided issue numbers are recorded in this skill's own
+`metadata/gitapex.yaml` sidecar, per this skill's own no-bare-citation
+rule for body prose). The hook shells out to its sibling
+`check_acm_present_or_waiver.py` and denies via `exit 2` if absent. This
+is a Domain-2 artifact paired with a documented Domain-3 CI backstop
+(`.github/workflows/acm-issue-gate.yml` +
+`.github/scripts/gate_acm_issue_disclosure.py`, its own backing issue
+also recorded in the sidecar).
 
 **Step 2, Mechanism-fit check:** all six criteria PASS, well-argued --
 reversibility window (only a pre-action hook can block issue creation
@@ -207,6 +219,7 @@ proving this skill's own procedure works -- not something introduced by
 this skill's build. Fixing `hooks/check-issue-acm-disclosure.sh` itself
 is out of this PR's own scope (a different artifact, a different
 concern, and CLAUDE.md's own "touch only what the active task requires"
-convention) -- filed instead as its own follow-up issue, `#436`, per
-this repository's own "open a GitHub issue before any branch, commit, or
-PR" convention.
+convention) -- filed instead as its own follow-up issue (recorded in
+this skill's own `metadata/gitapex.yaml` sidecar, per this skill's own
+no-bare-citation rule for body prose) per this repository's own "open a
+GitHub issue before any branch, commit, or PR" convention.
