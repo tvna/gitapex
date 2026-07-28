@@ -184,6 +184,35 @@ mechanism, not only the ones already recorded below.
   isolated re-audit of a real target skill that caught a residual bug)
   are recorded in `metadata/gitapex.yaml` rather than duplicated here,
   per this skill's own dimension-12 duplication discipline.
+- **Second leak vector found and fixed 2026-07-28, distinct from the
+  `CLAUDE.md`/`AGENTS.md` finding above.** The verified-alternative
+  `claude -p` subprocess isolates `CLAUDE.md`/`AGENTS.md` correctly (per
+  the controls above), but does not by itself isolate this harness's own
+  task-tracking state: task items created via `TaskCreate` persist as
+  JSON files under `$HOME/.claude/tasks/<session-id>/`, and a `claude -p`
+  subprocess spawned without overriding `$HOME` inherits the parent
+  shell's `$HOME` by default -- so it resolves the *same* directory.
+  Once a dispatched subprocess accumulates enough tool calls without its
+  own `TaskCreate`/`TaskUpdate` call, this harness injects a "haven't
+  used task tools recently" nudge carrying the calling session's actual,
+  live task list (not stale -- a task's status mid-dispatch matched the
+  live status set moments earlier) as an unprompted `<system-reminder>`.
+  Three controlled trials, same `CLAUDE.md`-free scratch directory, same
+  ~15-tool-call workload each: (1) `claude -p` with environment inherited
+  unchanged -- leaked the calling session's real task list verbatim,
+  quoted in full in the fix's own PR; (2) the same, with only
+  `CLAUDE_CODE_SESSION_ID` unset -- **still leaked**, ruling that env var
+  out as the sole mechanism; (3) the same, with `CLAUDE_CODE_SESSION_ID`
+  unset *and* `HOME` redirected to a freshly created, empty directory --
+  no task-list content leaked (the generic nudge text alone still fired,
+  since it does not itself depend on `$HOME`, but with nothing to list).
+  **Corrected invocation, when a dispatch must also avoid this leak**:
+  `env -u CLAUDE_CODE_SESSION_ID HOME=/fresh/empty/dir claude -p "prompt goes here"`
+  -- the `CLAUDE.md`/`AGENTS.md`-only guarantee above never needed the
+  `HOME` override, only the cwd change. **Scope**: bounded to a process
+  sharing this exact `$HOME` directory, not an account- or machine-wide
+  leak -- but real by default, since a plain `claude -p` subprocess
+  inherits `$HOME` unless the caller explicitly overrides it.
 
 ### Unlisted platform
 
