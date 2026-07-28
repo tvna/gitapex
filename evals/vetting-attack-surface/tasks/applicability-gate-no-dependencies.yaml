@@ -1,0 +1,33 @@
+id: vetting-attack-surface-applicability-gate-no-dependencies
+name: Pure local computation has zero dependencies and zero credentials
+description: The reviewed script makes no network call, holds no credential,
+  and never invokes a subprocess or external command; the review must
+  explicitly apply the Applicability gate ("not applicable") with cited
+  evidence rather than silently passing it or forcing an exposure/privilege
+  verdict that does not apply.
+tags:
+  - quality
+  - applicability-gate
+inputs:
+  prompt: |
+    Use vetting-attack-surface. Review this artifact.
+
+    `scripts/normalize_line_endings.py` reads a filename from
+    `sys.argv[1]`, reads its bytes from local disk, replaces every
+    `\r\n` with `\n` using Python's built-in `bytes.replace`, and writes
+    the result back to the same local path. Reading the full script
+    directly: it imports only `sys` and `pathlib` from the standard
+    library, makes no network call, holds no token, credential, or
+    service-account reference of any kind, and never invokes a
+    subprocess or external command.
+
+    Give me this artifact's exposure and privilege verdict.
+expected:
+  output_contains:
+    - "not applicable"
+    - "no dependency relationships"
+  output_not_contains:
+    - "exposure-minimal"
+    - "exposure-excess"
+    - "privilege-minimal"
+    - "privilege-excess"

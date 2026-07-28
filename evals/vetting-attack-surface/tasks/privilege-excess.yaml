@@ -1,0 +1,36 @@
+id: vetting-attack-surface-privilege-excess
+name: Read-only stale-issue workflow holds write-all permissions
+description: The reviewed workflow's own steps only read open issues and print
+  their numbers to the job log, but its permissions block grants write-all;
+  the review must grade this credential/permission grant privilege-excess and
+  name the specific over-broad grant.
+tags:
+  - quality
+  - least-privilege
+inputs:
+  prompt: |
+    Use vetting-attack-surface. Review this artifact's credential/permission
+    grant.
+
+    `.github/workflows/label-stale-issues.yml` runs on a daily schedule.
+    Reading the job's own steps directly: it calls
+    `actions/checkout@v4` (a read-only clone) and then a script that
+    calls the GitHub REST API's `GET /repos/{owner}/{repo}/issues` to
+    list open issues older than 30 days, printing their numbers to the
+    job log. No step in the job ever creates, updates, labels, comments
+    on, or closes anything.
+
+    The workflow's `permissions:` block, read directly from the YAML, is:
+
+    ```yaml
+    permissions: write-all
+    ```
+
+    Give me the least-privilege verdict for this one credential/
+    permission grant.
+expected:
+  output_contains:
+    - "privilege-excess"
+    - "write-all"
+  output_not_contains:
+    - "privilege-minimal"

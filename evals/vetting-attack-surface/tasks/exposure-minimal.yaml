@@ -1,0 +1,38 @@
+id: vetting-attack-surface-exposure-minimal
+name: Status-page webhook sends exactly what the provider renders
+description: The reviewed script's outbound POST body contains only the two
+  fields the status-page provider's own documented contract renders; the
+  review must grade this dependency relationship exposure-minimal rather than
+  flagging it.
+tags:
+  - quality
+  - exposure-minimization
+inputs:
+  prompt: |
+    Use vetting-attack-surface. Review this artifact's outbound interface.
+
+    `scripts/report_deploy_status.py` runs after every deploy and POSTs to
+    a third-party status-page provider's
+    `https://status.example-provider.com/api/v1/incidents` endpoint. That
+    provider's own documented API contract (fetched directly, not
+    recalled) states this endpoint renders exactly two fields on the
+    public status page -- `service_name` and `is_operational` (a boolean)
+    -- and nothing else in the request body is ever displayed or
+    otherwise consumed.
+
+    The script's actual POST body, read directly from the code, is:
+
+    ```python
+    requests.post(url, json={
+        "service_name": service_name,
+        "is_operational": deploy_succeeded,
+    })
+    ```
+
+    Give me the exposure-minimization verdict for this one dependency
+    relationship.
+expected:
+  output_contains:
+    - "exposure-minimal"
+  output_not_contains:
+    - "exposure-excess"
