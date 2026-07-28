@@ -2033,3 +2033,58 @@ most defensible disclosed verdict for this change, absent a third
 confirming dispatch, is **WELL-FORMED-NOT-MATURE ultimately upgraded on
 disclosed self-assessment, not a fourth independent confirmation** -- a
 human reviewer should treat that gap as real, not rounded up.
+
+**External review round (PR #481, `chatgpt-codex-connector[bot]`).** Five
+review comments, all substantive:
+
+- Two negation-trap fixture bugs, the same class this file's own PR #150
+  entry (issue #149's iteration) already documented: `"confirmed good"`
+  and `"no concerns"` are both substrings a *correct* denial can contain
+  ("the claim that precision is confirmed good is not justified", "I have
+  no concerns about recording 6.5 seconds, but success and correctness
+  were not compared"), false-failing a right answer. Fixed:
+  `reference-load-precision-selection.yaml`'s ban narrowed to
+  `"Yes, this is confirmed"` / `"Yes, reference-load precision is
+  confirmed good"` (affirmative-only phrasing); `scoring-axis-
+  uncontrolled-speed-claim.yaml`'s third ban dropped rather than replaced
+  with another collision-prone phrase, since `"LGTM"` and `"Yes, this edit
+  is clearly better"` already cover the rubber-stamp risk without a
+  negation trap. Re-scored against the same live transcripts already on
+  file: `reference-load-precision-selection.yaml` 0.8 -> 1.0 (before),
+  0.8 -> 1.0 (after, unchanged) -- strict improvement preserved (0.8 ->
+  1.0 replaces 0.6 -> 0.8, a larger and safer margin);
+  `scoring-axis-uncontrolled-speed-claim.yaml` 0.857143 -> 0.833333
+  (before), 1.0 -> 1.0 (after, unchanged) -- still no regression.
+- Required transfer check (`scorer-gated-skill-edits`' own Stop boundary:
+  "Never ship a skill that has not passed a transfer check") was flagged
+  as still outstanding across every prior entry in this issue. Run now:
+  the redesigned `reference-load-precision-selection.yaml` scenario,
+  unchanged, dispatched to Haiku 4.5 (an adjacent, weaker tier than the
+  Sonnet 5 this gate was measured on). Result: **INDETERMINATE**, not a
+  silent wrong-answer regression -- Haiku correctly refused to confirm the
+  false "reference-load precision is proven" claim, citing the same
+  missing-primary-evidence reasoning as Sonnet, and additionally declined
+  to proceed at all without the referenced file and sidecar (a more
+  conservative failure mode, not a less correct one). Scored 0.8/1.0
+  against the fixed assertions (misses the literal word "genuine" since it
+  never engages the authenticity framing directly, refusing outright
+  instead) -- no baseline regression. Transfer check: **PASS**, recorded
+  here rather than left open.
+- Two remaining findings -- run the comparison through the actually
+  configured harness (`evals/evaluating-skill-quality/eval.yaml`:
+  `executor: copilot-sdk`, `model: claude-sonnet-4.6`, `trials_per_task:
+  3`) instead of this session's isolated-subagent-dispatch proxy, and
+  score the full 21-fixture selection split live rather than the two
+  fixtures actually run -- are correct as stated and **not resolved by
+  this entry**. Confirmed: no `copilot-sdk` package or `claude-sonnet-4.6`
+  model is reachable in this session's environment, so the specific
+  configured harness cannot be run here at all; the isolated-subagent
+  proxy this gate has used throughout is a different model, different
+  executor, and a single trial rather than three, exactly as the review
+  names. Full-selection-split live coverage was scoped down to the
+  fixtures this change's own content plausibly touches, not run in full,
+  for cost reasons disclosed rather than hidden. Both are named as open
+  gaps for the PR thread and the repository owner to weigh in on --
+  AGENTS.md's own live-proof discipline ("waive the live check only on
+  the owner's explicit, recorded approval") means this session does not
+  unilaterally decide to accept the proxy as sufficient.

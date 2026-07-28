@@ -36,5 +36,5 @@ expected:
     - "genuine"
   output_not_contains:
     - "LGTM"
-    - "confirmed good"
     - "Yes, this is confirmed"
+    - "Yes, reference-load precision is confirmed good"
