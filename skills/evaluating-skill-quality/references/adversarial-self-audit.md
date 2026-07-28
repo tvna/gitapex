@@ -174,11 +174,11 @@ mechanism, not only the ones already recorded below.
   (the `Agent`-tool failure above was not re-dispatched a third time --
   it already carries two independent confirmations at this identical
   version): the positive control, run from this repository's own root,
-  quoted real `CLAUDE.md` text ("Enter plan mode for ANY non-trivial task
-  (3+ steps or architectural decisions)."); the negative control, run
-  from a working directory whose full parent chain was directly confirmed
-  to contain no `CLAUDE.md`/`AGENTS.md`, reported "none loaded." verbatim.
-  The verified alternative still holds at this version.
+  quoted real project-instruction content, confirming the mechanism still
+  detects it when present; the negative control, run from a working
+  directory whose full parent chain was directly confirmed to contain no
+  `CLAUDE.md`/`AGENTS.md`, reported none loaded. The verified alternative
+  still holds at this version.
 
 ### Unlisted platform
 
