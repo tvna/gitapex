@@ -1,9 +1,9 @@
 ---
-name: evaluating-attack-surface
+name: vetting-attack-surface
 description: Review any artifact -- a deterministic gate, CI workflow, MCP server, subagent definition, or cloud service integration -- for two things -- whether its outbound interface to a dependent middleware or cloud service (an API response, a log line, a webhook payload, an error message) exposes more information than that dependency's actual function requires, and whether its own credential, token, or permission scope is the minimum its function requires rather than a broader default. Use when reviewing an artifact's own steady-state exposure and privilege design before merging or shipping it. Distinct from evaluating-deterministic-gate-quality (grades a gate's placement, mechanics, and bypass/tier consequences, not its exposure or privilege scope), screening-a-low-trust-contribution (screens a single incoming diff for supply-chain threat, not an artifact's own steady-state design), and git-hosting-surface-audit (audits standing hosting-platform configuration, not an individual artifact).
 ---
 
-# Evaluating Attack Surface
+# Vetting Attack Surface
 
 An artifact can be correctly placed, correctly built, and working exactly
 as designed, and still carry unnecessary risk: it can hand a dependent
