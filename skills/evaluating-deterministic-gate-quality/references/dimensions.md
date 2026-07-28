@@ -247,7 +247,14 @@ section and `references/security-level.md` for the full test.
     defaulting to allow on a fast path are not optimizations, they are
     correctness regressions wearing an optimization's name; grade only a
     change that holds the gate's own deny / self-revalidation / fail-closed
-    behavior fixed while reducing its cost.
+    behavior fixed while reducing its cost. A gate's own comment, docstring,
+    or commit message claiming its cost is "already optimized" is not
+    itself evidence for this dimension -- the same empirical-verification
+    discipline dimension 10 applies to a claimed deny/allow outcome applies
+    here to a claimed cost: ground the finding in a direct reading of the
+    actual code path (does it really skip the network round-trip, the full
+    scan, or the cold start the claim describes?) or a live measurement,
+    never the claim alone.
     *Domains:* generalizes with adaptation. Agent-harness hook: does the
     hook re-run expensive recomputation on every matching tool call, or
     scope/cache to only the changed surface since its last run? CI job

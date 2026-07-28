@@ -322,34 +322,63 @@ each, no network I/O, no filesystem scan beyond the sibling script's own
 existence check) -- confirmed by direct reading of both files, not assumed
 from their names.
 
-**Live measurement, three consecutive runs against a passing (waiver-line)
+**Live measurement, five consecutive runs against a passing (waiver-line)
 synthetic `mcp__github__issue_write` payload**, run directly against the
-real script:
+real script with bash's own `time` builtin (copy-pasteable and reproducible
+as written; substitute a different repository checkout's own path if
+re-running elsewhere):
 
 ```
 $ payload='{"tool_name":"mcp__github__issue_write","tool_input":{"method":"create","body":"ACM: not-applicable (docs): example"}}'
-$ time bash hooks/check-issue-acm-disclosure.sh <<< "$payload"
-run 1: real=0.063s user=0.043s sys=0.017s (exit=0)
-run 2: real=0.042s user=0.038s sys=0.006s (exit=0)
-run 3: real=0.039s user=0.029s sys=0.011s (exit=0)
+$ for i in 1 2 3 4 5; do
+    echo "$payload" | { time bash hooks/check-issue-acm-disclosure.sh > /dev/null; } 2>&1 | sed "s/^/run $i: /"
+  done
+run 1:
+run 1: real	0m0.066s
+run 1: user	0m0.053s
+run 1: sys	0m0.016s
+run 2:
+run 2: real	0m0.043s
+run 2: user	0m0.031s
+run 2: sys	0m0.014s
+run 3:
+run 3: real	0m0.043s
+run 3: user	0m0.032s
+run 3: sys	0m0.013s
+run 4:
+run 4: real	0m0.051s
+run 4: user	0m0.037s
+run 4: sys	0m0.015s
+run 5:
+run 5: real	0m0.038s
+run 5: user	0m0.034s
+run 5: sys	0m0.006s
 ```
 
-A fourth run against a failing (no-ACM) body took the same path length
-(`real=0.062s`, `exit=2`) -- confirming the deny path pays the identical
-cost as the allow path, since both call through to the same Python
-cold-start regardless of outcome.
+Run 1 (0.066s) is consistently the slowest across repeated trials of this
+same measurement, ahead of runs 2-5 (0.038-0.051s) -- an ordinary
+first-invocation cold-start effect (disk-cache/page-cache warmup for the
+`bash`/`jq`/`python3` binaries themselves), not a defect in the gate and
+not cherry-picked away: all five raw runs are reported above rather than
+only the fastest ones. A separate run against a failing (no-ACM) body took
+the same path length (`real 0m0.062s`, `exit=2`) -- confirming the deny
+path pays the identical cost as the allow path, since both call through to
+the same Python cold-start regardless of outcome.
 
-**Verdict: PASS, no optimization gap found.** Measured cost (~40-65ms wall)
-is roughly 150-250x under the registered 10s budget (dimension 6's own
-concern, not restated here) and is already close to the floor for what the
-policy requires: a single `python3` interpreter cold start plus two
-constant-time regex searches over a short issue body, no full-repository
-scan, no network round-trip, no cache to warm because there is no
-repeated-state to cache between independent tool calls. There is no
-avoidable overhead of the kind this dimension names (no redundant clone, no
-synchronous network call, no quadratic pattern) to point to. Applying this
-dimension's own guard: no correctness tradeoff is on the table either way,
-since there is nothing here worth trading away for speed.
+**Verdict: PASS, no optimization gap found.** Measured cost (~38-66ms wall
+across five runs, including the slower first invocation) is roughly
+150-260x under the registered 10s budget (dimension 6's own concern, not
+restated here) and is already close to the floor for what the policy
+requires: a single `python3` interpreter cold start plus two constant-time
+regex searches over a short issue body, no full-repository scan, no
+network round-trip, no cache to warm because there is no repeated-state to
+cache between independent tool calls. There is no avoidable overhead of the
+kind this dimension names (no redundant clone, no synchronous network
+call, no quadratic pattern) to point to -- confirmed by direct reading of
+both files (quoted above), not accepted from either script's own header
+comment, per this dimension's own verification-mandate clause. Applying
+this dimension's own guard: no correctness tradeoff is on the table either
+way, since there is nothing here worth trading away for speed.
 
 ## Audit history: Security-level axis hardening round
 
