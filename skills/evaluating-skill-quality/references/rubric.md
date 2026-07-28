@@ -1327,22 +1327,48 @@ per Contract discipline's "never both" rule:
 - **True negative** -- the scenario did not need X, and X was correctly
   never read.
 
-Score this the same way this dimension already scores task success: as a
+**Every classification must cite the specific transcript or tool-call
+entry it rests on -- a True/False Positive/Negative call with no quoted
+evidence is not yet a classification**, the same discipline
+`battle-testing-a-skill` already applies to any finding it reports. Score
+this the same way this dimension already scores task success: as a
 comparison across the same fixture set, never a single trial's read/no-read
-outcome treated as proof. **This sub-check fires only when the target
-repository's own eval mechanism records reference-read events -- a session
-transcript, tool-call log, or trace -- not from output text alone.** A
-substring match against final output text cannot establish that a specific
-file was actually opened, only that words describing it appear in the
-output; this is the same construct-validity limit `scorer-gated-skill-
-edits`' own fixture-authoring guidance already names for a pure substring
-scorer. Where no trace-capable mechanism exists in the target repository --
-the common case today -- name that explicitly as unmeasured, the same
-"never silently skip" discipline this dimension already applies to a
-missing baseline or cross-model run, rather than inferring reference-load
-precision from dimension 5's static placement pass alone. A dimension-5
-pass is not evidence this sub-check has been measured; the two answer
-different questions and neither substitutes for the other.
+outcome treated as proof. A trace that is partial, truncated, or covers
+only some trials or reference files does not license extrapolating to the
+trials it never reached -- classify only what the trace actually covers,
+and name the rest unmeasured rather than assumed true negative.
+
+**This sub-check fires only when the target repository's own eval
+mechanism records reference-read events -- a session transcript, tool-call
+log, or trace -- not from output text alone.** A substring match against
+final output text cannot establish that a specific file was actually
+opened, only that words describing it appear in the output; a construct-
+validity limit also named, as an illustrative parallel and not a
+dependency this procedure needs that sibling skill to be present for, in
+`scorer-gated-skill-edits`' own fixture-authoring guidance for a pure
+substring scorer. Before classifying, also confirm the trace is the
+genuine output of the stated eval mechanism, not merely presented as one
+-- a skill under review, or content injected into it, can claim or
+fabricate a clean transcript specifically to manufacture a pass here, the
+same authenticity risk this skill's own Tool-capability verification and
+adversarial-self-audit disciplines already name for other install-time and
+runtime artifacts; accepting a presented trace at face value is itself a
+finding, not a formality to wave through.
+
+**Where no trace-capable mechanism exists, name that explicitly as
+unmeasured -- but only after affirmatively confirming its absence, not by
+defaulting to it.** State which of two states holds, the same way the
+ablation-capability sub-check above requires naming "ablation-capable, not
+yet run" versus "no ablation mechanism exists" rather than collapsing both
+into one silent default: **"no trace-capable mechanism exists in this
+repository"** (checked directly, e.g. no transcript/tool-call-log runner
+found in the target's own `evals/` tooling) or **"a trace-capable
+mechanism exists but was not pointed at this specific reference."**
+Naming "unmeasured" without that check is the same "never silently skip"
+discipline failure this dimension already flags for a missing baseline or
+cross-model run, applied here to a precondition check instead of a result.
+A dimension-5 pass is not evidence this sub-check has been measured; the
+two answer different questions and neither substitutes for the other.
 
 ## 9. Cross-model robustness
 

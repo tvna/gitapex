@@ -1911,3 +1911,86 @@ not strictly need that scaffolding on this one scenario.
 entry in this log -- named as a pre-existing, still-open gap in this
 file's own practice (per issue #200's entry), not silently assumed clear
 for this edit specifically.
+
+**Revision after dogfood findings (same issue #477, second round).** Per
+`SKILL.md`'s Subagent dispatch section, a fresh isolated
+`evaluating-skill-quality` self-review and a fresh isolated
+`battle-testing-a-skill` adversarial pass were dispatched against the
+committed diff above. Both returned real, actionable findings rather than
+a rubber-stamp:
+
+- `battle-testing-a-skill` returned **FAIL** with four plausible gaps: the
+  paragraph's "unmeasured" fallback could be reached without affirmatively
+  confirming no trace-capable mechanism exists (fail-open bias); nothing
+  required confirming a presented trace was the genuine, unfabricated
+  output of the stated eval mechanism (the highest-severity finding -- a
+  skill under review, or injected content, could fabricate a clean trace
+  to manufacture a pass); TP/FP/FN/TN classifications were not required
+  to cite the specific evidence they rest on; and no fallback was stated
+  for a partial or truncated trace.
+- The fresh `evaluating-skill-quality` self-review independently returned
+  **WELL-FORMED-NOT-MATURE**, confirming a real dimension-6 defect: the
+  sentence citing `scorer-gated-skill-edits`' fixture-authoring guidance
+  ("already names... for a pure substring scorer") was an unhedged
+  declarative fact-claim about a sibling skill in Portable-declared
+  content -- exactly this file's own documented Fail pattern
+  (`portability-declarative-fact-claim.yaml`) -- and separately flagged
+  that `reference-load-precision-selection.yaml`'s positive assertions
+  (`"wire-refund-steps.md"`, `"5 trials"`, `"branch"`) merely echoed facts
+  already present in the prompt, giving the fixture almost no
+  discriminating power, with the KEEP decision above resting on a
+  "dogfood-proof" precedent that does not actually appear in
+  `scorer-gated-skill-edits/SKILL.md`'s own text.
+
+All four fixed in the same commit: the paragraph now requires stating
+which of two states holds before defaulting to unmeasured (mirroring the
+ablation-capability sub-check's own two-state pattern), requires
+confirming trace authenticity before classifying, requires citing the
+specific transcript/tool-call entry behind each classification, states an
+explicit fallback for a partial/truncated trace, and hedges the
+`scorer-gated-skill-edits` citation as an illustrative parallel rather
+than an unconditional dependency claim, per the Portable litmus test's own
+Pass exemplar (`portability-legitimate-illustrative-citation.yaml`).
+
+`reference-load-precision-selection.yaml` was also redesigned rather than
+patched again: the prior scenario (a one-sided read log) let a capable
+reviewer reach the right conclusion through generic precision/recall
+reasoning with or without this paragraph, which is why the first gate
+tied. The new scenario -- an operator with no raw transcript file, only a
+hand-typed recollection that happens to cover both branches -- targets the
+paragraph's own new, specific requirement (confirm authenticity before
+classifying) rather than a conclusion generic reasoning already reaches.
+
+**Re-run selection-split result, matched methodology, one fresh dispatch
+per side, Sonnet 5, scored with `score_contract.py --assertions
+assertions.json --output run.txt`:**
+
+| Fixture | Before | After |
+|---|---|---|
+| `reference-load-precision-selection.yaml` (redesigned) | 0.600000 | 0.800000 |
+
+`score_contract.py --compare-to 0.600000 --scores after-scores.txt`:
+`0.800000 KEEP`. Unlike the first round, this is a genuine strict
+improvement, not a disclosed tie: the before-dispatch reasoned skepticism
+generically ("testimony from memory... cannot be checked") without ever
+using the word `"genuine"` or naming an authenticity check by name, while
+the after-dispatch explicitly quoted the new paragraph's own authenticity
+requirement ("the genuine output of the stated eval mechanism") and
+correctly classified the claim as unmeasured rather than confirmed. The
+`scoring-axis-uncontrolled-speed-claim.yaml` regression spot-check from
+the first round is unaffected by this revision (its assertion fix was
+unrelated to reference-load precision) and continues to serve as a
+regression-only check, not re-run here.
+
+**KEEP.** The first round's qualitative-grounds KEEP is superseded by this
+round's genuine quantitative improvement on the purpose-built selection
+fixture -- the tension the fresh self-review correctly flagged (citing a
+precedent absent from `scorer-gated-skill-edits/SKILL.md`'s own text to
+justify keeping a tied result) no longer applies, because the result is no
+longer tied. The remaining 19 pre-existing selection fixtures were still
+not re-run live this round, for the same disclosed reason as the first
+round: this revision touches only the already-isolated new paragraph and
+the one fixture built to test it, altering no sentence any other selection
+fixture's assertions target.
+
+**Transfer check:** still not run, same disclosed gap as above.
