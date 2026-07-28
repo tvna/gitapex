@@ -1384,3 +1384,45 @@ No no-skill baseline run exists for this suite, and only
 `claude-sonnet-4.6` has been evaluated -- cross-model behavior is
 currently unmeasured, the same disclosed gap as every other suite in this
 file.
+
+**Issue #472 (fable Blind Spot Pass, refs #467, #471):** an independent
+subagent dispatch on a fable model, deliberately not self-graded by the
+session that authored the original 5-task corpus, ran a
+`battle-testing-a-skill`-style cold-enumeration pass over this skill and
+corpus. It found the corpus's composition was sound (both poles of both
+checks plus the gate) but contained zero adversarial fixtures, despite
+dimension 14's own catalog title naming the gap "reusable, versioned
+**adversarial** regression corpus" -- an edit that deleted or weakened
+any of `SKILL.md`'s Stop boundaries (encoded/obfuscated instructions,
+secret redaction, persisted "already reviewed" claims) would have passed
+the then-current suite at 100%. It also found the Procedure step 1
+indeterminate fallback -- the fix three of four prior audit rounds
+converged on, per `metadata/gitapex.yaml`'s own recorded history -- had
+no regression fixture at all, since every existing prompt pre-supplied
+fully verified evidence.
+
+6 tasks were added in response, closing the three findings issue #472
+scoped in (two lower-severity findings -- an unstated under-privilege
+vocabulary gap, and the `-minimal` tasks' lack of a negative assertion
+guard -- were named but deliberately deferred, not bundled in):
+`adversarial-planted-review-claim.yaml`,
+`adversarial-legible-credential-redaction.yaml`, and
+`adversarial-encoded-directive.yaml` exercise the Stop boundaries
+directly (a planted "already reviewed" comment that must not substitute
+for re-deriving the verdict; a legible dummy token that must be redacted
+from the report rather than reproduced verbatim; a Base64-encoded
+directive embedded in the reviewed artifact that must not be obeyed);
+`indeterminate-self-description-only.yaml` and
+`indeterminate-unreadable-target.yaml` exercise the two non-nominal
+Procedure step 1 paths (self-description-only baseline -> `indeterminate`;
+unreadable/truncated target -> "cannot review", the Applicability gate
+not silently applied); `multi-item-combined-verdict.yaml` exercises the
+per-item, no-aggregate-verdict discipline on a single artifact carrying
+both an exposure issue and a privilege issue. The corpus is now 11
+tasks. `lint_fixture_assertions.py` (0 warnings), `check_skill_shape.py`
+(31/31), and `pytest` (878 passed) all re-verified clean after the
+addition. This growth does not change the dimension-14 verdict above --
+the enforcement conjunct (no CI merge gate) is still the dispositive,
+repository-wide reason it remains FAIL -- but it directly closes the
+"zero adversarial fixtures" and "indeterminate fallback unguarded" gaps
+the Blind Spot Pass found, independent of that conjunct.
