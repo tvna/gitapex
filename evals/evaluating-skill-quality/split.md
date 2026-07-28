@@ -2088,3 +2088,61 @@ review comments, all substantive:
   AGENTS.md's own live-proof discipline ("waive the live check only on
   the owner's explicit, recorded approval") means this session does not
   unilaterally decide to accept the proxy as sufficient.
+
+**Expanded regression sweep (operator-directed, PR #481 follow-up).** Per
+the operator's explicit choice to expand coverage within this session's
+own capability (Task-tool subagent dispatches on Sonnet 5, since
+`copilot-sdk`/`claude-sonnet-4.6` remain unreachable here), live
+before/after dispatches were run against the remaining pre-existing
+selection fixtures beyond the two already covered above.
+
+**Result: 13 of 19 remaining selection fixtures got a complete live
+before/after pair** (`edge.yaml`, `mechanism-fit-subagent.yaml`,
+`third-party-not-authoritative.yaml`,
+`ordering-rule-totality-distinct-skill.yaml`,
+`blind-spot-pass-generalizes.yaml`,
+`model-effort-tier-fit-unjustified-effort.yaml`,
+`heldout-vague-completion.yaml`,
+`capability-assumption-frontier-flags-explanation.yaml`,
+`ablation-capability-runner-exists-not-run.yaml`,
+`tool-capability-verification-selection.yaml`,
+`consumer-repo-convention-deference-selection.yaml`,
+`portability-issue-number-citation.yaml`,
+`cohesion-temporal-grouping-selection.yaml`). Every one ties or improves;
+**no regression found** -- consistent with this addition being a pure
+text append after dimension 8's existing content, touching no sentence
+any of these fixtures assert on. One fixture surfaced a genuine, disclosed
+side effect rather than a regression: `ablation-capability-runner-exists-
+not-run.yaml`'s after-dispatch independently fact-checked the fixture's
+own embedded claim ("the repository ships `battle/run_battle.py`...")
+against this actual repository, found no such file exists, and correctly
+returned "no ablation mechanism exists" instead of the fixture's scripted
+"ablation-capable, not yet run" -- a plausible spillover from the new
+paragraph's own "don't accept a presented claim at face value" framing,
+generalizing beyond reference-load evidence specifically. Not scored as a
+fixture failure; noted as an interesting, unprompted generalization.
+
+**6 of 19 did not get a complete pair**, hitting this environment's
+20-concurrent-subagent dispatch cap mid-batch (`compatibility-devin-
+trigger-selection.yaml`, `compatibility-openclaw-gate-selection.yaml`,
+`compatibility-independent-blocker-selection.yaml`,
+`compatibility-conflicting-allowed-tools-semantics-selection.yaml`,
+`compatibility-documentation-silence-unknown-selection.yaml`,
+`compatibility-undeclared-runtime-extension-selection.yaml`) -- each
+either has only one side of the pair, or neither. Per the platform's own
+"Do NOT retry" instruction on that specific error, these were not
+redispatched; disclosed here as genuinely not covered rather than silently
+assumed clear. All six are `compatibility-*` fixtures whose assertions
+target `references/runtime-compatibility.md` content this change does not
+touch, so the same assertion-surface-disjointness reasoning applies, but
+that reasoning was not backed by a live re-run for these six the way it
+was for the 13 above.
+
+**Net assessment.** Combined with the two purpose-built fixtures already
+gated above (0.8 -&gt; 1.0 strict improvement) and this expanded sweep (13/19
+ties-or-improvements, 0 regressions, 6/19 not reached), the live evidence
+for this change is substantially broader than the first two rounds
+recorded, though still short of full 21/21 coverage and still short of
+the actually-configured `copilot-sdk`/`claude-sonnet-4.6` harness. Both
+residual gaps are disclosed, not hidden, per this session's PR #481
+review-comment replies to `chatgpt-codex-connector[bot]`.
