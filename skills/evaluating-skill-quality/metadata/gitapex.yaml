@@ -93,6 +93,22 @@ spec:
     - kind: deferral
       anchor: "https://github.com/tvna/gitapex/issues/476 -> https://github.com/tvna/gitapex/issues/479"
       summary: "Filed a tangential, not-yet-independently-confirmed finding from that isolated dispatch -- this session's own TaskList state unexpectedly appearing in its context -- as a separate follow-up issue."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/479"
+      summary: "Reproduced the TaskList-leak finding by direct filesystem inspection: TaskCreate persists tasks as JSON under $HOME/.claude/tasks/<session-id>/, and a claude -p subprocess inherits the parent shell's $HOME by default, resolving the identical directory."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/479"
+      summary: "Three controlled trials, same CLAUDE.md-free scratch dir and ~15-tool-call workload: environment unchanged leaked the live task list; CLAUDE_CODE_SESSION_ID unset alone still leaked; CLAUDE_CODE_SESSION_ID unset plus HOME redirected to a wholesale-empty directory suppressed it."
+      outcome:
+        mechanism: HOME-directory-scoped
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/pull/489"
+      summary: "A Codex review caught that the wholesale-empty-HOME candidate above also discards this platform's own permissions.allow/hooks configuration -- dangerous for a dispatch reviewing untrusted content in headless mode. Corrected recipe: copy $HOME/.claude/ and $HOME/.claude.json, strip only tasks/ plus conversation-history dirs. Verified live: no leak, settings byte-identical, tool execution intact."
+      outcome:
+        verdict: fixed
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/pull/489"
+      summary: "Per Anthropic's Claude Opus 5 prompting guidance (self-correction: state corrections plainly, don't narrate slips that don't matter), trimmed change-history/self-correction narration from gitapex-worked-examples.md's dimension-19 example and this file's own Known-entries reconfirmation bullet; the trimmed detail is preserved in this sidecar instead."
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/477"
       summary: "Dimension 8 gained a reference-load-precision sub-check (TP/FP/FN/TN classification of whether a skill's references/*.md were actually read); confirmed no existing eval mechanism observes this, so it is written transcript-gated with an unmeasured-fallback default."

@@ -325,9 +325,8 @@ one `python3` cold start running `check_acm_present_or_waiver.py` (two
 scan beyond the sibling script's own existence check). That is the **allow
 path**: 1 `cat` + 3 `jq` processes + 1 `python3` process, 5 subprocess
 launches total (the `cat` in `input=$(cat)` at line 26 is itself an
-external-command fork, not a shell builtin -- omitting it from the total
-was this worked example's own earlier arithmetic error, caught by an
-isolated re-audit rather than left standing). The **deny path** (line 42's
+external-command fork, not a shell builtin, and is counted above). The
+**deny path** (line 42's
 body fails the Python check) launches one more: `deny()`'s own `jq -n`
 call at line 49, to build the `hookSpecificOutput` JSON written to stderr
 -- 1 `cat` + 4 `jq` processes + 1 `python3` process, 6 subprocess launches
@@ -386,8 +385,8 @@ five runs, including the slower first invocation) is roughly 150-260x
 under the registered 10s budget (dimension 6's own concern, not restated
 here) -- comfortably PASS on that axis. But this dimension asks a stricter
 question than "is it fast enough," and a strict read finds a real, if
-minor, instance of avoidable overhead this worked example's first draft
-missed: the three sequential `jq -r` calls on the allow path (and the
+minor, instance of avoidable overhead: the three sequential `jq -r` calls
+on the allow path (and the
 matching three plus a fourth on the deny path) each parse the *same*
 already-buffered `$input` string independently, forking a fresh `jq`
 process per field, when a single `jq -r` invocation extracting
@@ -401,18 +400,17 @@ before ever touching `body`, which a single upfront extraction would
 partly forfeit -- collapsing to one call is not risk-free by construction
 and would need to preserve the same early-exit behavior, not just be
 assumed cost-free. **Net assessment:** a genuine minor optimization
-opportunity exists and should not have been reported as absent, but its
-absolute impact (a small fraction of the measured ~40-65ms, itself
-~150-260x under budget) does not change this gate's overall placement
-verdict -- named as a low-priority finding, not a blocking one, per this
-dimension's own "grade only a change that holds ... behavior fixed while
-reducing its cost" guard, which cuts both ways: a real gap is still worth
-naming even when fixing it would not matter much, and a candidate fix is
-not free of risk just because the process savings are cheap to state.
-Every claim above is confirmed by direct reading of both files (quoted
-above) and by the live measurements, never accepted from either script's
-own header comment alone, per this dimension's own verification-mandate
-clause.
+opportunity exists; its absolute impact (a small fraction of the measured
+~40-65ms, itself ~150-260x under budget) does not change this gate's
+overall placement verdict -- named as a low-priority finding, not a
+blocking one, per this dimension's own "grade only a change that holds
+... behavior fixed while reducing its cost" guard, which cuts both ways:
+a real gap is still worth naming even when fixing it would not matter
+much, and a candidate fix is not free of risk just because the process
+savings are cheap to state. Every claim above is confirmed by direct
+reading of both files (quoted above) and by the live measurements, never
+accepted from either script's own header comment alone, per this
+dimension's own verification-mandate clause.
 
 ## Audit history: Security-level axis hardening round
 

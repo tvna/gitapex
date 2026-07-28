@@ -170,20 +170,47 @@ mechanism, not only the ones already recorded below.
 - **Reconfirmed 2026-07-28**: same identifying signals as above
   (`CLAUDE_CODE_REMOTE=true`, `CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=
   cloud_default`, `claude --version` again reported `2.1.220 (Claude
-  Code)`). Only the verified-alternative side was re-run live this round
-  (the `Agent`-tool failure above was not re-dispatched a third time --
-  it already carries two independent confirmations at this identical
-  version): the positive control, run from this repository's own root,
-  quoted real project-instruction content, confirming the mechanism still
-  detects it when present; the negative control, run from a working
+  Code)`). Positive control, run from this repository's own root, quoted
+  real project-instruction content; negative control, run from a working
   directory whose full parent chain was directly confirmed to contain no
   `CLAUDE.md`/`AGENTS.md`, reported none loaded. The verified alternative
-  still holds at this version. Independently re-confirmed a second time
-  the same day by a separate, concurrent session with identical results;
-  that session's own provenance and its one novel contribution (an
-  isolated re-audit of a real target skill that caught a residual bug)
-  are recorded in `metadata/gitapex.yaml` rather than duplicated here,
-  per this skill's own dimension-12 duplication discipline.
+  still holds at this version.
+- **Second leak vector, distinct from the `CLAUDE.md`/`AGENTS.md` finding
+  above.** The verified-alternative `claude -p` subprocess isolates
+  `CLAUDE.md`/`AGENTS.md` correctly (per the controls above), but does not
+  by itself isolate this harness's own task-tracking state: task items
+  created via `TaskCreate` persist as JSON files under
+  `$HOME/.claude/tasks/<session-id>/`, and a `claude -p` subprocess
+  spawned without overriding `$HOME` inherits the parent shell's `$HOME`
+  by default, so it resolves the *same* directory. Once a dispatched
+  subprocess accumulates enough tool calls without its own
+  `TaskCreate`/`TaskUpdate` call, this harness injects a "haven't used
+  task tools recently" nudge carrying the calling session's actual, live
+  task list as an unprompted `<system-reminder>` -- confirmed live, with a
+  task's status mid-dispatch matching its live status moments earlier,
+  ruling out a stale-cache explanation.
+  - **Mechanism confirmed**: `claude -p` leaks the calling session's real
+    task list both with the environment inherited unchanged and with only
+    `CLAUDE_CODE_SESSION_ID` unset -- that variable alone does not control
+    it; `$HOME` does.
+  - **Verified alternative**: copy the real `$HOME/.claude/` tree and
+    `$HOME/.claude.json` into a fresh directory, remove only its `tasks/`
+    subtree (recreated empty) and this harness's own conversation-history
+    directories (`.claude/projects`, `.claude/sessions`,
+    `.claude/shell-snapshots` on this platform), then dispatch with both
+    `CLAUDE_CODE_SESSION_ID` unset and `HOME` pointed at that copy.
+    Verified live: no task-list content leaked, the copied settings file
+    diffed byte-identical to the original (permission rules and hooks
+    intact), and the dispatched process successfully executed a real
+    script -- this recipe neither leaks nor disables the platform's own
+    permission/hook enforcement.
+  - **Scope**: bounded to a process sharing the exact `$HOME` directory,
+    not an account- or machine-wide leak -- but real by default, since a
+    plain `claude -p` subprocess inherits `$HOME` unless the caller
+    explicitly overrides it. The `CLAUDE.md`/`AGENTS.md`-only guarantee
+    above never needed any `HOME` change, only the cwd change; the
+    `HOME`-copy step is required only when a dispatch must also avoid this
+    second leak.
 
 ### Unlisted platform
 
