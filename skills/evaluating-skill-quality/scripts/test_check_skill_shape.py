@@ -2000,8 +2000,8 @@ def test_references_valid_list_is_well_formed(tmp_path):
         "  portability: Portable\n"
         "  capabilityAssumption: Broad\n"
         "  references:\n"
-        "    - \"gitapex#25\"\n"
-        "    - \"PR #29\"\n",
+        "    - \"https://github.com/tvna/gitapex/issues/25\"\n"
+        "    - \"https://github.com/tvna/gitapex/pull/29\"\n",
         encoding="utf-8")
     by = _by_name(css.check_shape(d))
     assert by["references-well-formed"].passed is True
@@ -2070,6 +2070,160 @@ def test_references_well_formed_fails_when_sidecar_unreadable(tmp_path):
     sidecar.write_bytes(b"\xff\xfe\x00\x01invalid")
     by = _by_name(css.check_shape(d))
     assert by["references-well-formed"].passed is False
+
+
+def test_references_entry_over_budget_fails_well_formed(tmp_path):
+    # issue #488: an unbounded spec.references entry is exactly the bloat
+    # this cap exists to force out of the sidecar and into references/*.md.
+    d = _write_skill(tmp_path)
+    oversized = "x" * (css.REFERENCES_ENTRY_MAX_CHARS + 1)
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  references:\n"
+        f"    - \"{oversized}\"\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["references-well-formed"].passed is False
+    assert "over 500 chars" in by["references-well-formed"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_references_entry_at_budget_passes_well_formed(tmp_path):
+    d = _write_skill(tmp_path)
+    at_budget = "x" * css.REFERENCES_ENTRY_MAX_CHARS
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  references:\n"
+        f"    - \"{at_budget}\"\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["references-well-formed"].passed is True
+    assert css.main([str(d)]) == 0
+
+
+def test_references_bare_citation_fails_no_bare_issue_citation(tmp_path):
+    # issue #488: metadata/gitapex.yaml used to be exempt from this scan --
+    # a bare citation here now fails the same way one in SKILL.md would.
+    d = _write_skill(tmp_path)
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  references:\n"
+        "    - \"gitapex#25 fixed this\"\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["no-bare-issue-citation"].passed is False
+    assert "spec.references:#25" in by["no-bare-issue-citation"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_references_full_url_citation_passes_no_bare_issue_citation(tmp_path):
+    # The only sanctioned way left to cite an issue from the sidecar: a
+    # full URL contains no bare "#N", so it never trips this scan.
+    d = _write_skill(tmp_path)
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  references:\n"
+        "    - \"https://github.com/tvna/gitapex/issues/25 fixed this\"\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["no-bare-issue-citation"].passed is True
+    assert by["references-well-formed"].passed is True
+    assert css.main([str(d)]) == 0
+
+
+def test_lifecycle_reason_over_budget_fails_well_formed(tmp_path):
+    d = _write_skill(tmp_path)
+    oversized = "x" * (css.REFERENCES_ENTRY_MAX_CHARS + 1)
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  lifecycle:\n"
+        "    experimental:\n"
+        f"      reason: {oversized}\n"
+        "      trackingIssue: \"https://github.com/tvna/gitapex/issues/123\"\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is False
+    assert "reason is" in by["lifecycle-well-formed"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_lifecycle_reason_bare_citation_fails_no_bare_issue_citation(tmp_path):
+    d = _write_skill(tmp_path)
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  lifecycle:\n"
+        "    experimental:\n"
+        "      reason: follows from gitapex#25\n"
+        "      trackingIssue: \"https://github.com/tvna/gitapex/issues/123\"\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["no-bare-issue-citation"].passed is False
+    assert ("spec.lifecycle.experimental.reason:#25"
+            in by["no-bare-issue-citation"].evidence)
+    assert css.main([str(d)]) == 1
+
+
+def test_lifecycle_tracking_issue_bare_number_fails_well_formed(tmp_path):
+    # issue #488: the old "#123"/"owner/repo#123" shape no longer
+    # validates -- only a full GitHub URL does.
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n"
+        "    experimental:\n"
+        "      reason: not yet proven\n"
+        "      trackingIssue: \"owner/repo#123\"\n")
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is False
+    assert "trackingIssue" in by["lifecycle-well-formed"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_lifecycle_tracking_issue_pull_url_passes_well_formed(tmp_path):
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n"
+        "    experimental:\n"
+        "      reason: not yet proven\n"
+        "      trackingIssue: \"https://github.com/tvna/gitapex/pull/29\"\n")
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is True
+    assert css.main([str(d)]) == 0
 
 
 def test_manifest_parser_parses_spec_references_list():
@@ -2737,7 +2891,7 @@ def test_lifecycle_experimental_only_is_well_formed(tmp_path):
         "  lifecycle:\n"
         "    experimental:\n"
         "      reason: not yet proven\n"
-        "      trackingIssue: \"#123\"\n")
+        "      trackingIssue: \"https://github.com/tvna/gitapex/issues/123\"\n")
     by = _by_name(css.check_shape(d))
     assert by["lifecycle-well-formed"].passed is True
     assert "experimental" in by["lifecycle-well-formed"].evidence
@@ -2773,7 +2927,7 @@ def test_lifecycle_both_blocks_present_is_valid(tmp_path):
         "  lifecycle:\n"
         "    experimental:\n"
         "      reason: not yet proven\n"
-        "      trackingIssue: \"#123\"\n"
+        "      trackingIssue: \"https://github.com/tvna/gitapex/issues/123\"\n"
         "    deprecated:\n"
         "      reason: superseded\n"
         "      replacement: other-skill\n")
@@ -3027,7 +3181,7 @@ def test_lifecycle_experimental_and_stable_fails_compatible(tmp_path):
         "  lifecycle:\n"
         "    experimental:\n"
         "      reason: not yet proven\n"
-        "      trackingIssue: \"#123\"\n"
+        "      trackingIssue: \"https://github.com/tvna/gitapex/issues/123\"\n"
         "    stable:\n"
         "      since: \"2026-07-21\"\n")
     by = _by_name(css.check_shape(d))
@@ -3088,8 +3242,11 @@ def test_lifecycle_unquoted_tracking_issue_is_read_as_bare_comment(tmp_path):
     # Regression guard (adversarial review finding): an unquoted value
     # that is nothing but a comment (starts with "#") must read as
     # absent, not as the literal string -- real YAML treats
-    # "trackingIssue: #123" as trackingIssue: null, not "#123", even
-    # though "#123" happens to be this exact field's valid shape.
+    # "trackingIssue: #123" as trackingIssue: null, not "#123". (Bare
+    # "#123" is no longer this field's valid shape at all -- see issue
+    # #488 -- but the null-vs-literal-string distinction this regression
+    # guards against is unaffected by that: either way, an unquoted "#..."
+    # value must never be read as the literal string.)
     d = _write_lifecycle_sidecar(
         _write_skill(tmp_path),
         "  lifecycle:\n"
@@ -3102,10 +3259,13 @@ def test_lifecycle_unquoted_tracking_issue_is_read_as_bare_comment(tmp_path):
     assert css.main([str(d)]) == 1
 
 
-def test_lifecycle_quoted_tracking_issue_starting_with_hash_still_valid(tmp_path):
+def test_lifecycle_quoted_tracking_issue_bare_hash_fails_well_formed(tmp_path):
     # Companion to the bare-comment regression above: a QUOTED value
-    # starting with "#" is a real string in YAML, not a comment, and must
-    # still validate normally.
+    # starting with "#" is a real string in YAML, not a comment -- it
+    # reaches _valid_tracking_issue as the literal string "#123", not
+    # null. Unlike before issue #488, that no longer validates: a bare
+    # issue number is not a full https://github.com/tvna/gitapex/issues/<N>
+    # URL, so this must fail, not pass.
     d = _write_lifecycle_sidecar(
         _write_skill(tmp_path),
         "  lifecycle:\n"
@@ -3113,8 +3273,9 @@ def test_lifecycle_quoted_tracking_issue_starting_with_hash_still_valid(tmp_path
         "      reason: not yet proven\n"
         "      trackingIssue: \"#123\"\n")
     by = _by_name(css.check_shape(d))
-    assert by["lifecycle-well-formed"].passed is True
-    assert css.main([str(d)]) == 0
+    assert by["lifecycle-well-formed"].passed is False
+    assert "trackingIssue" in by["lifecycle-well-formed"].evidence
+    assert css.main([str(d)]) == 1
 
 
 def test_lifecycle_renamed_from_given_a_block_fails_well_formed(tmp_path):

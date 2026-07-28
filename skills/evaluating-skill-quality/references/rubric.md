@@ -620,9 +620,14 @@ specific paths or other repo-specific content. Sibling-skill names,
 repo-specific paths, and repo-specific conventions remain legitimate
 Mixed/Repository-scoped territory; a skill's own issue/PR provenance
 belongs in the `metadata/gitapex.yaml` sidecar's `spec.references` instead
-(maintainer-facing, never auto-loaded), not a bare number sitting in prose.
-The `no-bare-issue-citation` shape check enforces this unconditionally,
-while the two repo-path shape checks (`portable-no-repo-path-citation`,
+(maintainer-facing, never auto-loaded) -- but even there, only as a full
+`https://github.com/tvna/gitapex/issues/149`-style URL, never a bare
+number: the sidecar travels with its skill directory too, and a bare `#N`
+loses its meaning the same way once that happens. The
+`no-bare-issue-citation` shape check enforces this unconditionally across
+`SKILL.md`, `references/*.md`, and the sidecar's own `spec.references`/
+`lifecycle.experimental`/`deprecated.reason` text alike, while the two
+repo-path shape checks (`portable-no-repo-path-citation`,
 `portable-no-unhedged-inline-path-citation`) stay gated to Portable only.
 
 ## Compatibility awareness
@@ -855,14 +860,19 @@ Three independent, optional sub-blocks plus one plain scalar under
 
 - **`experimental`** -- the entry side: a skill not yet proven. `reason`
   and `trackingIssue` are required non-empty strings once this block is
-  declared at all; `since`, if present, must be a real calendar date in
-  strict `YYYY-MM-DD` shape. `trackingIssue` must be an anchored `#123`
-  or `owner/repo#123` reference (shape-only -- never resolved against a
-  live GitHub API call).
+  declared at all (`reason` <= 500 chars -- past that, move detail into
+  `references/*.md` and leave a short pointer); `since`, if present, must
+  be a real calendar date in strict `YYYY-MM-DD` shape. `trackingIssue`
+  must be a full `https://github.com/tvna/gitapex/issues/123` (or
+  `/pull/123`) URL, not a bare issue number -- a bare number loses its
+  meaning once this sidecar travels with its skill directory to another
+  repository (shape-only -- never resolved against a live GitHub API
+  call).
 - **`deprecated`** -- the exit side: a skill superseded by another or
   slated for removal. `reason` and `replacement` are required non-empty
-  strings once this block is declared at all. `replacement` must name an
-  existing sibling skill directory -- enforced by
+  strings once this block is declared at all (`reason` subject to the
+  same 500-char cap as `experimental.reason` above). `replacement` must
+  name an existing sibling skill directory -- enforced by
   `lifecycle-deprecated-replacement-resolves`, the same
   dangling-reference gate `spec.skillDependencies.requires`/`relatedTo`
   already use. `since`/`removeAfter`, if present, must be real calendar

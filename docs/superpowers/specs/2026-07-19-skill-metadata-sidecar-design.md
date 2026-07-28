@@ -139,13 +139,25 @@ home. This supersedes the body-line placement described in
 - **`spec.references` (optional, gated by Sub-project C):** a list of
   primary-source / corroboration links, commit SHAs, PR numbers --
   maintainer-facing provenance. When present, must be a non-empty list of
-  non-empty strings (the `references-well-formed` check); when absent, no
-  finding. Populated for `battle-testing-a-skill`,
+  non-empty strings, each <= 500 characters (the `references-well-formed`
+  check -- tightened by issue #488 after several entries grew to
+  thousands of characters; detail past that budget moves into that
+  skill's own `references/*.md`, left pointed at by a short prose
+  mention); when absent, no finding. Populated for `battle-testing-a-skill`,
   `establishing-ubiquitous-language`, `scorer-gated-skill-edits`, and
   `evaluating-skill-quality` -- the four skills `docs/skill-provenance.md`
   covered before Sub-project C retired that central file in favor of this
   per-skill field. The gate is deliberately narrow: only this one field's
-  list shape is parsed; no other nested/list field gained a parser.
+  list shape is parsed; no other nested/list field gained a parser -- the
+  length/citation-format tightening above is a value-level constraint on
+  that same flat `list[str]` shape, not a parser change. Issue #488 also
+  removed the sidecar's prior exemption from the `no-bare-issue-citation`
+  check: a `spec.references` entry (and `spec.lifecycle.experimental`/
+  `deprecated.reason`) may only cite an issue/PR via a full
+  `https://github.com/tvna/gitapex/issues/<N>` (or `/pull/<N>`) URL, never
+  a bare `#N`/`owner/repo#N` -- a bare number loses its meaning once the
+  sidecar travels with its skill directory to another repository, unlike
+  a full URL.
 - **`spec.skillDependencies` (optional, gated by Sub-project D -- see
   section 4.6):** the inter-skill dependency graph, split by strength:
 
@@ -192,7 +204,8 @@ home. This supersedes the body-line placement described in
   addition) is still skipped, not parsed -- this is not a general
   arbitrary-YAML reader. Full arbitrary YAML is neither produced nor
   required.
-- **Example** (`skills/evaluating-skill-quality/metadata/gitapex.yaml`):
+- **Example** (`skills/evaluating-skill-quality/metadata/gitapex.yaml`,
+  post-issue-#488 shape):
 
   ```yaml
   apiVersion: gitapex.io/v1alpha1
@@ -203,7 +216,7 @@ home. This supersedes the body-line placement described in
     portability: Portable
     capabilityAssumption: Broad
     references:
-      - "For readers working in this repository (gitapex), the worked example in `skills/evaluating-skill-quality/references/worked-example-self-review.md` notes that this skill's own deterministic shape lane was delegated to `scripts/check_skill_shape.py`; that delegation was made in gitapex#32. This is provenance for maintainers of this specific repository, not something the worked example depends on."
+      - "This skill's own deterministic shape lane is delegated to scripts/check_skill_shape.py (https://github.com/tvna/gitapex/issues/32). Full history: references/gitapex-history.md."
   ```
 
 - **Behavior-neutrality invariant (hard requirement / stop boundary):**

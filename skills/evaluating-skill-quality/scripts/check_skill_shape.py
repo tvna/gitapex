@@ -201,18 +201,24 @@ Checks (the canonical list -- the manual fallback is to apply these):
     Mixed, and Repository-scoped alike, unlike the two repo-path checks
     below. A bare #N auto-links relative to whichever repository
     currently hosts the file and silently resolves to the wrong issue
-    once the skill is vendored or simply read out of context, and that
-    risk does not depend on the skill's declared portability: a Mixed or
-    Repository-scoped skill's own issue/PR provenance belongs in the
-    metadata sidecar's spec.references instead (maintainer-facing, never
-    auto-loaded), not a bare number sitting in prose. Other repo-specific
-    content -- sibling-skill names, repo-specific paths/conventions --
-    remains legitimate Mixed/Repository-scoped territory; this rule is
-    narrowly about issue/PR numbers. Matches inside inline code (`#149`),
-    fenced code blocks, absolute URLs, and Markdown links are excluded from
-    THIS bare-prose scan -- those are the established ways this repo's
-    skills quote such a token illustratively without it resolving live.
-    Inline code is not unconditionally safe, though: for Portable-declared
+    once the skill is vendored or simply read out of context. This scan
+    also covers the metadata sidecar's own spec.references entries and
+    lifecycle.experimental/deprecated.reason text (issue #488) -- the
+    sidecar used to be the sanctioned, exempted home for exactly this bare
+    shape, on the theory that it was maintainer-facing and never
+    auto-loaded, but a bare number there loses its meaning the same way
+    once the sidecar travels with its skill directory to another
+    repository. A full ``https://github.com/tvna/gitapex/issues/149``-style
+    URL contains no bare ``#N`` and so is never flagged by this scan --
+    that is the only sanctioned way left to cite an issue from the
+    sidecar. Other repo-specific content -- sibling-skill names,
+    repo-specific paths/conventions -- remains legitimate
+    Mixed/Repository-scoped territory; this rule is narrowly about
+    issue/PR numbers. Matches inside inline code (`#149`), fenced code
+    blocks, absolute URLs, and Markdown links are excluded from THIS
+    bare-prose scan -- those are the established ways this repo's skills
+    quote such a token illustratively without it resolving live. Inline
+    code is not unconditionally safe, though: for Portable-declared
     content specifically, the separate check below (issue #263) re-inspects
     exactly the inline-code spans this scan skips.
   - Portable self-citation, repo-path half (only when the skill declares
@@ -327,6 +333,14 @@ from pathlib import Path
 # tighter cap to stay valid on both surfaces.
 DESCRIPTION_MAX_CHARS = 1024
 NAME_MAX_CHARS = 64
+# Cap on a single spec.references entry (and spec.lifecycle.experimental/
+# deprecated.reason) in metadata/gitapex.yaml -- these free-text fields had
+# no length limit and several grew to thousands of characters, mixing an
+# issue citation, a decision rationale, and a full audit changelog into one
+# string. Forces detail past this budget out into that skill's own
+# references/*.md, which has real Markdown structure (headings, sections)
+# a YAML string scalar does not.
+REFERENCES_ENTRY_MAX_CHARS = 500
 # "Keep SKILL.md body under 500 lines for optimal performance" (same doc;
 # also code.claude.com/docs/en/skills).
 BODY_MAX_LINES = 500
@@ -469,13 +483,18 @@ LIFECYCLE_SCALAR_KEYS = ("renamedFrom",)
 # lenient ISO-variant parsing in Python 3.11+ never gets a chance to
 # accept an off-shape string.
 LIFECYCLE_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-# A GitHub issue/PR reference anchoring the whole string (unlike
-# ISSUE_CITATION_RE above, which scans for the same shape inside running
-# prose): an optional "owner/repo" prefix, then "#" and a digit run.
-# Shape-only -- never resolved against a live GitHub API call, since this
-# checker is offline/read-only by design.
+# A full GitHub issue/PR URL anchoring the whole string: this repository's
+# own host only (metadata/gitapex.yaml is maintainer-facing provenance for
+# THIS repository, never something a portable skill body depends on), an
+# "issues" or "pull" segment, then a digit run. Deliberately a full URL, not
+# the bare "#123"/"owner/repo#123" shape this field used to require: a bare
+# issue number means nothing once this sidecar travels with its skill
+# directory to another repository (e.g. plugin vendoring); a full URL still
+# resolves to the right place wherever it lands. Shape-only -- never
+# resolved against a live GitHub API call, since this checker is
+# offline/read-only by design.
 LIFECYCLE_ISSUE_REF_RE = re.compile(
-    r"^(?:[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*)?#\d+$")
+    r"^https://github\.com/tvna/gitapex/(?:issues|pull)/\d+$")
 
 # A YAML mapping key at a given indent, however it was written: a bare
 # scalar key (any run of characters up to the first unquoted ":" that
@@ -2339,6 +2358,12 @@ def check_shape(target: Path) -> list[CheckResult]:
     skill_md = _resolve_skill_md(target)
     skill_dir = skill_md.parent
     results: list[CheckResult] = []
+    # Populated below, only when the sidecar parses with spec.references
+    # and/or spec.lifecycle.experimental/deprecated.reason present -- fed
+    # into _issue_citation_checks so the bare-issue-citation ban covers the
+    # sidecar's own free text too (issue #488), not just SKILL.md/
+    # references/*.md.
+    sidecar_citation_sources: list[tuple[str, str]] = []
 
     text = skill_md.read_text(encoding="utf-8")
     frontmatter = _parse_frontmatter(text)
@@ -2529,6 +2554,10 @@ def check_shape(target: Path) -> list[CheckResult]:
                 f"spec.capabilityAssumption is one of {CAPABILITY_ASSUMPTIONS}",
                 repr(capability)))
             references = spec.get("references")
+            references_well_formed_rule = (
+                "spec.references, if present, is a non-empty list of "
+                f"non-empty strings, each <= {REFERENCES_ENTRY_MAX_CHARS} "
+                "chars")
             if not spec_is_mapping:
                 # spec itself failed to parse as a mapping (e.g. "spec:
                 # some-scalar"), the same precondition failure
@@ -2536,8 +2565,7 @@ def check_shape(target: Path) -> list[CheckResult]:
                 # already report above -- "not declared" would misreport
                 # this as the ordinary optional-and-absent case.
                 results.append(CheckResult(
-                    "references-well-formed", False,
-                    "spec.references, if present, is a non-empty list of non-empty strings",
+                    "references-well-formed", False, references_well_formed_rule,
                     f"spec is not a mapping: {spec_raw!r}"))
             elif malformed_reference_items:
                 # A mapping-shaped or inconsistently-indented list item was
@@ -2547,30 +2575,50 @@ def check_shape(target: Path) -> list[CheckResult]:
                 # a clean list of strings.
                 count = len(malformed_reference_items)
                 results.append(CheckResult(
-                    "references-well-formed", False,
-                    "spec.references, if present, is a non-empty list of non-empty strings",
+                    "references-well-formed", False, references_well_formed_rule,
                     f"{count} malformed entr{'y' if count == 1 else 'ies'}: "
                     f"{malformed_reference_items[0]!r}"))
             elif references is None:
                 results.append(CheckResult(
-                    "references-well-formed", True,
-                    "spec.references, if present, is a non-empty list of non-empty strings",
+                    "references-well-formed", True, references_well_formed_rule,
                     "not declared (optional)"))
-            elif (isinstance(references, list) and references
-                  and all(isinstance(r, str) and r.strip() for r in references)):
-                ref_count = len(references)
-                ref_noun = "entry" if ref_count == 1 else "entries"
-                results.append(CheckResult(
-                    "references-well-formed", True,
-                    "spec.references, if present, is a non-empty list of non-empty strings",
-                    f"{ref_count} {ref_noun}"))
-            else:
+            elif not (isinstance(references, list) and references
+                      and all(isinstance(r, str) and r.strip() for r in references)):
                 ref_evidence = ("empty list" if references == []
                                 else f"not a list of non-empty strings: {references!r}")
                 results.append(CheckResult(
-                    "references-well-formed", False,
-                    "spec.references, if present, is a non-empty list of non-empty strings",
+                    "references-well-formed", False, references_well_formed_rule,
                     ref_evidence))
+            else:
+                oversized = [r for r in references
+                            if len(r) > REFERENCES_ENTRY_MAX_CHARS]
+                if oversized:
+                    results.append(CheckResult(
+                        "references-well-formed", False, references_well_formed_rule,
+                        f"{len(oversized)} entr{'y' if len(oversized) == 1 else 'ies'} "
+                        f"over {REFERENCES_ENTRY_MAX_CHARS} chars: "
+                        f"{len(oversized[0])} chars, starts "
+                        f"{oversized[0][:60]!r}"))
+                else:
+                    ref_count = len(references)
+                    ref_noun = "entry" if ref_count == 1 else "entries"
+                    results.append(CheckResult(
+                        "references-well-formed", True, references_well_formed_rule,
+                        f"{ref_count} {ref_noun}"))
+            if isinstance(references, list) and references:
+                sidecar_citation_sources.append((
+                    "metadata/gitapex.yaml:spec.references",
+                    "\n".join(r for r in references if isinstance(r, str))))
+            lifecycle_raw = spec.get("lifecycle") if spec_is_mapping else None
+            lifecycle_dict = lifecycle_raw if isinstance(lifecycle_raw, dict) else {}
+            for lifecycle_key in ("experimental", "deprecated"):
+                lifecycle_block = lifecycle_dict.get(lifecycle_key)
+                if isinstance(lifecycle_block, dict):
+                    reason_text = lifecycle_block.get("reason")
+                    if isinstance(reason_text, str) and reason_text:
+                        sidecar_citation_sources.append((
+                            f"metadata/gitapex.yaml:spec.lifecycle.{lifecycle_key}.reason",
+                            reason_text))
             results.extend(_skill_dependency_checks(
                 spec_is_mapping, spec_raw, spec,
                 malformed_skill_dependency_items, unknown_skill_dependency_keys,
@@ -2660,7 +2708,8 @@ def check_shape(target: Path) -> list[CheckResult]:
                 "all resolve" if not ref_broken_anchors
                 else "broken: " + ", ".join(ref_broken_anchors)))
 
-    results.extend(_issue_citation_checks(skill_md, skill_dir, body))
+    results.extend(_issue_citation_checks(
+        skill_md, skill_dir, body, extra_sources=sidecar_citation_sources))
     results.extend(_illustrative_model_id_checks(skill_md, skill_dir, body))
     results.extend(_raw_placeholder_checks(skill_md, skill_dir, body))
     if _is_portable(body, sidecar_portability):
@@ -2690,15 +2739,30 @@ def _citation_sources(skill_md: Path, skill_dir: Path,
 
 
 def _issue_citation_checks(skill_md: Path, skill_dir: Path,
-                           body: list[str]) -> list[CheckResult]:
-    """The bare GitHub issue/PR-number citation scan over SKILL.md body and
-    references/*.md (see the module docstring's issue #254 entry). Runs
+                           body: list[str],
+                           extra_sources: list[tuple[str, str]] | None = None
+                           ) -> list[CheckResult]:
+    """The bare GitHub issue/PR-number citation scan over SKILL.md body,
+    references/*.md, and (unlike every other check built on
+    ``_citation_sources``) the metadata/gitapex.yaml sidecar's own
+    spec.references entries and lifecycle.experimental/deprecated.reason
+    text, passed in via ``extra_sources``. The sidecar used to be exempt
+    from this scan -- a bare "#149" there was considered the sanctioned,
+    maintainer-facing home for an issue/PR citation the same rule forbids
+    everywhere else -- but a bare number loses its meaning the moment the
+    sidecar travels with its skill directory to another repository. A full
+    ``https://github.com/...`` URL contains no bare ``#N`` and so is never
+    flagged here -- that is what makes a full URL the only way left to cite
+    an issue from the sidecar, with no separate format regex needed. Runs
     unconditionally on every skill regardless of declared portability level
     -- unlike ``_portable_path_citation_checks`` below, the caller does not
     gate this one on ``_is_portable``.
     """
     issue_hits: list[str] = []
-    for label, source_text in _citation_sources(skill_md, skill_dir, body):
+    sources = _citation_sources(skill_md, skill_dir, body)
+    if extra_sources:
+        sources = sources + extra_sources
+    for label, source_text in sources:
         defenced = _blank_fenced_blocks(source_text)
         issues, _paths = _portable_citation_offenders(defenced)
         issue_hits += [f"{label}:{c}" for c in issues]
@@ -2971,9 +3035,10 @@ def _valid_lifecycle_date(value: object) -> bool:
 
 
 def _valid_tracking_issue(value: object) -> bool:
-    """Shape-only check for spec.lifecycle.experimental.trackingIssue: an
-    anchored ``#123`` or ``owner/repo#123``. Never resolved against a
-    live GitHub API call -- this checker is offline/read-only by design.
+    """Shape-only check for spec.lifecycle.experimental.trackingIssue: a
+    full ``https://github.com/tvna/gitapex/issues/123`` (or ``/pull/123``)
+    URL. Never resolved against a live GitHub API call -- this checker is
+    offline/read-only by design.
     """
     return isinstance(value, str) and bool(LIFECYCLE_ISSUE_REF_RE.match(value))
 
@@ -3014,8 +3079,10 @@ def _lifecycle_checks(spec_is_mapping: bool, spec_raw: object,
         "each -- if present -- a mapping of their own recognized scalar "
         "fields; renamedFrom, if present, is a non-empty scalar string. "
         "since/removeAfter, if present, must be real YYYY-MM-DD dates; "
-        "trackingIssue, if present, an anchored #123 or owner/repo#123 "
-        "reference; compatibilityGuarantee, if present, one of "
+        "reason, if present, is <= "
+        f"{REFERENCES_ENTRY_MAX_CHARS} chars; trackingIssue, if present, a "
+        "full https://github.com/tvna/gitapex/issues/<N> (or /pull/<N>) "
+        "URL; compatibilityGuarantee, if present, one of "
         f"{COMPATIBILITY_GUARANTEE_LEVELS}")
     resolve_rule = (
         "spec.lifecycle.deprecated.replacement, if a non-empty string, "
@@ -3087,11 +3154,17 @@ def _lifecycle_checks(spec_is_mapping: bool, spec_raw: object,
             if field in block and not _valid_lifecycle_date(block[field]):
                 problems.append(
                     f"{key}.{field} is not a YYYY-MM-DD date: {block[field]!r}")
+        reason_val = block.get("reason")
+        if isinstance(reason_val, str) and len(reason_val) > REFERENCES_ENTRY_MAX_CHARS:
+            problems.append(
+                f"{key}.reason is {len(reason_val)} chars, over the "
+                f"{REFERENCES_ENTRY_MAX_CHARS}-char limit")
         if key == "experimental" and "trackingIssue" in block \
                 and not _valid_tracking_issue(block["trackingIssue"]):
             problems.append(
-                f"experimental.trackingIssue is not a #123 or owner/repo#123 "
-                f"reference: {block['trackingIssue']!r}")
+                f"experimental.trackingIssue is not a full "
+                f"https://github.com/tvna/gitapex/issues/<N> (or /pull/<N>) "
+                f"URL: {block['trackingIssue']!r}")
         if key == "stable" and "compatibilityGuarantee" in block \
                 and block["compatibilityGuarantee"] not in COMPATIBILITY_GUARANTEE_LEVELS:
             problems.append(

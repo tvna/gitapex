@@ -294,7 +294,7 @@ spec:
   lifecycle:
     experimental:
       reason: why this skill is not yet proven
-      trackingIssue: "#123"      # tracks graduation to Stable
+      trackingIssue: "https://github.com/tvna/gitapex/issues/123"  # tracks graduation to Stable
       since: "2026-07-21"        # optional, YYYY-MM-DD
     deprecated:
       reason: why this skill is deprecated
@@ -307,11 +307,11 @@ spec:
     renamedFrom: old-skill-name  # optional, this skill's former directory name
 ```
 
-- **`experimental`**: `reason` and `trackingIssue` are required once this
-  block is present at all; `since` is optional. `trackingIssue` must be
-  an anchored `#123` or `owner/repo#123` reference.
-- **`deprecated`**: `reason` and `replacement` are required once this
-  block is present at all; `since`/`removeAfter` are optional.
+- **`experimental`**: `reason` (<= 500 chars) and `trackingIssue` (a full
+  `https://github.com/tvna/gitapex/issues/123` or `/pull/123` URL, not a
+  bare number) are required once this block is present at all; `since` is optional.
+- **`deprecated`**: `reason` (same cap) and `replacement` are required
+  once this block is present at all; `since`/`removeAfter` are optional.
   `replacement` must name an existing sibling skill directory (the
   `lifecycle-deprecated-replacement-resolves` shape check enforces this
   -- the same dangling-reference gate `spec.skillDependencies` uses).
