@@ -21,7 +21,8 @@ copied from the report's own text.
 3. [Worked example: dimension 12 and sibling-repository provenance](#worked-example-dimension-12-deployment-mode-portability-and-sibling-repository-provenance)
 4. [Smoke test: this skill applied to a real Domain-2 gate](#smoke-test-this-skill-applied-to-a-real-domain-2-gate)
 5. [Worked example: Security-level / Zero-Trust maturity classification axis](#worked-example-security-level--zero-trust-maturity-classification-axis-this-repositorys-own-established-ceiling)
-6. [Audit history: Security-level axis hardening round](#audit-history-security-level-axis-hardening-round)
+6. [Worked example: dimension 19 (runtime-cost optimization) applied to the same Domain-2 gate pair](#worked-example-dimension-19-runtime-cost-optimization-applied-to-the-same-domain-2-gate-pair)
+7. [Audit history: Security-level axis hardening round](#audit-history-security-level-axis-hardening-round)
 
 ## Worked example: Reproducibility / Domain-coverage axis (argued, multi-domain coverage)
 
@@ -305,6 +306,50 @@ exit-2 deny signal is used on the well-formed path) -- but a live-tested
 floor violation disqualifies a gate from any tier, it does not cap it at
 one. No Enterprise/Advanced-tier escalation exists or is claimed either
 way.
+
+## Worked example: dimension 19 (runtime-cost optimization) applied to the same Domain-2 gate pair
+
+Reuses -- does not re-derive -- the same smoke-test target already graded
+above: `hooks/check-issue-acm-disclosure.sh` + `hooks/check_acm_present_or_waiver.py`
+(Domain 2, registered in `hooks/hooks.json:26-32` under the
+`mcp__github__issue_write` matcher with a 10-second `timeout`). This is a
+live-measured pass, not an assumed one.
+
+**What the gate actually does per invocation:** one `cat` of stdin, three
+`jq -r` field extractions, and one `python3` cold start running
+`check_acm_present_or_waiver.py` (two `re.compile` calls, one `re.search`
+each, no network I/O, no filesystem scan beyond the sibling script's own
+existence check) -- confirmed by direct reading of both files, not assumed
+from their names.
+
+**Live measurement, three consecutive runs against a passing (waiver-line)
+synthetic `mcp__github__issue_write` payload**, run directly against the
+real script:
+
+```
+$ payload='{"tool_name":"mcp__github__issue_write","tool_input":{"method":"create","body":"ACM: not-applicable (docs): example"}}'
+$ time bash hooks/check-issue-acm-disclosure.sh <<< "$payload"
+run 1: real=0.063s user=0.043s sys=0.017s (exit=0)
+run 2: real=0.042s user=0.038s sys=0.006s (exit=0)
+run 3: real=0.039s user=0.029s sys=0.011s (exit=0)
+```
+
+A fourth run against a failing (no-ACM) body took the same path length
+(`real=0.062s`, `exit=2`) -- confirming the deny path pays the identical
+cost as the allow path, since both call through to the same Python
+cold-start regardless of outcome.
+
+**Verdict: PASS, no optimization gap found.** Measured cost (~40-65ms wall)
+is roughly 150-250x under the registered 10s budget (dimension 6's own
+concern, not restated here) and is already close to the floor for what the
+policy requires: a single `python3` interpreter cold start plus two
+constant-time regex searches over a short issue body, no full-repository
+scan, no network round-trip, no cache to warm because there is no
+repeated-state to cache between independent tool calls. There is no
+avoidable overhead of the kind this dimension names (no redundant clone, no
+synchronous network call, no quadratic pattern) to point to. Applying this
+dimension's own guard: no correctness tradeoff is on the table either way,
+since there is nothing here worth trading away for speed.
 
 ## Audit history: Security-level axis hardening round
 
