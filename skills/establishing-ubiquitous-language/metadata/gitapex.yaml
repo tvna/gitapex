@@ -6,7 +6,9 @@ spec:
   portability: Portable
   capabilityAssumption: Broad
   references:
-    - "For readers working in this repository (gitapex), the worked example in `skills/establishing-ubiquitous-language/references/worked-example.md` (owner vs. author vs. contributor) traces to: the document `docs/motivation.md`, the draft commit `241f4392`, and the rename commit `ef222b81` on pull request #2. This is provenance for maintainers of this specific repository, not something the worked example depends on."
+    - kind: caveat
+      anchor: "https://github.com/tvna/gitapex/pull/2"
+      summary: "worked example (owner vs. author vs. contributor) traces to docs/motivation.md, draft commit 241f4392, rename commit ef222b81"
   skillDependencies:
     requires: []
     relatedTo: []
