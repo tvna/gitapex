@@ -48,8 +48,12 @@ def _write_task(tmp_path, filename, **fields):
     if "description" in fields:
         lines.append(f"description: {fields['description']}")
     if "tags" in fields:
-        lines.append("tags:")
-        lines += [f"  - {t}" for t in fields["tags"]]
+        tags = fields["tags"]
+        if isinstance(tags, str):
+            lines.append(f"tags: {tags}")  # a bare scalar, not a list -- see below
+        else:
+            lines.append("tags:")
+            lines += [f"  - {t}" for t in tags]
     lines.append("inputs:")
     lines.append("  prompt: |")
     lines.append(f"    {fields.get('prompt', 'p')}")
@@ -91,6 +95,16 @@ def test_discover_axes_missing_file_is_empty_not_error(tmp_path):
     assert C.discover_axes(tmp_path / "nope.md") == {}
 
 
+def test_discover_axes_short_key_collision_is_first_match_wins(tmp_path):
+    text = (
+        "### Axis: Reproducibility / Domain-coverage\n\nFirst.\n\n"
+        "### Axis: Reproducibility / Something-else\n\nSecond.\n"
+    )
+    path = _write(tmp_path, "SKILL.md", text)
+    axes = C.discover_axes(path)
+    assert axes == {"Reproducibility": "Reproducibility / Domain-coverage"}
+
+
 # ---- discover_citations ----
 
 def test_discover_citations_finds_dimension_in_prompt_not_only_description(tmp_path):
@@ -124,6 +138,65 @@ def test_discover_citations_axis_short_key_case_insensitive(tmp_path):
     assert axis_hits == {"Compatibility awareness": ["a.yaml"]}
 
 
+def test_discover_citations_axis_short_key_is_word_bounded(tmp_path):
+    # "compatibility awareness" must not match as a bare substring of
+    # "incompatibility awareness" -- an unrelated phrase that happens to
+    # contain it.
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    _write_task(tasks, "a.yaml", description="this hook has an incompatibility awareness gap")
+    _, axis_hits = C.discover_citations(
+        str(tasks / "*.yaml"), {}, {"Compatibility awareness": "Compatibility awareness"}
+    )
+    assert axis_hits == {}
+
+
+def test_discover_citations_dimension_plural_and_list_form(tmp_path):
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    _write_task(tasks, "a.yaml", description="this exercises dimensions 9, 11, and 12 together")
+    dims = {"9": "x", "11": "y", "12": "z", "13": "w"}
+    dim_hits, _ = C.discover_citations(str(tasks / "*.yaml"), dims, {})
+    assert set(dim_hits) == {"9", "11", "12"}
+    assert "13" not in dim_hits
+
+
+def test_discover_citations_dimension_hyphenated_form(tmp_path):
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    _write_task(tasks, "a.yaml", description="see dimension-9 for detail")
+    dims = {"9": "x"}
+    dim_hits, _ = C.discover_citations(str(tasks / "*.yaml"), dims, {})
+    assert dim_hits == {"9": ["a.yaml"]}
+
+
+def test_discover_citations_dimension_number_stops_at_sentence_end(tmp_path):
+    # A number belonging to a later, unrelated sentence must not be
+    # attributed to an earlier "dimension" mention just because it falls
+    # within the raw character window.
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    _write_task(
+        tasks, "a.yaml",
+        description="this exercises dimension 9. Unrelated -- see issue 12 for context.",
+    )
+    dims = {"9": "x", "12": "y"}
+    dim_hits, _ = C.discover_citations(str(tasks / "*.yaml"), dims, {})
+    assert dim_hits == {"9": ["a.yaml"]}
+
+
+def test_discover_citations_scalar_tags_not_char_iterated(tmp_path):
+    # "tags: reproducibility" (a bare scalar, not a "- item" list) must be
+    # treated as one tag, not iterated character-by-character.
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    _write_task(tasks, "a.yaml", description="unrelated", tags="reproducibility")
+    _, axis_hits = C.discover_citations(
+        str(tasks / "*.yaml"), {}, {"Reproducibility": "Reproducibility / Domain-coverage"}
+    )
+    assert axis_hits == {"Reproducibility": ["a.yaml"]}
+
+
 # ---- compute_coverage / CoverageReport ----
 
 def test_compute_coverage_uncovered_lists_are_sorted_numerically(tmp_path):
@@ -141,6 +214,58 @@ def test_compute_coverage_uncovered_lists_are_sorted_numerically(tmp_path):
 
 
 # ---- integration: the real corpus ----
+
+# ---- format_report / main (CLI surface) ----
+
+def _skill_dir(tmp_path, dimensions_md, skill_md):
+    skill_dir = tmp_path / "skill"
+    (skill_dir / "references").mkdir(parents=True)
+    _write(skill_dir / "references", "dimensions.md", dimensions_md)
+    _write(skill_dir, "SKILL.md", skill_md)
+    return skill_dir
+
+
+def test_format_report_lists_covered_and_uncovered(tmp_path):
+    skill_dir = _skill_dir(
+        tmp_path, "1. **A.**\n2. **B.**\n",
+        "# skill\n\n### Axis: Reproducibility / Domain-coverage\n\n### Axis: Blast-radius\n",
+    )
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    _write_task(tasks, "a.yaml", description="dimension 1, exercises the Reproducibility axis")
+
+    report = C.compute_coverage(skill_dir, str(tasks / "*.yaml"))
+    text = C.format_report(report)
+    assert "Dimensions: 1/2 cited" in text
+    assert "covered by a.yaml" in text
+    assert "UNCOVERED" in text
+    assert "Uncovered dimensions: 2" in text
+    assert "Axes: 1/2 cited" in text
+    assert "Uncovered axes: Blast-radius" in text
+
+
+def test_main_prints_report_and_exits_zero(tmp_path, capsys):
+    skill_dir = _skill_dir(tmp_path, "1. **A.**\n", "# skill\n")
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    _write_task(tasks, "a.yaml", description="dimension 1")
+
+    rc = C.main(["--skill-dir", str(skill_dir), "--tasks-glob", str(tasks / "*.yaml")])
+    assert rc == 0
+    assert "Dimensions: 1/1 cited" in capsys.readouterr().out
+
+
+def test_main_reports_error_and_exits_two_on_malformed_fixture_shape(tmp_path):
+    # A task file that parses to a non-mapping top level (a bare scalar
+    # string here) must not crash main() with an uncaught AttributeError.
+    skill_dir = _skill_dir(tmp_path, "1. **A.**\n", "# skill\n")
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    (tasks / "bad.yaml").write_text("just a scalar string\n", encoding="utf-8")
+
+    rc = C.main(["--skill-dir", str(skill_dir), "--tasks-glob", str(tasks / "*.yaml")])
+    assert rc == 2
+
 
 def test_real_corpus_coverage_matches_expected_snapshot():
     skill_dir = REPO_ROOT / "skills" / "evaluating-deterministic-gate-quality"
