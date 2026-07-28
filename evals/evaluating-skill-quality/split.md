@@ -11,14 +11,15 @@ block deterministically.
 
 ## Corpus size and the 2:1:7 caveat
 
-SkillOpt's default split ratio is 2:1:7. At 50 fixtures that ratio gives a
+SkillOpt's default split ratio is 2:1:7. At 52 fixtures that ratio gives a
 selection split of roughly five tasks, too thin to gate a strict
 improve-or-reject decision because five observations provide little ability
 to average out run-to-run variance. Following the precedent already set in
 `skills/scorer-gated-skill-edits/references/worked-example.md` ("the ratio is
 aspirational" for a small fixture count), this split combines the 17:14:9
-base-plus-cohesion partition with a scoped 2:6:2 compatibility addition, for
-a resulting 19:20:11 partition. This is named explicitly as a deviation from
+base-plus-cohesion partition with a scoped 2:6:2 compatibility addition and a
+1:1:0 reference-load-precision addition (gitapex#477), for a resulting
+20:21:11 partition. This is named explicitly as a deviation from
 the 2:1:7 default. The
 honest minimal groundwork, per that same worked example, is a larger
 fixture corpus over time, not a smaller gate.
@@ -39,7 +40,8 @@ fixture corpus over time, not a smaller gate.
   `consumer-repo-convention-deference-train.yaml`,
   `compatibility-claude-fork-train.yaml`,
   `compatibility-hermes-platform-train.yaml`,
-  `cohesion-independently-changeable-branches-train.yaml`.
+  `cohesion-independently-changeable-branches-train.yaml`,
+  `reference-load-precision-train.yaml`.
 - **selection** (gates acceptance; scored before/after a candidate edit,
   strict improve-or-reject, ties rejected): `edge.yaml`,
   `mechanism-fit-subagent.yaml`, `third-party-not-authoritative.yaml`,
@@ -58,7 +60,8 @@ fixture corpus over time, not a smaller gate.
   `compatibility-conflicting-allowed-tools-semantics-selection.yaml`,
   `compatibility-documentation-silence-unknown-selection.yaml`,
   `compatibility-undeclared-runtime-extension-selection.yaml`,
-  `cohesion-temporal-grouping-selection.yaml`.
+  `cohesion-temporal-grouping-selection.yaml`,
+  `reference-load-precision-selection.yaml`.
 - **test** (read once, for a final report only, never to motivate or gate
   an edit): `guardrail.yaml`, `no-fabricated-violation.yaml`,
   `portability-classification.yaml`, `blind-spot-pass-not-silent.yaml`,
@@ -1794,3 +1797,440 @@ fixture built to test the new check (a different cohesion sub-type, not
 memorized wording), and a restraint result corroborated by two other
 fixtures' independent, unprompted after-dispatch findings rather than by
 the purpose-built restraint fixture alone.
+
+**Iteration: issue #477, Reference-load precision (dimension 8 sub-check).**
+Candidate edit: add a new bold-lead-in paragraph to `references/rubric.md`
+dimension 8 defining a True Positive/False Positive/False Negative/True
+Negative classification for whether a skill's `references/*.md` files are
+actually read on the branch dimension 5 already marked as needing them,
+fired only when the target repository's own eval mechanism records
+reference-read events, defaulting to "unmeasured" otherwise. Full text:
+see this PR's diff. Confirmed before writing it, by direct inspection of
+`scorer-gated-skill-edits/scripts/score_contract.py`,
+`evals/evaluating-skill-quality/eval.yaml`, and `docs/skill-eval-status.md`,
+that no mechanism in this repository's own eval stack observes which
+reference file a trial actually reads -- every existing scorer works from
+final output text only, which is exactly why the new paragraph is written
+transcript-gated rather than assumed always-applicable.
+
+Precondition and splits: satisfied (52 fixtures, 20:21:11 with this
+iteration's additions -- see Assignment above).
+
+**Live gate, matched methodology, fresh dispatch per side, scored with
+`scripts/score_contract.py`:**
+
+| Fixture | Model | Before | After |
+|---|---|---|---|
+| `reference-load-precision-selection.yaml` | Sonnet 5 | 1.000000 | 1.000000 |
+| `reference-load-precision-selection.yaml` | Haiku 4.5 | 1.000000 | 1.000000 |
+| `scoring-axis-uncontrolled-speed-claim.yaml` (regression spot-check) | Sonnet 5 | 0.857143 | 1.000000 |
+
+**Two real fixture-authoring bugs found and fixed during this gate, the
+same class PR #150 caught for issue #149's iteration:**
+
+1. `reference-load-precision-selection.yaml`'s original `output_contains`
+   included `"True negative"`. Every live dispatch (both before and after,
+   both model tiers) that correctly identified the missing check phrased
+   it as `"True Negative"` (title-cased second word, paired with `"False
+   Positive"`) or avoided the term entirely -- a case-sensitivity mismatch
+   against this rubric's own bullet casing (`**True negative**`), the same
+   bug class the `case-sensitivity` lint rule exists to catch, except here
+   the mismatch was against live model phrasing rather than a rubric
+   anchor the linter can see. Also, `"standard payment API"` was
+   unreliable at Haiku tier (Haiku's terser reviews did not always quote
+   the prompt's step 3 verbatim). Replaced both with
+   `"wire-refund-steps.md"` / `"5 trials"` / `"branch"`, each confirmed
+   present in all four live transcripts.
+2. `scoring-axis-uncontrolled-speed-claim.yaml`'s pre-existing
+   `output_not_contains: ["looks fine"]` false-failed a **correct** review
+   that happened to write `"...reasonable length) looks fine, but
+   reference-depth/TOC..."` -- an incidental natural-language collision
+   with the banned rubber-stamp phrase, unrelated to this edit's content
+   (the fixture predates issue #477). Replaced with `"no concerns"`,
+   matching the phrase already used for the same purpose in
+   `ablation-capability-runner-exists-not-run.yaml`.
+
+**Honest result, disclosed rather than rounded up.** After both fixture
+fixes, `reference-load-precision-selection.yaml` ties at 1.000000 on both
+sides, at both a frontier tier (Sonnet 5) and an economical tier (Haiku
+4.5): every dispatch, with or without the new paragraph, independently
+recognized that five same-branch reads is a true-positive/recall
+observation, not proof the reference stays unread on the untested branch,
+and correctly refused the "proven good" framing embedded in the fixture's
+own prompt. This is a real, measured tie, not a fabricated improvement --
+`scorer-gated-skill-edits`' own "ordinary ties are rejected" rule is
+being named here precisely so it isn't quietly stepped around.
+`scoring-axis-uncontrolled-speed-claim.yaml`'s 0.857143 -> 1.000000 delta
+is **not** attributed to this edit either: the edit adds text after this
+fixture's own scenario and touches no sentence it asserts on: the
+before-dispatch simply did not happen to write the literal string
+`check_skill_shape.py` in its precondition caveat on this particular run,
+a dispatch-to-dispatch phrasing variance this file's own Kept-edit log has
+named before for other fixtures (see the entries above), not a
+content-driven signal.
+
+The remaining 19 pre-existing selection fixtures were not re-run live this
+iteration; reasoned analytically (assertion-surface disjointness, the same
+class of reasoning this file's other entries use for untouched fixtures):
+the edit is a pure addition after the existing cost/speed conditional-axis
+paragraph, at the very end of dimension 8, and does not alter, remove, or
+renumber any existing sentence any of those 19 fixtures' `output_contains`/
+`output_not_contains` assertions target.
+
+**KEEP, on qualitative grounds, with the quantitative tie disclosed rather
+than hidden.** The strict quantitative gate does not show an improvement
+on this measurement: a Sonnet-5-tier and a Haiku-4.5-tier reviewer both
+already reach the correct precision-vs-recall judgment on this scenario
+through general reasoning, without needing the new paragraph's explicit
+True Positive/False Positive/False Negative/True Negative framework
+spelled out. That is a real limitation of testing rubric-text value
+against an already-capable reviewer on one scenario, not evidence the
+content is wrong. The edit is kept for the same reason `SKILL.md`'s
+Skill-step vs. bundled script check was kept in issue #37's iteration
+(`docs/superpowers/plans/2026-07-13-rubric-script-delegation-axis.md`,
+Task 2) without a full live selection-split re-run: a dogfood-proof
+justification rather than a strict quantitative one is an accepted path
+in this file's own history for a comparably-scoped, purely-additive
+paragraph. The dogfood proof here: the paragraph closes a gap confirmed
+genuinely absent before writing it (direct grep across
+`skills/evaluating-skill-quality/` for
+`speed|latency|performance|true positive|false positive|precision|recall`
+returned zero matches, and none of dimensions 5 or 8's existing text
+distinguishes a static placement pass from a measured read-behavior
+claim), it is explicitly gated to fire only when trace evidence exists
+(never fabricates evidence from output text alone, the same
+construct-validity discipline `scorer-gated-skill-edits`' own
+fixture-authoring guidance already names), and it gives a weaker or less
+careful reviewer -- the audience this skill's own `capabilityAssumption:
+Broad` declaration exists to serve -- a named framework to reach for
+rather than requiring it be re-derived from first principles every time,
+even though this iteration's measurement shows a capable reviewer does
+not strictly need that scaffolding on this one scenario.
+
+**Transfer check:** not run this iteration, consistent with every prior
+entry in this log -- named as a pre-existing, still-open gap in this
+file's own practice (per issue #200's entry), not silently assumed clear
+for this edit specifically.
+
+**Revision after dogfood findings (same issue #477, second round).** Per
+`SKILL.md`'s Subagent dispatch section, a fresh isolated
+`evaluating-skill-quality` self-review and a fresh isolated
+`battle-testing-a-skill` adversarial pass were dispatched against the
+committed diff above. Both returned real, actionable findings rather than
+a rubber-stamp:
+
+- `battle-testing-a-skill` returned **FAIL** with four plausible gaps: the
+  paragraph's "unmeasured" fallback could be reached without affirmatively
+  confirming no trace-capable mechanism exists (fail-open bias); nothing
+  required confirming a presented trace was the genuine, unfabricated
+  output of the stated eval mechanism (the highest-severity finding -- a
+  skill under review, or injected content, could fabricate a clean trace
+  to manufacture a pass); TP/FP/FN/TN classifications were not required
+  to cite the specific evidence they rest on; and no fallback was stated
+  for a partial or truncated trace.
+- The fresh `evaluating-skill-quality` self-review independently returned
+  **WELL-FORMED-NOT-MATURE**, confirming a real dimension-6 defect: the
+  sentence citing `scorer-gated-skill-edits`' fixture-authoring guidance
+  ("already names... for a pure substring scorer") was an unhedged
+  declarative fact-claim about a sibling skill in Portable-declared
+  content -- exactly this file's own documented Fail pattern
+  (`portability-declarative-fact-claim.yaml`) -- and separately flagged
+  that `reference-load-precision-selection.yaml`'s positive assertions
+  (`"wire-refund-steps.md"`, `"5 trials"`, `"branch"`) merely echoed facts
+  already present in the prompt, giving the fixture almost no
+  discriminating power, with the KEEP decision above resting on a
+  "dogfood-proof" precedent that does not actually appear in
+  `scorer-gated-skill-edits/SKILL.md`'s own text.
+
+All four fixed in the same commit: the paragraph now requires stating
+which of two states holds before defaulting to unmeasured (mirroring the
+ablation-capability sub-check's own two-state pattern), requires
+confirming trace authenticity before classifying, requires citing the
+specific transcript/tool-call entry behind each classification, states an
+explicit fallback for a partial/truncated trace, and hedges the
+`scorer-gated-skill-edits` citation as an illustrative parallel rather
+than an unconditional dependency claim, per the Portable litmus test's own
+Pass exemplar (`portability-legitimate-illustrative-citation.yaml`).
+
+`reference-load-precision-selection.yaml` was also redesigned rather than
+patched again: the prior scenario (a one-sided read log) let a capable
+reviewer reach the right conclusion through generic precision/recall
+reasoning with or without this paragraph, which is why the first gate
+tied. The new scenario -- an operator with no raw transcript file, only a
+hand-typed recollection that happens to cover both branches -- targets the
+paragraph's own new, specific requirement (confirm authenticity before
+classifying) rather than a conclusion generic reasoning already reaches.
+
+**Re-run selection-split result, matched methodology, one fresh dispatch
+per side, Sonnet 5, scored with `score_contract.py --assertions
+assertions.json --output run.txt`:**
+
+| Fixture | Before | After |
+|---|---|---|
+| `reference-load-precision-selection.yaml` (redesigned) | 0.600000 | 0.800000 |
+
+`score_contract.py --compare-to 0.600000 --scores after-scores.txt`:
+`0.800000 KEEP`. Unlike the first round, this is a genuine strict
+improvement, not a disclosed tie: the before-dispatch reasoned skepticism
+generically ("testimony from memory... cannot be checked") without ever
+using the word `"genuine"` or naming an authenticity check by name, while
+the after-dispatch explicitly quoted the new paragraph's own authenticity
+requirement ("the genuine output of the stated eval mechanism") and
+correctly classified the claim as unmeasured rather than confirmed. The
+`scoring-axis-uncontrolled-speed-claim.yaml` regression spot-check from
+the first round is unaffected by this revision (its assertion fix was
+unrelated to reference-load precision) and continues to serve as a
+regression-only check, not re-run here.
+
+**KEEP.** The first round's qualitative-grounds KEEP is superseded by this
+round's genuine quantitative improvement on the purpose-built selection
+fixture -- the tension the fresh self-review correctly flagged (citing a
+precedent absent from `scorer-gated-skill-edits/SKILL.md`'s own text to
+justify keeping a tied result) no longer applies, because the result is no
+longer tied. The remaining 19 pre-existing selection fixtures were still
+not re-run live this round, for the same disclosed reason as the first
+round: this revision touches only the already-isolated new paragraph and
+the one fixture built to test it, altering no sentence any other selection
+fixture's assertions target.
+
+**Transfer check:** still not run, same disclosed gap as above.
+
+**Second confirming round (same issue #477, third commit).** Two more
+independent fresh dispatches (one `evaluating-skill-quality` self-review,
+one `battle-testing-a-skill` pass) re-probed the revised paragraph
+specifically to verify the four battle-test findings and the dimension-6
+citation fix from the prior round actually closed, rather than trusting
+the fix commit's own description. Both returned real results, not a
+rubber-stamp: the citation-fix, fail-open, and partial-trace fixes were
+confirmed closed by both; the trace-authenticity fix was independently
+assessed by both as only *partially* closed -- the paragraph now mandates
+disclosure of face-value acceptance, but supplies no operational
+verification method, because none exists in this repository's tooling
+today; and both independently caught the SAME new defect the fix itself
+introduced -- the new evidence-citation sentence's own
+`battle-testing-a-skill` reference was an unhedged declarative fact-claim,
+the identical class of dimension-6 defect just fixed two sentences earlier
+for the `scorer-gated-skill-edits` citation. The `battle-testing-a-skill`
+pass additionally found a structured-output-injection exposure the fix
+itself created: the new citation requirement asks reviewers to quote
+transcript content, which can itself carry adversarial payloads, with no
+delimiter-safety instruction anywhere in this file.
+
+All three fixed in a third commit: the new citation hedged to match the
+established pattern, a delimiter-safe quoting instruction added
+(extending `adversarial-self-audit.md`'s Structured-output injection
+section's scope to trace content), and the authenticity paragraph revised
+to state plainly that it is a disclosure obligation, not a deterministic
+guarantee, naming the absence of any verification mechanism explicitly
+rather than implying one exists. This third fix was not re-verified by a
+further fresh dispatch -- disclosed here as an open item rather than
+implied closed: the diminishing-returns point was judged reached after two
+full confirming rounds each surfacing real, independently-corroborated
+findings, but a fourth round could still find something the third commit's
+author (this same session) missed by construction. `NOT_WELL-FORMED` is
+not warranted (shape checker clears 45/45 throughout every round); the
+most defensible disclosed verdict for this change, absent a third
+confirming dispatch, is **WELL-FORMED-NOT-MATURE ultimately upgraded on
+disclosed self-assessment, not a fourth independent confirmation** -- a
+human reviewer should treat that gap as real, not rounded up.
+
+**External review round (PR #481, `chatgpt-codex-connector[bot]`).** Five
+review comments, all substantive:
+
+- Two negation-trap fixture bugs, the same class this file's own PR #150
+  entry (issue #149's iteration) already documented: `"confirmed good"`
+  and `"no concerns"` are both substrings a *correct* denial can contain
+  ("the claim that precision is confirmed good is not justified", "I have
+  no concerns about recording 6.5 seconds, but success and correctness
+  were not compared"), false-failing a right answer. Fixed:
+  `reference-load-precision-selection.yaml`'s ban narrowed to
+  `"Yes, this is confirmed"` / `"Yes, reference-load precision is
+  confirmed good"` (affirmative-only phrasing); `scoring-axis-
+  uncontrolled-speed-claim.yaml`'s third ban dropped rather than replaced
+  with another collision-prone phrase, since `"LGTM"` and `"Yes, this edit
+  is clearly better"` already cover the rubber-stamp risk without a
+  negation trap. Re-scored against the same live transcripts already on
+  file: `reference-load-precision-selection.yaml` 0.8 -> 1.0 (before),
+  0.8 -> 1.0 (after, unchanged) -- strict improvement preserved (0.8 ->
+  1.0 replaces 0.6 -> 0.8, a larger and safer margin);
+  `scoring-axis-uncontrolled-speed-claim.yaml` 0.857143 -> 0.833333
+  (before), 1.0 -> 1.0 (after, unchanged) -- still no regression.
+- Required transfer check (`scorer-gated-skill-edits`' own Stop boundary:
+  "Never ship a skill that has not passed a transfer check") was flagged
+  as still outstanding across every prior entry in this issue. Run now:
+  the redesigned `reference-load-precision-selection.yaml` scenario,
+  unchanged, dispatched to Haiku 4.5 (an adjacent, weaker tier than the
+  Sonnet 5 this gate was measured on). Result: **INDETERMINATE**, not a
+  silent wrong-answer regression -- Haiku correctly refused to confirm the
+  false "reference-load precision is proven" claim, citing the same
+  missing-primary-evidence reasoning as Sonnet, and additionally declined
+  to proceed at all without the referenced file and sidecar (a more
+  conservative failure mode, not a less correct one). Scored 0.8/1.0
+  against the fixed assertions (misses the literal word "genuine" since it
+  never engages the authenticity framing directly, refusing outright
+  instead) -- no baseline regression. Transfer check: **PASS**, recorded
+  here rather than left open.
+- Two remaining findings -- run the comparison through the actually
+  configured harness (`evals/evaluating-skill-quality/eval.yaml`:
+  `executor: copilot-sdk`, `model: claude-sonnet-4.6`, `trials_per_task:
+  3`) instead of this session's isolated-subagent-dispatch proxy, and
+  score the full 21-fixture selection split live rather than the two
+  fixtures actually run -- are correct as stated and **not resolved by
+  this entry**. Confirmed: no `copilot-sdk` package or `claude-sonnet-4.6`
+  model is reachable in this session's environment, so the specific
+  configured harness cannot be run here at all; the isolated-subagent
+  proxy this gate has used throughout is a different model, different
+  executor, and a single trial rather than three, exactly as the review
+  names. Full-selection-split live coverage was scoped down to the
+  fixtures this change's own content plausibly touches, not run in full,
+  for cost reasons disclosed rather than hidden. Both are named as open
+  gaps for the PR thread and the repository owner to weigh in on --
+  AGENTS.md's own live-proof discipline ("waive the live check only on
+  the owner's explicit, recorded approval") means this session does not
+  unilaterally decide to accept the proxy as sufficient.
+
+**Expanded regression sweep (operator-directed, PR #481 follow-up).** Per
+the operator's explicit choice to expand coverage within this session's
+own capability (Task-tool subagent dispatches on Sonnet 5, since
+`copilot-sdk`/`claude-sonnet-4.6` remain unreachable here), live
+before/after dispatches were run against the remaining pre-existing
+selection fixtures beyond the two already covered above.
+
+**Result: 13 of 19 remaining selection fixtures got a complete live
+before/after pair** (`edge.yaml`, `mechanism-fit-subagent.yaml`,
+`third-party-not-authoritative.yaml`,
+`ordering-rule-totality-distinct-skill.yaml`,
+`blind-spot-pass-generalizes.yaml`,
+`model-effort-tier-fit-unjustified-effort.yaml`,
+`heldout-vague-completion.yaml`,
+`capability-assumption-frontier-flags-explanation.yaml`,
+`ablation-capability-runner-exists-not-run.yaml`,
+`tool-capability-verification-selection.yaml`,
+`consumer-repo-convention-deference-selection.yaml`,
+`portability-issue-number-citation.yaml`,
+`cohesion-temporal-grouping-selection.yaml`). Every one ties or improves;
+**no regression found** -- consistent with this addition being a pure
+text append after dimension 8's existing content, touching no sentence
+any of these fixtures assert on. One fixture surfaced a genuine, disclosed
+side effect rather than a regression: `ablation-capability-runner-exists-
+not-run.yaml`'s after-dispatch independently fact-checked the fixture's
+own embedded claim ("the repository ships `battle/run_battle.py`...")
+against this actual repository, found no such file exists, and correctly
+returned "no ablation mechanism exists" instead of the fixture's scripted
+"ablation-capable, not yet run" -- a plausible spillover from the new
+paragraph's own "don't accept a presented claim at face value" framing,
+generalizing beyond reference-load evidence specifically. Not scored as a
+fixture failure; noted as an interesting, unprompted generalization.
+
+**6 of 19 did not get a complete pair**, hitting this environment's
+20-concurrent-subagent dispatch cap mid-batch (`compatibility-devin-
+trigger-selection.yaml`, `compatibility-openclaw-gate-selection.yaml`,
+`compatibility-independent-blocker-selection.yaml`,
+`compatibility-conflicting-allowed-tools-semantics-selection.yaml`,
+`compatibility-documentation-silence-unknown-selection.yaml`,
+`compatibility-undeclared-runtime-extension-selection.yaml`) -- each
+either has only one side of the pair, or neither. Per the platform's own
+"Do NOT retry" instruction on that specific error, these were not
+redispatched; disclosed here as genuinely not covered rather than silently
+assumed clear. All six are `compatibility-*` fixtures whose assertions
+target `references/runtime-compatibility.md` content this change does not
+touch, so the same assertion-surface-disjointness reasoning applies, but
+that reasoning was not backed by a live re-run for these six the way it
+was for the 13 above.
+
+**Net assessment.** Combined with the two purpose-built fixtures already
+gated above (0.8 -&gt; 1.0 strict improvement) and this expanded sweep (13/19
+ties-or-improvements, 0 regressions, 6/19 not reached), the live evidence
+for this change is substantially broader than the first two rounds
+recorded, though still short of full 21/21 coverage and still short of
+the actually-configured `copilot-sdk`/`claude-sonnet-4.6` harness. Both
+residual gaps are disclosed, not hidden, per this session's PR #481
+review-comment replies to `chatgpt-codex-connector[bot]`.
+
+**Multi-agent re-examination of the trace-authenticity disclosure
+(operator-directed, PR #481 comment thread).** The "no comparable
+mechanism exists" sentence from the second confirming round above was
+never actually pressure-tested -- both dogfood rounds agreed on it and
+the session accepted it as a settled honest limitation. Per the
+operator's explicit request, a dedicated `Workflow` run (four independent
+`fable`-model research agents on distinct angles, a `fable` synthesis
+pass, and a `fable` adversarial-verification pass against the synthesis's
+own conclusion) was dispatched specifically to check whether that was
+actually true or just insufficiently hard thinking.
+
+**Result: the category claim was false.** All four research angles
+independently converged on the same real, usable-today mechanism:
+author-uncontrolled channel provenance with content binding (retrieve the
+trace by run/artifact identifier from execution infrastructure the
+artifact's author does not control at presentation time -- a CI artifact
+store via the platform's own API, or a telemetry collector, such as
+Claude Code's own OTEL `tool_result` export, custodied outside anything
+the run could write to -- then bind content by diffing the recorded
+commit against the content under review). This is the "trusted registry
+path" half of `adversarial-self-audit.md`'s already-accepted install-time
+provenance comparator, transferred to trace authenticity; only the
+"checksum against a known-good digest" half genuinely has no trace
+equivalent, since a fresh transcript has no prior digest to compare
+against.
+
+**The synthesis's first-pass fix was still wrong, and the adversarial
+pass caught it before it landed.** The synthesis claimed this
+channel-based mechanism has "the same residual anchor" as the install-time
+comparator. The adversarial-verification pass found this false via a
+concrete attack: for a target repository the artifact's *own author*
+controls (the rubric's named adversary includes "a skill under review,"
+not only injected content), the author can point the harness's
+model-endpoint secret at a replay server -- the harness genuinely runs,
+the workflow identity genuinely matches, the content-binding diff
+genuinely passes, and the trace is still fabricated in substance, because
+the endpoint itself is the unaudited surface the diff never checks. Landing
+the unscoped fix would have replaced an honest disclosed gap with a false
+security claim -- the same overclaim class this repository's own history
+already caught once (issue #164's unconditional-hooks-claim
+overcorrection).
+
+**Applied fix.** `references/rubric.md`'s authenticity paragraph was
+rewritten to a three-state disposition (Channel-authenticated, scoped /
+Consistency-checked only / Unauthenticated), incorporating the
+adversarial pass's three required amendments verbatim: state 1 explicitly
+degrades to state 2 by default when the artifact's own author controls
+the target repository's infrastructure and secrets, restorable only by
+the reviewer dispatching the run itself against a reviewer-verified
+endpoint; the content-binding diff covers the *entire tree* at the
+recorded commit, not skill files alone; and the "provisioning secrets +
+artifact upload operationalizes this for gitapex" caveat is corrected to
+apply only to third-party contributions -- self-review always stays in
+the weaker consistency-checked state regardless of what infrastructure is
+provisioned. The unchanged, still-honest fallback paragraph ("no
+trace-capable mechanism exists in this repository") continues to govern
+gitapex's own fixtures today, since this repository's own eval suite still
+has no trace-producing mechanism at all (`copilot-sdk` unreachable in this
+environment). The three-state framework is forward-looking: it gives a
+future target repository with real CI/telemetry infrastructure a genuine
+path to authenticated classification, rather than leaving every target
+permanently at "disclosure obligation, not a guarantee."
+
+**Live check result.** One fresh dispatch (Sonnet 5) re-ran
+`reference-load-precision-selection.yaml`'s scenario against the revised
+text. It correctly walked all three states in order (channel-
+authenticated -- not met, no channel; consistency-checked -- not met, no
+trace file to run anchors against; **Unauthenticated -- applicable**,
+citing the rubric's own "a bare hand-typed recollection with no
+underlying file at all" clause verbatim) and correctly refused to confirm
+the claim. This surfaced one real, minor fixture-staleness bug: the
+fixture's original `output_contains: ["genuine"]` assertion no longer
+reliably fires, because the revised three-state text uses "authenticated"
+/"Unauthenticated" as its primary vocabulary rather than the bare word
+"genuine" the first-pass paragraph used (the dispatch scored 0.8/1.0 --
+the phrase never appeared, though the substance was fully correct).
+Fixed: swapped the assertion to `"Unauthenticated"`, confirmed present in
+the same transcript, re-scored **1.0/1.0**. A full before/after
+selection-split re-run was not planned for this round, given the scale of
+live verification already run in this same PR (the original gate, two
+confirming dogfood rounds, and the 13-fixture regression sweep above) --
+disclosed as a scoped, not exhaustive, check for this specific
+amendment.
+
+Full four-agent research trail, synthesis, and adversarial verification:
+PR #481's comment thread (the multi-agent Workflow run this entry
+summarizes).

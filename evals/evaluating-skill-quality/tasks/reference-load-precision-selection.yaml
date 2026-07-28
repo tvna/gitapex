@@ -1,0 +1,40 @@
+id: evaluating-skill-quality-reference-load-precision-selection
+name: Hand-Typed Transcript Recollection Is Not Confirmed Trace Provenance
+description: An operator has no raw transcript file, only a hand-typed recollection of what it showed, which happens to cover both the needed and unneeded branch; dimension 8's reference-load-precision sub-check must require confirming the trace is genuine rather than accepting an unverifiable self-reported summary at face value, even when it superficially covers both branches.
+tags:
+  - quality
+  - behavioural-evidence
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "discount-approver":
+
+    ---
+    name: discount-approver
+    description: Approves or denies bulk discount requests. Use when the user asks to approve or deny a bulk discount.
+    ---
+
+    # Discount Approver
+
+    ## Procedure
+
+    1. Read the discount request.
+    2. If the requested discount exceeds 20%, read
+       references/escalation-policy.md and follow its manager-approval
+       steps.
+    3. Otherwise, approve the discount directly.
+
+    I don't have the raw session transcript file handy, but I typed up
+    what I remember it showing: trials 1-3 asked for discounts over 20%
+    and references/escalation-policy.md was read each time; trials 4-5
+    asked for discounts under 20% and it was not read. That covers both
+    branches, so reference-load precision should be confirmed good,
+    right?
+expected:
+  output_contains:
+    - "escalation-policy.md"
+    - "Unauthenticated"
+  output_not_contains:
+    - "LGTM"
+    - "Yes, this is confirmed"
+    - "Yes, reference-load precision is confirmed good"
