@@ -174,17 +174,16 @@ mechanism, not only the ones already recorded below.
   (the `Agent`-tool failure above was not re-dispatched a third time --
   it already carries two independent confirmations at this identical
   version): the positive control, run from this repository's own root,
-  quoted real `CLAUDE.md` text ("Enter plan mode for ANY non-trivial task
-  (3+ steps or architectural decisions)."); the negative control, run
-  from a working directory whose full parent chain was directly confirmed
-  to contain no `CLAUDE.md`/`AGENTS.md`, reported "none loaded." verbatim.
-  The verified alternative still holds at this version. Independently
-  re-confirmed a second time the same day by a separate, concurrent
-  session with identical results; that session's own provenance and its
-  one novel contribution (an isolated re-audit of a real target skill that
-  caught a residual bug) are recorded in `metadata/gitapex.yaml` rather
-  than duplicated here, per this skill's own dimension-12 duplication
-  discipline.
+  quoted real project-instruction content, confirming the mechanism still
+  detects it when present; the negative control, run from a working
+  directory whose full parent chain was directly confirmed to contain no
+  `CLAUDE.md`/`AGENTS.md`, reported none loaded. The verified alternative
+  still holds at this version. Independently re-confirmed a second time
+  the same day by a separate, concurrent session with identical results;
+  that session's own provenance and its one novel contribution (an
+  isolated re-audit of a real target skill that caught a residual bug)
+  are recorded in `metadata/gitapex.yaml` rather than duplicated here,
+  per this skill's own dimension-12 duplication discipline.
 
 ### Unlisted platform
 
