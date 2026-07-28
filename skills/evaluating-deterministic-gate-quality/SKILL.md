@@ -175,6 +175,12 @@ own equivalent dispatch requirement is; that skill's own Subagent
 dispatch section carries the isolation-verification mechanics (confirming
 a dispatch does not inherit the calling repository's own
 project-instruction file) this skill defers to rather than re-deriving.
+Open that file before dispatching, not only when a dispatch's own
+self-report later discloses contamination: on a Claude Code Remote
+session specifically, its Known entries already record a plain Agent-tool
+dispatch as a confirmed isolation failure and name a verified `claude -p`
+subprocess alternative -- a pointer sentence is not a substitute for
+actually reading what it points to.
 
 ## Procedure
 

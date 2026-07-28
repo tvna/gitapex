@@ -323,12 +323,16 @@ stdin, then three sequential `jq -r` field extractions
 one `python3` cold start running `check_acm_present_or_waiver.py` (two
 `re.compile` calls, one `re.search` each, no network I/O, no filesystem
 scan beyond the sibling script's own existence check). That is the **allow
-path**: 3 `jq` processes + 1 `python3` process, 4 subprocess launches
-total. The **deny path** (line 42's body fails the Python check) launches
-one more: `deny()`'s own `jq -n` call at line 49, to build the
-`hookSpecificOutput` JSON written to stderr -- 4 `jq` processes + 1
-`python3` process, 5 subprocess launches total. The two paths are not
-process-count-identical; deny costs one more fork than allow.
+path**: 1 `cat` + 3 `jq` processes + 1 `python3` process, 5 subprocess
+launches total (the `cat` in `input=$(cat)` at line 26 is itself an
+external-command fork, not a shell builtin -- omitting it from the total
+was this worked example's own earlier arithmetic error, caught by an
+isolated re-audit rather than left standing). The **deny path** (line 42's
+body fails the Python check) launches one more: `deny()`'s own `jq -n`
+call at line 49, to build the `hookSpecificOutput` JSON written to stderr
+-- 1 `cat` + 4 `jq` processes + 1 `python3` process, 6 subprocess launches
+total. The two paths are not process-count-identical; deny costs one more
+fork than allow.
 
 **Live measurement, five consecutive runs against a passing (waiver-line)
 synthetic `mcp__github__issue_write` payload**, run directly against the
@@ -371,7 +375,7 @@ not cherry-picked away: all five raw runs are reported above rather than
 only the fastest ones. A separate run against a failing (no-ACM) body
 measured `real 0m0.062s`, `exit=2` -- within the same noise band as the
 allow-path runs above at this timing resolution, even though the deny path
-launches one more subprocess (5 vs. 4, per the process count above); the
+launches one more subprocess (6 vs. 5, per the process count above); the
 extra `jq -n` fork is too cheap to separate from run-to-run variance at
 this measurement precision, which is itself worth stating plainly rather
 than rounding up to "identical."
@@ -388,7 +392,7 @@ matching three plus a fourth on the deny path) each parse the *same*
 already-buffered `$input` string independently, forking a fresh `jq`
 process per field, when a single `jq -r` invocation extracting
 `tool_name`, `tool_input.method`, and `tool_input.body` together (e.g. as
-tab-separated output) would collapse 3 of those 4 (or 4 of those 5)
+tab-separated output) would collapse 3 of those 5 (or 4 of those 6)
 process launches into 1 -- real, avoidable, process-fork overhead by this
 dimension's own letter, not merely a cost that is already at the floor.
 Applying this dimension's own guard before crediting that as a fix: the
