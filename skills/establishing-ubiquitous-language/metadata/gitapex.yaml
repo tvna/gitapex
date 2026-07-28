@@ -6,7 +6,9 @@ spec:
   portability: Portable
   capabilityAssumption: Broad
   references:
-    - "caveat | https://github.com/tvna/gitapex/pull/2 | worked example (owner vs. author vs. contributor) traces to docs/motivation.md, draft commit 241f4392, rename commit ef222b81"
+    - kind: caveat
+      anchor: "https://github.com/tvna/gitapex/pull/2"
+      summary: "worked example (owner vs. author vs. contributor) traces to docs/motivation.md, draft commit 241f4392, rename commit ef222b81"
   skillDependencies:
     requires: []
     relatedTo: []

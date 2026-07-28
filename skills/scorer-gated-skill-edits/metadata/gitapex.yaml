@@ -6,7 +6,9 @@ spec:
   portability: Portable
   capabilityAssumption: Broad
   references:
-    - "decision | https://github.com/tvna/gitapex/issues/30 | scripts/score_contract.py's docstring refers to a held-out gate, introduced here"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/30"
+      summary: "scripts/score_contract.py's docstring refers to a held-out gate, introduced here"
   skillDependencies:
     requires: []
     relatedTo:

@@ -6,45 +6,153 @@ spec:
   portability: Mixed
   capabilityAssumption: Adaptive
   references:
-    - "decision | https://github.com/tvna/gitapex/issues/435 | Skill's evaluation model (four-domain scope, guiding principle, two-lane split, three axes, mechanism-fit test) finalized in this issue's research pass and committed as docs/superpowers/reports/2026-07-27-hook-evaluation-quality-research.md."
-    - "caveat | references/gitapex-worked-examples.md | This file carries gitapex's own worked examples and live smoke-test output gathered during the skill's initial build; substitute the target repository's own equivalents when applying this skill elsewhere."
-    - "elision | references/gitapex-worked-examples.md | The ACM-disclosure worked example's docstring quote elides https://github.com/tvna/gitapex/issues/357 (the investigation) and https://github.com/tvna/gitapex/issues/413 (the paired PreToolUse hook)."
-    - "elision | references/gitapex-worked-examples.md | The ACM-disclosure smoke test's Step 1 elides https://github.com/tvna/gitapex/issues/357, https://github.com/tvna/gitapex/issues/413, and https://github.com/tvna/gitapex/issues/414 (the Domain-3 CI backstop, gate_acm_issue_disclosure.py)."
-    - "elision | references/gitapex-worked-examples.md | The retrospective-identity worked example's docstring quote elides https://github.com/tvna/gitapex/issues/297, itself referencing https://github.com/tvna/gitapex/issues/187, https://github.com/tvna/gitapex/issues/242, and https://github.com/tvna/gitapex/issues/246."
-    - "elision | references/gitapex-worked-examples.md | The sibling-repository-provenance worked example's docstring quote elides https://github.com/tvna/gitapex/issues/144 (the OWASP Agentic Top 10 mapping port)."
-    - "elision | references/gitapex-worked-examples.md | The ACM-disclosure smoke test's own disposition note elides https://github.com/tvna/gitapex/issues/436, the follow-up filed for the fail-open bug the smoke test found in hooks/check-issue-acm-disclosure.sh."
-    - "caveat | references/gitapex-worked-examples.md | The Security-level worked example introduces no new elided issue numbers: it reuses the already-verified ACM-disclosure smoke test's dimension 1 PASS and dimension 15 FAIL findings plus the already-elided https://github.com/tvna/gitapex/issues/436 citation, recast through the tier lens rather than re-tested."
-    - "decision | https://github.com/tvna/gitapex/issues/442 | Added a fourth cross-cutting axis, Security-level / Zero-Trust maturity classification, as a direct follow-up feature reusing this repository's existing tier/ceiling docs (docs/superpowers/specs/2026-07-18-init-capability-tiers-design.md, docs/security-control-inventory.md, both cited by path only) instead of a new taxonomy."
-    - "decision | https://github.com/tvna/gitapex/issues/82 -> https://github.com/tvna/gitapex/issues/147 | The tier/ceiling documentation the Security-level axis reuses (docs/superpowers/specs/2026-07-18-init-capability-tiers-design.md) originated as this child issue of the parent issue."
-    - "corroboration | https://www.anthropic.com/news/zero-trust-for-ai-agents | The Security-level axis's portable core cites only Anthropic's Zero Trust for AI Agents eBook as its external source."
-    - "audit | method:evaluating-skill-quality | A standard evaluating-skill-quality plus battle-testing-a-skill pass audited the newly added Security-level axis. | verdict=FAIL found=3"
-    - "audit | method:battle-testing-a-skill | A Fable-model blind-spot analysis plus eight adversarial trials against mock hostile repositories audited the Security-level axis, synthesized by an independent re-verification dispatch. | verdict=FAIL found=7"
-    - "correction | https://github.com/tvna/gitapex/issues/442 | All ten Security-level axis hardening findings from the two audit rounds above were fixed in SKILL.md's Stop boundaries and Procedure step 5, and in references/security-level.md and references/dimensions.md. | fixed=10"
-    - "deferral | https://github.com/tvna/gitapex/issues/442 -> https://github.com/tvna/gitapex/issues/449 | The round-1 evaluating-skill-quality dispatch's third finding (an unhedged execution-safety Stop boundary, prose-only unlike evaluating-skill-quality's own analogous boundary) was out of scope for issue 442 and filed as its own follow-up."
-    - "decision | https://github.com/tvna/gitapex/issues/455 | Restructured Mechanism-fit test: added a 'Gate vs. no gate' lead question, moved the section from 9th to 4th position in SKILL.md, and split three still-inlined axes into a new references/cross-cutting-axes.md. | lines=499->481"
-    - "correction | https://github.com/tvna/gitapex/issues/455 | A same-day follow-up fixed an internal inconsistency: short-circuit wording told the reader to skip Procedure step 6 and Subagent dispatch entirely on a no-gate verdict while also saying to report that verdict via step 6; fixed to skip only steps 3-5, and step 6 gained a 'no-gate-warranted' verdict category. | lines=484"
-    - "correction | https://github.com/tvna/gitapex/issues/455 | A second, operator-prompted follow-up corrected the premise that reordering alone reduces context cost, since SKILL.md loads wholesale regardless of section order; moved grading-only content into a new references/grading-procedure.md, keeping the two safety-critical Stop boundaries in SKILL.md's always-loaded body."
-    - "audit | method:battle-testing-a-skill | battle-testing-a-skill disclosed WAIVED for the issue-455 restructuring PR (frontmatter description unchanged): a pure structural reorganization of already-battle-tested content. | verdict=WAIVED"
-    - "correction | https://github.com/tvna/gitapex/issues/455 | A same-session (non-isolated) evaluating-skill-quality self-review found and fixed two defects the restructuring introduced: a Stop-boundary link left pointing at grading-procedure.md after that boundary moved back into SKILL.md, and a three-way duplication of the wholesale-loading rationale trimmed to one statement. | lines=440"
-    - "decision | https://github.com/tvna/gitapex/issues/455 | A same-day, operator-prompted follow-up trimmed non-behavioral change-history out of the skill body: gitapex-worked-examples.md's Security-level audit-history section cut from a full round-by-round narrative to a short summary, and SKILL.md's Lifecycle note lost its round-count litany. | lines=440->437 worked_examples_lines=468->328"
-    - "decision | https://github.com/tvna/gitapex/issues/474 | Added dimension 19 (Runtime-cost optimization, distinct from dimension 6's budget-set-and-proportionate check) to references/dimensions.md's probabilistic-maturity lane, appended after dimension 18 (lane count updated 7-18 to 7-19), plus a worked example reusing the existing ACM-disclosure smoke-test target with a live bash time measurement as evidence. | timing=0.038-0.066s runs=5 timeout=10s"
-    - "audit | method:evaluating-skill-quality | A fresh evaluating-skill-quality dispatch on the dimension-19 addition re-ran the live measurement and confirmed the new dimension's text and worked example sound; the only gap found was this sidecar not yet updated. | verdict=WELL-FORMED-NOT-MATURE"
-    - "audit | method:battle-testing-a-skill | A fresh battle-testing-a-skill dispatch on the dimension-19 addition returned FAIL with three findings: an unverified-optimization-claim gap, a non-reproducible timing transcript, and this sidecar's own missing entry. | verdict=FAIL found=3"
-    - "correction | https://github.com/tvna/gitapex/issues/474 | Fixed two of the battle-testing-a-skill dimension-19 findings in the same commit: added a verification-mandate clause mirroring dimension 10's empirical-verification discipline, and replaced the hand-summarized timing transcript with bash's literal time output across 5 runs, disclosing a roughly 40 percent cold-start variance."
-    - "deferral | https://github.com/tvna/gitapex/issues/475 | The recurring CLAUDE.md subagent-isolation limitation both dimension-19 audit dispatches disclosed again is now tracked as its own root-cause issue instead of being re-disclosed as a bare per-round caveat."
-    - "correction | https://github.com/tvna/gitapex/issues/474 | The repository's own Codex reviewer found the dimension-19 worked example's 'deny path pays the identical cost as allow' claim factually wrong (deny forks one extra jq process) and its 'no avoidable overhead' verdict overclaimed; fixed to state per-path process counts precisely and revise the verdict to PASS-against-budget with a named minor gap."
-    - "audit | method:battle-testing-a-skill | Initial round 1 (fresh battle-testing-a-skill plus evaluating-skill-quality) on this skill's first version fixed install-provenance, memory-poisoning/multi-turn, encoding/obfuscation, and structured-output-injection Stop-boundary gaps plus a missing Subagent-dispatch section."
-    - "audit | method:evaluating-skill-quality | Initial round 2 fixed a coverage-attestation input-trust gap and a bare-issue-citation defect that round 1's own fix had not actually resolved."
-    - "audit | method:evaluating-skill-quality | Initial round 3 converged evaluating-skill-quality to WELL-FORMED-AND-MATURE, closing dimension 18's secret/credential-redaction gap, and battle-testing-a-skill to INDETERMINATE-only-due-to-harness-isolation-limits, with zero new content defects. | verdict=WELL-FORMED-AND-MATURE"
-    - "deferral | https://github.com/tvna/gitapex/issues/435 | Deferred at initial ship: a verified agent-tool/middleware compatibility matrix -- the Compatibility-awareness axis is concept-only for now, unlike evaluating-skill-quality's own verified 6-vendor matrix."
-    - "deferral | https://github.com/tvna/gitapex/issues/435 | Deferred at initial ship: a bundled deterministic shape-checker script specific to this skill's own domain; references/dimensions.md's shape checks are applied manually today instead."
-    - "deferral | https://github.com/tvna/gitapex/issues/435 | Deferred at initial ship: a committed evals/ adversarial regression corpus, tracked as battle-testing-a-skill's own dimension 14 and disclosed there as a deliberate waiver, not a silent gap."
-    - "deferral | https://github.com/tvna/gitapex/issues/435 | Deferred at initial ship: independent re-derivation of each evaluation dimension's domain-generalization tag against real Domain-1/3/4 artifacts, beyond the reasoning applied during this skill's own build."
-    - "deferral | https://github.com/tvna/gitapex/issues/435 | Deferred at initial ship: a harness-level isolation-verification gap every audit round's own dispatch disclosed against itself, matching the same open problem evaluating-skill-quality's own Subagent dispatch section names for itself."
-    - "correction | https://github.com/tvna/gitapex/issues/442 | Corrects an earlier version of this sidecar's own experimental.reason field, which asserted the Security-level hardening rounds had 'verified... clean, an argued scaling-down, not a lowered bar' before either round had actually completed; itself one of the findings the rounds surfaced."
-    - "deferral | references/security-level.md | The Security-level axis's 'target has no established ceiling documentation' reuse branch is stated in this file but not yet smoke-tested against a target that actually lacks one."
-    - "caveat | references/gitapex-worked-examples.md | Round 2 of the Security-level axis hardening (the blind-spot and synthesis dispatches, though not its per-trial dispatches) carries the same unresolved CLAUDE.md subagent-isolation limitation every prior round of this skill discloses against itself."
-    - "caveat | method:evaluating-deterministic-gate-quality | This sidecar's spec.references history is provenance for maintainers of this repository only; SKILL.md, references/dimensions.md, and references/mechanism-fit.md do not depend on it to function."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/435"
+      summary: "Skill's evaluation model (four-domain scope, guiding principle, two-lane split, three axes, mechanism-fit test) finalized in this issue's research pass and committed as docs/superpowers/reports/2026-07-27-hook-evaluation-quality-research.md."
+    - kind: caveat
+      anchor: "references/gitapex-worked-examples.md"
+      summary: "This file carries gitapex's own worked examples and live smoke-test output gathered during the skill's initial build; substitute the target repository's own equivalents when applying this skill elsewhere."
+    - kind: elision
+      anchor: "references/gitapex-worked-examples.md"
+      summary: "The ACM-disclosure worked example's docstring quote elides https://github.com/tvna/gitapex/issues/357 (the investigation) and https://github.com/tvna/gitapex/issues/413 (the paired PreToolUse hook)."
+    - kind: elision
+      anchor: "references/gitapex-worked-examples.md"
+      summary: "The ACM-disclosure smoke test's Step 1 elides https://github.com/tvna/gitapex/issues/357, https://github.com/tvna/gitapex/issues/413, and https://github.com/tvna/gitapex/issues/414 (the Domain-3 CI backstop, gate_acm_issue_disclosure.py)."
+    - kind: elision
+      anchor: "references/gitapex-worked-examples.md"
+      summary: "The retrospective-identity worked example's docstring quote elides https://github.com/tvna/gitapex/issues/297, itself referencing https://github.com/tvna/gitapex/issues/187, https://github.com/tvna/gitapex/issues/242, and https://github.com/tvna/gitapex/issues/246."
+    - kind: elision
+      anchor: "references/gitapex-worked-examples.md"
+      summary: "The sibling-repository-provenance worked example's docstring quote elides https://github.com/tvna/gitapex/issues/144 (the OWASP Agentic Top 10 mapping port)."
+    - kind: elision
+      anchor: "references/gitapex-worked-examples.md"
+      summary: "The ACM-disclosure smoke test's own disposition note elides https://github.com/tvna/gitapex/issues/436, the follow-up filed for the fail-open bug the smoke test found in hooks/check-issue-acm-disclosure.sh."
+    - kind: caveat
+      anchor: "references/gitapex-worked-examples.md"
+      summary: "The Security-level worked example introduces no new elided issue numbers: it reuses the already-verified ACM-disclosure smoke test's dimension 1 PASS and dimension 15 FAIL findings plus the already-elided https://github.com/tvna/gitapex/issues/436 citation, recast through the tier lens rather than re-tested."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/442"
+      summary: "Added a fourth cross-cutting axis, Security-level / Zero-Trust maturity classification, as a direct follow-up feature reusing this repository's existing tier/ceiling docs (docs/superpowers/specs/2026-07-18-init-capability-tiers-design.md, docs/security-control-inventory.md, both cited by path only) instead of a new taxonomy."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/82 -> https://github.com/tvna/gitapex/issues/147"
+      summary: "The tier/ceiling documentation the Security-level axis reuses (docs/superpowers/specs/2026-07-18-init-capability-tiers-design.md) originated as this child issue of the parent issue."
+    - kind: corroboration
+      anchor: "https://www.anthropic.com/news/zero-trust-for-ai-agents"
+      summary: "The Security-level axis's portable core cites only Anthropic's Zero Trust for AI Agents eBook as its external source."
+    - kind: audit
+      anchor: "method:evaluating-skill-quality"
+      summary: "A standard evaluating-skill-quality plus battle-testing-a-skill pass audited the newly added Security-level axis."
+      outcome:
+        verdict: FAIL
+        found: 3
+    - kind: audit
+      anchor: "method:battle-testing-a-skill"
+      summary: "A Fable-model blind-spot analysis plus eight adversarial trials against mock hostile repositories audited the Security-level axis, synthesized by an independent re-verification dispatch."
+      outcome:
+        verdict: FAIL
+        found: 7
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/442"
+      summary: "All ten Security-level axis hardening findings from the two audit rounds above were fixed in SKILL.md's Stop boundaries and Procedure step 5, and in references/security-level.md and references/dimensions.md."
+      outcome:
+        fixed: 10
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/442 -> https://github.com/tvna/gitapex/issues/449"
+      summary: "The round-1 evaluating-skill-quality dispatch's third finding (an unhedged execution-safety Stop boundary, prose-only unlike evaluating-skill-quality's own analogous boundary) was out of scope for issue 442 and filed as its own follow-up."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/455"
+      summary: "Restructured Mechanism-fit test: added a 'Gate vs. no gate' lead question, moved the section from 9th to 4th position in SKILL.md, and split three still-inlined axes into a new references/cross-cutting-axes.md."
+      outcome:
+        lines: 499->481
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/455"
+      summary: "A same-day follow-up fixed an internal inconsistency: short-circuit wording told the reader to skip Procedure step 6 and Subagent dispatch entirely on a no-gate verdict while also saying to report that verdict via step 6; fixed to skip only steps 3-5, and step 6 gained a 'no-gate-warranted' verdict category."
+      outcome:
+        lines: 484
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/455"
+      summary: "A second, operator-prompted follow-up corrected the premise that reordering alone reduces context cost, since SKILL.md loads wholesale regardless of section order; moved grading-only content into a new references/grading-procedure.md, keeping the two safety-critical Stop boundaries in SKILL.md's always-loaded body."
+    - kind: audit
+      anchor: "method:battle-testing-a-skill"
+      summary: "battle-testing-a-skill disclosed WAIVED for the issue-455 restructuring PR (frontmatter description unchanged): a pure structural reorganization of already-battle-tested content."
+      outcome:
+        verdict: WAIVED
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/455"
+      summary: "A same-session (non-isolated) evaluating-skill-quality self-review found and fixed two defects the restructuring introduced: a Stop-boundary link left pointing at grading-procedure.md after that boundary moved back into SKILL.md, and a three-way duplication of the wholesale-loading rationale trimmed to one statement."
+      outcome:
+        lines: 440
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/455"
+      summary: "A same-day, operator-prompted follow-up trimmed non-behavioral change-history out of the skill body: gitapex-worked-examples.md's Security-level audit-history section cut from a full round-by-round narrative to a short summary, and SKILL.md's Lifecycle note lost its round-count litany."
+      outcome:
+        lines: 440->437
+        worked_examples_lines: 468->328
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/474"
+      summary: "Added dimension 19 (Runtime-cost optimization, distinct from dimension 6's budget-set-and-proportionate check) to references/dimensions.md's probabilistic-maturity lane, appended after dimension 18 (lane count updated 7-18 to 7-19), plus a worked example reusing the existing ACM-disclosure smoke-test target with a live bash time measurement as evidence."
+      outcome:
+        timing: 0.038-0.066s
+        runs: 5
+        timeout: 10s
+    - kind: audit
+      anchor: "method:evaluating-skill-quality"
+      summary: "A fresh evaluating-skill-quality dispatch on the dimension-19 addition re-ran the live measurement and confirmed the new dimension's text and worked example sound; the only gap found was this sidecar not yet updated."
+      outcome:
+        verdict: WELL-FORMED-NOT-MATURE
+    - kind: audit
+      anchor: "method:battle-testing-a-skill"
+      summary: "A fresh battle-testing-a-skill dispatch on the dimension-19 addition returned FAIL with three findings: an unverified-optimization-claim gap, a non-reproducible timing transcript, and this sidecar's own missing entry."
+      outcome:
+        verdict: FAIL
+        found: 3
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/474"
+      summary: "Fixed two of the battle-testing-a-skill dimension-19 findings in the same commit: added a verification-mandate clause mirroring dimension 10's empirical-verification discipline, and replaced the hand-summarized timing transcript with bash's literal time output across 5 runs, disclosing a roughly 40 percent cold-start variance."
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/475"
+      summary: "The recurring CLAUDE.md subagent-isolation limitation both dimension-19 audit dispatches disclosed again is now tracked as its own root-cause issue instead of being re-disclosed as a bare per-round caveat."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/474"
+      summary: "The repository's own Codex reviewer found the dimension-19 worked example's 'deny path pays the identical cost as allow' claim factually wrong (deny forks one extra jq process) and its 'no avoidable overhead' verdict overclaimed; fixed to state per-path process counts precisely and revise the verdict to PASS-against-budget with a named minor gap."
+    - kind: audit
+      anchor: "method:battle-testing-a-skill"
+      summary: "Initial round 1 (fresh battle-testing-a-skill plus evaluating-skill-quality) on this skill's first version fixed install-provenance, memory-poisoning/multi-turn, encoding/obfuscation, and structured-output-injection Stop-boundary gaps plus a missing Subagent-dispatch section."
+    - kind: audit
+      anchor: "method:evaluating-skill-quality"
+      summary: "Initial round 2 fixed a coverage-attestation input-trust gap and a bare-issue-citation defect that round 1's own fix had not actually resolved."
+    - kind: audit
+      anchor: "method:evaluating-skill-quality"
+      summary: "Initial round 3 converged evaluating-skill-quality to WELL-FORMED-AND-MATURE, closing dimension 18's secret/credential-redaction gap, and battle-testing-a-skill to INDETERMINATE-only-due-to-harness-isolation-limits, with zero new content defects."
+      outcome:
+        verdict: WELL-FORMED-AND-MATURE
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/435"
+      summary: "Deferred at initial ship: a verified agent-tool/middleware compatibility matrix -- the Compatibility-awareness axis is concept-only for now, unlike evaluating-skill-quality's own verified 6-vendor matrix."
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/435"
+      summary: "Deferred at initial ship: a bundled deterministic shape-checker script specific to this skill's own domain; references/dimensions.md's shape checks are applied manually today instead."
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/435"
+      summary: "Deferred at initial ship: a committed evals/ adversarial regression corpus, tracked as battle-testing-a-skill's own dimension 14 and disclosed there as a deliberate waiver, not a silent gap."
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/435"
+      summary: "Deferred at initial ship: independent re-derivation of each evaluation dimension's domain-generalization tag against real Domain-1/3/4 artifacts, beyond the reasoning applied during this skill's own build."
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/435"
+      summary: "Deferred at initial ship: a harness-level isolation-verification gap every audit round's own dispatch disclosed against itself, matching the same open problem evaluating-skill-quality's own Subagent dispatch section names for itself."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/442"
+      summary: "Corrects an earlier version of this sidecar's own experimental.reason field, which asserted the Security-level hardening rounds had 'verified... clean, an argued scaling-down, not a lowered bar' before either round had actually completed; itself one of the findings the rounds surfaced."
+    - kind: deferral
+      anchor: "references/security-level.md"
+      summary: "The Security-level axis's 'target has no established ceiling documentation' reuse branch is stated in this file but not yet smoke-tested against a target that actually lacks one."
+    - kind: caveat
+      anchor: "references/gitapex-worked-examples.md"
+      summary: "Round 2 of the Security-level axis hardening (the blind-spot and synthesis dispatches, though not its per-trial dispatches) carries the same unresolved CLAUDE.md subagent-isolation limitation every prior round of this skill discloses against itself."
+    - kind: caveat
+      anchor: "method:evaluating-deterministic-gate-quality"
+      summary: "This sidecar's spec.references history is provenance for maintainers of this repository only; SKILL.md, references/dimensions.md, and references/mechanism-fit.md do not depend on it to function."
   skillDependencies:
     requires:
       - evaluating-skill-quality

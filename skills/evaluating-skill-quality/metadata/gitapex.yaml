@@ -6,39 +6,135 @@ spec:
   portability: Portable
   capabilityAssumption: Broad
   references:
-    - "decision | https://github.com/tvna/gitapex/issues/32 | Delegated this skill's own deterministic shape lane to scripts/check_skill_shape.py; the worked example in references/worked-example-self-review.md documents that delegation."
-    - "audit | https://github.com/tvna/gitapex/issues/332 | Verified the warning-only compatibility baseline on 2026-07-25 against the Agent Skills spec and docs for Claude Code, Codex, Gemini CLI, Devin, OpenClaw, and HermesAgent; evidence in references/runtime-compatibility.md."
-    - "decision | https://github.com/tvna/gitapex/issues/444 | Added GitHub Copilot and Kiro rows to the runtime-compatibility baseline on 2026-07-27, grounded in official docs (github/docs source for Copilot; kiro.dev for Kiro)."
-    - "decision | https://github.com/tvna/gitapex/issues/444 | Added a Windsurf row same-day after docs.devin.ai was allow-listed; it documents only name/description in frontmatter with no allowed-tools claim, kept independent from the existing Devin row."
-    - "audit | https://github.com/tvna/gitapex/issues/444 | Investigated Amazon Q Developer CLI: its README states it is no longer maintained and is now Kiro CLI; AWS's EOL announcement confirms Q Developer IDE plugins sunset 2027-04-30 with a 12-month transition to Kiro. | verdict=non-addition reason=superseded-by-kiro"
-    - "audit | https://github.com/tvna/gitapex/issues/444 | Checked the separate 'Agent Toolkit for AWS' project via its own README: it is AWS-specific skill/plugin content consumed by other runtimes (Claude Code, Codex, Cursor, Kiro), not itself a runtime that parses SKILL.md. | verdict=non-addition"
-    - "decision | https://github.com/tvna/gitapex/issues/443 | Added Kimi CLI and Cursor rows to the runtime-compatibility baseline on 2026-07-27, each grounded in that vendor's official docs fetched directly (cursor.com's skills-documentation page after domain allow-listing)."
-    - "audit | https://github.com/tvna/gitapex/issues/443 | Investigated MiniMax: platform.minimax.io docs and its OpenClaw integration guide show mmx-cli is a media-generation tool whose SKILL.md is symlinked into other runtimes' skill dirs, not parsed by a MiniMax-owned runtime; no source names a distinct 'MaxClaw' runtime. | verdict=non-addition"
-    - "decision | https://github.com/tvna/gitapex/issues/445 | Added docs/agent-product-scope.md distinguishing this skill's Axis C evidence baseline (eleven runtimes) from GitApex's Axis A Claude Code target and https://github.com/tvna/gitapex/issues/307's Axis B six-runtime enforcement-adapter target, naming this file as Axis C's owning evidence."
-    - "correction | https://github.com/tvna/gitapex/issues/445 | Reverted an earlier draft's cross-reference sentence in references/runtime-compatibility.md pointing at docs/agent-product-scope.md, since a Portable skill's references/*.md must not carry a link escaping its own directory."
-    - "audit | https://github.com/tvna/gitapex/issues/261 | Self-audit tracking issue (battle-testing-a-skill and evaluating-skill-quality applied to themselves) resolved most findings: dimensions 1/2, 9, 12, 13/15/16, and 17 gained references/adversarial-self-audit.md plus SKILL.md pointers."
-    - "audit | https://github.com/tvna/gitapex/issues/261 | Dimension 11 gained a second independent check: a real downstream consumer, .github/scripts/gate_skill_audit_disclosure.py, was found, resolving the prior INDETERMINATE verdict."
-    - "decision | https://github.com/tvna/gitapex/issues/261 | Closed the dimension 6/8 named-rejection-token gap in references/rubric.md's Verdicts section by adding Not-well-formed and Indeterminate verdicts."
-    - "decision | https://github.com/tvna/gitapex/issues/261 | Folded the dimension-2 CLAUDE.md-exclusion duplication between the Subagent dispatch and Stop boundaries sections into a single cross-reference."
-    - "deferral | https://github.com/tvna/gitapex/issues/261 -> https://github.com/tvna/gitapex/issues/364 | Deferred dimension 14 (a dedicated regression corpus for this file's own guardrail prose, distinct from evals/evaluating-skill-quality/'s existing behavior-grading corpus) to a follow-up issue."
-    - "audit | https://github.com/tvna/gitapex/issues/383 -> https://github.com/tvna/gitapex/issues/390 | A fresh isolated self-review after the rubric.md cleanup returned WELL-FORMED-NOT-MATURE citing three gaps: dimension 2's triplicated step-level disclaimer (deduplicated), dimension 5's subagent-isolation-registry.md merged into adversarial-self-audit.md, and dimension 7's test_check_skill_shape.py gaining a subprocess CLI-boundary test group. | verdict=WELL-FORMED-NOT-MATURE found=3 fixed=3"
-    - "caveat | SKILL.md | The issue 390 self-review's Blind spot pass named a self-referential-circularity gap -- this skill grading itself has no independent standard of 'good' -- left open with no mechanical fix proposed."
-    - "audit | https://github.com/tvna/gitapex/issues/475 | Found SKILL.md's Subagent dispatch section already deferred to references/adversarial-self-audit.md's per-platform Isolation verification registry rather than hardcoding a mechanism; no SKILL.md text change was needed or made. | verdict=no-change-needed"
-    - "audit | https://github.com/tvna/gitapex/issues/475 | Ran a live reconfirmation trial against the isolation registry's existing dated entry for this exact platform (positive/negative claude -p controls); the verified alternative still held, so the isolation finding was not re-dispatched a third time given two prior independent confirmations. | verdict=reconfirmed"
-    - "audit | https://github.com/tvna/gitapex/issues/476 | A concurrent follow-up session independently re-ran the same isolation Verification procedure (same commands) in parallel with issue 475's own reconfirmation, reaching the same result."
-    - "correction | https://github.com/tvna/gitapex/issues/475 -> https://github.com/tvna/gitapex/issues/476 | Issue 476's session had proposed pointer clauses in evaluating-deterministic-gate-quality/SKILL.md and vetting-attack-surface/SKILL.md plus a second reconfirmation bullet in adversarial-self-audit.md; both were dropped on merge (landed as https://github.com/tvna/gitapex/issues/478) in favor of issue 475's already-reviewed no-change decision."
-    - "audit | https://github.com/tvna/gitapex/issues/474 -> https://github.com/tvna/gitapex/issues/476 | Using the verified claude -p mechanism, ran a genuinely isolated audit of evaluating-deterministic-gate-quality's diff, catching a real bug the earlier contaminated dispatch missed. | found=1 bug=subprocess-count-arithmetic-error"
-    - "deferral | https://github.com/tvna/gitapex/issues/476 -> https://github.com/tvna/gitapex/issues/479 | Filed a tangential, not-yet-independently-confirmed finding from that isolated dispatch -- this session's own TaskList state unexpectedly appearing in its context -- as a separate follow-up issue."
-    - "decision | https://github.com/tvna/gitapex/issues/477 | Dimension 8 gained a reference-load-precision sub-check (TP/FP/FN/TN classification of whether a skill's references/*.md were actually read); confirmed no existing eval mechanism observes this, so it is written transcript-gated with an unmeasured-fallback default."
-    - "audit | https://github.com/tvna/gitapex/issues/477 | The held-out gate was run live via fresh subagent dispatches (before/after) against the new selection fixture plus one dimension-8-adjacent sibling fixture as a regression spot-check; remaining selection-fixture ties were reasoned analytically per split.md's assertion-surface-disjointness rule."
-    - "audit | https://github.com/tvna/gitapex/issues/477 | A fresh isolated self-review and battle-testing-a-skill adversarial pass against the committed diff returned WELL-FORMED-NOT-MATURE and FAIL: the unmeasured fallback lacked affirmative confirmation, no authenticity check, no evidence-citation requirement, no partial-trace fallback, and one unhedged portability-litmus citation. | verdict=WELL-FORMED-NOT-MATURE/FAIL found=5"
-    - "decision | https://github.com/tvna/gitapex/issues/477 | Fixed all five dogfood findings in the same PR and redesigned the selection fixture around the new authenticity requirement, producing a genuine strict-improvement gate result rather than the first round's disclosed tie. | before=0.6 after=0.8"
-    - "audit | https://github.com/tvna/gitapex/issues/477 | A second confirming round (two more independent dispatches) verified the fixes: three of four battle-test findings plus the citation hedge were confirmed closed by both, but trace authenticity was only partially closed, and both independently caught a new unhedged citation plus a structured-output-injection exposure from unquoted trace content. | verdict=partial open=1"
-    - "correction | https://github.com/tvna/gitapex/issues/477 | Fixed the newly caught unhedged citation and structured-output-injection exposure in a third commit, not re-verified by a further dispatch; disclosed as an open item in split.md's second confirming-round entry rather than rounded up to a clean verdict."
-    - "audit | https://github.com/tvna/gitapex/pull/481 | A dedicated four-agent investigation (Workflow, fable model) into the open trace-authenticity item found the prior 'no comparable mechanism exists' claim false: a real mechanism exists (author-uncontrolled channel provenance with content binding, e.g. OTEL tool_result export or a CI artifact via the platform API, cross-checked against the recorded commit). | verdict=finding found=1"
-    - "correction | https://github.com/tvna/gitapex/issues/164 -> https://github.com/tvna/gitapex/pull/481 | The adversarial-verification pass caught an overclaim in the first-pass fix text: a target repo's own author can point the harness's model-endpoint secret at a replay server, producing a genuine-harness, fabricated trace that passes an unscoped content-binding diff -- the same overclaim class as issue 164's unconditional-hooks-claim overcorrection."
-    - "decision | https://github.com/tvna/gitapex/pull/481 | Revised the rubric to a three-state trace disposition (Channel-authenticated,scoped / Consistency-checked only / Unauthenticated): state 1 degrades to state 2 when the artifact's author controls the target repo's own infrastructure/secrets, the content-binding diff covers the full tree at the recorded commit, and the 'provisioning secrets' caveat is scoped to third-party contributions only."
-    - "caveat | references/rubric.md | GitApex's own eval suite has no trace-producing mechanism today, so its fixtures still resolve through the unchanged fallback paragraph; the three-state framework is forward-looking for a future target repository with real CI/telemetry infrastructure."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/32"
+      summary: "Delegated this skill's own deterministic shape lane to scripts/check_skill_shape.py; the worked example in references/worked-example-self-review.md documents that delegation."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/332"
+      summary: "Verified the warning-only compatibility baseline on 2026-07-25 against the Agent Skills spec and docs for Claude Code, Codex, Gemini CLI, Devin, OpenClaw, and HermesAgent; evidence in references/runtime-compatibility.md."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/444"
+      summary: "Added GitHub Copilot and Kiro rows to the runtime-compatibility baseline on 2026-07-27, grounded in official docs (github/docs source for Copilot; kiro.dev for Kiro)."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/444"
+      summary: "Added a Windsurf row same-day after docs.devin.ai was allow-listed; it documents only name/description in frontmatter with no allowed-tools claim, kept independent from the existing Devin row."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/444"
+      summary: "Investigated Amazon Q Developer CLI: its README states it is no longer maintained and is now Kiro CLI; AWS's EOL announcement confirms Q Developer IDE plugins sunset 2027-04-30 with a 12-month transition to Kiro."
+      outcome:
+        verdict: non-addition
+        reason: superseded-by-kiro
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/444"
+      summary: "Checked the separate 'Agent Toolkit for AWS' project via its own README: it is AWS-specific skill/plugin content consumed by other runtimes (Claude Code, Codex, Cursor, Kiro), not itself a runtime that parses SKILL.md."
+      outcome:
+        verdict: non-addition
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/443"
+      summary: "Added Kimi CLI and Cursor rows to the runtime-compatibility baseline on 2026-07-27, each grounded in that vendor's official docs fetched directly (cursor.com's skills-documentation page after domain allow-listing)."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/443"
+      summary: "Investigated MiniMax: platform.minimax.io docs and its OpenClaw integration guide show mmx-cli is a media-generation tool whose SKILL.md is symlinked into other runtimes' skill dirs, not parsed by a MiniMax-owned runtime; no source names a distinct 'MaxClaw' runtime."
+      outcome:
+        verdict: non-addition
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/445"
+      summary: "Added docs/agent-product-scope.md distinguishing this skill's Axis C evidence baseline (eleven runtimes) from GitApex's Axis A Claude Code target and https://github.com/tvna/gitapex/issues/307's Axis B six-runtime enforcement-adapter target, naming this file as Axis C's owning evidence."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/445"
+      summary: "Reverted an earlier draft's cross-reference sentence in references/runtime-compatibility.md pointing at docs/agent-product-scope.md, since a Portable skill's references/*.md must not carry a link escaping its own directory."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/261"
+      summary: "Self-audit tracking issue (battle-testing-a-skill and evaluating-skill-quality applied to themselves) resolved most findings: dimensions 1/2, 9, 12, 13/15/16, and 17 gained references/adversarial-self-audit.md plus SKILL.md pointers."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/261"
+      summary: "Dimension 11 gained a second independent check: a real downstream consumer, .github/scripts/gate_skill_audit_disclosure.py, was found, resolving the prior INDETERMINATE verdict."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/261"
+      summary: "Closed the dimension 6/8 named-rejection-token gap in references/rubric.md's Verdicts section by adding Not-well-formed and Indeterminate verdicts."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/261"
+      summary: "Folded the dimension-2 CLAUDE.md-exclusion duplication between the Subagent dispatch and Stop boundaries sections into a single cross-reference."
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/261 -> https://github.com/tvna/gitapex/issues/364"
+      summary: "Deferred dimension 14 (a dedicated regression corpus for this file's own guardrail prose, distinct from evals/evaluating-skill-quality/'s existing behavior-grading corpus) to a follow-up issue."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/383 -> https://github.com/tvna/gitapex/issues/390"
+      summary: "A fresh isolated self-review after the rubric.md cleanup returned WELL-FORMED-NOT-MATURE citing three gaps: dimension 2's triplicated step-level disclaimer (deduplicated), dimension 5's subagent-isolation-registry.md merged into adversarial-self-audit.md, and dimension 7's test_check_skill_shape.py gaining a subprocess CLI-boundary test group."
+      outcome:
+        verdict: WELL-FORMED-NOT-MATURE
+        found: 3
+        fixed: 3
+    - kind: caveat
+      anchor: "SKILL.md"
+      summary: "The issue 390 self-review's Blind spot pass named a self-referential-circularity gap -- this skill grading itself has no independent standard of 'good' -- left open with no mechanical fix proposed."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/475"
+      summary: "Found SKILL.md's Subagent dispatch section already deferred to references/adversarial-self-audit.md's per-platform Isolation verification registry rather than hardcoding a mechanism; no SKILL.md text change was needed or made."
+      outcome:
+        verdict: no-change-needed
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/475"
+      summary: "Ran a live reconfirmation trial against the isolation registry's existing dated entry for this exact platform (positive/negative claude -p controls); the verified alternative still held, so the isolation finding was not re-dispatched a third time given two prior independent confirmations."
+      outcome:
+        verdict: reconfirmed
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/476"
+      summary: "A concurrent follow-up session independently re-ran the same isolation Verification procedure (same commands) in parallel with issue 475's own reconfirmation, reaching the same result."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/475 -> https://github.com/tvna/gitapex/issues/476"
+      summary: "Issue 476's session had proposed pointer clauses in evaluating-deterministic-gate-quality/SKILL.md and vetting-attack-surface/SKILL.md plus a second reconfirmation bullet in adversarial-self-audit.md; both were dropped on merge (landed as https://github.com/tvna/gitapex/issues/478) in favor of issue 475's already-reviewed no-change decision."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/474 -> https://github.com/tvna/gitapex/issues/476"
+      summary: "Using the verified claude -p mechanism, ran a genuinely isolated audit of evaluating-deterministic-gate-quality's diff, catching a real bug the earlier contaminated dispatch missed."
+      outcome:
+        found: 1
+        bug: subprocess-count-arithmetic-error
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/476 -> https://github.com/tvna/gitapex/issues/479"
+      summary: "Filed a tangential, not-yet-independently-confirmed finding from that isolated dispatch -- this session's own TaskList state unexpectedly appearing in its context -- as a separate follow-up issue."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/477"
+      summary: "Dimension 8 gained a reference-load-precision sub-check (TP/FP/FN/TN classification of whether a skill's references/*.md were actually read); confirmed no existing eval mechanism observes this, so it is written transcript-gated with an unmeasured-fallback default."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/477"
+      summary: "The held-out gate was run live via fresh subagent dispatches (before/after) against the new selection fixture plus one dimension-8-adjacent sibling fixture as a regression spot-check; remaining selection-fixture ties were reasoned analytically per split.md's assertion-surface-disjointness rule."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/477"
+      summary: "A fresh isolated self-review and battle-testing-a-skill adversarial pass against the committed diff returned WELL-FORMED-NOT-MATURE and FAIL: the unmeasured fallback lacked affirmative confirmation, no authenticity check, no evidence-citation requirement, no partial-trace fallback, and one unhedged portability-litmus citation."
+      outcome:
+        verdict: WELL-FORMED-NOT-MATURE/FAIL
+        found: 5
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/477"
+      summary: "Fixed all five dogfood findings in the same PR and redesigned the selection fixture around the new authenticity requirement, producing a genuine strict-improvement gate result rather than the first round's disclosed tie."
+      outcome:
+        before: 0.6
+        after: 0.8
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/477"
+      summary: "A second confirming round (two more independent dispatches) verified the fixes: three of four battle-test findings plus the citation hedge were confirmed closed by both, but trace authenticity was only partially closed, and both independently caught a new unhedged citation plus a structured-output-injection exposure from unquoted trace content."
+      outcome:
+        verdict: partial
+        open: 1
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/477"
+      summary: "Fixed the newly caught unhedged citation and structured-output-injection exposure in a third commit, not re-verified by a further dispatch; disclosed as an open item in split.md's second confirming-round entry rather than rounded up to a clean verdict."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/pull/481"
+      summary: "A dedicated four-agent investigation (Workflow, fable model) into the open trace-authenticity item found the prior 'no comparable mechanism exists' claim false: a real mechanism exists (author-uncontrolled channel provenance with content binding, e.g. OTEL tool_result export or a CI artifact via the platform API, cross-checked against the recorded commit)."
+      outcome:
+        verdict: finding
+        found: 1
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/164 -> https://github.com/tvna/gitapex/pull/481"
+      summary: "The adversarial-verification pass caught an overclaim in the first-pass fix text: a target repo's own author can point the harness's model-endpoint secret at a replay server, producing a genuine-harness, fabricated trace that passes an unscoped content-binding diff -- the same overclaim class as issue 164's unconditional-hooks-claim overcorrection."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/pull/481"
+      summary: "Revised the rubric to a three-state trace disposition (Channel-authenticated,scoped / Consistency-checked only / Unauthenticated): state 1 degrades to state 2 when the artifact's author controls the target repo's own infrastructure/secrets, the content-binding diff covers the full tree at the recorded commit, and the 'provisioning secrets' caveat is scoped to third-party contributions only."
+    - kind: caveat
+      anchor: "references/rubric.md"
+      summary: "GitApex's own eval suite has no trace-producing mechanism today, so its fixtures still resolve through the unchanged fallback paragraph; the three-state framework is forward-looking for a future target repository with real CI/telemetry infrastructure."
   skillDependencies:
     requires: []
     relatedTo:
