@@ -71,13 +71,45 @@ job-level `permissions:`, `timeout-minutes`).
     from the superseded document (see below), adapted from
     session-oriented wording ("this session", "this Routine") to
     workflow-run wording.
-  - `claude_args: "--allowedTools mcp__github__list_issues,mcp__github__search_issues,mcp__github__list_pull_requests"`
+  - `claude_args:` `--mcp-config` (a GitHub MCP server, see below) plus
+    `--allowedTools mcp__github__list_issues,mcp__github__search_issues,mcp__github__list_pull_requests`
 
-  **Open item, not yet verified:** whether `claude-code-action` exposes
-  GitHub MCP tools under these exact `mcp__github__*` names or a
-  different internal toolset is unconfirmed as of this document. Verify
-  against the action's own security docs or the first live run, and
-  correct the `--allowedTools` value then rather than assume it here.
+  **Resolved 2026-07-28 (was an open item):** the first live
+  `workflow_dispatch` run (job
+  [90440858606](https://github.com/tvna/gitapex/actions/runs/30409033665/job/90440858606))
+  failed immediately (`is_error: true`, `num_turns: 1`,
+  `total_cost_usd: 0`, ~849ms). The logged SDK options carried
+  `allowedTools` referencing `mcp__github__*` but **no `mcpServers` key
+  at all** -- `claude-code-action` does not auto-wire a GitHub MCP
+  server for "agent" mode (`schedule`/`workflow_dispatch`) the way it
+  apparently does for "tag" mode (`@claude` mentions); the tool names in
+  `--allowedTools` referenced nothing that existed, leaving the run with
+  zero usable tools. Fixed by explicitly adding `--mcp-config` for
+  `github/github-mcp-server`. Two options were compared against primary
+  sources (not memory):
+  - The hosted remote endpoint (`https://api.githubcopilot.com/mcp`)
+    per [github-mcp-server's Claude install
+    guide](https://github.com/github/github-mcp-server/blob/main/docs/installation-guides/install-claude.md)
+    explicitly requires a GitHub **Personal Access Token** and rejects
+    the plain Actions `GITHUB_TOKEN` -- using it would mean minting and
+    rotating a new long-lived secret, undoing this design's "no new
+    PAT/App needed" advantage.
+  - The local Docker image (`ghcr.io/github/github-mcp-server`) has no
+    such restriction -- any valid token works, so the existing
+    read-scoped `GITHUB_TOKEN` (already granted `contents: read`,
+    `issues: read`, `pull-requests: read` by this workflow) satisfies
+    it with no new secret. **Chosen.**
+
+  Per [claude-code-action's own MCP configuration
+  docs](https://github.com/anthropics/claude-code-action/blob/main/docs/configuration.md),
+  the final `claude_args` is:
+  ```
+  --mcp-config '{"mcpServers": {"github": {"command": "docker", "args": ["run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "ghcr.io/github/github-mcp-server"], "env": {"GITHUB_PERSONAL_ACCESS_TOKEN": "${{ secrets.GITHUB_TOKEN }}"}}}}'
+  --allowedTools mcp__github__list_issues,mcp__github__search_issues,mcp__github__list_pull_requests
+  ```
+  Not yet re-verified live as of this edit -- the fix is filed in a
+  follow-up PR; AC1 still needs one more successful `workflow_dispatch`
+  run to close.
 
 ### Prompt (verbatim, `prompt:` input)
 
