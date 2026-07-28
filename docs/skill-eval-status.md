@@ -545,6 +545,86 @@ exact rubric -- remains the correct, already-adopted mechanism for the
 same underlying discipline (real scorer, real held-out split, strict
 improve-or-reject) without the unverified-code risk. Refs #319, #310.
 
+**Issue #495 (Opus 5 prompting-guide alignment).** Checked whether this
+skill's rubric evaluates a reviewed skill against Anthropic's "Prompting
+Claude Opus 5" guide. It did not: two of the guide's clearest, most
+gradable anti-patterns for a document read by a frontier-tier model had no
+rubric coverage. Added: (1) a Dimension 2 (Conciseness) grounded Fail
+instance -- a generic re-verification/self-correction instruction with no
+domain-specific reason, on Frontier-declared (or Adaptive-body) content, is
+**duplication** against the model's own documented default behavior,
+distinguished from an instruction naming the skill's own actual task; (2) a
+new step-level Mechanism-fit check, `### Subagent delegation scope` --
+declaration-independent, checking whether a skill that instructs subagent
+dispatch states a delegation criterion and either defaults to a single
+dispatch or states a cap. Both grounded in a new `[opus5]` reference entry.
+
+Went through `scorer-gated-skill-edits`' own held-out gate: 5 new fixtures
+added to `split.md`'s split (57 total, 22:23:12). Two live fresh-dispatch
+pairs against the two new selection fixtures (`opus5-redundant-
+verification-generalizes.yaml`, `opus5-unbounded-subagent-generalizes.yaml`)
+each moved **0.75 -> 1.0**; the 20 pre-existing selection fixtures were
+confirmed content-disjoint from the edit by direct inspection (no shared
+vocabulary in either their target-skill prompts or their assertions) rather
+than re-dispatched, per the same assertion-surface-disjointness reasoning
+this file's issue #406 entry already established. **KEEP** (strict
+improvement; the 20 unaffected fixtures tie exactly, both new fixtures
+strictly improve). A held-out restraint fixture (test split, read once,
+covering both new checks at once) scored 1.0 and surfaced a genuine bonus
+confirmation: the Subagent delegation scope check correctly distinguished
+a per-batch-size formula ("one subagent per 50-test batch") from an actual
+total-agent cap, a real partial finding rather than a false positive.
+During the gate run, before banking any score, a negation-trap fixture-
+assertion bug was found and fixed live (an initial `"over-verification"`
+assertion under-matched a correct-but-differently-phrased review, and an
+initial `"duplication"` assertion over-matched a correct denial that also
+used the word) -- both loosened/tightened the same way this file's prior
+entries (#149, #155) already document fixing this exact bug class.
+
+Isolation for both the gate and the two verification passes below used the
+verified `claude -p` subprocess alternative from `references/adversarial-
+self-audit.md`'s Isolation-verification registry (this exact platform/
+version already has a confirmed entry; the `Agent` tool dispatch mechanism
+remains confirmed-contaminated for this platform), plus the registry's
+own `$HOME`-copy recipe to avoid the separate task-list leak vector.
+
+A `battle-testing-a-skill` adversarial pass (one trial, by-hand per this
+disclosed methodology) against the edited `SKILL.md`/`rubric.md` returned
+20/22 PASS (provisional -- single non-subagent-isolated trial), 4 N/A
+(domain-conditional dimensions correctly ruled out), and 2 FAIL. One FAIL
+was real and specific to this edit: the new Subagent delegation scope
+section's worked example misattributed a quote from the Opus5 doc's own
+example prompt to `SKILL.md`, which does not contain that phrasing -- fixed
+to quote `SKILL.md`'s actual text ("one fresh subagent dispatch," "the
+single dispatch above can become several") and to honestly name that the
+escalation path itself states no numeric cap. The other FAIL (a claimed
+regression-corpus fixture reported absent) was a battle-test harness
+artifact: the scratch sandbox never copied `evals/` into its tree; the
+fixture exists in the real repository. Fix re-verified by direct grep
+against `SKILL.md`, not a second full dispatch.
+
+Two further self-review passes (this skill applied to itself, by-hand per
+disclosed methodology, per this file's own #164/#183/#477 precedent) found
+and fixed two more citation-accuracy defects of the same class, both in the
+Dimension 2 bullet: `rubric.md` paraphrased `SKILL.md`'s Procedure step 5
+as "quoting evidence" instead of quoting it exactly ("quoting the specific
+text that earns each verdict"); and `rubric.md` blended two distinct
+sections of the Opus5 doc (Task scope and over-verification; Self-
+correction) into one quotation, overstating what the source says for two of
+its four example phrases. Both fixed and verified byte-exact against
+`SKILL.md` and the live-fetched primary source respectively. The Subagent
+delegation scope section was independently re-verified clean on both self-
+review passes (every quote byte- or word-for-word matched). Other findings
+from the self-review passes (a shape-checker `skill-dependencies-resolve`
+FAIL, dangling reference-file links, an unmeasured Dimension 7) were
+sandbox-scoping artifacts from partial scratch copies, not real -- the
+actual repository shape check stayed 46/46 throughout via direct, complete
+runs. Two pre-existing, edit-unrelated gaps were named but left unfixed as
+out of scope: a bundled-script bare-issue-citation scope hole (Dimension
+6), and Dimension 5's mandatory-reference-read count now exceeding three
+for an ordinary review even before this edit. Full record: `evals/
+evaluating-skill-quality/split.md`'s Kept-edit log. Refs #495.
+
 ## explaining-the-work
 
 The committed eval suite (`evals/explaining-the-work/`) has no committed run

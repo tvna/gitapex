@@ -1,0 +1,32 @@
+id: evaluating-skill-quality-opus5-unbounded-subagent-generalizes
+name: Per-Ticket Subagent Dispatch With No Criterion or Cap
+description: A different domain from the train fixture -- the target instructs dispatching a subagent for every incoming support ticket, with no stated criterion and no cap. The gate measures whether the new Subagent delegation scope check generalizes to a distinct target and trigger ("for each incoming ticket") rather than memorizing the train fixture's "for every file" wording.
+tags:
+  - quality
+  - mechanism-fit
+  - opus5-prompting
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "support-ticket-triage". Is this a good skill?
+
+    ---
+    name: support-ticket-triage
+    description: Triage incoming customer support tickets and assign a priority. Use when the user asks to triage, sort, or prioritize support tickets.
+    ---
+
+    # Support Ticket Triage
+
+    ## Procedure
+
+    1. Pull the current queue of incoming tickets.
+    2. For each incoming ticket, dispatch a subagent to read it and assign
+       a priority.
+    3. Merge the subagent results back into the queue view.
+expected:
+  output_contains:
+    - "Subagent delegation scope"
+    - "ticket"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"

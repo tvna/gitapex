@@ -31,6 +31,7 @@ skill's own folder.
   - [Skill-step vs. bundled script](#skill-step-vs-bundled-script)
   - [Model/effort tier fit](#modeleffort-tier-fit)
   - [Tool-capability verification](#tool-capability-verification)
+  - [Subagent delegation scope](#subagent-delegation-scope)
 - [Portability level](#portability-level)
 - [Compatibility awareness](#compatibility-awareness)
 - [Capability assumption](#capability-assumption)
@@ -550,6 +551,48 @@ on it") rather than asserted as flat fact.
 
 Step-level finding, the same standing as the two checks above.
 
+### Subagent delegation scope
+
+An eighth Mechanism-fit check, distinct from the seven above: not whether a
+skill *should* delegate to a subagent at all (the whole-artifact "Skill vs.
+subagent" question above), but whether a skill whose own content *does*
+instruct subagent dispatch bounds when and how many. Grounded in "Prompting
+Claude Opus 5" ([opus5]): "Claude Opus 5 delegates to subagents more readily
+than prior models. Delegation pays off on genuinely independent, sizeable
+tracks of work, but it multiplies cost and time when applied to small
+tasks. If your harness supports subagents, give explicit guidance on which
+scenarios warrant delegation, or set deterministic caps on how many agents
+can be launched."
+
+**Applicability.** Fires only when the target's own content instructs
+dispatching a subagent at all -- most skills do not, and an absent
+delegation instruction is not a finding. Declaration-independent, the same
+way [Model/effort tier fit](#modeleffort-tier-fit) is: this check runs at
+Procedure step 2, before the `metadata/gitapex.yaml` sidecar is even read at
+step 4, so it cannot be gated by a declared capability assumption.
+
+**Justified.** The instruction states a criterion for when delegation is
+warranted (genuinely independent, parallelizable, or sizeable work, as
+opposed to anything the calling context could finish itself in a handful of
+tool calls) and either defaults to a single dispatch or states an explicit
+cap on how many agents may be launched. This skill's own `SKILL.md`
+Subagent dispatch section satisfies this criterion via the first disjunct,
+an in-repo example worth quoting accurately rather than the source's own
+example prompt: it runs the review "inside **one fresh subagent dispatch**,
+not the invoking context" by default, and treats any escalation to several
+as an explicitly optional upgrade ("the single dispatch above can become
+several"), never the default. That escalation path itself states no
+numeric cap once several agents are in play -- a real, narrower step-level
+gap this check would name if graded against `SKILL.md` for real, distinct
+from the criterion it does satisfy (defaulting to one).
+
+**Unjustified.** Delegation is instructed with no stated criterion and no
+cap -- for example, "dispatch a subagent for every item in this list" with
+no bound on how many items that could be, or no guidance distinguishing a
+genuinely independent, sizeable task from a small one.
+
+Step-level finding, the same standing as the three checks above.
+
 ## Portability level
 
 One of this review's own preconditions (see [Contract
@@ -1001,9 +1044,37 @@ apply the plain examples below only when no declaration exists or applies.
   model, harness, and fixture set. Never call a sentence a no-op from prose
   style alone; without a before/after run, use one of the four static
   classifications above or say unmeasured.
+- **A generic re-verification, self-check, or self-correction-narration
+  instruction is a specific instance of duplication** when the target is
+  declared (or read as) Frontier, or is Adaptive's body -- the "other owner"
+  here is the model's own documented default behavior, not another section
+  of the file. Anthropic's own guidance on prompting a specific frontier-class
+  model, "Prompting Claude Opus 5" ([opus5]), names this pattern directly, in
+  two adjacent sections with two distinct but related findings: an explicit
+  verification instruction such as "include a final verification step for
+  any non-trivial task" or "use a subagent to verify" "cause[s]
+  over-verification on Claude Opus 5, and removing them reduces wasted
+  tokens with no loss in quality"; separately, an instruction to
+  "double-check your answer" or "re-verify before responding" targets a
+  re-check the model "already performs" on its own, and "compound[s] with
+  the model's own behavior and add[s] cost without improving results" --
+  the same holds for narrating every self-correction rather than only ones
+  that "would change the user's code, conclusions, or decisions." Exempt an
+  instruction that names the skill's own domain-specific task instead of
+  restating generic scaffolding -- `SKILL.md`'s own Procedure step 5,
+  "quoting the specific text that earns each verdict," is this skill's
+  actual job, not a redundant re-check, and is not a Fail under this
+  bullet. Calibrated by the
+  [Capability assumption](#capability-assumption) section's existing
+  dimension-2 rules: full strictness at Frontier or Adaptive's body: a
+  Broad-declared target is excused, since a weaker or more economical model
+  may genuinely need to be told explicitly to verify or double-check its own
+  work.
 - **Fail:** explaining what a well-known format or tool is; retaining
   irrelevant, duplicate, sedimentary, or sprawling text without a
-  behavior-controlling reason; claiming an unmeasured sentence is a no-op.
+  behavior-controlling reason; claiming an unmeasured sentence is a no-op; an
+  unhedged generic verification or self-correction-narration instruction on
+  Frontier (or Adaptive-body) content with no domain-specific reason stated.
 - **Pass:** assumes competence, states only the project- or task-specific
   delta, reaches actionable content fast, and distinguishes static pruning
   evidence from measured no-op evidence.
@@ -1620,6 +1691,8 @@ Every inline `[label]` citation above resolves to the source below.
 - **[modeleffort]** Lydia Hallie, Anthropic (Claude Code team) -- Choosing
   a Claude model and effort level in Claude Code.
   <https://claude.com/blog/claude-model-and-effort-level-in-claude-code>
+- **[opus5]** Anthropic -- Prompting Claude Opus 5.
+  <https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5>
 - **[kapoor]** Kapoor, Stroebl, Siegel, Nadgir, Narayanan -- AI Agents That
   Matter, 2024 (arXiv:2407.01502).
   <https://arxiv.org/abs/2407.01502>
@@ -1648,3 +1721,4 @@ Every inline `[label]` citation above resolves to the source below.
 [steering]: https://claude.com/blog/steering-claude-code-skills-hooks-rules-subagents-and-more "Anthropic -- Steering Claude Code: skills, hooks, subagents and more"
 [fable]: https://claude.com/blog/a-field-guide-to-claude-fable-finding-your-unknowns "Thariq Shihipar, Anthropic -- A Field Guide to Fable: Finding Your Unknowns"
 [modeleffort]: https://claude.com/blog/claude-model-and-effort-level-in-claude-code "Lydia Hallie, Anthropic (Claude Code team) -- Choosing a Claude model and effort level in Claude Code"
+[opus5]: https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5 "Anthropic -- Prompting Claude Opus 5"

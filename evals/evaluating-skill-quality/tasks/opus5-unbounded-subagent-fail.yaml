@@ -1,0 +1,32 @@
+id: evaluating-skill-quality-opus5-unbounded-subagent-fail
+name: Per-File Subagent Dispatch With No Criterion or Cap
+description: Motivates the new Subagent delegation scope Mechanism-fit check -- the target instructs dispatching a subagent for every file in the repository, with no stated criterion for when delegation is warranted and no cap on how many agents may be launched. The review must flag this as unjustified delegation, not accept it because dispatching subagents is otherwise a reasonable mechanism choice.
+tags:
+  - quality
+  - mechanism-fit
+  - opus5-prompting
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "repo-wide-license-audit". Is this a good skill?
+
+    ---
+    name: repo-wide-license-audit
+    description: Audit every file in a repository for a missing or incorrect license header. Use when the user asks to audit, check, or fix license headers across a repository.
+    ---
+
+    # Repo-Wide License Audit
+
+    ## Procedure
+
+    1. List every file in the repository.
+    2. For every file in the repository, dispatch a subagent to check its
+       license header and report back.
+    3. Aggregate the subagent reports into one findings list.
+expected:
+  output_contains:
+    - "Subagent delegation scope"
+    - "license"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"

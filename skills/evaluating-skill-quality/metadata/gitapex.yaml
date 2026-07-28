@@ -151,6 +151,34 @@ spec:
     - kind: caveat
       anchor: "references/rubric.md"
       summary: "GitApex's own eval suite has no trace-producing mechanism today, so its fixtures still resolve through the unchanged fallback paragraph; the three-state framework is forward-looking for a future target repository with real CI/telemetry infrastructure."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/495"
+      summary: "Added a Dimension 2 grounded Fail instance (generic verification/self-correction instructions are duplication against a frontier model's own default behavior) and a new step-level Mechanism-fit check, Subagent delegation scope, both grounded in Anthropic's Prompting Claude Opus 5 guide."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/495"
+      summary: "scorer-gated-skill-edits held-out gate: 5 new fixtures added (57 total, 22:23:12). Both new selection fixtures moved 0.75->1.0 on live isolated claude -p dispatches; 20 pre-existing selection fixtures confirmed content-disjoint by direct inspection. KEEP. Full record: evals/evaluating-skill-quality/split.md."
+      outcome:
+        verdict: KEEP
+        before: 0.75
+        after: 1.0
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/495"
+      summary: "battle-testing-a-skill pass found one real FAIL: the new Subagent delegation scope section misattributed a quote from the Opus5 doc's own example prompt to SKILL.md. Fixed to quote SKILL.md's actual text. A second FAIL (missing evals/ dir) was a battle-test scratch-sandbox artifact, not a real defect."
+      outcome:
+        verdict: fixed
+        found: 1
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/495"
+      summary: "Two self-review passes found two further citation-accuracy defects in the Dimension 2 bullet: a paraphrase of SKILL.md's step 5 presented as an exact quote, and a blended quote overstating what two distinct Opus5-doc sections actually say. Both fixed and verified against primary sources."
+      outcome:
+        verdict: fixed
+        found: 2
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/pull/496"
+      summary: "Codex review caught two real bugs: check_skill_shape.py's citation-URL exemption regex missed a titled inline link (CommonMark's optional title), and the restraint fixture's delegation step stated a per-batch size, not a real total cap. Both fixed and re-verified live (fixture: 0.75->1.0->1.0 clean)."
+      outcome:
+        verdict: fixed
+        found: 2
   skillDependencies:
     requires: []
     relatedTo:

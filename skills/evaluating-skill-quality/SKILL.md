@@ -98,6 +98,8 @@ have been a different mechanism is not fixed by polishing it further.
   is not evidence the cited tool actually supports it. Also a step-level
   finding, not a whole-artifact one -- criteria and citation are in
   `references/rubric.md`'s Mechanism fit section.
+- **Subagent delegation scope**: subagent dispatch with no criterion or cap
+  is a step-level finding -- `references/rubric.md`.
 
 Full rationale and citation: [references/rubric.md](references/rubric.md)'s
 Mechanism fit section.
@@ -187,8 +189,7 @@ verdict itself would still be grading from a contaminated context.
   dispatches and cross-check them), the single dispatch above can become
   several. A harness with only a single-agent dispatch primitive still
   gets the isolation benefit from one fresh dispatch -- named here as an
-  illustrative example, not something this procedure depends on to
-  function.
+  illustrative example only.
 
 ## Portability level
 
@@ -378,10 +379,9 @@ re-derive one.
    or CLAUDE.md content) or a whole-artifact low-cohesion finding (the
    skill should be split into several) is the headline finding of the
    review -- report it even if the rest of the review still completes.
-   The step-level Skill-step vs. bundled script, Model/effort tier fit,
-   and Tool-capability verification findings are the exception: report
-   them for triage, not as the headline. Also run the Blind spot pass per
-   the Unknowns framework section above -- name a rubric gap if the
+   The four step-level Mechanism fit findings above are the exception:
+   report them for triage, not as the headline. Also run the Blind spot pass
+   per the Unknowns framework section above -- name a rubric gap if the
    target's domain exposes one, or state explicitly that none was found.
 3. Run the deterministic shape checker per the Two lanes section above (or
    apply its checks by hand where Python is unavailable); cite the exact
