@@ -58,11 +58,34 @@ def test_every_skill_has_an_eval_status_file():
 
 
 def test_every_skill_has_an_index_row():
+    skills = set(_skill_names())
     indexed = _indexed_skill_names()
-    missing = [name for name in _skill_names() if name not in indexed]
+    missing = sorted(skills - indexed)
     assert not missing, (
         f"{STATUS_DOC}'s '## Index' table has no row for: {missing} -- "
         "add a '| `<skill>` | [evals/<skill>/eval-status.md]"
         "(../evals/<skill>/eval-status.md) |' row in the same change "
         "that adds the skill."
+    )
+    stale = sorted(indexed - skills)
+    assert not stale, (
+        f"{STATUS_DOC}'s '## Index' table has a row for: {stale}, but no "
+        "corresponding skills/<name>/ directory exists -- remove the "
+        "stale row (and evals/<name>/, if orphaned) in the same change "
+        "that renames or removes the skill."
+    )
+
+
+def test_no_orphaned_eval_status_files():
+    skills = set(_skill_names())
+    eval_status_dirs = {
+        p.name for p in EVALS_DIR.iterdir() if p.is_dir() and (p / "eval-status.md").is_file()
+    }
+    orphaned = sorted(eval_status_dirs - skills)
+    assert not orphaned, (
+        f"evals/<name>/eval-status.md exists for {orphaned}, but no "
+        "corresponding skills/<name>/ directory exists -- remove the "
+        "orphaned evals/<name>/ directory (and its docs/skill-eval-"
+        "status.md index row, if any) in the same change that renames "
+        "or removes the skill."
     )
