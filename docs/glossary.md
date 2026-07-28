@@ -106,4 +106,6 @@ canonical vocabulary. Resolved by the repository owner directly, per the
 Resolve step: the third family above wins, rather than stretching either
 existing definition to cover a shape it wasn't written for.
 `evaluating-attack-surface` -> `vetting-attack-surface` was proposed as a
-rename candidate on PR #463 itself, not changed here.
+rename candidate on PR #463 itself, not changed here. That rename executed
+in gitapex#466 via `git mv` + `spec.lifecycle.renamedFrom`, once this entry
+itself had merged.
