@@ -2,6 +2,22 @@
 
 Date: 2026-07-25
 
+> **Superseded 2026-07-28.** This document's `create_trigger`-based Cloud
+> Routine approach could not be completed: `create_trigger`,
+> `list_triggers`, `list_environments`, and `send_later` all rejected
+> every attempt (including from a live interactive session, not just the
+> original non-interactive one) with the identical
+> `MCP error -32003: MCP tool call requires approval`, and the
+> `Claude_Code_Remote` server does not appear in `ListConnectors` output,
+> so the standard claude.ai connector-authorization path does not apply
+> either. This is an out-of-session, account-level gate this repository
+> cannot clear from any session. #315 now proceeds on a GitHub Actions +
+> `anthropics/claude-code-action@v1` design instead -- see
+> `docs/superpowers/specs/2026-07-28-ranking-the-open-queue-github-actions-routine.md`
+> for the replacement decision and comparison against AWS/GCP/Fly.io
+> alternatives. This document is kept as-is below for the audit trail;
+> its Routine configuration was never created live.
+
 Refs #315 (sub-task of #310, T1). Wires `skills/ranking-the-open-queue`
 (manual-invocation-only today) to a scheduled Claude Code Cloud Routine,
 using the platform's own `/schedule`(trigger) + `/goal`(verification)

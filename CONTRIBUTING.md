@@ -35,3 +35,37 @@ To enable this:
 The workflow's job runs under the `sync-bot` environment, so these secrets are
 only exposed to that job and can carry their own approval gates independent of
 other workflows in this repository.
+
+## ranking-the-open-queue weekly digest API key
+
+The "Weekly ranking-the-open-queue digest"
+workflow (`.github/workflows/ranking-the-open-queue-weekly.yml`) runs
+`skills/ranking-the-open-queue` on a weekly schedule via
+`anthropics/claude-code-action@v1`. See
+`docs/superpowers/specs/2026-07-28-ranking-the-open-queue-github-actions-routine.md`
+for the full design and why this replaced an earlier Claude Code Cloud
+Routine attempt.
+
+To enable this:
+
+1. Create an API key at [console.anthropic.com](https://console.anthropic.com)
+   scoped to this workload (a dedicated project/workspace key if your
+   organization's Console supports it, rather than reusing a
+   broader-scoped key).
+2. In this repository's settings, add it as a repository secret named
+   `ANTHROPIC_API_KEY` (Settings -> Secrets and variables -> Actions).
+   No GitHub Environment gate is used here (unlike the sync-bot App
+   above): this key grants no repository write capability, only Claude
+   API usage, so its blast radius is lower than a signing key.
+3. **Minimum permissions:** this key only needs Claude API access; it
+   grants nothing GitHub-side. The workflow's own `permissions:` block
+   (`contents: read`, `issues: read`, `pull-requests: read`) is what
+   bounds GitHub access, not this key.
+4. **Rotation:** no organization-mandated cadence exists yet for this
+   key; a 180-day manual rotation is proposed pending owner
+   confirmation. Record whatever cadence is actually adopted here once
+   decided.
+5. **Verification:** after adding the secret, trigger the workflow once
+   via `workflow_dispatch` (Actions tab -> "Weekly ranking-the-open-queue
+   digest" -> Run workflow) and confirm the job succeeds with the
+   ranked digest table in the job log.
