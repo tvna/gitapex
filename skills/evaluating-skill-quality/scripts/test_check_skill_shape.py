@@ -1136,7 +1136,11 @@ def test_references_quoted_scalar_looking_item_still_a_valid_string(tmp_path):
         encoding="utf-8")
     by = _by_name(css.check_shape(d))
     assert by["references-well-formed"].passed is True
-    assert css.main([str(d)]) == 0
+    # Not asserting css.main([str(d)]) == 0 here: "true"/"123" are neither
+    # kind-first nor pipe-delimited, so references-grammar correctly fails
+    # them -- an orthogonal, unrelated concern from what this test guards
+    # (that a quoted scalar-looking item is still read as a literal string,
+    # not YAML null/boolean/numeric).
     parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
     assert parsed.root["spec"]["references"] == ["true", "123"]
 
@@ -1188,7 +1192,10 @@ def test_references_string_item_with_glued_hash_is_not_a_comment(tmp_path):
         encoding="utf-8")
     by = _by_name(css.check_shape(d))
     assert by["references-well-formed"].passed is True
-    assert css.main([str(d)]) == 0
+    # Not asserting css.main([str(d)]) == 0 here, same reason as the quoted-
+    # scalar test above: "true#tag" has no pipe delimiters, so
+    # references-grammar correctly fails it independently of this test's
+    # own concern (glued "#" is not a YAML comment marker).
     parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
     assert parsed.root["spec"]["references"] == ["true#tag"]
 
@@ -2000,12 +2007,13 @@ def test_references_valid_list_is_well_formed(tmp_path):
         "  portability: Portable\n"
         "  capabilityAssumption: Broad\n"
         "  references:\n"
-        "    - \"https://github.com/tvna/gitapex/issues/25\"\n"
-        "    - \"https://github.com/tvna/gitapex/pull/29\"\n",
+        "    - \"decision | https://github.com/tvna/gitapex/issues/25 | fixed the thing\"\n"
+        "    - \"audit | https://github.com/tvna/gitapex/pull/29 | reviewed the fix | verdict=PASS\"\n",
         encoding="utf-8")
     by = _by_name(css.check_shape(d))
     assert by["references-well-formed"].passed is True
     assert by["references-well-formed"].evidence == "2 entries"
+    assert by["references-grammar"].passed is True
     assert css.main([str(d)]) == 0
 
 
@@ -2096,7 +2104,9 @@ def test_references_entry_over_budget_fails_well_formed(tmp_path):
 
 def test_references_entry_at_budget_passes_well_formed(tmp_path):
     d = _write_skill(tmp_path)
-    at_budget = "x" * css.REFERENCES_ENTRY_MAX_CHARS
+    prefix = "decision | https://github.com/tvna/gitapex/issues/25 | "
+    at_budget = prefix + "x" * (css.REFERENCES_ENTRY_MAX_CHARS - len(prefix))
+    assert len(at_budget) == css.REFERENCES_ENTRY_MAX_CHARS
     (d / "metadata/gitapex.yaml").write_text(
         "apiVersion: gitapex.io/v1alpha1\n"
         "kind: SkillMetadata\n"
@@ -2110,6 +2120,7 @@ def test_references_entry_at_budget_passes_well_formed(tmp_path):
         encoding="utf-8")
     by = _by_name(css.check_shape(d))
     assert by["references-well-formed"].passed is True
+    assert by["references-grammar"].passed is True
     assert css.main([str(d)]) == 0
 
 
@@ -2147,12 +2158,115 @@ def test_references_full_url_citation_passes_no_bare_issue_citation(tmp_path):
         "  portability: Portable\n"
         "  capabilityAssumption: Broad\n"
         "  references:\n"
-        "    - \"https://github.com/tvna/gitapex/issues/25 fixed this\"\n",
+        "    - \"decision | https://github.com/tvna/gitapex/issues/25 | fixed this\"\n",
         encoding="utf-8")
     by = _by_name(css.check_shape(d))
     assert by["no-bare-issue-citation"].passed is True
     assert by["references-well-formed"].passed is True
+    assert by["references-grammar"].passed is True
     assert css.main([str(d)]) == 0
+
+
+def _write_references(tmp_path, *entries):
+    d = _write_skill(tmp_path)
+    lines = "\n".join(f"    - \"{e}\"" for e in entries)
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  references:\n"
+        f"{lines}\n",
+        encoding="utf-8")
+    return d
+
+
+def test_references_grammar_not_declared_passes(tmp_path):
+    d = _write_skill(tmp_path)
+    by = _by_name(css.check_shape(d))
+    assert by["references-grammar"].passed is True
+    assert by["references-grammar"].evidence == "not declared (optional)"
+
+
+def test_references_grammar_valid_four_field_entry_passes(tmp_path):
+    d = _write_references(
+        tmp_path,
+        "audit | method:battle-testing-a-skill | ran adversarial pass | "
+        "verdict=FAIL found=3 fixed=3")
+    by = _by_name(css.check_shape(d))
+    assert by["references-grammar"].passed is True
+    assert by["references-grammar"].evidence == "all entries match"
+    assert css.main([str(d)]) == 0
+
+
+def test_references_grammar_missing_pipe_fails(tmp_path):
+    d = _write_references(tmp_path, "decision https://github.com/tvna/gitapex/issues/1 no pipes")
+    by = _by_name(css.check_shape(d))
+    assert by["references-grammar"].passed is False
+    assert "1 field(s)" in by["references-grammar"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_references_grammar_unknown_kind_fails(tmp_path):
+    d = _write_references(
+        tmp_path,
+        "changelog | https://github.com/tvna/gitapex/issues/1 | did a thing")
+    by = _by_name(css.check_shape(d))
+    assert by["references-grammar"].passed is False
+    assert "kind 'changelog' not in" in by["references-grammar"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_references_grammar_empty_anchor_fails(tmp_path):
+    d = _write_references(tmp_path, "decision |  | did a thing with no anchor")
+    by = _by_name(css.check_shape(d))
+    assert by["references-grammar"].passed is False
+    assert "empty anchor field" in by["references-grammar"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_references_grammar_empty_summary_fails(tmp_path):
+    d = _write_references(
+        tmp_path, "decision | https://github.com/tvna/gitapex/issues/1 | ")
+    by = _by_name(css.check_shape(d))
+    assert by["references-grammar"].passed is False
+    assert "empty summary field" in by["references-grammar"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_references_grammar_too_many_fields_fails(tmp_path):
+    d = _write_references(
+        tmp_path,
+        "decision | https://github.com/tvna/gitapex/issues/1 | summary | "
+        "verdict=PASS | extra field")
+    by = _by_name(css.check_shape(d))
+    assert by["references-grammar"].passed is False
+    assert "5 field(s)" in by["references-grammar"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_references_grammar_unusable_list_is_nothing_to_check(tmp_path):
+    # references-well-formed already reports the empty-list defect; this
+    # check must not pile on a second, redundant failure for the same
+    # underlying precondition.
+    d = _write_skill(tmp_path)
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  references:\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["references-well-formed"].passed is False
+    assert by["references-grammar"].passed is True
+    assert "nothing to check" in by["references-grammar"].evidence
 
 
 def test_references_inline_code_bare_citation_still_fails(tmp_path):

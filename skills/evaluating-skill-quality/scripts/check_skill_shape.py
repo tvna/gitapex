@@ -336,11 +336,45 @@ NAME_MAX_CHARS = 64
 # Cap on a single spec.references entry (and spec.lifecycle.experimental/
 # deprecated.reason) in metadata/gitapex.yaml -- these free-text fields had
 # no length limit and several grew to thousands of characters, mixing an
-# issue citation, a decision rationale, and a full audit changelog into one
-# string. Forces detail past this budget out into that skill's own
-# references/*.md, which has real Markdown structure (headings, sections)
-# a YAML string scalar does not.
+# issue citation, a decision rationale, and a full audit changelog for
+# several distinct events into one string. There is no overflow escape
+# valve (e.g. a second file to move detail into): the fix for an
+# over-budget entry is to decompose it into one entry per distinct event
+# (see REFERENCES_KIND_VOCAB/REFERENCES_FIELD_SEP below), each of which is
+# short by construction once it stops being fused with its siblings.
 REFERENCES_ENTRY_MAX_CHARS = 500
+# spec.references stays a flat list[str] (see the design doc's own
+# "deliberately narrow... not a general arbitrary-YAML reader" framing, and
+# test_references_mapping_shaped_item_fails_well_formed's regression guard
+# against a mapping-shaped item) but each string now follows a fixed,
+# pipe-delimited grammar instead of unstructured prose:
+#   "<kind> | <anchor> | <summary>[ | <outcome>]"
+# One entry = one event (one decision, one audit round, one deferral, ...),
+# not a fused changelog -- the grammar exists to make that unit explicit
+# and greppable, not to smuggle a second schema into a plain string.
+# " | " (space-pipe-space) was chosen as the field separator because it
+# occurs in zero pre-existing spec.references entries across this
+# repository's own sidecars (verified directly against the corpus this
+# grammar was designed from), unlike " -- ", which is already common in
+# this repository's own prose.
+REFERENCES_FIELD_SEP = " | "
+# Closed vocabulary for the first field, derived from the recurring entry
+# shapes actually found across every sidecar's spec.references: a
+# decision/change record, an audit-round record (a named
+# method/dispatch/verdict/finding-count), a deferral to a follow-up issue,
+# an external (non-gitapex) corroboration, a portability/worked-example
+# caveat, a citation-elision disclosure, or a correction/retraction of an
+# earlier entry. Not speculative -- no kind is included that the corpus
+# does not already contain an example of.
+REFERENCES_KIND_VOCAB = (
+    "decision",
+    "audit",
+    "deferral",
+    "corroboration",
+    "caveat",
+    "elision",
+    "correction",
+)
 # "Keep SKILL.md body under 500 lines for optimal performance" (same doc;
 # also code.claude.com/docs/en/skills).
 BODY_MAX_LINES = 500
@@ -2354,6 +2388,58 @@ def _validate_read_scope(target: Path, allowed_root: Path) -> None:
                     f"special file is not allowed in target skill: {path}")
 
 
+def _references_grammar_check(references: object) -> CheckResult:
+    """spec.references entries must each split (on REFERENCES_FIELD_SEP) into
+    3 or 4 fields -- kind, anchor, summary, and an optional outcome -- with
+    kind drawn from REFERENCES_KIND_VOCAB. Runs independently of
+    references-well-formed (a malformed-shape or over-length entry can also
+    be grammar-malformed, and a reader benefits from seeing both findings
+    rather than only the first one that happens to fail); when the field
+    isn't a usable list of strings at all, that precondition failure is
+    already reported by references-well-formed, so this reports "nothing to
+    check" instead of a redundant or misleading second failure.
+
+    Deliberately does not validate the anchor field's own internal shape
+    (a GitHub URL, an external URL, a `method:<skill>` token, or a
+    repo-relative path are all legitimate depending on the entry's kind) --
+    the existing no-bare-issue-citation scan already enforces the one rule
+    that actually matters for an anchor (no bare `#N`/`owner/repo#N`
+    citation anywhere in the entry), so a second, narrower anchor-shape
+    regex here would just be unenforced ornamentation.
+    """
+    rule = (
+        "spec.references, if present, has each entry shaped "
+        '"<kind> | <anchor> | <summary>[ | <outcome>]" (REFERENCES_FIELD_SEP-'
+        f"delimited), kind one of {REFERENCES_KIND_VOCAB}")
+    if references is None:
+        return CheckResult("references-grammar", True, rule, "not declared (optional)")
+    if not (isinstance(references, list) and references
+            and all(isinstance(r, str) and r.strip() for r in references)):
+        return CheckResult(
+            "references-grammar", True, rule,
+            "nothing to check (already reported by references-well-formed)")
+    offenders: list[str] = []
+    for entry in references:
+        fields = [f.strip() for f in entry.split(REFERENCES_FIELD_SEP)]
+        if len(fields) not in (3, 4):
+            offenders.append(
+                f"{len(fields)} field(s) (expected 3 or 4): {entry[:60]!r}")
+            continue
+        kind, anchor, summary = fields[0], fields[1], fields[2]
+        if kind not in REFERENCES_KIND_VOCAB:
+            offenders.append(f"kind {kind!r} not in {REFERENCES_KIND_VOCAB}: "
+                              f"{entry[:60]!r}")
+        if not anchor:
+            offenders.append(f"empty anchor field: {entry[:60]!r}")
+        if not summary:
+            offenders.append(f"empty summary field: {entry[:60]!r}")
+    count = len(offenders)
+    return CheckResult(
+        "references-grammar", not offenders, rule,
+        "all entries match" if not offenders
+        else f"{count} malformed entr{'y' if count == 1 else 'ies'}: {offenders[0]}")
+
+
 def check_shape(target: Path) -> list[CheckResult]:
     skill_md = _resolve_skill_md(target)
     skill_dir = skill_md.parent
@@ -2467,6 +2553,11 @@ def check_shape(target: Path) -> list[CheckResult]:
             results.append(CheckResult(
                 "references-well-formed", False,
                 "spec.references, if present, is a non-empty list of non-empty strings",
+                evidence))
+            results.append(CheckResult(
+                "references-grammar", False,
+                "spec.references, if present, has each entry shaped "
+                '"<kind> | <anchor> | <summary>[ | <outcome>]"',
                 evidence))
             results.append(CheckResult(
                 "skill-dependencies-well-formed", False,
@@ -2605,6 +2696,7 @@ def check_shape(target: Path) -> list[CheckResult]:
                     results.append(CheckResult(
                         "references-well-formed", True, references_well_formed_rule,
                         f"{ref_count} {ref_noun}"))
+            results.append(_references_grammar_check(references))
             if isinstance(references, list) and references:
                 sidecar_citation_sources.append((
                     "metadata/gitapex.yaml:spec.references",
