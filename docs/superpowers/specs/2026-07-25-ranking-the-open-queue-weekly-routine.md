@@ -2,6 +2,22 @@
 
 Date: 2026-07-25
 
+> **Superseded 2026-07-28.** This document's `create_trigger`-based Cloud
+> Routine approach could not be completed: `create_trigger`,
+> `list_triggers`, `list_environments`, and `send_later` all rejected
+> every attempt (including from a live interactive session, not just the
+> original non-interactive one) with the identical
+> `MCP error -32003: MCP tool call requires approval`, and the
+> `Claude_Code_Remote` server does not appear in `ListConnectors` output,
+> so the standard claude.ai connector-authorization path does not apply
+> either. This is an out-of-session, account-level gate this repository
+> cannot clear from any session. #315 now proceeds on a GitHub Actions +
+> `anthropics/claude-code-action@v1` design instead -- see
+> `docs/superpowers/specs/2026-07-28-ranking-the-open-queue-github-actions-routine.md`
+> for the replacement decision and comparison against AWS/GCP/Fly.io
+> alternatives. This document is kept as-is below for the audit trail;
+> its Routine configuration was never created live.
+
 Refs #315 (sub-task of #310, T1). Wires `skills/ranking-the-open-queue`
 (manual-invocation-only today) to a scheduled Claude Code Cloud Routine,
 using the platform's own `/schedule`(trigger) + `/goal`(verification)
@@ -197,3 +213,30 @@ Once created, record the resulting `trigger_id` here so future readers of
 this doc do not need to re-run `list_triggers` to find it:
 
 - **`trigger_id`:** _(fill in after live creation)_
+
+### Retry from an interactive session (2026-07-27) -- still blocked
+
+A follow-up session picked up this residual risk under the assumption
+that an *interactive* session (a human actively chatting, unlike the
+original PR-authoring session) might surface the `-32003` gate as a
+normal permission dialog the human could approve in real time. Both
+calls were retried here, live, with the human present and watching:
+
+- `list_triggers` (read-only, no arguments beyond `limit`): rejected with
+  the identical `MCP error -32003: MCP tool call requires approval`.
+- `create_trigger`, with every parameter above reproduced verbatim (name,
+  `0 0 * * 1` cron, `create_new_session_on_fire: true`,
+  `notifications: {"push": false, "email": false}`, the full prompt
+  block): rejected with the identical `MCP error -32003: MCP tool call
+  requires approval`.
+
+Neither call surfaced a permission dialog the human could act on --
+the rejection happened at the MCP protocol layer before this session's
+own tool-permission UI was ever engaged. This rules out "no interactive
+channel" as the actual cause; the gate is enforced somewhere outside this
+session's control regardless of interactivity. The Routine's live
+creation remains a **Human Decision requiring an out-of-session step**:
+the repository owner needs to either grant `Claude_Code_Remote`
+(`create_trigger`/`list_triggers`) approval through that MCP server's own
+settings/allowlist (outside this chat), or confirm a different
+approval path exists, before either call can succeed from any session.
