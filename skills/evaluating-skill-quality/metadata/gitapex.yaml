@@ -6,18 +6,151 @@ spec:
   portability: Portable
   capabilityAssumption: Broad
   references:
-    - "For readers working in this repository (gitapex), the worked example in `skills/evaluating-skill-quality/references/worked-example-self-review.md` notes that this skill's own deterministic shape lane was delegated to `scripts/check_skill_shape.py`; that delegation was made in gitapex#32. This is provenance for maintainers of this specific repository, not something the worked example depends on."
-    - "The warning-only compatibility baseline was verified on 2026-07-25 against the Agent Skills specification and primary documentation for Claude Code, Codex, Gemini CLI, Devin, OpenClaw, and HermesAgent. The portable evidence summary lives in `references/runtime-compatibility.md`; implementation provenance is tracked in gitapex#332."
-    - "gitapex#444: GitHub Copilot and Kiro rows were added to the baseline on 2026-07-27, each grounded in official documentation fetched directly that session (github/docs source files for Copilot; kiro.dev for Kiro). A Windsurf row was added in a same-day follow-up once the owner allow-listed docs.devin.ai (Cognition, Devin's maker, now hosts Windsurf's docs at a separate page on that domain): it documents only name/description in SKILL.md frontmatter, with no allowed-tools claim, so its row is kept independent from the existing Devin row rather than conflated with it. Amazon Q Developer proper was investigated last and resolved as a non-addition, closing gitapex#444. The aws/amazon-q-developer-cli README (fetched directly) states the project 'is no longer being actively maintained' and 'is now available as Kiro CLI, a closed-source product'; the official AWS DevOps blog end-of-support announcement (fetched directly once the owner allow-listed aws.amazon.com), confirms Q Developer IDE plugins and paid subscriptions reach end of support on 2027-04-30 with a 12-month transition window to Kiro, stating 'Kiro also includes everything developers rely on in Q Developer today' -- so its Skills-relevant successor is the already-cataloged Kiro row. The same announcement notes Amazon Q in the AWS Management Console and other first-party AWS experiences is unaffected by this sunset, so this finding is scoped to the Q Developer coding-agent product specifically, not all of Amazon Q. A separate 'Agent Toolkit for AWS' project was also checked and confirmed (via its own README) to be AWS-specific skill/plugin content consumed by other runtimes (Claude Code, Codex, Cursor, Kiro), not a runtime that parses SKILL.md itself -- the same category as the earlier MiniMax finding."
-    - "gitapex#443: Kimi CLI and Cursor rows were added to the baseline on 2026-07-27, each grounded in that vendor's official documentation fetched directly during the session (cursor.com/docs/skills was initially blocked by the session's egress policy, then fetched successfully once the owner allow-listed the domain). MiniMax was investigated but no row was added: `platform.minimax.io/docs/token-plan/minimax-cli` and its OpenClaw integration guide, both fetched directly, establish that MiniMax's `mmx-cli` is a media-generation tool consumed as a skill by other runtimes (Claude Code, OpenClaw, Cursor) -- its official SKILL.md is symlinked into those runtimes' own skill directories (e.g. `~/.claude/skills/`, `~/.openclaw/skills/`) rather than MiniMax parsing `SKILL.md` itself. No primary source documents a distinct MiniMax-owned runtime (the 'MaxClaw' name did not appear in either fetched page)."
-    - "gitapex#445: the new docs/agent-product-scope.md formally distinguishes this evidence baseline (Axis C: skill-quality-review evidence, currently eleven runtimes) from GitApex's plugin-distribution target (Axis A: Claude Code, per docs/repository-layout.md) and the gitapex#307 enforcement-adapter target set (Axis B: six runtimes), and names this file as Axis C's owning evidence. An earlier draft of this change added a body cross-reference sentence directly to references/runtime-compatibility.md pointing at docs/agent-product-scope.md; that was reverted after review because a Portable skill's own references/*.md content should not carry a relative link that escapes the skill's own directory -- it would 404 once this skill is vendored into a different repository, and check_skill_shape.py's repo-path-citation checks do not currently catch a Markdown-link-shaped instance of this (they exempt Markdown links entirely, by design, for a different concern). This provenance note carries that cross-reference instead, since sidecar notes are maintainer bookkeeping for this specific repository, not portability-scanned skill content -- the same reasoning behind this file's own first reference bullet above. No runtime was added, removed, or reclassified in this baseline as part of any of this."
-    - "gitapex#261 (self-audit tracking issue: battle-testing-a-skill and evaluating-skill-quality applied to themselves) resolved most of its findings directly: dimensions 1/2, 9, 12, 13/15/16, and 17 gained a new references/adversarial-self-audit.md file plus concise SKILL.md pointers to it; dimension 11 gained a second independent check (a real downstream consumer was found -- .github/scripts/gate_skill_audit_disclosure.py -- resolving the prior INDETERMINATE) documented in this file's own Notes section; the dimensions 6/8 named-rejection-token gap was closed in references/rubric.md's Verdicts section (new Not-well-formed and Indeterminate verdicts); the dimension-2 CLAUDE.md-exclusion duplication between Subagent dispatch and Stop boundaries was folded into a single cross-reference."
-    - "gitapex#261 deferred one finding with a stated reason: dimension 14 (a dedicated regression corpus for this file's own guardrail prose, distinct from evals/evaluating-skill-quality/'s existing corpus that tests this skill's grading behavior against arbitrary fed-in targets) was handed to gitapex#364."
-    - "gitapex#390: a fresh isolated self-review dispatch (following the references/rubric.md cleanup in gitapex#383) returned WELL-FORMED-NOT-MATURE, citing three dimension gaps -- dimension 2 (triplicated step-level Mechanism-fit disclaimer in rubric.md, deduplicated to one back-reference), dimension 5 (subagent-isolation-registry.md merged into adversarial-self-audit.md's new Isolation verification section, dropping the common-case dispatch from four mandatory reference files to three), and dimension 7 (scripts/test_check_skill_shape.py gained a subprocess-based CLI-boundary test group; its prior suite only ever called check_skill_shape.main() in-process). The dispatch's Blind spot pass also named a self-referential-circularity gap (this skill grading itself has no independent standard of \"good\") left open with no mechanical fix proposed."
-    - "gitapex#475: SKILL.md's Subagent dispatch section already deferred to references/adversarial-self-audit.md's Isolation verification section (the live per-platform registry gitapex#390 added above) rather than hardcoding a mechanism, so it already satisfied the issue's ask to reframe isolation as per-platform-verified rather than universally asserted -- no SKILL.md text change was needed or made. A live reconfirmation trial ran against the registry's existing dated entry for this exact platform (CLAUDE_CODE_REMOTE=true, CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=cloud_default, claude 2.1.220, matching the entry's own recorded signals exactly): the positive control (claude -p from this repository's own root) quoted real CLAUDE.md text, and the negative control (the identical prompt from a working directory whose full parent chain was directly confirmed empty of CLAUDE.md/AGENTS.md) reported none loaded -- the verified alternative still holds. Only that side was re-run live; the Agent-tool-fails-isolation finding itself was not re-dispatched a third time, since it already carries two independent confirmations (gitapex#474) at this identical harness version. Recorded as a dated addition to the existing Known entries entry in adversarial-self-audit.md itself, not a new entry. battle-testing-a-skill's own equivalent requirement (Procedure step 1) had drifted from this registry and was fixed separately in its own gitapex.yaml; evaluating-deterministic-gate-quality and vetting-attack-surface were checked and already correctly defer here with no change needed."
-    - "gitapex#475 concurrent follow-up (gitapex#476's own review, a separate session working the same issue in parallel with the entry directly above): started from the same incomplete premise -- gitapex#474/#476's own two Agent-tool audit dispatches had self-disclosed they could not confirm CLAUDE.md isolation, and the tracking issue was filed treating this as unsolved before checking whether a mechanism already existed. It did. This session independently re-ran the same Verification procedure (same commands, same result) and initially added a pointer clause to evaluating-deterministic-gate-quality/SKILL.md and vetting-attack-surface/SKILL.md plus a second reconfirmation bullet in adversarial-self-audit.md -- both dropped on merge with gitapex#478 (the entry directly above) in favor of its already-landed, reviewed decision that those two skills need no change, rather than kept as a redundant second treatment. What this session's work uniquely contributed: it actually used the verified `claude -p` mechanism to run a genuinely isolated audit of a specific target (evaluating-deterministic-gate-quality, gitapex#474's own diff) rather than only reconfirming the mechanism itself -- that isolated run caught a real residual bug (a subprocess-count arithmetic error dropping the `cat` fork from the total) the earlier contaminated dispatch had missed, concrete evidence the isolation property has practical value beyond process hygiene. A tangential, not-yet-independently-confirmed finding from that same isolated dispatch (this session's own TaskList state unexpectedly appearing in its context) was filed separately as gitapex#479."
-    - "gitapex#477: dimension 8 (Behavioural evidence) gained a new sub-check, reference-load precision -- a TP/FP/FN/TN classification of whether a skill's references/*.md files are actually read on the branch dimension 5 marked as needing them. Confirmed before writing it that no mechanism in this repository's eval stack (scorer-gated-skill-edits/scripts/score_contract.py, evals/evaluating-skill-quality/eval.yaml, docs/skill-eval-status.md) observes which reference file a trial actually read -- every existing scorer works from final output text only. The sub-check is written transcript-gated: it fires only when the target repository's own eval mechanism records reference-read events, and defaults to naming the gap unmeasured otherwise, the same discipline this dimension already applies to a missing baseline. Two new fixtures (reference-load-precision-train.yaml, reference-load-precision-selection.yaml) gate the addition; the held-out gate was run live via fresh subagent dispatches (before/after, matched methodology) against the new selection fixture plus one dimension-8-adjacent sibling (scoring-axis-uncontrolled-speed-claim.yaml) as a regression spot-check, with the remaining selection fixtures' ties reasoned analytically (assertion-surface disjointness: the edit is a pure addition after the existing cost/speed paragraph and alters no sentence any other fixture asserts on) rather than re-run live, per evals/evaluating-skill-quality/split.md's Kept-edit log. A fresh isolated evaluating-skill-quality self-review and battle-testing-a-skill adversarial pass, dispatched against the committed diff, returned WELL-FORMED-NOT-MATURE and FAIL respectively: the sub-check's unmeasured fallback lacked an affirmative-confirmation requirement, nothing verified a presented trace's authenticity before classifying, classifications had no evidence-citation requirement, no partial-trace fallback was stated, and one sentence citing scorer-gated-skill-edits was an unhedged portability-litmus violation. All fixed in the same PR; the selection fixture was also redesigned around the new authenticity requirement, producing a genuine strict-improvement gate result (0.6 -> 0.8) rather than the first round's disclosed tie. Full record in split.md's Kept-edit log, 'Revision after dogfood findings' entry. A second confirming round (two more independent fresh dispatches) verified those fixes: three of four battle-test findings and the citation hedge confirmed closed by both; trace authenticity independently assessed by both as only partially closed (disclosure mandated, no operational verification method exists in this repository); both independently caught the same new defect the fix introduced (an unhedged citation in the new evidence-citation sentence) plus a structured-output-injection exposure from quoting trace content with no delimiter-safety instruction. Fixed in a third commit, not re-verified by a further dispatch -- disclosed as an open item in split.md's second confirming-round entry rather than rounded up to a clean verdict. A dedicated multi-agent (Workflow, fable model) investigation was then run specifically against that open item, rather than continuing to accept it as settled: four independent research angles (platform capabilities, this repository's own install-time-provenance precedent, first-principles mechanism design, and a check on whether the question itself was well-posed), a synthesis pass, and an adversarial-verification pass that tried to break the synthesis's own conclusion. Finding: the prior text's category claim ('no comparable mechanism exists') was false -- a real, usable-today mechanism exists (author-uncontrolled channel provenance with content binding, e.g. Claude Code's OTEL tool_result telemetry export or a CI artifact retrieved through the platform's own API, cross-checked against the recorded commit), transferring the 'trusted registry path' half of the install-time comparator that adversarial-self-audit.md already accepts. The adversarial-verification pass then caught a real overclaim in the first-pass fix text: a target repository's own author can point a harness's model-endpoint secret at a replay server, producing a genuine-harness, semantically-fabricated trace that would pass an unscoped content-binding diff -- the same overclaim class this repository's own history caught before (issue #164's unconditional-hooks-claim overcorrection). The rubric text was revised to a three-state disposition (Channel-authenticated, scoped / Consistency-checked only / Unauthenticated) incorporating the adversarial pass's three required amendments: state 1 explicitly degrades to state 2 when the artifact's author controls the target repository's own infrastructure and secrets; the content-binding diff covers the full tree at the recorded commit, not skill files alone; and the 'provisioning secrets operationalizes this for gitapex' caveat is scoped to third-party contributions only, since self-review always stays in the weaker state regardless. gitapex's own eval suite still has no trace-producing mechanism today, so this repository's own fixtures still resolve through the unchanged fallback paragraph -- the three-state framework is forward-looking, giving a future target repository with real CI/telemetry infrastructure a genuine path to state 1 rather than leaving every target permanently at 'disclosure obligation, not a guarantee.' Full four-agent research trail, synthesis, and adversarial verification recorded in the PR #481 comment thread that prompted this revision."
-    - "gitapex#479: a tangential, not-yet-independently-confirmed finding from gitapex#475's own work (a dispatched claude -p subprocess self-reported this session's own TaskList state appearing unprompted in its context) was investigated directly rather than left standing on a single paraphrase. Root cause found by direct filesystem inspection before any live trial: this harness persists TaskCreate-created task items as JSON files under $HOME/.claude/tasks/<session-id>/, and a claude -p subprocess spawned without an explicit HOME override inherits the parent shell's $HOME by default, so it resolves the identical directory. Three controlled trials (same CLAUDE.md-free scratch directory, same roughly-15-tool-call workload, only the environment varied) confirmed and then fixed it: environment inherited unchanged leaked the calling session's real, live task list verbatim (a task's status mid-dispatch matched its live status moments earlier, ruling out a stale-cache explanation); CLAUDE_CODE_SESSION_ID unset alone still leaked, ruling that variable out as the sole mechanism; CLAUDE_CODE_SESSION_ID unset together with HOME redirected to a freshly created empty directory produced no task-list leak at all. Recorded as a new bullet in adversarial-self-audit.md's existing Known-entries entry for this platform (distinct from, and additive to, the CLAUDE.md/AGENTS.md finding already there). No literal task-list content was quoted in the registry file itself, to avoid repeating the same origin-repo-specific-content portability mistake gitapex#483 had just found and fixed in a neighboring bullet in the same file. A same-PR Codex review then correctly flagged the first fix's own recommended invocation (unsetting CLAUDE_CODE_SESSION_ID plus redirecting HOME to a wholesale-empty directory) as itself a real regression: this platform's $HOME/.claude/ carries a live permissions.allow/hooks configuration, and wiping it for a dispatch that reviews untrusted target content, with no interactive confirmation available in headless -p mode to catch a resulting misstep, trades a data leak for a worse loss of enforcement. Fixed by verifying a narrower recipe instead: copy the real $HOME/.claude/ tree and $HOME/.claude.json into the fresh directory, remove only its tasks/ subtree (recreated empty) plus this platform's own conversation-history directories (unrelated to permission/hook enforcement but independently worth excluding), then dispatch with HOME pointed at that copy. Re-verified live: the copied settings file diffed byte-identical to the original, no task-list content leaked, and the dispatched process successfully executed a real Bash script -- confirming the corrected recipe neither leaks nor silently breaks tool execution the way the rejected wholesale-empty-HOME candidate did."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/32"
+      summary: "Delegated this skill's own deterministic shape lane to scripts/check_skill_shape.py; the worked example in references/worked-example-self-review.md documents that delegation."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/332"
+      summary: "Verified the warning-only compatibility baseline on 2026-07-25 against the Agent Skills spec and docs for Claude Code, Codex, Gemini CLI, Devin, OpenClaw, and HermesAgent; evidence in references/runtime-compatibility.md."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/444"
+      summary: "Added GitHub Copilot and Kiro rows to the runtime-compatibility baseline on 2026-07-27, grounded in official docs (github/docs source for Copilot; kiro.dev for Kiro)."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/444"
+      summary: "Added a Windsurf row same-day after docs.devin.ai was allow-listed; it documents only name/description in frontmatter with no allowed-tools claim, kept independent from the existing Devin row."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/444"
+      summary: "Investigated Amazon Q Developer CLI: its README states it is no longer maintained and is now Kiro CLI; AWS's EOL announcement confirms Q Developer IDE plugins sunset 2027-04-30 with a 12-month transition to Kiro."
+      outcome:
+        verdict: non-addition
+        reason: superseded-by-kiro
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/444"
+      summary: "Checked the separate 'Agent Toolkit for AWS' project via its own README: it is AWS-specific skill/plugin content consumed by other runtimes (Claude Code, Codex, Cursor, Kiro), not itself a runtime that parses SKILL.md."
+      outcome:
+        verdict: non-addition
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/443"
+      summary: "Added Kimi CLI and Cursor rows to the runtime-compatibility baseline on 2026-07-27, each grounded in that vendor's official docs fetched directly (cursor.com's skills-documentation page after domain allow-listing)."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/443"
+      summary: "Investigated MiniMax: platform.minimax.io docs and its OpenClaw integration guide show mmx-cli is a media-generation tool whose SKILL.md is symlinked into other runtimes' skill dirs, not parsed by a MiniMax-owned runtime; no source names a distinct 'MaxClaw' runtime."
+      outcome:
+        verdict: non-addition
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/445"
+      summary: "Added docs/agent-product-scope.md distinguishing this skill's Axis C evidence baseline (eleven runtimes) from GitApex's Axis A Claude Code target and https://github.com/tvna/gitapex/issues/307's Axis B six-runtime enforcement-adapter target, naming this file as Axis C's owning evidence."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/445"
+      summary: "Reverted an earlier draft's cross-reference sentence in references/runtime-compatibility.md pointing at docs/agent-product-scope.md, since a Portable skill's references/*.md must not carry a link escaping its own directory."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/261"
+      summary: "Self-audit tracking issue (battle-testing-a-skill and evaluating-skill-quality applied to themselves) resolved most findings: dimensions 1/2, 9, 12, 13/15/16, and 17 gained references/adversarial-self-audit.md plus SKILL.md pointers."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/261"
+      summary: "Dimension 11 gained a second independent check: a real downstream consumer, .github/scripts/gate_skill_audit_disclosure.py, was found, resolving the prior INDETERMINATE verdict."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/261"
+      summary: "Closed the dimension 6/8 named-rejection-token gap in references/rubric.md's Verdicts section by adding Not-well-formed and Indeterminate verdicts."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/261"
+      summary: "Folded the dimension-2 CLAUDE.md-exclusion duplication between the Subagent dispatch and Stop boundaries sections into a single cross-reference."
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/261 -> https://github.com/tvna/gitapex/issues/364"
+      summary: "Deferred dimension 14 (a dedicated regression corpus for this file's own guardrail prose, distinct from evals/evaluating-skill-quality/'s existing behavior-grading corpus) to a follow-up issue."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/383 -> https://github.com/tvna/gitapex/issues/390"
+      summary: "A fresh isolated self-review after the rubric.md cleanup returned WELL-FORMED-NOT-MATURE citing three gaps: dimension 2's triplicated step-level disclaimer (deduplicated), dimension 5's subagent-isolation-registry.md merged into adversarial-self-audit.md, and dimension 7's test_check_skill_shape.py gaining a subprocess CLI-boundary test group."
+      outcome:
+        verdict: WELL-FORMED-NOT-MATURE
+        found: 3
+        fixed: 3
+    - kind: caveat
+      anchor: "SKILL.md"
+      summary: "The issue 390 self-review's Blind spot pass named a self-referential-circularity gap -- this skill grading itself has no independent standard of 'good' -- left open with no mechanical fix proposed."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/475"
+      summary: "Found SKILL.md's Subagent dispatch section already deferred to references/adversarial-self-audit.md's per-platform Isolation verification registry rather than hardcoding a mechanism; no SKILL.md text change was needed or made."
+      outcome:
+        verdict: no-change-needed
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/475"
+      summary: "Ran a live reconfirmation trial against the isolation registry's existing dated entry for this exact platform (positive/negative claude -p controls); the verified alternative still held, so the isolation finding was not re-dispatched a third time given two prior independent confirmations."
+      outcome:
+        verdict: reconfirmed
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/476"
+      summary: "A concurrent follow-up session independently re-ran the same isolation Verification procedure (same commands) in parallel with issue 475's own reconfirmation, reaching the same result."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/475 -> https://github.com/tvna/gitapex/issues/476"
+      summary: "Issue 476's session had proposed pointer clauses in evaluating-deterministic-gate-quality/SKILL.md and vetting-attack-surface/SKILL.md plus a second reconfirmation bullet in adversarial-self-audit.md; both were dropped on merge (landed as https://github.com/tvna/gitapex/issues/478) in favor of issue 475's already-reviewed no-change decision."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/474 -> https://github.com/tvna/gitapex/issues/476"
+      summary: "Using the verified claude -p mechanism, ran a genuinely isolated audit of evaluating-deterministic-gate-quality's diff, catching a real bug the earlier contaminated dispatch missed."
+      outcome:
+        found: 1
+        bug: subprocess-count-arithmetic-error
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/476 -> https://github.com/tvna/gitapex/issues/479"
+      summary: "Filed a tangential, not-yet-independently-confirmed finding from that isolated dispatch -- this session's own TaskList state unexpectedly appearing in its context -- as a separate follow-up issue."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/479"
+      summary: "Reproduced the TaskList-leak finding by direct filesystem inspection: TaskCreate persists tasks as JSON under $HOME/.claude/tasks/<session-id>/, and a claude -p subprocess inherits the parent shell's $HOME by default, resolving the identical directory."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/479"
+      summary: "Three controlled trials, same CLAUDE.md-free scratch dir and ~15-tool-call workload: environment unchanged leaked the live task list; CLAUDE_CODE_SESSION_ID unset alone still leaked; CLAUDE_CODE_SESSION_ID unset plus HOME redirected to a wholesale-empty directory suppressed it."
+      outcome:
+        mechanism: HOME-directory-scoped
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/pull/489"
+      summary: "A Codex review caught that the wholesale-empty-HOME candidate above also discards this platform's own permissions.allow/hooks configuration -- dangerous for a dispatch reviewing untrusted content in headless mode. Corrected recipe: copy $HOME/.claude/ and $HOME/.claude.json, strip only tasks/ plus conversation-history dirs. Verified live: no leak, settings byte-identical, tool execution intact."
+      outcome:
+        verdict: fixed
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/pull/489"
+      summary: "Per Anthropic's Claude Opus 5 prompting guidance (self-correction: state corrections plainly, don't narrate slips that don't matter), trimmed change-history/self-correction narration from gitapex-worked-examples.md's dimension-19 example and this file's own Known-entries reconfirmation bullet; the trimmed detail is preserved in this sidecar instead."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/477"
+      summary: "Dimension 8 gained a reference-load-precision sub-check (TP/FP/FN/TN classification of whether a skill's references/*.md were actually read); confirmed no existing eval mechanism observes this, so it is written transcript-gated with an unmeasured-fallback default."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/477"
+      summary: "The held-out gate was run live via fresh subagent dispatches (before/after) against the new selection fixture plus one dimension-8-adjacent sibling fixture as a regression spot-check; remaining selection-fixture ties were reasoned analytically per split.md's assertion-surface-disjointness rule."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/477"
+      summary: "A fresh isolated self-review and battle-testing-a-skill adversarial pass against the committed diff returned WELL-FORMED-NOT-MATURE and FAIL: the unmeasured fallback lacked affirmative confirmation, no authenticity check, no evidence-citation requirement, no partial-trace fallback, and one unhedged portability-litmus citation."
+      outcome:
+        verdict: WELL-FORMED-NOT-MATURE/FAIL
+        found: 5
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/477"
+      summary: "Fixed all five dogfood findings in the same PR and redesigned the selection fixture around the new authenticity requirement, producing a genuine strict-improvement gate result rather than the first round's disclosed tie."
+      outcome:
+        before: 0.6
+        after: 0.8
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/477"
+      summary: "A second confirming round (two more independent dispatches) verified the fixes: three of four battle-test findings plus the citation hedge were confirmed closed by both, but trace authenticity was only partially closed, and both independently caught a new unhedged citation plus a structured-output-injection exposure from unquoted trace content."
+      outcome:
+        verdict: partial
+        open: 1
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/477"
+      summary: "Fixed the newly caught unhedged citation and structured-output-injection exposure in a third commit, not re-verified by a further dispatch; disclosed as an open item in split.md's second confirming-round entry rather than rounded up to a clean verdict."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/pull/481"
+      summary: "A dedicated four-agent investigation (Workflow, fable model) into the open trace-authenticity item found the prior 'no comparable mechanism exists' claim false: a real mechanism exists (author-uncontrolled channel provenance with content binding, e.g. OTEL tool_result export or a CI artifact via the platform API, cross-checked against the recorded commit)."
+      outcome:
+        verdict: finding
+        found: 1
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/164 -> https://github.com/tvna/gitapex/pull/481"
+      summary: "The adversarial-verification pass caught an overclaim in the first-pass fix text: a target repo's own author can point the harness's model-endpoint secret at a replay server, producing a genuine-harness, fabricated trace that passes an unscoped content-binding diff -- the same overclaim class as issue 164's unconditional-hooks-claim overcorrection."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/pull/481"
+      summary: "Revised the rubric to a three-state trace disposition (Channel-authenticated,scoped / Consistency-checked only / Unauthenticated): state 1 degrades to state 2 when the artifact's author controls the target repo's own infrastructure/secrets, the content-binding diff covers the full tree at the recorded commit, and the 'provisioning secrets' caveat is scoped to third-party contributions only."
+    - kind: caveat
+      anchor: "references/rubric.md"
+      summary: "GitApex's own eval suite has no trace-producing mechanism today, so its fixtures still resolve through the unchanged fallback paragraph; the three-state framework is forward-looking for a future target repository with real CI/telemetry infrastructure."
   skillDependencies:
     requires: []
     relatedTo:

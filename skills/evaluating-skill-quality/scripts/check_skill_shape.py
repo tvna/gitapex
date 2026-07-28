@@ -99,7 +99,7 @@ Checks (the canonical list -- the manual fallback is to apply these):
     strings (free-form capability tags; this issue does not define a
     fixed vocabulary), with the same per-item shape rules
     (mapping-like-item, indent-consistency, and null/boolean/numeric-scalar
-    detection) spec.references and spec.skillDependencies items already use
+    detection) spec.skillDependencies.requires/relatedTo items already use
     (execution-requirements-well-formed). An absent executionRequirements
     block, an absent tools block, or an absent read/write/shell key each
     mean "not yet declared"; an explicit empty list (e.g. read: [])
@@ -201,18 +201,24 @@ Checks (the canonical list -- the manual fallback is to apply these):
     Mixed, and Repository-scoped alike, unlike the two repo-path checks
     below. A bare #N auto-links relative to whichever repository
     currently hosts the file and silently resolves to the wrong issue
-    once the skill is vendored or simply read out of context, and that
-    risk does not depend on the skill's declared portability: a Mixed or
-    Repository-scoped skill's own issue/PR provenance belongs in the
-    metadata sidecar's spec.references instead (maintainer-facing, never
-    auto-loaded), not a bare number sitting in prose. Other repo-specific
-    content -- sibling-skill names, repo-specific paths/conventions --
-    remains legitimate Mixed/Repository-scoped territory; this rule is
-    narrowly about issue/PR numbers. Matches inside inline code (`#149`),
-    fenced code blocks, absolute URLs, and Markdown links are excluded from
-    THIS bare-prose scan -- those are the established ways this repo's
-    skills quote such a token illustratively without it resolving live.
-    Inline code is not unconditionally safe, though: for Portable-declared
+    once the skill is vendored or simply read out of context. This scan
+    also covers the metadata sidecar's own spec.references entries and
+    lifecycle.experimental/deprecated.reason text (issue #488) -- the
+    sidecar used to be the sanctioned, exempted home for exactly this bare
+    shape, on the theory that it was maintainer-facing and never
+    auto-loaded, but a bare number there loses its meaning the same way
+    once the sidecar travels with its skill directory to another
+    repository. A full ``https://github.com/tvna/gitapex/issues/149``-style
+    URL contains no bare ``#N`` and so is never flagged by this scan --
+    that is the only sanctioned way left to cite an issue from the
+    sidecar. Other repo-specific content -- sibling-skill names,
+    repo-specific paths/conventions -- remains legitimate
+    Mixed/Repository-scoped territory; this rule is narrowly about
+    issue/PR numbers. Matches inside inline code (`#149`), fenced code
+    blocks, absolute URLs, and Markdown links are excluded from THIS
+    bare-prose scan -- those are the established ways this repo's skills
+    quote such a token illustratively without it resolving live. Inline
+    code is not unconditionally safe, though: for Portable-declared
     content specifically, the separate check below (issue #263) re-inspects
     exactly the inline-code spans this scan skips.
   - Portable self-citation, repo-path half (only when the skill declares
@@ -327,6 +333,56 @@ from pathlib import Path
 # tighter cap to stay valid on both surfaces.
 DESCRIPTION_MAX_CHARS = 1024
 NAME_MAX_CHARS = 64
+# Cap on spec.references' summary field (and spec.lifecycle.experimental/
+# deprecated.reason) in metadata/gitapex.yaml -- these free-text fields had
+# no length limit and several grew to thousands of characters, mixing an
+# issue citation, a decision rationale, and a full audit changelog for
+# several distinct events into one string. There is no overflow escape
+# valve (e.g. a second file to move detail into): the fix for an
+# over-budget entry is to decompose it into one list entry per distinct
+# event (see REFERENCES_KIND_VOCAB/REFERENCES_ITEM_SUBKEYS below), each of
+# which is short by construction once it stops being fused with its
+# siblings.
+REFERENCES_ENTRY_MAX_CHARS = 500
+# spec.references is a list whose items are themselves mappings -- the one
+# field in this sidecar with real nested structure one level *inside* a
+# list item, rather than under a scalar key the way spec.skillDependencies/
+# spec.lifecycle/spec.executionRequirements all nest. Each item has three
+# required scalar fields (kind, anchor, summary) and one optional nested
+# mapping (outcome, free-form key/value atoms -- verdict, found, fixed,
+# open, ... -- with no closed vocabulary of its own, since real entries use
+# too varied a set of outcome facts for a fixed schema to fit). This
+# replaced an earlier, simpler design (a single pipe-delimited string per
+# entry, "<kind> | <anchor> | <summary>[ | <outcome>]") that avoided any
+# parser change; the repository owner asked for a real YAML mapping
+# instead, for better long-term extensibility and tooling compatibility
+# (e.g. `yq` queries) as the corpus keeps growing, accepting the added
+# parser complexity as the trade-off.
+REFERENCES_ITEM_SUBKEYS = ("kind", "anchor", "summary", "outcome")
+REFERENCES_ITEM_REQUIRED_SUBKEYS = ("kind", "anchor", "summary")
+# Exactly 4 spaces -- one level under spec.references' own 2-space key,
+# matching every other gated block's own fixed-indent convention (unlike
+# the old bare-scalar-list design's "2 or more spaces" tolerance, dropped
+# here since every real sidecar is being rewritten fresh to this shape
+# rather than carrying years of pre-existing indent variation forward).
+REFERENCES_ITEM_INDENT = 4
+# Closed vocabulary for the "kind" field, derived from the recurring entry
+# shapes actually found across every sidecar's spec.references: a
+# decision/change record, an audit-round record (a named
+# method/dispatch/verdict/finding-count), a deferral to a follow-up issue,
+# an external (non-gitapex) corroboration, a portability/worked-example
+# caveat, a citation-elision disclosure, or a correction/retraction of an
+# earlier entry. Not speculative -- no kind is included that the corpus
+# does not already contain an example of.
+REFERENCES_KIND_VOCAB = (
+    "decision",
+    "audit",
+    "deferral",
+    "corroboration",
+    "caveat",
+    "elision",
+    "correction",
+)
 # "Keep SKILL.md body under 500 lines for optimal performance" (same doc;
 # also code.claude.com/docs/en/skills).
 BODY_MAX_LINES = 500
@@ -469,13 +525,18 @@ LIFECYCLE_SCALAR_KEYS = ("renamedFrom",)
 # lenient ISO-variant parsing in Python 3.11+ never gets a chance to
 # accept an off-shape string.
 LIFECYCLE_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-# A GitHub issue/PR reference anchoring the whole string (unlike
-# ISSUE_CITATION_RE above, which scans for the same shape inside running
-# prose): an optional "owner/repo" prefix, then "#" and a digit run.
-# Shape-only -- never resolved against a live GitHub API call, since this
-# checker is offline/read-only by design.
+# A full GitHub issue/PR URL anchoring the whole string: this repository's
+# own host only (metadata/gitapex.yaml is maintainer-facing provenance for
+# THIS repository, never something a portable skill body depends on), an
+# "issues" or "pull" segment, then a digit run. Deliberately a full URL, not
+# the bare "#123"/"owner/repo#123" shape this field used to require: a bare
+# issue number means nothing once this sidecar travels with its skill
+# directory to another repository (e.g. plugin vendoring); a full URL still
+# resolves to the right place wherever it lands. Shape-only -- never
+# resolved against a live GitHub API call, since this checker is
+# offline/read-only by design.
 LIFECYCLE_ISSUE_REF_RE = re.compile(
-    r"^(?:[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*)?#\d+$")
+    r"^https://github\.com/tvna/gitapex/(?:issues|pull)/\d+$")
 
 # A YAML mapping key at a given indent, however it was written: a bare
 # scalar key (any run of characters up to the first unquoted ":" that
@@ -508,6 +569,19 @@ KEY_LINE_RE_4 = re.compile(
     r'^[ ]{4}(?:"([^"]*)"|\'([^\']*)\'|([^\s"\'#][^:]*?)):[ \t]*(.*)$')
 KEY_LINE_RE_6 = re.compile(
     r'^[ ]{6}(?:"([^"]*)"|\'([^\']*)\'|([^\s"\'#][^:]*?)):[ \t]*(.*)$')
+# One nesting level deeper than KEY_LINE_RE_6: spec.references' own item
+# mappings nest an optional "outcome" sub-mapping (8-space indent, one
+# level under the item's own 6-space fields) -- the only field in this
+# sidecar three levels deep under spec.
+KEY_LINE_RE_8 = re.compile(
+    r'^[ ]{8}(?:"([^"]*)"|\'([^\']*)\'|([^\s"\'#][^:]*?)):[ \t]*(.*)$')
+# Matches a spec.references list item's own first field, given inline
+# right after its "- " marker (e.g. "kind: decision" from
+# "- kind: decision") -- same key-shape alternation as KEY_LINE_RE_4/6, but
+# with no anchored leading indent, since the "- " prefix itself already
+# consumed a variable amount of the line before this text was isolated.
+INLINE_KEY_VALUE_RE = re.compile(
+    r'^(?:"([^"]*)"|\'([^\']*)\'|([^\s"\'#][^:]*?)):[ \t]*(.*)$')
 
 # spec.executionRequirements' one recognized subkey so far (issue #349,
 # #307 Workstream W1 first slice): "tools", at 4-space indent -- same
@@ -858,15 +932,27 @@ class ManifestParse:
     empty when the sidecar's top-level structure is clean. See
     ``_parse_manifest`` for the exact malformed-line rule.
 
-    ``malformed_reference_items`` holds each spec.references list item
-    (trimmed) that could not be read as a plain scalar string -- an
-    unquoted mapping-shaped entry (e.g. "path: foo") or one indented
-    inconsistently with the rest of its own list. Empty when every item in
-    every spec.references list parsed cleanly. Unlike ``malformed_lines``,
-    these are indented lines; they would otherwise be silently skipped by
-    this parser's own "indented lines are never malformed" rule, which is
-    why they need this separate, explicit channel rather than reusing
-    ``malformed_lines``.
+    ``malformed_reference_items`` holds each spec.references list item's
+    own opening line (trimmed) that could not be read as a well-formed
+    item mapping -- an indent inconsistent with the rest of its own list,
+    an opening line not shaped like "<key>: <value>" at all (e.g. the
+    plain-scalar or pipe-delimited-string shapes this field used before),
+    an opening key outside REFERENCES_ITEM_SUBKEYS, or an otherwise
+    well-opened item missing one of REFERENCES_ITEM_REQUIRED_SUBKEYS
+    (``kind``/``anchor``/``summary``) by the time it closes. Empty when
+    every item in every spec.references list parsed cleanly. Unlike
+    ``malformed_lines``, these are indented lines; they would otherwise be
+    silently skipped by this parser's own "indented lines are never
+    malformed" rule, which is why they need this separate, explicit
+    channel rather than reusing ``malformed_lines``.
+
+    ``unknown_reference_item_keys`` holds each key found inside an
+    otherwise-well-opened spec.references item that is not one of
+    REFERENCES_ITEM_SUBKEYS (trimmed line, e.g. "notes: foo") -- the
+    item's other recognized fields still parse normally; only the stray
+    key itself is flagged, the same asymmetry
+    ``unknown_lifecycle_fields``/``unknown_skill_dependency_keys`` already
+    use for their own sibling fields.
 
     ``malformed_skill_dependency_items`` and ``unknown_skill_dependency_keys``
     are spec.skillDependencies' equivalents: the former holds each
@@ -910,6 +996,7 @@ class ManifestParse:
     root: dict[str, object]
     malformed_lines: list[str]
     malformed_reference_items: list[str]
+    unknown_reference_item_keys: list[str]
     malformed_skill_dependency_items: list[str]
     unknown_skill_dependency_keys: list[str]
     unknown_lifecycle_keys: list[str]
@@ -926,10 +1013,29 @@ def _parse_manifest(text: str) -> ManifestParse:
     scalars under a top-level map (metadata:, spec:). Two exceptions:
 
     - spec.references (and only that key, and only directly under spec) is
-      read as a flat list of scalar strings, each a "- <value>" line
-      indented 2 or more spaces -- the shape this repository's sidecars use
-      for maintainer-facing provenance (see the design spec's
-      Sub-project C).
+      read as a list whose items are themselves mappings -- one
+      maintainer-facing provenance event each (see the design spec's
+      Sub-project C and its issue #488 follow-up). Each item opens with a
+      "- <key>: <value>" line (its first field given inline right after
+      the dash) at exactly 4-space indent, with further recognized fields
+      as "<key>: <value>" continuation lines at exactly 6-space indent --
+      one level deeper, matching every other gated block's own indent-
+      doubling convention. Recognized keys: ``kind`` (required, a closed
+      vocabulary -- REFERENCES_KIND_VOCAB), ``anchor`` (required, the
+      provenance source), ``summary`` (required, free prose), and
+      ``outcome`` (optional, itself an empty-value key opening a further
+      nested mapping of free-form key/value atoms at 8-space indent --
+      KEY_LINE_RE_8 -- with no closed vocabulary of its own). A key inside
+      an item other than these four is collected into
+      ``ManifestParse.unknown_reference_item_keys`` instead of being
+      silently skipped, the same reasoning
+      ``unknown_skill_dependency_keys`` documents below; an item whose own
+      opening line is not "<key>: <value>" shaped at all, opens with an
+      unrecognized key, is indented inconsistently with the rest of its
+      own list, or is missing one of the three required keys by the time
+      it closes is collected (its opening line, trimmed) into
+      ``ManifestParse.malformed_reference_items`` and excluded from the
+      parsed list entirely, rather than kept as a partial or garbled item.
     - spec.skillDependencies (and only that key, and only directly under
       spec) is read as a mapping with exactly two recognized subkeys,
       ``requires`` and ``relatedTo`` (see the design spec's Sub-project D).
@@ -1045,15 +1151,23 @@ def _parse_manifest(text: str) -> ManifestParse:
     this parser deliberately does not interpret, and flagging them would
     defeat that reserved-field design. spec.references and
     spec.skillDependencies list items are the exceptions with their own
-    malformed channels: an unquoted item shaped like a YAML mapping key
-    ("path: foo", real YAML would read that as a nested mapping, not a
-    scalar), an item indented inconsistently with the rest of its own
-    list, or an unquoted null/boolean/numeric scalar (issue #356: real
-    YAML resolves e.g. "true"/"123"/"null" to that type, not a string) is
-    collected (trimmed) into ``ManifestParse.malformed_reference_items``
-    or ``ManifestParse.malformed_skill_dependency_items`` respectively,
+    malformed channels, though the two fields' own item shapes differ
+    (references' own items are mappings; skillDependencies.requires/
+    relatedTo's are still plain scalar strings): a spec.references item
+    not shaped like "<key>: <value>" at all, indented inconsistently with
+    the rest of its own list, opening with an unrecognized key, or missing
+    a required field by the time it closes is collected (its opening
+    line, trimmed) into ``ManifestParse.malformed_reference_items`` (see
+    this field's own fuller description above); a
+    spec.skillDependencies.requires/relatedTo item shaped like an
+    unquoted YAML mapping key ("path: foo", real YAML would read that as
+    a nested mapping, not the scalar string this list still expects), one
+    indented inconsistently with the rest of its own list, or an unquoted
+    null/boolean/numeric scalar (issue #356: real YAML resolves e.g.
+    "true"/"123"/"null" to that type, not a string) is collected the same
+    way into ``ManifestParse.malformed_skill_dependency_items`` -- both
     instead of being silently accepted as a garbled or wrongly-typed
-    scalar string.
+    value.
 
     Every gated *mapping*-valued block (spec.skillDependencies,
     spec.lifecycle and its experimental/deprecated/stable sub-blocks,
@@ -1078,10 +1192,25 @@ def _parse_manifest(text: str) -> ManifestParse:
     text = text.lstrip("\ufeff")  # strip a leading UTF-8 BOM, as _parse_frontmatter does
     root: dict[str, object] = {}
     current: dict[str, object] | None = None
-    collecting_refs: list[str] | None = None
-    refs_indent: int | None = None
+    collecting_refs: list[dict[str, object]] | None = None
+    # The spec.references item mapping currently being read (between its
+    # own "- <key>: <value>" opening line and either the next item, a
+    # dedent, or end of file); None between items. current_ref_item_valid
+    # goes False the moment the item's own opening line or any of its
+    # fields turns out malformed, so the item is excluded at finalization
+    # even though its now-known-garbage lines are still consumed here
+    # (not left to desync the references list's own end-of-block
+    # detection). current_ref_open_line is the item's own opening line
+    # (trimmed), kept only for evidence messages.
+    current_ref_item: dict[str, object] | None = None
+    current_ref_item_valid = True
+    current_ref_open_line = ""
+    # Non-None while inside that item's own optional "outcome:" nested
+    # mapping (one level deeper still -- see KEY_LINE_RE_8).
+    current_ref_outcome: dict[str, object] | None = None
     malformed: list[str] = []
     malformed_refs: list[str] = []
+    unknown_ref_item_keys: list[str] = []
     in_skill_deps = False
     skill_deps: dict[str, object] = {}
     # Whether spec.skillDependencies has seen at least one real child line
@@ -1128,12 +1257,35 @@ def _parse_manifest(text: str) -> ManifestParse:
     unknown_exec_req_keys: list[str] = []
     unknown_exec_tools_keys: list[str] = []
 
+    def _finalize_ref_outcome() -> None:
+        nonlocal current_ref_outcome
+        if current_ref_outcome is not None and current_ref_item is not None:
+            current_ref_item["outcome"] = (
+                current_ref_outcome if current_ref_outcome else None)
+        current_ref_outcome = None
+
+    def _finalize_current_ref_item() -> None:
+        nonlocal current_ref_item, current_ref_item_valid, current_ref_open_line
+        _finalize_ref_outcome()
+        if current_ref_item is not None:
+            missing = [k for k in REFERENCES_ITEM_REQUIRED_SUBKEYS
+                      if k not in current_ref_item]
+            if current_ref_item_valid and missing:
+                joined = ", ".join(missing)
+                malformed_refs.append(
+                    f"{current_ref_open_line} (missing required field(s): {joined})")
+            elif current_ref_item_valid and collecting_refs is not None:
+                collecting_refs.append(current_ref_item)
+        current_ref_item = None
+        current_ref_item_valid = True
+        current_ref_open_line = ""
+
     def _finalize_refs() -> None:
-        nonlocal collecting_refs, refs_indent
+        nonlocal collecting_refs
+        _finalize_current_ref_item()
         if collecting_refs is not None and current is not None:
             current["references"] = collecting_refs
         collecting_refs = None
-        refs_indent = None
 
     def _finalize_dep_list() -> None:
         nonlocal collecting_dep_list, collecting_dep_key, dep_list_indent
@@ -1208,32 +1360,82 @@ def _parse_manifest(text: str) -> ManifestParse:
         if collecting_refs is not None:
             item = REFERENCES_LIST_ITEM_RE.match(line)
             if item:
+                # A new "- <key>: <value>" item marker always closes
+                # whatever item (and its own outcome sub-block, if open)
+                # came before it.
+                _finalize_current_ref_item()
                 item_indent = len(line) - len(line.lstrip(" "))
-                if refs_indent is None:
-                    refs_indent = item_indent
-                if item_indent != refs_indent:
-                    # Same list, different indent than its own first item --
-                    # real YAML would reject this outright.
-                    malformed_refs.append(line.strip())
-                    continue
                 raw_text = item.group(1).strip()
-                is_quoted = (len(raw_text) >= 2 and raw_text[0] == raw_text[-1]
-                             and raw_text[0] in "\"'")
-                if not is_quoted and REFERENCES_MAPPING_LIKE_RE.match(raw_text):
-                    # An unquoted "key: value" item -- real YAML reads this
-                    # as a nested mapping, not the scalar string this
-                    # parser understands; flag it rather than silently
-                    # truncating the mapping into a garbled string.
+                opened = _match_key_line(INLINE_KEY_VALUE_RE, raw_text)
+                current_ref_open_line = line.strip()
+                if (item_indent != REFERENCES_ITEM_INDENT or opened is None
+                        or opened[0] not in REFERENCES_ITEM_SUBKEYS):
+                    # Wrong indent (exactly 4 spaces required -- one level
+                    # under spec.references' own 2-space key, matching
+                    # every other gated block's own fixed-indent
+                    # convention, not the old bare-scalar-list design's
+                    # "2 or more spaces" tolerance), not a "key: value"
+                    # shape at all (the old pipe-string/bare-scalar shape
+                    # this field used before, or other garbage), or an
+                    # unrecognized first
+                    # key -- flag the whole item rather than silently
+                    # misreading it. Still track it as "an item is open"
+                    # so its own (now-known-garbage) continuation lines
+                    # are consumed here instead of desyncing this block's
+                    # own end-of-list detection.
                     malformed_refs.append(line.strip())
-                elif not is_quoted and _is_non_string_plain_scalar(raw_text):
-                    # An unquoted null/boolean/numeric scalar -- real YAML
-                    # resolves this to that type, not a string (issue #356).
-                    malformed_refs.append(line.strip())
+                    current_ref_item = {}
+                    current_ref_item_valid = False
                 else:
-                    collecting_refs.append(_unquote(raw_text))
+                    key, value = opened
+                    current_ref_item = {}
+                    current_ref_item_valid = True
+                    if value:
+                        current_ref_item[key] = _unquote(value)
                 continue
-            # Not a list item: the references list ends here. Finalize it
-            # and fall through to process this line normally below.
+            if current_ref_outcome is not None:
+                matched = _match_key_line(KEY_LINE_RE_8, line)
+                if matched:
+                    key, value = matched
+                    if value:
+                        current_ref_outcome[key] = _unquote(value)
+                    continue
+                indent = len(line) - len(line.lstrip(" "))
+                if line[:1] in (" ", "\t") and indent >= 8:
+                    # Same fail-closed reasoning as every other gated
+                    # block's own equivalent branch: an unmatched line at
+                    # outcome's own indent invalidates the item rather
+                    # than being silently tolerated or misread.
+                    current_ref_item_valid = False
+                    continue
+                # Not more deeply indented: outcome's own block ends here.
+                # Finalize it and fall through to re-check this same line
+                # against the item's own 6-space fields below.
+                _finalize_ref_outcome()
+            if current_ref_item is not None:
+                matched = _match_key_line(KEY_LINE_RE_6, line)
+                if matched:
+                    key, value = matched
+                    value = _strip_bare_comment(value)
+                    if key not in REFERENCES_ITEM_SUBKEYS:
+                        unknown_ref_item_keys.append(line.strip())
+                    elif key == "outcome" and not value:
+                        current_ref_outcome = {}
+                    elif value:
+                        current_ref_item[key] = _unquote(value)
+                    continue
+                indent = len(line) - len(line.lstrip(" "))
+                if line[:1] in (" ", "\t") and indent >= 6:
+                    # Same fail-closed reasoning as every other gated
+                    # block's own equivalent branch.
+                    current_ref_item_valid = False
+                    unknown_ref_item_keys.append(line.strip())
+                    continue
+            # Neither a new item marker nor a continuation of the current
+            # one: the references list ends here (there is no legitimate
+            # content under spec.references besides its own items).
+            # Finalize it and fall through to process this line normally
+            # below.
             _finalize_refs()
         if collecting_dep_list is not None:
             item = SKILL_DEP_LIST_ITEM_RE.match(line)
@@ -1533,6 +1735,7 @@ def _parse_manifest(text: str) -> ManifestParse:
     _finalize_execution_requirements()
     return ManifestParse(root=root, malformed_lines=malformed,
                           malformed_reference_items=malformed_refs,
+                          unknown_reference_item_keys=unknown_ref_item_keys,
                           malformed_skill_dependency_items=malformed_deps,
                           unknown_skill_dependency_keys=unknown_dep_keys,
                           unknown_lifecycle_keys=unknown_lifecycle_keys,
@@ -2335,10 +2538,61 @@ def _validate_read_scope(target: Path, allowed_root: Path) -> None:
                     f"special file is not allowed in target skill: {path}")
 
 
+def _references_grammar_check(references: object) -> CheckResult:
+    """spec.references entries must each have a ``kind`` drawn from
+    REFERENCES_KIND_VOCAB -- the one thing about an already-well-shaped
+    item (see ``references-well-formed``, which already guarantees
+    ``kind``/``anchor``/``summary`` are all non-empty strings and
+    ``outcome``, if present, is itself a mapping) that is a semantic
+    enum-membership question rather than a parse-time shape question, the
+    same division of labor ``portability-declared``/
+    ``capability-assumption-declared`` already use relative to
+    ``manifest-envelope``. Runs independently of references-well-formed (a
+    malformed-shape entry can also carry an unrecognized ``kind``, and a
+    reader benefits from seeing both findings rather than only the first
+    one that happens to fail); when the field isn't a usable list of item
+    mappings at all, that precondition failure is already reported by
+    references-well-formed, so this reports "nothing to check" instead of
+    a redundant or misleading second failure.
+
+    Deliberately does not validate the anchor field's own internal shape
+    (a GitHub URL, an external URL, a `method:<skill>` token, or a
+    repo-relative path are all legitimate depending on the entry's kind) --
+    the existing no-bare-issue-citation scan already enforces the one rule
+    that actually matters for an anchor (no bare `#N`/`owner/repo#N`
+    citation anywhere in the entry), so a second, narrower anchor-shape
+    regex here would just be unenforced ornamentation.
+    """
+    rule = (
+        "spec.references, if present, has each entry's kind field one of "
+        f"{REFERENCES_KIND_VOCAB}")
+    if references is None:
+        return CheckResult("references-grammar", True, rule, "not declared (optional)")
+    if not (isinstance(references, list) and references
+            and all(isinstance(r, dict) and isinstance(r.get("kind"), str)
+                    for r in references)):
+        return CheckResult(
+            "references-grammar", True, rule,
+            "nothing to check (already reported by references-well-formed)")
+    offenders = [r["kind"] for r in references if r["kind"] not in REFERENCES_KIND_VOCAB]
+    count = len(offenders)
+    return CheckResult(
+        "references-grammar", not offenders, rule,
+        "all entries match" if not offenders
+        else f"{count} entr{'y' if count == 1 else 'ies'} with an unrecognized "
+             f"kind: {offenders[0]!r}")
+
+
 def check_shape(target: Path) -> list[CheckResult]:
     skill_md = _resolve_skill_md(target)
     skill_dir = skill_md.parent
     results: list[CheckResult] = []
+    # Populated below, only when the sidecar parses with spec.references
+    # and/or spec.lifecycle.experimental/deprecated.reason present -- fed
+    # into _issue_citation_checks so the bare-issue-citation ban covers the
+    # sidecar's own free text too (issue #488), not just SKILL.md/
+    # references/*.md.
+    sidecar_citation_sources: list[tuple[str, str]] = []
 
     text = skill_md.read_text(encoding="utf-8")
     frontmatter = _parse_frontmatter(text)
@@ -2398,6 +2652,7 @@ def check_shape(target: Path) -> list[CheckResult]:
             manifest: dict[str, object] | None = parsed.root
             malformed_lines = parsed.malformed_lines
             malformed_reference_items = parsed.malformed_reference_items
+            unknown_reference_item_keys = parsed.unknown_reference_item_keys
             malformed_skill_dependency_items = parsed.malformed_skill_dependency_items
             unknown_skill_dependency_keys = parsed.unknown_skill_dependency_keys
             unknown_lifecycle_keys = parsed.unknown_lifecycle_keys
@@ -2410,6 +2665,7 @@ def check_shape(target: Path) -> list[CheckResult]:
             manifest = None
             malformed_lines = []
             malformed_reference_items = []
+            unknown_reference_item_keys = []
             malformed_skill_dependency_items = []
             unknown_skill_dependency_keys = []
             unknown_lifecycle_keys = []
@@ -2442,6 +2698,11 @@ def check_shape(target: Path) -> list[CheckResult]:
             results.append(CheckResult(
                 "references-well-formed", False,
                 "spec.references, if present, is a non-empty list of non-empty strings",
+                evidence))
+            results.append(CheckResult(
+                "references-grammar", False,
+                "spec.references, if present, has each entry shaped "
+                '"<kind> | <anchor> | <summary>[ | <outcome>]"',
                 evidence))
             results.append(CheckResult(
                 "skill-dependencies-well-formed", False,
@@ -2529,6 +2790,15 @@ def check_shape(target: Path) -> list[CheckResult]:
                 f"spec.capabilityAssumption is one of {CAPABILITY_ASSUMPTIONS}",
                 repr(capability)))
             references = spec.get("references")
+            references_well_formed_rule = (
+                "spec.references, if present, is a non-empty list of "
+                "item mappings, each with kind/anchor/summary (and no "
+                f"unrecognized key), summary <= {REFERENCES_ENTRY_MAX_CHARS} "
+                "chars")
+            is_ref_item = lambda r: (  # noqa: E731 -- local, single use
+                isinstance(r, dict) and isinstance(r.get("kind"), str)
+                and isinstance(r.get("anchor"), str)
+                and isinstance(r.get("summary"), str))
             if not spec_is_mapping:
                 # spec itself failed to parse as a mapping (e.g. "spec:
                 # some-scalar"), the same precondition failure
@@ -2536,41 +2806,77 @@ def check_shape(target: Path) -> list[CheckResult]:
                 # already report above -- "not declared" would misreport
                 # this as the ordinary optional-and-absent case.
                 results.append(CheckResult(
-                    "references-well-formed", False,
-                    "spec.references, if present, is a non-empty list of non-empty strings",
+                    "references-well-formed", False, references_well_formed_rule,
                     f"spec is not a mapping: {spec_raw!r}"))
             elif malformed_reference_items:
-                # A mapping-shaped or inconsistently-indented list item was
-                # already flagged by the parser -- fail loudly instead of
-                # reporting on whatever garbled scalar it was misparsed
-                # into, even if the rest of the list otherwise looks like
-                # a clean list of strings.
+                # An item whose own opening line was unrecognizable, whose
+                # first key was unrecognized, whose indent didn't match the
+                # rest of its own list, or that was missing a required
+                # field by the time it closed was already flagged by the
+                # parser -- fail loudly instead of reporting on whatever
+                # partial item it was excluded in favor of, even if the
+                # rest of the list otherwise looks clean.
                 count = len(malformed_reference_items)
                 results.append(CheckResult(
-                    "references-well-formed", False,
-                    "spec.references, if present, is a non-empty list of non-empty strings",
+                    "references-well-formed", False, references_well_formed_rule,
                     f"{count} malformed entr{'y' if count == 1 else 'ies'}: "
                     f"{malformed_reference_items[0]!r}"))
+            elif unknown_reference_item_keys:
+                count = len(unknown_reference_item_keys)
+                results.append(CheckResult(
+                    "references-well-formed", False, references_well_formed_rule,
+                    f"{count} unknown key{'' if count == 1 else 's'}: "
+                    f"{unknown_reference_item_keys[0]!r}"))
             elif references is None:
                 results.append(CheckResult(
-                    "references-well-formed", True,
-                    "spec.references, if present, is a non-empty list of non-empty strings",
+                    "references-well-formed", True, references_well_formed_rule,
                     "not declared (optional)"))
-            elif (isinstance(references, list) and references
-                  and all(isinstance(r, str) and r.strip() for r in references)):
-                ref_count = len(references)
-                ref_noun = "entry" if ref_count == 1 else "entries"
-                results.append(CheckResult(
-                    "references-well-formed", True,
-                    "spec.references, if present, is a non-empty list of non-empty strings",
-                    f"{ref_count} {ref_noun}"))
-            else:
+            elif not (isinstance(references, list) and references
+                      and all(is_ref_item(r) for r in references)):
                 ref_evidence = ("empty list" if references == []
-                                else f"not a list of non-empty strings: {references!r}")
+                                else f"not a list of item mappings: {references!r}")
                 results.append(CheckResult(
-                    "references-well-formed", False,
-                    "spec.references, if present, is a non-empty list of non-empty strings",
+                    "references-well-formed", False, references_well_formed_rule,
                     ref_evidence))
+            else:
+                oversized = [r for r in references
+                            if len(r["summary"]) > REFERENCES_ENTRY_MAX_CHARS]
+                if oversized:
+                    results.append(CheckResult(
+                        "references-well-formed", False, references_well_formed_rule,
+                        f"{len(oversized)} entr{'y' if len(oversized) == 1 else 'ies'} "
+                        f"over {REFERENCES_ENTRY_MAX_CHARS} chars: "
+                        f"{len(oversized[0]['summary'])} chars, kind="
+                        f"{oversized[0].get('kind')!r}"))
+                else:
+                    ref_count = len(references)
+                    ref_noun = "entry" if ref_count == 1 else "entries"
+                    results.append(CheckResult(
+                        "references-well-formed", True, references_well_formed_rule,
+                        f"{ref_count} {ref_noun}"))
+            results.append(_references_grammar_check(references))
+            if isinstance(references, list) and references:
+                ref_texts = []
+                for r in references:
+                    if not isinstance(r, dict):
+                        continue
+                    ref_texts.append(str(r.get("anchor", "")))
+                    ref_texts.append(str(r.get("summary", "")))
+                    outcome = r.get("outcome")
+                    if isinstance(outcome, dict):
+                        ref_texts.extend(str(v) for v in outcome.values())
+                sidecar_citation_sources.append((
+                    "metadata/gitapex.yaml:spec.references", "\n".join(ref_texts)))
+            lifecycle_raw = spec.get("lifecycle") if spec_is_mapping else None
+            lifecycle_dict = lifecycle_raw if isinstance(lifecycle_raw, dict) else {}
+            for lifecycle_key in ("experimental", "deprecated"):
+                lifecycle_block = lifecycle_dict.get(lifecycle_key)
+                if isinstance(lifecycle_block, dict):
+                    reason_text = lifecycle_block.get("reason")
+                    if isinstance(reason_text, str) and reason_text:
+                        sidecar_citation_sources.append((
+                            f"metadata/gitapex.yaml:spec.lifecycle.{lifecycle_key}.reason",
+                            reason_text))
             results.extend(_skill_dependency_checks(
                 spec_is_mapping, spec_raw, spec,
                 malformed_skill_dependency_items, unknown_skill_dependency_keys,
@@ -2660,7 +2966,8 @@ def check_shape(target: Path) -> list[CheckResult]:
                 "all resolve" if not ref_broken_anchors
                 else "broken: " + ", ".join(ref_broken_anchors)))
 
-    results.extend(_issue_citation_checks(skill_md, skill_dir, body))
+    results.extend(_issue_citation_checks(
+        skill_md, skill_dir, body, extra_sources=sidecar_citation_sources))
     results.extend(_illustrative_model_id_checks(skill_md, skill_dir, body))
     results.extend(_raw_placeholder_checks(skill_md, skill_dir, body))
     if _is_portable(body, sidecar_portability):
@@ -2690,18 +2997,47 @@ def _citation_sources(skill_md: Path, skill_dir: Path,
 
 
 def _issue_citation_checks(skill_md: Path, skill_dir: Path,
-                           body: list[str]) -> list[CheckResult]:
-    """The bare GitHub issue/PR-number citation scan over SKILL.md body and
-    references/*.md (see the module docstring's issue #254 entry). Runs
+                           body: list[str],
+                           extra_sources: list[tuple[str, str]] | None = None
+                           ) -> list[CheckResult]:
+    """The bare GitHub issue/PR-number citation scan over SKILL.md body,
+    references/*.md, and (unlike every other check built on
+    ``_citation_sources``) the metadata/gitapex.yaml sidecar's own
+    spec.references entries and lifecycle.experimental/deprecated.reason
+    text, passed in via ``extra_sources``. The sidecar used to be exempt
+    from this scan -- a bare "#149" there was considered the sanctioned,
+    maintainer-facing home for an issue/PR citation the same rule forbids
+    everywhere else -- but a bare number loses its meaning the moment the
+    sidecar travels with its skill directory to another repository. A full
+    ``https://github.com/...`` URL contains no bare ``#N`` and so is never
+    flagged here -- that is what makes a full URL the only way left to cite
+    an issue from the sidecar, with no separate format regex needed. Runs
     unconditionally on every skill regardless of declared portability level
     -- unlike ``_portable_path_citation_checks`` below, the caller does not
     gate this one on ``_is_portable``.
+
+    ``extra_sources`` (the sidecar text) is scanned with the bare
+    ``ISSUE_CITATION_RE`` regex directly, NOT through
+    ``_portable_citation_offenders``/``_strip_illustrative_spans`` the way
+    SKILL.md/references/*.md are (Codex review finding on this PR): that
+    stripping exempts an inline-code span (`` `#149` ``) as an
+    "already illustrative, does not resolve live" citation form -- true in
+    rendered Markdown, where backticks make GitHub's auto-linker leave the
+    text alone, but meaningless inside a YAML string scalar, where a
+    backtick is just a literal character. Applying that exemption to the
+    sidecar would let a provenance entry write "fixed in `` `gitapex#25` ``"
+    and pass unflagged, defeating the full-URL-only rule this check exists
+    to enforce there.
     """
     issue_hits: list[str] = []
     for label, source_text in _citation_sources(skill_md, skill_dir, body):
         defenced = _blank_fenced_blocks(source_text)
         issues, _paths = _portable_citation_offenders(defenced)
         issue_hits += [f"{label}:{c}" for c in issues]
+    for label, source_text in (extra_sources or ()):
+        issue_hits += [f"{label}:{c}" for c in
+                       _dedup(m.group(0) for m in
+                              ISSUE_CITATION_RE.finditer(source_text))]
 
     return [
         CheckResult(
@@ -2971,9 +3307,10 @@ def _valid_lifecycle_date(value: object) -> bool:
 
 
 def _valid_tracking_issue(value: object) -> bool:
-    """Shape-only check for spec.lifecycle.experimental.trackingIssue: an
-    anchored ``#123`` or ``owner/repo#123``. Never resolved against a
-    live GitHub API call -- this checker is offline/read-only by design.
+    """Shape-only check for spec.lifecycle.experimental.trackingIssue: a
+    full ``https://github.com/tvna/gitapex/issues/123`` (or ``/pull/123``)
+    URL. Never resolved against a live GitHub API call -- this checker is
+    offline/read-only by design.
     """
     return isinstance(value, str) and bool(LIFECYCLE_ISSUE_REF_RE.match(value))
 
@@ -3014,8 +3351,10 @@ def _lifecycle_checks(spec_is_mapping: bool, spec_raw: object,
         "each -- if present -- a mapping of their own recognized scalar "
         "fields; renamedFrom, if present, is a non-empty scalar string. "
         "since/removeAfter, if present, must be real YYYY-MM-DD dates; "
-        "trackingIssue, if present, an anchored #123 or owner/repo#123 "
-        "reference; compatibilityGuarantee, if present, one of "
+        "reason, if present, is <= "
+        f"{REFERENCES_ENTRY_MAX_CHARS} chars; trackingIssue, if present, a "
+        "full https://github.com/tvna/gitapex/issues/<N> (or /pull/<N>) "
+        "URL; compatibilityGuarantee, if present, one of "
         f"{COMPATIBILITY_GUARANTEE_LEVELS}")
     resolve_rule = (
         "spec.lifecycle.deprecated.replacement, if a non-empty string, "
@@ -3087,11 +3426,17 @@ def _lifecycle_checks(spec_is_mapping: bool, spec_raw: object,
             if field in block and not _valid_lifecycle_date(block[field]):
                 problems.append(
                     f"{key}.{field} is not a YYYY-MM-DD date: {block[field]!r}")
+        reason_val = block.get("reason")
+        if isinstance(reason_val, str) and len(reason_val) > REFERENCES_ENTRY_MAX_CHARS:
+            problems.append(
+                f"{key}.reason is {len(reason_val)} chars, over the "
+                f"{REFERENCES_ENTRY_MAX_CHARS}-char limit")
         if key == "experimental" and "trackingIssue" in block \
                 and not _valid_tracking_issue(block["trackingIssue"]):
             problems.append(
-                f"experimental.trackingIssue is not a #123 or owner/repo#123 "
-                f"reference: {block['trackingIssue']!r}")
+                f"experimental.trackingIssue is not a full "
+                f"https://github.com/tvna/gitapex/issues/<N> (or /pull/<N>) "
+                f"URL: {block['trackingIssue']!r}")
         if key == "stable" and "compatibilityGuarantee" in block \
                 and block["compatibilityGuarantee"] not in COMPATIBILITY_GUARANTEE_LEVELS:
             problems.append(

@@ -1118,29 +1118,6 @@ def test_references_non_string_scalar_item_fails_well_formed(tmp_path):
     assert parsed.root["spec"]["references"] == []
 
 
-def test_references_quoted_scalar_looking_item_still_a_valid_string(tmp_path):
-    # A quoted item is a deliberate string regardless of its contents --
-    # real YAML never resolves a quoted scalar to null/boolean/numeric.
-    d = _write_skill(tmp_path)
-    (d / "metadata/gitapex.yaml").write_text(
-        "apiVersion: gitapex.io/v1alpha1\n"
-        "kind: SkillMetadata\n"
-        "metadata:\n"
-        "  name: skill\n"
-        "spec:\n"
-        "  portability: Portable\n"
-        "  capabilityAssumption: Broad\n"
-        "  references:\n"
-        "    - \"true\"\n"
-        "    - \"123\"\n",
-        encoding="utf-8")
-    by = _by_name(css.check_shape(d))
-    assert by["references-well-formed"].passed is True
-    assert css.main([str(d)]) == 0
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.root["spec"]["references"] == ["true", "123"]
-
-
 def test_references_non_string_scalar_with_trailing_comment_still_fails(tmp_path):
     # Regression guard (Codex review on this PR): a trailing inline
     # comment must not defeat the non-string-scalar classifier -- real
@@ -1169,34 +1146,13 @@ def test_references_non_string_scalar_with_trailing_comment_still_fails(tmp_path
     assert parsed.root["spec"]["references"] == []
 
 
-def test_references_string_item_with_glued_hash_is_not_a_comment(tmp_path):
-    # Companion regression guard: a "#" NOT preceded by whitespace is not
-    # a YAML comment marker at all -- "true#tag" is the literal string
-    # "true#tag", so it must still pass as an ordinary reference string,
-    # not be misclassified as the boolean true with a comment stripped.
-    d = _write_skill(tmp_path)
-    (d / "metadata/gitapex.yaml").write_text(
-        "apiVersion: gitapex.io/v1alpha1\n"
-        "kind: SkillMetadata\n"
-        "metadata:\n"
-        "  name: skill\n"
-        "spec:\n"
-        "  portability: Portable\n"
-        "  capabilityAssumption: Broad\n"
-        "  references:\n"
-        "    - true#tag\n",
-        encoding="utf-8")
-    by = _by_name(css.check_shape(d))
-    assert by["references-well-formed"].passed is True
-    assert css.main([str(d)]) == 0
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.root["spec"]["references"] == ["true#tag"]
-
-
 def test_references_inconsistent_indent_item_fails_well_formed(tmp_path):
-    # Regression guard: real YAML rejects a block sequence whose items are
-    # not all at the same indent. A well-formed item followed by one at a
-    # different indent must be flagged, not silently accepted alongside it.
+    # Regression guard: every item marker must sit at exactly
+    # REFERENCES_ITEM_INDENT (4 spaces), the same fixed-indent convention
+    # every other gated block already uses -- not the old bare-scalar-list
+    # design's "2 or more spaces, first item sets the tolerance" rule. A
+    # second item at a different indent must be flagged as malformed, not
+    # silently accepted alongside the well-formed one before it.
     d = _write_skill(tmp_path)
     (d / "metadata/gitapex.yaml").write_text(
         "apiVersion: gitapex.io/v1alpha1\n"
@@ -1207,16 +1163,23 @@ def test_references_inconsistent_indent_item_fails_well_formed(tmp_path):
         "  portability: Portable\n"
         "  capabilityAssumption: Broad\n"
         "  references:\n"
-        "    - \"a\"\n"
-        "  - \"b\"\n"
-        "      - \"c\"\n",
+        "    - kind: decision\n"
+        "      anchor: https://github.com/tvna/gitapex/issues/1\n"
+        "      summary: a\n"
+        "  - kind: audit\n"
+        "      anchor: https://github.com/tvna/gitapex/issues/2\n"
+        "      summary: b\n",
         encoding="utf-8")
     by = _by_name(css.check_shape(d))
     assert by["references-well-formed"].passed is False
     assert css.main([str(d)]) == 1
     parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.root["spec"]["references"] == ["a"]
-    assert parsed.malformed_reference_items == ['- "b"', '- "c"']
+    assert parsed.root["spec"]["references"] == [
+        {"kind": "decision",
+         "anchor": "https://github.com/tvna/gitapex/issues/1",
+         "summary": "a"},
+    ]
+    assert parsed.malformed_reference_items == ["- kind: audit"]
 
 
 def test_comment_and_document_marker_pass_manifest_parsable(tmp_path):
@@ -2000,12 +1963,19 @@ def test_references_valid_list_is_well_formed(tmp_path):
         "  portability: Portable\n"
         "  capabilityAssumption: Broad\n"
         "  references:\n"
-        "    - \"gitapex#25\"\n"
-        "    - \"PR #29\"\n",
+        "    - kind: decision\n"
+        "      anchor: https://github.com/tvna/gitapex/issues/25\n"
+        "      summary: fixed the thing\n"
+        "    - kind: audit\n"
+        "      anchor: https://github.com/tvna/gitapex/pull/29\n"
+        "      summary: reviewed the fix\n"
+        "      outcome:\n"
+        "        verdict: PASS\n",
         encoding="utf-8")
     by = _by_name(css.check_shape(d))
     assert by["references-well-formed"].passed is True
     assert by["references-well-formed"].evidence == "2 entries"
+    assert by["references-grammar"].passed is True
     assert css.main([str(d)]) == 0
 
 
@@ -2038,9 +2008,13 @@ def test_references_blank_entry_fails(tmp_path):
         "  portability: Portable\n"
         "  capabilityAssumption: Broad\n"
         "  references:\n"
-        "    - \"gitapex#25\"\n"
+        "    - kind: decision\n"
+        "      anchor: https://github.com/tvna/gitapex/issues/25\n"
+        "      summary: fixed this\n"
         "    -    \n"
-        "    - \"PR #29\"\n",
+        "    - kind: decision\n"
+        "      anchor: https://github.com/tvna/gitapex/pull/29\n"
+        "      summary: reviewed the fix\n",
         encoding="utf-8")
     by = _by_name(css.check_shape(d))
     assert by["references-well-formed"].passed is False
@@ -2072,6 +2046,279 @@ def test_references_well_formed_fails_when_sidecar_unreadable(tmp_path):
     assert by["references-well-formed"].passed is False
 
 
+def test_references_entry_over_budget_fails_well_formed(tmp_path):
+    # issue #488: an unbounded spec.references entry is exactly the bloat
+    # this cap exists to force out of the sidecar and into references/*.md.
+    # The cap applies to the item's own summary field specifically.
+    d = _write_skill(tmp_path)
+    oversized = "x" * (css.REFERENCES_ENTRY_MAX_CHARS + 1)
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  references:\n"
+        "    - kind: decision\n"
+        "      anchor: https://github.com/tvna/gitapex/issues/25\n"
+        f"      summary: {oversized}\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["references-well-formed"].passed is False
+    assert "over 500 chars" in by["references-well-formed"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_references_entry_at_budget_passes_well_formed(tmp_path):
+    d = _write_skill(tmp_path)
+    at_budget = "x" * css.REFERENCES_ENTRY_MAX_CHARS
+    assert len(at_budget) == css.REFERENCES_ENTRY_MAX_CHARS
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  references:\n"
+        "    - kind: decision\n"
+        "      anchor: https://github.com/tvna/gitapex/issues/25\n"
+        f"      summary: {at_budget}\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["references-well-formed"].passed is True
+    assert by["references-grammar"].passed is True
+    assert css.main([str(d)]) == 0
+
+
+def test_references_bare_citation_fails_no_bare_issue_citation(tmp_path):
+    # issue #488: metadata/gitapex.yaml used to be exempt from this scan --
+    # a bare citation here now fails the same way one in SKILL.md would.
+    d = _write_skill(tmp_path)
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  references:\n"
+        "    - kind: decision\n"
+        "      anchor: gitapex#25\n"
+        "      summary: fixed this\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["no-bare-issue-citation"].passed is False
+    assert "spec.references:#25" in by["no-bare-issue-citation"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_references_full_url_citation_passes_no_bare_issue_citation(tmp_path):
+    # The only sanctioned way left to cite an issue from the sidecar: a
+    # full URL contains no bare "#N", so it never trips this scan.
+    d = _write_skill(tmp_path)
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  references:\n"
+        "    - kind: decision\n"
+        "      anchor: https://github.com/tvna/gitapex/issues/25\n"
+        "      summary: fixed this\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["no-bare-issue-citation"].passed is True
+    assert by["references-well-formed"].passed is True
+    assert by["references-grammar"].passed is True
+    assert css.main([str(d)]) == 0
+
+
+def _write_references(tmp_path, *entries):
+    d = _write_skill(tmp_path)
+    lines = []
+    for e in entries:
+        lines.append(f"    - kind: {e['kind']}")
+        lines.append(f"      anchor: {e['anchor']}")
+        lines.append(f"      summary: {e['summary']}")
+        outcome = e.get("outcome")
+        if outcome:
+            lines.append("      outcome:")
+            for k, v in outcome.items():
+                lines.append(f"        {k}: {v}")
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  references:\n"
+        + "\n".join(lines) + "\n",
+        encoding="utf-8")
+    return d
+
+
+def test_references_grammar_not_declared_passes(tmp_path):
+    d = _write_skill(tmp_path)
+    by = _by_name(css.check_shape(d))
+    assert by["references-grammar"].passed is True
+    assert by["references-grammar"].evidence == "not declared (optional)"
+
+
+def test_references_grammar_valid_four_field_entry_passes(tmp_path):
+    d = _write_references(
+        tmp_path,
+        {"kind": "audit", "anchor": "method:battle-testing-a-skill",
+         "summary": "ran adversarial pass",
+         "outcome": {"verdict": "FAIL", "found": 3, "fixed": 3}})
+    by = _by_name(css.check_shape(d))
+    assert by["references-grammar"].passed is True
+    assert by["references-grammar"].evidence == "all entries match"
+    assert css.main([str(d)]) == 0
+
+
+def test_references_grammar_unknown_kind_fails(tmp_path):
+    d = _write_references(
+        tmp_path,
+        {"kind": "changelog", "anchor": "https://github.com/tvna/gitapex/issues/1",
+         "summary": "did a thing"})
+    by = _by_name(css.check_shape(d))
+    assert by["references-grammar"].passed is False
+    assert "unrecognized kind: 'changelog'" in by["references-grammar"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_references_grammar_unusable_list_is_nothing_to_check(tmp_path):
+    # references-well-formed already reports the empty-list defect; this
+    # check must not pile on a second, redundant failure for the same
+    # underlying precondition.
+    d = _write_skill(tmp_path)
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  references:\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["references-well-formed"].passed is False
+    assert by["references-grammar"].passed is True
+    assert "nothing to check" in by["references-grammar"].evidence
+
+
+def test_references_inline_code_bare_citation_still_fails(tmp_path):
+    # Regression guard (Codex review finding on issue #488's own PR): the
+    # SKILL.md/references/*.md bare-citation scan exempts an inline-code
+    # span (`#149`) as an already-illustrative, does-not-resolve-live
+    # citation form -- true in rendered Markdown, meaningless inside a
+    # YAML string scalar, where a backtick is just a literal character.
+    # Applying that same exemption to the sidecar would let an entry write
+    # "fixed in `gitapex#25`" and pass unflagged, defeating the
+    # full-URL-only rule. The sidecar's own scan must not exempt inline
+    # code the way the body-prose scan does.
+    d = _write_skill(tmp_path)
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  references:\n"
+        "    - kind: decision\n"
+        "      anchor: https://github.com/tvna/gitapex/issues/1\n"
+        "      summary: fixed in `gitapex#25`\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["no-bare-issue-citation"].passed is False
+    assert "spec.references:#25" in by["no-bare-issue-citation"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_lifecycle_reason_over_budget_fails_well_formed(tmp_path):
+    d = _write_skill(tmp_path)
+    oversized = "x" * (css.REFERENCES_ENTRY_MAX_CHARS + 1)
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  lifecycle:\n"
+        "    experimental:\n"
+        f"      reason: {oversized}\n"
+        "      trackingIssue: \"https://github.com/tvna/gitapex/issues/123\"\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is False
+    assert "reason is" in by["lifecycle-well-formed"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_lifecycle_reason_bare_citation_fails_no_bare_issue_citation(tmp_path):
+    d = _write_skill(tmp_path)
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  lifecycle:\n"
+        "    experimental:\n"
+        "      reason: follows from gitapex#25\n"
+        "      trackingIssue: \"https://github.com/tvna/gitapex/issues/123\"\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["no-bare-issue-citation"].passed is False
+    assert ("spec.lifecycle.experimental.reason:#25"
+            in by["no-bare-issue-citation"].evidence)
+    assert css.main([str(d)]) == 1
+
+
+def test_lifecycle_tracking_issue_bare_number_fails_well_formed(tmp_path):
+    # issue #488: the old "#123"/"owner/repo#123" shape no longer
+    # validates -- only a full GitHub URL does.
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n"
+        "    experimental:\n"
+        "      reason: not yet proven\n"
+        "      trackingIssue: \"owner/repo#123\"\n")
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is False
+    assert "trackingIssue" in by["lifecycle-well-formed"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_lifecycle_tracking_issue_pull_url_passes_well_formed(tmp_path):
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n"
+        "    experimental:\n"
+        "      reason: not yet proven\n"
+        "      trackingIssue: \"https://github.com/tvna/gitapex/pull/29\"\n")
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is True
+    assert css.main([str(d)]) == 0
+
+
 def test_manifest_parser_parses_spec_references_list():
     text = (
         "apiVersion: gitapex.io/v1alpha1\n"
@@ -2082,12 +2329,28 @@ def test_manifest_parser_parses_spec_references_list():
         "  portability: Portable\n"
         "  capabilityAssumption: Broad\n"
         "  references:\n"
-        "    - \"gitapex#25\"\n"
-        "    - \"PR #29\"\n"
+        "    - kind: decision\n"
+        "      anchor: https://github.com/tvna/gitapex/issues/25\n"
+        "      summary: fixed the thing\n"
+        "    - kind: audit\n"
+        "      anchor: https://github.com/tvna/gitapex/pull/29\n"
+        "      summary: reviewed the fix\n"
+        "      outcome:\n"
+        "        verdict: PASS\n"
     )
     parsed = css._parse_manifest(text)
-    assert parsed.root["spec"]["references"] == ["gitapex#25", "PR #29"]
+    assert parsed.root["spec"]["references"] == [
+        {"kind": "decision",
+         "anchor": "https://github.com/tvna/gitapex/issues/25",
+         "summary": "fixed the thing"},
+        {"kind": "audit",
+         "anchor": "https://github.com/tvna/gitapex/pull/29",
+         "summary": "reviewed the fix",
+         "outcome": {"verdict": "PASS"}},
+    ]
     assert parsed.malformed_lines == []
+    assert parsed.malformed_reference_items == []
+    assert parsed.unknown_reference_item_keys == []
 
 
 def test_manifest_parser_parses_spec_skill_dependencies():
@@ -2190,9 +2453,8 @@ def test_manifest_parser_still_ignores_eval_status():
 
 def test_references_entries_decode_escaped_quotes():
     # Regression guard: _unquote must decode \" (and \\) inside a
-    # double-quoted spec.references entry, not leave a literal backslash
-    # in the parsed string -- the exact shape battle-testing-a-skill's
-    # real sidecar entries use.
+    # double-quoted spec.references field value, not leave a literal
+    # backslash in the parsed string.
     text = (
         "apiVersion: gitapex.io/v1alpha1\n"
         "kind: SkillMetadata\n"
@@ -2202,12 +2464,16 @@ def test_references_entries_decode_escaped_quotes():
         "  portability: Portable\n"
         "  capabilityAssumption: Broad\n"
         "  references:\n"
-        "    - \"a \\\"quoted\\\" phrase\"\n"
-        "    - \"a literal backslash: \\\\\"\n"
+        "    - kind: decision\n"
+        "      anchor: https://github.com/tvna/gitapex/issues/25\n"
+        "      summary: \"a \\\"quoted\\\" phrase\"\n"
     )
     parsed = css._parse_manifest(text)
     assert parsed.root["spec"]["references"] == [
-        'a "quoted" phrase', "a literal backslash: \\"]
+        {"kind": "decision",
+         "anchor": "https://github.com/tvna/gitapex/issues/25",
+         "summary": 'a "quoted" phrase'},
+    ]
 
 
 def test_unquote_falls_back_on_invalid_json_escaping():
@@ -2217,10 +2483,13 @@ def test_unquote_falls_back_on_invalid_json_escaping():
     assert css._unquote('"bad "quote" here"') == 'bad "quote" here'
 
 
-def test_references_list_item_at_two_space_indent_is_read(tmp_path):
-    # Regression guard: a block-sequence item aligned with its own key
-    # (2-space indent, same as "references:" itself) is valid YAML and
-    # must be read, not silently dropped as an empty list.
+def test_references_list_item_at_two_space_indent_fails_well_formed(tmp_path):
+    # Regression guard: unlike the old bare-scalar-list design (which
+    # tolerated any indent >= 2, set dynamically by the first item), an
+    # item marker now must sit at exactly REFERENCES_ITEM_INDENT (4
+    # spaces) -- the same fixed-indent convention every other gated block
+    # already uses. 2-space indent (aligned with "references:" itself) is
+    # valid *YAML* but must still be flagged as malformed here.
     d = _write_skill(tmp_path)
     (d / "metadata/gitapex.yaml").write_text(
         "apiVersion: gitapex.io/v1alpha1\n"
@@ -2231,14 +2500,18 @@ def test_references_list_item_at_two_space_indent_is_read(tmp_path):
         "  portability: Portable\n"
         "  capabilityAssumption: Broad\n"
         "  references:\n"
-        "  - \"gitapex#25\"\n",
+        "  - kind: decision\n"
+        "    anchor: https://github.com/tvna/gitapex/issues/25\n"
+        "    summary: fixed this\n",
         encoding="utf-8")
     by = _by_name(css.check_shape(d))
-    assert by["references-well-formed"].passed is True
-    assert by["references-well-formed"].evidence == "1 entry"
+    assert by["references-well-formed"].passed is False
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.malformed_reference_items == ["- kind: decision"]
+    assert parsed.root["spec"]["references"] == []
 
 
-def test_references_list_item_at_three_space_indent_is_read(tmp_path):
+def test_references_list_item_at_three_space_indent_fails_well_formed(tmp_path):
     d = _write_skill(tmp_path)
     (d / "metadata/gitapex.yaml").write_text(
         "apiVersion: gitapex.io/v1alpha1\n"
@@ -2249,11 +2522,15 @@ def test_references_list_item_at_three_space_indent_is_read(tmp_path):
         "  portability: Portable\n"
         "  capabilityAssumption: Broad\n"
         "  references:\n"
-        "   - \"gitapex#25\"\n",
+        "   - kind: decision\n"
+        "     anchor: https://github.com/tvna/gitapex/issues/25\n"
+        "     summary: fixed this\n",
         encoding="utf-8")
     by = _by_name(css.check_shape(d))
-    assert by["references-well-formed"].passed is True
-    assert by["references-well-formed"].evidence == "1 entry"
+    assert by["references-well-formed"].passed is False
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.malformed_reference_items == ["- kind: decision"]
+    assert parsed.root["spec"]["references"] == []
 
 
 def test_references_list_ended_by_a_following_sibling_key(tmp_path):
@@ -2269,8 +2546,12 @@ def test_references_list_ended_by_a_following_sibling_key(tmp_path):
         "spec:\n"
         "  portability: Portable\n"
         "  references:\n"
-        "    - \"a\"\n"
-        "    - \"b\"\n"
+        "    - kind: decision\n"
+        "      anchor: https://github.com/tvna/gitapex/issues/25\n"
+        "      summary: fixed this\n"
+        "    - kind: decision\n"
+        "      anchor: https://github.com/tvna/gitapex/pull/29\n"
+        "      summary: reviewed the fix\n"
         "  capabilityAssumption: Broad\n",
         encoding="utf-8")
     by = _by_name(css.check_shape(d))
@@ -2737,7 +3018,7 @@ def test_lifecycle_experimental_only_is_well_formed(tmp_path):
         "  lifecycle:\n"
         "    experimental:\n"
         "      reason: not yet proven\n"
-        "      trackingIssue: \"#123\"\n")
+        "      trackingIssue: \"https://github.com/tvna/gitapex/issues/123\"\n")
     by = _by_name(css.check_shape(d))
     assert by["lifecycle-well-formed"].passed is True
     assert "experimental" in by["lifecycle-well-formed"].evidence
@@ -2773,7 +3054,7 @@ def test_lifecycle_both_blocks_present_is_valid(tmp_path):
         "  lifecycle:\n"
         "    experimental:\n"
         "      reason: not yet proven\n"
-        "      trackingIssue: \"#123\"\n"
+        "      trackingIssue: \"https://github.com/tvna/gitapex/issues/123\"\n"
         "    deprecated:\n"
         "      reason: superseded\n"
         "      replacement: other-skill\n")
@@ -3027,7 +3308,7 @@ def test_lifecycle_experimental_and_stable_fails_compatible(tmp_path):
         "  lifecycle:\n"
         "    experimental:\n"
         "      reason: not yet proven\n"
-        "      trackingIssue: \"#123\"\n"
+        "      trackingIssue: \"https://github.com/tvna/gitapex/issues/123\"\n"
         "    stable:\n"
         "      since: \"2026-07-21\"\n")
     by = _by_name(css.check_shape(d))
@@ -3088,8 +3369,11 @@ def test_lifecycle_unquoted_tracking_issue_is_read_as_bare_comment(tmp_path):
     # Regression guard (adversarial review finding): an unquoted value
     # that is nothing but a comment (starts with "#") must read as
     # absent, not as the literal string -- real YAML treats
-    # "trackingIssue: #123" as trackingIssue: null, not "#123", even
-    # though "#123" happens to be this exact field's valid shape.
+    # "trackingIssue: #123" as trackingIssue: null, not "#123". (Bare
+    # "#123" is no longer this field's valid shape at all -- see issue
+    # #488 -- but the null-vs-literal-string distinction this regression
+    # guards against is unaffected by that: either way, an unquoted "#..."
+    # value must never be read as the literal string.)
     d = _write_lifecycle_sidecar(
         _write_skill(tmp_path),
         "  lifecycle:\n"
@@ -3102,10 +3386,13 @@ def test_lifecycle_unquoted_tracking_issue_is_read_as_bare_comment(tmp_path):
     assert css.main([str(d)]) == 1
 
 
-def test_lifecycle_quoted_tracking_issue_starting_with_hash_still_valid(tmp_path):
+def test_lifecycle_quoted_tracking_issue_bare_hash_fails_well_formed(tmp_path):
     # Companion to the bare-comment regression above: a QUOTED value
-    # starting with "#" is a real string in YAML, not a comment, and must
-    # still validate normally.
+    # starting with "#" is a real string in YAML, not a comment -- it
+    # reaches _valid_tracking_issue as the literal string "#123", not
+    # null. Unlike before issue #488, that no longer validates: a bare
+    # issue number is not a full https://github.com/tvna/gitapex/issues/<N>
+    # URL, so this must fail, not pass.
     d = _write_lifecycle_sidecar(
         _write_skill(tmp_path),
         "  lifecycle:\n"
@@ -3113,8 +3400,9 @@ def test_lifecycle_quoted_tracking_issue_starting_with_hash_still_valid(tmp_path
         "      reason: not yet proven\n"
         "      trackingIssue: \"#123\"\n")
     by = _by_name(css.check_shape(d))
-    assert by["lifecycle-well-formed"].passed is True
-    assert css.main([str(d)]) == 0
+    assert by["lifecycle-well-formed"].passed is False
+    assert "trackingIssue" in by["lifecycle-well-formed"].evidence
+    assert css.main([str(d)]) == 1
 
 
 def test_lifecycle_renamed_from_given_a_block_fails_well_formed(tmp_path):
