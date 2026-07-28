@@ -6,7 +6,8 @@ spec:
   portability: Mixed
   capabilityAssumption: Broad
   references:
-    - "gitapex#445 (reframed): this skill formalizes the research-classify-document procedure used manually across gitapex#443, gitapex#444, and the original gitapex#445 to add or refresh runtime rows in evaluating-skill-quality's references/runtime-compatibility.md and to author docs/agent-product-scope.md. Portability is Mixed, not Repository-scoped, per docs/superpowers/specs/2026-07-21-portability-authorship-decision-table-design.md's documented (if unenforced) policy that Repository-scoped is reserved for a downstream fork hardcoding its own conventions, not an origin-authored skill -- the repository owner chose Mixed directly when this conflict was surfaced."
+    - "This skill formalizes the research-classify-document procedure used across https://github.com/tvna/gitapex/issues/443, https://github.com/tvna/gitapex/issues/444, and https://github.com/tvna/gitapex/issues/445 to add/refresh runtime rows in evaluating-skill-quality's references/runtime-compatibility.md and author docs/agent-product-scope.md."
+    - "Portability is Mixed, not Repository-scoped, per docs/superpowers/specs/2026-07-21-portability-authorship-decision-table-design.md's policy that Repository-scoped is reserved for a downstream fork hardcoding its own conventions, not an origin-authored skill -- the repository owner chose Mixed directly when this conflict was surfaced."
   skillDependencies:
     requires: []
     relatedTo:
