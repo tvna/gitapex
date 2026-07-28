@@ -1,0 +1,33 @@
+id: evaluating-deterministic-gate-quality-blast-radius-undocumented-consequence
+name: A mechanically sound hook with no stated bypass/absence consequence fails the Blast-radius axis
+description: A git pre-push hook that blocks oversized files is mechanically
+  sound (exits non-zero, diff-scoped, has a bundled test), but nothing --
+  no docstring, README entry, or design note -- states what happens if a
+  developer bypasses it with --no-verify, if it is never installed on a
+  fresh clone, or what an oversized push actually costs the project. The
+  Blast-radius / trust classification axis grades exactly this gap.
+tags:
+  - quality
+  - blast-radius
+inputs:
+  prompt: |
+    Use evaluating-deterministic-gate-quality. Review this gate.
+
+    A git pre-push hook, read directly from its own script: it inspects
+    every file in the outgoing push and exits non-zero, blocking the
+    push, if any file exceeds 50 MB. It has a bundled test exercising
+    both the pass and block cases, and exits non-zero correctly.
+
+    Reading the rest of the repository directly: no docstring in the
+    hook's own script, no README entry, and no design doc anywhere
+    states what happens if a developer runs `git push --no-verify`, what
+    happens on a fresh clone where the hook was never installed (git
+    hooks are not cloned by default), or what actually goes wrong for
+    the project if an oversized file slips through.
+
+    Give me the Blast-radius / trust classification finding for this
+    gate.
+expected:
+  output_contains:
+    - "Blast-radius"
+    - "bypassed, misconfigured, or simply absent"
