@@ -1,0 +1,27 @@
+{
+  "date": "2026-07-28",
+  "issue": "https://github.com/tvna/gitapex/issues/500",
+  "commit": "89f5073c0e12a550336202e0b533b39a3de5b6a1",
+  "fixture_set": "selection split (23 fixtures, evals/evaluating-skill-quality/split.md)",
+  "trials_per_fixture": 1,
+  "models": {
+    "haiku": "claude-haiku-4-5-20251001",
+    "sonnet": "claude-sonnet-5",
+    "opus": "claude-opus-5"
+  },
+  "dispatch_mechanism": "Isolated claude -p --model <tier> subprocess, per skills/evaluating-skill-quality/references/adversarial-self-audit.md's Isolation-verification registry (this platform/version's Agent-tool dispatch entry is confirmed-contaminated; the claude -p subprocess alternative, from a CLAUDE.md-free working directory with an isolated $HOME copy, is the verified mechanism). Each dispatch was instructed to read SKILL.md and references/rubric.md off disk and follow the Procedure by hand, since this session has no registered Skill tool for evaluating-skill-quality's own unpublished content (the same disclosed methodology this skill's split.md Kept-edit log has used since its earliest iterations).",
+  "scorer": "skills/scorer-gated-skill-edits/scripts/score_contract.py, scoring each fixture's output_contains/output_not_contains assertions deterministically",
+  "mean_scores": {
+    "claude-haiku-4-5-20251001": 0.824586,
+    "claude-sonnet-5": 0.901639,
+    "claude-opus-5": 0.936853
+  },
+  "known_gaps": [
+    "trials_per_fixture=1, not eval.yaml's trials_per_task:3 default -- no repeat-run variance data yet (dimension 8's pass@k discipline not applied here)",
+    "selection split only (23 of 57 fixtures), not the full corpus -- train and test splits are unmeasured for cross-model behavior",
+    "substring-scorer only -- confirms the fixture's expected keywords appear or don't, not whether the model actually walked all nine dimensions, ran the Blind Spot Pass, or issued a correctly-reasoned verdict beyond what each fixture's specific assertions probe",
+    "a subset of dispatches (14 of 23 sonnet, 4 of 23 opus) hit this session's own usage/session limit on first attempt and were retried after the limit cleared; retried transcripts are the ones scored, first-attempt failures are not included in the reported means",
+    "no qualitative reading of the transcripts beyond spot-checking the largest gaps; the per-fixture breakdown is the primary evidence, not a full manual review of all 69 transcripts"
+  ],
+  "headline_pattern": "Mean score increases monotonically with model tier (haiku 0.825 < sonnet 0.902 < opus 0.937). The gap is concentrated almost entirely in the compatibility-* fixtures (Runtime Compatibility axis's multi-state disposition): haiku trails opus by 0.29-0.57 on 4 of the 6 compatibility selection fixtures, versus a near-zero gap on most non-compatibility fixtures. This matches dimension 9's own concern (does the skill give Haiku enough guidance) for that specific axis. Two fixtures (portability-issue-number-citation, cohesion-temporal-grouping-selection) show an inverted result -- haiku scored 1.0 while sonnet/opus scored 0.75 -- not investigated further in this phase."
+}

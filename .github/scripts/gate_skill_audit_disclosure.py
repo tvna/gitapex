@@ -19,7 +19,8 @@ from the same workflow-supplied skill-name lists:
   the description field is the highest-leverage text that audit exists to
   scrutinize.
 - The PR's diff must also touch that skill's own `evals/<skill>/tasks/`
-  or `docs/skill-eval-status.md`, or disclose an
+  or `evals/<skill>/eval-status.md` (issue #499: moved from the single
+  central `docs/skill-eval-status.md`), or disclose an
   `eval-coverage-disclosure: WAIVED: <reason>` line (Repair 1).
 
 The calling workflow decides applicability (only invoked when the PR's
@@ -97,11 +98,13 @@ _LINE_PATTERNS = {name: _line_pattern(name, verdicts) for name, verdicts in _VER
 _BATTLE_TESTING_WAIVED_RE = _waived_pattern("battle-testing-a-skill")
 
 # Issue #427 (refs #422): a skill whose description changed must also touch
-# its own evals/<skill>/tasks/ or docs/skill-eval-status.md (checked by the
-# calling workflow, not this script), or disclose this WAIVED-only line --
-# there is no PASS/FAIL/INDETERMINATE verdict form for this check, since
-# "touched evals/docs" is a diff fact the workflow already verified, not a
-# model-graded judgment this script can independently confirm (Repair 1).
+# its own evals/<skill>/tasks/ or evals/<skill>/eval-status.md (checked by
+# the calling workflow, not this script; issue #499 moved the latter from a
+# single central docs/skill-eval-status.md), or disclose this WAIVED-only
+# line -- there is no PASS/FAIL/INDETERMINATE verdict form for this check,
+# since "touched evals/<skill>/" is a diff fact the workflow already
+# verified, not a model-graded judgment this script can independently
+# confirm (Repair 1).
 _EVAL_COVERAGE_CHECK_NAME = "eval-coverage-disclosure"
 _EVAL_COVERAGE_WAIVER_RE = _waived_pattern(_EVAL_COVERAGE_CHECK_NAME)
 
@@ -189,7 +192,7 @@ def main(argv=None):
         default="",
         help="Comma-separated skill names whose description changed but "
         "whose diff touches neither evals/<skill>/tasks/ nor "
-        "docs/skill-eval-status.md.",
+        "evals/<skill>/eval-status.md.",
     )
     args = parser.parse_args(argv)
     try:
@@ -250,8 +253,8 @@ def main(argv=None):
             "FAIL: changed SKILL.md description with no eval-coverage "
             "evidence for: "
             + ", ".join(missing_eval_coverage_skills)
-            + ". Touch evals/<skill>/tasks/ or docs/skill-eval-status.md for "
-            "the changed skill, or disclose "
+            + ". Touch evals/<skill>/tasks/ or evals/<skill>/eval-status.md "
+            "for the changed skill, or disclose "
             "'eval-coverage-disclosure: WAIVED: <reason>' in the "
             "'## Skill audit evidence' section.",
             file=sys.stderr,

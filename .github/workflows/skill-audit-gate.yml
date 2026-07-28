@@ -70,10 +70,14 @@ jobs:
           # Issue #427 (refs #422): for each changed SKILL.md whose own
           # frontmatter `description:` field's parsed value changed, compute
           # (a) whether this PR's diff also touches that skill's
-          # evals/<skill>/tasks/ or docs/skill-eval-status.md, and hand both
-          # skill-name lists to the gate script -- git access stays in this
-          # workflow step, the script only grades PR-body text against these
-          # workflow-supplied facts.
+          # evals/<skill>/tasks/ or evals/<skill>/eval-status.md, and hand
+          # both skill-name lists to the gate script -- git access stays in
+          # this workflow step, the script only grades PR-body text against
+          # these workflow-supplied facts. (Issue #499: eval-status.md moved
+          # from the single central docs/skill-eval-status.md to one file
+          # per skill under evals/<skill>/, so this check now requires the
+          # actual skill's own file rather than accepting a touch anywhere
+          # in one shared central doc.)
           #
           # description-changed detection delegates to skill_description_diff.py
           # (git show + parsed-value comparison) rather than a `git diff -U0 |
@@ -122,7 +126,7 @@ jobs:
             if [ "$description_result" = "changed" ]; then
               description_changed_skills="${description_changed_skills}${description_changed_skills:+,}${skill}"
               if ! printf '%s\n' "$all_changed" | grep -E "^evals/${skill}/tasks/" >/dev/null \
-                 && ! printf '%s\n' "$all_changed" | grep -xF 'docs/skill-eval-status.md' >/dev/null; then
+                 && ! printf '%s\n' "$all_changed" | grep -xF "evals/${skill}/eval-status.md" >/dev/null; then
                 needs_eval_coverage_skills="${needs_eval_coverage_skills}${needs_eval_coverage_skills:+,}${skill}"
               fi
             fi

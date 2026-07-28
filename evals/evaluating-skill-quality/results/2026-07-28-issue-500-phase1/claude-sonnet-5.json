@@ -1,0 +1,99 @@
+{
+  "model_id": "claude-sonnet-5",
+  "n_fixtures": 23,
+  "mean_score": 0.901639,
+  "scores": [
+    {
+      "fixture_id": "evaluating-skill-quality-ablation-capability-runner-exists-not-run",
+      "score": 1.0
+    },
+    {
+      "fixture_id": "evaluating-skill-quality-blind-spot-pass-generalizes",
+      "score": 1.0
+    },
+    {
+      "fixture_id": "evaluating-skill-quality-capability-assumption-frontier-flags-explanation",
+      "score": 1.0
+    },
+    {
+      "fixture_id": "evaluating-skill-quality-cohesion-temporal-grouping-selection",
+      "score": 0.75
+    },
+    {
+      "fixture_id": "evaluating-skill-quality-compatibility-conflicting-allowed-tools-semantics-selection",
+      "score": 1.0
+    },
+    {
+      "fixture_id": "evaluating-skill-quality-compatibility-devin-trigger-selection",
+      "score": 0.857143
+    },
+    {
+      "fixture_id": "evaluating-skill-quality-compatibility-documentation-silence-unknown-selection",
+      "score": 0.875
+    },
+    {
+      "fixture_id": "evaluating-skill-quality-compatibility-independent-blocker-selection",
+      "score": 0.7
+    },
+    {
+      "fixture_id": "evaluating-skill-quality-compatibility-openclaw-gate-selection",
+      "score": 0.888889
+    },
+    {
+      "fixture_id": "evaluating-skill-quality-compatibility-undeclared-runtime-extension-selection",
+      "score": 1.0
+    },
+    {
+      "fixture_id": "evaluating-skill-quality-consumer-repo-convention-deference-selection",
+      "score": 1.0
+    },
+    {
+      "fixture_id": "evaluating-skill-quality-edge",
+      "score": 1.0
+    },
+    {
+      "fixture_id": "evaluating-skill-quality-heldout-vague-completion",
+      "score": 1.0
+    },
+    {
+      "fixture_id": "evaluating-skill-quality-mechanism-fit-subagent",
+      "score": 0.833333
+    },
+    {
+      "fixture_id": "evaluating-skill-quality-model-effort-tier-fit-unjustified-effort",
+      "score": 0.75
+    },
+    {
+      "fixture_id": "evaluating-skill-quality-opus5-redundant-verification-generalizes",
+      "score": 0.75
+    },
+    {
+      "fixture_id": "evaluating-skill-quality-opus5-unbounded-subagent-generalizes",
+      "score": 1.0
+    },
+    {
+      "fixture_id": "evaluating-skill-quality-ordering-rule-totality-distinct-skill",
+      "score": 1.0
+    },
+    {
+      "fixture_id": "evaluating-skill-quality-portability-issue-number-citation",
+      "score": 0.75
+    },
+    {
+      "fixture_id": "evaluating-skill-quality-reference-load-precision-selection",
+      "score": 1.0
+    },
+    {
+      "fixture_id": "evaluating-skill-quality-scoring-axis-uncontrolled-speed-claim",
+      "score": 0.833333
+    },
+    {
+      "fixture_id": "evaluating-skill-quality-third-party-not-authoritative",
+      "score": 1.0
+    },
+    {
+      "fixture_id": "evaluating-skill-quality-tool-capability-verification-selection",
+      "score": 0.75
+    }
+  ]
+}
