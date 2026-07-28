@@ -184,55 +184,42 @@ mechanism, not only the ones already recorded below.
   isolated re-audit of a real target skill that caught a residual bug)
   are recorded in `metadata/gitapex.yaml` rather than duplicated here,
   per this skill's own dimension-12 duplication discipline.
-- **Second leak vector found and fixed 2026-07-28, distinct from the
-  `CLAUDE.md`/`AGENTS.md` finding above.** The verified-alternative
-  `claude -p` subprocess isolates `CLAUDE.md`/`AGENTS.md` correctly (per
-  the controls above), but does not by itself isolate this harness's own
-  task-tracking state: task items created via `TaskCreate` persist as
-  JSON files under `$HOME/.claude/tasks/<session-id>/`, and a `claude -p`
-  subprocess spawned without overriding `$HOME` inherits the parent
-  shell's `$HOME` by default -- so it resolves the *same* directory.
-  Once a dispatched subprocess accumulates enough tool calls without its
-  own `TaskCreate`/`TaskUpdate` call, this harness injects a "haven't
-  used task tools recently" nudge carrying the calling session's actual,
-  live task list (not stale -- a task's status mid-dispatch matched the
-  live status set moments earlier) as an unprompted `<system-reminder>`.
-  Trials, same `CLAUDE.md`-free scratch directory, same ~15-tool-call
-  workload each: (1) `claude -p` with environment inherited unchanged --
-  leaked the calling session's real task list verbatim, quoted in full in
-  the fix's own PR; (2) the same, with only `CLAUDE_CODE_SESSION_ID`
-  unset -- **still leaked**, ruling that env var out as the sole
-  mechanism; (3) the same, with `CLAUDE_CODE_SESSION_ID` unset *and*
-  `HOME` redirected to a freshly created, wholesale-empty directory -- no
-  task-list content leaked, **but this candidate was itself rejected**: a
-  same-PR Codex review correctly flagged that wholesale-replacing `HOME`
-  also discards whatever this harness stores there for permission rules,
-  hooks, and plugins (confirmed present on this platform:
-  `$HOME/.claude/`'s own settings file carries a live
-  `permissions.allow`/hooks block) -- a dispatched reviewer processes
-  untrusted target content and can make tool calls, and a headless `-p`
-  invocation receives no interactive confirmation to fall back on, so
-  silently dropping those controls is a materially worse trade than the
-  leak it fixes. (4) **Corrected candidate, verified working**: copy the
-  real `$HOME/.claude/` tree and `$HOME/.claude.json` into the fresh
-  directory first, remove only the `tasks/` subtree (recreating it
-  empty) plus this harness's own conversation-history directories
-  (`.claude/projects`, `.claude/sessions`, `.claude/shell-snapshots` on
-  this platform -- unrelated to permission/hook enforcement but
-  independently worth excluding from a dispatch reviewing untrusted
-  content), then dispatch with `HOME` pointed at that copy. Re-ran the
-  same leak check against this corrected recipe: no task-list content
-  leaked, the copied settings file diffed byte-identical to the original
-  (permission rules and hooks intact), and the dispatched process
-  successfully executed the real shape-checker script -- confirming the
-  fix does not silently break tool execution the way a bare empty `HOME`
-  risked doing. **Scope**: bounded to a process sharing this exact
-  `$HOME` directory, not an account- or machine-wide leak -- but real by
-  default, since a plain `claude -p` subprocess inherits `$HOME` unless
-  the caller explicitly overrides it. The `CLAUDE.md`/`AGENTS.md`-only
-  guarantee above never needed any `HOME` change, only the cwd change --
-  this is an additional step required only when a dispatch must also
-  avoid the task-list leak.
+- **Second leak vector, distinct from the `CLAUDE.md`/`AGENTS.md` finding
+  above.** The verified-alternative `claude -p` subprocess isolates
+  `CLAUDE.md`/`AGENTS.md` correctly (per the controls above), but does not
+  by itself isolate this harness's own task-tracking state: task items
+  created via `TaskCreate` persist as JSON files under
+  `$HOME/.claude/tasks/<session-id>/`, and a `claude -p` subprocess
+  spawned without overriding `$HOME` inherits the parent shell's `$HOME`
+  by default, so it resolves the *same* directory. Once a dispatched
+  subprocess accumulates enough tool calls without its own
+  `TaskCreate`/`TaskUpdate` call, this harness injects a "haven't used
+  task tools recently" nudge carrying the calling session's actual, live
+  task list as an unprompted `<system-reminder>` -- confirmed live, with a
+  task's status mid-dispatch matching its live status moments earlier,
+  ruling out a stale-cache explanation.
+  - **Mechanism confirmed**: `claude -p` leaks the calling session's real
+    task list both with the environment inherited unchanged and with only
+    `CLAUDE_CODE_SESSION_ID` unset -- that variable alone does not control
+    it; `$HOME` does.
+  - **Verified alternative**: copy the real `$HOME/.claude/` tree and
+    `$HOME/.claude.json` into a fresh directory, remove only its `tasks/`
+    subtree (recreated empty) and this harness's own conversation-history
+    directories (`.claude/projects`, `.claude/sessions`,
+    `.claude/shell-snapshots` on this platform), then dispatch with both
+    `CLAUDE_CODE_SESSION_ID` unset and `HOME` pointed at that copy.
+    Verified live: no task-list content leaked, the copied settings file
+    diffed byte-identical to the original (permission rules and hooks
+    intact), and the dispatched process successfully executed a real
+    script -- this recipe neither leaks nor disables the platform's own
+    permission/hook enforcement.
+  - **Scope**: bounded to a process sharing the exact `$HOME` directory,
+    not an account- or machine-wide leak -- but real by default, since a
+    plain `claude -p` subprocess inherits `$HOME` unless the caller
+    explicitly overrides it. The `CLAUDE.md`/`AGENTS.md`-only guarantee
+    above never needed any `HOME` change, only the cwd change; the
+    `HOME`-copy step is required only when a dispatch must also avoid this
+    second leak.
 
 ### Unlisted platform
 
