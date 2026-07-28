@@ -137,23 +137,37 @@ home. This supersedes the body-line placement described in
     (camelCase `spec` field per k8s convention; the enum *values* stay
     PascalCase, matching the prose levels.)
 - **`spec.references` (optional, gated by Sub-project C):** a list of
-  primary-source / corroboration links, commit SHAs, PR numbers --
-  maintainer-facing provenance. When present, must be a non-empty list of
-  non-empty strings, each <= 500 characters (`references-well-formed`);
-  when absent, no finding. Populated for `battle-testing-a-skill`,
+  primary-source / corroboration records -- maintainer-facing provenance,
+  one item per distinct event (a decision, an audit round, a correction).
+  When present, must be a non-empty list of item mappings
+  (`references-well-formed`); each item has three required string
+  subkeys -- `kind` (a closed 7-word vocabulary --
+  `decision`/`audit`/`deferral`/`corroboration`/`caveat`/`elision`/
+  `correction`, see `REFERENCES_KIND_VOCAB` in `check_skill_shape.py`),
+  `anchor` (the provenance source: a full GitHub URL, an external URL, a
+  repo-relative path, or `method:<skill-name>` for an audit with no
+  dedicated issue), and `summary` (the WHAT/WHY, <= 500 characters,
+  `REFERENCES_ENTRY_MAX_CHARS`) -- plus one optional nested mapping,
+  `outcome` (free-form key/value pairs, common on `audit` entries, e.g.
+  `verdict: FAIL` / `found: 3` / `fixed: 3`). When absent, no finding.
+  Populated for `battle-testing-a-skill`,
   `establishing-ubiquitous-language`, `scorer-gated-skill-edits`, and
   `evaluating-skill-quality` -- the four skills `docs/skill-provenance.md`
   covered before Sub-project C retired that central file in favor of this
-  per-skill field. The gate is deliberately narrow: only this one field's
-  list shape is parsed; no other nested/list field gained a parser (issue
-  #488's own tightening, below, is a value-level constraint on that same
-  flat `list[str]` shape, not a parser change -- see the regression test
-  `test_references_mapping_shaped_item_fails_well_formed`, which
-  deliberately rejects turning an entry into a nested mapping).
+  per-skill field -- plus `auditing-agent-product-scope`,
+  `evaluating-deterministic-gate-quality`, and `vetting-attack-surface`.
+  The gate is deliberately narrow: only this one field's list-of-mappings
+  shape is parsed, at a fixed 4-space item indent and a fixed 6-space
+  item-field indent (matching every other gated block's own fixed-indent
+  convention, not an indent range tolerated dynamically) -- no other
+  nested/list field gained a general parser.
 
-  Issue #488 tightened this field twice, in direct response to several
-  entries growing to thousands of characters by fusing multiple distinct
-  events (a decision, several audit rounds, a correction) into one string:
+  Issue #488 tightened this field through three iterations, in direct
+  response to several entries growing to thousands of characters by
+  fusing multiple distinct events (a decision, several audit rounds, a
+  correction) into one string, and a citation format that loses its
+  meaning once a sidecar travels with its skill directory to another
+  repository:
 
   1. **Full-URL citations only** (`no-bare-issue-citation`, no longer
      exempting the sidecar): an entry (and `spec.lifecycle.experimental`/
@@ -162,29 +176,38 @@ home. This supersedes the body-line placement described in
      never a bare `#N`/`owner/repo#N` -- a bare number loses its meaning
      once the sidecar travels with its skill directory to another
      repository, unlike a full URL.
-  2. **A fixed per-entry grammar** (`references-grammar`): each string
-     must be `"<kind> | <anchor> | <summary>[ | <outcome>]"`
-     (`REFERENCES_FIELD_SEP = " | "`, chosen because it occurs in zero
-     pre-existing entries across the corpus this grammar was designed
-     from). `kind` is a closed 7-word vocabulary derived from the
-     recurring entry shapes actually found in that corpus --
-     `decision`/`audit`/`deferral`/`corroboration`/`caveat`/`elision`/
-     `correction` (see `REFERENCES_KIND_VOCAB` in `check_skill_shape.py`).
-     `anchor` is the provenance source (a GitHub URL, an external URL, a
-     repo-relative path, or `method:<skill-name>` for an audit with no
-     dedicated issue); `summary` is the WHAT/WHY; `outcome` is an optional
-     space-separated `key=value` set, common on `audit` entries
-     (`verdict=FAIL found=5 fixed=4`). The grammar is deliberately *not*
-     a second overflow mechanism -- there is no `detail:`-style pointer to
-     a second file. The actual fix for an over-budget entry is to
-     decompose it: one list entry per distinct event, not one fused
-     changelog. Once genuinely atomic, an entry is short by construction.
-     An earlier version of this fix instead split an over-budget entry
-     into a short sidecar summary plus a new `references/gitapex-history.md`
-     holding the full text verbatim -- the repository owner rejected that
-     result (a second file was never intended, and relocating the same
-     fused prose elsewhere is not a real restructure); no such file exists
-     anywhere in this repository as of this fix.
+  2. **A pipe-delimited per-entry grammar** (superseded by 3, immediately
+     below): each entry was briefly one string,
+     `"<kind> | <anchor> | <summary>[ | <outcome>]"`
+     (`REFERENCES_FIELD_SEP = " | "`). The repository owner asked why
+     this used a delimited string instead of YAML's own list/mapping
+     structure; on reflection, the string grammar traded a one-off
+     parsing simplification for a permanent structural cost as the field
+     keeps growing at its current pace -- every reader (human or tool)
+     still had to re-parse a string grammar to reach `kind`/`anchor`/
+     `summary` individually, the exact "re-parse prose to find a fact"
+     problem this whole redesign exists to remove. An even earlier
+     alternative (splitting an over-budget entry into a short sidecar
+     summary plus a new `references/gitapex-history.md` holding the full
+     text verbatim) was rejected outright by the repository owner before
+     this grammar shipped -- a second file was never intended, and
+     relocating the same fused prose elsewhere is not a real restructure;
+     no such file exists anywhere in this repository.
+  3. **A genuine list-of-mappings structure** (current shape, described
+     above): each entry became a real YAML mapping with `kind`/`anchor`/
+     `summary`/`outcome` as its own subkeys, at the cost of a second,
+     deliberate parser extension (one nesting level for the item mapping,
+     one more for its optional `outcome` sub-mapping) and a second full
+     re-migration of every populated sidecar -- both accepted explicitly,
+     given the field's current growth rate, in exchange for never needing
+     a third structural rewrite merely to reach a fact one nesting level
+     deeper. This step deliberately inverted Sub-project C's own
+     `test_references_mapping_shaped_item_fails_well_formed` regression
+     test, which used to assert a mapping-shaped entry must **fail**; a
+     mapping-shaped entry is now the only well-formed shape. The
+     per-entry length cap (<= 500 characters) now applies to the item's
+     `summary` subkey specifically, not the entry's total serialized
+     length as under grammar 2.
 - **`spec.skillDependencies` (optional, gated by Sub-project D -- see
   section 4.6):** the inter-skill dependency graph, split by strength:
 
@@ -221,16 +244,19 @@ home. This supersedes the body-line placement described in
   fields under `metadata`/`spec`), the checker reads it with a small
   indentation-aware reader -- no PyYAML dependency. It walks the top-level
   keys, then the `metadata` and `spec` children it needs. Two exceptions:
-  `spec.references`, added in Sub-project C, is read as a flat list of
-  scalar strings (each a `- "..."` line, indented exactly 4 spaces);
-  `spec.skillDependencies`, added in Sub-project D, is read as a mapping
-  with exactly two recognized subkeys (`requires`, `relatedTo`), each
-  either an inline empty list or a block list of scalar strings, one
-  nesting level deeper than `spec.references`' own items (section 4.6).
-  Every other nested map or list field (`spec.evalStatus` and any future
-  addition) is still skipped, not parsed -- this is not a general
-  arbitrary-YAML reader. Full arbitrary YAML is neither produced nor
-  required.
+  `spec.references`, added in Sub-project C, is read as a list of item
+  mappings (each a `- kind: ...` block, its own marker indented exactly 4
+  spaces and its `kind`/`anchor`/`summary`/`outcome` fields indented
+  exactly 6, with `outcome`'s own nested key/value pairs one level deeper
+  still at 8 spaces -- the only field in this sidecar three levels deep
+  under `spec`); `spec.skillDependencies`, added in Sub-project D, is read
+  as a mapping with exactly two recognized subkeys (`requires`,
+  `relatedTo`), each either an inline empty list or a block list of scalar
+  strings, one nesting level deeper than `spec.references`' own items
+  (section 4.6). Every other nested map or list field (`spec.evalStatus`
+  and any future addition) is still skipped, not parsed -- this is not a
+  general arbitrary-YAML reader. Full arbitrary YAML is neither produced
+  nor required.
 - **Example** (`skills/evaluating-skill-quality/metadata/gitapex.yaml`,
   post-issue-#488 shape):
 
@@ -243,7 +269,14 @@ home. This supersedes the body-line placement described in
     portability: Portable
     capabilityAssumption: Broad
     references:
-      - "decision | https://github.com/tvna/gitapex/issues/32 | Delegated this skill's own deterministic shape lane to scripts/check_skill_shape.py; the worked example in references/worked-example-self-review.md documents that delegation."
+      - kind: decision
+        anchor: "https://github.com/tvna/gitapex/issues/32"
+        summary: "Delegated this skill's own deterministic shape lane to scripts/check_skill_shape.py; the worked example in references/worked-example-self-review.md documents that delegation."
+      - kind: audit
+        anchor: "https://github.com/tvna/gitapex/issues/332"
+        summary: "Verified the warning-only compatibility baseline against the Agent Skills spec and docs for six runtimes."
+        outcome:
+          verdict: PASS
   ```
 
 - **Behavior-neutrality invariant (hard requirement / stop boundary):**
@@ -287,8 +320,11 @@ cases, add cases for the new checks (valid manifest; missing file; wrong
 
 Sub-project C later added a sixth check to this list,
 `references-well-formed` -- `spec.references`, if present, is a non-empty
-list of non-empty strings -- via a narrow parser extension that reads
-only that one field's list shape (section 4.5).
+list of item mappings, each with `kind`/`anchor`/`summary` (and no
+unrecognized key), `summary` <= 500 characters -- via a narrow parser
+extension that reads only that one field's list-of-mappings shape
+(section 4.5). A seventh check, `references-grammar`, verifies each
+item's `kind` is one of the closed vocabulary.
 
 ### 4.3 Migration of the 17 skills
 
@@ -390,8 +426,10 @@ Sub-project C populated `spec.references` for the four skills
 deleted the central file once the migration was verified. It also added
 the `references-well-formed` shape check (section 4.2), a decision the
 operator made explicitly rather than leaving the field permanently
-ungated: when present, `spec.references` must be a non-empty list of
-non-empty strings. The gate is narrowly scoped to this one field --
+ungated: when present, `spec.references` had to be a non-empty list of
+non-empty strings -- since superseded twice, by issue #488's own
+iterations described in section 4.1, ending at the current
+list-of-mappings shape. The gate is narrowly scoped to this one field --
 `spec.skillDependencies` and `spec.evalStatus` remain exactly as
 unparsed/ungated as A left them at this point, reserved for their own
 later sub-projects (`spec.skillDependencies` was populated and gated
