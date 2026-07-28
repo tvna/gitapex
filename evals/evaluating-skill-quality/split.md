@@ -1994,3 +1994,42 @@ the one fixture built to test it, altering no sentence any other selection
 fixture's assertions target.
 
 **Transfer check:** still not run, same disclosed gap as above.
+
+**Second confirming round (same issue #477, third commit).** Two more
+independent fresh dispatches (one `evaluating-skill-quality` self-review,
+one `battle-testing-a-skill` pass) re-probed the revised paragraph
+specifically to verify the four battle-test findings and the dimension-6
+citation fix from the prior round actually closed, rather than trusting
+the fix commit's own description. Both returned real results, not a
+rubber-stamp: the citation-fix, fail-open, and partial-trace fixes were
+confirmed closed by both; the trace-authenticity fix was independently
+assessed by both as only *partially* closed -- the paragraph now mandates
+disclosure of face-value acceptance, but supplies no operational
+verification method, because none exists in this repository's tooling
+today; and both independently caught the SAME new defect the fix itself
+introduced -- the new evidence-citation sentence's own
+`battle-testing-a-skill` reference was an unhedged declarative fact-claim,
+the identical class of dimension-6 defect just fixed two sentences earlier
+for the `scorer-gated-skill-edits` citation. The `battle-testing-a-skill`
+pass additionally found a structured-output-injection exposure the fix
+itself created: the new citation requirement asks reviewers to quote
+transcript content, which can itself carry adversarial payloads, with no
+delimiter-safety instruction anywhere in this file.
+
+All three fixed in a third commit: the new citation hedged to match the
+established pattern, a delimiter-safe quoting instruction added
+(extending `adversarial-self-audit.md`'s Structured-output injection
+section's scope to trace content), and the authenticity paragraph revised
+to state plainly that it is a disclosure obligation, not a deterministic
+guarantee, naming the absence of any verification mechanism explicitly
+rather than implying one exists. This third fix was not re-verified by a
+further fresh dispatch -- disclosed here as an open item rather than
+implied closed: the diminishing-returns point was judged reached after two
+full confirming rounds each surfacing real, independently-corroborated
+findings, but a fourth round could still find something the third commit's
+author (this same session) missed by construction. `NOT_WELL-FORMED` is
+not warranted (shape checker clears 45/45 throughout every round); the
+most defensible disclosed verdict for this change, absent a third
+confirming dispatch, is **WELL-FORMED-NOT-MATURE ultimately upgraded on
+disclosed self-assessment, not a fourth independent confirmation** -- a
+human reviewer should treat that gap as real, not rounded up.
