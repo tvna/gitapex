@@ -1309,6 +1309,27 @@ it silently inapplicable to every ordinary one-shot review -- the gap is
 exactly as real whether the mismatched scenario arrived in the last commit
 or has sat unfixed for months.
 
+**When the target skill declares its own numbered dimensions or named
+cross-cutting axes (a `references/`-style enumerated rubric, not merely
+prose that happens to use the word "dimension"), check whether the eval
+corpus cites each one, not just that fixture count looks adequate.** This
+is a different claim from the named-trigger-scenario check above: that one
+asks whether each *scenario the skill's own trigger names* has a matching
+fixture; this one asks whether each *dimension or axis the skill's own
+rubric enumerates* does. A skill whose eval corpus never once exercises
+one of its own stated dimensions can still look well-covered by aggregate
+fixture count alone. Treat a dimension or axis with zero corpus citation
+as a finding for this dimension unless the target's own eval-status
+bookkeeping (see above) discloses it as a deliberate, named gap -- the
+same disclosed-vs-silent distinction this dimension already applies to a
+missing baseline. A repository that maintains its own coverage-measurement
+tooling for this (this repository's own
+`evals/scripts/check_dimension_coverage.py` is one instance, run against
+the `evaluating-deterministic-gate-quality` skill's corpus as a worked
+example) makes this check mechanical; without one, cross-reference the
+rubric's own numbered list
+against the corpus by hand.
+
 **`waza check`'s output is useful evidence, but verify its heuristics
 against the primary spec before trusting a verdict from it** -- do not
 treat a third-party tool's score as equivalent to Anthropic's own bar any

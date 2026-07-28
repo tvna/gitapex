@@ -34,7 +34,7 @@ inputs:
     - The job has a bundled unit test exercising both the pinned-pass and
       unpinned-fail cases.
     - `timeout-minutes: 5` is set explicitly, proportionate to a job that
-      only parses local YAML files with no network call.
+      only parses local YAML files with no network call (dimension 6).
 
     Give me the verdict for this gate.
 expected:
