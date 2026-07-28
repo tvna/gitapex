@@ -1,0 +1,33 @@
+id: evaluating-skill-quality-opus5-redundant-verification-generalizes
+name: Generic Re-Verify Instruction in a Distinct Domain
+description: A different domain and a different phrasing from the train fixture -- the target, declared Frontier, instructs "re-verify the plan is correct before presenting it to the user" with no domain-specific reason (not a dry-run tool, not the skill's own actual check). The gate measures whether the new Dimension 2 grounded Fail instance generalizes to a distinct target and wording rather than memorizing the train fixture's "double-check your answer" phrasing.
+tags:
+  - quality
+  - conciseness
+  - opus5-prompting
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "database-migration-planner". Is this a good skill? Its
+    metadata/gitapex.yaml declares capabilityAssumption: Frontier.
+
+    ---
+    name: database-migration-planner
+    description: Plan a database schema migration, including rollback steps. Use when the user asks to plan, draft, or review a database migration.
+    ---
+
+    # Database Migration Planner
+
+    ## Procedure
+
+    1. Read the current schema and the desired end state.
+    2. Draft the migration steps and a matching rollback step for each.
+    3. After drafting the plan, re-verify the plan is correct before
+       presenting it to the user.
+expected:
+  output_contains:
+    - "duplication"
+    - "domain-specific"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"

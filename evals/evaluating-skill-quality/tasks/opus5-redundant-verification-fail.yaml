@@ -1,0 +1,34 @@
+id: evaluating-skill-quality-opus5-redundant-verification-fail
+name: Generic Double-Check Instruction Duplicates the Model's Own Default Verification
+description: Motivates the new Dimension 2 (Conciseness) grounded Fail instance -- the target, declared Frontier, tells the model to "always double-check your answer before responding" with no domain-specific reason. Per Anthropic's Prompting Claude Opus 5 guidance, this restates behavior a frontier-tier model already performs unprompted, so it is duplication against the model's own default policy. The review must flag this, not treat it as harmless extra caution.
+tags:
+  - quality
+  - conciseness
+  - opus5-prompting
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "changelog-entry-writer". Is this a good skill? Its
+    metadata/gitapex.yaml declares capabilityAssumption: Frontier.
+
+    ---
+    name: changelog-entry-writer
+    description: Draft a changelog entry summarizing a merged pull request's user-facing changes. Use when the user asks to write, draft, or update a changelog entry for a merge.
+    ---
+
+    # Changelog Entry Writer
+
+    ## Procedure
+
+    1. Read the merged pull request's title, description, and diff.
+    2. Draft a one-paragraph changelog entry in past tense, user-facing
+       language only (no internal file names or implementation detail).
+    3. Always double-check your answer before responding, and re-verify
+       your final output one more time before finishing.
+expected:
+  output_contains:
+    - "duplication"
+    - "changelog"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"

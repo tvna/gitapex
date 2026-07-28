@@ -53,7 +53,14 @@ check flags "claude-" followed immediately by a known model-family word
 skill's `SKILL.md` or `references/*.md` -- including inside a fenced code
 block or inline code span, since this rule is about the identifier ever
 appearing as illustrative content at all, unlike the citation checks in
-the same script. `claude-example-model` never matches.
+the same script. `claude-example-model` never matches. One exemption: a
+match that falls entirely inside a real citation URL to Anthropic's own
+docs (an autolink, inline link target, or reference-style link definition
+pointing at `platform.claude.com`, `code.claude.com`, or `claude.com`) is
+not an offender -- a doc URL whose own slug names the model the page
+documents (e.g. a citation to Anthropic's "Prompting Claude Opus 5" guide)
+is a primary-source citation, not illustrative content a reader might
+copy-paste as sample data.
 
 ## 2. Durable docs assert content, never git-log position
 

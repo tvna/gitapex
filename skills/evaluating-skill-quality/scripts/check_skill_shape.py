@@ -296,6 +296,12 @@ Checks (the canonical list -- the manual fallback is to apply these):
     live. A placeholder such as "claude-example-model" never matches (no
     recognized family word immediately follows "claude-"), so it stays the
     sanctioned way to write a flagged "bad example" needing a model name.
+    One exemption: a match that falls entirely inside an
+    ANTHROPIC_DOC_CITATION_RE span -- a real citation URL to Anthropic's own
+    docs (platform.claude.com, code.claude.com, claude.com), in this
+    repository's own autolink/inline-link/reference-definition citation
+    forms -- is not an offender; that is a primary-source citation, not
+    illustrative content.
   - Raw angle-bracket placeholder (no-raw-angle-bracket-placeholder,
     docs/skill-authoring-standards.md rule 4): no "<name>"-shaped
     placeholder in SKILL.md or references/*.md bare prose (fenced code
@@ -683,6 +689,29 @@ REPO_PATH_CITATION_RE = re.compile(r"(?:evals|docs)/[A-Za-z0-9._/-]+")
 ILLUSTRATIVE_MODEL_ID_RE = re.compile(
     r"\bclaude-(?:opus|sonnet|haiku|fable|instant)-?[0-9][a-z0-9.\-]*\b",
     re.IGNORECASE)
+# A citation to Anthropic's own documentation, in the exact forms this
+# repository's own reference lists use: a GFM autolink
+# ("<https://platform.claude.com/...>"), an inline link target
+# ("[text](https://code.claude.com/...)"), or a reference-style link
+# definition ("[label]: https://claude.com/..."). A real, current model
+# identifier appearing only inside one of these -- e.g. a doc URL whose own
+# slug names the model the page documents -- is a primary-source citation,
+# not "illustrative content" in rule 1's sense (a worked example or sample
+# value a reader might copy-paste); rule 1's own found-via incident (a
+# worked example's flagged "bad" sample) never involved a citation URL.
+# Narrowly scoped to the three Anthropic-owned domains this rubric's own
+# Stop boundaries already name as primary sources (platform.claude.com,
+# code.claude.com) plus claude.com (the blog domain [steering]/[fable]/
+# [modeleffort] already cite), so this exemption cannot become a general
+# escape hatch for illustrative content wrapped in an arbitrary URL.
+ANTHROPIC_DOC_CITATION_RE = re.compile(
+    r"<https://(?:platform\.claude\.com|code\.claude\.com|claude\.com)/"
+    r"[^\s>]*>"
+    r"|\]\(https://(?:platform\.claude\.com|code\.claude\.com|claude\.com)/"
+    r"[^)\s]*\)"
+    r"|^[ ]{0,3}\[[^\]]+\]:\s*<?https://"
+    r"(?:platform\.claude\.com|code\.claude\.com|claude\.com)/[^\s>]*>?",
+    re.MULTILINE)
 # An opening angle-bracket placeholder token in raw prose: "<" then a single
 # word of letters/digits/underscore/hyphen (no "/" or ":"), then ">". The
 # no-"/"-or-":" restriction means a GFM autolink ("<https://example.com>")
@@ -3058,11 +3087,22 @@ def _illustrative_model_id_checks(skill_md: Path, skill_dir: Path,
     identifier ever appearing as illustrative content at all, not about it
     resolving live, so a real model ID inside a worked example is exactly
     what this check exists to catch, not something to exempt.
+
+    One narrow exemption: a match that falls entirely inside an
+    ANTHROPIC_DOC_CITATION_RE span (a real citation URL to Anthropic's own
+    docs, not illustrative content) does not count as an offender -- see
+    that constant's own docstring for why.
     """
-    offenders = _dedup(
-        f"{label}:{m.group(0)}"
-        for label, text in _citation_sources(skill_md, skill_dir, body)
-        for m in ILLUSTRATIVE_MODEL_ID_RE.finditer(text))
+    offenders: list[str] = []
+    for label, text in _citation_sources(skill_md, skill_dir, body):
+        citation_spans = [m.span() for m in
+                          ANTHROPIC_DOC_CITATION_RE.finditer(text)]
+        for m in ILLUSTRATIVE_MODEL_ID_RE.finditer(text):
+            if any(start <= m.start() and m.end() <= end
+                   for start, end in citation_spans):
+                continue
+            offenders.append(f"{label}:{m.group(0)}")
+    offenders = _dedup(offenders)
     return [
         CheckResult(
             "no-illustrative-model-identifier", not offenders,

@@ -17,9 +17,10 @@ improve-or-reject decision because five observations provide little ability
 to average out run-to-run variance. Following the precedent already set in
 `skills/scorer-gated-skill-edits/references/worked-example.md` ("the ratio is
 aspirational" for a small fixture count), this split combines the 17:14:9
-base-plus-cohesion partition with a scoped 2:6:2 compatibility addition and a
-1:1:0 reference-load-precision addition (gitapex#477), for a resulting
-20:21:11 partition. This is named explicitly as a deviation from
+base-plus-cohesion partition with a scoped 2:6:2 compatibility addition, a
+1:1:0 reference-load-precision addition (gitapex#477), and a 2:2:1
+opus5-prompting-fit addition (gitapex#495), for a resulting 22:23:12
+partition. This is named explicitly as a deviation from
 the 2:1:7 default. The
 honest minimal groundwork, per that same worked example, is a larger
 fixture corpus over time, not a smaller gate.
@@ -41,7 +42,9 @@ fixture corpus over time, not a smaller gate.
   `compatibility-claude-fork-train.yaml`,
   `compatibility-hermes-platform-train.yaml`,
   `cohesion-independently-changeable-branches-train.yaml`,
-  `reference-load-precision-train.yaml`.
+  `reference-load-precision-train.yaml`,
+  `opus5-redundant-verification-fail.yaml`,
+  `opus5-unbounded-subagent-fail.yaml`.
 - **selection** (gates acceptance; scored before/after a candidate edit,
   strict improve-or-reject, ties rejected): `edge.yaml`,
   `mechanism-fit-subagent.yaml`, `third-party-not-authoritative.yaml`,
@@ -61,7 +64,9 @@ fixture corpus over time, not a smaller gate.
   `compatibility-documentation-silence-unknown-selection.yaml`,
   `compatibility-undeclared-runtime-extension-selection.yaml`,
   `cohesion-temporal-grouping-selection.yaml`,
-  `reference-load-precision-selection.yaml`.
+  `reference-load-precision-selection.yaml`,
+  `opus5-redundant-verification-generalizes.yaml`,
+  `opus5-unbounded-subagent-generalizes.yaml`.
 - **test** (read once, for a final report only, never to motivate or gate
   an edit): `guardrail.yaml`, `no-fabricated-violation.yaml`,
   `portability-classification.yaml`, `blind-spot-pass-not-silent.yaml`,
@@ -71,7 +76,8 @@ fixture corpus over time, not a smaller gate.
   `ablation-capability-already-run.yaml`,
   `compatibility-declared-hermes-test.yaml`,
   `compatibility-portable-standard-test.yaml`,
-  `cohesion-sequential-orchestrator-restraint.yaml`.
+  `cohesion-sequential-orchestrator-restraint.yaml`,
+  `opus5-restraint-domain-verification-and-bounded-subagent.yaml`.
 
 ## Compatibility-awareness branch coverage
 
@@ -343,6 +349,36 @@ finding**") or as a standalone lowercase mid-sentence mention
 inconsistently satisfies -- both changed to the case-agnostic
 `"eadline finding"` (dropping the leading letter), immune to either
 capitalization.
+
+The `opus5-redundant-verification-*` and `opus5-unbounded-subagent-*`
+pairs, plus the shared `opus5-restraint-domain-verification-and-bounded-
+subagent.yaml` fixture, were added for gitapex#495 (the two new Mechanism
+fit/Dimension 2 checks grounded in Anthropic's "Prompting Claude Opus 5"
+guide), for the same reason as every prior addition: none of the prior 52
+fixtures probe a generic re-verification/self-correction instruction that
+duplicates a frontier-tier model's own default behavior, or an unbounded
+subagent-delegation instruction with no stated criterion or cap.
+`opus5-redundant-verification-fail.yaml` sits in train (a Frontier-declared
+changelog-entry-writer skill instructing "always double-check your answer
+before responding" -- it motivated the Dimension 2 addition).
+`opus5-redundant-verification-generalizes.yaml` sits in selection and uses a
+distinct domain and phrasing (a database-migration-planner's "re-verify the
+plan is correct" instruction, not "double-check your answer") so the gate
+measures generalization of the new Fail instance, not memorization of the
+train fixture's exact wording. `opus5-unbounded-subagent-fail.yaml` sits in
+train (a repo-wide-license-audit skill dispatching a subagent per file, no
+criterion or cap -- it motivated the Subagent delegation scope check).
+`opus5-unbounded-subagent-generalizes.yaml` sits in selection and uses a
+distinct domain and trigger (a support-ticket-triage skill dispatching a
+subagent per incoming ticket) so the gate measures generalization rather
+than memorization of the train fixture's "for every file" wording.
+`opus5-restraint-domain-verification-and-bounded-subagent.yaml` sits in test
+(read once, for the final report) and checks the restraint side for both
+new checks at once: a flaky-test-triager skill whose verification step
+names its own domain-specific task (re-running a candidate to confirm it
+reproduces, not generic double-checking) and whose delegation step states a
+criterion and a cap (batch by suite size, or triage directly for a small
+suite) must not be false-positively flagged by either new check.
 
 Future edits to this rubric should reuse this same split rather than
 re-deriving one per iteration, so the selection split stays genuinely
@@ -2234,3 +2270,142 @@ amendment.
 Full four-agent research trail, synthesis, and adversarial verification:
 PR #481's comment thread (the multi-agent Workflow run this entry
 summarizes).
+
+**Iteration: issue #495, Opus 5 prompting-guide alignment.** Candidate
+edit, two parts: (Part 1) a new Dimension 2 (Conciseness) grounded Fail
+instance in `references/rubric.md` -- a generic re-verification/self-
+correction instruction with no domain-specific reason, on Frontier-declared
+(or Adaptive-body) content, classified as **duplication** against the
+model's own documented default behavior (grounded in Anthropic's "Prompting
+Claude Opus 5"), exempting an instruction naming the skill's own actual
+task; (Part 2) a new step-level Mechanism-fit check, `### Subagent
+delegation scope`, declaration-independent, checking whether a skill that
+instructs subagent dispatch states a delegation criterion and either
+defaults to a single dispatch or states a cap. A matching `[opus5]`
+reference entry was added. Small cross-references added to `SKILL.md`'s
+Mechanism-fit bullet list and Procedure step 2.
+
+Precondition and splits: satisfied by adding 5 new fixtures to the existing
+corpus (57 fixtures, 22:23:12 -- see Assignment above) --
+`opus5-redundant-verification-fail.yaml` / `opus5-unbounded-subagent-
+fail.yaml` (train), `opus5-redundant-verification-generalizes.yaml` /
+`opus5-unbounded-subagent-generalizes.yaml` (selection),
+`opus5-restraint-domain-verification-and-bounded-subagent.yaml` (test).
+
+**Fixture-assertion bug found and fixed live, before banking any score**
+(the same recurring class this file's #149/#155 entries already document):
+the first-draft `opus5-redundant-verification-*` assertions required the
+literal phrase `"over-verification"`, quoted directly from the rubric's own
+Anthropic citation. A live train-fixture dispatch produced a fully correct
+Fail verdict that instead reasoned "adds tokens without changing behavior"
+-- a paraphrase, not the quoted term -- under-matching a correct review.
+Loosened to `"duplication"`, the rubric's own required Dimension-2
+classification vocabulary. That in turn over-matched: a live selection-
+fixture **before** (pre-edit) dispatch used the word "duplication" in a
+*negated* Pass sentence ("Nothing here is sprawl, duplication, or explains
+a known concept... Passes") -- the same negation-trap class this file's
+Authoring-fixtures section already warns against, mirrored here on the
+`output_contains` side instead of `output_not_contains`. Fixed by requiring
+`["duplication", "domain-specific"]` together (`"domain-specific"` -- the
+rubric's own exemption-criterion phrase -- was independently confirmed
+absent from both live before-transcripts and present in both after-
+transcripts). The restraint fixture's original `output_not_contains:
+["duplication", "unjustified"]` was dropped pre-emptively for the identical
+negation-trap reason, before it could false-fail a correct restraint pass,
+per this file's own "rewrote as positive-only assertions" precedent.
+
+**Gate result, live dispatches, matched methodology, isolated `claude -p`
+subprocess per `references/adversarial-self-audit.md`'s Isolation-
+verification registry (this platform/version's entry already confirmed;
+`Agent`-tool dispatch remains confirmed-contaminated here), scored with
+`skills/scorer-gated-skill-edits/scripts/score_contract.py`:**
+
+| Fixture | Before | After |
+|---|---|---|
+| `opus5-redundant-verification-generalizes.yaml` | 0.750000 (fresh) | 1.000000 (fresh) |
+| `opus5-unbounded-subagent-generalizes.yaml` | 0.750000 (fresh) | 1.000000 (fresh) |
+| 20 pre-existing selection fixtures | unchanged | unchanged |
+
+**Assertion-surface disjointness (verified by direct grep across all 20
+pre-existing selection fixtures' prompts and `expected` blocks):** none
+reference `"duplication"`, `"domain-specific"`, `"Subagent delegation
+scope"`, or any redundant-verification/unbounded-subagent-dispatch pattern
+in their target-skill prompts. The edit is a pure insertion (confirmed by
+`git diff`: no existing sentence in `rubric.md` was altered, only new
+bullets/subsections added), so none of the 20 fixtures' scores can move --
+the same leg-1 reasoning this file's issue #406 entry already established,
+applied here without needing each fixture's exact historical value.
+
+Selection mean strictly increases (2 fixtures move 0.75 -> 1.0, 20 tie
+exactly) regardless of the 20's absolute values. **KEEP.**
+
+**Restraint check (test split, read once):**
+`opus5-restraint-domain-verification-and-bounded-subagent.yaml` -- a
+flaky-test-triager skill whose verification step names its own domain task
+(re-running a candidate to confirm it reproduces) and whose delegation step
+states a criterion (suite size) and a per-batch size. Scored **1.0**. The
+after-dispatch did not false-positive the domain-specific verification, and
+found a genuine, real partial finding on delegation the fixture did not
+anticipate: "one subagent per 50-test batch" states a batch *size*, not a
+total *cap* -- `ceil(N/50)` still grows unboundedly with suite size `N`.
+This is the new check's own criterion working correctly ("either defaults
+to a single dispatch or states an explicit cap"), not a false positive; the
+fixture's own assertions (`"reproduces"`, `"criterion"`,
+`output_not_contains` restricted to `"LGTM"`/`"no concerns"`) still scored
+1.0 since the dispatch never produced a bare non-finding.
+
+**Battle-test pass (`battle-testing-a-skill`, one by-hand trial, disclosed
+non-isolated per this session's methodology):** 20/22 PASS (provisional),
+4 N/A, 2 FAIL. One FAIL was real: the Subagent delegation scope section's
+worked example quoted phrasing ("If one subagent can complete the task, use
+one rather than several," "keep spawn counts low") that does not appear
+anywhere in `SKILL.md` -- verified via direct `grep`, and via a live fetch
+of the primary source confirming both phrases are the *source doc's own*
+example prompt, not this skill's. Fixed to quote `SKILL.md`'s actual text
+("one fresh subagent dispatch," "the single dispatch above can become
+several") and to name the real, narrower gap the corrected quote exposes
+(the escalation path states no numeric cap). Fix verified by direct grep,
+not a second dispatch. The other FAIL (a claimed-absent regression-corpus
+fixture) was a battle-test scratch-sandbox artifact -- `evals/` was never
+copied into that trial's tree; the fixture exists in the real repository,
+confirmed directly.
+
+**Self-review (this skill applied to itself, two passes, by-hand per
+disclosed methodology, matching this file's own #164/#183/#477
+precedent):** the first pass (partial scratch copy: 3 of 6 reference files,
+no bundled script) found one real citation defect -- the Dimension 2
+bullet paraphrased `SKILL.md`'s Procedure step 5 as `"quoting evidence"`
+instead of its actual text, `"quoting the specific text that earns each
+verdict"` -- fixed and byte-verified. Its other FAILs (dangling reference
+links, unmeasured Dimension 7, blocked Compatibility awareness) were
+sandbox-scoping artifacts from the partial copy; the real repository's
+shape check stayed 46/46 throughout, confirmed by direct runs. A second
+pass with a complete scratch copy (all 6 reference files, the bundled
+script, actually re-run inside the sandbox) found one further real defect:
+the Dimension 2 bullet's external citation blended two distinct Opus5-doc
+sections (Task scope and over-verification; Self-correction) into one
+quotation, overstating what the source says for two of its four example
+phrases -- fixed to attribute each phrase to its own section with its own
+actual wording, verified against the primary source fetched earlier in
+this same work session. The Subagent delegation scope section was
+independently re-verified clean on both passes (every quote byte- or
+word-for-word matched `SKILL.md` and the live-fetched primary source). Two
+pre-existing, edit-unrelated gaps were named but left unfixed as out of
+scope: a bundled-script bare-issue-citation scope hole (Dimension 6), and
+Dimension 5's mandatory-reference-read count now exceeding three for an
+ordinary review, a tension that predates this edit.
+
+**Transfer check:** not run this iteration, the same disclosed,
+unresolved gap issue #200 first named and every entry in this log since
+has carried forward.
+
+**Deterministic checks, run after every fix in this iteration:**
+`check_skill_shape.py` 46/46, full pytest suite (`skills/evaluating-
+skill-quality/scripts/` + `tests/`) 768/768.
+
+**KEEP.** Strict selection-split improvement (2 fixtures move 0.75 -> 1.0,
+20 confirmed unaffected by direct inspection), a clean restraint result
+with a genuine bonus finding, and three real citation-accuracy defects
+found across an external battle-test pass and two self-review passes, all
+fixed and independently re-verified against primary sources rather than
+re-trusted.

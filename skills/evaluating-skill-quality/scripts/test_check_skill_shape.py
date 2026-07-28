@@ -3949,6 +3949,55 @@ def test_real_model_identifier_in_reference_file_fails(tmp_path):
     assert "references/notes.md:claude-sonnet-5" in res["no-illustrative-model-identifier"].evidence
 
 
+def test_model_id_inside_anthropic_doc_autolink_passes(tmp_path):
+    # A real citation URL whose own slug names the model the page
+    # documents is a primary-source citation, not illustrative content.
+    d = _write_raw(tmp_path, _simple_body(
+        "See <https://platform.claude.com/docs/en/build-with-claude/"
+        "prompt-engineering/prompting-claude-opus-5> for guidance."))
+    res = _by_name(css.check_shape(d))
+    assert res["no-illustrative-model-identifier"].passed is True
+
+
+def test_model_id_inside_anthropic_doc_refdef_passes(tmp_path):
+    d = _write_raw(tmp_path, _simple_body(
+        "Grounded in [opus5].\n\n"
+        "[opus5]: https://platform.claude.com/docs/en/build-with-claude/"
+        "prompt-engineering/prompting-claude-opus-5 "
+        "\"Anthropic -- Prompting Claude Opus 5\""))
+    res = _by_name(css.check_shape(d))
+    assert res["no-illustrative-model-identifier"].passed is True
+
+
+def test_model_id_inside_inline_link_to_anthropic_doc_passes(tmp_path):
+    d = _write_raw(tmp_path, _simple_body(
+        "See [the guide](https://platform.claude.com/docs/en/build-with-"
+        "claude/prompt-engineering/prompting-claude-opus-5) for details."))
+    res = _by_name(css.check_shape(d))
+    assert res["no-illustrative-model-identifier"].passed is True
+
+
+def test_model_id_inside_non_anthropic_link_still_fails(tmp_path):
+    # The exemption is scoped to Anthropic's own doc domains -- a link to
+    # any other host does not launder an illustrative model identifier.
+    d = _write_raw(tmp_path, _simple_body(
+        "See <https://example.com/prompting-claude-opus-5> for a mirror."))
+    res = _by_name(css.check_shape(d))
+    assert res["no-illustrative-model-identifier"].passed is False
+    assert "claude-opus-5" in res["no-illustrative-model-identifier"].evidence
+
+
+def test_model_id_outside_link_still_fails_even_near_anthropic_url(tmp_path):
+    # A bare mention next to (not inside) a real citation URL is still
+    # illustrative content and must still fail.
+    d = _write_raw(tmp_path, _simple_body(
+        "claude-sonnet-5 is discussed at "
+        "<https://platform.claude.com/docs/en/about-claude/models>."))
+    res = _by_name(css.check_shape(d))
+    assert res["no-illustrative-model-identifier"].passed is False
+    assert "claude-sonnet-5" in res["no-illustrative-model-identifier"].evidence
+
+
 # ---- Raw angle-bracket placeholder (docs/skill-authoring-standards.md rule 4) ----
 
 def test_raw_placeholder_in_prose_fails(tmp_path):

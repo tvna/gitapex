@@ -1,0 +1,38 @@
+id: evaluating-skill-quality-opus5-restraint-domain-verification-and-bounded-subagent
+name: Domain-Specific Verification and Bounded Subagent Delegation Must Not False-Positive
+description: Restraint check for both new checks at once -- the target's verification step names its own domain-specific task (re-running a candidate flaky test to confirm it reproduces, not generic double-checking), and its delegation step states a criterion and a cap (batch by suite size, or triage directly for a small suite). Neither the new Dimension 2 duplication instance nor the new Subagent delegation scope check should fire; the review must say so explicitly rather than flagging a false positive.
+tags:
+  - quality
+  - conciseness
+  - mechanism-fit
+  - opus5-prompting
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "flaky-test-triager". Is this a good skill? Its
+    metadata/gitapex.yaml declares capabilityAssumption: Frontier.
+
+    ---
+    name: flaky-test-triager
+    description: Identify and triage flaky tests in a CI test suite. Use when the user asks to find, triage, or confirm flaky tests.
+    ---
+
+    # Flaky Test Triager
+
+    ## Procedure
+
+    1. Scan recent CI runs for tests with an inconsistent pass/fail history.
+    2. For each candidate, re-run it 3 times and verify the failure
+       reproduces before flagging it as flaky -- a single inconsistent run
+       is not enough evidence on its own.
+    3. For a suite of more than 200 tests, delegate to one subagent per
+       50-test batch; for a smaller suite, triage directly without
+       delegation.
+    4. Report every confirmed flaky test with its reproduction rate.
+expected:
+  output_contains:
+    - "reproduces"
+    - "criterion"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"
