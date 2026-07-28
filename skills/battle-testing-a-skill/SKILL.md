@@ -62,10 +62,21 @@ limits.
    instructions is not the neutral, portable evaluation this step requires,
    and the omission does not get to surface only when a human happens to
    ask about it directly. Requesting the exclusion is not proof it held:
-   before treating the dispatch as ready, confirm with an observable check
-   (e.g. list or search the chosen scratch location and its full directory
-   ancestry for `CLAUDE.md`/`AGENTS.md` and require the result to be empty)
-   rather than trusting intent. If the harness offers none of the listed
+   which mechanism actually achieves it is a fact about the current
+   platform's dispatch tooling, not a fixed choice this skill can
+   hardcode, and a filesystem-ancestry-only check on the scratch location
+   (confirming its own directory chain contains no `CLAUDE.md`/`AGENTS.md`)
+   is not sufficient proof by itself -- one platform's dispatch tool has
+   been confirmed to leak the calling repository's `CLAUDE.md` into a
+   subagent's context regardless of which paths the dispatch prompt
+   references, so an ancestry check alone would have missed it. Consult
+   `evaluating-skill-quality`'s `references/adversarial-self-audit.md`
+   Isolation verification section for the current platform's verified
+   mechanism before dispatching, running its Verification procedure and
+   recording a new entry there if none exists yet. Only that section's own
+   two-part behavioral test (does the dispatched agent's own self-report
+   actually change between a positive- and negative-control location)
+   counts as verification. If the harness offers none of the listed
    mechanisms, that is itself a blocker -- stop and escalate rather than
    dispatching into a contaminated context. If an operator explicitly
    authorizes proceeding anyway rather than escalating, that authorization

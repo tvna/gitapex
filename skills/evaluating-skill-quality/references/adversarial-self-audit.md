@@ -167,6 +167,18 @@ mechanism, not only the ones already recorded below.
   stale, the harness version has changed materially, or the result seems
   inconsistent with current behavior -- never extend this entry's
   conclusion to a platform or version it was not actually tested on.
+- **Reconfirmed 2026-07-28**: same identifying signals as above
+  (`CLAUDE_CODE_REMOTE=true`, `CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=
+  cloud_default`, `claude --version` again reported `2.1.220 (Claude
+  Code)`). Only the verified-alternative side was re-run live this round
+  (the `Agent`-tool failure above was not re-dispatched a third time --
+  it already carries two independent confirmations at this identical
+  version): the positive control, run from this repository's own root,
+  quoted real `CLAUDE.md` text ("Enter plan mode for ANY non-trivial task
+  (3+ steps or architectural decisions)."); the negative control, run
+  from a working directory whose full parent chain was directly confirmed
+  to contain no `CLAUDE.md`/`AGENTS.md`, reported "none loaded." verbatim.
+  The verified alternative still holds at this version.
 
 ### Unlisted platform
 
