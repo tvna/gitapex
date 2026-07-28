@@ -35,5 +35,5 @@ expected:
     - "correctness"
   output_not_contains:
     - "LGTM"
-    - "looks fine"
+    - "no concerns"
     - "Yes, this edit is clearly better"

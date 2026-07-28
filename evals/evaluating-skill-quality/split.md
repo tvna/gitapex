@@ -11,14 +11,15 @@ block deterministically.
 
 ## Corpus size and the 2:1:7 caveat
 
-SkillOpt's default split ratio is 2:1:7. At 50 fixtures that ratio gives a
+SkillOpt's default split ratio is 2:1:7. At 52 fixtures that ratio gives a
 selection split of roughly five tasks, too thin to gate a strict
 improve-or-reject decision because five observations provide little ability
 to average out run-to-run variance. Following the precedent already set in
 `skills/scorer-gated-skill-edits/references/worked-example.md` ("the ratio is
 aspirational" for a small fixture count), this split combines the 17:14:9
-base-plus-cohesion partition with a scoped 2:6:2 compatibility addition, for
-a resulting 19:20:11 partition. This is named explicitly as a deviation from
+base-plus-cohesion partition with a scoped 2:6:2 compatibility addition and a
+1:1:0 reference-load-precision addition (gitapex#477), for a resulting
+20:21:11 partition. This is named explicitly as a deviation from
 the 2:1:7 default. The
 honest minimal groundwork, per that same worked example, is a larger
 fixture corpus over time, not a smaller gate.
@@ -39,7 +40,8 @@ fixture corpus over time, not a smaller gate.
   `consumer-repo-convention-deference-train.yaml`,
   `compatibility-claude-fork-train.yaml`,
   `compatibility-hermes-platform-train.yaml`,
-  `cohesion-independently-changeable-branches-train.yaml`.
+  `cohesion-independently-changeable-branches-train.yaml`,
+  `reference-load-precision-train.yaml`.
 - **selection** (gates acceptance; scored before/after a candidate edit,
   strict improve-or-reject, ties rejected): `edge.yaml`,
   `mechanism-fit-subagent.yaml`, `third-party-not-authoritative.yaml`,
@@ -58,7 +60,8 @@ fixture corpus over time, not a smaller gate.
   `compatibility-conflicting-allowed-tools-semantics-selection.yaml`,
   `compatibility-documentation-silence-unknown-selection.yaml`,
   `compatibility-undeclared-runtime-extension-selection.yaml`,
-  `cohesion-temporal-grouping-selection.yaml`.
+  `cohesion-temporal-grouping-selection.yaml`,
+  `reference-load-precision-selection.yaml`.
 - **test** (read once, for a final report only, never to motivate or gate
   an edit): `guardrail.yaml`, `no-fabricated-violation.yaml`,
   `portability-classification.yaml`, `blind-spot-pass-not-silent.yaml`,
@@ -1794,3 +1797,117 @@ fixture built to test the new check (a different cohesion sub-type, not
 memorized wording), and a restraint result corroborated by two other
 fixtures' independent, unprompted after-dispatch findings rather than by
 the purpose-built restraint fixture alone.
+
+**Iteration: issue #477, Reference-load precision (dimension 8 sub-check).**
+Candidate edit: add a new bold-lead-in paragraph to `references/rubric.md`
+dimension 8 defining a True Positive/False Positive/False Negative/True
+Negative classification for whether a skill's `references/*.md` files are
+actually read on the branch dimension 5 already marked as needing them,
+fired only when the target repository's own eval mechanism records
+reference-read events, defaulting to "unmeasured" otherwise. Full text:
+see this PR's diff. Confirmed before writing it, by direct inspection of
+`scorer-gated-skill-edits/scripts/score_contract.py`,
+`evals/evaluating-skill-quality/eval.yaml`, and `docs/skill-eval-status.md`,
+that no mechanism in this repository's own eval stack observes which
+reference file a trial actually reads -- every existing scorer works from
+final output text only, which is exactly why the new paragraph is written
+transcript-gated rather than assumed always-applicable.
+
+Precondition and splits: satisfied (52 fixtures, 20:21:11 with this
+iteration's additions -- see Assignment above).
+
+**Live gate, matched methodology, fresh dispatch per side, scored with
+`scripts/score_contract.py`:**
+
+| Fixture | Model | Before | After |
+|---|---|---|---|
+| `reference-load-precision-selection.yaml` | Sonnet 5 | 1.000000 | 1.000000 |
+| `reference-load-precision-selection.yaml` | Haiku 4.5 | 1.000000 | 1.000000 |
+| `scoring-axis-uncontrolled-speed-claim.yaml` (regression spot-check) | Sonnet 5 | 0.857143 | 1.000000 |
+
+**Two real fixture-authoring bugs found and fixed during this gate, the
+same class PR #150 caught for issue #149's iteration:**
+
+1. `reference-load-precision-selection.yaml`'s original `output_contains`
+   included `"True negative"`. Every live dispatch (both before and after,
+   both model tiers) that correctly identified the missing check phrased
+   it as `"True Negative"` (title-cased second word, paired with `"False
+   Positive"`) or avoided the term entirely -- a case-sensitivity mismatch
+   against this rubric's own bullet casing (`**True negative**`), the same
+   bug class the `case-sensitivity` lint rule exists to catch, except here
+   the mismatch was against live model phrasing rather than a rubric
+   anchor the linter can see. Also, `"standard payment API"` was
+   unreliable at Haiku tier (Haiku's terser reviews did not always quote
+   the prompt's step 3 verbatim). Replaced both with
+   `"wire-refund-steps.md"` / `"5 trials"` / `"branch"`, each confirmed
+   present in all four live transcripts.
+2. `scoring-axis-uncontrolled-speed-claim.yaml`'s pre-existing
+   `output_not_contains: ["looks fine"]` false-failed a **correct** review
+   that happened to write `"...reasonable length) looks fine, but
+   reference-depth/TOC..."` -- an incidental natural-language collision
+   with the banned rubber-stamp phrase, unrelated to this edit's content
+   (the fixture predates issue #477). Replaced with `"no concerns"`,
+   matching the phrase already used for the same purpose in
+   `ablation-capability-runner-exists-not-run.yaml`.
+
+**Honest result, disclosed rather than rounded up.** After both fixture
+fixes, `reference-load-precision-selection.yaml` ties at 1.000000 on both
+sides, at both a frontier tier (Sonnet 5) and an economical tier (Haiku
+4.5): every dispatch, with or without the new paragraph, independently
+recognized that five same-branch reads is a true-positive/recall
+observation, not proof the reference stays unread on the untested branch,
+and correctly refused the "proven good" framing embedded in the fixture's
+own prompt. This is a real, measured tie, not a fabricated improvement --
+`scorer-gated-skill-edits`' own "ordinary ties are rejected" rule is
+being named here precisely so it isn't quietly stepped around.
+`scoring-axis-uncontrolled-speed-claim.yaml`'s 0.857143 -> 1.000000 delta
+is **not** attributed to this edit either: the edit adds text after this
+fixture's own scenario and touches no sentence it asserts on: the
+before-dispatch simply did not happen to write the literal string
+`check_skill_shape.py` in its precondition caveat on this particular run,
+a dispatch-to-dispatch phrasing variance this file's own Kept-edit log has
+named before for other fixtures (see the entries above), not a
+content-driven signal.
+
+The remaining 19 pre-existing selection fixtures were not re-run live this
+iteration; reasoned analytically (assertion-surface disjointness, the same
+class of reasoning this file's other entries use for untouched fixtures):
+the edit is a pure addition after the existing cost/speed conditional-axis
+paragraph, at the very end of dimension 8, and does not alter, remove, or
+renumber any existing sentence any of those 19 fixtures' `output_contains`/
+`output_not_contains` assertions target.
+
+**KEEP, on qualitative grounds, with the quantitative tie disclosed rather
+than hidden.** The strict quantitative gate does not show an improvement
+on this measurement: a Sonnet-5-tier and a Haiku-4.5-tier reviewer both
+already reach the correct precision-vs-recall judgment on this scenario
+through general reasoning, without needing the new paragraph's explicit
+True Positive/False Positive/False Negative/True Negative framework
+spelled out. That is a real limitation of testing rubric-text value
+against an already-capable reviewer on one scenario, not evidence the
+content is wrong. The edit is kept for the same reason `SKILL.md`'s
+Skill-step vs. bundled script check was kept in issue #37's iteration
+(`docs/superpowers/plans/2026-07-13-rubric-script-delegation-axis.md`,
+Task 2) without a full live selection-split re-run: a dogfood-proof
+justification rather than a strict quantitative one is an accepted path
+in this file's own history for a comparably-scoped, purely-additive
+paragraph. The dogfood proof here: the paragraph closes a gap confirmed
+genuinely absent before writing it (direct grep across
+`skills/evaluating-skill-quality/` for
+`speed|latency|performance|true positive|false positive|precision|recall`
+returned zero matches, and none of dimensions 5 or 8's existing text
+distinguishes a static placement pass from a measured read-behavior
+claim), it is explicitly gated to fire only when trace evidence exists
+(never fabricates evidence from output text alone, the same
+construct-validity discipline `scorer-gated-skill-edits`' own
+fixture-authoring guidance already names), and it gives a weaker or less
+careful reviewer -- the audience this skill's own `capabilityAssumption:
+Broad` declaration exists to serve -- a named framework to reach for
+rather than requiring it be re-derived from first principles every time,
+even though this iteration's measurement shows a capable reviewer does
+not strictly need that scaffolding on this one scenario.
+
+**Transfer check:** not run this iteration, consistent with every prior
+entry in this log -- named as a pre-existing, still-open gap in this
+file's own practice (per issue #200's entry), not silently assumed clear
+for this edit specifically.

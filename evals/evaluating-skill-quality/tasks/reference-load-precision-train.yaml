@@ -1,0 +1,41 @@
+id: evaluating-skill-quality-reference-load-precision-train
+name: Well-Placed Reference Link Alone Does Not Prove Reference-Load Precision
+description: A reference link passes dimension 5's static branch-point placement check, and the operator asks whether that alone proves reference-load precision (TP/FP/FN/TN read behaviour); dimension 8's new sub-check must deny the conflation and name the finding unmeasured absent a transcript.
+tags:
+  - quality
+  - behavioural-evidence
+  - train
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this SKILL.md excerpt for a skill
+    called "invoice-checker":
+
+    ---
+    name: invoice-checker
+    description: Validates outgoing invoices before send. Use when the user asks to check or validate an invoice.
+    ---
+
+    # Invoice Checker
+
+    ## Procedure
+
+    1. Read the invoice.
+    2. If the invoice is for a foreign customer, read
+       references/vat-rules.md and apply its cross-border VAT steps.
+    3. Otherwise, apply the domestic VAT rate inline.
+
+    SKILL.md links references/vat-rules.md right at step 2, exactly where
+    the foreign-customer branch becomes necessary, with a pointer
+    explaining what it covers and why it is needed there. Dimension 5
+    clearly passes. Does that also mean reference-load precision -- whether
+    the model actually reads vat-rules.md only on foreign-customer trials
+    and never on domestic ones -- is proven good here?
+expected:
+  output_contains:
+    - "transcript"
+    - "unmeasured"
+    - "static"
+  output_not_contains:
+    - "LGTM"
+    - "looks fine"
+    - "already proves reference-load precision"

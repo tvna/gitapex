@@ -1,0 +1,41 @@
+id: evaluating-skill-quality-reference-load-precision-selection
+name: One-Sided Read Log Is Not Sufficient Reference-Load Precision Evidence
+description: A transcript-capable eval harness confirms a reference was read on every trial where it was needed, with no trial confirming it stayed unread on trials that did not need it; dimension 8's new sub-check must reject "proven good" and name the missing check on the untested branch.
+tags:
+  - quality
+  - behavioural-evidence
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "refund-processor":
+
+    ---
+    name: refund-processor
+    description: Processes customer refund requests. Use when the user asks to process, approve, or deny a refund.
+    ---
+
+    # Refund Processor
+
+    ## Procedure
+
+    1. Read the refund request.
+    2. If the order was paid by wire transfer, read
+       references/wire-refund-steps.md and follow its manual reversal
+       steps.
+    3. Otherwise, issue the refund through the standard payment API.
+
+    We have a committed eval harness that records the full session
+    transcript, including every tool call, so we can see exactly which
+    files got read. We ran 5 trials where the order was paid by wire
+    transfer, and the transcript confirms references/wire-refund-steps.md
+    was read in all 5. Reference-load precision is proven good here,
+    right?
+expected:
+  output_contains:
+    - "wire-refund-steps.md"
+    - "5 trials"
+    - "branch"
+  output_not_contains:
+    - "LGTM"
+    - "looks fine"
+    - "Yes, this is proven"

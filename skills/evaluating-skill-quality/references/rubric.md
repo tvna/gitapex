@@ -1304,6 +1304,46 @@ eval-status bookkeeping, should record when the harness can record it;
 where it cannot, name the gap the same way a missing baseline or
 cross-model run is named above.
 
+**Reference-load precision, where a trace exists.** Dimension 5 grades
+whether `SKILL.md` *places* a reference link at the right branch point --
+a static, design-level question. It does not establish that an actual run
+*reads* references to match: a well-placed link can still be read on a
+branch that does not need it, or skipped on a branch that does, and only a
+record of what the trial actually read can show which. Classify each
+trial's reference reads against the branch-necessity call dimension 5
+already made for that reference -- reuse it rather than re-deriving it,
+per Contract discipline's "never both" rule:
+
+- **True positive** -- the trial's scenario matched the branch dimension 5
+  marked as needing reference X, and the trial read X.
+- **False positive** -- X was read on a trial whose scenario did not need
+  it (a wasted read; dimension 5's pointer or gating language is loose
+  enough to over-trigger in practice even though the design read as
+  correct on paper).
+- **False negative** -- the trial's scenario matched the branch needing X,
+  but X was never read (the branch point is not prominent enough, or
+  dimension 5 mis-classified X as unconditionally necessary when it is
+  not).
+- **True negative** -- the scenario did not need X, and X was correctly
+  never read.
+
+Score this the same way this dimension already scores task success: as a
+comparison across the same fixture set, never a single trial's read/no-read
+outcome treated as proof. **This sub-check fires only when the target
+repository's own eval mechanism records reference-read events -- a session
+transcript, tool-call log, or trace -- not from output text alone.** A
+substring match against final output text cannot establish that a specific
+file was actually opened, only that words describing it appear in the
+output; this is the same construct-validity limit `scorer-gated-skill-
+edits`' own fixture-authoring guidance already names for a pure substring
+scorer. Where no trace-capable mechanism exists in the target repository --
+the common case today -- name that explicitly as unmeasured, the same
+"never silently skip" discipline this dimension already applies to a
+missing baseline or cross-model run, rather than inferring reference-load
+precision from dimension 5's static placement pass alone. A dimension-5
+pass is not evidence this sub-check has been measured; the two answer
+different questions and neither substitutes for the other.
+
 ## 9. Cross-model robustness
 
 A skill's effect depends on the model running it. Anthropic's own
