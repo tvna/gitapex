@@ -1,0 +1,44 @@
+id: vetting-attack-surface-exposure-excess
+name: Status-page webhook sends more than the provider renders
+description: The reviewed script's outbound POST body includes a full deploy
+  log, internal hostname, and the deploying user's email, when the status-page
+  provider's own documented contract renders only two fields; the review must
+  grade this dependency relationship exposure-excess and name the specific
+  over-exposed field.
+tags:
+  - quality
+  - exposure-minimization
+inputs:
+  prompt: |
+    Use vetting-attack-surface. Review this artifact's outbound interface.
+
+    `scripts/report_deploy_status.py` runs after every deploy and POSTs to
+    a third-party status-page provider's
+    `https://status.example-provider.com/api/v1/incidents` endpoint. That
+    provider's own documented API contract (fetched directly, not
+    recalled) states this endpoint renders exactly two fields on the
+    public status page -- `service_name` and `is_operational` (a boolean)
+    -- and discards everything else in the request body after 24 hours
+    per its data-retention docs; nothing beyond those two fields is ever
+    displayed or otherwise consumed.
+
+    The script's actual POST body, read directly from the code, is:
+
+    ```python
+    requests.post(url, json={
+        "service_name": service_name,
+        "is_operational": deploy_succeeded,
+        "full_deploy_log": open(log_path).read(),
+        "internal_hostname": socket.gethostname(),
+        "deploying_user_email": os.environ["DEPLOY_USER_EMAIL"],
+    })
+    ```
+
+    Give me the exposure-minimization verdict for this one dependency
+    relationship.
+expected:
+  output_contains:
+    - "exposure-excess"
+    - "full_deploy_log"
+  output_not_contains:
+    - "attack surface: OK"
