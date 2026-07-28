@@ -6,7 +6,7 @@ Two lanes, mirroring `evaluating-skill-quality`'s own split:
   grade these mechanically if one existed for the target's own tooling.
   No bundled checker ships with this skill yet (see `SKILL.md`'s Lifecycle
   note); apply these by direct inspection.
-- **Probabilistic-maturity dimensions** (7-18) -- need judgment; walk all
+- **Probabilistic-maturity dimensions** (7-19) -- need judgment; walk all
   of them, quoting the specific evidence that earns each verdict.
 
 Every dimension is tagged with its own **domain-generalization scope**,
@@ -232,3 +232,37 @@ section and `references/security-level.md` for the full test.
     an agent-harness hook's own stderr message, and an MCP server's own
     error response are all readable by someone or something with less
     trust than the credential itself carries.
+19. **Runtime-cost optimization, distinct from dimension 6's
+    budget-proportionality check.** Dimension 6 asks only whether a
+    timeout/budget is set explicitly and matches the check's stated cost;
+    this dimension asks whether that cost itself has been minimized within
+    what the policy genuinely requires -- does the gate's own implementation
+    avoid avoidable overhead (a full clone or full-repository scan where a
+    shallow fetch or diff-scoped scan would do, a synchronous network
+    round-trip where a cached or local answer would do, re-paying a whole
+    interpreter/toolchain cold-start on every invocation where a warm or
+    incremental path exists, an unbounded quadratic pattern over input that
+    could be linear)? A finding here must never come at the cost of
+    dimensions 1, 3, or 15 -- narrowing scope, skipping self-revalidation, or
+    defaulting to allow on a fast path are not optimizations, they are
+    correctness regressions wearing an optimization's name; grade only a
+    change that holds the gate's own deny / self-revalidation / fail-closed
+    behavior fixed while reducing its cost. A gate's own comment, docstring,
+    or commit message claiming its cost is "already optimized" is not
+    itself evidence for this dimension -- the same empirical-verification
+    discipline dimension 10 applies to a claimed deny/allow outcome applies
+    here to a claimed cost: ground the finding in a direct reading of the
+    actual code path (does it really skip the network round-trip, the full
+    scan, or the cold start the claim describes?) or a live measurement,
+    never the claim alone.
+    *Domains:* generalizes with adaptation. Agent-harness hook: does the
+    hook re-run expensive recomputation on every matching tool call, or
+    scope/cache to only the changed surface since its last run? CI job
+    step: does the job use the platform's own dependency/build caching and
+    path filters, or needlessly rebuild full state and run unconditionally
+    regardless of whether anything in its own scope changed? Git hook
+    subprocess: on pre-commit/pre-push, does it operate on the staged/changed
+    diff rather than re-scanning the whole working tree each invocation?
+    MCP server subprocess: does the server hold a warm process or cached
+    connection this call reuses, or pay a full cold-start cost on every
+    request?
