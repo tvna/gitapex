@@ -1,0 +1,37 @@
+id: evaluating-deterministic-gate-quality-mechanism-fit-domain-misplaced
+name: Post-hoc CI scan for a blockable live-session action is well-formed but misplaced
+description: The policy "block a live agent session from ever calling rm -rf
+  against the repository root" is realized only as a CI job that scans merged
+  commit history afterward for evidence the command ran -- well-built as a
+  scanner but too late by construction. The reversibility-window criterion
+  clearly places the correct chokepoint at the agent-harness PreToolUse hook
+  domain, not CI. Verdict must be well-formed but misplaced.
+tags:
+  - quality
+  - mechanism-fit
+  - domain-placement
+inputs:
+  prompt: |
+    Use evaluating-deterministic-gate-quality. Review this gate.
+
+    The policy: "never let a live agent session run `rm -rf` against this
+    repository's own root directory." The implemented gate, read directly
+    from its own script: a CI job step, correctly wired as a required
+    check, that scans every merged commit's diff for evidence a
+    `rm -rf .` (or equivalent) command was executed against the repo
+    root during the session that produced it, and fails the build if
+    found. It has a bundled test, exits non-zero correctly, and is
+    self-revalidating (it re-checks the diff content itself rather than
+    trusting a filename filter).
+
+    This CI job runs only after a commit has already merged -- by the
+    time it fires, any destructive command it detects has already
+    executed against the repository. The agent harness that runs the live
+    session exposes a PreToolUse hook that can inspect and block a
+    proposed tool call before it executes; no gate currently uses it for
+    this policy.
+
+    Give me the domain-placement verdict for this policy.
+expected:
+  output_contains:
+    - "well-formed but misplaced"

@@ -1,0 +1,35 @@
+id: evaluating-deterministic-gate-quality-multi-verdict-coexistence
+name: Wrong-domain gate that also fails a deterministic-shape check reports both findings together
+description: The same rm -rf policy from the domain-misplacement fixture, but
+  this time the post-hoc CI scanner is also missing a bundled test -- a
+  distinct deterministic-shape gap (dimension 4) on top of the
+  domain-placement gap. Per SKILL.md, an artifact matching more than one
+  finding at once gets both reported together, not resolved by picking one.
+tags:
+  - quality
+  - verdict-discipline
+inputs:
+  prompt: |
+    Use evaluating-deterministic-gate-quality. Review this gate.
+
+    The policy: "never let a live agent session run `rm -rf` against this
+    repository's own root directory." The implemented gate, read
+    directly from its own script: a CI job step, correctly wired as a
+    required check, that scans every merged commit's diff for evidence
+    a `rm -rf .` (or equivalent) command was executed against the repo
+    root, and fails the build if found. It exits non-zero correctly and
+    is self-revalidating.
+
+    This CI job runs only after a commit has already merged -- any
+    destructive command it detects has already executed by the time it
+    fires. The agent harness exposes a PreToolUse hook that could block
+    the proposed command before it executes; no gate uses it for this
+    policy. Reading the rest of the repository directly, there is also
+    no automated test anywhere exercising this CI job's own detection
+    logic.
+
+    Give me every verdict/finding this gate earns.
+expected:
+  output_contains:
+    - "well-formed but misplaced"
+    - "bundled test"

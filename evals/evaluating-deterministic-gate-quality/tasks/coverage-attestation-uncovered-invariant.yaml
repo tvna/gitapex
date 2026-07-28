@@ -1,0 +1,29 @@
+id: evaluating-deterministic-gate-quality-coverage-attestation-uncovered-invariant
+name: A gate-worthy invariant with zero enforcing mechanism is a fail-closed coverage-attestation finding
+description: The repository's own contributor-instruction file states a fixed,
+  reproducible rule -- "every commit message must cite an open issue number"
+  -- but no git hook, CI job, or MCP-server check anywhere enforces it. The
+  coverage-attestation pass (Procedure step 5) must report this as an
+  explicit, fail-closed finding rather than silently passing it.
+tags:
+  - quality
+  - coverage-attestation
+inputs:
+  prompt: |
+    Use evaluating-deterministic-gate-quality. Do a coverage-attestation
+    pass over this repository's stated invariants.
+
+    The repository's contributor-instruction file states, as a fixed
+    rule: "every commit message must cite an open issue number." This is
+    a fixed, reproducible check -- a commit either does or does not
+    contain an issue-number pattern.
+
+    Reading the rest of the repository directly: there is no commit-msg
+    git hook, no CI job step, and no MCP-server-level check anywhere
+    that verifies this. No mechanism in any of the four domains enforces
+    it.
+
+    Give me the coverage-attestation finding for this invariant.
+expected:
+  output_contains:
+    - "as an explicit, fail-closed finding"

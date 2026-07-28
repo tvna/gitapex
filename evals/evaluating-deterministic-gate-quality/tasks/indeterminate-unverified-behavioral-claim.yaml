@@ -1,0 +1,29 @@
+id: evaluating-deterministic-gate-quality-indeterminate-unverified-behavioral-claim
+name: Unverified fail-closed claim earns indeterminate, not a well-formed verdict
+description: A design doc for an MCP server's tool-call handler asserts it
+  "fails closed" whenever its upstream auth check errors, but no test or
+  live run has ever forced that error path and observed the rejection. A
+  well-formed verdict may not rest on that unverified behavioral claim.
+tags:
+  - quality
+  - live-testing
+inputs:
+  prompt: |
+    Use evaluating-deterministic-gate-quality. Review this gate.
+
+    The policy: "if the upstream auth check errors for any reason, the
+    MCP server's tool-call handler must reject the call (fail closed)
+    rather than letting it through." The design doc for the handler,
+    read directly, states: "On an auth-check error, the handler returns
+    a rejection -- this fails closed by design."
+
+    Reading the rest of the artifact directly: no test exercises the
+    auth-check-error path, no one has forced the upstream auth check to
+    error and observed what the handler actually does, and the handler
+    has never been run against a synthetic auth-error input. The claim
+    rests entirely on the design doc's own prose.
+
+    Give me the verdict for this gate's fail-closed claim.
+expected:
+  output_contains:
+    - "indeterminate"

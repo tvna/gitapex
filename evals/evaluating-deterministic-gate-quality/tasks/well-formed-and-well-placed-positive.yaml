@@ -1,0 +1,42 @@
+id: evaluating-deterministic-gate-quality-well-formed-and-well-placed-positive
+name: Correctly built and correctly placed action-pinning gate earns the clean positive verdict
+description: A CI required check for "every third-party GitHub Action must be
+  pinned to a full commit SHA" satisfies non-bypassable deny, dual-signal
+  deny, self-revalidation, a bundled test, safe subprocess argument passing,
+  and an explicit proportionate timeout. This exercises the positive path so
+  the skill is not graded as reflexively negative.
+tags:
+  - quality
+  - positive
+inputs:
+  prompt: |
+    Use evaluating-deterministic-gate-quality. Review this gate.
+
+    The policy: "every third-party GitHub Action referenced in a workflow
+    file must be pinned to a full commit SHA, never a mutable tag." The
+    implemented gate, read directly from its own script and configuration:
+
+    - A CI job step parses every `.github/workflows/*.yml` file itself
+      (self-revalidation -- it does not trust the triggering event's own
+      changed-files list, it re-reads every workflow file directly) and
+      fails (non-zero exit) if any `uses:` line is not pinned to a
+      40-character commit SHA.
+    - The job is configured as a required status check in branch
+      protection with `enforce_admins: true`, so a red run blocks merge
+      for every actor, including admins; there is no bypass flag.
+    - On failure, the job both fails its own job status (a machine-
+      readable required-check signal) and posts a PR-comment annotation
+      naming the specific offending file and `uses:` line (a human-
+      readable signal on the channel the reviewing human actually reads).
+    - Any file path or action reference the job reads is passed to its
+      parsing library as a function argument, never interpolated into a
+      shell string.
+    - The job has a bundled unit test exercising both the pinned-pass and
+      unpinned-fail cases.
+    - `timeout-minutes: 5` is set explicitly, proportionate to a job that
+      only parses local YAML files with no network call.
+
+    Give me the verdict for this gate.
+expected:
+  output_contains:
+    - "well-formed and well-placed"
