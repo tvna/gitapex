@@ -70,13 +70,18 @@ limits.
    been confirmed to leak the calling repository's `CLAUDE.md` into a
    subagent's context regardless of which paths the dispatch prompt
    references, so an ancestry check alone would have missed it. Consult
-   `evaluating-skill-quality`'s `references/adversarial-self-audit.md`
-   Isolation verification section for the current platform's verified
-   mechanism before dispatching, running its Verification procedure and
-   recording a new entry there if none exists yet. Only that section's own
-   two-part behavioral test (does the dispatched agent's own self-report
-   actually change between a positive- and negative-control location)
-   counts as verification. If the harness offers none of the listed
+   `evaluating-skill-quality`'s own Subagent dispatch section for the
+   current platform's verified mechanism before dispatching -- it carries
+   the isolation-verification mechanics (a live per-platform registry plus
+   a portable two-control verification procedure) this skill defers to
+   rather than re-deriving, the same way
+   `evaluating-deterministic-gate-quality` and `vetting-attack-surface`
+   already do; run its Verification procedure and record a new entry
+   there if none exists yet. Only that
+   procedure's own two-part behavioral test (does the dispatched agent's
+   own self-report actually change between a positive- and
+   negative-control location) counts as verification. If the harness
+   offers none of the listed
    mechanisms, that is itself a blocker -- stop and escalate rather than
    dispatching into a contaminated context. If an operator explicitly
    authorizes proceeding anyway rather than escalating, that authorization
