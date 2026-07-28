@@ -139,25 +139,52 @@ home. This supersedes the body-line placement described in
 - **`spec.references` (optional, gated by Sub-project C):** a list of
   primary-source / corroboration links, commit SHAs, PR numbers --
   maintainer-facing provenance. When present, must be a non-empty list of
-  non-empty strings, each <= 500 characters (the `references-well-formed`
-  check -- tightened by issue #488 after several entries grew to
-  thousands of characters; detail past that budget moves into that
-  skill's own `references/*.md`, left pointed at by a short prose
-  mention); when absent, no finding. Populated for `battle-testing-a-skill`,
+  non-empty strings, each <= 500 characters (`references-well-formed`);
+  when absent, no finding. Populated for `battle-testing-a-skill`,
   `establishing-ubiquitous-language`, `scorer-gated-skill-edits`, and
   `evaluating-skill-quality` -- the four skills `docs/skill-provenance.md`
   covered before Sub-project C retired that central file in favor of this
   per-skill field. The gate is deliberately narrow: only this one field's
-  list shape is parsed; no other nested/list field gained a parser -- the
-  length/citation-format tightening above is a value-level constraint on
-  that same flat `list[str]` shape, not a parser change. Issue #488 also
-  removed the sidecar's prior exemption from the `no-bare-issue-citation`
-  check: a `spec.references` entry (and `spec.lifecycle.experimental`/
-  `deprecated.reason`) may only cite an issue/PR via a full
-  `https://github.com/tvna/gitapex/issues/<N>` (or `/pull/<N>`) URL, never
-  a bare `#N`/`owner/repo#N` -- a bare number loses its meaning once the
-  sidecar travels with its skill directory to another repository, unlike
-  a full URL.
+  list shape is parsed; no other nested/list field gained a parser (issue
+  #488's own tightening, below, is a value-level constraint on that same
+  flat `list[str]` shape, not a parser change -- see the regression test
+  `test_references_mapping_shaped_item_fails_well_formed`, which
+  deliberately rejects turning an entry into a nested mapping).
+
+  Issue #488 tightened this field twice, in direct response to several
+  entries growing to thousands of characters by fusing multiple distinct
+  events (a decision, several audit rounds, a correction) into one string:
+
+  1. **Full-URL citations only** (`no-bare-issue-citation`, no longer
+     exempting the sidecar): an entry (and `spec.lifecycle.experimental`/
+     `deprecated.reason`) may only cite an issue/PR via a full
+     `https://github.com/tvna/gitapex/issues/<N>` (or `/pull/<N>`) URL,
+     never a bare `#N`/`owner/repo#N` -- a bare number loses its meaning
+     once the sidecar travels with its skill directory to another
+     repository, unlike a full URL.
+  2. **A fixed per-entry grammar** (`references-grammar`): each string
+     must be `"<kind> | <anchor> | <summary>[ | <outcome>]"`
+     (`REFERENCES_FIELD_SEP = " | "`, chosen because it occurs in zero
+     pre-existing entries across the corpus this grammar was designed
+     from). `kind` is a closed 7-word vocabulary derived from the
+     recurring entry shapes actually found in that corpus --
+     `decision`/`audit`/`deferral`/`corroboration`/`caveat`/`elision`/
+     `correction` (see `REFERENCES_KIND_VOCAB` in `check_skill_shape.py`).
+     `anchor` is the provenance source (a GitHub URL, an external URL, a
+     repo-relative path, or `method:<skill-name>` for an audit with no
+     dedicated issue); `summary` is the WHAT/WHY; `outcome` is an optional
+     space-separated `key=value` set, common on `audit` entries
+     (`verdict=FAIL found=5 fixed=4`). The grammar is deliberately *not*
+     a second overflow mechanism -- there is no `detail:`-style pointer to
+     a second file. The actual fix for an over-budget entry is to
+     decompose it: one list entry per distinct event, not one fused
+     changelog. Once genuinely atomic, an entry is short by construction.
+     An earlier version of this fix instead split an over-budget entry
+     into a short sidecar summary plus a new `references/gitapex-history.md`
+     holding the full text verbatim -- the repository owner rejected that
+     result (a second file was never intended, and relocating the same
+     fused prose elsewhere is not a real restructure); no such file exists
+     anywhere in this repository as of this fix.
 - **`spec.skillDependencies` (optional, gated by Sub-project D -- see
   section 4.6):** the inter-skill dependency graph, split by strength:
 
@@ -216,7 +243,7 @@ home. This supersedes the body-line placement described in
     portability: Portable
     capabilityAssumption: Broad
     references:
-      - "This skill's own deterministic shape lane is delegated to scripts/check_skill_shape.py (https://github.com/tvna/gitapex/issues/32). Full history: references/gitapex-history.md."
+      - "decision | https://github.com/tvna/gitapex/issues/32 | Delegated this skill's own deterministic shape lane to scripts/check_skill_shape.py; the worked example in references/worked-example-self-review.md documents that delegation."
   ```
 
 - **Behavior-neutrality invariant (hard requirement / stop boundary):**
