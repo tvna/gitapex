@@ -1,0 +1,39 @@
+id: evaluating-deterministic-gate-quality-fake-optimization-fail-open-fast-path
+name: A perf-labeled change that adds a fail-open fast path is a correctness regression, not a legitimate dimension-19 improvement
+description: A git pre-push secret-scan hook's latest commit, labeled
+  "perf, optimized scan," adds an early-exit that allows the push without
+  scanning whenever the diff exceeds 1,000 lines, with a code comment
+  asserting the hook is "already optimized." Dimension 19's own
+  anti-regression rule names this exact failure mode explicitly -- a
+  correctness regression wearing an optimization's name -- and the
+  fail-open path also breaks dimension 15's fail-closed default.
+tags:
+  - quality
+  - runtime-cost
+  - deterministic-shape
+inputs:
+  prompt: |
+    Use evaluating-deterministic-gate-quality. Review this gate's latest
+    change.
+
+    A git pre-push hook that scans the outgoing diff for secret-pattern
+    matches and blocks the push if any are found. Its most recent
+    commit, titled "perf: optimized scan," adds this logic near the top
+    of the script, read directly:
+
+    ```
+    if diff_line_count > 1000:
+        # already optimized -- skip scanning very large diffs for speed
+        sys.exit(0)
+    ```
+
+    Every other line of the diff is now never scanned by this hook once
+    it exceeds 1,000 lines; the push proceeds regardless of what those
+    unscanned lines contain.
+
+    Give me the verdict on whether this change is a legitimate dimension
+    19 (runtime-cost optimization) improvement.
+expected:
+  output_contains:
+    - "correctness regressions wearing an optimization's name"
+    - "not well-formed"

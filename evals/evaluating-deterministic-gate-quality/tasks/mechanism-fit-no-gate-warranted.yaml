@@ -1,0 +1,25 @@
+id: evaluating-deterministic-gate-quality-mechanism-fit-no-gate-warranted
+name: Judgment-only PR-description policy proposed as a gate must stop at no-gate-warranted
+description: A proposed CI check greps PR body text for the literal substring
+  "trade-off" to enforce "PR descriptions must clearly explain trade-offs to
+  the reviewer." Whether a description actually explains trade-offs well is a
+  judgment call, not a fixed reproducible decision, so the Gate vs. no gate
+  question must conclude no-gate-warranted and skip the axes, three-way
+  division, and coverage attestation for this policy.
+tags:
+  - quality
+  - mechanism-fit
+inputs:
+  prompt: |
+    Use evaluating-deterministic-gate-quality. Review this proposed policy.
+
+    A maintainer wants to enforce: "Every pull request description must
+    clearly explain the trade-offs of the change to the reviewer." The
+    proposed CI job step, read directly from its own script: it fetches
+    the PR body text and fails the job if the literal substring
+    "trade-off" (case-insensitive) does not appear anywhere in it.
+
+    Give me the mechanism-fit verdict for this policy.
+expected:
+  output_contains:
+    - "no-gate-warranted"

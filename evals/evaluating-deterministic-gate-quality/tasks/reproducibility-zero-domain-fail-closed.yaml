@@ -1,0 +1,31 @@
+id: evaluating-deterministic-gate-quality-reproducibility-zero-domain-fail-closed
+name: A gate-worthy invariant realized in zero domains is a fail-closed Reproducibility finding
+description: A fixed, reproducible policy ("a force-push to the default branch
+  must never be possible for any actor") is stated only in prose, in none of
+  the four realization domains. The Reproducibility / Domain-coverage axis
+  must report the zero-domain case as a fail-closed finding in its own
+  right, not an absence of a finding.
+tags:
+  - quality
+  - reproducibility
+inputs:
+  prompt: |
+    Use evaluating-deterministic-gate-quality. Apply the Reproducibility /
+    Domain-coverage axis to this invariant.
+
+    The repository's own contributor-instruction file states, as a fixed
+    rule: "a force-push to the default branch must never be possible for
+    any actor." This reproduces the same decision every time (a force-
+    push either occurred or did not) -- clearly gate material.
+
+    Reading the rest of the repository directly: there is no branch-
+    protection rule blocking force-pushes to the default branch, no git
+    hook, no CI job step, and no MCP-server-level check anywhere
+    realizing this policy. It is stated in prose only, in none of the
+    four domains.
+
+    Give me the Reproducibility / Domain-coverage finding for this
+    invariant.
+expected:
+  output_contains:
+    - "fail-closed finding in its own right"

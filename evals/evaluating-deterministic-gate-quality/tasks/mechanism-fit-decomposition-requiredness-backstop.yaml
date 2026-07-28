@@ -1,0 +1,35 @@
+id: evaluating-deterministic-gate-quality-mechanism-fit-decomposition-requiredness-backstop
+name: A no-gate verdict for the judgmental half of a policy must not license removing its deterministic requiredness backstop
+description: A maintainer proposes deleting the branch-protection
+  required-reviewers rule backing "a production deployment requires an
+  independent approval," arguing the whole policy is a judgment call
+  (whether a specific deployment should have been approved is indeed
+  judgment) and therefore no-gate-warranted. Mechanism-fit's own
+  decomposition rule requires splitting this into a deterministic fact
+  (was an approval recorded at all) and a judgmental one (should it have
+  been); the deterministic requiredness backstop must not be removed.
+tags:
+  - quality
+  - mechanism-fit
+inputs:
+  prompt: |
+    Use evaluating-deterministic-gate-quality. Review this proposed
+    change.
+
+    The current policy: "a production deployment requires an independent
+    approval," backed today by a branch-protection required-reviewers
+    rule on the deployment branch -- the rule blocks a merge to that
+    branch unless at least one reviewer distinct from the author has
+    approved it.
+
+    A maintainer proposes removing that required-reviewers rule
+    entirely, arguing: "whether a deployment *should* have been approved
+    is a judgment call about the specific change's risk -- that's not
+    gate material, so the whole approval-required policy is
+    no-gate-warranted and the branch-protection rule should come out."
+
+    Give me the mechanism-fit verdict on this proposal.
+expected:
+  output_contains:
+    - "a deterministic part and a judgmental part"
+    - "requiredness backstop"

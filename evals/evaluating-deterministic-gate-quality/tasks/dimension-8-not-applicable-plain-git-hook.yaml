@@ -1,0 +1,30 @@
+id: evaluating-deterministic-gate-quality-dimension-8-not-applicable-plain-git-hook
+name: Dimension 8 is graded not-applicable, not silently skipped, for a domain with no model-mediated variant
+description: A plain bash pre-commit git hook rejecting commits that touch
+  vendor/ has no possible model-mediated (LLM-judged) implementation variant
+  at all -- a domain-1 git hook subprocess is a pure deterministic-script
+  domain by construction. Dimension 8 must be graded not-applicable here,
+  explicitly, rather than silently omitted from the review.
+tags:
+  - quality
+  - deterministic-shape
+  - applicability
+inputs:
+  prompt: |
+    Use evaluating-deterministic-gate-quality. Review this gate, with
+    particular attention to dimension 8 (implementation-mechanism fit:
+    deterministic script vs. model-judged step).
+
+    A git pre-commit hook, read directly from its own script: a plain
+    bash script that checks whether any staged file path starts with
+    `vendor/` and exits non-zero, blocking the commit, if so. It is a
+    single conditional over `git diff --cached --name-only` output --
+    nothing about this hook's own invocation mechanism offers any
+    model-mediated (LLM-judged) alternative implementation path; a git
+    hook subprocess in this repository is always a plain script.
+
+    Give me the dimension 8 finding for this gate specifically.
+expected:
+  output_contains:
+    - "no model-mediated variant"
+    - "graded as not-applicable"

@@ -1,0 +1,39 @@
+id: evaluating-deterministic-gate-quality-compatibility-awareness-warning-only
+name: Undocumented exit-code divergence across agent runtimes is a Compatibility-awareness finding that never overrides the verdict
+description: An agent-harness PreToolUse hook is otherwise well-built (self-
+  revalidating, exec-form subprocess args, bundled test, explicit timeout)
+  and signals deny via exit code 2. Under the primary agent runtime it was
+  tested against, exit code 2 blocks the tool call; under a second runtime
+  the same team also deploys it to, exit code 2 is treated as a generic
+  non-zero and silently degrades to a non-blocking warning -- undocumented
+  anywhere. This exercises the Compatibility-awareness axis, which is
+  warning-only and must never itself change the verdict.
+tags:
+  - quality
+  - compatibility-awareness
+inputs:
+  prompt: |
+    Use evaluating-deterministic-gate-quality. Review this gate.
+
+    An agent-harness PreToolUse hook, read directly from its own script:
+    it re-parses the proposed tool call's own command string itself
+    (self-revalidation), invokes its subprocess via an exec-form
+    argument array (no shell interpolation), has a bundled test, sets an
+    explicit proportionate timeout, and signals deny by exiting with
+    code 2 plus a structured JSON field on stdout.
+
+    Reading the rest of the setup directly: under "Runtime A," the agent
+    harness this team primarily developed against, exit code 2 is a
+    recognized hard-deny signal that blocks the tool call. This same
+    hook is also deployed for "Runtime B," a second agent harness the
+    same team runs in production -- but Runtime B treats any non-zero
+    exit code generically and only logs a warning, never blocking the
+    call. Neither the hook's own script nor any doc mentions this
+    difference.
+
+    Give me the Compatibility-awareness finding and the overall verdict
+    for this gate.
+expected:
+  output_contains:
+    - "Compatibility awareness"
+    - "never change a verdict solely because of this axis"

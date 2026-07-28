@@ -1,0 +1,28 @@
+id: evaluating-deterministic-gate-quality-not-well-formed-unsafe-shell-interpolation
+name: Untrusted branch name string-concatenated into a shell command fails dimension 5
+description: An agent-harness PreToolUse hook takes an untrusted tool-call
+  argument (a branch name that could contain attacker-controlled shell
+  metacharacters) and interpolates it directly into a shell command string
+  via string concatenation, instead of a parameterized/exec-form invocation.
+  This is dimension 5's exact failure mode.
+tags:
+  - quality
+  - deterministic-shape
+  - security
+inputs:
+  prompt: |
+    Use evaluating-deterministic-gate-quality. Review this gate.
+
+    An agent-harness PreToolUse hook, read directly from its own script:
+    it receives the proposed tool call's `branch_name` argument -- an
+    untrusted value that could come from an attacker-controlled PR title
+    or branch name -- and runs it via
+    `subprocess.run(f"git branch {branch_name}", shell=True)`, string-
+    concatenating the value directly into the shell command rather than
+    passing it as a parameterized argument array.
+
+    Give me the verdict for dimension 5 on this gate.
+expected:
+  output_contains:
+    - "not well-formed"
+    - "interpolated unsafely into a shell/command string"

@@ -1,0 +1,31 @@
+id: evaluating-deterministic-gate-quality-coverage-attestation-soft-wording-filter
+name: A softly worded invariant is not thereby proven a judgment call -- filter by subject matter, not surface wording
+description: The contributor-instruction file's only secret-handling
+  invariant reads "use good judgment about secrets in commits" -- softly
+  phrased, but secret handling has a precedented deterministic mechanism
+  (secret-scanning tooling) and no hook, CI step, or MCP check anywhere
+  actually scans for secrets. Coverage attestation must filter this
+  invariant in by subject matter rather than filtering it out because of
+  its soft wording, and report it as an explicit, fail-closed finding.
+tags:
+  - quality
+  - coverage-attestation
+inputs:
+  prompt: |
+    Use evaluating-deterministic-gate-quality. Do a coverage-attestation
+    pass over this repository's stated invariants.
+
+    The repository's contributor-instruction file states, as its only
+    secret-handling guidance: "use good judgment about secrets in
+    commits."
+
+    Reading the rest of the repository directly: there is no git hook,
+    no CI job step, and no MCP-server-level check anywhere that scans
+    for secret-pattern matches in a commit or diff. No mechanism in any
+    of the four domains realizes secret detection.
+
+    Give me the coverage-attestation finding for this invariant.
+expected:
+  output_contains:
+    - "subject matter, not surface wording"
+    - "as an explicit, fail-closed finding"

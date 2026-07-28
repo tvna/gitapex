@@ -1,0 +1,33 @@
+id: evaluating-deterministic-gate-quality-not-well-formed-single-signal-deny
+name: Required CI check whose failure reason is invisible to the reviewer fails Dual-signal deny
+description: A CI job is correctly wired as a non-bypassable required check
+  (dimension 1 is satisfied), but the specific reason it failed is written
+  only to an internal log store the PR author cannot access -- the human
+  reviewer who must act on the failure sees only a bare "Checks failed" with
+  no further detail. This is a Dual-signal deny (dimension 2) gap distinct
+  from dimension 1, since the hard gate itself blocks correctly.
+tags:
+  - quality
+  - deterministic-shape
+inputs:
+  prompt: |
+    Use evaluating-deterministic-gate-quality. Review this gate.
+
+    The policy: "every third-party GitHub Action must be pinned to a full
+    commit SHA." The implemented gate: a CI job step that fails (non-zero
+    exit) when it finds an unpinned action, and is correctly configured as
+    a required branch-protection check with no bypass flag -- a red run
+    blocks merge for every actor.
+
+    Reading the rest of the setup directly: the specific offending file
+    and `uses:` line are written only to the job's internal log storage,
+    which requires elevated CI-admin access to view. The PR's own Checks
+    tab and every bot comment show only the bare text "Checks failed" --
+    the PR author, who has PR-read access but not CI-admin access, cannot
+    see why it failed or what to fix.
+
+    Give me the verdict for dimension 2 (Dual-signal deny) on this gate.
+expected:
+  output_contains:
+    - "not well-formed"
+    - "Dual-signal deny"

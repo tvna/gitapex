@@ -1,0 +1,35 @@
+id: evaluating-deterministic-gate-quality-security-level-tier-honesty
+name: A control that skips fork-triggered PRs is Documented, not enforced against its own Enterprise ceiling
+description: The repository's own tier/ceiling documentation establishes an
+  Enterprise-tier requirement for this control category, but the actual gate
+  is configured to skip entirely on fork-triggered PRs, so it does not
+  actually reach that tier. The Security-level axis must reuse the target's
+  own established ceiling (never re-derive one) and tag this honestly as
+  Documented, not enforced -- not Enforced today, and not Not achievable.
+tags:
+  - quality
+  - security-level
+inputs:
+  prompt: |
+    Use evaluating-deterministic-gate-quality. Apply the Security-level /
+    Zero-Trust maturity classification axis to this gate.
+
+    This repository's own `docs/zero-trust-tiers.md` establishes a
+    Foundation/Enterprise/Advanced capability-tier ladder and states this
+    control's category is currently held to an Enterprise-tier ceiling.
+
+    The gate itself, read directly: a CI job step that fails a build if
+    a secret-pattern match is found in the diff. It runs today, fails
+    the build reliably, and is a required check -- but reading the
+    Enterprise-tier definition in `docs/zero-trust-tiers.md` directly,
+    Enterprise tier for this category also requires the check to run
+    identically against a fork-triggered PR's own code, not only against
+    same-repository pushes; this gate is configured to skip entirely on
+    fork-triggered PRs (its workflow trigger is `push` only, no
+    `pull_request` trigger at all).
+
+    Give me the honesty-vocabulary tag for this control against its own
+    repository's established Enterprise ceiling.
+expected:
+  output_contains:
+    - "Documented, not enforced"
