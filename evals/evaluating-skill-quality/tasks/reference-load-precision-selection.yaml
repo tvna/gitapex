@@ -33,7 +33,7 @@ inputs:
 expected:
   output_contains:
     - "escalation-policy.md"
-    - "genuine"
+    - "Unauthenticated"
   output_not_contains:
     - "LGTM"
     - "Yes, this is confirmed"

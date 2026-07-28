@@ -2146,3 +2146,91 @@ recorded, though still short of full 21/21 coverage and still short of
 the actually-configured `copilot-sdk`/`claude-sonnet-4.6` harness. Both
 residual gaps are disclosed, not hidden, per this session's PR #481
 review-comment replies to `chatgpt-codex-connector[bot]`.
+
+**Multi-agent re-examination of the trace-authenticity disclosure
+(operator-directed, PR #481 comment thread).** The "no comparable
+mechanism exists" sentence from the second confirming round above was
+never actually pressure-tested -- both dogfood rounds agreed on it and
+the session accepted it as a settled honest limitation. Per the
+operator's explicit request, a dedicated `Workflow` run (four independent
+`fable`-model research agents on distinct angles, a `fable` synthesis
+pass, and a `fable` adversarial-verification pass against the synthesis's
+own conclusion) was dispatched specifically to check whether that was
+actually true or just insufficiently hard thinking.
+
+**Result: the category claim was false.** All four research angles
+independently converged on the same real, usable-today mechanism:
+author-uncontrolled channel provenance with content binding (retrieve the
+trace by run/artifact identifier from execution infrastructure the
+artifact's author does not control at presentation time -- a CI artifact
+store via the platform's own API, or a telemetry collector, such as
+Claude Code's own OTEL `tool_result` export, custodied outside anything
+the run could write to -- then bind content by diffing the recorded
+commit against the content under review). This is the "trusted registry
+path" half of `adversarial-self-audit.md`'s already-accepted install-time
+provenance comparator, transferred to trace authenticity; only the
+"checksum against a known-good digest" half genuinely has no trace
+equivalent, since a fresh transcript has no prior digest to compare
+against.
+
+**The synthesis's first-pass fix was still wrong, and the adversarial
+pass caught it before it landed.** The synthesis claimed this
+channel-based mechanism has "the same residual anchor" as the install-time
+comparator. The adversarial-verification pass found this false via a
+concrete attack: for a target repository the artifact's *own author*
+controls (the rubric's named adversary includes "a skill under review,"
+not only injected content), the author can point the harness's
+model-endpoint secret at a replay server -- the harness genuinely runs,
+the workflow identity genuinely matches, the content-binding diff
+genuinely passes, and the trace is still fabricated in substance, because
+the endpoint itself is the unaudited surface the diff never checks. Landing
+the unscoped fix would have replaced an honest disclosed gap with a false
+security claim -- the same overclaim class this repository's own history
+already caught once (issue #164's unconditional-hooks-claim
+overcorrection).
+
+**Applied fix.** `references/rubric.md`'s authenticity paragraph was
+rewritten to a three-state disposition (Channel-authenticated, scoped /
+Consistency-checked only / Unauthenticated), incorporating the
+adversarial pass's three required amendments verbatim: state 1 explicitly
+degrades to state 2 by default when the artifact's own author controls
+the target repository's infrastructure and secrets, restorable only by
+the reviewer dispatching the run itself against a reviewer-verified
+endpoint; the content-binding diff covers the *entire tree* at the
+recorded commit, not skill files alone; and the "provisioning secrets +
+artifact upload operationalizes this for gitapex" caveat is corrected to
+apply only to third-party contributions -- self-review always stays in
+the weaker consistency-checked state regardless of what infrastructure is
+provisioned. The unchanged, still-honest fallback paragraph ("no
+trace-capable mechanism exists in this repository") continues to govern
+gitapex's own fixtures today, since this repository's own eval suite still
+has no trace-producing mechanism at all (`copilot-sdk` unreachable in this
+environment). The three-state framework is forward-looking: it gives a
+future target repository with real CI/telemetry infrastructure a genuine
+path to authenticated classification, rather than leaving every target
+permanently at "disclosure obligation, not a guarantee."
+
+**Live check result.** One fresh dispatch (Sonnet 5) re-ran
+`reference-load-precision-selection.yaml`'s scenario against the revised
+text. It correctly walked all three states in order (channel-
+authenticated -- not met, no channel; consistency-checked -- not met, no
+trace file to run anchors against; **Unauthenticated -- applicable**,
+citing the rubric's own "a bare hand-typed recollection with no
+underlying file at all" clause verbatim) and correctly refused to confirm
+the claim. This surfaced one real, minor fixture-staleness bug: the
+fixture's original `output_contains: ["genuine"]` assertion no longer
+reliably fires, because the revised three-state text uses "authenticated"
+/"Unauthenticated" as its primary vocabulary rather than the bare word
+"genuine" the first-pass paragraph used (the dispatch scored 0.8/1.0 --
+the phrase never appeared, though the substance was fully correct).
+Fixed: swapped the assertion to `"Unauthenticated"`, confirmed present in
+the same transcript, re-scored **1.0/1.0**. A full before/after
+selection-split re-run was not planned for this round, given the scale of
+live verification already run in this same PR (the original gate, two
+confirming dogfood rounds, and the 13-fixture regression sweep above) --
+disclosed as a scoped, not exhaustive, check for this specific
+amendment.
+
+Full four-agent research trail, synthesis, and adversarial verification:
+PR #481's comment thread (the multi-agent Workflow run this entry
+summarizes).

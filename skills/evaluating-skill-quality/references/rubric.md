@@ -1361,17 +1361,68 @@ fabricate a clean transcript specifically to manufacture a pass here, the
 same authenticity risk this skill's own Tool-capability verification and
 adversarial-self-audit disciplines already name for other install-time and
 runtime artifacts; accepting a presented trace at face value is itself a
-finding, not a formality to wave through. **State plainly that this is a
-disclosure obligation, not a deterministic guarantee**: unlike install-time
-provenance, where a checksum, a signed release, or a trusted registry path
-gives an actual verification method, no comparable mechanism for
-authenticating a session transcript's provenance exists in this repository
-today. A determined fabrication can still evade a reviewer who does not
-independently trigger the run. Naming that limitation is itself required,
-the same way a safety-critical prose-only rule elsewhere in this rubric
-must say so rather than imply deterministic backing it does not have --
-see Mechanism fit's "Skill vs. hook" reasoning, applied here to this
-sub-check's own limits rather than to the reviewed target's.
+finding, not a formality to wave through. **The install-time comparator
+transfers in half.** A checksum or signed release (content-addressing
+against a known-good digest) has no trace equivalent -- a fresh transcript
+has no prior known-good digest to compare against -- but the trusted-
+registry-path half (authenticity from the retrieval channel, not the
+presented bytes) transfers, with a narrower defense than the comparator's
+own. Apply this as a three-state disposition, naming which state holds:
+
+1. **Channel-authenticated, scoped.** Accept a trace as genuine only when
+   retrieved by run or artifact identifier from execution infrastructure
+   the artifact's author does not control at presentation time -- a CI
+   artifact store resolved through the platform's own API, or a telemetry
+   collector custodied outside anything the run could write to -- never as
+   bytes handed over in-band, and only after binding content: confirm the
+   run executed the stated harness definition; that the *entire tree* at
+   the run's recorded commit, not the skill files alone, is identical to
+   the content under review; and that the harness itself checksums against
+   its own upstream release, not merely that the workflow definition
+   matches the target's default branch. This state's defense is scoped,
+   not general: it authenticates against fabrication by the reviewed
+   content, or by an author who does not control the executing
+   infrastructure's configuration and secrets. Where the artifact's own
+   author controls the target repository, this state degrades to state 2
+   by default -- a hostile owner can point a harness's model-endpoint
+   secret at a replay server and produce a genuine-harness, semantically-
+   fabricated trace that a content-binding diff alone cannot catch, since
+   the endpoint itself is the unaudited surface. Restoring state 1 for an
+   author-controlled target requires the reviewer to additionally dispatch
+   the run itself against a reviewer-verified endpoint, not merely observe
+   the channel.
+2. **Consistency-checked only.** Where state 1's channel, or its
+   additional author-controlled-target conditions, are not met, run these
+   deterministic anchors before any classification: every claimed
+   reference read names a path that exists at the stated commit; every
+   excerpt the trace shows being read byte-matches that file at that
+   commit; identifiers, ordering, and timestamps are internally
+   consistent; and repeated trials are not byte-identical, since genuine
+   repeated sampled runs vary. Any mismatch is a screening flag and this
+   sub-check goes Indeterminate, never silently classified. Passing every
+   anchor is tamper-evidence that raises fabrication cost, not
+   authentication -- a fabricator with full repo-state access can satisfy
+   every one, and this is the default state for a self-reviewed target
+   even when a CI channel and artifact upload are both provisioned for it.
+3. **Unauthenticated.** Where neither state applies -- including a bare
+   hand-typed recollection with no underlying file at all -- classify
+   every conclusion drawn from that trace as resting on an unauthenticated
+   trace, and say so in the verdict.
+
+Where the stated eval mechanism is runnable from the reviewing
+environment, a spot re-execution of at least one trial the presented trace
+covers strengthens any state: compare read/no-read patterns across trials
+against the presented trace, treating only distribution-level divergence
+as a fabrication flag -- single-trial divergence is expected run variance,
+not proof. **None of this is a deterministic guarantee even at its
+strongest**: state 1 defends a bounded threat model, not a hostile channel
+operator or a hostile target-repo owner controlling its own harness
+secrets, and states 2 and 3 remain disclosure obligations. Naming that
+residual limitation is itself required, the same way a safety-critical
+prose-only rule elsewhere in this rubric must say so rather than imply
+deterministic backing it does not have -- see Mechanism fit's "Skill vs.
+hook" reasoning, applied here to this sub-check's own limits rather than
+to the reviewed target's.
 
 **Where no trace-capable mechanism exists, name that explicitly as
 unmeasured -- but only after affirmatively confirming its absence, not by
