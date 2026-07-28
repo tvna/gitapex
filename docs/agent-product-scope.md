@@ -113,12 +113,12 @@ Actions, `apm.lock.yaml` pins both of GitApex's own apm dependencies to
 `host: github.com`, and `CONTRIBUTING.md`'s signed-commit-bot mechanism
 is a GitHub App + GraphQL `createCommitOnBranch` construct with no
 GitLab equivalent. GitHub and GitLab are both supported at the
-skill-portability level by `skills/git-hosting-surface-audit/`, which
+skill-portability level by `skills/auditing-git-hosting-surface/`, which
 audits either platform's hosting-configuration surface when a skill
 copy is used against a target repository -- Gitea and Bitbucket are not
 mentioned anywhere in this repository.
 
-**Owning skill:** `skills/git-hosting-surface-audit/` (gitapex#82).
+**Owning skill:** `skills/auditing-git-hosting-surface/` (gitapex#82).
 
 **Boundary:** this axis does not duplicate that skill's checklists or
 platform-detection logic -- it only names the axis and points to the

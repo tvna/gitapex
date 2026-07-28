@@ -1,9 +1,9 @@
 ---
-name: git-hosting-surface-audit
+name: auditing-git-hosting-surface
 description: Use when auditing a GitHub or GitLab repository's hosting-platform configuration surface -- branch protection, required reviews/checks, Actions/CI permissions, unpinned third-party actions, webhook inventory, deploy-key inventory, token scopes, secret-scanning status. Detects platform from git remote (with a directory-marker fallback), loads exactly one platform's checklist reference, and reports each item's real tool coverage (Covered/Partial/Gap) instead of a false all-green summary. Gap items cross-link this repository's own tracking issue for approved-but-unbuilt tooling.
 ---
 
-# Git Hosting Surface Audit
+# Auditing Git Hosting Surface
 
 The procedure, the coverage-honesty rule, and both platform checklists
 work identically no matter which GitHub/GitLab repo is being *audited*.

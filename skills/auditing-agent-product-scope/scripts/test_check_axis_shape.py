@@ -4,7 +4,7 @@ Fixtures are synthesized in-memory (no repository file is read) so the
 test is self-contained and travels with the skill on vendoring. Not
 wired into the root pyproject.toml testpaths -- this skill's checklist
 item is meant to stand alone (same approach as
-git-hosting-surface-audit/scripts/test_scan_unpinned_actions.py); run
+auditing-git-hosting-surface/scripts/test_scan_unpinned_actions.py); run
 directly with:
     python3 -m pytest skills/auditing-agent-product-scope/scripts/
 
