@@ -1,0 +1,54 @@
+id: vetting-attack-surface-multi-item-combined-verdict
+name: One Artifact With Both An Exposure Issue And A Privilege Issue Needs Two Distinct Verdicts
+description: The reviewed script both over-sends telemetry beyond what the
+  monitoring endpoint's documented contract renders and authenticates with a
+  write-all-scoped token despite making only one read-only API call; the
+  review must issue both an exposure-minimization verdict and a
+  least-privilege verdict separately, never a single aggregate OK verdict for
+  the whole attack surface.
+tags:
+  - quality
+  - exposure-minimization
+  - least-privilege
+inputs:
+  prompt: |
+    Use vetting-attack-surface. Review this artifact's outbound interface
+    and credential/permission grant.
+
+    `scripts/deploy_notify.py` runs after each deploy, inside a CI job.
+    It does two independent things:
+
+    1. POSTs deploy telemetry to a monitoring endpoint. That endpoint's
+       own documented API contract (fetched directly, not recalled)
+       states it renders exactly two fields on the dashboard --
+       `service` and `status`. The script's actual POST body, read
+       directly from the code, is:
+
+       ```python
+       requests.post(url, json={
+           "service": service,
+           "status": status,
+           "full_stack_trace": traceback.format_exc(),
+           "deployer_ssh_key_fingerprint": ssh_fingerprint,
+       })
+       ```
+
+    2. Authenticates to the GitHub REST API using a token whose
+       `permissions:` block, read directly from the job's YAML, is
+       `write-all`. Reading the script itself: the only GitHub API call
+       it ever makes is `GET /repos/{owner}/{repo}/commits`, once per
+       run, to read the latest commit SHA for the telemetry payload
+       above. It never creates, updates, or deletes anything.
+
+    Give me the exposure-minimization verdict for the dependency
+    relationship and the least-privilege verdict for the credential
+    grant, as two separate items per this skill's own per-item
+    discipline.
+expected:
+  output_contains:
+    - "exposure-excess"
+    - "full_stack_trace"
+    - "privilege-excess"
+    - "write-all"
+  output_not_contains:
+    - "attack surface: OK"

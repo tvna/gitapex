@@ -21,7 +21,8 @@ copied from the report's own text.
 3. [Worked example: dimension 12 and sibling-repository provenance](#worked-example-dimension-12-deployment-mode-portability-and-sibling-repository-provenance)
 4. [Smoke test: this skill applied to a real Domain-2 gate](#smoke-test-this-skill-applied-to-a-real-domain-2-gate)
 5. [Worked example: Security-level / Zero-Trust maturity classification axis](#worked-example-security-level--zero-trust-maturity-classification-axis-this-repositorys-own-established-ceiling)
-6. [Audit history: Security-level axis hardening round](#audit-history-security-level-axis-hardening-round)
+6. [Worked example: dimension 19 (runtime-cost optimization) applied to the same Domain-2 gate pair](#worked-example-dimension-19-runtime-cost-optimization-applied-to-the-same-domain-2-gate-pair)
+7. [Audit history: Security-level axis hardening round](#audit-history-security-level-axis-hardening-round)
 
 ## Worked example: Reproducibility / Domain-coverage axis (argued, multi-domain coverage)
 
@@ -305,6 +306,113 @@ exit-2 deny signal is used on the well-formed path) -- but a live-tested
 floor violation disqualifies a gate from any tier, it does not cap it at
 one. No Enterprise/Advanced-tier escalation exists or is claimed either
 way.
+
+## Worked example: dimension 19 (runtime-cost optimization) applied to the same Domain-2 gate pair
+
+Reuses -- does not re-derive -- the same smoke-test target already graded
+above: `hooks/check-issue-acm-disclosure.sh` + `hooks/check_acm_present_or_waiver.py`
+(Domain 2, registered in `hooks/hooks.json:26-32` under the
+`mcp__github__issue_write` matcher with a 10-second `timeout`). This is a
+live-measured pass, not an assumed one.
+
+**What the gate actually does per invocation, by path** (confirmed by
+direct reading of both files, not assumed from their names): one `cat` of
+stdin, then three sequential `jq -r` field extractions
+(`hooks/check-issue-acm-disclosure.sh:28,36,42` -- `tool_name`, `method`,
+`body`, each gated behind the previous field's own early-exit check), then
+one `python3` cold start running `check_acm_present_or_waiver.py` (two
+`re.compile` calls, one `re.search` each, no network I/O, no filesystem
+scan beyond the sibling script's own existence check). That is the **allow
+path**: 1 `cat` + 3 `jq` processes + 1 `python3` process, 5 subprocess
+launches total (the `cat` in `input=$(cat)` at line 26 is itself an
+external-command fork, not a shell builtin -- omitting it from the total
+was this worked example's own earlier arithmetic error, caught by an
+isolated re-audit rather than left standing). The **deny path** (line 42's
+body fails the Python check) launches one more: `deny()`'s own `jq -n`
+call at line 49, to build the `hookSpecificOutput` JSON written to stderr
+-- 1 `cat` + 4 `jq` processes + 1 `python3` process, 6 subprocess launches
+total. The two paths are not process-count-identical; deny costs one more
+fork than allow.
+
+**Live measurement, five consecutive runs against a passing (waiver-line)
+synthetic `mcp__github__issue_write` payload**, run directly against the
+real script with bash's own `time` builtin (copy-pasteable and reproducible
+as written; substitute a different repository checkout's own path if
+re-running elsewhere):
+
+```
+$ payload='{"tool_name":"mcp__github__issue_write","tool_input":{"method":"create","body":"ACM: not-applicable (docs): example"}}'
+$ for i in 1 2 3 4 5; do
+    echo "$payload" | { time bash hooks/check-issue-acm-disclosure.sh > /dev/null; } 2>&1 | sed "s/^/run $i: /"
+  done
+run 1:
+run 1: real	0m0.066s
+run 1: user	0m0.053s
+run 1: sys	0m0.016s
+run 2:
+run 2: real	0m0.043s
+run 2: user	0m0.031s
+run 2: sys	0m0.014s
+run 3:
+run 3: real	0m0.043s
+run 3: user	0m0.032s
+run 3: sys	0m0.013s
+run 4:
+run 4: real	0m0.051s
+run 4: user	0m0.037s
+run 4: sys	0m0.015s
+run 5:
+run 5: real	0m0.038s
+run 5: user	0m0.034s
+run 5: sys	0m0.006s
+```
+
+Run 1 (0.066s) is consistently the slowest across repeated trials of this
+same measurement, ahead of runs 2-5 (0.038-0.051s) -- an ordinary
+first-invocation cold-start effect (disk-cache/page-cache warmup for the
+`bash`/`jq`/`python3` binaries themselves), not a defect in the gate and
+not cherry-picked away: all five raw runs are reported above rather than
+only the fastest ones. A separate run against a failing (no-ACM) body
+measured `real 0m0.062s`, `exit=2` -- within the same noise band as the
+allow-path runs above at this timing resolution, even though the deny path
+launches one more subprocess (6 vs. 5, per the process count above); the
+extra `jq -n` fork is too cheap to separate from run-to-run variance at
+this measurement precision, which is itself worth stating plainly rather
+than rounding up to "identical."
+
+**Verdict: PASS against the registered budget, with a named minor gap
+against this dimension's own bar.** Measured cost (~38-66ms wall across
+five runs, including the slower first invocation) is roughly 150-260x
+under the registered 10s budget (dimension 6's own concern, not restated
+here) -- comfortably PASS on that axis. But this dimension asks a stricter
+question than "is it fast enough," and a strict read finds a real, if
+minor, instance of avoidable overhead this worked example's first draft
+missed: the three sequential `jq -r` calls on the allow path (and the
+matching three plus a fourth on the deny path) each parse the *same*
+already-buffered `$input` string independently, forking a fresh `jq`
+process per field, when a single `jq -r` invocation extracting
+`tool_name`, `tool_input.method`, and `tool_input.body` together (e.g. as
+tab-separated output) would collapse 3 of those 5 (or 4 of those 6)
+process launches into 1 -- real, avoidable, process-fork overhead by this
+dimension's own letter, not merely a cost that is already at the floor.
+Applying this dimension's own guard before crediting that as a fix: the
+current staged structure exits early on `tool_name`/`method` mismatches
+before ever touching `body`, which a single upfront extraction would
+partly forfeit -- collapsing to one call is not risk-free by construction
+and would need to preserve the same early-exit behavior, not just be
+assumed cost-free. **Net assessment:** a genuine minor optimization
+opportunity exists and should not have been reported as absent, but its
+absolute impact (a small fraction of the measured ~40-65ms, itself
+~150-260x under budget) does not change this gate's overall placement
+verdict -- named as a low-priority finding, not a blocking one, per this
+dimension's own "grade only a change that holds ... behavior fixed while
+reducing its cost" guard, which cuts both ways: a real gap is still worth
+naming even when fixing it would not matter much, and a candidate fix is
+not free of risk just because the process savings are cheap to state.
+Every claim above is confirmed by direct reading of both files (quoted
+above) and by the live measurements, never accepted from either script's
+own header comment alone, per this dimension's own verification-mandate
+clause.
 
 ## Audit history: Security-level axis hardening round
 

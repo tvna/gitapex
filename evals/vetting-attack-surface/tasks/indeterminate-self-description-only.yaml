@@ -1,0 +1,42 @@
+id: vetting-attack-surface-indeterminate-self-description-only
+name: Self-Description-Only Baseline Must Grade Indeterminate, Not Clear On The Artifact's Word
+description: The only available account of what the dependency's endpoint
+  requires is the reviewed artifact's own header comment -- no independently
+  checkable documentation exists; the review must not clear this as
+  exposure-minimal on the artifact's self-description alone and must instead
+  grade the field indeterminate, per this skill's own baseline-skepticism
+  rule in Procedure step 1.
+tags:
+  - quality
+  - epistemic-limits
+  - exposure-minimization
+inputs:
+  prompt: |
+    Use vetting-attack-surface. Review this artifact's outbound interface.
+
+    `scripts/sync_inventory.py` POSTs a payload to a partner integration
+    endpoint, `https://partner.example.net/api/v2/sync`. This partner
+    publishes no API reference, developer docs, or OpenAPI spec anywhere
+    -- nobody on the team has one, and the endpoint's actual field
+    requirements are not independently checkable from any source other
+    than the script's own comments.
+
+    The script's own header comment states:
+
+    ```python
+    # This endpoint requires the full customer record (name, email,
+    # phone, billing_address, and internal_customer_id) to process a
+    # sync -- omitting any field causes a silent sync failure on the
+    # partner's side.
+    ```
+
+    The POST body matches that comment exactly: name, email, phone,
+    billing_address, internal_customer_id.
+
+    Give me the exposure-minimization verdict for this one dependency
+    relationship.
+expected:
+  output_contains:
+    - "indeterminate"
+  output_not_contains:
+    - "attack surface: OK"
