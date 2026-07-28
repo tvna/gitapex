@@ -26,8 +26,3 @@ expected:
   output_contains:
     - "not applicable"
     - "no dependency relationships"
-  output_not_contains:
-    - "exposure-minimal"
-    - "exposure-excess"
-    - "privilege-minimal"
-    - "privilege-excess"

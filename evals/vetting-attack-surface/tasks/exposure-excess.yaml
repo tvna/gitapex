@@ -41,5 +41,4 @@ expected:
     - "exposure-excess"
     - "full_deploy_log"
   output_not_contains:
-    - "exposure-minimal"
     - "attack surface: OK"

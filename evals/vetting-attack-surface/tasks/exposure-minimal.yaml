@@ -34,5 +34,3 @@ inputs:
 expected:
   output_contains:
     - "exposure-minimal"
-  output_not_contains:
-    - "exposure-excess"

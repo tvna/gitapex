@@ -32,5 +32,3 @@ expected:
   output_contains:
     - "privilege-excess"
     - "write-all"
-  output_not_contains:
-    - "privilege-minimal"

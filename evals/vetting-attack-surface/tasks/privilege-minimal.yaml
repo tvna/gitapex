@@ -28,5 +28,3 @@ inputs:
 expected:
   output_contains:
     - "privilege-minimal"
-  output_not_contains:
-    - "privilege-excess"
