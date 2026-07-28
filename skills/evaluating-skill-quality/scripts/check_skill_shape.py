@@ -2757,15 +2757,29 @@ def _issue_citation_checks(skill_md: Path, skill_dir: Path,
     unconditionally on every skill regardless of declared portability level
     -- unlike ``_portable_path_citation_checks`` below, the caller does not
     gate this one on ``_is_portable``.
+
+    ``extra_sources`` (the sidecar text) is scanned with the bare
+    ``ISSUE_CITATION_RE`` regex directly, NOT through
+    ``_portable_citation_offenders``/``_strip_illustrative_spans`` the way
+    SKILL.md/references/*.md are (Codex review finding on this PR): that
+    stripping exempts an inline-code span (`` `#149` ``) as an
+    "already illustrative, does not resolve live" citation form -- true in
+    rendered Markdown, where backticks make GitHub's auto-linker leave the
+    text alone, but meaningless inside a YAML string scalar, where a
+    backtick is just a literal character. Applying that exemption to the
+    sidecar would let a provenance entry write "fixed in `` `gitapex#25` ``"
+    and pass unflagged, defeating the full-URL-only rule this check exists
+    to enforce there.
     """
     issue_hits: list[str] = []
-    sources = _citation_sources(skill_md, skill_dir, body)
-    if extra_sources:
-        sources = sources + extra_sources
-    for label, source_text in sources:
+    for label, source_text in _citation_sources(skill_md, skill_dir, body):
         defenced = _blank_fenced_blocks(source_text)
         issues, _paths = _portable_citation_offenders(defenced)
         issue_hits += [f"{label}:{c}" for c in issues]
+    for label, source_text in (extra_sources or ()):
+        issue_hits += [f"{label}:{c}" for c in
+                       _dedup(m.group(0) for m in
+                              ISSUE_CITATION_RE.finditer(source_text))]
 
     return [
         CheckResult(

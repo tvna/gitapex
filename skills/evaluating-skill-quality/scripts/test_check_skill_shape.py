@@ -2155,6 +2155,34 @@ def test_references_full_url_citation_passes_no_bare_issue_citation(tmp_path):
     assert css.main([str(d)]) == 0
 
 
+def test_references_inline_code_bare_citation_still_fails(tmp_path):
+    # Regression guard (Codex review finding on issue #488's own PR): the
+    # SKILL.md/references/*.md bare-citation scan exempts an inline-code
+    # span (`#149`) as an already-illustrative, does-not-resolve-live
+    # citation form -- true in rendered Markdown, meaningless inside a
+    # YAML string scalar, where a backtick is just a literal character.
+    # Applying that same exemption to the sidecar would let an entry write
+    # "fixed in `gitapex#25`" and pass unflagged, defeating the
+    # full-URL-only rule. The sidecar's own scan must not exempt inline
+    # code the way the body-prose scan does.
+    d = _write_skill(tmp_path)
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  references:\n"
+        "    - \"fixed in `gitapex#25`\"\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["no-bare-issue-citation"].passed is False
+    assert "spec.references:#25" in by["no-bare-issue-citation"].evidence
+    assert css.main([str(d)]) == 1
+
+
 def test_lifecycle_reason_over_budget_fails_well_formed(tmp_path):
     d = _write_skill(tmp_path)
     oversized = "x" * (css.REFERENCES_ENTRY_MAX_CHARS + 1)
