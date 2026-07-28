@@ -8,7 +8,8 @@ waiver) for both battle-testing-a-skill and evaluating-skill-quality.
 Refs #427 (refs #422): when a changed SKILL.md's frontmatter description
 line itself changed, two extra checks apply -- battle-testing-a-skill can
 no longer be WAIVED, and the diff must also touch the skill's own
-evals/<skill>/tasks/ or docs/skill-eval-status.md, or disclose an
+evals/<skill>/tasks/ or evals/<skill>/eval-status.md (issue #499 moved the
+latter from a single central docs/skill-eval-status.md), or disclose an
 eval-coverage-disclosure waiver.
 """
 

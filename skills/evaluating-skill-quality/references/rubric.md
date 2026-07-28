@@ -1262,9 +1262,10 @@ this dimension: state plainly that behavioural evidence is unmeasured for
 the reviewed skill when no mechanism is committed to the repo, rather than
 scoring it pass or fail without one to back the score. This gap-naming need
 not sit inline in the `SKILL.md`: a repository may record its per-skill
-eval status (baselines, trials, model coverage) centrally in its own
-documentation -- for example a `docs/` eval-status file -- rather than in
-each skill body, since a vendored skill should not carry the origin repo's
+eval status (baselines, trials, model coverage) in its own documentation
+instead -- for example a central `docs/` eval-status file, or one file per
+skill under its own `evals/<skill>/` directory -- rather than in each
+skill body, since a vendored skill should not carry the origin repo's
 eval-run bookkeeping. Read that documentation before treating an absent
 inline gap-disclosure (no `## Known gaps` section) as undisclosed. Do not install
 missing eval tooling yourself as part of a review -- propose it to the

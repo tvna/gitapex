@@ -1,11 +1,15 @@
-"""CI gate: docs/skill-eval-status.md's merge-retrospective fixture count
-stays in sync with the real corpus under evals/merge-retrospective/tasks/.
+"""CI gate: evals/merge-retrospective/eval-status.md's fixture count stays
+in sync with the real corpus under evals/merge-retrospective/tasks/.
 
 Codex review on PR #328 found this section still stated "five task files,
 zero Step 0 coverage" after the corpus had already grown to 18 fixtures
 with real Step 0 coverage (issue #312) -- the two sources had silently
 desynchronized with nothing to catch it. This asserts the doc's own
 stated count against the real fixture count going forward.
+
+Issue #499: the doc moved from a single central docs/skill-eval-status.md
+to one file per skill under evals/<skill>/eval-status.md; this gate's
+target path moved with it.
 """
 
 from __future__ import annotations
@@ -14,7 +18,7 @@ import pathlib
 import re
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
-STATUS_DOC = REPO_ROOT / "docs" / "skill-eval-status.md"
+STATUS_DOC = REPO_ROOT / "evals" / "merge-retrospective" / "eval-status.md"
 FIXTURES_DIR = REPO_ROOT / "evals" / "merge-retrospective" / "tasks"
 
 _COUNT_RE = re.compile(r"\*\*(\d+)\s+committed task files\*\*")
