@@ -1,10 +1,13 @@
 # evaluating-skill-quality eval status
 
 The committed eval suite (`evals/evaluating-skill-quality/`) has no
-committed no-skill baseline run, and only `claude-sonnet-4.6` has been
-evaluated -- cross-model behavior is currently unmeasured. Named gap
-specific to this skill's subagent-dispatch procedure: the committed eval
-tasks assert on final output content, not on tool-call or dispatch traces,
+committed no-skill baseline run. `claude-sonnet-4.6` is the suite's own
+pinned tier (`eval.yaml`); cross-model behavior beyond that pin was
+unmeasured until issue #500's Phase 1 run below, which is a partial,
+disclosed-scope measurement, not a replacement for a real matrix run
+against the pinned suite itself. Named gap specific to this skill's
+subagent-dispatch procedure: the committed eval tasks assert on final
+output content, not on tool-call or dispatch traces,
 so they cannot confirm the nine-dimension walk (Procedure steps 1, 2, 4, 5)
 actually ran inside a fresh subagent dispatch rather than the invoking
 context -- that mechanism was exercised by one manual live run during the
@@ -459,3 +462,36 @@ Codex rerun with project/user instruction loading disabled was rejected
 because transmitting the public repository target to that separate model
 execution requires explicit operator approval. No PASS is claimed for those
 audits. Refs #332.
+
+## Cross-model measurement, Phase 1 (issue #500)
+
+First actual cross-model data point for this skill, using an alternative
+mechanism to the still-unrun `waza-eval-matrix.yml` (no
+`COPILOT_BASE_URL`/etc. secrets provisioned -- see the cross-cutting
+scaffolding note in `docs/skill-eval-status.md`): isolated
+`claude -p --model <tier>` dispatches, the same mechanism validated in
+issue #495's own dogfood gate.
+
+Ran the selection split (23 fixtures) against Haiku 4.5 / Sonnet 5 / Opus 5,
+one trial per fixture, scored with `score_contract.py`. Full data, per-run
+provenance, and known scope limits:
+[results/2026-07-28-issue-500-phase1/](results/2026-07-28-issue-500-phase1/manifest.json).
+
+**Headline**: mean score increases monotonically with model tier --
+`claude-haiku-4-5-20251001` 0.824586, `claude-sonnet-5` 0.901639,
+`claude-opus-5` 0.936853. The gap concentrates almost entirely in the
+`compatibility-*` fixtures (the Runtime Compatibility axis's multi-state
+disposition): Haiku trails Opus by 0.29-0.57 on 4 of 6 compatibility
+selection fixtures, versus a near-zero gap on most other fixtures --
+concrete evidence for dimension 9's own concern (does the skill give a
+weak tier *enough* guidance) landing specifically on that one axis, not
+diffused evenly across the rubric. Two fixtures inverted (Haiku scored 1.0
+where Sonnet/Opus scored 0.75) -- not investigated further in this phase.
+
+Disclosed, not closed: 1 trial per fixture (no repeat-run variance data),
+selection split only (23 of 57 fixtures -- train/test unmeasured), and a
+substring scorer that confirms expected keywords appear, not that the full
+nine-dimension walk or Blind Spot Pass actually ran. A follow-up phase
+covering the full corpus, `trials_per_task: 3`, and/or the compatibility
+axis specifically (given where Phase 1's gap concentrated) is the natural
+next step, not yet scheduled. Refs #500.
