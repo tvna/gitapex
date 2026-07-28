@@ -99,12 +99,7 @@ target. Required, not optional, the same way
 `evaluating-deterministic-gate-quality`'s own equivalent dispatch
 requirement is; that skill's own Subagent dispatch section (which itself
 defers to `evaluating-skill-quality`'s isolation-verification mechanics)
-is the pattern this skill reuses rather than re-deriving. Open
-`evaluating-skill-quality`'s own `references/adversarial-self-audit.md`
-before dispatching, not only after a dispatch's own self-report discloses
-contamination: on a Claude Code Remote session specifically, its Known
-entries already record a plain Agent-tool dispatch as a confirmed
-isolation failure and name a verified `claude -p` subprocess alternative.
+is the pattern this skill reuses rather than re-deriving.
 
 ## Procedure
 

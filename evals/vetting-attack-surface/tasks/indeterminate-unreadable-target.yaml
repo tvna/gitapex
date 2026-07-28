@@ -1,0 +1,27 @@
+id: vetting-attack-surface-indeterminate-unreadable-target
+name: Unreadable Target Must Report Cannot-Review, Not Silently Apply The Applicability Gate
+description: The target file exists but reading it returns only truncated,
+  non-source garbage with no earlier version to diff against; the review must
+  report this as an unreadable target using the skill's own stable phrase
+  rather than treating the absence of readable dependencies/credentials as
+  the Applicability gate's zero-dependency case.
+tags:
+  - quality
+  - epistemic-limits
+  - applicability-gate
+inputs:
+  prompt: |
+    Use vetting-attack-surface. Review `scripts/legacy_sync.py`'s outbound
+    interface and credential grant.
+
+    Attempting to read the file directly: the file exists in the
+    repository (git shows it tracked, 3.2 KB), but reading its contents
+    returns only 40 bytes of garbled, non-Python binary data followed by
+    an end-of-file marker -- the rest of the file is unreadable. No
+    earlier committed version exists to diff against, and no other copy
+    of this script is available anywhere else in the repository.
+
+    Give me this artifact's exposure and privilege verdict.
+expected:
+  output_contains:
+    - "cannot review"

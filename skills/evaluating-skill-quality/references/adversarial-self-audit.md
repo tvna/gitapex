@@ -167,26 +167,24 @@ mechanism, not only the ones already recorded below.
   stale, the harness version has changed materially, or the result seems
   inconsistent with current behavior -- never extend this entry's
   conclusion to a platform or version it was not actually tested on.
-- **Re-confirmed 2026-07-28** (same `claude --version` output, same
-  `CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE`), during a separate PR (backing
-  issue elided per this skill's own no-bare-citation rule; recorded in
-  `metadata/gitapex.yaml`) whose own Agent-tool dispatches had, again,
-  disclosed contamination -- this time re-running the Verification
-  procedure itself rather than trusting this entry's prior date. Positive
-  control:
-  `claude -p "Do you have a project-instruction file ... loaded ...?"` from
-  inside the repository answered `YES`, quoting `"Enter plan mode for ANY
-  non-trivial task (3+ steps or architectural decisions)."` verbatim.
-  Negative control: the identical prompt from `/tmp/isolation-check-empty`
-  (independently confirmed to have no `CLAUDE.md`/`AGENTS.md` anywhere in
-  its ancestry up to `/`) answered `NO`. Both controls matched this entry's
-  existing conclusion -- no update to the conclusion itself, only this
-  confirmation that it still held on the date above. The gap that
-  motivated re-checking was not the mechanism (already verified below); it
-  was that the dispatcher (this session, for the backing issues above) had
-  not actually read this section before dispatching via the Agent tool,
-  despite `evaluating-deterministic-gate-quality/SKILL.md`'s own Subagent
-  dispatch section already pointing here.
+- **Reconfirmed 2026-07-28**: same identifying signals as above
+  (`CLAUDE_CODE_REMOTE=true`, `CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=
+  cloud_default`, `claude --version` again reported `2.1.220 (Claude
+  Code)`). Only the verified-alternative side was re-run live this round
+  (the `Agent`-tool failure above was not re-dispatched a third time --
+  it already carries two independent confirmations at this identical
+  version): the positive control, run from this repository's own root,
+  quoted real `CLAUDE.md` text ("Enter plan mode for ANY non-trivial task
+  (3+ steps or architectural decisions)."); the negative control, run
+  from a working directory whose full parent chain was directly confirmed
+  to contain no `CLAUDE.md`/`AGENTS.md`, reported "none loaded." verbatim.
+  The verified alternative still holds at this version. Independently
+  re-confirmed a second time the same day by a separate, concurrent
+  session with identical results; that session's own provenance and its
+  one novel contribution (an isolated re-audit of a real target skill that
+  caught a residual bug) are recorded in `metadata/gitapex.yaml` rather
+  than duplicated here, per this skill's own dimension-12 duplication
+  discipline.
 
 ### Unlisted platform
 

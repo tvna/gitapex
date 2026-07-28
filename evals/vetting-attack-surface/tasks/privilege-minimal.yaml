@@ -1,0 +1,30 @@
+id: vetting-attack-surface-privilege-minimal
+name: Release-notes script holds exactly the scope its one API call needs
+description: The reviewed script's token is scoped to exactly the permission
+  GitHub's own documented API reference requires for the single endpoint the
+  script calls; the review must grade this credential/permission grant
+  privilege-minimal rather than flagging it.
+tags:
+  - quality
+  - least-privilege
+inputs:
+  prompt: |
+    Use vetting-attack-surface. Review this artifact's credential/permission
+    grant.
+
+    `scripts/post_release_notes.py` runs once per release. Reading the
+    script directly: it calls exactly one GitHub REST API endpoint,
+    `POST /repos/{owner}/{repo}/releases`, to create a single release
+    with the generated changelog body, and makes no other API call.
+
+    The token it authenticates with is a fine-grained GitHub personal
+    access token scoped to this one repository, with exactly one
+    permission granted: "Contents: Read and write" -- the permission
+    GitHub's own documented REST API reference for the create-a-release
+    endpoint states is required.
+
+    Give me the least-privilege verdict for this one credential/
+    permission grant.
+expected:
+  output_contains:
+    - "privilege-minimal"
