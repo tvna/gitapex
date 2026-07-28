@@ -691,9 +691,10 @@ ILLUSTRATIVE_MODEL_ID_RE = re.compile(
     re.IGNORECASE)
 # A citation to Anthropic's own documentation, in the exact forms this
 # repository's own reference lists use: a GFM autolink
-# ("<https://platform.claude.com/...>"), an inline link target
-# ("[text](https://code.claude.com/...)"), or a reference-style link
-# definition ("[label]: https://claude.com/..."). A real, current model
+# ("<https://platform.claude.com/...>"), an inline link target, with or
+# without CommonMark's optional title
+# ("[text](https://code.claude.com/... \"Title\")"), or a reference-style
+# link definition ("[label]: https://claude.com/..."). A real, current model
 # identifier appearing only inside one of these -- e.g. a doc URL whose own
 # slug names the model the page documents -- is a primary-source citation,
 # not "illustrative content" in rule 1's sense (a worked example or sample
@@ -708,7 +709,7 @@ ANTHROPIC_DOC_CITATION_RE = re.compile(
     r"<https://(?:platform\.claude\.com|code\.claude\.com|claude\.com)/"
     r"[^\s>]*>"
     r"|\]\(https://(?:platform\.claude\.com|code\.claude\.com|claude\.com)/"
-    r"[^)\s]*\)"
+    r"[^)\s]*(?:\s+\"[^\"]*\"|\s+'[^']*')?\)"
     r"|^[ ]{0,3}\[[^\]]+\]:\s*<?https://"
     r"(?:platform\.claude\.com|code\.claude\.com|claude\.com)/[^\s>]*>?",
     re.MULTILINE)

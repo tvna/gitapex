@@ -173,6 +173,12 @@ spec:
       outcome:
         verdict: fixed
         found: 2
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/pull/496"
+      summary: "Codex review caught two real bugs: check_skill_shape.py's citation-URL exemption regex missed a titled inline link (CommonMark's optional title), and the restraint fixture's delegation step stated a per-batch size, not a real total cap. Both fixed and re-verified live (fixture: 0.75->1.0->1.0 clean)."
+      outcome:
+        verdict: fixed
+        found: 2
   skillDependencies:
     requires: []
     relatedTo:

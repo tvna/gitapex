@@ -2409,3 +2409,31 @@ with a genuine bonus finding, and three real citation-accuracy defects
 found across an external battle-test pass and two self-review passes, all
 fixed and independently re-verified against primary sources rather than
 re-trusted.
+
+**Corrections (found by external review, `chatgpt-codex-connector[bot]` on
+PR #496), both fixed in the same PR:**
+
+1. `ANTHROPIC_DOC_CITATION_RE`'s inline-link branch required the URL to be
+   followed immediately by `)`, so a real citation using CommonMark's
+   optional inline-link title (`[text](url "Title")`) did not match the
+   exemption span and still tripped `no-illustrative-model-identifier`.
+   Fixed to allow an optional double- or single-quoted title before the
+   closing paren; two new tests added (`test_model_id_inside_titled_
+   inline_link_to_anthropic_doc_passes`, `..._single_quote_titled_...`).
+2. `opus5-restraint-domain-verification-and-bounded-subagent.yaml`'s
+   delegation step ("one subagent per 50-test batch") stated a per-batch
+   *size*, not a total *cap* -- `ceil(N/50)` still grows unboundedly with
+   suite size `N`, so a correct reviewer could legitimately flag it under
+   the new check even though the fixture's own assertions did not expect
+   that, letting the eval pass without actually testing the no-false-
+   positive path. Fixed to a genuine total cap ("at most 5 subagents
+   total, each covering an equal share"). Re-verified live: a fresh
+   isolated dispatch against the corrected text scored **1.0/1.0** and
+   explicitly called the corrected delegation step out as "a genuinely
+   good example" of the check's own criteria, with no partial finding
+   this time (contrast the original miswritten version's dispatch above,
+   which correctly caught the per-batch-vs-cap gap the fixture didn't
+   intend to test).
+
+Neither correction changes the KEEP verdict above: both are fixes to
+fixture/checker precision, not to the rubric content the gate scored.

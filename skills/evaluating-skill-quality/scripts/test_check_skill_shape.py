@@ -3977,6 +3977,28 @@ def test_model_id_inside_inline_link_to_anthropic_doc_passes(tmp_path):
     assert res["no-illustrative-model-identifier"].passed is True
 
 
+def test_model_id_inside_titled_inline_link_to_anthropic_doc_passes(tmp_path):
+    # CommonMark's optional inline-link title ("(url \"title\")") must not
+    # defeat the exemption -- caught by external review (chatgpt-codex-
+    # connector[bot] on PR #496): the first-draft regex required the URL to
+    # be followed immediately by ")", so a titled link still tripped rule 1.
+    d = _write_raw(tmp_path, _simple_body(
+        'See [the guide](https://platform.claude.com/docs/en/build-with-'
+        'claude/prompt-engineering/prompting-claude-opus-5 '
+        '"Prompting Claude Opus 5") for details.'))
+    res = _by_name(css.check_shape(d))
+    assert res["no-illustrative-model-identifier"].passed is True
+
+
+def test_model_id_inside_single_quote_titled_inline_link_passes(tmp_path):
+    d = _write_raw(tmp_path, _simple_body(
+        "See [the guide](https://platform.claude.com/docs/en/build-with-"
+        "claude/prompt-engineering/prompting-claude-opus-5 "
+        "'Prompting Claude Opus 5') for details."))
+    res = _by_name(css.check_shape(d))
+    assert res["no-illustrative-model-identifier"].passed is True
+
+
 def test_model_id_inside_non_anthropic_link_still_fails(tmp_path):
     # The exemption is scoped to Anthropic's own doc domains -- a link to
     # any other host does not launder an illustrative model identifier.

@@ -1,6 +1,6 @@
 id: evaluating-skill-quality-opus5-restraint-domain-verification-and-bounded-subagent
 name: Domain-Specific Verification and Bounded Subagent Delegation Must Not False-Positive
-description: Restraint check for both new checks at once -- the target's verification step names its own domain-specific task (re-running a candidate flaky test to confirm it reproduces, not generic double-checking), and its delegation step states a criterion and a cap (batch by suite size, or triage directly for a small suite). Neither the new Dimension 2 duplication instance nor the new Subagent delegation scope check should fire; the review must say so explicitly rather than flagging a false positive.
+description: Restraint check for both new checks at once -- the target's verification step names its own domain-specific task (re-running a candidate flaky test to confirm it reproduces, not generic double-checking), and its delegation step states both a criterion and a genuine total cap (at most 5 subagents, not merely a per-batch size that could still grow unboundedly). Neither the new Dimension 2 duplication instance nor the new Subagent delegation scope check should fire; the review must say so explicitly rather than flagging a false positive. (A first-draft version of this fixture used a per-batch size with no total cap, which a correct reviewer could legitimately flag under the new check -- caught by external review, chatgpt-codex-connector[bot] on PR #496.)
 tags:
   - quality
   - conciseness
@@ -25,9 +25,9 @@ inputs:
     2. For each candidate, re-run it 3 times and verify the failure
        reproduces before flagging it as flaky -- a single inconsistent run
        is not enough evidence on its own.
-    3. For a suite of more than 200 tests, delegate to one subagent per
-       50-test batch; for a smaller suite, triage directly without
-       delegation.
+    3. For a suite of more than 200 tests, delegate to at most 5 subagents
+       total, each covering an equal share of the candidates; for a smaller
+       suite, triage directly without delegation.
     4. Report every confirmed flaky test with its reproduction rate.
 expected:
   output_contains:
