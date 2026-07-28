@@ -315,12 +315,20 @@ above: `hooks/check-issue-acm-disclosure.sh` + `hooks/check_acm_present_or_waive
 `mcp__github__issue_write` matcher with a 10-second `timeout`). This is a
 live-measured pass, not an assumed one.
 
-**What the gate actually does per invocation:** one `cat` of stdin, three
-`jq -r` field extractions, and one `python3` cold start running
-`check_acm_present_or_waiver.py` (two `re.compile` calls, one `re.search`
-each, no network I/O, no filesystem scan beyond the sibling script's own
-existence check) -- confirmed by direct reading of both files, not assumed
-from their names.
+**What the gate actually does per invocation, by path** (confirmed by
+direct reading of both files, not assumed from their names): one `cat` of
+stdin, then three sequential `jq -r` field extractions
+(`hooks/check-issue-acm-disclosure.sh:28,36,42` -- `tool_name`, `method`,
+`body`, each gated behind the previous field's own early-exit check), then
+one `python3` cold start running `check_acm_present_or_waiver.py` (two
+`re.compile` calls, one `re.search` each, no network I/O, no filesystem
+scan beyond the sibling script's own existence check). That is the **allow
+path**: 3 `jq` processes + 1 `python3` process, 4 subprocess launches
+total. The **deny path** (line 42's body fails the Python check) launches
+one more: `deny()`'s own `jq -n` call at line 49, to build the
+`hookSpecificOutput` JSON written to stderr -- 4 `jq` processes + 1
+`python3` process, 5 subprocess launches total. The two paths are not
+process-count-identical; deny costs one more fork than allow.
 
 **Live measurement, five consecutive runs against a passing (waiver-line)
 synthetic `mcp__github__issue_write` payload**, run directly against the
@@ -360,25 +368,47 @@ same measurement, ahead of runs 2-5 (0.038-0.051s) -- an ordinary
 first-invocation cold-start effect (disk-cache/page-cache warmup for the
 `bash`/`jq`/`python3` binaries themselves), not a defect in the gate and
 not cherry-picked away: all five raw runs are reported above rather than
-only the fastest ones. A separate run against a failing (no-ACM) body took
-the same path length (`real 0m0.062s`, `exit=2`) -- confirming the deny
-path pays the identical cost as the allow path, since both call through to
-the same Python cold-start regardless of outcome.
+only the fastest ones. A separate run against a failing (no-ACM) body
+measured `real 0m0.062s`, `exit=2` -- within the same noise band as the
+allow-path runs above at this timing resolution, even though the deny path
+launches one more subprocess (5 vs. 4, per the process count above); the
+extra `jq -n` fork is too cheap to separate from run-to-run variance at
+this measurement precision, which is itself worth stating plainly rather
+than rounding up to "identical."
 
-**Verdict: PASS, no optimization gap found.** Measured cost (~38-66ms wall
-across five runs, including the slower first invocation) is roughly
-150-260x under the registered 10s budget (dimension 6's own concern, not
-restated here) and is already close to the floor for what the policy
-requires: a single `python3` interpreter cold start plus two constant-time
-regex searches over a short issue body, no full-repository scan, no
-network round-trip, no cache to warm because there is no repeated-state to
-cache between independent tool calls. There is no avoidable overhead of the
-kind this dimension names (no redundant clone, no synchronous network
-call, no quadratic pattern) to point to -- confirmed by direct reading of
-both files (quoted above), not accepted from either script's own header
-comment, per this dimension's own verification-mandate clause. Applying
-this dimension's own guard: no correctness tradeoff is on the table either
-way, since there is nothing here worth trading away for speed.
+**Verdict: PASS against the registered budget, with a named minor gap
+against this dimension's own bar.** Measured cost (~38-66ms wall across
+five runs, including the slower first invocation) is roughly 150-260x
+under the registered 10s budget (dimension 6's own concern, not restated
+here) -- comfortably PASS on that axis. But this dimension asks a stricter
+question than "is it fast enough," and a strict read finds a real, if
+minor, instance of avoidable overhead this worked example's first draft
+missed: the three sequential `jq -r` calls on the allow path (and the
+matching three plus a fourth on the deny path) each parse the *same*
+already-buffered `$input` string independently, forking a fresh `jq`
+process per field, when a single `jq -r` invocation extracting
+`tool_name`, `tool_input.method`, and `tool_input.body` together (e.g. as
+tab-separated output) would collapse 3 of those 4 (or 4 of those 5)
+process launches into 1 -- real, avoidable, process-fork overhead by this
+dimension's own letter, not merely a cost that is already at the floor.
+Applying this dimension's own guard before crediting that as a fix: the
+current staged structure exits early on `tool_name`/`method` mismatches
+before ever touching `body`, which a single upfront extraction would
+partly forfeit -- collapsing to one call is not risk-free by construction
+and would need to preserve the same early-exit behavior, not just be
+assumed cost-free. **Net assessment:** a genuine minor optimization
+opportunity exists and should not have been reported as absent, but its
+absolute impact (a small fraction of the measured ~40-65ms, itself
+~150-260x under budget) does not change this gate's overall placement
+verdict -- named as a low-priority finding, not a blocking one, per this
+dimension's own "grade only a change that holds ... behavior fixed while
+reducing its cost" guard, which cuts both ways: a real gap is still worth
+naming even when fixing it would not matter much, and a candidate fix is
+not free of risk just because the process savings are cheap to state.
+Every claim above is confirmed by direct reading of both files (quoted
+above) and by the live measurements, never accepted from either script's
+own header comment alone, per this dimension's own verification-mandate
+clause.
 
 ## Audit history: Security-level axis hardening round
 
