@@ -168,10 +168,20 @@ def test_main_reads_body_from_file(tmp_path, capsys):
 
 
 def test_main_fails_with_missing_disclosure(capsys):
-    assert gate.main(["--body", "/dev/null"]) == 1
+    assert gate.main(["--body", "/dev/null", "--skill-md-changed"]) == 1
     err = capsys.readouterr().err
     assert "battle-testing-a-skill" in err
     assert "evaluating-skill-quality" in err
+
+
+def test_main_skips_base_check_when_skill_md_not_changed(capsys):
+    # Issue #517: skill-audit-gate.yml's applicable path now also fires
+    # for a design-doc-only change with no SKILL.md touched -- the base
+    # battle-testing-a-skill/evaluating-skill-quality check must not run
+    # unconditionally, or every design-doc-only PR would be forced to
+    # disclose audits of a skill it never touched.
+    assert gate.main(["--body", "/dev/null"]) == 0
+    assert "PASS" in capsys.readouterr().out
 
 
 def test_main_reports_error_for_missing_file(capsys):
@@ -370,7 +380,127 @@ def test_main_notes_waiver_would_be_rejected_when_battle_testing_missing_entirel
 - evaluating-skill-quality: WELL-FORMED-AND-MATURE
 """
     monkeypatch.setattr("sys.stdin", io.StringIO(body))
-    assert gate.main(["--description-changed-skills", "foo"]) == 1
+    assert gate.main(["--description-changed-skills", "foo", "--skill-md-changed"]) == 1
     err = capsys.readouterr().err
     assert "battle-testing-a-skill" in err
     assert "would not be accepted here either" in err
+
+
+# --- Issue #517 (refs #454): find_missing_security_coverage_disclosure ---
+
+
+def test_security_coverage_not_required_when_skill_list_empty():
+    assert gate.find_missing_security_coverage_disclosure("anything, no section", []) == []
+
+
+def test_missing_security_coverage_disclosure_reported_with_no_section():
+    body = "# My PR\n\nNo evidence section at all.\n"
+    assert gate.find_missing_security_coverage_disclosure(body, ["foo"]) == ["foo"]
+
+
+def test_missing_security_coverage_disclosure_reported_with_no_line():
+    assert gate.find_missing_security_coverage_disclosure(_VALID_SECTION, ["foo"]) == ["foo"]
+
+
+@pytest.mark.parametrize("verdict", ["RAN", "NOT-RUN", "ran", "not-run"])
+def test_security_coverage_accepts_its_own_verdict_vocabulary(verdict):
+    body = _VALID_SECTION + f"- adversarial-coverage-mapping: {verdict}\n"
+    assert gate.find_missing_security_coverage_disclosure(body, ["foo"]) == []
+
+
+def test_security_coverage_waiver_satisfies_check():
+    body = _VALID_SECTION + "- adversarial-coverage-mapping: WAIVED: not security-relevant enough\n"
+    assert gate.find_missing_security_coverage_disclosure(body, ["foo"]) == []
+
+
+def test_security_coverage_bare_waiver_with_no_reason_does_not_satisfy():
+    body = _VALID_SECTION + "- adversarial-coverage-mapping: WAIVED\n"
+    assert gate.find_missing_security_coverage_disclosure(body, ["foo"]) == ["foo"]
+
+
+def test_security_coverage_unrecognized_verdict_does_not_satisfy():
+    body = _VALID_SECTION + "- adversarial-coverage-mapping: MAYBE\n"
+    assert gate.find_missing_security_coverage_disclosure(body, ["foo"]) == ["foo"]
+
+
+# --- Issue #517 (refs #277): find_missing_design_doc_disclosure ---
+
+
+def test_design_doc_disclosure_not_required_when_doc_list_empty():
+    assert gate.find_missing_design_doc_disclosure("anything, no section", []) == []
+
+
+def test_missing_design_doc_disclosure_reported_with_no_section():
+    body = "# My PR\n\nNo evidence section at all.\n"
+    assert gate.find_missing_design_doc_disclosure(body, ["docs/superpowers/specs/foo.md"]) == [
+        "docs/superpowers/specs/foo.md"
+    ]
+
+
+def test_missing_design_doc_disclosure_reported_with_no_line():
+    assert gate.find_missing_design_doc_disclosure(_VALID_SECTION, ["foo.md"]) == ["foo.md"]
+
+
+@pytest.mark.parametrize("verdict", ["RAN", "NOT-RUN", "ran", "not-run"])
+def test_design_doc_disclosure_accepts_its_own_verdict_vocabulary(verdict):
+    body = _VALID_SECTION + f"- design-doc-adversarial-review: {verdict}\n"
+    assert gate.find_missing_design_doc_disclosure(body, ["foo.md"]) == []
+
+
+def test_design_doc_disclosure_waiver_satisfies_check():
+    body = _VALID_SECTION + "- design-doc-adversarial-review: WAIVED: routine bookkeeping doc\n"
+    assert gate.find_missing_design_doc_disclosure(body, ["foo.md"]) == []
+
+
+def test_design_doc_disclosure_bare_waiver_with_no_reason_does_not_satisfy():
+    body = _VALID_SECTION + "- design-doc-adversarial-review: WAIVED\n"
+    assert gate.find_missing_design_doc_disclosure(body, ["foo.md"]) == ["foo.md"]
+
+
+# --- Issue #517: main() integration for both new checks ---
+
+
+def test_main_fails_when_security_coverage_missing(monkeypatch, capsys):
+    monkeypatch.setattr("sys.stdin", io.StringIO(_VALID_SECTION))
+    assert gate.main(["--security-relevant-skills", "foo"]) == 1
+    err = capsys.readouterr().err
+    assert "adversarial-coverage-mapping" in err
+    assert "foo" in err
+
+
+def test_main_passes_when_security_coverage_disclosed(monkeypatch, capsys):
+    body = _VALID_SECTION + "- adversarial-coverage-mapping: RAN\n"
+    monkeypatch.setattr("sys.stdin", io.StringIO(body))
+    assert gate.main(["--security-relevant-skills", "foo"]) == 0
+
+
+def test_main_fails_when_design_doc_disclosure_missing(monkeypatch, capsys):
+    monkeypatch.setattr("sys.stdin", io.StringIO(_VALID_SECTION))
+    assert gate.main(["--changed-design-docs", "foo.md"]) == 1
+    err = capsys.readouterr().err
+    assert "design-doc-adversarial-review" in err
+    assert "foo.md" in err
+
+
+def test_main_passes_when_design_doc_disclosure_present(monkeypatch, capsys):
+    body = _VALID_SECTION + "- design-doc-adversarial-review: NOT-RUN\n"
+    monkeypatch.setattr("sys.stdin", io.StringIO(body))
+    assert gate.main(["--changed-design-docs", "foo.md"]) == 0
+
+
+def test_main_reports_security_and_design_doc_failures_together(monkeypatch, capsys):
+    monkeypatch.setattr("sys.stdin", io.StringIO(_VALID_SECTION))
+    assert (
+        gate.main(
+            [
+                "--security-relevant-skills",
+                "foo",
+                "--changed-design-docs",
+                "bar.md",
+            ]
+        )
+        == 1
+    )
+    err = capsys.readouterr().err
+    assert "adversarial-coverage-mapping" in err
+    assert "design-doc-adversarial-review" in err

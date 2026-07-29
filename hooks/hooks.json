@@ -1,5 +1,5 @@
 {
-  "description": "Deterministic PreToolUse gates backing 5 approved Major findings from docs/superpowers/reports/2026-07-13-skill-gap-triage.md: blocking install commands, direct GitHub CLI writes (including auto-merge and gh api field-flag implicit writes), warning (not blocking) on git push when the outward-artifact-preflight provenance scan flags a candidate, and Write calls that would overwrite an existing issue/PR/MR template. Also backs issue #413 (sub-issue of #357): blocking a new-issue-creation tool call whose body lacks an Acceptance Criteria Map or an explicit waiver.",
+  "description": "Deterministic PreToolUse gates backing 5 approved Major findings from docs/superpowers/reports/2026-07-13-skill-gap-triage.md: blocking install commands, direct GitHub CLI writes (including auto-merge and gh api field-flag implicit writes), warning (not blocking) on git push when the outward-artifact-preflight provenance scan flags a candidate, and Write calls that would overwrite an existing issue/PR/MR template. Also backs issue #413 (sub-issue of #357): blocking a new-issue-creation tool call whose body lacks an Acceptance Criteria Map or an explicit waiver. Also backs issue #517 (refs #285, #300): blocking a create/update_pull_request call carrying a PR body that, given a local diff touching skills/*/SKILL.md, lacks skill-audit disclosure evidence.",
   "hooks": {
     "PreToolUse": [
       {
@@ -29,6 +29,26 @@
             "type": "command",
             "command": "\"$CLAUDE_PLUGIN_ROOT/hooks/check-issue-acm-disclosure.sh\"",
             "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__github__create_pull_request",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PLUGIN_ROOT/hooks/check-pr-skill-audit-disclosure.sh\"",
+            "timeout": 15
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__github__update_pull_request",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PLUGIN_ROOT/hooks/check-pr-skill-audit-disclosure.sh\"",
+            "timeout": 15
           }
         ]
       }
