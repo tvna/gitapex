@@ -14,6 +14,12 @@ immutable/read-only snapshot; this preflight does not claim to defeat a
 concurrent filesystem mutation between validation and later reads.
 
 Checks (the canonical list -- the manual fallback is to apply these):
+  - SKILL.md itself: readable as UTF-8 text (skill-md-readable). A corrupt
+    (non-UTF-8) SKILL.md fails this one check and short-circuits every
+    other check below -- there is nothing left to read a description,
+    name, or body length out of -- rather than raising out of
+    ``check_shape`` (issue #518, the same UnicodeDecodeError-class
+    contract issue #187 repair 3 already established for the sidecar).
   - description: present/non-empty, no XML tags, <= 1024 chars, and --
     only when actually written as an unquoted YAML plain scalar in the
     source (the form every SKILL.md in this repository currently uses) --
@@ -2624,7 +2630,30 @@ def check_shape(target: Path) -> list[CheckResult]:
     # references/*.md.
     sidecar_citation_sources: list[tuple[str, str]] = []
 
-    text = skill_md.read_text(encoding="utf-8")
+    # A corrupt (non-UTF-8) SKILL.md must not raise out of check_shape --
+    # the same contract issue #187 repair 3 already established for the
+    # sidecar read below (see its own try/except a few lines down). Unlike
+    # the sidecar, SKILL.md's text feeds nearly every other check in this
+    # function (frontmatter, body-length, and every citation/model-id/
+    # placeholder/link scan further down), so there is no bounded,
+    # independent subset of checks left to run once it can't be read --
+    # report the one failure and stop, rather than a raised exception
+    # that would abort any direct caller (not just main(), which already
+    # guards its own check_shape() call) with a bare traceback.
+    try:
+        text = skill_md.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        return [CheckResult(
+            "skill-md-readable", False,
+            "SKILL.md is readable as UTF-8 text",
+            f"unreadable: {type(exc).__name__}")]
+    # Always emitted (pass or fail), matching every other check in this
+    # module -- not only on the failure path above -- so a caller scanning
+    # results for this name never has to treat its absence as a third,
+    # ambiguous state.
+    results.append(CheckResult(
+        "skill-md-readable", True, "SKILL.md is readable as UTF-8 text",
+        "present"))
     frontmatter = _parse_frontmatter(text)
     fields = frontmatter.fields
 
