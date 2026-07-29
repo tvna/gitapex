@@ -49,5 +49,5 @@ spec:
       - grounding-in-primary-sources
   lifecycle:
     experimental:
-      reason: "First version of a new skill category. Deferred: (1) a second, post-fix evaluating-skill-quality/battle-testing-a-skill confirmation round -- one round of each already ran, see spec.references; (2) a shape-checker specific to its own five criteria (evaluating-skill-quality's generic checker covers shape meanwhile); (3) a committed evals/ corpus (ablation-capable, not yet run, not an absent-mechanism gap); (4) a cross-agent-tool compatibility matrix."
+      reason: "First version of a new skill category. Deferred: (1) a post-fix evaluating-skill-quality/battle-testing-a-skill confirmation round -- several already ran, see spec.references; (2) a shape-checker specific to its own five criteria; (3) a committed evals/ corpus (ablation-capable, not yet run); (4) a cross-agent-tool compatibility matrix; (5) one shared state source feeding multiple decisions with conflicting discipline -- named, not covered by the five criteria."
       trackingIssue: "https://github.com/tvna/gitapex/issues/547"

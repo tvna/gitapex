@@ -1,6 +1,6 @@
 ---
 name: evaluating-decision-state-discipline
-description: Review whether a deterministic check's decision logic that reads state beyond its own triggering event -- a counter, a rolling metrics window, a cached verdict, a quota ledger -- is disciplined on five named points -- state provenance/trust, cold-start/absence behavior, replay/reproducibility, bounded growth, and an argued blocking-vs-advisory posture. Use when a gate, CI check, or hook's deny/allow decision reads such persisted state, once evaluating-deterministic-gate-quality's Mechanism-fit test has concluded the artifact is gate material -- this skill grades state-coupling properties that skill's dimensions mostly do not reach (one disclosed adjacency -- cold-start/absence narrows its dimension 15 to the state-read sub-case, not an independent property). Sibling to evaluating-deterministic-gate-quality (which instead grades domain placement, reproducibility-across-domains, and Zero-Trust tier); distinct from evaluating-skill-quality (grades a SKILL.md's own content, not a check's decision logic).
+description: Review whether a deterministic check's decision logic that reads state beyond its own triggering event -- a counter, a rolling metrics window, a cached verdict, a quota ledger -- is disciplined on five named points -- state provenance/trust, cold-start/absence behavior, replay/reproducibility, bounded growth, and an argued blocking-vs-advisory posture. Use when a gate, CI check, or hook's deny/allow decision reads persisted state and evaluating-deterministic-gate-quality's Mechanism-fit test already applies (or applies here, for a first review) -- this skill grades state-coupling properties that skill's dimensions mostly do not reach (one disclosed adjacency -- cold-start/absence narrows its dimension 15 to the state-read sub-case, not an independent property). Sibling to evaluating-deterministic-gate-quality (which instead grades domain placement, reproducibility-across-domains, and Zero-Trust tier); distinct from evaluating-skill-quality (grades a SKILL.md's own content, not a check's decision logic).
 ---
 
 # Evaluating Decision-State Discipline
@@ -150,16 +150,20 @@ what a common-case review needs from the definitions above:
    `evaluating-deterministic-gate-quality`'s own Mechanism-fit test --
    already applied elsewhere, not re-run here. Evidence that the test was
    already applied: a citation to a prior review's own recorded verdict
-   (an issue, a PR, an `evaluating-deterministic-gate-quality` report).
-   Where no such citation exists and this is the first review of the
-   artifact, this skill's own reviewer may apply that sibling test
-   directly as an explicit, disclosed exception -- state plainly that the
-   test was applied here for the first time, rather than silently
-   assuming someone else already had, and rather than silently
-   re-deriving the judgment while claiming it was "already applied
-   elsewhere." Confirm it reads state beyond its own triggering event,
-   and that the state is capturable. Report and stop per checks 1-2
-   above if either fails.
+   (an issue, a PR, an `evaluating-deterministic-gate-quality` report) --
+   fetch or open that citation and confirm it actually states a
+   gate-material verdict for this specific artifact; a citation-shaped
+   string that does not resolve to one, or resolves to something else, is
+   the same as no citation, never treated as satisfying evidence merely
+   for existing. Where no such citation exists and this is the first
+   review of the artifact, this skill's own reviewer may apply that
+   sibling test directly as an explicit, disclosed exception -- state
+   plainly that the test was applied here for the first time, rather
+   than silently assuming someone else already had, and rather than
+   silently re-deriving the judgment while claiming it was "already
+   applied elsewhere." Confirm it reads state beyond its own triggering
+   event, and that the state is capturable. Report and stop per checks
+   1-2 above if either fails.
 2. **Discover the actual state reads.** Identify every distinct piece of
    state the decision reads beyond its triggering event's own payload --
    a counter, a cache, a fetched window, a quota ledger -- by direct
