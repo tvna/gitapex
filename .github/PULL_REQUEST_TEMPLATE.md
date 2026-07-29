@@ -38,7 +38,7 @@ method -> result. Otherwise, list the command(s) run and their output.
 - [ ] Tests pass locally
 - [ ] Docs updated if behavior changed
 - [ ] Issue number cited in every commit
-- [ ] If this PR adds/modifies a `skills/*/SKILL.md`, a `docs/superpowers/specs/*.md` design doc, or a security-relevant skill, a `## Skill audit evidence` section discloses the required verdicts/waivers (see `.github/scripts/gate_skill_audit_disclosure.py`)
+- [ ] If this PR adds/modifies a `skills/*/SKILL.md`, a `docs/superpowers/specs/*.md` design doc, a security-relevant skill, or a deterministic checker script (`skills/*/scripts/*.py`, `evals/scripts/*.py`, `.github/scripts/*.py`), a `## Skill audit evidence` section discloses the required verdicts/waivers (see `.github/scripts/gate_skill_audit_disclosure.py`)
 - [ ] If this PR adds a new Kept-edit-log entry to any `evals/*/split.md`, that entry discloses a Transfer check line (see `.github/scripts/gate_transfer_check_disclosure.py`)
 
 <!--

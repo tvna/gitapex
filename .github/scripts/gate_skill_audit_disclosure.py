@@ -38,11 +38,27 @@ check here) instead of a PASS/FAIL-style verdict:
   modified). This is why the workflow's `paths:` trigger list grew to
   include that glob alongside `skills/**/SKILL.md`.
 
+Issue #565 (refs #560 repair 5): a fourth process-disclosure check, same
+RAN/NOT-RUN/WAIVED shape as the two above.
+
+- `checker-script-adversarial-review`: required when the calling
+  workflow's diff adds or modifies a deterministic checker script under
+  `skills/*/scripts/*.py`, `evals/scripts/*.py`, or `.github/scripts/*.py`.
+  PR #558 (retrospective: issue #560) touched only
+  `skills/evaluating-skill-quality/scripts/check_skill_shape.py` -- no
+  SKILL.md -- and still shipped four real correctness bugs (two regex
+  boundary asymmetries, a hedge-proximity window bug, a duplicated cache)
+  that pytest, ruff, and a full corpus sweep all missed; only a voluntary
+  `/code-review` pass caught them, and nothing required that disclosure.
+  This is why the workflow's `paths:` trigger list grows again to include
+  these three globs.
+
 The calling workflow decides applicability (only invoked when the PR's
-diff adds or modifies a skills/*/SKILL.md file or a
-docs/superpowers/specs/*.md design doc) and which skills had a
-description-line change, need eval-coverage disclosure, are
-security-relevant, or which design docs changed (all of this requires git
+diff adds or modifies a skills/*/SKILL.md file, a
+docs/superpowers/specs/*.md design doc, or a deterministic checker
+script) and which skills had a description-line change, need
+eval-coverage disclosure, are security-relevant, which design docs
+changed, or which checker scripts changed (all of this requires git
 history this script deliberately does not access); this script only
 grades the body text handed to it against those workflow-supplied facts.
 Deliberately not placed inside either audited skill's own directory: both
@@ -141,6 +157,17 @@ _SECURITY_COVERAGE_LINE_RE = _line_pattern(
 _DESIGN_DOC_CHECK_NAME = "design-doc-adversarial-review"
 _DESIGN_DOC_LINE_RE = _line_pattern(_DESIGN_DOC_CHECK_NAME, _PROCESS_DISCLOSURE_VERDICTS)
 
+# Issue #565 (refs #560 repair 5): a deterministic checker script
+# (skills/*/scripts/*.py, evals/scripts/*.py, .github/scripts/*.py) is
+# exactly as capable of shipping subtly wrong logic as skill content is
+# -- PR #558 is direct evidence -- so it gets the same RAN/NOT-RUN/WAIVED
+# process-disclosure shape as adversarial-coverage-mapping and
+# design-doc-adversarial-review above, not a PASS/FAIL verdict: this
+# checks that an adversarial review round happened, not what it
+# concluded.
+_CHECKER_SCRIPT_CHECK_NAME = "checker-script-adversarial-review"
+_CHECKER_SCRIPT_LINE_RE = _line_pattern(_CHECKER_SCRIPT_CHECK_NAME, _PROCESS_DISCLOSURE_VERDICTS)
+
 
 def _normalize_body(body_text):
     # Normalize CRLF/CR line endings before matching: GitHub is known to
@@ -223,6 +250,14 @@ def find_missing_design_doc_disclosure(body_text, changed_design_docs):
     return _find_missing_disclosure(body_text, changed_design_docs, _DESIGN_DOC_LINE_RE)
 
 
+def find_missing_checker_script_disclosure(body_text, changed_checker_scripts):
+    """Return changed_checker_scripts unchanged if none of them is covered by
+    a checker-script-adversarial-review RAN/NOT-RUN/WAIVED line in the PR
+    body (issue #565, refs #560 repair 5); else [].
+    """
+    return _find_missing_disclosure(body_text, changed_checker_scripts, _CHECKER_SCRIPT_LINE_RE)
+
+
 def _parse_skill_list(raw):
     """Comma-separated skill names -> a sorted, deduped, non-empty list."""
     return sorted({item.strip() for item in (raw or "").split(",") if item.strip()})
@@ -268,6 +303,14 @@ def main(argv=None):
         "or modified in this diff (issue #517, refs #277).",
     )
     parser.add_argument(
+        "--changed-checker-scripts",
+        default="",
+        help="Comma-separated deterministic checker-script paths "
+        "(skills/*/scripts/*.py, evals/scripts/*.py, or "
+        ".github/scripts/*.py) added or modified in this diff "
+        "(issue #565, refs #560 repair 5).",
+    )
+    parser.add_argument(
         "--skill-md-changed",
         action="store_true",
         help="Set when this diff adds or modifies at least one "
@@ -304,6 +347,10 @@ def main(argv=None):
     missing_design_doc_skills = find_missing_design_doc_disclosure(
         body_text, changed_design_docs
     )
+    changed_checker_scripts = _parse_skill_list(args.changed_checker_scripts)
+    missing_checker_script_disclosure = find_missing_checker_script_disclosure(
+        body_text, changed_checker_scripts
+    )
 
     if (
         not missing
@@ -311,6 +358,7 @@ def main(argv=None):
         and not missing_eval_coverage_skills
         and not missing_security_coverage_skills
         and not missing_design_doc_skills
+        and not missing_checker_script_disclosure
     ):
         print("PASS: skill audit evidence disclosed for both audits")
         return 0
@@ -380,6 +428,19 @@ def main(argv=None):
             "'design-doc-adversarial-review: NOT-RUN' (or "
             "'... : WAIVED: <reason>') in the '## Skill audit evidence' "
             "section.",
+            file=sys.stderr,
+        )
+
+    if missing_checker_script_disclosure:
+        print(
+            "FAIL: changed deterministic checker script with no "
+            "checker-script-adversarial-review disclosure for: "
+            + ", ".join(missing_checker_script_disclosure)
+            + ". Add 'checker-script-adversarial-review: RAN' or "
+            "'checker-script-adversarial-review: NOT-RUN' (or "
+            "'... : WAIVED: <reason>') in the '## Skill audit evidence' "
+            "section, disclosing whether an adversarial review round ran "
+            "against this deterministic checker script.",
             file=sys.stderr,
         )
 
