@@ -133,14 +133,71 @@ sources.md`.
 
 Refs #576.
 
+## Third round (#576): unified the five criteria with their grounding
+
+A requester review judged the second round's own split itself
+structurally wrong: `references/primary-sources.md` was pure citation/
+historical explanation, disconnected from the five criteria's full
+definitions (which stayed in `SKILL.md`) -- exactly the decision-state-
+discipline thinness this skill exists to catch, now present in its own
+construction, unlike `evaluating-skill-quality/references/rubric.md`,
+which unifies its own nine dimensions' full substantive content with
+their citations in one file.
+
+`references/primary-sources.md` deleted; `references/criteria.md` added,
+merging the five criteria's full definitions (moved out of `SKILL.md`)
+with their primary-source grounding into one elaboration per criterion.
+`SKILL.md`'s own "The five criteria" section was first shrunk to a bare
+pointer (naming the five criteria, no definitions at all), mirroring how
+`SKILL.md` treats `rubric.md`'s nine dimensions.
+
+A fresh `battle-testing-a-skill` dispatch (again disclosing context
+contamination and no isolated-dispatch tool -- see Open follow-up)
+returned **FAIL** on that bare-pointer draft: dimension 14's regression-
+corpus gap (pre-existing, already disclosed, not new); and a real,
+newly-introduced regression -- `evaluating-skill-quality` declares this
+skill's own `capabilityAssumption: Adaptive`, whose own dimension-5 rule
+requires `SKILL.md`'s body to complete the common case with no forced
+reference read; stripping the five criteria's definitions out of the body
+entirely broke that contract (rubric.md's identical file-split is exempt
+only because `evaluating-skill-quality` itself declares `Broad`, not
+`Adaptive`). A companion `evaluating-skill-quality` dispatch returned
+**WELL-FORMED-NOT-MATURE**: the same regression corpus gap; a confirmed
+dimension-2 duplication (the four-gate-realization-domains sentence
+repeated near-verbatim in both `SKILL.md` and `criteria.md`); and a
+non-blocking Blind-spot finding (one shared, mutable state source feeding
+multiple distinct gate decisions with potentially conflicting discipline
+requirements -- not addressed this round, named for visibility). Both
+dispatches also independently found `eval-status.md` (this file) stale --
+still describing the deleted `primary-sources.md` as current, with no
+round-2b entry -- which this section itself is the fix for.
+
+Fixed: `SKILL.md`'s "The five criteria" section restored each criterion's
+full core definition (2-4 sentences: the question plus one canonical-
+failure example), keeping the body self-sufficient for the Adaptive
+declaration's strong-model common case; `references/criteria.md` no
+longer restates those definitions, instead assuming them known and moving
+straight into per-domain notes and grounding -- genuine layered depth,
+not duplicated prose. The four-gate-realization-domains sentence now
+lives only in `SKILL.md`; `criteria.md`'s own intro no longer repeats it.
+Re-verified: `check_skill_shape.py` 40/40, full suite 1368 passed,
+ASCII-only, no reintroduced control-theory vocabulary, no repository-
+specific path or fact in `criteria.md`, and the four-domain sentence
+confirmed present in exactly one file.
+
+Refs #576.
+
 ## Open follow-up
 
-A third, post-fix confirmation round of both `evaluating-skill-quality`
-and `battle-testing-a-skill` against the round-2 fixes above has not yet
-run -- tracked in `metadata/gitapex.yaml`'s own
-`lifecycle.experimental.reason` rather than assumed clean from the fixes
-alone. `battle-testing-a-skill`'s own round-2 dispatch also flagged that
-its result is single-trial and context-contaminated (no isolated
-subagent-dispatch tool was available to it) rather than the full
-three-trial isolated protocol that skill's own Procedure calls for; a
-genuinely isolated re-run is still outstanding.
+A fourth, post-fix confirmation round of both `evaluating-skill-quality`
+and `battle-testing-a-skill` against this round's fixes has not yet run
+-- tracked in `metadata/gitapex.yaml`'s own `lifecycle.experimental.reason`
+rather than assumed clean from the fixes alone. Every `battle-testing-a-
+skill` dispatch against this skill so far has flagged that its result is
+single-trial and context-contaminated (no isolated subagent-dispatch tool
+was available to it) rather than the full three-trial isolated protocol
+that skill's own Procedure calls for; a genuinely isolated re-run is
+still outstanding. The non-blocking Blind-spot finding above (one shared
+state source feeding multiple decisions with potentially conflicting
+discipline requirements) also remains unaddressed, named for a future
+round rather than silently dropped.

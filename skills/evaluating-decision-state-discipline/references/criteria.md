@@ -1,19 +1,16 @@
-# The five criteria: full rationale and primary-source grounding
+# The five criteria: per-domain notes and primary-source grounding
 
-Full definitions, per-domain notes, and primary-source grounding for
-`SKILL.md`'s five criteria -- `SKILL.md` itself carries only a short
-pointer per criterion, the same split
+`SKILL.md`'s own "The five criteria" section already states each
+criterion's full definition -- what a common-case review needs. This
+file assumes that definition is already known and adds, per criterion,
+the per-domain notes and the primary-source grounding a less-common
+target or a less-capable reviewer needs spelled out, the same split
 `evaluating-skill-quality/references/rubric.md` uses for its own nine
-dimensions. For a target that has already cleared the precondition in
-`SKILL.md`'s "Relationship to `evaluating-deterministic-gate-quality`"
-section (source readable, state read, state capturable), grade each
-criterion below from direct evidence -- a quoted source read, or a live
-test per `SKILL.md`'s own Stop boundaries. A criterion that cannot be
-assessed from available evidence is reported as such, not silently
-skipped or guessed. Every criterion generalizes with adaptation across
-the four gate-realization domains `evaluating-deterministic-gate-quality`
-already names (git hook subprocess, agent-harness hook subprocess, CI job
-step, MCP server subprocess) -- reused here by reference, not redefined.
+dimensions' deeper rationale relative to its own lean `SKILL.md` bullets.
+Nothing below restates a criterion's own definition; where the wording
+here would otherwise repeat `SKILL.md` verbatim, it instead moves
+directly into the domain-specific or grounding content `SKILL.md` itself
+does not carry.
 
 Every source cited below was actually fetched (directly, or via a proxy
 when a tool's default fetch path was blocked) and read -- never cited
@@ -36,12 +33,6 @@ file.
 - [References](#references)
 
 ## 1. State provenance/trust
-
-Can an actor the decision constrains also write the state that decides
-whether they are constrained? A deployer able to edit the metrics store a
-release gate reads is the canonical failure -- the gate's own deny path
-is sound, but the state feeding it is not adversarially independent of
-the party it is meant to constrain.
 
 Grounded in Saltzer and Schroeder's **"Separation of privilege"** design
 principle [saltzer] -- the same 1975 paper grounds criterion 2 below
@@ -96,19 +87,6 @@ thinking in this same neighborhood:
 
 ## 2. Cold-start/absence behavior
 
-Narrows `evaluating-deterministic-gate-quality`'s own dimension 15
-(fail-closed on incomplete or malformed input) to the specific
-state-read sub-case, rather than an independent property: with the state
-store empty, missing, freshly created, or unreachable, does the decision
-deny or escalate, or does it silently allow? What this criterion requires
-beyond a general dimension-15 walk: the brand-new-deployment,
-fresh-session, or first-invocation-against-a-not-yet-populated-store case
-is the mandatory fixture this criterion grades, not an edge case a
-reviewer may wave through as unlikely or defer on the assumption
-"dimension 15 already covers this in general." A dimension-15 PASS that
-never actually exercised this specific empty-state scenario is not
-itself evidence for this criterion.
-
 Grounded in the same Saltzer and Schroeder paper's **"Fail-safe
 defaults"** design principle [saltzer]:
 
@@ -120,9 +98,10 @@ defaults"** design principle [saltzer]:
 > excludes access tends to fail by allowing access, a failure which may go
 > unnoticed in normal use."
 
-This is a near-exact match: an inadequately-considered case (this
-criterion's own fresh-store fixture above) should default to lack of
-access, and the paper names the silent-allow failure mode directly.
+This is a near-exact match: an inadequately-considered case (`SKILL.md`'s
+own mandatory fresh-store fixture for this criterion) should default to
+lack of access, and the paper names the silent-allow failure mode
+directly.
 
 Secondary, modern standards-body corroboration from NIST SP 800-53 Rev. 5,
 controls **SI-17 (Fail-safe Procedures)** and **SC-24 (Fail in Known
@@ -143,20 +122,10 @@ on-topic for the general fail-safe/fail-to-known-state pattern:
 
 ## 3. Replay/reproducibility
 
-Is the state snapshot behind a past decision recorded (a fetched window
-logged as a build artifact, a cache key with a retained value, a
-versioned store), so that decision can be re-verified later against the
-same input -- including by `evaluating-deterministic-gate-quality`'s own
-dimension 10 (empirical verification), which this skill's own findings
-feed into rather than duplicate? A state-coupled deny with no recorded
-snapshot is verifiable only at the moment it fires; grade the
-corresponding claim indeterminate afterward, never inferred from the
-decision's own later report of what it did.
-
 Grounded in Martin Fowler's **"Event Sourcing"** writeup [fowler-es],
-whose "External Queries" section is close to a verbatim match for this
-criterion's own examples ("a fetched window logged as a build artifact, a
-cache key with a retained value"):
+whose "External Queries" section is close to a verbatim match for
+`SKILL.md`'s own examples for this criterion ("a fetched window logged as
+a build artifact, a cache key with a retained value"):
 
 > "The primary problem with external queries is that the data that they
 > return has an effect on the results on handling an event. If I ask for an
@@ -193,15 +162,6 @@ Tertiary support, general audit-trail framing only, from NIST SP 800-92
 
 ## 4. Bounded growth
 
-Is the state's own size or age bounded, or does the decision's cost or
-behavior drift as history accumulates without limit? This generalizes
-`evaluating-deterministic-gate-quality`'s own dimension 6/19
-budget-proportionality concern from a single invocation's runtime cost to
-the state's own accumulated footprint across many invocations -- a
-distinct failure mode dimension 6/19 does not reach, since that dimension
-grades one call's own cost, not what a store holding every past call's
-residue eventually costs.
-
 Two verified sources ground the two halves of this criterion (a *size*
 bound and an *age* bound), not one alone.
 
@@ -234,19 +194,6 @@ scoped to a fixed age, not a service's entire lifetime history:
 > (corresponding to 1,000 initial requests, not counting retries)."
 
 ## 5. Blocking-posture justification
-
-Where the state-coupled signal is aggregate and noisy (a trend, a rate, a
-rolling average) rather than a single sharp fact, is a blocking -- not
-advisory -- posture argued somewhere (a docstring, a design doc, a cited
-policy), against `evaluating-deterministic-gate-quality`'s own
-`references/mechanism-fit.md` Domain placement criterion 6 (which routes
-aggregate, noisy signals toward advisory, non-blocking placement as a
-starting heuristic), rather than a single event being blocked on a signal
-no single event fully controls, left unexplained? A deterministic
-statistical rule (a fitted threshold, a fixed window average) is not
-model-judged and therefore already passes that other skill's own
-dimension 8 -- a dimension-8 pass is not evidence for this criterion,
-which asks a different question entirely.
 
 Grounded in the Google SRE book's **"Embracing Risk"** chapter [sre-risk],
 which argues explicitly against binary blocking on an aggregate
