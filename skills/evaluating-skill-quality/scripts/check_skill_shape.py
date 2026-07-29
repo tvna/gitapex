@@ -909,10 +909,18 @@ ISSUE_CITATION_HEDGE_PHRASES = (
 # characters, so no word/non-word transition exists there for ``\b`` to
 # match -- confirmed by direct execution during review, which silently
 # made the bare-apostrophe form (a name already ending in "s", e.g.
-# "scorer-gated-skill-edits'") never match at all. A lookahead for
-# whitespace is used instead, which works identically for both forms.
+# "scorer-gated-skill-edits'") never match at all. A negative lookahead
+# for a word character is used instead (matches whitespace, punctuation,
+# or end of string, but never a further letter/digit continuing the
+# possessive itself) -- an earlier cut of this fix used ``(?=\s)``
+# (requires whitespace specifically), which a review finding on this PR
+# caught as its own narrower bug: a citation immediately followed by
+# punctuation before further prose (e.g. "`name`', already noted, ...")
+# has a comma, not whitespace, right after the possessive, and would
+# silently never match either.
 PORTABLE_SKILL_FACT_CLAIM_RE = re.compile(
-    r"`([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)`'s?(?=\s)(?P<clause>[^.;\n]{0,120})")
+    r"`([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)`'s?(?![A-Za-z0-9])"
+    r"(?P<clause>[^.;\n]{0,120})")
 
 
 @dataclass(frozen=True)
@@ -2132,8 +2140,21 @@ def _heading_slugs(text: str) -> frozenset[str]:
 # heading-text group is deliberately narrow (letters/digits/space/
 # apostrophe/slash/hyphen, non-greedy) so it stops at the literal " section"
 # boundary rather than running on into the next sentence.
+#
+# "s?" (not a bare "s") plus a following-character guard, not a plain
+# "\s+": a sibling skill directory name that itself already ends in "s"
+# (e.g. "scorer-gated-skill-edits") is correctly cited with the bare
+# English possessive apostrophe and no trailing "s" (PORTABLE_SKILL_FACT_
+# CLAIM_RE's own comment documents this same rule and the same "\b does
+# not work here" pitfall -- a review finding on this PR caught that this
+# regex had NOT been given the same fix, so a cross-skill citation naming
+# such a sibling in the grammatically-correct bare-apostrophe form was
+# silently never matched at all, never flagged as dangling if it happened
+# to be broken). The following-character guard is a negative lookahead for
+# a word character, not a literal "\s+": a possessive immediately followed
+# by punctuation before further prose (e.g. a comma) still needs to match.
 CROSS_SKILL_CITATION_RE = re.compile(
-    r"`([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)`'s\s+"
+    r"`([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)`'s?(?![A-Za-z0-9])\s*"
     r"`references/([A-Za-z0-9._-]+\.md)`\s+"
     r"([A-Za-z0-9][A-Za-z0-9 '/-]*?)\s+[Ss]ection\b")
 
@@ -3206,7 +3227,8 @@ def check_shape(target: Path) -> list[CheckResult]:
 
     results.extend(_issue_citation_checks(
         skill_md, skill_dir, body, extra_sources=sidecar_citation_sources))
-    results.extend(_cross_skill_citation_checks(skill_md, skill_dir, body))
+    results.extend(_cross_skill_citation_checks(
+        skill_md, skill_dir, body, anchor_slug_cache))
     results.extend(_mechanism_fit_checks(skill_md, skill_dir, body))
     results.extend(_illustrative_model_id_checks(skill_md, skill_dir, body))
     results.extend(_raw_placeholder_checks(skill_md, skill_dir, body))
@@ -3289,8 +3311,9 @@ def _issue_citation_checks(skill_md: Path, skill_dir: Path,
     ]
 
 
-def _cross_skill_citation_checks(skill_md: Path, skill_dir: Path,
-                                 body: list[str]) -> list[CheckResult]:
+def _cross_skill_citation_checks(
+        skill_md: Path, skill_dir: Path, body: list[str],
+        slug_cache: dict[Path, frozenset[str] | None]) -> list[CheckResult]:
     """Issue #482: every cross-skill "file+heading" citation
     (CROSS_SKILL_CITATION_RE) in SKILL.md or references/*.md must resolve --
     the sibling skill directory exists (a cheaper version of this,
@@ -3313,13 +3336,20 @@ def _cross_skill_citation_checks(skill_md: Path, skill_dir: Path,
     table (not the target file's real per-document dedup table) -- a prose
     citation names a heading's TEXT, and this checker has no way to know
     which same-slug occurrence (1st, 2nd, ...) the author meant, so it
-    accepts a match against the base (first-occurrence) slug only. A target
-    file is read at most once per (skill, file) pair per run via
-    ``slug_cache``, mirroring ``_cached_target_heading_slugs``'s own
-    one-read-per-file memoization one level up.
+    accepts a match against the base (first-occurrence) slug only.
+
+    ``slug_cache`` is ``check_shape``'s own ``anchor_slug_cache`` -- the
+    SAME ``Path``-keyed cache ``anchor-targets-resolve`` already shares
+    across SKILL.md and every references/*.md file -- reused here (via
+    ``_cached_target_heading_slugs``) rather than this function keeping an
+    independent ``(skill_name, filename)``-keyed cache of its own (a
+    review finding on this PR's first cut: two caches with the identical
+    read-once/frontmatter-strip/heading-slugs/None-on-error contract had
+    to be kept in sync by hand, and a sibling skill's own SKILL.md or
+    references/*.md file cited here might already be a cached anchor
+    target from this same run's earlier checks).
     """
     offenders: list[str] = []
-    slug_cache: dict[tuple[str, str], frozenset[str] | None] = {}
     for label, source_text in _citation_sources(skill_md, skill_dir, body):
         defenced = _blank_fenced_blocks(source_text)
         for m in CROSS_SKILL_CITATION_RE.finditer(defenced):
@@ -3329,17 +3359,8 @@ def _cross_skill_citation_checks(skill_md: Path, skill_dir: Path,
             if not sibling_dir.is_dir():
                 offenders.append(f"{label}:{citation} (no such sibling skill)")
                 continue
-            cache_key = (skill_name, filename)
-            if cache_key not in slug_cache:
-                target = sibling_dir / "references" / filename
-                try:
-                    target_text = target.read_text(encoding="utf-8")
-                except (UnicodeDecodeError, OSError):
-                    slug_cache[cache_key] = None
-                else:
-                    slug_cache[cache_key] = _heading_slugs(
-                        "\n".join(_body_after_frontmatter(target_text)))
-            slugs = slug_cache[cache_key]
+            target = sibling_dir / "references" / filename
+            slugs = _cached_target_heading_slugs(target, slug_cache)
             if slugs is None:
                 offenders.append(f"{label}:{citation} (file not found)")
                 continue
@@ -3560,14 +3581,40 @@ def _portable_skill_fact_claim_offenders(defenced_text: str,
     list ``portable-no-repo-path-citation`` uses; the underlying meaning is
     the same regardless of whether the citation is a path, an issue
     number, or a skill name: a disclosed, deliberate same-repo dependency)
-    in that clause or the text immediately before the citation.
+    in that clause or the sentence immediately before it, within the same
+    paragraph.
 
     See PORTABLE_SKILL_FACT_CLAIM_RE's own comment for why all three
     conditions (possessive shape, "already" nearby, real sibling) are
     required together -- each one alone was corpus-validated to produce
     false positives against this repository's own shipped skills.
+
+    The hedge lookback is bounded to the SENTENCE IMMEDIATELY BEFORE the
+    citation's own clause, within the current paragraph (via
+    _PARAGRAPH_SPLIT_RE + _SENTENCE_SPLIT_RE, the exact hedge-proximity
+    boundary ``_inline_citation_offenders`` already establishes as this
+    file's own convention: "own sentence or the sentence immediately
+    before it"), not a fixed character count and not the whole paragraph.
+    Two review findings on this PR's own first cut caught real gaps here:
+    a flat 200-char slice let an unrelated hedge word sitting in a prior,
+    unconnected sentence within that character count satisfy an unhedged
+    citation; a follow-up cut that widened the lookback to the whole
+    current paragraph (rather than just the one sentence before) still let
+    a hedge two-or-more sentences back leak in, caught by this file's own
+    regression test (test_hedge_in_unrelated_earlier_sentence_does_not_
+    count) once paragraph-only bounding was tried and found insufficient.
+    Inline-code spans are blanked out of the search text first, matching
+    ``_inline_citation_offenders``'s own established rule (its own
+    docstring: "so a citation cannot self-satisfy the requirement merely
+    because its own text happens to contain a hedge word") -- a third
+    review finding caught that an earlier cut searched raw text, so an
+    unrelated inline-code token elsewhere in the paragraph (e.g. a
+    `` `docs/gitapex-notes.md` `` path) could satisfy the hedge search
+    purely because "gitapex" is one of HEDGE_PHRASES, with no bearing on
+    this citation at all.
     """
     offenders: list[str] = []
+    para_breaks = [m.end() for m in _PARAGRAPH_SPLIT_RE.finditer(defenced_text)]
     for m in PORTABLE_SKILL_FACT_CLAIM_RE.finditer(defenced_text):
         name = m.group(1)
         clause = m.group("clause")
@@ -3575,8 +3622,16 @@ def _portable_skill_fact_claim_offenders(defenced_text: str,
             continue
         if not (skill_dir.parent / name).is_dir():
             continue
-        lookback = defenced_text[max(0, m.start() - 200):m.start()]
-        haystack = (lookback + clause).lower()
+        para_start = 0
+        for brk in para_breaks:
+            if brk > m.start():
+                break
+            para_start = brk
+        para_lookback = defenced_text[para_start:m.start()]
+        prior_sentences = [s for s in _SENTENCE_SPLIT_RE.split(para_lookback)
+                           if s.strip()]
+        lookback = prior_sentences[-1] if prior_sentences else ""
+        haystack = INLINE_CODE_RE.sub(" ", lookback + clause).lower()
         if any(phrase in haystack for phrase in HEDGE_PHRASES):
             continue
         offenders.append(m.group(0).strip())

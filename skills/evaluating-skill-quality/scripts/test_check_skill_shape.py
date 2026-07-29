@@ -1038,6 +1038,41 @@ def test_cross_skill_citation_all_resolve_passes(tmp_path):
     assert result.evidence == "none"
 
 
+def test_cross_skill_citation_bare_apostrophe_sibling_name_resolves(tmp_path):
+    # Regression: a sibling directory name that already ends in "s"
+    # (e.g. "scorer-gated-skill-edits") is correctly cited with the bare
+    # English possessive apostrophe, no trailing "s" -- a first cut of
+    # CROSS_SKILL_CITATION_RE required a literal "'s" unconditionally and
+    # silently never matched this grammatically-correct form at all.
+    sibling = tmp_path / "scorer-gated-skill-edits"
+    (sibling / "references").mkdir(parents=True)
+    (sibling / "references" / "notes.md").write_text(
+        "## Fixture format\n\nDetails.\n", encoding="utf-8")
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "See `scorer-gated-skill-edits`' `references/notes.md` Fixture "
+        "format section for details.\n")
+    result = _result(css.check_shape(d), "cross-skill-citation-resolves")
+    assert result.passed
+    assert result.evidence == "none"
+
+
+def test_cross_skill_citation_bare_apostrophe_missing_heading_fails(tmp_path):
+    sibling = tmp_path / "scorer-gated-skill-edits"
+    (sibling / "references").mkdir(parents=True)
+    (sibling / "references" / "notes.md").write_text(
+        "## Something else\n", encoding="utf-8")
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "See `scorer-gated-skill-edits`' `references/notes.md` Fixture "
+        "format section for details.\n")
+    result = _result(css.check_shape(d), "cross-skill-citation-resolves")
+    assert not result.passed
+    assert "heading not found" in result.evidence
+
+
 def test_cross_skill_citation_missing_sibling_fails(tmp_path):
     d = _write_raw(
         tmp_path,
@@ -2297,6 +2332,82 @@ def test_sibling_skill_citation_in_reference_file_fails(tmp_path):
     result = _by_name(css.check_shape(d))["portable-no-unhedged-skill-fact-claim"]
     assert result.passed is False
     assert "references/notes.md:" in result.evidence
+
+
+def test_citation_followed_by_punctuation_still_flagged(tmp_path):
+    # Regression: a first cut of PORTABLE_SKILL_FACT_CLAIM_RE required
+    # whitespace immediately after the possessive ("(?=\\s)"), so a
+    # citation immediately followed by punctuation (e.g. a comma before
+    # further prose) never matched at all.
+    (tmp_path / "scorer-gated-skill-edits").mkdir()
+    d = _write_raw(tmp_path, _portable_body(
+        "`scorer-gated-skill-edits`', already noted, names a format for "
+        "a pure substring scorer."))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-skill-fact-claim"]
+    assert result.passed is False
+
+
+def test_hedge_two_sentences_back_does_not_count(tmp_path):
+    # Regression: a first cut of the hedge lookback was a flat 200-char
+    # slice, not sentence-bounded -- a hedge word sitting two (or more)
+    # sentences before the citation, well within 200 characters,
+    # incorrectly satisfied a later, genuinely unhedged citation. The
+    # established convention (matching _inline_citation_offenders) is
+    # "the citation's own sentence, or the ONE sentence immediately
+    # before it" -- not an unbounded lookback, and not the whole
+    # paragraph either.
+    (tmp_path / "scorer-gated-skill-edits").mkdir()
+    d = _write_raw(tmp_path, _portable_body(
+        "This repository has also recorded some unrelated background. "
+        "A second, intervening sentence sits between that hedge and the "
+        "citation below. "
+        "`scorer-gated-skill-edits`' own guidance already names a "
+        "format for a pure substring scorer."))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-skill-fact-claim"]
+    assert result.passed is False
+
+
+def test_hedge_in_sentence_immediately_before_does_count(tmp_path):
+    # The established convention DOES accept a hedge in the sentence
+    # immediately before the citation's own sentence, even without an
+    # explicit topical connector -- matching _inline_citation_offenders'
+    # own documented "one leading hedge... a list of several different
+    # citations" allowance.
+    (tmp_path / "scorer-gated-skill-edits").mkdir()
+    d = _write_raw(tmp_path, _portable_body(
+        "This repository has also recorded background context here. "
+        "`scorer-gated-skill-edits`' own guidance already names a "
+        "format for a pure substring scorer."))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-skill-fact-claim"]
+    assert result.passed is True
+
+
+def test_hedge_word_inside_unrelated_inline_code_does_not_count(tmp_path):
+    # Regression: a first cut of the hedge search ran over raw text with
+    # no inline-code blanking, so an unrelated inline-code token
+    # containing "gitapex" (one of HEDGE_PHRASES) elsewhere in the same
+    # paragraph incorrectly satisfied the hedge search.
+    (tmp_path / "scorer-gated-skill-edits").mkdir()
+    d = _write_raw(tmp_path, _portable_body(
+        "See `docs/gitapex-notes.md` for background. "
+        "`scorer-gated-skill-edits`' own guidance already names a "
+        "format for a pure substring scorer."))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-skill-fact-claim"]
+    assert result.passed is False
+
+
+def test_hedge_in_prior_paragraph_does_not_count(tmp_path):
+    # The paragraph-bounded lookback must not reach back across a blank
+    # line into a PRIOR paragraph's own hedge, the same boundary
+    # _inline_citation_offenders already enforces for the other two
+    # Portable citation checks.
+    (tmp_path / "scorer-gated-skill-edits").mkdir()
+    d = _write_raw(tmp_path, _portable_body(
+        "This repository has also recorded background context here.\n\n"
+        "`scorer-gated-skill-edits`' own guidance already names a "
+        "format for a pure substring scorer."))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-skill-fact-claim"]
+    assert result.passed is False
 
 
 # ---- Portability source precedence: sidecar first, body marker as fallback ----
