@@ -227,12 +227,9 @@ repo-specific content, which stay legitimate at those two levels.
 Full rationale and per-dimension grading detail:
 [references/rubric.md](references/rubric.md)'s Portability level section.
 
-## Compatibility awareness
+## Compatibility and Confidentiality awareness
 
-A warning-only axis, separate from Portability and the nine dimensions. Apply
-the classifications, evidence states, output tokens, and remediation rules in
-the [runtime compatibility baseline](references/runtime-compatibility.md).
-Never change the verdict solely for this warning. Put GitApex-only evidence in `metadata/gitapex.yaml`; reserve `compatibility` for the skill's declaration.
+Two warning-only axes, separate from Portability and the nine dimensions, that never change the verdict. **Compatibility awareness** applies the classifications, evidence states, output tokens, and remediation rules in the [runtime compatibility baseline](references/runtime-compatibility.md); put GitApex-only evidence in `metadata/gitapex.yaml`, reserve `compatibility` for the skill's declaration. **Confidentiality awareness** -- distinct from Mechanism fit's secret-exposure Stop-boundary check (backing, not disclosure) -- fires when a procedure step handles secrets, credentials, PII, payment/financial account data, confidential/competitively-sensitive business information (insider-trading-adjacent MNPI and ordinary trade-secret-type harm alike), or private data; reports `NO_CONFIDENTIALITY_CONCERN` / `PROPOSE_CONFIDENTIALITY_SAFEGUARD` / `CONFIDENTIALITY_ACKNOWLEDGED`. Full detail for both: [references/rubric.md](references/rubric.md)'s Compatibility awareness and Confidentiality awareness sections.
 
 ## Unknowns framework
 
@@ -396,8 +393,8 @@ re-derive one.
    from a repository that has not adopted this convention), establish
    both by reading the target's content instead -- the same way an
    undeclared level is read today -- and note the sidecar's absence as
-   context, not as a finding. Run Compatibility awareness from its baseline,
-   keeping the warning separate from portability and the verdict.
+   context, not as a finding. Run Compatibility and Confidentiality
+   awareness from their baselines, keeping both separate from the verdict.
 5. Walk all nine dimensions in `references/rubric.md`, in order (including
    8-9), quoting the specific text that earns each verdict; assume steps
    1-4 hold rather than re-deriving them. No cited evidence means no

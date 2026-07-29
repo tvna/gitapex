@@ -1,0 +1,62 @@
+{
+  "model_id": "claude-sonnet-5 (inferred, not independently confirmed -- see manifest known_gaps)",
+  "n_runs": 8,
+  "scores": [
+    {
+      "iteration": "axis-addition",
+      "fixture_id": "evaluating-skill-quality-confidentiality-awareness-selection",
+      "condition": "before",
+      "commit": "e8c387c0f10aa45886013c7c20b38bd131a72d97",
+      "score": 0.666667
+    },
+    {
+      "iteration": "axis-addition",
+      "fixture_id": "evaluating-skill-quality-confidentiality-awareness-selection",
+      "condition": "after",
+      "commit": "343a7be",
+      "score": 1.0
+    },
+    {
+      "iteration": "payment-data-wording",
+      "fixture_id": "evaluating-skill-quality-confidentiality-awareness-payment-data-selection",
+      "condition": "before",
+      "commit": "bd6fef7",
+      "score": 1.0
+    },
+    {
+      "iteration": "payment-data-wording",
+      "fixture_id": "evaluating-skill-quality-confidentiality-awareness-payment-data-selection",
+      "condition": "after",
+      "commit": "2e6de04",
+      "score": 1.0
+    },
+    {
+      "iteration": "mnpi-wording",
+      "fixture_id": "evaluating-skill-quality-confidentiality-awareness-mnpi-selection",
+      "condition": "before",
+      "commit": "2e6de04",
+      "score": 1.0
+    },
+    {
+      "iteration": "mnpi-wording",
+      "fixture_id": "evaluating-skill-quality-confidentiality-awareness-mnpi-selection",
+      "condition": "after",
+      "commit": "754bb54",
+      "score": 1.0
+    },
+    {
+      "iteration": "business-info-broadening",
+      "fixture_id": "evaluating-skill-quality-confidentiality-awareness-trade-secret-selection",
+      "condition": "before",
+      "commit": "754bb54",
+      "score": 1.0
+    },
+    {
+      "iteration": "business-info-broadening",
+      "fixture_id": "evaluating-skill-quality-confidentiality-awareness-trade-secret-selection",
+      "condition": "after",
+      "commit": "efe40d6",
+      "score": 1.0
+    }
+  ]
+}

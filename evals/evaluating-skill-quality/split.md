@@ -18,10 +18,14 @@ to average out run-to-run variance. Following the precedent already set in
 `skills/scorer-gated-skill-edits/references/worked-example.md` ("the ratio is
 aspirational" for a small fixture count), this split combines the 17:14:9
 base-plus-cohesion partition with a scoped 2:6:2 compatibility addition, a
-1:1:0 reference-load-precision addition (gitapex#477), and a 2:2:1
-opus5-prompting-fit addition (gitapex#495), for a resulting 22:23:12
-partition. This is named explicitly as a deviation from
-the 2:1:7 default. The
+1:1:0 reference-load-precision addition (gitapex#477), a 2:2:1
+opus5-prompting-fit addition (gitapex#495), a 1:1:0
+confidentiality-awareness addition (gitapex#537), a 0:1:0
+payment-data sub-category addition (gitapex#537 follow-up), a 0:1:0
+MNPI/insider-trading-adjacent sub-category addition (gitapex#537
+follow-up), and a 0:1:0 trade-secret/competitive-harm broadening (gitapex#537
+follow-up), for a resulting 23:27:12 partition. This is named explicitly
+as a deviation from the 2:1:7 default. The
 honest minimal groundwork, per that same worked example, is a larger
 fixture corpus over time, not a smaller gate.
 
@@ -44,7 +48,8 @@ fixture corpus over time, not a smaller gate.
   `cohesion-independently-changeable-branches-train.yaml`,
   `reference-load-precision-train.yaml`,
   `opus5-redundant-verification-fail.yaml`,
-  `opus5-unbounded-subagent-fail.yaml`.
+  `opus5-unbounded-subagent-fail.yaml`,
+  `confidentiality-awareness-train.yaml`.
 - **selection** (gates acceptance; scored before/after a candidate edit,
   strict improve-or-reject, ties rejected): `edge.yaml`,
   `mechanism-fit-subagent.yaml`, `third-party-not-authoritative.yaml`,
@@ -66,7 +71,11 @@ fixture corpus over time, not a smaller gate.
   `cohesion-temporal-grouping-selection.yaml`,
   `reference-load-precision-selection.yaml`,
   `opus5-redundant-verification-generalizes.yaml`,
-  `opus5-unbounded-subagent-generalizes.yaml`.
+  `opus5-unbounded-subagent-generalizes.yaml`,
+  `confidentiality-awareness-selection.yaml`,
+  `confidentiality-awareness-payment-data-selection.yaml`,
+  `confidentiality-awareness-mnpi-selection.yaml`,
+  `confidentiality-awareness-trade-secret-selection.yaml`.
 - **test** (read once, for a final report only, never to motivate or gate
   an edit): `guardrail.yaml`, `no-fabricated-violation.yaml`,
   `portability-classification.yaml`, `blind-spot-pass-not-silent.yaml`,
@@ -379,6 +388,213 @@ names its own domain-specific task (re-running a candidate to confirm it
 reproduces, not generic double-checking) and whose delegation step states a
 criterion and a cap (batch by suite size, or triage directly for a small
 suite) must not be false-positively flagged by either new check.
+
+The `confidentiality-awareness-train.yaml` / `-selection.yaml` pair was
+added for gitapex#537 (the new Confidentiality awareness cross-cutting
+axis), for the same reason as every prior addition: none of the prior 57
+fixtures probe whether the review discloses that a reviewed skill's own
+procedure handles secrets, credentials, PII, or private data, and none of
+the prior fixtures' target skills contain such a step at all --
+`portability-declarative-fact-claim.yaml` (train split) and
+`cohesion-independently-changeable-branches-train.yaml` (train split) each
+mention a secret-rotation/secret-scanning tool by name, but neither
+fixture's own `expected` assertions reference confidentiality, secrets, or
+credentials, and the Confidentiality awareness axis is declaration-
+independent of those two fixtures' actual failure shape (Mechanism-fit
+Skill-vs.-multiple-skills cohesion and Portability's declarative-fact-claim
+litmus test, respectively) -- so this pair is the first to probe the new
+axis at all. `-train.yaml` sits in train (a `webhook-debugger` skill that
+writes a full raw request/response, including the live bearer token, to a
+local debug log with no redaction or scoping statement -- it motivated the
+edit). `-selection.yaml` sits in selection and uses a distinct domain,
+sensitive-data category, and sink (a `ticket-summarizer` skill forwarding
+raw customer PII -- name, email, account number -- to a third-party
+analytics webhook, not a credential written to a local file) so the gate
+measures generalization of the axis across data category and sink, not
+memorization of the train fixture's credential/local-log wording. No
+dedicated restraint fixture was added, following the same disclosed
+reasoning the `tool-capability-verification` and
+`consumer-repo-convention-deference` pairs above used: the existing
+`guardrail.yaml` / `no-fabricated-violation.yaml` fixtures already probe
+generic false-positive restraint across the whole rubric, and this axis's
+own Applicability clause (fires only on an ordinary procedure step, not a
+hypothetical example or a Stop-boundary prohibition naming the risk only
+to forbid it) is a narrower, declaration-independent test than a
+freestanding restraint fixture would add coverage for.
+
+Blind spot pass for this addition: the pair covers a credential handled by
+a local-sink step and PII handled by a third-party-sink step, both in the
+`PROPOSE_CONFIDENTIALITY_SAFEGUARD` direction. It does not cover the
+`CONFIDENTIALITY_ACKNOWLEDGED` state (a target that already states an
+accurate safeguard) or a target that mentions sensitive data only as a
+Stop-boundary prohibition rather than an ordinary step -- both left as a
+disclosed, open gap for a future addition rather than silently assumed
+covered.
+
+**Gate result: see the Kept-edit log below.**
+
+**Follow-up (gitapex#537, same issue): payment/financial account data
+named explicitly.** A follow-up question (does the Applicability clause's
+"PII" bucket reliably cover a bare credit-card number with no other
+conventionally-named PII field present?) found the wording ambiguous:
+"PII" read narrowly (name/email/address-type identifiers) could plausibly
+miss a step that handles nothing but a card number, which also carries
+its own distinct regulatory regime (PCI-DSS) separate from general
+privacy law. `references/rubric.md`'s Applicability clause and `SKILL.md`'s
+mirrored pointer were extended to name "payment/financial account data
+(credit card or other payment-card numbers, bank account or routing
+numbers)" explicitly, alongside a new selection fixture,
+`confidentiality-awareness-payment-data-selection.yaml` (a
+`checkout-debugger` skill logging a bare replayed card number to a local
+debug file, with no name/email/other-PII field anywhere in the excerpt --
+isolating the payment-data sub-category from the two original fixtures,
+which both bundle it alongside more obviously-named PII).
+
+**Gate result, same `claude -p` isolation methodology as above (pre-edit
+pinned at `bd6fef7`), one fresh dispatch per side against only
+`confidentiality-awareness-payment-data-selection.yaml`:**
+
+| Fixture | Before | After |
+|---|---|---|
+| `confidentiality-awareness-payment-data-selection.yaml` | 1.000000 (fresh) | 1.000000 (fresh) |
+
+`score_contract.py --compare-to 1.000000`: `1.000000 REJECT` (tie at the
+scorer's ceiling). The *before* dispatch already correctly generalized
+"PII" to cover a bare, unlabeled card number without the explicit
+category -- quoting it directly: *"a procedure step that handles a
+payment credential (PAN) with zero stated safeguard... this is the
+rubric's Confidentiality awareness axis firing at its worst case."* So
+this specific live trial (Sonnet, high effort) did not demonstrate the
+ambiguity the edit was written to close.
+
+**Kept anyway, REJECT disclosed rather than hidden -- the same
+disposition the gitapex#406 entry above used for a drift-correction the
+corpus could not score.** The tie reflects a real limit of this specific
+trial (one strong-tier model, one sample), not evidence the edit adds
+nothing: (1) the corpus-coverage argument stands independent of this
+trial's outcome -- Dimension 1's own "specific key terms, no filler"
+principle, applied to the rubric's own Applicability wording, favors an
+explicit, regulation-grounded category over reliance on a generalization
+one live sample happened to make correctly; (2) issue #500's own Phase 1
+cross-model data already shows weaker tiers under-performing specifically
+on axis-disambiguation content (the `compatibility-*` fixtures), the same
+shape of risk this edit guards against for a tier this gate has not
+tested; (3) the cost is at or near zero -- a few explicit words, no
+added ambiguity, `check_skill_shape.py` unaffected (46/46 both before and
+after). Per this repository's own drift-correction precedent, a tie is a
+statement about what the current corpus can measure, not a verdict on the
+edit's merit -- extending the corpus with a fixture built specifically to
+expose the narrow-"PII"-reading failure mode (a weaker-tier trial, or a
+harder-to-generalize phrasing than "full card number") is the honest next
+step if this edit's real effect is ever to be measured on this corpus,
+not reclassifying this tie to force a KEEP.
+
+**Second follow-up (gitapex#537, same issue): material non-public
+business information (MNPI) named explicitly.** A further question (does
+the axis cover non-public business/corporate information whose premature
+disclosure could be insider-trading-adjacent, e.g. undisclosed earnings
+or deal terms) found the same shape of gap: this material fits the
+generic "private/internal-only data" bucket, but that bucket read
+narrowly could miss it, and it carries its own distinct legal regime
+(securities/insider-trading law) the same way payment-card data carries
+PCI-DSS. Extended `references/rubric.md`'s Applicability clause and
+`SKILL.md`'s pointer to name it explicitly, plus a new selection fixture,
+`confidentiality-awareness-mnpi-selection.yaml` (an `earnings-prep-
+assistant` skill posting a draft quarterly earnings summary -- undisclosed
+revenue/margin/guidance figures -- to a company-wide Slack channel with no
+access restriction or embargo statement; unlike the PII/payment-data
+fixtures, this target handles no personal data at all, isolating the MNPI
+sub-category cleanly).
+
+**Gate result, same methodology, pre-edit pinned at `2e6de04`, one fresh
+dispatch per side against `confidentiality-awareness-mnpi-selection.yaml`:**
+
+| Fixture | Before | After |
+|---|---|---|
+| `confidentiality-awareness-mnpi-selection.yaml` | 1.000000 (fresh) | 1.000000 (fresh) |
+
+`score_contract.py --compare-to 1.000000`: `1.000000 REJECT` (tie at
+ceiling, the same shape as the payment-data follow-up immediately above).
+The *before* dispatch's own text names why: it explicitly noted "the
+rubric's own Confidentiality-awareness category list doesn't quite name
+[MNPI]... but functionally, this is the thing most wrong with the skill,"
+then generalized from the generic `private/internal-only data` bucket to
+the correct verdict anyway. **Kept anyway, REJECT disclosed, same
+disposition and reasoning as the payment-data entry above** -- not
+repeated in full here; the corpus-coverage argument, the cross-model
+Phase 1 evidence, and the near-zero cost all apply identically.
+
+**Pattern across both follow-ups so far:** two independent live trials
+(payment data, MNPI), two independent ties at the scorer's ceiling, both
+because this specific strong tier (Sonnet, high effort) already
+generalizes a narrow bucket correctly. This is becoming a standing,
+disclosed limitation of measuring precision-only wording edits against a
+single strong-tier live sample, not a new finding each time -- a
+weaker-tier or repeated-trial measurement (issue #500 Phase 2, not yet
+scheduled) remains the honest way to actually detect the gap these edits
+guard against, per the corpus-coverage reasoning already on record.
+
+**Third follow-up (gitapex#537, same issue): the business-information
+bucket broadened, not re-scoped a third time.** A further question (does
+the axis cover competitively-sensitive cost/pricing data that harms a
+business regardless of any securities-law exposure -- e.g. a private
+company with no insider-trading angle at all) exposed that the just-added
+MNPI wording was itself too narrowly scoped: its parenthetical named only
+"insider-trading- or market-abuse-adjacent" disclosure, which does not
+obviously cover ordinary trade-secret/competitive-harm data. Rather than
+add a third standalone named category (continuing an unbounded
+enumeration this rubric's own Dimension 2 conciseness discipline would
+flag as sprawl if a target skill did it), broadened the existing
+`material non-public business information` bullet into `confidential or
+competitively-sensitive business information`, explicitly covering both
+the insider-trading-adjacent harm mechanism and ordinary trade-secret/
+competitive-harm data (cost structure, supplier pricing, unreleased
+strategy) as two named anchors under one bucket, with an explicit note
+that these are illustrative, not an exhaustive enumeration.
+
+Added `confidentiality-awareness-trade-secret-selection.yaml`: a private
+company (no securities-law angle at all) emailing its own internal cost
+breakdown to an external supplier during a price negotiation --
+deliberately the sub-case the narrow MNPI wording's parenthetical did not
+name, to test the broadened wording against exactly the gap that
+motivated it, distinct from `confidentiality-awareness-mnpi-selection.yaml`'s
+publicly-traded/earnings framing.
+
+**Gate result, same methodology, pre-edit pinned at `754bb54`, one fresh
+dispatch per side against `confidentiality-awareness-trade-secret-selection.yaml`:**
+
+| Fixture | Before | After |
+|---|---|---|
+| `confidentiality-awareness-trade-secret-selection.yaml` | 1.000000 (fresh) | 1.000000 (fresh) |
+
+`score_contract.py --compare-to 1.000000`: `1.000000 REJECT` -- a third
+consecutive tie at the scorer's ceiling. The *before* dispatch (narrow,
+insider-trading-scoped MNPI wording) already generalized `"material
+non-public business information"` past its own parenthetical's explicit
+insider-trading/market-abuse scoping to cover a private company's
+supplier-negotiation cost leak; the *after* dispatch (broadened wording)
+cited the new text directly ("Internal cost structure is the rubric's own
+named example of competitively-sensitive business information"). **Kept
+anyway, REJECT disclosed, same disposition as the two entries above** --
+not repeated in full.
+
+**Consolidated pattern, three follow-ups (payment data, MNPI, trade
+secret/broadening): three independent live trials, three ties at the
+scorer's ceiling, all for the same underlying reason** -- this strong
+tier (Sonnet, high effort) reliably generalizes past a narrow or generic
+bucket to the correct sensitive-data instance and safeguard proposal on a
+single live sample, so a substring scorer measuring only "did the exact
+token/heading appear" cannot detect what these wording edits add at this
+tier. This is now a standing, disclosed limit of this measurement
+approach for precision-only Applicability wording, not three independent
+surprises -- the honest way to actually measure whether these edits earn
+their keep is a weaker-tier and/or repeated-trial run (issue #500 Phase
+2, not yet scheduled), not continued single-strong-tier single-trial
+gating. None of the three edits are reverted on this basis: each has an
+independent, freestanding rationale (a named, distinct regulatory or harm
+regime; Dimension 1's own specificity principle applied to the rubric's
+own wording; near-zero cost; no shape-check regression) that does not
+depend on this specific corpus detecting an improvement.
 
 Future edits to this rubric should reuse this same split rather than
 re-deriving one per iteration, so the selection split stays genuinely
@@ -2437,3 +2653,90 @@ PR #496), both fixed in the same PR:**
 
 Neither correction changes the KEEP verdict above: both are fixes to
 fixture/checker precision, not to the rubric content the gate scored.
+
+**Iteration: gitapex#537, Confidentiality awareness axis.** Candidate
+edit: add a new `## Confidentiality awareness` warning-only, cross-cutting
+axis to `references/rubric.md` (mirroring `## Compatibility awareness`'s
+three-state structure), a merged `## Compatibility and confidentiality
+awareness` pointer section in `SKILL.md`, and an extension to Procedure
+step 4 to run both axes. Full text: this PR's diff. Motivated by a
+conversational Q&A session finding no existing axis checks whether a
+reviewed skill's own procedure discloses/guards handling of secrets,
+credentials, PII, or private data -- distinct from Mechanism fit's
+secret-exposure Stop-boundary check, which only asks whether a *stated*
+prohibition is hook-backed.
+
+Precondition and splits: satisfied (59 fixtures, 23:24:12 -- see
+Assignment above); 2 new fixtures added this iteration
+(`confidentiality-awareness-train.yaml` / `-selection.yaml`).
+
+**Methodology.** Isolation used the verified `claude -p` subprocess
+alternative from `references/adversarial-self-audit.md`'s registry (this
+exact `CLAUDE_CODE_REMOTE=true`, `claude --version` `2.1.220 (Claude
+Code)` platform has a confirmed entry): working directory outside this
+repository's `CLAUDE.md`/`AGENTS.md` ancestry, `$HOME` pointed at a copy
+of the real `$HOME/.claude/` + `.claude.json` with only `tasks/` and the
+conversation-history directories (`projects/`, `sessions/`,
+`shell-snapshots/`) stripped, confirmed byte-identical to the original
+`.claude.json` otherwise. `--permission-mode dontAsk --allowedTools Read`
+(the sandbox's root/sudo context rejects `--dangerously-skip-permissions`
+outright, so this narrower flag combination stands in for it, scoped to
+read-only tool access). Pre-edit snapshot pinned at
+`e8c387c0f10aa45886013c7c20b38bd131a72d97` via `git show`; post-edit
+snapshot the working tree at commit time. One fresh dispatch per side
+against only `confidentiality-awareness-selection.yaml` (the new fixture
+-- the 23 pre-existing selection fixtures were confirmed content-disjoint
+from this edit by direct inspection: none of their `expected` blocks or
+target-skill prompts reference "Confidentiality," "secret," "credential,"
+or "PII," and the two pre-existing fixtures that do mention a
+secret-rotation/secret-scanning tool by name
+(`portability-declarative-fact-claim.yaml`,
+`cohesion-independently-changeable-branches-train.yaml`) both sit in
+train, not selection -- so they tie exactly and were not re-dispatched,
+the same assertion-surface-disjointness basis the gitapex#406 and
+gitapex#495 entries above already used), scored with
+`skills/scorer-gated-skill-edits/scripts/score_contract.py`:
+
+| Fixture | Before | After |
+|---|---|---|
+| `confidentiality-awareness-selection.yaml` | 0.666667 (fresh) | 1.000000 (fresh) |
+
+`score_contract.py --compare-to 0.666667`: `1.000000 KEEP`.
+
+**Independent corroboration, found unprompted.** The *pre-edit* dispatch's
+own Blind spot pass -- run against the unmodified rubric, with no
+awareness this edit was planned -- named the exact gap this edit closes,
+verbatim: "the rubric has no dedicated axis for 'does this skill's
+instructed action itself constitute a privacy/data-handling risk,' as
+distinct from reliability-of-enforcement (mechanism fit) or procedural
+fragility (dimension 3)." The *post-edit* dispatch correctly fired the new
+axis (`Confidentiality awareness: PROPOSE_CONFIDENTIALITY_SAFEGUARD`,
+citing the exact step and proposing a concrete redaction fix) and folded
+it into a coherent whole-artifact review (also correctly flagging a
+Communicational/informational cohesion split candidate and a Dimension 6
+durability gap on the same target) rather than over-firing the new axis
+in isolation from the rest of the walk.
+
+**Deterministic checks:** `check_skill_shape.py` 46/46 after the final
+content edits (one intermediate `body-length` FAIL at 515 lines was fixed
+by merging the SKILL.md pointer into the existing Compatibility-awareness
+section rather than adding a second full heading, since `SKILL.md` was
+already at the exact 500-line cap with zero slack before this edit); the
+new fixtures' YAML parses cleanly and `lint_fixture_assertions.py` flagged
+one disclosed, accepted case-sensitivity warning (both new fixtures'
+`"Confidentiality awareness"` assertion matches `rubric.md`'s own `##
+Confidentiality awareness` heading casing exactly -- the literal string
+the rubric's own "Report exactly one state" bullets instruct a compliant
+review to emit -- but differs from `SKILL.md`'s merged heading, `##
+Compatibility and confidentiality awareness`, whose casing is
+necessarily different because it names two axes in one sentence-style
+heading; not a fixture-authoring bug).
+
+**Transfer check:** not run this iteration, the same disclosed, unresolved
+gap every entry in this log since issue #200 has carried forward.
+
+**KEEP.** Strict selection-split improvement on the one fixture built to
+test this exact change (0.666667 -> 1.000000), 23 pre-existing selection
+fixtures confirmed unaffected by direct inspection, and unprompted
+independent corroboration from the pre-edit dispatch's own Blind spot pass
+that the closed gap was real.
