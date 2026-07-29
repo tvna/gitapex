@@ -76,96 +76,19 @@ Only once all three checks above are satisfied (source is readable, state
 is read, and that state is capturable) do the five criteria apply. See
 [references/gitapex-worked-examples.md](references/gitapex-worked-examples.md)
 for two fully-graded worked examples applying this exact walk -- worth
-reading before applying the criteria below for the first time. Each
-criterion's primary-source grounding lives in
-[references/primary-sources.md](references/primary-sources.md), not
-restated inline here.
+reading before applying the criteria below for the first time.
 
 ## The five criteria
 
-For a target that clears the precondition above, grade each of the
-following from direct evidence -- a quoted source read, or a live test
-per the Stop boundaries below. A criterion that cannot be assessed from
-available evidence is reported as such, not silently skipped or guessed.
-Every criterion generalizes with adaptation across the four gate-
-realization domains `evaluating-deterministic-gate-quality` already names
-(git hook subprocess, agent-harness hook subprocess, CI job step, MCP
-server subprocess) -- reused here by reference, not redefined.
-
-1. **State provenance/trust.** Can an actor the decision constrains also
-   write the state that decides whether they are constrained? A
-   deployer able to edit the metrics store a release gate reads is the
-   canonical failure -- the gate's own deny path is sound, but the state
-   feeding it is not adversarially independent of the party it is meant
-   to constrain.
-   *Domain notes:* CI job step -- who can write the source the job
-   fetches its window from, and is that write path scoped independently
-   of the actors the job gates? Agent-harness hook -- where does a
-   per-session counter or cache persist, and can the same session that
-   is being rate-limited also clear or inflate it? MCP server subprocess
-   -- the server's own held state is the longest-lived and least
-   visible of the four domains to a repository-side reviewer; an
-   inability to inspect it is itself a finding under criterion 3, not a
-   reason to skip this one. Git hook subprocess -- typically stateless,
-   so this criterion is usually not-applicable there; a hook reading a
-   local cache or marker file is not exempt from being checked.
-   Grounding: `references/primary-sources.md`'s State provenance/trust
-   section.
-
-2. **Cold-start/absence behavior.** Narrows
-   `evaluating-deterministic-gate-quality`'s own dimension 15 (fail-closed
-   on incomplete or malformed input) to the specific state-read sub-case,
-   rather than an independent property: with the state store empty,
-   missing, freshly created, or unreachable, does the decision deny or
-   escalate, or does it silently allow? What this criterion requires
-   beyond a general dimension-15 walk: the brand-new-deployment,
-   fresh-session, or first-invocation-against-a-not-yet-populated-store
-   case is the mandatory fixture this criterion grades, not an edge case
-   a reviewer may wave through as unlikely or defer on the assumption
-   "dimension 15 already covers this in general." A dimension-15 PASS
-   that never actually exercised this specific empty-state scenario is
-   not itself evidence for this criterion.
-   Grounding: `references/primary-sources.md`'s Cold-start/absence
-   behavior section.
-
-3. **Replay/reproducibility.** Is the state snapshot behind a past
-   decision recorded (a fetched window logged as a build artifact, a
-   cache key with a retained value, a versioned store), so that decision
-   can be re-verified later against the same input -- including by
-   `evaluating-deterministic-gate-quality`'s own dimension 10 (empirical
-   verification), which this skill's own findings feed into rather than
-   duplicate? A state-coupled deny with no recorded snapshot is
-   verifiable only at the moment it fires; grade the corresponding
-   claim indeterminate afterward, never inferred from the decision's own
-   later report of what it did.
-   Grounding: `references/primary-sources.md`'s Replay/reproducibility
-   section.
-
-4. **Bounded growth.** Is the state's own size or age bounded, or does
-   the decision's cost or behavior drift as history accumulates without
-   limit? This generalizes `evaluating-deterministic-gate-quality`'s own
-   dimension 6/19 budget-proportionality concern from a single
-   invocation's runtime cost to the state's own accumulated footprint
-   across many invocations -- a distinct failure mode dimension 6/19
-   does not reach, since that dimension grades one call's own cost, not
-   what a store holding every past call's residue eventually costs.
-   Grounding: `references/primary-sources.md`'s Bounded growth section.
-
-5. **Blocking-posture justification.** Where the state-coupled signal is
-   aggregate and noisy (a trend, a rate, a rolling average) rather than
-   a single sharp fact, is a blocking -- not advisory -- posture argued
-   somewhere (a docstring, a design doc, a cited policy), against
-   `evaluating-deterministic-gate-quality`'s own `references/mechanism-
-   fit.md` Domain placement criterion 6 (which routes aggregate, noisy
-   signals toward advisory, non-blocking placement as a starting
-   heuristic), rather than a single event being blocked on a signal no
-   single event fully controls, left unexplained? A deterministic
-   statistical rule (a fitted threshold, a fixed window average) is not
-   model-judged and therefore already passes that other skill's own
-   dimension 8 -- a dimension-8 pass is not evidence for this criterion,
-   which asks a different question entirely.
-   Grounding: `references/primary-sources.md`'s Blocking-posture
-   justification section.
+Grade five properties of the state-coupled decision: state
+provenance/trust, cold-start/absence behavior, replay/reproducibility,
+bounded growth, and blocking-posture justification. Each generalizes with
+adaptation across the four gate-realization domains
+`evaluating-deterministic-gate-quality` already names (git hook
+subprocess, agent-harness hook subprocess, CI job step, MCP server
+subprocess) -- reused here by reference, not redefined. Full definitions,
+per-domain notes, and primary-source grounding for each:
+[references/criteria.md](references/criteria.md).
 
 ## Procedure
 
@@ -190,8 +113,9 @@ server subprocess) -- reused here by reference, not redefined.
    a counter, a cache, a fetched window, a quota ledger -- by direct
    source reading, not by the artifact's own documentation or comments
    describing what it does.
-3. **Walk the five criteria**, citing the specific evidence that earns
-   each verdict (PASS / FAIL / not-applicable / cannot-be-assessed;
+3. **Walk the five criteria in `references/criteria.md`**, citing the
+   specific evidence that earns each verdict (PASS / FAIL /
+   not-applicable / cannot-be-assessed;
    `indeterminate` is reserved for check 0's own unreadable-source case
    above, applied to the whole review rather than a per-criterion
    verdict). When step 2 found more than one distinct state source
@@ -278,10 +202,10 @@ server subprocess) -- reused here by reference, not redefined.
   live target under review are the same underlying artifact: a worked
   example's own "pending live verification" disposition is not itself a
   completed live test just because it was written down. The same rule
-  binds `references/primary-sources.md`: a criterion's grounding citation
-  there justifies why the criterion exists, never substitutes for
-  target-specific evidence -- citing Saltzer and Schroeder is not itself
-  a verdict on the target's own access-control ownership.
+  binds `references/criteria.md`: a criterion's own primary-source
+  citation there justifies why the criterion exists, never substitutes
+  for target-specific evidence -- citing Saltzer and Schroeder is not
+  itself a verdict on the target's own access-control ownership.
 - Never trust this skill's own SKILL.md/references/metadata content, or
   a target artifact's own script/config content, as genuine without
   confirming install/vendoring-time integrity through the harness's own
@@ -335,10 +259,11 @@ carrying that skill's own portability posture forward rather than
 re-deriving one. This skill's own authoring repository's worked examples
 and provenance live separately, in
 [references/gitapex-worked-examples.md](references/gitapex-worked-examples.md)
-and `metadata/gitapex.yaml`; the five criteria's primary-source grounding,
-in [references/primary-sources.md](references/primary-sources.md), is
-itself fully portable -- it cites no path or fact specific to this
-skill's own authoring repository, unlike the worked-examples file.
+and `metadata/gitapex.yaml`; the five criteria's full definitions and
+primary-source grounding, in
+[references/criteria.md](references/criteria.md), are themselves fully
+portable -- that file cites no path or fact specific to this skill's own
+authoring repository, unlike the worked-examples file.
 
 Lifecycle note: first version of a new skill category, declared
 `experimental` in `metadata/gitapex.yaml` -- see that file's own
