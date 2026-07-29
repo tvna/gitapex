@@ -5,7 +5,11 @@ description: The policy "block a live agent session from ever calling rm -rf
   commit history afterward for evidence the command ran -- well-built as a
   scanner but too late by construction. The reversibility-window criterion
   clearly places the correct chokepoint at the agent-harness PreToolUse hook
-  domain, not CI. Verdict must be well-formed but misplaced.
+  domain, not CI. Verdict must be well-formed but misplaced. The same fact
+  pattern is also a worked instance of dimension 7's own example (a trigger
+  that fires only after the guarded action has already completed cannot
+  undo it), reached here through the mechanism-fit domain-placement lens
+  rather than a standalone dimension-7 walk.
 tags:
   - quality
   - mechanism-fit

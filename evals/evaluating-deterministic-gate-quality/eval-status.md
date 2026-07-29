@@ -21,15 +21,36 @@ also have none.
 
 The first 14 fixtures were authored directly; a second pass (an independent
 `fable` subagent review) built a coverage map against every dimension/axis
-in `SKILL.md` and `references/*.md`, found the Compatibility-awareness and
+in `SKILL.md` and `references/*.md`, found the Compatibility awareness and
 Blast-radius axes had zero coverage, several probabilistic-maturity
 dimensions were untouched, and a wording bug in one existing fixture (citing
 "dimension 12" instead of the correct "dimension 18" for secret redaction) --
-fixed, plus 8 new fixtures added to close the highest-value gaps. Not
-exhaustive by design: dimensions 9, 11, 13, 14, 16, 17 and several Stop
-boundaries remain uncovered where no safe verbatim assertion could be found
-without risking a paraphrase-drift false-fail; see the fixtures' own
-`description` fields for what each one actually pins down.
+fixed, plus 8 new fixtures added to close the highest-value gaps.
+
+This coverage map is no longer a one-off: `evals/scripts/
+check_dimension_coverage.py` makes it repeatable, discovering this skill's
+own numbered dimensions (`references/dimensions.md`) and named cross-cutting
+axes (`SKILL.md`'s `### Axis:` headings), then cross-referencing them
+against every fixture's `id`/`name`/`description`/`tags`/`inputs.prompt`
+text for a `"dimension N"` or axis-name citation.
+`tests/test_evaluating_deterministic_gate_quality_dimension_coverage.py`
+runs it against this real corpus and fails CI if any dimension it reports
+uncovered is not named right here -- so this list can't silently drift from
+the real corpus the way the "dimension 12" mislabel above did. Current
+output: 12/19 dimensions and 4/4 axes cited; **dimensions 9, 11, 12, 13, 14,
+16, and 17 remain uncovered**, not exhaustive by design -- no fixture's
+scenario naturally exercises known-limitation disclosure (9), deployment-
+mode portability (11), duplication/drift risk (12), side-effect independence
+from the deny decision (13), structured-output hygiene (14), runtime
+tamper-detection (16), or discoverability (17) without inventing an
+artificial scenario just to name-check a dimension number, and several Stop
+boundaries also remain uncovered where no safe verbatim assertion could be
+found without risking a paraphrase-drift false-fail; see the fixtures' own
+`description` fields for what each one actually pins down. The tool is
+citation-based, not semantic (its own module docstring names this
+explicitly), so a future fixture could exercise one of these seven
+substantively without literally writing its number -- rerun the script
+before trusting this list stale.
 
 No no-skill baseline and no model tier have been run against this corpus:
 the environment that authored it has neither `waza` nor `nix` installed, the
@@ -37,4 +58,4 @@ same constraint the "Cross-model matrix scaffolding" section of
 `docs/skill-eval-status.md` already discloses for the whole repository. This
 is scaffolding, not a measurement -- a credentialed dispatch (or an
 environment with `waza` available) is still needed to produce the first real
-run. Refs #435, #507, #508.
+run. Refs #435, #507, #508, #511.

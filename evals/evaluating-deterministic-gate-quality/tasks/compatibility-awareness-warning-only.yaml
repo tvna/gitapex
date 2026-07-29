@@ -1,12 +1,12 @@
 id: evaluating-deterministic-gate-quality-compatibility-awareness-warning-only
-name: Undocumented exit-code divergence across agent runtimes is a Compatibility-awareness finding that never overrides the verdict
+name: Undocumented exit-code divergence across agent runtimes is a Compatibility awareness finding that never overrides the verdict
 description: An agent-harness PreToolUse hook is otherwise well-built (self-
   revalidating, exec-form subprocess args, bundled test, explicit timeout)
   and signals deny via exit code 2. Under the primary agent runtime it was
   tested against, exit code 2 blocks the tool call; under a second runtime
   the same team also deploys it to, exit code 2 is treated as a generic
   non-zero and silently degrades to a non-blocking warning -- undocumented
-  anywhere. This exercises the Compatibility-awareness axis, which is
+  anywhere. This exercises the Compatibility awareness axis, which is
   warning-only and must never itself change the verdict.
 tags:
   - quality
@@ -31,7 +31,7 @@ inputs:
     call. Neither the hook's own script nor any doc mentions this
     difference.
 
-    Give me the Compatibility-awareness finding and the overall verdict
+    Give me the Compatibility awareness finding and the overall verdict
     for this gate.
 expected:
   output_contains:
