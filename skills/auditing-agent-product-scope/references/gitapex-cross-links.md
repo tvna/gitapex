@@ -18,8 +18,7 @@ cross-link where they don't, never fabricating one.
 
 ## The scope map and its six axes
 
-gitapex's scope map is
-[`docs/agent-product-scope.md`](../../../docs/agent-product-scope.md):
+gitapex's scope map is `docs/agent-product-scope.md`:
 
 | Axis | Governs |
 |---|---|

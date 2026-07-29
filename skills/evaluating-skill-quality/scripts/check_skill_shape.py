@@ -148,7 +148,9 @@ Checks (the canonical list -- the manual fallback is to apply these):
     (a Markdown heading matching "Table of contents" or "Contents",
     case-insensitive). Junk files (dotfiles, __pycache__, non-UTF-8) under
     references/ are ignored, not flagged.
-  - SKILL.md body: every Markdown link target -- inline ([text](path))
+  - SKILL.md body and every references/*.md file (links-inside-skill,
+    issue #453 extended this from SKILL.md-only to references/*.md too):
+    every Markdown link target -- inline ([text](path))
     or reference-style ([text][label] resolved via a [label]: path
     definition) -- that is not an absolute URL/scheme (http(s):,
     mailto:, etc.) or a bare in-page fragment (#section) must resolve
@@ -156,14 +158,23 @@ Checks (the canonical list -- the manual fallback is to apply these):
     (e.g. "../../docs/x.md") fails. This
     gives the skill's own "Portable" self-declaration (whose definition
     already requires every instruction to resolve inside the skill's own
-    folder) a deterministic backstop.
+    folder) a deterministic backstop. Runs on SKILL.md (bare check name)
+    and independently on every references/*.md file (``links-inside-
+    skill:{ref.name}``, mirroring anchor-targets-resolve's own per-file
+    naming below). A relative target is resolved against the file that
+    CONTAINS it (SKILL.md's own directory, or a references/*.md file's
+    own references/ directory) -- real relative-link semantics, not
+    resolved against the skill root unconditionally, since a
+    references/*.md file does not itself sit at the skill root (issue
+    #453's own incident: a references/*.md file's own relative link
+    escaping the skill directory went undetected because this check used
+    to only ever run against SKILL.md).
   - Markdown anchor-fragment resolution (anchor-targets-resolve, issue
     #280 row 11 / issue #289): every Markdown link's ``#fragment`` --
     inline or reference-style, same as the check above -- must match a
     real heading anchor GitHub's own renderer would generate for the
     link's target file (the link's own file, when no path is given, or
-    the resolved path otherwise). Runs on SKILL.md (bare check name,
-    mirroring links-inside-skill's own SKILL.md-only scope) and
+    the resolved path otherwise). Runs on SKILL.md (bare check name) and
     independently on every references/*.md file (``anchor-targets-
     resolve:{ref.name}``, mirroring toc:{ref.name}'s per-file naming and
     loop, but unconditionally -- not gated on the 100-line TOC threshold,
@@ -200,6 +211,32 @@ Checks (the canonical list -- the manual fallback is to apply these):
     code block is never treated as a real heading (the same fence-
     blanking already used for the citation checks below, which also
     normalizes CRLF/CR line endings to bare ``\n`` first).
+  - Cross-skill file+heading citation resolution (cross-skill-citation-
+    resolves, issue #482): a prose citation of the shape "`SKILL-NAME`'s
+    `references/FILE.md` HEADING TEXT section" (skill name and file path
+    each in their own inline-code span, heading text as bare prose ending
+    at the literal word "section") in SKILL.md or references/*.md must
+    resolve -- the named sibling skill directory exists, the named file
+    exists inside that sibling's own references/ directory, and a
+    heading matching the cited text exists in that file (reusing the
+    same GitHub heading-slug logic anchor-targets-resolve implements
+    above). A citation in this shape can never be a real Markdown link
+    that anchor-targets-resolve or links-inside-skill would otherwise
+    catch, since a cross-skill target cannot legally resolve inside the
+    CITING skill's own directory -- this is the dedicated backstop for
+    exactly that gap. Runs unconditionally, at every portability level.
+  - Mechanism-fit subsection citation completeness (mechanism-fit-
+    subsections-cite-sources, issue #218): every "### " subsection nested
+    under a "## Mechanism fit" heading, in SKILL.md or references/*.md,
+    must carry either a "[label]"-style citation bracket or the literal
+    phrase "this repository's own reasoned extension" -- mechanizing the
+    completeness rule such a section's own intro prose already states
+    ("the primary source and the reasoning behind each check") but
+    nothing previously checked. Generic over any document with such a
+    heading, not hardcoded to references/rubric.md's filename; a
+    document with no "## Mechanism fit" heading at all trivially passes
+    (zero subsections to check). Runs unconditionally, at every
+    portability level.
   - Bare issue/PR-number citation (no-bare-issue-citation, issue #254):
     no bare-prose GitHub issue/PR-number citation (#149 or owner/repo#149)
     in SKILL.md or references/*.md body text. Runs unconditionally on
@@ -290,6 +327,21 @@ Checks (the canonical list -- the manual fallback is to apply these):
     full rationale, including why its phrase list is separate from and
     narrower than HEDGE_PHRASES) nearby. Portable-gated, alongside the two
     repo-path checks above, unlike the unconditional bare-prose scan.
+  - Portable unhedged sibling-skill fact-claim (portable-no-unhedged-
+    skill-fact-claim, issue #487): a possessive citation of a named
+    sibling skill (e.g. `` `scorer-gated-skill-edits`' own
+    fixture-authoring guidance already names X for a pure substring
+    scorer ``, the real incident this issue reports) inside
+    Portable-declared content, asserted with "already" in the same
+    clause, naming a real sibling skill directory, with no approved hedge
+    phrase (HEDGE_PHRASES, the same list the repo-path check above uses)
+    nearby. Deliberately narrow (see PORTABLE_SKILL_FACT_CLAIM_RE's own
+    comment): a corpus-wide validation scan found that flagging every
+    resolving backtick-quoted skill-name citation, without the possessive
+    shape and "already" requirements, fires on eleven of this
+    repository's own already-shipped skills -- the possessive form alone
+    is this repository's single most common, entirely benign way to cite
+    a sibling skill's content.
   - Illustrative model identifier (no-illustrative-model-identifier,
     docs/skill-authoring-standards.md rule 1): no real, current Claude model
     identifier (ILLUSTRATIVE_MODEL_ID_RE: "claude-" plus a known
@@ -817,6 +869,50 @@ ISSUE_CITATION_HEDGE_PHRASES = (
     "hex color",
     "css color",
 )
+
+# A possessive citation of a named sibling skill, issue #487 -- e.g.
+# "`scorer-gated-skill-edits`' own fixture-authoring guidance already
+# names X for a pure substring scorer", the real incident this issue
+# reports (rubric.md, commit 7ae597d, fixed in 59b86a5). Matches either
+# "`name`'s" (a name not already ending in "s") or the bare-apostrophe
+# English possessive "`name`'" (a name that already ends in "s", e.g.
+# "scorer-gated-skill-edits'"). ``clause`` captures the text up to the
+# next sentence/clause boundary (an approximation, same tolerance this
+# file's own _SENTENCE_SPLIT_RE-based tokenizer elsewhere accepts, not a
+# full parser) for the caller to search for "already" and an approved
+# hedge phrase.
+#
+# Deliberately narrower than "any backtick-quoted resolving skill name" --
+# a full-repository scan performed while designing this check (see the
+# PR's own commit message / issue #487's ACM residual-risk column, which
+# already predicted this exact gap: "distinguishing 'unhedged fact-claim'
+# from ordinary prose mentioning a sibling skill by name needs careful
+# heuristics to avoid false positives") found that an unscoped "any
+# resolving citation, no hedge" rule fires on ELEVEN of this repository's
+# own already-shipped skills -- the possessive-citation shape alone
+# ("`NAME`'s own X") is this repository's single most common, entirely
+# benign way to cite a sibling skill's content, used dozens of times
+# across nearly every skill. Requiring "already" in the same clause (the
+# one signal both the real incident's own text and its own fix commit's
+# diff share -- the fix deliberately dropped this exact framing rather
+# than adding a hedge phrase) reduced that same corpus-wide scan to zero
+# real false positives (three residual hits were all inside
+# Repository-scoped/Mixed skills this check's own Portable gate already
+# excludes). This narrowness is a deliberate, evidence-grounded trade-off,
+# not an oversight: it will not catch a differently-worded unhedged
+# fact-claim that never uses the word "already".
+#
+# A trailing ``\b`` word-boundary assertion (the usual way this file marks
+# "end of token" elsewhere) does NOT work after the bare-apostrophe form:
+# at the position right after a lone ``'`` with no ``s`` following, both
+# the apostrophe itself and the whitespace after it are non-word
+# characters, so no word/non-word transition exists there for ``\b`` to
+# match -- confirmed by direct execution during review, which silently
+# made the bare-apostrophe form (a name already ending in "s", e.g.
+# "scorer-gated-skill-edits'") never match at all. A lookahead for
+# whitespace is used instead, which works identically for both forms.
+PORTABLE_SKILL_FACT_CLAIM_RE = re.compile(
+    r"`([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)`'s?(?=\s)(?P<clause>[^.;\n]{0,120})")
 
 
 @dataclass(frozen=True)
@@ -1849,7 +1945,8 @@ def _escapes_skill_dir(normalized: str, skill_norm: str) -> bool:
     return normalized != skill_norm and not normalized.startswith(skill_norm + os.sep)
 
 
-def _out_of_skill_link_targets(body_text: str, skill_dir: Path) -> list[str]:
+def _out_of_skill_link_targets(body_text: str, skill_dir: Path,
+                               source_dir: Path | None = None) -> list[str]:
     """Return each Markdown link target in ``body_text`` that resolves
     outside ``skill_dir``.
 
@@ -1861,8 +1958,24 @@ def _out_of_skill_link_targets(body_text: str, skill_dir: Path) -> list[str]:
     fragments (#section) -- neither is a same-repo relative path.
     Resolution is purely lexical (os.path.normpath), not a real
     filesystem lookup, since the target need not exist for this check.
+
+    ``source_dir`` (default: ``skill_dir`` itself) is the directory a
+    relative target is resolved AGAINST -- real relative-link semantics,
+    the file-relative rule ``_resolve_anchor_link_file`` already
+    established for the anchor-fragment check (issue #453). For SKILL.md,
+    which sits at the skill root, "relative to the containing file" and
+    "relative to the skill root" coincide, so the default keeps that call
+    site unchanged. A references/*.md file does NOT sit at the skill
+    root, though: a relative target written there (e.g. "other.md" meaning
+    "references/other.md") must resolve against references/, not the
+    skill root, or a same-directory link would be misclassified as
+    escaping. The escape-BOUNDARY test itself stays ``skill_dir``
+    regardless of ``source_dir`` -- escaping the skill directory is the
+    failure this check exists to catch, not escaping references/ alone.
     """
     skill_norm = os.path.normpath(str(skill_dir))
+    source_norm = os.path.normpath(str(source_dir if source_dir is not None
+                                       else skill_dir))
     offenders = []
     for raw in _raw_link_targets(body_text):
         target = raw.strip()
@@ -1876,7 +1989,7 @@ def _out_of_skill_link_targets(body_text: str, skill_dir: Path) -> list[str]:
         if os.path.isabs(path_part):
             normalized = os.path.normpath(path_part)
         else:
-            normalized = os.path.normpath(os.path.join(skill_norm, path_part))
+            normalized = os.path.normpath(os.path.join(source_norm, path_part))
         if _escapes_skill_dir(normalized, skill_norm):
             offenders.append(target)
     return offenders
@@ -1998,6 +2111,54 @@ def _heading_slugs(text: str) -> frozenset[str]:
     matches.sort(key=lambda pair: pair[0])
     occurrences: dict[str, int] = {}
     return frozenset(_github_slug(heading, occurrences) for _pos, heading in matches)
+
+
+# A cross-skill "file+heading" citation, issue #482: this repository's own
+# established convention for naming a specific sibling skill's reference
+# file and heading in prose (e.g. "`evaluating-skill-quality`'s
+# `references/adversarial-self-audit.md` Isolation verification section" --
+# the exact real-world shape #482's own retrospective quotes), never
+# previously checked against the sibling actually existing. Both the skill
+# name and the file path sit in their OWN inline-code span (unlike the
+# bare-prose citation checks below, this one is never inline-code-stripped
+# first -- the regex depends on the backticks being present), while the
+# heading text itself is bare prose ending at the literal word "section".
+# Skill-name char class matches BACKTICK_SKILL_NAME_RE's own kebab-case
+# shape (same convention _stale_related_skill_references already reads a
+# sibling skill name against). A plain ASCII apostrophe before "s",
+# matching this repository's own established prose (a corpus-wide check
+# performed while designing this rule found no typographic/curly
+# apostrophe usage anywhere in this repository's own skill content). The
+# heading-text group is deliberately narrow (letters/digits/space/
+# apostrophe/slash/hyphen, non-greedy) so it stops at the literal " section"
+# boundary rather than running on into the next sentence.
+CROSS_SKILL_CITATION_RE = re.compile(
+    r"`([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)`'s\s+"
+    r"`references/([A-Za-z0-9._-]+\.md)`\s+"
+    r"([A-Za-z0-9][A-Za-z0-9 '/-]*?)\s+[Ss]ection\b")
+
+# Mechanism-fit subsection completeness, issue #218: every ATX heading in a
+# document, this time captured WITH its own '#'-run (unlike HEADING_RE,
+# which only needs a heading's text for anchor-slug purposes and is
+# level-agnostic) -- the Mechanism-fit check below needs to tell a level-2
+# "## Mechanism fit" heading apart from a level-3 "### " subsection nested
+# under it, so it cannot reuse HEADING_RE's own single-capture-group shape.
+MECHANISM_FIT_HEADING_RE = re.compile(
+    r"^[ ]{0,3}(#{1,6})[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$", re.MULTILINE)
+# A "[label]"-style citation bracket -- this repository's own established
+# reference-style-link-label convention (e.g. "[sd]", "[ab]",
+# "[modeleffort]"), the same shape a Mechanism-fit subsection already uses
+# today wherever it cites a primary source. Presence-only: this check does
+# not verify the label resolves to a real "[label]: url" definition
+# elsewhere in the document (a distinct, narrower question issue #218 did
+# not ask for), only that a subsection carries SOME citation-shaped marker
+# rather than none.
+MECHANISM_FIT_CITATION_RE = re.compile(r"\[[a-z0-9][a-z0-9-]*\]")
+# The literal disclosure phrase this repository's own rubric.md already
+# uses (verbatim, twice) to mark a Mechanism-fit claim as its own reasoned
+# extension rather than an Anthropic-sourced one -- see issue #218's own
+# repair 4 for the incident this check mechanizes.
+MECHANISM_FIT_REASONED_EXTENSION_PHRASE = "this repository's own reasoned extension"
 
 
 # An optional Markdown link *title* trailing an inline link's destination
@@ -3025,6 +3186,14 @@ def check_shape(target: Path) -> list[CheckResult]:
                     f"reference over {TOC_MIN_LINES} lines has a TOC",
                     f"{n} lines, " + ("TOC found" if has_toc else "no TOC")))
             ref_body = "\n".join(_body_after_frontmatter(ref_text))
+            ref_offenders = _out_of_skill_link_targets(
+                ref_body, skill_dir, source_dir=ref.parent)
+            results.append(CheckResult(
+                f"links-inside-skill:{ref.name}", not ref_offenders,
+                "Markdown link targets resolve inside the skill's own "
+                "directory",
+                "all inside" if not ref_offenders
+                else "outside: " + ", ".join(ref_offenders)))
             anchor_slug_cache.setdefault(ref, _heading_slugs(ref_body))
             ref_broken_anchors = _broken_anchor_targets(
                 ref_body, ref, skill_dir, anchor_slug_cache)
@@ -3037,10 +3206,13 @@ def check_shape(target: Path) -> list[CheckResult]:
 
     results.extend(_issue_citation_checks(
         skill_md, skill_dir, body, extra_sources=sidecar_citation_sources))
+    results.extend(_cross_skill_citation_checks(skill_md, skill_dir, body))
+    results.extend(_mechanism_fit_checks(skill_md, skill_dir, body))
     results.extend(_illustrative_model_id_checks(skill_md, skill_dir, body))
     results.extend(_raw_placeholder_checks(skill_md, skill_dir, body))
     if _is_portable(body, sidecar_portability):
         results.extend(_portable_path_citation_checks(skill_md, skill_dir, body))
+        results.extend(_portable_skill_citation_checks(skill_md, skill_dir, body))
 
     return results
 
@@ -3114,6 +3286,139 @@ def _issue_citation_checks(skill_md: Path, skill_dir: Path,
             "No bare-prose GitHub issue/PR-number citation, at any "
             "portability level",
             "none" if not issue_hits else "found: " + ", ".join(issue_hits)),
+    ]
+
+
+def _cross_skill_citation_checks(skill_md: Path, skill_dir: Path,
+                                 body: list[str]) -> list[CheckResult]:
+    """Issue #482: every cross-skill "file+heading" citation
+    (CROSS_SKILL_CITATION_RE) in SKILL.md or references/*.md must resolve --
+    the sibling skill directory exists (a cheaper version of this,
+    directory-only, is already covered by ``related-skill-references-resolve``
+    and ``skill-dependencies-resolve``), the named file exists inside that
+    sibling's own references/ directory, and a heading matching the cited
+    text actually exists in that file -- reusing ``_github_slug``/
+    ``_heading_slugs`` verbatim, the same GitHub heading-slug logic
+    ``anchor-targets-resolve`` already implements for real Markdown links.
+    Unlike a real Markdown link, a citation in this prose shape can never be
+    a same-repo relative link (a cross-skill target cannot legally resolve
+    inside the CITING skill's own directory, per ``links-inside-skill``), so
+    neither ``links-inside-skill`` nor ``anchor-targets-resolve`` ever sees
+    it -- this is the dedicated backstop issue #482 asked for. Runs
+    unconditionally, at every portability level, the same as
+    ``no-bare-issue-citation`` above: a dangling cross-skill citation is a
+    defect regardless of declared portability.
+
+    Each cited heading is slugged with its OWN fresh, empty occurrence
+    table (not the target file's real per-document dedup table) -- a prose
+    citation names a heading's TEXT, and this checker has no way to know
+    which same-slug occurrence (1st, 2nd, ...) the author meant, so it
+    accepts a match against the base (first-occurrence) slug only. A target
+    file is read at most once per (skill, file) pair per run via
+    ``slug_cache``, mirroring ``_cached_target_heading_slugs``'s own
+    one-read-per-file memoization one level up.
+    """
+    offenders: list[str] = []
+    slug_cache: dict[tuple[str, str], frozenset[str] | None] = {}
+    for label, source_text in _citation_sources(skill_md, skill_dir, body):
+        defenced = _blank_fenced_blocks(source_text)
+        for m in CROSS_SKILL_CITATION_RE.finditer(defenced):
+            skill_name, filename, heading_text = m.group(1), m.group(2), m.group(3)
+            citation = m.group(0)
+            sibling_dir = skill_dir.parent / skill_name
+            if not sibling_dir.is_dir():
+                offenders.append(f"{label}:{citation} (no such sibling skill)")
+                continue
+            cache_key = (skill_name, filename)
+            if cache_key not in slug_cache:
+                target = sibling_dir / "references" / filename
+                try:
+                    target_text = target.read_text(encoding="utf-8")
+                except (UnicodeDecodeError, OSError):
+                    slug_cache[cache_key] = None
+                else:
+                    slug_cache[cache_key] = _heading_slugs(
+                        "\n".join(_body_after_frontmatter(target_text)))
+            slugs = slug_cache[cache_key]
+            if slugs is None:
+                offenders.append(f"{label}:{citation} (file not found)")
+                continue
+            if _github_slug(heading_text, {}) not in slugs:
+                offenders.append(f"{label}:{citation} (heading not found)")
+    offenders = _dedup(offenders)
+    return [
+        CheckResult(
+            "cross-skill-citation-resolves", not offenders,
+            "Every \"SKILL-NAME's `references/FILE.md` HEADING section\" "
+            "cross-skill citation resolves to a real sibling skill, file, "
+            "and heading",
+            "none" if not offenders else "found: " + ", ".join(offenders)),
+    ]
+
+
+def _mechanism_fit_citation_offenders(body_text: str) -> list[str]:
+    """Issue #218: return each '### ' subsection heading text nested under
+    a '## Mechanism fit' heading in ``body_text`` that carries neither a
+    '[label]'-style citation (MECHANISM_FIT_CITATION_RE) nor the literal
+    phrase "this repository's own reasoned extension" --
+    mechanizing the completeness rule references/rubric.md's own
+    Mechanism-fit section intro already states in prose ("the primary
+    source and the reasoning behind each check") but nothing previously
+    checked.
+
+    Generic over ANY document, not hardcoded to rubric.md's filename -- a
+    document with no '## Mechanism fit' heading at all contributes zero
+    offenders (the same "not applicable, trivially passes" shape the
+    references-flat/TOC checks already use for a precondition that does not
+    apply to every skill). Only a level-2 '## Mechanism fit' heading is
+    recognized (case-insensitive on its text, exact heading level); its own
+    section span runs from immediately after it to the next heading at
+    level <= 2 (or end of document), and only '### ' (level-3) headings
+    inside that span count as its subsections -- a deeper '#### ' heading
+    nested under a level-3 subsection is part of that subsection's own
+    content, not a sibling subsection needing its own citation.
+    """
+    defenced = _blank_fenced_blocks(body_text)
+    headings = [(m.start(), len(m.group(1)), m.group(2))
+                for m in MECHANISM_FIT_HEADING_RE.finditer(defenced)]
+    offenders: list[str] = []
+    for i, (_start, level, text) in enumerate(headings):
+        if level != 2 or text.strip().lower() != "mechanism fit":
+            continue
+        section_end = next(
+            (s for s, lv, _t in headings[i + 1:] if lv <= 2), len(defenced))
+        subsections = [(s, t) for s, lv, t in headings[i + 1:]
+                       if s < section_end and lv == 3]
+        for j, (sub_start, sub_text) in enumerate(subsections):
+            sub_end = subsections[j + 1][0] if j + 1 < len(subsections) else section_end
+            content = defenced[sub_start:sub_end]
+            has_citation = bool(MECHANISM_FIT_CITATION_RE.search(content))
+            has_phrase = MECHANISM_FIT_REASONED_EXTENSION_PHRASE in content.lower()
+            if not (has_citation or has_phrase):
+                offenders.append(sub_text.strip())
+    return offenders
+
+
+def _mechanism_fit_checks(skill_md: Path, skill_dir: Path,
+                          body: list[str]) -> list[CheckResult]:
+    """The check_shape() entry point for _mechanism_fit_citation_offenders,
+    scanning SKILL.md and every references/*.md file the same way every
+    other _citation_sources-based check does. Runs unconditionally, at
+    every portability level -- a missing citation is a completeness defect,
+    not a portability one.
+    """
+    offenders: list[str] = []
+    for label, source_text in _citation_sources(skill_md, skill_dir, body):
+        for heading in _mechanism_fit_citation_offenders(source_text):
+            offenders.append(f"{label}:{heading}")
+    offenders = _dedup(offenders)
+    return [
+        CheckResult(
+            "mechanism-fit-subsections-cite-sources", not offenders,
+            "Every '### ' subsection under a '## Mechanism fit' heading "
+            "carries a '[label]'-style citation or the literal phrase "
+            "\"this repository's own reasoned extension\"",
+            "none" if not offenders else "found: " + ", ".join(offenders)),
     ]
 
 
@@ -3244,6 +3549,64 @@ def _portable_path_citation_checks(skill_md: Path, skill_dir: Path,
             "sentence or the sentence immediately before it",
             "none" if not hits else "found: " + ", ".join(hits)))
     return results
+
+
+def _portable_skill_fact_claim_offenders(defenced_text: str,
+                                         skill_dir: Path) -> list[str]:
+    """Issue #487: return each possessive sibling-skill citation
+    (PORTABLE_SKILL_FACT_CLAIM_RE) in ``defenced_text`` that names a real
+    sibling skill directory, asserts its claim with "already" in the same
+    clause, and has no approved hedge phrase (HEDGE_PHRASES -- the same
+    list ``portable-no-repo-path-citation`` uses; the underlying meaning is
+    the same regardless of whether the citation is a path, an issue
+    number, or a skill name: a disclosed, deliberate same-repo dependency)
+    in that clause or the text immediately before the citation.
+
+    See PORTABLE_SKILL_FACT_CLAIM_RE's own comment for why all three
+    conditions (possessive shape, "already" nearby, real sibling) are
+    required together -- each one alone was corpus-validated to produce
+    false positives against this repository's own shipped skills.
+    """
+    offenders: list[str] = []
+    for m in PORTABLE_SKILL_FACT_CLAIM_RE.finditer(defenced_text):
+        name = m.group(1)
+        clause = m.group("clause")
+        if "already" not in clause.lower():
+            continue
+        if not (skill_dir.parent / name).is_dir():
+            continue
+        lookback = defenced_text[max(0, m.start() - 200):m.start()]
+        haystack = (lookback + clause).lower()
+        if any(phrase in haystack for phrase in HEDGE_PHRASES):
+            continue
+        offenders.append(m.group(0).strip())
+    return offenders
+
+
+def _portable_skill_citation_checks(skill_md: Path, skill_dir: Path,
+                                    body: list[str]) -> list[CheckResult]:
+    """The check_shape() entry point for
+    _portable_skill_fact_claim_offenders, scanning SKILL.md and every
+    references/*.md file the same way every other _citation_sources-based
+    check does. Only called when ``_is_portable`` is true (see
+    ``check_shape``), matching ``_portable_path_citation_checks``'s own
+    Portable-only gate: a Mixed/Repository-scoped skill legitimately
+    depends on a named sibling's real behavior.
+    """
+    hits: list[str] = []
+    for label, source_text in _citation_sources(skill_md, skill_dir, body):
+        defenced = _blank_fenced_blocks(source_text)
+        for offender in _portable_skill_fact_claim_offenders(defenced, skill_dir):
+            hits.append(f"{label}:{offender}")
+    hits = _dedup(hits)
+    return [
+        CheckResult(
+            "portable-no-unhedged-skill-fact-claim", not hits,
+            "Portable content has no unhedged declarative fact-claim "
+            "about a named sibling skill's own behavior "
+            f"(no approved hedge phrase {HEDGE_PHRASES} nearby)",
+            "none" if not hits else "found: " + ", ".join(hits)),
+    ]
 
 
 def _valid_skill_dependency_list(value: object) -> bool:

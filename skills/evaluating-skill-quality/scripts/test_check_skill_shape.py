@@ -970,6 +970,220 @@ def test_related_skill_reference_bullet_stops_at_next_bullet(tmp_path):
     assert result.passed
 
 
+# ---- links-inside-skill scans references/*.md too (issue #453) ----
+
+def test_reference_file_out_of_skill_link_fails(tmp_path):
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n",
+        references={"notes.md": "See [design doc](../../docs/foo.md) for context.\n"})
+    result = _result(css.check_shape(d), "links-inside-skill:notes.md")
+    assert not result.passed
+    assert "../../docs/foo.md" in result.evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_reference_file_same_directory_link_passes(tmp_path):
+    # A references/*.md file's own relative link must resolve against ITS
+    # OWN directory (references/), not the skill root -- "other.md" here
+    # means "references/other.md", not a skill-root-relative "other.md"
+    # that does not exist.
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n",
+        references={
+            "notes.md": "See [background](other.md) for context.\n",
+            "other.md": "background\n",
+        })
+    assert _result(css.check_shape(d), "links-inside-skill:notes.md").passed
+
+
+def test_reference_file_skill_root_link_passes(tmp_path):
+    # A references/*.md file linking back into SKILL.md itself must also
+    # resolve, since SKILL.md sits one directory up from references/.
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n",
+        references={"notes.md": "See [overview](../SKILL.md) for context.\n"})
+    assert _result(css.check_shape(d), "links-inside-skill:notes.md").passed
+
+
+def test_skill_md_link_check_unaffected_by_reference_file_extension(tmp_path):
+    # Regression: SKILL.md's own check must still resolve against the skill
+    # root exactly as before -- the new source_dir parameter must not change
+    # SKILL.md's own established behavior (it sits at the skill root, so its
+    # default source_dir stays the skill directory itself).
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "See [background](references/foo.md) for context.\n",
+        references={"foo.md": "background\n"})
+    assert _result(css.check_shape(d), "links-inside-skill").passed
+
+
+# ---- cross-skill-citation-resolves (issue #482) ----
+
+def test_cross_skill_citation_all_resolve_passes(tmp_path):
+    sibling = tmp_path / "sibling-skill"
+    (sibling / "references").mkdir(parents=True)
+    (sibling / "references" / "notes.md").write_text(
+        "## Isolation verification\n\nDetails.\n", encoding="utf-8")
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "See `sibling-skill`'s `references/notes.md` Isolation "
+        "verification section for details.\n")
+    result = _result(css.check_shape(d), "cross-skill-citation-resolves")
+    assert result.passed
+    assert result.evidence == "none"
+
+
+def test_cross_skill_citation_missing_sibling_fails(tmp_path):
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "See `ghost-skill`'s `references/notes.md` Some Heading "
+        "section for details.\n")
+    result = _result(css.check_shape(d), "cross-skill-citation-resolves")
+    assert not result.passed
+    assert "no such sibling skill" in result.evidence
+    assert "ghost-skill" in result.evidence
+
+
+def test_cross_skill_citation_missing_file_fails(tmp_path):
+    sibling = tmp_path / "sibling-skill"
+    (sibling / "references").mkdir(parents=True)
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "See `sibling-skill`'s `references/missing.md` Some Heading "
+        "section for details.\n")
+    result = _result(css.check_shape(d), "cross-skill-citation-resolves")
+    assert not result.passed
+    assert "file not found" in result.evidence
+
+
+def test_cross_skill_citation_missing_heading_fails(tmp_path):
+    sibling = tmp_path / "sibling-skill"
+    (sibling / "references").mkdir(parents=True)
+    (sibling / "references" / "notes.md").write_text(
+        "## Some Other Heading\n", encoding="utf-8")
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "See `sibling-skill`'s `references/notes.md` Isolation "
+        "verification section for details.\n")
+    result = _result(css.check_shape(d), "cross-skill-citation-resolves")
+    assert not result.passed
+    assert "heading not found" in result.evidence
+
+
+def test_cross_skill_citation_inside_fenced_block_is_skipped(tmp_path):
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "```\nSee `ghost-skill`'s `references/notes.md` Nope section.\n```\n")
+    assert _result(css.check_shape(d), "cross-skill-citation-resolves").passed
+
+
+def test_cross_skill_citation_in_reference_file_is_scanned(tmp_path):
+    sibling = tmp_path / "sibling-skill"
+    (sibling / "references").mkdir(parents=True)
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n",
+        references={
+            "notes.md": "See `sibling-skill`'s `references/missing.md` "
+                        "Some Heading section.\n",
+        })
+    result = _result(css.check_shape(d), "cross-skill-citation-resolves")
+    assert not result.passed
+    assert "references/notes.md:" in result.evidence
+
+
+# ---- mechanism-fit-subsections-cite-sources (issue #218) ----
+
+def test_mechanism_fit_subsection_with_citation_passes(tmp_path):
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "## Mechanism fit\n\n"
+        "### Tool-capability verification\n\n"
+        "Grounded in the platform docs [pd].\n\n"
+        "[pd]: https://platform.claude.com/docs\n")
+    result = _result(css.check_shape(d), "mechanism-fit-subsections-cite-sources")
+    assert result.passed
+
+
+def test_mechanism_fit_subsection_with_reasoned_extension_phrase_passes(tmp_path):
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "## Mechanism fit\n\n"
+        "### Tool-capability verification\n\n"
+        "Labelled here as this repository's own reasoned extension rather "
+        "than an Anthropic-sourced claim.\n")
+    result = _result(css.check_shape(d), "mechanism-fit-subsections-cite-sources")
+    assert result.passed
+
+
+def test_mechanism_fit_subsection_with_neither_fails(tmp_path):
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "## Mechanism fit\n\n"
+        "### Tool-capability verification\n\n"
+        "Just a claim with nothing backing it up.\n")
+    result = _result(css.check_shape(d), "mechanism-fit-subsections-cite-sources")
+    assert not result.passed
+    assert "Tool-capability verification" in result.evidence
+
+
+def test_no_mechanism_fit_heading_trivially_passes(tmp_path):
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "## Some Other Section\n\n### A subsection\n\nNo citation here.\n")
+    result = _result(css.check_shape(d), "mechanism-fit-subsections-cite-sources")
+    assert result.passed
+
+
+def test_mechanism_fit_multiple_subsections_each_checked_independently(tmp_path):
+    # The [ok] reference-style definition is deliberately kept OUT of the
+    # Mechanism-fit section entirely (this check only requires a citation
+    # BRACKET to appear textually inside a subsection's own body, not that
+    # it resolve to a real definition -- see the check's own docstring) --
+    # placing it after "Bad subsection" would otherwise land inside that
+    # LAST subsection's own span (which runs to end of document) and
+    # spuriously satisfy it.
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "[ok]: https://example.com\n\n"
+        "## Mechanism fit\n\n"
+        "### Good subsection\n\nCited [ok].\n\n"
+        "### Bad subsection\n\nNo citation.\n")
+    result = _result(css.check_shape(d), "mechanism-fit-subsections-cite-sources")
+    assert not result.passed
+    assert "Bad subsection" in result.evidence
+    assert "Good subsection" not in result.evidence
+
+
+def test_mechanism_fit_section_stops_at_next_level_2_heading(tmp_path):
+    # A subsection AFTER the next '## ' heading belongs to that later
+    # section, not to Mechanism fit, and must not be scanned by this check.
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "## Mechanism fit\n\n"
+        "### Covered subsection\n\nCited [ok].\n\n"
+        "## Something else entirely\n\n"
+        "### Unrelated subsection\n\nNo citation, but out of scope.\n\n"
+        "[ok]: https://example.com\n")
+    result = _result(css.check_shape(d), "mechanism-fit-subsections-cite-sources")
+    assert result.passed
+
+
 def test_sidecar_checks_pass_on_good_skill(tmp_path):
     d = _write_skill(tmp_path)
     by = _by_name(css.check_shape(d))
@@ -1991,6 +2205,98 @@ def test_double_backtick_code_span_citation_still_flagged(tmp_path):
     result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-issue-citation"]
     assert result.passed is False
     assert "``#42``" in result.evidence
+
+
+# ---- Portable unhedged sibling-skill fact-claim scan (issue #487) ----
+#
+# The real incident (rubric.md, commit 7ae597d, fixed in 59b86a5): a
+# Portable-declared paragraph cited "`scorer-gated-skill-edits`' own
+# fixture-authoring guidance already names X for a pure substring scorer"
+# as an unconditional fact, with no hedge marking it as a deliberate,
+# disclosed same-repo dependency -- the same defect class #220/#263
+# already catch for repo paths and issue numbers, now extended to a named
+# sibling skill's own behavior. A full-repo scan performed while
+# designing this check found that the possessive-citation shape
+# ("`NAME`'s own X") alone is extremely common, benign prose in this
+# repository (dozens of hits across nearly every skill) -- the fixtures
+# below reflect the narrower, corpus-validated trigger (possessive shape
+# + "already" in the same clause + a resolving sibling), not a bare
+# skill-name mention.
+
+def test_unhedged_sibling_skill_citation_fails(tmp_path):
+    (tmp_path / "scorer-gated-skill-edits").mkdir()
+    d = _write_raw(tmp_path, _portable_body(
+        "This is the same construct-validity limit "
+        "`scorer-gated-skill-edits`' own fixture-authoring guidance "
+        "already names for a pure substring scorer."))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-skill-fact-claim"]
+    assert result.passed is False
+    assert "scorer-gated-skill-edits" in result.evidence
+
+
+def test_hedged_sibling_skill_citation_passes(tmp_path):
+    (tmp_path / "scorer-gated-skill-edits").mkdir()
+    d = _write_raw(tmp_path, _portable_body(
+        "This repository has also recorded that "
+        "`scorer-gated-skill-edits`' own fixture-authoring guidance "
+        "already names a format for a pure substring scorer."))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-skill-fact-claim"]
+    assert result.passed is True
+
+
+def test_nonresolving_backtick_token_never_flagged(tmp_path):
+    # No sibling directory named "pytest" exists -- this must never be
+    # treated as a sibling-skill fact-claim, hedged or not, matching the
+    # false-positive guard PORTABLE_SKILL_FACT_CLAIM_RE's own comment
+    # describes.
+    d = _write_raw(tmp_path, _portable_body(
+        "`pytest`'s own fixture discovery already handles this case."))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-skill-fact-claim"]
+    assert result.passed is True
+
+
+def test_possessive_citation_without_already_never_flagged(tmp_path):
+    # The possessive shape alone is this repository's own common, benign
+    # way to cite a sibling skill -- only "already" in the same clause
+    # turns it into the narrower flagged shape.
+    (tmp_path / "scorer-gated-skill-edits").mkdir()
+    d = _write_raw(tmp_path, _portable_body(
+        "See `scorer-gated-skill-edits`' own fixture-authoring guidance "
+        "for the established format."))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-skill-fact-claim"]
+    assert result.passed is True
+
+
+def test_non_possessive_citation_never_flagged(tmp_path):
+    # A bare (non-possessive) mention, even with "already" nearby, is not
+    # the flagged shape -- this is the "assumes the item is already
+    # accepted work"-style Related-skills scoping language this
+    # repository's own corpus uses routinely and legitimately.
+    (tmp_path / "scorer-gated-skill-edits").mkdir()
+    d = _write_raw(tmp_path, _portable_body(
+        "`scorer-gated-skill-edits` assumes the fixture is already valid."))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-skill-fact-claim"]
+    assert result.passed is True
+
+
+def test_non_portable_skill_skips_skill_fact_claim_scan(tmp_path):
+    (tmp_path / "scorer-gated-skill-edits").mkdir()
+    d = _write_raw(tmp_path, _portable_body(
+        "`scorer-gated-skill-edits`' own guidance already names a format.",
+        marker="**Portability: Mixed.** Repo-specific detail is split out."))
+    names = _by_name(css.check_shape(d))
+    assert "portable-no-unhedged-skill-fact-claim" not in names
+
+
+def test_sibling_skill_citation_in_reference_file_fails(tmp_path):
+    (tmp_path / "scorer-gated-skill-edits").mkdir()
+    d = _write_raw(tmp_path, _portable_body("Clean body."),
+                   references={"notes.md":
+                               "`scorer-gated-skill-edits`' own guidance "
+                               "already names a fixture format.\n"})
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-skill-fact-claim"]
+    assert result.passed is False
+    assert "references/notes.md:" in result.evidence
 
 
 # ---- Portability source precedence: sidecar first, body marker as fallback ----
