@@ -1,0 +1,297 @@
+#!/usr/bin/env python3
+"""CI gate: split.md fixture-table coverage checks.
+
+Issue #526 unifies two gate proposals drawn from two retrospective issues
+("Requested outcome: one check catches both gap classes.") into this one
+script.
+
+Check A (issue #191, repair 1). A `split.md`'s gate-result table (a
+`| Fixture | Before | After |` Markdown table recording a live before/edit
+scored run) is supposed to cover every fixture the file's own `##
+Assignment` section declares for the `selection` split. PR #190 shipped a
+gate table that silently omitted a declared fixture (`heldout-vague-
+completion.yaml`) -- the reported gate covered 9 of the declared 10, and
+the missing fixture was never actually scored, caught only by external
+review (`chatgpt-codex-connector[bot]`), not by anything mechanical. This
+check parses the *most recent* (last, by file position) gate-result table
+in a `split.md` file and requires its Fixture column to be a superset of
+that file's declared `selection` list -- unless the table is explicitly
+scoped to a single named fixture, this repository's own established
+convention for a narrower recheck ("one fresh dispatch per side against
+`<fixture>.yaml`", used repeatedly by
+`evals/evaluating-skill-quality/split.md`'s `gitapex#537` follow-up
+entries), which by construction never claims full-corpus coverage and is
+exempt from the superset rule.
+
+Check B (issue #352, repair 3). A `SKILL.md` documenting a
+precedence/branching rule (an "X takes precedence/priority over Y"
+sentence) needs a train+held-out equivalence-class fixture pair in its own
+`split.md`, per `scorer-gated-skill-edits`' own precondition gate ("every
+actual trigger branch" needs both a positive and a negative/non-trigger
+fixture). PR #328 shipped `skills/merge-retrospective/SKILL.md`'s Step 4
+precedence rule with zero fixture coverage in
+`evals/merge-retrospective/split.md` until external review caught it
+(closed by class 9: `title-convention-precedence-train.yaml` /
+`no-title-convention-fallback-selection.yaml`). This check parses a
+`SKILL.md` for that phrasing and, when the skill already has a
+corresponding `evals/<skill>/split.md` (a skill with no `split.md` at all
+is out of scope for this check -- that gap belongs to
+`scorer-gated-skill-edits`' own precondition gate, not this one), requires
+that `split.md`'s `## Equivalence classes` table to have a row that both
+mentions "precedence"/"priority" and names two fixtures (a train one and a
+held-out one).
+
+Both checks are heuristic text parsing over Markdown prose, not a formal
+grammar -- the issue's own Acceptance Criteria Map names this residual
+risk explicitly ("Parsing split.md's prose-based Assignment section and
+gate tables reliably needs a defined, stable format convention" /
+"Detecting... phrases in free-form SKILL.md prose needs a heuristic that
+could miss some phrasings or over-trigger on unrelated conditional
+language"). Scope is deliberately narrowed to the exact conventions this
+repository's own four `split.md` files already use, verified directly
+against all of them (`evals/evaluating-skill-quality/split.md`,
+`evals/scorer-gated-skill-edits/split.md`,
+`evals/battle-testing-a-skill/split.md`,
+`evals/merge-retrospective/split.md`) before writing this gate -- not a
+general-purpose Markdown parser.
+
+Mirrors `gate_retro_title_convention_citation.py`'s shape: the calling
+workflow computes which `split.md`/`SKILL.md` files this PR actually added
+or modified (pre-existing, already-shipped content is out of scope for a
+gate whose job is to catch a gap before it ships), this script only grades
+those files.
+
+Usage::
+
+    python3 .github/scripts/gate_split_fixture_coverage.py \\
+        --split-md FILE [FILE ...] --skill-md FILE [FILE ...]
+
+Either flag may be omitted (or given zero files) if this PR did not touch
+that file type. Each `--skill-md` file is matched to a sibling `split.md`
+by this repository's own established convention,
+`skills/<slug>/SKILL.md` <-> `evals/<slug>/split.md`, resolved under
+`--repo-root` (default: current directory).
+
+Exit codes:
+    0  No offending file.
+    1  At least one offending file, or a required file could not be read.
+"""
+
+from __future__ import annotations
+
+import argparse
+import re
+import sys
+from pathlib import Path
+
+_YAML_NAME_RE = re.compile(r"`([A-Za-z0-9._-]+\.yaml)`")
+
+_ASSIGNMENT_HEADING_RE = re.compile(r"^##\s+Assignment\s*$", re.MULTILINE)
+_EQUIVALENCE_CLASSES_HEADING_RE = re.compile(r"^##\s+Equivalence classes\s*$", re.MULTILINE)
+_NEXT_HEADING_RE = re.compile(r"^##\s+\S", re.MULTILINE)
+
+# "- **train** (...): `a.yaml`, `b.yaml`." style bullets -- the one
+# fixture-assignment convention all four of this repository's split.md
+# files share (verified directly against all four before writing this
+# regex), even though the surrounding prose differs.
+_SPLIT_BULLET_RE = re.compile(
+    r"-\s+\*\*(train|selection|test)\*\*(.*?)(?=\n-\s+\*\*(?:train|selection|test)\*\*|\Z)",
+    re.IGNORECASE | re.DOTALL,
+)
+
+# A gate-result table header: three columns literally named Fixture,
+# Before, After, in that order, with any column widths/alignment.
+_GATE_TABLE_HEADER_RE = re.compile(
+    r"^\|[^\n]*\bFixture\b[^\n]*\|[^\n]*\bBefore\b[^\n]*\|[^\n]*\bAfter\b[^\n]*\|\s*$",
+    re.IGNORECASE | re.MULTILINE,
+)
+_TABLE_SEPARATOR_RE = re.compile(r"^\s*\|[\s:|-]+\|\s*$")
+
+# This repository's own established phrasing for a table intentionally
+# scoped to one fixture, e.g. "one fresh dispatch per side against only
+# `confidentiality-awareness-payment-data-selection.yaml`:".
+_SCOPED_TABLE_RE = re.compile(r"against\s+(?:only\s+)?`([A-Za-z0-9._-]+\.yaml)`", re.IGNORECASE)
+
+# The concrete phrasing named by issue #352 ("template and title take
+# precedence over this skill's own defaults"), generalized to the
+# "priority" synonym. Deliberately narrow (verified against every SKILL.md
+# in this repository before writing this regex: exactly one hit,
+# skills/merge-retrospective/SKILL.md) to avoid over-triggering on
+# unrelated conditional language.
+_PRECEDENCE_RE = re.compile(r"\btakes?\s+(?:precedence|priority)\s+over\b", re.IGNORECASE)
+
+
+def _section(text: str, heading_re: re.Pattern[str]) -> str:
+    """Text from `heading_re`'s heading (exclusive) to the next `##`
+    heading, or end of file. Empty string if the heading is absent."""
+    match = heading_re.search(text)
+    if not match:
+        return ""
+    rest = text[match.end() :]
+    next_heading = _NEXT_HEADING_RE.search(rest)
+    return rest[: next_heading.start()] if next_heading else rest
+
+
+def parse_assignment_fixtures(text: str) -> dict[str, list[str]]:
+    """Return `{"train": [...], "selection": [...], "test": [...]}` parsed
+    from a `split.md` file's `## Assignment` section."""
+    section = _section(text, _ASSIGNMENT_HEADING_RE)
+    result: dict[str, list[str]] = {"train": [], "selection": [], "test": []}
+    for match in _SPLIT_BULLET_RE.finditer(section):
+        result[match.group(1).lower()] = _YAML_NAME_RE.findall(match.group(2))
+    return result
+
+
+def find_gate_tables(text: str) -> list[tuple[int, list[str]]]:
+    """Every `| Fixture | Before | After |`-shaped table in `text`, as
+    `(header_start_offset, fixtures_in_row_order)`, in file order."""
+    tables: list[tuple[int, list[str]]] = []
+    for header_match in _GATE_TABLE_HEADER_RE.finditer(text):
+        # `$` in MULTILINE mode matches before the newline without
+        # consuming it, so `header_match.end()` still points at the
+        # header's own trailing "\n" -- skip past it explicitly, or
+        # splitlines() below sees a spurious leading blank line and the
+        # separator-row / data-row indices are all off by one.
+        newline_index = text.find("\n", header_match.end())
+        body_start = newline_index + 1 if newline_index != -1 else len(text)
+        lines = text[body_start:].splitlines(keepends=True)
+        idx = 0
+        if idx < len(lines) and _TABLE_SEPARATOR_RE.match(lines[idx]):
+            idx += 1
+        fixtures: list[str] = []
+        while idx < len(lines) and lines[idx].lstrip().startswith("|"):
+            cell_match = _YAML_NAME_RE.search(lines[idx])
+            if cell_match:
+                fixtures.append(cell_match.group(1))
+            idx += 1
+        tables.append((header_match.start(), fixtures))
+    return tables
+
+
+def _preceding_paragraph(text: str, pos: int) -> str:
+    """The blank-line-delimited paragraph immediately before `pos`."""
+    paragraphs = [p for p in re.split(r"\n\s*\n", text[:pos]) if p.strip()]
+    return paragraphs[-1] if paragraphs else ""
+
+
+def is_single_fixture_scoped(paragraph: str, table_fixtures: list[str]) -> bool:
+    """True iff `paragraph` (the text immediately introducing a gate table)
+    names exactly one fixture via the "against [only] `<fixture>.yaml`"
+    convention, and the table itself covers only that same fixture -- i.e.
+    the table never claimed full-corpus coverage in the first place."""
+    match = _SCOPED_TABLE_RE.search(paragraph)
+    if match is None:
+        return False
+    return set(table_fixtures) == {match.group(1)}
+
+
+def check_latest_gate_table_coverage(path: Path, text: str) -> str | None:
+    """Return an offender message if `path`'s most recent gate-result table
+    omits a fixture declared in its own `selection` split, else None."""
+    tables = find_gate_tables(text)
+    if not tables:
+        return None
+    header_start, fixtures = tables[-1]
+    paragraph = _preceding_paragraph(text, header_start)
+    if is_single_fixture_scoped(paragraph, fixtures):
+        return None
+    declared_selection = parse_assignment_fixtures(text)["selection"]
+    missing = [f for f in declared_selection if f not in fixtures]
+    if not missing:
+        return None
+    return (
+        f"{path}: most recent gate-result table covers {len(fixtures)} fixture(s) "
+        f"but the declared 'selection' split has {len(declared_selection)}; "
+        f"missing from the table: {', '.join(missing)}"
+    )
+
+
+def find_precedence_phrases(text: str) -> list[str]:
+    """Every precedence/branching phrase match in `text` (a SKILL.md),
+    in file order."""
+    return [m.group(0) for m in _PRECEDENCE_RE.finditer(text)]
+
+
+def has_precedence_equivalence_class_pair(split_text: str) -> bool:
+    """True iff `split_text`'s `## Equivalence classes` table has a row
+    mentioning precedence/priority with two named fixtures (a train one
+    and a held-out one)."""
+    section = _section(split_text, _EQUIVALENCE_CLASSES_HEADING_RE)
+    for line in section.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("|"):
+            continue
+        lowered = stripped.lower()
+        if "precedence" not in lowered and "priority" not in lowered:
+            continue
+        if len(_YAML_NAME_RE.findall(stripped)) >= 2:
+            return True
+    return False
+
+
+def check_precedence_branch_coverage(skill_md_path: Path, skill_text: str, repo_root: Path) -> str | None:
+    """Return an offender message if `skill_md_path` documents a
+    precedence/branching rule with no matching train+held-out equivalence
+    class in its skill's own `split.md`, else None. A skill with no
+    `split.md` at all is out of scope -- see module docstring, Check B."""
+    phrases = find_precedence_phrases(skill_text)
+    if not phrases:
+        return None
+    split_md_path = repo_root / "evals" / skill_md_path.parent.name / "split.md"
+    if not split_md_path.is_file():
+        return None
+    split_text = split_md_path.read_text(encoding="utf-8")
+    if has_precedence_equivalence_class_pair(split_text):
+        return None
+    return (
+        f"{skill_md_path}: documents a precedence/branching rule ({phrases[0]!r}) "
+        f"with no matching train+held-out equivalence-class pair in {split_md_path}"
+    )
+
+
+def _read(path: Path) -> str | None:
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError as error:
+        print(f"error: could not read {path}: {error}", file=sys.stderr)
+        return None
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--split-md", nargs="*", default=[], help="split.md files this PR added or modified.")
+    parser.add_argument("--skill-md", nargs="*", default=[], help="SKILL.md files this PR added or modified.")
+    parser.add_argument("--repo-root", default=".", help="Repository root, for resolving a skill's split.md.")
+    args = parser.parse_args(argv)
+    repo_root = Path(args.repo_root)
+
+    offenders: list[str] = []
+    for raw_path in args.split_md:
+        path = Path(raw_path)
+        text = _read(path)
+        if text is None:
+            return 1
+        offender = check_latest_gate_table_coverage(path, text)
+        if offender:
+            offenders.append(offender)
+
+    for raw_path in args.skill_md:
+        path = Path(raw_path)
+        text = _read(path)
+        if text is None:
+            return 1
+        offender = check_precedence_branch_coverage(path, text, repo_root)
+        if offender:
+            offenders.append(offender)
+
+    if not offenders:
+        print("PASS: split.md fixture-table coverage checks satisfied")
+        return 0
+    print("FAIL: split.md fixture-table coverage gap(s) found:", file=sys.stderr)
+    for offender in offenders:
+        print(f"  - {offender}", file=sys.stderr)
+    return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

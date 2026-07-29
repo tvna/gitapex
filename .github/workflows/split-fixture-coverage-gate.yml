@@ -1,0 +1,96 @@
+name: Split fixture coverage gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "evals/*/split.md"
+      - "evals/**/split.md"
+      - "skills/*/SKILL.md"
+      - "skills/**/SKILL.md"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  split-fixture-coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      # Issue #526 (unifying #191/#352's proposed gates): only split.md/
+      # SKILL.md files this PR actually added or modified need checking,
+      # matching retro-title-convention-citation-gate.yml's own rationale
+      # -- pre-existing, already-shipped content is out of scope for a gate
+      # whose job is to catch a gap before it ships. A three-dot
+      # (merge-base) diff, not a two-dot direct diff, so a file changed on
+      # the base branch after this PR forked is never misattributed here.
+      # A pure deletion has no new content to check, so it is excluded the
+      # same way skill-audit-gate.yml excludes D/R100 statuses.
+      - name: Determine changed split.md/SKILL.md files
+        id: diff
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if ! diff_output=$(git diff --name-status "$BASE_SHA...$HEAD_SHA" -- \
+              'evals/*/split.md' 'evals/**/split.md' 'skills/*/SKILL.md' 'skills/**/SKILL.md'); then
+            echo "::error::git diff failed between $BASE_SHA and $HEAD_SHA" >&2
+            exit 1
+          fi
+          changed=$(printf '%s\n' "$diff_output" | grep -vE '^(D|R100)[[:space:]]' | awk -F'\t' '{print $NF}' || true)
+          split_files=$(printf '%s\n' "$changed" | grep -E '/split\.md$' || true)
+          skill_files=$(printf '%s\n' "$changed" | grep -E '/SKILL\.md$' || true)
+          if [ -z "$split_files" ] && [ -z "$skill_files" ]; then
+            echo "No added/modified split.md or SKILL.md files in this diff; skipping."
+            echo "applicable=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Added/modified split.md files:"
+          echo "$split_files"
+          echo "Added/modified SKILL.md files:"
+          echo "$skill_files"
+          {
+            echo "applicable=true"
+            echo "split_files<<GITAPEX_EOF"
+            echo "$split_files"
+            echo "GITAPEX_EOF"
+            echo "skill_files<<GITAPEX_EOF"
+            echo "$skill_files"
+            echo "GITAPEX_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check split.md fixture-table coverage
+        if: steps.diff.outputs.applicable == 'true'
+        env:
+          SPLIT_FILES: ${{ steps.diff.outputs.split_files }}
+          SKILL_FILES: ${{ steps.diff.outputs.skill_files }}
+        run: |
+          set -euo pipefail
+          mapfile -t split_args < <(printf '%s\n' "$SPLIT_FILES" | grep -v '^$' || true)
+          mapfile -t skill_args < <(printf '%s\n' "$SKILL_FILES" | grep -v '^$' || true)
+          cmd=(python3 .github/scripts/gate_split_fixture_coverage.py --repo-root .)
+          if [ "${#split_args[@]}" -gt 0 ]; then
+            cmd+=(--split-md "${split_args[@]}")
+          fi
+          if [ "${#skill_args[@]}" -gt 0 ]; then
+            cmd+=(--skill-md "${skill_args[@]}")
+          fi
+          "${cmd[@]}"
