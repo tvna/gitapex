@@ -93,3 +93,48 @@ def test_real_committed_suite_shape(tmp_path: Path):
     for suite in suites:
         out = scm.set_config_model(suite.read_text(encoding="utf-8"), "probe-model")
         assert "  model: probe-model\n" in out
+
+
+def test_config_block_tolerates_blank_and_comment_lines():
+    # A blank line or a comment line inside the config: block must not be
+    # mistaken for the start of the next top-level key.
+    text = (
+        "config:\n"
+        "  trials_per_task: 3\n"
+        "\n"
+        "  # pinned for the matrix\n"
+        "  model: claude-sonnet-4.6\n"
+        "metrics:\n"
+        "  - name: x\n"
+    )
+    out = scm.set_config_model(text, "claude-opus-4.6")
+    assert "  model: claude-opus-4.6\n" in out
+    assert "  # pinned for the matrix\n" in out
+    assert "metrics:\n  - name: x\n" in out
+
+
+def test_main_wrong_arg_count(capsys: pytest.CaptureFixture[str]):
+    assert scm.main(["set_config_model.py", "only-one-arg"]) == 2
+    assert "usage:" in capsys.readouterr().err
+
+
+def test_main_missing_file(capsys: pytest.CaptureFixture[str], tmp_path: Path):
+    missing = tmp_path / "does-not-exist.yaml"
+    assert scm.main(["set_config_model.py", str(missing), "m"]) == 1
+    assert "not a file" in capsys.readouterr().err
+
+
+def test_main_value_error_from_override(capsys: pytest.CaptureFixture[str], tmp_path: Path):
+    p = tmp_path / "eval.yaml"
+    p.write_text("name: x\nmetrics: []\n", encoding="utf-8")
+    assert scm.main(["set_config_model.py", str(p), "m"]) == 1
+    assert "error:" in capsys.readouterr().err
+
+
+def test_main_success(capsys: pytest.CaptureFixture[str], tmp_path: Path):
+    p = tmp_path / "eval.yaml"
+    p.write_text(BASE, encoding="utf-8")
+    assert scm.main(["set_config_model.py", str(p), "claude-opus-4.6"]) == 0
+    out = capsys.readouterr().out
+    assert "config.model -> claude-opus-4.6" in out
+    assert "  model: claude-opus-4.6\n" in p.read_text(encoding="utf-8")
