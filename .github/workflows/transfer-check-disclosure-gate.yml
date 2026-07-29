@@ -1,0 +1,103 @@
+name: Transfer check disclosure gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "evals/**/split.md"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  transfer-check-disclosure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      # Refs #517 (refs #487): this checks diff *content* (whether a
+      # newly-added Kept-edit-log entry discloses a Transfer check line),
+      # not PR-body text, so unlike skill-audit-gate.yml this workflow has
+      # no `edited` trigger type -- editing the PR description doesn't
+      # change anything this gate cares about. A three-dot (merge-base)
+      # diff, D/R100-excluded, mirrors skill-audit-gate.yml's own rationale:
+      # a split.md change already merged to the base branch after this PR
+      # forked must never be misattributed to this PR, and a pure deletion
+      # or byte-identical rename has no new entry to check.
+      - name: Determine newly-added Kept-edit-log entries
+        id: diff
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if ! diff_output=$(git diff --name-status "$BASE_SHA...$HEAD_SHA" -- 'evals/*/split.md'); then
+            echo "::error::git diff failed between $BASE_SHA and $HEAD_SHA" >&2
+            exit 1
+          fi
+          changed=$(printf '%s\n' "$diff_output" | grep -vE '^(D|R100)[[:space:]]' || true)
+          if [ -z "$changed" ]; then
+            echo "No added/modified evals/*/split.md in this diff; skipping."
+            echo "applicable=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Added/modified split.md files:"
+          echo "$changed"
+
+          merge_base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
+          entries_file="$RUNNER_TEMP/new_kept_edit_entries.tsv"
+          : > "$entries_file"
+          while IFS=$'\t' read -r status path newpath; do
+            [ -z "$status" ] && continue
+            case "$status" in
+              R*) new_path="$newpath" ;;
+              *) new_path="$path" ;;
+            esac
+            # Newly-added '**Iteration:' header lines only -- a diff hunk
+            # touching unrelated text in an existing entry (or reformatting
+            # an existing entry without changing its own header line) must
+            # not re-trigger this check; only an entry whose own header
+            # line is new counts as "newly added" here. grep exits non-zero
+            # when nothing matches, which would trip `set -e`; `|| true`
+            # guards it the same way every other conditionally-empty grep
+            # in this repo's gates is guarded.
+            new_lines=$(git diff -U0 "$merge_base...$HEAD_SHA" -- "$new_path" \
+              | grep -E '^\+\*\*Iteration:' || true)
+            if [ -n "$new_lines" ]; then
+              while IFS= read -r new_line; do
+                [ -z "$new_line" ] && continue
+                # Strip the leading '+' unified-diff marker only -- the
+                # remaining text must match the current file's own line
+                # content verbatim for gate_transfer_check_disclosure.py
+                # to locate the entry.
+                printf '%s\t%s\n' "$new_path" "${new_line#+}" >> "$entries_file"
+              done <<< "$new_lines"
+            fi
+          done <<< "$changed"
+
+          {
+            echo "applicable=true"
+            echo "entries-file=${entries_file}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check Transfer check disclosure
+        if: steps.diff.outputs.applicable == 'true'
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/gate_transfer_check_disclosure.py --entries "${{ steps.diff.outputs.entries-file }}"

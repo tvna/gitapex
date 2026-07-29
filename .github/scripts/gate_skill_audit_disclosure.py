@@ -23,10 +23,27 @@ from the same workflow-supplied skill-name lists:
   central `docs/skill-eval-status.md`), or disclose an
   `eval-coverage-disclosure: WAIVED: <reason>` line (Repair 1).
 
+Issue #517 (refs #454, #277): two more conditional, workflow-supplied-fact
+checks, same shape as the #427 pair above but disclosing *whether a
+process ran* rather than grading an audit's outcome, so both share a
+"RAN"/"NOT-RUN" vocabulary (WAIVED still accepted, same as every other
+check here) instead of a PASS/FAIL-style verdict:
+
+- `adversarial-coverage-mapping`: required when the calling workflow
+  heuristically flags a changed skill as security-relevant (keyword match
+  on the skill's own frontmatter block, computed by the workflow -- this
+  script only grades PR-body text, never skill content).
+- `design-doc-adversarial-review`: required when the calling workflow's
+  diff touches a `docs/superpowers/specs/*.md` design doc (added or
+  modified). This is why the workflow's `paths:` trigger list grew to
+  include that glob alongside `skills/**/SKILL.md`.
+
 The calling workflow decides applicability (only invoked when the PR's
-diff adds or modifies a skills/*/SKILL.md file) and which skills had a
-description-line change or need eval-coverage disclosure (both require
-git history this script deliberately does not access); this script only
+diff adds or modifies a skills/*/SKILL.md file or a
+docs/superpowers/specs/*.md design doc) and which skills had a
+description-line change, need eval-coverage disclosure, are
+security-relevant, or which design docs changed (all of this requires git
+history this script deliberately does not access); this script only
 grades the body text handed to it against those workflow-supplied facts.
 Deliberately not placed inside either audited skill's own directory: both
 declare a portability level whose procedure must not depend on this
@@ -108,6 +125,22 @@ _BATTLE_TESTING_WAIVED_RE = _waived_pattern("battle-testing-a-skill")
 _EVAL_COVERAGE_CHECK_NAME = "eval-coverage-disclosure"
 _EVAL_COVERAGE_WAIVER_RE = _waived_pattern(_EVAL_COVERAGE_CHECK_NAME)
 
+# Issue #517 (refs #454, #277): two process-disclosure checks, each
+# required only when the calling workflow supplies a non-empty skill/doc
+# list for it. "RAN"/"NOT-RUN" (case-insensitive, same as every other
+# vocabulary here) discloses whether the named process happened at all --
+# WAIVED: <reason> is accepted too, via the shared _line_pattern factory,
+# same as the two audits in _VERDICTS.
+_PROCESS_DISCLOSURE_VERDICTS = ("RAN", "NOT-RUN")
+
+_SECURITY_COVERAGE_CHECK_NAME = "adversarial-coverage-mapping"
+_SECURITY_COVERAGE_LINE_RE = _line_pattern(
+    _SECURITY_COVERAGE_CHECK_NAME, _PROCESS_DISCLOSURE_VERDICTS
+)
+
+_DESIGN_DOC_CHECK_NAME = "design-doc-adversarial-review"
+_DESIGN_DOC_LINE_RE = _line_pattern(_DESIGN_DOC_CHECK_NAME, _PROCESS_DISCLOSURE_VERDICTS)
+
 
 def _normalize_body(body_text):
     # Normalize CRLF/CR line endings before matching: GitHub is known to
@@ -163,6 +196,36 @@ def find_missing_eval_coverage_disclosure(body_text, needs_eval_coverage_skills)
     return list(needs_eval_coverage_skills)
 
 
+def find_missing_security_coverage_disclosure(body_text, security_relevant_skills):
+    """Return security_relevant_skills unchanged if none of them is covered
+    by an adversarial-coverage-mapping RAN/NOT-RUN/WAIVED line in the PR
+    body (issue #517, refs #454); else [].
+    """
+    if not security_relevant_skills:
+        return []
+    section = _extract_section(_normalize_body(body_text))
+    if section is None:
+        return list(security_relevant_skills)
+    if _SECURITY_COVERAGE_LINE_RE.search(section):
+        return []
+    return list(security_relevant_skills)
+
+
+def find_missing_design_doc_disclosure(body_text, changed_design_docs):
+    """Return changed_design_docs unchanged if none of them is covered by a
+    design-doc-adversarial-review RAN/NOT-RUN/WAIVED line in the PR body
+    (issue #517, refs #277); else [].
+    """
+    if not changed_design_docs:
+        return []
+    section = _extract_section(_normalize_body(body_text))
+    if section is None:
+        return list(changed_design_docs)
+    if _DESIGN_DOC_LINE_RE.search(section):
+        return []
+    return list(changed_design_docs)
+
+
 def _parse_skill_list(raw):
     """Comma-separated skill names -> a sorted, deduped, non-empty list."""
     return sorted({item.strip() for item in (raw or "").split(",") if item.strip()})
@@ -194,6 +257,19 @@ def main(argv=None):
         "whose diff touches neither evals/<skill>/tasks/ nor "
         "evals/<skill>/eval-status.md.",
     )
+    parser.add_argument(
+        "--security-relevant-skills",
+        default="",
+        help="Comma-separated skill names (skills/<name>/SKILL.md) whose "
+        "frontmatter heuristically matches a security-relevant keyword "
+        "(issue #517, refs #454).",
+    )
+    parser.add_argument(
+        "--changed-design-docs",
+        default="",
+        help="Comma-separated docs/superpowers/specs/*.md filenames added "
+        "or modified in this diff (issue #517, refs #277).",
+    )
     args = parser.parse_args(argv)
     try:
         body_text = (
@@ -212,8 +288,22 @@ def main(argv=None):
     missing_eval_coverage_skills = find_missing_eval_coverage_disclosure(
         body_text, needs_eval_coverage_skills
     )
+    security_relevant_skills = _parse_skill_list(args.security_relevant_skills)
+    missing_security_coverage_skills = find_missing_security_coverage_disclosure(
+        body_text, security_relevant_skills
+    )
+    changed_design_docs = _parse_skill_list(args.changed_design_docs)
+    missing_design_doc_skills = find_missing_design_doc_disclosure(
+        body_text, changed_design_docs
+    )
 
-    if not missing and not disallowed_waiver_skills and not missing_eval_coverage_skills:
+    if (
+        not missing
+        and not disallowed_waiver_skills
+        and not missing_eval_coverage_skills
+        and not missing_security_coverage_skills
+        and not missing_design_doc_skills
+    ):
         print("PASS: skill audit evidence disclosed for both audits")
         return 0
 
@@ -257,6 +347,31 @@ def main(argv=None):
             "for the changed skill, or disclose "
             "'eval-coverage-disclosure: WAIVED: <reason>' in the "
             "'## Skill audit evidence' section.",
+            file=sys.stderr,
+        )
+
+    if missing_security_coverage_skills:
+        print(
+            "FAIL: security-relevant skill change with no "
+            "adversarial-coverage-mapping disclosure for: "
+            + ", ".join(missing_security_coverage_skills)
+            + ". Add 'adversarial-coverage-mapping: RAN' or "
+            "'adversarial-coverage-mapping: NOT-RUN' (or "
+            "'... : WAIVED: <reason>') in the '## Skill audit evidence' "
+            "section, disclosing whether an adversarial coverage-mapping "
+            "round ran against this security-relevant skill.",
+            file=sys.stderr,
+        )
+
+    if missing_design_doc_skills:
+        print(
+            "FAIL: changed design doc with no design-doc-adversarial-review "
+            "disclosure for: "
+            + ", ".join(missing_design_doc_skills)
+            + ". Add 'design-doc-adversarial-review: RAN' or "
+            "'design-doc-adversarial-review: NOT-RUN' (or "
+            "'... : WAIVED: <reason>') in the '## Skill audit evidence' "
+            "section.",
             file=sys.stderr,
         )
 
