@@ -76,7 +76,10 @@ Only once all three checks above are satisfied (source is readable, state
 is read, and that state is capturable) do the five criteria apply. See
 [references/gitapex-worked-examples.md](references/gitapex-worked-examples.md)
 for two fully-graded worked examples applying this exact walk -- worth
-reading before applying the criteria below for the first time.
+reading before applying the criteria below for the first time. Each
+criterion's primary-source grounding lives in
+[references/primary-sources.md](references/primary-sources.md), not
+restated inline here.
 
 ## The five criteria
 
@@ -106,6 +109,8 @@ server subprocess) -- reused here by reference, not redefined.
    reason to skip this one. Git hook subprocess -- typically stateless,
    so this criterion is usually not-applicable there; a hook reading a
    local cache or marker file is not exempt from being checked.
+   Grounding: `references/primary-sources.md`'s State provenance/trust
+   section.
 
 2. **Cold-start/absence behavior.** Narrows
    `evaluating-deterministic-gate-quality`'s own dimension 15 (fail-closed
@@ -120,6 +125,8 @@ server subprocess) -- reused here by reference, not redefined.
    "dimension 15 already covers this in general." A dimension-15 PASS
    that never actually exercised this specific empty-state scenario is
    not itself evidence for this criterion.
+   Grounding: `references/primary-sources.md`'s Cold-start/absence
+   behavior section.
 
 3. **Replay/reproducibility.** Is the state snapshot behind a past
    decision recorded (a fetched window logged as a build artifact, a
@@ -131,6 +138,8 @@ server subprocess) -- reused here by reference, not redefined.
    verifiable only at the moment it fires; grade the corresponding
    claim indeterminate afterward, never inferred from the decision's own
    later report of what it did.
+   Grounding: `references/primary-sources.md`'s Replay/reproducibility
+   section.
 
 4. **Bounded growth.** Is the state's own size or age bounded, or does
    the decision's cost or behavior drift as history accumulates without
@@ -140,6 +149,7 @@ server subprocess) -- reused here by reference, not redefined.
    across many invocations -- a distinct failure mode dimension 6/19
    does not reach, since that dimension grades one call's own cost, not
    what a store holding every past call's residue eventually costs.
+   Grounding: `references/primary-sources.md`'s Bounded growth section.
 
 5. **Blocking-posture justification.** Where the state-coupled signal is
    aggregate and noisy (a trend, a rate, a rolling average) rather than
@@ -154,6 +164,8 @@ server subprocess) -- reused here by reference, not redefined.
    model-judged and therefore already passes that other skill's own
    dimension 8 -- a dimension-8 pass is not evidence for this criterion,
    which asks a different question entirely.
+   Grounding: `references/primary-sources.md`'s Blocking-posture
+   justification section.
 
 ## Procedure
 
@@ -313,7 +325,10 @@ carrying that skill's own portability posture forward rather than
 re-deriving one. This skill's own authoring repository's worked examples
 and provenance live separately, in
 [references/gitapex-worked-examples.md](references/gitapex-worked-examples.md)
-and `metadata/gitapex.yaml`.
+and `metadata/gitapex.yaml`; the five criteria's primary-source grounding,
+in [references/primary-sources.md](references/primary-sources.md), is
+itself fully portable -- it cites no path or fact specific to this
+skill's own authoring repository, unlike the worked-examples file.
 
 Lifecycle note: first version of a new skill category, declared
 `experimental` in `metadata/gitapex.yaml` -- see that file's own
