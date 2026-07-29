@@ -82,15 +82,23 @@ _HTTP_TIMEOUT_SECONDS = 30
 # A convention-claim phrase: "this repo('s)? own/actual/established
 # convention" (repo/repository, with or without a possessive apostrophe --
 # Markdown sources in this repo use both "repo's" and a bare "repository").
+# Up to two extra qualifier words (each optionally comma-separated) are
+# allowed between the required modifier and "convention" -- e.g. "own,
+# long-established convention" or "own established naming convention" --
+# a natural paraphrase of the same claim this gate exists to catch, not
+# just the single-adjective template.
 _CONVENTION_CLAIM_RE = re.compile(
-    r"\bthis\s+repo(?:sitory)?(?:'s)?\s+(?:own|actual|established)\s+convention\b",
+    r"\bthis\s+repo(?:sitory)?(?:'s)?\s+(?:own|actual|established)\b"
+    r"(?:[,\s]+[A-Za-z-]+){0,2}\s+convention\b",
     re.IGNORECASE,
 )
 
 # The claim must also be about a title/identity string, not an unrelated
 # convention (formatting, scoring, tooling) -- narrowed per this module's
-# own docstring.
-_TITLE_IDENTITY_RE = re.compile(r"\b(title|identity)\b", re.IGNORECASE)
+# own docstring. Plural forms included ("titles", "identities") -- a claim
+# about "this repo's own convention for retrospective titles" is the same
+# claim class as one about "the title", not a different one.
+_TITLE_IDENTITY_RE = re.compile(r"\b(titles?|identit(?:y|ies))\b", re.IGNORECASE)
 
 # Digit-boundary-aware, matching scan_retrospective_gate_drift.py's own
 # _citation_pattern rationale: "#341" must not match inside "#3410" or
@@ -137,6 +145,12 @@ def cited_issue_numbers(text: str) -> list[int]:
 def has_citation(text: str) -> bool:
     """Return True iff `text` cites at least one issue/PR number anywhere."""
     return bool(_CITATION_RE.search(text))
+
+
+def _no_citation_message(path: Path) -> str:
+    """Shared offender message for both --check-only and full mode, so the
+    two never drift into subtly different wording for the same defect."""
+    return f"{path}: title/identity convention claim with no #<number> citation anywhere in the file"
 
 
 # ---------------------------------------------------------------------------
@@ -220,7 +234,7 @@ def find_unresolvable_offenders(
         return None
     numbers = cited_issue_numbers(text)
     if not numbers:
-        return f"{path}: title/identity convention claim with no #<number> citation anywhere in the file"
+        return _no_citation_message(path)
     if any(is_resolvable_issue(owner, repo, n, token, opener, sleeper) for n in numbers):
         return None
     cited = ", ".join(f"#{n}" for n in numbers)
@@ -254,7 +268,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.check_only:
         offenders = [
-            f"{path}: title/identity convention claim with no #<number> citation anywhere in the file"
+            _no_citation_message(path)
             for path, text in texts.items()
             if find_offending_paragraphs(text) and not has_citation(text)
         ]

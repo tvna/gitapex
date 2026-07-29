@@ -108,6 +108,29 @@ _NO_SKILL_REF_DOC = """\
 Nothing about a Routine or a skill here.
 """
 
+_CAPABILITY_WITH_TRAILING_COMMENT = "spec:\n  capabilityAssumption: Broad  # confirmed 2026-07\n"
+
+_PERMISSIONS_WITH_TRAILING_COMMENT_DOC = """\
+# weekly workflow
+
+Wires `skills/ranking-the-open-queue` to a scheduled workflow.
+
+```yaml
+permissions:
+  contents: read
+  issues: write  # reverted after incident
+```
+"""
+
+_UNRELATED_DENY_AND_HOOK_DOC = """\
+# weekly Routine
+
+Wires `skills/ranking-the-open-queue` to a scheduled Routine. Formatting
+is enforced by `hooks/pre-commit.sh`.
+
+Reviewers may deny this PR if CI is red.
+"""
+
 
 def test_is_superseded():
     assert gate.is_superseded(_SUPERSEDED_DOC) is True
@@ -122,6 +145,10 @@ def test_referenced_skill_names_dedupes():
 def test_capability_assumption():
     assert gate.capability_assumption("spec:\n  capabilityAssumption: Broad\n") == "Broad"
     assert gate.capability_assumption("spec:\n  portability: Portable\n") is None
+
+
+def test_capability_assumption_tolerates_trailing_comment():
+    assert gate.capability_assumption(_CAPABILITY_WITH_TRAILING_COMMENT) == "Broad"
 
 
 def test_has_concrete_scoping_citation_env_id():
@@ -141,8 +168,20 @@ def test_has_concrete_scoping_citation_rejects_permissions_block_with_write():
     assert gate.has_concrete_scoping_citation(_PERMISSIONS_WITH_WRITE_DOC) is False
 
 
+def test_has_concrete_scoping_citation_rejects_permissions_block_with_write_trailing_comment():
+    # A write-granting line with a trailing comment must not silently drop
+    # out of the "all values are read" check.
+    assert gate.has_concrete_scoping_citation(_PERMISSIONS_WITH_TRAILING_COMMENT_DOC) is False
+
+
 def test_has_concrete_scoping_citation_deny_hook():
     assert gate.has_concrete_scoping_citation(_DENY_HOOK_DOC) is True
+
+
+def test_has_concrete_scoping_citation_rejects_unrelated_deny_and_hook_mentions():
+    # A hook path in one paragraph and an unrelated "deny" in another must
+    # not combine into a false "named deny hook" citation.
+    assert gate.has_concrete_scoping_citation(_UNRELATED_DENY_AND_HOOK_DOC) is False
 
 
 def test_has_concrete_scoping_citation_readonly_credential():
@@ -183,10 +222,13 @@ def test_broad_skills_without_scoping_no_skill_reference(tmp_path):
     assert gate.broad_skills_without_scoping(_NO_SKILL_REF_DOC, tmp_path / "skills") == []
 
 
-def test_broad_skills_without_scoping_missing_sidecar_skipped(tmp_path):
-    # Referenced skill has no sidecar under skills_root -- not this gate's
-    # problem to invent a verdict for a skill it cannot read.
-    assert gate.broad_skills_without_scoping(_PROMPT_ONLY_DOC, tmp_path / "skills") == []
+def test_broad_skills_without_scoping_missing_sidecar_flagged(tmp_path):
+    # Referenced skill has no sidecar under skills_root -- fail loud rather
+    # than silently treat an unknown capabilityAssumption as "not Broad"
+    # (a missing/renamed/typo'd sidecar must not silently defeat the gate).
+    offenders = gate.broad_skills_without_scoping(_PROMPT_ONLY_DOC, tmp_path / "skills")
+    assert len(offenders) == 1
+    assert "unverifiable" in offenders[0]
 
 
 def test_main_fails_on_prompt_only_doc(tmp_path, capsys):

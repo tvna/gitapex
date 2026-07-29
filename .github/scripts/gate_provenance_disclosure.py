@@ -4,12 +4,14 @@ evidence-limitation reason, with no owner-disclosure marker in the same
 diff.
 
 Issue #520 (row 3, refs #350): retrospective #350 found that a doc's
-evidence-limitation note disclosed a session-specific runtime-tooling
-fingerprint -- naming the absence of "a registered Skill invocation" and
-"a generic dispatch tool" -- as the reason a prior evaluation could not be
+evidence-limitation note named two pieces of session-specific
+runtime-tooling machinery as the reason a prior evaluation could not be
 reused, in an outward-facing artifact, without an owner decision to
 disclose it (CLAUDE.md section 3's provenance-marker audit). A reviewer
-bot caught it that time; this gate makes the catch deterministic.
+bot caught it that time; this gate makes the catch deterministic. (This
+paragraph deliberately does not reproduce the flagged phrasing verbatim --
+doing so would self-trigger this very gate on this file; see the
+Vocabulary section below for the actual cue words instead.)
 
 Distinct from skills/outward-artifact-preflight/scripts/scan_provenance.py:
 that script flags markers of *this artifact's own production* (a model ID,
@@ -21,14 +23,24 @@ production marker. Both are non-exhaustive, keyword-based heuristics by
 design (issue #520's own Acceptance Criteria Map names this as residual
 risk: "a keyword/pattern list that could miss novel phrasings").
 
-A paragraph is flagged when it combines (a) a limitation/reason cue
-("no access to", "lacks access to", "absence of", "missing a", ...) with
-(b) a tool-fingerprint cue (a generic internal-tooling concept: "registered
-skill", "dispatch tool", "subagent", "task tool", "agent tool", "mcp
-tool", "tool call", ...) in the same paragraph -- mirroring
-scan_provenance.py's own same-line corroborating-context approach, scoped
-to the paragraph since prose evidence-limitation notes commonly wrap
-across lines in Markdown.
+A paragraph is flagged when it combines a limitation/reason cue with a
+tool-fingerprint cue in the same paragraph -- mirroring scan_provenance.py's
+own same-line corroborating-context approach, scoped to the paragraph
+since prose evidence-limitation notes commonly wrap across lines in
+Markdown.
+
+Vocabulary (split across two paragraphs so this docstring itself never
+combines an example of each cue type in one paragraph -- doing so would
+self-trigger this gate on this very file, same defect the first version of
+this file's docstring shipped with).
+
+Limitation/reason cue examples: "no access to", "lacks access to",
+"absence of", "missing a", and their close variants -- see
+`_LIMITATION_CUE_RE` below for the exact pattern.
+
+Tool-fingerprint cue examples: a generic internal-tooling concept such as
+a registered skill invocation, a dispatch tool, a subagent, or an MCP tool
+call -- see `_TOOL_CUE_RE` below for the exact pattern.
 
 Disclosure marker: a `tool-fingerprint-disclosure: WAIVED: <reason>` line
 anywhere in the combined corpus (PR body plus any diff-added doc text

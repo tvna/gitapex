@@ -66,7 +66,12 @@ _SUPERSEDED_RE = re.compile(r"\*\*Superseded\b", re.IGNORECASE)
 # "skills/ranking-the-open-queue" or "skills/ranking-the-open-queue/SKILL.md".
 _SKILL_REF_RE = re.compile(r"\bskills/([a-z0-9][a-z0-9-]*)\b")
 
-_CAPABILITY_RE = re.compile(r"^\s*capabilityAssumption:\s*(\S+)\s*$", re.MULTILINE)
+# No trailing `\s*$` anchor: a sidecar line carrying an inline comment
+# (`capabilityAssumption: Broad  # confirmed 2026-07`) would otherwise fail
+# to match at all -- `\S+` already stops at the first whitespace, so
+# dropping the end anchor is sufficient and does not change what value is
+# captured for a plain, comment-free line.
+_CAPABILITY_RE = re.compile(r"^\s*capabilityAssumption:\s*(\S+)", re.MULTILINE)
 
 # A real environment_id value: "env_" or "ccpool_" (self-hosted pools) per
 # create_trigger's own environment_id documentation, not a bare mention of
@@ -77,7 +82,12 @@ _ENV_ID_VALUE_RE = re.compile(r"\b(?:env_|ccpool_)[A-Za-z0-9]+\b")
 # gate_skill_rename_lifecycle.py's LIFECYCLE_BLOCK_RE bounds spec.lifecycle:
 # the header line, then its immediately-following more-indented lines.
 _PERMISSIONS_BLOCK_RE = re.compile(r"^([ \t]*)permissions:[ \t]*$\n((?:\1[ \t]+.*\n?)*)", re.MULTILINE)
-_PERMISSIONS_LINE_RE = re.compile(r"^\s*[\w-]+:\s*(\S+)\s*$", re.MULTILINE)
+# No trailing `\s*$` anchor, same rationale as _CAPABILITY_RE above: a
+# `issues: write  # reverted after incident` line must still count as a
+# `write` value, not silently drop out of the block's captured values
+# (which would make an all-`read` check on the remaining values pass
+# vacuously despite the block actually granting write).
+_PERMISSIONS_LINE_RE = re.compile(r"^\s*[\w-]+:\s*(\S+)", re.MULTILINE)
 
 _ALLOWED_TOOLS_RE = re.compile(r"--allowedTools\b|\ballowedTools\b", re.IGNORECASE)
 
@@ -88,6 +98,20 @@ _READONLY_CREDENTIAL_RE = re.compile(
     r"read-only[\w\s-]{0,40}(?:credential|token)|(?:credential|token)[\w\s-]{0,40}read-only",
     re.IGNORECASE,
 )
+
+
+def _paragraphs(text: str) -> list[str]:
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+    return [p for p in re.split(r"\n\s*\n", normalized) if p.strip()]
+
+
+def _has_deny_hook_citation(text: str) -> bool:
+    """True iff some paragraph in `text` names both a hook path and the
+    word "deny" -- co-located, not merely present anywhere in the doc.
+    An unscoped search would let an unrelated "hooks/pre-commit.sh" mention
+    in one section and an unrelated "reviewers may deny this PR" in another
+    combine into a false "named deny hook" citation."""
+    return any(_DENY_HOOK_RE.search(p) and _DENY_WORD_RE.search(p) for p in _paragraphs(text))
 
 
 def is_superseded(text: str) -> bool:
@@ -133,7 +157,7 @@ def has_concrete_scoping_citation(text: str) -> bool:
         _ENV_ID_VALUE_RE.search(text)
         or _permissions_block_is_read_only(text)
         or _ALLOWED_TOOLS_RE.search(text)
-        or (_DENY_HOOK_RE.search(text) and _DENY_WORD_RE.search(text))
+        or _has_deny_hook_citation(text)
         or _READONLY_CREDENTIAL_RE.search(text)
     )
 
@@ -157,6 +181,14 @@ def broad_skills_without_scoping(
         try:
             sidecar_text = sidecar.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
+            # Fail loud, not silent-pass (CLAUDE.md section 4): a
+            # Routine-connection doc naming a skill whose sidecar cannot be
+            # read (missing, renamed, unreadable) has an unknown
+            # capabilityAssumption -- treating that as "not Broad" would
+            # let exactly the unscoped-Broad-skill pattern this gate exists
+            # to catch slip through behind a typo'd or not-yet-created
+            # sidecar path.
+            broad_skills.append(f"{name} (capabilityAssumption unverifiable: {sidecar} not found or unreadable)")
             continue
         if capability_assumption(sidecar_text) == "Broad":
             broad_skills.append(name)

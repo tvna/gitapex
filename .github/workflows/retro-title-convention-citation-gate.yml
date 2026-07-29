@@ -41,6 +41,15 @@ jobs:
       # base branch after this PR forked must never be misattributed here.
       # A pure deletion has no new claim to check, so it is excluded the
       # same way skill-audit-gate.yml excludes D/R100 statuses.
+      #
+      # git's default pathspec matching requires "**" to span at least one
+      # directory segment -- 'docs/**/*.md' does NOT match a file directly
+      # under docs/ (e.g. docs/glossary.md), unlike this workflow's own
+      # `on.pull_request.paths` trigger glob above (a different engine,
+      # zero-or-more semantics). Both the "**" form and the plain "*" form
+      # are listed explicitly so a top-level docs/*.md edit is never
+      # silently skipped by this step even though it correctly triggered
+      # the workflow.
       - name: Determine changed doc/skill files
         id: diff
         env:
@@ -48,7 +57,8 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          if ! diff_output=$(git diff --name-status "$BASE_SHA...$HEAD_SHA" -- 'skills/**/*.md' 'docs/**/*.md'); then
+          if ! diff_output=$(git diff --name-status "$BASE_SHA...$HEAD_SHA" -- \
+              'skills/*.md' 'skills/**/*.md' 'docs/*.md' 'docs/**/*.md'); then
             echo "::error::git diff failed between $BASE_SHA and $HEAD_SHA" >&2
             exit 1
           fi
@@ -74,5 +84,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          printf '%s\n' "$FILES" | xargs -r python3 .github/scripts/gate_retro_title_convention_citation.py \
+          # -d '\n' (GNU xargs, available on ubuntu-latest): split strictly
+          # on newlines, not arbitrary whitespace, and disable xargs' own
+          # quote/backslash interpretation -- a doc path containing a space
+          # or a single quote must pass through as one argument, not get
+          # split or abort xargs with "unmatched quote".
+          printf '%s\n' "$FILES" | xargs -d '\n' -r python3 .github/scripts/gate_retro_title_convention_citation.py \
             --owner "${{ github.repository_owner }}" --repo "${{ github.event.repository.name }}"

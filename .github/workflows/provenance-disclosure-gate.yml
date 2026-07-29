@@ -39,6 +39,13 @@ jobs:
       # Markdown: pre-existing, already-reviewed prose is out of this
       # gate's scope, only what this diff introduces. A three-dot
       # (merge-base) diff matches the other new gates' own rationale.
+      # git's default pathspec matching requires "**" to span at least one
+      # directory segment -- 'docs/**/*.md' does NOT match a file directly
+      # under docs/ (e.g. docs/glossary.md), unlike the GitHub Actions
+      # workflow-trigger paths: glob (a different engine, zero-or-more
+      # semantics). Both the "**" form (nested files) and the plain "*"
+      # form (top-level files) are listed explicitly per directory so a
+      # top-level docs/*.md or evals/*.md edit is never silently skipped.
       - name: Extract added lines from doc/eval/skill Markdown
         id: diff
         env:
@@ -47,13 +54,12 @@ jobs:
         run: |
           set -euo pipefail
           added_file="$RUNNER_TEMP/added_lines.txt"
-          : > "$added_file"
-          if git diff -U0 "$BASE_SHA...$HEAD_SHA" -- 'docs/**/*.md' 'evals/**/*.md' 'skills/**/*.md' \
-              | grep -E '^\+[^+]' | sed 's/^\+//' > "$added_file.tmp"; then
-            mv "$added_file.tmp" "$added_file"
-          else
-            rm -f "$added_file.tmp"
+          if ! diff_output=$(git diff -U0 "$BASE_SHA...$HEAD_SHA" -- \
+              'docs/*.md' 'docs/**/*.md' 'evals/*.md' 'evals/**/*.md' 'skills/*.md' 'skills/**/*.md'); then
+            echo "::error::git diff failed between $BASE_SHA and $HEAD_SHA" >&2
+            exit 1
           fi
+          printf '%s\n' "$diff_output" | grep -E '^\+[^+]' | sed 's/^\+//' > "$added_file" || true
           echo "added-file=$added_file" >> "$GITHUB_OUTPUT"
 
       # PR_BODY carries untrusted external text (anyone with PR-author

@@ -63,6 +63,16 @@ def test_find_offending_paragraphs_ignores_plain_prose():
     assert gate.find_offending_paragraphs("Nothing to see here.\n") == []
 
 
+def test_find_offending_paragraphs_matches_compound_modifier():
+    text = "this repository's own, long-established convention for the title"
+    assert len(gate.find_offending_paragraphs(text)) == 1
+
+
+def test_find_offending_paragraphs_matches_extra_qualifier_word():
+    text = "this repository's own established naming convention for retrospective titles"
+    assert len(gate.find_offending_paragraphs(text)) == 1
+
+
 def test_cited_issue_numbers_dedupes_in_order():
     text = "Refs #341, #342, and #341 again."
     assert gate.cited_issue_numbers(text) == [341, 342]
@@ -186,19 +196,38 @@ def test_find_unresolvable_offenders_unresolvable_fails(tmp_path):
 
 
 def test_check_only_end_to_end_pass_does_not_touch_network(tmp_path, capsys):
-    # main()'s full (non-check-only) mode forwards to find_unresolvable_offenders
-    # with no injected opener, so it always resolves to the real
-    # _default_opener -- a monkeypatch of the module-level name would not
-    # retroactively change that already-bound default (Python binds default
-    # argument values once, at function-definition time). Full-mode network
-    # wiring is therefore exercised at the function level only
-    # (test_find_unresolvable_offenders_resolvable_passes/_unresolvable_fails
-    # above, both with an explicitly injected opener), matching this
-    # repository's own test_gate_acm_issue_disclosure.py convention of never
-    # calling main()'s network-calling path with a mocked opener. This test
-    # only re-confirms --check-only's pure-text pass case end to end.
     path = tmp_path / "doc.md"
     path.write_text(_CITED_TITLE_CLAIM, encoding="utf-8")
     exit_code = gate.main(["--check-only", str(path)])
     assert exit_code == 0
     assert "PASS" in capsys.readouterr().out
+
+
+def test_full_mode_end_to_end_pass(tmp_path, monkeypatch, capsys):
+    # main()'s full mode forwards to find_unresolvable_offenders with no
+    # injected opener, so it always resolves to the real _default_opener.
+    # Unlike _default_opener itself (a default *argument value*, bound once
+    # at function-definition time -- monkeypatching the module-level name
+    # afterward never reaches an already-bound default), _default_opener's
+    # own body looks up urllib.request.urlopen fresh on every call, so
+    # patching that attribute IS the correct seam for exercising main()'s
+    # full-mode wiring end to end without a real network call.
+    path = tmp_path / "doc.md"
+    path.write_text(_CITED_TITLE_CLAIM, encoding="utf-8")
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    monkeypatch.setattr(
+        gate.urllib.request, "urlopen", lambda request, timeout=None: Response(200, json.dumps({"number": 341}))
+    )
+    exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex", str(path)])
+    assert exit_code == 0
+    assert "PASS" in capsys.readouterr().out
+
+
+def test_full_mode_end_to_end_fail(tmp_path, monkeypatch, capsys):
+    path = tmp_path / "doc.md"
+    path.write_text(_UNCITED_TITLE_CLAIM, encoding="utf-8")
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    monkeypatch.setattr(gate.urllib.request, "urlopen", lambda request, timeout=None: Response(200, "{}"))
+    exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex", str(path)])
+    assert exit_code == 1
+    assert "FAIL" in capsys.readouterr().err

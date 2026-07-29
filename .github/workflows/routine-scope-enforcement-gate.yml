@@ -27,11 +27,16 @@ jobs:
         with:
           egress-policy: audit
 
+      # No fetch-depth: 0 -- unlike skill-rename-lifecycle-gate.yml (which
+      # needs a merge-base and two historical tree listings via git
+      # ls-tree), this job's only step is a plain `find` over the checked-
+      # out working tree with no git history operation at all, so the
+      # default shallow checkout is sufficient and avoids paying for a
+      # full-history clone on every trigger.
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-          fetch-depth: 0
 
       # Issue #520 (row 2, refs #348): every Routine-connection doc
       # currently in the repository is checked on each run, not just the
@@ -68,4 +73,7 @@ jobs:
           DOCS: ${{ steps.find.outputs.docs }}
         run: |
           set -euo pipefail
-          printf '%s\n' "$DOCS" | xargs -r python3 .github/scripts/gate_routine_scope_enforcement.py --skills-root skills
+          # -d '\n': see retro-title-convention-citation-gate.yml's own
+          # xargs step for why plain whitespace/quote splitting is unsafe
+          # for a file-path list.
+          printf '%s\n' "$DOCS" | xargs -d '\n' -r python3 .github/scripts/gate_routine_scope_enforcement.py --skills-root skills
