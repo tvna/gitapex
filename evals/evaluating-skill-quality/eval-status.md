@@ -574,4 +574,8 @@ measurement limit rather than re-argued per edit -- a weaker-tier and/or
 repeated-trial run (issue #500 Phase 2, not yet scheduled) remains the
 honest way to actually measure whether precision-only Applicability
 wording earns its keep. Full record, methodology, and per-fixture scores:
-`evals/evaluating-skill-quality/split.md`'s Kept-edit log. Refs #537.
+`evals/evaluating-skill-quality/split.md`'s Kept-edit log. Structured,
+machine-readable run data for all four gates (axis addition plus the
+three wording follow-ups):
+[results/2026-07-29-issue-537-confidentiality-gates/](results/2026-07-29-issue-537-confidentiality-gates/manifest.json).
+Refs #537.
