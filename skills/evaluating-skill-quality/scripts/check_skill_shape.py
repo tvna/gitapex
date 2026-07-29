@@ -2642,6 +2642,16 @@ def check_shape(target: Path) -> list[CheckResult]:
     # guards its own check_shape() call) with a bare traceback.
     try:
         text = skill_md.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        # A SKILL.md that does not exist at all is a different, pre-existing
+        # contract this fix does not change: main() already pre-checks
+        # ``skill_md.is_file()`` before ever calling check_shape() and
+        # returns exit 2 for that case (see test_directory_without_skill_md_
+        # returns_2), the same "missing" vs. "present but corrupt" split the
+        # sidecar's own is_file() check below draws. Re-raising here (rather
+        # than folding "missing" into the "present but unreadable" evidence
+        # below) keeps that split intact for any other direct caller too.
+        raise
     except (OSError, UnicodeDecodeError) as exc:
         return [CheckResult(
             "skill-md-readable", False,

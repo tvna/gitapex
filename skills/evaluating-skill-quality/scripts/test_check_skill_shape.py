@@ -1109,6 +1109,27 @@ def test_non_utf8_skill_md_fails_checks_not_uncaught(tmp_path):
     assert css.main([str(d)]) == 1
 
 
+def test_missing_skill_md_raises_not_swallowed_as_unreadable(tmp_path):
+    # Adversarial-review regression guard: the row-6 fix's own
+    # try/except (OSError, UnicodeDecodeError) is broader than the
+    # UnicodeDecodeError-class bug it targets -- FileNotFoundError is an
+    # OSError subclass, so without this test a directory with no SKILL.md
+    # at all would silently produce a misleading "skill-md-readable:
+    # unreadable: FileNotFoundError" CheckResult instead of raising,
+    # conflating "missing" with "present but corrupt" (the actual bug
+    # class) for any direct caller of check_shape() that skips main()'s
+    # own is_file() pre-check (test_directory_without_skill_md_returns_2
+    # covers that pre-check itself, only through main()). check_shape()
+    # must keep raising FileNotFoundError here, matching its own
+    # pre-existing (unchanged) contract and the same "missing" vs.
+    # "present but unreadable" split the sidecar's own is_file() check
+    # already draws.
+    d = tmp_path / "skill"
+    d.mkdir()
+    with pytest.raises(FileNotFoundError):
+        css.check_shape(d)
+
+
 def test_manifest_parser_ignores_deeper_nesting(tmp_path):
     text = (
         "apiVersion: gitapex.io/v1alpha1\n"
