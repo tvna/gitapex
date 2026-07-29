@@ -4829,3 +4829,186 @@ def test_raw_placeholder_in_reference_file_fails(tmp_path):
     res = _by_name(css.check_shape(d))
     assert res["no-raw-angle-bracket-placeholder"].passed is False
     assert "references/notes.md:<TERM>" in res["no-raw-angle-bracket-placeholder"].evidence
+
+
+# ---- CLAUDE.md chapter/section citation (issue #192, Refs #26 repair 1) ----
+#
+# Extends REPO_PATH_CITATION_RE, so these reuse the same two checks
+# (portable-no-repo-path-citation for bare prose,
+# portable-no-unhedged-inline-path-citation for inline code) the evals/docs
+# path-citation tests above already cover -- these fixtures instead exercise
+# the new CLAUDE.md alternative, covering all three real phrasings in use
+# elsewhere in this repository (ch./chapter/section).
+
+def test_portable_bare_claude_md_ch_citation_fails(tmp_path):
+    d = _write_raw(tmp_path, _portable_body(
+        "See CLAUDE.md ch.2 for the primary-source rule."))
+    result = _by_name(css.check_shape(d))["portable-no-repo-path-citation"]
+    assert result.passed is False
+    assert "CLAUDE.md ch.2" in result.evidence
+
+
+def test_portable_bare_claude_md_chapter_citation_fails(tmp_path):
+    d = _write_raw(tmp_path, _portable_body(
+        "Governed by CLAUDE.md chapter 3's git-ecosystem rules."))
+    result = _by_name(css.check_shape(d))["portable-no-repo-path-citation"]
+    assert result.passed is False
+    assert "CLAUDE.md chapter 3" in result.evidence
+
+
+def test_portable_bare_claude_md_section_citation_fails(tmp_path):
+    d = _write_raw(tmp_path, _portable_body(
+        "Per CLAUDE.md section 4, never echo secrets into logs."))
+    result = _by_name(css.check_shape(d))["portable-no-repo-path-citation"]
+    assert result.passed is False
+    assert "CLAUDE.md section 4" in result.evidence
+
+
+def test_portable_unhedged_inline_claude_md_citation_fails(tmp_path):
+    d = _write_raw(tmp_path, _portable_body(
+        "See `CLAUDE.md ch.2` for the rule."))
+    result = _by_name(
+        css.check_shape(d))["portable-no-unhedged-inline-path-citation"]
+    assert result.passed is False
+    assert "CLAUDE.md ch.2" in result.evidence
+
+
+def test_portable_hedged_inline_claude_md_citation_passes(tmp_path):
+    d = _write_raw(tmp_path, _portable_body(
+        "This repository's own convention cites `CLAUDE.md ch.2` here."))
+    result = _by_name(
+        css.check_shape(d))["portable-no-unhedged-inline-path-citation"]
+    assert result.passed is True
+
+
+def test_non_portable_skill_skips_claude_md_scan(tmp_path):
+    d = _write_raw(tmp_path, _portable_body(
+        "See CLAUDE.md section 3 for detail.",
+        marker="**Portability: Mixed.** Repo-specific detail is split out."))
+    names = _by_name(css.check_shape(d))
+    assert "portable-no-repo-path-citation" not in names
+
+
+# ---- Out-of-skill bare-prose scripts/ citation (issue #192, Refs #26
+# ---- repair 3/#36 repair 3/#20 item d) ----
+#
+# A "scripts/PATH" mention is legitimate self-reference when it resolves
+# under the citing skill's own directory (the common case, confirmed by a
+# corpus-wide check before adding this rule) and a defect only when it
+# does not -- unlike the evals/docs family above, this check needs a real
+# directory-existence resolution, not an unconditional flag or a hedge.
+
+def test_portable_out_of_skill_scripts_citation_fails(tmp_path):
+    d = _write_raw(tmp_path, _portable_body(
+        "Run scripts/does_not_exist.py to check this."))
+    result = _by_name(
+        css.check_shape(d))["portable-no-out-of-skill-scripts-citation"]
+    assert result.passed is False
+    assert "scripts/does_not_exist.py" in result.evidence
+
+
+def test_portable_self_scripts_citation_passes(tmp_path):
+    d = _write_raw(tmp_path, _portable_body(
+        "Run scripts/check_foo.py to check this."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "check_foo.py").write_text("# stub\n", encoding="utf-8")
+    result = _by_name(
+        css.check_shape(d))["portable-no-out-of-skill-scripts-citation"]
+    assert result.passed is True
+
+
+def test_portable_inline_code_scripts_citation_excluded(tmp_path):
+    # The bare-prose scan excludes inline code, same as every other
+    # citation check in this module -- an inline-code mention (even of a
+    # nonexistent path) is not this check's concern.
+    d = _write_raw(tmp_path, _portable_body(
+        "Run `scripts/does_not_exist.py` to check this."))
+    result = _by_name(
+        css.check_shape(d))["portable-no-out-of-skill-scripts-citation"]
+    assert result.passed is True
+
+
+def test_non_portable_skill_skips_scripts_scan(tmp_path):
+    d = _write_raw(tmp_path, _portable_body(
+        "Run scripts/does_not_exist.py to check this.",
+        marker="**Portability: Mixed.** Repo-specific detail is split out."))
+    names = _by_name(css.check_shape(d))
+    assert "portable-no-out-of-skill-scripts-citation" not in names
+
+
+def test_out_of_skill_scripts_citation_in_reference_file_fails(tmp_path):
+    d = _write_raw(tmp_path, _portable_body("See references/notes.md."),
+                   references={"notes.md": "Run scripts/ghost.py first.\n"})
+    result = _by_name(
+        css.check_shape(d))["portable-no-out-of-skill-scripts-citation"]
+    assert result.passed is False
+    assert "references/notes.md:scripts/ghost.py" in result.evidence
+
+
+# ---- Step-number execution-location contradiction (issue #192, Refs #93
+# ---- repair 1) ----
+#
+# Runs unconditionally (not Portable-gated): a same-file contradiction
+# about where a step executes is a consistency defect at every portability
+# level. Deliberately narrow, closed vocabulary -- see the check's own
+# module-docstring entry for why a broader "location" linter has no
+# evidence base in this repository's real content.
+
+def test_step_location_contradiction_fails(tmp_path):
+    d = _write_raw(tmp_path, _simple_body(
+        "Step 6 stays in the main thread. Elsewhere, step 6 executes "
+        "inside the dispatch and returns a verdict."))
+    result = _by_name(css.check_shape(d))["no-step-location-contradiction"]
+    assert result.passed is False
+    assert "step 6" in result.evidence
+
+
+def test_step_location_same_phrase_repeated_passes(tmp_path):
+    # Restating the identical location twice is not a contradiction.
+    d = _write_raw(tmp_path, _simple_body(
+        "Step 6 stays in the main thread. Later, step 6 again stays in "
+        "the main thread for the whole walk."))
+    result = _by_name(css.check_shape(d))["no-step-location-contradiction"]
+    assert result.passed is True
+
+
+def test_step_location_ceding_phrase_passes(tmp_path):
+    d = _write_raw(tmp_path, _simple_body(
+        "Step 6 stays in the main thread. The Subagent dispatch section "
+        "below states step 6 executes inside the dispatch; that section "
+        "is the authoritative statement."))
+    result = _by_name(css.check_shape(d))["no-step-location-contradiction"]
+    assert result.passed is True
+
+
+def test_step_location_different_step_numbers_no_contradiction(tmp_path):
+    d = _write_raw(tmp_path, _simple_body(
+        "Step 6 stays in the main thread. Step 7 executes inside the "
+        "dispatch."))
+    result = _by_name(css.check_shape(d))["no-step-location-contradiction"]
+    assert result.passed is True
+
+
+def test_step_location_fenced_block_excluded(tmp_path):
+    d = _write_raw(tmp_path, _simple_body(
+        "Step 6 stays in the main thread.\n\n"
+        "```\nStep 6 executes inside the dispatch.\n```\n"))
+    result = _by_name(css.check_shape(d))["no-step-location-contradiction"]
+    assert result.passed is True
+
+
+def test_no_step_or_location_language_trivially_passes(tmp_path):
+    d = _write_raw(tmp_path, _simple_body("A clean body with no step "
+                                          "references at all."))
+    result = _by_name(css.check_shape(d))["no-step-location-contradiction"]
+    assert result.passed is True
+
+
+def test_step_location_contradiction_in_reference_file_fails(tmp_path):
+    d = _write_raw(
+        tmp_path, _simple_body("See references/notes.md."),
+        references={"notes.md": "Step 3 stays in the main thread. Step 3 "
+                                "also executes inside the dispatch.\n"})
+    result = _by_name(css.check_shape(d))["no-step-location-contradiction"]
+    assert result.passed is False
+    assert "references/notes.md:step 3" in result.evidence
