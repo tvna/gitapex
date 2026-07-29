@@ -21,10 +21,16 @@ logic, is not; those are `evaluating-skill-quality`'s and
 
 ## Scope
 
-In scope: CLAUDE.md (root and subdirectory variants), a Subagent
-definition (`.claude/agents/*.md` or equivalent), an Output style, a
-system-prompt-append configuration, and Auto-memory content or its
-curation policy.
+In scope: CLAUDE.md (root and subdirectory variants, and any
+equivalently-generated or synced project-instruction file serving the
+same role under a different name for the same or a different harness --
+for example `AGENTS.md`), a Subagent definition (`.claude/agents/*.md` or
+equivalent), an Output style, a system-prompt-append configuration, and
+Auto-memory content or its curation policy. A repository carrying more
+than one such file (a `CLAUDE.md` and an `AGENTS.md` compiled from the
+same source) is graded per file, not folded into a single verdict --
+each is its own instance of this channel, and can independently pass or
+fail.
 
 Out of scope, each for a stated reason rather than left implicit:
 
@@ -134,11 +140,12 @@ what a common-case review needs from the definitions above:
    not-applicable / cannot-be-assessed; `indeterminate` is reserved for
    check 0's own unreadable-source case above, applied to the whole
    review rather than a per-criterion verdict). Where a claim depends on
-   whether an enforcement mechanism actually exists (criterion 4) or
-   whether a review/ownership process actually runs (criterion 1), check
-   the harness's own actual configuration (a hooks manifest, a CODEOWNERS
+   whether an enforcement mechanism actually exists (criterion 4), whether
+   a review/ownership process actually runs (criterion 1), or who actually
+   authored or last modified the content (criterion 5), check the
+   harness's own actual configuration (a hooks manifest, a CODEOWNERS
    file, a commit history) directly -- a channel's own docstring or
-   comment asserting either is not itself evidence, per the Stop
+   comment asserting any of the three is not itself evidence, per the Stop
    boundaries below.
 3. **Issue a verdict** per criterion, plus one overall summary noting
    which criteria were not-applicable and why. A criterion failing does
@@ -210,7 +217,7 @@ what a common-case review needs from the definitions above:
 - Never let this review request or accept more target-repository access
   than reading files, plus a harness-configuration lookup (hooks
   manifest, CODEOWNERS, commit history) narrowly scoped to confirming
-  criteria 1 and 4, permits.
+  criteria 1, 4, and 5, permits.
 - Never let this review's own resource consumption scale unbounded with
   an adversarially large or recursive target channel -- budget what gets
   read, and report exceeding it as a finding, not silently expanded
@@ -228,6 +235,23 @@ whenever the invoking context has plausibly already seen, authored, or
 discussed the specific channel under review -- a context that just wrote
 or discussed a target is not a neutral grader of it. Give the dispatch
 only the target channel's content (or path) and this skill's own files.
+
+Required, not optional, the same way `evaluating-skill-quality`'s own
+equivalent dispatch requirement is -- and with sharper stakes here than
+for most targets that skill or `evaluating-deterministic-gate-quality`
+review: when the target under review is itself a CLAUDE.md or
+AGENTS.md-equivalent file, that file is both the artifact being graded
+*and* ambient context the dispatching harness may auto-load regardless of
+what the dispatch prompt references. A dispatch that inherits the
+calling repository's own project-instruction file is not reviewing it
+from outside -- it is reasoning from inside the very content criterion 5
+asks whether an adversarial writer could shape. `evaluating-skill-
+quality`'s own Subagent dispatch section carries the isolation-
+verification mechanics (confirming a dispatch does not inherit the
+calling repository's own `CLAUDE.md`/`AGENTS.md`, via its own two-part
+behavioral test rather than a filesystem-only check) this skill defers to
+rather than re-deriving; run that verification before trusting isolation
+whenever the target is a CLAUDE.md/AGENTS.md-equivalent channel.
 
 ## Notes
 

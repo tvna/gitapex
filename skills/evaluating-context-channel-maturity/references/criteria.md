@@ -238,13 +238,15 @@ where this criterion bites hardest.
 
 ## References
 
-**[steering]** Segner, M. -- "Steering Claude Code: when to use
-CLAUDE.md, skills, hooks, and subagents," Claude by Anthropic (blog),
-June 18, 2026.
+**[steering]** Anthropic (Segner, M.) -- "Steering Claude Code: when to
+use CLAUDE.md, skills, hooks, and subagents," Claude by Anthropic (blog),
+June 18, 2026. Matches `evaluating-skill-quality/references/rubric.md`'s
+own citation of the same source, attributed there to "Anthropic" at the
+organizational level; this file adds the byline author for precision.
 
-**[context-eng]** Shihipar, T. -- "The new rules of context engineering
-for Claude 5 generation models," Claude by Anthropic (blog), July 24,
-2026.
+**[context-eng]** Anthropic (Shihipar, T.) -- "The new rules of context
+engineering for Claude 5 generation models," Claude by Anthropic (blog),
+July 24, 2026.
 
-[steering]: https://claude.com/blog/steering-claude-code-skills-hooks-rules-subagents-and-more
-[context-eng]: https://claude.com/blog/the-new-rules-of-context-engineering-for-claude-5-generation-models
+[steering]: https://claude.com/blog/steering-claude-code-skills-hooks-rules-subagents-and-more "Anthropic -- Steering Claude Code: skills, hooks, subagents and more"
+[context-eng]: https://claude.com/blog/the-new-rules-of-context-engineering-for-claude-5-generation-models "Anthropic -- The new rules of context engineering for Claude 5 generation models"
