@@ -1,11 +1,11 @@
 """Tests for check_middleware_table_shape.py.
 
 Fixtures are synthesized in-memory (no repository file is read) so the
-test is self-contained and travels with the skill on vendoring. Not
-wired into the root pyproject.toml testpaths -- this skill's checklist
-item is meant to stand alone (same approach as
-auditing-git-hosting-surface/scripts/test_scan_unpinned_actions.py); run
-directly with:
+test is self-contained and travels with the skill on vendoring. Wired
+into the root pyproject.toml testpaths (issue #562:
+check_middleware_table_shape.py sat at 66% file coverage precisely
+because this file, despite existing, was never collected by the
+repository's default pytest run) -- can still be run directly with:
     python3 -m pytest skills/auditing-agent-product-scope/scripts/
 """
 

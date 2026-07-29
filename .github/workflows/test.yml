@@ -41,8 +41,11 @@ jobs:
       # file's CLI surface could ship untested (PR #512's own retrospective
       # finding) without CI ever flagging it. coverage.json already exists
       # from the pytest step above; this only asserts a threshold on what
-      # it measured.
-      - name: Enforce evals/scripts coverage minimum
+      # it measured. Issue #562: the gate's default scope grew from just
+      # evals/scripts/*.py to every pyproject.toml [tool.coverage.run]
+      # source directory (derived from pyproject.toml itself, no extra
+      # flag needed here), including this gate's own .github/scripts file.
+      - name: Enforce per-file coverage minimum
         run: uv run --frozen python3 .github/scripts/gate_evals_scripts_coverage.py --coverage-json coverage.json
 
       # if: always() -- the coverage-minimum step above can fail (exit 1)

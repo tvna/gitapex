@@ -15,6 +15,9 @@ import scan_apm_manifest_drift as drift
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 
+_VALID_APM = "name: gitapex\nversion: 0.1.0\n"
+_VALID_PLUGIN = {"name": "gitapex", "version": "0.1.0"}
+
 
 def _write_pair(
     tmp_path: pathlib.Path, apm: str, plugin: dict
@@ -65,7 +68,41 @@ def test_missing_field_fails_loudly(tmp_path):
         drift.find_drift(apm, plugin)
 
 
+def test_missing_field_in_plugin_json_fails_loudly(tmp_path):
+    # Regression: find_drift checks plugin_data's fields before apm_data's
+    # (line 51 vs. line 53) -- a plugin.json missing a mirrored field must
+    # raise too, not only an apm.yml that's missing one.
+    apm, plugin = _write_pair(
+        tmp_path,
+        _VALID_APM,
+        {"name": "gitapex"},  # no version
+    )
+    with pytest.raises(KeyError, match="plugin.json"):
+        drift.find_drift(apm, plugin)
+
+
 def test_repository_manifests_are_in_lockstep():
     """The gate: real apm.yml must mirror plugin.json's name and version."""
     findings = drift.find_drift()
     assert findings == [], f"apm manifest drift: {findings}"
+
+
+def test_main_prints_no_drift_and_returns_zero_when_manifests_match(capsys, monkeypatch):
+    # find_drift's own path-reading behavior is covered by the fixture-based
+    # tests above and the live repository-manifest test below; this test
+    # isolates main()'s own print/exit-code contract by stubbing find_drift.
+    monkeypatch.setattr(drift, "find_drift", lambda: [])
+    rc = drift.main()
+    assert rc == 0
+    assert "No apm manifest drift found." in capsys.readouterr().out
+
+
+def test_main_prints_findings_and_returns_one_on_drift(capsys, monkeypatch):
+    monkeypatch.setattr(
+        drift, "find_drift", lambda: [("version", "0.1.0", "0.2.0")]
+    )
+    rc = drift.main()
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "apm manifest drift" in out
+    assert "version: plugin.json='0.1.0' != apm.yml='0.2.0'" in out

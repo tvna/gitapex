@@ -237,6 +237,13 @@ def test_pruning_compare_keeps_matched_correctness_with_lower_context_cost():
     assert score_contract.pruning_compare(0.9, 0.9, 1400, 1120) == "KEEP"
 
 
+def test_pruning_compare_keeps_a_direct_correctness_improvement():
+    # Correctness strictly improves (not matched): the "if after >
+    # before_correctness: return KEEP" branch, distinct from the
+    # matched-correctness/lower-cost branch covered above.
+    assert score_contract.pruning_compare(0.9, 0.95, 1400, 1400) == "KEEP"
+
+
 def test_pruning_compare_uses_the_cli_published_correctness_precision():
     recomputed_same_scores = 0.9398148333333333
     assert (
@@ -505,3 +512,92 @@ def test_main_rejects_non_finite_context_costs(tmp_path, capsys, invalid):
     )
     assert rc == 1
     assert "finite non-negative" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# Remaining branches: empty score list, TypeError-raising inputs to the
+# correctness/context-cost validators, and main()'s CLI-argument and
+# file-handling error paths (issue #562 coverage floor).
+# ---------------------------------------------------------------------------
+
+
+def test_split_mean_rejects_empty_score_list():
+    with pytest.raises(ValueError, match="cannot take the mean of an empty score list"):
+        score_contract.split_mean([])
+
+
+@pytest.mark.parametrize("invalid", ["not-a-number", None, []])
+def test_strict_compare_rejects_non_numeric_correctness(invalid):
+    # math.isfinite() raises TypeError on a non-numeric value; _validate_
+    # correctness must translate that into the documented ValueError rather
+    # than letting the TypeError escape uncaught.
+    with pytest.raises(ValueError, match=r"finite number in \[0,1\]"):
+        score_contract.strict_compare(invalid, 0.9)
+
+
+@pytest.mark.parametrize("invalid", ["not-a-number", None, []])
+def test_pruning_compare_rejects_non_numeric_context_cost(invalid):
+    # Same TypeError-to-ValueError translation as above, for
+    # _validate_context_cost's math.isfinite() call.
+    with pytest.raises(ValueError, match="finite non-negative"):
+        score_contract.pruning_compare(0.9, 0.9, invalid, 100)
+
+
+def test_main_pruning_only_without_compare_to_or_costs_fails_closed(capsys):
+    rc = score_contract.main(["--pruning-only"])
+    assert rc == 1
+    assert (
+        "--pruning-only requires --compare-to, --prior-context-cost, "
+        "and --candidate-context-cost" in capsys.readouterr().err
+    )
+
+
+def test_main_pruning_only_missing_one_context_cost_fails_closed(tmp_path, capsys):
+    scores = tmp_path / "scores.txt"
+    scores.write_text("0.9\n", encoding="utf-8")
+    rc = score_contract.main(
+        [
+            "--compare-to",
+            "0.9",
+            "--scores",
+            str(scores),
+            "--pruning-only",
+            "--prior-context-cost",
+            "1400",
+        ]
+    )
+    assert rc == 1
+    assert "--pruning-only requires --compare-to" in capsys.readouterr().err
+
+
+def test_main_requires_assertions_or_compare_to(capsys):
+    rc = score_contract.main([])
+    assert rc == 1
+    assert (
+        "--assertions is required unless --compare-to is used"
+        in capsys.readouterr().err
+    )
+
+
+def test_main_missing_assertions_file_fails_closed(capsys):
+    rc = score_contract.main(["--assertions", "/no/such/assertions.json"])
+    assert rc == 1
+    assert "assertions file not found" in capsys.readouterr().err
+
+
+def test_main_malformed_assertions_json_fails_closed(tmp_path, capsys):
+    apath = tmp_path / "assertions.json"
+    apath.write_text("not json{{{", encoding="utf-8")
+    rc = score_contract.main(["--assertions", str(apath)])
+    assert rc == 1
+    assert "invalid JSON" in capsys.readouterr().err
+
+
+def test_main_missing_output_file_fails_closed(tmp_path, capsys):
+    apath = tmp_path / "assertions.json"
+    apath.write_text(json.dumps({"output_contains": ["Facts"]}), encoding="utf-8")
+    rc = score_contract.main(
+        ["--assertions", str(apath), "--output", "/no/such/output.txt"]
+    )
+    assert rc == 1
+    assert "output file not found" in capsys.readouterr().err
