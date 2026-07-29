@@ -1,0 +1,36 @@
+apiVersion: gitapex.io/v1alpha1
+kind: SkillMetadata
+metadata:
+  name: evaluating-context-channel-maturity
+spec:
+  portability: Mixed
+  capabilityAssumption: Broad
+  references:
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/547"
+      summary: "Original lineage: evaluating-decision-state-discipline was proposed after a review of evaluating-deterministic-gate-quality found zero coverage for a deterministic check whose decision reads state beyond its own triggering event; a fable-model design review rejected importing 'feedforward' control-theory vocabulary as a category error and recommended native vocabulary instead."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/580"
+      summary: "A follow-up design review (fable-model, Plan role) found re-scoping evaluating-decision-state-discipline's own five criteria to also cover CLAUDE.md/Subagents/Output styles/system-prompt-append/Auto-memory would be a category error in the opposite direction: those criteria presuppose gate material, and none of the five candidates are gate material. Full breakdown in PR 579's and issue 576's own closing comments (both closed as superseded)."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/580"
+      summary: "Given the category-error finding, the requester chose to retire evaluating-decision-state-discipline and replace it with this skill (evaluating-context-channel-maturity), grading a natively-derived five-criterion rubric (ownership/review gating, bounded growth, placement/disclosure fit, enforcement-fit, provenance/adversarial independence) against CLAUDE.md/Subagents/Output styles/system-prompt-append/Auto-memory, rather than reusing the retired skill's gate-shaped criteria."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/580"
+      summary: "Rules (.claude/rules/) excluded from scope per the requester's own explicit reason: Claude Code's own proprietary implementation detail, not a portable concept across agent harnesses. Skills and deterministic gates/hooks excluded as fully owned by evaluating-skill-quality and evaluating-deterministic-gate-quality respectively, each already citing the same primary source (Steering Claude Code) this skill cites for its own criteria."
+    - kind: caveat
+      anchor: "references/gitapex-worked-examples.md"
+      summary: "This file carries gitapex's own worked examples: this repository's own root CLAUDE.md and the branch-plan-task subagent definition, both real (not synthetic) targets, each independently verified during authoring (line counts, hook-script contents and existence directly checked, not trusted from the target's own claims about itself). Substitute the target repository's own equivalents when applying this skill elsewhere."
+    - kind: caveat
+      anchor: "references/criteria.md"
+      summary: "Saltzer and Schroeder's separation-of-privilege/least-privilege principles were considered as a secondary reinforcement for criterion 5 but not cited, since the specific source was not re-fetched during this authoring session and this repository's own primary-source discipline requires same-session verification rather than carrying over an earlier, different skill's own citation. Recorded in criteria.md's own 'Sources considered and not used' section."
+  skillDependencies:
+    relatedTo:
+      - evaluating-skill-quality
+      - evaluating-deterministic-gate-quality
+      - grounding-in-primary-sources
+  lifecycle:
+    renamedFrom: evaluating-decision-state-discipline
+    experimental:
+      reason: "First version of this skill (replacing the retired evaluating-decision-state-discipline). Deferred: (1) an evaluating-skill-quality/battle-testing-a-skill audit round, not yet run; (2) a shape-checker for its own five criteria; (3) a committed evals/ corpus (ablation-capable, not yet run); (4) a cross-agent-tool compatibility matrix; (5) verification of the APM-manifest's own review gate (example 1, criterion 5) and the branch-plan-task subagent's write-access boundary (example 2, criterion 5)."
+      trackingIssue: "https://github.com/tvna/gitapex/issues/580"

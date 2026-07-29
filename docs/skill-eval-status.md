@@ -62,7 +62,7 @@ point via such an alternative mechanism -- see its own
 | `drafting-an-acm-issue` | [evals/drafting-an-acm-issue/eval-status.md](../evals/drafting-an-acm-issue/eval-status.md) |
 | `driving-pr-to-merge` | [evals/driving-pr-to-merge/eval-status.md](../evals/driving-pr-to-merge/eval-status.md) |
 | `establishing-ubiquitous-language` | [evals/establishing-ubiquitous-language/eval-status.md](../evals/establishing-ubiquitous-language/eval-status.md) |
-| `evaluating-decision-state-discipline` | [evals/evaluating-decision-state-discipline/eval-status.md](../evals/evaluating-decision-state-discipline/eval-status.md) |
+| `evaluating-context-channel-maturity` | [evals/evaluating-context-channel-maturity/eval-status.md](../evals/evaluating-context-channel-maturity/eval-status.md) |
 | `evaluating-deterministic-gate-quality` | [evals/evaluating-deterministic-gate-quality/eval-status.md](../evals/evaluating-deterministic-gate-quality/eval-status.md) |
 | `evaluating-skill-quality` | [evals/evaluating-skill-quality/eval-status.md](../evals/evaluating-skill-quality/eval-status.md) |
 | `executing-a-branch-plan` | [evals/executing-a-branch-plan/eval-status.md](../evals/executing-a-branch-plan/eval-status.md) |

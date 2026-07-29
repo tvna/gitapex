@@ -1,12 +1,52 @@
-# evaluating-decision-state-discipline eval status
+# evaluating-context-channel-maturity eval status
 
-No `evals/evaluating-decision-state-discipline/` suite exists yet for this
-newly authored skill (issue #547). There is no committed task corpus, no
-no-skill baseline, and no model tier evaluated. Building one is out of
-scope for this skill's initial authoring pass and is left as follow-up
-work, the same disclosed-gap pattern this file's sibling entries already
-use (see `evals/auditing-agent-product-scope/eval-status.md`) rather than
-a silent omission -- an ablation-capable, not-yet-run gap, not an
+This skill replaces `evaluating-decision-state-discipline` (issue #580),
+following a design review that found extending that skill's own five
+gate-shaped criteria to CLAUDE.md/Subagents/Output styles/system-prompt-
+append/Auto-memory would be a category error -- none of those five
+mechanisms are gate material. This file's directory was renamed along
+with the skill; the section below preserves the retired skill's own audit
+history rather than discarding it, since that history documents real,
+independently-verified findings against the predecessor skill's own prior
+form, not against this skill's current one.
+
+No `evals/evaluating-context-channel-maturity/` task corpus exists yet for
+this newly authored skill (issue #580). There is no committed task
+corpus, no no-skill baseline, and no model tier evaluated -- an
+ablation-capable, not-yet-run gap, not an absent-mechanism one, matching
+the same disclosed pattern the retired skill's own history below already
+used.
+
+Refs #580.
+
+## Current round
+
+A fresh `evaluating-skill-quality` and `battle-testing-a-skill` dispatch
+against this candidate has not yet run at the time this file was first
+written under the new name -- see `metadata/gitapex.yaml`'s own
+`lifecycle.experimental.reason` for the authoritative, current list of
+deferred items.
+
+## Open follow-up
+
+A first-round `evaluating-skill-quality` and `battle-testing-a-skill`
+dispatch against this reframed candidate is required before this skill is
+considered mature, mirroring the retired skill's own first-round
+requirement. Tracked in `metadata/gitapex.yaml`'s own
+`lifecycle.experimental.reason` rather than assumed clean without it.
+
+## History: evaluating-decision-state-discipline (retired)
+
+Preserved for provenance; describes audit rounds run against the retired
+predecessor skill's own prior form, not this skill.
+
+No `evals/evaluating-decision-state-discipline/` suite existed for that
+skill either. There was no committed task corpus, no no-skill baseline,
+and no model tier evaluated. Building one was out of scope for that
+skill's initial authoring pass and was left as follow-up work, the same
+disclosed-gap pattern this file's sibling entries use (see
+`evals/auditing-agent-product-scope/eval-status.md`) rather than a
+silent omission -- an ablation-capable, not-yet-run gap, not an
 absent-mechanism one.
 
 A fresh `battle-testing-a-skill` dispatch against the initial candidate
@@ -73,12 +113,15 @@ the smoke test's own more rigorous, evidence-cited walk (cannot-be-
 assessed / not-applicable throughout, no forced verdict) and by removing
 the synthetic example's unsupported live-tested claim.
 
-Refs #547.
+A five-round primary-source-grounding effort (issue #576, PR #579) then
+ran against this skill -- adding citations for the five gate-shaped
+criteria, correcting `capabilityAssumption` from an unintentional
+`Adaptive` to `Broad`, and fixing a trigger-wording overclaim -- before
+the design review recorded at the top of this file found the whole
+gate-shaped framing itself was the wrong target for the requester's
+follow-up direction. PR #579 was closed without merging and issue #576
+closed as not planned; see this repository's PR #579 and issue #576 for
+that round's own full detail, preserved on GitHub rather than repeated
+here.
 
-## Open follow-up
-
-A second, post-fix confirmation round of both `evaluating-skill-quality`
-and `battle-testing-a-skill` against the corrected candidate has not yet
-run -- tracked in `metadata/gitapex.yaml`'s own
-`lifecycle.experimental.reason` rather than assumed clean from the fixes
-alone.
+Refs #547, #576, #579.
