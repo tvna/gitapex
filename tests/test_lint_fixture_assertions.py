@@ -217,6 +217,38 @@ def test_symmetric_bans_ignores_ordinary_fixture():
     assert L.check_symmetric_bans(ordinary) is None
 
 
+def test_symmetric_bans_classifies_bare_not_as_negative():
+    # /code-review (issue #516 follow-up): NEGATION_CUE_RE originally omitted
+    # bare "not", unlike DENIAL_CUES elsewhere in this file which already
+    # treats "not " and "no " as equally valid denial forms.
+    assert L.classify_ban_direction("not observed") == "negative"
+
+
+def test_symmetric_bans_exempts_enum_style_indeterminate_status():
+    # /code-review (issue #516 follow-up): a literal `route_status:
+    # INDETERMINATE` status-field value is not the natural-language "claim
+    # cannot be determined" pattern this check means to catch -- confirmed
+    # against the real false positive on battle-testing-a-skill's own
+    # codex-unknown-model-fail-closed.yaml.
+    enum_style = {
+        "id": "t", "name": "T",
+        "description": "Requires an unknown caller to stop as INDETERMINATE.",
+        "expected": {
+            "output_contains": ["route_status", "INDETERMINATE"],
+            "output_not_contains": ["model_route: inherited", "overall: PASS"],
+        },
+    }
+    assert L.check_symmetric_bans(enum_style) is None
+
+
+def test_symmetric_bans_still_flags_lowercase_indeterminate_claim():
+    # The exemption above must not swallow the genuine epistemic-claim
+    # case, which uses lowercase "indeterminate" as an output_contains
+    # verdict rather than an ALL-CAPS status-field value.
+    detail = L.check_symmetric_bans(_indeterminate_task(["no force-push occurred"]))
+    assert detail is not None
+
+
 # ---- check_prompt_echo (issue #516, #191 -- opt in, non-blocking) ----
 
 def test_prompt_echo_flags_verbatim_substring():
@@ -362,3 +394,52 @@ def test_main_discovery_mode_runs_when_tasks_glob_omitted(tmp_path, monkeypatch)
 def test_main_discovery_mode_exits_two_with_no_skills(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     assert L.main([]) == 2
+
+
+# ---- format_report (issue #516 follow-up) ----
+
+def test_format_report_clean_run_says_well_formed():
+    assert "well-formed" in L.format_report([])
+
+
+def test_format_report_notes_only_does_not_claim_well_formed():
+    # /code-review: with zero blocking warnings but a non-blocking note
+    # present, the report must not print the "well-formed" claim the note
+    # right below it contradicts.
+    notes_only = [L.Warning_("t", "k", "v", "prompt-echo", "detail", blocking=False)]
+    report = L.format_report(notes_only)
+    assert "well-formed" not in report
+    assert "0 blocking warning" in report
+    assert "1 non-blocking note" in report
+
+
+def test_format_report_blocking_warning_present():
+    blocking = [L.Warning_("t", "k", "v", "case-sensitivity", "detail")]
+    report = L.format_report(blocking)
+    assert "1 warning(s)" in report
+    assert "well-formed" not in report
+
+
+# ---- lint_skill_tasks / lint_all_skills reuse already-parsed task data
+# (issue #516 follow-up: avoid re-parsing each task YAML twice) ----
+
+def test_lint_skill_tasks_returns_parsed_task_data(tmp_path):
+    tasks_dir = _write_skill_and_tasks(tmp_path, "alpha", with_rubric=True)
+    rubric, skill = (tmp_path / "skills" / "alpha" / "references" / "rubric.md",
+                     tmp_path / "skills" / "alpha" / "SKILL.md")
+    corpus = L.load_corpus(rubric, skill)
+    task_paths = sorted(tasks_dir.glob("*.yaml"))
+    warnings, task_data = L.lint_skill_tasks(task_paths, corpus)
+    assert warnings == []
+    assert set(task_data) == set(task_paths)
+    assert task_data[task_paths[0]]["id"] == "t"
+
+
+def test_check_adversarial_coverage_reuses_supplied_task_data(tmp_path):
+    # Passing task_data must short-circuit the tasks_dir glob/parse entirely
+    # -- point tasks_dir at a nonexistent directory to prove it is unused.
+    missing_dir = tmp_path / "does-not-exist"
+    task_data = {tmp_path / "t.yaml": {"tags": ["adversarial"]}}
+    assert L.check_adversarial_coverage(
+        "some-skill", missing_dir, "claims adversarial coverage",
+        task_data=task_data) is None

@@ -199,10 +199,12 @@ INDETERMINATE_MARKER_RE = re.compile(
     r"cannot be determined|not claimable|\bindeterminate\b", re.IGNORECASE)
 
 # A ban that reads as the negative direction of an unsupported claim ("no X
-# occurred", "never happened", "isn't present"). Anything else is treated as
-# the positive direction. Used only to classify output_not_contains entries
-# already gated by INDETERMINATE_MARKER_RE, not as a general negation check.
-NEGATION_CUE_RE = re.compile(r"\b(no|never|zero|none)\b|n't\b",
+# occurred", "never happened", "isn't present", "not observed"). Anything
+# else is treated as the positive direction. Used only to classify
+# output_not_contains entries already gated by INDETERMINATE_MARKER_RE, not
+# as a general negation check. "not" is included alongside "no" for the same
+# reason DENIAL_CUES treats them as equally valid denial forms above.
+NEGATION_CUE_RE = re.compile(r"\b(no|not|never|zero|none)\b|n't\b",
                               re.IGNORECASE)
 
 # An UPPER_SNAKE_CASE-shaped classification-code token, excluded from the
@@ -358,12 +360,27 @@ def check_symmetric_bans(data: dict) -> str | None:
     """Warn when a "claim cannot be determined" fixture (#352) bans an
     unsupported claim in only one direction. Gated on
     ``INDETERMINATE_MARKER_RE`` so this never fires for an ordinary fixture
-    that just happens to have only negative-direction bans."""
+    that just happens to have only negative-direction bans.
+
+    Exempts a fixture whose own ``output_contains`` requires an ALL-CAPS
+    ``INDETERMINATE``-shaped token (e.g. a literal `route_status:
+    INDETERMINATE` enum value): that is a closed-enum status field, the
+    same design this file's ``ENUM_TOKEN_RE`` already exempts from the
+    cross-task collision check, not the natural-language "claim cannot be
+    determined" pattern this check means to catch. Without this, a
+    fixture like `battle-testing-a-skill`'s `codex-unknown-model-fail-
+    closed.yaml` -- whose description explains stopping "as INDETERMINATE"
+    as a report field, and whose bans are unrelated report-field names,
+    not claim directions -- would be wrongly held to this rule.
+    """
     haystack = " ".join(str(data.get(k) or "") for k in ("id", "name", "description"))
     haystack += " " + " ".join(_as_tag_list(data.get("tags")))
     if not INDETERMINATE_MARKER_RE.search(haystack):
         return None
     expected = data.get("expected") or {}
+    positives = [v for v in (expected.get("output_contains") or []) if isinstance(v, str)]
+    if any(ENUM_TOKEN_RE.fullmatch(v) and "indeterminate" in v.lower() for v in positives):
+        return None
     bans = [v for v in (expected.get("output_not_contains") or []) if isinstance(v, str)]
     if not bans:
         return ("claims the underlying fact cannot be determined but declares "
@@ -405,15 +422,22 @@ def check_cross_task_collision(task_name: str, value: str,
     return None
 
 
-def check_adversarial_coverage(skill_name: str, tasks_dir: Path,
-                                claim_text: str) -> str | None:
+def check_adversarial_coverage(skill_name: str, tasks_dir: Path, claim_text: str, *,
+                                task_data: dict[Path, dict] | None = None) -> str | None:
     """Blocking, discovery-mode only (#473): a skill whose own docs claim
     adversarial coverage but whose tasks/ directory has no fixture tagged
-    ``adversarial``."""
+    ``adversarial``.
+
+    ``task_data``, if the caller already parsed every task YAML under
+    ``tasks_dir`` (as ``lint_all_skills`` does via ``lint_skill_tasks``),
+    is reused instead of re-globbing and re-parsing every file here.
+    """
     if not re.search(r"\badversarial\b", claim_text, re.IGNORECASE):
         return None
-    for path in tasks_dir.glob("*.yaml"):
-        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    if task_data is None:
+        task_data = {p: (yaml.safe_load(p.read_text(encoding="utf-8")) or {})
+                     for p in tasks_dir.glob("*.yaml")}
+    for data in task_data.values():
         tags = {t.strip().lower() for t in _as_tag_list(data.get("tags"))}
         if "adversarial" in tags:
             return None
@@ -485,11 +509,18 @@ def lint_task(task_path: Path, data: dict, anchors: list[str], corpus_flat: str,
     return warnings
 
 
-def lint_skill_tasks(task_paths: list[Path], rubric_path: Path, skill_path: Path, *,
+def lint_skill_tasks(task_paths: list[Path], corpus: str, *,
                      check_prompt_echo_enabled: bool = False,
-                     check_cross_task_enabled: bool = False) -> list[Warning_]:
-    """Lint one skill's task set against its own anchor corpus."""
-    corpus = load_corpus(rubric_path, skill_path)
+                     check_cross_task_enabled: bool = False,
+                     ) -> tuple[list[Warning_], dict[Path, dict]]:
+    """Lint one skill's task set against its own, already-loaded anchor
+    corpus (a caller reads it once via ``load_corpus`` and passes the text
+    here, rather than this function re-reading the same files).
+
+    Returns ``(warnings, task_data)``: ``task_data`` is each task path's
+    parsed YAML, so a caller linting many skills (``lint_all_skills``) can
+    reuse it for the adversarial-coverage check instead of re-parsing.
+    """
     anchors = extract_anchors(corpus)
     corpus_flat = WS_RE.sub(" ", corpus.lower())
     corpus_tokens = _content_tokens(corpus)
@@ -507,7 +538,7 @@ def lint_skill_tasks(task_paths: list[Path], rubric_path: Path, skill_path: Path
             path, data, anchors, corpus_flat, corpus_tokens, positive_index,
             check_prompt_echo_enabled=check_prompt_echo_enabled,
             check_cross_task_enabled=check_cross_task_enabled))
-    return warnings
+    return warnings, task_data
 
 
 def discover_skills(evals_root: Path, skills_root: Path) -> list[str]:
@@ -549,24 +580,32 @@ def _skill_claim_text(skills_root: Path, evals_root: Path, name: str) -> str:
 
 def lint_all_skills(evals_root: Path, skills_root: Path, *,
                     check_prompt_echo_enabled: bool = False,
-                    check_cross_task_enabled: bool = False) -> list[Warning_]:
+                    check_cross_task_enabled: bool = False,
+                    skill_names: list[str] | None = None) -> list[Warning_]:
     """Broadened default scope (#296): lint every discovered skill's own
     task set against its own anchor corpus, plus the discovery-mode-only
-    adversarial-coverage check (#473)."""
+    adversarial-coverage check (#473).
+
+    ``skill_names``, if the caller already ran ``discover_skills`` (as
+    ``main`` does, to fail fast on an empty repo before linting), is reused
+    instead of walking evals/ and skills/ a second time.
+    """
     warnings: list[Warning_] = []
-    for name in discover_skills(evals_root, skills_root):
+    names = skill_names if skill_names is not None else discover_skills(evals_root, skills_root)
+    for name in names:
         tasks_dir = evals_root / name / "tasks"
         rubric_path, skill_path = _skill_corpus_paths(skills_root, name)
         task_paths = sorted(tasks_dir.glob("*.yaml"))
+        corpus = load_corpus(rubric_path, skill_path)
 
-        skill_warnings = lint_skill_tasks(
-            task_paths, rubric_path, skill_path,
+        skill_warnings, task_data = lint_skill_tasks(
+            task_paths, corpus,
             check_prompt_echo_enabled=check_prompt_echo_enabled,
             check_cross_task_enabled=check_cross_task_enabled)
         warnings.extend(replace(w, task=f"{name}/{w.task}") for w in skill_warnings)
 
         claim_text = _skill_claim_text(skills_root, evals_root, name)
-        coverage = check_adversarial_coverage(name, tasks_dir, claim_text)
+        coverage = check_adversarial_coverage(name, tasks_dir, claim_text, task_data=task_data)
         if coverage:
             warnings.append(Warning_(
                 name, "(skill)", "(tasks directory)", "adversarial-coverage",
@@ -579,7 +618,12 @@ def format_report(warnings: list[Warning_]) -> str:
     notes = [w for w in warnings if not w.blocking]
     lines: list[str] = []
     if not blocking:
-        lines.append("0 warnings: every fixture assertion is well-formed.")
+        if notes:
+            # Non-blocking notes exist below -- "well-formed" would
+            # contradict them, so stay neutral about blocking status only.
+            lines.append("0 blocking warning(s).")
+        else:
+            lines.append("0 warnings: every fixture assertion is well-formed.")
     else:
         lines.append(f"{len(blocking)} warning(s):")
         for w in blocking:
@@ -622,19 +666,20 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.tasks_glob is None:
             evals_root, skills_root = Path("evals"), Path("skills")
-            if not discover_skills(evals_root, skills_root):
+            names = discover_skills(evals_root, skills_root)
+            if not names:
                 print("error: no skill directories discovered under evals/ "
                       "and skills/", file=sys.stderr)
                 return 2
             warnings = lint_all_skills(
-                evals_root, skills_root,
+                evals_root, skills_root, skill_names=names,
                 check_prompt_echo_enabled=args.check_prompt_echo,
                 check_cross_task_enabled=args.check_cross_task)
         else:
             rubric = Path(args.rubric) if args.rubric else Path(DEFAULT_RUBRIC)
             skill = Path(args.skill) if args.skill else Path(DEFAULT_SKILL)
             try:
-                load_corpus(rubric, skill)  # fail fast on an unreadable corpus
+                corpus = load_corpus(rubric, skill)
             except OSError as exc:
                 print(f"error: could not read the anchor corpus: {exc}", file=sys.stderr)
                 return 2
@@ -642,8 +687,8 @@ def main(argv: list[str] | None = None) -> int:
             if not task_paths:
                 print(f"error: no task files matched: {args.tasks_glob}", file=sys.stderr)
                 return 2
-            warnings = lint_skill_tasks(
-                task_paths, rubric, skill,
+            warnings, _ = lint_skill_tasks(
+                task_paths, corpus,
                 check_prompt_echo_enabled=args.check_prompt_echo,
                 check_cross_task_enabled=args.check_cross_task)
     except (OSError, yaml.YAMLError) as exc:
