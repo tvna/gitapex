@@ -188,6 +188,15 @@ spec:
     - kind: corroboration
       anchor: "https://github.com/tvna/gitapex/issues/537"
       summary: "The pre-edit gate dispatch's own Blind spot pass, run with no awareness this edit was planned, independently named the exact gap the edit closes -- unprompted evidence the addition targets a real, not imagined, rubric blind spot."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/537"
+      summary: "Three Applicability-wording follow-ups: named payment/financial account data and material non-public business information (MNPI) as explicit examples, then broadened the latter from insider-trading-scoped MNPI to 'confidential or competitively-sensitive business information' (covering ordinary trade-secret/competitive harm too) rather than adding a third standalone category. Certificate/TLS private keys checked and found already covered by 'secrets' -- no change made."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/537"
+      summary: "scorer-gated-skill-edits gate on all three follow-ups: 3 new fixtures (62 total, 23:27:12), each a live before/after isolated dispatch pair. All three tied at the scorer's ceiling (1.0->1.0, REJECT) -- disclosed and kept per the https://github.com/tvna/gitapex/issues/406 drift-correction precedent, not reclassified. Full per-fixture scores in split.md's Kept-edit log."
+    - kind: caveat
+      anchor: "https://github.com/tvna/gitapex/issues/537"
+      summary: "Three consecutive ceiling ties on the same strong tier (Sonnet, high effort) is now a named, standing limit of single-trial substring-scorer measurement for precision-only Applicability wording, not three independent surprises. A weaker-tier and/or repeated-trial run (https://github.com/tvna/gitapex/issues/500 Phase 2, not yet scheduled) is the honest way to actually measure whether these edits earn their keep."
   skillDependencies:
     requires: []
     relatedTo:

@@ -560,13 +560,41 @@ name, to test the broadened wording against exactly the gap that
 motivated it, distinct from `confidentiality-awareness-mnpi-selection.yaml`'s
 publicly-traded/earnings framing.
 
-**Gate status: in progress, not yet a recorded KEEP/REJECT.** Live
-before/after isolated dispatches (pre-edit pinned at `754bb54`, the
-narrow-MNPI-wording commit) were started but had not completed at the
-time this file was committed. Given the pattern immediately above (two
-consecutive ties at the scorer's ceiling on this same strong tier), a
-third tie would not be surprising; this section will be replaced with the
-actual per-fixture scores and disposition once both dispatches finish.
+**Gate result, same methodology, pre-edit pinned at `754bb54`, one fresh
+dispatch per side against `confidentiality-awareness-trade-secret-selection.yaml`:**
+
+| Fixture | Before | After |
+|---|---|---|
+| `confidentiality-awareness-trade-secret-selection.yaml` | 1.000000 (fresh) | 1.000000 (fresh) |
+
+`score_contract.py --compare-to 1.000000`: `1.000000 REJECT` -- a third
+consecutive tie at the scorer's ceiling. The *before* dispatch (narrow,
+insider-trading-scoped MNPI wording) already generalized `"material
+non-public business information"` past its own parenthetical's explicit
+insider-trading/market-abuse scoping to cover a private company's
+supplier-negotiation cost leak; the *after* dispatch (broadened wording)
+cited the new text directly ("Internal cost structure is the rubric's own
+named example of competitively-sensitive business information"). **Kept
+anyway, REJECT disclosed, same disposition as the two entries above** --
+not repeated in full.
+
+**Consolidated pattern, three follow-ups (payment data, MNPI, trade
+secret/broadening): three independent live trials, three ties at the
+scorer's ceiling, all for the same underlying reason** -- this strong
+tier (Sonnet, high effort) reliably generalizes past a narrow or generic
+bucket to the correct sensitive-data instance and safeguard proposal on a
+single live sample, so a substring scorer measuring only "did the exact
+token/heading appear" cannot detect what these wording edits add at this
+tier. This is now a standing, disclosed limit of this measurement
+approach for precision-only Applicability wording, not three independent
+surprises -- the honest way to actually measure whether these edits earn
+their keep is a weaker-tier and/or repeated-trial run (issue #500 Phase
+2, not yet scheduled), not continued single-strong-tier single-trial
+gating. None of the three edits are reverted on this basis: each has an
+independent, freestanding rationale (a named, distinct regulatory or harm
+regime; Dimension 1's own specificity principle applied to the rubric's
+own wording; near-zero cost; no shape-check regression) that does not
+depend on this specific corpus detecting an improvement.
 
 Future edits to this rubric should reuse this same split rather than
 re-deriving one per iteration, so the selection split stays genuinely

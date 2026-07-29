@@ -530,3 +530,48 @@ this edit was planned, independently named the exact gap the edit closes
 action itself constitute a privacy/data-handling risk'"). Full record,
 methodology, and per-fixture scores:
 `evals/evaluating-skill-quality/split.md`'s Kept-edit log. Refs #537.
+
+**Three Applicability-wording follow-ups, same issue.** Further
+conversational Q&A probed whether the Applicability clause's named
+categories actually covered three more cases: payment/financial card
+data, material non-public business information (MNPI, insider-trading-
+adjacent), and competitively-sensitive business information with no
+securities-law angle at all (e.g. a private company's cost-structure
+leak). Certificate/TLS private keys were also checked and found already
+unambiguously covered by the existing "secrets" category -- no change
+proposed there, to avoid the same sprawl risk named below.
+
+Each of the first two gaps was closed with an explicit named example
+(payment-card data: PCI-DSS is a distinct regime "PII" read narrowly
+could miss; MNPI: securities/insider-trading law is a distinct regime
+"private data" read narrowly could miss). The third exposed that the
+second edit's own wording was itself too narrowly scoped to
+insider-trading framing to cover ordinary trade-secret/competitive harm
+-- rather than add a third standalone category (which would have made
+this bullet an ever-growing enumeration, the same "sprawl" Dimension 2
+flags in a *reviewed* skill, now caught in the rubric's own text), the
+bullet was broadened from "material non-public business information" to
+"confidential or competitively-sensitive business information," naming
+both harm mechanisms as two anchors under one bucket with an explicit
+"illustrative, not exhaustive" disclaimer.
+
+Three fixtures added (62 total, 23:27:12): one selection fixture per
+follow-up, each isolating the specific sub-case the current wording had
+not yet been tested against. All three held-out gates tied at the
+scorer's ceiling on live before/after trials (1.0 -> 1.0, REJECT each
+time) -- this strong tier (Sonnet, high effort) reliably generalized past
+the narrower or generic wording to the correct finding on a single live
+sample each time, so a substring scorer checking only "did the exact
+token appear" cannot detect what these wording edits add at this tier.
+All three kept anyway, REJECT disclosed rather than reclassified, per the
+gitapex#406 drift-correction precedent: each edit has an independent,
+freestanding rationale (a named, distinct regulatory/harm regime;
+Dimension 1's own specificity principle applied reflexively to the
+rubric's own wording; near-zero cost; `check_skill_shape.py` unaffected
+throughout) that does not depend on this specific corpus detecting an
+improvement. The pattern itself is now named as a standing, disclosed
+measurement limit rather than re-argued per edit -- a weaker-tier and/or
+repeated-trial run (issue #500 Phase 2, not yet scheduled) remains the
+honest way to actually measure whether precision-only Applicability
+wording earns its keep. Full record, methodology, and per-fixture scores:
+`evals/evaluating-skill-quality/split.md`'s Kept-edit log. Refs #537.
