@@ -136,11 +136,11 @@ def read_coverage_sources(pyproject_path: str) -> list[str]:
             f"{pyproject_path!r} has no [tool.coverage.run] source list"
         ) from exc
     if not isinstance(source, list) or not source or not all(
-        isinstance(item, str) for item in source
+        isinstance(item, str) and item.strip() for item in source
     ):
         raise ValueError(
             f"{pyproject_path!r}'s [tool.coverage.run] source must be a "
-            "non-empty list of strings"
+            "non-empty list of non-blank strings"
         )
     return source
 

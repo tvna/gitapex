@@ -243,21 +243,42 @@ def test_read_coverage_sources_rejects_missing_coverage_table(tmp_path):
 def test_read_coverage_sources_rejects_non_list_source(tmp_path):
     pyproject = tmp_path / "pyproject.toml"
     pyproject.write_text('[tool.coverage.run]\nsource = "not-a-list"\n', encoding="utf-8")
-    with pytest.raises(ValueError, match="must be a non-empty list of strings"):
+    with pytest.raises(ValueError, match="must be a non-empty list of non-blank strings"):
         gate.read_coverage_sources(str(pyproject))
 
 
 def test_read_coverage_sources_rejects_empty_source_list(tmp_path):
     pyproject = tmp_path / "pyproject.toml"
     pyproject.write_text('[tool.coverage.run]\nsource = []\n', encoding="utf-8")
-    with pytest.raises(ValueError, match="must be a non-empty list of strings"):
+    with pytest.raises(ValueError, match="must be a non-empty list of non-blank strings"):
         gate.read_coverage_sources(str(pyproject))
 
 
 def test_read_coverage_sources_rejects_non_string_source_entries(tmp_path):
     pyproject = tmp_path / "pyproject.toml"
     pyproject.write_text('[tool.coverage.run]\nsource = ["ok/scripts", 1]\n', encoding="utf-8")
-    with pytest.raises(ValueError, match="must be a non-empty list of strings"):
+    with pytest.raises(ValueError, match="must be a non-empty list of non-blank strings"):
+        gate.read_coverage_sources(str(pyproject))
+
+
+def test_read_coverage_sources_rejects_a_blank_source_entry(tmp_path):
+    # Regression: an earlier version only checked isinstance(item, str),
+    # which accepted "" (or whitespace-only) as a source. select_files_in_
+    # source(data, "") normalizes to parent="", which matches every
+    # top-level *.py file in the coverage report via rpartition("/") --
+    # e.g. a stray "setup.py" entry -- silently widening this gate's scope
+    # to files nobody declared as a coverage target. Caught by an
+    # independent adversarial review round dispatched via /code-review.
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text('[tool.coverage.run]\nsource = ["ok/scripts", ""]\n', encoding="utf-8")
+    with pytest.raises(ValueError, match="must be a non-empty list of non-blank strings"):
+        gate.read_coverage_sources(str(pyproject))
+
+
+def test_read_coverage_sources_rejects_a_whitespace_only_source_entry(tmp_path):
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text('[tool.coverage.run]\nsource = ["ok/scripts", "   "]\n', encoding="utf-8")
+    with pytest.raises(ValueError, match="must be a non-empty list of non-blank strings"):
         gate.read_coverage_sources(str(pyproject))
 
 
