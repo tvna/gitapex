@@ -764,13 +764,17 @@ Stop-boundary prohibition naming the risk only to forbid it), reads,
 derives, logs, transmits, or otherwise handles material in the
 sensitive-data category: secrets, credentials, API keys/tokens, PII,
 payment/financial account data (credit card or other payment-card
-numbers, bank account or routing numbers), or private/internal-only data.
-Payment-card data is named explicitly, not left to an implicit reading of
-PII, because it carries its own distinct regulatory regime (PCI-DSS) and
-a reviewer reading "PII" narrowly (name/email/address-type identifiers
-only) could otherwise miss a step that handles nothing but a bare card
-number. A skill whose procedure never touches such material does not
-select this axis merely for mentioning the category in passing.
+numbers, bank account or routing numbers), material non-public business
+information (undisclosed financials, M&A or deal terms, or other
+information whose premature or selective disclosure could be
+insider-trading- or market-abuse-adjacent), or private/internal-only
+data generally. Payment-card data and material non-public business
+information are each named explicitly, not left to an implicit reading
+of PII or "private data," because each carries its own distinct
+regulatory regime (PCI-DSS; securities/insider-trading law) a reviewer
+reading the general categories narrowly could otherwise miss. A skill
+whose procedure never touches such material does not select this axis
+merely for mentioning the category in passing.
 
 Report exactly one state:
 

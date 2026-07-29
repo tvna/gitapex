@@ -20,10 +20,11 @@ aspirational" for a small fixture count), this split combines the 17:14:9
 base-plus-cohesion partition with a scoped 2:6:2 compatibility addition, a
 1:1:0 reference-load-precision addition (gitapex#477), a 2:2:1
 opus5-prompting-fit addition (gitapex#495), a 1:1:0
-confidentiality-awareness addition (gitapex#537), and a 0:1:0
-payment-data sub-category addition (gitapex#537 follow-up), for a
-resulting 23:25:12 partition. This is named explicitly as a deviation from
-the 2:1:7 default. The
+confidentiality-awareness addition (gitapex#537), a 0:1:0
+payment-data sub-category addition (gitapex#537 follow-up), and a 0:1:0
+MNPI/insider-trading-adjacent sub-category addition (gitapex#537
+follow-up), for a resulting 23:26:12 partition. This is named explicitly
+as a deviation from the 2:1:7 default. The
 honest minimal groundwork, per that same worked example, is a larger
 fixture corpus over time, not a smaller gate.
 
@@ -71,7 +72,8 @@ fixture corpus over time, not a smaller gate.
   `opus5-redundant-verification-generalizes.yaml`,
   `opus5-unbounded-subagent-generalizes.yaml`,
   `confidentiality-awareness-selection.yaml`,
-  `confidentiality-awareness-payment-data-selection.yaml`.
+  `confidentiality-awareness-payment-data-selection.yaml`,
+  `confidentiality-awareness-mnpi-selection.yaml`.
 - **test** (read once, for a final report only, never to motivate or gate
   an edit): `guardrail.yaml`, `no-fabricated-violation.yaml`,
   `portability-classification.yaml`, `blind-spot-pass-not-silent.yaml`,
@@ -446,13 +448,72 @@ debug file, with no name/email/other-PII field anywhere in the excerpt --
 isolating the payment-data sub-category from the two original fixtures,
 which both bundle it alongside more obviously-named PII).
 
+**Gate result, same `claude -p` isolation methodology as above (pre-edit
+pinned at `bd6fef7`), one fresh dispatch per side against only
+`confidentiality-awareness-payment-data-selection.yaml`:**
+
+| Fixture | Before | After |
+|---|---|---|
+| `confidentiality-awareness-payment-data-selection.yaml` | 1.000000 (fresh) | 1.000000 (fresh) |
+
+`score_contract.py --compare-to 1.000000`: `1.000000 REJECT` (tie at the
+scorer's ceiling). The *before* dispatch already correctly generalized
+"PII" to cover a bare, unlabeled card number without the explicit
+category -- quoting it directly: *"a procedure step that handles a
+payment credential (PAN) with zero stated safeguard... this is the
+rubric's Confidentiality awareness axis firing at its worst case."* So
+this specific live trial (Sonnet, high effort) did not demonstrate the
+ambiguity the edit was written to close.
+
+**Kept anyway, REJECT disclosed rather than hidden -- the same
+disposition the gitapex#406 entry above used for a drift-correction the
+corpus could not score.** The tie reflects a real limit of this specific
+trial (one strong-tier model, one sample), not evidence the edit adds
+nothing: (1) the corpus-coverage argument stands independent of this
+trial's outcome -- Dimension 1's own "specific key terms, no filler"
+principle, applied to the rubric's own Applicability wording, favors an
+explicit, regulation-grounded category over reliance on a generalization
+one live sample happened to make correctly; (2) issue #500's own Phase 1
+cross-model data already shows weaker tiers under-performing specifically
+on axis-disambiguation content (the `compatibility-*` fixtures), the same
+shape of risk this edit guards against for a tier this gate has not
+tested; (3) the cost is at or near zero -- a few explicit words, no
+added ambiguity, `check_skill_shape.py` unaffected (46/46 both before and
+after). Per this repository's own drift-correction precedent, a tie is a
+statement about what the current corpus can measure, not a verdict on the
+edit's merit -- extending the corpus with a fixture built specifically to
+expose the narrow-"PII"-reading failure mode (a weaker-tier trial, or a
+harder-to-generalize phrasing than "full card number") is the honest next
+step if this edit's real effect is ever to be measured on this corpus,
+not reclassifying this tie to force a KEEP.
+
+**Second follow-up (gitapex#537, same issue): material non-public
+business information (MNPI) named explicitly.** A further question (does
+the axis cover non-public business/corporate information whose premature
+disclosure could be insider-trading-adjacent, e.g. undisclosed earnings
+or deal terms) found the same shape of gap: this material fits the
+generic "private/internal-only data" bucket, but that bucket read
+narrowly could miss it, and it carries its own distinct legal regime
+(securities/insider-trading law) the same way payment-card data carries
+PCI-DSS. Extended `references/rubric.md`'s Applicability clause and
+`SKILL.md`'s pointer to name it explicitly, plus a new selection fixture,
+`confidentiality-awareness-mnpi-selection.yaml` (an `earnings-prep-
+assistant` skill posting a draft quarterly earnings summary -- undisclosed
+revenue/margin/guidance figures -- to a company-wide Slack channel with no
+access restriction or embargo statement; unlike the PII/payment-data
+fixtures, this target handles no personal data at all, isolating the MNPI
+sub-category cleanly).
+
 **Gate status: in progress, not yet a recorded KEEP/REJECT.** Live
 before/after isolated dispatches against the new fixture were started
-(same `claude -p` methodology as above, pre-edit pinned at
-`bd6fef7`) but had not completed at the time this file was committed.
-This section will be replaced with the actual per-fixture scores and
-KEEP/REJECT determination once both dispatches finish -- not assumed
-passing in the meantime.
+(same `claude -p` methodology, pre-edit pinned at `2e6de04`) but had not
+completed at the time this file was committed. Given the payment-data
+follow-up immediately above already scored a tie at the ceiling on its
+first live trial, a tie here would not be surprising and, per that same
+entry's reasoning, would not by itself argue for reverting the wording --
+this section will be replaced with the actual per-fixture scores and
+disposition once both dispatches finish, not assumed either way in the
+meantime.
 
 Future edits to this rubric should reuse this same split rather than
 re-deriving one per iteration, so the selection split stays genuinely
