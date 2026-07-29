@@ -112,8 +112,12 @@ author-independent check.
       not an edit to the other skill's file).
 - [x] Write the five criteria (state provenance/trust; cold-start/
       absence; replay/reproducibility; bounded growth; blocking-posture
-      justification), each with domain notes reusing (not redefining) the
-      four gate-realization domains.
+      justification), reusing (not redefining) the four gate-realization
+      domains: criterion 1 carries an explicit, labeled *Domain notes*
+      subsection; criteria 2-5 weave domain-specific examples into their
+      own prose without a separately labeled subsection (a checklist
+      correction over an earlier draft of this line, which claimed
+      uniform labeled subsections across all five).
 - [x] Write Procedure, Stop boundaries (live-testing discipline,
       execution-safety boundary, anti-injection, evidence-citation,
       non-disclosure), Subagent dispatch, Notes (portability, lifecycle,
@@ -161,13 +165,21 @@ Verification: same shape-checker command as Task 1 (`manifest-envelope`,
 - [x] Worked example 1: a real, already-disclosed target --
       `skills/executing-a-branch-plan/references/execution-and-
       dispatch.md`'s own worktree-cleanup-after-merge-back open item --
-      walked against the precondition and all five criteria, honestly
-      reporting criterion 4 as "FAIL pending live verification, not
-      completed here" rather than overclaiming a live-tested result this
-      file did not actually gather.
+      walked against the precondition and all five criteria. An earlier
+      draft graded criterion 4 "FAIL, live-tested is required, not yet
+      performed" -- an invented fifth verdict label a fresh adversarial
+      code review (Step 8) caught as an overclaim of a violation never
+      actually shown. Rewritten, matching an independent smoke test's own
+      more rigorous walk: precondition cannot-be-assessed (the decision's
+      actual source -- the Workflow tool's own worktree-cleanup
+      implementation -- is not present in this repository), criteria 1/2/4
+      cannot-be-assessed, criterion 3 cannot-be-assessed with one
+      adjacent citable fact, criterion 5 not-applicable.
 - [x] Worked example 2: a synthetic burn-rate release gate, walked
-      against the precondition and all five criteria (two FAILs, two
-      PASSes, one not-applicable), each independently justified.
+      against the precondition and all five criteria (two FAILs -- one
+      illustrative-only, not live-tested, per the same adversarial
+      review's other BLOCKING finding -- and three PASSes), each
+      independently justified.
 - [x] No bare issue-number citation in this file's own prose (shape
       checker's `no-bare-issue-citation` rule) -- cite via
       `metadata/gitapex.yaml` instead.
@@ -208,16 +220,37 @@ entry to `metadata/gitapex.yaml`, recording the smoke test's own outcome.
 **Interfaces:** reads Tasks 1-3's finished content; writes to Task 2's and
 Task 3's own files (append-only).
 
-- [ ] Run the shape checker (already PASS after Task 3, re-confirm).
-- [ ] Dispatch a fresh, independent subagent given only `SKILL.md` and
+- [x] Run the shape checker (33/33, re-confirmed after every subsequent
+      fix below).
+- [x] Dispatch a fresh, independent subagent given only `SKILL.md` and
       `metadata/gitapex.yaml` (withholding `references/gitapex-worked-
-      examples.md`, matching `evaluating-deterministic-gate-quality`'s
-      own smoke-test precedent) to apply this skill to a real target and
-      report its own findings, without seeing this plan's own
-      pre-written worked examples.
-- [ ] Compare the fresh dispatch's findings against Task 3's own worked
-      example for consistency; record any discrepancy as a finding, not
-      silently reconciled.
+      examples.md`) to apply this skill to the real worktree-lifecycle
+      target and report its own findings.
+- [x] Compare the fresh dispatch's findings against Task 3's own worked
+      example: a real discrepancy was found (the smoke test's own
+      precondition verdict was cannot-be-assessed; Task 3's original text
+      had claimed the precondition cleared) and fixed by rewriting Task
+      3's own worked example to match the smoke test's more rigorous
+      analysis, per Step 8 below, rather than silently reconciled.
+
+Alongside the smoke test, three more independent dispatches ran as this
+Branch Plan's own Step 8 (mandatory aggregate refactor + adversarial
+review), given the low-blast-radius deviation this plan's own Execution
+note already states: a fresh `evaluating-skill-quality` audit, a fresh
+`battle-testing-a-skill` audit, a refactor/simplify pass, and a separate
+adversarial code review, all against the full accumulated diff
+(`SKILL.md`, `metadata/gitapex.yaml`, `references/gitapex-worked-
+examples.md`, this plan doc). Verdicts: `evaluating-skill-quality`
+WELL-FORMED-NOT-MATURE (6 findings), `battle-testing-a-skill` FAIL (10
+findings). The refactor pass found 5 wording/count inconsistencies; the
+adversarial review found 2 BLOCKING overclaims (a "live-tested" claim for
+a script never executed; an invented fifth verdict label asserting a
+violation never actually shown) and 2 non-blocking gaps. All 23 findings
+across the four dispatches were fixed in the same change -- see
+`metadata/gitapex.yaml`'s own `spec.references` audit/correction entries
+for the itemized record. A second, post-fix confirmation round of
+`evaluating-skill-quality`/`battle-testing-a-skill` remains open, named
+in `metadata/gitapex.yaml`'s own `lifecycle.experimental.reason`.
 
 ## Verification Plan (Acceptance Criteria Map cross-reference)
 
