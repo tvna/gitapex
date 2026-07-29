@@ -773,10 +773,16 @@ ISSUE_CITATION_RE = re.compile(
 # different citation shape. Three real phrasings are already in use
 # elsewhere in this repository ("CLAUDE.md ch.2", "CLAUDE.md chapter 3",
 # "CLAUDE.md section 4") -- all three are covered rather than guessing at
-# just the one issue #26 happened to quote.
+# just the one issue #26 happened to quote. The CLAUDE.md alternative is
+# scoped case-insensitive via an inline ``(?i:...)`` group (a review
+# finding: "CLAUDE.md Chapter 2" or "claude.md section 4" otherwise
+# evaded both checks this constant feeds) -- scoped rather than a
+# pattern-wide ``re.IGNORECASE``, so the evals/docs alternative, whose
+# real targets are always lowercase POSIX paths, keeps its existing
+# case-sensitive behavior unchanged.
 REPO_PATH_CITATION_RE = re.compile(
     r"(?:evals|docs)/[A-Za-z0-9._/-]+"
-    r"|CLAUDE\.md\s+(?:ch\.|chapter|section)\s*\d+")
+    r"|(?i:CLAUDE\.md\s+(?:ch\.|chapter|section)\s*\d+)")
 # A bare-prose "scripts/PATH" mention (issue #192, Refs #26 repair 3/#36
 # repair 3/#20 item d). Deliberately NOT folded into REPO_PATH_CITATION_RE's
 # alternation above: unlike evals/ or docs/, a "scripts/..." path routinely
@@ -788,8 +794,14 @@ REPO_PATH_CITATION_RE = re.compile(
 # unconditional-flag-or-hedge treatment. Only the bare-prose form is
 # checked here: the Markdown-link form of the identical "must resolve
 # inside the skill's own directory" rule is already covered by
-# links-inside-skill/_out_of_skill_link_targets above.
-SCRIPTS_PATH_BARE_RE = re.compile(r"scripts/[A-Za-z0-9._/-]+")
+# links-inside-skill/_out_of_skill_link_targets above. The leading ``\b``
+# (a review finding) keeps this from matching inside an unrelated word
+# that merely ends in "scripts" (e.g. "manuscripts/genX.py",
+# "postscripts/cleanup.sh") -- unlike REPO_PATH_CITATION_RE's evals/docs
+# alternative, which only gates presence and is harmless without one,
+# this pattern drives an existence check, so a mid-word false match would
+# produce a wrong verdict rather than a merely-imprecise offender string.
+SCRIPTS_PATH_BARE_RE = re.compile(r"\bscripts/[A-Za-z0-9._/-]+")
 # A real, versioned Claude model identifier: "claude-" plus a known
 # model-family word (opus/sonnet/haiku/fable/instant) plus a version-like
 # digit, e.g. "claude-sonnet-5", "claude-opus-4.7",
@@ -3631,31 +3643,59 @@ def _step_location_offenders(body_text: str) -> list[str]:
     catch. Two mentions of the SAME step number with the SAME location
     phrase are not a contradiction either (restating one fact twice is not
     a conflict) -- only genuinely distinct location phrases for one step
-    number count.
+    number count. A sentence naming more than one step number, or
+    asserting more than one location phrase, is skipped entirely (a
+    review finding: pairing the sentence's FIRST step-number match with
+    its FIRST location match via independent ``.search()`` calls can
+    misattribute one step's location claim to a different step number
+    named in the same sentence) rather than guessed at -- unambiguous
+    single-step-number, single-location-phrase sentences are the only
+    shape this check reads, matching this check's own deliberately narrow
+    scope.
+
+    Illustrative spans (inline code, Markdown links, absolute URLs -- see
+    ``_strip_illustrative_spans``) are stripped before scanning, the same
+    as every other bare-prose check in this file (a review finding: an
+    inline-code-quoted illustration of issue #93's own incident -- this
+    repository's own established way of documenting a "bad example," see
+    e.g. rubric.md's citation checks -- would otherwise trip this check as
+    a real contradiction).
+
+    A ceding phrase only resolves the SPECIFIC pair of distinct location
+    phrases where at least one side's own sentence carries it, not every
+    contradiction recorded for that step number (a review finding: one
+    ceding sentence would otherwise silently drop an unrelated, genuinely
+    unreconciled third location for the same step).
     """
-    defenced = _blank_fenced_blocks(body_text)
+    bare = _strip_illustrative_spans(_blank_fenced_blocks(body_text))
     by_step: dict[str, list[tuple[str, bool]]] = {}
-    for sentence in _SENTENCE_SPLIT_RE.split(defenced):
-        step_match = STEP_NUM_RE.search(sentence)
-        location_match = STEP_LOCATION_ASSERTION_RE.search(sentence)
-        if not (step_match and location_match):
+    for sentence in _SENTENCE_SPLIT_RE.split(bare):
+        step_matches = list(STEP_NUM_RE.finditer(sentence))
+        location_matches = list(STEP_LOCATION_ASSERTION_RE.finditer(sentence))
+        if len(step_matches) != 1 or len(location_matches) != 1:
             continue
-        step_num = step_match.group(1)
+        step_num = step_matches[0].group(1)
         has_ceding = STEP_LOCATION_CEDING_PHRASE in sentence.lower()
-        phrase = " ".join(location_match.group(0).split()).rstrip(".,;:")
+        phrase = " ".join(location_matches[0].group(0).split()).rstrip(".,;:")
         by_step.setdefault(step_num, []).append((phrase, has_ceding))
 
     offenders: list[str] = []
     for step_num in sorted(by_step, key=int):
-        mentions = by_step[step_num]
-        distinct_phrases = _dedup(phrase for phrase, _ceding in mentions)
+        phrase_ceding: dict[str, bool] = {}
+        for phrase, ceding in by_step[step_num]:
+            phrase_ceding[phrase] = phrase_ceding.get(phrase, False) or ceding
+        distinct_phrases = list(phrase_ceding)
         if len(distinct_phrases) < 2:
             continue
-        if any(ceding for _phrase, ceding in mentions):
+        unresolved = [
+            (a, b) for i, a in enumerate(distinct_phrases)
+            for b in distinct_phrases[i + 1:]
+            if not (phrase_ceding[a] or phrase_ceding[b])]
+        if not unresolved:
             continue
         offenders.append(
             f"step {step_num}: " +
-            " vs. ".join(repr(p) for p in distinct_phrases))
+            "; ".join(f"{a!r} vs. {b!r}" for a, b in unresolved))
     return offenders
 
 
@@ -3860,12 +3900,31 @@ def _out_of_skill_scripts_offenders(skill_dir: Path,
     (confirmed by a corpus-wide simulation before adding this check: every
     real bare-prose "scripts/..." mention in this repository's own
     Portable skills today is a same-skill self-reference).
+
+    Resolution reuses ``_escapes_skill_dir`` (a review finding: a plain
+    ``(skill_dir / path).is_file()`` check, with no lexical boundary
+    check first, would treat a "scripts/../../other-skill/scripts/x.py"-
+    shaped citation that plainly escapes the citing skill's own directory
+    as a legitimate self-reference whenever the traversed-to file happens
+    to exist -- the same boundary test links-inside-skill's own
+    ``_out_of_skill_link_targets`` already applies to a real Markdown
+    link, applied here too). A trailing ".,;:)" is stripped from the raw
+    regex match before resolution (another review finding: sentence-final
+    punctuation immediately after a real extension, e.g. "run
+    scripts/check_foo.py.", is captured by SCRIPTS_PATH_BARE_RE's own
+    character class -- which must include "." for real extensions -- and
+    would otherwise make a genuine self-reference fail the existence
+    check purely because of how the sentence ends); no real path ends in
+    one of these characters, so stripping them is never lossy.
     """
     bare = _strip_illustrative_spans(_blank_fenced_blocks(source_text))
+    skill_norm = os.path.normpath(str(skill_dir))
     offenders: list[str] = []
     for match in SCRIPTS_PATH_BARE_RE.finditer(bare):
-        path = match.group(0)
-        if not (skill_dir / path).is_file():
+        path = match.group(0).rstrip(".,;:)")
+        normalized = os.path.normpath(os.path.join(skill_norm, path))
+        if (_escapes_skill_dir(normalized, skill_norm)
+                or not Path(normalized).is_file()):
             offenders.append(path)
     return offenders
 

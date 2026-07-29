@@ -5012,3 +5012,86 @@ def test_step_location_contradiction_in_reference_file_fails(tmp_path):
     result = _by_name(css.check_shape(d))["no-step-location-contradiction"]
     assert result.passed is False
     assert "references/notes.md:step 3" in result.evidence
+
+
+# ---- Regressions found by an adversarial review pass (issue #192) ----
+
+def test_claude_md_citation_case_insensitive_fails(tmp_path):
+    # A differently-cased phrasing must still be caught.
+    d = _write_raw(tmp_path, _portable_body(
+        "See CLAUDE.md Chapter 2 for the rule."))
+    result = _by_name(css.check_shape(d))["portable-no-repo-path-citation"]
+    assert result.passed is False
+    assert "CLAUDE.md Chapter 2" in result.evidence
+
+
+def test_scripts_citation_does_not_match_inside_unrelated_word(tmp_path):
+    # "manuscripts/genX.py" must not be read as a "scripts/..." citation
+    # merely because it contains that substring.
+    d = _write_raw(tmp_path, _portable_body(
+        "See manuscripts/genX.py for the generator."))
+    result = _by_name(
+        css.check_shape(d))["portable-no-out-of-skill-scripts-citation"]
+    assert result.passed is True
+
+
+def test_scripts_citation_path_traversal_still_flagged(tmp_path):
+    # A "scripts/../../elsewhere/x.py"-shaped citation escapes the
+    # skill's own directory even when the traversed-to file happens to
+    # exist -- it must still be flagged, not treated as a legitimate
+    # self-reference merely because SOME file exists at the resolved path.
+    d = _write_raw(tmp_path, _portable_body(
+        "Run scripts/../../elsewhere/x.py to check this."))
+    (d.parent / "elsewhere").mkdir()
+    (d.parent / "elsewhere" / "x.py").write_text("# stub\n", encoding="utf-8")
+    result = _by_name(
+        css.check_shape(d))["portable-no-out-of-skill-scripts-citation"]
+    assert result.passed is False
+    assert "scripts/../../elsewhere/x.py" in result.evidence
+
+
+def test_scripts_citation_trailing_period_still_resolves(tmp_path):
+    # Sentence-final punctuation immediately after a real extension must
+    # not defeat the existence check.
+    d = _write_raw(tmp_path, _portable_body(
+        "Run scripts/check_foo.py."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "check_foo.py").write_text("# stub\n", encoding="utf-8")
+    result = _by_name(
+        css.check_shape(d))["portable-no-out-of-skill-scripts-citation"]
+    assert result.passed is True
+
+
+def test_step_location_two_step_numbers_in_one_sentence_skipped(tmp_path):
+    # An ambiguous sentence naming two step numbers must not have its
+    # single location phrase misattributed to either one.
+    d = _write_raw(tmp_path, _simple_body(
+        "Step 6 and step 7 both stay in the main thread."))
+    result = _by_name(css.check_shape(d))["no-step-location-contradiction"]
+    assert result.passed is True
+
+
+def test_step_location_inline_code_illustration_excluded(tmp_path):
+    # An inline-code-quoted illustration of the historical incident (this
+    # repository's own established way of quoting a "bad example") must
+    # not itself trip the check.
+    d = _write_raw(tmp_path, _simple_body(
+        "`Step 6 stays in the main thread. Step 6 executes inside the "
+        "dispatch.` is the historical bad-example shape this check "
+        "exists to catch."))
+    result = _by_name(css.check_shape(d))["no-step-location-contradiction"]
+    assert result.passed is True
+
+
+def test_step_location_ceding_only_resolves_the_ceded_pair(tmp_path):
+    # A ceding phrase for one pair of locations must not silently drop a
+    # THIRD, unrelated, genuinely unreconciled location for the same step.
+    d = _write_raw(tmp_path, _simple_body(
+        "Step 6 stays in the main thread. The Subagent dispatch section "
+        "states step 6 executes inside the dispatch; that section is the "
+        "authoritative statement. Elsewhere, step 6 runs inside the "
+        "worker pool with no reconciliation."))
+    result = _by_name(css.check_shape(d))["no-step-location-contradiction"]
+    assert result.passed is False
+    assert "step 6" in result.evidence
+    assert "worker pool" in result.evidence
