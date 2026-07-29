@@ -151,3 +151,214 @@ def test_repository_fixtures_are_clean():
         "--skill", str(REPO_ROOT / L.DEFAULT_SKILL),
     ])
     assert rc == 0
+
+
+# ---- check_short_word_collision (issue #516, #218) ----
+
+def test_short_word_collision_flags_known_pair():
+    assert L.check_short_word_collision("actor") == "factor"
+
+
+def test_short_word_collision_passes_longer_term():
+    assert L.check_short_word_collision("factor") is None
+
+
+def test_short_word_collision_ignores_non_alpha():
+    assert L.check_short_word_collision("6.5") is None
+
+
+def test_short_word_collision_ignores_deliberate_stem_fragment():
+    # "emporal" is not itself a recognized word, unlike "actor" -- this
+    # repository's own fixtures use exactly this kind of truncated stem to
+    # match several inflections of "temporal", which must not be flagged.
+    assert L.check_short_word_collision("emporal") is None
+
+
+# ---- check_symmetric_bans (issue #516, #352) ----
+
+def _indeterminate_task(bans):
+    return {
+        "id": "t", "name": "T",
+        "description": "Whether X occurred cannot be determined from available data.",
+        "expected": {"output_not_contains": bans},
+    }
+
+
+def test_symmetric_bans_flags_negative_only():
+    detail = L.check_symmetric_bans(_indeterminate_task(["no force-push occurred"]))
+    assert detail is not None
+    assert "positive-claim" in detail
+
+
+def test_symmetric_bans_flags_positive_only():
+    detail = L.check_symmetric_bans(_indeterminate_task(["A force-push occurred"]))
+    assert detail is not None
+    assert "negative-claim" in detail
+
+
+def test_symmetric_bans_passes_both_directions():
+    detail = L.check_symmetric_bans(_indeterminate_task(
+        ["no force-push occurred", "A force-push occurred"]))
+    assert detail is None
+
+
+def test_symmetric_bans_flags_no_bans_at_all():
+    detail = L.check_symmetric_bans(_indeterminate_task([]))
+    assert detail is not None
+
+
+def test_symmetric_bans_ignores_ordinary_fixture():
+    # No "cannot be determined"-style marker: an ordinary fixture with only
+    # a negative-direction ban is not held to the symmetric-ban rule.
+    ordinary = {
+        "id": "t", "name": "T", "description": "An ordinary review fixture.",
+        "expected": {"output_not_contains": ["LGTM"]},
+    }
+    assert L.check_symmetric_bans(ordinary) is None
+
+
+# ---- check_prompt_echo (issue #516, #191 -- opt in, non-blocking) ----
+
+def test_prompt_echo_flags_verbatim_substring():
+    detail = L.check_prompt_echo("dimension eight", "review this for dimension eight please")
+    assert detail is not None
+
+
+def test_prompt_echo_passes_absent_phrase():
+    assert L.check_prompt_echo("dimension eight", "review this artifact please") is None
+
+
+def test_prompt_echo_ignores_single_word():
+    assert L.check_prompt_echo("dimension", "review dimension eight please") is None
+
+
+# ---- check_cross_task_collision (issue #516, #270, #473 -- opt in, non-blocking) ----
+
+def test_cross_task_collision_flags_exact_match_in_sibling_task():
+    index = {"other.yaml": {"not applicable"}, "self.yaml": set()}
+    assert L.check_cross_task_collision(
+        "self.yaml", "not applicable", index) == "other.yaml"
+
+
+def test_cross_task_collision_ignores_own_task():
+    index = {"self.yaml": {"not applicable"}}
+    assert L.check_cross_task_collision("self.yaml", "not applicable", index) is None
+
+
+def test_cross_task_collision_excludes_enum_style_token():
+    # This repository's closed-enum classification fixtures deliberately
+    # ban sibling UPPER_SNAKE_CASE labels -- a correct design, not a bug.
+    index = {"other.yaml": {"status: no_compatibility_warning"}}
+    assert L.check_cross_task_collision(
+        "self.yaml", "Status: NO_COMPATIBILITY_WARNING", index) is None
+
+
+# ---- check_adversarial_coverage (issue #516, #473 -- discovery mode only) ----
+
+def _write_yaml(path, tags):
+    path.write_text(
+        "id: t\nname: T\ninputs:\n  prompt: p\ntags:\n" +
+        "".join(f"  - {t}\n" for t in tags) + "expected:\n  output_contains: []\n",
+        encoding="utf-8")
+
+
+def test_adversarial_coverage_flags_claim_without_tag(tmp_path):
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    _write_yaml(tasks / "t.yaml", ["quality"])
+    detail = L.check_adversarial_coverage(
+        "some-skill", tasks, "This skill covers 22 adversarial dimensions.")
+    assert detail is not None
+
+
+def test_adversarial_coverage_passes_with_tagged_fixture(tmp_path):
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    _write_yaml(tasks / "t.yaml", ["quality", "adversarial"])
+    detail = L.check_adversarial_coverage(
+        "some-skill", tasks, "This skill covers 22 adversarial dimensions.")
+    assert detail is None
+
+
+def test_adversarial_coverage_ignores_skill_without_claim(tmp_path):
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    _write_yaml(tasks / "t.yaml", ["quality"])
+    detail = L.check_adversarial_coverage("some-skill", tasks, "This skill covers quality.")
+    assert detail is None
+
+
+# ---- negation broadened to the fixture's own prompt (issue #516, #487) ----
+
+def test_negation_haystack_extended_with_own_prompt_catches_ad_hoc_ban():
+    # The rubric alone never mentions "rewritten commit"; only this
+    # fixture's own prompt denies it. #487 asks the negation-trap detector
+    # to catch this too, not only corpus-sourced denial phrases.
+    prompt = "This session found no rewritten commit in the available history."
+    prompt_flat = L.WS_RE.sub(" ", prompt.lower())
+    local_flat = FLAT + " " + prompt_flat
+    assert L.check_negation("rewritten commit", local_flat) is not None
+    # Confirms the corpus alone would have missed it (isolating the fix).
+    assert L.check_negation("rewritten commit", FLAT) is None
+
+
+# ---- discovery mode (issue #516, #296) ----
+
+def _write_skill_and_tasks(root, name, *, with_rubric=False,
+                           expected=None):
+    skill_dir = root / "skills" / name
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(CORPUS, encoding="utf-8")
+    if with_rubric:
+        (skill_dir / "references").mkdir()
+        (skill_dir / "references" / "rubric.md").write_text(CORPUS, encoding="utf-8")
+    tasks_dir = root / "evals" / name / "tasks"
+    tasks_dir.mkdir(parents=True)
+    _write_task(tasks_dir, expected or {"output_contains": ["Blind spot pass"],
+                                        "output_not_contains": ["LGTM"]})
+    return tasks_dir
+
+
+def test_discover_skills_finds_matching_skill_and_tasks_dirs(tmp_path):
+    _write_skill_and_tasks(tmp_path, "alpha")
+    _write_skill_and_tasks(tmp_path, "beta")
+    # A tasks/ dir with no matching skills/<name>/SKILL.md is not discovered.
+    (tmp_path / "evals" / "orphan" / "tasks").mkdir(parents=True)
+    found = L.discover_skills(tmp_path / "evals", tmp_path / "skills")
+    assert found == ["alpha", "beta"]
+
+
+def test_discover_skills_skips_empty_tasks_dir(tmp_path):
+    skill_dir = tmp_path / "skills" / "gamma"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("# skill\n", encoding="utf-8")
+    (tmp_path / "evals" / "gamma" / "tasks").mkdir(parents=True)
+    assert L.discover_skills(tmp_path / "evals", tmp_path / "skills") == []
+
+
+def test_lint_all_skills_executes_across_multiple_skills(tmp_path):
+    # Acceptance criterion #296's own proof method: confirm the linter
+    # actually runs a second skill's fixtures, not silently skipping it.
+    # Each skill gets its own distinct, deliberate bug so a warning from
+    # either one only appears if that skill was actually linted.
+    _write_skill_and_tasks(tmp_path, "alpha", with_rubric=True,
+                           expected={"output_contains": ["blind spot"]})
+    _write_skill_and_tasks(tmp_path, "beta",
+                           expected={"output_not_contains": ["tenth dimension"]})
+    warnings = L.lint_all_skills(tmp_path / "evals", tmp_path / "skills")
+    linted_skills = {w.task.split("/", 1)[0] for w in warnings}
+    assert linted_skills == {"alpha", "beta"}
+
+
+def test_main_discovery_mode_runs_when_tasks_glob_omitted(tmp_path, monkeypatch):
+    _write_skill_and_tasks(tmp_path, "alpha", with_rubric=True)
+    monkeypatch.chdir(tmp_path)
+    # alpha's fixture is clean and its docs never mention "adversarial", so
+    # discovery mode runs and finds nothing to flag -- confirms it actually
+    # executes rather than silently no-op'ing without a --tasks-glob.
+    assert L.main([]) == 0
+
+
+def test_main_discovery_mode_exits_two_with_no_skills(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    assert L.main([]) == 2
