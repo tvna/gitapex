@@ -105,8 +105,26 @@ jobs:
           # three globs at once; no per-glob loop is needed since none of
           # them need to be told apart downstream (the gate script only
           # needs the flat list of changed paths, not which glob matched).
+          #
+          # Every pathspec below carries the `:(glob)` magic so `*` does not
+          # cross `/` -- git's *default* pathspec matching does (verified
+          # live: 'skills/*/scripts/*.py' with no `:(glob)` matches a nested
+          # path like 'skills/foo/scripts/sub/bar.py' too), the opposite of
+          # this workflow's own top-level `paths:` trigger, whose `*` never
+          # crosses `/` per GitHub Actions' own path-filter syntax. Without
+          # `:(glob)`, a stray nested checker-script path pulled in by a
+          # PR that also touches something the `paths:` trigger fired on
+          # would reach the filename-shape validation below, fail it (that
+          # validation is intentionally single-level, matching every
+          # existing skill's flat scripts/ layout), and hard-fail this
+          # entire required check for a file this gate never intended to
+          # scope in -- not a hypothetical: reproduced directly against a
+          # scratch repo before adding `:(glob)` here. Nested checker-script
+          # subdirectories are out of scope by design (matching the
+          # `paths:` trigger's own boundary and every skill's current flat
+          # layout), not an oversight.
           if ! checker_script_diff_output=$(git diff --name-status "$BASE_SHA...$HEAD_SHA" -- \
-              'skills/*/scripts/*.py' 'evals/scripts/*.py' '.github/scripts/*.py'); then
+              ':(glob)skills/*/scripts/*.py' ':(glob)evals/scripts/*.py' ':(glob).github/scripts/*.py'); then
             echo "::error::git diff failed for checker scripts between $BASE_SHA and $HEAD_SHA" >&2
             exit 1
           fi
@@ -128,11 +146,14 @@ jobs:
               # .github/scripts/, which have no owning-skill component. The
               # skill-name segment is restricted to the same
               # [A-Za-z0-9_-]+ class the SKILL.md diff step above already
-              # requires of its own extracted `skill` variable (line ~157)
-              # -- not a permissive [^/]+ -- because that segment is never
-              # separately re-validated downstream here the way `skill` is
-              # there; an unrestricted class would let a directory name
-              # containing a literal comma corrupt the comma-join sink.
+              # requires of its own extracted `skill` variable (the
+              # `skill=$(printf ... | sed -E 's#^skills/...#\1#')` /
+              # `grep -E '^[A-Za-z0-9_-]+$'` pair earlier in this same
+              # step) -- not a permissive [^/]+ -- because that segment is
+              # never separately re-validated downstream here the way
+              # `skill` is there; an unrestricted class would let a
+              # directory name containing a literal comma corrupt the
+              # comma-join sink.
               if ! printf '%s' "$new_path" | grep -E \
                   '^(skills/[A-Za-z0-9_-]+/scripts/[A-Za-z0-9._-]+\.py|evals/scripts/[A-Za-z0-9._-]+\.py|\.github/scripts/[A-Za-z0-9._-]+\.py)$' \
                   >/dev/null; then

@@ -75,6 +75,7 @@ verdict vocabulary, no shared contract between the two checks.
 from __future__ import annotations
 
 import argparse
+import collections
 import re
 import sys
 
@@ -141,32 +142,86 @@ _BATTLE_TESTING_WAIVED_RE = _waived_pattern("battle-testing-a-skill")
 _EVAL_COVERAGE_CHECK_NAME = "eval-coverage-disclosure"
 _EVAL_COVERAGE_WAIVER_RE = _waived_pattern(_EVAL_COVERAGE_CHECK_NAME)
 
-# Issue #517 (refs #454, #277): two process-disclosure checks, each
-# required only when the calling workflow supplies a non-empty skill/doc
-# list for it. "RAN"/"NOT-RUN" (case-insensitive, same as every other
-# vocabulary here) discloses whether the named process happened at all --
-# WAIVED: <reason> is accepted too, via the shared _line_pattern factory,
-# same as the two audits in _VERDICTS.
-_PROCESS_DISCLOSURE_VERDICTS = ("RAN", "NOT-RUN")
-
-_SECURITY_COVERAGE_CHECK_NAME = "adversarial-coverage-mapping"
-_SECURITY_COVERAGE_LINE_RE = _line_pattern(
-    _SECURITY_COVERAGE_CHECK_NAME, _PROCESS_DISCLOSURE_VERDICTS
+# Issue #517 (refs #454, #277) / #565 (refs #560 repair 5): three
+# process-disclosure checks, each required only when the calling workflow
+# supplies a non-empty item list for it. "RAN"/"NOT-RUN" (case-insensitive,
+# same as every other vocabulary here) discloses whether the named process
+# happened at all -- WAIVED: <reason> is accepted too, via the shared
+# _line_pattern factory, same as the two audits in _VERDICTS.
+#
+# A registry, not three hand-copied name/CLI-flag/help-text/FAIL-message
+# constants: this is the third such check (adversarial-coverage-mapping,
+# design-doc-adversarial-review, checker-script-adversarial-review), each
+# previously duplicated across five places (module constant, `find_missing_*`
+# wrapper, CLI flag, main() wiring, FAIL-message block). This PR's own
+# checker-script-adversarial-review addition was that third copy -- the
+# signal to collapse the four still-generic places (everything but the
+# named `find_missing_*` wrappers, which stay individually named and
+# one-line since tests call them directly by name) into this table instead
+# of hand-copying a fourth time in the future.
+_ProcessDisclosureCheck = collections.namedtuple(
+    "_ProcessDisclosureCheck",
+    ["name", "cli_flag", "cli_dest", "help_text", "fail_subject", "fail_hint"],
 )
 
-_DESIGN_DOC_CHECK_NAME = "design-doc-adversarial-review"
-_DESIGN_DOC_LINE_RE = _line_pattern(_DESIGN_DOC_CHECK_NAME, _PROCESS_DISCLOSURE_VERDICTS)
+_PROCESS_DISCLOSURE_VERDICTS = ("RAN", "NOT-RUN")
 
-# Issue #565 (refs #560 repair 5): a deterministic checker script
-# (skills/*/scripts/*.py, evals/scripts/*.py, .github/scripts/*.py) is
-# exactly as capable of shipping subtly wrong logic as skill content is
-# -- PR #558 is direct evidence -- so it gets the same RAN/NOT-RUN/WAIVED
-# process-disclosure shape as adversarial-coverage-mapping and
-# design-doc-adversarial-review above, not a PASS/FAIL verdict: this
-# checks that an adversarial review round happened, not what it
-# concluded.
-_CHECKER_SCRIPT_CHECK_NAME = "checker-script-adversarial-review"
-_CHECKER_SCRIPT_LINE_RE = _line_pattern(_CHECKER_SCRIPT_CHECK_NAME, _PROCESS_DISCLOSURE_VERDICTS)
+_PROCESS_DISCLOSURE_CHECKS = (
+    _ProcessDisclosureCheck(
+        name="adversarial-coverage-mapping",
+        cli_flag="--security-relevant-skills",
+        cli_dest="security_relevant_skills",
+        help_text=(
+            "Comma-separated skill names (skills/<name>/SKILL.md) whose "
+            "frontmatter heuristically matches a security-relevant keyword "
+            "(issue #517, refs #454)."
+        ),
+        fail_subject="security-relevant skill change",
+        fail_hint=(
+            ", disclosing whether an adversarial coverage-mapping round "
+            "ran against this security-relevant skill"
+        ),
+    ),
+    _ProcessDisclosureCheck(
+        name="design-doc-adversarial-review",
+        cli_flag="--changed-design-docs",
+        cli_dest="changed_design_docs",
+        help_text=(
+            "Comma-separated docs/superpowers/specs/*.md filenames added "
+            "or modified in this diff (issue #517, refs #277)."
+        ),
+        fail_subject="changed design doc",
+        fail_hint="",
+    ),
+    # Issue #565 (refs #560 repair 5): a deterministic checker script
+    # (skills/*/scripts/*.py, evals/scripts/*.py, .github/scripts/*.py) is
+    # exactly as capable of shipping subtly wrong logic as skill content
+    # is -- PR #558 is direct evidence -- so it gets the same
+    # RAN/NOT-RUN/WAIVED process-disclosure shape as the two checks above,
+    # not a PASS/FAIL verdict: this checks that an adversarial review
+    # round happened, not what it concluded.
+    _ProcessDisclosureCheck(
+        name="checker-script-adversarial-review",
+        cli_flag="--changed-checker-scripts",
+        cli_dest="changed_checker_scripts",
+        help_text=(
+            "Comma-separated deterministic checker-script paths "
+            "(skills/*/scripts/*.py, evals/scripts/*.py, or "
+            ".github/scripts/*.py) added or modified in this diff "
+            "(issue #565, refs #560 repair 5)."
+        ),
+        fail_subject="changed deterministic checker script",
+        fail_hint=(
+            ", disclosing whether an adversarial review round ran against "
+            "this deterministic checker script"
+        ),
+    ),
+)
+
+_PROCESS_DISCLOSURE_LINE_RES = {
+    check.name: _line_pattern(check.name, _PROCESS_DISCLOSURE_VERDICTS)
+    for check in _PROCESS_DISCLOSURE_CHECKS
+}
 
 
 def _normalize_body(body_text):
@@ -239,7 +294,9 @@ def find_missing_security_coverage_disclosure(body_text, security_relevant_skill
     by an adversarial-coverage-mapping RAN/NOT-RUN/WAIVED line in the PR
     body (issue #517, refs #454); else [].
     """
-    return _find_missing_disclosure(body_text, security_relevant_skills, _SECURITY_COVERAGE_LINE_RE)
+    return _find_missing_disclosure(
+        body_text, security_relevant_skills, _PROCESS_DISCLOSURE_LINE_RES["adversarial-coverage-mapping"]
+    )
 
 
 def find_missing_design_doc_disclosure(body_text, changed_design_docs):
@@ -247,7 +304,9 @@ def find_missing_design_doc_disclosure(body_text, changed_design_docs):
     design-doc-adversarial-review RAN/NOT-RUN/WAIVED line in the PR body
     (issue #517, refs #277); else [].
     """
-    return _find_missing_disclosure(body_text, changed_design_docs, _DESIGN_DOC_LINE_RE)
+    return _find_missing_disclosure(
+        body_text, changed_design_docs, _PROCESS_DISCLOSURE_LINE_RES["design-doc-adversarial-review"]
+    )
 
 
 def find_missing_checker_script_disclosure(body_text, changed_checker_scripts):
@@ -255,7 +314,9 @@ def find_missing_checker_script_disclosure(body_text, changed_checker_scripts):
     a checker-script-adversarial-review RAN/NOT-RUN/WAIVED line in the PR
     body (issue #565, refs #560 repair 5); else [].
     """
-    return _find_missing_disclosure(body_text, changed_checker_scripts, _CHECKER_SCRIPT_LINE_RE)
+    return _find_missing_disclosure(
+        body_text, changed_checker_scripts, _PROCESS_DISCLOSURE_LINE_RES["checker-script-adversarial-review"]
+    )
 
 
 def _parse_skill_list(raw):
@@ -264,13 +325,15 @@ def _parse_skill_list(raw):
 
 
 def main(argv=None):
-    """CLI: exit 0 iff the given PR body discloses both audits (and, when
-    applicable, the two description-change-only checks from issue #427),
-    else 1.
+    """CLI: exit 0 iff the given PR body discloses every applicable check --
+    the two #248 audits when a SKILL.md changed, the two #427
+    description-change-only checks, and each #517/#565 process-disclosure
+    check the workflow flags as applicable -- else 1.
     """
     parser = argparse.ArgumentParser(
-        description="Check that a PR body discloses battle-testing-a-skill and "
-        "evaluating-skill-quality audit evidence for a skill-content change."
+        description="Check that a PR body discloses the required skill-audit "
+        "and deterministic-checker-script review evidence for this diff "
+        "(see this module's own docstring for the full check catalogue)."
     )
     parser.add_argument(
         "--body",
@@ -289,27 +352,10 @@ def main(argv=None):
         "whose diff touches neither evals/<skill>/tasks/ nor "
         "evals/<skill>/eval-status.md.",
     )
-    parser.add_argument(
-        "--security-relevant-skills",
-        default="",
-        help="Comma-separated skill names (skills/<name>/SKILL.md) whose "
-        "frontmatter heuristically matches a security-relevant keyword "
-        "(issue #517, refs #454).",
-    )
-    parser.add_argument(
-        "--changed-design-docs",
-        default="",
-        help="Comma-separated docs/superpowers/specs/*.md filenames added "
-        "or modified in this diff (issue #517, refs #277).",
-    )
-    parser.add_argument(
-        "--changed-checker-scripts",
-        default="",
-        help="Comma-separated deterministic checker-script paths "
-        "(skills/*/scripts/*.py, evals/scripts/*.py, or "
-        ".github/scripts/*.py) added or modified in this diff "
-        "(issue #565, refs #560 repair 5).",
-    )
+    for check in _PROCESS_DISCLOSURE_CHECKS:
+        parser.add_argument(
+            check.cli_flag, dest=check.cli_dest, default="", help=check.help_text
+        )
     parser.add_argument(
         "--skill-md-changed",
         action="store_true",
@@ -339,28 +385,22 @@ def main(argv=None):
     missing_eval_coverage_skills = find_missing_eval_coverage_disclosure(
         body_text, needs_eval_coverage_skills
     )
-    security_relevant_skills = _parse_skill_list(args.security_relevant_skills)
-    missing_security_coverage_skills = find_missing_security_coverage_disclosure(
-        body_text, security_relevant_skills
-    )
-    changed_design_docs = _parse_skill_list(args.changed_design_docs)
-    missing_design_doc_skills = find_missing_design_doc_disclosure(
-        body_text, changed_design_docs
-    )
-    changed_checker_scripts = _parse_skill_list(args.changed_checker_scripts)
-    missing_checker_script_disclosure = find_missing_checker_script_disclosure(
-        body_text, changed_checker_scripts
-    )
+    process_disclosure_missing = {
+        check.name: _find_missing_disclosure(
+            body_text,
+            _parse_skill_list(getattr(args, check.cli_dest)),
+            _PROCESS_DISCLOSURE_LINE_RES[check.name],
+        )
+        for check in _PROCESS_DISCLOSURE_CHECKS
+    }
 
     if (
         not missing
         and not disallowed_waiver_skills
         and not missing_eval_coverage_skills
-        and not missing_security_coverage_skills
-        and not missing_design_doc_skills
-        and not missing_checker_script_disclosure
+        and not any(process_disclosure_missing.values())
     ):
-        print("PASS: skill audit evidence disclosed for both audits")
+        print("PASS: all applicable skill-audit disclosure requirements are met")
         return 0
 
     if missing:
@@ -406,43 +446,17 @@ def main(argv=None):
             file=sys.stderr,
         )
 
-    if missing_security_coverage_skills:
-        print(
-            "FAIL: security-relevant skill change with no "
-            "adversarial-coverage-mapping disclosure for: "
-            + ", ".join(missing_security_coverage_skills)
-            + ". Add 'adversarial-coverage-mapping: RAN' or "
-            "'adversarial-coverage-mapping: NOT-RUN' (or "
-            "'... : WAIVED: <reason>') in the '## Skill audit evidence' "
-            "section, disclosing whether an adversarial coverage-mapping "
-            "round ran against this security-relevant skill.",
-            file=sys.stderr,
-        )
-
-    if missing_design_doc_skills:
-        print(
-            "FAIL: changed design doc with no design-doc-adversarial-review "
-            "disclosure for: "
-            + ", ".join(missing_design_doc_skills)
-            + ". Add 'design-doc-adversarial-review: RAN' or "
-            "'design-doc-adversarial-review: NOT-RUN' (or "
-            "'... : WAIVED: <reason>') in the '## Skill audit evidence' "
-            "section.",
-            file=sys.stderr,
-        )
-
-    if missing_checker_script_disclosure:
-        print(
-            "FAIL: changed deterministic checker script with no "
-            "checker-script-adversarial-review disclosure for: "
-            + ", ".join(missing_checker_script_disclosure)
-            + ". Add 'checker-script-adversarial-review: RAN' or "
-            "'checker-script-adversarial-review: NOT-RUN' (or "
-            "'... : WAIVED: <reason>') in the '## Skill audit evidence' "
-            "section, disclosing whether an adversarial review round ran "
-            "against this deterministic checker script.",
-            file=sys.stderr,
-        )
+    for check in _PROCESS_DISCLOSURE_CHECKS:
+        missing_items = process_disclosure_missing[check.name]
+        if missing_items:
+            print(
+                f"FAIL: {check.fail_subject} with no {check.name} disclosure for: "
+                + ", ".join(missing_items)
+                + f". Add '{check.name}: RAN' or '{check.name}: NOT-RUN' (or "
+                "'... : WAIVED: <reason>') in the '## Skill audit evidence' "
+                f"section{check.fail_hint}.",
+                file=sys.stderr,
+            )
 
     return 1
 
