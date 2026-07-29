@@ -4,6 +4,7 @@ Fixtures are synthesized in tmp_path so the test is self-contained and
 travels with the skill on vendoring.
 """
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -99,6 +100,84 @@ def test_well_formed_skill_passes(tmp_path):
     results = css.check_shape(d)
     assert all(r.passed for r in results)
     assert css.main([str(d)]) == 0
+
+
+def _known_static_check_names():
+    """Mechanically derive every check name check_shape() can statically
+    emit as a literal string (issue #518 ACM row 7's own proof method:
+    derive the expected check-name list from the real source instead of
+    hand-maintaining one) -- every ``CheckResult(...)`` call's own literal
+    first argument, plus ``_INLINE_CITATION_CHECK_SPECS``' own name column
+    (a genuine small registry check_shape() already has). Deliberately
+    excludes the handful of runtime-templated names ({field}-length/
+    {field}-no-xml/description-yaml-safe from _length_check/
+    _no_xml_check/_yaml_plain_scalar_safety_check; per-reference-file
+    toc:{name}/anchor-targets-resolve:{name}) -- those are generated from
+    caller-supplied runtime data (a field name, a reference filename), not
+    a fixed literal a source scan can enumerate.
+    """
+    source = Path(css.__file__).read_text(encoding="utf-8")
+    literal_names = set(re.findall(
+        r'CheckResult\(\s*\n?\s*"([a-zA-Z0-9-]+)"', source))
+    literal_names.update(spec[0] for spec in css._INLINE_CITATION_CHECK_SPECS)
+    return literal_names
+
+
+def test_well_formed_skill_kitchen_sink_covers_every_known_check_name(tmp_path):
+    # Completeness gate for issue #518 ACM row 7 (#205's own named failure
+    # mode: "no check verifies that every 'every check must pass on a
+    # well-formed skill' style test enumerates a newly-added check name").
+    # This repo's own such tests (test_well_formed_skill_passes above,
+    # tests/test_skill_metadata_sidecar.py, tests/test_repository_skill_
+    # shape.py) already derive their PASS assertion from the real result
+    # list (``all(r.passed for r in results)`` / ``not [r for r in
+    # results if not r.passed]``), not a hand-maintained name list, so
+    # #205's exact failure mode cannot recur there. This test instead
+    # guards check_shape()'s own COVERAGE, mechanically: every check name
+    # this source can statically name (_known_static_check_names above)
+    # must actually be reachable from some fixture -- a new check added to
+    # the source but never wired into any fixture's trigger condition
+    # would otherwise only ever run in its own narrow unit test and never
+    # get exercised by the repo-wide real-skills sweeps.
+    (tmp_path / "other-skill").mkdir()
+    d = _write_skill(tmp_path, name="kitchen-sink-skill", portability="Portable",
+                     references={"notes.md": "Some reference notes.\n"})
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: kitchen-sink-skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  references:\n"
+        "    - kind: decision\n"
+        "      anchor: https://github.com/tvna/gitapex/issues/1\n"
+        "      summary: a decision\n"
+        "  skillDependencies:\n"
+        "    requires: []\n"
+        "    relatedTo:\n"
+        "      - other-skill\n"
+        "  lifecycle:\n"
+        "    experimental:\n"
+        "      reason: not yet proven\n"
+        "      trackingIssue: \"https://github.com/tvna/gitapex/issues/2\"\n"
+        "    deprecated:\n"
+        "      reason: superseded\n"
+        "      replacement: other-skill\n"
+        "    renamedFrom: old-kitchen-sink-skill\n"
+        "  executionRequirements:\n"
+        "    tools:\n"
+        "      read:\n"
+        "        - files\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    missing = _known_static_check_names() - set(by)
+    assert not missing, (
+        f"{sorted(missing)} declared in check_skill_shape.py's own "
+        "CheckResult(...) calls but never emitted by this maximal "
+        "fixture -- either the fixture needs updating to trigger the new "
+        "check's precondition, or the check is unreachable dead code.")
 
 
 def test_accepts_skill_md_path_directly(tmp_path):
@@ -918,14 +997,39 @@ def test_wrong_api_version_fails(tmp_path):
     assert _by_name(css.check_shape(d))["manifest-envelope"].passed is False
 
 
+def test_missing_api_version_fails(tmp_path):
+    # Present/absent/present-but-invalid coverage (issue #518 ACM row 5,
+    # #187 repair 2's own named gap): only the present-but-invalid case was
+    # covered above -- apiVersion missing entirely (manifest.get returns
+    # None) must fail the same envelope check, not be silently treated as
+    # satisfied.
+    d = _write_skill(tmp_path, api_version=None)
+    by = _by_name(css.check_shape(d))
+    assert by["manifest-envelope"].passed is False
+    assert "apiVersion=None" in by["manifest-envelope"].evidence
+
+
 def test_wrong_kind_fails(tmp_path):
     d = _write_skill(tmp_path, kind="NotASkill")
     assert _by_name(css.check_shape(d))["manifest-envelope"].passed is False
 
 
+def test_missing_kind_fails(tmp_path):
+    d = _write_skill(tmp_path, kind=None)
+    by = _by_name(css.check_shape(d))
+    assert by["manifest-envelope"].passed is False
+    assert "kind=None" in by["manifest-envelope"].evidence
+
+
 def test_metadata_name_mismatch_fails(tmp_path):
     d = _write_skill(tmp_path, meta_name="some-other-name")
     assert _by_name(css.check_shape(d))["metadata-name-matches-dir"].passed is False
+
+
+def test_missing_metadata_name_fails(tmp_path):
+    d = _write_skill(tmp_path, meta_name=None)
+    assert _by_name(
+        css.check_shape(d))["metadata-name-matches-dir"].passed is False
 
 
 def test_missing_portability_fails(tmp_path):
@@ -965,8 +1069,10 @@ def test_non_utf8_sidecar_fails_checks_not_exit_2(tmp_path):
     # evidence naming the read failure. metadata-file-present still PASSes
     # (the file does exist); the five checks that need the parsed manifest
     # FAIL. main() returns 1 (a full readable report), same as any other
-    # shape failure -- not 2, which stays reserved for a missing/unreadable
-    # SKILL.md (see test_directory_without_skill_md_returns_2).
+    # shape failure -- not 2, which stays reserved for a missing SKILL.md
+    # (see test_directory_without_skill_md_returns_2) -- an unreadable
+    # SKILL.md itself no longer returns 2 either, see
+    # test_non_utf8_skill_md_fails_checks_not_uncaught below.
     d = _write_skill(tmp_path)
     (d / "metadata/gitapex.yaml").write_bytes(b"\xff\xfe not utf8 \x00\x01")
     by = _by_name(css.check_shape(d))
@@ -977,6 +1083,51 @@ def test_non_utf8_sidecar_fails_checks_not_exit_2(tmp_path):
         assert by[check].passed is False, check
         assert "UnicodeDecodeError" in by[check].evidence, check
     assert css.main([str(d)]) == 1
+
+
+def test_non_utf8_skill_md_fails_checks_not_uncaught(tmp_path):
+    # Regression guard (issue #518): the same UnicodeDecodeError-class bug
+    # issue #187 repair 3 already fixed for the sidecar read above,
+    # recurring on SKILL.md's own read -- check_shape() previously let a
+    # corrupt (non-UTF-8) SKILL.md's read raise straight out, which any
+    # direct caller (not just main(), which happens to guard its own
+    # check_shape() call and turn it into exit 2) would see as a bare
+    # traceback instead of a report. Called directly here -- the actual
+    # entry point tests/test_skill_metadata_sidecar.py and
+    # tests/test_repository_skill_shape.py use to sweep every real skill.
+    d = tmp_path / "skill"
+    d.mkdir()
+    (d / "SKILL.md").write_bytes(b"\xff\xfe not utf8 \x00\x01")
+    results = css.check_shape(d)
+    by = _by_name(results)
+    assert by["skill-md-readable"].passed is False
+    assert "UnicodeDecodeError" in by["skill-md-readable"].evidence
+    # Unlike a missing SKILL.md (test_directory_without_skill_md_returns_2,
+    # exit 2 -- no file to even attempt reading), a present-but-unreadable
+    # one is now a shape failure like any other: exit 1, full report, not
+    # the exit-2-discards-everything symptom the sidecar fix already closed.
+    assert css.main([str(d)]) == 1
+
+
+def test_missing_skill_md_raises_not_swallowed_as_unreadable(tmp_path):
+    # Adversarial-review regression guard: the row-6 fix's own
+    # try/except (OSError, UnicodeDecodeError) is broader than the
+    # UnicodeDecodeError-class bug it targets -- FileNotFoundError is an
+    # OSError subclass, so without this test a directory with no SKILL.md
+    # at all would silently produce a misleading "skill-md-readable:
+    # unreadable: FileNotFoundError" CheckResult instead of raising,
+    # conflating "missing" with "present but corrupt" (the actual bug
+    # class) for any direct caller of check_shape() that skips main()'s
+    # own is_file() pre-check (test_directory_without_skill_md_returns_2
+    # covers that pre-check itself, only through main()). check_shape()
+    # must keep raising FileNotFoundError here, matching its own
+    # pre-existing (unchanged) contract and the same "missing" vs.
+    # "present but unreadable" split the sidecar's own is_file() check
+    # already draws.
+    d = tmp_path / "skill"
+    d.mkdir()
+    with pytest.raises(FileNotFoundError):
+        css.check_shape(d)
 
 
 def test_manifest_parser_ignores_deeper_nesting(tmp_path):
@@ -1087,6 +1238,36 @@ def test_references_mapping_shaped_item_fails_well_formed(tmp_path):
     # The malformed item is excluded from the parsed list entirely (not
     # silently kept as a garbled string); nothing else in this fixture's
     # references block was well-formed, so the list itself ends up empty.
+    assert parsed.root["spec"]["references"] == []
+
+
+def test_references_item_missing_required_field_fails_well_formed(tmp_path):
+    # Present/absent/present-but-invalid coverage (issue #518 ACM row 5): a
+    # well-formed-shaped item (correct indent, only recognized keys) that
+    # omits one of REFERENCES_ITEM_REQUIRED_SUBKEYS (kind/anchor/summary)
+    # by the time it closes must fail as malformed, not be silently
+    # accepted as a partial item -- the "_finalize_current_ref_item"
+    # missing-required-field branch had no dedicated test before this.
+    d = _write_skill(tmp_path)
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  references:\n"
+        "    - kind: decision\n"
+        "      anchor: https://github.com/tvna/gitapex/issues/1\n",
+        encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["references-well-formed"].passed is False
+    assert "missing required field(s): summary" in by["references-well-formed"].evidence
+    assert css.main([str(d)]) == 1
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.malformed_reference_items == [
+        "- kind: decision (missing required field(s): summary)"]
     assert parsed.root["spec"]["references"] == []
 
 
@@ -3277,6 +3458,39 @@ def test_lifecycle_stable_with_compatibility_guarantee_is_well_formed(tmp_path):
     assert css.main([str(d)]) == 0
 
 
+def test_lifecycle_experimental_missing_reason_fails_well_formed(tmp_path):
+    # Present/absent/present-but-invalid coverage (issue #518 ACM row 5):
+    # experimental.trackingIssue's missing-required-field case is already
+    # covered above (test_lifecycle_missing_tracking_issue_fails_well_formed),
+    # as is deprecated.replacement's (test_lifecycle_missing_replacement_
+    # fails_well_formed) and stable.since's (below) -- but neither
+    # experimental.reason nor deprecated.reason (the other required field
+    # each of those two blocks shares) had an equivalent, an asymmetric gap
+    # in the same LIFECYCLE_REQUIRED_FIELDS enforcement code path.
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n"
+        "    experimental:\n"
+        "      trackingIssue: \"https://github.com/tvna/gitapex/issues/1\"\n")
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is False
+    assert "experimental.reason" in by["lifecycle-well-formed"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_lifecycle_deprecated_missing_reason_fails_well_formed(tmp_path):
+    (tmp_path / "other-skill").mkdir()
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n"
+        "    deprecated:\n"
+        "      replacement: other-skill\n")
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is False
+    assert "deprecated.reason" in by["lifecycle-well-formed"].evidence
+    assert css.main([str(d)]) == 1
+
+
 def test_lifecycle_stable_missing_since_fails_well_formed(tmp_path):
     d = _write_lifecycle_sidecar(
         _write_skill(tmp_path),
@@ -3887,6 +4101,136 @@ def test_null_vs_empty_mapping_matches_real_yaml_semantics():
         else:
             assert isinstance(real_value, dict), (key, body)
             assert isinstance(parsed_value, dict), (key, body, parsed_value)
+
+
+def test_non_string_scalar_detection_matches_pyyaml_for_representative_inputs():
+    # Broader differential test against PyYAML (issue #518 ACM row 1),
+    # extending test_null_vs_empty_mapping_matches_real_yaml_semantics'
+    # own technique from the block/mapping case above to the scalar-type
+    # case: _is_non_string_plain_scalar decides whether an unquoted list
+    # item (spec.references; spec.skillDependencies.requires/relatedTo;
+    # spec.executionRequirements.tools.read/write/shell) is a real YAML
+    # string or resolves to null/boolean/numeric (issue #356's own named
+    # gap) -- for each representative raw item text below, this must
+    # agree with what yaml.safe_load itself resolves a one-item list built
+    # from the same raw text to.
+    #
+    # Deliberately excludes two known-divergent classes, both already
+    # named at YAML_NON_STRING_SCALAR_RE's own definition as intentional,
+    # not gaps this test should flag: YAML 1.1's yes/no/on/off booleans
+    # (this parser deliberately treats them as ordinary strings, since
+    # they are also common English words a legitimate tag/reference could
+    # contain) and exponential-notation floats, where this run confirmed a
+    # real, separate divergence -- "-1.5e10" resolves to a YAML *string*
+    # under PyYAML's own default SafeLoader (not a float, for reasons
+    # internal to PyYAML's resolver), while this parser's regex classifies
+    # it as numeric. Chasing full parity with PyYAML's own float grammar
+    # is a separate, unrequested scope from issue #518's ACM (a stricter
+    # rejection of an unlikely-in-practice reference string, not the
+    # silent-acceptance failure mode #356 and this row are about); noted
+    # here rather than silently dropped, per this parser's own "not a full
+    # YAML string lexer" humility elsewhere in this file.
+    import yaml
+
+    cases = [
+        "true", "True", "TRUE", "false", "False", "FALSE",
+        "null", "Null", "NULL", "~",
+        "123", "-123", "+123", "1.5", "-1.5", ".inf", "-.inf", ".nan",
+        "true # rationale", "123 # a note",
+        "true#tag", "a-real-tag", "not-a-bool-word",
+    ]
+    for raw in cases:
+        real_value = yaml.safe_load(f"- {raw}\n")[0]
+        real_is_string = isinstance(real_value, str)
+        parsed_is_non_string = css._is_non_string_plain_scalar(raw)
+        assert (not real_is_string) == parsed_is_non_string, (
+            raw, real_value, type(real_value).__name__)
+
+
+# ---- _parse_manifest docstring recognized-key drift guard (issue #518 ACM row 4) ----
+#
+# _parse_manifest's docstring separately prose-lists each gated block's
+# recognized keys (spec.references' item subkeys, spec.skillDependencies',
+# spec.lifecycle's, spec.executionRequirements.tools') -- nothing
+# previously checked that prose against the real constants
+# (REFERENCES_ITEM_SUBKEYS, SKILL_DEPENDENCY_SUBKEYS, LIFECYCLE_SUBKEYS/
+# LIFECYCLE_SCALAR_KEYS, EXEC_REQ_TOOLS_SUBKEYS) a future field addition
+# updates -- exactly the drift #244 repair 4 found (three docstring
+# passages still describing spec.lifecycle as experimental/deprecated-only
+# after stable/renamedFrom were added). Modeled on
+# test_skill_dep_list_item_re_indent_matches_its_docstrings in
+# tests/test_skill_metadata_sidecar.py (same technique -- extract prose,
+# compare to the real constant -- applied to a recognized-key list instead
+# of an indent numeral).
+
+def test_docstring_references_item_subkeys_match_constant():
+    docstring = css._parse_manifest.__doc__
+    start = docstring.index("Recognized keys:")
+    end = docstring.index(". A key inside", start)
+    tokens = tuple(re.findall(r"``(\w+)``", docstring[start:end]))
+    assert tokens == css.REFERENCES_ITEM_SUBKEYS, (
+        "_parse_manifest's docstring lists spec.references item keys as "
+        f"{tokens}, but REFERENCES_ITEM_SUBKEYS is "
+        f"{css.REFERENCES_ITEM_SUBKEYS} -- a field was added/renamed in "
+        "one but not the other.")
+
+
+def test_docstring_skill_dependency_subkeys_match_constant():
+    docstring = css._parse_manifest.__doc__
+    m = re.search(
+        r"recognized subkeys,\s*``(\w+)``\s*and\s*``(\w+)``", docstring)
+    assert m is not None, (
+        "_parse_manifest's docstring no longer states "
+        "spec.skillDependencies' recognized subkeys in the expected "
+        "'``X`` and ``Y``' shape -- update this test's extraction logic.")
+    assert m.groups() == css.SKILL_DEPENDENCY_SUBKEYS, (
+        f"_parse_manifest's docstring lists spec.skillDependencies "
+        f"subkeys as {m.groups()}, but SKILL_DEPENDENCY_SUBKEYS is "
+        f"{css.SKILL_DEPENDENCY_SUBKEYS} -- a field was added/renamed in "
+        "one but not the other.")
+
+
+def test_docstring_lifecycle_keys_match_constants():
+    docstring = css._parse_manifest.__doc__
+    block_match = re.search(
+        r"recognized block sub-keys --\s*``(\w+)``,\s*``(\w+)``,\s*``(\w+)``",
+        docstring)
+    assert block_match is not None, (
+        "_parse_manifest's docstring no longer states spec.lifecycle's "
+        "recognized block sub-keys in the expected shape -- update this "
+        "test's extraction logic.")
+    assert block_match.groups() == css.LIFECYCLE_SUBKEYS, (
+        f"_parse_manifest's docstring lists spec.lifecycle block sub-keys "
+        f"as {block_match.groups()}, but LIFECYCLE_SUBKEYS is "
+        f"{css.LIFECYCLE_SUBKEYS} -- a field was added/renamed in one but "
+        "not the other.")
+
+    scalar_match = re.search(r"plain scalar key,\s*``(\w+)``", docstring)
+    assert scalar_match is not None, (
+        "_parse_manifest's docstring no longer states spec.lifecycle's "
+        "recognized plain scalar key in the expected shape -- update this "
+        "test's extraction logic.")
+    assert (scalar_match.group(1),) == css.LIFECYCLE_SCALAR_KEYS, (
+        f"_parse_manifest's docstring lists spec.lifecycle's scalar key as "
+        f"{scalar_match.group(1)!r}, but LIFECYCLE_SCALAR_KEYS is "
+        f"{css.LIFECYCLE_SCALAR_KEYS} -- a field was added/renamed in one "
+        "but not the other.")
+
+
+def test_docstring_execution_requirement_tools_subkeys_match_constant():
+    docstring = css._parse_manifest.__doc__
+    m = re.search(
+        r"6-space indent:\s*``(\w+)``/``(\w+)``/``(\w+)``", docstring)
+    assert m is not None, (
+        "_parse_manifest's docstring no longer states "
+        "spec.executionRequirements.tools' recognized subkeys in the "
+        "expected '``X``/``Y``/``Z``' shape -- update this test's "
+        "extraction logic.")
+    assert m.groups() == css.EXEC_REQ_TOOLS_SUBKEYS, (
+        f"_parse_manifest's docstring lists tools subkeys as "
+        f"{m.groups()}, but EXEC_REQ_TOOLS_SUBKEYS is "
+        f"{css.EXEC_REQ_TOOLS_SUBKEYS} -- a field was added/renamed in one "
+        "but not the other.")
 
 
 # ---- Illustrative model identifier (docs/skill-authoring-standards.md rule 1) ----
