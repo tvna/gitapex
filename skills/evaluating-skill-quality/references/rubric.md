@@ -762,10 +762,15 @@ not another name for Mechanism fit's secret-exposure Stop-boundary example.
 step a reviewer would expect to execute (not a hypothetical example or a
 Stop-boundary prohibition naming the risk only to forbid it), reads,
 derives, logs, transmits, or otherwise handles material in the
-sensitive-data category: secrets, credentials, API keys/tokens, PII, or
-private/internal-only data. A skill whose procedure never touches such
-material does not select this axis merely for mentioning the category in
-passing.
+sensitive-data category: secrets, credentials, API keys/tokens, PII,
+payment/financial account data (credit card or other payment-card
+numbers, bank account or routing numbers), or private/internal-only data.
+Payment-card data is named explicitly, not left to an implicit reading of
+PII, because it carries its own distinct regulatory regime (PCI-DSS) and
+a reviewer reading "PII" narrowly (name/email/address-type identifiers
+only) could otherwise miss a step that handles nothing but a bare card
+number. A skill whose procedure never touches such material does not
+select this axis merely for mentioning the category in passing.
 
 Report exactly one state:
 

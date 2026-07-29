@@ -19,9 +19,10 @@ to average out run-to-run variance. Following the precedent already set in
 aspirational" for a small fixture count), this split combines the 17:14:9
 base-plus-cohesion partition with a scoped 2:6:2 compatibility addition, a
 1:1:0 reference-load-precision addition (gitapex#477), a 2:2:1
-opus5-prompting-fit addition (gitapex#495), and a 1:1:0
-confidentiality-awareness addition (gitapex#537), for a resulting 23:24:12
-partition. This is named explicitly as a deviation from
+opus5-prompting-fit addition (gitapex#495), a 1:1:0
+confidentiality-awareness addition (gitapex#537), and a 0:1:0
+payment-data sub-category addition (gitapex#537 follow-up), for a
+resulting 23:25:12 partition. This is named explicitly as a deviation from
 the 2:1:7 default. The
 honest minimal groundwork, per that same worked example, is a larger
 fixture corpus over time, not a smaller gate.
@@ -69,7 +70,8 @@ fixture corpus over time, not a smaller gate.
   `reference-load-precision-selection.yaml`,
   `opus5-redundant-verification-generalizes.yaml`,
   `opus5-unbounded-subagent-generalizes.yaml`,
-  `confidentiality-awareness-selection.yaml`.
+  `confidentiality-awareness-selection.yaml`,
+  `confidentiality-awareness-payment-data-selection.yaml`.
 - **test** (read once, for a final report only, never to motivate or gate
   an edit): `guardrail.yaml`, `no-fabricated-violation.yaml`,
   `portability-classification.yaml`, `blind-spot-pass-not-silent.yaml`,
@@ -426,6 +428,31 @@ disclosed, open gap for a future addition rather than silently assumed
 covered.
 
 **Gate result: see the Kept-edit log below.**
+
+**Follow-up (gitapex#537, same issue): payment/financial account data
+named explicitly.** A follow-up question (does the Applicability clause's
+"PII" bucket reliably cover a bare credit-card number with no other
+conventionally-named PII field present?) found the wording ambiguous:
+"PII" read narrowly (name/email/address-type identifiers) could plausibly
+miss a step that handles nothing but a card number, which also carries
+its own distinct regulatory regime (PCI-DSS) separate from general
+privacy law. `references/rubric.md`'s Applicability clause and `SKILL.md`'s
+mirrored pointer were extended to name "payment/financial account data
+(credit card or other payment-card numbers, bank account or routing
+numbers)" explicitly, alongside a new selection fixture,
+`confidentiality-awareness-payment-data-selection.yaml` (a
+`checkout-debugger` skill logging a bare replayed card number to a local
+debug file, with no name/email/other-PII field anywhere in the excerpt --
+isolating the payment-data sub-category from the two original fixtures,
+which both bundle it alongside more obviously-named PII).
+
+**Gate status: in progress, not yet a recorded KEEP/REJECT.** Live
+before/after isolated dispatches against the new fixture were started
+(same `claude -p` methodology as above, pre-edit pinned at
+`bd6fef7`) but had not completed at the time this file was committed.
+This section will be replaced with the actual per-fixture scores and
+KEEP/REJECT determination once both dispatches finish -- not assumed
+passing in the meantime.
 
 Future edits to this rubric should reuse this same split rather than
 re-deriving one per iteration, so the selection split stays genuinely

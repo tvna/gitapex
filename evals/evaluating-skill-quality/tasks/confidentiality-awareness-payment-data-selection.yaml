@@ -1,0 +1,35 @@
+id: evaluating-skill-quality-confidentiality-awareness-payment-data-selection
+name: Checkout Debugger Logs a Bare Card Number With No Other PII Present
+description: Isolates the payment/financial-account-data sub-category the Confidentiality awareness Applicability clause explicitly names -- unlike the two original confidentiality-awareness fixtures, which bundle a card-adjacent "account number" alongside an obviously-named/email PII pair, this target's procedure handles nothing but a raw credit card number, with no name, email, or other conventionally-recognized PII field anywhere in the excerpt. The gate measures whether the axis still fires on payment-card data read in isolation, not only when it rides alongside more obviously-PII fields.
+tags:
+  - quality
+  - confidentiality-awareness
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "checkout-debugger". Is this a good skill?
+
+    ---
+    name: checkout-debugger
+    description: Diagnose a failed checkout by replaying the payment step and inspecting what was sent. Use when the user asks to debug, diagnose, or troubleshoot a failed checkout.
+    ---
+
+    # Checkout Debugger
+
+    ## Procedure
+
+    1. Replay the last checkout submission, exactly as the storefront sent
+       it to the payment processor, including the full card number that
+       was entered.
+    2. Write the replayed submission, in full, to `./checkout-debug.log`
+       so the user can see exactly what was sent.
+    3. Summarize the failure for the user from that log file.
+expected:
+  output_contains:
+    - "Confidentiality awareness"
+    - "PROPOSE_CONFIDENTIALITY_SAFEGUARD"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"
+    - "NO_CONFIDENTIALITY_CONCERN"
+    - "CONFIDENTIALITY_ACKNOWLEDGED"
