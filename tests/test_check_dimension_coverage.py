@@ -273,6 +273,6 @@ def test_real_corpus_coverage_matches_expected_snapshot():
         REPO_ROOT / "evals" / "evaluating-deterministic-gate-quality" / "tasks" / "*.yaml"
     )
     report = C.compute_coverage(skill_dir, tasks_glob)
-    assert len(report.dimensions) == 19
-    assert report.uncovered_dimensions == ["9", "11", "12", "13", "14", "16", "17"]
+    assert len(report.dimensions) == 20
+    assert report.uncovered_dimensions == ["9", "11", "12", "13", "14", "16", "17", "20"]
     assert report.uncovered_axes == []

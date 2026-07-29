@@ -6,7 +6,7 @@ Two lanes, mirroring `evaluating-skill-quality`'s own split:
   grade these mechanically if one existed for the target's own tooling.
   No bundled checker ships with this skill yet (see `SKILL.md`'s Lifecycle
   note); apply these by direct inspection.
-- **Probabilistic-maturity dimensions** (7-19) -- need judgment; walk all
+- **Probabilistic-maturity dimensions** (7-20) -- need judgment; walk all
   of them, quoting the specific evidence that earns each verdict.
 
 Every dimension is tagged with its own **domain-generalization scope**,
@@ -266,3 +266,18 @@ section and `references/security-level.md` for the full test.
     MCP server subprocess: does the server hold a warm process or cached
     connection this call reuses, or pay a full cold-start cost on every
     request?
+20. **Correspondence/sync gates check both set differences, not one.**
+    Where a gate's own stated purpose is a "1:1 correspondence" or "sync"
+    check between two enumerable sets (two directory listings, a table's
+    rows vs. the files it indexes, a doc's disclosed-gap list vs. a
+    tool's live computed output), does it assert both directions -- the
+    set the driving spec happened to enumerate first, *and* its reverse
+    -- rather than only one? A gate that checks only one direction can
+    still name itself "correspondence" or "sync" while missing a rename,
+    removal, or drift-toward-stale-disclosure that only the reverse
+    direction would catch; a bundled test (dimension 4) covering only the
+    forward direction does not itself satisfy this dimension.
+    *Domains:* generalizes directly -- the same one-directional gap can
+    occur in a git hook script, a CI job step, an agent-harness hook, or
+    an MCP server subprocess; the question is about the assertion's own
+    set-difference completeness, not which domain runs it.
