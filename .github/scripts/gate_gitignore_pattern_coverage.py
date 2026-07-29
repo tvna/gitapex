@@ -21,6 +21,7 @@ limitation (see issue #519's Acceptance Criteria Map), not an oversight.
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -30,6 +31,21 @@ from pathlib import Path
 # matches, but a test asserting the same path rarely repeats that exact
 # punctuation.
 _NEGATION_PREFIX = "!"
+
+# A plain `core in source` substring check (the first version of this gate)
+# was matched by an unrelated word merely containing the core as a
+# substring -- e.g. core "build" is a substring of "rebuild" and
+# "build_id" -- which would report a completely uncovered pattern as
+# covered. Bounding both sides with a not-alnum-or-underscore lookaround
+# (rather than plain `\b`, which does not reliably bound a core containing
+# glob metacharacters like `*`) keeps the match to the pattern appearing as
+# its own token, not a fragment of a longer identifier.
+_NOT_BEFORE = r"(?<![A-Za-z0-9_])"
+_NOT_AFTER = r"(?![A-Za-z0-9_])"
+
+
+def _core_regex(core: str) -> re.Pattern[str]:
+    return re.compile(f"{_NOT_BEFORE}{re.escape(core)}{_NOT_AFTER}")
 
 
 def _core(pattern: str) -> str:
@@ -74,7 +90,7 @@ def find_offenders(added_patterns: list[str], repo_root: Path) -> list[str]:
     offenders = []
     for pattern in added_patterns:
         core = _core(pattern)
-        if core and any(core in source for source in sources):
+        if core and any(_core_regex(core).search(source) for source in sources):
             continue
         offenders.append(
             f"{pattern}: added to .gitignore in this diff, but no test "
@@ -94,11 +110,16 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        text = (
-            open(args.added, encoding="utf-8").read() if args.added else sys.stdin.read()
-        )
-    except FileNotFoundError:
-        print(f"error: added-lines file not found: {args.added}", file=sys.stderr)
+        if args.added:
+            with open(args.added, encoding="utf-8") as handle:
+                text = handle.read()
+        else:
+            text = sys.stdin.read()
+    except OSError as exc:
+        # OSError (not just FileNotFoundError) -- a directory path
+        # (IsADirectoryError) or a permission-denied file (PermissionError)
+        # must also fail with this message, not an unhandled traceback.
+        print(f"error: could not read added-lines file {args.added!r}: {exc}", file=sys.stderr)
         return 1
 
     added_patterns = parse_patterns(text)

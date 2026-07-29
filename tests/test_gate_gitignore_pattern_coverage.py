@@ -87,6 +87,27 @@ def test_find_offenders_multiple_patterns_reported_independently(tmp_path):
     assert "/uncovered/path/" in offenders[0]
 
 
+def test_find_offenders_does_not_match_substring_within_larger_word(tmp_path):
+    # Regression: a plain `core in source` substring check would treat
+    # "build" as covered merely because "rebuild_step" and "build_id"
+    # contain it as a fragment -- neither actually references the
+    # "/build/" pattern itself.
+    _write_test_file(
+        tmp_path, "test_unrelated_words.py",
+        'REBUILD = "rebuild_step"\nBUILD_ID = "build_id"\n',
+    )
+    offenders = gate.find_offenders(["/build/"], tmp_path)
+    assert len(offenders) == 1
+    assert "/build/" in offenders[0]
+
+
+def test_find_offenders_matches_core_as_standalone_token(tmp_path):
+    # Same core ("build") as above, but this time genuinely referenced as
+    # its own token (quoted path segment) -- must still be found.
+    _write_test_file(tmp_path, "test_real_reference.py", 'PATTERN = "build/output"\n')
+    assert gate.find_offenders(["/build/"], tmp_path) == []
+
+
 def test_find_offenders_searches_nested_test_files(tmp_path):
     nested_dir = tmp_path / "tests" / "sub"
     nested_dir.mkdir(parents=True)
@@ -127,4 +148,13 @@ def test_main_fails_and_reports_offenders(monkeypatch, tmp_path, capsys):
 
 def test_main_reports_error_for_missing_added_file(capsys):
     assert gate.main(["--added", "/no/such/file.txt"]) == 1
-    assert "not found" in capsys.readouterr().err
+    assert "could not read" in capsys.readouterr().err
+
+
+def test_main_reports_error_for_unreadable_added_path(tmp_path, capsys):
+    # Regression: a directory path raises IsADirectoryError, not
+    # FileNotFoundError -- only catching FileNotFoundError let this class
+    # of OSError crash with an unhandled traceback instead of the intended
+    # graceful error message.
+    assert gate.main(["--added", str(tmp_path)]) == 1
+    assert "could not read" in capsys.readouterr().err
