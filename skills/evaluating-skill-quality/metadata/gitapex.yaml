@@ -197,6 +197,18 @@ spec:
     - kind: caveat
       anchor: "https://github.com/tvna/gitapex/issues/537"
       summary: "Three consecutive ceiling ties on the same strong tier (Sonnet, high effort) is now a named, standing limit of single-trial substring-scorer measurement for precision-only Applicability wording, not three independent surprises. A weaker-tier and/or repeated-trial run (https://github.com/tvna/gitapex/issues/500 Phase 2, not yet scheduled) is the honest way to actually measure whether these edits earn their keep."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/537"
+      summary: "Pre-merge self-review: this skill applied to its own current state (whole SKILL.md + all references/) via an isolated fresh dispatch, per its own Subagent-dispatch procedure. Verdict: WELL-FORMED-NOT-MATURE. The dispatch had no Bash tool and hedged references-well-formed as unconfirmed; a direct run in this session confirmed 46/46 PASS including references-well-formed (48 entries), resolving that hedge with real evidence."
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/537"
+      summary: "Self-review gap 1/3, not blocking, deferred: Dimension 2 watch-point -- SKILL.md sits at 497/500 lines, only a few lines of margin before the next edit trips the body-length shape check."
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/537"
+      summary: "Self-review gap 2/3, not blocking, deferred: Confidentiality awareness fires on this skill's own content -- Procedure step 5's mandatory verbatim quoting of a reviewed target's evidence has no stated safeguard against reproducing a credential/PII/confidential detail if the target happens to contain one. PROPOSE_CONFIDENTIALITY_SAFEGUARD, self-applied."
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/537"
+      summary: "Self-review gap 3/3, not blocking, pre-existing (not introduced by this PR): dimensions 5, 7, 9 gaps -- the common-case dispatch mandatorily reads three files, check_skill_shape.py's module docstring may be stale on spec.references' real shape, and the procedure has no tier-specific scaffolding despite a Broad capability declaration."
   skillDependencies:
     requires: []
     relatedTo:
