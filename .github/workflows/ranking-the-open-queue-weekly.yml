@@ -79,6 +79,14 @@ jobs:
           # new secret is needed. See
           # docs/superpowers/specs/2026-07-28-ranking-the-open-queue-github-actions-routine.md
           # for the full incident record.
+          #
+          # Image pinned by digest, not a mutable tag: this container
+          # receives GITHUB_TOKEN, so an upstream retag of a floating tag
+          # could silently swap in different code handling that
+          # credential. Digest resolved from the v0.20.1 release tag via
+          # the GHCR anonymous-token API (`docker-content-digest` response
+          # header) -- update deliberately by re-resolving a newer release
+          # tag's digest, not by switching back to a tag.
           claude_args: |
-            --mcp-config '{"mcpServers": {"github": {"command": "docker", "args": ["run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "ghcr.io/github/github-mcp-server"], "env": {"GITHUB_PERSONAL_ACCESS_TOKEN": "${{ secrets.GITHUB_TOKEN }}"}}}}'
+            --mcp-config '{"mcpServers": {"github": {"command": "docker", "args": ["run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "ghcr.io/github/github-mcp-server@sha256:d909564772c4afc7ed08831c1fce367c051d82f8602abc4c1f033cdfc4a89e68"], "env": {"GITHUB_PERSONAL_ACCESS_TOKEN": "${{ secrets.GITHUB_TOKEN }}"}}}}'
             --allowedTools mcp__github__list_issues,mcp__github__search_issues,mcp__github__list_pull_requests
