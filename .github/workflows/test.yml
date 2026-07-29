@@ -35,9 +35,24 @@ jobs:
           enable-cache: true
 
       - name: Run pytest
-        run: uv run --frozen pytest --cov-report=xml
+        run: uv run --frozen pytest --cov-report=xml --cov-report=json
 
+      # Issue #536: evals/scripts/*.py had no minimum-coverage floor, so a
+      # file's CLI surface could ship untested (PR #512's own retrospective
+      # finding) without CI ever flagging it. coverage.json already exists
+      # from the pytest step above; this only asserts a threshold on what
+      # it measured.
+      - name: Enforce evals/scripts coverage minimum
+        run: uv run --frozen python3 .github/scripts/gate_evals_scripts_coverage.py --coverage-json coverage.json
+
+      # if: always() -- the coverage-minimum step above can fail (exit 1)
+      # on a real coverage regression without pytest itself failing; the
+      # coverage.xml pytest already produced is still valid and worth
+      # uploading so a reviewer can see the diff-coverage report on
+      # exactly the run where it matters most, instead of the upload
+      # silently being skipped along with every other later step.
       - name: Upload coverage to Codecov
+        if: always()
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f  # v7.0.0
         with:
           token: ${{ secrets.CODECOV_TOKEN }}

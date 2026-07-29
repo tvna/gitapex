@@ -37,20 +37,21 @@ text for a `"dimension N"` or axis-name citation.
 runs it against this real corpus and fails CI if any dimension it reports
 uncovered is not named right here -- so this list can't silently drift from
 the real corpus the way the "dimension 12" mislabel above did. Current
-output: 12/19 dimensions and 4/4 axes cited; **dimensions 9, 11, 12, 13, 14,
-16, and 17 remain uncovered**, not exhaustive by design -- no fixture's
+output: 12/20 dimensions and 4/4 axes cited; **dimensions 9, 11, 12, 13, 14,
+16, 17, and 20 remain uncovered**, not exhaustive by design -- no fixture's
 scenario naturally exercises known-limitation disclosure (9), deployment-
 mode portability (11), duplication/drift risk (12), side-effect independence
 from the deny decision (13), structured-output hygiene (14), runtime
-tamper-detection (16), or discoverability (17) without inventing an
-artificial scenario just to name-check a dimension number, and several Stop
-boundaries also remain uncovered where no safe verbatim assertion could be
-found without risking a paraphrase-drift false-fail; see the fixtures' own
-`description` fields for what each one actually pins down. The tool is
-citation-based, not semantic (its own module docstring names this
-explicitly), so a future fixture could exercise one of these seven
-substantively without literally writing its number -- rerun the script
-before trusting this list stale.
+tamper-detection (16), discoverability (17), or bidirectional correspondence
+checking (20, added per issue #506's own deferred follow-up and #536's
+retrospective closing it out) without inventing an artificial scenario just
+to name-check a dimension number, and several Stop boundaries also remain
+uncovered where no safe verbatim assertion could be found without risking a
+paraphrase-drift false-fail; see the fixtures' own `description` fields for
+what each one actually pins down. The tool is citation-based, not semantic
+(its own module docstring names this explicitly), so a future fixture could
+exercise one of these eight substantively without literally writing its
+number -- rerun the script before trusting this list stale.
 
 No no-skill baseline and no model tier have been run against this corpus:
 the environment that authored it has neither `waza` nor `nix` installed, the
@@ -58,4 +59,4 @@ same constraint the "Cross-model matrix scaffolding" section of
 `docs/skill-eval-status.md` already discloses for the whole repository. This
 is scaffolding, not a measurement -- a credentialed dispatch (or an
 environment with `waza` available) is still needed to produce the first real
-run. Refs #435, #507, #508, #511.
+run. Refs #435, #506, #507, #508, #511, #536.

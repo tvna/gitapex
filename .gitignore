@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 .coverage
 coverage.xml
+coverage.json
 
 # APM dependencies: apm_modules/ is apm's package cache; the .claude/ entries are
 # what `apm install` deploys from apm.lock.yaml (obra/superpowers, tvna/clairvoyance)
