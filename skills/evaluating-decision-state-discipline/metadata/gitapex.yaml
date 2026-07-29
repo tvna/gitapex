@@ -4,7 +4,7 @@ metadata:
   name: evaluating-decision-state-discipline
 spec:
   portability: Mixed
-  capabilityAssumption: Adaptive
+  capabilityAssumption: Broad
   references:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/547"
@@ -38,6 +38,9 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/576"
       summary: "Second round: added references/criteria.md -- the five criteria's full definitions (moved from SKILL.md) merged with verified primary-source grounding, mirroring rubric.md's own SKILL.md/references split. An earlier draft split criteria (SKILL.md) from disconnected citations (primary-sources.md); review found that split itself exhibited the decision-state-discipline thinness this skill exists to catch. Control-theory vocabulary, rejected per issue 547, was not reintroduced."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/576"
+      summary: "capabilityAssumption corrected from Adaptive to Broad -- Adaptive was never intentional (the requester's own call); matches evaluating-skill-quality's own declaration, the skill whose SKILL.md/references split this skill mirrors. Frontmatter description rewritten to add an explicit 'Use when' invocation-trigger clause, per a requester finding that when to invoke and what is graded were not explicit enough."
   skillDependencies:
     requires:
       - evaluating-deterministic-gate-quality

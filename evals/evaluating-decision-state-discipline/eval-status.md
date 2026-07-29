@@ -187,9 +187,40 @@ confirmed present in exactly one file.
 
 Refs #576.
 
+## Fourth round (#576): capabilityAssumption correction, description rewrite
+
+Two further requester findings, independent of the structural criticism
+above. First: `spec.capabilityAssumption: Adaptive` was never an
+intentional declaration for this skill -- corrected to `Broad`, matching
+`evaluating-skill-quality`'s own declaration (the skill whose
+`SKILL.md`/`references` split this skill mirrors). This resolves the
+round-3 tension at its root: `Broad` does not carry Adaptive's own
+stricter dimension-5 rule (body must complete the common case alone), so
+`SKILL.md` keeping full criterion definitions inline (round 3's fix)
+remains correct and sufficient, but would also have been valid to shrink
+further under `Broad` -- kept as-is rather than re-shrinking again,
+since a richer self-sufficient body is never a defect, only optional
+under the corrected declaration. Second: the frontmatter `description`
+did not state an explicit invocation trigger (a "Use when" clause) the
+way `evaluating-skill-quality`'s own description does -- rewritten to add
+one ("Use when a gate, CI check, or hook's deny/allow decision reads such
+persisted state, once evaluating-deterministic-gate-quality's Mechanism-
+fit test has concluded the artifact is gate material"), keeping the five
+named points and sibling/distinct disambiguation.
+
+Re-verified: `check_skill_shape.py` 40/40 (`capability-assumption-
+declared`: `Broad`; `description-length`: 1015/1024 chars;
+`description-yaml-safe`: safe after replacing two colon-space sequences
+introduced by the rewrite with the repository's own `--` convention, a
+real YAML-plain-scalar-breaking pattern the shape checker caught before
+this ever reached CI), full suite 1368 passed, ASCII-only, no
+reintroduced control-theory vocabulary.
+
+Refs #576.
+
 ## Open follow-up
 
-A fourth, post-fix confirmation round of both `evaluating-skill-quality`
+A fifth, post-fix confirmation round of both `evaluating-skill-quality`
 and `battle-testing-a-skill` against this round's fixes has not yet run
 -- tracked in `metadata/gitapex.yaml`'s own `lifecycle.experimental.reason`
 rather than assumed clean from the fixes alone. Every `battle-testing-a-
@@ -197,7 +228,7 @@ skill` dispatch against this skill so far has flagged that its result is
 single-trial and context-contaminated (no isolated subagent-dispatch tool
 was available to it) rather than the full three-trial isolated protocol
 that skill's own Procedure calls for; a genuinely isolated re-run is
-still outstanding. The non-blocking Blind-spot finding above (one shared
-state source feeding multiple decisions with potentially conflicting
-discipline requirements) also remains unaddressed, named for a future
-round rather than silently dropped.
+still outstanding. The non-blocking Blind-spot finding from the third
+round (one shared state source feeding multiple decisions with
+potentially conflicting discipline requirements) also remains
+unaddressed, named for a future round rather than silently dropped.
