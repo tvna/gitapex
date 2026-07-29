@@ -764,17 +764,27 @@ Stop-boundary prohibition naming the risk only to forbid it), reads,
 derives, logs, transmits, or otherwise handles material in the
 sensitive-data category: secrets, credentials, API keys/tokens, PII,
 payment/financial account data (credit card or other payment-card
-numbers, bank account or routing numbers), material non-public business
-information (undisclosed financials, M&A or deal terms, or other
-information whose premature or selective disclosure could be
-insider-trading- or market-abuse-adjacent), or private/internal-only
-data generally. Payment-card data and material non-public business
-information are each named explicitly, not left to an implicit reading
-of PII or "private data," because each carries its own distinct
-regulatory regime (PCI-DSS; securities/insider-trading law) a reviewer
-reading the general categories narrowly could otherwise miss. A skill
-whose procedure never touches such material does not select this axis
-merely for mentioning the category in passing.
+numbers, bank account or routing numbers), confidential or
+competitively-sensitive business information, or private/internal-only
+data generally. The business-information bucket is deliberately not
+scoped to one harm mechanism: it covers material non-public information
+whose premature or selective disclosure could be insider-trading- or
+market-abuse-adjacent (undisclosed financials, M&A or deal terms) *and*
+trade-secret-type information whose disclosure would harm competitive
+position on its own terms, independent of any securities-law exposure --
+cost structure, supplier pricing, or unreleased product/strategy plans
+are examples, not an exhaustive list, and apply equally to a private
+company with no securities-law angle at all. Payment-card data and this
+business-information bucket are each named explicitly, not left to an
+implicit reading of PII or "private data," because each carries its own
+distinct regulatory or harm regime (PCI-DSS; securities/insider-trading
+law; trade-secret law and ordinary competitive harm) a reviewer reading
+the general categories narrowly could otherwise miss -- but the intent is
+two named anchors illustrating the category, not a closed enumeration:
+further named examples should extend this same paragraph's reasoning
+rather than accumulate as additional standalone bullets each time a new
+instance surfaces. A skill whose procedure never touches such material
+does not select this axis merely for mentioning the category in passing.
 
 Report exactly one state:
 

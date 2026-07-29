@@ -21,9 +21,10 @@ base-plus-cohesion partition with a scoped 2:6:2 compatibility addition, a
 1:1:0 reference-load-precision addition (gitapex#477), a 2:2:1
 opus5-prompting-fit addition (gitapex#495), a 1:1:0
 confidentiality-awareness addition (gitapex#537), a 0:1:0
-payment-data sub-category addition (gitapex#537 follow-up), and a 0:1:0
+payment-data sub-category addition (gitapex#537 follow-up), a 0:1:0
 MNPI/insider-trading-adjacent sub-category addition (gitapex#537
-follow-up), for a resulting 23:26:12 partition. This is named explicitly
+follow-up), and a 0:1:0 trade-secret/competitive-harm broadening (gitapex#537
+follow-up), for a resulting 23:27:12 partition. This is named explicitly
 as a deviation from the 2:1:7 default. The
 honest minimal groundwork, per that same worked example, is a larger
 fixture corpus over time, not a smaller gate.
@@ -73,7 +74,8 @@ fixture corpus over time, not a smaller gate.
   `opus5-unbounded-subagent-generalizes.yaml`,
   `confidentiality-awareness-selection.yaml`,
   `confidentiality-awareness-payment-data-selection.yaml`,
-  `confidentiality-awareness-mnpi-selection.yaml`.
+  `confidentiality-awareness-mnpi-selection.yaml`,
+  `confidentiality-awareness-trade-secret-selection.yaml`.
 - **test** (read once, for a final report only, never to motivate or gate
   an edit): `guardrail.yaml`, `no-fabricated-violation.yaml`,
   `portability-classification.yaml`, `blind-spot-pass-not-silent.yaml`,
@@ -504,16 +506,67 @@ access restriction or embargo statement; unlike the PII/payment-data
 fixtures, this target handles no personal data at all, isolating the MNPI
 sub-category cleanly).
 
+**Gate result, same methodology, pre-edit pinned at `2e6de04`, one fresh
+dispatch per side against `confidentiality-awareness-mnpi-selection.yaml`:**
+
+| Fixture | Before | After |
+|---|---|---|
+| `confidentiality-awareness-mnpi-selection.yaml` | 1.000000 (fresh) | 1.000000 (fresh) |
+
+`score_contract.py --compare-to 1.000000`: `1.000000 REJECT` (tie at
+ceiling, the same shape as the payment-data follow-up immediately above).
+The *before* dispatch's own text names why: it explicitly noted "the
+rubric's own Confidentiality-awareness category list doesn't quite name
+[MNPI]... but functionally, this is the thing most wrong with the skill,"
+then generalized from the generic `private/internal-only data` bucket to
+the correct verdict anyway. **Kept anyway, REJECT disclosed, same
+disposition and reasoning as the payment-data entry above** -- not
+repeated in full here; the corpus-coverage argument, the cross-model
+Phase 1 evidence, and the near-zero cost all apply identically.
+
+**Pattern across both follow-ups so far:** two independent live trials
+(payment data, MNPI), two independent ties at the scorer's ceiling, both
+because this specific strong tier (Sonnet, high effort) already
+generalizes a narrow bucket correctly. This is becoming a standing,
+disclosed limitation of measuring precision-only wording edits against a
+single strong-tier live sample, not a new finding each time -- a
+weaker-tier or repeated-trial measurement (issue #500 Phase 2, not yet
+scheduled) remains the honest way to actually detect the gap these edits
+guard against, per the corpus-coverage reasoning already on record.
+
+**Third follow-up (gitapex#537, same issue): the business-information
+bucket broadened, not re-scoped a third time.** A further question (does
+the axis cover competitively-sensitive cost/pricing data that harms a
+business regardless of any securities-law exposure -- e.g. a private
+company with no insider-trading angle at all) exposed that the just-added
+MNPI wording was itself too narrowly scoped: its parenthetical named only
+"insider-trading- or market-abuse-adjacent" disclosure, which does not
+obviously cover ordinary trade-secret/competitive-harm data. Rather than
+add a third standalone named category (continuing an unbounded
+enumeration this rubric's own Dimension 2 conciseness discipline would
+flag as sprawl if a target skill did it), broadened the existing
+`material non-public business information` bullet into `confidential or
+competitively-sensitive business information`, explicitly covering both
+the insider-trading-adjacent harm mechanism and ordinary trade-secret/
+competitive-harm data (cost structure, supplier pricing, unreleased
+strategy) as two named anchors under one bucket, with an explicit note
+that these are illustrative, not an exhaustive enumeration.
+
+Added `confidentiality-awareness-trade-secret-selection.yaml`: a private
+company (no securities-law angle at all) emailing its own internal cost
+breakdown to an external supplier during a price negotiation --
+deliberately the sub-case the narrow MNPI wording's parenthetical did not
+name, to test the broadened wording against exactly the gap that
+motivated it, distinct from `confidentiality-awareness-mnpi-selection.yaml`'s
+publicly-traded/earnings framing.
+
 **Gate status: in progress, not yet a recorded KEEP/REJECT.** Live
-before/after isolated dispatches against the new fixture were started
-(same `claude -p` methodology, pre-edit pinned at `2e6de04`) but had not
-completed at the time this file was committed. Given the payment-data
-follow-up immediately above already scored a tie at the ceiling on its
-first live trial, a tie here would not be surprising and, per that same
-entry's reasoning, would not by itself argue for reverting the wording --
-this section will be replaced with the actual per-fixture scores and
-disposition once both dispatches finish, not assumed either way in the
-meantime.
+before/after isolated dispatches (pre-edit pinned at `754bb54`, the
+narrow-MNPI-wording commit) were started but had not completed at the
+time this file was committed. Given the pattern immediately above (two
+consecutive ties at the scorer's ceiling on this same strong tier), a
+third tie would not be surprising; this section will be replaced with the
+actual per-fixture scores and disposition once both dispatches finish.
 
 Future edits to this rubric should reuse this same split rather than
 re-deriving one per iteration, so the selection split stays genuinely
