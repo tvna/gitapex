@@ -6,15 +6,35 @@ structure -- and file-to-file boundaries -- into one blob, producing false
 positives in gate_provenance_disclosure.py's own paragraph-scoped check.
 
 A fresh adversarial review (before this fix ever merged) found the first
-cut of this fix left one more instance of the identical defect class:
-two non-adjacent hunks within the *same* file also collapsed into one
-paragraph, since only file boundaries forced a separator, not hunk
-boundaries. `test_multiple_hunks_in_same_file_get_a_separator` and the
-hunk-boundary branch in `extract_diff_added_lines.py` close that gap.
+cut of this fix left one more instance of the identical defect class: two
+non-adjacent hunks within the *same* file also collapsed into one
+paragraph under `-U0`, since only file boundaries forced a separator, not
+hunk boundaries. That review's own suggested remedy -- force a separator
+at every hunk-to-hunk transition -- was itself disproven by a second,
+independent review (this repo's mandatory Step 8, via `/code-review`):
+`-U0` shows zero context, so two edits inside the *same* real paragraph,
+separated only by an untouched non-blank line, are ALSO reported as two
+separate hunks, indistinguishable under zero context from two edits in
+genuinely different paragraphs. Forcing a separator at every hunk boundary
+therefore introduced a false NEGATIVE (a real cue-combination paragraph
+silently split into two innocuous halves, passing CI) -- more dangerous
+for a disclosure gate than the false positive #552 originally reported.
+
+The shipped fix instead requests full diff context (`git diff -U1000000`,
+wired in `provenance-disclosure-gate.yml`) and detects real paragraph
+breaks from actual blank context/added lines, never from hunk boundaries
+alone. `test_same_file_two_edits_with_a_blank_line_between_them_get_a_
+separator` and `test_same_file_two_edits_with_no_blank_line_between_them_
+are_joined_without_a_separator` cover the two directions of that fix
+directly; `test_multi_hunk_without_context_is_joined_without_a_forced_
+separator` documents the module's own named, deliberately accepted
+residual limitation (a file so large it still splits into multiple hunks
+even under `-U1000000`).
 """
 
 from __future__ import annotations
 
+import io
 import re
 
 import extract_diff_added_lines as extractor
@@ -71,31 +91,6 @@ index 4444444..0000000
 -This line was removed, not added.
 """
 
-_MULTI_HUNK_SAME_FILE_DIFF = """\
-diff --git a/docs/crosshunk.md b/docs/crosshunk.md
-index 4444444..5555555 100644
---- a/docs/crosshunk.md
-+++ b/docs/crosshunk.md
-@@ -3 +3 @@
--Old placeholder line near the top of the file.
-+This hunk's own edit, unrelated to the second one below.
-@@ -13 +13 @@
--Old placeholder line near the bottom of the file.
-+A second, physically distant edit in the very same file.
-"""
-
-_MULTI_HUNK_SECOND_HUNK_PURE_DELETION_DIFF = """\
-diff --git a/docs/e.md b/docs/e.md
-index 6666666..7777777 100644
---- a/docs/e.md
-+++ b/docs/e.md
-@@ -1 +1 @@
--Old first line.
-+New first line, the only added content in this file.
-@@ -9 +8,0 @@
--A line deleted with no replacement -- this hunk adds nothing.
-"""
-
 _THREE_FILE_DIFF_WITH_RENAME = """\
 diff --git a/docs/old-name.md b/docs/new-name.md
 similarity index 60%
@@ -109,11 +104,117 @@ index 8888888..9999999 100644
 +Rewritten first line after the rename.
 """
 
+# Full-context (-U1000000) single-hunk fixture: two edited lines with only
+# an untouched, NON-blank connecting line between them -- the exact shape
+# the superseded hunk-boundary fix (f6bcf84) would have wrongly split into
+# two paragraphs had it seen this as two separate -U0 hunks. No real blank
+# line exists between the two edits, so no separator must be inserted.
+# A real git-diff blank *context* line is a single space character with
+# nothing following -- built by concatenation (not a triple-quoted
+# literal) so that single space is never silently trimmed as trailing
+# whitespace.
+_SAME_FILE_TWO_EDITS_NO_BLANK_BETWEEN_DIFF = (
+    "diff --git a/docs/samepara.md b/docs/samepara.md\n"
+    "index 4444444..5555555 100644\n"
+    "--- a/docs/samepara.md\n"
+    "+++ b/docs/samepara.md\n"
+    "@@ -1,7 +1,7 @@\n"
+    " # Title\n"
+    " \n"
+    "-Old first edit line.\n"
+    "+New first edit line, part of one continuous paragraph.\n"
+    " Untouched connecting line, same paragraph.\n"
+    "-Old second edit line.\n"
+    "+New second edit line, still the same paragraph as above.\n"
+    " \n"
+    " Footer paragraph.\n"
+)
 
-def _split_paragraphs(text: str) -> list[str]:
-    """Match gate_provenance_disclosure's own `_paragraphs()` blank-line
-    split, without reaching into that module's private function."""
-    return [p for p in re.split(r"\n\s*\n", text) if p.strip()]
+# Full-context (-U1000000) single-hunk fixture: two edited lines with a
+# real blank line between them -- a genuine paragraph break the extractor
+# must preserve as a separator.
+_SAME_FILE_TWO_EDITS_WITH_BLANK_BETWEEN_DIFF = (
+    "diff --git a/docs/twopara.md b/docs/twopara.md\n"
+    "index 6666666..7777777 100644\n"
+    "--- a/docs/twopara.md\n"
+    "+++ b/docs/twopara.md\n"
+    "@@ -1,5 +1,5 @@\n"
+    " # Title\n"
+    " \n"
+    "-Old paragraph A line.\n"
+    "+New paragraph A line.\n"
+    " \n"
+    "-Old paragraph B line.\n"
+    "+New paragraph B line.\n"
+)
+
+# No-context (-U0-style) fixture representing the module's own named,
+# deliberately accepted residual limitation: a file so large that git
+# still splits it into more than one hunk even under a large -U value.
+# The elided gap between the two hunks is not visible to this script at
+# all, so no separator is forced there -- this is a documented trade-off,
+# not a regression.
+_MULTI_HUNK_NO_CONTEXT_BETWEEN_DIFF = """\
+diff --git a/docs/hugefile.md b/docs/hugefile.md
+index 8888888..9999999 100644
+--- a/docs/hugefile.md
++++ b/docs/hugefile.md
+@@ -3 +3 @@
+-Old placeholder line near the top of the file.
++This hunk's own edit, unrelated to the second one below.
+@@ -13 +13 @@
+-Old placeholder line near the bottom of the file.
++A second, physically distant edit in the very same file.
+"""
+
+_REGRESSION_TWO_FILE_DIFF = """\
+diff --git a/docs/one.md b/docs/one.md
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/docs/one.md
+@@ -0,0 +1,3 @@
++# Notes
++
++This confirms by reading the source -- never by the absence of a
++mention in its documentation -- that state is read correctly.
+diff --git a/docs/two.md b/docs/two.md
+new file mode 100644
+index 0000000..2222222
+--- /dev/null
++++ b/docs/two.md
+@@ -0,0 +1,2 @@
++## Subagent dispatch
++
++Run this skill's Procedure inside a fresh, isolated subagent dispatch.
+"""
+
+# A single "+" line whose own text contains a literal, embedded carriage
+# return -- never emitted by real `git diff` as a line *terminator* (which
+# is strictly "\n"), but reachable as ordinary content inside an added
+# line. Built by concatenation (not a triple-quoted literal) so the
+# embedded "\r" is unambiguous in this source file.
+_EMBEDDED_CR_DIFF = (
+    "diff --git a/docs/cr.md b/docs/cr.md\n"
+    "new file mode 100644\n"
+    "index 0000000..1234567\n"
+    "--- /dev/null\n"
+    "+++ b/docs/cr.md\n"
+    "@@ -0,0 +1,1 @@\n"
+    "+Before the embedded CR\rafter the embedded CR, same added line.\n"
+)
+
+
+class _FakeStdin:
+    """Minimal stand-in for `sys.stdin` exposing only the `.buffer.read()`
+    surface `main()` actually uses. A plain `io.StringIO` (the pre-rewrite
+    fixture's stand-in) has no `.buffer` attribute at all and would raise
+    `AttributeError` against the rewritten `main()`, which now reads raw
+    bytes and decodes them itself instead of relying on the platform's
+    default text-mode decoding."""
+
+    def __init__(self, data: bytes) -> None:
+        self.buffer = io.BytesIO(data)
 
 
 def test_single_file_preserves_blank_lines():
@@ -123,12 +224,12 @@ def test_single_file_preserves_blank_lines():
 
 def test_corpus_has_blank_line_between_paragraphs():
     corpus = extractor.build_added_corpus(_SINGLE_FILE_DIFF)
-    assert _split_paragraphs(corpus) == ["# Title", "Paragraph one.", "Paragraph two."]
+    assert gate._paragraphs(corpus) == ["# Title", "Paragraph one.", "Paragraph two."]
 
 
 def test_two_files_get_a_separator_even_when_first_file_ends_non_blank():
     corpus = extractor.build_added_corpus(_TWO_FILE_DIFF)
-    assert _split_paragraphs(corpus) == [
+    assert gate._paragraphs(corpus) == [
         "File A's own last line, not blank.",
         "File B's own first line.",
     ]
@@ -159,68 +260,78 @@ def test_preamble_before_first_diff_git_line_is_ignored():
     ]
 
 
-def test_multiple_hunks_in_same_file_get_a_separator():
-    """Two edits ~10 lines apart in the same file, with an untouched
-    paragraph physically between them -- must not collapse into one
-    paragraph just because both belong to the same file."""
-    corpus = extractor.build_added_corpus(_MULTI_HUNK_SAME_FILE_DIFF)
-    assert _split_paragraphs(corpus) == [
-        "This hunk's own edit, unrelated to the second one below.",
-        "A second, physically distant edit in the very same file.",
-    ]
-    assert gate.find_offending_paragraphs(corpus) == []
-
-
-def test_hunk_contributing_nothing_does_not_force_a_stray_separator():
-    """A pure-deletion hunk between two content-bearing hunks (or, as
-    here, after the only content-bearing one) must not leave a dangling
-    blank-line artifact -- the separator is only inserted ahead of a
-    *later* hunk that goes on to contribute its own content, and an
-    already-blank tail is never doubled."""
-    files = extractor.extract_added_lines_by_file(
-        _MULTI_HUNK_SECOND_HUNK_PURE_DELETION_DIFF
-    )
-    assert files == [["New first line, the only added content in this file."]]
-
-
 def test_rename_with_rewrite_and_second_file_both_extract_correctly():
     corpus = extractor.build_added_corpus(_THREE_FILE_DIFF_WITH_RENAME)
-    assert _split_paragraphs(corpus) == ["Rewritten first line after the rename."]
+    assert gate._paragraphs(corpus) == ["Rewritten first line after the rename."]
 
 
-def _old_buggy_extraction(diff_text: str) -> str:
-    """Reimplementation of the pre-#552 bash pipeline
-    (`grep -E '^\\+[^+]' | sed 's/^\\+//'`), kept only to demonstrate the
-    contrast the regression test below relies on -- not used by the
-    shipped fix."""
-    lines = []
-    for line in diff_text.splitlines():
-        if re.match(r"^\+[^+]", line):
-            lines.append(line[1:])
-    return "\n".join(lines)
+def test_same_file_two_edits_with_no_blank_line_between_them_are_joined_without_a_separator():
+    """The core of the false-negative fix: two edits in the same real
+    paragraph, separated only by an untouched non-blank connecting line,
+    must NOT get a separator forced between them -- unlike the superseded
+    hunk-boundary-based fix, which could not tell this case apart from two
+    edits in genuinely different paragraphs."""
+    files = extractor.extract_added_lines_by_file(_SAME_FILE_TWO_EDITS_NO_BLANK_BETWEEN_DIFF)
+    assert files == [
+        [
+            "New first edit line, part of one continuous paragraph.",
+            "New second edit line, still the same paragraph as above.",
+        ]
+    ]
+    corpus = extractor.build_added_corpus(_SAME_FILE_TWO_EDITS_NO_BLANK_BETWEEN_DIFF)
+    assert gate._paragraphs(corpus) == [
+        "New first edit line, part of one continuous paragraph.\n"
+        "New second edit line, still the same paragraph as above."
+    ]
 
 
-_REGRESSION_TWO_FILE_DIFF = """\
-diff --git a/docs/one.md b/docs/one.md
-new file mode 100644
-index 0000000..1111111
---- /dev/null
-+++ b/docs/one.md
-@@ -0,0 +1,3 @@
-+# Notes
-+
-+This confirms by reading the source -- never by the absence of a
-+mention in its documentation -- that state is read correctly.
-diff --git a/docs/two.md b/docs/two.md
-new file mode 100644
-index 0000000..2222222
---- /dev/null
-+++ b/docs/two.md
-@@ -0,0 +1,2 @@
-+## Subagent dispatch
-+
-+Run this skill's Procedure inside a fresh, isolated subagent dispatch.
-"""
+def test_same_file_two_edits_with_a_blank_line_between_them_get_a_separator():
+    """The other direction of the same fix: a genuine blank line between
+    two edits is real evidence of a paragraph break and must be preserved,
+    even though both edits are in the same file and the same (full-context)
+    hunk."""
+    files = extractor.extract_added_lines_by_file(_SAME_FILE_TWO_EDITS_WITH_BLANK_BETWEEN_DIFF)
+    assert files == [["New paragraph A line.", "", "New paragraph B line."]]
+    corpus = extractor.build_added_corpus(_SAME_FILE_TWO_EDITS_WITH_BLANK_BETWEEN_DIFF)
+    assert gate._paragraphs(corpus) == ["New paragraph A line.", "New paragraph B line."]
+
+
+def test_multi_hunk_without_context_is_joined_without_a_forced_separator():
+    """Known, deliberately accepted limitation (see the module docstring):
+    if a file's total line count exceeds the requested context depth, git
+    can still split it into more than one hunk, and the gap git elides is
+    not visible to this script at all. Unlike the superseded fix, which
+    forced a separator at every hunk boundary and thereby caused the
+    false-negative bug this redesign fixes, the current design makes no
+    claim about content it cannot see -- it joins the two hunks' added
+    lines with no separator, accepting a theoretical miss on an
+    extreme-scale file rather than asserting an unverified break."""
+    files = extractor.extract_added_lines_by_file(_MULTI_HUNK_NO_CONTEXT_BETWEEN_DIFF)
+    assert files == [
+        [
+            "This hunk's own edit, unrelated to the second one below.",
+            "A second, physically distant edit in the very same file.",
+        ]
+    ]
+
+
+def test_embedded_carriage_return_in_added_line_is_preserved_not_truncated():
+    """`str.splitlines()` splits on more terminators than plain "\\n" --
+    a bare \\r, \\v, \\f, U+0085, U+2028, and U+2029 among them -- none of
+    which `git diff` itself ever emits as a line *terminator*, but any of
+    which can appear embedded inside a real added line's own text. The
+    superseded splitlines()-based parse would have silently shredded this
+    single "+" line into two at the embedded \\r and dropped everything
+    after it; explicit "\\n"-splitting must keep it intact."""
+    whole_added_line = "+Before the embedded CR\rafter the embedded CR, same added line."
+    assert whole_added_line not in _EMBEDDED_CR_DIFF.splitlines(), (
+        "this fixture must actually exercise the splitlines()-vs-split('\\n') "
+        "gap it claims to -- if splitlines() stops over-splitting on a bare "
+        "\\r, this fixture no longer demonstrates the pitfall it names"
+    )
+    assert whole_added_line in _EMBEDDED_CR_DIFF.split("\n")
+    files = extractor.extract_added_lines_by_file(_EMBEDDED_CR_DIFF)
+    assert files == [["Before the embedded CR\rafter the embedded CR, same added line."]]
 
 
 def test_regression_multi_file_addition_no_longer_false_positives():
@@ -242,10 +353,20 @@ def test_regression_multi_file_addition_no_longer_false_positives():
     assert gate.find_offending_paragraphs(new_corpus) == []
 
 
-def test_main_reads_stdin_and_writes_corpus(monkeypatch, capsys):
-    import io
+def _old_buggy_extraction(diff_text: str) -> str:
+    """Reimplementation of the pre-#552 bash pipeline
+    (`grep -E '^\\+[^+]' | sed 's/^\\+//'`), kept only to demonstrate the
+    contrast the regression test above relies on -- not used by the
+    shipped fix."""
+    lines = []
+    for line in diff_text.splitlines():
+        if re.match(r"^\+[^+]", line):
+            lines.append(line[1:])
+    return "\n".join(lines)
 
-    monkeypatch.setattr("sys.stdin", io.StringIO(_SINGLE_FILE_DIFF))
+
+def test_main_reads_stdin_and_writes_corpus(monkeypatch, capsys):
+    monkeypatch.setattr("sys.stdin", _FakeStdin(_SINGLE_FILE_DIFF.encode("utf-8")))
     exit_code = extractor.main()
     assert exit_code == 0
     out = capsys.readouterr().out
@@ -254,9 +375,31 @@ def test_main_reads_stdin_and_writes_corpus(monkeypatch, capsys):
 
 
 def test_main_empty_diff_writes_nothing(monkeypatch, capsys):
-    import io
-
-    monkeypatch.setattr("sys.stdin", io.StringIO(""))
+    monkeypatch.setattr("sys.stdin", _FakeStdin(b""))
     exit_code = extractor.main()
     assert exit_code == 0
     assert capsys.readouterr().out == ""
+
+
+def test_main_replaces_invalid_utf8_bytes_instead_of_crashing(monkeypatch, capsys):
+    """`main()` now reads stdin as bytes and decodes with an explicit
+    `errors="replace"` policy, rather than relying on the platform/
+    locale's own default text-mode decoding -- which would either raise an
+    uncaught UnicodeDecodeError on a real but non-UTF-8 byte, or silently
+    pass through an unpaired surrogate on a surrogateescape locale. A
+    single invalid byte inside an otherwise well-formed added line must
+    become U+FFFD, not a crash and not silent corruption."""
+    diff_bytes = (
+        b"diff --git a/docs/bad.md b/docs/bad.md\n"
+        b"new file mode 100644\n"
+        b"index 0000000..1234567\n"
+        b"--- /dev/null\n"
+        b"+++ b/docs/bad.md\n"
+        b"@@ -0,0 +1,1 @@\n"
+        b"+Invalid byte follows: \xff end of line.\n"
+    )
+    monkeypatch.setattr("sys.stdin", _FakeStdin(diff_bytes))
+    exit_code = extractor.main()
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert "Invalid byte follows: " + "\ufffd" + " end of line." in out
