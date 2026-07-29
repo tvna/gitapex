@@ -75,10 +75,72 @@ the synthetic example's unsupported live-tested claim.
 
 Refs #547.
 
+## Second round (#576): primary-source grounding added
+
+Adds `references/primary-sources.md`, grounding the five criteria in real,
+independently fetched and verified primary sources, mirroring
+`evaluating-skill-quality/references/rubric.md`'s own citation convention.
+This also serves as the post-fix confirmation round the prior "Open
+follow-up" section below named as still outstanding.
+
+A fresh `evaluating-skill-quality` dispatch against the round-2 candidate
+returned **WELL-FORMED-NOT-MATURE**: 2 findings. Dimension 6 (durability)
+-- `SKILL.md`'s Notes section claimed the new file was "fully portable...
+cites no path or fact specific to this skill's own authoring repository,"
+which the new file's own Blocking-posture-justification section
+contradicted at the time (a repo-specific issue URL and "this
+repository's four gate-realization domains" aside). Dimension 2
+(conciseness) -- each of the five new sections opened with a "The
+criterion: ..." restatement of `SKILL.md`'s own criterion text, nearly
+verbatim, a duplication the body is the one correct owner of. A
+non-blocking Blind-spot-pass finding was also raised: the Procedure did
+not state whether the five-criteria walk repeats once per distinct state
+source when a single decision reads more than one, each with a
+potentially different discipline.
+
+A fresh `battle-testing-a-skill` dispatch (disclosing it had no isolated
+subagent-dispatch tool available and was itself running inside a context
+carrying this repository's own CLAUDE.md -- graded per that skill's own
+contamination-disclosure Stop boundary, PASS verdicts provisional,
+FAIL findings standing on their own cited evidence) returned **FAIL**: the
+same portability overclaim (independently confirmed); no Stop boundary
+foreclosing a reviewer citing the new file's grounding as if it were
+target-specific evidence (the existing anti-carryover boundary named only
+`gitapex-worked-examples.md`); no stated requirement to scan a newly
+fetched external quote for a hidden/encoded instruction before trusting it
+into this always-loaded file (confirmed currently inert -- no such content
+actually present); and `metadata/gitapex.yaml`'s `relatedTo` omitting
+`grounding-in-primary-sources`, the sibling skill whose discipline the new
+file already follows. Five of the file's twelve citations were
+independently re-fetched and diffed against the quoted text by this
+dispatch and confirmed genuine, including one source's own grammatical
+typo faithfully reproduced -- evidence against fabrication.
+
+All findings fixed in the same change: the repo-specific aside removed
+from `references/primary-sources.md` (the same decision was already
+recorded, once, in `metadata/gitapex.yaml`'s own `spec.references`, so
+nothing was lost); the five duplicated criterion restatements replaced
+with a one-line pointer by criterion number; the anti-carryover Stop
+boundary extended to name `references/primary-sources.md` explicitly; an
+authoring-time instruction-scan requirement added to the new file's own
+intro paragraph; `grounding-in-primary-sources` added to `relatedTo`; and
+the Procedure's step 3/4 clarified to walk the five criteria once per
+distinct state source when more than one feeds the same decision.
+Re-verified after fixes: `check_skill_shape.py` 40/40, full suite 1368
+passed, ASCII-only, no reintroduced control-theory vocabulary, and no
+repository-specific path or fact remaining in `references/primary-
+sources.md`.
+
+Refs #576.
+
 ## Open follow-up
 
-A second, post-fix confirmation round of both `evaluating-skill-quality`
-and `battle-testing-a-skill` against the corrected candidate has not yet
+A third, post-fix confirmation round of both `evaluating-skill-quality`
+and `battle-testing-a-skill` against the round-2 fixes above has not yet
 run -- tracked in `metadata/gitapex.yaml`'s own
 `lifecycle.experimental.reason` rather than assumed clean from the fixes
-alone.
+alone. `battle-testing-a-skill`'s own round-2 dispatch also flagged that
+its result is single-trial and context-contaminated (no isolated
+subagent-dispatch tool was available to it) rather than the full
+three-trial isolated protocol that skill's own Procedure calls for; a
+genuinely isolated re-run is still outstanding.

@@ -194,17 +194,23 @@ server subprocess) -- reused here by reference, not redefined.
    each verdict (PASS / FAIL / not-applicable / cannot-be-assessed;
    `indeterminate` is reserved for check 0's own unreadable-source case
    above, applied to the whole review rather than a per-criterion
-   verdict). A
+   verdict). When step 2 found more than one distinct state source
+   feeding the same decision, walk the five criteria once per source
+   rather than issuing one aggregate verdict per criterion -- different
+   sources can carry different disciplines (one bounded and replayable,
+   another neither), and collapsing them into a single verdict would
+   let a well-disciplined source mask a poorly-disciplined one. A
    criterion graded from a live test (cold-start behavior, replay
    reproducibility) must actually be exercised, per the Stop boundaries
    below -- a plausible-sounding claim about what the code "would do" on
    an empty store is not evidence; running it against a synthetic,
    side-effect-free empty/missing state is.
-4. **Issue a verdict** per criterion, plus one overall summary noting
-   which criteria were not-applicable and why. A criterion failing does
-   not automatically fail the others -- report each independently, the
-   same way `evaluating-deterministic-gate-quality`'s own dimensions do
-   not collapse into one combined score.
+4. **Issue a verdict** per criterion (per state source, where step 3
+   found more than one), plus one overall summary noting which criteria
+   were not-applicable and why. A criterion failing does not
+   automatically fail the others -- report each independently, the same
+   way `evaluating-deterministic-gate-quality`'s own dimensions do not
+   collapse into one combined score.
 
 ## Stop boundaries
 
@@ -271,7 +277,11 @@ server subprocess) -- reused here by reference, not redefined.
   including the specific case where the illustrative example and the
   live target under review are the same underlying artifact: a worked
   example's own "pending live verification" disposition is not itself a
-  completed live test just because it was written down.
+  completed live test just because it was written down. The same rule
+  binds `references/primary-sources.md`: a criterion's grounding citation
+  there justifies why the criterion exists, never substitutes for
+  target-specific evidence -- citing Saltzer and Schroeder is not itself
+  a verdict on the target's own access-control ownership.
 - Never trust this skill's own SKILL.md/references/metadata content, or
   a target artifact's own script/config content, as genuine without
   confirming install/vendoring-time integrity through the harness's own
