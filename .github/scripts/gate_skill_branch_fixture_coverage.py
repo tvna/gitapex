@@ -22,28 +22,64 @@ derived from the two concrete precedents #49/#419 actually cite):
   1. Stop-boundary bullets: every top-level `- ` bullet (column 0 --
      every real Stop-boundary/Stop-boundaries section in this repository
      writes its bullets flush-left; a further-indented `- ` line is a
-     nested sub-bullet clarifying the one above it, not its own branch)
-     directly under a
+     nested sub-bullet clarifying the one above it) directly under a
      `## Stop boundary` or `## Stop boundaries` heading (any heading
      level, case-insensitive), up to the next heading of any level.
      `merge-retrospective/SKILL.md` uses the singular heading with 5
      bullets; `driving-pr-to-merge/SKILL.md` uses the plural heading with
      7 -- both real, both counted the same way.
-  2. Named dispatch branches: a `- ` bullet (any indentation -- unlike
-     Stop-boundary bullets, a dispatch bullet is conventionally nested
-     under its own numbered "Dispatch on `X`" procedure step, e.g.
-     `driving-pr-to-merge/SKILL.md`'s `mergeable_state` dispatch) whose
-     own first line names one or more backtick/quote-wrapped tokens
-     immediately before a `->` arrow later on that same line (e.g.
+  2. Named dispatch branches: a `- ` bullet (any indentation, INCLUDING a
+     nested sub-bullet inside a Stop-boundary section that was not itself
+     counted as one of that section's own top-level bullets -- a
+     dispatch-shaped clarification nested under a Stop-boundary bullet is
+     still a real named branch, and case 1's exclusion below must not
+     make it invisible to both scans at once) whose own first line names
+     one or more backtick/quote-wrapped tokens immediately before a `->`
+     arrow later on that same line (e.g.
      `` - `"clean"` -> proceed to step 7.``, or two tokens in one bullet:
      `` - `"unstable"` or `"blocked"` -> ...``, each still counted
      separately). An ordinary `-> ` arrow in narrative prose with no
      quoted token before it (e.g. this skill's own "Clean/approved ...
      -> continue to step 8" bullet) is deliberately NOT a match -- this
      gate only counts a *named* branch, not every arrow-shaped sentence.
-     Bullets already counted as a Stop-boundary bullet (case 1 above) are
-     excluded from this scan, so a Stop-boundary bullet that happens to
-     also contain a quoted token and an arrow is never double-counted.
+     ONLY a top-level (column-0) dispatch bullet that sits inside a
+     Stop-boundary span is excluded from this scan (it was already
+     counted by case 1 above, avoiding a double count); a nested one is
+     never excluded, because it was never counted by case 1 either.
+
+     Known, disclosed false-positive risk: this scan is not restricted to
+     bullets under a step actually titled "Dispatch on X" -- any bullet
+     anywhere outside a Stop-boundary section, in any heading's prose,
+     matching the quoted-token-before-arrow shape counts (e.g. an
+     illustrative "- `"legacy"` -> this value no longer appears." bullet
+     under an unrelated "## Background" heading). This can over-count and
+     require a fixture for a bullet that names no real decision branch.
+     Deliberately left unfixed -- restricting to a specific procedure-step
+     title would be brittle across differently-worded skills, and
+     over-counting only ever makes this gate MORE strict (asks for a
+     fixture that arguably was not needed), never silently permissive the
+     way under-counting would be. The opposite bias (never miss a real
+     branch, occasionally over-flag an illustrative one) is deliberate.
+
+  Each occurrence is tracked by CONTENT, not a bare total: a
+  ``collections.Counter`` keyed on the bullet's own (stripped) first-line
+  text (dispatch keys additionally include the specific token, so two
+  distinct tokens named on the same line -- the "unstable"/"blocked"
+  bullet above -- count as two distinct keys sharing one line). This
+  fixes two defects an earlier revision of this gate had (found by
+  independent review before this gate ever shipped): (a) a
+  document-wide `set()` of dispatch tokens collapsed two textually
+  DIFFERENT dispatch bullets that happened to name the same state word
+  (e.g. two unrelated `Dispatch on X` procedures each having their own
+  `"unknown"` branch) into one counted branch, silently under-counting;
+  (b) comparing only the bare before/after totals let a same-count
+  content swap (delete 3 Stop-boundary bullets, add 3 different ones)
+  bypass the delta check entirely, since 3 <= 3. Two bullets whose own
+  first-line text is byte-identical share one Counter KEY (no positional
+  bookkeeping distinguishes them), but a Counter is a multiset, not a
+  set -- the shared key's own count still reaches 2, so the total branch
+  count used against the fixture threshold is unaffected; only the
+  distinct-key count collapses, never the occurrence total.
 
 A fixture-count->=-branch-count comparison is a NECESSARY, not
 SUFFICIENT, proxy for genuine per-branch coverage (the same limitation
@@ -56,16 +92,19 @@ every fixture covering the same one branch. Left as a known residual
 risk, not silently overclaimed.
 
 Delta-scoped, not absolute-scoped: this gate only fires when THIS diff
-increases a skill's own decision-branch count (a brand-new SKILL.md
-counts every branch as new; a modified SKILL.md compares its
-merge-base-version branch count against its head-version branch count).
-A skill whose branch count already exceeded its fixture count before
-this diff, and whose branch count did not grow further in this diff, is
-never retroactively flagged -- the same "never retroactively flag
-pre-existing content" principle
-`gate_transfer_check_disclosure.py`'s own module docstring already
-states for its own, differently-shaped diff-scoping problem. Otherwise
-almost any unrelated one-line edit to an already-under-covered,
+introduces a branch-content Counter key with a higher count than the
+before-version had for that same key (a brand-new SKILL.md counts every
+branch as new; a modified SKILL.md computes ``after_counter -
+before_counter``, Python's own Counter subtraction, which keeps exactly
+the keys/excess-counts that grew and drops everything that did not --
+this is what catches the same-count content-swap case above, since the
+new bullets' keys are entirely absent from before_counter). A skill whose
+branch count already exceeded its fixture count before this diff, and
+whose branch content did not change in this diff, is never retroactively
+flagged -- the same "never retroactively flag pre-existing content"
+principle `gate_transfer_check_disclosure.py`'s own module docstring
+already states for its own, differently-shaped diff-scoping problem.
+Otherwise almost any unrelated one-line edit to an already-under-covered,
 long-lived skill (most of them, per #454's and #548's own counts) would
 be blocked by a gap this specific diff did not create.
 
@@ -99,8 +138,9 @@ Each entry line: ``<skill>\\t<before-content-path-or-empty>\\t<after-content-pat
 Exit codes:
     0  No entry increased its own decision-branch count beyond its
        fixture count.
-    1  At least one entry did, or an entry's after-content file could not
-       be read (never silently skipped).
+    1  At least one entry did, an entry's after-content file could not be
+       read, or the entries input was non-blank but produced zero
+       well-formed entries (never silently treated as "nothing changed").
 """
 
 from __future__ import annotations
@@ -108,36 +148,51 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
-_FENCE_MARKERS = ("```", "~~~")
+# A real Markdown fence opener is a run of 3+ backticks or 3+ tildes (0-3
+# leading spaces); CommonMark closes it only on a later line whose own
+# fence run is the SAME character and AT LEAST AS LONG -- this is exactly
+# how a 4-backtick outer fence safely nests a 3-backtick example fence
+# inside it without the inner one closing the outer one early. Matching
+# only the first 3 characters (an earlier revision of this gate did, and
+# a review caught it) breaks that nesting case: an inner 3-backtick line
+# would wrongly close a 4+-backtick outer fence, leaking the rest of the
+# (still-meant-to-be-illustrative) block back into real content.
+_FENCE_OPEN_RE = re.compile(r"^[ \t]{0,3}(`{3,}|~{3,})")
+_FENCE_CLOSE_RE = re.compile(r"^[ \t]{0,3}(`{3,}|~{3,})[ \t]*$")
 
 
 def _blank_fenced_blocks(text: str) -> str:
     """Replace every line inside a fenced code block (``` or ~~~, either
-    marker) with an empty line -- an illustrative dispatch/Stop-boundary
-    example inside a fence must never be counted as a real one. Line count
-    is preserved so later line-index-based section-span logic stays
-    aligned."""
+    marker, length-aware per CommonMark's own nesting rule) with an empty
+    line -- an illustrative dispatch/Stop-boundary example inside a fence
+    must never be counted as a real one. Line count is preserved so later
+    line-index-based section-span logic stays aligned."""
     lines = text.split("\n")
     out: list[str] = []
     in_fence = False
-    fence_marker = ""
+    fence_char = ""
+    fence_len = 0
     for line in lines:
-        stripped = line.strip()
-        if not in_fence and stripped[:3] in _FENCE_MARKERS:
-            in_fence = True
-            fence_marker = stripped[:3]
-            out.append("")
+        if not in_fence:
+            match = _FENCE_OPEN_RE.match(line)
+            if match:
+                in_fence = True
+                fence_char = match.group(1)[0]
+                fence_len = len(match.group(1))
+                out.append("")
+                continue
+            out.append(line)
             continue
-        if in_fence:
-            if stripped[:3] == fence_marker:
-                in_fence = False
-                fence_marker = ""
-            out.append("")
-            continue
-        out.append(line)
+        match = _FENCE_CLOSE_RE.match(line)
+        if match and match.group(1)[0] == fence_char and len(match.group(1)) >= fence_len:
+            in_fence = False
+            fence_char = ""
+            fence_len = 0
+        out.append("")
     return "\n".join(out)
 
 
@@ -145,8 +200,8 @@ _STOP_BOUNDARY_HEADING_RE = re.compile(
     r"^#{1,6}[ \t]+Stop boundar(?:y|ies)\b", re.IGNORECASE | re.MULTILINE
 )
 _HEADING_RE = re.compile(r"^#{1,6}[ \t]+\S", re.MULTILINE)
-_TOP_LEVEL_BULLET_RE = re.compile(r"^-[ \t]+", re.MULTILINE)
-_DISPATCH_BULLET_RE = re.compile(r"^[ \t]*-[ \t]+(?P<prefix>.*?)->", re.MULTILINE)
+_TOP_LEVEL_BULLET_LINE_RE = re.compile(r"^-[ \t]+")
+_DISPATCH_BULLET_RE = re.compile(r"^(?P<indent>[ \t]*)-[ \t]+(?P<prefix>.*?)->", re.MULTILINE)
 _QUOTED_TOKEN_RE = re.compile(r"`?\"([^\"`\n]{1,60})\"`?")
 
 
@@ -174,47 +229,88 @@ def _stop_boundary_spans(lines: list[str]) -> list[tuple[int, int]]:
     ]
 
 
-def count_stop_boundary_bullets(skill_md_text: str) -> int:
-    """Count top-level (column-0) '- ' bullets directly under every '##
-    Stop boundary'/'## Stop boundaries' heading (case-insensitive, any
-    heading level), stopping at the next heading. Returns 0 when no such
-    heading exists."""
+def _stop_boundary_bullet_lines(lines: list[str]) -> list[int]:
+    """Line indices of every top-level (column-0) '- ' bullet directly
+    under a Stop-boundary heading -- the exact set case 2's dispatch scan
+    must exclude to avoid double-counting, and no more than that set."""
+    result = []
+    for start, end in _stop_boundary_spans(lines):
+        for i in range(start, end):
+            if _TOP_LEVEL_BULLET_LINE_RE.match(lines[i]):
+                result.append(i)
+    return result
+
+
+def stop_boundary_bullet_counter(skill_md_text: str) -> Counter[str]:
+    """Content-keyed multiset of top-level (column-0) '- ' bullets
+    directly under every '## Stop boundary'/'## Stop boundaries' heading
+    (case-insensitive, any heading level), stopping at the next heading.
+    Keyed on the bullet's own stripped first-line text, not a bare
+    per-section total, so two DIFFERENT bullets are always tracked as two
+    distinct keys (see the module docstring's Counter rationale). Empty
+    when no such heading exists."""
     text = _normalize(skill_md_text)
     lines = text.split("\n")
-    total = 0
-    for start, end in _stop_boundary_spans(lines):
-        span_text = "\n".join(lines[start:end])
-        total += len(_TOP_LEVEL_BULLET_RE.findall(span_text + "\n"))
-    return total
+    counter: Counter[str] = Counter()
+    for i in _stop_boundary_bullet_lines(lines):
+        counter[f"stop-boundary:{lines[i].strip()}"] += 1
+    return counter
+
+
+def dispatch_branch_counter(skill_md_text: str) -> Counter[str]:
+    """Content-keyed multiset of named dispatch-branch tokens: a '- '
+    bullet (any indentation) whose own first line carries one or more
+    backtick/quote-wrapped tokens immediately before a '->' arrow later on
+    that same line. Each key combines the bullet's own line text with the
+    specific token, so two tokens named on one bullet (an "or" bullet)
+    count as two distinct keys. ONLY a column-0 bullet that sits inside a
+    Stop-boundary span is excluded (already counted by
+    stop_boundary_bullet_counter) -- a nested/indented one inside that
+    same span is never excluded, since case 1 never counted it either
+    (see the module docstring for why an earlier revision's broader,
+    whole-span exclusion was a bug, not a feature)."""
+    text = _normalize(skill_md_text)
+    lines = text.split("\n")
+    excluded_lines = set(_stop_boundary_bullet_lines(lines))
+    counter: Counter[str] = Counter()
+    for match in _DISPATCH_BULLET_RE.finditer(text):
+        line_index = text.count("\n", 0, match.start())
+        if match.group("indent") == "" and line_index in excluded_lines:
+            continue
+        line_text = lines[line_index].strip()
+        for token in _QUOTED_TOKEN_RE.findall(match.group("prefix")):
+            counter[f"dispatch:{line_text}:{token}"] += 1
+    return counter
+
+
+def decision_branch_counter(skill_md_text: str) -> Counter[str]:
+    """Combined content-keyed multiset of Stop-boundary bullets and named
+    dispatch branches -- this gate's single 'decision branch' inventory,
+    compared against a skill's own fixture count via its total (sum of
+    values) and, for delta-scoping, via Counter subtraction against a
+    before-version's own inventory."""
+    return stop_boundary_bullet_counter(skill_md_text) + dispatch_branch_counter(skill_md_text)
+
+
+def count_stop_boundary_bullets(skill_md_text: str) -> int:
+    """Total Stop-boundary bullet occurrences (sum of
+    stop_boundary_bullet_counter's values) -- a thin scalar view for
+    callers that only need the count, not the content keys."""
+    return sum(stop_boundary_bullet_counter(skill_md_text).values())
 
 
 def count_dispatch_branches(skill_md_text: str) -> int:
-    """Count distinct named dispatch-branch tokens: a '- ' bullet (any
-    indentation) whose own first line carries one or more backtick/quote-
-    wrapped tokens immediately before a '->' arrow later on that same
-    line. Bullets inside a Stop-boundary section are excluded (already
-    counted by count_stop_boundary_bullets)."""
-    text = _normalize(skill_md_text)
-    lines = text.split("\n")
-    excluded = _stop_boundary_spans(lines)
-
-    def _in_excluded(line_index: int) -> bool:
-        return any(start <= line_index < end for start, end in excluded)
-
-    branches: set[str] = set()
-    for match in _DISPATCH_BULLET_RE.finditer(text):
-        line_index = text.count("\n", 0, match.start())
-        if _in_excluded(line_index):
-            continue
-        branches.update(_QUOTED_TOKEN_RE.findall(match.group("prefix")))
-    return len(branches)
+    """Total named dispatch-branch occurrences (sum of
+    dispatch_branch_counter's values) -- a thin scalar view for callers
+    that only need the count, not the content keys."""
+    return sum(dispatch_branch_counter(skill_md_text).values())
 
 
 def count_decision_branches(skill_md_text: str) -> int:
     """Sum of Stop-boundary bullets and named dispatch branches -- this
     gate's single 'decision branch' count, compared against a skill's own
     fixture count."""
-    return count_stop_boundary_bullets(skill_md_text) + count_dispatch_branches(skill_md_text)
+    return sum(decision_branch_counter(skill_md_text).values())
 
 
 @dataclass(frozen=True)
@@ -231,12 +327,22 @@ def evaluate_skill(
     skill: str, before_text: str | None, after_text: str, fixture_count: int
 ) -> CoverageResult:
     """Delta-scoped decision: not applicable (always passes) unless this
-    diff increased the skill's own decision-branch count -- ``before_text
-    is None`` (a brand-new SKILL.md, or a before-version that could not be
-    read) counts every branch in ``after_text`` as new."""
-    after_branches = count_decision_branches(after_text)
-    before_branches = count_decision_branches(before_text) if before_text is not None else None
-    if before_branches is not None and after_branches <= before_branches:
+    diff introduced a decision-branch Counter key with a higher count than
+    the before-version had for that same key -- ``before_text is None`` (a
+    brand-new SKILL.md, or a before-version that could not be read) counts
+    every branch in ``after_text`` as new. Uses Counter subtraction
+    (``after - before``, which keeps only keys whose count in ``after``
+    exceeds their count in ``before``), not a bare total comparison -- a
+    same-or-lower-total content swap (e.g. 3 bullets removed, 3 different
+    ones added) still shows up as growth here, because the new bullets'
+    keys are entirely absent from ``before``'s own Counter."""
+    after_counter = decision_branch_counter(after_text)
+    after_branches = sum(after_counter.values())
+    if before_text is None:
+        return CoverageResult(skill, None, after_branches, fixture_count, True, fixture_count >= after_branches)
+    before_counter = decision_branch_counter(before_text)
+    before_branches = sum(before_counter.values())
+    if not (after_counter - before_counter):
         return CoverageResult(skill, before_branches, after_branches, fixture_count, False, True)
     passed = fixture_count >= after_branches
     return CoverageResult(skill, before_branches, after_branches, fixture_count, True, passed)
@@ -342,6 +448,14 @@ def main(argv: list[str] | None = None) -> int:
 
     parsed = _parse_entries(text)
     if not parsed:
+        if text.strip():
+            print(
+                "error: entries input was non-blank but contained no well-formed "
+                "'<skill><TAB><before><TAB><after><TAB><fixture-count>' lines -- "
+                "refusing to silently treat malformed input as 'nothing changed'",
+                file=sys.stderr,
+            )
+            return 1
         print("PASS: no added/modified SKILL.md in this diff")
         return 0
 

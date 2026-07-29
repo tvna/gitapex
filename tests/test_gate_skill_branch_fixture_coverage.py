@@ -139,9 +139,41 @@ def test_dispatch_bullet_inside_stop_boundary_section_is_excluded():
     assert gate.count_stop_boundary_bullets(text) == 1
 
 
-def test_duplicate_token_across_bullets_counted_once():
-    text = '- `"clean"` -> proceed.\n- `"clean"` -> proceed again elsewhere.\n'
-    assert gate.count_dispatch_branches(text) == 1
+def test_same_token_on_two_different_bullets_counted_separately():
+    # Two textually DIFFERENT bullets that happen to name the same state
+    # word are two distinct branches, not one -- an earlier revision of
+    # this gate used a document-wide set() of bare tokens and collapsed
+    # them, silently under-counting (found by review before this gate
+    # ever shipped; see the module docstring's Counter rationale).
+    text = '- `"clean"` -> proceed.\n- `"clean"` -> proceed again, but for a different reason.\n'
+    assert gate.count_dispatch_branches(text) == 2
+
+
+def test_two_unrelated_dispatch_blocks_sharing_a_token_both_count():
+    doc = (
+        "## Exact sequence\n\n"
+        "6. Dispatch on mergeable_state.\n"
+        '   - `"unknown"` -> GitHub has not finished computing mergeability yet.\n'
+        '   - `"clean"` -> proceed.\n'
+        "7. Dispatch on ci_status.\n"
+        '   - `"unknown"` -> CI has not reported yet.\n'
+        '   - `"failed"` -> stop.\n'
+    )
+    assert gate.count_dispatch_branches(doc) == 4
+
+
+def test_byte_identical_bullet_lines_share_one_key_but_both_still_count():
+    # The accepted, documented edge case: two bullets with byte-identical
+    # first-line text (not merely the same token) share one Counter key
+    # (no positional bookkeeping distinguishes them), but the Counter
+    # itself still tracks both as a multiset occurrence -- the total stays
+    # 2, only the distinct-key count collapses to 1. This is a strictly
+    # safer direction than silently dropping to 1 total: it still demands
+    # two fixtures' worth of coverage for the two real occurrences.
+    text = '- `"clean"` -> proceed.\n- `"clean"` -> proceed.\n'
+    counter = gate.dispatch_branch_counter(text)
+    assert len(counter) == 1
+    assert gate.count_dispatch_branches(text) == 2
 
 
 def test_fenced_dispatch_example_is_not_counted():
@@ -151,6 +183,51 @@ def test_fenced_dispatch_example_is_not_counted():
 def test_plain_quoted_token_without_backticks_also_counts():
     text = '- "clean" -> proceed.\n'
     assert gate.count_dispatch_branches(text) == 1
+
+
+def test_nested_dispatch_bullet_inside_stop_boundary_section_still_counts():
+    # A dispatch-shaped bullet nested (indented) under a Stop-boundary
+    # bullet was never counted by count_stop_boundary_bullets (column-0
+    # only) -- excluding the whole section span from the dispatch scan
+    # too made it vanish from BOTH counters (found by review before this
+    # gate ever shipped). Only a column-0 bullet inside the span -- one
+    # that WAS already counted as a Stop-boundary bullet -- is excluded.
+    text = (
+        "## Stop boundaries\n\n"
+        "- Never proceed on an ambiguous check status; resolve first.\n"
+        '  - `"unstable"` -> wait and re-check.\n'
+        '  - `"blocked"` -> escalate.\n'
+    )
+    assert gate.count_stop_boundary_bullets(text) == 1
+    assert gate.count_dispatch_branches(text) == 2
+    assert gate.count_decision_branches(text) == 3
+
+
+def test_column_zero_dispatch_bullet_inside_stop_boundary_still_excluded_once():
+    # The narrower exclusion must still avoid double-counting a bullet
+    # that genuinely IS one of the section's own top-level bullets.
+    text = '## Stop boundaries\n\n- `"clean"` -> this reads as a Stop boundary bullet, not a dispatch branch.\n'
+    assert gate.count_stop_boundary_bullets(text) == 1
+    assert gate.count_dispatch_branches(text) == 0
+
+
+def test_outer_fence_longer_than_inner_nested_fence_stays_blanked():
+    # CommonMark: a fence only closes on a line whose own run is the SAME
+    # character and AT LEAST AS LONG as the opener. Matching only the
+    # first 3 characters (an earlier revision did) let an inner 3-backtick
+    # line wrongly close a 4+-backtick outer fence, leaking the rest of
+    # the still-illustrative block back into real content.
+    text = (
+        "## Stop boundaries\n\n- Never do X.\n\n"
+        "## Worked example\n\n"
+        "````\n"
+        "```\n"
+        "## Stop boundaries\n\n- Never do fake-A.\n- Never do fake-B.\n"
+        "```\n"
+        "still inside the outer fence\n"
+        "````\n"
+    )
+    assert gate.count_stop_boundary_bullets(text) == 1
 
 
 # --- count_decision_branches ---
@@ -163,6 +240,27 @@ def test_decision_branches_sums_both_metrics():
 def test_decision_branches_zero_for_a_skill_with_neither_shape():
     text = "## Procedure\n\n1. Step one.\n2. Step two.\n"
     assert gate.count_decision_branches(text) == 0
+
+
+# --- *_counter (content-keyed multisets) ---
+
+
+def test_stop_boundary_bullet_counter_keys_by_content():
+    counter = gate.stop_boundary_bullet_counter(_STOP_BOUNDARY_SKILL)
+    assert sum(counter.values()) == 3
+    assert len(counter) == 3  # three distinct keys, since all three bullets differ
+
+
+def test_dispatch_branch_counter_keys_combine_line_and_token():
+    counter = gate.dispatch_branch_counter(_DISPATCH_SKILL)
+    assert sum(counter.values()) == 4
+    assert len(counter) == 4
+
+
+def test_decision_branch_counter_is_the_sum_of_both_counters():
+    combined = gate.decision_branch_counter(_DISPATCH_SKILL)
+    expected = gate.stop_boundary_bullet_counter(_DISPATCH_SKILL) + gate.dispatch_branch_counter(_DISPATCH_SKILL)
+    assert combined == expected
 
 
 # --- evaluate_skill (delta scoping) ---
@@ -211,6 +309,31 @@ def test_increased_branch_count_with_matching_fixtures_passes():
     grown = _STOP_BOUNDARY_SKILL.replace("- Never do Z.\n", "- Never do Z.\n- Never do W.\n")
     result = gate.evaluate_skill("growing-skill", _STOP_BOUNDARY_SKILL, grown, fixture_count=4)
     assert result.applicable is True
+    assert result.passed is True
+
+
+def test_same_count_content_swap_is_still_detected_as_growth():
+    # A same-total content swap (3 bullets removed, 3 DIFFERENT bullets
+    # added) must not bypass the delta check just because 3 <= 3 -- an
+    # earlier revision of this gate compared bare totals and missed this
+    # exact case (found by review before this gate ever shipped).
+    before = "## Stop boundaries\n\n- Never do A.\n- Never do B.\n- Never do C.\n"
+    after = "## Stop boundaries\n\n- Never do X.\n- Never do Y.\n- Never do Z.\n"
+    result = gate.evaluate_skill("swap-skill", before, after, fixture_count=0)
+    assert result.applicable is True
+    assert result.before_branches == 3
+    assert result.after_branches == 3
+    assert result.passed is False
+
+
+def test_reordering_the_same_bullets_is_not_applicable():
+    # The inverse of the swap case: identical bullet CONTENT, different
+    # order, must not look like growth (Counter subtraction is
+    # order-independent, unlike a naive positional diff).
+    before = "## Stop boundaries\n\n- Never do A.\n- Never do B.\n- Never do C.\n"
+    after = "## Stop boundaries\n\n- Never do C.\n- Never do A.\n- Never do B.\n"
+    result = gate.evaluate_skill("reorder-skill", before, after, fixture_count=0)
+    assert result.applicable is False
     assert result.passed is True
 
 
@@ -312,6 +435,17 @@ def test_main_reads_entries_from_file(tmp_path, capsys):
 def test_main_reports_error_for_missing_entries_file(capsys):
     assert gate.main(["--entries", "/no/such/file.tsv"]) == 1
     assert "not found" in capsys.readouterr().err
+
+
+def test_main_hard_fails_on_entirely_malformed_nonblank_input(monkeypatch, capsys):
+    # A non-blank entries input that parses to zero well-formed entries
+    # (e.g. a workflow bug producing lines with the wrong field count)
+    # must never be silently read as "nothing changed" -- an earlier
+    # revision of this gate returned a bare PASS here (found by review
+    # before this gate ever shipped).
+    monkeypatch.setattr("sys.stdin", io.StringIO("not-a-well-formed-line\nanother-bad-line\n"))
+    assert gate.main([]) == 1
+    assert "refusing to silently treat malformed input" in capsys.readouterr().err
 
 
 def test_main_reports_multiple_skills_in_one_run(tmp_path, monkeypatch, capsys):
