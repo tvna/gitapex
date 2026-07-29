@@ -269,20 +269,67 @@ def test_find_bare_get_spec_offenders_catches_multiline_call():
     assert _find_bare_get_spec_offenders(text) == [1]
 
 
-def test_no_bare_get_spec_chain_in_tests():
+# tests/*.py is this repo's shared test suite; skills/*/scripts/test_*.py
+# is where each skill keeps tests for its own bundled scripts (e.g.
+# skills/evaluating-skill-quality/scripts/test_check_skill_shape.py, right
+# next to spec_of()'s own implementation) -- both are "test-side consumers"
+# of parsed.root["spec"] in the sense issue #228 meant, so both are scanned
+# (issue #525 widened this from the original tests/*.py-only scan, which
+# predated any skills/*/scripts/test_*.py file existing in this repo).
+_SCANNED_GLOBS: tuple[str, ...] = ("tests/*.py", "skills/*/scripts/test_*.py")
+
+
+def _scan_for_bare_get_spec(root: pathlib.Path) -> list[str]:
+    """Offending 'path:lineno' strings for every bare get-on-spec chain
+    found under any of ``_SCANNED_GLOBS``, resolved relative to ``root``."""
     offenders: list[str] = []
-    for test_file in sorted(REPO_ROOT.glob("tests/*.py")):
-        text = test_file.read_text(encoding="utf-8")
-        offenders.extend(
-            f"{test_file.relative_to(REPO_ROOT)}:{lineno}"
-            for lineno in _find_bare_get_spec_offenders(text)
-        )
+    for pattern in _SCANNED_GLOBS:
+        for test_file in sorted(root.glob(pattern)):
+            text = test_file.read_text(encoding="utf-8")
+            offenders.extend(
+                f"{test_file.relative_to(root)}:{lineno}"
+                for lineno in _find_bare_get_spec_offenders(text)
+            )
+    return offenders
+
+
+def test_no_bare_get_spec_chain_in_tests():
+    offenders = _scan_for_bare_get_spec(REPO_ROOT)
     assert not offenders, (
         "bare get-on-spec chain found outside css.spec_of() -- use "
         "css.spec_of(parsed) instead, which guards against a malformed "
         "sidecar's spec: being a non-mapping scalar/list (issue #228 "
         f"repairs 2/3): {offenders}"
     )
+
+
+# Built via concatenation, not one literal, so this module's own source
+# text never contains the offending get-on-spec substring -- otherwise
+# this file (itself scanned by test_no_bare_get_spec_chain_in_tests, since
+# it lives under tests/*.py) would flag itself.
+_OFFENDING_LINE = 'x = parsed.root.get(' + '"spec"' + ')\n'
+
+
+def test_scan_for_bare_get_spec_catches_offender_in_skill_scripts_glob(tmp_path):
+    # Regression pin for the widened glob (issue #525): a bare get-on-spec
+    # chain reintroduced right next to check_skill_shape.py itself, in
+    # skills/*/scripts/test_*.py, must be caught -- not just tests/*.py.
+    skill_scripts = tmp_path / "skills" / "some-skill" / "scripts"
+    skill_scripts.mkdir(parents=True)
+    (skill_scripts / "test_something.py").write_text(_OFFENDING_LINE, encoding="utf-8")
+    offenders = _scan_for_bare_get_spec(tmp_path)
+    assert offenders == ["skills/some-skill/scripts/test_something.py:1"]
+
+
+def test_scan_for_bare_get_spec_ignores_non_test_files_in_skill_scripts(tmp_path):
+    # A skill's own non-test implementation file (e.g. check_skill_shape.py
+    # itself) legitimately contains the guarded pattern inside spec_of()'s
+    # own body -- the glob is test_*.py-scoped specifically so it never
+    # flags that internal implementation.
+    skill_scripts = tmp_path / "skills" / "some-skill" / "scripts"
+    skill_scripts.mkdir(parents=True)
+    (skill_scripts / "check_something.py").write_text(_OFFENDING_LINE, encoding="utf-8")
+    assert _scan_for_bare_get_spec(tmp_path) == []
 
 
 # ---- SKILL_DEP_LIST_ITEM_RE docstring-consistency gate (#228 repair 3) ----
