@@ -46,6 +46,13 @@ jobs:
       # semantics). Both the "**" form (nested files) and the plain "*"
       # form (top-level files) are listed explicitly per directory so a
       # top-level docs/*.md or evals/*.md edit is never silently skipped.
+      # Issue #552: a prior `grep -E '^\+[^+]' | sed 's/^\+//'` extraction
+      # dropped every blank-line-only diff addition, collapsing per-file
+      # paragraph structure (and file-to-file boundaries) that
+      # gate_provenance_disclosure.py's own paragraph-scoped check depends
+      # on, producing false positives on a sufficiently large addition.
+      # extract_diff_added_lines.py replaces it, tracking real per-file and
+      # per-hunk boundaries instead of a prefix heuristic.
       - name: Extract added lines from doc/eval/skill Markdown
         id: diff
         env:
@@ -54,12 +61,12 @@ jobs:
         run: |
           set -euo pipefail
           added_file="$RUNNER_TEMP/added_lines.txt"
-          if ! diff_output=$(git diff -U0 "$BASE_SHA...$HEAD_SHA" -- \
-              'docs/*.md' 'docs/**/*.md' 'evals/*.md' 'evals/**/*.md' 'skills/*.md' 'skills/**/*.md'); then
-            echo "::error::git diff failed between $BASE_SHA and $HEAD_SHA" >&2
+          if ! git diff -U0 "$BASE_SHA...$HEAD_SHA" -- \
+              'docs/*.md' 'docs/**/*.md' 'evals/*.md' 'evals/**/*.md' 'skills/*.md' 'skills/**/*.md' \
+              | python3 .github/scripts/extract_diff_added_lines.py > "$added_file"; then
+            echo "::error::git diff/extraction failed between $BASE_SHA and $HEAD_SHA" >&2
             exit 1
           fi
-          printf '%s\n' "$diff_output" | grep -E '^\+[^+]' | sed 's/^\+//' > "$added_file" || true
           echo "added-file=$added_file" >> "$GITHUB_OUTPUT"
 
       # PR_BODY carries untrusted external text (anyone with PR-author
