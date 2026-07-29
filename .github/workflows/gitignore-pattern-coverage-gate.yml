@@ -1,0 +1,66 @@
+name: Gitignore pattern coverage gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - ".gitignore"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gitignore-pattern-coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      # git merge-base (not base.sha directly), same reasoning as
+      # skill-rename-lifecycle-gate.yml: a .gitignore change that landed on
+      # the base branch after this PR forked must never be misattributed to
+      # this PR.
+      - name: Determine added .gitignore patterns
+        id: diff
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if ! merge_base=$(git merge-base "$BASE_SHA" "$HEAD_SHA"); then
+            echo "::error::git merge-base failed between $BASE_SHA and $HEAD_SHA" >&2
+            exit 1
+          fi
+          added_file="$RUNNER_TEMP/added_gitignore_lines.txt"
+          git diff "$merge_base" "$HEAD_SHA" -- .gitignore \
+            | grep -E '^\+' | grep -vE '^\+\+\+' | sed -E 's/^\+//' > "$added_file" || true
+          echo "added_file=$added_file" >> "$GITHUB_OUTPUT"
+          if [ -s "$added_file" ]; then
+            echo ".gitignore lines added in this diff (candidates):"
+            cat "$added_file"
+            echo "applicable=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No lines added to .gitignore in this diff; skipping."
+            echo "applicable=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check added patterns have test coverage
+        if: steps.diff.outputs.applicable == 'true'
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/gate_gitignore_pattern_coverage.py --added "${{ steps.diff.outputs.added_file }}"
