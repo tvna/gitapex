@@ -43,11 +43,15 @@ method -> result. Otherwise, list the command(s) run and their output.
 
 <!--
 The skill-audit-evidence and Transfer-check-disclosure checklist items
-above ARE CI-enforced (see .github/workflows/skill-audit-gate.yml and
-.github/workflows/transfer-check-disclosure-gate.yml, both blocking, no
-continue-on-error) -- confirmed current as of issue #513. Every other
-checklist item in this template still relies on reviewer discipline
-alone; no CI gate covers them.
+above are each checked by a CI job that fails (no continue-on-error) on
+missing disclosure -- see .github/workflows/skill-audit-gate.yml and
+.github/workflows/transfer-check-disclosure-gate.yml. Whether a failing
+job actually blocks the merge button additionally depends on this
+repo's branch-protection required-status-checks list, which is a GitHub
+admin setting no in-repo tooling can read or confirm (see the "Open
+item" in docs/superpowers/specs/2026-07-21-skill-audit-merge-gate-design.md).
+Every other checklist item in this template still relies on reviewer
+discipline alone; no CI gate covers them.
 -->
 
 ## Related Issue
