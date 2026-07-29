@@ -495,3 +495,38 @@ nine-dimension walk or Blind Spot Pass actually ran. A follow-up phase
 covering the full corpus, `trials_per_task: 3`, and/or the compatibility
 axis specifically (given where Phase 1's gap concentrated) is the natural
 next step, not yet scheduled. Refs #500.
+
+## Confidentiality awareness (issue #537)
+
+Found via conversational Q&A, not a proactive audit: no axis checked
+whether a reviewed skill's own procedure discloses/guards its handling of
+secrets, credentials, PII, or private data -- the closest existing
+coverage, Mechanism fit's secret-exposure Stop-boundary check, only asks
+whether a *stated* prohibition is hook-backed, not whether the target
+discloses a sensitive-data-handling step at all. Added a new `##
+Confidentiality awareness` warning-only, cross-cutting axis to
+`references/rubric.md`, mirroring `## Compatibility awareness`'s
+three-state structure (`NO_CONFIDENTIALITY_CONCERN` /
+`PROPOSE_CONFIDENTIALITY_SAFEGUARD` / `CONFIDENTIALITY_ACKNOWLEDGED`); a
+merged `## Compatibility and confidentiality awareness` pointer section in
+`SKILL.md` (a standalone second heading would have pushed `SKILL.md` over
+its 500-line shape cap, since the file had zero slack left); and an
+extension to Procedure step 4 to run both axes together.
+
+Went through `scorer-gated-skill-edits`' own held-out gate: 2 new fixtures
+added to `split.md`'s split (59 total, 23:24:12). One fresh isolated
+before/after dispatch pair against the new selection fixture
+(`confidentiality-awareness-selection.yaml`) moved **0.666667 ->
+1.000000**; the 23 pre-existing selection fixtures were confirmed
+content-disjoint from the edit by direct inspection (no shared vocabulary
+in either their target-skill prompts or their assertions) rather than
+re-dispatched. **KEEP**. Isolation used the verified `claude -p`
+subprocess mechanism from `references/adversarial-self-audit.md`'s
+registry, with the documented `$HOME`-copy recipe to avoid the separate
+task-list leak vector. A genuine, unprompted corroboration surfaced
+mid-gate: the *pre-edit* dispatch's own Blind spot pass, with no awareness
+this edit was planned, independently named the exact gap the edit closes
+("the rubric has no dedicated axis for 'does this skill's instructed
+action itself constitute a privacy/data-handling risk'"). Full record,
+methodology, and per-fixture scores:
+`evals/evaluating-skill-quality/split.md`'s Kept-edit log. Refs #537.

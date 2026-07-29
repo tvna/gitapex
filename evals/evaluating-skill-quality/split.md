@@ -425,17 +425,7 @@ Stop-boundary prohibition rather than an ordinary step -- both left as a
 disclosed, open gap for a future addition rather than silently assumed
 covered.
 
-**Gate status: in progress, not yet a recorded KEEP/REJECT.** Live
-before/after isolated dispatches against `confidentiality-awareness-
-selection.yaml` were started (methodology: `claude -p` subprocess, pinned
-pre-edit commit `e8c387c0f10aa45886013c7c20b38bd131a72d97`, working
-directory and `$HOME` isolated per `references/adversarial-self-
-audit.md`'s Isolation-verification registry) but had not completed at the
-time this file was first committed for gitapex#537. This section will be
-replaced with the actual per-fixture scores and KEEP/REJECT determination,
-appended to the Kept-edit or Rejected-edit log below per this file's own
-convention, once both dispatches finish -- not assumed passing in the
-meantime.
+**Gate result: see the Kept-edit log below.**
 
 Future edits to this rubric should reuse this same split rather than
 re-deriving one per iteration, so the selection split stays genuinely
@@ -2494,3 +2484,90 @@ PR #496), both fixed in the same PR:**
 
 Neither correction changes the KEEP verdict above: both are fixes to
 fixture/checker precision, not to the rubric content the gate scored.
+
+**Iteration: gitapex#537, Confidentiality awareness axis.** Candidate
+edit: add a new `## Confidentiality awareness` warning-only, cross-cutting
+axis to `references/rubric.md` (mirroring `## Compatibility awareness`'s
+three-state structure), a merged `## Compatibility and confidentiality
+awareness` pointer section in `SKILL.md`, and an extension to Procedure
+step 4 to run both axes. Full text: this PR's diff. Motivated by a
+conversational Q&A session finding no existing axis checks whether a
+reviewed skill's own procedure discloses/guards handling of secrets,
+credentials, PII, or private data -- distinct from Mechanism fit's
+secret-exposure Stop-boundary check, which only asks whether a *stated*
+prohibition is hook-backed.
+
+Precondition and splits: satisfied (59 fixtures, 23:24:12 -- see
+Assignment above); 2 new fixtures added this iteration
+(`confidentiality-awareness-train.yaml` / `-selection.yaml`).
+
+**Methodology.** Isolation used the verified `claude -p` subprocess
+alternative from `references/adversarial-self-audit.md`'s registry (this
+exact `CLAUDE_CODE_REMOTE=true`, `claude --version` `2.1.220 (Claude
+Code)` platform has a confirmed entry): working directory outside this
+repository's `CLAUDE.md`/`AGENTS.md` ancestry, `$HOME` pointed at a copy
+of the real `$HOME/.claude/` + `.claude.json` with only `tasks/` and the
+conversation-history directories (`projects/`, `sessions/`,
+`shell-snapshots/`) stripped, confirmed byte-identical to the original
+`.claude.json` otherwise. `--permission-mode dontAsk --allowedTools Read`
+(the sandbox's root/sudo context rejects `--dangerously-skip-permissions`
+outright, so this narrower flag combination stands in for it, scoped to
+read-only tool access). Pre-edit snapshot pinned at
+`e8c387c0f10aa45886013c7c20b38bd131a72d97` via `git show`; post-edit
+snapshot the working tree at commit time. One fresh dispatch per side
+against only `confidentiality-awareness-selection.yaml` (the new fixture
+-- the 23 pre-existing selection fixtures were confirmed content-disjoint
+from this edit by direct inspection: none of their `expected` blocks or
+target-skill prompts reference "Confidentiality," "secret," "credential,"
+or "PII," and the two pre-existing fixtures that do mention a
+secret-rotation/secret-scanning tool by name
+(`portability-declarative-fact-claim.yaml`,
+`cohesion-independently-changeable-branches-train.yaml`) both sit in
+train, not selection -- so they tie exactly and were not re-dispatched,
+the same assertion-surface-disjointness basis the gitapex#406 and
+gitapex#495 entries above already used), scored with
+`skills/scorer-gated-skill-edits/scripts/score_contract.py`:
+
+| Fixture | Before | After |
+|---|---|---|
+| `confidentiality-awareness-selection.yaml` | 0.666667 (fresh) | 1.000000 (fresh) |
+
+`score_contract.py --compare-to 0.666667`: `1.000000 KEEP`.
+
+**Independent corroboration, found unprompted.** The *pre-edit* dispatch's
+own Blind spot pass -- run against the unmodified rubric, with no
+awareness this edit was planned -- named the exact gap this edit closes,
+verbatim: "the rubric has no dedicated axis for 'does this skill's
+instructed action itself constitute a privacy/data-handling risk,' as
+distinct from reliability-of-enforcement (mechanism fit) or procedural
+fragility (dimension 3)." The *post-edit* dispatch correctly fired the new
+axis (`Confidentiality awareness: PROPOSE_CONFIDENTIALITY_SAFEGUARD`,
+citing the exact step and proposing a concrete redaction fix) and folded
+it into a coherent whole-artifact review (also correctly flagging a
+Communicational/informational cohesion split candidate and a Dimension 6
+durability gap on the same target) rather than over-firing the new axis
+in isolation from the rest of the walk.
+
+**Deterministic checks:** `check_skill_shape.py` 46/46 after the final
+content edits (one intermediate `body-length` FAIL at 515 lines was fixed
+by merging the SKILL.md pointer into the existing Compatibility-awareness
+section rather than adding a second full heading, since `SKILL.md` was
+already at the exact 500-line cap with zero slack before this edit); the
+new fixtures' YAML parses cleanly and `lint_fixture_assertions.py` flagged
+one disclosed, accepted case-sensitivity warning (both new fixtures'
+`"Confidentiality awareness"` assertion matches `rubric.md`'s own `##
+Confidentiality awareness` heading casing exactly -- the literal string
+the rubric's own "Report exactly one state" bullets instruct a compliant
+review to emit -- but differs from `SKILL.md`'s merged heading, `##
+Compatibility and confidentiality awareness`, whose casing is
+necessarily different because it names two axes in one sentence-style
+heading; not a fixture-authoring bug).
+
+**Transfer check:** not run this iteration, the same disclosed, unresolved
+gap every entry in this log since issue #200 has carried forward.
+
+**KEEP.** Strict selection-split improvement on the one fixture built to
+test this exact change (0.666667 -> 1.000000), 23 pre-existing selection
+fixtures confirmed unaffected by direct inspection, and unprompted
+independent corroboration from the pre-edit dispatch's own Blind spot pass
+that the closed gap was real.
