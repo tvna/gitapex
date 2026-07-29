@@ -42,8 +42,12 @@ method -> result. Otherwise, list the command(s) run and their output.
 - [ ] If this PR adds a new Kept-edit-log entry to any `evals/*/split.md`, that entry discloses a Transfer check line (see `.github/scripts/gate_transfer_check_disclosure.py`)
 
 <!--
-No CI gate currently enforces this checklist's completion or this body's
-content -- reviewer discipline is the only gate until one exists.
+The skill-audit-evidence and Transfer-check-disclosure checklist items
+above ARE CI-enforced (see .github/workflows/skill-audit-gate.yml and
+.github/workflows/transfer-check-disclosure-gate.yml, both blocking, no
+continue-on-error) -- confirmed current as of issue #513. Every other
+checklist item in this template still relies on reviewer discipline
+alone; no CI gate covers them.
 -->
 
 ## Related Issue
