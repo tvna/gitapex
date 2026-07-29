@@ -1,0 +1,29 @@
+apiVersion: gitapex.io/v1alpha1
+kind: SkillMetadata
+metadata:
+  name: evaluating-decision-state-discipline
+spec:
+  portability: Mixed
+  capabilityAssumption: Adaptive
+  references:
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/547"
+      summary: "New skill proposed after a review of evaluating-deterministic-gate-quality found zero coverage for a deterministic check whose decision reads state beyond its own triggering event; a fable-model design review rejected importing 'feedforward' control-theory vocabulary as a category error for this repository's four gate-realization domains and recommended native vocabulary (decision, state, discipline) instead."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/547"
+      summary: "Scoped as a sibling skill to evaluating-deterministic-gate-quality rather than a new dimension appended to that skill's own files, per the requester's explicit direction; the applicability precondition (SKILL.md's 'Relationship to evaluating-deterministic-gate-quality' section) cross-references that skill's own Mechanism-fit test rather than duplicating or amending it."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/547"
+      summary: "A candidate third skill to evaluate multi-agent orchestration/dispatch-mechanism correctness (task-partitioning/scheduling safety, cross-agent git-concurrency safety, partial-failure rollback semantics) was considered during scoping and explicitly not pursued; recorded in issue 547's own 'Scoping update (post-creation)' section so it is not silently re-proposed."
+    - kind: caveat
+      anchor: "references/gitapex-worked-examples.md"
+      summary: "This file carries gitapex's own worked examples, including a real (not synthetic) target found in skills/executing-a-branch-plan/references/execution-and-dispatch.md's own disclosed worktree-cleanup open item; substitute the target repository's own equivalents when applying this skill elsewhere."
+  skillDependencies:
+    requires:
+      - evaluating-deterministic-gate-quality
+    relatedTo:
+      - evaluating-skill-quality
+  lifecycle:
+    experimental:
+      reason: "Experimental: first version of a new skill category, split out of a design review originally scoped as an addition to evaluating-deterministic-gate-quality. The five-criteria evaluation model has been through one design review (a fable-model subagent dispatch) but not yet an independent evaluating-skill-quality/battle-testing-a-skill audit round, a bundled shape-checker script specific to its own five criteria, or a committed evals/ regression corpus."
+      trackingIssue: "https://github.com/tvna/gitapex/issues/547"
