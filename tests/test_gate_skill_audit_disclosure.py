@@ -168,10 +168,20 @@ def test_main_reads_body_from_file(tmp_path, capsys):
 
 
 def test_main_fails_with_missing_disclosure(capsys):
-    assert gate.main(["--body", "/dev/null"]) == 1
+    assert gate.main(["--body", "/dev/null", "--skill-md-changed"]) == 1
     err = capsys.readouterr().err
     assert "battle-testing-a-skill" in err
     assert "evaluating-skill-quality" in err
+
+
+def test_main_skips_base_check_when_skill_md_not_changed(capsys):
+    # Issue #517: skill-audit-gate.yml's applicable path now also fires
+    # for a design-doc-only change with no SKILL.md touched -- the base
+    # battle-testing-a-skill/evaluating-skill-quality check must not run
+    # unconditionally, or every design-doc-only PR would be forced to
+    # disclose audits of a skill it never touched.
+    assert gate.main(["--body", "/dev/null"]) == 0
+    assert "PASS" in capsys.readouterr().out
 
 
 def test_main_reports_error_for_missing_file(capsys):
@@ -370,7 +380,7 @@ def test_main_notes_waiver_would_be_rejected_when_battle_testing_missing_entirel
 - evaluating-skill-quality: WELL-FORMED-AND-MATURE
 """
     monkeypatch.setattr("sys.stdin", io.StringIO(body))
-    assert gate.main(["--description-changed-skills", "foo"]) == 1
+    assert gate.main(["--description-changed-skills", "foo", "--skill-md-changed"]) == 1
     err = capsys.readouterr().err
     assert "battle-testing-a-skill" in err
     assert "would not be accepted here either" in err

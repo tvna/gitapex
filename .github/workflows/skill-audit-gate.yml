@@ -77,6 +77,18 @@ jobs:
                 R*) new_path="$newpath" ;;
                 *) new_path="$path" ;;
               esac
+              # Design-doc paths get comma-joined into $GITHUB_OUTPUT and
+              # later comma-split by _parse_skill_list, same sink as the
+              # skill-name list below -- a PR author fully controls this
+              # filename, so validate its shape first rather than trusting
+              # an arbitrary string (e.g. one containing a literal comma,
+              # which would corrupt the downstream comma-split) into
+              # either sink. Matches exactly the 'docs/superpowers/specs/*.md'
+              # glob this diff is already scoped to.
+              if ! printf '%s' "$new_path" | grep -E '^docs/superpowers/specs/[A-Za-z0-9._-]+\.md$' >/dev/null; then
+                echo "::error::unsupported design doc filename for signal computation: $new_path" >&2
+                exit 1
+              fi
               changed_design_docs="${changed_design_docs}${changed_design_docs:+,}${new_path}"
             done <<< "$changed_design_doc_lines"
           fi
@@ -89,6 +101,7 @@ jobs:
               echo "needs-eval-coverage-skills="
               echo "security-relevant-skills="
               echo "changed-design-docs="
+              echo "skill-md-changed=false"
             } >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -148,11 +161,14 @@ jobs:
               # description + any other frontmatter fields), not its full
               # procedure body -- this meta-repo's own prose mentions "gate"
               # constantly outside frontmatter, which would otherwise
-              # over-match almost every skill. \b is a prefix/suffix
-              # word-boundary, so "gated"/"gateway"/"trusted"/"trustworthy"
-              # match while "aggregate"/"delegate"/"negotiate" do not.
-              frontmatter=$(git show "$HEAD_SHA:$new_path" | sed -n '/^---$/,/^---$/p')
-              if printf '%s\n' "$frontmatter" | grep -iE '\b(security|gate|trust)' >/dev/null; then
+              # over-match almost every skill. Delegated to
+              # skill_security_relevance.py rather than a bash sed/grep
+              # one-liner: a sed range address re-arms itself on any later
+              # '---' line in the body (e.g. a markdown horizontal rule),
+              # leaking body prose into the scan -- this script's bounded,
+              # tested extraction avoids that (see its own docstring).
+              security_result=$(git show "$HEAD_SHA:$new_path" | python3 .github/scripts/skill_security_relevance.py)
+              if [ "$security_result" = "relevant" ]; then
                 security_relevant_skills="${security_relevant_skills}${security_relevant_skills:+,}${skill}"
               fi
 
@@ -177,12 +193,17 @@ jobs:
               fi
             done <<< "$changed"
           fi
+          skill_md_changed=false
+          if [ -n "$changed" ]; then
+            skill_md_changed=true
+          fi
           {
             echo "applicable=true"
             echo "description-changed-skills=${description_changed_skills}"
             echo "needs-eval-coverage-skills=${needs_eval_coverage_skills}"
             echo "security-relevant-skills=${security_relevant_skills}"
             echo "changed-design-docs=${changed_design_docs}"
+            echo "skill-md-changed=${skill_md_changed}"
           } >> "$GITHUB_OUTPUT"
 
       # PR_BODY carries untrusted external text (anyone with PR-author
@@ -197,10 +218,16 @@ jobs:
           NEEDS_EVAL_COVERAGE_SKILLS: ${{ steps.diff.outputs.needs-eval-coverage-skills }}
           SECURITY_RELEVANT_SKILLS: ${{ steps.diff.outputs.security-relevant-skills }}
           CHANGED_DESIGN_DOCS: ${{ steps.diff.outputs.changed-design-docs }}
+          SKILL_MD_CHANGED: ${{ steps.diff.outputs.skill-md-changed }}
         run: |
           set -euo pipefail
+          skill_md_changed_flag=()
+          if [ "$SKILL_MD_CHANGED" = "true" ]; then
+            skill_md_changed_flag=(--skill-md-changed)
+          fi
           printf '%s' "$PR_BODY" | python3 .github/scripts/gate_skill_audit_disclosure.py \
             --description-changed-skills "$DESCRIPTION_CHANGED_SKILLS" \
             --needs-eval-coverage-skills "$NEEDS_EVAL_COVERAGE_SKILLS" \
             --security-relevant-skills "$SECURITY_RELEVANT_SKILLS" \
-            --changed-design-docs "$CHANGED_DESIGN_DOCS"
+            --changed-design-docs "$CHANGED_DESIGN_DOCS" \
+            "${skill_md_changed_flag[@]}"

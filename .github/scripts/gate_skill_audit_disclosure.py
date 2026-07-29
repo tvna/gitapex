@@ -183,17 +183,28 @@ def find_disallowed_battle_testing_waiver(body_text, description_changed_skills)
     return []
 
 
+def _find_missing_disclosure(body_text, items, pattern):
+    """Return `items` unchanged if none of them is covered by a line in the
+    PR body's '## Skill audit evidence' section matching `pattern`; else
+    []. Shared by the three conditional, workflow-supplied-list checks
+    below (issue #517: collapses what were three structurally-identical
+    functions differing only in which items/pattern they close over)."""
+    if not items:
+        return []
+    section = _extract_section(_normalize_body(body_text))
+    if section is None:
+        return list(items)
+    if pattern.search(section):
+        return []
+    return list(items)
+
+
 def find_missing_eval_coverage_disclosure(body_text, needs_eval_coverage_skills):
     """Return needs_eval_coverage_skills unchanged if none of them is covered
     by an eval-coverage-disclosure WAIVED line in the PR body (Repair 1);
     else [].
     """
-    if not needs_eval_coverage_skills:
-        return []
-    section = _extract_section(_normalize_body(body_text))
-    if section is not None and _EVAL_COVERAGE_WAIVER_RE.search(section):
-        return []
-    return list(needs_eval_coverage_skills)
+    return _find_missing_disclosure(body_text, needs_eval_coverage_skills, _EVAL_COVERAGE_WAIVER_RE)
 
 
 def find_missing_security_coverage_disclosure(body_text, security_relevant_skills):
@@ -201,14 +212,7 @@ def find_missing_security_coverage_disclosure(body_text, security_relevant_skill
     by an adversarial-coverage-mapping RAN/NOT-RUN/WAIVED line in the PR
     body (issue #517, refs #454); else [].
     """
-    if not security_relevant_skills:
-        return []
-    section = _extract_section(_normalize_body(body_text))
-    if section is None:
-        return list(security_relevant_skills)
-    if _SECURITY_COVERAGE_LINE_RE.search(section):
-        return []
-    return list(security_relevant_skills)
+    return _find_missing_disclosure(body_text, security_relevant_skills, _SECURITY_COVERAGE_LINE_RE)
 
 
 def find_missing_design_doc_disclosure(body_text, changed_design_docs):
@@ -216,14 +220,7 @@ def find_missing_design_doc_disclosure(body_text, changed_design_docs):
     design-doc-adversarial-review RAN/NOT-RUN/WAIVED line in the PR body
     (issue #517, refs #277); else [].
     """
-    if not changed_design_docs:
-        return []
-    section = _extract_section(_normalize_body(body_text))
-    if section is None:
-        return list(changed_design_docs)
-    if _DESIGN_DOC_LINE_RE.search(section):
-        return []
-    return list(changed_design_docs)
+    return _find_missing_disclosure(body_text, changed_design_docs, _DESIGN_DOC_LINE_RE)
 
 
 def _parse_skill_list(raw):
@@ -270,6 +267,17 @@ def main(argv=None):
         help="Comma-separated docs/superpowers/specs/*.md filenames added "
         "or modified in this diff (issue #517, refs #277).",
     )
+    parser.add_argument(
+        "--skill-md-changed",
+        action="store_true",
+        help="Set when this diff adds or modifies at least one "
+        "skills/*/SKILL.md file. Gates the base battle-testing-a-skill / "
+        "evaluating-skill-quality check (issue #517: the workflow's "
+        "applicable path now also fires for a design-doc-only change with "
+        "no SKILL.md touched at all, so that base check must no longer "
+        "run unconditionally -- a design-doc-only PR has nothing to "
+        "disclose about audits of a skill it never touched).",
+    )
     args = parser.parse_args(argv)
     try:
         body_text = (
@@ -279,7 +287,7 @@ def main(argv=None):
         print(f"error: body file not found: {args.body}", file=sys.stderr)
         return 1
 
-    missing = find_missing_disclosures(body_text)
+    missing = find_missing_disclosures(body_text) if args.skill_md_changed else []
     description_changed_skills = _parse_skill_list(args.description_changed_skills)
     needs_eval_coverage_skills = _parse_skill_list(args.needs_eval_coverage_skills)
     disallowed_waiver_skills = find_disallowed_battle_testing_waiver(

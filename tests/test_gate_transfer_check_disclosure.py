@@ -85,6 +85,14 @@ def test_missing_file_reported_as_failure(tmp_path):
     assert gate.find_missing_transfer_checks(entries) == entries
 
 
+def test_missing_file_warning_surfaces_the_actual_reason(tmp_path, capsys):
+    missing_path = str(tmp_path / "does-not-exist.md")
+    gate.find_missing_transfer_checks([(missing_path, "**Iteration: X.**")])
+    err = capsys.readouterr().err
+    assert missing_path in err
+    assert "No such file" in err or "not found" in err.lower()
+
+
 def test_unmatched_iteration_line_reported_as_failure(tmp_path):
     path = _write(tmp_path, "split.md", _ENTRY_WITH_TRANSFER_CHECK)
     entries = [(path, "**Iteration: does not exist in file.**")]
@@ -93,6 +101,84 @@ def test_unmatched_iteration_line_reported_as_failure(tmp_path):
 
 def test_no_entries_is_a_no_op():
     assert gate.find_missing_transfer_checks([]) == []
+
+
+def test_entry_under_rejected_edit_log_is_out_of_scope(tmp_path):
+    # Issue #517 review finding: the requirement is scoped specifically to
+    # '## Kept-edit log', not any '##' section a split.md happens to
+    # contain. A candidate edit rejected before a transfer check was ever
+    # relevant must not be flagged.
+    content = (
+        "## Kept-edit log\n\n"
+        "None yet.\n\n"
+        "## Rejected-edit log\n\n"
+        "**Iteration: rejected candidate, no transfer check.**\n"
+        "Rejected for an unrelated reason, nothing else disclosed here.\n"
+    )
+    path = _write(tmp_path, "split.md", content)
+    entries = [(path, "**Iteration: rejected candidate, no transfer check.**")]
+    assert gate.find_missing_transfer_checks(entries) == []
+
+
+def test_entry_with_no_heading_above_it_is_out_of_scope(tmp_path):
+    content = "**Iteration: no heading above this at all.**\nNo section heading precedes this entry.\n"
+    path = _write(tmp_path, "split.md", content)
+    entries = [(path, "**Iteration: no heading above this at all.**")]
+    assert gate.find_missing_transfer_checks(entries) == []
+
+
+def test_duplicate_header_text_first_occurrence_compliant_second_is_not(tmp_path):
+    # Two entries share byte-identical '**Iteration:' header text: the
+    # first (earlier in the file) discloses a Transfer check, the second
+    # (the genuinely new one) does not. Naive first-match text search
+    # would wrongly grade the second against the first's (compliant) span.
+    content = (
+        "## Kept-edit log\n\n"
+        "**Iteration: dup.**\n"
+        "**Transfer check:** PASS, recorded here.\n\n"
+        "**Iteration: dup.**\n"
+        "Nothing else disclosed for this one.\n"
+    )
+    path = _write(tmp_path, "split.md", content)
+    entries = [(path, "**Iteration: dup.**"), (path, "**Iteration: dup.**")]
+    missing = gate.find_missing_transfer_checks(entries)
+    assert missing == [(path, "**Iteration: dup.**")]
+    assert len(missing) == 1
+
+
+def test_duplicate_header_text_both_missing_reports_both(tmp_path):
+    content = (
+        "## Kept-edit log\n\n"
+        "**Iteration: dup.**\n"
+        "Nothing disclosed for the first.\n\n"
+        "**Iteration: dup.**\n"
+        "Nothing disclosed for the second either.\n"
+    )
+    path = _write(tmp_path, "split.md", content)
+    entries = [(path, "**Iteration: dup.**"), (path, "**Iteration: dup.**")]
+    missing = gate.find_missing_transfer_checks(entries)
+    assert missing == entries
+
+
+def test_third_duplicate_beyond_actual_occurrences_reported_as_unmatched(tmp_path):
+    # Only two physical '**Iteration: dup.**' lines exist in the file, but
+    # three tuples are supplied (e.g. a bash-side miscount) -- the third
+    # must not silently re-match an already-consumed line.
+    content = (
+        "## Kept-edit log\n\n"
+        "**Iteration: dup.**\n"
+        "**Transfer check:** PASS.\n\n"
+        "**Iteration: dup.**\n"
+        "**Transfer check:** PASS.\n"
+    )
+    path = _write(tmp_path, "split.md", content)
+    entries = [
+        (path, "**Iteration: dup.**"),
+        (path, "**Iteration: dup.**"),
+        (path, "**Iteration: dup.**"),
+    ]
+    missing = gate.find_missing_transfer_checks(entries)
+    assert missing == [(path, "**Iteration: dup.**")]
 
 
 def test_reworded_but_untouched_transfer_check_line_still_counts(tmp_path):

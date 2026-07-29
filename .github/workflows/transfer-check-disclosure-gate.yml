@@ -66,28 +66,57 @@ jobs:
           while IFS=$'\t' read -r status path newpath; do
             [ -z "$status" ] && continue
             case "$status" in
-              R*) new_path="$newpath" ;;
-              *) new_path="$path" ;;
+              R*) old_path="$path"; new_path="$newpath" ;;
+              *) old_path="$path"; new_path="$path" ;;
             esac
             # Newly-added '**Iteration:' header lines only -- a diff hunk
             # touching unrelated text in an existing entry (or reformatting
             # an existing entry without changing its own header line) must
             # not re-trigger this check; only an entry whose own header
-            # line is new counts as "newly added" here. grep exits non-zero
-            # when nothing matches, which would trip `set -e`; `|| true`
-            # guards it the same way every other conditionally-empty grep
-            # in this repo's gates is guarded.
-            new_lines=$(git diff -U0 "$merge_base...$HEAD_SHA" -- "$new_path" \
-              | grep -E '^\+\*\*Iteration:' || true)
-            if [ -n "$new_lines" ]; then
+            # line is new counts as "newly added" here.
+            #
+            # Computed as a content-based multiset diff (old iteration-line
+            # texts vs. new iteration-line texts via `comm`), not
+            # `git diff -U0 -- "$new_path"`: restricting a diff to a single
+            # pathspec drops the *other* endpoint of a rename from git's
+            # view entirely, so git cannot pair the rename and instead
+            # renders the whole renamed-with-modification file as a full
+            # addition (the same class of bug skill_description_diff.py's
+            # own docstring documents fixing for description-diffing, refs
+            # PR #428's rename-false-positive review finding) -- every
+            # pre-existing entry in a file renamed alongside an unrelated
+            # edit would then be wrongly reported as "newly added". `comm`
+            # instead compares the two blobs' own content directly and is
+            # immune to this: it needs no rename detection because it
+            # never restricts a tree-diff pathspec in the first place.
+            # `sort`'s own exit code is what `pipefail` reports for each
+            # pipeline below, and `sort` succeeds even when `git show`
+            # fails (e.g. old_path not present at merge_base, a newly
+            # added file) and its upstream `grep` finds nothing -- so both
+            # temp files come out correctly empty in that case with no
+            # explicit fallback needed.
+            old_lines_file=$(mktemp)
+            new_lines_file=$(mktemp)
+            # `|| true` on both: under `pipefail`, a bare pipeline reports
+            # non-zero if ANY stage fails, even when the rightmost stage
+            # (sort) itself succeeds on empty input -- verified directly
+            # (`false | grep nomatch | sort` reports exit 1 under
+            # pipefail despite sort succeeding). grep legitimately finds
+            # zero '**Iteration:' lines whenever a changed split.md
+            # doesn't touch the Kept-edit-log section at all, and git show
+            # legitimately fails when old_path didn't exist at merge_base
+            # (a newly added file) -- both are expected, not errors.
+            git show "${merge_base}:${old_path}" 2>/dev/null \
+              | grep -E '^\*\*Iteration:' | sort > "$old_lines_file" || true
+            git show "${HEAD_SHA}:${new_path}" \
+              | grep -E '^\*\*Iteration:' | sort > "$new_lines_file" || true
+            new_texts=$(comm -13 "$old_lines_file" "$new_lines_file" || true)
+            rm -f "$old_lines_file" "$new_lines_file"
+            if [ -n "$new_texts" ]; then
               while IFS= read -r new_line; do
                 [ -z "$new_line" ] && continue
-                # Strip the leading '+' unified-diff marker only -- the
-                # remaining text must match the current file's own line
-                # content verbatim for gate_transfer_check_disclosure.py
-                # to locate the entry.
-                printf '%s\t%s\n' "$new_path" "${new_line#+}" >> "$entries_file"
-              done <<< "$new_lines"
+                printf '%s\t%s\n' "$new_path" "$new_line" >> "$entries_file"
+              done <<< "$new_texts"
             fi
           done <<< "$changed"
 

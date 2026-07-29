@@ -41,6 +41,24 @@ a workflow-supplied list of newly-added entries -- a different task
 shape, kept as its own focused gate script and workflow per this repo's
 existing gate_owasp_asi_mapping.py / gate_owasp_llm_mapping.py precedent
 of independent, single-purpose gates.
+
+Scoped specifically to the `## Kept-edit log` section, not any `##`
+section a split.md happens to contain: an entry under `## Rejected-edit
+log` was rejected before a transfer check could even be relevant, so this
+gate only requires the line for an entry whose nearest preceding `##`
+heading is `Kept-edit log` (case-insensitive); an entry under any other
+heading, or with no heading above it at all, is out of this gate's scope
+and never reported as a failure.
+
+Line selection is multiplicity-aware: if two entries in the same file
+share byte-identical `**Iteration:` header text (an edge case -- real
+entries cite a unique issue number -- but not impossible), naively
+matching the *first* occurrence in the file would grade a later,
+genuinely new entry against an earlier, unrelated one's span. Each
+workflow-supplied (path, iteration_line) tuple instead consumes one
+not-yet-claimed matching line, preferring the *last* (highest-numbered)
+remaining occurrence first, since new entries are conventionally appended
+to the end of a Kept-edit log.
 """
 
 from __future__ import annotations
@@ -51,7 +69,8 @@ import sys
 from pathlib import Path
 
 _ITERATION_PREFIX = "**Iteration:"
-_HEADING_RE = re.compile(r"^##[ \t]+\S")
+_HEADING_RE = re.compile(r"^##[ \t]+(\S.*)$")
+_KEPT_EDIT_LOG_HEADING_RE = re.compile(r"^kept-edit log$", re.IGNORECASE)
 _TRANSFER_CHECK_RE = re.compile(r"transfer check", re.IGNORECASE)
 
 
@@ -67,9 +86,24 @@ def _entry_span(lines, start_index):
     return lines[start_index:end]
 
 
-def _find_line_index(lines, target_line):
-    for i, line in enumerate(lines):
-        if line == target_line:
+def _nearest_heading(lines, index):
+    """Return the text of the nearest `##` heading at or before `index`,
+    or None if there is none (index sits before any heading)."""
+    for i in range(index, -1, -1):
+        match = _HEADING_RE.match(lines[i])
+        if match:
+            return match.group(1).strip()
+    return None
+
+
+def _select_unconsumed_line_index(lines, target_line, consumed):
+    """Return the highest-index line in `lines` equal to `target_line`
+    that is not already in `consumed`, or None if every occurrence (or
+    there are none at all) is already claimed. Preferring the last
+    occurrence first matches how new Kept-edit-log entries are
+    conventionally appended."""
+    for i in range(len(lines) - 1, -1, -1):
+        if i not in consumed and lines[i] == target_line:
             return i
     return None
 
@@ -77,27 +111,38 @@ def _find_line_index(lines, target_line):
 def find_missing_transfer_checks(entries):
     """entries: an iterable of (path, iteration_line) pairs -- workflow-
     computed, newly-added `**Iteration:` lines in this diff. Returns the
-    subset whose entry span (read from the current on-disk file content)
-    has no `Transfer check` mention, or whose (path, iteration_line) could
-    not be located at all (missing file, or the line text no longer
-    matches current content) -- either way treated as a disclosure
-    failure, not silently skipped.
+    subset that are in scope (nearest heading is `## Kept-edit log`) and
+    whose entry span (read from the current on-disk file content) has no
+    `Transfer check` mention, or whose (path, iteration_line) could not be
+    located at all (missing file, or the line text no longer matches
+    current content, or every matching occurrence already claimed by an
+    earlier tuple) -- either way treated as a disclosure failure, not
+    silently skipped. An entry located but scoped to a heading other than
+    `## Kept-edit log` (e.g. `## Rejected-edit log`) is out of scope and
+    never added to the returned list.
     """
     missing = []
     file_lines_cache = {}
+    consumed_by_path = {}
     for path, iteration_line in entries:
         if path not in file_lines_cache:
             try:
                 file_lines_cache[path] = Path(path).read_text(encoding="utf-8").splitlines()
-            except OSError:
+            except (OSError, UnicodeDecodeError) as exc:
+                print(f"warning: could not read {path}: {exc}", file=sys.stderr)
                 file_lines_cache[path] = None
         lines = file_lines_cache[path]
         if lines is None:
             missing.append((path, iteration_line))
             continue
-        idx = _find_line_index(lines, iteration_line)
+        consumed = consumed_by_path.setdefault(path, set())
+        idx = _select_unconsumed_line_index(lines, iteration_line, consumed)
         if idx is None:
             missing.append((path, iteration_line))
+            continue
+        consumed.add(idx)
+        heading = _nearest_heading(lines, idx)
+        if heading is None or not _KEPT_EDIT_LOG_HEADING_RE.match(heading):
             continue
         span_text = "\n".join(_entry_span(lines, idx))
         if not _TRANSFER_CHECK_RE.search(span_text):
