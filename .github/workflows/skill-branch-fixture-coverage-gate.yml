@@ -1,0 +1,124 @@
+name: Skill decision-branch fixture coverage gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "skills/**/SKILL.md"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  skill-branch-fixture-coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      # Issue #49 repair 1 (re-escalated, unbuilt, across #419, #440,
+      # #454, #548): a SKILL.md's own Stop-boundary bullets and named
+      # dispatch branches must not outgrow its evals/<skill>/tasks/
+      # fixture count. Diff-scoped (added/modified skills/*/SKILL.md,
+      # D/R100-excluded) and delta-scoped -- see
+      # gate_skill_branch_fixture_coverage.py's own module docstring for
+      # why this only fires when THIS diff increases a skill's own
+      # decision-branch count, never retroactively against a pre-existing
+      # gap this gate did not create. A three-dot (merge-base) diff
+      # mirrors skill-audit-gate.yml's and transfer-check-disclosure-gate.yml's
+      # own rationale: a SKILL.md change already merged to the base branch
+      # after this PR forked must never be misattributed to this PR.
+      - name: Determine changed SKILL.md and compute branch/fixture facts
+        id: diff
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if ! diff_output=$(git diff --name-status "$BASE_SHA...$HEAD_SHA" -- 'skills/*/SKILL.md'); then
+            echo "::error::git diff failed between $BASE_SHA and $HEAD_SHA" >&2
+            exit 1
+          fi
+          changed=$(printf '%s\n' "$diff_output" | grep -vE '^(D|R100)[[:space:]]' || true)
+          if [ -z "$changed" ]; then
+            echo "No added/modified skills/*/SKILL.md in this diff; skipping."
+            echo "applicable=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Added/modified SKILL.md files:"
+          echo "$changed"
+
+          merge_base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
+          entries_file="$RUNNER_TEMP/skill_branch_entries.tsv"
+          : > "$entries_file"
+          while IFS=$'\t' read -r status path newpath; do
+            [ -z "$status" ] && continue
+            case "$status" in
+              R*) old_path="$path"; new_path="$newpath" ;;
+              *) old_path="$path"; new_path="$path" ;;
+            esac
+            skill=$(printf '%s\n' "$new_path" | sed -E 's#^skills/([^/]+)/SKILL\.md$#\1#')
+            # Skill name is interpolated into a path below and written to a
+            # temp TSV file this workflow itself parses -- a PR author fully
+            # controls this directory name in their own diff, so validate
+            # its shape first (same guard skill-audit-gate.yml already
+            # applies to the identical extraction).
+            if ! printf '%s' "$skill" | grep -E '^[A-Za-z0-9_-]+$' >/dev/null; then
+              echo "::error::unsupported skill directory name for signal computation: $new_path" >&2
+              exit 1
+            fi
+
+            after_file=$(mktemp)
+            git show "${HEAD_SHA}:${new_path}" > "$after_file"
+
+            # A pure addition ('A' status) has no merge-base version at
+            # all -- every branch it declares counts as new. A modify or
+            # rename does have one; git show can still legitimately fail
+            # for a rename whose old_path didn't exist at merge_base (a
+            # rename plus re-add across history is rare but not
+            # impossible) -- treated the same as "no prior version found".
+            before_file=""
+            if [ "$status" != "A" ]; then
+              candidate_before_file=$(mktemp)
+              if git show "${merge_base}:${old_path}" > "$candidate_before_file" 2>/dev/null; then
+                before_file="$candidate_before_file"
+              else
+                rm -f "$candidate_before_file"
+              fi
+            fi
+
+            # grep -c always prints a count (even "0") and only exits
+            # non-zero when the count is zero; `|| true` absorbs that
+            # under `pipefail` without masking a real git-ls-tree failure
+            # (which prints nothing, so grep -c on empty input still
+            # correctly reports "0").
+            fixture_count=$(git ls-tree -r --name-only "$HEAD_SHA" -- "evals/${skill}/tasks/" 2>/dev/null | grep -c '\.yaml$' || true)
+
+            printf '%s\t%s\t%s\t%s\n' "$skill" "$before_file" "$after_file" "$fixture_count" >> "$entries_file"
+          done <<< "$changed"
+
+          {
+            echo "applicable=true"
+            echo "entries-file=${entries_file}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check decision-branch fixture coverage
+        if: steps.diff.outputs.applicable == 'true'
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/gate_skill_branch_fixture_coverage.py --entries "${{ steps.diff.outputs.entries-file }}"

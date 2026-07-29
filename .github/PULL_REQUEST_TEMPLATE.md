@@ -40,13 +40,16 @@ method -> result. Otherwise, list the command(s) run and their output.
 - [ ] Issue number cited in every commit
 - [ ] If this PR adds/modifies a `skills/*/SKILL.md`, a `docs/superpowers/specs/*.md` design doc, a security-relevant skill, or a deterministic checker script (`skills/*/scripts/*.py`, `evals/scripts/*.py`, `.github/scripts/*.py`), a `## Skill audit evidence` section discloses the required verdicts/waivers (see `.github/scripts/gate_skill_audit_disclosure.py`)
 - [ ] If this PR adds a new Kept-edit-log entry to any `evals/*/split.md`, that entry discloses a Transfer check line (see `.github/scripts/gate_transfer_check_disclosure.py`)
+- [ ] If this PR adds or increases a `skills/*/SKILL.md`'s Stop-boundary bullets or named dispatch branches, `evals/<skill>/tasks/*.yaml` gained at least as many new fixtures (see `.github/scripts/gate_skill_branch_fixture_coverage.py`)
 
 <!--
-The skill-audit-evidence and Transfer-check-disclosure checklist items
-above are each checked by a CI job that fails (no continue-on-error) on
-missing disclosure -- see .github/workflows/skill-audit-gate.yml and
-.github/workflows/transfer-check-disclosure-gate.yml. Whether a failing
-job actually blocks the merge button additionally depends on this
+The skill-audit-evidence, Transfer-check-disclosure, and decision-branch/
+fixture-coverage checklist items above are each checked by a CI job that
+fails (no continue-on-error) on missing disclosure or coverage -- see
+.github/workflows/skill-audit-gate.yml,
+.github/workflows/transfer-check-disclosure-gate.yml, and
+.github/workflows/skill-branch-fixture-coverage-gate.yml. Whether a
+failing job actually blocks the merge button additionally depends on this
 repo's branch-protection required-status-checks list, which is a GitHub
 admin setting no in-repo tooling can read or confirm (see the "Open
 item" in docs/superpowers/specs/2026-07-21-skill-audit-merge-gate-design.md).
