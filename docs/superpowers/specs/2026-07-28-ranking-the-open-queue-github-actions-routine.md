@@ -107,9 +107,32 @@ job-level `permissions:`, `timeout-minutes`).
   --mcp-config '{"mcpServers": {"github": {"command": "docker", "args": ["run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "ghcr.io/github/github-mcp-server"], "env": {"GITHUB_PERSONAL_ACCESS_TOKEN": "${{ secrets.GITHUB_TOKEN }}"}}}}'
   --allowedTools mcp__github__list_issues,mcp__github__search_issues,mcp__github__list_pull_requests
   ```
-  Not yet re-verified live as of this edit -- the fix is filed in a
-  follow-up PR; AC1 still needs one more successful `workflow_dispatch`
-  run to close.
+  **Correction 2026-07-29:** the `--mcp-config` fix above was landed
+  based on the wrong diagnosis. Re-testing it (job
+  [90447731321](https://github.com/tvna/gitapex/actions/runs/30411290184/job/90447731321),
+  with `show_full_output: true` temporarily enabled to see past the
+  action's normal "output hidden for security" summary) surfaced the
+  real error: `"result": "Credit balance is too low"`,
+  `"error": "billing_error"`, `"api_error_status": 400`. Both prior
+  failures (job 90440858606, before this fix, and job 90447365293,
+  after this fix but before `show_full_output`) share the exact same
+  shape (`num_turns: 1`, `total_cost_usd: 0`, ~700-900ms) -- consistent
+  with the very first API call being rejected for billing before the
+  SDK ever got far enough to attempt any tool, MCP-configured or not.
+  The printed "SDK options" block earlier in this document's own
+  investigation was a red herring: it is a fixed dump of the initial
+  request configuration, not evidence of whether MCP tools ultimately
+  resolved.
+
+  The `--mcp-config` and digest-pinning changes are kept (still correct
+  practice, and likely still necessary once a real run gets past this
+  point), but neither was the actual blocker. **AC1 is now blocked on a
+  different, purely external/human action:** the Anthropic Console
+  account or workspace backing this repository's `ANTHROPIC_API_KEY`
+  needs credit added at <https://console.anthropic.com>. Nothing in
+  this repository can fix that. `show_full_output: true` was reverted
+  after use -- re-enable it temporarily if a *different* error appears
+  once credits are restored.
 
 ### Prompt (verbatim, `prompt:` input)
 
