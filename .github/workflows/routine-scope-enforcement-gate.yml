@@ -1,0 +1,71 @@
+name: Routine scope enforcement gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "docs/superpowers/specs/*routine*.md"
+      - "docs/superpowers/specs/*Routine*.md"
+      - "skills/**/metadata/gitapex.yaml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  routine-scope-enforcement:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      # Issue #520 (row 2, refs #348): every Routine-connection doc
+      # currently in the repository is checked on each run, not just the
+      # ones this diff touches -- a change to a skill's own
+      # metadata/gitapex.yaml (e.g. flipping capabilityAssumption to
+      # Broad) can turn a previously-compliant doc into an offender
+      # without the doc itself changing, so a diff-scoped file list would
+      # miss exactly that case. This mirrors
+      # skill-rename-lifecycle-gate.yml's own full-tree comparison
+      # rationale (a plain listing, not a diff-scoped one, is what makes
+      # the check unaffected by which specific file changed).
+      - name: Find Routine-connection docs
+        id: find
+        run: |
+          set -euo pipefail
+          docs=$(find docs/superpowers/specs -maxdepth 1 -iname '*routine*.md' 2>/dev/null | sort || true)
+          if [ -z "$docs" ]; then
+            echo "No Routine-connection docs found; skipping."
+            echo "applicable=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Routine-connection docs to check:"
+          echo "$docs"
+          {
+            echo "applicable=true"
+            echo "docs<<GITAPEX_EOF"
+            echo "$docs"
+            echo "GITAPEX_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check Routine scope enforcement
+        if: steps.find.outputs.applicable == 'true'
+        env:
+          DOCS: ${{ steps.find.outputs.docs }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$DOCS" | xargs -r python3 .github/scripts/gate_routine_scope_enforcement.py --skills-root skills

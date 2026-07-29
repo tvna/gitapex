@@ -1,0 +1,76 @@
+name: Provenance disclosure gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  provenance-disclosure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      # Issue #520 (row 3, refs #350): the flagged pattern (a review-
+      # response draft or doc/PR-body diff naming a specific tool's
+      # absence/presence as an evidence-limitation reason) can live in the
+      # PR body alone, so this workflow runs on every PR regardless of
+      # which paths changed -- unlike the other two new gates, a paths:
+      # filter here would skip exactly the body-only case #350 itself was.
+      # Added-line extraction (not the whole file) for doc/eval/skill
+      # Markdown: pre-existing, already-reviewed prose is out of this
+      # gate's scope, only what this diff introduces. A three-dot
+      # (merge-base) diff matches the other new gates' own rationale.
+      - name: Extract added lines from doc/eval/skill Markdown
+        id: diff
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          added_file="$RUNNER_TEMP/added_lines.txt"
+          : > "$added_file"
+          if git diff -U0 "$BASE_SHA...$HEAD_SHA" -- 'docs/**/*.md' 'evals/**/*.md' 'skills/**/*.md' \
+              | grep -E '^\+[^+]' | sed 's/^\+//' > "$added_file.tmp"; then
+            mv "$added_file.tmp" "$added_file"
+          else
+            rm -f "$added_file.tmp"
+          fi
+          echo "added-file=$added_file" >> "$GITHUB_OUTPUT"
+
+      # PR_BODY carries untrusted external text (anyone with PR-author
+      # access controls it) -- written to a file via env, never
+      # interpolated directly into the shell script, avoiding GitHub
+      # Actions expression/script injection (same rationale as
+      # skill-audit-gate.yml's own PR_BODY handling).
+      - name: Write PR body to file
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$PR_BODY" > "$RUNNER_TEMP/pr_body.txt"
+
+      - name: Check provenance disclosure
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/gate_provenance_disclosure.py \
+            --body "$RUNNER_TEMP/pr_body.txt" \
+            --diff-added "${{ steps.diff.outputs.added-file }}"
