@@ -1,0 +1,46 @@
+apiVersion: gitapex.io/v1alpha1
+kind: SkillMetadata
+metadata:
+  name: evaluating-decision-state-discipline
+spec:
+  portability: Mixed
+  capabilityAssumption: Adaptive
+  references:
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/547"
+      summary: "New skill proposed after a review of evaluating-deterministic-gate-quality found zero coverage for a deterministic check whose decision reads state beyond its own triggering event; a fable-model design review rejected importing 'feedforward' control-theory vocabulary as a category error for this repository's four gate-realization domains and recommended native vocabulary (decision, state, discipline) instead."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/547"
+      summary: "Scoped as a sibling skill to evaluating-deterministic-gate-quality rather than a new dimension appended to that skill's own files, per the requester's explicit direction; the applicability precondition (SKILL.md's 'Relationship to evaluating-deterministic-gate-quality' section) cross-references that skill's own Mechanism-fit test rather than duplicating or amending it."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/547"
+      summary: "A candidate third skill to evaluate multi-agent orchestration/dispatch-mechanism correctness (task-partitioning/scheduling safety, cross-agent git-concurrency safety, partial-failure rollback semantics) was considered during scoping and explicitly not pursued; recorded in issue 547's own 'Scoping update (post-creation)' section so it is not silently re-proposed."
+    - kind: caveat
+      anchor: "references/gitapex-worked-examples.md"
+      summary: "This file carries gitapex's own worked examples, including a real (not synthetic) target found in skills/executing-a-branch-plan/references/execution-and-dispatch.md's own disclosed worktree-cleanup open item; substitute the target repository's own equivalents when applying this skill elsewhere."
+    - kind: audit
+      anchor: "method:evaluating-skill-quality"
+      summary: "Fresh dispatch against the initial candidate returned WELL-FORMED-NOT-MATURE: 6 findings, the major one being criterion 2's own text and the frontmatter description both overclaiming zero overlap with the sibling skill's dimension 15."
+      outcome:
+        verdict: WELL-FORMED-NOT-MATURE
+        found: 6
+    - kind: audit
+      anchor: "method:battle-testing-a-skill"
+      summary: "Fresh adversarial dispatch against the initial candidate returned FAIL: 10 findings, concentrated in Stop-boundary gaps (waiver-spoofing, execution-safety specificity, delimiter-safe quoting, install/vendoring provenance, memory-poisoning/multi-turn, missing-target-artifact handling, worked-example carry-over) the sibling skill's own Stop boundaries already close."
+      outcome:
+        verdict: FAIL
+        found: 10
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/547"
+      summary: "All 6 evaluating-skill-quality findings and all 10 battle-testing-a-skill findings fixed in the same change: SKILL.md's precondition, five criteria, Stop boundaries, and Notes; the worktree worked example rewritten to cannot-be-assessed per an independent smoke test; two BLOCKING overclaims found by a separate adversarial code review also fixed."
+      outcome:
+        fixed: 16
+  skillDependencies:
+    requires:
+      - evaluating-deterministic-gate-quality
+    relatedTo:
+      - evaluating-skill-quality
+  lifecycle:
+    experimental:
+      reason: "First version of a new skill category. Deferred: (1) a second, post-fix evaluating-skill-quality/battle-testing-a-skill confirmation round -- one round of each already ran, see spec.references; (2) a shape-checker specific to its own five criteria (evaluating-skill-quality's generic checker covers shape meanwhile); (3) a committed evals/ corpus (ablation-capable, not yet run, not an absent-mechanism gap); (4) a cross-agent-tool compatibility matrix."
+      trackingIssue: "https://github.com/tvna/gitapex/issues/547"
