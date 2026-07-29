@@ -17,7 +17,8 @@ sentences that happen to co-occur once paragraph boundaries are gone.
 Reproduced live against a real PR: see issue #552 for the full repro.
 
 This script replaces that grep/sed pipeline. It parses `git diff -U0`
-output directly, tracking two boundaries a prefix-based heuristic cannot:
+output directly, tracking three boundaries a prefix-based heuristic
+cannot:
 
 1. **Per-file boundaries** (`diff --git a/... b/...` lines). Each file's
    own extracted content is joined back together with an explicit
@@ -33,6 +34,17 @@ output directly, tracking two boundaries a prefix-based heuristic cannot:
    `+++ b/file` header line, the same way the original bug misclassified
    it as non-content for the unrelated reason of requiring a second
    character to exist at all.
+3. **Hunk-to-hunk boundaries within the same file.** An earlier version of
+   this fix (caught by a fresh adversarial review before merge, not by any
+   automated check -- every fixture at that point had exactly one `@@` per
+   file, so line coverage could not discriminate a first-hunk-in-file from
+   a later one) still joined two non-adjacent hunks of the *same* file
+   with a bare newline, no separator. Two edits ten lines apart in the
+   same file, with an untouched paragraph physically between them in the
+   real file, collapsed into one paragraph here -- the identical defect
+   class issue #552 was filed to eliminate, one level down. Fixed by
+   inserting an explicit blank-line marker whenever a new hunk begins for
+   a file that has already contributed content from an earlier hunk.
 
 Deliberately stdlib-only, matching this repository's existing
 `.github/scripts/*.py` convention.
@@ -59,12 +71,14 @@ def extract_added_lines_by_file(diff_text: str) -> list[list[str]]:
     files: list[list[str]] = []
     current: list[str] | None = None
     in_hunk = False
+    pending_hunk_separator = False
     for line in diff_text.splitlines():
         if line.startswith("diff --git "):
             if current is not None:
                 files.append(current)
             current = []
             in_hunk = False
+            pending_hunk_separator = False
             continue
         if current is None:
             # Preamble before the first "diff --git" line (e.g. a
@@ -72,6 +86,18 @@ def extract_added_lines_by_file(diff_text: str) -> list[list[str]]:
             # such line at all) -- nothing to extract yet.
             continue
         if line.startswith("@@"):
+            # A later hunk in the same file starts a new, physically
+            # separate span of the real file -- force a paragraph break
+            # here too, the same reason build_added_corpus forces one
+            # between files, so two non-adjacent edits in one file are
+            # never read as one continuous paragraph. `in_hunk` already
+            # being True here (not just "a hunk was seen before") is what
+            # distinguishes this file's own *later* hunk from its first.
+            # Deferred, not applied immediately: a hunk that turns out to
+            # contribute no "+" line at all (a pure deletion) must not
+            # leave a dangling trailing separator behind it.
+            if in_hunk:
+                pending_hunk_separator = True
             in_hunk = True
             continue
         if not in_hunk:
@@ -80,6 +106,10 @@ def extract_added_lines_by_file(diff_text: str) -> list[list[str]]:
             # none of this is the file's own added content.
             continue
         if line.startswith("+"):
+            if pending_hunk_separator:
+                if current and current[-1] != "":
+                    current.append("")
+                pending_hunk_separator = False
             current.append(line[1:])
     if current is not None:
         files.append(current)
@@ -96,7 +126,7 @@ def build_added_corpus(diff_text: str) -> str:
     return "\n\n".join("\n".join(lines) for lines in per_file)
 
 
-def main(argv: list[str] | None = None) -> int:
+def main() -> int:
     diff_text = sys.stdin.read()
     corpus = build_added_corpus(diff_text)
     if corpus:

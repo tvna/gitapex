@@ -88,6 +88,28 @@ Expected: `PASS: no undisclosed tool-fingerprint evidence-limitation prose found
 | The exact reported false-positive shape is fixed | `test_regression_multi_file_addition_no_longer_false_positives`, plus the live replay against the real PR #551 diff above |
 | No change to `gate_provenance_disclosure.py`'s own grading logic | `git diff --stat` against this branch shows that file untouched |
 
+## Step 8: mandatory refactor + adversarial review (ran before merge)
+
+A fresh, independent adversarial review found the first cut of this fix
+left one more instance of the exact defect class #552 was filed to
+eliminate: two non-adjacent hunks of the *same* file still merged into
+one paragraph, since only file boundaries forced a separator, not hunk
+boundaries -- reproduced with real `git` (two edits ~10 lines apart in
+one file, confirmed to falsely trip `gate_provenance_disclosure.py`).
+Fixed: `extract_added_lines_by_file` now inserts a deferred paragraph
+separator whenever a later hunk in the same file goes on to contribute
+its own content, without leaving a dangling separator behind a hunk that
+turns out to contribute nothing (a pure-deletion hunk). Two new tests
+(`test_multiple_hunks_in_same_file_get_a_separator`,
+`test_hunk_contributing_nothing_does_not_force_a_stray_separator`) plus a
+rename-with-rewrite test cover this; the real-`git` reproduction was
+re-run against the fix and now passes. A separate, independent refactor
+pass found 3 minor items (a dead `argv` parameter inconsistent with this
+repo's own no-CLI-args convention, duplicated paragraph-splitting test
+logic, one fixture not matching the file's own triple-quoted-constant
+style) -- all fixed in the same commit. Full suite re-verified: 1130
+passed, 0 failed; 100% coverage on the new script.
+
 ## Next Move
 
 Publish this plan as the branch's first commit, open a PR carrying the
