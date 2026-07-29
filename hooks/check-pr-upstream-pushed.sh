@@ -1,18 +1,25 @@
 #!/bin/bash
 # PreToolUse hook (matcher: mcp__github__create_pull_request) backing
-# issue #187: block a PR-open call for a branch that has no upstream
-# configured, or has local commits not yet pushed to its upstream -- both
-# reproduce #187's "No commits between main and <branch>" failure (opening
-# a PR for a branch GitHub can't see any commits on because it was never
+# issue #187: block a PR-open call for a branch that has no resolvable
+# upstream, or has local commits not yet pushed to it -- both reproduce
+# #187's "No commits between <base> and <branch>" failure (opening a PR
+# for a branch GitHub can't see any commits on because it was never
 # pushed).
 #
-# This is a local git-state precondition and only has an opinion when
-# tool_input.head is the branch currently checked out in this working
-# tree (this repo's git-branch-per-issue convention normally guarantees
-# that -- see skills/driving-pr-to-merge/SKILL.md step 0). Any local git
-# state this hook cannot resolve to a real answer -- not inside a work
-# tree, detached HEAD, tool_input.head not the checked-out branch -- fails
-# OPEN (exit 0, stderr warning), mirroring
+# Verifies tool_input.head directly via its refs/heads/<branch> ref,
+# independent of whatever is currently checked out in this working tree
+# -- a PR can legitimately be opened for a branch other than the one
+# checked out (scripted PR creation, multiple worktrees). "Pushed" is
+# checked via `git merge-base --is-ancestor <branch> <branch>@{u}`, not
+# SHA equality: a local branch that is merely behind its already-pushed
+# upstream (e.g. after a `git fetch` with no local merge) has zero
+# unpushed commits and must not be denied, only a branch with commits
+# not yet present upstream (ahead or diverged) actually reproduces #187.
+#
+# Any local git state this hook cannot resolve to a real answer -- not
+# inside a work tree, tool_input.head not a local branch (e.g. a
+# fork/cross-repo head), an inconclusive merge-base result -- fails OPEN
+# (exit 0, stderr warning), mirroring
 # hooks/check-pr-skill-audit-disclosure.sh's fail-open philosophy.
 #
 # Unlike that hook, there is no CI backstop for this failure mode -- but
@@ -40,6 +47,8 @@ if [ "$tool_name" != "mcp__github__create_pull_request" ]; then
 fi
 
 head_branch=$(printf '%s' "$input" | jq -r '.tool_input.head // empty')
+base_branch=$(printf '%s' "$input" | jq -r '.tool_input.base // empty')
+base_display=${base_branch:-<base>}
 
 deny() {
   jq -n --arg msg "$1" \
@@ -54,27 +63,20 @@ warn_open() {
 
 [ -n "$head_branch" ] || warn_open "found no tool_input.head on this call"
 
-git rev-parse --is-inside-work-tree >/dev/null 2>&1 \
-  || warn_open "is not running inside a git work tree"
+git show-ref --verify --quiet "refs/heads/$head_branch" 2>/dev/null \
+  || warn_open "could not find a local branch named '$head_branch' (not inside a git work tree, no such local branch here, or tool_input.head names a fork/cross-repo head this local checkout cannot verify)"
 
-current_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null) \
-  || warn_open "could not resolve the current branch (git rev-parse --abbrev-ref HEAD failed)"
+upstream=$(git rev-parse --abbrev-ref --symbolic-full-name "${head_branch}@{u}" 2>/dev/null) \
+  || deny "Blocked by hooks/check-pr-upstream-pushed.sh (PR-open precondition, issue #187): branch '$head_branch' has no resolvable upstream (either never configured, or its remote-tracking ref is stale/missing locally) -- GitHub cannot see commits on a branch with no visible upstream, which reproduces issue #187's 'No commits between $base_display and $head_branch' failure. Run 'git push -u origin $head_branch' to (re-)establish the upstream, then retry opening the PR."
 
-[ "$current_branch" != "HEAD" ] \
-  || warn_open "found a detached HEAD, not a branch"
+if git merge-base --is-ancestor "refs/heads/$head_branch" "${head_branch}@{u}" 2>/dev/null; then
+  ancestor_rc=0
+else
+  ancestor_rc=$?
+fi
 
-[ "$current_branch" = "$head_branch" ] \
-  || warn_open "found tool_input.head ($head_branch) does not match the currently checked-out branch ($current_branch) -- cannot verify a branch that is not checked out here"
-
-upstream=$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null) \
-  || deny "Blocked by hooks/check-pr-upstream-pushed.sh (PR-open precondition, issue #187): branch '$current_branch' has no upstream configured -- GitHub cannot see any commits on an unpushed branch, which reproduces issue #187's 'No commits between main and <branch>' failure. Run 'git push -u origin $current_branch' to set the upstream, then retry opening the PR."
-
-local_sha=$(git rev-parse HEAD 2>/dev/null) \
-  || warn_open "could not resolve the local HEAD SHA (git rev-parse HEAD failed)"
-upstream_sha=$(git rev-parse '@{u}' 2>/dev/null) \
-  || warn_open "resolved an upstream ($upstream) but could not resolve its SHA (git rev-parse @{u} failed)"
-
-[ "$local_sha" = "$upstream_sha" ] \
-  || deny "Blocked by hooks/check-pr-upstream-pushed.sh (PR-open precondition, issue #187): branch '$current_branch' has local commits not yet pushed to its upstream ($upstream) -- opening this PR now would reproduce issue #187's 'No commits between main and <branch>' failure for the missing commits, or open it against a stale remote branch. Run 'git push' to bring $upstream up to date, then retry opening the PR."
-
-exit 0
+case "$ancestor_rc" in
+  0) exit 0 ;;
+  1) deny "Blocked by hooks/check-pr-upstream-pushed.sh (PR-open precondition, issue #187): branch '$head_branch' has local commits not yet pushed to its upstream ($upstream) -- opening this PR now would reproduce issue #187's 'No commits between $base_display and $head_branch' failure for the missing commits. Run 'git push' to bring $upstream up to date, then retry opening the PR." ;;
+  *) warn_open "could not compare '$head_branch' to its upstream ($upstream) via git merge-base --is-ancestor (unexpected exit $ancestor_rc)" ;;
+esac

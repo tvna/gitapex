@@ -279,11 +279,11 @@ def test_find_bare_get_spec_offenders_catches_multiline_call():
 _SCANNED_GLOBS: tuple[str, ...] = ("tests/*.py", "skills/*/scripts/test_*.py")
 
 
-def _scan_for_bare_get_spec(root: pathlib.Path, globs: tuple[str, ...]) -> list[str]:
+def _scan_for_bare_get_spec(root: pathlib.Path) -> list[str]:
     """Offending 'path:lineno' strings for every bare get-on-spec chain
-    found under any of ``globs``, resolved relative to ``root``."""
+    found under any of ``_SCANNED_GLOBS``, resolved relative to ``root``."""
     offenders: list[str] = []
-    for pattern in globs:
+    for pattern in _SCANNED_GLOBS:
         for test_file in sorted(root.glob(pattern)):
             text = test_file.read_text(encoding="utf-8")
             offenders.extend(
@@ -294,7 +294,7 @@ def _scan_for_bare_get_spec(root: pathlib.Path, globs: tuple[str, ...]) -> list[
 
 
 def test_no_bare_get_spec_chain_in_tests():
-    offenders = _scan_for_bare_get_spec(REPO_ROOT, _SCANNED_GLOBS)
+    offenders = _scan_for_bare_get_spec(REPO_ROOT)
     assert not offenders, (
         "bare get-on-spec chain found outside css.spec_of() -- use "
         "css.spec_of(parsed) instead, which guards against a malformed "
@@ -303,12 +303,11 @@ def test_no_bare_get_spec_chain_in_tests():
     )
 
 
-# Built from a variable, not a literal, so this module's own source text
-# never contains the offending get-on-spec substring -- otherwise this
-# file (itself scanned by test_no_bare_get_spec_chain_in_tests, since it
-# lives under tests/*.py) would flag itself.
-_SPEC_KEY = "spec"
-_OFFENDING_LINE = f'x = parsed.root.get("{_SPEC_KEY}")\n'
+# Built via concatenation, not one literal, so this module's own source
+# text never contains the offending get-on-spec substring -- otherwise
+# this file (itself scanned by test_no_bare_get_spec_chain_in_tests, since
+# it lives under tests/*.py) would flag itself.
+_OFFENDING_LINE = 'x = parsed.root.get(' + '"spec"' + ')\n'
 
 
 def test_scan_for_bare_get_spec_catches_offender_in_skill_scripts_glob(tmp_path):
@@ -318,7 +317,7 @@ def test_scan_for_bare_get_spec_catches_offender_in_skill_scripts_glob(tmp_path)
     skill_scripts = tmp_path / "skills" / "some-skill" / "scripts"
     skill_scripts.mkdir(parents=True)
     (skill_scripts / "test_something.py").write_text(_OFFENDING_LINE, encoding="utf-8")
-    offenders = _scan_for_bare_get_spec(tmp_path, _SCANNED_GLOBS)
+    offenders = _scan_for_bare_get_spec(tmp_path)
     assert offenders == ["skills/some-skill/scripts/test_something.py:1"]
 
 
@@ -330,7 +329,7 @@ def test_scan_for_bare_get_spec_ignores_non_test_files_in_skill_scripts(tmp_path
     skill_scripts = tmp_path / "skills" / "some-skill" / "scripts"
     skill_scripts.mkdir(parents=True)
     (skill_scripts / "check_something.py").write_text(_OFFENDING_LINE, encoding="utf-8")
-    assert _scan_for_bare_get_spec(tmp_path, _SCANNED_GLOBS) == []
+    assert _scan_for_bare_get_spec(tmp_path) == []
 
 
 # ---- SKILL_DEP_LIST_ITEM_RE docstring-consistency gate (#228 repair 3) ----

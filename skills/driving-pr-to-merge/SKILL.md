@@ -24,20 +24,23 @@ platform naming.
 
 ## Exact sequence
 
-0. **Before calling `github:create_pull_request`** — verify the current
-   branch has an upstream configured and local HEAD matches it (i.e. it
-   has actually been pushed): `git rev-parse --abbrev-ref
-   --symbolic-full-name @{u}` succeeds, and `git rev-parse HEAD` equals
-   `git rev-parse @{u}`. Prefer a deterministic PreToolUse hook (e.g. this
-   plugin's `hooks/check-pr-upstream-pushed.sh`) where the environment
-   supports one; this step's prose is the fallback for environments
-   without one. Opening a PR for a branch that was never pushed, or that
-   has local commits not yet pushed, surfaces as GitHub's own opaque "No
-   commits between `<base>` and `<head>`" error (see
-   https://github.com/tvna/gitapex/issues/187) instead of a clear "push
-   first" message — push (`git push -u origin <branch>`, or plain `git
-   push` if upstream is already configured but behind) before calling
-   `github:create_pull_request`.
+0. **Before calling `github:create_pull_request`** — verify the target
+   (`head`) branch has a resolvable upstream and nothing locally
+   committed on it is missing from that upstream (i.e. it has actually
+   been pushed). Prefer a deterministic PreToolUse hook (e.g. this
+   plugin's `hooks/check-pr-upstream-pushed.sh`, which performs this
+   exact check against the named branch regardless of what is currently
+   checked out) where the environment supports one; this step's prose is
+   the fallback for environments without one: confirm the branch's
+   upstream resolves (e.g. `git rev-parse --abbrev-ref --symbolic-full-name <branch>@{u}`), and that the branch is an ancestor of that upstream (a branch merely behind
+   an already-pushed upstream is not itself a problem; only commits
+   missing from the upstream are). Opening a PR for a branch that was
+   never pushed, or that has local commits not yet pushed, surfaces as
+   GitHub's own opaque "No commits between `<base>` and `<head>`" error
+   (see https://github.com/tvna/gitapex/issues/187) instead of a clear
+   "push first" message — push (`git push -u origin <branch>`, or plain
+   `git push` if upstream is already configured but behind) before
+   calling `github:create_pull_request`.
 1. **On PR open** — subscribe to CI, review, and comment activity without
    asking permission. Prefer a deterministic subscription hook or automation
    (e.g. a PR-open webhook or CI event) where the environment supports one;
