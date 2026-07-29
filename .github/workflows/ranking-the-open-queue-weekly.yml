@@ -56,6 +56,13 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          # TEMPORARY diagnostic flag: two consecutive is_error:true runs
+          # (jobs 90440858606, 90447365293) both showed identical,
+          # unchanged "SDK options" logs even after the --mcp-config fix
+          # landed -- the action hides full output by default, so the
+          # actual failure reason (whether --mcp-config was even parsed)
+          # is invisible. Remove once the real cause is found and fixed.
+          show_full_output: true
           prompt: |
             Run the `ranking-the-open-queue` skill (skills/ranking-the-open-queue/SKILL.md) in the tvna/gitapex repository against the full backlog of open issues and open pull requests (no filter -- default scope per the skill's own Step 1). Follow its Procedure exactly: sweep via mcp__github__list_issues and mcp__github__search_issues (list_* for broad retrieval, search_* for targeted criteria), extract the four signals Step 3 calls for, score every item on the four independent axes defined in skills/ranking-the-open-queue/references/scoring-rubric.md (Severity, Staleness, Blockage, Actionability), then rank per the rubric's ordering rule and re-check the assembled order before presenting it.
 
