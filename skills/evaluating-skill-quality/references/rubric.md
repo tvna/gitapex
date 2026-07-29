@@ -34,6 +34,7 @@ skill's own folder.
   - [Subagent delegation scope](#subagent-delegation-scope)
 - [Portability level](#portability-level)
 - [Compatibility awareness](#compatibility-awareness)
+- [Confidentiality awareness](#confidentiality-awareness)
 - [Capability assumption](#capability-assumption)
 - [Lifecycle](#lifecycle)
 - [Execution requirements](#execution-requirements)
@@ -740,6 +741,64 @@ Mechanism-fit or correctness finding under its existing rules. Report both.
 Never downgrade the blocker because the same lines also triggered this
 warning, and never upgrade the warning into a blocker merely because another
 finding exists nearby.
+
+## Confidentiality awareness
+
+This is a warning-only evaluation axis, not a tenth maturity dimension and
+not another name for Mechanism fit's secret-exposure Stop-boundary example.
+
+- **Mechanism fit** (Stop-boundary example) asks whether a target's own
+  stated "never expose secrets" prohibition is backed by a hook or
+  permission -- an enforcement question, and it fires only when the target
+  actually states such a prohibition.
+- **Confidentiality awareness** asks whether the artifact accurately
+  discloses that one of its own procedure steps creates a sensitive-data
+  handling responsibility, and states the safeguard -- a disclosure
+  question, mirroring how Compatibility awareness above checks disclosure
+  of a runtime dependency rather than its enforcement. It fires independently
+  of whether the target states any Stop boundary at all.
+
+**Applicability.** Fires when the target's own procedure, as an ordinary
+step a reviewer would expect to execute (not a hypothetical example or a
+Stop-boundary prohibition naming the risk only to forbid it), reads,
+derives, logs, transmits, or otherwise handles material in the
+sensitive-data category: secrets, credentials, API keys/tokens, PII, or
+private/internal-only data. A skill whose procedure never touches such
+material does not select this axis merely for mentioning the category in
+passing.
+
+Report exactly one state:
+
+- **No confidentiality concern**: no step in the target's procedure handles
+  sensitive-category data. Emit
+  `Confidentiality awareness: NO_CONFIDENTIALITY_CONCERN`.
+- **Confidentiality safeguard proposed**: a step handles sensitive-category
+  data and the target's own content states no safeguard for it. Name the
+  exact step and propose a concrete corrected sentence (redact before
+  logging/output, scope collection to the task's minimal need, do not send
+  to an external sink absent a stated need) rather than a generic warning.
+  Emit `Confidentiality awareness: PROPOSE_CONFIDENTIALITY_SAFEGUARD`.
+- **Confidentiality acknowledged**: a step handles sensitive-category data
+  and the target's own content already states an accurate, complete
+  safeguard for it. Emit
+  `Confidentiality awareness: CONFIDENTIALITY_ACKNOWLEDGED`; do not request
+  duplicate prose.
+
+### Severity and precedence
+
+The axis is warning-only:
+
+- it does not change any dimension verdict or numeric score;
+- it cannot by itself block **Well-formed** or **Mature**;
+- it does not prove that the stated safeguard is actually enforced -- that
+  is Mechanism fit's question, not this axis's.
+
+Classify independent evidence independently. For example, a step that logs
+an unredacted credential earns a confidentiality warning; a separate,
+unenforced "never log secrets" Stop boundary with no hook or permission
+backing it remains a Mechanism-fit finding under its existing rules. Report
+both. Never downgrade one finding because the same lines also triggered the
+other, and never let either substitute for the other.
 
 ## Capability assumption
 

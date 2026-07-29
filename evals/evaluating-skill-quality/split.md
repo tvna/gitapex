@@ -18,8 +18,9 @@ to average out run-to-run variance. Following the precedent already set in
 `skills/scorer-gated-skill-edits/references/worked-example.md` ("the ratio is
 aspirational" for a small fixture count), this split combines the 17:14:9
 base-plus-cohesion partition with a scoped 2:6:2 compatibility addition, a
-1:1:0 reference-load-precision addition (gitapex#477), and a 2:2:1
-opus5-prompting-fit addition (gitapex#495), for a resulting 22:23:12
+1:1:0 reference-load-precision addition (gitapex#477), a 2:2:1
+opus5-prompting-fit addition (gitapex#495), and a 1:1:0
+confidentiality-awareness addition (gitapex#537), for a resulting 23:24:12
 partition. This is named explicitly as a deviation from
 the 2:1:7 default. The
 honest minimal groundwork, per that same worked example, is a larger
@@ -44,7 +45,8 @@ fixture corpus over time, not a smaller gate.
   `cohesion-independently-changeable-branches-train.yaml`,
   `reference-load-precision-train.yaml`,
   `opus5-redundant-verification-fail.yaml`,
-  `opus5-unbounded-subagent-fail.yaml`.
+  `opus5-unbounded-subagent-fail.yaml`,
+  `confidentiality-awareness-train.yaml`.
 - **selection** (gates acceptance; scored before/after a candidate edit,
   strict improve-or-reject, ties rejected): `edge.yaml`,
   `mechanism-fit-subagent.yaml`, `third-party-not-authoritative.yaml`,
@@ -66,7 +68,8 @@ fixture corpus over time, not a smaller gate.
   `cohesion-temporal-grouping-selection.yaml`,
   `reference-load-precision-selection.yaml`,
   `opus5-redundant-verification-generalizes.yaml`,
-  `opus5-unbounded-subagent-generalizes.yaml`.
+  `opus5-unbounded-subagent-generalizes.yaml`,
+  `confidentiality-awareness-selection.yaml`.
 - **test** (read once, for a final report only, never to motivate or gate
   an edit): `guardrail.yaml`, `no-fabricated-violation.yaml`,
   `portability-classification.yaml`, `blind-spot-pass-not-silent.yaml`,
@@ -379,6 +382,60 @@ names its own domain-specific task (re-running a candidate to confirm it
 reproduces, not generic double-checking) and whose delegation step states a
 criterion and a cap (batch by suite size, or triage directly for a small
 suite) must not be false-positively flagged by either new check.
+
+The `confidentiality-awareness-train.yaml` / `-selection.yaml` pair was
+added for gitapex#537 (the new Confidentiality awareness cross-cutting
+axis), for the same reason as every prior addition: none of the prior 57
+fixtures probe whether the review discloses that a reviewed skill's own
+procedure handles secrets, credentials, PII, or private data, and none of
+the prior fixtures' target skills contain such a step at all --
+`portability-declarative-fact-claim.yaml` (train split) and
+`cohesion-independently-changeable-branches-train.yaml` (train split) each
+mention a secret-rotation/secret-scanning tool by name, but neither
+fixture's own `expected` assertions reference confidentiality, secrets, or
+credentials, and the Confidentiality awareness axis is declaration-
+independent of those two fixtures' actual failure shape (Mechanism-fit
+Skill-vs.-multiple-skills cohesion and Portability's declarative-fact-claim
+litmus test, respectively) -- so this pair is the first to probe the new
+axis at all. `-train.yaml` sits in train (a `webhook-debugger` skill that
+writes a full raw request/response, including the live bearer token, to a
+local debug log with no redaction or scoping statement -- it motivated the
+edit). `-selection.yaml` sits in selection and uses a distinct domain,
+sensitive-data category, and sink (a `ticket-summarizer` skill forwarding
+raw customer PII -- name, email, account number -- to a third-party
+analytics webhook, not a credential written to a local file) so the gate
+measures generalization of the axis across data category and sink, not
+memorization of the train fixture's credential/local-log wording. No
+dedicated restraint fixture was added, following the same disclosed
+reasoning the `tool-capability-verification` and
+`consumer-repo-convention-deference` pairs above used: the existing
+`guardrail.yaml` / `no-fabricated-violation.yaml` fixtures already probe
+generic false-positive restraint across the whole rubric, and this axis's
+own Applicability clause (fires only on an ordinary procedure step, not a
+hypothetical example or a Stop-boundary prohibition naming the risk only
+to forbid it) is a narrower, declaration-independent test than a
+freestanding restraint fixture would add coverage for.
+
+Blind spot pass for this addition: the pair covers a credential handled by
+a local-sink step and PII handled by a third-party-sink step, both in the
+`PROPOSE_CONFIDENTIALITY_SAFEGUARD` direction. It does not cover the
+`CONFIDENTIALITY_ACKNOWLEDGED` state (a target that already states an
+accurate safeguard) or a target that mentions sensitive data only as a
+Stop-boundary prohibition rather than an ordinary step -- both left as a
+disclosed, open gap for a future addition rather than silently assumed
+covered.
+
+**Gate status: in progress, not yet a recorded KEEP/REJECT.** Live
+before/after isolated dispatches against `confidentiality-awareness-
+selection.yaml` were started (methodology: `claude -p` subprocess, pinned
+pre-edit commit `e8c387c0f10aa45886013c7c20b38bd131a72d97`, working
+directory and `$HOME` isolated per `references/adversarial-self-
+audit.md`'s Isolation-verification registry) but had not completed at the
+time this file was first committed for gitapex#537. This section will be
+replaced with the actual per-fixture scores and KEEP/REJECT determination,
+appended to the Kept-edit or Rejected-edit log below per this file's own
+convention, once both dispatches finish -- not assumed passing in the
+meantime.
 
 Future edits to this rubric should reuse this same split rather than
 re-deriving one per iteration, so the selection split stays genuinely

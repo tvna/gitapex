@@ -179,6 +179,12 @@ spec:
       outcome:
         verdict: fixed
         found: 2
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/537"
+      summary: "Added a Confidentiality awareness cross-cutting axis, mirroring Compatibility awareness's warning-only three-state structure, distinguishing it from Mechanism fit's secret-exposure Stop-boundary check (backing vs. disclosure). Wired into references/rubric.md's TOC, SKILL.md's merged Compatibility-and-confidentiality-awareness section, and Procedure step 4."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/537"
+      summary: "scorer-gated-skill-edits held-out gate: 2 new fixtures added (59 total, 23:24:12). Live isolated before/after dispatches against the new selection fixture were started but had not finished at this commit -- disclosed in-progress state, not a claimed KEEP. See evals/evaluating-skill-quality/split.md for live status and, once complete, per-fixture scores."
   skillDependencies:
     requires: []
     relatedTo:
