@@ -69,3 +69,26 @@ def test_repository_workflows_are_drift_free():
     """The gate: real CI workflows must provision Class B tools via the flake."""
     findings = drift.find_drift(REPO_ROOT / ".github" / "workflows")
     assert findings == [], f"toolchain pin drift in real workflows: {findings}"
+
+
+def test_main_prints_no_drift_and_returns_zero_when_clean(capsys, monkeypatch):
+    # find_drift's own path-reading behavior is covered by the fixture-based
+    # tests above and the live repository test above; this test isolates
+    # main()'s own print/exit-code contract by stubbing find_drift.
+    monkeypatch.setattr(drift, "find_drift", lambda: [])
+    rc = drift.main()
+    assert rc == 0
+    assert "No toolchain pin drift found." in capsys.readouterr().out
+
+
+def test_main_prints_findings_and_returns_one_on_drift(capsys, monkeypatch):
+    monkeypatch.setattr(
+        drift,
+        "find_drift",
+        lambda: [(".github/workflows/waza-check.yml", 3, "go install microsoft/waza")],
+    )
+    rc = drift.main()
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "Toolchain pin drift" in out
+    assert ".github/workflows/waza-check.yml:3: go install microsoft/waza" in out
