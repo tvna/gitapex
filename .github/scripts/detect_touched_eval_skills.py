@@ -49,6 +49,40 @@ an embedded/trailing newline through, corrupting the single-line
 requires the match to span the entire segment, which a trailing `\n`
 prevents.
 
+A leading `./` (repeated, e.g. `././evals/foo/eval.yaml`) is stripped
+before the `evals/`-prefix check runs, so it does not silently defeat
+detection the way an un-stripped leading segment otherwise would (the
+first segment would be `"."`, not `"evals"`, and the path would be
+dropped with no error at all -- worse than the raised-error cases above,
+since nothing would flag it). `git diff --name-only` itself never emits a
+`./`-prefixed path, but this script's own CLI/stdin usage (see Usage
+below) accepts arbitrary caller-supplied paths, and `./`-prefixed output
+is a common shape from other tools (e.g. `find .`) a caller might pipe in
+instead. Only a literal leading `.` segment is stripped this way -- a `..`
+segment (leading or otherwise) is deliberately left alone and continues to
+raise via the class check above, since collapsing `..` (e.g. via
+`posixpath.normpath`) would silently resolve `evals/../etc/passwd` down to
+`etc/passwd` and defeat the path-traversal check instead of preserving it.
+
+A bare leading `/` (an absolute-looking path, e.g. `/evals/foo/eval.yaml`)
+is a known, deliberately undefended input shape: neither `git diff
+--name-only` nor this workflow's `workflow_dispatch` fallback ever
+produces one, so it is left out of scope rather than adding unrequested
+normalization surface.
+
+Every path this script receives is also expected to already be free of
+git's own `--name-only` C-style quoting (the double-quote-and-octal-escape
+wrapping git applies to a path containing a non-ASCII byte, a double
+quote, a backslash, or a control character, unless the diff is taken with
+`-z`). This script does not un-quote such a line itself -- the calling
+workflow step is responsible for invoking `git diff --name-only -z`
+(NUL-delimited, which disables that quoting) and converting NUL to
+newline *before* capturing the result into a shell variable, not after,
+since a bash `$(...)` capture silently drops embedded NUL bytes and would
+otherwise glue two touched paths together. See `waza-eval-gate.yml`'s
+"Determine touched skills" step for the fixed invocation and its
+rationale.
+
 Output matches `skill-audit-gate.yml`'s own comma-join convention for
 `$GITHUB_OUTPUT` values (e.g. its `security-relevant-skills` output): a
 single sorted, deduped, comma-joined line, empty when no skill was
@@ -57,11 +91,17 @@ directly into a `GITHUB_OUTPUT` variable.
 
 Usage::
 
-    git diff --name-only "$BASE_SHA...$HEAD_SHA" | \\
+    git diff --name-only -z "$BASE_SHA...$HEAD_SHA" | tr '\0' '\n' | \\
         python3 .github/scripts/detect_touched_eval_skills.py
 
     python3 .github/scripts/detect_touched_eval_skills.py \\
         evals/foo/tasks/x.yaml evals/bar/eval.yaml
+
+The `-z | tr '\0' '\n'` above is required, not a style choice: a plain
+`git diff --name-only` (no `-z`) C-quotes any path containing a non-ASCII
+byte, a double quote, a backslash, or a control character, and the quoted
+line then fails this script's `evals/`-prefix check (see above) -- silently
+dropping a real touched skill instead of reporting it.
 
 Positional args and stdin are both supported (matching this repo's mixed
 conventions across existing `.github/scripts/*.py` CLIs): when one or more
@@ -100,6 +140,15 @@ def touched_skills(paths: list[str]) -> list[str]:
     skills: set[str] = set()
     for path in paths:
         segments = path.split("/")
+        # Strip a leading "./" (repeated -- "././evals/foo/x" too) before
+        # the "evals/" check below: an un-stripped leading "." segment
+        # would otherwise make segments[0] != "evals" and silently drop an
+        # otherwise-valid touched path with no error at all. Deliberately
+        # narrow: only a literal leading "." is stripped, never "..",  so
+        # this does not weaken the path-traversal class check below (see
+        # module docstring for why a general normpath-style collapse would).
+        while len(segments) > 1 and segments[0] == ".":
+            segments = segments[1:]
         # Must start with "evals/" and have at least one segment beyond
         # the skill-name segment itself: ["evals", "<skill>", ...at least
         # one more...]. A bare "evals/<skill>" (length 2) or a top-level

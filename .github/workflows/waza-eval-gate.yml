@@ -68,6 +68,24 @@ jobs:
       # detect_touched_eval_skills.py (unit-tested in
       # tests/test_detect_touched_eval_skills.py) rather than re-derived
       # inline here -- this step only ever produces a flat path list.
+      #
+      # `-z` (NUL-delimited, piped through `tr '\0' '\n'` before capture) is
+      # required, not cosmetic: git's default `--name-only` quotes an entire
+      # path in double quotes with octal escapes the moment it contains any
+      # non-ASCII byte or a `"`/`\`/control character (core.quotepath,
+      # default on) -- e.g. `evals/foo/tasks/日本語.yaml` becomes the literal
+      # line `"evals/foo/tasks/\346\227\245...yaml"`. That leading `"`
+      # defeats detect_touched_eval_skills.py's `segments[0] != "evals"`
+      # check, silently dropping the whole path -- the exact false-negative
+      # (a touched skill's suite silently never runs) this gate exists to
+      # prevent. `-z` disables that quoting outright (git's own documented
+      # behavior); converting to newline via `tr` must happen inside the
+      # pipeline *before* command-substitution captures it into a bash
+      # variable, since bash silently drops embedded NUL bytes on capture
+      # (confirmed: `x=$(printf 'a\0b')` yields `x="ab"`, gluing two
+      # different paths into one) -- capturing the raw `-z` output directly
+      # would silently merge multiple changed paths together, a second and
+      # worse false-negative.
       - name: Determine touched skills
         id: diff
         env:
@@ -78,7 +96,7 @@ jobs:
           set -euo pipefail
 
           if [ "$EVENT_NAME" = "pull_request" ]; then
-            if ! diff_output=$(git diff --name-only "$BASE_SHA...$HEAD_SHA"); then
+            if ! diff_output=$(git diff --name-only -z "$BASE_SHA...$HEAD_SHA" | tr '\0' '\n'); then
               echo "::error::git diff failed between $BASE_SHA and $HEAD_SHA" >&2
               exit 1
             fi
