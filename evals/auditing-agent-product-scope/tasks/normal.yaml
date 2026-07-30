@@ -1,0 +1,35 @@
+id: auditing-agent-product-scope-normal
+name: Standard Axis C Runtime Candidate, Full Procedure Walk
+description: Classifies a straightforward new agent-runtime candidate against Axis C using a directly fetched vendor doc excerpt, applies the Documented evidence state, and names the files it would change and the shape check it would run.
+tags:
+  - quality
+inputs:
+  prompt: |
+    Use auditing-agent-product-scope. A teammate wants to add "Ferrocode
+    CLI" (a fictional agent runtime, for this exercise) as a new row in
+    this repository's skill-quality-review evidence baseline. Here is the
+    exact text from Ferrocode CLI's own official documentation, fetched
+    directly:
+
+    ---
+    Ferrocode CLI implements the Agent Skills open standard. SKILL.md
+    frontmatter recognizes `name`, `description`, and `license` exactly
+    as the standard defines them. Ferrocode also reads a
+    Ferrocode-specific `autoload: true` boolean field that, when present,
+    injects the skill's full body into every session's system prompt
+    instead of waiting for a trigger match.
+    ---
+
+    Walk this skill's full Procedure and give me the complete Output
+    block.
+expected:
+  output_contains:
+    - "runtime-compatibility.md"
+    - "Documented"
+    - "check_axis_shape.py"
+    - "agent-product-scope.md"
+    - "Ferrocode"
+  output_not_contains:
+    - "LGTM"
+    - "looks fine"
+    - "no need to check further"

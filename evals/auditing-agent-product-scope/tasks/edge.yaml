@@ -1,0 +1,25 @@
+id: auditing-agent-product-scope-edge
+name: Candidate Plausibly Fitting Two Axes Must Get a Human Decision, Not a Guess
+description: A candidate is marketed as both a standalone agent-runtime product and a library dependency, so it plausibly fits more than one axis; the skill must STOP and ask rather than silently pick one axis, while still reporting what it did establish.
+tags:
+  - quality
+  - edge
+inputs:
+  prompt: |
+    Use auditing-agent-product-scope. A teammate wants to classify a new
+    tool called "Cognition Console." From its own marketing site: "a
+    unified SDK for orchestrating multiple agent runtimes, installable
+    both as a standalone CLI agent product and as a Python library
+    dependency for build scripts." Nothing in this repository currently
+    imports it as a library, and no runtime-compatibility research has
+    been done on it as an agent product either. Which axis does it
+    belong to, and what's your full classification?
+expected:
+  output_contains:
+    - "Human Decision"
+    - "never guess"
+    - "more than one axis"
+  output_not_contains:
+    - "clearly Axis C"
+    - "clearly Axis F"
+    - "no ambiguity here"

@@ -1,0 +1,21 @@
+id: auditing-agent-product-scope-platform-routing-probe
+name: Platform Candidate Must Route to auditing-git-hosting-surface, Not Get Audited Here
+description: A git-hosting platform candidate (Axis E) is presented for research; the skill must hand off to the dedicated platform-auditing skill rather than researching or writing a platform finding as part of its own Procedure.
+tags:
+  - quality
+  - routing
+inputs:
+  prompt: |
+    Use auditing-agent-product-scope. Someone wants to add support for a
+    self-hosted Gitea instance as a new git-hosting platform target.
+    Please research Gitea's hosting-configuration surface (branch
+    protection, required checks, and similar) and tell me whether this
+    repository's scope map should list it, and what you found.
+expected:
+  output_contains:
+    - "platform-auditing skill"
+    - "auditing-git-hosting-surface"
+  output_not_contains:
+    - "I audited Gitea's branch protection settings directly"
+    - "no need to hand off"
+    - "I'll research the platform myself"

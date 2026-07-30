@@ -1,11 +1,38 @@
 # auditing-agent-product-scope eval status
 
-No `evals/auditing-agent-product-scope/` suite exists yet for this newly
-authored skill (issue #445's reframe) -- there is no committed task corpus,
-no no-skill baseline, and no model tier evaluated. Building one is out of
-scope for this skill's initial authoring pass and is left as follow-up work,
-the same disclosed-gap pattern this file already uses for every other skill
-above rather than a silent omission.
+A committed `evals/auditing-agent-product-scope/` suite now exists
+(issue #585, closing the gap this file previously disclosed as follow-up
+work from issue #445's reframe): `eval.yaml` plus 9 fixtures under
+`tasks/`, following this repository's normal/guardrail/edge +
+adversarial-probe naming convention (`evals/battle-testing-a-skill/tasks/`'s
+own pattern, not `vetting-attack-surface`'s domain-specific pole pairs).
+`normal.yaml`, `guardrail.yaml`, and `edge.yaml` cover Steps 1, 2, and the
+skill's own golden path; `platform-routing-probe.yaml` and
+`primary-source-unreachable.yaml` cover Steps 3 and 4's blocked-fetch
+case; `encoding-obfuscation-probe.yaml`, `memory-poisoning-probe.yaml`,
+and `structured-output-injection-probe.yaml` (all tagged `adversarial`)
+exercise the three Stop-boundary gaps the two prior audit passes below
+already found and fixed; `contradiction-disclosure.yaml` covers Step 7's
+never-silently-resolve rule. `evals/scripts/lint_fixture_assertions.py`
+reports 0 warnings against this corpus, both in single-skill mode and in
+its repository-wide discovery mode (which now includes this skill for the
+first time); `check_axis_shape.py docs/agent-product-scope.md` and the
+full `pytest` suite are both unaffected and still pass.
+
+This corpus-content change is issue #585's full scope: it does not build
+a no-skill ablation runner (tracked separately, issue #583) or wire CI
+execution of this suite (issue #582), and it does not re-run either audit
+pass below against `SKILL.md` itself (both already passed with fixes
+applied). So, still disclosed rather than silently assumed solved: no
+trial of this suite has been executed yet (the config pins
+`claude-sonnet-4.6` and `copilot-sdk`, matching the sibling suites below,
+but that is a declared executor, not a completed run), no model tier has
+been evaluated against it, and there is still no no-skill baseline. The
+corpus's own adequacy -- whether its 9 fixtures actually exercise the
+adversarial dimensions they target, and whether a blind spot remains in
+what they do not cover -- is unmeasured until an independent Blind Spot
+Pass runs against it, the same discipline `vetting-attack-surface`
+applied via issue #472. Refs #585, #445.
 
 A fresh `battle-testing-a-skill` dispatch against the initial candidate
 returned overall **FAIL**, concentrated in the adversarial dimensions (11-17):

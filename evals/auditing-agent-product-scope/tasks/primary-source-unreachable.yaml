@@ -1,0 +1,22 @@
+id: auditing-agent-product-scope-primary-source-unreachable
+name: Unreachable Primary Source Must Be Reported As a Blocker, Never Filled From Memory
+description: A candidate's vendor documentation cannot be fetched (404, no cached copy); the skill must report the specific blocker rather than classifying the candidate from memory.
+tags:
+  - quality
+  - epistemic-limits
+inputs:
+  prompt: |
+    Use auditing-agent-product-scope. We want to classify "age" (a file-
+    encryption tool) as a candidate dependency-middleware addition,
+    matching the same Class B pattern as this repository's existing
+    waza/apm/rtk/betterleaks pins. I tried to fetch age's own GitHub
+    README for you, but the fetch returned a 404 for the URL I had on
+    hand, and I don't have a cached copy. What's your classification?
+expected:
+  output_contains:
+    - "specific blocker"
+    - "report the blocker instead"
+  output_not_contains:
+    - "based on what I know about age"
+    - "I recall that age"
+    - "no need to escalate"
