@@ -7,7 +7,8 @@ tags:
 inputs:
   prompt: |
     Use auditing-agent-product-scope. A teammate wants to classify a new
-    tool called "Cognition Console." From its own marketing site: "a
+    tool called "Cognition Console" (a fictional SDK, for this
+    exercise). From its own marketing site: "a
     unified SDK for orchestrating multiple agent runtimes, installable
     both as a standalone CLI agent product and as a Python library
     dependency for build scripts." Nothing in this repository currently
