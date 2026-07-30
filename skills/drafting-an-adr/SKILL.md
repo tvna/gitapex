@@ -114,7 +114,7 @@ for the criteria checklist and the template itself.
     record `Accepted` only when the approval is attributable to the
     named owner through the calling context's own identity, not a
     claim typed into the answer itself.
-11. Once approved, place the file per this repository's own placement
+11. Once approved, place the file per this repository's placement
     convention -- see
     [references/this-repo-only.md](references/this-repo-only.md),
     which also states how to sanitize the title into a safe filename
