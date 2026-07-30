@@ -43,6 +43,7 @@ a single accountable owner and a review gate equivalent to a code review
   shifts the question upstream: is *that* source under equivalent review,
   or does the generated file merely look reviewed because it is
   committed?
+
 - **Subagent definitions / Output styles / system-prompt-append
   configuration**: typically single-owner by construction (one file, one
   narrow purpose); ownership is usually satisfied trivially by the
@@ -51,6 +52,7 @@ a single accountable owner and a review gate equivalent to a code review
   confirm rather than assume, since a large `.claude/agents/` directory
   can still accumulate redundant or stale definitions the same way an
   unowned CLAUDE.md does.
+
 - **Auto-memory**: per [The new rules of context engineering][context-eng],
   memory is now written automatically rather than through an explicit,
   reviewed edit ("Claude now automatically saves memories that are
@@ -78,12 +80,14 @@ at all can still be small today and unbounded in trend.
   an explicit target (200 lines, per the article's own tip, absent a
   stricter locally-declared target) and, where history is available,
   check the trend across recent revisions rather than a single snapshot.
+
 - **Auto-memory**: does the store (or its retrieval mechanism) apply any
   age-based or relevance-based pruning, or does every session's memory
   persist indefinitely? [The new rules of context engineering][context-eng]
   does not itself specify a bound for Auto-memory, which is itself a
-  finding worth naming if no locally-declared bound exists either --
-  absence of a stated bound is not evidence of an unstated one.
+  finding worth naming if no locally-declared bound exists either -- an
+  unstated bound is not itself evidence that one exists.
+
 - **Subagent definitions / Output styles / system-prompt-append
   configuration**: usually not-applicable, per the same reasoning as
   criterion 1's channel notes -- report so explicitly rather than
@@ -112,11 +116,13 @@ skill instead.
   workflow, paying the root file's always-loaded tax, is the canonical
   (a)-failure; a multi-step procedure with branches (not a short fact) is
   the canonical (b)-failure.
+
 - **CLAUDE.md (subdirectory)**: the (a) question is usually already
   satisfied by construction (the mechanism itself scopes loading to the
   subdirectory); check the (b) question -- is subdirectory-scoped
   procedural content that should be a skill instead sitting here because
   it was easier to add to an existing file.
+
 - **Subagents**: per [Steering Claude Code][steering], "use a subagent
   when a side task... would clutter your main conversation with
   intermediate results you won't reference again... Use a skill when you
@@ -125,12 +131,14 @@ skill instead.
   isolation-worthy (its intermediate steps are exactly what a human
   wants to steer) is a (b)-failure in the opposite direction from
   CLAUDE.md's.
+
 - **Output styles / system-prompt-append**: per the same source, output
   styles are for "significant role changes" and system-prompt-append for
   "tone, response length, formatting preferences" -- narrow, specific
   content masquerading as either (a large embedded procedure; a role
   change smuggled into a system-prompt-append flag meant only for tone)
   is the failure to check for.
+
 - **Auto-memory**: this mechanism has no meaningful (a) failure mode of
   its own (retrieval timing is automatic, not author-controlled); check
   only whether memory content that is actually a reusable procedure
@@ -163,6 +171,7 @@ claim about itself.
   permission) is the canonical failure; a "NEVER" bullet that the
   channel's own text correctly scopes as advisory-only, or that a
   confirmed hook does back, both pass.
+
 - **Subagents**: a subagent definition's own frontmatter can carry real,
   structural backing beyond prose -- a `disallowedTools` restriction, or
   an embedded lifecycle hook scoped to that subagent alone. Where a
@@ -171,12 +180,14 @@ claim about itself.
   manifest; a subagent whose only backing is its own prose description of
   what it "never" does has the identical failure this criterion catches
   in CLAUDE.md.
+
 - **Output styles / system-prompt-append**: per
   [Steering Claude Code][steering], output styles "carry the highest
   instruction-following weight of any method... covered so far," but
   still never compile to deterministic enforcement; an absolute
   prohibition placed here has the same unbacked-guardrail failure as one
   placed in CLAUDE.md, dressed in a higher-authority channel.
+
 - **Auto-memory**: a memory instructing future sessions to always or
   never do something functions exactly like an unbacked CLAUDE.md
   "NEVER" bullet, with the added complication that it was not authored
@@ -209,12 +220,14 @@ where this criterion bites hardest.
   session's behavior? This is the sharpest instance of this criterion
   across all five channels, and the one with no sibling-skill coverage
   today.
+
 - **CLAUDE.md**: can the same contributor whose future work the file is
   meant to constrain also add or edit the constraining text, with no
   independent reviewer in the path? This mirrors this lineage's own
   predecessor's criterion for gate-feeding state (a deployer able to edit
   the metrics store a release gate reads), applied here to an advisory
   channel instead of a deny path.
+
 - **Subagents / Output styles / system-prompt-append**: usually satisfied
   by the repository's ordinary review process (criterion 1), since these
   channels are not automatically written the way Auto-memory is; check
