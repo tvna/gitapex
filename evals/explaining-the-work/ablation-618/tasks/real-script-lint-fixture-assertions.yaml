@@ -1,0 +1,26 @@
+id: explaining-the-work-ablation-618-real-script-lint-fixture-assertions
+name: Real-Script Scenario -- evals/scripts/lint_fixture_assertions.py
+description: >
+  A realistic change scenario grounded in this repository's own
+  lint_fixture_assertions.py (the hand-curated short-word-collision pairs,
+  chosen over a general English-dictionary substring scan).
+tags:
+  - ablation
+  - issue-618
+inputs:
+  prompt: |
+    Use explaining-the-work. In evals/scripts/lint_fixture_assertions.py I just
+    implemented the short-word-collision check using a small hand-curated set
+    of known collision pairs instead of a general English-dictionary substring
+    scan -- issue #518 evaluated the dictionary-scan approach and rejected it,
+    because it false-flagged this repo's own deliberately-truncated stem
+    assertions like "emporal" for temporal and "hardcod" for hardcode(d), which
+    aren't real dictionary words themselves. This fully closes #518. Give me
+    the commit message, the why-not code comment, and a test name.
+expected:
+  output_contains:
+    - "Closes #518"
+    - "why-not(#518)"
+    - "test name"
+  output_not_contains:
+    - "LGTM"

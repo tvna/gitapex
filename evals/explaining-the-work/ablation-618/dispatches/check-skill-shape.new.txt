@@ -1,0 +1,34 @@
+Applying the routing from `explaining-the-work`: the full design discussion (real-vs-placeholder trade-off, why #470 rejected the real-name option) belongs in the issue/PR body, not here. What follows is only the terse Why for the commit, the Why-not for the comment, and the What for the test.
+
+**Commit message**
+
+```
+Reject real model IDs as illustrative SKILL.md content
+
+A real model identifier reads as a concrete example, but it goes
+stale the moment that model is superseded, and it duplicates the
+staleness check gate_provenance_disclosure.py already performs.
+Require a placeholder instead.
+
+Closes #470
+```
+
+(`Closes`, not `Refs`, since this fully satisfies #470's acceptance criteria.)
+
+**Code comment**
+
+Only add this if the check's source actually has a spot where a reviewer could plausibly ask "why not just allow the real name" -- e.g. next to the identifier-matching logic in `check_skill_shape.py`:
+
+```python
+# why-not(#470): real model IDs go stale on supersession & duplicate gate_provenance_disclosure.py's job
+```
+
+104 chars, within the 120 cap. No ADR exists for this yet, so no `-> docs/adr/...` pointer is appended -- don't fabricate one; #470 alone is the citable source that evaluated and rejected the alternative.
+
+**Test name**
+
+```python
+def test_flags_real_model_identifier_as_illustrative_example_issue470():
+```
+
+The name alone carries both the What (flags a real model identifier used as illustrative example content) and the issue reference (`issue470`), so no docstring is needed for that purpose. If the test body needs a docstring at all, keep it to non-obvious setup detail -- not a restatement of the name.

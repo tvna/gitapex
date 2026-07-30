@@ -1,0 +1,30 @@
+id: explaining-the-work-ablation-618-real-script-gate-split-fixture-coverage
+name: Real-Script Scenario -- .github/scripts/gate_split_fixture_coverage.py
+description: >
+  A realistic change scenario grounded in this repository's own
+  gate_split_fixture_coverage.py (the "against only `<fixture>.yaml`"
+  single-fixture-scoped exemption to Check A), deliberately requiring both
+  a Refs and a Closes trailer against two different real issue numbers in
+  the same response.
+tags:
+  - ablation
+  - issue-618
+inputs:
+  prompt: |
+    Use explaining-the-work. In .github/scripts/gate_split_fixture_coverage.py
+    I just added the "against only `<fixture>.yaml`" single-fixture-scoped
+    exemption to Check A -- issue #527 evaluated requiring every gate-result
+    table to always cover the full selection-split superset with no exception,
+    and rejected that, because it would break the established convention of a
+    narrow single-fixture recheck dispatch after a small follow-up fix. This
+    change relates to and partially builds on #526 (which established Check A
+    originally) but does not close it, while it does fully resolve #527. I need
+    the commit message, the why-not code comment (if citable), and a test name.
+expected:
+  output_contains:
+    - "Refs #526"
+    - "Closes #527"
+    - "why-not(#527)"
+    - "test name"
+  output_not_contains:
+    - "LGTM"

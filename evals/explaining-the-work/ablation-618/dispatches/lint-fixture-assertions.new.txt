@@ -1,0 +1,43 @@
+## Commit message
+
+```
+Use curated pairs for short-word collision lint
+
+Dictionary substring scanning false-flagged this repo's own
+deliberately truncated stems (e.g. "emporal", "hardcod") as
+collisions, since truncated stems aren't real dictionary words.
+A curated set of known collision pairs sidesteps this class of
+false positive entirely.
+
+Closes #518
+```
+
+Rationale for shape: subject is imperative/terse; body gives the *why* only (dictionary scan rejected due to false-flagging non-dictionary truncated stems), not the full design discussion -- that stays in #518 itself. `Closes #518` is used rather than `Refs #518` because you said this fully closes it.
+
+## Why-not code comment
+
+Place it directly above the hand-curated collision-pair set (or the function that consults it) in `evals/scripts/lint_fixture_assertions.py`:
+
+```python
+# why-not(#518): dictionary substring scan false-flagged truncated stems ("emporal", "hardcod") as collisions
+COLLISION_PAIRS = {
+    ...
+}
+```
+
+109 characters, one line, cites the issue that actually evaluated and rejected the dictionary-scan alternative. No ADR path is appended since none exists yet for this decision -- the bracketed `-> docs/adr/NNNN-*.md` segment is optional per the skill, and fabricating one isn't licensed by a citation-only issue.
+
+## Test name
+
+```python
+def test_curated_collision_pairs_exclude_truncated_stem_false_positives_518():
+```
+
+The name carries both the *what* (curated pairs don't flag truncated stems) and the issue reference (`_518`), so no docstring is needed per the skill's rule that a docstring is only required when the test name itself can't carry the issue pointer. If your test naming convention disallows trailing numeric issue suffixes, fall back to:
+
+```python
+def test_short_word_lint_ignores_deliberately_truncated_stems():
+    """Regression for #518: dictionary-scan false-flagged non-dictionary stems like 'emporal'/'hardcod'."""
+```
+
+but prefer the first form since the name alone carries the reference.

@@ -1,0 +1,31 @@
+## Commit message
+
+```
+Add no-illustrative-model-identifier check to check_skill_shape.py
+
+Flags a SKILL.md that names a real, current Claude model identifier as
+illustrative example content instead of a placeholder. #470 considered
+allowing real names for concreteness and rejected it: a real identifier
+goes stale the moment that model is superseded, and doing so would
+duplicate what gate_provenance_disclosure.py already catches.
+
+Closes #470
+```
+
+## Code comment
+
+Placed on the line (or guard clause) in `check_skill_shape.py` that rejects a real model identifier and requires a placeholder instead -- not restating what the check does, just why the rejected alternative (allowing real names) isn't taken:
+
+```python
+# why-not(#470): real model IDs go stale on supersession & duplicate gate_provenance_disclosure.py's job
+```
+
+(104 chars, cites #470, which is the issue that actually evaluated and rejected the alternative -- so it's citable per the skill's requirement.)
+
+## Test name
+
+```
+test_flags_real_current_model_identifier_used_as_illustrative_example
+```
+
+This carries the *what* (a real/current model ID used as example content gets flagged) directly in the name, so no docstring is needed for issue traceability -- the *why* (staleness + duplication with `gate_provenance_disclosure.py`) stays in the commit/issue, not in test code.

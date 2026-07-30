@@ -1,0 +1,27 @@
+id: explaining-the-work-ablation-618-real-script-score-contract
+name: Real-Script Scenario -- skills/scorer-gated-skill-edits/scripts/score_contract.py
+description: >
+  A realistic change scenario grounded in this repository's own
+  score_contract.py (the blank-line-separator rule in _near_satisfied),
+  used to measure PR #612's real-world effect against a real, in-repo
+  script rather than a synthetic prompt.
+tags:
+  - ablation
+  - issue-618
+inputs:
+  prompt: |
+    Use explaining-the-work. In skills/scorer-gated-skill-edits/scripts/score_contract.py
+    I just finished implementing the output_contains_near check's blank-line-separator
+    rule (see _near_satisfied) -- issue #421 already evaluated a simpler pure
+    character-window version and rejected it, because a window-only check lets two
+    occurrences straddle a fully separate, unrelated paragraph and still false-pass
+    as "near". This fully closes #421. I need: (1) the commit message, (2) the code
+    comment (if any) explaining why we didn't just use a plain character-window
+    check, (3) a test name capturing this.
+expected:
+  output_contains:
+    - "Closes #421"
+    - "why-not(#421)"
+    - "test name"
+  output_not_contains:
+    - "LGTM"

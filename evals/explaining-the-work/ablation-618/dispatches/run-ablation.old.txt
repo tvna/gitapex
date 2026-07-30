@@ -1,0 +1,27 @@
+## Commit message
+
+```
+Use --bare + --append-system-prompt-file for ablation's no-skill arm
+
+Issue #583 evaluated staging a .claude/skills/<name>/ directory for the
+without-skill arm and rejected it: --bare explicitly disables the
+skill-discovery mechanism a staged directory depends on, so the two
+approaches are mutually exclusive, not a fidelity dial with a middle
+setting.
+
+Closes #583
+```
+
+## Why-not code comment (drop at the toggle site in `run_ablation.py`)
+
+```python
+# why-not(#583): staged .claude/skills/ dir requires discovery, which --bare disables; not a fidelity dial
+```
+
+## Test name
+
+```
+test_without_skill_arm_uses_bare_and_append_system_prompt_not_staged_skill_dir
+```
+
+Routing notes: the commit body stays terse (one paragraph, the rejected alternative + the mutual-exclusivity reason) and points to `#583` with `Closes` since this fully satisfies it -- the fuller Fact/Speculation-tagged writeup, if any, belongs in the issue body, not duplicated here. The code comment carries only the why-not, citing the same issue, under 120 chars. The test name carries the *what* on its own, so no docstring/issue-ref is needed there.

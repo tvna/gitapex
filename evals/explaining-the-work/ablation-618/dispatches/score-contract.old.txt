@@ -1,0 +1,30 @@
+Here are the three artifacts, routed per the skill (terse Why in the commit, Why-not only in the comment, What in the test name):
+
+**1. Commit message**
+
+```
+Reject blank-line-separated occurrences in output_contains_near
+
+A pure character-window check lets two occurrences straddle a fully
+separate, unrelated paragraph and still false-pass as "near" (#421
+evaluated and rejected this simpler version). _near_satisfied now
+also requires no blank-line paragraph break between occurrences
+within the window.
+
+Closes #421
+```
+
+**2. Code comment** (in `_near_satisfied`, at the blank-line-separator check)
+
+```python
+# why-not(#421): pure char-window match false-passes when a blank-line paragraph break separates occurrences
+```
+(108 chars, cites #421 which already evaluated and rejected the window-only version -- no ADR exists for this, so no path suffix.)
+
+**3. Test name**
+
+```python
+def test_near_satisfied_rejects_occurrences_separated_by_blank_line_paragraph():
+```
+
+No docstring needed -- the name alone carries the "what," and the issue reference belongs in the commit/comment, not duplicated here.

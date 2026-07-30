@@ -1,0 +1,31 @@
+## Commit message
+
+```
+Use curated collision pairs for short-word check, not dictionary scan
+
+A general English-dictionary substring scan false-flagged this repo's
+deliberately-truncated stem assertions (e.g. "emporal" for temporal,
+"hardcod" for hardcode(d)), which aren't real dictionary words
+themselves. A hand-curated set of known collision pairs avoids that
+class of false positive.
+
+Closes #518
+```
+
+## Why-not code comment
+
+Placed at the point where the curated-pairs set (or the dict-scan alternative) would otherwise look like the obvious choice:
+
+```python
+# why-not(#518): dict-substring scan false-flags truncated stems (e.g. "emporal", "hardcod")
+```
+
+(93 chars, under the 120 limit.)
+
+## Test name
+
+```python
+def test_collision_check_ignores_deliberately_truncated_stems_emporal_hardcod():
+```
+
+The name alone carries the regression's "what" (the check must not flag `emporal`/`hardcod`-style truncated stems), so no docstring is needed; the why-not comment in the source and the commit's `Closes #518` are where the "why" already lives -- don't duplicate it here.

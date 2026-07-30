@@ -1,0 +1,35 @@
+Following **explaining-the-work**'s routing (commit = terse Why + issue pointer; code = Why-not one-liner with mandatory citation; test = What, carried in the name):
+
+## 1. Commit message
+
+```
+Add blank-line-separator rule to output_contains_near's proximity check
+
+A pure character-window check lets two occurrences straddle a fully
+separate, unrelated paragraph and still false-pass as "near" --
+already evaluated and rejected for that reason in #421.
+_near_satisfied now also requires no blank-line paragraph break
+between the two spans.
+
+Closes #421
+```
+
+This stays terse-Why-only: it states the defect the window-only version had and what changed, not the fuller back-and-forth (window sizes tried, edge cases discussed, etc.) -- that belongs in the #421 issue/PR body, tagged Fact/Speculation there, not duplicated here.
+
+## 2. Code comment
+
+```python
+# why-not(#421): pure char-window lets occurrences straddle a separate paragraph and false-pass as "near"
+```
+
+(105 chars, under the 120 cap.) No `-> docs/adr/NNNN-*.md` suffix -- you didn't mention an ADR, and the skill's citation gate forbids inventing one just to pad the comment. The issue alone is a valid citation here since #421 is the record that actually evaluated and rejected the plain-window version.
+
+## 3. Test name
+
+```python
+def test_near_satisfied_false_when_blank_line_separates_occurrences_421():
+```
+
+Carries both the What (window-adjacent occurrences separated by a blank-line paragraph break must not count as "near") and the issue reference in the name itself, so per the skill no docstring is needed just to smuggle in `#421`. Add a docstring only if you later find the name alone can't carry some other nuance -- not by default.
+
+One thing I couldn't verify without reading the actual file: whether `#421` is truly *closed* by this change (i.e., no follow-up work remains against it) versus only *addressed* -- you stated it fully closes #421, so `Closes #421` is correct per your description; if any part of #421's acceptance criteria is left for a later PR, that trailer should be `Refs #421` instead.

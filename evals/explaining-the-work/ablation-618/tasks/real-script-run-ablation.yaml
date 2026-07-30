@@ -1,0 +1,26 @@
+id: explaining-the-work-ablation-618-real-script-run-ablation
+name: Real-Script Scenario -- evals/scripts/run_ablation.py
+description: >
+  A realistic change scenario grounded in this repository's own
+  run_ablation.py (the --bare + --append-system-prompt-file toggle
+  mechanism, chosen over staging a .claude/skills/<name>/ directory).
+tags:
+  - ablation
+  - issue-618
+inputs:
+  prompt: |
+    Use explaining-the-work. In evals/scripts/run_ablation.py I just chose the
+    --bare plus --append-system-prompt-file toggle mechanism instead of staging
+    a .claude/skills/<name>/ directory for the "without skill" arm -- issue #583
+    evaluated the staged-directory approach and rejected it, because --bare
+    explicitly disables the very skill-discovery mechanism a staged directory
+    depends on, so the two approaches are mutually exclusive, not a fidelity
+    dial with a middle setting. This fully closes #583. Give me the commit
+    message, the why-not code comment, and a test name.
+expected:
+  output_contains:
+    - "Closes #583"
+    - "why-not(#583)"
+    - "test name"
+  output_not_contains:
+    - "LGTM"

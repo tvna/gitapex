@@ -1,0 +1,35 @@
+## Commit message
+
+```
+Scope Check A's full-split exemption to single-fixture reruns
+
+Check A required every gate-result table to cover the full
+selection-split superset with no exception. That broke the existing
+narrow single-fixture recheck dispatch used after a small follow-up
+fix, since such a recheck only ever runs against one
+`<fixture>.yaml`. Exempt tables scoped to that single-fixture case
+so the established recheck convention keeps working.
+
+Refs #526
+Closes #527
+```
+
+(`Refs #526` because this builds on the Check A that issue established but doesn't close it; `Closes #527` because this change is exactly what #527 asked for.)
+
+## Why-not code comment
+
+Citable: #527 is the issue that evaluated and rejected "always require full selection-split superset coverage, no exception" -- so it's a legitimate citation for this why-not, no ADR needed since none exists.
+
+```python
+# why-not(#527): always requiring full split-superset coverage breaks narrow single-fixture recheck after small fixes
+```
+
+(117 chars, fits the <=120 budget.)
+
+## Test name
+
+```
+test_check_a_skips_full_split_requirement_for_single_fixture_recheck
+```
+
+No docstring needed -- the name alone carries the "what" (Check A's full-split requirement is bypassed when the table is scoped to a single-fixture recheck), and it doesn't need an issue reference to be understood on its own.

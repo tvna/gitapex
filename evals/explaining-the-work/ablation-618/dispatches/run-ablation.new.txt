@@ -1,0 +1,39 @@
+## 1. Commit message
+
+```
+Use --bare + --append-system-prompt-file for the no-skill arm
+
+Staging a .claude/skills/<name>/ directory can't serve as the
+no-skill arm: --bare disables the very skill-discovery mechanism a
+staged directory depends on. The two are mutually exclusive, not a
+fidelity dial with a middle setting, so there's no partial approach
+to build.
+
+Closes #583
+```
+
+The fuller design essay (why the staged-directory arm was tried first, what "middle setting" was hoped for, why it can't exist) belongs in issue/PR #583's body, tagged Fact/Speculation -- not duplicated into this commit.
+
+## 2. Why-not code comment
+
+Place at the point where the "without skill" arm's CLI flags are assembled:
+
+```python
+if arm == "without_skill":
+    # why-not(#583): staged skills/ dir rejected; --bare disables the skill-discovery it needs (mutually exclusive)
+    cmd += ["--bare", "--append-system-prompt-file", str(base_prompt_path)]
+```
+
+111 chars, within the <=120 cap. No `docs/adr/NNNN-*.md` suffix -- you didn't cite an ADR, only issue #583, and the skill requires not fabricating a path that wasn't actually evaluated there.
+
+## 3. Test name
+
+Python identifiers can't carry a `#583`, so the issue pointer goes in a one-line docstring, not the name itself:
+
+```python
+def test_without_skill_arm_passes_bare_and_append_system_prompt_file():
+    """Refs #583: a staged .claude/skills/ dir can't substitute here -- --bare disables the skill-discovery it needs."""
+    ...
+```
+
+Routing check: commit carries the terse Why + `Closes #583`; the comment carries only the Why-not, cited to #583; the test name carries the What, with the issue pointer pushed into the docstring since the name can't hold it. Nothing duplicated across the three.

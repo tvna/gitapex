@@ -1,0 +1,37 @@
+Here are the three artifacts, routed per `explaining-the-work`:
+
+## Commit message
+
+```
+Exempt single-fixture recheck runs from Check A's full-superset rule
+
+Check A required every gate-result table to cover the full
+selection-split superset. #527 evaluated dropping that requirement
+entirely and rejected it, since doing so would break the established
+convention of a narrow single-fixture recheck dispatch after a small
+follow-up fix. Scope the exemption instead to runs whose gate-result
+table asserts against only `<fixture>.yaml`.
+
+Closes #527
+Refs #526
+```
+
+Rationale for the trailers: #527 is the issue that evaluated and rejected the blanket "always full superset, no exception" rule -- this change is exactly that resolution, so it closes #527. #526 only established Check A originally; this change builds on it but doesn't close it, so it's `Refs #526`, not `Closes`.
+
+## Why-not code comment
+
+Citable, since #527 is the issue that actually evaluated and rejected the alternative (no-exception full-superset coverage). Place it directly above the single-fixture exemption branch in `gate_split_fixture_coverage.py`:
+
+```python
+# why-not(#527): requiring full-superset coverage would break the single-fixture recheck-dispatch convention
+```
+
+(108 chars, within the 120-char budget. No ADR exists for this decision per what you've described, so no `-> docs/adr/...` suffix -- don't fabricate one.)
+
+## Test name
+
+```python
+def test_check_a_passes_when_gate_result_table_scopes_only_single_fixture_yaml():
+```
+
+The name alone carries the "What" (Check A accepts a gate-result table scoped to one fixture file) without needing an issue reference, so no docstring is required per the skill's routing rule.

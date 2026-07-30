@@ -1,0 +1,26 @@
+id: explaining-the-work-ablation-618-real-script-check-skill-shape
+name: Real-Script Scenario -- skills/evaluating-skill-quality/scripts/check_skill_shape.py
+description: >
+  A realistic change scenario grounded in this repository's own
+  check_skill_shape.py (the no-illustrative-model-identifier check).
+tags:
+  - ablation
+  - issue-618
+inputs:
+  prompt: |
+    Use explaining-the-work. In skills/evaluating-skill-quality/scripts/check_skill_shape.py
+    I just added the no-illustrative-model-identifier check, which flags a
+    SKILL.md that names a real, current Claude model identifier as illustrative
+    example content instead of a placeholder -- issue #470 evaluated just
+    allowing real model names for concreteness and rejected that, because a
+    real current identifier goes stale the moment that model is superseded and
+    duplicates what this repo's own gate_provenance_disclosure.py is meant to
+    catch. This fully closes #470. I need the commit message, the code comment
+    (if any) explaining why we don't allow real model names, and a test name.
+expected:
+  output_contains:
+    - "Closes #470"
+    - "why-not(#470)"
+    - "test name"
+  output_not_contains:
+    - "LGTM"
