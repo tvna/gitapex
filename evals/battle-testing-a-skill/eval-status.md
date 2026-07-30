@@ -13,9 +13,11 @@ the identical prompt via `claude -p ... --bare` (once with a skill's
 `SKILL.md` appended through `--append-system-prompt-file`, once without),
 and scores each run's output through the existing `score_contract.py`
 convention. Checked directly against this repository as it stands today:
-this mechanism now exists, so per the sub-check's own distinction this
-entry reclassifies from "no ablation mechanism exists in this repository"
-to **"ablation-capable, not yet run."** The only evidence recorded so far
+this mechanism now exists, so per `evaluating-skill-quality`'s dimension 8
+sub-check (the same "no mechanism" vs. "not yet run" distinction issue
+#185 established) this entry reclassifies from "no ablation mechanism
+exists in this repository" to **"ablation-capable, not yet run."** The
+only evidence recorded so far
 is `tests/test_run_ablation.py`'s stub-executor unit test -- a
 hand-written fake standing in for a real model call -- never a live
 model run against this skill's own tasks (e.g.

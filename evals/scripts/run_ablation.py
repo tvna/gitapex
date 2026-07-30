@@ -44,7 +44,8 @@ disclosed fidelity tradeoff, not an oversight: a live run through this
 mechanism measures the effect of the skill's instructions being present
 in context, not the effect of the model choosing to invoke the skill as
 a discoverable tool (the Skill tool never appears in bare mode's tool
-list at all, per the same docs page).
+list at all, per the same docs page). `_FIXED_FLAGS` below is therefore
+not CLI-overridable -- see that constant's own comment.
 
 Undecided, disclosed residual risk for whoever runs this live: what
 `--permission-mode`/`--allowedTools` a real run should pass is not yet
@@ -58,19 +59,22 @@ since bare mode skips OAuth/keychain reads entirely (same docs page).
 Standard library plus PyYAML (already a dev dependency used by this
 repository's other fixture tooling) and this repository's own
 `score_contract.score` (`skills/scorer-gated-skill-edits/scripts/
-score_contract.py`, importable as a bare `import score_contract` because
-both that directory and `evals/scripts` are already on `pythonpath` in
-`pyproject.toml`).
+score_contract.py`). That module is imported by bare name below; the
+`sys.path` bootstrap right before the import exists because
+`pyproject.toml`'s `pythonpath` entry that would otherwise resolve it is
+pytest-only and has no effect on a direct `python3 evals/scripts/
+run_ablation.py ...` invocation -- see the bootstrap's own comment.
 
-Exit code contract (matching the majority pattern across this
-repository's other `evals/scripts/*.py` CLIs -- `route_test_model.py`,
-`lint_fixture_assertions.py`, `gate_evals_scripts_coverage.py` -- not
-`set_config_model.py`, whose flat single-`ValueError`-type contract is an
-outlier that predates argparse in that script): 2 means the input itself
-was malformed (bad usage, a missing file, a fixture that does not match
-the expected shape, a blank/padded `--model-cli`); 1 means the input was
-valid but the model CLI invocation itself failed (nonzero exit, could not
-be launched, or timed out); 0 means success.
+Exit code contract: 2 means the input itself was malformed (bad usage, a
+missing file, a fixture or `expected` block that does not match the
+required shape, a blank/padded `--model-cli`, or a non-positive
+`--timeout`); 1 means the input was valid but the model CLI invocation
+itself failed (nonzero exit, could not be launched, or timed out); 0
+means success. This malformed-input-vs-execution-failure split matches
+`evals/scripts/lint_fixture_assertions.py`'s own 2/1 convention more
+closely than `evals/scripts/set_config_model.py`'s flat single-
+exception-type contract (that script's own outlier, predating argparse
+there).
 
 Usage::
 
@@ -89,7 +93,23 @@ from pathlib import Path
 
 import yaml
 
-import score_contract
+# score_contract.py lives in a sibling skill's scripts/ directory, not this
+# one. pyproject.toml's `pythonpath` entry resolves the bare `import
+# score_contract` below under pytest, but that setting is a pytest-only
+# mechanism -- it has no effect when this file is run directly the way its
+# own Usage:: block documents, so a plain `python3 evals/scripts/
+# run_ablation.py ...` crashed with ModuleNotFoundError before this
+# bootstrap existed (confirmed by direct execution while reviewing this
+# script). Insert the directory explicitly so both invocation styles
+# resolve identically, without depending on pytest ever having run first.
+_SCORE_CONTRACT_DIR = (
+    Path(__file__).resolve().parents[2]
+    / "skills" / "scorer-gated-skill-edits" / "scripts"
+)
+if str(_SCORE_CONTRACT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCORE_CONTRACT_DIR))
+
+import score_contract  # noqa: E402 -- path bootstrap above must run first
 
 DEFAULT_MODEL_CLI = "claude"
 # Matches evals/*/eval.yaml's own config.timeout_seconds convention for a
@@ -97,10 +117,8 @@ DEFAULT_MODEL_CLI = "claude"
 # suites' own budget rather than an arbitrary new number.
 DEFAULT_TIMEOUT_SECONDS = 300
 
-# Always applied, not CLI-exposed: --bare is what makes the "without skill"
-# arm actually mean that (see module docstring). Making it overridable would
-# let a caller silently reintroduce this repository's own skills/CLAUDE.md
-# into the comparison without realizing it breaks the ablation's premise.
+# Always applied, not CLI-exposed -- see the module docstring's "Skill
+# toggle mechanism" section for why --bare must stay non-overridable.
 _FIXED_FLAGS = ["--bare"]
 
 # (argv, timeout_seconds) -> captured stdout text. Swappable so this script's
@@ -109,8 +127,31 @@ Executor = Callable[[Sequence[str], int], str]
 
 
 def _require_nonblank_str(value: object, field: str) -> str:
+    """Reject anything that isn't a non-empty string. Deliberately does
+    NOT also reject leading/trailing whitespace -- unlike
+    ``_require_unpadded_str`` below, this is used for ``inputs.prompt``,
+    whose real committed fixtures universally end with a trailing newline
+    from YAML's ``|`` block-scalar chomping (verified against all 258
+    committed task fixtures while fixing this), so an unpadded check here
+    would reject nearly every real fixture in this repository.
+    """
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{field} must be a non-empty string")
+    return value
+
+
+def _require_unpadded_str(value: object, field: str) -> str:
+    """Like ``_require_nonblank_str``, but also rejects leading/trailing
+    whitespace. Used only for short, single-token fields (a fixture's
+    ``id``, a CLI executable name) where padding is always an authoring
+    mistake -- confirmed none of the 258 committed task fixtures' ``id``
+    fields carry padding, unlike ``inputs.prompt`` (see
+    ``_require_nonblank_str``'s own docstring for why that field is
+    exempted instead of sharing this stricter check).
+    """
+    value = _require_nonblank_str(value, field)
+    if value != value.strip():
+        raise ValueError(f"{field} must be unpadded")
     return value
 
 
@@ -122,18 +163,19 @@ def load_task_fixture(path: Path) -> dict:
     ``name``/``description``/``tags`` are not, since checking fields this
     script never reads would make it a second, unrequested fixture-shape
     linter duplicating ``lint_fixture_assertions.py``'s own job. ``expected``
-    is checked only for being a mapping; the per-assertion-list validation
-    (e.g. ``output_contains`` must be a list) is ``score_contract.score``'s
-    own responsibility, not duplicated here.
+    is checked only for being a mapping here; the deeper per-assertion-list
+    shape validation (e.g. ``output_contains`` must be a list) happens in
+    ``run_ablation()`` via a cheap dry run against ``score_contract.score``,
+    before any live model call -- not duplicated in this loader.
 
-    Raises ``ValueError`` on any malformed shape, including invalid YAML
-    syntax (wrapped from ``yaml.YAMLError`` so callers only ever need to
-    catch one exception type from this function).
+    Raises ``ValueError`` on any malformed shape, including invalid or
+    non-UTF-8 file content, so callers only ever need to catch one
+    exception type from this function.
     """
     try:
         text = path.read_text(encoding="utf-8")
         data = yaml.safe_load(text)
-    except OSError as exc:
+    except (OSError, UnicodeDecodeError) as exc:
         raise ValueError(f"cannot read task fixture {path}: {exc}") from exc
     except yaml.YAMLError as exc:
         raise ValueError(f"invalid YAML in task fixture {path}: {exc}") from exc
@@ -141,7 +183,7 @@ def load_task_fixture(path: Path) -> dict:
     if not isinstance(data, Mapping):
         raise ValueError(f"task fixture {path} must be a YAML mapping")
 
-    task_id = _require_nonblank_str(data.get("id"), "id")
+    task_id = _require_unpadded_str(data.get("id"), "id")
 
     inputs = data.get("inputs")
     if not isinstance(inputs, Mapping):
@@ -162,9 +204,7 @@ def build_command(model_cli: str, prompt: str, skill_md: Path | None) -> list[st
     (the "skill available" arm); ``None`` omits it entirely (the "skill
     withheld" arm). ``--bare`` is always included -- see module docstring.
     """
-    model_cli = _require_nonblank_str(model_cli, "model_cli")
-    if model_cli != model_cli.strip():
-        raise ValueError("model_cli must be unpadded")
+    model_cli = _require_unpadded_str(model_cli, "model_cli")
     argv = [model_cli, "-p", prompt, *_FIXED_FLAGS]
     if skill_md is not None:
         argv += ["--append-system-prompt-file", str(skill_md)]
@@ -180,27 +220,26 @@ def subprocess_executor(argv: Sequence[str], timeout: int) -> str:
     would let a broken invocation score as if the model simply produced a
     bad answer, masking the real failure. ``subprocess.TimeoutExpired``
     propagates as-is; callers already handle it as a distinct failure mode.
+    ``errors="replace"`` on stdout/stderr decoding means a stray non-UTF-8
+    byte in live model output degrades to a replacement character instead
+    of raising ``UnicodeDecodeError`` (a ``ValueError`` subclass that would
+    otherwise be indistinguishable from a malformed-input failure to this
+    function's caller).
     """
     result = subprocess.run(
-        list(argv), capture_output=True, text=True, timeout=timeout, check=False
+        list(argv),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+        check=False,
     )
     if result.returncode != 0:
         raise RuntimeError(
             f"model CLI exited {result.returncode}: {result.stderr.strip()}"
         )
     return result.stdout
-
-
-def run_once(
-    model_cli: str,
-    prompt: str,
-    skill_md: Path | None,
-    executor: Executor,
-    timeout: int,
-) -> str:
-    """Build the command for one arm and run it through ``executor``."""
-    argv = build_command(model_cli, prompt, skill_md)
-    return executor(argv, timeout)
 
 
 @dataclass(frozen=True)
@@ -219,6 +258,24 @@ class AblationResult:
         return self.with_skill_score - self.without_skill_score
 
 
+def _validate_expected_shape(expected: Mapping) -> None:
+    """Raise ``ValueError`` if ``expected`` is not a well-formed assertion
+    set, without spending a live model call to find out.
+
+    Dry-runs ``score_contract.score("", expected)``: an empty output text
+    exercises exactly the same shape checks (assertion set non-empty, each
+    list correctly typed) ``score_contract.score`` would otherwise only
+    raise partway through scoring a real, already-obtained model output.
+    Converts a plain ``TypeError`` (e.g. a non-string entry in an
+    ``output_contains`` list) into ``ValueError`` so this function, like
+    ``load_task_fixture``, raises only one exception type.
+    """
+    try:
+        score_contract.score("", expected)
+    except TypeError as exc:
+        raise ValueError(f"'expected' assertions are malformed: {exc}") from exc
+
+
 def run_ablation(
     fixture: Mapping,
     skill_md: Path,
@@ -232,13 +289,17 @@ def run_ablation(
     fixture's own ``expected`` assertions via ``score_contract.score``.
 
     ``fixture`` is the mapping ``load_task_fixture`` returns (or an
-    equivalent ``{"id", "prompt", "expected"}`` mapping).
+    equivalent ``{"id", "prompt", "expected"}`` mapping). ``expected``'s
+    shape is validated (see ``_validate_expected_shape``) before either
+    live call, so a malformed or empty assertion set is rejected without
+    spending a single model-CLI invocation on it.
     """
     prompt = fixture["prompt"]
     expected = fixture["expected"]
+    _validate_expected_shape(expected)
 
-    with_skill_output = run_once(model_cli, prompt, skill_md, executor, timeout)
-    without_skill_output = run_once(model_cli, prompt, None, executor, timeout)
+    with_skill_output = executor(build_command(model_cli, prompt, skill_md), timeout)
+    without_skill_output = executor(build_command(model_cli, prompt, None), timeout)
 
     return AblationResult(
         task_id=fixture["id"],
@@ -264,6 +325,13 @@ def main(argv: list[str] | None = None) -> int:
 
     if not args.skill_md.is_file():
         print(f"error: skill file not found: {args.skill_md}", file=sys.stderr)
+        return 2
+
+    if args.timeout <= 0:
+        print(
+            f"error: --timeout must be a positive number of seconds, got {args.timeout}",
+            file=sys.stderr,
+        )
         return 2
 
     try:

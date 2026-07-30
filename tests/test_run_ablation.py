@@ -107,7 +107,7 @@ def test_load_task_fixture_rejects_missing_prompt(tmp_path: Path):
         "id: x\ninputs:\n  other: y\nexpected:\n  output_contains: [a]\n",
         encoding="utf-8",
     )
-    with pytest.raises(ValueError, match="inputs.prompt must be a non-empty string"):
+    with pytest.raises(ValueError, match=r"inputs\.prompt must be a non-empty string"):
         run_ablation.load_task_fixture(p)
 
 
@@ -117,7 +117,38 @@ def test_load_task_fixture_rejects_blank_prompt(tmp_path: Path):
         "id: x\ninputs:\n  prompt: '   '\nexpected:\n  output_contains: [a]\n",
         encoding="utf-8",
     )
-    with pytest.raises(ValueError, match="inputs.prompt must be a non-empty string"):
+    with pytest.raises(ValueError, match=r"inputs\.prompt must be a non-empty string"):
+        run_ablation.load_task_fixture(p)
+
+
+def test_load_task_fixture_rejects_padded_id(tmp_path: Path):
+    p = tmp_path / "task.yaml"
+    p.write_text(
+        "id: ' padded '\ninputs:\n  prompt: hi\nexpected:\n  output_contains: [a]\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="id must be unpadded"):
+        run_ablation.load_task_fixture(p)
+
+
+def test_load_task_fixture_accepts_prompt_with_trailing_newline(tmp_path: Path):
+    # Regression: inputs.prompt must NOT be unpadded-checked -- every real
+    # committed fixture's `prompt: |` block scalar ends with a trailing
+    # newline (YAML's default chomping), so an unpadded check here would
+    # reject nearly every real fixture in this repository.
+    p = tmp_path / "task.yaml"
+    p.write_text(
+        "id: x\ninputs:\n  prompt: |\n    hi\nexpected:\n  output_contains: [a]\n",
+        encoding="utf-8",
+    )
+    fixture = run_ablation.load_task_fixture(p)
+    assert fixture["prompt"] == "hi\n"
+
+
+def test_load_task_fixture_wraps_non_utf8_file(tmp_path: Path):
+    p = tmp_path / "task.yaml"
+    p.write_bytes(b"id: \xff\xfe bad\n")
+    with pytest.raises(ValueError, match="cannot read task fixture"):
         run_ablation.load_task_fixture(p)
 
 
@@ -228,8 +259,101 @@ def test_subprocess_executor_propagates_timeout_expired():
         run_ablation.subprocess_executor(argv, timeout=0.1)
 
 
+def test_subprocess_executor_replaces_invalid_utf8_instead_of_raising():
+    # Regression: subprocess.run(text=True) with no explicit errors= policy
+    # raises UnicodeDecodeError (a ValueError subclass) on a stray non-UTF-8
+    # byte in the child's stdout, which main() would then misclassify as a
+    # malformed-input failure (exit 2) instead of a live-execution failure.
+    argv = [
+        sys.executable,
+        "-c",
+        "import sys; sys.stdout.buffer.write(b'ok \\xff\\xfe bad bytes')",
+    ]
+    out = run_ablation.subprocess_executor(argv, timeout=10)
+    assert "ok " in out
+    assert "\ufffd" in out  # the Unicode replacement character
+
+
 # ---------------------------------------------------------------------------
-# run_once / run_ablation (hand-written recording stub executor)
+# direct invocation (regression: `import score_contract` must resolve even
+# outside pytest's own pythonpath configuration)
+# ---------------------------------------------------------------------------
+
+
+def test_direct_invocation_does_not_crash_on_score_contract_import():
+    # Regression: score_contract.py lives in a sibling skill's scripts/
+    # directory. pyproject.toml's pythonpath entry resolves the bare
+    # `import score_contract` under pytest only -- running this script
+    # exactly as its own Usage:: block documents (a real subprocess, not an
+    # in-process pytest import) crashed with ModuleNotFoundError before the
+    # sys.path bootstrap at the top of run_ablation.py existed.
+    result = subprocess.run(
+        [sys.executable, str(REPO_ROOT / "evals" / "scripts" / "run_ablation.py"), "--help"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert result.returncode == 0
+    assert "ModuleNotFoundError" not in result.stderr
+    assert "usage:" in result.stdout.lower()
+
+
+# ---------------------------------------------------------------------------
+# _validate_expected_shape / run_ablation pre-flight validation
+# ---------------------------------------------------------------------------
+
+
+def test_validate_expected_shape_accepts_well_formed_assertions():
+    run_ablation._validate_expected_shape({"output_contains": ["a"]})  # no raise
+
+
+def test_validate_expected_shape_rejects_empty_assertion_set():
+    with pytest.raises(ValueError, match="empty assertion set"):
+        run_ablation._validate_expected_shape({})
+
+
+def test_validate_expected_shape_rejects_non_list_output_contains():
+    with pytest.raises(ValueError, match="must be a list"):
+        run_ablation._validate_expected_shape({"output_contains": "not-a-list"})
+
+
+def test_validate_expected_shape_converts_type_error_to_value_error():
+    # score_contract.score("", {"output_contains": [123]}) raises TypeError
+    # (`123 in ""` is not a valid `in` comparison) -- this must surface as
+    # ValueError like every other shape defect this function catches.
+    with pytest.raises(ValueError, match="'expected' assertions are malformed"):
+        run_ablation._validate_expected_shape({"output_contains": [123]})
+
+
+def test_run_ablation_rejects_empty_expected_without_calling_executor(tmp_path: Path):
+    # This is the concrete fix for the cross-verified finding: a malformed
+    # `expected` block must fail before either live model call, not after
+    # both have already run and spent real cost.
+    skill_md = tmp_path / "SKILL.md"
+    skill_md.write_text("# Demo skill\n", encoding="utf-8")
+    executor = _RecordingExecutor([])
+
+    fixture = {"id": "x", "prompt": "hi", "expected": {}}
+    with pytest.raises(ValueError, match="empty assertion set"):
+        run_ablation.run_ablation(fixture, skill_md, executor=executor, model_cli="claude")
+
+    assert executor.calls == []
+
+
+def test_run_ablation_rejects_malformed_expected_without_calling_executor(tmp_path: Path):
+    skill_md = tmp_path / "SKILL.md"
+    skill_md.write_text("# Demo skill\n", encoding="utf-8")
+    executor = _RecordingExecutor([])
+
+    fixture = {"id": "x", "prompt": "hi", "expected": {"output_contains": "not-a-list"}}
+    with pytest.raises(ValueError, match="must be a list"):
+        run_ablation.run_ablation(fixture, skill_md, executor=executor, model_cli="claude")
+
+    assert executor.calls == []
+
+
+# ---------------------------------------------------------------------------
+# run_ablation (hand-written recording stub executor)
 # ---------------------------------------------------------------------------
 
 
@@ -434,6 +558,37 @@ def test_main_blank_model_cli_returns_2(tmp_path: Path, capsys):
 
     assert rc == 2
     assert "error:" in capsys.readouterr().err
+
+
+def test_main_rejects_zero_timeout_without_launching_subprocess(
+    tmp_path: Path, monkeypatch, capsys
+):
+    task = _write_demo_fixture(tmp_path)
+    skill_md = tmp_path / "SKILL.md"
+    skill_md.write_text("# Demo skill\n", encoding="utf-8")
+    executor = _RecordingExecutor([])
+    monkeypatch.setattr(run_ablation, "subprocess_executor", executor)
+
+    rc = run_ablation.main(
+        ["--task", str(task), "--skill-md", str(skill_md), "--timeout", "0"]
+    )
+
+    assert rc == 2
+    assert "positive" in capsys.readouterr().err
+    assert executor.calls == []
+
+
+def test_main_rejects_negative_timeout(tmp_path: Path, capsys):
+    task = _write_demo_fixture(tmp_path)
+    skill_md = tmp_path / "SKILL.md"
+    skill_md.write_text("# Demo skill\n", encoding="utf-8")
+
+    rc = run_ablation.main(
+        ["--task", str(task), "--skill-md", str(skill_md), "--timeout", "-5"]
+    )
+
+    assert rc == 2
+    assert "positive" in capsys.readouterr().err
 
 
 def test_main_executor_runtime_error_returns_1(tmp_path: Path, monkeypatch, capsys):
