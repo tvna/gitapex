@@ -1,11 +1,11 @@
 apiVersion: gitapex.io/v1alpha1
 kind: SkillMetadata
 metadata:
-  name: explaining-the-work
+  name: drafting-an-adr
 spec:
   portability: Mixed
   capabilityAssumption: Broad
   skillDependencies:
     requires: []
     relatedTo:
-      - drafting-an-adr
+      - explaining-the-work

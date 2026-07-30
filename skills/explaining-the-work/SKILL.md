@@ -43,6 +43,8 @@ into the wrong artifact.
   `why-not(#NNN):` prefix, the optional ADR path form) is a good fit for a
   small lint-hook or pre-commit check where the repo has one; keep the
   judgment call (is a rejected alternative actually citable) in-model.
+  When no ADR exists yet for a citable why-not, use `drafting-an-adr` to
+  author one before citing its path here.
 
 ## Precedence
 
@@ -65,7 +67,9 @@ precedence over this skill. Do not enumerate exceptions to those gates here.
 Portability: the why-not comment's `docs/adr/NNNN-*.md` path and the
 "commit + `Closes #N`/`Refs #N`" convention are this repository's own
 conventions; adapt the literal path/trailer form to whatever issue and
-ADR conventions the calling repository actually uses.
+ADR conventions the calling repository actually uses. This skill only
+cites an ADR; see `drafting-an-adr` for how one actually gets authored
+and approved.
 
 ## References
 
