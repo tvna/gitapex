@@ -1,0 +1,41 @@
+id: responding-to-a-fresh-arrival-edge-empty-arrival
+name: Unfilled Template Carries Only Placeholder Text, No Real Content
+description: The issue was filed using the bug-report template but every
+  section still holds only the template's own placeholder comment -- no
+  actual description, repro steps, or expected behavior was ever typed in.
+  Per Step 1, the first response must be a needs-more-info request naming
+  the missing fields, not a fabricated repro, a guessed intent, or a
+  content label applied before real content exists.
+tags:
+  - quality
+  - edge-case
+inputs:
+  prompt: |
+    Use responding-to-a-fresh-arrival. Issue #729 just arrived, filed
+    using the "bug" issue template:
+
+    Title: Bug Report
+    Body:
+    ### Describe the bug
+    <!-- A clear and concise description of what the bug is -->
+
+    ### To Reproduce
+    <!-- Steps to reproduce the behavior -->
+
+    ### Expected behavior
+    <!-- A clear and concise description of what you expected to happen -->
+
+    ### Additional context
+    <!-- Add any other context about the problem here -->
+
+    Every section still holds only the template's own placeholder
+    comment; the reporter never typed anything in.
+expected:
+  output_contains:
+    - "needs-more-info"
+    - "missing"
+    - "repro steps"
+  output_not_contains:
+    - "reproduced"
+    - "labeled as bug"
+    - "label: bug"
