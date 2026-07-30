@@ -64,10 +64,10 @@ convention (not gitapex-specific business logic), and the reference is a
 template the model writes into a new comment, not a path it reads to
 decide behavior -- so this does not fail dimension 6's strict Portable
 bar (no behavior-controlling *read* of that path). Worth naming anyway:
-gitapex's own repository does not currently have a `docs/adr/` directory
-(confirmed absent from the repository tree), so the template currently
-points at a location that does not exist yet even in its origin
-repository. A cleaner Portable version would phrase this as "the calling
+gitapex's own repository has no `docs/adr/` directory today (confirmed
+absent), so the template points at a location that does not yet exist
+even in its origin repository. A cleaner Portable version would phrase
+this as "the calling
 repository's own ADR location, e.g. `docs/adr/NNNN-*.md`" rather than a
 bare example that reads as a fixed path.
 
@@ -109,8 +109,7 @@ messages"), with specific terms (comments, docstrings, commit/PR messages)
 rather than filler like "helps with documentation". One structural note,
 not a failure: the trigger clause precedes the capability clause, the
 reverse of the rubric's own pass example ("Extract text ... Use when
-..."). Order is not itself a deterministic-gate requirement and both
-clauses are present, so this stays a note, not a finding.
+..."); order is not gated, so this is a note, not a finding.
 
 Sibling-distinctiveness check (rubric.md's current framing for this
 dimension): as of this review, `explaining-the-work`'s siblings in this
@@ -218,13 +217,11 @@ Advisory: body-structure flagged -- no examples section, no error-handling secti
 
 The spec-compliance (9/9) and token-budget (418/500, pass) lines are real,
 useful, tool-verified evidence. The "Compliance Score: Low" line is a
-false negative, not a real defect: checked against `waza`'s own source
-(`internal/scoring/scoring.go`), `HasTriggers` only matches the literal
-substrings `when:`, `use for:`, `use this skill`, `triggers:`, `trigger
-phrases include` -- and this skill's description opens "Use when writing
-or editing code comments..." (line 3), which matches none of those five
-strings even though it is exactly Anthropic's own documented trigger
-phrasing. Dimension 1 already confirmed the trigger is well-formed against
+false negative, not a real defect: rubric.md's dimension 8 already
+documents `waza`'s `HasTriggers` heuristic missing Anthropic's own
+"Use when ..." phrasing, and this skill's description opens "Use when
+writing or editing code comments..." (line 3) -- the same miss, applied
+here. Dimension 1 already confirmed the trigger is well-formed against
 the primary spec; this tool's narrower heuristic missing it is a fact
 about the tool, not the skill. The "negative-delta-risk: 7 constraint
 keywords" and "no examples section" advisories are legitimate style

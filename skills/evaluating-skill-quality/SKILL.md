@@ -87,9 +87,8 @@ have been a different mechanism is not fixed by polishing it further.
   Most skills correctly omit both and inherit the caller's; that absence
   is not a finding. Also a step-level finding, not a whole-artifact one
   -- criteria and citation are in `references/rubric.md`'s Mechanism fit
-  section. Runs at step 2, before the sidecar is read at step 4, and
-  stays declaration-independent: the capability-assumption
-  declaration-vs-pin cross-check is step 4's job, not this one's.
+  section. Runs at step 2, before the sidecar is read -- Procedure step 4
+  below owns the separate declaration-vs-pin cross-check.
 - **Tool-capability verification**: when the reviewed skill's own content
   cites a specific tool or MCP subcall as able to detect, verify, or
   reconstruct something -- most often inside a Stop boundary or a
@@ -108,12 +107,9 @@ Mechanism fit section.
 
 Procedure steps 1, 2, 4, 5, and 6 read, grade, and issue a verdict on the
 target directly -- run them inside **one fresh subagent dispatch**, not
-the invoking context. A main thread that just authored, defended, or
-extensively discussed the target is not a neutral grader; an instruction
-to "review it fairly anyway" is weaker than an actually isolated context,
-and that includes the final verdict (step 6), not only the dimension
-walk -- a main thread that only relays evidence but re-synthesizes the
-verdict itself would still be grading from a contaminated context.
+the invoking context, including the final verdict (step 6): a main
+thread that only relays evidence but re-synthesizes the verdict itself
+is still grading from a contaminated context.
 
 - Give the dispatch only the target's path (or content) and a pointer to
   this skill's own `references/rubric.md` -- never the calling
@@ -126,32 +122,27 @@ verdict itself would still be grading from a contaminated context.
   throughout steps 1-6.
 - Required, not optional: when the calling repository carries its own
   project-instruction file (for example `CLAUDE.md` or `AGENTS.md`),
-  exclude that file from the dispatch's context before dispatching. Which
-  mechanism achieves this is a fact about the current platform's dispatch
-  tooling, not a fixed choice this skill can hardcode -- consult
+  exclude that file from the dispatch's context before dispatching. The
+  mechanism is platform-dependent, not a fixed choice this skill can
+  hardcode -- consult
   [references/adversarial-self-audit.md](references/adversarial-self-audit.md)'s
   Isolation verification section for the current platform's verified
-  mechanism before dispatching, running its Verification procedure and
-  recording a new entry yourself if none exists yet. A dispatch that
-  inherits the calling repository's own instructions is not the neutral
-  grading context this section exists to guarantee, and the omission must
-  not depend on a human asking whether it happened. Requesting the
-  exclusion is not proof it held, and a filesystem-only check (e.g.
-  confirming a scratch copy's own directory ancestry contains no
-  `CLAUDE.md`/`AGENTS.md`) is not proof either -- one platform's dispatch
-  tool has been confirmed to leak the calling repository's `CLAUDE.md`
-  into a subagent's context regardless of which paths the dispatch prompt
-  references, so an ancestry check alone would have missed it (see that
-  section's Known entries). Only its own two-part behavioral test (does
-  the dispatched agent's own self-report actually change between a
-  positive- and negative-control location) counts as verification. If no
-  platform mechanism can be verified this way, that is itself a blocker --
-  stop and escalate rather than dispatching into a contaminated context.
-  Whether the exclusion, once verified, carries real deterministic
-  backing (a hook, a permission rule) or is enforced by this instruction
-  alone still depends on the environment -- check directly rather than
-  assuming either way, the same self-audit this skill already applies to
-  its eval-tooling-install Stop boundary below.
+  mechanism, running its Verification procedure and recording a new
+  entry if none exists yet. The omission must not depend on a human
+  asking whether it happened, and requesting the exclusion is not proof
+  it held -- nor is a filesystem-only check (e.g. confirming a scratch
+  copy's own directory ancestry is clean); only that section's own
+  two-part behavioral test (does the dispatched agent's self-report
+  actually change between a positive- and negative-control location)
+  counts as verification -- see that section's Known entries for a
+  documented case where the filesystem-only check would have missed a
+  real leak. If no platform mechanism can be verified this way, stop and
+  escalate rather than dispatching into a contaminated context. Whether
+  the exclusion, once verified, carries real deterministic backing (a
+  hook, a permission rule) or is enforced by this instruction alone
+  still depends on the environment -- check directly, the same self-audit
+  this skill already applies to its eval-tooling-install Stop boundary
+  below.
 - Hand the dispatch step 3's shape-checker output as an established fact
   rather than having it re-run the script itself (Contract discipline's
   "never both" rule, `references/rubric.md`).
@@ -182,14 +173,11 @@ verdict itself would still be grading from a contaminated context.
   misclassified precondition (`references/rubric.md`, Contract
   discipline) applies to a misgraded dimension.
 - Optional upgrade, not a requirement: on a harness with a multi-agent
-  orchestration mechanism (this repository's own CLAUDE.md points to
-  superpowers' `dispatching-parallel-agents` / `subagent-driven-
-  development`; some Claude Code sessions carry a `Workflow` tool whose
-  "adversarial verify" / "judge panel" patterns run several independent
-  dispatches and cross-check them), the single dispatch above can become
-  several. A harness with only a single-agent dispatch primitive still
-  gets the isolation benefit from one fresh dispatch -- named here as an
-  illustrative example only.
+  orchestration mechanism, the single dispatch above may become several
+  independent cross-checking dispatches, capped at a small explicit N
+  (default: stay single-dispatch unless a specific harness feature and a
+  stated reason justify more). A single-agent harness still gets the
+  isolation benefit from the one fresh dispatch.
 
 ## Portability level
 
@@ -259,13 +247,10 @@ agent acts on at runtime, and fires only when such a pin actually exists
 (most skills correctly have none, and none of this repository's skills
 do today). This declaration pins nothing and never executes -- it
 recalibrates the *reviewer's* grading strictness and has full coverage
-over every skill regardless of whether that skill pins anything. The two
-checks are never merged, and the one place they interact -- a declared
-level that contradicts a pin the same skill's own content makes (e.g.
-declaring Frontier while pinning a weak model onto a judgment step) --
-has exactly one owner: Procedure step 4 below, not the tier-fit check at
-step 2. Tier fit runs before the sidecar is even read and stays
-declaration-independent by design.
+over every skill regardless of whether that skill pins anything. Where a
+declared level contradicts a pin the same skill's own content makes (e.g.
+declaring Frontier while pinning a weak model onto a judgment step),
+Procedure step 4 below is the one place that check runs.
 
 - **Broad** -- authored to stay effective down to a weak or economical
   model, or a constrained harness.
@@ -358,12 +343,9 @@ section and the design doc it cites.
 Steps 1-4 are this review's precondition, step 6 its postcondition --
 see `references/rubric.md`'s Contract discipline section. Steps 1, 2, 4,
 5, and 6 execute inside the fresh subagent dispatch described in
-Subagent dispatch above -- the dispatch issues the verdict as part of
-its structured report, not the main thread. Only step 3 runs directly in
-the main thread, before the dispatch; the main thread's remaining job
-after the dispatch returns is to relay its report (including the
-verdict it already issued) verbatim -- never to independently issue or
-re-derive one.
+Subagent dispatch above; only step 3 runs directly in the main thread,
+before the dispatch. The main thread's remaining job is to relay the
+dispatch's report verbatim, per Subagent dispatch above.
 
 1. Review only a caller-created immutable/read-only snapshot beneath the
    approved root. Reject traversal, symlinks, special files, unreadable or
@@ -386,10 +368,9 @@ re-derive one.
 4. Read the skill's `metadata/gitapex.yaml` sidecar and establish both its
    portability level and its capability assumption per the sections above.
    Check the declared capability assumption against any model/effort pin
-   step 2 already found: a `Frontier` declaration paired with a
-   weak-tier pin is a contradiction, named here once -- this is the
-   declaration-vs-pin consistency check's one owner, not step 2's
-   Model/effort tier fit. When the target has no sidecar (e.g. vendored
+   step 2 already found (a `Frontier` declaration paired with a
+   weak-tier pin is a contradiction) -- this is that check's one owner.
+   When the target has no sidecar (e.g. vendored
    from a repository that has not adopted this convention), establish
    both by reading the target's content instead -- the same way an
    undeclared level is read today -- and note the sidecar's absence as
@@ -400,8 +381,8 @@ re-derive one.
    1-4 hold rather than re-deriving them. No cited evidence means no
    review happened.
 6. Issue a verdict per `references/rubric.md`'s Verdicts section, inside
-   the same dispatch as steps 1, 2, 4, and 5. The main thread relays this
-   verdict verbatim; it does not issue or re-derive its own.
+   the same dispatch as steps 1, 2, 4, and 5, relayed verbatim by the
+   main thread per Subagent dispatch above.
 
 Worked example of steps 2-6, applied to a real merged skill:
 [references/worked-example-explaining-the-work.md](references/worked-example-explaining-the-work.md).
@@ -460,8 +441,8 @@ actually specifies.
   section above for the mechanism list, the observable check, and the
   backing-status check, rather than restating them here.
 - Never revise a dimension verdict in the main thread after the dispatch
-  returns it. A wrong or contested verdict is fixed by a second,
-  independent dispatch, not a patch made in place.
+  returns it -- Subagent dispatch's second-independent-dispatch rule
+  above, not a patch made in place.
 - Never leave the Blind spot pass unaddressed -- an explicit "no gap found"
   and a silently skipped question are not the same thing; the latter is
   not a completed review.
@@ -490,8 +471,7 @@ audit evidence` section for the literal verdict tokens
 `WELL-FORMED-AND-MATURE`, `WELL-FORMED-NOT-MATURE`, `NOT-WELL-FORMED`, or a
 `WAIVED: <reason>` line, and blocks the PR when the section or a valid
 token is absent -- by its own docstring, "it checks that disclosure was
-made, not that the audits actually passed." That design already matches
+made, not that the audits actually passed," matching
 [references/adversarial-self-audit.md](references/adversarial-self-audit.md)'s
-non-authoritative principle: the gate is a presence check, never a
-correctness check, so a green gate is not itself confirmation this
+non-authoritative principle: a green gate is not itself confirmation this
 review's judgment was sound.
