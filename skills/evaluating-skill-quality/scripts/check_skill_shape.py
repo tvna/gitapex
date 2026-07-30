@@ -18,8 +18,7 @@ Checks (the canonical list -- the manual fallback is to apply these):
     (non-UTF-8) SKILL.md fails this one check and short-circuits every
     other check below -- there is nothing left to read a description,
     name, or body length out of -- rather than raising out of
-    ``check_shape`` (issue #518, the same UnicodeDecodeError-class
-    contract issue #187 repair 3 already established for the sidecar).
+    ``check_shape``.
   - description: present/non-empty, no XML tags, <= 1024 chars, and --
     only when actually written as an unquoted YAML plain scalar in the
     source (the form every SKILL.md in this repository currently uses) --
@@ -46,7 +45,7 @@ Checks (the canonical list -- the manual fallback is to apply these):
     list of non-empty scalar strings, each item consistently indented with
     its own list, not an unquoted YAML mapping key such as "path: foo", and
     not an unquoted null/boolean/numeric scalar such as "null"/"true"/"123"
-    (issue #356: a real YAML parser resolves such a plain scalar to that
+    (a real YAML parser resolves such a plain scalar to that
     type, not a string, so it must fail rather than be silently accepted
     as one; a quoted item, e.g. "\"true\"", is unaffected -- it is a
     deliberate string regardless of its contents)
@@ -94,11 +93,10 @@ Checks (the canonical list -- the manual fallback is to apply these):
     exists. No skill's runtime procedure may read or branch on any part
     of spec.lifecycle (the sidecar's behavior-neutrality invariant).
     spec.executionRequirements, if present, is a mapping with only the
-    tools key so far (issue #349, GitApex sidecar execution-requirement
-    schema, Workstream W1 first slice of the parent tracking issue --
-    filesystem/network/mcp/credentials/browser/externalServices/context
-    categories are deferred to sibling child issues and, until they land,
-    any key other than tools here is an unknown key, not reserved space);
+    tools key so far (further categories -- filesystem/network/mcp/
+    credentials/browser/externalServices/context -- are deferred; until
+    they land, any key other than tools here is an unknown key, not
+    reserved space);
     tools, if present, is itself a mapping -- like spec.executionRequirements
     itself, never real YAML null -- with only the keys
     read/write/shell, each -- if present -- a list of non-empty scalar
@@ -112,8 +110,7 @@ Checks (the canonical list -- the manual fallback is to apply these):
     means "declared, zero tools of that kind needed" -- a deliberate
     statement, not the same as absence.
 
-    Three-way absent/null/empty-mapping distinction (issue #356, ACM row
-    2), shared by every gated *mapping*-valued block above
+    Three-way absent/null/empty-mapping distinction, shared by every gated *mapping*-valued block above
     (spec.skillDependencies, spec.lifecycle and each of its
     experimental/deprecated/stable sub-blocks, spec.executionRequirements,
     and spec.executionRequirements.tools): the key never appearing at all
@@ -122,9 +119,7 @@ Checks (the canonical list -- the manual fallback is to apply these):
     is real YAML null -- a real YAML parser never reads a bare block
     header followed by a dedent as an empty mapping, so this checker
     fails it as the wrong type rather than reading it as "declared,
-    nothing inside" (the bug the issue reported: "A blank tools: value is
-    YAML null, but the parser converts it to an empty mapping and
-    passes"); and the key appearing with at least one real child key
+    nothing inside"; and the key appearing with at least one real child key
     (however that child's own value turns out) is a genuine, non-null
     mapping, checked normally -- there is no way to spell "declared, but
     deliberately an empty mapping" in this parser's supported block-style
@@ -148,8 +143,7 @@ Checks (the canonical list -- the manual fallback is to apply these):
     (a Markdown heading matching "Table of contents" or "Contents",
     case-insensitive). Junk files (dotfiles, __pycache__, non-UTF-8) under
     references/ are ignored, not flagged.
-  - SKILL.md body and every references/*.md file (links-inside-skill,
-    issue #453 extended this from SKILL.md-only to references/*.md too):
+  - SKILL.md body and every references/*.md file (links-inside-skill):
     every Markdown link target -- inline ([text](path))
     or reference-style ([text][label] resolved via a [label]: path
     definition) -- that is not an absolute URL/scheme (http(s):,
@@ -165,12 +159,8 @@ Checks (the canonical list -- the manual fallback is to apply these):
     CONTAINS it (SKILL.md's own directory, or a references/*.md file's
     own references/ directory) -- real relative-link semantics, not
     resolved against the skill root unconditionally, since a
-    references/*.md file does not itself sit at the skill root (issue
-    #453's own incident: a references/*.md file's own relative link
-    escaping the skill directory went undetected because this check used
-    to only ever run against SKILL.md).
-  - Markdown anchor-fragment resolution (anchor-targets-resolve, issue
-    #280 row 11 / issue #289): every Markdown link's ``#fragment`` --
+    references/*.md file does not itself sit at the skill root.
+  - Markdown anchor-fragment resolution (anchor-targets-resolve): every Markdown link's ``#fragment`` --
     inline or reference-style, same as the check above -- must match a
     real heading anchor GitHub's own renderer would generate for the
     link's target file (the link's own file, when no path is given, or
@@ -212,7 +202,7 @@ Checks (the canonical list -- the manual fallback is to apply these):
     blanking already used for the citation checks below, which also
     normalizes CRLF/CR line endings to bare ``\n`` first).
   - Cross-skill file+heading citation resolution (cross-skill-citation-
-    resolves, issue #482): a prose citation of the shape "`SKILL-NAME`'s
+    resolves): a prose citation of the shape "`SKILL-NAME`'s
     `references/FILE.md` HEADING TEXT section" (skill name and file path
     each in their own inline-code span, heading text as bare prose ending
     at the literal word "section") in SKILL.md or references/*.md must
@@ -226,18 +216,18 @@ Checks (the canonical list -- the manual fallback is to apply these):
     CITING skill's own directory -- this is the dedicated backstop for
     exactly that gap. Runs unconditionally, at every portability level.
   - Mechanism-fit subsection citation completeness (mechanism-fit-
-    subsections-cite-sources, issue #218): every "### " subsection nested
+    subsections-cite-sources): every "### " subsection nested
     under a "## Mechanism fit" heading, in SKILL.md or references/*.md,
     must carry either a "[label]"-style citation bracket or the literal
     phrase "this repository's own reasoned extension" -- mechanizing the
     completeness rule such a section's own intro prose already states
-    ("the primary source and the reasoning behind each check") but
-    nothing previously checked. Generic over any document with such a
+    ("the primary source and the reasoning behind each check").
+    Generic over any document with such a
     heading, not hardcoded to references/rubric.md's filename; a
     document with no "## Mechanism fit" heading at all trivially passes
     (zero subsections to check). Runs unconditionally, at every
     portability level.
-  - Bare issue/PR-number citation (no-bare-issue-citation, issue #254):
+  - Bare issue/PR-number citation (no-bare-issue-citation):
     no bare-prose GitHub issue/PR-number citation (#149 or owner/repo#149)
     in SKILL.md or references/*.md body text. Runs unconditionally on
     every skill regardless of declared portability level -- Portable,
@@ -246,12 +236,9 @@ Checks (the canonical list -- the manual fallback is to apply these):
     currently hosts the file and silently resolves to the wrong issue
     once the skill is vendored or simply read out of context. This scan
     also covers the metadata sidecar's own spec.references entries and
-    lifecycle.experimental/deprecated.reason text (issue #488) -- the
-    sidecar used to be the sanctioned, exempted home for exactly this bare
-    shape, on the theory that it was maintainer-facing and never
-    auto-loaded, but a bare number there loses its meaning the same way
-    once the sidecar travels with its skill directory to another
-    repository. A full ``https://github.com/tvna/gitapex/issues/149``-style
+    lifecycle.experimental/deprecated.reason text -- a bare number there
+    loses its meaning once the sidecar travels with its skill directory
+    to another repository. A full ``https://github.com/tvna/gitapex/issues/149``-style
     URL contains no bare ``#N`` and so is never flagged by this scan --
     that is the only sanctioned way left to cite an issue from the
     sidecar. Other repo-specific content -- sibling-skill names,
@@ -262,7 +249,7 @@ Checks (the canonical list -- the manual fallback is to apply these):
     bare-prose scan -- those are the established ways this repo's skills
     quote such a token illustratively without it resolving live. Inline
     code is not unconditionally safe, though: for Portable-declared
-    content specifically, the separate check below (issue #263) re-inspects
+    content specifically, the separate check below re-inspects
     exactly the inline-code spans this scan skips.
   - Portable self-citation, repo-path half (only when the skill declares
     "Portable", not "Mixed" or "Repository-scoped" -- unlike the
@@ -291,8 +278,8 @@ Checks (the canonical list -- the manual fallback is to apply these):
     Portable-skill rule; the semantic judgment of whether a citation is
     illustrative context vs. the skill's own bookkeeping stays with that
     model-judged dimension.
-  - Portable inline-code repo-path citation without a hedge (issue #220,
-    narrowing the blind spot the exemption above leaves open): treating
+  - Portable inline-code repo-path citation without a hedge, narrowing
+    the blind spot the exemption above leaves open: treating
     every inline-code path citation as automatically illustrative was
     itself the gap -- an inline-code `evals/...`/`docs/...` citation reads
     exactly as authoritative as a bare-prose one to a reader who has no
@@ -312,11 +299,10 @@ Checks (the canonical list -- the manual fallback is to apply these):
     unconditionally, as the module docstring above already covers -- this
     check never runs on blocks, only on inline code, since a worked
     example's illustrative fenced output is a different, already-settled
-    case (issue #171 acceptance criterion 3) that this issue does not
-    reopen.
-  - Portable inline-code issue/PR-number citation without a hedge (issue
-    #263, the same blind spot as #220 above but for issue numbers instead
-    of repo paths): the bare-issue-citation scan's inline-code exclusion
+    case that this check does not reopen.
+  - Portable inline-code issue/PR-number citation without a hedge (the
+    same blind spot as the repo-path check above, but for issue numbers
+    instead of paths): the bare-issue-citation scan's inline-code exclusion
     (see its own entry above) let a fictional worked-example citation like
     `` `#42` `` or `` `#142` `` sit in Portable content indefinitely, since
     dimension 6's rubric bans an issue/PR-number citation from Portable
@@ -328,10 +314,10 @@ Checks (the canonical list -- the manual fallback is to apply these):
     narrower than HEDGE_PHRASES) nearby. Portable-gated, alongside the two
     repo-path checks above, unlike the unconditional bare-prose scan.
   - Portable unhedged sibling-skill fact-claim (portable-no-unhedged-
-    skill-fact-claim, issue #487): a possessive citation of a named
+    skill-fact-claim): a possessive citation of a named
     sibling skill (e.g. `` `scorer-gated-skill-edits`' own
     fixture-authoring guidance already names X for a pure substring
-    scorer ``, the real incident this issue reports) inside
+    scorer ``) inside
     Portable-declared content, asserted with "already" in the same
     clause, naming a real sibling skill directory, with no approved hedge
     phrase (HEDGE_PHRASES, the same list the repo-path check above uses)
@@ -398,10 +384,9 @@ from pathlib import Path
 DESCRIPTION_MAX_CHARS = 1024
 NAME_MAX_CHARS = 64
 # Cap on spec.references' summary field (and spec.lifecycle.experimental/
-# deprecated.reason) in metadata/gitapex.yaml -- these free-text fields had
-# no length limit and several grew to thousands of characters, mixing an
-# issue citation, a decision rationale, and a full audit changelog for
-# several distinct events into one string. There is no overflow escape
+# deprecated.reason) in metadata/gitapex.yaml -- these free-text fields have
+# no length limit otherwise and can grow unbounded by mixing multiple
+# distinct events into one string. There is no overflow escape
 # valve (e.g. a second file to move detail into): the fix for an
 # over-budget entry is to decompose it into one list entry per distinct
 # event (see REFERENCES_KIND_VOCAB/REFERENCES_ITEM_SUBKEYS below), each of
@@ -415,20 +400,11 @@ REFERENCES_ENTRY_MAX_CHARS = 500
 # required scalar fields (kind, anchor, summary) and one optional nested
 # mapping (outcome, free-form key/value atoms -- verdict, found, fixed,
 # open, ... -- with no closed vocabulary of its own, since real entries use
-# too varied a set of outcome facts for a fixed schema to fit). This
-# replaced an earlier, simpler design (a single pipe-delimited string per
-# entry, "<kind> | <anchor> | <summary>[ | <outcome>]") that avoided any
-# parser change; the repository owner asked for a real YAML mapping
-# instead, for better long-term extensibility and tooling compatibility
-# (e.g. `yq` queries) as the corpus keeps growing, accepting the added
-# parser complexity as the trade-off.
+# too varied a set of outcome facts for a fixed schema to fit).
 REFERENCES_ITEM_SUBKEYS = ("kind", "anchor", "summary", "outcome")
 REFERENCES_ITEM_REQUIRED_SUBKEYS = ("kind", "anchor", "summary")
 # Exactly 4 spaces -- one level under spec.references' own 2-space key,
-# matching every other gated block's own fixed-indent convention (unlike
-# the old bare-scalar-list design's "2 or more spaces" tolerance, dropped
-# here since every real sidecar is being rewritten fresh to this shape
-# rather than carrying years of pre-existing indent variation forward).
+# matching every other gated block's own fixed-indent convention.
 REFERENCES_ITEM_INDENT = 4
 # Closed vocabulary for the "kind" field, derived from the recurring entry
 # shapes actually found across every sidecar's spec.references: a
@@ -487,9 +463,7 @@ REFERENCES_MAPPING_LIKE_RE = re.compile(r"^[A-Za-z0-9_.-]+:(\s|$)")
 # string every list-of-scalar-strings field (spec.references,
 # spec.skillDependencies.requires/relatedTo,
 # spec.executionRequirements.tools.read/write/shell) assumes each of its
-# items is (issue #356: "Unquoted YAML scalars such as true, 123, and
-# null are converted to strings in list-valued fields and pass a
-# list-of-strings check"). Deliberately the common, uncontroversial
+# items is. Deliberately the common, uncontroversial
 # subset -- not YAML 1.1's yes/no/on/off, which are also ordinary English
 # words a legitimate capability-tag or reference string could contain --
 # rather than a full type resolver. Checked only against an UNQUOTED
@@ -509,11 +483,11 @@ YAML_NON_STRING_SCALAR_RE = re.compile(
 # literal string "true#tag", not "true" plus a comment). Used only to
 # strip a trailing comment before classifying an unquoted list item's own
 # scalar type in _is_non_string_plain_scalar below -- the item's stored
-# value is unaffected either way, only the type classification is (Codex
-# review on this PR: a comment-bearing item such as "true # rationale"
-# defeated YAML_NON_STRING_SCALAR_RE's own full-string anchor on its own,
-# silently certifying a real YAML boolean/null/numeric as a string
-# whenever it carried a trailing comment).
+# value is unaffected either way, only the type classification is --
+# a comment-bearing item such as "true # rationale" would otherwise defeat
+# YAML_NON_STRING_SCALAR_RE's own full-string anchor, silently certifying
+# a real YAML boolean/null/numeric as a string whenever it carries a
+# trailing comment.
 _INLINE_COMMENT_RE = re.compile(r"(?:^|\s)#.*$")
 
 
@@ -592,8 +566,8 @@ LIFECYCLE_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 # A full GitHub issue/PR URL anchoring the whole string: this repository's
 # own host only (metadata/gitapex.yaml is maintainer-facing provenance for
 # THIS repository, never something a portable skill body depends on), an
-# "issues" or "pull" segment, then a digit run. Deliberately a full URL, not
-# the bare "#123"/"owner/repo#123" shape this field used to require: a bare
+# "issues" or "pull" segment, then a digit run. Deliberately a full URL,
+# not a bare "#123"/"owner/repo#123" shape: a bare
 # issue number means nothing once this sidecar travels with its skill
 # directory to another repository (e.g. plugin vendoring); a full URL still
 # resolves to the right place wherever it lands. Shape-only -- never
@@ -613,7 +587,7 @@ LIFECYCLE_ISSUE_REF_RE = re.compile(
 # shared one blind spot: a quoted key (`"extra": foo`) or a key containing
 # a character outside that narrow class matched NEITHER regex, so it fell
 # through both checks into the "stray content, skip silently" branch
-# instead of ever reaching unknown-key detection (issue #356). Matching
+# instead of ever reaching unknown-key detection. Matching
 # broadly here and leaving "recognized vs. unknown" entirely to the
 # caller's own membership check closes that gap: every syntactically
 # key-shaped line at this indent is now seen as A key, so an unrecognized
@@ -627,8 +601,7 @@ LIFECYCLE_ISSUE_REF_RE = re.compile(
 # matches neither a list item currently being collected nor this key
 # pattern is itself flagged as unknown/malformed, not silently skipped --
 # rejecting every unmatched line at that indent, rather than only the
-# ones this regex happens to parse, is the actual fail-closed contract
-# (Codex review on #356's own PR).
+# ones this regex happens to parse, is the actual fail-closed contract.
 KEY_LINE_RE_4 = re.compile(
     r'^[ ]{4}(?:"([^"]*)"|\'([^\']*)\'|([^\s"\'#][^:]*?)):[ \t]*(.*)$')
 KEY_LINE_RE_6 = re.compile(
@@ -647,13 +620,12 @@ KEY_LINE_RE_8 = re.compile(
 INLINE_KEY_VALUE_RE = re.compile(
     r'^(?:"([^"]*)"|\'([^\']*)\'|([^\s"\'#][^:]*?)):[ \t]*(.*)$')
 
-# spec.executionRequirements' one recognized subkey so far (issue #349,
-# #307 Workstream W1 first slice): "tools", at 4-space indent -- same
-# depth as spec.skillDependencies' requires/relatedTo and
-# spec.lifecycle's experimental/deprecated/stable. Recognized via the
-# same shared KEY_LINE_RE_4 matcher those two fields use (issue #356),
-# not a field-specific regex -- consistency across all three gated
-# blocks, per #356's own constraint against patching just the newest one.
+# spec.executionRequirements' one recognized subkey so far: "tools", at
+# 4-space indent -- same depth as spec.skillDependencies' requires/
+# relatedTo and spec.lifecycle's experimental/deprecated/stable.
+# Recognized via the same shared KEY_LINE_RE_4 matcher those two fields
+# use, not a field-specific regex -- for consistency across all three
+# gated blocks.
 EXEC_REQ_TOOLS_SUBKEYS = ("read", "write", "shell")
 # List items accept 6 or more spaces -- the same indent-drift tolerance
 # REFERENCES_LIST_ITEM_RE/SKILL_DEP_LIST_ITEM_RE already give their own
@@ -710,7 +682,7 @@ SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.\-]*:")
 # "Mixed" / "Repository-scoped" qualifiers -- those levels legitimately cite
 # repo-specific paths, so the two repo-path checks below do not apply to
 # them. The bare-issue-citation check is different: it runs unconditionally
-# on every skill regardless of this classification (issue #254).
+# on every skill regardless of this classification.
 # The near-top body marker, kept only as the fallback declaration form for a
 # skill vendored in from another repository that has no sidecar. Skills in
 # this repository declare portability in metadata/gitapex.yaml instead.
@@ -786,12 +758,11 @@ FENCE_RE = re.compile(r"^\s*(?:```|~~~)")
 # A Markdown inline code span: a run of 1-3 backticks, non-greedy content,
 # then a closing run of the SAME length (\1) -- CommonMark's own rule, used
 # e.g. when the span's content itself needs to contain a literal backtick
-# (` ``a`b`` `). A first cut of this regex (`` `[^`]*` ``) assumed every span
-# uses exactly one backtick each side; a review finding on issue #263 showed
-# that a double-backtick span (` ``#42`` `) instead reads as two adjacent
-# EMPTY single-backtick spans under that assumption, so its content was
-# never inspected by either citation check below -- a silent evasion route,
-# not just a cosmetic gap. Capped at 3 backticks (this file already reserves
+# (` ``a`b`` `). A span using two backticks each side (` ``#42`` `) must be
+# read as one citation, not two adjacent empty single-backtick spans --
+# otherwise its content is never inspected by either citation check below,
+# a silent evasion route, not just a cosmetic gap. Capped at 3 backticks
+# (this file already reserves
 # exactly 3 for FENCE_RE's own fenced-block markers, handled separately
 # per-line by ``_blank_fenced_blocks`` before this regex ever runs on that
 # line) rather than an unbounded ``+``, since this checker is deliberately a
@@ -803,7 +774,7 @@ MD_REF_LINK_RE = re.compile(r"\[[^\]]*\]\[[^\]]*\]")
 MD_REF_DEF_RE = re.compile(r"^\s{0,3}\[[^\]]+\]:\s.*$")
 
 # Approved hedge phrases for the inline-code repo-path citation check (see
-# the module docstring's issue #220 entry). Matched case-insensitively as a
+# the module docstring's repo-path citation entry above). Matched case-insensitively as a
 # plain substring, not a word-boundary regex, so a longer phrase already in
 # use (e.g. "this repository's own", "this repository has also") is covered
 # by the shorter "this repository" entry without a separate one per variant.
@@ -822,19 +793,19 @@ HEDGE_PHRASES = (
 )
 
 # Approved hedge phrases for the inline-code issue/PR-number citation check
-# (see the module docstring's issue #263 entry). Deliberately a separate,
+# (see the module docstring's issue-number citation entry above). Deliberately a separate,
 # narrower list from HEDGE_PHRASES: that list marks a repo-*path* citation as
 # a deliberate reference to a real (or explicitly generic) repository; this
 # one marks an issue-*number* citation as a rule/syntax illustration rather
 # than worked-example bookkeeping -- different questions, so a shared phrase
 # list would blur both.
 # Deliberately full multi-word phrases, not bare words, matching HEDGE_PHRASES'
-# own convention (a first cut of this check used the bare words "anchored"
-# and "citation" and was caught by review: an ordinary sentence like "See the
-# citation in PR `#144` for prior art" or "the review is anchored to PR
-# `#88`" contains either bare word while citing a real, banned issue number --
-# the exact defect this check exists to catch). Full phrases collapse that
-# false-negative surface close to zero without adding new mechanism.
+# own convention: a bare word such as "anchored" or "citation" is not enough --
+# an ordinary sentence like "See the citation in PR `#144` for prior art" or
+# "the review is anchored to PR `#88`" contains either bare word while citing
+# a real, banned issue number, the exact defect this check exists to catch.
+# Full phrases collapse that false-negative surface close to zero without
+# adding new mechanism.
 # "must be an anchored" is this repository's own established way of
 # introducing a trackingIssue field's *shape* (`trackingIssue` must be an
 # anchored `#123` or `owner/repo#123` reference) rather than citing a
@@ -850,19 +821,19 @@ HEDGE_PHRASES = (
 #
 # "hex color" / "css color" are different in kind from the two phrases
 # above: a pre-emptive escape hatch for a known, unresolved limitation
-# (issue #272) rather than a hedge drawn from existing in-repo prose --
+# rather than a hedge drawn from existing in-repo prose --
 # ISSUE_CITATION_RE (`#\d+`) cannot syntactically distinguish a real issue
 # number from a decimal-digit-only CSS hex color (`#123456`, `#123`,
 # `#000000` are all valid CSS, all also valid GitHub issue-number shapes).
-# This repository has no web-design skill yet (issue #271), but a future
+# This repository has no web-design skill yet, but a future
 # one documenting a literal color value would hit this false positive with
 # no natural way to phrase around it otherwise. Naming the color's own
 # nature ("the hex color `#123456`", "this CSS color") is how such a skill
 # would phrase it anyway, so the escape hatch costs no awkward wording.
 # Reserved in advance of that skill landing, not drawn from existing
 # content the way the two phrases above are. Does not replace the deeper,
-# still-open fix tracked in #272 (context-aware classification instead of
-# a hedge word).
+# still-open fix of context-aware classification instead of
+# a hedge word.
 ISSUE_CITATION_HEDGE_PHRASES = (
     "must be an anchored",
     "issue/pr-number citation",
@@ -870,10 +841,9 @@ ISSUE_CITATION_HEDGE_PHRASES = (
     "css color",
 )
 
-# A possessive citation of a named sibling skill, issue #487 -- e.g.
+# A possessive citation of a named sibling skill -- e.g.
 # "`scorer-gated-skill-edits`' own fixture-authoring guidance already
-# names X for a pure substring scorer", the real incident this issue
-# reports (rubric.md, commit 7ae597d, fixed in 59b86a5). Matches either
+# names X for a pure substring scorer". Matches either
 # "`name`'s" (a name not already ending in "s") or the bare-apostrophe
 # English possessive "`name`'" (a name that already ends in "s", e.g.
 # "scorer-gated-skill-edits'"). ``clause`` captures the text up to the
@@ -883,41 +853,32 @@ ISSUE_CITATION_HEDGE_PHRASES = (
 # hedge phrase.
 #
 # Deliberately narrower than "any backtick-quoted resolving skill name" --
-# a full-repository scan performed while designing this check (see the
-# PR's own commit message / issue #487's ACM residual-risk column, which
-# already predicted this exact gap: "distinguishing 'unhedged fact-claim'
-# from ordinary prose mentioning a sibling skill by name needs careful
-# heuristics to avoid false positives") found that an unscoped "any
-# resolving citation, no hedge" rule fires on ELEVEN of this repository's
-# own already-shipped skills -- the possessive-citation shape alone
-# ("`NAME`'s own X") is this repository's single most common, entirely
-# benign way to cite a sibling skill's content, used dozens of times
-# across nearly every skill. Requiring "already" in the same clause (the
-# one signal both the real incident's own text and its own fix commit's
-# diff share -- the fix deliberately dropped this exact framing rather
-# than adding a hedge phrase) reduced that same corpus-wide scan to zero
-# real false positives (three residual hits were all inside
-# Repository-scoped/Mixed skills this check's own Portable gate already
-# excludes). This narrowness is a deliberate, evidence-grounded trade-off,
-# not an oversight: it will not catch a differently-worded unhedged
-# fact-claim that never uses the word "already".
+# an unscoped "any resolving citation, no hedge" rule fires on eleven of
+# this repository's own already-shipped skills -- the possessive-citation
+# shape alone ("`NAME`'s own X") is this repository's single most common,
+# entirely benign way to cite a sibling skill's content, used dozens of
+# times across nearly every skill. Requiring "already" in the same clause
+# reduces that same corpus-wide scan to zero real false positives (three
+# residual hits were all inside Repository-scoped/Mixed skills this
+# check's own Portable gate already excludes). This narrowness is a
+# deliberate, evidence-grounded trade-off, not an oversight: it will not
+# catch a differently-worded unhedged fact-claim that never uses the word
+# "already".
 #
 # A trailing ``\b`` word-boundary assertion (the usual way this file marks
 # "end of token" elsewhere) does NOT work after the bare-apostrophe form:
 # at the position right after a lone ``'`` with no ``s`` following, both
 # the apostrophe itself and the whitespace after it are non-word
 # characters, so no word/non-word transition exists there for ``\b`` to
-# match -- confirmed by direct execution during review, which silently
-# made the bare-apostrophe form (a name already ending in "s", e.g.
-# "scorer-gated-skill-edits'") never match at all. A negative lookahead
-# for a word character is used instead (matches whitespace, punctuation,
-# or end of string, but never a further letter/digit continuing the
-# possessive itself) -- an earlier cut of this fix used ``(?=\s)``
-# (requires whitespace specifically), which a review finding on this PR
-# caught as its own narrower bug: a citation immediately followed by
+# match, and the bare-apostrophe form (a name already ending in "s", e.g.
+# "scorer-gated-skill-edits'") would never match at all. A negative
+# lookahead for a word character is used instead (matches whitespace,
+# punctuation, or end of string, but never a further letter/digit
+# continuing the possessive itself) rather than ``(?=\s)`` (requires
+# whitespace specifically): a citation immediately followed by
 # punctuation before further prose (e.g. "`name`', already noted, ...")
-# has a comma, not whitespace, right after the possessive, and would
-# silently never match either.
+# has a comma, not whitespace, right after the possessive, and
+# ``(?=\s)`` would silently never match that either.
 PORTABLE_SKILL_FACT_CLAIM_RE = re.compile(
     r"`([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)`'s?(?![A-Za-z0-9])"
     r"(?P<clause>[^.;\n]{0,120})")
@@ -1002,8 +963,7 @@ def _unquote(value: str) -> str:
             # sidecar-generation method deliberately relies on that: see
             # the design plan's Task 1, which builds these values with
             # json.dumps). Decoding via the stdlib json module handles
-            # every escape a generator might emit (\", \\, \n, \uXXXX,
-            # ...), not just the two this parser previously hand-decoded.
+            # every escape a generator might emit (\", \\, \n, \uXXXX, ...).
             # Fall back to a naive strip on decode failure (e.g. a stray
             # unescaped literal quote) rather than raising -- this parser
             # never raises on malformed sidecar content.
@@ -1048,7 +1008,7 @@ def _match_key_line(pattern: re.Pattern[str], line: str) -> tuple[str, str] | No
     unquoted (a quoted key's own quote characters are never part of the
     key name) and the value right-stripped, or ``None`` if ``line`` is not
     a key-shaped line at that indent. The one shared recognition site
-    every gated block's key handling uses (issue #356) -- callers decide
+    every gated block's key handling uses -- callers decide
     "recognized vs. unknown" themselves via membership in their own set of
     valid names; this function only decides "is this syntactically a key
     at all," so an unrecognized key can never again bypass detection by
@@ -1121,8 +1081,7 @@ class ManifestParse:
 
     ``unknown_execution_requirement_keys``, ``unknown_execution_requirement_tools_keys``,
     and ``malformed_execution_requirement_tools_items`` are
-    spec.executionRequirements' equivalents (issue #349, #307 Workstream
-    W1 first slice): the first holds each key found directly under
+    spec.executionRequirements' equivalents: the first holds each key found directly under
     spec.executionRequirements that is not ``tools`` (only one recognized
     key exists so far -- further categories are deferred to sibling child
     issues, and any other key here is unknown, not reserved space); the
@@ -1356,9 +1315,7 @@ def _parse_manifest(text: str) -> ManifestParse:
     # Whether spec.skillDependencies has seen at least one real child line
     # (a recognized or unknown key) since it was opened -- distinguishes a
     # block header left with nothing under it (real YAML null) from one
-    # that genuinely has content, however malformed (issue #356: a blank
-    # mapping header used to always finalize to {}, an empty-but-present
-    # mapping, conflating "declared null" with "declared, zero subkeys").
+    # that genuinely has content, however malformed.
     # Mirrored by lifecycle_has_content/lifecycle_subkey_has_content/
     # exec_req_has_content/exec_tools_has_content below, one per gated
     # mapping block.
@@ -1440,7 +1397,7 @@ def _parse_manifest(text: str) -> ManifestParse:
         _finalize_dep_list()
         if in_skill_deps and current is not None:
             # A block header with zero real children ever seen is real
-            # YAML null, not an empty-but-present mapping (issue #356).
+            # YAML null, not an empty-but-present mapping.
             current["skillDependencies"] = (
                 skill_deps if skill_deps_has_content else None)
         in_skill_deps = False
@@ -1607,8 +1564,7 @@ def _parse_manifest(text: str) -> ManifestParse:
                 # # comment") must read as blank/absent, not as the
                 # literal comment text -- otherwise it neither opens the
                 # list nor equals "[]" and is instead stored as a raw,
-                # wrong-type scalar (found by review: "requires:  #
-                # inline comment" silently discarded the whole list).
+                # wrong-type scalar.
                 value = _strip_bare_comment(value)
                 if key not in SKILL_DEPENDENCY_SUBKEYS:
                     unknown_dep_keys.append(line.strip())
@@ -1636,7 +1592,7 @@ def _parse_manifest(text: str) -> ManifestParse:
                 # list-valued keys, so flag it as unknown rather than
                 # silently tolerating it: rejecting every unmatched line at
                 # this indent, not just the ones a regex happens to parse,
-                # is the actual fail-closed contract (issue #356 follow-up).
+                # is the actual fail-closed contract.
                 skill_deps_has_content = True
                 unknown_dep_keys.append(line.strip())
                 continue
@@ -1836,7 +1792,7 @@ def _parse_manifest(text: str) -> ManifestParse:
                 # reads it -- otherwise `not value` is False, none of
                 # these four gated blocks ever opens, and the entire
                 # nested block underneath is discarded as a raw,
-                # wrong-type scalar string instead (found by review).
+                # wrong-type scalar string instead.
                 value = _strip_bare_comment(value)
                 # current is root["spec"] by identity exactly while inside
                 # the spec: block, so this is "are we directly under spec"
@@ -1891,9 +1847,8 @@ def spec_of(parsed: ManifestParse) -> dict[str, object] | None:
     A malformed sidecar can write ``spec:`` as a scalar or list rather than
     a mapping; every consumer that only cares about "does this sidecar have
     a real spec mapping" needs the same isinstance guard around
-    ``root.get("spec")``, and inlining it separately at each call site let
-    the exact same unguarded pattern regress twice in one file within a
-    single PR (issue #228 repairs 2/3). Callers outside this module (e.g.
+    ``root.get("spec")``; sharing this guard avoids the pattern regressing
+    independently at each call site. Callers outside this module (e.g.
     tests/test_skill_metadata_sidecar.py) should use this instead of
     inlining ``parsed.root.get("spec")`` themselves.
     """
@@ -1970,7 +1925,7 @@ def _out_of_skill_link_targets(body_text: str, skill_dir: Path,
     ``source_dir`` (default: ``skill_dir`` itself) is the directory a
     relative target is resolved AGAINST -- real relative-link semantics,
     the file-relative rule ``_resolve_anchor_link_file`` already
-    established for the anchor-fragment check (issue #453). For SKILL.md,
+    established for the anchor-fragment check. For SKILL.md,
     which sits at the skill root, "relative to the containing file" and
     "relative to the skill root" coincide, so the default keeps that call
     site unchanged. A references/*.md file does NOT sit at the skill
@@ -2009,12 +1964,10 @@ def _out_of_skill_link_targets(body_text: str, skill_dir: Path,
 # optional CommonMark closing sequence (one or more trailing '#'
 # characters, itself preceded by at least one space/tab) and any trailing
 # whitespace. The closing sequence must be stripped in the regex itself,
-# not left for ANCHOR_SLUG_STRIP_RE to clean up afterward -- a first cut
-# of this regex assumed the strip step would handle a trailing "## Heading
-# ##" safely, but that leaves the space before the closing '#'s in the
-# captured text, which then survives stripping and becomes a spurious
-# trailing '-' in the slug ("heading-" instead of "heading"), confirmed
-# by direct execution during review. Applied only to fence-blanked text
+# not left for ANCHOR_SLUG_STRIP_RE to clean up afterward: a trailing
+# space before the closing '#'s would otherwise survive stripping and
+# become a spurious trailing '-' in the slug ("heading-" instead of
+# "heading"). Applied only to fence-blanked text
 # (see _heading_slugs) so a heading-shaped line inside a fenced code
 # example is never read as a real heading.
 HEADING_RE = re.compile(
@@ -2030,28 +1983,19 @@ HEADING_RE = re.compile(
 # underline's own text line; without this exclusion, an ATX heading
 # immediately followed by a "---" divider (a common section-break
 # convention, distinct from a Setext underline) would be misread as a
-# Setext H2 whose "text" is the whole "## Heading" line, hashes included
-# -- confirmed empirically not to happen with this exclusion in place, and
-# confirmed to still correctly recognize a real, marker-free Setext
-# heading immediately above a bare "---"/"===" line.
+# Setext H2 whose "text" is the whole "## Heading" line, hashes included.
 SETEXT_HEADING_RE = re.compile(
     r"^[ ]{0,3}(?!#{1,6}(?:[ \t]|$))(\S.*?)[ \t]*\n[ ]{0,3}(?:=+|-+)[ \t]*$",
     re.MULTILINE)
 # GitHub's own heading-to-anchor slug punctuation strip set -- a denylist
 # of specific ASCII punctuation plus two Unicode "General Punctuation"/
 # "Supplemental Punctuation" blocks, matching the real github-slugger
-# algorithm's own regex, NOT an ASCII allowlist. An earlier cut of this
-# constant stripped everything outside [a-z0-9_ -], which also deleted
-# every non-ASCII Unicode LETTER (e.g. "## Café Notes" -> "caf-notes"
-# instead of GitHub's real "café-notes") -- confirmed by direct
-# execution during review to diverge from real GitHub rendering. This
-# denylist form preserves Unicode letters/digits (and underscore/hyphen/
-# space, as before) while still stripping the same fixed punctuation set.
-# Re-validated against every real hand-written "## Contents" TOC in this
-# repository (battle-testing-a-skill, executing-a-branch-plan,
-# scorer-gated-skill-edits references/*.md) after the change -- all still
-# match, since every punctuation character those TOCs' own headings use
-# ('&', '.', ':', etc.) is covered by this denylist too.
+# algorithm's own regex, NOT an ASCII allowlist. This denylist form
+# preserves Unicode letters/digits (and underscore/hyphen/space) while
+# stripping the same fixed punctuation set GitHub's own slugger strips --
+# an ASCII-only allowlist would incorrectly also delete non-ASCII Unicode
+# letters (e.g. turning "## Café Notes" into "caf-notes" instead of
+# GitHub's real "café-notes").
 ANCHOR_SLUG_STRIP_RE = re.compile(
     r"[\u2000-\u206F\u2E00-\u2E7F\\'!\"#$%&()*+,./:;<=>?@\[\]^`{|}~]")
 
@@ -2078,8 +2022,7 @@ def _github_slug(heading: str, occurrences: dict[str, int]) -> str:
     for headings "Foo", "Foo-1", "Foo" in that order, the naive "count how
     many times 'foo' was seen" approach would slug the third heading
     "foo-1" again, colliding with the second heading's own real slug
-    "foo-1" (confirmed by direct execution during review, matching a
-    reported false-negative). This loop instead keeps incrementing the
+    "foo-1". This loop instead keeps incrementing the
     base's own counter and re-probing until it lands on a slug string not
     already in ``occurrences`` -- exactly the real github-slugger
     algorithm's own occurrence-tracking approach -- so the third "Foo"
@@ -2121,12 +2064,11 @@ def _heading_slugs(text: str) -> frozenset[str]:
     return frozenset(_github_slug(heading, occurrences) for _pos, heading in matches)
 
 
-# A cross-skill "file+heading" citation, issue #482: this repository's own
+# A cross-skill "file+heading" citation: this repository's own
 # established convention for naming a specific sibling skill's reference
 # file and heading in prose (e.g. "`evaluating-skill-quality`'s
-# `references/adversarial-self-audit.md` Isolation verification section" --
-# the exact real-world shape #482's own retrospective quotes), never
-# previously checked against the sibling actually existing. Both the skill
+# `references/adversarial-self-audit.md` Isolation verification section").
+# Both the skill
 # name and the file path sit in their OWN inline-code span (unlike the
 # bare-prose citation checks below, this one is never inline-code-stripped
 # first -- the regex depends on the backticks being present), while the
@@ -2134,9 +2076,8 @@ def _heading_slugs(text: str) -> frozenset[str]:
 # Skill-name char class matches BACKTICK_SKILL_NAME_RE's own kebab-case
 # shape (same convention _stale_related_skill_references already reads a
 # sibling skill name against). A plain ASCII apostrophe before "s",
-# matching this repository's own established prose (a corpus-wide check
-# performed while designing this rule found no typographic/curly
-# apostrophe usage anywhere in this repository's own skill content). The
+# matching this repository's own established prose (this repository's own
+# skill content uses only plain ASCII apostrophes). The
 # heading-text group is deliberately narrow (letters/digits/space/
 # apostrophe/slash/hyphen, non-greedy) so it stops at the literal " section"
 # boundary rather than running on into the next sentence.
@@ -2144,13 +2085,12 @@ def _heading_slugs(text: str) -> frozenset[str]:
 # "s?" (not a bare "s") plus a following-character guard, not a plain
 # "\s+": a sibling skill directory name that itself already ends in "s"
 # (e.g. "scorer-gated-skill-edits") is correctly cited with the bare
-# English possessive apostrophe and no trailing "s" (PORTABLE_SKILL_FACT_
-# CLAIM_RE's own comment documents this same rule and the same "\b does
-# not work here" pitfall -- a review finding on this PR caught that this
-# regex had NOT been given the same fix, so a cross-skill citation naming
-# such a sibling in the grammatically-correct bare-apostrophe form was
-# silently never matched at all, never flagged as dangling if it happened
-# to be broken). The following-character guard is a negative lookahead for
+# English possessive apostrophe and no trailing "s" -- the same "\b does
+# not work here" pitfall PORTABLE_SKILL_FACT_CLAIM_RE's own comment
+# documents. Without the same fix, a cross-skill citation naming such a
+# sibling in the grammatically-correct bare-apostrophe form would never
+# match at all, never flagged as dangling even if broken. The
+# following-character guard is a negative lookahead for
 # a word character, not a literal "\s+": a possessive immediately followed
 # by punctuation before further prose (e.g. a comma) still needs to match.
 CROSS_SKILL_CITATION_RE = re.compile(
@@ -2158,7 +2098,7 @@ CROSS_SKILL_CITATION_RE = re.compile(
     r"`references/([A-Za-z0-9._-]+\.md)`\s+"
     r"([A-Za-z0-9][A-Za-z0-9 '/-]*?)\s+[Ss]ection\b")
 
-# Mechanism-fit subsection completeness, issue #218: every ATX heading in a
+# Mechanism-fit subsection completeness: every ATX heading in a
 # document, this time captured WITH its own '#'-run (unlike HEADING_RE,
 # which only needs a heading's text for anchor-slug purposes and is
 # level-agnostic) -- the Mechanism-fit check below needs to tell a level-2
@@ -2171,14 +2111,13 @@ MECHANISM_FIT_HEADING_RE = re.compile(
 # "[modeleffort]"), the same shape a Mechanism-fit subsection already uses
 # today wherever it cites a primary source. Presence-only: this check does
 # not verify the label resolves to a real "[label]: url" definition
-# elsewhere in the document (a distinct, narrower question issue #218 did
-# not ask for), only that a subsection carries SOME citation-shaped marker
+# elsewhere in the document (a distinct, narrower question this check
+# does not attempt), only that a subsection carries SOME citation-shaped marker
 # rather than none.
 MECHANISM_FIT_CITATION_RE = re.compile(r"\[[a-z0-9][a-z0-9-]*\]")
 # The literal disclosure phrase this repository's own rubric.md already
 # uses (verbatim, twice) to mark a Mechanism-fit claim as its own reasoned
-# extension rather than an Anthropic-sourced one -- see issue #218's own
-# repair 4 for the incident this check mechanizes.
+# extension rather than an Anthropic-sourced one.
 MECHANISM_FIT_REASONED_EXTENSION_PHRASE = "this repository's own reasoned extension"
 
 
@@ -2391,7 +2330,7 @@ def _is_portable(body: list[str], sidecar: SidecarPortability) -> bool:
     (``_portable_path_citation_checks``) do not apply to them. The
     bare-issue-citation check (``_issue_citation_checks``) is different: it
     runs unconditionally on every skill regardless of what this function
-    returns (issue #254) -- this function's return value never gates it.
+    returns -- this function's return value never gates it.
 
     In the fallback (absent) path the level word may wrap onto the line
     after the ``Portability:`` marker (e.g. ``**Portability:**`` then
@@ -2467,8 +2406,7 @@ def _strip_illustrative_spans(defenced_text: str) -> str:
     the forms in which this repo's Portable skills already write an issue
     number or repo path without it resolving live (an inline-code
     ``#149``, a full URL, a ``[PR #2][pr2]`` worked-example link), so what
-    remains is a citation sitting unguarded in running prose -- the shape
-    the historical incidents took.
+    remains is a citation sitting unguarded in running prose.
     """
     out: list[str] = []
     for line in defenced_text.splitlines():
@@ -2488,21 +2426,22 @@ def _split_at_bridging_semicolon(sentence: str,
     """Split ``sentence`` at its first semicolon into two clauses, but ONLY
     when an inline-code citation (matching any of ``citation_res``, across
     every spec, not just one) appears on BOTH sides of it -- otherwise
-    return ``[sentence]`` unsplit (issue #273).
+    return ``[sentence]`` unsplit.
 
     A semicolon is structurally ambiguous in real prose: it can join two
     independent clauses ("Use the hex color `#123456`; see PR `#42` for
-    the implementation history." -- Codex's exact reported example, PR
-    #269/#273), which must split so the second, unrelated citation does
+    the implementation history."), which must split so the second, unrelated
+    citation does
     not inherit the first's hedge; or it can sit inside a single
     parenthetical aside about ONE citation ("`docs/adr/NNNN-*.md` (line
     24; gitapex's own state on this path is covered under Portability
     level above), uses forward slashes." -- real, pre-existing content in
     this repository's own worked-example-explaining-the-work.md), which
     must NOT split, or the hedge phrase that lands after the semicolon
-    loses the citation it was actually describing. Blanket semicolon
-    splitting (a first cut of this fix) and blanket non-splitting (the
-    original, exploitable design) each broke one of these; requiring a
+    loses the citation it was actually describing. Splitting at every
+    semicolon would incorrectly split a single parenthetical aside about
+    one citation; never splitting would let a hedge after the semicolon
+    absorb an unrelated citation before it. Requiring a
     citation on both sides is the narrowest rule that keeps both correct.
     Only the FIRST semicolon is considered -- multiple semicolons in one
     sentence are rare enough in this repository's own prose that handling
@@ -2533,18 +2472,15 @@ def _inline_citation_offenders(
     that have no phrase from that spec's ``hedge_phrases`` in their own
     sentence (or bridging-semicolon-split clause, see
     ``_split_at_bridging_semicolon``) or the one immediately before it (see
-    the module docstring's issue #220 and #263 entries for the rationale,
-    and issue #273 for the clause-splitting refinement). The returned list
+    the module docstring's repo-path and issue-number citation entries for
+    the rationale, and the clause-splitting note below). The returned list
     is ordered the same as ``specs``. Shared by the repo-path check
     (``REPO_PATH_CITATION_RE``/``HEDGE_PHRASES``) and the issue-number
     check (``ISSUE_CITATION_RE``/``ISSUE_CITATION_HEDGE_PHRASES``) -- the
     citation shape and hedge vocabulary differ per spec, but the
     paragraph/sentence tokenization and the inline-code-span search below
     are identical, so both specs are evaluated in one pass over the same
-    tokens rather than one pass per spec (a prior cut of this function
-    took one ``citation_re``/``hedge_phrases`` pair and was called once
-    per spec by the caller, redoing the full paragraph/sentence split for
-    each).
+    tokens rather than one pass per spec.
 
     Bounded to a paragraph first (a run of contiguous non-blank lines),
     then to a sentence within it via ``_SENTENCE_SPLIT_RE``, each further
@@ -2572,8 +2508,8 @@ def _inline_citation_offenders(
     one leading hedge introducing a list of several different citations
     (e.g. "in this repository's own bookkeeping ...:
     `evals/.../split.md`'s Kept-edit log and `docs/skill-eval-status.md`."),
-    which a stricter per-citation windowing design (tried and reverted
-    while closing issue #273) broke. The "clause immediately before"
+    which a stricter per-citation windowing design would incorrectly break.
+    The "clause immediately before"
     fallback is instead the layer doing the real work for the reported
     exploit shape: it is used ONLY when that previous clause has no
     citation of its own for this spec -- the established, tested pattern
@@ -2583,9 +2519,7 @@ def _inline_citation_offenders(
     that correctly justifies one clause's own citation (e.g. "Use the hex
     color `#123456` for the button.") would leak into a completely
     unrelated citation in the very next clause (e.g. "See PR `#42` for the
-    implementation history.") purely because they are clause-adjacent -- a
-    review finding on an earlier cut of this check that a bare "previous
-    sentence, no further condition" fallback could not tell apart.
+    implementation history.") purely because they are clause-adjacent.
 
     A narrower residual is accepted, not solved, by this design: two
     DIFFERENT citations within the same clause, comma- or
@@ -2597,8 +2531,7 @@ def _inline_citation_offenders(
     than a punctuation-based tokenizer can resolve; this checker is a
     deliberately simple, practical approximation (see the module's own
     established tolerance for this tokenizer's "e.g." over-split,
-    elsewhere in this file), not a full parser, and the bridging-semicolon
-    case is the one issue #273 was actually filed to close.
+    elsewhere in this file), not a full parser.
 
     Fenced code blocks are already excluded by the caller via
     ``_blank_fenced_blocks`` -- a citation inside a fenced illustrative
@@ -2808,13 +2741,13 @@ def check_shape(target: Path) -> list[CheckResult]:
     # Populated below, only when the sidecar parses with spec.references
     # and/or spec.lifecycle.experimental/deprecated.reason present -- fed
     # into _issue_citation_checks so the bare-issue-citation ban covers the
-    # sidecar's own free text too (issue #488), not just SKILL.md/
+    # sidecar's own free text too, not just SKILL.md/
     # references/*.md.
     sidecar_citation_sources: list[tuple[str, str]] = []
 
     # A corrupt (non-UTF-8) SKILL.md must not raise out of check_shape --
-    # the same contract issue #187 repair 3 already established for the
-    # sidecar read below (see its own try/except a few lines down). Unlike
+    # the same contract already established for the sidecar read below
+    # (see its own try/except a few lines down). Unlike
     # the sidecar, SKILL.md's text feeds nearly every other check in this
     # function (frontmatter, body-length, and every citation/model-id/
     # placeholder/link scan further down), so there is no bounded,
@@ -3267,11 +3200,10 @@ def _issue_citation_checks(skill_md: Path, skill_dir: Path,
     references/*.md, and (unlike every other check built on
     ``_citation_sources``) the metadata/gitapex.yaml sidecar's own
     spec.references entries and lifecycle.experimental/deprecated.reason
-    text, passed in via ``extra_sources``. The sidecar used to be exempt
-    from this scan -- a bare "#149" there was considered the sanctioned,
-    maintainer-facing home for an issue/PR citation the same rule forbids
-    everywhere else -- but a bare number loses its meaning the moment the
-    sidecar travels with its skill directory to another repository. A full
+    text, passed in via ``extra_sources``. A bare number in the sidecar
+    loses its meaning the moment the sidecar travels with its skill
+    directory to another repository, so this scan covers the sidecar's
+    own free text too. A full
     ``https://github.com/...`` URL contains no bare ``#N`` and so is never
     flagged here -- that is what makes a full URL the only way left to cite
     an issue from the sidecar, with no separate format regex needed. Runs
@@ -3282,7 +3214,7 @@ def _issue_citation_checks(skill_md: Path, skill_dir: Path,
     ``extra_sources`` (the sidecar text) is scanned with the bare
     ``ISSUE_CITATION_RE`` regex directly, NOT through
     ``_portable_citation_offenders``/``_strip_illustrative_spans`` the way
-    SKILL.md/references/*.md are (Codex review finding on this PR): that
+    SKILL.md/references/*.md are: that
     stripping exempts an inline-code span (`` `#149` ``) as an
     "already illustrative, does not resolve live" citation form -- true in
     rendered Markdown, where backticks make GitHub's auto-linker leave the
@@ -3314,7 +3246,7 @@ def _issue_citation_checks(skill_md: Path, skill_dir: Path,
 def _cross_skill_citation_checks(
         skill_md: Path, skill_dir: Path, body: list[str],
         slug_cache: dict[Path, frozenset[str] | None]) -> list[CheckResult]:
-    """Issue #482: every cross-skill "file+heading" citation
+    """Every cross-skill "file+heading" citation
     (CROSS_SKILL_CITATION_RE) in SKILL.md or references/*.md must resolve --
     the sibling skill directory exists (a cheaper version of this,
     directory-only, is already covered by ``related-skill-references-resolve``
@@ -3327,7 +3259,7 @@ def _cross_skill_citation_checks(
     a same-repo relative link (a cross-skill target cannot legally resolve
     inside the CITING skill's own directory, per ``links-inside-skill``), so
     neither ``links-inside-skill`` nor ``anchor-targets-resolve`` ever sees
-    it -- this is the dedicated backstop issue #482 asked for. Runs
+    it -- this is the dedicated backstop for exactly that gap. Runs
     unconditionally, at every portability level, the same as
     ``no-bare-issue-citation`` above: a dangling cross-skill citation is a
     defect regardless of declared portability.
@@ -3342,12 +3274,11 @@ def _cross_skill_citation_checks(
     SAME ``Path``-keyed cache ``anchor-targets-resolve`` already shares
     across SKILL.md and every references/*.md file -- reused here (via
     ``_cached_target_heading_slugs``) rather than this function keeping an
-    independent ``(skill_name, filename)``-keyed cache of its own (a
-    review finding on this PR's first cut: two caches with the identical
-    read-once/frontmatter-strip/heading-slugs/None-on-error contract had
-    to be kept in sync by hand, and a sibling skill's own SKILL.md or
-    references/*.md file cited here might already be a cached anchor
-    target from this same run's earlier checks).
+    independent ``(skill_name, filename)``-keyed cache of its own: two
+    caches with the identical read-once/frontmatter-strip/heading-slugs/
+    None-on-error contract would have to be kept in sync by hand, and a
+    sibling skill's own SKILL.md or references/*.md file cited here might
+    already be a cached anchor target from this same run's earlier checks.
     """
     offenders: list[str] = []
     for label, source_text in _citation_sources(skill_md, skill_dir, body):
@@ -3378,14 +3309,13 @@ def _cross_skill_citation_checks(
 
 
 def _mechanism_fit_citation_offenders(body_text: str) -> list[str]:
-    """Issue #218: return each '### ' subsection heading text nested under
+    """Return each '### ' subsection heading text nested under
     a '## Mechanism fit' heading in ``body_text`` that carries neither a
     '[label]'-style citation (MECHANISM_FIT_CITATION_RE) nor the literal
     phrase "this repository's own reasoned extension" --
     mechanizing the completeness rule references/rubric.md's own
     Mechanism-fit section intro already states in prose ("the primary
-    source and the reasoning behind each check") but nothing previously
-    checked.
+    source and the reasoning behind each check").
 
     Generic over ANY document, not hardcoded to rubric.md's filename -- a
     document with no '## Mechanism fit' heading at all contributes zero
@@ -3532,10 +3462,11 @@ def _portable_path_citation_checks(skill_md: Path, skill_dir: Path,
     its offenders labelled by file, so a failure points at the exact file to
     fix. Only called when ``_is_portable`` is true (see ``check_shape``) --
     unlike the bare-prose issue-number scan in ``_issue_citation_checks``,
-    every check here stays level-gated (see the module docstring's issue
-    #254 entry for why the bare-prose scan is different, and the #263 entry
-    for why the inline-code issue-number check joins the two repo-path
-    checks here rather than the unconditional one).
+    every check here stays level-gated (see the module docstring's
+    bare-issue-citation entry for why the bare-prose scan is different,
+    and the issue-number citation entry for why the inline-code
+    issue-number check joins the two repo-path checks here rather than
+    the unconditional one).
     """
     path_hits: list[str] = []
     inline_hits_per_spec: list[list[str]] = [[] for _ in _INLINE_CITATION_CHECK_SPECS]
@@ -3574,7 +3505,7 @@ def _portable_path_citation_checks(skill_md: Path, skill_dir: Path,
 
 def _portable_skill_fact_claim_offenders(defenced_text: str,
                                          skill_dir: Path) -> list[str]:
-    """Issue #487: return each possessive sibling-skill citation
+    """Return each possessive sibling-skill citation
     (PORTABLE_SKILL_FACT_CLAIM_RE) in ``defenced_text`` that names a real
     sibling skill directory, asserts its claim with "already" in the same
     clause, and has no approved hedge phrase (HEDGE_PHRASES -- the same
@@ -3589,26 +3520,20 @@ def _portable_skill_fact_claim_offenders(defenced_text: str,
     required together -- each one alone was corpus-validated to produce
     false positives against this repository's own shipped skills.
 
-    The hedge lookback is bounded to the SENTENCE IMMEDIATELY BEFORE the
+    The hedge lookback is bounded to the sentence immediately before the
     citation's own clause, within the current paragraph (via
-    _PARAGRAPH_SPLIT_RE + _SENTENCE_SPLIT_RE, the exact hedge-proximity
-    boundary ``_inline_citation_offenders`` already establishes as this
-    file's own convention: "own sentence or the sentence immediately
-    before it"), not a fixed character count and not the whole paragraph.
-    Two review findings on this PR's own first cut caught real gaps here:
-    a flat 200-char slice let an unrelated hedge word sitting in a prior,
-    unconnected sentence within that character count satisfy an unhedged
-    citation; a follow-up cut that widened the lookback to the whole
-    current paragraph (rather than just the one sentence before) still let
-    a hedge two-or-more sentences back leak in, caught by this file's own
-    regression test (test_hedge_in_unrelated_earlier_sentence_does_not_
-    count) once paragraph-only bounding was tried and found insufficient.
-    Inline-code spans are blanked out of the search text first, matching
-    ``_inline_citation_offenders``'s own established rule (its own
-    docstring: "so a citation cannot self-satisfy the requirement merely
-    because its own text happens to contain a hedge word") -- a third
-    review finding caught that an earlier cut searched raw text, so an
-    unrelated inline-code token elsewhere in the paragraph (e.g. a
+    `_PARAGRAPH_SPLIT_RE` + `_SENTENCE_SPLIT_RE`, the same hedge-proximity
+    boundary `_inline_citation_offenders` uses: "own sentence or the
+    sentence immediately before it"), not a fixed character count and not
+    the whole paragraph: a fixed character count would let an unrelated
+    hedge word in a prior, unconnected sentence satisfy an unhedged
+    citation, and a whole-paragraph lookback would let a hedge two-or-more
+    sentences back leak in (see `test_hedge_in_unrelated_earlier_sentence_
+    does_not_count`). Inline-code spans are blanked out of the search text
+    first, matching ``_inline_citation_offenders``'s own rule ("a citation
+    cannot self-satisfy the requirement merely because its own text
+    happens to contain a hedge word") -- otherwise an unrelated
+    inline-code token elsewhere in the paragraph (e.g. a
     `` `docs/gitapex-notes.md` `` path) could satisfy the hedge search
     purely because "gitapex" is one of HEDGE_PHRASES, with no bearing on
     this citation at all.
@@ -3725,8 +3650,8 @@ def _skill_dependency_checks(spec_is_mapping: bool, spec_raw: object,
 
     deps = spec.get("skillDependencies")
     # deps is None here means the key was present with a blank (YAML null)
-    # value, not absent -- distinct from the "not in spec" case above
-    # (issue #356). isinstance(None, dict) is already False, so the
+    # value, not absent -- distinct from the "not in spec" case above.
+    # isinstance(None, dict) is already False, so the
     # existing "not a mapping" branch below fails it correctly without
     # further special-casing.
     if not isinstance(deps, dict):
@@ -3884,7 +3809,7 @@ def _lifecycle_checks(spec_is_mapping: bool, spec_raw: object,
 
     lifecycle = spec.get("lifecycle")
     # lifecycle is None here means present-but-blank (YAML null), distinct
-    # from absent above (issue #356) -- isinstance(None, dict) is already
+    # from absent above -- isinstance(None, dict) is already
     # False, so the existing "not a mapping" branch below fails it.
     if not isinstance(lifecycle, dict):
         evidence = f"not a mapping: {lifecycle!r}"
@@ -3995,19 +3920,18 @@ def _execution_requirements_checks(spec_is_mapping: bool, spec_raw: object,
                                     unknown_tools_keys: list[str],
                                     malformed_tools_items: list[str]
                                     ) -> list[CheckResult]:
-    """The one spec.executionRequirements check landed so far (issue #349,
-    #307 Workstream W1 first slice): ``execution-requirements-well-formed``.
+    """The one spec.executionRequirements check landed so far:
+    ``execution-requirements-well-formed``.
 
     Mirrors ``_skill_dependency_checks``'s early-return ladder (spec not a
     mapping / not declared / not a mapping) before real validation, and its
     problem-accumulation-then-single-CheckResult pattern. Unlike
     spec.skillDependencies or spec.lifecycle, this field has only one
-    recognized top-level subkey so far, ``tools`` -- the remaining #307 W1
+    recognized top-level subkey so far, ``tools`` -- the remaining
     categories (filesystem, network, mcp, credentials, browser,
-    externalServices, context) are deferred to sibling child issues, and
-    any key here other than ``tools`` fails closed via ``unknown_keys``
-    rather than being silently accepted as reserved space, per #307's
-    security invariant 4. There is no dangling-reference or cross-field
+    externalServices, context) are deferred; any key here other than
+    ``tools`` fails closed via ``unknown_keys``
+    rather than being silently accepted as reserved space. There is no dangling-reference or cross-field
     check the way spec.skillDependencies/spec.lifecycle have one each --
     tools' read/write/shell entries are free-form capability tags, not
     names that resolve against sibling skill directories, and no rule
@@ -4031,7 +3955,7 @@ def _execution_requirements_checks(spec_is_mapping: bool, spec_raw: object,
 
     execution_requirements = spec.get("executionRequirements")
     # None here means present-but-blank (YAML null), distinct from absent
-    # above (issue #356) -- isinstance(None, dict) is already False, so
+    # above -- isinstance(None, dict) is already False, so
     # the existing "not a mapping" branch below fails it correctly.
     if not isinstance(execution_requirements, dict):
         return [CheckResult(
@@ -4047,10 +3971,8 @@ def _execution_requirements_checks(spec_is_mapping: bool, spec_raw: object,
     tools_present = "tools" in execution_requirements
     tools = execution_requirements.get("tools")
     # tools_present with tools is None means present-but-blank (YAML
-    # null), distinct from tools being absent entirely -- previously both
-    # fell through this elif ladder untouched and passed silently
-    # (issue #356: "A blank tools: value is YAML null, but the parser
-    # converts it to an empty mapping and passes").
+    # null), distinct from tools being absent entirely -- both must fail
+    # closed here rather than silently passing as an empty mapping.
     if tools_present and not isinstance(tools, dict):
         problems.append(f"tools is not a mapping: {tools!r}")
     elif isinstance(tools, dict):
