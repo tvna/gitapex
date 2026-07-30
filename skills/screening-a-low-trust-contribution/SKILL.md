@@ -29,10 +29,11 @@ delegation inherits the extension automatically.
 1. **Diff completeness and provenance.** Screen the literal diff --
    fetched via a platform-integrated tool call or this repository's
    approved read-only API wrapper (never a hand-invoked `git`/`gh` CLI
-   command; see CLAUDE.md section 3), or already supplied as the literal
-   diff in context -- never a paraphrase of it, per this repository's own
-   primary-source rule (CLAUDE.md section 2: ground claims in the
-   observed state, not a secondary summary). Treat a caller's own prose
+   command), or already supplied as the literal diff in context -- never a
+   paraphrase of it, grounding the claim in the observed state rather than
+   a secondary summary (gitapex's own primary-source convention;
+   substitute the calling repository's equivalent policy where it
+   differs). Treat a caller's own prose
    description *or self-reported file list* as no more trustworthy than a
    paraphrase: only the platform's own diff/file-list/stat output counts
    as the literal artifact. If that literal artifact is not in context,
@@ -114,7 +115,7 @@ delegation inherits the extension automatically.
    change (a patch bump, a well-known package name): a judgment-based
    exemption is itself the kind of shortcut a supply-chain attacker would
    target, so this check's cost stays unconditional rather than trading
-   safety for speed (CLAUDE.md section 4).
+   safety for speed.
 6. **Typosquat patterns.** Package/action names one edit-distance from a
    well-known name (e.g. `actons/checkout` vs `actions/checkout`).
 7. **Unreviewable content.** A binary file, a minified/obfuscated
@@ -146,7 +147,7 @@ step".
 
 1. Diff completeness and provenance: the literal diff was pulled via a
    platform-integrated pull-request-read tool call (not a hand-invoked
-   `gh`/`git` CLI command, per CLAUDE.md section 3), not taken from the
+   `gh`/`git` CLI command), not taken from the
    PR description's own claim of "just a speedup" -- since it came from
    the tool call rather than a pasted blob, the file-list/SHA-ref
    cross-check does not apply here. Proceed to the checks below on that
@@ -207,9 +208,9 @@ about to change.
   not an inbound contribution), and `auditing-git-hosting-surface` (audits
   standing repo configuration, not an incoming diff).
 - Read-only: this skill screens and reports; it does not itself decide
-  to merge, close, or reject -- that stays a human/operator decision per
-  CLAUDE.md section 6's "Never hand a human a decision that is not
-  decision-ready" (this skill exists to make it decision-ready).
+  to merge, close, or reject -- that stays a human/operator decision.
+  Never hand a human a decision that is not decision-ready (this skill
+  exists to make it decision-ready).
 - ASCII only, by gitapex's own default -- substitute the calling
   repository's actual character-set convention where it differs.
 

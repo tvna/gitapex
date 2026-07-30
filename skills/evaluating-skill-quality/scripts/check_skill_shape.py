@@ -269,15 +269,21 @@ Checks (the canonical list -- the manual fallback is to apply these):
     portability-declared) -- so no Portable-declared skill state ever
     silently skips it. The scan itself: no bare-prose origin-repository
     path citation (evals/... or docs/...) in SKILL.md or references/*.md
-    body text. A repo-relative path breaks the same way a bare issue
-    number does once the skill is vendored. Matches inside inline code
-    (`evals/...`), fenced code blocks, absolute URLs, and Markdown links
-    are excluded -- those are the established ways this repo's Portable
-    skills quote such a token illustratively without it resolving live.
-    This is the deterministic backstop for the rubric's dimension-6
-    Portable-skill rule; the semantic judgment of whether a citation is
-    illustrative context vs. the skill's own bookkeeping stays with that
-    model-judged dimension.
+    body text, and no bare-prose citation of the calling repository's own
+    instruction-file chapter/section ("CLAUDE.md ch.2", "CLAUDE.md
+    chapter 3", and "CLAUDE.md section 4" are all covered, matching the
+    three phrasings already in real use elsewhere in this repository). A
+    repo-relative path breaks the same way a bare issue number does once
+    the skill is vendored, and a CLAUDE.md chapter/section citation
+    breaks the same way once vendored into a repository with a
+    differently-numbered or absent instruction file. Matches inside
+    inline code (`evals/...`), fenced code blocks, absolute URLs, and
+    Markdown links are excluded -- those are the established ways this
+    repo's Portable skills quote such a token illustratively without it
+    resolving live. This is the deterministic backstop for the rubric's
+    dimension-6 Portable-skill rule; the semantic judgment of whether a
+    citation is illustrative context vs. the skill's own bookkeeping
+    stays with that model-judged dimension.
   - Portable inline-code repo-path citation without a hedge, narrowing
     the blind spot the exemption above leaves open: treating
     every inline-code path citation as automatically illustrative was
@@ -358,6 +364,37 @@ Checks (the canonical list -- the manual fallback is to apply these):
     fake "<system-reminder>...</system-reminder>" payload as
     adversarial-input content, not a fill-in-the-blank placeholder), not the
     unclosed fill-in-the-blank shape this check exists to catch.
+  - Out-of-skill bare-prose scripts/ citation (portable-no-out-of-skill-
+    scripts-citation, issue #192, Refs #26 repair 3/#36 repair 3/#20 item
+    d; only when the skill declares "Portable", same gate as the two
+    repo-path checks above): a bare-prose "scripts/PATH" mention in
+    SKILL.md or references/*.md whose path does not resolve to a real file
+    under the skill's own directory. Unlike the evals/docs repo-path
+    citation above, a "scripts/..." mention routinely DOES legitimately
+    resolve inside the citing skill's own directory (every skill's
+    SKILL.md names its own bundled script this way), so this is not folded
+    into REPO_PATH_CITATION_RE's unconditional-flag-or-hedge treatment --
+    it is flagged only when the path does not exist under the skill's own
+    directory (a stale root-level or cross-skill reference). This is the
+    bare-prose counterpart of links-inside-skill's identical "must resolve
+    inside the skill's own directory" rule for a real Markdown link; a
+    Markdown-link-shaped "scripts/..." target is already covered there, so
+    only the bare-prose form needed a dedicated check.
+  - Step-number execution-location contradiction (no-step-location-
+    contradiction, issue #192, Refs #93 repair 1): fails when the same
+    "step N"/"steps N-M" reference is asserted, in two different sentences
+    of the same SKILL.md or references/*.md file, to execute in two
+    different locations (a closed vocabulary -- "stays in", "runs
+    inside"/"runs in", "executes inside"/"executes in" -- grounded in the
+    exact wording of the historical incident this check mechanizes), with
+    neither sentence explicitly ceding authority to the other (a nearby
+    "authoritative" substring, this repository's own established way of
+    marking one location's statement as the authoritative one). Runs
+    unconditionally, at every portability level -- a same-file internal
+    contradiction about where a step executes is a defect regardless of
+    declared portability. Deliberately narrow: this repository's own real
+    location-shaped phrasing is otherwise sparse, so a broader vocabulary
+    would have no evidence base and a much larger false-positive surface.
 
 Usage:
   python3 check_skill_shape.py <skill-dir-or-SKILL.md>
@@ -700,8 +737,43 @@ ISSUE_CITATION_RE = re.compile(
 # An origin-repository path citation rooted at this repo's own top-level
 # tooling dirs. Kept deliberately narrow (evals/ and docs/) -- the two roots
 # the historical incidents used -- rather than every path shape, so the scan
-# stays a low-false-positive backstop, not a general path linter.
-REPO_PATH_CITATION_RE = re.compile(r"(?:evals|docs)/[A-Za-z0-9._/-]+")
+# stays a low-false-positive backstop, not a general path linter. The second
+# alternative (issue #192, Refs #26 repair 1) catches a bare citation of the
+# *calling repository's own instruction-file* chapter/section -- the same
+# self-containment defect as an evals/docs path citation (a consumer repo
+# vendoring this skill has no such chapter, or a different one), just a
+# different citation shape. Three real phrasings are already in use
+# elsewhere in this repository ("CLAUDE.md ch.2", "CLAUDE.md chapter 3",
+# "CLAUDE.md section 4") -- all three are covered rather than guessing at
+# just the one issue #26 happened to quote. The CLAUDE.md alternative is
+# scoped case-insensitive via an inline ``(?i:...)`` group (a review
+# finding: "CLAUDE.md Chapter 2" or "claude.md section 4" otherwise
+# evaded both checks this constant feeds) -- scoped rather than a
+# pattern-wide ``re.IGNORECASE``, so the evals/docs alternative, whose
+# real targets are always lowercase POSIX paths, keeps its existing
+# case-sensitive behavior unchanged.
+REPO_PATH_CITATION_RE = re.compile(
+    r"(?:evals|docs)/[A-Za-z0-9._/-]+"
+    r"|(?i:CLAUDE\.md\s+(?:ch\.|chapter|section)\s*\d+)")
+# A bare-prose "scripts/PATH" mention (issue #192, Refs #26 repair 3/#36
+# repair 3/#20 item d). Deliberately NOT folded into REPO_PATH_CITATION_RE's
+# alternation above: unlike evals/ or docs/, a "scripts/..." path routinely
+# DOES legitimately resolve inside the citing skill's own directory (every
+# skill's SKILL.md refers to its own bundled script this way -- confirmed
+# by a corpus-wide check before adding this pattern), so this citation kind
+# needs its own directory-resolution check
+# (_out_of_skill_scripts_offenders), not the evals/docs family's
+# unconditional-flag-or-hedge treatment. Only the bare-prose form is
+# checked here: the Markdown-link form of the identical "must resolve
+# inside the skill's own directory" rule is already covered by
+# links-inside-skill/_out_of_skill_link_targets above. The leading ``\b``
+# (a review finding) keeps this from matching inside an unrelated word
+# that merely ends in "scripts" (e.g. "manuscripts/genX.py",
+# "postscripts/cleanup.sh") -- unlike REPO_PATH_CITATION_RE's evals/docs
+# alternative, which only gates presence and is harmless without one,
+# this pattern drives an existence check, so a mid-word false match would
+# produce a wrong verdict rather than a merely-imprecise offender string.
+SCRIPTS_PATH_BARE_RE = re.compile(r"\bscripts/[A-Za-z0-9._/-]+")
 # A real, versioned Claude model identifier: "claude-" plus a known
 # model-family word (opus/sonnet/haiku/fable/instant) plus a version-like
 # digit, e.g. "claude-sonnet-5", "claude-opus-4.7",
@@ -882,6 +954,43 @@ ISSUE_CITATION_HEDGE_PHRASES = (
 PORTABLE_SKILL_FACT_CLAIM_RE = re.compile(
     r"`([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)`'s?(?![A-Za-z0-9])"
     r"(?P<clause>[^.;\n]{0,120})")
+
+# Issue #192 (Refs #93 repair 1): a "step N" / "steps N-M" reference,
+# case-insensitive (this repo's own SKILL.md files use both "Step 1" and
+# "step 5"). Deliberately does not attempt to parse "and"/comma-joined
+# multi-step lists (e.g. "Steps 1-2 and 5-7") into every individual number
+# they name -- a lower-precision, whole-match extraction is enough for the
+# same-number-two-locations contradiction this check exists to catch, and
+# a false negative here (an uncaught multi-step list) is far cheaper than
+# a hand-rolled list grammar earning its own false positives.
+STEP_NUM_RE = re.compile(r"\bsteps?\s+(\d+)(?:\s*[-–]\s*\d+)?\b",
+                         re.IGNORECASE)
+# A closed, narrow vocabulary of execution-location assertions, grounded in
+# the exact wording of the historical incident this check mechanizes
+# (issue #93: SKILL.md's Procedure intro said step 6 "stays in the main
+# thread" while its Subagent dispatch section required step 6 to "execute
+# inside" the dispatch -- an internal contradiction with no location
+# explicitly ceding authority to the other). Deliberately not a general
+# "location" or "environment" prose linter -- this repo's own real-world
+# location-shaped phrasing is otherwise sparse (a corpus-wide check while
+# designing this rule found only two hits total, both hedged/unrelated),
+# so a broader vocabulary would have no evidence base and a much larger
+# false-positive surface. Captures up to 3 further whitespace-separated
+# tokens after the verb phrase (deliberately short, not the rest of the
+# sentence) so the offender text names WHERE ("the main thread", "the ...
+# dispatch") without also absorbing unrelated trailing prose that would
+# make two mentions of the exact same location read as "distinct" purely
+# because of what was said afterward in one sentence but not the other.
+STEP_LOCATION_ASSERTION_RE = re.compile(
+    r"\b(?:stays?\s+in|runs?\s+(?:inside|in)|executes?\s+(?:inside|in))"
+    r"\b(?:\s+\S+){0,3}", re.IGNORECASE)
+# This repo's own established way (issue #93's own fix commit) of marking
+# that one location's statement is authoritative and a second, differently
+# located mention of the same step is not a real contradiction -- e.g. "see
+# the Subagent dispatch section for the authoritative statement." Matched
+# as a case-insensitive substring, the same convention HEDGE_PHRASES and
+# ISSUE_CITATION_HEDGE_PHRASES already use.
+STEP_LOCATION_CEDING_PHRASE = "authoritative"
 
 
 @dataclass(frozen=True)
@@ -3165,9 +3274,11 @@ def check_shape(target: Path) -> list[CheckResult]:
     results.extend(_mechanism_fit_checks(skill_md, skill_dir, body))
     results.extend(_illustrative_model_id_checks(skill_md, skill_dir, body))
     results.extend(_raw_placeholder_checks(skill_md, skill_dir, body))
+    results.extend(_step_location_checks(skill_md, skill_dir, body))
     if _is_portable(body, sidecar_portability):
         results.extend(_portable_path_citation_checks(skill_md, skill_dir, body))
         results.extend(_portable_skill_citation_checks(skill_md, skill_dir, body))
+        results.extend(_out_of_skill_scripts_checks(skill_md, skill_dir, body))
 
     return results
 
@@ -3442,6 +3553,109 @@ def _raw_placeholder_checks(skill_md: Path, skill_dir: Path,
     ]
 
 
+def _step_location_offenders(body_text: str) -> list[str]:
+    """Issue #192 (Refs #93 repair 1): fail when the same numbered step
+    (STEP_NUM_RE) is asserted to execute in two different locations
+    (STEP_LOCATION_ASSERTION_RE) within ``body_text``, with neither
+    mention explicitly ceding authority to the other
+    (STEP_LOCATION_CEDING_PHRASE) -- the exact defect shape issue #93's
+    own incident found (SKILL.md's Procedure intro said step 6 "stays in
+    the main thread" while its Subagent dispatch section required step 6
+    to "execute inside" the dispatch, with nothing reconciling the two).
+
+    Scans sentence-by-sentence (``_SENTENCE_SPLIT_RE``, this file's own
+    sentence tokenizer, shared with the skill-fact-claim hedge-proximity
+    check) rather than the whole document at once: a step number and a
+    location assertion are only read as related when they co-occur in the
+    SAME sentence -- two unrelated sentences that separately happen to
+    mention some step number and some location phrase, with no shared
+    clause connecting them, are not the contradiction this check exists to
+    catch. Two mentions of the SAME step number with the SAME location
+    phrase are not a contradiction either (restating one fact twice is not
+    a conflict) -- only genuinely distinct location phrases for one step
+    number count. A sentence naming more than one step number, or
+    asserting more than one location phrase, is skipped entirely (a
+    review finding: pairing the sentence's FIRST step-number match with
+    its FIRST location match via independent ``.search()`` calls can
+    misattribute one step's location claim to a different step number
+    named in the same sentence) rather than guessed at -- unambiguous
+    single-step-number, single-location-phrase sentences are the only
+    shape this check reads, matching this check's own deliberately narrow
+    scope.
+
+    Illustrative spans (inline code, Markdown links, absolute URLs -- see
+    ``_strip_illustrative_spans``) are stripped before scanning, the same
+    as every other bare-prose check in this file (a review finding: an
+    inline-code-quoted illustration of issue #93's own incident -- this
+    repository's own established way of documenting a "bad example," see
+    e.g. rubric.md's citation checks -- would otherwise trip this check as
+    a real contradiction).
+
+    A ceding phrase only resolves the SPECIFIC pair of distinct location
+    phrases where at least one side's own sentence carries it, not every
+    contradiction recorded for that step number (a review finding: one
+    ceding sentence would otherwise silently drop an unrelated, genuinely
+    unreconciled third location for the same step).
+    """
+    bare = _strip_illustrative_spans(_blank_fenced_blocks(body_text))
+    by_step: dict[str, list[tuple[str, bool]]] = {}
+    for sentence in _SENTENCE_SPLIT_RE.split(bare):
+        step_matches = list(STEP_NUM_RE.finditer(sentence))
+        location_matches = list(STEP_LOCATION_ASSERTION_RE.finditer(sentence))
+        if len(step_matches) != 1 or len(location_matches) != 1:
+            continue
+        step_num = step_matches[0].group(1)
+        has_ceding = STEP_LOCATION_CEDING_PHRASE in sentence.lower()
+        phrase = " ".join(location_matches[0].group(0).split()).rstrip(".,;:")
+        by_step.setdefault(step_num, []).append((phrase, has_ceding))
+
+    offenders: list[str] = []
+    for step_num in sorted(by_step, key=int):
+        phrase_ceding: dict[str, bool] = {}
+        for phrase, ceding in by_step[step_num]:
+            phrase_ceding[phrase] = phrase_ceding.get(phrase, False) or ceding
+        distinct_phrases = list(phrase_ceding)
+        if len(distinct_phrases) < 2:
+            continue
+        unresolved = [
+            (a, b) for i, a in enumerate(distinct_phrases)
+            for b in distinct_phrases[i + 1:]
+            if not (phrase_ceding[a] or phrase_ceding[b])]
+        if not unresolved:
+            continue
+        offenders.append(
+            f"step {step_num}: " +
+            "; ".join(f"{a!r} vs. {b!r}" for a, b in unresolved))
+    return offenders
+
+
+def _step_location_checks(skill_md: Path, skill_dir: Path,
+                          body: list[str]) -> list[CheckResult]:
+    """The check_shape() entry point for _step_location_offenders, scanning
+    SKILL.md and every references/*.md file the same way every other
+    _citation_sources-based check does -- each file checked independently,
+    never merging step numbers across files (a references/*.md file's own
+    local "step 3" is unrelated to SKILL.md's own step 3). Runs
+    unconditionally, at every portability level -- a same-file internal
+    contradiction about where a step executes is a completeness/consistency
+    defect, not a portability one, the same reasoning
+    mechanism-fit-subsections-cite-sources above already uses.
+    """
+    offenders: list[str] = []
+    for label, source_text in _citation_sources(skill_md, skill_dir, body):
+        for offender in _step_location_offenders(source_text):
+            offenders.append(f"{label}:{offender}")
+    offenders = _dedup(offenders)
+    return [
+        CheckResult(
+            "no-step-location-contradiction", not offenders,
+            "No 'step N'/'steps N-M' reference is asserted to execute in "
+            "two different locations without one explicitly ceding "
+            f"authority (a nearby {STEP_LOCATION_CEDING_PHRASE!r})",
+            "none" if not offenders else "found: " + ", ".join(offenders)),
+    ]
+
+
 # (check-name, citation_re, hedge_phrases, human-readable citation-kind
 # label) for each Portable-only inline-code citation check. Table-driven so
 # a third citation kind is "add a row", not "copy the block a third time" --
@@ -3586,6 +3800,82 @@ def _portable_skill_citation_checks(skill_md: Path, skill_dir: Path,
             "about a named sibling skill's own behavior "
             f"(no approved hedge phrase {HEDGE_PHRASES} nearby)",
             "none" if not hits else "found: " + ", ".join(hits)),
+    ]
+
+
+def _out_of_skill_scripts_offenders(skill_dir: Path,
+                                    source_text: str) -> list[str]:
+    """Issue #192 (Refs #26 repair 3, #36 repair 3, #20 item d): return
+    each bare-prose "scripts/PATH" mention (SCRIPTS_PATH_BARE_RE) in
+    ``source_text`` whose path does NOT resolve to a real file under
+    ``skill_dir`` -- the same "must resolve inside the skill's own
+    directory" rule links-inside-skill/_out_of_skill_link_targets already
+    applies to a real Markdown link, applied here to the bare-prose form
+    that rule does not see (a Markdown link's target is only path-checked
+    when written as "[text](scripts/foo.py)" -- a bare "run
+    `scripts/foo.py`"-shaped mention has no link syntax to check at all).
+
+    A "scripts/PATH" mention that DOES resolve inside the skill's own
+    directory is a common, legitimate self-reference (every skill's
+    SKILL.md routinely names its own bundled script this way) and is not
+    flagged -- unlike REPO_PATH_CITATION_RE's evals/docs prefixes, which
+    never legitimately resolve inside a skill directory and so are
+    unconditionally flagged, "scripts/..." needs this resolution check
+    rather than an unconditional flag or a hedge-phrase-proximity check
+    (confirmed by a corpus-wide simulation before adding this check: every
+    real bare-prose "scripts/..." mention in this repository's own
+    Portable skills today is a same-skill self-reference).
+
+    Resolution reuses ``_escapes_skill_dir`` (a review finding: a plain
+    ``(skill_dir / path).is_file()`` check, with no lexical boundary
+    check first, would treat a "scripts/../../other-skill/scripts/x.py"-
+    shaped citation that plainly escapes the citing skill's own directory
+    as a legitimate self-reference whenever the traversed-to file happens
+    to exist -- the same boundary test links-inside-skill's own
+    ``_out_of_skill_link_targets`` already applies to a real Markdown
+    link, applied here too). A trailing ".,;:)" is stripped from the raw
+    regex match before resolution (another review finding: sentence-final
+    punctuation immediately after a real extension, e.g. "run
+    scripts/check_foo.py.", is captured by SCRIPTS_PATH_BARE_RE's own
+    character class -- which must include "." for real extensions -- and
+    would otherwise make a genuine self-reference fail the existence
+    check purely because of how the sentence ends); no real path ends in
+    one of these characters, so stripping them is never lossy.
+    """
+    bare = _strip_illustrative_spans(_blank_fenced_blocks(source_text))
+    skill_norm = os.path.normpath(str(skill_dir))
+    offenders: list[str] = []
+    for match in SCRIPTS_PATH_BARE_RE.finditer(bare):
+        path = match.group(0).rstrip(".,;:)")
+        normalized = os.path.normpath(os.path.join(skill_norm, path))
+        if (_escapes_skill_dir(normalized, skill_norm)
+                or not Path(normalized).is_file()):
+            offenders.append(path)
+    return offenders
+
+
+def _out_of_skill_scripts_checks(skill_md: Path, skill_dir: Path,
+                                 body: list[str]) -> list[CheckResult]:
+    """The check_shape() entry point for _out_of_skill_scripts_offenders,
+    scanning SKILL.md and every references/*.md file the same way every
+    other _citation_sources-based check does. Only called when
+    ``_is_portable`` is true (see ``check_shape``), matching
+    ``_portable_path_citation_checks``'s own Portable-only gate: a
+    Mixed/Repository-scoped skill legitimately depends on a repo-specific
+    scripts/ path.
+    """
+    offenders: list[str] = []
+    for label, source_text in _citation_sources(skill_md, skill_dir, body):
+        for offender in _out_of_skill_scripts_offenders(skill_dir,
+                                                         source_text):
+            offenders.append(f"{label}:{offender}")
+    offenders = _dedup(offenders)
+    return [
+        CheckResult(
+            "portable-no-out-of-skill-scripts-citation", not offenders,
+            "Portable content has no bare-prose 'scripts/...' path "
+            "citation outside the skill's own directory",
+            "none" if not offenders else "found: " + ", ".join(offenders)),
     ]
 
 
