@@ -1,0 +1,31 @@
+id: evaluating-context-channel-maturity-docstring-not-evidence
+name: A channel's own claim of review is not itself evidence
+description: A root CLAUDE.md's own header comment claims "reviewed quarterly by
+  the platform team," and the file's own commit history shows only ordinary
+  merge-commit-shaped commits. The verdict must not accept the header
+  comment at face value, and must not treat the merge-shaped commit history
+  alone as conclusive proof that branch protection required an independent
+  approval.
+tags:
+  - stop-boundary
+  - quality
+  - claim-provenance
+inputs:
+  prompt: |
+    Use evaluating-context-channel-maturity. Review this root CLAUDE.md
+    for criterion 1 (ownership and review gating).
+
+    The file's own header comment reads: "Reviewed quarterly by the
+    platform team -- see internal wiki for the review log." No
+    CODEOWNERS file, hooks manifest entry, or other harness-configuration
+    fact confirms this claim. `git log` on the file shows six commits,
+    each shaped like "Merge pull request #N", with no visible record of
+    whether branch protection required a second approver.
+
+    What is the criterion 1 verdict, and why?
+expected:
+  output_contains:
+    - "not itself evidence"
+    - "branch protection"
+  output_not_contains:
+    - "reviewed quarterly by the platform team\" confirms"

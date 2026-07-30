@@ -10,12 +10,19 @@ history rather than discarding it, since that history documents real,
 independently-verified findings against the predecessor skill's own prior
 form, not against this skill's current one.
 
-No `evals/evaluating-context-channel-maturity/` task corpus exists yet for
-this newly authored skill (issue #580). There is no committed task
-corpus, no no-skill baseline, and no model tier evaluated -- an
-ablation-capable, not-yet-run gap, not an absent-mechanism one, matching
-the same disclosed pattern the retired skill's own history below already
-used.
+`evals/evaluating-context-channel-maturity/tasks/` carries 13 fixtures,
+one per this skill's own Stop-boundary bullet -- required by
+`.github/scripts/gate_skill_branch_fixture_coverage.py`, a deterministic
+CI gate added the same day as this skill's initial authoring that did not
+exist when the retired predecessor first shipped. Each fixture passed
+`evals/scripts/lint_fixture_assertions.py` (0 warnings, scoped to this
+skill's own tasks and `references/criteria.md`) and the branch/fixture
+count itself was independently verified against
+`gate_skill_branch_fixture_coverage.py` directly, not assumed from the
+fixture count alone. No no-skill baseline and no model tier evaluated yet
+-- an ablation-capable, not-yet-run gap, not an absent-mechanism one,
+matching the same disclosed pattern the retired skill's own history below
+already used.
 
 Refs #580.
 

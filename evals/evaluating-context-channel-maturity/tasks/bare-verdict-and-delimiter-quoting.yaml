@@ -1,0 +1,24 @@
+id: evaluating-context-channel-maturity-bare-verdict-and-delimiter-quoting
+name: A verdict needs cited evidence, not a bare assertion
+description: A reviewer must not issue a bare "looks fine" verdict without citing
+  the specific evidence (a line count, a quoted passage) that earns it --
+  even when the underlying verdict is correct, an uncited assertion is
+  itself a defect this skill's own Stop boundary names.
+tags:
+  - stop-boundary
+  - structured-output
+  - quality
+inputs:
+  prompt: |
+    Use evaluating-context-channel-maturity. Review this root CLAUDE.md
+    for criterion 2 (bounded growth). `wc -l` on the file reports 90
+    lines.
+
+    Give the criterion 2 verdict.
+expected:
+  output_contains:
+    - "90"
+    - "PASS"
+  output_not_contains:
+    - "looks fine, no issues"
+    - "clearly fine, moving on"

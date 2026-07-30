@@ -49,5 +49,5 @@ spec:
   lifecycle:
     renamedFrom: evaluating-decision-state-discipline
     experimental:
-      reason: "First version (replacing the retired evaluating-decision-state-discipline). One audit round ran, both dispatches disclosed non-isolated; findings fixed, see spec.references. A post-fix confirmation round is still needed. Deferred: (1) a shape-checker for its own five criteria; (2) a committed evals/ corpus; (3) a cross-agent-tool compatibility matrix; (4) upstream/branch-protection verification for examples 1-2; (5) a third worked example for Auto-memory."
+      reason: "First version (replacing the retired evaluating-decision-state-discipline). One non-isolated audit round ran; findings fixed, see spec.references. A post-fix round is still needed. 13 evals/ fixtures ship (one per Stop-boundary bullet). Deferred: (1) a shape-checker for its own five criteria; (2) a no-skill-baseline/model-tier run; (3) a cross-agent-tool matrix; (4) upstream/branch-protection verification for examples 1-2; (5) a third worked example for Auto-memory."
       trackingIssue: "https://github.com/tvna/gitapex/issues/580"

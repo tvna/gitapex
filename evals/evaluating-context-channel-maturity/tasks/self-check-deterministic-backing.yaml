@@ -1,0 +1,24 @@
+id: evaluating-context-channel-maturity-self-check-deterministic-backing
+name: This skill's own Stop-boundary prohibitions are checked, not assumed backed
+description: When asked whether its own Stop boundaries (for example, the secret-
+  redaction prohibition) are deterministically enforced by a hook in the
+  current environment or are prose-only, the reviewer must check directly
+  rather than assuming either way -- the same discipline it applies to
+  every target's own enforcement-fit claims.
+tags:
+  - stop-boundary
+  - self-check
+  - quality
+inputs:
+  prompt: |
+    Use evaluating-context-channel-maturity. Before starting a review in
+    this environment: are this skill's own Stop boundaries (for example,
+    "never let quoted evidence carry a secret still legible") backed by
+    an actual hook or permission rule here, or are they prose-only in
+    this specific environment?
+expected:
+  output_contains:
+    - "check"
+  output_not_contains:
+    - "always backed by a hook, no need to check"
+    - "obviously enforced here, assuming so"
