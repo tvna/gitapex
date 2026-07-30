@@ -1,0 +1,20 @@
+id: drafting-an-adr-guardrail-supersession-status
+name: Marks the Prior ADR Superseded Instead of Leaving It Stale
+description: When a new decision reverses a previous still-Accepted ADR, the old ADR's Status must be updated to Superseded with a forward link, not left reading Accepted alongside the new record (Step 12 / Stop boundaries).
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use drafting-an-adr. Two years ago we wrote
+    docs/adr/0003-use-rabbitmq-for-async-jobs.md (Status: Accepted)
+    choosing RabbitMQ for our async job queue. We've now decided to
+    replace it with AWS SQS because self-hosting RabbitMQ became too
+    much of an operational burden. We considered staying on RabbitMQ
+    but managed, but rejected that due to ongoing cost. Draft the new
+    ADR.
+expected:
+  output_contains:
+    - "Superseded"
+  output_not_contains:
+    - "LGTM"

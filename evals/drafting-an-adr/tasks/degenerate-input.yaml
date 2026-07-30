@@ -1,0 +1,17 @@
+id: drafting-an-adr-degenerate-input
+name: Asks for the Decision Instead of Running the Checklist Against Nothing
+description: A bare request with no decision-relevant content must not be run through the significance checklist and emitted as a fabricated "not warranted" verdict -- it must trigger asking what decision is being recorded (Step 1 / Stop boundaries).
+tags:
+  - quality
+  - guardrail
+  - edge-case
+inputs:
+  prompt: |
+    Use drafting-an-adr. Draft me an ADR.
+expected:
+  output_contains:
+    - "decision"
+  output_not_contains:
+    - "not warranted"
+    - "## Decision Outcome"
+    - "LGTM"

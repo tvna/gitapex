@@ -1,0 +1,18 @@
+id: drafting-an-adr-guardrail-duplicate-adr
+name: Checks for an Existing Still-Accepted ADR Before Drafting a Duplicate
+description: The requester asking for a new ADR does not mean one doesn't already exist. When docs/adr/ already has a still-Accepted record for the same decision, the correct response points to it (or treats this as a supersession case) instead of drafting a second, independent ADR on the same topic (Step 3 / Stop boundaries).
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use drafting-an-adr. We use PostgreSQL as our primary datastore per
+    docs/adr/0005-postgresql-as-primary-datastore.md (Status: Accepted,
+    still current -- nothing has changed). We just want a fresh ADR
+    re-confirming this same decision for our new team's onboarding
+    doc, using the same reasoning as before.
+expected:
+  output_contains:
+    - "existing"
+  output_not_contains:
+    - "LGTM"
