@@ -1,0 +1,494 @@
+"""Tests for evals/scripts/run_ablation.py (issue #583).
+
+The stub-executor tests here are the concrete stand-in for issue #583's own
+ACM proof method ("run it against one already-committed task fixture and
+confirm it produces two distinct, inspectable outputs") -- a live model run
+is out of scope for this environment (no credentials), which the issue's
+own Constraints section explicitly pre-authorizes.
+"""
+
+from __future__ import annotations
+
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+import run_ablation
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+BASE_FIXTURE_TEXT = """\
+id: demo-task
+name: Demo task
+description: A demo fixture for run_ablation tests.
+tags:
+  - demo
+inputs:
+  prompt: |
+    Say the magic word.
+expected:
+  output_contains:
+    - magic-word-present
+"""
+
+
+# ---------------------------------------------------------------------------
+# load_task_fixture
+# ---------------------------------------------------------------------------
+
+
+def test_load_task_fixture_happy_path(tmp_path: Path):
+    p = tmp_path / "task.yaml"
+    p.write_text(BASE_FIXTURE_TEXT, encoding="utf-8")
+    fixture = run_ablation.load_task_fixture(p)
+    assert fixture == {
+        "id": "demo-task",
+        "prompt": "Say the magic word.\n",
+        "expected": {"output_contains": ["magic-word-present"]},
+    }
+
+
+def test_load_task_fixture_rejects_non_mapping(tmp_path: Path):
+    p = tmp_path / "task.yaml"
+    p.write_text("- just\n- a\n- list\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="must be a YAML mapping"):
+        run_ablation.load_task_fixture(p)
+
+
+def test_load_task_fixture_rejects_missing_id(tmp_path: Path):
+    p = tmp_path / "task.yaml"
+    p.write_text("inputs:\n  prompt: hi\nexpected:\n  output_contains: [a]\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="id must be a non-empty string"):
+        run_ablation.load_task_fixture(p)
+
+
+def test_load_task_fixture_rejects_non_string_id(tmp_path: Path):
+    p = tmp_path / "task.yaml"
+    p.write_text(
+        "id: 123\ninputs:\n  prompt: hi\nexpected:\n  output_contains: [a]\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="id must be a non-empty string"):
+        run_ablation.load_task_fixture(p)
+
+
+def test_load_task_fixture_rejects_blank_id(tmp_path: Path):
+    p = tmp_path / "task.yaml"
+    p.write_text(
+        "id: '   '\ninputs:\n  prompt: hi\nexpected:\n  output_contains: [a]\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="id must be a non-empty string"):
+        run_ablation.load_task_fixture(p)
+
+
+def test_load_task_fixture_rejects_missing_inputs(tmp_path: Path):
+    p = tmp_path / "task.yaml"
+    p.write_text("id: x\nexpected:\n  output_contains: [a]\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="'inputs' must be a mapping"):
+        run_ablation.load_task_fixture(p)
+
+
+def test_load_task_fixture_rejects_non_mapping_inputs(tmp_path: Path):
+    p = tmp_path / "task.yaml"
+    p.write_text(
+        "id: x\ninputs: not-a-mapping\nexpected:\n  output_contains: [a]\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="'inputs' must be a mapping"):
+        run_ablation.load_task_fixture(p)
+
+
+def test_load_task_fixture_rejects_missing_prompt(tmp_path: Path):
+    p = tmp_path / "task.yaml"
+    p.write_text(
+        "id: x\ninputs:\n  other: y\nexpected:\n  output_contains: [a]\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="inputs.prompt must be a non-empty string"):
+        run_ablation.load_task_fixture(p)
+
+
+def test_load_task_fixture_rejects_blank_prompt(tmp_path: Path):
+    p = tmp_path / "task.yaml"
+    p.write_text(
+        "id: x\ninputs:\n  prompt: '   '\nexpected:\n  output_contains: [a]\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="inputs.prompt must be a non-empty string"):
+        run_ablation.load_task_fixture(p)
+
+
+def test_load_task_fixture_rejects_missing_expected(tmp_path: Path):
+    p = tmp_path / "task.yaml"
+    p.write_text("id: x\ninputs:\n  prompt: hi\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="'expected' must be a mapping"):
+        run_ablation.load_task_fixture(p)
+
+
+def test_load_task_fixture_rejects_non_mapping_expected(tmp_path: Path):
+    p = tmp_path / "task.yaml"
+    p.write_text(
+        "id: x\ninputs:\n  prompt: hi\nexpected: not-a-mapping\n", encoding="utf-8"
+    )
+    with pytest.raises(ValueError, match="'expected' must be a mapping"):
+        run_ablation.load_task_fixture(p)
+
+
+def test_load_task_fixture_rejects_invalid_yaml_syntax(tmp_path: Path):
+    p = tmp_path / "task.yaml"
+    p.write_text("id: [unclosed\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="invalid YAML"):
+        run_ablation.load_task_fixture(p)
+
+
+def test_load_task_fixture_rejects_missing_file(tmp_path: Path):
+    missing = tmp_path / "does-not-exist.yaml"
+    with pytest.raises(ValueError, match="cannot read task fixture"):
+        run_ablation.load_task_fixture(missing)
+
+
+def test_load_task_fixture_real_committed_suite_shape():
+    # Regression: every real committed task fixture must parse under this
+    # script's shape assumptions, the same way test_set_config_model.py's
+    # test_real_committed_suite_shape guards against drift for eval.yaml.
+    fixtures = sorted((REPO_ROOT / "evals").glob("*/tasks/*.yaml"))
+    assert fixtures, "no committed task fixtures found"
+    for path in fixtures:
+        fixture = run_ablation.load_task_fixture(path)
+        assert fixture["id"]
+        assert fixture["prompt"]
+        assert isinstance(fixture["expected"], dict)
+
+
+# ---------------------------------------------------------------------------
+# build_command
+# ---------------------------------------------------------------------------
+
+
+def test_build_command_without_skill_md():
+    argv = run_ablation.build_command("claude", "hello", None)
+    assert argv == ["claude", "-p", "hello", "--bare"]
+
+
+def test_build_command_with_skill_md():
+    skill_md = Path("/tmp/SKILL.md")
+    argv = run_ablation.build_command("claude", "hello", skill_md)
+    assert argv == [
+        "claude",
+        "-p",
+        "hello",
+        "--bare",
+        "--append-system-prompt-file",
+        str(skill_md),
+    ]
+
+
+def test_build_command_always_includes_bare_flag():
+    assert "--bare" in run_ablation.build_command("claude", "p", None)
+    assert "--bare" in run_ablation.build_command("claude", "p", Path("x.md"))
+
+
+def test_build_command_rejects_empty_model_cli():
+    with pytest.raises(ValueError, match="non-empty"):
+        run_ablation.build_command("", "hello", None)
+
+
+def test_build_command_rejects_padded_model_cli():
+    with pytest.raises(ValueError, match="unpadded"):
+        run_ablation.build_command(" claude ", "hello", None)
+
+
+# ---------------------------------------------------------------------------
+# subprocess_executor (real subprocess, no `claude` binary needed)
+# ---------------------------------------------------------------------------
+
+
+def test_subprocess_executor_captures_stdout_on_success():
+    argv = [sys.executable, "-c", "print('hello from stand-in model cli')"]
+    out = run_ablation.subprocess_executor(argv, timeout=10)
+    assert out == "hello from stand-in model cli\n"
+
+
+def test_subprocess_executor_raises_runtime_error_on_nonzero_exit():
+    argv = [
+        sys.executable,
+        "-c",
+        "import sys; sys.stderr.write('boom'); sys.exit(3)",
+    ]
+    with pytest.raises(RuntimeError, match="exited 3: boom"):
+        run_ablation.subprocess_executor(argv, timeout=10)
+
+
+def test_subprocess_executor_propagates_timeout_expired():
+    argv = [sys.executable, "-c", "import time; time.sleep(5)"]
+    with pytest.raises(subprocess.TimeoutExpired):
+        run_ablation.subprocess_executor(argv, timeout=0.1)
+
+
+# ---------------------------------------------------------------------------
+# run_once / run_ablation (hand-written recording stub executor)
+# ---------------------------------------------------------------------------
+
+
+class _RecordingExecutor:
+    """Stand-in for a live model CLI: returns pre-canned output per call and
+    records every (argv, timeout) it was invoked with, so tests can assert on
+    exactly what run_ablation asked it to run without a real model or
+    credentials."""
+
+    def __init__(self, outputs: list[str]) -> None:
+        self._outputs = list(outputs)
+        self.calls: list[tuple[list[str], int]] = []
+
+    def __call__(self, argv, timeout) -> str:
+        self.calls.append((list(argv), timeout))
+        return self._outputs[len(self.calls) - 1]
+
+
+def _demo_fixture() -> dict:
+    return {
+        "id": "demo-task",
+        "prompt": "Say the magic word.",
+        "expected": {"output_contains": ["magic-word-present"]},
+    }
+
+
+def test_run_ablation_calls_executor_exactly_twice_with_and_without_skill_flag(tmp_path: Path):
+    skill_md = tmp_path / "SKILL.md"
+    skill_md.write_text("# Demo skill\n", encoding="utf-8")
+    executor = _RecordingExecutor(["magic-word-present here", "no magic here"])
+
+    run_ablation.run_ablation(
+        _demo_fixture(), skill_md, executor=executor, model_cli="claude", timeout=42
+    )
+
+    assert len(executor.calls) == 2
+    first_argv, first_timeout = executor.calls[0]
+    second_argv, second_timeout = executor.calls[1]
+    assert "--append-system-prompt-file" in first_argv
+    assert str(skill_md) in first_argv
+    assert "--append-system-prompt-file" not in second_argv
+    assert first_timeout == 42
+    assert second_timeout == 42
+
+
+def test_run_ablation_computes_distinct_scores_from_stub_outputs(tmp_path: Path):
+    skill_md = tmp_path / "SKILL.md"
+    skill_md.write_text("# Demo skill\n", encoding="utf-8")
+    executor = _RecordingExecutor(["magic-word-present here", "no magic here"])
+
+    result = run_ablation.run_ablation(
+        _demo_fixture(), skill_md, executor=executor, model_cli="claude"
+    )
+
+    assert result.with_skill_score == 1.0
+    assert result.without_skill_score == 0.0
+
+
+def test_run_ablation_delta_is_with_minus_without(tmp_path: Path):
+    skill_md = tmp_path / "SKILL.md"
+    skill_md.write_text("# Demo skill\n", encoding="utf-8")
+    executor = _RecordingExecutor(["magic-word-present here", "no magic here"])
+
+    result = run_ablation.run_ablation(
+        _demo_fixture(), skill_md, executor=executor, model_cli="claude"
+    )
+
+    assert result.delta == pytest.approx(1.0)
+    assert result.delta == result.with_skill_score - result.without_skill_score
+
+
+def test_run_ablation_preserves_raw_outputs_verbatim(tmp_path: Path):
+    skill_md = tmp_path / "SKILL.md"
+    skill_md.write_text("# Demo skill\n", encoding="utf-8")
+    executor = _RecordingExecutor(["magic-word-present here", "no magic here"])
+
+    result = run_ablation.run_ablation(
+        _demo_fixture(), skill_md, executor=executor, model_cli="claude"
+    )
+
+    assert result.with_skill_output == "magic-word-present here"
+    assert result.without_skill_output == "no magic here"
+
+
+def test_run_ablation_task_id_comes_from_fixture(tmp_path: Path):
+    skill_md = tmp_path / "SKILL.md"
+    skill_md.write_text("# Demo skill\n", encoding="utf-8")
+    executor = _RecordingExecutor(["magic-word-present here", "no magic here"])
+
+    result = run_ablation.run_ablation(
+        _demo_fixture(), skill_md, executor=executor, model_cli="claude"
+    )
+
+    assert result.task_id == "demo-task"
+
+
+def test_run_ablation_rejects_invalid_model_cli(tmp_path: Path):
+    skill_md = tmp_path / "SKILL.md"
+    skill_md.write_text("# Demo skill\n", encoding="utf-8")
+    executor = _RecordingExecutor(["a", "b"])
+
+    with pytest.raises(ValueError, match="non-empty"):
+        run_ablation.run_ablation(
+            _demo_fixture(), skill_md, executor=executor, model_cli=""
+        )
+
+
+# ---------------------------------------------------------------------------
+# AblationResult
+# ---------------------------------------------------------------------------
+
+
+def test_ablation_result_delta_property():
+    result = run_ablation.AblationResult(
+        task_id="t",
+        with_skill_output="a",
+        without_skill_output="b",
+        with_skill_score=0.75,
+        without_skill_score=0.25,
+    )
+    assert result.delta == pytest.approx(0.5)
+
+
+# ---------------------------------------------------------------------------
+# main()
+# ---------------------------------------------------------------------------
+
+
+def _write_demo_fixture(tmp_path: Path) -> Path:
+    p = tmp_path / "task.yaml"
+    p.write_text(BASE_FIXTURE_TEXT, encoding="utf-8")
+    return p
+
+
+def test_main_success_prints_json(tmp_path: Path, monkeypatch, capsys):
+    task = _write_demo_fixture(tmp_path)
+    skill_md = tmp_path / "SKILL.md"
+    skill_md.write_text("# Demo skill\n", encoding="utf-8")
+
+    executor = _RecordingExecutor(["magic-word-present here", "no magic here"])
+    monkeypatch.setattr(run_ablation, "subprocess_executor", executor)
+
+    rc = run_ablation.main(
+        ["--task", str(task), "--skill-md", str(skill_md), "--timeout", "5"]
+    )
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    import json
+
+    payload = json.loads(out)
+    assert payload["task_id"] == "demo-task"
+    assert payload["with_skill_score"] == 1.0
+    assert payload["without_skill_score"] == 0.0
+    assert payload["delta"] == 1.0
+    assert payload["with_skill_output"] == "magic-word-present here"
+    assert payload["without_skill_output"] == "no magic here"
+    assert executor.calls[0][1] == 5
+
+
+def test_main_missing_task_file_returns_2(tmp_path: Path, capsys):
+    skill_md = tmp_path / "SKILL.md"
+    skill_md.write_text("# Demo skill\n", encoding="utf-8")
+    missing_task = tmp_path / "no-such-task.yaml"
+
+    rc = run_ablation.main(["--task", str(missing_task), "--skill-md", str(skill_md)])
+
+    assert rc == 2
+    assert "error:" in capsys.readouterr().err
+
+
+def test_main_missing_skill_md_file_returns_2(tmp_path: Path, capsys):
+    task = _write_demo_fixture(tmp_path)
+    missing_skill_md = tmp_path / "no-such-skill.md"
+
+    rc = run_ablation.main(["--task", str(task), "--skill-md", str(missing_skill_md)])
+
+    assert rc == 2
+    assert "skill file not found" in capsys.readouterr().err
+
+
+def test_main_malformed_fixture_returns_2(tmp_path: Path, capsys):
+    task = tmp_path / "task.yaml"
+    task.write_text("id: x\n", encoding="utf-8")  # missing inputs/expected
+    skill_md = tmp_path / "SKILL.md"
+    skill_md.write_text("# Demo skill\n", encoding="utf-8")
+
+    rc = run_ablation.main(["--task", str(task), "--skill-md", str(skill_md)])
+
+    assert rc == 2
+    assert "error:" in capsys.readouterr().err
+
+
+def test_main_blank_model_cli_returns_2(tmp_path: Path, capsys):
+    task = _write_demo_fixture(tmp_path)
+    skill_md = tmp_path / "SKILL.md"
+    skill_md.write_text("# Demo skill\n", encoding="utf-8")
+
+    rc = run_ablation.main(
+        ["--task", str(task), "--skill-md", str(skill_md), "--model-cli", "   "]
+    )
+
+    assert rc == 2
+    assert "error:" in capsys.readouterr().err
+
+
+def test_main_executor_runtime_error_returns_1(tmp_path: Path, monkeypatch, capsys):
+    task = _write_demo_fixture(tmp_path)
+    skill_md = tmp_path / "SKILL.md"
+    skill_md.write_text("# Demo skill\n", encoding="utf-8")
+
+    def failing_executor(argv, timeout):
+        raise RuntimeError("model CLI exited 1: something went wrong")
+
+    monkeypatch.setattr(run_ablation, "subprocess_executor", failing_executor)
+
+    rc = run_ablation.main(["--task", str(task), "--skill-md", str(skill_md)])
+
+    assert rc == 1
+    assert "something went wrong" in capsys.readouterr().err
+
+
+def test_main_executor_timeout_returns_1(tmp_path: Path, monkeypatch, capsys):
+    task = _write_demo_fixture(tmp_path)
+    skill_md = tmp_path / "SKILL.md"
+    skill_md.write_text("# Demo skill\n", encoding="utf-8")
+
+    def timing_out_executor(argv, timeout):
+        raise subprocess.TimeoutExpired(cmd=argv, timeout=timeout)
+
+    monkeypatch.setattr(run_ablation, "subprocess_executor", timing_out_executor)
+
+    rc = run_ablation.main(["--task", str(task), "--skill-md", str(skill_md)])
+
+    assert rc == 1
+    assert "error:" in capsys.readouterr().err
+
+
+def test_main_executor_os_error_returns_1(tmp_path: Path, monkeypatch, capsys):
+    task = _write_demo_fixture(tmp_path)
+    skill_md = tmp_path / "SKILL.md"
+    skill_md.write_text("# Demo skill\n", encoding="utf-8")
+
+    def unlaunchable_executor(argv, timeout):
+        raise OSError("no such file or directory: claude")
+
+    monkeypatch.setattr(run_ablation, "subprocess_executor", unlaunchable_executor)
+
+    rc = run_ablation.main(["--task", str(task), "--skill-md", str(skill_md)])
+
+    assert rc == 1
+    assert "error:" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# module-level defaults
+# ---------------------------------------------------------------------------
+
+
+def test_default_constants():
+    assert run_ablation.DEFAULT_MODEL_CLI == "claude"
+    assert run_ablation.DEFAULT_TIMEOUT_SECONDS == 300

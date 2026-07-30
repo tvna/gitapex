@@ -6,26 +6,37 @@ cross-model behavior is currently unmeasured (dimensions 11-17's own
 cross-model spread is unmeasured for the same reason, per
 `references/provenance-and-caveats.md`).
 
-**Ablation-capability check (issue #185), applied live to this skill:**
-`evaluating-skill-quality`'s dimension 8 now requires naming which of the
-two "no baseline" situations applies, rather than the undifferentiated
-phrasing above. Checked directly against this repository as it stands
-today: no file or script anywhere under this repository matches a live
-model-execution pattern (`claude -p`, `subprocess.run` against a model
-CLI, `--append-system-prompt-file`, or equivalent) capable of running this
-skill's own candidate task with and without the skill and comparing the
-two -- `evals/battle-testing-a-skill/eval.yaml` declares
-`executor: copilot-sdk`, an external harness not vendored into this
-repository, and its tasks assert only `output_contains`/
-`output_not_contains` substrings against a supplied transcript, never
-producing one. Per the new sub-check's own distinction: this is **"no
-ablation mechanism exists in this repository"**, not "ablation-capable,
-not yet run" -- the undifferentiated "no committed no-skill baseline run"
-line above was masking that the gap is a missing mechanism, not merely a
-missing run. Building an in-repo runner capable of that comparison
-(clairvoyance's `battle/run_battle.py --ablate` is worked prior art for
-the shape such a runner could take) remains open, separate follow-on work
-tracked as a candidate future issue, not bundled into #185. Refs #185.
+**Ablation-capability check (issue #185, closed by issue #583), applied
+live to this skill:** issue #583 built `evals/scripts/run_ablation.py`,
+an in-repo runner that loads a task fixture, invokes a model CLI twice on
+the identical prompt via `claude -p ... --bare` (once with a skill's
+`SKILL.md` appended through `--append-system-prompt-file`, once without),
+and scores each run's output through the existing `score_contract.py`
+convention. Checked directly against this repository as it stands today:
+this mechanism now exists, so per the sub-check's own distinction this
+entry reclassifies from "no ablation mechanism exists in this repository"
+to **"ablation-capable, not yet run."** The only evidence recorded so far
+is `tests/test_run_ablation.py`'s stub-executor unit test -- a
+hand-written fake standing in for a real model call -- never a live
+model run against this skill's own tasks (e.g.
+`evals/battle-testing-a-skill/tasks/normal.yaml`). A real run remains
+blocked on two separate, disclosed preconditions: the `claude` CLI must
+be installed and authenticated in whatever environment eventually runs
+it (no such credentials exist in the environment that built this
+runner), and issue #124's owner-provisioned credential precondition for
+the separate cross-model matrix. Disclosed fidelity tradeoff:
+`--append-system-prompt-file` statically appends this skill's `SKILL.md`
+text to the system prompt; it is not the same as the skill being
+discoverable through Claude Code's own Skill-tool auto-discovery, which
+`--bare` mode (used here for a hermetic run, isolated from this
+repository's other 22 skills, `CLAUDE.md`, and hooks) explicitly skips.
+A live run through this mechanism therefore measures the effect of the
+skill's instructions being present in context, not the effect of the
+model choosing to invoke the skill as a discoverable tool.
+`evals/battle-testing-a-skill/eval.yaml` still declares
+`executor: copilot-sdk` for the trials-per-task matrix; this new runner
+is a separate, narrower, in-repo mechanism, not a replacement for that
+harness. Refs #185, #583.
 
 Named gap specific to this skill's
 subagent-dispatch procedure: the committed eval tasks assert on final
