@@ -212,6 +212,48 @@ mechanism, not only the ones already recorded below.
     `HOME`-copy step is required only when a dispatch must also avoid this
     second leak.
 
+#### `claude -p --plugin-dir` combined with cwd/HOME isolation
+
+- **Identifying signal**: same platform as the entry above
+  (`CLAUDE_CODE_REMOTE=true`, `claude --version` `2.1.220 (Claude Code)`),
+  additionally invoking `--plugin-dir <path>` to load this repository's own
+  `skills/` (and, in one test, its root `CLAUDE.md`) as a session-scoped
+  plugin, rather than only the isolated cwd/HOME recipe above.
+- **Mechanism tested**: `claude -p` from the same isolated cwd + isolated
+  `$HOME` copy as the verified alternative above, with `--plugin-dir`
+  additionally pointed at (a) a copy of this repository containing only
+  `.claude-plugin/` and `skills/` (no `CLAUDE.md`/`AGENTS.md`), and (b) a
+  second copy that also includes a root `CLAUDE.md`, to test whether
+  `--plugin-dir` loading itself triggers CLAUDE.md auto-discovery from the
+  loaded plugin directory (a mechanism distinct from cwd-ancestry scanning).
+- **Result: does not leak, and does not need CLAUDE.md stripped from the
+  plugin copy.** The two-control self-report test returned "none loaded"
+  whether or not the `--plugin-dir` target contained a `CLAUDE.md`, while
+  the identical prompt run from this repository's real, unisolated root
+  (still using the isolated `$HOME` copy) correctly quoted real
+  distinctive `CLAUDE.md` content -- confirming the self-report mechanism
+  itself works and that `--plugin-dir` loading is not a CLAUDE.md-scanning
+  code path on this platform; only cwd ancestry is. Separately confirmed:
+  `--plugin-dir` does make the fixture wording `Use evaluating-skill-quality.`
+  auto-trigger the real `Skill` tool (`gitapex:evaluating-skill-quality`)
+  from a fully isolated cwd/HOME, so it is a viable mechanism for a future
+  in-repo runner that needs the real, unmodified Skill content loaded.
+- **Caveat, distinct from a leak risk**: once auto-triggered this way, the
+  skill's own Procedure correctly reads this exact registry and (since the
+  `Agent` tool is confirmed-contaminated above) shells out to a *nested*
+  `claude -p` subprocess via `Bash` rather than using the `Agent` tool --
+  real, correct behavior, but slow (observed >3 minutes, with background
+  Bash polling and `ScheduleWakeup` calls inside the nested session) to run
+  to completion inside a wrapping live-proof script. A caller needing a
+  fast, deterministic proof run should prefer explicit "dispatch via the
+  Agent tool" prompt wording (already established as this repository's own
+  precedent for a session with no registered Skill tool -- see this
+  skill's own `eval-status.md` for that history) over relying on this
+  auto-trigger path, and budget substantially more time/turns if it does
+  rely on it.
+- **Dated**: 2026-07-30, same version pin as the entry above; re-run the
+  Verification procedure if this entry looks stale.
+
 ### Unlisted platform
 
 If the current platform is not represented above, do not assume either

@@ -471,6 +471,71 @@ def test_main_rejects_judge_verdict_with_pruning_only(tmp_path, capsys):
     assert "not defined for --pruning-only" in capsys.readouterr().err
 
 
+def test_main_dispatch_trace_confirmed_appends_marker(tmp_path, capsys):
+    apath = tmp_path / "assertions.json"
+    apath.write_text(json.dumps({"output_contains": ["Facts"]}), encoding="utf-8")
+    opath = tmp_path / "run.txt"
+    opath.write_text("Facts and more", encoding="utf-8")
+    rc = score_contract.main([
+        "--assertions", str(apath), "--output", str(opath),
+        "--dispatch-trace-verdict", "confirmed",
+    ])
+    assert rc == 0
+    assert capsys.readouterr().out.strip() == "1.000000 DISPATCH_TRACE_CONFIRMED"
+
+
+def test_main_dispatch_trace_not_confirmed_appends_marker(tmp_path, capsys):
+    apath = tmp_path / "assertions.json"
+    apath.write_text(json.dumps({"output_contains": ["Facts"]}), encoding="utf-8")
+    opath = tmp_path / "run.txt"
+    opath.write_text("Facts and more", encoding="utf-8")
+    rc = score_contract.main([
+        "--assertions", str(apath), "--output", str(opath),
+        "--dispatch-trace-verdict", "not_confirmed",
+    ])
+    assert rc == 0
+    assert capsys.readouterr().out.strip() == "1.000000 DISPATCH_TRACE_NOT_CONFIRMED"
+
+
+def test_main_dispatch_trace_unverified_appends_marker(tmp_path, capsys):
+    apath = tmp_path / "assertions.json"
+    apath.write_text(json.dumps({"output_contains": ["Facts"]}), encoding="utf-8")
+    opath = tmp_path / "run.txt"
+    opath.write_text("no match here", encoding="utf-8")
+    rc = score_contract.main([
+        "--assertions", str(apath), "--output", str(opath),
+        "--dispatch-trace-verdict", "unverified",
+    ])
+    assert rc == 0
+    assert capsys.readouterr().out.strip() == "0.000000 DISPATCH_TRACE_UNVERIFIED"
+
+
+def test_main_dispatch_trace_verdict_omitted_leaves_output_unchanged(tmp_path, capsys):
+    apath = tmp_path / "assertions.json"
+    apath.write_text(json.dumps({"output_contains": ["Facts"]}), encoding="utf-8")
+    opath = tmp_path / "run.txt"
+    opath.write_text("Facts", encoding="utf-8")
+    rc = score_contract.main(["--assertions", str(apath), "--output", str(opath)])
+    assert rc == 0
+    assert capsys.readouterr().out.strip() == "1.000000"
+
+
+def test_main_rejects_dispatch_trace_verdict_with_compare_to(tmp_path, capsys):
+    scores = tmp_path / "scores.txt"
+    scores.write_text("0.9\n1.0\n", encoding="utf-8")
+    rc = score_contract.main([
+        "--compare-to", "0.9", "--scores", str(scores),
+        "--dispatch-trace-verdict", "confirmed",
+    ])
+    assert rc == 1
+    assert "not defined for --compare-to" in capsys.readouterr().err
+
+
+def test_main_rejects_invalid_dispatch_trace_verdict_choice(capsys):
+    with pytest.raises(SystemExit):
+        score_contract.main(["--dispatch-trace-verdict", "yes"])
+
+
 @pytest.mark.parametrize("invalid", ["nan", "inf", "-0.1", "1.1"])
 def test_main_rejects_invalid_correctness_scores(tmp_path, capsys, invalid):
     scores = tmp_path / "scores.txt"
