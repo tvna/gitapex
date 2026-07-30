@@ -81,6 +81,9 @@ spec:
     - kind: deferral
       anchor: "https://github.com/tvna/gitapex/pull/478"
       summary: "Whether a general deterministic drift-gate for this whole class of cross-skill prose citation (already affecting three skills) should be built now or as a follow-up issue was left to the operator's own call rather than decided unilaterally."
+    - kind: elision
+      anchor: "skills/battle-testing-a-skill/SKILL.md"
+      summary: "Issue 605's redundant-restatement trim condensed Procedure step 1's Blind Spot Pass citation to a pointer, dropping the source from SKILL.md's body: Thariq Shihipar, \"A Field Guide to Fable: Finding Your Unknowns\", https://claude.com/blog/a-field-guide-to-claude-fable-finding-your-unknowns (already recorded in full in references/provenance-and-caveats.md). Recorded here too since a sidecar entry carries no runtime instruction weight, unlike the body prose the trim was reducing."
   skillDependencies:
     requires:
       - evaluating-skill-quality

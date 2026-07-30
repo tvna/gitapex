@@ -205,9 +205,3 @@ This skill's procedure is portable; the repo-specific detail (this repo's
 sibling skills, its GitHub project, corroborating side-projects) lives only
 in the references files below. The declared level itself lives in
 `metadata/gitapex.yaml`.
-
-Source for the "Blind Spot Pass" term used in Procedure step 1: Thariq
-Shihipar, "A Field Guide to Fable: Finding Your Unknowns",
-<https://claude.com/blog/a-field-guide-to-claude-fable-finding-your-unknowns>
-(also cited in full in
-[references/provenance-and-caveats.md](references/provenance-and-caveats.md)).
