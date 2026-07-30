@@ -244,10 +244,14 @@ calling repository that vendors this skill replaces only that one file
 and leaves everything else unchanged. See `references/adr-template.md`'s
 own References section for full source citations.
 
-Install/vendoring-time integrity (whether this SKILL.md and its bundled
-`scripts/check_adr_shape.py` are themselves the untampered, intended
-copies) is a separate question from the runtime content trust Step 1
-covers -- a runtime PASS from Step 9 says nothing about whether the copy
-that produced it was the one actually intended for installation. Verify
-that through the calling repository's own vendoring/install process, not
-this skill's own output.
+Install/vendoring-time integrity (whether this SKILL.md, its bundled
+`scripts/check_adr_shape.py`, and `references/this-repo-only.md` are
+themselves the untampered, intended copies) is a separate question from
+the runtime content trust Step 1 covers -- a runtime PASS from Step 9
+says nothing about whether the copy that produced it was the one
+actually intended for installation. `this-repo-only.md` carries this
+skill's only integrity-relevant repo-specific logic (the title
+sanitization rule Step 11 depends on) and is also the one file this
+skill invites a calling repository to replace outright when vendoring
+it -- verify a replacement preserves that rule, through the calling
+repository's own vendoring/install process, not this skill's own output.
