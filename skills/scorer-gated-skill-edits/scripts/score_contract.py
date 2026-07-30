@@ -9,15 +9,14 @@ scoring step is made deterministic here.
 
 ``output_contains``/``output_not_contains`` check presence/absence anywhere
 in the text, independently of each other -- they cannot verify that two
-substrings are actually *bound together* (e.g. that a specific repair's own
-description sits next to its own classification label, rather than each
-merely appearing somewhere in the output). ``output_contains_near`` (added
-for issue #328's fix to gitapex#312) closes half of that gap: each entry is
-``{"all": [s1, s2, ...], "window": int}`` and is satisfied only when every
-listed substring's first occurrence falls within a ``window``-character span
-of every other -- i.e. they co-occur in roughly the same sentence/paragraph,
-not merely somewhere in the same document. ``window`` defaults to 400 when
-omitted.
+substrings are actually *bound together* (e.g. a repair's own description
+sitting next to its own classification label, rather than each merely
+appearing somewhere in the output). ``output_contains_near`` closes half of
+that gap: each entry is ``{"all": [s1, s2, ...], "window": int}`` and is
+satisfied only when every listed substring's first occurrence falls within
+a ``window``-character span of every other -- i.e. they co-occur in roughly
+the same sentence/paragraph, not merely somewhere in the same document.
+``window`` defaults to 400 when omitted.
 
 Requiring the *right* pairing alone is not sufficient: a short enough
 response can still accidentally satisfy a `near` window for the wrong
@@ -33,15 +32,14 @@ entry's pairing does *not* hold.
 A raw character count alone cannot cleanly separate "these two substrings
 are bound in the same logical unit" from "they merely happen to be within N
 characters of each other" -- a verbose correct paragraph and a terse
-adjacent (but unrelated) one can straddle any fixed window either way (this
-was measured directly against real fixture text while building this
-feature, not assumed). "Near" therefore means two things together, both
-required: (1) within ``window`` characters (a loose backstop, default 400),
-AND (2) no blank line (``"\n\n"``, this repository's own established
-paragraph/list-item separator -- see `merge-retrospective/SKILL.md`'s own
-worked example, one blank-line-separated numbered item per repair) between
-the two occurrences. The blank-line check is what actually carries the
-distinction in practice; the character window is a secondary sanity bound.
+adjacent (but unrelated) one can straddle any fixed window either way.
+"Near" therefore means two things together, both required: (1) within
+``window`` characters (a loose backstop, default 400), AND (2) no blank
+line (``"\n\n"``, this repository's paragraph/list-item separator -- see
+`merge-retrospective/SKILL.md`'s worked example, one blank-line-separated
+item per repair) between the two occurrences. The blank-line check is what
+actually carries the distinction in practice; the character window is a
+secondary sanity bound.
 """
 
 from __future__ import annotations
@@ -254,7 +252,15 @@ def main(argv=None):
     appends the outcome of an adversarially-verified semantic judge (already
     run by the caller; this script does not call a model) as ``JUDGE_AGREE``
     or ``JUDGE_DISAGREE_REVIEW_REQUIRED`` -- an additional recorded field,
-    never blended into the substring mean or verdict.
+    never blended into the substring mean or verdict. With
+    ``--dispatch-trace-verdict`` (single-run scoring only, i.e. without
+    ``--compare-to``), similarly appends whether a fresh subagent dispatch
+    was confirmed in this run's own transcript (already resolved by the
+    caller, typically via ``evals/scripts/check_dispatch_trace.py``; this
+    script does not inspect any transcript itself) as
+    ``DISPATCH_TRACE_CONFIRMED``, ``DISPATCH_TRACE_NOT_CONFIRMED``, or
+    ``DISPATCH_TRACE_UNVERIFIED`` -- again a recorded field, never blended
+    into the substring score (issue #584).
     """
     parser = argparse.ArgumentParser(
         description="Score a run against a task's substring assertions."
@@ -306,6 +312,16 @@ def main(argv=None):
         type=float,
         help="Context cost of the candidate skill for a pruning-only gate.",
     )
+    parser.add_argument(
+        "--dispatch-trace-verdict",
+        choices=["confirmed", "not_confirmed", "unverified"],
+        help="Whether a fresh subagent dispatch was confirmed in this run's "
+        "own transcript, already resolved by the caller (typically via "
+        "evals/scripts/check_dispatch_trace.py's exit code). Recorded "
+        "alongside the substring score, never blended into it. Single-run "
+        "scoring only -- incompatible with --compare-to, whose scores list "
+        "has no single transcript for this to describe.",
+    )
     args = parser.parse_args(argv)
 
     context_costs = (args.prior_context_cost, args.candidate_context_cost)
@@ -335,6 +351,14 @@ def main(argv=None):
             "error: --judge-verdict is not defined for --pruning-only -- a "
             "pruning verdict is a context-cost comparison, not the "
             "substring-derived KEEP/REJECT a semantic judge is scoped to",
+            file=sys.stderr,
+        )
+        return 1
+    if args.dispatch_trace_verdict is not None and args.compare_to is not None:
+        print(
+            "error: --dispatch-trace-verdict is not defined for --compare-to "
+            "-- it describes one run's own transcript, not a selection-split "
+            "scores list with no single transcript to describe",
             file=sys.stderr,
         )
         return 1
@@ -389,7 +413,10 @@ def main(argv=None):
             return 1
     else:
         output_text = sys.stdin.read()
-    print(f"{score(output_text, assertions):.6f}")
+    line = f"{score(output_text, assertions):.6f}"
+    if args.dispatch_trace_verdict is not None:
+        line += " DISPATCH_TRACE_" + args.dispatch_trace_verdict.upper()
+    print(line)
     return 0
 
 

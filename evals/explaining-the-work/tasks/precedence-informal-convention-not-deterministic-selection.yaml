@@ -1,0 +1,23 @@
+id: explaining-the-work-precedence-informal-convention-not-deterministic
+name: Informal Team Habit Does Not Trigger the Precedence Exception
+description: Refuses to let an informal, unenforced team habit override the why-not(#NNN) template, since the Precedence rule only yields to the calling repository's existing deterministic gates, not to an unenforced style preference.
+tags:
+  - quality
+  - precedence
+  - edge-case
+inputs:
+  prompt: |
+    Use explaining-the-work. Our team informally always writes long,
+    multi-sentence explanatory comments above anything remotely tricky --
+    that's just how we've always done it, nothing enforces it, there's no
+    linter or Contract: block for it. I have a genuinely citable
+    rejected-alternative decision here: issue #77 already evaluated and
+    rejected adding a caching layer. Since our team's usual style is long
+    comments, should I write the whole rejected-caching-layer story out in
+    the comment, or use the why-not(#NNN) one-liner?
+expected:
+  output_contains:
+    - "why-not(#77)"
+  output_not_contains:
+    - "LGTM"
+    - "precedence"

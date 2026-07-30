@@ -1,6 +1,5 @@
 #!/bin/bash
-# PreToolUse hook (matcher: Bash) backing 3 approved Major findings from
-# docs/superpowers/reports/2026-07-13-skill-gap-triage.md:
+# PreToolUse hook (matcher: Bash) enforcing four skill-defined policies:
 #
 #   1. [evaluating-skill-quality] SKILL.md -- block package/plugin install
 #      commands run via Bash.
@@ -59,18 +58,14 @@ warn() {
 # --- Shared boundary: pre-command anchor that also swallows an absolute or
 # relative path prefix -----------------------------------------------------
 # The boundary is "start of string, or any character that cannot be part of a
-# command-name token" -- i.e. anything outside [[:alnum:]_.-]. Enumerating a
-# fixed delimiter set ([[:space:];&|]) instead let shell-indirection wrappers
-# bypass every gate: in `bash -c "pip install x"` or `eval 'gh pr merge 1'`
-# the character right before the verb is a quote, which was not in that set,
-# so the verb never anchored and the deny never fired. A negated
-# command-token class closes that whole class of wrapper (quote, paren,
-# backtick, etc.) at once instead of chasing each form. The optional
-# path-prefix group then lets the anchor land right before the bare verb name
-# regardless of a leading directory, so `/usr/bin/pip install`,
+# command-name token" -- i.e. anything outside [[:alnum:]_.-]. A negated
+# command-token class anchors regardless of what precedes the verb (quote,
+# paren, backtick, space, etc.), so shell-indirection wrappers like
+# `bash -c "pip install x"` or `eval 'gh pr merge 1'` still match. The
+# optional path-prefix group then lets the anchor land right before the bare
+# verb name regardless of a leading directory, so `/usr/bin/pip install`,
 # `./pip install`, etc. still match. (Obfuscation that hides the verb itself
-# -- base64-piped-to-sh and the like -- is out of reach of any regex gate and
-# is tracked for a deeper allowlist design in issue #55.)
+# -- base64-piped-to-sh and the like -- is out of reach of any regex gate.)
 cmd_boundary='(^|[^[:alnum:]_.-])([[:alnum:]_.-]*/)*'
 
 # --- Finding 1: package/plugin install verbs -------------------------------
@@ -78,9 +73,8 @@ cmd_boundary='(^|[^[:alnum:]_.-])([[:alnum:]_.-]*/)*'
 # containing "install", or `cargo install-update` do not false-positive.
 # Each alternative ends exactly at the verb/subcommand token (no baked-in
 # trailing boundary of its own) so the single outer ([[:space:]]|$) suffix
-# applies uniformly -- duplicating it per-alternative previously caused
-# `npm i <pkg>` to be missed (the inner match already consumed the boundary
-# before the pkg name, leaving nothing for the outer check to see).
+# applies uniformly to every alternative, including short forms like
+# `npm i <pkg>`.
 install_re="${cmd_boundary}(pip3?[[:space:]]+install|npm[[:space:]]+install|npm[[:space:]]+i|yarn[[:space:]]+add|pnpm[[:space:]]+add|go[[:space:]]+install|brew[[:space:]]+install|apt(-get)?[[:space:]]+install|gem[[:space:]]+install|cargo[[:space:]]+install|uv[[:space:]]+pip[[:space:]]+install|uv[[:space:]]+install|uv[[:space:]]+add|plugin[[:space:]]+install)([[:space:]]|\$)"
 
 if [[ "$lc_command" =~ $install_re ]]; then
@@ -90,11 +84,8 @@ fi
 # --- Findings 2 & 3: direct CLI GitHub write commands ----------------------
 # Denylist the write/mutating subcommands, not just create|edit|close|
 # comment|merge. Read subcommands (list, view, status, diff, checks,
-# checkout) stay allowed; the destructive/mutating ones -- delete, reopen,
-# transfer, pin/unpin, lock/unlock, develop (issue), review, ready (pr) --
-# were previously missed, so `gh issue delete 42` or `gh pr review 7
-# --approve` sailed past a gate whose job is to block direct CLI GitHub
-# writes.
+# checkout) stay allowed; delete, reopen, transfer, pin/unpin, lock/unlock,
+# develop (issue), review, and ready (pr) are mutating and denied too.
 gh_issue_re="${cmd_boundary}gh[[:space:]]+issue[[:space:]]+(create|edit|close|comment|delete|reopen|transfer|pin|unpin|lock|unlock|develop)([[:space:]]|\$)"
 gh_pr_re="${cmd_boundary}gh[[:space:]]+pr[[:space:]]+(create|edit|close|comment|merge|review|ready|reopen|lock|unlock|update-branch)([[:space:]]|\$)"
 gh_api_re="${cmd_boundary}gh[[:space:]]+api([[:space:]]|\$)"
@@ -103,8 +94,6 @@ gh_api_re="${cmd_boundary}gh[[:space:]]+api([[:space:]]|\$)"
 #   - whitespace-separated:  -X POST      / --method POST
 #   - equals-form long flag:              --method=POST
 #   - attached short flag:   -XPOST
-# The old version only matched the whitespace-separated form, so
-# `--method=POST` and `-XPOST` sailed through undetected.
 gh_api_write_method_re='(-x[[:space:]]*=?[[:space:]]*|--method[[:space:]=]+)(post|put|patch|delete)([[:space:]]|$)'
 # Finding: `gh api graphql` has no -X/--method flag at all (GraphQL uses a
 # single POST endpoint regardless of query vs. mutation), so the method-flag
@@ -137,8 +126,8 @@ fi
 # convention is that field flags mean a write; a GET-only call has no reason
 # to carry one. Scoped to non-graphql `gh api` calls -- `gh api graphql -f
 # query='query{...}'` legitimately uses -f to pass a plain read query as a
-# variable, and that case is already handled (or not) by the mutation-keyword
-# check above, not this one.
+# variable, and that case is handled by the mutation-keyword check above,
+# not this one.
 gh_api_field_flag_re='(^|[[:space:]])(-f|--field|--raw-field)([[:space:]=]|[a-z_]|$)'
 
 if [[ "$lc_command" =~ $gh_api_re ]] && ! [[ "$lc_command" =~ $gh_api_graphql_re ]] && [[ "$lc_command" =~ $gh_api_field_flag_re ]]; then
@@ -158,11 +147,9 @@ if [[ "$lc_command" =~ $push_re ]]; then
 
   # Determine the commit range being pushed. With an upstream, @{u}..HEAD is
   # exact. On a first push (`git push -u origin newbranch`) there is no
-  # upstream, so @{u} errors and the range is empty; the old fallback then
-  # scanned only the tip commit (-1 HEAD), silently skipping every earlier
-  # commit in the very push we most want to check. Fall back to the merge-base
-  # with the best available default branch so the whole branch is scanned, and
-  # only if no reference point resolves do we scan full history.
+  # upstream, so @{u} errors and the range is empty. Fall back to the
+  # merge-base with the best available default branch so the whole branch is
+  # scanned, and only if no reference point resolves do we scan full history.
   range='@{u}..HEAD'
   if ! git -C "$project_dir" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
     base=''
@@ -189,12 +176,10 @@ if [[ "$lc_command" =~ $push_re ]]; then
 
   # scan_provenance.py's own docstring says it "surfaces candidates, it does
   # not decide" -- a hard deny here would make this mechanical regex the
-  # decider, which is exactly what its docstring disclaims, and a
-  # too-broad pattern previously blocked this repo's own history (see
-  # skills/outward-artifact-preflight/scripts/scan_provenance.py's
-  # line-context tightening). Warn instead of deny: surface every hit so
-  # the operator applies the checklist's judgment call, but do not block
-  # the push on a mechanical false positive the regex cannot rule out.
+  # decider, which is exactly what its docstring disclaims. Warn instead of
+  # deny: surface every hit so the operator applies the checklist's judgment
+  # call, but do not block the push on a mechanical false positive the regex
+  # cannot rule out.
   if [ "$scan_exit" -ne 0 ]; then
     warn "outward-artifact-preflight scan_provenance.py flagged the outgoing push for review (not blocked -- this scan surfaces candidates, it does not decide) -- $scan_output"
   fi

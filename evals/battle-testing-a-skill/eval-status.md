@@ -6,26 +6,39 @@ cross-model behavior is currently unmeasured (dimensions 11-17's own
 cross-model spread is unmeasured for the same reason, per
 `references/provenance-and-caveats.md`).
 
-**Ablation-capability check (issue #185), applied live to this skill:**
-`evaluating-skill-quality`'s dimension 8 now requires naming which of the
-two "no baseline" situations applies, rather than the undifferentiated
-phrasing above. Checked directly against this repository as it stands
-today: no file or script anywhere under this repository matches a live
-model-execution pattern (`claude -p`, `subprocess.run` against a model
-CLI, `--append-system-prompt-file`, or equivalent) capable of running this
-skill's own candidate task with and without the skill and comparing the
-two -- `evals/battle-testing-a-skill/eval.yaml` declares
-`executor: copilot-sdk`, an external harness not vendored into this
-repository, and its tasks assert only `output_contains`/
-`output_not_contains` substrings against a supplied transcript, never
-producing one. Per the new sub-check's own distinction: this is **"no
-ablation mechanism exists in this repository"**, not "ablation-capable,
-not yet run" -- the undifferentiated "no committed no-skill baseline run"
-line above was masking that the gap is a missing mechanism, not merely a
-missing run. Building an in-repo runner capable of that comparison
-(clairvoyance's `battle/run_battle.py --ablate` is worked prior art for
-the shape such a runner could take) remains open, separate follow-on work
-tracked as a candidate future issue, not bundled into #185. Refs #185.
+**Ablation-capability check (issue #185, closed by issue #583), applied
+live to this skill:** issue #583 built `evals/scripts/run_ablation.py`,
+an in-repo runner that loads a task fixture, invokes a model CLI twice on
+the identical prompt via `claude -p ... --bare` (once with a skill's
+`SKILL.md` appended through `--append-system-prompt-file`, once without),
+and scores each run's output through the existing `score_contract.py`
+convention. Checked directly against this repository as it stands today:
+this mechanism now exists, so per `evaluating-skill-quality`'s dimension 8
+sub-check (the same "no mechanism" vs. "not yet run" distinction issue
+#185 established) this entry reclassifies from "no ablation mechanism
+exists in this repository" to **"ablation-capable, not yet run."** The
+only evidence recorded so far
+is `tests/test_run_ablation.py`'s stub-executor unit test -- a
+hand-written fake standing in for a real model call -- never a live
+model run against this skill's own tasks (e.g.
+`evals/battle-testing-a-skill/tasks/normal.yaml`). A real run remains
+blocked on two separate, disclosed preconditions: the `claude` CLI must
+be installed and authenticated in whatever environment eventually runs
+it (no such credentials exist in the environment that built this
+runner), and issue #124's owner-provisioned credential precondition for
+the separate cross-model matrix. Disclosed fidelity tradeoff:
+`--append-system-prompt-file` statically appends this skill's `SKILL.md`
+text to the system prompt; it is not the same as the skill being
+discoverable through Claude Code's own Skill-tool auto-discovery, which
+`--bare` mode (used here for a hermetic run, isolated from this
+repository's other 22 skills, `CLAUDE.md`, and hooks) explicitly skips.
+A live run through this mechanism therefore measures the effect of the
+skill's instructions being present in context, not the effect of the
+model choosing to invoke the skill as a discoverable tool.
+`evals/battle-testing-a-skill/eval.yaml` still declares
+`executor: copilot-sdk` for the trials-per-task matrix; this new runner
+is a separate, narrower, in-repo mechanism, not a replacement for that
+harness. Refs #185, #583.
 
 Named gap specific to this skill's
 subagent-dispatch procedure: the committed eval tasks assert on final
@@ -176,3 +189,70 @@ specific disagreement about whether `provenance-and-caveats.md`
 qualifies as per-invocation content. Recorded here rather than
 resolved unilaterally so the operator can weigh in; the PR thread
 carries the same disclosure.
+
+## Dispatch-trace verification (issue #584)
+
+Closes the gap this file's own top section named: "the committed eval
+tasks assert on final output content (`output_contains`/
+`output_not_contains` substrings), not on tool-call or dispatch traces, so
+they cannot confirm a fresh subagent dispatch actually occurred for
+Procedure steps 1-3 or step 5's re-run." `evaluating-skill-quality/
+eval-status.md` disclosed the near-identical gap independently -- see that
+file's own new entry, same issue, for the full mechanism design and the
+Track A/B feasibility-spike detail (not repeated here in full).
+
+The mechanism, the fixture schema, the new `score_contract.py` flag, and
+the new lint check are shared cross-skill infrastructure, built once and
+applied to both skills -- see the `evaluating-skill-quality` entry.
+Applied to this skill specifically:
+
+**Live proof (ACM's own Proof method).** A positive control instructed to
+use the `Agent` tool for the battle-test trial (Track B, same reasoning as
+the companion run: the real Skill's organic auto-trigger via `--plugin-dir`
+was separately confirmed to work and not leak `CLAUDE.md`, but this
+skill's own Procedure step 1 then correctly defers to
+`evaluating-skill-quality`'s Isolation-verification registry and shells
+out to a nested `claude -p`, too slow to run to completion inside this
+proof's budget), and the negative control fixture below run verbatim.
+`evals/scripts/check_dispatch_trace.py check-transcript
+--dispatch-tool-name Agent`: positive control `DISPATCH_COUNT=1` (exit 0,
+confirmed); negative control `DISPATCH_COUNT=0` (exit 1, not_confirmed).
+The negative-control fixture's own `output_contains`/`output_not_contains`
+independently scored 1.0 while `score_contract.py --dispatch-trace-verdict
+not_confirmed` correctly reported the dispatch verdict alongside it, not
+blended into it. Full record:
+[results/2026-07-30-issue-584-dispatch-trace/](results/2026-07-30-issue-584-dispatch-trace/manifest.json).
+
+**Fixtures.** `expected.requires_fresh_dispatch` added to `tasks/
+normal.yaml`. New `tasks/dispatch-required-negative-control.yaml`: a
+deliberately-forced negative control whose correct, expected
+dispatch-trace-verdict is `not_confirmed`, not evidence of a fixture
+defect. `lint_fixture_assertions.py`'s new check 9 passes for this skill
+(previously blocking, confirmed via a direct before/after run of the
+linter). `split.md`'s train bucket lists the new fixture for listing
+consistency (not gate-enforced).
+
+Disclosed, not closed: only `normal.yaml` and the new negative-control
+fixture, of 23 committed fixtures, now carry `requires_fresh_dispatch`.
+The remaining fixtures -- including this skill's own multi-trial re-
+dispatch requirement ("Never reuse a dispatch for two trials," Procedure
+step 1) -- still assert on final output text only; a real
+`trials_per_task: 3` dispatch-trace run (confirming each of the three
+trials gets its own fresh dispatch, not one dispatch reused) is open
+follow-up work, as is the literal organic-trigger (Track A) proof run and
+wiring `--dispatch-bash-pattern` into a real live run. Refs #584, #583.
+
+**Post-PR adversarial review round.** Same shared mechanism as
+`evaluating-skill-quality`'s own new entry above (full detail there, not
+repeated here): a multi-angle review pass found and fixed several real
+defects in `check_dispatch_trace.py`/`lint_fixture_assertions.py`
+(uncaught subprocess errors, a silent `/root` HOME fallback, a truthiness
+bug on empty `--dispatch-bash-pattern`, an unresolved relative
+`--isolated-home`, a copy-then-delete inefficiency in
+`build_isolated_home`, a missing `Bash` default in `--allowed-tools`, and
+a vacuous `requires_fresh_dispatch` truthiness check in lint check 9),
+plus two factual fixture-count errors in this file's own prose above and
+in `results/2026-07-30-issue-584-dispatch-trace/manifest.json` (23
+committed fixtures, not 24/22). All fixed, all with new tests. Full
+pytest (1434 passed) and the four live-proof transcripts were reconfirmed
+against the fixed script with identical results.

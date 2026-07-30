@@ -9,7 +9,10 @@ selection-gate result is claimed.
 - **train** (may motivate edits): `normal.yaml`,
   `premature-completion-visible-horizon.yaml`,
   `codex-model-inheritance.yaml`,
-  `codex-unknown-model-fail-closed.yaml`.
+  `codex-unknown-model-fail-closed.yaml`,
+  `dispatch-required-negative-control.yaml` (issue #584 -- see that entry in
+  `eval-status.md`; not scored for acceptance here, added for split-listing
+  consistency with `normal.yaml`).
 - **selection** (held out for candidate acceptance):
   `edge.yaml`, `guardrail.yaml`, `injection-probe.yaml`,
   `cross-skill-composition.yaml`, `memory-poisoning.yaml`,

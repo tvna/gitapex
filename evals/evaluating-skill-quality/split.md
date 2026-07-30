@@ -49,7 +49,10 @@ fixture corpus over time, not a smaller gate.
   `reference-load-precision-train.yaml`,
   `opus5-redundant-verification-fail.yaml`,
   `opus5-unbounded-subagent-fail.yaml`,
-  `confidentiality-awareness-train.yaml`.
+  `confidentiality-awareness-train.yaml`,
+  `dispatch-required-negative-control.yaml` (issue #584 -- see that entry in
+  `eval-status.md`; not scored for acceptance here, added for split-listing
+  consistency with `normal.yaml`).
 - **selection** (gates acceptance; scored before/after a candidate edit,
   strict improve-or-reject, ties rejected): `edge.yaml`,
   `mechanism-fit-subagent.yaml`, `third-party-not-authoritative.yaml`,

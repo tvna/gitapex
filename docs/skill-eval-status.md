@@ -52,6 +52,32 @@ results. Do not read the scaffolding as a run. `evaluating-skill-quality`
 point via such an alternative mechanism -- see its own
 `evals/evaluating-skill-quality/eval-status.md`.
 
+## Dispatch-trace verification scaffolding (issue #584)
+
+A mechanism now exists to confirm, from a live transcript's own tool-call
+trace, that a fresh subagent dispatch actually occurred for a fixture --
+not only that the fixture's final output text matches expected substrings.
+`evals/scripts/check_dispatch_trace.py` (offline `check-transcript`
+subcommand plus a live `run` orchestrator using the isolated `claude -p`
+recipe from `skills/evaluating-skill-quality/references/
+adversarial-self-audit.md`), a new optional fixture key
+(`expected.requires_fresh_dispatch`), a non-blending
+`score_contract.py --dispatch-trace-verdict` flag, and a new blocking lint
+check in `lint_fixture_assertions.py` (check 9) together close this gap
+for `evaluating-skill-quality` and `battle-testing-a-skill`, the two
+skills that disclosed it.
+
+This is opt-in per fixture, not a suite-wide re-run: as of issue #584,
+only each skill's own `normal.yaml` and a new
+`dispatch-required-negative-control.yaml` fixture declare
+`requires_fresh_dispatch`. Do not read this as "these two suites now
+fully verify dispatch" -- see each skill's own `eval-status.md` for the
+live proof, the disclosed feasibility-spike findings (the dispatch tool's
+real name had to be confirmed live, not assumed; the real Skill's organic
+auto-trigger works but the resulting nested-dispatch chain is too slow for
+a routine proof run), and the residual scope gap (most fixtures in both
+suites still assert on final text only).
+
 ## Index
 
 | Skill | Eval status |

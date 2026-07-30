@@ -1,6 +1,6 @@
 id: explaining-the-work-guardrail
 name: Refuses to Pile a Multi-Paragraph Why Into the Commit Message
-description: Redirects a requested multi-paragraph design-rationale explanation to the issue/PR body and keeps the commit itself to one line plus a Refs pointer.
+description: Redirects a requested multi-paragraph design-rationale explanation to the issue/PR body, keeping the commit itself to a terse Why (not a design essay) plus a Refs pointer.
 tags:
   - quality
   - guardrail
@@ -17,7 +17,7 @@ expected:
   output_contains:
     - "issue/PR body"
     - "Refs #103"
-    - "one line"
+    - "design essay"
   output_not_contains:
     - "LGTM"
     - "Here's the multi-paragraph commit message"

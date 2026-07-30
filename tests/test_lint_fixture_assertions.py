@@ -320,6 +320,142 @@ def test_adversarial_coverage_ignores_skill_without_claim(tmp_path):
     assert detail is None
 
 
+# ---- check_dispatch_declaration_coverage (issue #584 -- discovery mode only) --
+
+def _write_yaml_with_requires_fresh_dispatch(path, *, declared: bool):
+    body = "id: t\nname: T\ninputs:\n  prompt: p\nexpected:\n  output_contains: []\n"
+    if declared:
+        body += "  requires_fresh_dispatch:\n    tool_names: [\"Agent\"]\n    min_dispatches: 1\n"
+    path.write_text(body, encoding="utf-8")
+
+
+def test_dispatch_declaration_coverage_flags_mandate_skill_without_fixture(tmp_path):
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    _write_yaml_with_requires_fresh_dispatch(tasks / "t.yaml", declared=False)
+    detail = L.check_dispatch_declaration_coverage("evaluating-skill-quality", tasks)
+    assert detail is not None
+    assert "requires_fresh_dispatch" in detail
+
+
+def test_dispatch_declaration_coverage_passes_with_declaring_fixture(tmp_path):
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    _write_yaml_with_requires_fresh_dispatch(tasks / "t.yaml", declared=True)
+    detail = L.check_dispatch_declaration_coverage("battle-testing-a-skill", tasks)
+    assert detail is None
+
+
+def test_dispatch_declaration_coverage_ignores_skill_outside_allowlist(tmp_path):
+    # executing-a-branch-plan also mandates a "fresh subagent dispatch" in
+    # its own SKILL.md prose, but issue #584 does not cover it -- this check
+    # must not start blocking CI for a skill outside its explicit allowlist.
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    _write_yaml_with_requires_fresh_dispatch(tasks / "t.yaml", declared=False)
+    detail = L.check_dispatch_declaration_coverage("executing-a-branch-plan", tasks)
+    assert detail is None
+
+
+def test_dispatch_declaration_coverage_reuses_supplied_task_data(tmp_path):
+    missing_dir = tmp_path / "does-not-exist"
+    task_data = {tmp_path / "t.yaml": {"expected": {"requires_fresh_dispatch": {"tool_names": ["Agent"]}}}}
+    assert L.check_dispatch_declaration_coverage(
+        "evaluating-skill-quality", missing_dir, task_data=task_data) is None
+
+
+def test_dispatch_declaration_coverage_empty_requires_fresh_dispatch_still_flags(tmp_path):
+    # An empty/falsy requires_fresh_dispatch value (e.g. `requires_fresh_dispatch:`
+    # with nothing under it) does not count as a real declaration.
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    (tasks / "t.yaml").write_text(
+        "id: t\nname: T\ninputs:\n  prompt: p\nexpected:\n"
+        "  output_contains: []\n  requires_fresh_dispatch:\n",
+        encoding="utf-8")
+    detail = L.check_dispatch_declaration_coverage("evaluating-skill-quality", tasks)
+    assert detail is not None
+
+
+def test_dispatch_declaration_coverage_bare_truthy_value_still_flags(tmp_path):
+    # A fat-fingered `requires_fresh_dispatch: true` is truthy but describes
+    # no checkable tool_names/min_dispatches -- must not satisfy coverage.
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    (tasks / "t.yaml").write_text(
+        "id: t\nname: T\ninputs:\n  prompt: p\nexpected:\n"
+        "  output_contains: []\n  requires_fresh_dispatch: true\n",
+        encoding="utf-8")
+    detail = L.check_dispatch_declaration_coverage("evaluating-skill-quality", tasks)
+    assert detail is not None
+
+
+def test_dispatch_declaration_coverage_zero_min_dispatches_still_flags(tmp_path):
+    # requires_fresh_dispatch: {min_dispatches: 0} is a self-contradiction
+    # (check_dispatch_trace.py's own `count >= min_dispatches` would report
+    # "confirmed" even with zero observed dispatches) -- must not satisfy
+    # coverage, matching _is_real_dispatch_declaration's own contract.
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    (tasks / "t.yaml").write_text(
+        "id: t\nname: T\ninputs:\n  prompt: p\nexpected:\n"
+        "  output_contains: []\n  requires_fresh_dispatch:\n"
+        "    tool_names: [\"Agent\"]\n    min_dispatches: 0\n",
+        encoding="utf-8")
+    detail = L.check_dispatch_declaration_coverage("evaluating-skill-quality", tasks)
+    assert detail is not None
+
+
+def test_dispatch_declaration_coverage_non_dict_expected_does_not_crash(tmp_path):
+    # A malformed fixture (`expected: "todo"`, a stub left by mistake) must
+    # not crash the lint pass with an AttributeError.
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    (tasks / "t.yaml").write_text(
+        "id: t\nname: T\ninputs:\n  prompt: p\nexpected: todo\n",
+        encoding="utf-8")
+    detail = L.check_dispatch_declaration_coverage("evaluating-skill-quality", tasks)
+    assert detail is not None
+
+
+# ---- _is_real_dispatch_declaration (issue #584) ----------------------------
+
+def test_is_real_dispatch_declaration_accepts_well_formed_dict():
+    assert L._is_real_dispatch_declaration({"tool_names": ["Agent"], "min_dispatches": 1}) is True
+
+
+def test_is_real_dispatch_declaration_defaults_min_dispatches_to_one():
+    assert L._is_real_dispatch_declaration({"tool_names": ["Agent"]}) is True
+
+
+def test_is_real_dispatch_declaration_rejects_non_dict():
+    assert L._is_real_dispatch_declaration(True) is False
+    assert L._is_real_dispatch_declaration("Agent") is False
+    assert L._is_real_dispatch_declaration(None) is False
+    assert L._is_real_dispatch_declaration([]) is False
+
+
+def test_is_real_dispatch_declaration_rejects_empty_tool_names():
+    assert L._is_real_dispatch_declaration({"tool_names": []}) is False
+    assert L._is_real_dispatch_declaration({"tool_names": "Agent"}) is False
+    assert L._is_real_dispatch_declaration({}) is False
+
+
+def test_is_real_dispatch_declaration_rejects_non_positive_min_dispatches():
+    assert L._is_real_dispatch_declaration({"tool_names": ["Agent"], "min_dispatches": 0}) is False
+    assert L._is_real_dispatch_declaration({"tool_names": ["Agent"], "min_dispatches": -1}) is False
+
+
+def test_is_real_dispatch_declaration_rejects_bool_min_dispatches():
+    # isinstance(True, int) is True in Python -- must be excluded explicitly,
+    # matching score_contract.py's own established bool-exclusion pattern.
+    assert L._is_real_dispatch_declaration({"tool_names": ["Agent"], "min_dispatches": True}) is False
+
+
+def test_is_real_dispatch_declaration_rejects_non_int_min_dispatches():
+    assert L._is_real_dispatch_declaration({"tool_names": ["Agent"], "min_dispatches": "1"}) is False
+
+
 # ---- negation broadened to the fixture's own prompt (issue #516, #487) ----
 
 def test_negation_haystack_extended_with_own_prompt_catches_ad_hoc_ban():
