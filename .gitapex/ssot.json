@@ -1,0 +1,356 @@
+{
+  "meta": {
+    "schema_version": "1.0.0",
+    "tracking_issue": 123,
+    "status": "active",
+    "phase": "phase-0"
+  },
+  "policy_sources": [
+    {
+      "id": "plugin-manifest",
+      "path": ".claude-plugin/plugin.json",
+      "format": "json",
+      "authority": "name/version single source of truth; apm.yml mirrors it (see apm-manifest-drift)"
+    },
+    {
+      "id": "pyproject-coverage",
+      "path": "pyproject.toml",
+      "format": "toml",
+      "authority": "[tool.coverage.run] source directories -- authoritative scope for evals-scripts-coverage-floor's per-file coverage check"
+    },
+    {
+      "id": "skill-metadata-sidecar",
+      "path": "skills/*/metadata/gitapex.yaml",
+      "format": "yaml",
+      "authority": "per-skill capabilityAssumption (read by routine-scope-enforcement) and spec.lifecycle.renamedFrom (read by skill-rename-lifecycle); one entry stands in for the glob since every sidecar shares one schema"
+    }
+  ],
+  "gates": [
+    {
+      "id": "bash-cli-write-and-install-guard",
+      "kind": "script",
+      "script": "hooks/check-bash-safety.sh",
+      "rule": "Denies a Bash call matching a package/plugin-install verb; denies gh issue/gh pr write subcommands and gh api writes (POST/PUT/PATCH/DELETE, a field flag, or 'mutation' in gh api graphql); on git push, runs skills/outward-artifact-preflight/scripts/scan_provenance.py against the outgoing commit range and warns (never blocks) if it flags something.",
+      "planes": ["pretooluse"],
+      "trigger": "PreToolUse matcher Bash (hooks/hooks.json)",
+      "policy_refs": [],
+      "cluster": ["outward-hygiene", "github-operations"],
+      "tracking_issue": null,
+      "status": "active",
+      "supersedes": null
+    },
+    {
+      "id": "template-overwrite-guard",
+      "kind": "script",
+      "script": "hooks/check-template-overwrite.sh",
+      "rule": "Denies a Write call whose file_path case-insensitively matches an existing GitHub/GitLab issue/PR/MR template location.",
+      "planes": ["pretooluse"],
+      "trigger": "PreToolUse matcher Write (hooks/hooks.json)",
+      "policy_refs": [],
+      "cluster": "outward-hygiene",
+      "tracking_issue": null,
+      "status": "active",
+      "supersedes": null
+    },
+    {
+      "id": "acm-issue-disclosure",
+      "kind": "script",
+      "script": [
+        "hooks/check-issue-acm-disclosure.sh",
+        "hooks/check_acm_present_or_waiver.py",
+        ".github/scripts/gate_acm_issue_disclosure.py"
+      ],
+      "rule": "Requires a new GitHub issue's body (method==\"create\" only) to contain an ACM table header or an explicit 'ACM: not-applicable (chore|docs|tracking): <reason>' waiver; the CI twin re-checks on issues opened/edited and labels+comments (non-blocking).",
+      "planes": ["pretooluse", "ci"],
+      "trigger": "PreToolUse matcher mcp__github__issue_write (hooks/hooks.json); .github/workflows/acm-issue-gate.yml on issues:[opened, edited]",
+      "policy_refs": [],
+      "cluster": "plan-integrity",
+      "tracking_issue": null,
+      "status": "active",
+      "supersedes": null
+    },
+    {
+      "id": "pr-upstream-pushed",
+      "kind": "script",
+      "script": "hooks/check-pr-upstream-pushed.sh",
+      "rule": "Denies mcp__github__create_pull_request when the head branch has no resolvable upstream or has local commits not yet pushed to it; fails open on any unresolvable local git state.",
+      "planes": ["pretooluse"],
+      "trigger": "PreToolUse matcher mcp__github__create_pull_request (hooks/hooks.json)",
+      "policy_refs": [],
+      "cluster": "github-operations",
+      "tracking_issue": 187,
+      "status": "active",
+      "supersedes": null
+    },
+    {
+      "id": "skill-audit-disclosure",
+      "kind": "script",
+      "script": [
+        "hooks/check-pr-skill-audit-disclosure.sh",
+        "hooks/check_skill_audit_disclosure_or_waiver.py",
+        ".github/scripts/gate_skill_audit_disclosure.py",
+        ".github/scripts/skill_description_diff.py",
+        ".github/scripts/skill_security_relevance.py"
+      ],
+      "rule": "Requires a PR touching skills/*/SKILL.md to disclose battle-testing-a-skill / evaluating-skill-quality verdicts or waivers under a '## Skill audit evidence' heading; the CI twin additionally requires disclosure for description changes, security-relevant skills, changed design docs, and changed checker scripts.",
+      "planes": ["pretooluse", "ci"],
+      "trigger": "PreToolUse matcher mcp__github__create_pull_request and mcp__github__update_pull_request (hooks/hooks.json); .github/workflows/skill-audit-gate.yml on pull_request",
+      "policy_refs": [],
+      "cluster": "skill-lifecycle",
+      "tracking_issue": null,
+      "status": "active",
+      "supersedes": null
+    },
+    {
+      "id": "gitignore-pattern-test-coverage",
+      "kind": "script",
+      "script": ".github/scripts/gate_gitignore_pattern_coverage.py",
+      "rule": "Every .gitignore line added in a PR diff must have its de-negated/de-slashed core text referenced, as a whole token, by some file under tests/.",
+      "planes": ["ci"],
+      "trigger": ".github/workflows/gitignore-pattern-coverage-gate.yml on pull_request",
+      "policy_refs": [],
+      "cluster": "repo-hygiene",
+      "tracking_issue": 519,
+      "status": "active",
+      "supersedes": null
+    },
+    {
+      "id": "provenance-disclosure",
+      "kind": "script",
+      "script": [
+        ".github/scripts/gate_provenance_disclosure.py",
+        ".github/scripts/extract_diff_added_lines.py"
+      ],
+      "rule": "Flags a paragraph (PR body, or diff-added docs/evals/skills Markdown) combining a capability-limitation cue with a tool-fingerprint cue absent an explicit 'tool-fingerprint-disclosure: WAIVED: <reason>' line.",
+      "planes": ["ci"],
+      "trigger": ".github/workflows/provenance-disclosure-gate.yml on pull_request",
+      "policy_refs": [],
+      "cluster": "outward-hygiene",
+      "tracking_issue": 520,
+      "status": "active",
+      "supersedes": null
+    },
+    {
+      "id": "retro-title-convention-citation",
+      "kind": "script",
+      "script": ".github/scripts/gate_retro_title_convention_citation.py",
+      "rule": "Any changed skills/**/*.md or docs/**/*.md paragraph asserting a title/identity string is this repo's own/established convention must cite a real #N issue.",
+      "planes": ["ci"],
+      "trigger": ".github/workflows/retro-title-convention-citation-gate.yml on pull_request",
+      "policy_refs": [],
+      "cluster": "self-governance",
+      "tracking_issue": 520,
+      "status": "active",
+      "supersedes": null
+    },
+    {
+      "id": "routine-scope-enforcement",
+      "kind": "script",
+      "script": ".github/scripts/gate_routine_scope_enforcement.py",
+      "rule": "A docs/superpowers/specs/*routine*.md doc naming a skill whose metadata/gitapex.yaml declares capabilityAssumption: Broad must also cite a concrete scoping mechanism.",
+      "planes": ["ci"],
+      "trigger": ".github/workflows/routine-scope-enforcement-gate.yml on pull_request",
+      "policy_refs": ["skill-metadata-sidecar"],
+      "cluster": "self-governance",
+      "tracking_issue": 520,
+      "status": "active",
+      "supersedes": null
+    },
+    {
+      "id": "skill-rename-lifecycle",
+      "kind": "script",
+      "script": ".github/scripts/gate_skill_rename_lifecycle.py",
+      "rule": "Any skills/ directory name removed in a diff (while at least one is added) must appear as some surviving skill's spec.lifecycle.renamedFrom value.",
+      "planes": ["ci"],
+      "trigger": ".github/workflows/skill-rename-lifecycle-gate.yml on pull_request",
+      "policy_refs": ["skill-metadata-sidecar"],
+      "cluster": "skill-lifecycle",
+      "tracking_issue": 285,
+      "status": "active",
+      "supersedes": null
+    },
+    {
+      "id": "skill-branch-fixture-coverage",
+      "kind": "script",
+      "script": ".github/scripts/gate_skill_branch_fixture_coverage.py",
+      "rule": "If a changed SKILL.md increases its own count of Stop-boundary bullets plus named dispatch branches, evals/<skill>/tasks/*.yaml must gain at least that many new fixtures.",
+      "planes": ["ci"],
+      "trigger": ".github/workflows/skill-branch-fixture-coverage-gate.yml on pull_request",
+      "policy_refs": [],
+      "cluster": "skill-lifecycle",
+      "tracking_issue": 49,
+      "status": "active",
+      "supersedes": null
+    },
+    {
+      "id": "split-fixture-coverage",
+      "kind": "script",
+      "script": ".github/scripts/gate_split_fixture_coverage.py",
+      "rule": "A changed split.md's gate-result table Fixture column must be a superset of its own declared selection list; a changed SKILL.md precedence sentence needs a matching fixture-pair row in split.md's Equivalence classes table.",
+      "planes": ["ci"],
+      "trigger": ".github/workflows/split-fixture-coverage-gate.yml on pull_request",
+      "policy_refs": [],
+      "cluster": "skill-lifecycle",
+      "tracking_issue": 526,
+      "status": "active",
+      "supersedes": null
+    },
+    {
+      "id": "transfer-check-disclosure",
+      "kind": "script",
+      "script": ".github/scripts/gate_transfer_check_disclosure.py",
+      "rule": "Every newly-added '**Iteration:' entry under a '## Kept-edit log' in evals/*/split.md must contain a Transfer check line.",
+      "planes": ["ci"],
+      "trigger": ".github/workflows/transfer-check-disclosure-gate.yml on pull_request",
+      "policy_refs": [],
+      "cluster": "skill-lifecycle",
+      "tracking_issue": 517,
+      "status": "active",
+      "supersedes": null
+    },
+    {
+      "id": "evals-scripts-coverage-floor",
+      "kind": "script",
+      "script": ".github/scripts/gate_evals_scripts_coverage.py",
+      "rule": "Every file under each of pyproject.toml's [tool.coverage.run] source directories must meet a minimum per-file coverage percentage, read from coverage.json.",
+      "planes": ["ci"],
+      "trigger": "pytest step inside .github/workflows/test.yml",
+      "policy_refs": ["pyproject-coverage"],
+      "cluster": ["supply-chain", "test-integrity"],
+      "tracking_issue": 536,
+      "status": "active",
+      "supersedes": null
+    },
+    {
+      "id": "apm-manifest-drift",
+      "kind": "script",
+      "script": ".github/scripts/scan_apm_manifest_drift.py",
+      "rule": "apm.yml's name/version must equal .claude-plugin/plugin.json's (plugin.json is authoritative); raises if either manifest is missing a mirrored field.",
+      "planes": ["ci"],
+      "trigger": "tests/test_scan_apm_manifest_drift.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": ["plugin-manifest"],
+      "cluster": "supply-chain",
+      "tracking_issue": 234,
+      "status": "active",
+      "supersedes": null
+    },
+    {
+      "id": "toolchain-pin-drift",
+      "kind": "script",
+      "script": ".github/scripts/scan_toolchain_pin_drift.py",
+      "rule": "No .github/workflows/*.yml/.yaml may reference a flake-owned Class B tool's (microsoft/waza, microsoft/apm, rtk-ai/rtk, betterleaks/betterleaks) upstream repo in an install context -- they must come from flake.nix only.",
+      "planes": ["ci"],
+      "trigger": "tests/test_scan_toolchain_pin_drift.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "supply-chain",
+      "tracking_issue": 57,
+      "status": "active",
+      "supersedes": null
+    },
+    {
+      "id": "owasp-asi-mapping-completeness",
+      "kind": "script",
+      "script": ".github/scripts/gate_owasp_asi_mapping.py",
+      "rule": "docs/security-control-inventory.md's ASI section must have exactly one row per ASI01-ASI10, each with a status in {covered, partially covered, not covered, not applicable} and a rationale prefixed by exactly one of [deny]/[require_approval]/[allow].",
+      "planes": ["ci"],
+      "trigger": "tests/test_gate_owasp_asi_mapping.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "self-governance",
+      "tracking_issue": 144,
+      "status": "active",
+      "supersedes": null
+    },
+    {
+      "id": "owasp-llm-mapping-completeness",
+      "kind": "script",
+      "script": ".github/scripts/gate_owasp_llm_mapping.py",
+      "rule": "Sibling gate to owasp-asi-mapping-completeness, for the exact-pinned heading '## OWASP Top 10 for LLM Applications and Generative AI (LLM01-10:2025)', LLM01-LLM10.",
+      "planes": ["ci"],
+      "trigger": "tests/test_gate_owasp_llm_mapping.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "self-governance",
+      "tracking_issue": 145,
+      "status": "active",
+      "supersedes": null
+    },
+    {
+      "id": "retrospective-gate-drift-scan",
+      "kind": "script",
+      "script": ".github/scripts/scan_retrospective_gate_drift.py",
+      "rule": "Lists every retrospective-labelled issue (any state) and fails the job if the count with zero commit on main citing it exceeds threshold 20.",
+      "planes": ["ci"],
+      "trigger": ".github/workflows/retrospective-gate-drift.yml, daily cron 07:00 UTC + workflow_dispatch",
+      "policy_refs": [],
+      "cluster": "self-governance",
+      "tracking_issue": 297,
+      "status": "active",
+      "supersedes": null
+    },
+    {
+      "id": "waza-eval-gate",
+      "kind": "script",
+      "script": [
+        ".github/workflows/waza-eval-gate.yml",
+        ".github/scripts/detect_touched_eval_skills.py"
+      ],
+      "rule": "Executes each PR-touched skill's own evals/<skill>/ suite via 'nix run .#waza -- run <skill>' and fails the job if any suite fails; not yet a required status check.",
+      "planes": ["ci"],
+      "trigger": ".github/workflows/waza-eval-gate.yml on pull_request",
+      "policy_refs": [],
+      "cluster": "skill-lifecycle",
+      "tracking_issue": 582,
+      "status": "active",
+      "supersedes": null
+    },
+    {
+      "id": "workflow-lint",
+      "kind": "script",
+      "script": ".github/workflows/lint.yml",
+      "rule": "Runs actionlint (rhysd/actionlint, digest-pinned) against changed .github/workflows/** files.",
+      "planes": ["ci"],
+      "trigger": ".github/workflows/lint.yml on pull_request",
+      "policy_refs": [],
+      "cluster": "supply-chain",
+      "tracking_issue": null,
+      "status": "active",
+      "supersedes": null
+    },
+    {
+      "id": "toolchain-nix-build-verify",
+      "kind": "script",
+      "script": ".github/workflows/toolchain-nix.yml",
+      "rule": "On flake.nix/flake.lock changes: fails if flake.lock is stale after nix flake lock, or if nix flake check, the Class-B build, or the devShell smoke step fail.",
+      "planes": ["ci"],
+      "trigger": ".github/workflows/toolchain-nix.yml on changes to flake.nix/flake.lock",
+      "policy_refs": [],
+      "cluster": "supply-chain",
+      "tracking_issue": null,
+      "status": "active",
+      "supersedes": null
+    },
+    {
+      "id": "ssot-schema-drift",
+      "kind": "script",
+      "script": ".github/scripts/scan_ssot_schema.py",
+      "rule": "Validates .gitapex/ssot.json against .gitapex/ssot.schema.json (JSON Schema draft 2020-12); fails if any gates[].script path doesn't exist as a real file, or any policy_refs[] value doesn't resolve to a real policy_sources[].id.",
+      "planes": ["ci"],
+      "trigger": "tests/test_scan_ssot_schema.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "registry-integrity",
+      "tracking_issue": 123,
+      "status": "active",
+      "supersedes": null
+    }
+  ],
+  "clusters": {
+    "outward-hygiene": "Provenance and outward-facing-artifact hygiene checks on text bound for a public push/release.",
+    "github-operations": "Direct guards on the GitHub write/PR-open surface.",
+    "plan-integrity": "Pre-work planning artifacts (Acceptance Criteria Maps) required before an issue is considered ready.",
+    "skill-lifecycle": "SKILL.md authoring, rename, audit-disclosure, and fixture-coverage discipline.",
+    "repo-hygiene": "Repository-file-level conventions such as .gitignore pattern test coverage.",
+    "self-governance": "The repo's own doc-integrity and self-referential-claim checks (OWASP mappings, retro-title/routine-scope citation, retro backlog cap).",
+    "supply-chain": "Toolchain and dependency provisioning, and manifest-identity drift.",
+    "test-integrity": "Test-suite coverage floors backing the other clusters' own gates.",
+    "registry-integrity": "Self-validation of this registry file itself against its schema and against the repo's real files."
+  }
+}
