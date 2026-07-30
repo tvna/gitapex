@@ -53,9 +53,11 @@ jobs:
       # scope here -- see docs/superpowers/specs/2026-07-12-skill-distribution-foundation-design.md
       # Non-goals. `.github/workflows/waza-eval-gate.yml` (issue #582, added
       # in the same change as this sentence) now actually executes each
-      # touched skill's own evals/ suite via `waza run` on push/PR, so this
-      # job's own "never executing evals/ at all" framing is scoped to this
-      # `waza check` step specifically, not to this repository as a whole.
+      # touched skill's own evals/ suite via `waza run` on pull_request (not
+      # yet a required status check -- see issue #582 and #124 for the
+      # sequencing), so this job's own "never executing evals/ at all"
+      # framing is scoped to this `waza check` step specifically, not to
+      # this repository as a whole.
       - name: Run waza check (advisory report, not a merge gate)
         continue-on-error: true
         run: |

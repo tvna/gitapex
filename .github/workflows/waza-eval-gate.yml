@@ -1,5 +1,5 @@
 # Issue #582: execute each touched skill's committed evals/<skill>/ suite as
-# a real (not merely advisory) gate on push/PR, without disturbing
+# a real (not merely advisory) gate on pull_request, without disturbing
 # waza-eval-matrix.yml -- that workflow is issue #124's cross-model matrix
 # scope (workflow_dispatch-only, model-override, advisory) and is
 # deliberately left unmodified here.
@@ -49,14 +49,6 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
-      # waza is provisioned from this repo's flake (SSoT), never re-installed
-      # by hand -- same rule waza-check.yml and waza-eval-matrix.yml follow.
-      # See flake.nix + #57.
-      - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25  # v22
-        with:
-          extra-conf: "experimental-features = nix-command flakes"
-
       # For a pull_request event, diff against the merge-base of
       # BASE_SHA/HEAD_SHA (a three-dot diff), matching skill-audit-gate.yml's
       # own rationale: a change merged to the base branch after this PR
@@ -69,23 +61,39 @@ jobs:
       # tests/test_detect_touched_eval_skills.py) rather than re-derived
       # inline here -- this step only ever produces a flat path list.
       #
-      # `-z` (NUL-delimited, piped through `tr '\0' '\n'` before capture) is
-      # required, not cosmetic: git's default `--name-only` quotes an entire
-      # path in double quotes with octal escapes the moment it contains any
-      # non-ASCII byte or a `"`/`\`/control character (core.quotepath,
-      # default on) -- e.g. `evals/foo/tasks/日本語.yaml` becomes the literal
-      # line `"evals/foo/tasks/\346\227\245...yaml"`. That leading `"`
-      # defeats detect_touched_eval_skills.py's `segments[0] != "evals"`
-      # check, silently dropping the whole path -- the exact false-negative
-      # (a touched skill's suite silently never runs) this gate exists to
-      # prevent. `-z` disables that quoting outright (git's own documented
-      # behavior); converting to newline via `tr` must happen inside the
-      # pipeline *before* command-substitution captures it into a bash
-      # variable, since bash silently drops embedded NUL bytes on capture
-      # (confirmed: `x=$(printf 'a\0b')` yields `x="ab"`, gluing two
-      # different paths into one) -- capturing the raw `-z` output directly
-      # would silently merge multiple changed paths together, a second and
-      # worse false-negative.
+      # `--name-status` (not `--name-only`) plus `-z`: a PR that deletes an
+      # entire evals/<skill>/ directory must not have those paths reported
+      # as touched -- the run step would then try `nix run .#waza -- run
+      # <skill>` against a skill directory that no longer exists on HEAD,
+      # failing a legitimate deletion PR. So `D` (deleted) and `R100` (pure
+      # rename, no content change) status records are dropped, mirroring
+      # skill-audit-gate.yml's own established `grep -vE '^(D|R100)[[:space:]]'`
+      # convention -- adapted here to `--name-status -z`'s NUL-separated (not
+      # tab/newline-separated) fields: a rename/copy ("R"/"C"-prefixed)
+      # status record carries TWO path fields (old, new), every other status
+      # exactly ONE, so the flat field list below is walked with an explicit
+      # index rather than assumed to be a fixed width or line-delimited (there
+      # are no line boundaries at all in `-z` output). `-z` is also what
+      # disables git's core.quotepath C-style quoting of a non-ASCII/special
+      # -byte path (see detect_touched_eval_skills.py's own docstring for why
+      # that quoting would otherwise silently defeat detection).
+      #
+      # The raw `-z` bytes are captured to a temp file, never a plain bash
+      # scalar variable (`x=$(...)`) -- confirmed empirically that bash
+      # silently drops embedded NUL bytes on scalar capture (`x=$(printf
+      # 'a\0b')` yields `x="ab"`), which would glue two touched paths
+      # together. `mapfile -d ''` reads NUL-delimited fields from that file
+      # straight into a bash array (arrays hold multiple NUL-free elements
+      # fine; a scalar variable is what cannot hold an embedded NUL). The
+      # filtered, currently-live paths are collected into a second array and
+      # handed to detect_touched_eval_skills.py's `--nul` mode via `printf
+      # '%s\0' "${arr[@]}"` -- kept NUL-delimited all the way into Python
+      # rather than converted to newline via `tr` first, since `tr '\0' '\n'`
+      # cannot tell its own inserted separator apart from a literal newline
+      # byte inside a real path, silently mis-splitting that one path into
+      # two (see detect_touched_eval_skills.py's docstring for the full
+      # rationale and tests/test_detect_touched_eval_skills.py for the
+      # reproduced defeat case).
       - name: Determine touched skills
         id: diff
         env:
@@ -95,26 +103,52 @@ jobs:
         run: |
           set -euo pipefail
 
+          touched_paths_arr=()
+
           if [ "$EVENT_NAME" = "pull_request" ]; then
-            if ! diff_output=$(git diff --name-only -z "$BASE_SHA...$HEAD_SHA" | tr '\0' '\n'); then
+            diff_file="$(mktemp)"
+            if ! git diff --name-status -z "$BASE_SHA...$HEAD_SHA" > "$diff_file"; then
+              rm -f "$diff_file"
               echo "::error::git diff failed between $BASE_SHA and $HEAD_SHA" >&2
               exit 1
             fi
-            changed_paths="$diff_output"
+            mapfile -d '' -t diff_fields < "$diff_file"
+            rm -f "$diff_file"
+
+            i=0
+            n=${#diff_fields[@]}
+            while [ "$i" -lt "$n" ]; do
+              status="${diff_fields[$i]}"
+              case "$status" in
+                R*|C*)
+                  # Rename/copy record: [status, old-path, new-path].
+                  path="${diff_fields[$((i + 2))]}"
+                  i=$((i + 3))
+                  ;;
+                *)
+                  # Every other status: [status, path].
+                  path="${diff_fields[$((i + 1))]}"
+                  i=$((i + 2))
+                  ;;
+              esac
+              case "$status" in
+                D|R100) ;; # deleted, or pure rename with no content change
+                *) touched_paths_arr+=("$path") ;;
+              esac
+            done
           else
             # workflow_dispatch: no PR base/head SHA exists to diff against.
             # Enumerate every committed suite by its eval.yaml (the same
             # enumeration waza-eval-matrix.yml already uses, which excludes
             # non-suite directories such as evals/scripts/ since they have
             # no eval.yaml of their own).
-            changed_paths=""
             for suite in evals/*/eval.yaml; do
               [ -f "$suite" ] || continue
-              changed_paths="${changed_paths}${suite}"$'\n'
+              touched_paths_arr+=("$suite")
             done
           fi
 
-          if ! skills=$(printf '%s\n' "$changed_paths" | python3 .github/scripts/detect_touched_eval_skills.py); then
+          if ! skills=$(printf '%s\0' "${touched_paths_arr[@]}" | python3 .github/scripts/detect_touched_eval_skills.py --nul); then
             echo "::error::detect_touched_eval_skills.py rejected a touched path (see the error above)" >&2
             exit 1
           fi
@@ -130,6 +164,20 @@ jobs:
             echo "has-changes=${has_changes}"
           } >> "$GITHUB_OUTPUT"
 
+      # waza is provisioned from this repo's flake (SSoT), never re-installed
+      # by hand -- same rule waza-check.yml and waza-eval-matrix.yml follow.
+      # See flake.nix + #57. Deferred to run only once there is actually
+      # touched-skill work to do (the diff step above needs only git/python3,
+      # both already on the runner image) -- this workflow's trigger is
+      # deliberately broad/unfiltered (see the top-of-file rationale), so
+      # most PRs never touch evals/ at all, and this avoids paying the
+      # Nix-install cost on every one of them.
+      - name: Install Nix
+        if: steps.diff.outputs.has-changes == 'true'
+        uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25  # v22
+        with:
+          extra-conf: "experimental-features = nix-command flakes"
+
       # Fail loudly if the credentials the copilot-sdk executor needs are not
       # configured, before any run is attempted, but only when there is
       # actually at least one touched skill to run -- a PR that touches
@@ -137,6 +185,22 @@ jobs:
       # need. Presence is checked; values are never printed (CLAUDE.md
       # section 4 -- secrets must not reach a log). This job is not yet a
       # required status check (see issue #582 and #124 for the sequencing).
+      #
+      # Known, accepted limitation (not a bug): this workflow triggers on
+      # `pull_request`, and GitHub never exposes repository secrets to a
+      # `pull_request`-triggered run for a fork-originated PR (its own
+      # documented, non-configurable security default). So this step's
+      # "no copilot-sdk endpoint configured" error will fire for every
+      # fork PR that touches evals/, even when COPILOT_BASE_URL /
+      # COPILOT_PROVIDER_BASE_URL are genuinely configured as repo secrets
+      # -- misleadingly looking like a credentials-provisioning gap rather
+      # than an inherent fork-PR limitation. The fix for that would be
+      # switching to `pull_request_target`, which is deliberately NOT done
+      # here: `pull_request_target` runs with the base repo's secrets and
+      # write-scoped token against the *fork's* untrusted code, which would
+      # be a real security regression, not a fix -- and this repo currently
+      # has no evidence of accepting external fork contributions to weigh
+      # against that risk.
       - name: Preflight -- require executor endpoint secrets
         if: steps.diff.outputs.has-changes == 'true'
         env:
