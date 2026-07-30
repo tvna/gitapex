@@ -100,15 +100,20 @@ def count_dispatches(
     tool_use_blocks,
     dispatch_tool_names,
     dispatch_bash_pattern: re.Pattern | None = None,
+    bash_tool_name: str = "Bash",
 ) -> int:
     """Count dispatch-shaped ``tool_use`` blocks.
 
     A block counts if its ``name`` is in ``dispatch_tool_names`` (a same-
     transcript dispatch-tool invocation), OR -- when ``dispatch_bash_pattern``
-    is given -- its ``name`` is ``"Bash"`` and its ``input.command`` matches
-    that pattern (a nested ``claude -p`` subprocess dispatch; see this
-    module's docstring, lesson 2). The two are independent checks: a
-    fixture that only cares about the first passes ``dispatch_bash_pattern
+    is given -- its ``name`` equals ``bash_tool_name`` and its
+    ``input.command`` matches that pattern (a nested ``claude -p`` subprocess
+    dispatch; see this module's docstring, lesson 2). ``bash_tool_name``
+    defaults to ``"Bash"`` but is caller-overridable, for the same reason
+    ``dispatch_tool_names`` is never hardcoded (docstring lesson 1) -- a
+    shell-tool name is platform-specific too, even if it drifts less often
+    than the dispatch-tool name observed to. The two are independent checks:
+    a fixture that only cares about the first passes ``dispatch_bash_pattern
     =None`` and gets exactly the same-transcript-tool_use behavior.
     """
     names = set(dispatch_tool_names)
@@ -118,7 +123,7 @@ def count_dispatches(
         if name in names:
             count += 1
             continue
-        if dispatch_bash_pattern is not None and name == "Bash":
+        if dispatch_bash_pattern is not None and name == bash_tool_name:
             block_input = block.get("input")
             command = block_input.get("command") if isinstance(block_input, dict) else None
             if isinstance(command, str) and dispatch_bash_pattern.search(command):
@@ -130,12 +135,19 @@ def check_transcript(
     transcript_path: Path,
     dispatch_tool_names,
     dispatch_bash_pattern: re.Pattern | None = None,
+    bash_tool_name: str = "Bash",
 ) -> int:
     """Return the dispatch count for ``transcript_path``. Propagates
     ``ValueError``/``OSError`` from ``iter_tool_use_blocks`` unchanged --
-    the CLI layer is what turns those into an exit-2 usage error."""
-    blocks = list(iter_tool_use_blocks(transcript_path))
-    return count_dispatches(blocks, dispatch_tool_names, dispatch_bash_pattern)
+    the CLI layer is what turns those into an exit-2 usage error. Streams
+    ``tool_use`` blocks directly into ``count_dispatches`` rather than
+    materializing a list first -- ``count_dispatches`` only ever makes one
+    forward pass, so buffering the whole transcript in memory first would
+    cost real memory on a long transcript for no benefit."""
+    return count_dispatches(
+        iter_tool_use_blocks(transcript_path), dispatch_tool_names,
+        dispatch_bash_pattern, bash_tool_name,
+    )
 
 
 def build_isolated_home(base_dir: Path) -> Path:
@@ -143,25 +155,48 @@ def build_isolated_home(base_dir: Path) -> Path:
     fresh directory under ``base_dir``, stripping only the live-state
     subdirectories a dispatched subprocess must not see. Mirrors the
     verified recipe in ``adversarial-self-audit.md``'s Isolation verification
-    section byte-for-byte (settings/hooks/skills untouched). Returns the new
-    ``$HOME`` path. Raises ``FileNotFoundError`` if the real ``$HOME/.claude``
-    does not exist -- there is nothing to isolate a copy of.
+    section (settings/hooks/skills untouched). Returns the new ``$HOME``
+    path. Raises ``FileNotFoundError`` if ``$HOME`` is unset or the real
+    ``$HOME/.claude`` does not exist -- there is nothing to isolate a copy
+    of, and guessing a fallback (e.g. ``/root``) risks silently copying a
+    different identity's config/skills into the "isolated" copy, defeating
+    the isolation guarantee this function exists to provide.
     """
-    real_home = Path(os.environ.get("HOME", "/root"))
+    home_env = os.environ.get("HOME")
+    if not home_env:
+        raise FileNotFoundError(
+            "$HOME is not set -- refusing to guess a fallback location"
+        )
+    real_home = Path(home_env)
     real_claude_dir = real_home / ".claude"
     if not real_claude_dir.is_dir():
         raise FileNotFoundError(f"no {real_claude_dir} to build an isolated copy from")
     isolated_home = base_dir / "isolated-home"
     isolated_home.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(real_claude_dir, isolated_home / ".claude")
+
+    def _ignore_top_level_strip_dirs(directory, names):
+        # Only strip these names as direct children of real_claude_dir
+        # itself -- an ignore_patterns-style recursive match could also
+        # exclude an unrelated same-named directory nested inside a vendored
+        # skill (e.g. a skill's own tasks/ content), which the prior
+        # copy-then-rmtree approach never touched either.
+        if Path(directory) == real_claude_dir:
+            return [n for n in names if n in _HOME_COPY_STRIP_DIRS]
+        return []
+
+    shutil.copytree(
+        real_claude_dir, isolated_home / ".claude",
+        ignore=_ignore_top_level_strip_dirs,
+    )
     real_claude_json = real_home / ".claude.json"
     if real_claude_json.is_file():
         shutil.copy2(real_claude_json, isolated_home / ".claude.json")
     for name in _HOME_COPY_STRIP_DIRS:
-        target = isolated_home / ".claude" / name
-        shutil.rmtree(target, ignore_errors=True)
-        target.mkdir(parents=True, exist_ok=True)
+        (isolated_home / ".claude" / name).mkdir(parents=True, exist_ok=True)
     return isolated_home
+
+
+_DEFAULT_LIVE_DISPATCH_TIMEOUT_SECONDS = 600
 
 
 def run_live_dispatch(
@@ -175,6 +210,7 @@ def run_live_dispatch(
     add_dir: Path | None = None,
     permission_mode: str = "acceptEdits",
     claude_bin: str = "claude",
+    timeout_seconds: float | None = _DEFAULT_LIVE_DISPATCH_TIMEOUT_SECONDS,
 ) -> subprocess.CompletedProcess:
     """Run one live, isolated ``claude -p`` dispatch and capture its
     ``stream-json`` transcript to ``transcript_out``. Callers are responsible
@@ -184,6 +220,14 @@ def run_live_dispatch(
     not verify isolation itself, only executes the already-isolated call, so
     a live proof run must still record the isolation check per
     ``adversarial-self-audit.md``'s Verification procedure.
+
+    Raises ``subprocess.TimeoutExpired`` if the dispatch does not finish
+    within ``timeout_seconds`` (default 10 minutes -- a real observed
+    dispatch on this platform took over 3 minutes; pass ``None`` to disable)
+    rather than blocking indefinitely on a stalled or permission-prompt-stuck
+    subprocess, and ``OSError``/``FileNotFoundError`` if ``claude_bin`` is not
+    launchable at all -- callers should catch both alongside this function's
+    own contract, matching every other failure path in this module's CLI.
     """
     argv = [
         claude_bin,
@@ -204,10 +248,17 @@ def run_live_dispatch(
     env = dict(os.environ)
     env.pop("CLAUDE_CODE_SESSION_ID", None)
     env["HOME"] = str(isolated_home)
+    # Some tools consult $PWD (a POSIX-shell convention) instead of calling
+    # getcwd(); left unset/stale here it would still carry the *calling*
+    # process's real cwd even though `cwd=` below is the isolated one,
+    # potentially resolving back to a CLAUDE.md-carrying location by a path
+    # other than the one this isolation recipe actually controls.
+    env["PWD"] = str(isolated_cwd)
     with transcript_out.open("w", encoding="utf-8") as out:
         result = subprocess.run(
             argv, cwd=str(isolated_cwd), env=env, stdout=out,
             stderr=subprocess.PIPE, text=True, check=False,
+            timeout=timeout_seconds,
         )
     return result
 
@@ -233,6 +284,7 @@ def main(argv: list[str] | None = None) -> int:
         help="Optional regex; a Bash tool_use whose input.command matches also counts as a "
              "dispatch (a nested `claude -p` subprocess dispatch, see docstring lesson 2).",
     )
+    check_p.add_argument("--bash-tool-name", default="Bash", help="Tool name matched by --dispatch-bash-pattern.")
     check_p.add_argument("--min-dispatches", type=int, default=1)
 
     run_p = sub.add_parser(
@@ -242,18 +294,30 @@ def main(argv: list[str] | None = None) -> int:
     run_p.add_argument("--transcript-out", required=True)
     run_p.add_argument("--dispatch-tool-name", action="append", required=True, dest="dispatch_tool_names")
     run_p.add_argument("--dispatch-bash-pattern", default=None)
+    run_p.add_argument("--bash-tool-name", default="Bash", help="Tool name matched by --dispatch-bash-pattern.")
     run_p.add_argument("--min-dispatches", type=int, default=1)
-    run_p.add_argument("--allowed-tools", default="Agent")
+    run_p.add_argument(
+        "--allowed-tools", default="Agent",
+        help="Space-separated tools to allow in the dispatched session. If --dispatch-bash-"
+             "pattern is also given and --bash-tool-name is not already listed here, it is "
+             "auto-appended -- otherwise the nested-dispatch shape this flag exists to detect "
+             "would always be denied by the harness itself before it could ever be observed.",
+    )
     run_p.add_argument("--permission-mode", default="acceptEdits")
     run_p.add_argument("--plugin-dir", default=None)
     run_p.add_argument("--add-dir", default=None)
     run_p.add_argument("--isolated-home", default=None, help="Reuse an existing isolated $HOME; else build a fresh one.")
     run_p.add_argument("--claude-bin", default="claude")
+    run_p.add_argument(
+        "--timeout", type=float, default=_DEFAULT_LIVE_DISPATCH_TIMEOUT_SECONDS,
+        help="Seconds before a stalled live dispatch is killed (default 600). "
+             "0 or negative disables the timeout.",
+    )
 
     args = parser.parse_args(argv)
 
     try:
-        pattern = re.compile(args.dispatch_bash_pattern) if args.dispatch_bash_pattern else None
+        pattern = re.compile(args.dispatch_bash_pattern) if args.dispatch_bash_pattern is not None else None
     except re.error as exc:
         print(f"error: invalid --dispatch-bash-pattern: {exc}", file=sys.stderr)
         return 2
@@ -264,7 +328,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"error: transcript not found: {transcript}", file=sys.stderr)
             return 2
         try:
-            count = check_transcript(transcript, args.dispatch_tool_names, pattern)
+            count = check_transcript(transcript, args.dispatch_tool_names, pattern, args.bash_tool_name)
         except (ValueError, OSError) as exc:
             print(f"error: could not check transcript: {exc}", file=sys.stderr)
             return 2
@@ -279,33 +343,48 @@ def main(argv: list[str] | None = None) -> int:
     prompt = prompt_file.read_text(encoding="utf-8")
     transcript_out = Path(args.transcript_out)
 
+    allowed_tools = args.allowed_tools
+    if pattern is not None and args.bash_tool_name not in allowed_tools.split():
+        allowed_tools = f"{allowed_tools} {args.bash_tool_name}"
+
     with tempfile.TemporaryDirectory(prefix="check-dispatch-trace-") as tmp:
         tmp_path = Path(tmp)
         isolated_cwd = tmp_path / "isolated-cwd"
         isolated_cwd.mkdir()
         if args.isolated_home:
-            isolated_home = Path(args.isolated_home)
+            isolated_home = Path(args.isolated_home).resolve()
         else:
             try:
                 isolated_home = build_isolated_home(tmp_path)
             except FileNotFoundError as exc:
                 print(f"error: {exc}", file=sys.stderr)
                 return 2
-        result = run_live_dispatch(
-            prompt, transcript_out,
-            isolated_cwd=isolated_cwd, isolated_home=isolated_home,
-            allowed_tools=args.allowed_tools,
-            plugin_dir=Path(args.plugin_dir) if args.plugin_dir else None,
-            add_dir=Path(args.add_dir) if args.add_dir else None,
-            permission_mode=args.permission_mode,
-            claude_bin=args.claude_bin,
-        )
+        try:
+            result = run_live_dispatch(
+                prompt, transcript_out,
+                isolated_cwd=isolated_cwd, isolated_home=isolated_home,
+                allowed_tools=allowed_tools,
+                plugin_dir=Path(args.plugin_dir) if args.plugin_dir else None,
+                add_dir=Path(args.add_dir) if args.add_dir else None,
+                permission_mode=args.permission_mode,
+                claude_bin=args.claude_bin,
+                timeout_seconds=args.timeout if args.timeout > 0 else None,
+            )
+        except OSError as exc:
+            print(f"error: could not launch {args.claude_bin!r}: {exc}", file=sys.stderr)
+            return 2
+        except subprocess.TimeoutExpired:
+            print(
+                f"error: claude -p did not finish within {args.timeout}s -- killed",
+                file=sys.stderr,
+            )
+            return 2
     if result.returncode != 0:
         print(f"error: claude -p exited {result.returncode}: {result.stderr}", file=sys.stderr)
         return 2
 
     try:
-        count = check_transcript(transcript_out, args.dispatch_tool_names, pattern)
+        count = check_transcript(transcript_out, args.dispatch_tool_names, pattern, args.bash_tool_name)
     except (ValueError, OSError) as exc:
         print(f"error: could not check captured transcript: {exc}", file=sys.stderr)
         return 2

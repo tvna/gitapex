@@ -220,7 +220,7 @@ linter). `split.md`'s train bucket lists the new fixture for listing
 consistency (not gate-enforced).
 
 Disclosed, not closed: only `normal.yaml` and the new negative-control
-fixture, of 24 committed fixtures, now carry `requires_fresh_dispatch`.
+fixture, of 23 committed fixtures, now carry `requires_fresh_dispatch`.
 The remaining fixtures -- including this skill's own multi-trial re-
 dispatch requirement ("Never reuse a dispatch for two trials," Procedure
 step 1) -- still assert on final output text only; a real
@@ -228,3 +228,18 @@ step 1) -- still assert on final output text only; a real
 trials gets its own fresh dispatch, not one dispatch reused) is open
 follow-up work, as is the literal organic-trigger (Track A) proof run and
 wiring `--dispatch-bash-pattern` into a real live run. Refs #584, #583.
+
+**Post-PR adversarial review round.** Same shared mechanism as
+`evaluating-skill-quality`'s own new entry above (full detail there, not
+repeated here): a multi-angle review pass found and fixed several real
+defects in `check_dispatch_trace.py`/`lint_fixture_assertions.py`
+(uncaught subprocess errors, a silent `/root` HOME fallback, a truthiness
+bug on empty `--dispatch-bash-pattern`, an unresolved relative
+`--isolated-home`, a copy-then-delete inefficiency in
+`build_isolated_home`, a missing `Bash` default in `--allowed-tools`, and
+a vacuous `requires_fresh_dispatch` truthiness check in lint check 9),
+plus two factual fixture-count errors in this file's own prose above and
+in `results/2026-07-30-issue-584-dispatch-trace/manifest.json` (23
+committed fixtures, not 24/22). All fixed, all with new tests. Full
+pytest (1434 passed) and the four live-proof transcripts were reconfirmed
+against the fixed script with identical results.

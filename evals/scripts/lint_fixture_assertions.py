@@ -98,8 +98,10 @@ mode (#296, #473):
      skills' `eval-status.md` disclosed that the committed fixtures assert
      only on final output text, never confirming a dispatch actually
      happened. Blocking within discovery mode: either skill's `tasks/`
-     directory with zero fixtures declaring a non-empty
-     `expected.requires_fresh_dispatch` key. Scoped to a small, explicit
+     directory with zero fixtures declaring a well-formed
+     `expected.requires_fresh_dispatch` value (a mapping with a non-empty
+     `tool_names` list and `min_dispatches` >= 1 -- a bare truthy value
+     like `true` or `{min_dispatches: 0}` does not count). Scoped to a small, explicit
      allowlist (`DISPATCH_MANDATE_SKILLS`), not a generic "SKILL.md
      mentions dispatch" scan -- see that constant's own docstring for why a
      broader scan would wrongly pull in at least one other skill this issue
@@ -229,6 +231,32 @@ NEGATION_CUE_RE = re.compile(r"\b(no|not|never|zero|none)\b|n't\b",
 # failing CI for that skill's own, unrelated fixtures. Extending this set to
 # a newly-adopted skill is a deliberate follow-up edit, not automatic.
 DISPATCH_MANDATE_SKILLS = frozenset({"evaluating-skill-quality", "battle-testing-a-skill"})
+
+
+def _is_real_dispatch_declaration(value: object) -> bool:
+    """True iff ``value`` (a fixture's ``expected.requires_fresh_dispatch``)
+    is a well-formed declaration -- a mapping with a non-empty
+    ``tool_names`` list and a ``min_dispatches`` of at least 1 -- not merely
+    truthy. A bare truthiness check would let ``requires_fresh_dispatch:
+    true`` or ``requires_fresh_dispatch: {min_dispatches: 0}`` silently
+    satisfy check 9's coverage requirement while describing no real,
+    checkable dispatch expectation (a ``min_dispatches: 0`` fixture would
+    even report ``confirmed`` from ``check_dispatch_trace.py`` with zero
+    observed dispatches, since ``0 &gt;= 0``) -- exactly the kind of vacuous
+    gate issue #584 exists to close, reopened one field down.
+    ``min_dispatches`` defaults to 1 when omitted, matching
+    ``check_dispatch_trace.py``'s own CLI default.
+    """
+    if not isinstance(value, dict):
+        return False
+    tool_names = value.get("tool_names")
+    if not isinstance(tool_names, list) or not tool_names:
+        return False
+    min_dispatches = value.get("min_dispatches", 1)
+    if isinstance(min_dispatches, bool) or not isinstance(min_dispatches, int):
+        return False
+    return min_dispatches >= 1
+
 
 # An UPPER_SNAKE_CASE-shaped classification-code token, excluded from the
 # cross-task collision check (#270, #473) -- this repository's closed-enum
@@ -472,11 +500,12 @@ def check_dispatch_declaration_coverage(skill_name: str, tasks_dir: Path, *,
                                          task_data: dict[Path, dict] | None = None) -> str | None:
     """Blocking, discovery-mode only (#584): a skill in
     ``DISPATCH_MANDATE_SKILLS`` whose ``tasks/`` directory has zero fixtures
-    declaring a non-empty ``expected.requires_fresh_dispatch`` key -- the
-    fixture-level assertion this skill's own ``eval-status.md`` previously
-    disclosed as entirely missing (final-output-text-only assertions cannot
-    confirm a fresh subagent dispatch actually happened for the skill's own
-    mandated Procedure steps).
+    declaring a well-formed ``expected.requires_fresh_dispatch`` value (see
+    ``_is_real_dispatch_declaration``) -- the fixture-level assertion this
+    skill's own ``eval-status.md`` previously disclosed as entirely missing
+    (final-output-text-only assertions cannot confirm a fresh subagent
+    dispatch actually happened for the skill's own mandated Procedure
+    steps).
 
     ``task_data``, if the caller already parsed every task YAML under
     ``tasks_dir`` (as ``lint_all_skills`` does), is reused instead of
@@ -489,12 +518,13 @@ def check_dispatch_declaration_coverage(skill_name: str, tasks_dir: Path, *,
         task_data = {p: (yaml.safe_load(p.read_text(encoding="utf-8")) or {})
                      for p in tasks_dir.glob("*.yaml")}
     for data in task_data.values():
-        expected = data.get("expected") or {}
-        if expected.get("requires_fresh_dispatch"):
+        expected = data.get("expected")
+        if isinstance(expected, dict) and _is_real_dispatch_declaration(
+                expected.get("requires_fresh_dispatch")):
             return None
     return (f"{skill_name}'s own SKILL.md mandates a fresh subagent dispatch for its "
             f"core judgment steps, but no fixture under {tasks_dir} declares a "
-            f"non-empty expected.requires_fresh_dispatch (issue #584)")
+            f"well-formed expected.requires_fresh_dispatch (issue #584)")
 
 
 def lint_task(task_path: Path, data: dict, anchors: list[str], corpus_flat: str,

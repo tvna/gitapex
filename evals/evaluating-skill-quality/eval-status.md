@@ -679,10 +679,40 @@ identical baseline, confirmed via `git stash`; the only change is the two
 previously-blocking dispatch-declaration-coverage warnings clearing).
 
 Disclosed, not closed: only `normal.yaml` and the new negative-control
-fixture, of 59 committed fixtures, now carry `requires_fresh_dispatch`.
+fixture, of 63 committed fixtures, now carry `requires_fresh_dispatch`.
 The remaining fixtures still assert on final output text only. The live
 proof used an adapted, explicit-instruction prompt for the positive
 control rather than `normal.yaml`'s own literal wording (disclosed above
 and in the results manifest); a literal organic-trigger run (Track A,
 confirmed viable but slow) is open follow-up work, as is wiring
 `--dispatch-bash-pattern` into a real live run. Refs #584, #583, #500.
+
+**Post-PR adversarial review round.** A multi-angle review pass against
+`check_dispatch_trace.py`, the `score_contract.py` diff, and the
+`lint_fixture_assertions.py` diff (before this, one narrower pass had
+already caught and fixed two crash-on-malformed-input bugs pre-merge)
+found and fixed several more real defects: `run` left `subprocess.run`'s
+`OSError`/`subprocess.TimeoutExpired` uncaught, breaking this file's own
+exit-2 contract; `build_isolated_home` silently fell back to `/root` when
+`$HOME` was unset instead of failing loudly (a real isolation-defeating
+risk, not just a style issue); an empty-string `--dispatch-bash-pattern`
+was silently treated as absent via a truthiness check; a relative
+`--isolated-home` path was never resolved before being handed to a
+subprocess with a different cwd; `build_isolated_home` copied the full
+`.claude` tree before deleting most of it back out; `--allowed-tools`
+defaulted to `Agent` only, so `--dispatch-bash-pattern` could never
+actually observe a nested dispatch the harness itself would deny; and
+`check_dispatch_declaration_coverage` in `lint_fixture_assertions.py`
+only checked `requires_fresh_dispatch` truthiness, so `true` or
+`{min_dispatches: 0}` would silently satisfy check 9 while describing no
+real, checkable dispatch expectation. All fixed, with new tests for each
+(`tests/test_check_dispatch_trace.py`, `tests/test_lint_fixture_assertions.py`).
+The same review also caught two factual errors in this file's own prose
+above and in `results/2026-07-30-issue-584-dispatch-trace/manifest.json`
+(the fixture-count denominator was wrong in both -- 63 committed fixtures,
+not 59/57), now corrected. Full pytest (1434 passed, 100% coverage on
+every touched script) and the identical 39-warning lint baseline were
+reconfirmed after these fixes; the four live-proof transcripts were
+re-checked against the fixed script and still report the same result
+(`DISPATCH_COUNT=1`/confirmed for both positive controls,
+`DISPATCH_COUNT=0`/not_confirmed for both negative controls).

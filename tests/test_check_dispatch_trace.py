@@ -173,6 +173,15 @@ def test_check_transcript_end_to_end(tmp_path: Path):
     assert cdt.check_transcript(p, ["Agent"]) == 2
 
 
+def test_count_dispatches_custom_bash_tool_name():
+    import re
+    pattern = re.compile(r"claude\s+(-p|--print)\b")
+    blocks = [{"name": "Shell", "input": {"command": "claude -p 'x'"}}]
+    # Default bash_tool_name="Bash" does not match a "Shell"-named block.
+    assert cdt.count_dispatches(blocks, ["Agent"], pattern) == 0
+    assert cdt.count_dispatches(blocks, ["Agent"], pattern, bash_tool_name="Shell") == 1
+
+
 # ---- CLI: check-transcript --------------------------------------------------
 
 
@@ -297,13 +306,41 @@ def test_build_isolated_home_raises_without_real_claude_dir(tmp_path: Path, monk
         cdt.build_isolated_home(tmp_path / "workdir")
 
 
+def test_build_isolated_home_raises_when_home_unset(tmp_path: Path, monkeypatch):
+    # Must fail loudly, never silently fall back to a guessed location (e.g.
+    # /root) that could belong to a different identity and defeat isolation.
+    monkeypatch.delenv("HOME", raising=False)
+    with pytest.raises(FileNotFoundError, match="HOME is not set"):
+        cdt.build_isolated_home(tmp_path / "workdir")
+
+
+def test_build_isolated_home_does_not_strip_nested_same_named_dir(tmp_path: Path, monkeypatch):
+    # Only a direct child of $HOME/.claude named "tasks" (etc.) is stripped
+    # -- a same-named directory nested inside a vendored skill's own content
+    # must survive untouched (the strip is a top-level-only exclusion, not a
+    # recursive ignore_patterns-style match).
+    real_home = tmp_path / "real-home"
+    claude_dir = real_home / ".claude"
+    (claude_dir / "tasks").mkdir(parents=True)
+    nested_tasks = claude_dir / "skills" / "some-skill" / "tasks"
+    nested_tasks.mkdir(parents=True)
+    (nested_tasks / "fixture.yaml").write_text("id: x", encoding="utf-8")
+    monkeypatch.setenv("HOME", str(real_home))
+
+    isolated_home = cdt.build_isolated_home(tmp_path / "workdir")
+
+    assert not list((isolated_home / ".claude" / "tasks").iterdir())
+    assert (isolated_home / ".claude" / "skills" / "some-skill" / "tasks" / "fixture.yaml").read_text(
+        encoding="utf-8") == "id: x"
+
+
 # ---- run_live_dispatch (argv construction only, no real subprocess) --------
 
 
 def test_run_live_dispatch_constructs_expected_argv(tmp_path: Path, monkeypatch):
     captured = {}
 
-    def fake_run(argv, cwd, env, stdout, stderr, text, check):
+    def fake_run(argv, cwd, env, stdout, stderr, text, check, timeout=None):
         captured["argv"] = argv
         captured["cwd"] = cwd
         captured["env"] = env
@@ -333,6 +370,7 @@ def test_run_live_dispatch_constructs_expected_argv(tmp_path: Path, monkeypatch)
     assert "--plugin-dir" in argv
     assert captured["cwd"] == str(isolated_cwd)
     assert captured["env"]["HOME"] == str(isolated_home)
+    assert captured["env"]["PWD"] == str(isolated_cwd)
     assert "CLAUDE_CODE_SESSION_ID" not in captured["env"]
     assert transcript_out.read_text(encoding="utf-8") == '{"type": "result"}\n'
 
@@ -340,7 +378,7 @@ def test_run_live_dispatch_constructs_expected_argv(tmp_path: Path, monkeypatch)
 def test_run_live_dispatch_includes_add_dir(tmp_path: Path, monkeypatch):
     captured = {}
 
-    def fake_run(argv, cwd, env, stdout, stderr, text, check):
+    def fake_run(argv, cwd, env, stdout, stderr, text, check, timeout=None):
         captured["argv"] = argv
         stdout.write("{}\n")
         return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
@@ -374,7 +412,7 @@ def test_cli_run_end_to_end_mocked(tmp_path: Path, monkeypatch):
     prompt_file.write_text("dispatch a subagent", encoding="utf-8")
     transcript_out = tmp_path / "out.jsonl"
 
-    def fake_run(argv, cwd, env, stdout, stderr, text, check):
+    def fake_run(argv, cwd, env, stdout, stderr, text, check, timeout=None):
         stdout.write(TRANSCRIPT_ONE_AGENT_DISPATCH)
         return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
 
@@ -399,7 +437,7 @@ def test_cli_run_reports_claude_failure(tmp_path: Path, monkeypatch):
     prompt_file.write_text("dispatch", encoding="utf-8")
     transcript_out = tmp_path / "out.jsonl"
 
-    def fake_run(argv, cwd, env, stdout, stderr, text, check):
+    def fake_run(argv, cwd, env, stdout, stderr, text, check, timeout=None):
         return subprocess.CompletedProcess(argv, 1, stdout="", stderr="boom")
 
     monkeypatch.setattr(cdt.subprocess, "run", fake_run)
@@ -409,6 +447,188 @@ def test_cli_run_reports_claude_failure(tmp_path: Path, monkeypatch):
         "--dispatch-tool-name", "Agent",
     ])
     assert rc == 2
+
+
+def test_cli_run_catches_missing_claude_binary(tmp_path: Path, monkeypatch):
+    real_home = tmp_path / "real-home"
+    (real_home / ".claude").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(real_home))
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("dispatch", encoding="utf-8")
+
+    def fake_run(argv, cwd, env, stdout, stderr, text, check, timeout=None):
+        raise FileNotFoundError("[Errno 2] No such file or directory: 'claude'")
+
+    monkeypatch.setattr(cdt.subprocess, "run", fake_run)
+
+    rc = cdt.main([
+        "run", "--prompt-file", str(prompt_file),
+        "--transcript-out", str(tmp_path / "out.jsonl"),
+        "--dispatch-tool-name", "Agent",
+    ])
+    assert rc == 2
+
+
+def test_cli_run_catches_timeout(tmp_path: Path, monkeypatch, capsys):
+    real_home = tmp_path / "real-home"
+    (real_home / ".claude").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(real_home))
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("dispatch", encoding="utf-8")
+
+    def fake_run(argv, cwd, env, stdout, stderr, text, check, timeout=None):
+        raise subprocess.TimeoutExpired(cmd=argv, timeout=timeout)
+
+    monkeypatch.setattr(cdt.subprocess, "run", fake_run)
+
+    rc = cdt.main([
+        "run", "--prompt-file", str(prompt_file),
+        "--transcript-out", str(tmp_path / "out.jsonl"),
+        "--dispatch-tool-name", "Agent", "--timeout", "5",
+    ])
+    assert rc == 2
+    assert "did not finish within 5" in capsys.readouterr().err
+
+
+def test_cli_run_resolves_relative_isolated_home(tmp_path: Path, monkeypatch):
+    captured = {}
+
+    def fake_run(argv, cwd, env, stdout, stderr, text, check, timeout=None):
+        captured["env"] = env
+        stdout.write(TRANSCRIPT_ONE_AGENT_DISPATCH)
+        return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(cdt.subprocess, "run", fake_run)
+
+    reused_home = tmp_path / "reused-home"
+    reused_home.mkdir()
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("dispatch", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    rc = cdt.main([
+        "run", "--prompt-file", "prompt.txt",
+        "--transcript-out", str(tmp_path / "out.jsonl"),
+        "--dispatch-tool-name", "Agent",
+        "--isolated-home", "reused-home",  # relative
+    ])
+    assert rc == 0
+    # The child process runs with a different cwd (the tempdir isolated_cwd),
+    # so a relative --isolated-home must be resolved against *this* process's
+    # cwd before being written into env["HOME"], not left relative.
+    assert captured["env"]["HOME"] == str(reused_home.resolve())
+
+
+def test_cli_run_auto_appends_bash_tool_when_dispatch_bash_pattern_given(tmp_path: Path, monkeypatch):
+    real_home = tmp_path / "real-home"
+    (real_home / ".claude").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(real_home))
+    captured = {}
+
+    def fake_run(argv, cwd, env, stdout, stderr, text, check, timeout=None):
+        captured["argv"] = argv
+        stdout.write(TRANSCRIPT_NO_DISPATCH)
+        return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(cdt.subprocess, "run", fake_run)
+
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("dispatch", encoding="utf-8")
+
+    cdt.main([
+        "run", "--prompt-file", str(prompt_file),
+        "--transcript-out", str(tmp_path / "out.jsonl"),
+        "--dispatch-tool-name", "Agent",
+        "--dispatch-bash-pattern", r"claude\s+-p",
+        "--allowed-tools", "Agent",
+    ])
+    allowed_tools_index = captured["argv"].index("--allowedTools") + 1
+    assert captured["argv"][allowed_tools_index] == "Agent Bash"
+
+
+def test_cli_run_does_not_duplicate_already_allowed_bash(tmp_path: Path, monkeypatch):
+    real_home = tmp_path / "real-home"
+    (real_home / ".claude").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(real_home))
+    captured = {}
+
+    def fake_run(argv, cwd, env, stdout, stderr, text, check, timeout=None):
+        captured["argv"] = argv
+        stdout.write(TRANSCRIPT_NO_DISPATCH)
+        return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(cdt.subprocess, "run", fake_run)
+
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("dispatch", encoding="utf-8")
+
+    cdt.main([
+        "run", "--prompt-file", str(prompt_file),
+        "--transcript-out", str(tmp_path / "out.jsonl"),
+        "--dispatch-tool-name", "Agent",
+        "--dispatch-bash-pattern", r"claude\s+-p",
+        "--allowed-tools", "Agent Bash",
+    ])
+    allowed_tools_index = captured["argv"].index("--allowedTools") + 1
+    assert captured["argv"][allowed_tools_index] == "Agent Bash"
+
+
+def test_cli_run_does_not_append_bash_without_dispatch_bash_pattern(tmp_path: Path, monkeypatch):
+    real_home = tmp_path / "real-home"
+    (real_home / ".claude").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(real_home))
+    captured = {}
+
+    def fake_run(argv, cwd, env, stdout, stderr, text, check, timeout=None):
+        captured["argv"] = argv
+        stdout.write(TRANSCRIPT_NO_DISPATCH)
+        return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(cdt.subprocess, "run", fake_run)
+
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("dispatch", encoding="utf-8")
+
+    cdt.main([
+        "run", "--prompt-file", str(prompt_file),
+        "--transcript-out", str(tmp_path / "out.jsonl"),
+        "--dispatch-tool-name", "Agent",
+        "--allowed-tools", "Agent",
+    ])
+    allowed_tools_index = captured["argv"].index("--allowedTools") + 1
+    assert captured["argv"][allowed_tools_index] == "Agent"
+
+
+def test_cli_check_transcript_empty_bash_pattern_is_not_treated_as_absent(tmp_path: Path):
+    # Truthiness (`if args.dispatch_bash_pattern`) would silently treat an
+    # explicitly-passed empty string the same as "not given"; an empty
+    # regex is a valid (if unusual) pattern that matches every command, so
+    # --dispatch-bash-pattern "" must still compile and be used.
+    p = tmp_path / "t.jsonl"
+    p.write_text(TRANSCRIPT_NESTED_CLAUDE_P_VIA_BASH, encoding="utf-8")
+    rc = cdt.main([
+        "check-transcript", "--transcript", str(p),
+        "--dispatch-tool-name", "Agent", "--dispatch-bash-pattern", "",
+    ])
+    assert rc == 0
+
+
+def test_cli_check_transcript_custom_bash_tool_name(tmp_path: Path):
+    p = tmp_path / "t.jsonl"
+    p.write_text(_line({
+        "type": "assistant",
+        "message": {"content": [
+            {"type": "tool_use", "name": "Shell", "id": "t1",
+             "input": {"command": "claude -p 'x'"}},
+        ]},
+    }), encoding="utf-8")
+    rc = cdt.main([
+        "check-transcript", "--transcript", str(p),
+        "--dispatch-tool-name", "Agent",
+        "--dispatch-bash-pattern", r"claude\s+-p",
+        "--bash-tool-name", "Shell",
+    ])
+    assert rc == 0
 
 
 def test_cli_run_missing_prompt_file(tmp_path: Path):
@@ -435,7 +655,7 @@ def test_cli_run_reuses_provided_isolated_home(tmp_path: Path, monkeypatch):
 
     captured = {}
 
-    def fake_run(argv, cwd, env, stdout, stderr, text, check):
+    def fake_run(argv, cwd, env, stdout, stderr, text, check, timeout=None):
         captured["env"] = env
         stdout.write(TRANSCRIPT_ONE_AGENT_DISPATCH)
         return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
@@ -475,7 +695,7 @@ def test_cli_run_malformed_captured_transcript_exit_2(tmp_path: Path, monkeypatc
     prompt_file.write_text("dispatch", encoding="utf-8")
     transcript_out = tmp_path / "out.jsonl"
 
-    def fake_run(argv, cwd, env, stdout, stderr, text, check):
+    def fake_run(argv, cwd, env, stdout, stderr, text, check, timeout=None):
         stdout.write("not json at all\n")
         return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
 
