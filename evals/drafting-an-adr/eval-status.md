@@ -3,7 +3,22 @@
 The committed eval suite (`evals/drafting-an-adr/`) has 18 task files under
 `tasks/` and no committed no-skill baseline run; only `claude-sonnet-4.6`
 is targeted by `eval.yaml` -- cross-model behavior is currently
-unmeasured. Every committed task's own prompt explicitly force-names the
+unmeasured.
+
+**Ablation-capability check (issue #185/#583), applied to this skill:**
+`evals/scripts/run_ablation.py` (merged to `main` after this skill's own
+audits ran) is an in-repo runner that invokes a model CLI twice on the
+identical prompt via `claude -p ... --bare` -- once with a skill's
+`SKILL.md` appended, once without -- and scores each run through the
+existing `score_contract.py` convention. Per `evaluating-skill-quality`'s
+dimension 8 "no mechanism" vs. "not yet run" distinction, this reclassifies
+from "no ablation mechanism exists in this repository" to
+**"ablation-capable, not yet run"** for this skill specifically: no live
+run has been executed against `evals/drafting-an-adr/tasks/`, the same
+disclosed gap `evals/battle-testing-a-skill/eval-status.md` records for
+its own skill.
+
+Every committed task's own prompt explicitly force-names the
 skill (`Use drafting-an-adr.`), and `eval.yaml` fixes a top-level `skill:
 drafting-an-adr` field that forces dispatch regardless of prompt content
 -- this suite tests behavioral quality once the skill is already
