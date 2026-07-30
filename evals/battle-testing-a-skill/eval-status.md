@@ -176,3 +176,55 @@ specific disagreement about whether `provenance-and-caveats.md`
 qualifies as per-invocation content. Recorded here rather than
 resolved unilaterally so the operator can weigh in; the PR thread
 carries the same disclosure.
+
+## Dispatch-trace verification (issue #584)
+
+Closes the gap this file's own top section named: "the committed eval
+tasks assert on final output content (`output_contains`/
+`output_not_contains` substrings), not on tool-call or dispatch traces, so
+they cannot confirm a fresh subagent dispatch actually occurred for
+Procedure steps 1-3 or step 5's re-run." `evaluating-skill-quality/
+eval-status.md` disclosed the near-identical gap independently -- see that
+file's own new entry, same issue, for the full mechanism design and the
+Track A/B feasibility-spike detail (not repeated here in full).
+
+The mechanism, the fixture schema, the new `score_contract.py` flag, and
+the new lint check are shared cross-skill infrastructure, built once and
+applied to both skills -- see the `evaluating-skill-quality` entry.
+Applied to this skill specifically:
+
+**Live proof (ACM's own Proof method).** A positive control instructed to
+use the `Agent` tool for the battle-test trial (Track B, same reasoning as
+the companion run: the real Skill's organic auto-trigger via `--plugin-dir`
+was separately confirmed to work and not leak `CLAUDE.md`, but this
+skill's own Procedure step 1 then correctly defers to
+`evaluating-skill-quality`'s Isolation-verification registry and shells
+out to a nested `claude -p`, too slow to run to completion inside this
+proof's budget), and the negative control fixture below run verbatim.
+`evals/scripts/check_dispatch_trace.py check-transcript
+--dispatch-tool-name Agent`: positive control `DISPATCH_COUNT=1` (exit 0,
+confirmed); negative control `DISPATCH_COUNT=0` (exit 1, not_confirmed).
+The negative-control fixture's own `output_contains`/`output_not_contains`
+independently scored 1.0 while `score_contract.py --dispatch-trace-verdict
+not_confirmed` correctly reported the dispatch verdict alongside it, not
+blended into it. Full record:
+[results/2026-07-30-issue-584-dispatch-trace/](results/2026-07-30-issue-584-dispatch-trace/manifest.json).
+
+**Fixtures.** `expected.requires_fresh_dispatch` added to `tasks/
+normal.yaml`. New `tasks/dispatch-required-negative-control.yaml`: a
+deliberately-forced negative control whose correct, expected
+dispatch-trace-verdict is `not_confirmed`, not evidence of a fixture
+defect. `lint_fixture_assertions.py`'s new check 9 passes for this skill
+(previously blocking, confirmed via a direct before/after run of the
+linter). `split.md`'s train bucket lists the new fixture for listing
+consistency (not gate-enforced).
+
+Disclosed, not closed: only `normal.yaml` and the new negative-control
+fixture, of 24 committed fixtures, now carry `requires_fresh_dispatch`.
+The remaining fixtures -- including this skill's own multi-trial re-
+dispatch requirement ("Never reuse a dispatch for two trials," Procedure
+step 1) -- still assert on final output text only; a real
+`trials_per_task: 3` dispatch-trace run (confirming each of the three
+trials gets its own fresh dispatch, not one dispatch reused) is open
+follow-up work, as is the literal organic-trigger (Track A) proof run and
+wiring `--dispatch-bash-pattern` into a real live run. Refs #584, #583.

@@ -320,6 +320,63 @@ def test_adversarial_coverage_ignores_skill_without_claim(tmp_path):
     assert detail is None
 
 
+# ---- check_dispatch_declaration_coverage (issue #584 -- discovery mode only) --
+
+def _write_yaml_with_requires_fresh_dispatch(path, *, declared: bool):
+    body = "id: t\nname: T\ninputs:\n  prompt: p\nexpected:\n  output_contains: []\n"
+    if declared:
+        body += "  requires_fresh_dispatch:\n    tool_names: [\"Agent\"]\n    min_dispatches: 1\n"
+    path.write_text(body, encoding="utf-8")
+
+
+def test_dispatch_declaration_coverage_flags_mandate_skill_without_fixture(tmp_path):
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    _write_yaml_with_requires_fresh_dispatch(tasks / "t.yaml", declared=False)
+    detail = L.check_dispatch_declaration_coverage("evaluating-skill-quality", tasks)
+    assert detail is not None
+    assert "requires_fresh_dispatch" in detail
+
+
+def test_dispatch_declaration_coverage_passes_with_declaring_fixture(tmp_path):
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    _write_yaml_with_requires_fresh_dispatch(tasks / "t.yaml", declared=True)
+    detail = L.check_dispatch_declaration_coverage("battle-testing-a-skill", tasks)
+    assert detail is None
+
+
+def test_dispatch_declaration_coverage_ignores_skill_outside_allowlist(tmp_path):
+    # executing-a-branch-plan also mandates a "fresh subagent dispatch" in
+    # its own SKILL.md prose, but issue #584 does not cover it -- this check
+    # must not start blocking CI for a skill outside its explicit allowlist.
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    _write_yaml_with_requires_fresh_dispatch(tasks / "t.yaml", declared=False)
+    detail = L.check_dispatch_declaration_coverage("executing-a-branch-plan", tasks)
+    assert detail is None
+
+
+def test_dispatch_declaration_coverage_reuses_supplied_task_data(tmp_path):
+    missing_dir = tmp_path / "does-not-exist"
+    task_data = {tmp_path / "t.yaml": {"expected": {"requires_fresh_dispatch": {"tool_names": ["Agent"]}}}}
+    assert L.check_dispatch_declaration_coverage(
+        "evaluating-skill-quality", missing_dir, task_data=task_data) is None
+
+
+def test_dispatch_declaration_coverage_empty_requires_fresh_dispatch_still_flags(tmp_path):
+    # An empty/falsy requires_fresh_dispatch value (e.g. `requires_fresh_dispatch:`
+    # with nothing under it) does not count as a real declaration.
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    (tasks / "t.yaml").write_text(
+        "id: t\nname: T\ninputs:\n  prompt: p\nexpected:\n"
+        "  output_contains: []\n  requires_fresh_dispatch:\n",
+        encoding="utf-8")
+    detail = L.check_dispatch_declaration_coverage("evaluating-skill-quality", tasks)
+    assert detail is not None
+
+
 # ---- negation broadened to the fixture's own prompt (issue #516, #487) ----
 
 def test_negation_haystack_extended_with_own_prompt_catches_ad_hoc_ban():

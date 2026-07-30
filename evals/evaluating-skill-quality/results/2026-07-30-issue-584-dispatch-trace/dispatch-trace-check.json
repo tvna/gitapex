@@ -1,0 +1,26 @@
+{
+  "model_id": "claude-sonnet-5 (inferred, not independently confirmed -- see manifest known_gaps)",
+  "n_runs": 2,
+  "runs": [
+    {
+      "control": "positive",
+      "fixture_id": "evaluating-skill-quality-normal (adapted prompt, see manifest known_gaps)",
+      "dispatch_tool_names": ["Agent"],
+      "min_dispatches": 1,
+      "dispatch_count": 1,
+      "dispatch_trace_verdict": "confirmed",
+      "checker_exit_code": 0
+    },
+    {
+      "control": "negative",
+      "fixture_id": "evaluating-skill-quality-dispatch-required-negative-control",
+      "dispatch_tool_names": ["Agent"],
+      "min_dispatches": 1,
+      "dispatch_count": 0,
+      "dispatch_trace_verdict": "not_confirmed",
+      "checker_exit_code": 1,
+      "substring_score": 1.0,
+      "combined_score_contract_output": "1.000000 DISPATCH_TRACE_NOT_CONFIRMED"
+    }
+  ]
+}

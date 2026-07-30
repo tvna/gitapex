@@ -579,3 +579,110 @@ machine-readable run data for all four gates (axis addition plus the
 three wording follow-ups):
 [results/2026-07-29-issue-537-confidentiality-gates/](results/2026-07-29-issue-537-confidentiality-gates/manifest.json).
 Refs #537.
+
+## Dispatch-trace verification (issue #584)
+
+Closes the gap this file's own top section named: "the committed eval tasks
+assert on final output content, not on tool-call or dispatch traces, so
+they cannot confirm the nine-dimension walk (Procedure steps 1, 2, 4, 5)
+actually ran inside a fresh subagent dispatch rather than the invoking
+context." `battle-testing-a-skill/eval-status.md` disclosed the identical
+gap independently -- see that file's own new entry, same issue.
+
+#584's own Acceptance Criteria Map named a residual risk: "If the
+`copilot-sdk` harness does not expose tool-call traces to the grader at
+all, this may require an eval-infra change bundled with #583 (which
+already establishes an in-repo, non-`copilot-sdk` runner path)." Checked
+directly rather than assumed: #583 remains unimplemented (no file, PR, or
+commit anywhere in this repository references it), and the premise does
+not hold regardless -- this repository's own already-verified, already-
+repeatedly-used live-dispatch mechanism is not `copilot-sdk` at all but the
+isolated `claude -p` subprocess documented in
+`references/adversarial-self-audit.md`'s Isolation-verification registry
+(used for every real gate run cited above, #495/#500/#537 included).
+`claude -p --output-format stream-json --verbose` already emits a complete
+tool-call trace per run with no `copilot-sdk` involvement, so #584 did not
+need #583's ablation-runner scope (a skill-injected-vs-no-skill *score
+comparison*, a different mechanism) -- only a much narrower "did a
+dispatch-shaped tool call appear" check.
+
+**Mechanism.** New `evals/scripts/check_dispatch_trace.py`
+(`check-transcript` subcommand: offline, parses a captured `stream-json`
+transcript's `tool_use` blocks against a caller-supplied dispatch-tool-name
+set, plus an optional `--dispatch-bash-pattern` for a nested `claude -p`
+dispatch invoked via `Bash`; `run` subcommand: live orchestration using the
+same isolated-cwd/isolated-`$HOME` recipe as the registry). New optional
+fixture key, `expected.requires_fresh_dispatch: {tool_names, min_dispatches}`,
+independent of `output_contains`/`output_not_contains`. New
+`score_contract.py --dispatch-trace-verdict {confirmed,not_confirmed,
+unverified}` flag, mirroring the existing `--judge-verdict` non-blending
+append convention exactly -- a second, separately-recorded evidence type,
+never blended into the substring score. New blocking lint check (#9) in
+`lint_fixture_assertions.py`: `evaluating-skill-quality` and
+`battle-testing-a-skill` (a small, explicit allowlist, not a generic
+"SKILL.md mentions dispatch" scan -- that broader phrase also appears in
+`executing-a-branch-plan/SKILL.md`'s own Decision 12 mandate, which this
+issue does not cover) must each have at least one fixture declaring
+`requires_fresh_dispatch`.
+
+**Feasibility spike, live, before any design was finalized.** Confirmed
+directly in this exact platform/version (`claude` 2.1.220, same pin as the
+registry's own entries): a live `claude -p` run's `system`-init metadata
+reports the dispatch tool as `"Task"`, and the model's own self-report of
+its available tools said `"Agent"` -- but an actual dispatch's `tool_use`
+block is emitted with `name: "Agent"`, disagreeing with the system-init
+field. Only a real invocation's `tool_use.name` is ground truth; neither
+metadata nor self-report is. `check_dispatch_trace.py` never hardcodes a
+dispatch-tool name for this reason -- `--dispatch-tool-name` is always
+caller-supplied. Separately confirmed: `claude -p --plugin-dir <this
+repo's skills/>` does auto-trigger the real Skill off the fixtures' own
+`Use evaluating-skill-quality.` wording, and does not leak `CLAUDE.md`
+even when the plugin-dir copy contains one (two-control test, new dated
+entry recorded in `references/adversarial-self-audit.md`) -- but the
+triggered skill then correctly reads this same registry and shells out to
+a *nested* `claude -p` via `Bash` (since the `Agent` tool is
+confirmed-contaminated on this platform), which is real, correct behavior
+but too slow (observed >3 minutes, background polling) to run to
+completion inside this pass's proof budget. `check_dispatch_trace.py`'s
+`--dispatch-bash-pattern` option exists specifically to also recognize
+that dispatch shape, so a future run using it is not silently missed.
+
+**Live proof (ACM's own Proof method).** Two live, isolated `claude -p`
+dispatches: a positive control instructed to use the `Agent` tool for the
+review (Track B, matching issue #500's own precedent, since the organic-
+trigger path above was too slow to use for this proof), and the negative
+control fixture below run verbatim (instructed to answer using only inline
+reasoning, no dispatch). `check_dispatch_trace.py check-transcript
+--dispatch-tool-name Agent`: positive control `DISPATCH_COUNT=1` (exit 0,
+confirmed); negative control `DISPATCH_COUNT=0` (exit 1, not_confirmed).
+The negative-control fixture's own `output_contains`/`output_not_contains`
+independently scored 1.0 while `score_contract.py --dispatch-trace-verdict
+not_confirmed` correctly reported the dispatch verdict alongside it, not
+blended into it. Full record:
+[results/2026-07-30-issue-584-dispatch-trace/](results/2026-07-30-issue-584-dispatch-trace/manifest.json).
+
+**Fixtures.** `requires_fresh_dispatch` added to `tasks/normal.yaml` (the
+suite's own fixture exercising exactly the Procedure steps this gap
+named). New `tasks/dispatch-required-negative-control.yaml`: a
+deliberately-forced negative control whose correct, expected
+dispatch-trace-verdict is `not_confirmed` -- not evidence of a fixture
+defect. `lint_fixture_assertions.py`'s new check 9 passes for this skill
+(previously blocking, confirmed via a direct before/after run of the
+linter). `split.md`'s train bucket lists the new fixture for listing
+consistency (not gate-enforced -- `gate_split_fixture_coverage.py`'s
+actual scope does not require it).
+
+Deterministic verification: `pytest` (100% coverage on both touched/new
+scripts, `check_dispatch_trace.py` and `score_contract.py`), fixture YAML
+parse, `lint_fixture_assertions.py` (39 warnings before and after --
+identical baseline, confirmed via `git stash`; the only change is the two
+previously-blocking dispatch-declaration-coverage warnings clearing).
+
+Disclosed, not closed: only `normal.yaml` and the new negative-control
+fixture, of 59 committed fixtures, now carry `requires_fresh_dispatch`.
+The remaining fixtures still assert on final output text only. The live
+proof used an adapted, explicit-instruction prompt for the positive
+control rather than `normal.yaml`'s own literal wording (disclosed above
+and in the results manifest); a literal organic-trigger run (Track A,
+confirmed viable but slow) is open follow-up work, as is wiring
+`--dispatch-bash-pattern` into a real live run. Refs #584, #583, #500.
