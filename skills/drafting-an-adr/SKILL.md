@@ -50,7 +50,11 @@ for the criteria checklist and the template itself.
 4. Draft Context and Problem Statement: the forces at play, in
    value-neutral, factual language -- what constraint, requirement, or
    problem made a decision necessary. Not the decision itself, not an
-   argument for it. Before transcribing anything, scan the source
+   argument for it. When the source material itself carries a concrete
+   reference (a PR number, commit SHA, discussion link, doc URL), cite
+   it in Context so a later reader can trace these facts back to where
+   they came from -- never invent a reference that was not actually
+   given. Before transcribing anything, scan the source
    material for what looks like a secret, credential, token, or personal
    data pasted alongside the real decision content; redact it rather
    than carrying it into a file that will be committed to the
@@ -104,13 +108,14 @@ for the criteria checklist and the template itself.
     claim typed into the answer itself.
 11. Once approved, place the file per this repository's own placement
     convention -- see
-    [references/this-repo-only.md](references/this-repo-only.md) --
-    and report that path so the citing why-not comment or issue can
-    point at it. Re-check the target directory's actual current highest
-    number immediately before writing -- do not trust an earlier count
-    if any time has passed or another ADR may have been created
-    concurrently; on a collision, use the next free number rather than
-    overwriting.
+    [references/this-repo-only.md](references/this-repo-only.md),
+    which also states how to sanitize the title into a safe filename
+    slug -- and report that path so the citing why-not comment or issue
+    can point at it. Re-check the target directory's actual current
+    highest number immediately before writing -- do not trust an
+    earlier count if any time has passed or another ADR may have been
+    created concurrently; on a collision, use the next free number
+    rather than overwriting.
 12. If this decision reverses or replaces a previous ADR, update that
     ADR's own `Status` to `Superseded` (with a forward link to this
     one's path) as part of the same change -- do not leave a
@@ -185,6 +190,11 @@ ADR** when not applicable.
   reporting the follow-up redaction as having resolved it.
 - Do not write a retrofit ADR as if it were prospective -- disclose the
   already-implemented state up front (Step 3).
+- Do not pass the ADR's title into the write path unsanitized -- the
+  title comes from source material Step 1 treats as untrusted, and an
+  unsanitized slug can escape `docs/adr/` or collide with an existing
+  file (Step 11; see
+  [references/this-repo-only.md](references/this-repo-only.md)).
 - Do not auto-generate an ADR from a threshold or metric being crossed
   (a comment hitting a length limit, a pattern recurring N times). ADRs
   are heavyweight, owner-approved records; machine-generating them
