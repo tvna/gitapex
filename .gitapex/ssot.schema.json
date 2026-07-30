@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/tvna/gitapex/blob/main/.gitapex/ssot.schema.json",
+  "title": "gitapex gate registry (SSOT)",
+  "description": "Schema for .gitapex/ssot.json -- issue #123's self-referential registry of gitapex's own deterministic gates (hooks/CI checks) and the policy-source files they read. Holds references and routing only, never policy values (mirrors the upstream tvna/claude-md precedent's own stated constraint). label_routing/label_consumers are deliberately absent -- gitapex has no .github/label-policy.toml yet, so they are not-yet-applicable per issue #123, not an oversight. Adding a field is a schema_version bump, never a silent addition (additionalProperties is false throughout).",
+  "type": "object",
+  "required": ["meta", "policy_sources", "gates", "clusters"],
+  "additionalProperties": false,
+  "properties": {
+    "meta": {
+      "type": "object",
+      "required": ["schema_version", "tracking_issue", "status", "phase"],
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$",
+          "description": "Semver of this schema file itself. Bump on any required/additionalProperties change."
+        },
+        "tracking_issue": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The GitHub issue that specs this registry's schema."
+        },
+        "status": {
+          "enum": ["draft", "active", "deprecated"],
+          "description": "Lifecycle of the registry as a whole, distinct from any single gate's own status."
+        },
+        "phase": {
+          "type": "string",
+          "pattern": "^phase-\\d+$",
+          "description": "Rollout phase. phase-0 = self-referential seed of gitapex's own already-existing gates only; no label_routing, no business-domain (opa-rego) entries yet."
+        }
+      }
+    },
+    "policy_sources": {
+      "type": "array",
+      "description": "Files that at least one gate reads as authoritative data via policy_refs[] -- not every config-shaped file in the repo, only ones a real gate actually consumes.",
+      "items": { "$ref": "#/$defs/policySource" }
+    },
+    "gates": {
+      "type": "array",
+      "description": "Every deterministic gate gitapex enforces on itself: development-process gates and (in a future phase) adopter-authored business-domain gates share this same array -- no split by origin.",
+      "items": { "$ref": "#/$defs/gate" }
+    },
+    "clusters": {
+      "type": "object",
+      "description": "cluster id -> one-line description of what the cluster groups. Every gates[].cluster value must name a key here (see scan_ssot_schema.py's drift check).",
+      "minProperties": 1,
+      "additionalProperties": { "type": "string", "minLength": 1 }
+    }
+  },
+  "$defs": {
+    "policySource": {
+      "type": "object",
+      "required": ["id", "path", "format", "authority"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Repo-root-relative path. May be a glob (e.g. skills/*/metadata/gitapex.yaml) when every matched file shares one schema/authority."
+        },
+        "format": {
+          "enum": ["toml", "json", "yaml", "rego"],
+          "description": "Serialization language only -- descriptive, not a dispatch switch (that's gates[].kind)."
+        },
+        "authority": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Free-text prose: what this file is authoritative for."
+        }
+      }
+    },
+    "gate": {
+      "type": "object",
+      "required": [
+        "id", "kind", "rule", "planes", "trigger", "policy_refs",
+        "cluster", "tracking_issue", "status", "supersedes"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+        },
+        "kind": {
+          "enum": ["script", "native", "opa-rego"],
+          "description": "The sole evaluation-dispatch switch. 'native' is reserved for a GitHub-platform rule with no repo-tracked artifact at all (e.g. a branch-protection setting) -- every gate seeded in phase-0 has a real backing file, so none use it yet."
+        },
+        "script": {
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 }
+          ],
+          "description": "Repo-root-relative path(s) to the file(s) that actually enforce this gate (a .py/.sh script, or a .yml workflow when the enforcement logic lives inline in the workflow itself, with no separate script file). Array when a gate is genuinely enforced by more than one cooperating file (e.g. a pretooluse hook plus its CI twin)."
+        },
+        "native_rule": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Prose description of a GitHub-native rule with no repo file (kind: native only)."
+        },
+        "rule": {
+          "type": "string",
+          "minLength": 1,
+          "description": "One-line statement of what this gate actually enforces, grounded in the real script's logic -- not a restatement of a CLAUDE.md bullet it may be inspired by."
+        },
+        "planes": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "enum": ["pretooluse", "posttooluse", "ci"] }
+        },
+        "trigger": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What fires this gate: a hook matcher, a workflow event, or a pytest collection path."
+        },
+        "policy_refs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "policy_sources[].id values this gate reads as authoritative data. Empty when the gate's rule vocabulary is hardcoded in its own script (true for most of phase-0's seed)."
+        },
+        "cluster": {
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 }
+          ]
+        },
+        "tracking_issue": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "The issue that introduced this specific gate. null when the origin is a pre-issue-discipline squashed import, or genuinely compound (spans more than one issue) rather than guessed."
+        },
+        "status": {
+          "enum": ["experimental", "active", "deprecated"]
+        },
+        "supersedes": {
+          "type": ["string", "null"],
+          "description": "id of a gate this one replaces, if any. An active gate may only move to deprecated in the same PR that either sets a replacement's supersedes or states in the PR body why none exists."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": ["kind"],
+            "properties": { "kind": { "const": "script" } }
+          },
+          "then": { "required": ["script"] }
+        },
+        {
+          "if": {
+            "required": ["kind"],
+            "properties": { "kind": { "const": "native" } }
+          },
+          "then": { "required": ["native_rule"] }
+        }
+      ]
+    }
+  }
+}
