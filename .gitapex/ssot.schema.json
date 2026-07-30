@@ -145,11 +145,17 @@
       },
       "allOf": [
         {
-          "if": { "properties": { "kind": { "const": "script" } } },
+          "if": {
+            "required": ["kind"],
+            "properties": { "kind": { "const": "script" } }
+          },
           "then": { "required": ["script"] }
         },
         {
-          "if": { "properties": { "kind": { "const": "native" } } },
+          "if": {
+            "required": ["kind"],
+            "properties": { "kind": { "const": "native" } }
+          },
           "then": { "required": ["native_rule"] }
         }
       ]

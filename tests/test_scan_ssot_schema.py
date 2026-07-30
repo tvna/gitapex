@@ -68,6 +68,21 @@ def test_missing_required_field_is_flagged(tmp_path):
     assert any("schema:" in f and "kind" in f for f in findings)
 
 
+def test_missing_kind_produces_one_schema_error_not_three(tmp_path):
+    # Regression: the schema's per-kind if/then blocks each pair "properties:
+    # kind const X" with "required: [kind]" so a gate missing kind entirely
+    # doesn't vacuously satisfy both the script-kind and native-kind if
+    # branches and produce three duplicate "required" errors (kind, script,
+    # native_rule) instead of the one real one (kind).
+    bad = json.loads(json.dumps(_VALID_INSTANCE))
+    del bad["gates"][0]["kind"]
+    instance_path = _write_instance(tmp_path, bad)
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
+    schema_findings = [f for f in findings if f.startswith("schema:")]
+    assert len(schema_findings) == 1
+    assert "kind" in schema_findings[0]
+
+
 def test_missing_script_file_is_flagged(tmp_path):
     bad = json.loads(json.dumps(_VALID_INSTANCE))
     bad["gates"][0]["script"] = "hooks/does-not-exist.sh"
@@ -115,6 +130,69 @@ def test_dangling_cluster_is_flagged(tmp_path):
     assert any(
         "cluster-drift" in f and "nonexistent-cluster" in f for f in findings
     )
+
+
+def test_explicit_null_gates_does_not_crash(tmp_path):
+    # Regression: instance.get("gates", []) only substitutes the default for
+    # a *missing* key -- an explicit JSON null (schema-invalid, but not
+    # impossible in a hand-edited file) must not crash the reference checks
+    # with an unhandled TypeError before the schema violation is reported.
+    bad = json.loads(json.dumps(_VALID_INSTANCE))
+    bad["gates"] = None
+    instance_path = _write_instance(tmp_path, bad)
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
+    assert any(f.startswith("schema:") for f in findings)
+
+
+def test_explicit_null_policy_refs_does_not_crash(tmp_path):
+    bad = json.loads(json.dumps(_VALID_INSTANCE))
+    bad["gates"][0]["policy_refs"] = None
+    instance_path = _write_instance(tmp_path, bad)
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
+    assert any(f.startswith("schema:") for f in findings)
+
+
+def test_explicit_null_clusters_does_not_crash(tmp_path):
+    bad = json.loads(json.dumps(_VALID_INSTANCE))
+    bad["clusters"] = None
+    instance_path = _write_instance(tmp_path, bad)
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
+    assert any(f.startswith("schema:") for f in findings)
+
+
+def test_duplicate_gate_id_is_flagged(tmp_path):
+    dup = json.loads(json.dumps(_VALID_INSTANCE))
+    dup["gates"].append(json.loads(json.dumps(dup["gates"][0])))
+    instance_path = _write_instance(tmp_path, dup)
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
+    assert any(
+        "duplicate-id" in f and "example-gate" in f and "2 times" in f
+        for f in findings
+    )
+
+
+def test_duplicate_policy_source_id_is_flagged(tmp_path):
+    dup = json.loads(json.dumps(_VALID_INSTANCE))
+    dup["policy_sources"].append(json.loads(json.dumps(dup["policy_sources"][0])))
+    instance_path = _write_instance(tmp_path, dup)
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
+    assert any(
+        "duplicate-id" in f and "example-policy" in f and "2 times" in f
+        for f in findings
+    )
+
+
+def test_duplicate_id_check_skips_entries_missing_an_id(tmp_path):
+    # An entry with no id at all (schema-invalid, caught separately by
+    # find_schema_violations) must not be miscounted as a "duplicate" of
+    # itself or of any real id -- it's simply skipped by this check.
+    bad = json.loads(json.dumps(_VALID_INSTANCE))
+    second_gate = json.loads(json.dumps(bad["gates"][0]))
+    del second_gate["id"]
+    bad["gates"].append(second_gate)
+    instance_path = _write_instance(tmp_path, bad)
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
+    assert not any("duplicate-id" in f for f in findings)
 
 
 def test_script_paths_defaults_to_empty_when_absent():
