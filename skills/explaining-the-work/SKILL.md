@@ -18,13 +18,19 @@ into the wrong artifact.
   already says.
 - **Test code -> What**, expressed through the test name. Use a docstring
   only when the test name itself cannot carry an issue reference.
-- **Commit log -> not the place for Why.** The real Why lives in the
-  issue/PR body, tagged Fact (verified/observed) or Speculation
-  (unverified) rather than blended. A commit is a subject line plus an
-  issue pointer -- `Closes #N` when the change fully satisfies #N's
-  acceptance criteria, `Refs #N` when it only partially addresses or
-  relates to it -- with any repo-mandated trailers (e.g.
-  `Co-Authored-By`) excepted — nothing else.
+- **Commit log -> a terse Why, not the full Why.** Per git-community
+  consensus ([beams]; [kerneldoc]; [progit]) the commit body is a
+  permanent record that outlives the discussion that produced it, so it
+  must carry enough Why for a reader who has "long since forgotten the
+  immediate details of the discussion." A commit is a subject line, a
+  short Why (what problem this solves and why this approach -- one to a
+  few sentences, not a design essay), and an issue pointer -- `Closes #N`
+  when the change fully satisfies #N's acceptance criteria, `Refs #N`
+  when it only partially addresses or relates to it -- with any
+  repo-mandated trailers (e.g. `Co-Authored-By`) excepted. The fuller
+  Why, tagged Fact (verified/observed) or Speculation (unverified) rather
+  than blended, still lives in the issue/PR body; the commit's Why is a
+  terse pointer to it, never a duplicate design writeup.
 - **Code comments -> Why-not / durable constraints only**, one-line form:
 
   ```
@@ -60,3 +66,13 @@ Portability: the why-not comment's `docs/adr/NNNN-*.md` path and the
 "commit + `Closes #N`/`Refs #N`" convention are this repository's own
 conventions; adapt the literal path/trailer form to whatever issue and
 ADR conventions the calling repository actually uses.
+
+## References
+
+- **[beams]** Chris Beams -- How to Write a Git Commit Message.
+  <https://cbea.ms/git-commit/>
+- **[kerneldoc]** The Linux Kernel documentation -- Submitting patches.
+  <https://www.kernel.org/doc/html/latest/process/submitting-patches.html>
+- **[progit]** Scott Chacon and Ben Straub -- Pro Git, Distributed Git --
+  Contributing to a Project.
+  <https://git-scm.com/book/en/v2/Distributed-Git-Contributing-to-a-Project>

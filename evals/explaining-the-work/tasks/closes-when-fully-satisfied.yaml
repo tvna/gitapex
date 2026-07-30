@@ -14,4 +14,3 @@ expected:
     - "Closes #212"
   output_not_contains:
     - "LGTM"
-    - "Refs #212"

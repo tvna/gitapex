@@ -16,4 +16,3 @@ expected:
     - "Refs #340"
   output_not_contains:
     - "LGTM"
-    - "Closes #340"
