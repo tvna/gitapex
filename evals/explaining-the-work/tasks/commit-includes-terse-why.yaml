@@ -1,0 +1,18 @@
+id: explaining-the-work-commit-includes-terse-why
+name: Commit Includes a Terse Why, Not Just Subject and Issue Pointer
+description: Routes a brief, present-tense Why into the commit message body itself, not just a subject line and issue pointer, per git-community consensus that the commit is the permanent record.
+tags:
+  - quality
+inputs:
+  prompt: |
+    Use explaining-the-work. I just added a per-request timeout to our
+    HTTP client because slow downstream responses were blocking the whole
+    worker pool (issue #401 tracks this, and this change fully closes
+    it). Give me just the commit message for this -- I don't need any
+    explanation of the routing rules, just the message itself.
+expected:
+  output_contains:
+    - "worker pool"
+    - "Closes #401"
+  output_not_contains:
+    - "LGTM"
