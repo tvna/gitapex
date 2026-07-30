@@ -2,37 +2,33 @@
 """Check a candidate PR body for skill-audit disclosure evidence (the base
 two-audit check only).
 
-Issue #517 (refs #285, #300): a local pre-check should catch a missing or
-malformed disclosure section before a create/update_pull_request call ever
-reaches CI, the same round-trip-avoidance rationale that motivated
-hooks/check_acm_present_or_waiver.py (issue #413). Per
-docs/repository-layout.md, only skills/ and hooks/ are deployed runtime
-primitives when this repository is installed as a plugin -- .github/ is
-dev-only CI tooling and is never installed into a consumer repository. A
-prior version of the ACM hook shelled out to .github/scripts/ relative to
-CLAUDE_PROJECT_DIR and a Codex review on PR #433 caught the resulting
-false-deny in an installed-plugin consumer checkout; this file exists
-standalone for the same reason, per that same precedent.
+A local pre-check catches a missing or malformed disclosure section
+before a create/update_pull_request call reaches CI, the same
+round-trip-avoidance rationale behind hooks/check_acm_present_or_waiver.py.
+Per docs/repository-layout.md, only skills/ and hooks/ are deployed
+runtime primitives when this repository is installed as a plugin --
+.github/ is dev-only CI tooling and is never installed into a consumer
+repository.
 
 This is a *deliberately partial* copy of
 .github/scripts/gate_skill_audit_disclosure.py: only the base check that
 both battle-testing-a-skill and evaluating-skill-quality are disclosed
 (find_missing_disclosures there). It does NOT port that script's
-conditional issue #427/#454/#277 extensions (WAIVED-rejection on a
-description change, eval-coverage disclosure, security-relevance,
-design-doc coverage) -- each of those needs a git-diff-computed fact
-(which skill's description changed, which skill is security-relevant,
-which design docs changed) that only the CI workflow computes, not a
-local hook with no equivalent applicability-diff step. CI remains the
-full, authoritative gate; this hook is a fast, partial, local backstop.
+conditional extensions (WAIVED-rejection on a description change,
+eval-coverage disclosure, security-relevance, design-doc coverage) --
+each needs a git-diff-computed fact (which skill's description changed,
+which skill is security-relevant, which design docs changed) that only
+the CI workflow computes, not a local hook with no equivalent
+applicability-diff step. CI remains the full, authoritative gate; this
+hook is a fast, partial, local backstop.
 
 Deliberately not imported from .github/scripts/gate_skill_audit_disclosure.py
 or any other copy: this file must work standalone from inside a
 distributed plugin bundle with no access to .github/. Kept in sync with
 that script's own _SECTION_RE/_VERDICTS/pattern-building logic by
 tests/test_check_skill_audit_disclosure_hook_sync.py, the same
-sync-test pattern tests/test_check_acm_present_sync.py already uses for
-the ACM-disclosure family.
+sync-test pattern tests/test_check_acm_present_sync.py uses for the
+ACM-disclosure family.
 
 Standard library only, no network calls, no side effects.
 """
