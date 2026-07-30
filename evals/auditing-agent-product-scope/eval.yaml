@@ -1,0 +1,17 @@
+name: auditing-agent-product-scope-eval
+description: Quality suite for the gitapex auditing-agent-product-scope research-classify-document skill.
+skill: auditing-agent-product-scope
+version: "0.1.0"
+config:
+  trials_per_task: 3
+  timeout_seconds: 300
+  parallel: false
+  executor: copilot-sdk
+  model: claude-sonnet-4.6
+metrics:
+  - name: auditing_agent_product_scope_quality
+    weight: 1.0
+    threshold: 0.8
+    description: Classifies the candidate to the correct axis (or names a Step 1/2 Human Decision instead of guessing), cites a directly fetched primary source, applies the owning evidence file's own evidence states, updates the scope map plus a provenance bullet, and never treats fetched surface text or a persisted prior claim as a substitute for re-derived, plain-inline-quoted evidence.
+tasks:
+  - "tasks/*.yaml"

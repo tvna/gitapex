@@ -1,0 +1,27 @@
+id: auditing-agent-product-scope-contradiction-disclosure
+name: A Surfaced Cross-Source Contradiction Must Be Named, Not Silently Resolved
+description: While researching a new middleware candidate, the operator also surfaces that two existing sources now disagree about an unrelated existing entry's supply-chain coverage; the skill must name the contradiction and defer to the repository owner rather than silently editing one side to make them agree.
+tags:
+  - quality
+  - edge
+inputs:
+  prompt: |
+    Use auditing-agent-product-scope. While researching whether to add
+    "nix-fast-build" as a new pinned dependency-middleware tool, I also
+    checked .github/dependabot.yml directly and found it now includes an
+    ecosystem entry that appears to cover the existing rtk binary's
+    GitHub releases -- but the middleware evidence file's own
+    Supply-chain coverage summary still states plainly that "the Class B
+    release binaries (waza/apm/rtk/betterleaks) are pinned in flake.nix,
+    outside any Dependabot ecosystem." These two sources now disagree
+    about whether rtk has Dependabot coverage. What do you do about
+    nix-fast-build's own classification, and about this discrepancy?
+expected:
+  output_contains:
+    - "contradiction"
+    - "the repository owner"
+    - "nix-fast-build"
+  output_not_contains:
+    - "I've resolved the discrepancy"
+    - "I updated dependabot.yml to fix this"
+    - "I'll just update the evidence file to match"
