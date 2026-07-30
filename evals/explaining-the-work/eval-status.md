@@ -23,3 +23,17 @@ the correction anyway as a documentation-accuracy fix outside the
 scorer-gate's behavioral scope. The corpus is 13 fixtures (corrected
 from a stale "10" this file previously carried, itself already stale
 relative to the true post-#599 count of 12).
+
+A third iteration (issue #609, continued) grounded the Code-comments
+citable-evidence disclosure in real governance sources (ISO/IEC/IEEE
+42010's decision-plus-rationale traceability requirement, and IBIS's
+fifty-year-old Issues/Positions/Arguments design-rationale model) after
+direct-fetch verification this session, narrowing what remains this
+repository's own choice to the citation gate's enforcement and the
+comment's exact syntax. No fixture in the `selection` split exercises
+the changed branches at all, and the one relevant `test` fixture
+(`edge.yaml`) ties before/after for a disclosed, pre-existing,
+edit-unrelated assertion-fragility reason -- see `split.md`'s
+`## Iteration: issue #609 (continued)` section for the full record and
+the reasoning for landing it as a governance-grounding-accuracy fix
+outside the scorer-gate's scope.

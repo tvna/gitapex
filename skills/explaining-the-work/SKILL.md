@@ -47,18 +47,25 @@ into the wrong artifact.
 
   Requires a citable issue/PR/ADR that actually evaluated the rejected
   alternative. If nothing can be cited, do not write the comment — never
-  fabricate a rationale. This citable-evidence requirement is this
-  repository's own policy choice, stricter than general software-
-  engineering practice: no primary source checked (Google's C++ style
-  guide, Ousterhout's *A Philosophy of Software Design*, Robert C.
+  fabricate a rationale. The underlying principle is real governance
+  practice, not invented for this skill: [42010] requires that
+  architecture decisions and their rationale be documented and traceable
+  to the concerns they address, and [ibis] has treated a rejected
+  position's counter-argument as a first-class, recordable part of a
+  design's rationale since the 1970s. What remains this repository's own
+  policy choice, stricter than general software-engineering practice, is
+  enforcing that principle at the granularity of a single code comment
+  via a mandatory citation gate: no primary source checked (Google's C++
+  style guide, Ousterhout's *A Philosophy of Software Design*, Robert C.
   Martin's *Clean Code*, the Linux kernel's own coding-style guidance)
-  restricts a good comment to why-not-for-a-rejected-alternative or
-  requires a citation to license one -- all of them sanction broader Why
-  (and sometimes tricky How) with no such gate. The mechanical part (line
-  length, the `why-not(#NNN):` prefix, the optional ADR path form) is a
-  good fit for a small lint-hook or pre-commit check where the repo has
-  one; keep the judgment call (is a rejected alternative actually
-  citable) in-model.
+  requires a citation to license a why-not comment specifically -- all of
+  them sanction broader Why (and sometimes tricky How) with no such gate
+  -- and neither [42010] nor [ibis] mandates this comment's one-line
+  syntax, the `why-not(#NNN):` prefix, or the <=120-char cap; those stay
+  this repository's own implementation choice. The mechanical part (line
+  length, the prefix, the optional ADR path form) is a good fit for a
+  small lint-hook or pre-commit check where the repo has one; keep the
+  judgment call (is a rejected alternative actually citable) in-model.
 
 ## Precedence
 
@@ -91,6 +98,17 @@ how long one may be; every source's own guidance is qualitative
 finding, the same shape as `drafting-an-adr`'s own disclosed absence of
 a numeric ADR-significance threshold -- not a gap in this search.
 
+Verification gap on the governance grounding above, disclosed rather than
+smoothed over: [42010]'s own maintainer site returned a server error on
+every direct fetch attempted for this skill, so its requirements above
+are confirmed through [arc42]'s and Wikipedia's published summaries of
+the standard, not a direct read of the ISO/IEC/IEEE 42010:2022 text
+itself. Neither source makes "record the rejected alternative" a named
+requirement: [42010] mandates decision-plus-rationale traceability in
+general, and [ibis]'s con-argument is the closest analogue for recording
+a rejected position specifically, not a name-checked clause inside
+[42010] itself -- the two sources ground adjacent, not identical, claims.
+
 ## References
 
 - **[beams]** Chris Beams -- How to Write a Git Commit Message.
@@ -100,3 +118,15 @@ a numeric ADR-significance threshold -- not a gap in this search.
 - **[progit]** Scott Chacon and Ben Straub -- Pro Git, Distributed Git --
   Contributing to a Project.
   <https://git-scm.com/book/en/v2/Distributed-Git-Contributing-to-a-Project>
+- **[42010]** ISO/IEC/IEEE 42010, Architecture description -- requirements
+  summarized via Wikipedia (the standard's own maintainer site returned a
+  server error on every direct fetch attempted this session).
+  <https://en.wikipedia.org/wiki/ISO/IEC_42010>
+- **[arc42]** arc42 Quality Model -- ISO 42010 mapping, the secondary
+  source actually fetched for [42010]'s decision/rationale/traceability
+  wording above. <https://quality.arc42.org/standards/iso-42010>
+- **[ibis]** Werner Kunz and Horst W. J. Rittel -- Issues as Elements of
+  Information Systems, Working Paper No. 131, Institute of Urban and
+  Regional Development, University of California, Berkeley (1970);
+  Issues/Positions/Arguments summary via Wikipedia.
+  <https://en.wikipedia.org/wiki/Issue-based_information_system>

@@ -342,3 +342,147 @@ regression on any train, selection, or test fixture (all still score
 1.000000 or their already-disclosed pre-existing baseline); the new test
 fixture's tie is a genuine, disclosed finding about model behavior under
 brevity-cap removal, not a defect.
+
+## Iteration: issue #609 (continued), Code-comments/Notes governance-grounding correction
+
+Candidate edit: the Code-comments bullet's citable-evidence disclosure
+(added in the iteration above) said only that requiring a citation was
+"this repository's own policy choice," with no positive grounding for
+*why* recording a rejected alternative's rationale is a reasonable thing
+to require at all. Direct verification this session (real `WebFetch`
+reads, not memory) found that the underlying principle -- decisions and
+their rationale should be documented and kept traceable to what they
+concern -- is real, citable governance practice: ISO/IEC/IEEE 42010
+("architecture description") requires that architecture decisions and
+their rationale be documented and kept traceable to the stakeholder
+concerns they address, and IBIS (Kunz & Rittel, Issues/Positions/
+Arguments, 1970) has treated a rejected position's counter-argument as a
+recordable, first-class part of a design's rationale for over fifty
+years. The candidate rewrites the same disclosure sentence to cite both
+([42010], [ibis]), while narrowing the "this repository's own choice"
+claim to what it actually is: enforcing that principle at the granularity
+of a single code comment via a *mandatory citation gate*, plus the
+comment's specific one-line syntax/`why-not(#NNN):` prefix/`<=120`-char
+cap -- none of which either source mandates. A second, smaller addition
+to Notes discloses a real residual verification gap rather than hiding
+it: [42010]'s own maintainer site (`iso-architecture.org`) returned an
+HTTP 503 on every direct fetch attempted this session, so its
+requirements are confirmed through [arc42]'s and Wikipedia's published
+summaries, not a direct read of the ISO/IEC/IEEE 42010:2022 text itself;
+and neither source makes "record the rejected alternative" specifically
+a named requirement -- [42010] mandates decision-plus-rationale
+traceability in general, [ibis]'s con-argument is the closest analogue
+for a rejected position specifically, and the two claims are adjacent,
+not identical. Three new `## References` entries ([42010], [arc42],
+[ibis]) cite the sources actually fetched. Full text: see this PR's diff.
+
+Classification: **ordinary** (rewords and extends existing disclosure
+sentences with new citations; not a pure deletion, so the pruning-only
+exception does not apply).
+
+### No selection fixture exercises the changed branches at all -- a starker case than the prior iteration's tie
+
+Unlike the Commit-log-bullet edit above, this candidate touches only the
+Code-comments and Notes sections. Neither `selection` fixture
+(`commit-includes-terse-why.yaml`, `closes-when-fully-satisfied.yaml`)
+exercises either section -- both test only the Commit-log branch, which
+this candidate leaves byte-identical. The selection-split mean therefore
+cannot move by construction, not merely tie empirically: there is no
+fixture in scope of the strict gate that could observe this edit at all.
+
+The one **test**-split fixture that does exercise the changed branch,
+`edge.yaml` (Code comments, "Declines a Why-Not Comment With No Citable
+Source"), was scored with one fresh dispatch per side against only
+`edge.yaml` -- real dispatches, not assumed, and not a full-corpus
+selection-split gate table (see the prior iteration's "Gate result"
+table above for that):
+
+| Fixture | Split | Before (old text) | After (new text) |
+|---|---|---|---|
+| `edge.yaml` | test | 0.500000 | 0.500000 |
+
+A genuine tie. Both responses correctly refuse the comment and cite
+`citable` as required, but both also spell out the *correct future*
+`why-not(#<real-number>):` syntax as part of explaining what the user
+should do once a real issue exists -- which trips this fixture's own
+`output_not_contains: "# why-not(#"` ban (intended to catch a model that
+writes the comment anyway, not one that quotes the correct syntax while
+declining). This is the same recurring fixture-assertion-fragility class
+`split.md` already discloses for this file (the #599 iteration's
+`edge.yaml`/`no-auto-generated-adr.yaml` "can't" vs. "cannot" note): a
+construct-validity gap in the fixture's own assertions, identical old vs.
+new, not a regression introduced by this edit. `guardrail.yaml` and
+`normal.yaml` were also re-dispatched (fresh, not reused) as a sanity
+check even though their Commit-log-only content is untouched by this
+edit: `guardrail.yaml` scored 0.833333 old / 1.000000 new and
+`normal.yaml` scored 1.000000 / 1.000000 -- since the branch they test is
+byte-identical between old and new, this spread is ordinary model
+response variance on an unrelated, unchanged branch (one dispatch phrased
+"the PR/issue body," the fixture wants the literal order "issue/PR
+body"), not signal attributable to this candidate, and is disclosed here
+rather than mistaken for either a regression or an improvement.
+
+### Why this is landed anyway, outside the scorer-gate's scope
+
+Same reasoning as the prior `## Iteration: issue #609` section's own
+precedent, one step further: that iteration's candidate at least *could*
+have moved a fixture and happened to tie; this one's changed branches
+have no fixture inside the gate's jurisdiction (`selection`) that could
+observe them at all, and the one `test`-split fixture that comes closest
+(`edge.yaml`) ties for a reason unrelated to the edit (a pre-existing
+assertion fragility, not new to this candidate). Per
+`scorer-gated-skill-edits/references/worked-example.md`'s Edit-B
+precedent, a change with no demonstrated behavioral improvement is not
+claimed as a scorer-validated KEEP. But this candidate corrects the same
+class of defect the prior iteration's Track B already established as
+outside the gate's behavioral jurisdiction: an accuracy/grounding
+correction to what the skill's own prose asserts about its citations and
+their justification, verified against real primary-source fetches this
+session, not a routing-behavior change. Manufacturing a fixture
+specifically to force this correction through the gate would repeat the
+construct-validity violation `lint_fixture_assertions.py` exists to
+catch (see this iteration's own investigation, and the user's explicit
+instruction this session to investigate primary sources rather than
+leave an unsupported claim in place). The corrected prose is landed as a
+documentation/governance-grounding-accuracy fix, explicitly outside this
+gate's behavioral scope, not smuggled through as a false KEEP.
+
+### Transfer check
+
+Re-ran `edge.yaml` (the one test-split fixture exercising the changed
+branch) on Haiku 4.5 against the candidate (new) text, same method as
+prior iterations:
+
+| Fixture | Haiku (new text) |
+|---|---|
+| `edge.yaml` | 0.500000 |
+
+Identical to the strong-tier score (0.500000) and for the identical
+reason (the same "# why-not(#" ban trips on a correctly-declined
+response's own syntax example) -- no tier-dependent regression observed
+for this candidate, unlike the prior iteration's disclosed tier-dependent
+finding on `commit-why-keeps-distinct-reasons.yaml`.
+
+### Rejected-edit log
+
+**Behavioral verdict: REJECT (no selection-split fixture in scope; the
+one relevant test fixture ties for a pre-existing, edit-unrelated
+reason).** No candidate wording was discarded after the fact -- this is
+the actual, accepted, disclosed result of the one candidate scored, not a
+defect hidden by retrying.
+
+### Verdict
+
+**Behavioral gate: REJECT (out of scorer-gate scope by construction) --
+landed anyway as a governance-grounding-accuracy fix**, per the reasoning
+above. No regression on any train, selection, or test fixture (`edge.yaml`
+ties for a disclosed, pre-existing, edit-unrelated assertion-fragility
+reason; `guardrail.yaml`/`normal.yaml` variance reflects unrelated model
+response noise on an untouched branch). The prior "no primary source
+checked" disclosure for the citable-evidence requirement is now narrowed
+to what remains genuinely ungrounded (the exact comment syntax and the
+mandatory-citation *gate* itself), while the underlying governance
+principle is grounded in [42010] and [ibis] -- with the residual
+verification gap ([42010]'s own site returning HTTP 503, reliance on
+[arc42]/Wikipedia secondary summaries) disclosed plainly rather than
+smoothed over.
