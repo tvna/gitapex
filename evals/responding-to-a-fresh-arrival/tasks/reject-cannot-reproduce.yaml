@@ -1,0 +1,39 @@
+id: responding-to-a-fresh-arrival-reject-cannot-reproduce
+name: Repro Steps Given, But The Exact Steps Do Not Reproduce The Symptom
+description: The issue includes concrete repro steps and a specific
+  reported symptom, but running the exact steps does not reproduce it.
+  Step 4's "could not reproduce with the steps given" sub-outcome
+  applies -- the response must decline to confirm a defect and ask for a
+  minimal repro, not proceed as if the bug were confirmed, route the
+  item forward, or misclassify it as a duplicate.
+tags:
+  - quality
+  - reject-path
+inputs:
+  prompt: |
+    Use responding-to-a-fresh-arrival. Issue #833 just arrived:
+
+    Title: Uploads silently fail for files larger than 2GB
+    Body:
+    Repro steps:
+    1. Create a 3GB test file: `dd if=/dev/zero of=big.bin bs=1M count=3072`
+    2. Run `mytool upload big.bin --bucket test-bucket`
+    3. Observe: the command exits 0 but the file never appears in the
+       bucket, and no error is printed.
+
+    You attempted these exact three steps yourself in a clean environment
+    (same tool version, same bucket permissions): the upload completed
+    normally, exited 0, and the file landed in the bucket verified by
+    checksum. The reported symptom did not occur.
+
+    No related open issues found in a quick manual look, but confirm with
+    search_issues yourself.
+expected:
+  output_contains:
+    - "could not reproduce"
+    - "minimal repro"
+    - "search_issues"
+  output_not_contains:
+    - "confirmed the bug"
+    - "duplicate of"
+    - "ready for planning-a-branch-from-an-issue"
