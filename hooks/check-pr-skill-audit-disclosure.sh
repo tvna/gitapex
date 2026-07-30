@@ -1,35 +1,33 @@
 #!/bin/bash
 # PreToolUse hook (matchers: mcp__github__create_pull_request,
-# mcp__github__update_pull_request) backing issue #517 (refs #285, #300):
-# block a PR-body-carrying call whose diff adds/modifies a
-# skills/*/SKILL.md but whose body does not disclose both
-# battle-testing-a-skill and evaluating-skill-quality audit evidence (or
-# an explicit waiver for each).
+# mcp__github__update_pull_request): blocks a PR-body-carrying call whose
+# diff adds/modifies a skills/*/SKILL.md but whose body does not disclose
+# both battle-testing-a-skill and evaluating-skill-quality audit evidence
+# (or an explicit waiver for each).
 #
 # Applicability is computed locally via git, mirroring (a reduced form
-# of) .github/workflows/skill-audit-gate.yml's own three-dot diff +
-# D/R100 exclusion. Unlike that CI workflow, this hook has no
+# of) .github/workflows/skill-audit-gate.yml's three-dot diff + D/R100
+# exclusion. Unlike that CI workflow, this hook has no
 # github.event.pull_request.base.sha to anchor on -- it resolves the PR's
 # base branch from tool_input.base when present (create_pull_request
 # always supplies it; update_pull_request only when changing the base),
-# falling back to the repo's own default branch (origin/HEAD) otherwise.
+# falling back to the repo's default branch (origin/HEAD) otherwise.
 # If that resolution, or the git diff itself, fails for any reason (base
 # ref not fetched locally, detached HEAD, etc.), this hook fails OPEN
-# (exit 0, warning to stderr) rather than blocking on inconclusive local
-# git state -- CI's skill-audit-gate.yml remains the deterministic,
-# always-correct backstop regardless of what this hook can determine
-# locally.
+# (exit 0, warning to stderr) rather than block on inconclusive local
+# git state -- CI's skill-audit-gate.yml remains the deterministic
+# backstop regardless of what this hook can determine locally.
 #
 # Only checks the base two-audit disclosure via the self-contained
 # check_skill_audit_disclosure_or_waiver.py sibling bundled beside this
 # hook (not .github/scripts/gate_skill_audit_disclosure.py -- per
 # docs/repository-layout.md, only skills/ and hooks/ are deployed with
 # the plugin, .github/ never is; see that sibling script's own docstring,
-# and hooks/check-issue-acm-disclosure.sh's docstring for the PR #433
-# precedent this follows). Does not attempt the issue #427/#454/#277
-# conditional extensions (WAIVED-rejection on description change,
-# eval-coverage, security-relevance, design-doc coverage) -- those need
-# git-diff-computed facts this hook does not compute; CI covers them.
+# and hooks/check-issue-acm-disclosure.sh's docstring for the same
+# pattern). Does not attempt the conditional extensions (WAIVED-rejection
+# on description change, eval-coverage, security-relevance, design-doc
+# coverage) -- those need git-diff-computed facts this hook does not
+# compute; CI covers them.
 #
 # Denies via the PreToolUse hookSpecificOutput JSON on stdout AND exit 2 /
 # stderr (both conventions, for defense in depth -- see plugin-dev's
@@ -135,10 +133,9 @@ fi
 # check_skill_audit_disclosure_or_waiver.py only ever exits 0 (PASS) or 1
 # with a 'FAIL: ...' stderr message for a genuine disclosure failure --
 # anything else (a different exit code, or exit 1 with no 'FAIL:' line,
-# e.g. an uncaught traceback) is the check script itself crashing, not a
-# verdict on the PR body. Denying either way is still the safe default
+# e.g. an uncaught traceback) means the check script itself crashed, not
+# a verdict on the PR body. Denying either way is still the safe default
 # (an unverifiable body should not silently pass), but the message must
-# say so plainly rather than blaming the PR body for a bug in the check
-# script -- CLAUDE.md: "fail loudly... surface what went wrong so a human
-# can react."
+# say so plainly rather than blame the PR body for a bug in the check
+# script.
 deny "Blocked by hooks/check-pr-skill-audit-disclosure.sh: check_skill_audit_disclosure_or_waiver.py exited $check_exit without a recognized FAIL message -- this looks like a bug in the check script itself, not a genuine disclosure failure in your PR body. Output: $check_output"
