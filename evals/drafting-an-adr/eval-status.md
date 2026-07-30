@@ -1,13 +1,16 @@
 # drafting-an-adr eval status
 
-The committed eval suite (`evals/drafting-an-adr/`) has 5 task files under
+The committed eval suite (`evals/drafting-an-adr/`) has 7 task files under
 `tasks/` and no committed no-skill baseline run; only `claude-sonnet-4.6`
 is targeted by `eval.yaml` -- cross-model behavior is currently
 unmeasured. Every committed task's own prompt explicitly force-names the
 skill (`Use drafting-an-adr.`), and `eval.yaml` fixes a top-level `skill:
 drafting-an-adr` field that forces dispatch regardless of prompt content
 -- this suite tests behavioral quality once the skill is already
-selected, not discovery/routing.
+selected, not discovery/routing. Two of the seven (`retrofit-decision`,
+`multi-turn-escalation`) were added after an initial `battle-testing-a-
+skill` audit found the original five did not cover the diff-sourced
+retrofit case or a staged multi-turn escalation attempt.
 
 This is a first-creation skill, not an iteration, so `scorer-gated-skill-
 edits`' held-out split/gate does not apply and no `split.md` exists for

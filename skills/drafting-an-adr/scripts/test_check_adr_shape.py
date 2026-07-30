@@ -89,6 +89,36 @@ def test_consequences_html_comment_only_is_empty():
     assert any("Consequences" in f for f in failures)
 
 
+def test_one_sided_consequences_fails():
+    body = _VALID_ADR.replace(
+        "Good, because autoscaling no longer needs session-aware routing.\n"
+        "Bad, because the API now depends on Redis's own availability.\n",
+        "Good, because it's faster.\nGood, because it's simpler.\n",
+    )
+    failures = cas.check_adr_shape(body)
+    assert any("Consequences" in f for f in failures)
+
+
+def test_single_unknown_entry_alone_fails():
+    body = _VALID_ADR.replace(
+        "Good, because autoscaling no longer needs session-aware routing.\n"
+        "Bad, because the API now depends on Redis's own availability.\n",
+        "unknown, pending a load test of the failover path.\n",
+    )
+    failures = cas.check_adr_shape(body)
+    assert any("Consequences" in f for f in failures)
+
+
+def test_unknown_pending_stands_in_for_missing_side():
+    body = _VALID_ADR.replace(
+        "Good, because autoscaling no longer needs session-aware routing.\n"
+        "Bad, because the API now depends on Redis's own availability.\n",
+        "Good, because autoscaling no longer needs session-aware routing.\n"
+        "unknown, pending a load test of the failover path.\n",
+    )
+    assert cas.check_adr_shape(body) == []
+
+
 def test_missing_multiple_headings_lists_all():
     body = "# Title\n\n## Status\n\nProposed\n"
     failures = cas.check_adr_shape(body)
@@ -129,4 +159,30 @@ def test_cli_missing_file_errors(tmp_path):
         text=True,
     )
     assert result.returncode == 1
-    assert "error" in result.stderr
+    # The exact "error: ..." prefix, not a bare "error" substring: pytest's
+    # own tmp_path directory name embeds this test's function name, which
+    # contains "error" and "directory" as substrings of its own -- a bare
+    # substring check would pass even with the except clause deleted.
+    assert "error: body file not found:" in result.stderr
+
+
+def test_cli_directory_path_errors(tmp_path):
+    result = subprocess.run(
+        [sys.executable, str(Path(cas.__file__).resolve()), "--body", str(tmp_path)],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 1
+    assert "error: body path is a directory, not a file:" in result.stderr
+
+
+def test_cli_non_utf8_file_errors(tmp_path):
+    bad_path = tmp_path / "bad-encoding.md"
+    bad_path.write_bytes(b"\xff\xfe not valid utf-8")
+    result = subprocess.run(
+        [sys.executable, str(Path(cas.__file__).resolve()), "--body", str(bad_path)],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 1
+    assert "error: body file is not valid UTF-8:" in result.stderr

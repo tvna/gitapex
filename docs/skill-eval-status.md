@@ -86,6 +86,7 @@ suites still assert on final text only).
 | `auditing-git-hosting-surface` | [evals/auditing-git-hosting-surface/eval-status.md](../evals/auditing-git-hosting-surface/eval-status.md) |
 | `battle-testing-a-skill` | [evals/battle-testing-a-skill/eval-status.md](../evals/battle-testing-a-skill/eval-status.md) |
 | `drafting-an-acm-issue` | [evals/drafting-an-acm-issue/eval-status.md](../evals/drafting-an-acm-issue/eval-status.md) |
+| `drafting-an-adr` | [evals/drafting-an-adr/eval-status.md](../evals/drafting-an-adr/eval-status.md) |
 | `driving-pr-to-merge` | [evals/driving-pr-to-merge/eval-status.md](../evals/driving-pr-to-merge/eval-status.md) |
 | `establishing-ubiquitous-language` | [evals/establishing-ubiquitous-language/eval-status.md](../evals/establishing-ubiquitous-language/eval-status.md) |
 | `evaluating-decision-state-discipline` | [evals/evaluating-decision-state-discipline/eval-status.md](../evals/evaluating-decision-state-discipline/eval-status.md) |

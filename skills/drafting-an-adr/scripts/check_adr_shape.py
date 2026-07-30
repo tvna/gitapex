@@ -63,20 +63,32 @@ def has_valid_status(body_text):
     return False
 
 
-def has_nonempty_consequences(body_text):
-    """``True`` iff the Consequences section has real (non-comment,
-    non-whitespace) content."""
+_GOOD_MARKER_RE = re.compile(r"^[\s\-\*\d\.]*good\b", re.IGNORECASE)
+_BAD_MARKER_RE = re.compile(r"^[\s\-\*\d\.]*bad\b", re.IGNORECASE)
+_UNKNOWN_MARKER_RE = re.compile(r"unknown,\s*pending", re.IGNORECASE)
+
+
+def has_balanced_consequences(body_text):
+    """``True`` iff Consequences names at least one real entry on each side
+    (a "Good" marker line and a "Bad" marker line), or an "unknown,
+    pending X" line stands in for the missing side. A single one-sided
+    list of only favorable (or only unfavorable) entries fails -- see
+    Step 7 / Stop boundaries in ../SKILL.md."""
     section = _section_body(body_text, "Consequences")
     if section is None:
         return False
+    entries = []
     for line in section.splitlines():
         stripped = line.strip()
-        if not stripped:
+        if not stripped or stripped.startswith("<!--") or stripped.endswith("-->"):
             continue
-        if stripped.startswith("<!--") or stripped.endswith("-->"):
-            continue
-        return True
-    return False
+        entries.append(stripped)
+    if len(entries) < 2:
+        return False
+    has_good = any(_GOOD_MARKER_RE.match(e) for e in entries)
+    has_bad = any(_BAD_MARKER_RE.match(e) for e in entries)
+    has_unknown = any(_UNKNOWN_MARKER_RE.search(e) for e in entries)
+    return (has_good or has_unknown) and (has_bad or has_unknown)
 
 
 def check_adr_shape(body_text):
@@ -90,8 +102,12 @@ def check_adr_shape(body_text):
             "Status section's value is not one of "
             + "/".join(_STATUS_VALUES)
         )
-    if not missing and not has_nonempty_consequences(body_text):
-        failures.append("Consequences section has no real content")
+    if not missing and not has_balanced_consequences(body_text):
+        failures.append(
+            "Consequences section must name at least one Good and one Bad "
+            "entry (or an explicit \"unknown, pending X\" standing in for "
+            "the missing side) -- not only favorable or only unfavorable"
+        )
     return failures
 
 
@@ -110,6 +126,15 @@ def main(argv=None):
         )
     except FileNotFoundError:
         print(f"error: body file not found: {args.body}", file=sys.stderr)
+        return 1
+    except IsADirectoryError:
+        print(f"error: body path is a directory, not a file: {args.body}", file=sys.stderr)
+        return 1
+    except PermissionError:
+        print(f"error: no permission to read body file: {args.body}", file=sys.stderr)
+        return 1
+    except UnicodeDecodeError as exc:
+        print(f"error: body file is not valid UTF-8: {args.body} ({exc})", file=sys.stderr)
         return 1
 
     failures = check_adr_shape(body_text)
