@@ -34,3 +34,6 @@ expected:
   output_not_contains:
     - "LGTM"
     - "looks fine"
+  requires_fresh_dispatch:
+    tool_names: ["Agent"]
+    min_dispatches: 1

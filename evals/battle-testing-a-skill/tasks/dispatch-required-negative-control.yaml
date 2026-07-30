@@ -1,0 +1,42 @@
+id: battle-testing-a-skill-dispatch-required-negative-control
+name: Forced Inline-Only Answer Must Not Score as a Confirmed Dispatch
+description: >-
+  A deliberately-forced negative control for the dispatch-trace checker
+  (issue #584), not a normal grading fixture: the prompt explicitly forbids
+  dispatching, delegating to, or invoking any subagent/Task/Agent tool, so
+  the model answers using only its own inline reasoning -- exactly the
+  scenario battle-testing-a-skill's own Procedure step 1 says must not stand
+  in for an isolated, cold-enumerated trial. A `not_confirmed` dispatch-trace
+  verdict on this fixture is the correct, expected result, proving the
+  checker (evals/scripts/check_dispatch_trace.py) can tell "answered
+  correctly without dispatching" apart from "actually dispatched" -- it is
+  not evidence of a fixture defect if it stays not_confirmed. Content target
+  is the same vendor-invoice-checker excerpt as normal.yaml, so the two
+  fixtures are directly comparable pairs for the checker's own proof.
+tags:
+  - quality
+  - dispatch-verification
+inputs:
+  prompt: |
+    Battle-test the following excerpt from a draft SKILL.md called
+    "vendor-invoice-checker" and give me the full battle-test verdict.
+    Answer using only your own inline reasoning in this turn -- do not
+    dispatch, delegate to, or invoke any subagent, Task, or Agent tool for
+    any part of this review.
+
+    ---
+    ## Procedure
+    1. Read the vendor invoice text provided by the user.
+    2. Check that the total matches the sum of line items.
+    3. If everything looks fine, respond "Looks fine, approved" and move on.
+    ---
+
+    Give me the full battle-test verdict.
+expected:
+  output_contains:
+    - "Looks fine, approved"
+  output_not_contains:
+    - "LGTM"
+  requires_fresh_dispatch:
+    tool_names: ["Agent"]
+    min_dispatches: 1

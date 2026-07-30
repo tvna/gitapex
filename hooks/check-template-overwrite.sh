@@ -1,14 +1,13 @@
 #!/bin/bash
-# PreToolUse hook (matcher: Write) enforcing a standing repository
-# invariant: block Write calls that would overwrite an EXISTING issue/PR/MR
-# template file (GitHub or GitLab). A genuinely new template (file does not
-# yet exist) is allowed. Protects any hand-maintained or agent-authored
-# template from an accidental clobber, regardless of which skill or
-# workflow is touching it.
+# PreToolUse hook (matcher: Write): blocks Write calls that would overwrite
+# an existing issue/PR/MR template file (GitHub or GitLab). A genuinely new
+# template (file not yet present) is allowed -- this protects any
+# hand-maintained or agent-authored template from accidental clobber by any
+# skill or workflow.
 #
-# Denies via the PreToolUse hookSpecificOutput JSON on stdout AND exit 2 /
-# stderr (both conventions, for defense in depth -- see plugin-dev's
-# hook-development skill, examples/validate-write.sh).
+# Denies via PreToolUse hookSpecificOutput JSON on stdout AND exit 2 /
+# stderr (defense in depth -- see plugin-dev's hook-development skill,
+# examples/validate-write.sh).
 
 set -euo pipefail
 
@@ -44,14 +43,11 @@ is_template_path() {
   esac
 
   # Single-file PR template. GitHub honors it at the repo root, in `.github/`,
-  # or in `docs/`, with a `.md`/`.txt`/no extension. The previous version only
-  # matched `.github/PULL_REQUEST_TEMPLATE.md` (uppercase, .github-only),
-  # missing the common root-level lowercase `pull_request_template.md` and the
-  # docs/ variants that this plugin's own validate_templates.py
-  # (find_existing_templates) already enumerates. Matching the reserved
-  # basename anywhere is a safe over-approximation -- a file with this exact
-  # name is a PR template in practice -- and keeps the overwrite guard in sync
-  # with what the seeding skill treats as an existing template.
+  # or in `docs/`, with a `.md`/`.txt`/no extension -- the same set this
+  # plugin's validate_templates.py (find_existing_templates) enumerates.
+  # Matching the reserved basename anywhere is a safe over-approximation: a
+  # file with this exact name is a PR template in practice, keeping this
+  # guard in sync with what the seeding skill treats as existing.
   base=${p##*/}
   case "$base" in
     pull_request_template|pull_request_template.md|pull_request_template.txt) return 0 ;;

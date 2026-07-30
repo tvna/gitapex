@@ -4,34 +4,28 @@ carries its four required fields, non-empty.
 SKILL.md Step 7 requires updating "the relevant axis section" when a
 candidate's research changes one -- this is a narrow, deterministic
 check that the section still has the shape a reader depends on
-(Governs / Current scope / an Owning reference / Boundary), rather than
-a full cross-file drift gate synchronizing every axis against its
-owning file (a Codex review on this repository's PR #447 suggested
-that broader gate; this is the appropriately-scoped first step, not
-that). Standard library only, no network calls, no side effects.
+(Governs / Current scope / an Owning reference / Boundary), rather
+than a full cross-file drift gate synchronizing every axis against
+its owning file. Standard library only, no network calls, no side
+effects.
 
-Also flags any axis label outside the expected set (default A-F, the
-six axes this repository has today) as an offense rather than silently
-accepting it -- a battle-testing-a-skill dispatch against this skill
-(dimension 17, structured-output injection) found that a hostile
-"deciding quote" pasted verbatim into an evidence file per SKILL.md
-Step 6 could forge a spurious "## Axis G: ..." heading with fabricated
-fields, and this checker would otherwise report PASS on it. A new axis
-letter is not necessarily an attack -- the scope map has legitimately
-grown before -- but it must be a deliberate, visible decision (passing
---expected-labels to include it), not something this checker accepts
-by default.
+Flags any axis label outside the expected set (default A-F, the six
+axes this repository has today) as an offense rather than silently
+accepting it: a hostile "deciding quote" pasted verbatim into an
+evidence file (per SKILL.md Step 6) could forge a spurious "## Axis
+G: ..." heading with fabricated fields that would otherwise pass. A
+new axis letter is not necessarily an attack -- the scope map has
+legitimately grown before -- but it must be a deliberate, visible
+decision (passing --expected-labels to include it), not something
+this checker accepts by default.
 
-Also verifies every expected label appears exactly once -- a Codex
-review on this repository's PR #451 found that checking only "no
-unexpected label" let a document missing axes B-F (only a complete
-Axis A left) or a duplicated Axis A heading both pass with no
-offenses, despite the checker's advertised six-axis invariant. And
-each axis section is now bounded by the next '## ' heading of any
-kind, not only the next '## Axis' heading -- the same review found that
-the final axis's own missing field could otherwise be silently
-"supplied" by a same-named field label appearing in an unrelated later
-section (e.g. '## Maintenance').
+Also verifies every expected label appears exactly once: checking
+only for unexpected labels would let a document missing several axes,
+or with a duplicated axis heading, pass with no offenses. Each axis
+section is bounded by the next '## ' heading of any kind, not only
+the next '## Axis' heading, so a missing field in the final axis
+section can't be silently "supplied" by a same-named field label in
+an unrelated later section (e.g. '## Maintenance').
 """
 
 from __future__ import annotations
@@ -44,10 +38,9 @@ import sys
 # every section in docs/agent-product-scope.md uses this exact casing.
 _AXIS_HEADING_RE = re.compile(r"^## Axis ([A-Za-z0-9]+): (.+)$", re.MULTILINE)
 
-# Any level-two heading at all -- used only to find where an axis section
-# ends: at the next heading of ANY kind, not only the next axis heading, so
-# a non-axis section immediately after the last axis (e.g. '## Maintenance')
-# is never scanned as if it were still part of that axis's own content.
+# Any level-two heading at all -- marks where an axis section ends, so a
+# non-axis section right after the last axis (e.g. '## Maintenance') is
+# never scanned as if it were still part of that axis's content.
 _ANY_H2_RE = re.compile(r"^## ", re.MULTILINE)
 
 # A bolded field label at the start of a line, e.g. "**Governs:**" or

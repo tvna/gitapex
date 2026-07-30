@@ -1,18 +1,13 @@
 """Check a candidate GitHub issue body for ACM disclosure (table or waiver).
 
-Issue #413 (sub-issue of #357): hooks/check-issue-acm-disclosure.sh needs
-this check bundled *with the hook itself*. Per docs/repository-layout.md,
-only skills/ and hooks/ are deployed runtime primitives when this
-repository is installed as a plugin -- .github/ is dev-only CI tooling
-and is never installed into a consumer repository. A prior version of
-the hook shelled out to .github/scripts/gate_acm_issue_disclosure.py
-relative to CLAUDE_PROJECT_DIR, which does not exist in an
-installed-plugin consumer checkout: a Codex review on PR #433 caught
-this and reproduced the false-deny it causes even for a body carrying a
-valid ACM table or waiver.
+hooks/check-issue-acm-disclosure.sh needs this check bundled *with the
+hook itself*. Per docs/repository-layout.md, only skills/ and hooks/ are
+deployed runtime primitives when this repository is installed as a
+plugin -- .github/ is dev-only CI tooling and is never installed into a
+consumer repository.
 
 This is a fourth, self-contained copy of the same header-table regex and
-waiver-line vocabulary already duplicated across
+waiver-line vocabulary duplicated across
 skills/drafting-an-acm-issue/scripts/check_acm_present.py,
 skills/planning-a-branch-from-an-issue/scripts/check_acm_present.py, and
 .github/scripts/gate_acm_issue_disclosure.py -- kept in sync by
