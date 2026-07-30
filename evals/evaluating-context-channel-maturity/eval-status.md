@@ -21,18 +21,55 @@ Refs #580.
 
 ## Current round
 
-A fresh `evaluating-skill-quality` and `battle-testing-a-skill` dispatch
-against this candidate has not yet run at the time this file was first
-written under the new name -- see `metadata/gitapex.yaml`'s own
-`lifecycle.experimental.reason` for the authoritative, current list of
-deferred items.
+Both required dispatches ran, each disclosing it was not genuinely
+isolated (the calling repository's own `CLAUDE.md` was present in
+context from the start in both cases) -- every favorable finding below is
+therefore provisional pending a genuinely isolated re-run, per this
+repository's own established disclosure convention; the FAIL/gap findings
+below stand regardless, since each rests on an independently cited check
+(a file read, a `git log`, a live GitHub API read, a direct source
+fetch), not on the dispatch's own unverified judgment.
+
+`battle-testing-a-skill` returned **FAIL**, 4 findings: (1) the CLAUDE.md
+worked example's own Criterion-4 quote was fabricated -- it conflated the
+Claude Code harness's own universal git-safety tool instructions with
+this repository's actual `CLAUDE.md` content, which does not contain the
+quoted phrases (independently re-verified: `grep` against the real file
+found no match). (2) Criterion 5 requires a commit-history/harness-config
+check the privilege-scope Stop boundary never authorized (it named only
+criteria 1 and 4). (3) `AGENTS.md`, a real, near-identical sibling to
+root `CLAUDE.md` in this repository, had no defined handling under the
+precondition's channel list. (4) The Subagent dispatch section carried no
+`CLAUDE.md`/`AGENTS.md` exclusion or isolation-verification requirement,
+unlike both sibling skills. All four fixed in commit `14f5802`.
+
+A companion `evaluating-skill-quality` dispatch, run against the fixed
+candidate, returned **WELL-FORMED-NOT-MATURE**, 4 findings: (1) the
+worked example's own Criterion-1 evidence overstated a single
+`chore: sync agent instructions` commit (paired with its own PR-merge
+commit) as a "recurring pattern," when `CLAUDE.md`'s own 12-commit
+history contains exactly one such commit, independently re-counted via
+`git log --follow`. (2) A commit history showing PR-merge-shaped commits
+is weaker evidence for enforced review than the Stop boundaries implied
+-- it shows a PR was used, not that branch protection required an
+independent approval. (3) A genuine Blind spot: Auto-memory has no
+on-disk artifact representation the other four channels share, and the
+Precondition never said what a reviewer should actually read for it. (4)
+The Scope section's own wording on the retired skill's lineage was
+ambiguous enough to misread as "this skill now covers that sub-case,"
+the opposite of its own intent. All four fixed: the worked example's
+evidence corrected to the real commit count, plus a branch-protection
+hedge; a representation-confirmation step added to the Precondition for
+Auto-memory (and recorded as an open worked-example gap, since no
+representation was available to build a third worked example against);
+the Scope wording tightened to state the sub-case is an unowned gap, not
+absorbed.
 
 ## Open follow-up
 
-A first-round `evaluating-skill-quality` and `battle-testing-a-skill`
-dispatch against this reframed candidate is required before this skill is
-considered mature, mirroring the retired skill's own first-round
-requirement. Tracked in `metadata/gitapex.yaml`'s own
+A post-fix confirmation round of both `evaluating-skill-quality` and
+`battle-testing-a-skill`, ideally under genuine isolation this time, has
+not yet run -- tracked in `metadata/gitapex.yaml`'s own
 `lifecycle.experimental.reason` rather than assumed clean without it.
 
 ## History: evaluating-decision-state-discipline (retired)

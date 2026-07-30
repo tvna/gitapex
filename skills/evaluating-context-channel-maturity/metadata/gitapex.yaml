@@ -24,6 +24,23 @@ spec:
     - kind: caveat
       anchor: "references/criteria.md"
       summary: "Saltzer and Schroeder's separation-of-privilege/least-privilege principles were considered as a secondary reinforcement for criterion 5 but not cited, since the specific source was not re-fetched during this authoring session and this repository's own primary-source discipline requires same-session verification rather than carrying over an earlier, different skill's own citation. Recorded in criteria.md's own 'Sources considered and not used' section."
+    - kind: audit
+      anchor: "method:battle-testing-a-skill"
+      summary: "Fresh, disclosed-contaminated dispatch against the initial candidate returned FAIL: the CLAUDE.md worked example's Criterion-4 quote was fabricated (conflated the harness's own universal git-safety tool instructions with this repository's actual CLAUDE.md); criterion 5 needed a harness-config check the privilege-scope Stop boundary never authorized; AGENTS.md had no defined handling; Subagent dispatch lacked the sibling skills' own isolation-verification requirement."
+      outcome:
+        verdict: FAIL
+        found: 4
+    - kind: audit
+      anchor: "method:evaluating-skill-quality"
+      summary: "Fresh, disclosed-contaminated dispatch against the fixed candidate returned WELL-FORMED-NOT-MATURE: the worked example's Criterion-1 evidence overstated a single sync commit as a 'recurring pattern' (12 total commits, 1 sync commit); a commit-history-as-review-proof gap; an Auto-memory artifact-representation Blind spot; a Scope-wording ambiguity risking a false extended-coverage reading."
+      outcome:
+        verdict: WELL-FORMED-NOT-MATURE
+        found: 4
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/580"
+      summary: "All 8 findings fixed: worked example quote replaced with verified CLAUDE.md text and its commit-count claim corrected; criterion 5 added to the harness-config-lookup allowance; a branch-protection-vs-merge-shape hedge added; AGENTS.md added to Scope/Precondition as a separate channel instance; Subagent dispatch gained the isolation-verification requirement; an Auto-memory representation-confirmation step added; Scope wording tightened."
+      outcome:
+        fixed: 8
   skillDependencies:
     relatedTo:
       - evaluating-skill-quality
@@ -32,5 +49,5 @@ spec:
   lifecycle:
     renamedFrom: evaluating-decision-state-discipline
     experimental:
-      reason: "First version of this skill (replacing the retired evaluating-decision-state-discipline). Deferred: (1) an evaluating-skill-quality/battle-testing-a-skill audit round, not yet run; (2) a shape-checker for its own five criteria; (3) a committed evals/ corpus (ablation-capable, not yet run); (4) a cross-agent-tool compatibility matrix; (5) verification of the APM-manifest's own review gate (example 1, criterion 5) and the branch-plan-task subagent's write-access boundary (example 2, criterion 5)."
+      reason: "First version (replacing the retired evaluating-decision-state-discipline). One audit round ran, both dispatches disclosed non-isolated; findings fixed, see spec.references. A post-fix confirmation round is still needed. Deferred: (1) a shape-checker for its own five criteria; (2) a committed evals/ corpus; (3) a cross-agent-tool compatibility matrix; (4) upstream/branch-protection verification for examples 1-2; (5) a third worked example for Auto-memory."
       trackingIssue: "https://github.com/tvna/gitapex/issues/580"
