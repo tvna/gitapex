@@ -1,34 +1,32 @@
 #!/bin/bash
-# PreToolUse hook (matcher: mcp__github__create_pull_request) backing
-# issue #187: block a PR-open call for a branch that has no resolvable
-# upstream, or has local commits not yet pushed to it -- both reproduce
-# #187's "No commits between <base> and <branch>" failure (opening a PR
-# for a branch GitHub can't see any commits on because it was never
-# pushed).
+# PreToolUse hook (matcher: mcp__github__create_pull_request): blocks a
+# PR-open call for a branch with no resolvable upstream, or with local
+# commits not yet pushed to it -- both reproduce #187's "No commits
+# between <base> and <branch>" failure (opening a PR for a branch GitHub
+# can't see any commits on because it was never pushed).
 #
-# Verifies tool_input.head directly via its refs/heads/<branch> ref,
-# independent of whatever is currently checked out in this working tree
-# -- a PR can legitimately be opened for a branch other than the one
-# checked out (scripted PR creation, multiple worktrees). "Pushed" is
-# checked via `git merge-base --is-ancestor <branch> <branch>@{u}`, not
-# SHA equality: a local branch that is merely behind its already-pushed
-# upstream (e.g. after a `git fetch` with no local merge) has zero
-# unpushed commits and must not be denied, only a branch with commits
-# not yet present upstream (ahead or diverged) actually reproduces #187.
+# Verifies tool_input.head directly via refs/heads/<branch>, independent
+# of what's checked out in this working tree -- a PR can legitimately
+# target a branch other than the one checked out (scripted PR creation,
+# multiple worktrees). "Pushed" is checked via `git merge-base
+# --is-ancestor <branch> <branch>@{u}`, not SHA equality: a branch merely
+# behind its already-pushed upstream (e.g. after a fetch with no local
+# merge) has zero unpushed commits and must not be denied -- only a
+# branch with commits not yet upstream (ahead or diverged) reproduces
+# #187.
 #
-# Any local git state this hook cannot resolve to a real answer -- not
-# inside a work tree, tool_input.head not a local branch (e.g. a
-# fork/cross-repo head), an inconclusive merge-base result -- fails OPEN
-# (exit 0, stderr warning), mirroring
-# hooks/check-pr-skill-audit-disclosure.sh's fail-open philosophy.
+# Any local git state this hook cannot resolve -- not inside a work
+# tree, tool_input.head not a local branch (e.g. a fork/cross-repo
+# head), an inconclusive merge-base result -- fails OPEN (exit 0, stderr
+# warning), mirroring hooks/check-pr-skill-audit-disclosure.sh's
+# fail-open philosophy.
 #
-# Unlike that hook, there is no CI backstop for this failure mode -- but
-# there doesn't need to be one: the create_pull_request call this hook
-# gates is itself the ground truth (GitHub rejects an unpushed/behind
-# branch with its own "No commits between..." error). Failing open here
-# never hides the underlying problem; it just means the agent hits
-# GitHub's raw error instead of this hook's clearer one for that one call,
-# no worse than if this hook did not exist.
+# Unlike that hook, there is no CI backstop here -- but none is needed:
+# the create_pull_request call this hook gates is itself the ground
+# truth (GitHub rejects an unpushed/behind branch with its own "No
+# commits between..." error). Failing open just means the agent sees
+# GitHub's raw error instead of this hook's clearer one, no worse than
+# if this hook did not exist.
 #
 # Denies via the PreToolUse hookSpecificOutput JSON on stderr + exit 2,
 # same convention as check-issue-acm-disclosure.sh and
