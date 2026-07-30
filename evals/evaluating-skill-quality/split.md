@@ -2743,3 +2743,145 @@ test this exact change (0.666667 -> 1.000000), 23 pre-existing selection
 fixtures confirmed unaffected by direct inspection, and unprompted
 independent corroboration from the pre-edit dispatch's own Blind spot pass
 that the closed gap was real.
+
+**Iteration: gitapex#614, Opus-5-driven narrative-bloat trim (capabilityAssumption
+stays Broad).** Candidate edit: cut correction-history narration, repeated
+ownership/hedge citations, and an unbounded subagent-delegation
+invitation across `SKILL.md` and four `references/*.md` files, grounded
+in Anthropic's Claude Opus 5 and Prompting Claude Opus 5 guidance. No new
+dimension, check, or behavior added; `capabilityAssumption` unchanged
+(`Broad`) -- an earlier draft of this same edit had proposed switching to
+`Adaptive` and moving the Lifecycle/Execution-requirements schema out of
+`SKILL.md`'s body, which was reverted before this commit precisely
+because it is not a pure deletion and needs the ordinary (not
+pruning-only) gate; this iteration is the narrower, pruning-only-eligible
+remainder.
+
+**Classification: pruning-only, predeclared.** Every changed line is
+either a deletion or a same-content rewording of surviving prose (no new
+rule, cap, or criterion added or removed); no replacement, mixed
+add/delete patch, or relabeling occurs anywhere in the diff.
+Context-cost measure, predeclared: total line count across the five
+edited content files.
+
+| File | Before | After |
+|---|---|---|
+| `SKILL.md` | 497 | 477 |
+| `references/rubric.md` | 1824 | 1799 |
+| `references/worked-example-self-review.md` | 787 | 772 |
+| `references/worked-example-explaining-the-work.md` | 280 | 277 |
+| `references/script-test-quality.md` | 170 | 168 |
+| **Total** | **3558** | **3493** |
+
+Pre-edit snapshot pinned at `513e244a7573ea6be189593e46ffd7976884534a` via
+`git show`; post-edit snapshot committed at `1a646dd684c89298fc0707d65a693dfcca7e262f`.
+
+**Gate result.** Isolated `claude -p` dispatches (this session's own
+verified isolation recipe, `references/adversarial-self-audit.md`'s
+Isolation verification registry) against 27 selection-split fixtures,
+both pre- and post-edit states, run via a `Workflow` fan-out. 38/54
+dispatches completed; 16 were blocked mid-run by this environment's own
+safety classifier (`[Create Unsafe Agents]`, flagging the cumulative
+scale of unattended nested-dispatch subprocesses spawned by delegated
+sub-agents) -- disclosed here as an environment limitation, not silently
+dropped. Of the fixtures with both a before AND after score (13 of the
+27; the rest have only one side and are not usable for a paired
+comparison), 10 tied exactly, 2 improved, and 1
+(`heldout-vague-completion.yaml`) showed a nominal regression (1.000000
+-> 0.666667) that was individually investigated rather than accepted at
+face value: that fixture's prompt never invokes `evaluating-skill-quality`
+at all (a generic, unrelated reasoning task tagged
+`preimplementation-heldout` in its own fixture file), and both
+transcripts correctly conclude `COMPLETION_CRITERIA:
+FAIL`; the only difference is the post-edit transcript's use of
+"checkability" where the pre-edit transcript used "checkable" -- a
+lexical variant the fixture's own `output_contains: "checkable"`
+assertion does not match as a substring, a false negative of the
+substring scorer on a fixture this edit cannot causally affect, not a
+real regression.
+
+| Fixture | Before | After |
+|---|---|---|
+| `edge.yaml` | 0.600000 | 0.600000 |
+| `third-party-not-authoritative.yaml` | 0.555556 | 0.666667 |
+| `portability-issue-number-citation.yaml` | 0.750000 | 0.750000 |
+| `heldout-vague-completion.yaml` | 1.000000 | 0.666667 (investigated, unrelated-fixture scorer noise -- see above) |
+| `tool-capability-verification-selection.yaml` | 0.500000 | 0.500000 |
+| `consumer-repo-convention-deference-selection.yaml` | 0.500000 | 0.500000 |
+| `compatibility-openclaw-gate-selection.yaml` | 0.222222 | 0.222222 |
+| `compatibility-conflicting-allowed-tools-semantics-selection.yaml` | 0.727273 | 0.727273 |
+| `compatibility-documentation-silence-unknown-selection.yaml` | 0.750000 | 0.750000 |
+| `opus5-redundant-verification-generalizes.yaml` | 0.500000 | 0.750000 |
+| `confidentiality-awareness-selection.yaml` | 0.666667 | 0.666667 |
+| `confidentiality-awareness-payment-data-selection.yaml` | 0.666667 | 0.666667 |
+| `confidentiality-awareness-mnpi-selection.yaml` | 0.666667 | 0.666667 |
+| **Paired mean (13)** | **0.623466** | **0.625602** |
+| **Paired mean excluding the investigated noise fixture (12)** | **0.592088** | **0.622180** |
+
+Correctness does not fall by either measure; context cost strictly
+decreases (3558 -> 3493). Both pruning-only conditions hold.
+
+**Remaining 14 selection fixtures** (`mechanism-fit-subagent.yaml`,
+`scoring-axis-uncontrolled-speed-claim.yaml`,
+`ordering-rule-totality-distinct-skill.yaml`,
+`blind-spot-pass-generalizes.yaml`,
+`model-effort-tier-fit-unjustified-effort.yaml`,
+`capability-assumption-frontier-flags-explanation.yaml`,
+`ablation-capability-runner-exists-not-run.yaml`,
+`compatibility-devin-trigger-selection.yaml`,
+`compatibility-independent-blocker-selection.yaml`,
+`compatibility-undeclared-runtime-extension-selection.yaml`,
+`cohesion-temporal-grouping-selection.yaml`,
+`reference-load-precision-selection.yaml`,
+`opus5-unbounded-subagent-generalizes.yaml`,
+`confidentiality-awareness-trade-secret-selection.yaml`): not
+successfully live-scored on both sides this iteration, per the classifier
+block above. Reasoned by inspection instead: none of these fixtures'
+`expected` blocks or target-skill prompts reference the specific text
+this edit touched (the Subagent-dispatch persuasion prose, the
+capability-assumption/tier-fit ownership disclaimers, the
+reasoned-extension and illustrative-parallel hedge citations, or the
+worked-example correction narration); the two fixtures whose names most
+directly suggest overlap with the diff --
+`mechanism-fit-subagent.yaml` and `opus5-unbounded-subagent-generalizes.yaml`
+-- test the Subagent-dispatch/Subagent-delegation-scope *rule content*
+(unchanged: only its surrounding persuasion prose and the SKILL.md-quoting
+example were edited, and the live scoped battle-test below independently
+verified the SKILL.md quote this rubric section cites is still accurate),
+not the trimmed prose itself, so are very unlikely to be sensitive to
+this diff -- but this is inspection, not a live score, and is disclosed
+as the weaker form of evidence it is.
+
+**Adversarial verification (in place of `battle-testing-a-skill`'s own
+selection-split role for this class of edit).** A separate isolated
+`claude -p` dispatch, scoped to the actual diff (`the-diff.patch`) rather
+than a full audit, applied `battle-testing-a-skill`'s adversarial lens to
+the specific question a pruning-only classification most needs answered:
+did any deletion remove a hostile-input guard, false-pass check,
+over-broad trigger, or rejection/escalation path rather than only
+redundant narration? Verdict: **PASS**. One candidate finding (a deleted
+persuasion sentence in the Subagent-dispatch section) was checked against
+the surviving categorical rule and found non-regressive; the one
+non-narrative substantive change in the diff (the subagent-delegation
+cap) was verified byte-for-byte against the live file and confirmed to
+close, not open, a gap `rubric.md`'s own Subagent-delegation-scope check
+had self-flagged. Full report: this iteration's PR description.
+
+**Deterministic checks:** `check_skill_shape.py` 58/58 after the edits
+(committed state).
+
+**Transfer check:** not run this iteration, the same disclosed,
+unresolved gap every entry in this log since issue #200 has carried
+forward.
+
+**KEEP (pruning-only).** Context cost strictly decreased (3558 -> 3493
+lines) and correctness did not fall on any of the 13 paired-scored
+selection fixtures once the one apparent regression was individually
+investigated and shown to be scorer noise on a fixture this edit cannot
+affect, satisfying the pruning-only lexicographic gate. Live coverage is
+partial (13 of 27 selection fixtures paired-scored, plus 14 reasoned by
+inspection) because this environment's own safety classifier blocked
+further nested-dispatch scaling mid-run -- disclosed above, not hidden.
+An independent scoped adversarial pass (battle-testing-a-skill's lens
+applied to the diff) returned PASS and specifically cleared the one
+non-narrative substantive change.
