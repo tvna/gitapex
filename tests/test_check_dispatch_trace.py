@@ -145,6 +145,21 @@ def test_count_dispatches_bash_pattern_ignores_non_matching_command():
     assert cdt.count_dispatches(blocks, ["Agent"], pattern) == 0
 
 
+def test_count_dispatches_bash_pattern_tolerates_non_dict_input():
+    # A Bash tool_use block whose `input` is present but not a dict (a
+    # malformed/unexpected transcript shape) must not crash count_dispatches
+    # -- it simply cannot match the bash pattern, not an AttributeError.
+    import re
+    pattern = re.compile(r"claude\s+(-p|--print)\b")
+    blocks = [
+        {"name": "Bash", "input": ["not", "a", "dict"]},
+        {"name": "Bash", "input": "also not a dict"},
+        {"name": "Bash", "input": 42},
+        {"name": "Bash", "input": None},
+    ]
+    assert cdt.count_dispatches(blocks, ["Agent"], pattern) == 0
+
+
 def test_count_dispatches_bash_pattern_does_not_double_count_agent():
     blocks = [{"name": "Agent"}]
     import re
@@ -221,6 +236,30 @@ def test_cli_check_transcript_bash_pattern_flag(tmp_path: Path):
         "--dispatch-bash-pattern", r"claude\s+(-p|--print)\b",
     ])
     assert rc == 0
+
+
+def test_cli_check_transcript_invalid_bash_pattern_exit_2(tmp_path: Path, capsys):
+    p = tmp_path / "t.jsonl"
+    p.write_text(TRANSCRIPT_NO_DISPATCH, encoding="utf-8")
+    rc = cdt.main([
+        "check-transcript", "--transcript", str(p),
+        "--dispatch-tool-name", "Agent",
+        "--dispatch-bash-pattern", "(unclosed",
+    ])
+    assert rc == 2
+    assert "invalid --dispatch-bash-pattern" in capsys.readouterr().err
+
+
+def test_cli_run_invalid_bash_pattern_exit_2(tmp_path: Path):
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("dispatch", encoding="utf-8")
+    rc = cdt.main([
+        "run", "--prompt-file", str(prompt_file),
+        "--transcript-out", str(tmp_path / "out.jsonl"),
+        "--dispatch-tool-name", "Agent",
+        "--dispatch-bash-pattern", "(unclosed",
+    ])
+    assert rc == 2
 
 
 def test_cli_requires_dispatch_tool_name(tmp_path: Path):

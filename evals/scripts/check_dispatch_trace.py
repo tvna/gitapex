@@ -119,7 +119,8 @@ def count_dispatches(
             count += 1
             continue
         if dispatch_bash_pattern is not None and name == "Bash":
-            command = (block.get("input") or {}).get("command")
+            block_input = block.get("input")
+            command = block_input.get("command") if isinstance(block_input, dict) else None
             if isinstance(command, str) and dispatch_bash_pattern.search(command):
                 count += 1
     return count
@@ -251,7 +252,11 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
 
-    pattern = re.compile(args.dispatch_bash_pattern) if args.dispatch_bash_pattern else None
+    try:
+        pattern = re.compile(args.dispatch_bash_pattern) if args.dispatch_bash_pattern else None
+    except re.error as exc:
+        print(f"error: invalid --dispatch-bash-pattern: {exc}", file=sys.stderr)
+        return 2
 
     if args.command == "check-transcript":
         transcript = Path(args.transcript)
