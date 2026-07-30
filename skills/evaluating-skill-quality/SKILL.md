@@ -369,7 +369,8 @@ dispatch's report verbatim, per Subagent dispatch above.
    portability level and its capability assumption per the sections above.
    Check the declared capability assumption against any model/effort pin
    step 2 already found (a `Frontier` declaration paired with a
-   weak-tier pin is a contradiction) -- this is that check's one owner.
+   weak-tier pin is a contradiction) -- this is the declaration-vs-pin
+   check's one owner.
    When the target has no sidecar (e.g. vendored
    from a repository that has not adopted this convention), establish
    both by reading the target's content instead -- the same way an

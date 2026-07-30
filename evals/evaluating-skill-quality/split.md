@@ -2815,7 +2815,21 @@ real regression.
 | `confidentiality-awareness-selection.yaml` | 0.666667 | 0.666667 |
 | `confidentiality-awareness-payment-data-selection.yaml` | 0.666667 | 0.666667 |
 | `confidentiality-awareness-mnpi-selection.yaml` | 0.666667 | 0.666667 |
-| **Paired mean (13)** | **0.623466** | **0.625602** |
+| `mechanism-fit-subagent.yaml` | 0.666667 | not scored (classifier-blocked) |
+| `scoring-axis-uncontrolled-speed-claim.yaml` | not scored (classifier-blocked) | 0.333333 |
+| `ordering-rule-totality-distinct-skill.yaml` | not scored (classifier-blocked) | 1.000000 |
+| `blind-spot-pass-generalizes.yaml` | 0.750000 | not scored (classifier-blocked) |
+| `model-effort-tier-fit-unjustified-effort.yaml` | not scored (classifier-blocked) | 0.500000 |
+| `capability-assumption-frontier-flags-explanation.yaml` | not scored (classifier-blocked) | 0.500000 |
+| `ablation-capability-runner-exists-not-run.yaml` | not scored (classifier-blocked) | 0.750000 |
+| `compatibility-devin-trigger-selection.yaml` | 0.428571 | not scored (classifier-blocked) |
+| `compatibility-independent-blocker-selection.yaml` | 0.300000 | not scored (classifier-blocked) |
+| `compatibility-undeclared-runtime-extension-selection.yaml` | not scored (classifier-blocked) | not scored (classifier-blocked) |
+| `cohesion-temporal-grouping-selection.yaml` | 0.500000 | not scored (classifier-blocked) |
+| `reference-load-precision-selection.yaml` | 0.800000 | not scored (classifier-blocked) |
+| `opus5-unbounded-subagent-generalizes.yaml` | not scored (classifier-blocked) | not scored (classifier-blocked) |
+| `confidentiality-awareness-trade-secret-selection.yaml` | not scored (classifier-blocked) | 0.666667 |
+| **Paired mean (13 fixtures with both sides scored)** | **0.623466** | **0.625602** |
 | **Paired mean excluding the investigated noise fixture (12)** | **0.592088** | **0.622180** |
 
 Correctness does not fall by either measure; context cost strictly
