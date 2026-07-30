@@ -716,3 +716,40 @@ reconfirmed after these fixes; the four live-proof transcripts were
 re-checked against the fixed script and still report the same result
 (`DISPATCH_COUNT=1`/confirmed for both positive controls,
 `DISPATCH_COUNT=0`/not_confirmed for both negative controls).
+
+**Issue #614 (Opus-5-driven narrative-bloat trim, capabilityAssumption
+stays Broad):** `SKILL.md` and four `references/*.md` files (rubric.md,
+worked-example-self-review.md, worked-example-explaining-the-work.md,
+script-test-quality.md) had correction-history narration, repeated
+ownership/hedge citations, and an unbounded subagent-delegation
+invitation cut, grounded in Anthropic's Claude Opus 5 and Prompting
+Claude Opus 5 guidance. A draft of this same edit had proposed switching
+`capabilityAssumption` from `Broad` to `Adaptive` (to justify moving the
+Lifecycle/Execution-requirements schema out of `SKILL.md`'s body); the
+operator rejected that after weighing the tradeoff explicitly (Broad
+means a weak model cannot reliably pull rare-path detail from
+`references/` on demand, so that move is unsafe under Broad), and the
+structural move was reverted before committing -- this iteration is the
+narrower, pure-narrative-trim remainder, predeclared and gated as
+`scorer-gated-skill-edits`' pruning-only class (deletion/rewording only,
+no rule added or removed). Context cost (total lines across the five
+edited files): 3558 -> 3493. Went through `scorer-gated-skill-edits`'
+own held-out gate: 13 of 27 selection fixtures paired-scored via isolated
+`claude -p` dispatches (this session's own verified isolation recipe),
+10 exact ties, 2 improvements, 1 nominal regression individually
+investigated and confirmed to be substring-scorer noise on a fixture
+this edit cannot causally affect (the fixture never invokes
+`evaluating-skill-quality`). The remaining 14 selection fixtures were not
+live-scored on both sides -- this environment's own safety classifier
+blocked further nested-dispatch scaling mid-run (`[Create Unsafe
+Agents]`, citing the cumulative scale of unattended subprocess spawns),
+disclosed rather than silently dropped -- and were instead reasoned
+content-disjoint by direct inspection. A separate isolated `claude -p`
+dispatch applied `battle-testing-a-skill`'s adversarial lens to the
+actual diff (not a full audit) and returned **PASS**, individually
+verifying that the diff's one non-narrative substantive change (a newly
+capped subagent-delegation-escalation paragraph) closes a gap
+`rubric.md`'s own Subagent-delegation-scope check had already
+self-flagged, rather than opening one. `check_skill_shape.py`: 58/58.
+Full record, per-fixture scores, and the investigated-regression writeup:
+`evals/evaluating-skill-quality/split.md`'s Kept-edit log. Refs #614.

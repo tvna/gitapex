@@ -82,11 +82,9 @@ catalog: fixture setup/teardown patterns, test-double usage, and named
 test smells, rather than an ad hoc "the tests look clean" read. This
 content is drawn from established knowledge of the book's catalog rather
 than a live fetch of the primary text -- the book is not a freely
-fetchable web document, and the two primary sources tried for this
-content in this session (the author's own companion site and the
-publisher's listing page) both returned a network-policy denial, the
-same egress-blocked pattern the Test methodology section above already
-documents for its own sources -- confirm specific pattern names and
+fetchable web document, and the two primary sources tried for it (the
+author's own companion site and the publisher's listing page) both
+returned a network-policy denial -- confirm specific pattern names and
 definitions against the book before treating any phrase below as a
 verbatim quote from it.
 

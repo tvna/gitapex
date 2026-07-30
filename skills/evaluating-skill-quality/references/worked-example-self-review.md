@@ -359,11 +359,8 @@ issues rather than passing by default.
 
 Applicable, not N/A -- this skill ships `scripts/check_skill_shape.py`
 (and its test, `scripts/test_check_skill_shape.py`), the deterministic
-shape checker Step 3 above delegates to. An earlier pass of this same
-review graded this dimension N/A, contradicting its own Step 3 and
-Mechanism-fit sections a few paragraphs up, which both cite that script
-as the shape lane's implementation -- a self-contradiction within one
-document, fixed here rather than left standing.
+shape checker Step 3 above delegates to, per the Mechanism-fit section's
+own citation of that script as the shape lane's implementation.
 
 Walking the actual checklist: **solve, don't punt** -- the script raises
 readable errors (missing file, bad usage) rather than leaving the model
@@ -382,12 +379,8 @@ high-stakes batch work** -- not applicable; this is a single read-only
 pass/fail check, not a plan -> validate -> execute batch pattern.
 
 **Test methodology** (`scripts/test_check_skill_shape.py`, 243 tests
-collected as of this snapshot -- corrected from an earlier "219, no
-coverage config" pass of this same section that never actually opened
-this repository's root `pyproject.toml` and got both numbers wrong; fixed
-here with measured data rather than left standing, the same discipline
-this section's own N/A-to-Applicable correction above already applied).
-**Test levels** -- `main(argv: list[str] | None = None) -> int` is a
+collected as of this snapshot, per this repository's root
+`pyproject.toml`). **Test levels** -- `main(argv: list[str] | None = None) -> int` is a
 directly and thoroughly tested *function*: 11+ assertions call
 `css.main([...])` with real argv-equivalent lists and check its exit
 codes (0/1/2), so `main()`'s own internal logic, including the exit-code
@@ -405,10 +398,9 @@ itself is unit-tested. (This repository's own `pyproject.toml` coverage
 config does separately exclude the two-line `if __name__ ==
 "__main__":` dispatch from statement-coverage measurement -- a standard
 idiom, and accurate on its own terms -- but that is a coverage-accounting
-convention, unrelated to whether integration-level testing occurred; the
-two questions were wrongly conflated in an earlier pass of this section,
-corrected here. The lines actually reported missing near there,
-`3095-3097`, are a different and separately real gap: `main()`'s own
+convention, unrelated to whether integration-level testing occurred. The
+lines actually reported missing near there, `3095-3097`, are a different
+and separately real gap: `main()`'s own
 `except (OSError, UnicodeDecodeError)` handler for a read failure
 mid-`check_shape()` call, also untested.) **Test design
 technique diversity** -- black-box coverage is genuinely broad:
@@ -419,9 +411,8 @@ concrete, e.g. `test_overlong_description_fails` uses
 `test_quoted_description_excludes_surrounding_quotes` targets "exactly
 the cap once quotes drop"; error-guessing/experience-based cases are
 present too (BOM-prefixed files, malformed fences, symlink-basename
-mismatches). No decision-table gap here, corrected from an earlier pass
-of this section that named one without checking the underlying code: a
-decision table is for logic that actually *combines* independent
+mismatches). No decision-table gap here: a decision table is for logic
+that actually *combines* independent
 conditions into one branch, and `check_skill_shape.py`'s own validation
 does not do that for portability/capabilityAssumption/lifecycle --
 `portability-declared` and `capability-assumption-declared` each check
@@ -472,9 +463,8 @@ substitutes a collaborator and returns canned answers when the SUT calls
 it; `chdir` instead mutates real process state (the actual OS working
 directory) before the call and restores it after, with no substituted
 object and no interface the SUT calls into -- environment setup, not a
-test double. (An earlier pass of this section misclassified it as a Stub;
-corrected here on inspection, not left standing.) No Mock, Spy, or Fake
-either, and that absence is explained rather than an unstated gap:
+test double. No Mock, Spy, or Fake either, and that absence is explained
+rather than an unstated gap:
 `check_skill_shape.py` under test is a pure filesystem-read-and-parse
 script with no injected collaborator to substitute -- there is nothing
 here any test double would stand in for.
@@ -492,13 +482,10 @@ check. **Conditional Test Logic**: a full pass over the module (every
 `for`/`if`/`elif`/`while` at test-body indentation, not a sampled subset)
 finds exactly 13 test functions containing a loop in their own body --
 lines 215, 779, 856, 1768, 1780, 1798, 1813, 1832, 2209, 2534, 2578, 3062,
-and 3475 -- all real, low-severity instances of this smell by this
-dimension's own definition, named completely rather than as a partial
-illustration. (An earlier pass of this section cited only 7 of these 13
-under this smell and discussed two more, lines 779 and 856, only under
-Eager Test without cross-tagging them here -- an inconsistency with this
-dimension's own rule, corrected now with the full count rather than left
-standing.) Twelve of the 13 (all but line 3475) share one shape:
+and 3475 -- all 13 real, low-severity instances of this smell by this
+dimension's own definition, including two (lines 779, 856) also
+cross-tagged under Eager Test. Twelve of the 13 (all but line 3475)
+share one shape:
 `for check in <fixed-tuple-or-name-list>: assert ...`, iterating a
 hardcoded literal with one uniform assertion per item -- mild by this
 dimension's own distinction (no data-dependent branching), but still the
@@ -678,11 +665,9 @@ two-sided observation (tight body, grown reference) plus a note to
 re-check, not a present, mature-blocking gap. This "mature" is the bounded kind rubric.md defines: it
 clears everything this repository's tooling can check today, not a claim
 of proven behaviour -- precisely because dimensions 8 and 9 remain
-named-unmeasured rather than passed. (An earlier draft of this verdict
-read "not yet mature" while simultaneously asserting every one of these
-same clear-1-7-plus-named-8-9 conditions -- a verdict that contradicted
-its own governing rubric; corrected here to the verdict those conditions
-actually entail.)
+named-unmeasured rather than passed. (This verdict follows directly from
+the clear-1-7-plus-named-8-9 conditions above, correcting a
+contradictory earlier "not yet mature" draft.)
 
 **Update (capability-assumption axis re-grade, Broad):** this skill's
 `Broad` declaration has since been re-walked against dimensions 2, 3, 5,

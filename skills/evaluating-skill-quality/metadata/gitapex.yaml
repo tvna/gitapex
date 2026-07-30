@@ -209,6 +209,21 @@ spec:
     - kind: deferral
       anchor: "https://github.com/tvna/gitapex/issues/537"
       summary: "Self-review gap 3/3, not blocking, pre-existing (not introduced by this PR): dimensions 5, 7, 9 gaps -- the common-case dispatch mandatorily reads three files, check_skill_shape.py's module docstring may be stale on spec.references' real shape, and the procedure has no tier-specific scaffolding despite a Broad capability declaration."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/614"
+      summary: "Per Anthropic's Opus 5 and Prompting Opus 5 guidance (less need for verification/correction narration, readier subagent delegation, stable long-context following), trimmed narrative bloat across SKILL.md and references/*.md. capabilityAssumption stays Broad -- Adaptive was rejected, since moving Lifecycle/Execution-requirements detail out of the body needs a weak model to pull references/ on demand. Body-length ceiling (issue/537 gap 1/3) only partly relieved: narrative cuts only."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/614"
+      summary: "scorer-gated-skill-edits held-out gate, pruning-only class: context cost 3558->3493 lines. 13/27 selection fixtures paired-scored (10 ties, 2 improved, 1 nominal regression investigated and confirmed unrelated-fixture scorer noise); remaining 14 reasoned content-disjoint by inspection after this session's own safety classifier blocked further nested-dispatch scaling. Full record: evals/evaluating-skill-quality/split.md."
+      outcome:
+        verdict: KEEP
+        class: pruning-only
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/614"
+      summary: "Diff-scoped isolated claude -p dispatches (full-scope dispatches twice timed out at 9.5min, too large here): battle-testing-a-skill on the-diff.patch returned PASS, confirming the one substantive change (a newly capped subagent-delegation escalation) closes a gap rubric.md had self-flagged. A diff-scoped self-review returned WELL-FORMED-AND-MATURE, naming one gap (this decision entry lacked a paired audit entry, unlike issues/495 and /537) -- resolved by this audit entry's own addition."
+      outcome:
+        verdict: WELL-FORMED-AND-MATURE
+        battle_test: PASS
   skillDependencies:
     requires: []
     relatedTo:
