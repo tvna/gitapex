@@ -43,10 +43,16 @@ for the criteria checklist and the template itself.
    claim made in this conversation -- re-derive from the decision
    itself either way, never from a remembered summary of an earlier
    verdict.
-3. State plainly, up front in Context, whether this decision is already
-   implemented (a retrofit ADR written after the fact) or still
-   prospective -- never let a retrofit read as if it were written before
-   the decision was made.
+3. Before drafting, check whether `docs/adr/` already has an existing,
+   still-`Accepted` record covering this same decision -- the requester
+   asking for a new ADR does not mean one doesn't already exist. If one
+   does, treat this as a Step 12 supersession case, or point to the
+   existing record instead of drafting a duplicate, rather than
+   producing a second, independent ADR on the same topic.
+   Separately, state plainly, up front in Context, whether this
+   decision is already implemented (a retrofit ADR written after the
+   fact) or still prospective -- never let a retrofit read as if it
+   were written before the decision was made.
 4. Draft Context and Problem Statement: the forces at play, in
    value-neutral, factual language -- what constraint, requirement, or
    problem made a decision necessary. Not the decision itself, not an
@@ -55,8 +61,10 @@ for the criteria checklist and the template itself.
    it in Context so a later reader can trace these facts back to where
    they came from -- never invent a reference that was not actually
    given. Before transcribing anything, scan the source
-   material for what looks like a secret, credential, token, or personal
-   data pasted alongside the real decision content; redact it rather
+   material for what looks like a secret, credential, token, personal
+   data, or confidential/competitively-sensitive business detail (cost
+   structure, supplier pricing, deal terms, unreleased product plans)
+   pasted alongside the real decision content; redact it rather
    than carrying it into a file that will be committed to the
    repository -- an ADR is more permanent and more widely read than the
    discussion that produced it. When transcribing a fact from source
@@ -180,7 +188,8 @@ ADR** when not applicable.
   time, no matter which turn or which session's memory asks.
 - Do not leave a superseded ADR's `Status` reading `Accepted` once a
   later decision has actually replaced it (Step 12).
-- Do not carry a secret, credential, token, or personal data from source
+- Do not carry a secret, credential, token, personal data, or
+  confidential/competitively-sensitive business detail from source
   material into the drafted ADR -- redact it (Step 4).
 - Do not treat redacting a secret in a follow-up commit as sufficient
   once an ADR carrying it has already been merged -- a git commit is
@@ -190,6 +199,10 @@ ADR** when not applicable.
   reporting the follow-up redaction as having resolved it.
 - Do not write a retrofit ADR as if it were prospective -- disclose the
   already-implemented state up front (Step 3).
+- Do not draft a second, independent ADR for a decision `docs/adr/`
+  already has a still-`Accepted` record for -- check first, and treat a
+  hit as a Step 12 supersession case or point to the existing record
+  instead (Step 3).
 - Do not pass the ADR's title into the write path unsanitized -- the
   title comes from source material Step 1 treats as untrusted, and an
   unsanitized slug can escape `docs/adr/` or collide with an existing
