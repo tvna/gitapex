@@ -9,15 +9,14 @@ scoring step is made deterministic here.
 
 ``output_contains``/``output_not_contains`` check presence/absence anywhere
 in the text, independently of each other -- they cannot verify that two
-substrings are actually *bound together* (e.g. that a specific repair's own
-description sits next to its own classification label, rather than each
-merely appearing somewhere in the output). ``output_contains_near`` (added
-for issue #328's fix to gitapex#312) closes half of that gap: each entry is
-``{"all": [s1, s2, ...], "window": int}`` and is satisfied only when every
-listed substring's first occurrence falls within a ``window``-character span
-of every other -- i.e. they co-occur in roughly the same sentence/paragraph,
-not merely somewhere in the same document. ``window`` defaults to 400 when
-omitted.
+substrings are actually *bound together* (e.g. a repair's own description
+sitting next to its own classification label, rather than each merely
+appearing somewhere in the output). ``output_contains_near`` closes half of
+that gap: each entry is ``{"all": [s1, s2, ...], "window": int}`` and is
+satisfied only when every listed substring's first occurrence falls within
+a ``window``-character span of every other -- i.e. they co-occur in roughly
+the same sentence/paragraph, not merely somewhere in the same document.
+``window`` defaults to 400 when omitted.
 
 Requiring the *right* pairing alone is not sufficient: a short enough
 response can still accidentally satisfy a `near` window for the wrong
@@ -33,15 +32,14 @@ entry's pairing does *not* hold.
 A raw character count alone cannot cleanly separate "these two substrings
 are bound in the same logical unit" from "they merely happen to be within N
 characters of each other" -- a verbose correct paragraph and a terse
-adjacent (but unrelated) one can straddle any fixed window either way (this
-was measured directly against real fixture text while building this
-feature, not assumed). "Near" therefore means two things together, both
-required: (1) within ``window`` characters (a loose backstop, default 400),
-AND (2) no blank line (``"\n\n"``, this repository's own established
-paragraph/list-item separator -- see `merge-retrospective/SKILL.md`'s own
-worked example, one blank-line-separated numbered item per repair) between
-the two occurrences. The blank-line check is what actually carries the
-distinction in practice; the character window is a secondary sanity bound.
+adjacent (but unrelated) one can straddle any fixed window either way.
+"Near" therefore means two things together, both required: (1) within
+``window`` characters (a loose backstop, default 400), AND (2) no blank
+line (``"\n\n"``, this repository's paragraph/list-item separator -- see
+`merge-retrospective/SKILL.md`'s worked example, one blank-line-separated
+item per repair) between the two occurrences. The blank-line check is what
+actually carries the distinction in practice; the character window is a
+secondary sanity bound.
 """
 
 from __future__ import annotations
