@@ -17,7 +17,10 @@ SkillOpt's default split ratio is 2:1:7. This corpus's actual counts were
 already stale in this file and in `eval-status.md` (both said "10
 fixtures" / "2:2:6" when the true count following the #599 iteration was
 3:2:7 = 12) -- fixed here (issue #609) alongside adding one more test
-fixture, for a corrected, current 3:2:8 = 13. Following the precedent
+fixture, for a corrected, current 3:2:8 = 13, and now 3:2:9 = 14 with one
+further test fixture (issue #609, continued again -- see the
+`## Iteration: issue #609 (continued again)` section below). Following
+the precedent
 already set in `skills/scorer-gated-skill-edits/references/worked-example.md`
 ("the ratio is aspirational" for a small fixture count) and
 `evals/evaluating-skill-quality/split.md`'s own disclosed deviations,
@@ -48,7 +51,11 @@ over time, not a smaller gate.
   which belongs to the unrelated Commit-log-rule edit),
   `commit-why-keeps-distinct-reasons.yaml` (new, issue #609; assigned to
   test rather than selection because it did not demonstrate a behavioral
-  improvement -- see the `## Iteration: issue #609` section below).
+  improvement -- see the `## Iteration: issue #609` section below),
+  `why-not-issue-and-adr-numbers-stay-distinct.yaml` (new, issue #609
+  continued again; assigned to test, not selection, for the same
+  reason -- see the `## Iteration: issue #609 (continued again)` section
+  below).
 
 ## Equivalence classes
 
@@ -486,3 +493,100 @@ principle is grounded in [42010] and [ibis] -- with the residual
 verification gap ([42010]'s own site returning HTTP 503, reliance on
 [arc42]/Wikipedia secondary summaries) disclosed plainly rather than
 smoothed over.
+
+## Iteration: issue #609 (continued again), Issue/ADR number-conflation clarification
+
+Candidate edit: reviewer feedback caught that the Code-comments format
+line, `# why-not(#NNN): <=120 chars [-> docs/adr/NNNN-*.md]`, places two
+different placeholders one character apart (`#NNN`, three digits with a
+`#`; `NNNN`, four digits, no `#`) with nothing in the prose stating they
+are two independent number spaces. Confirmed against
+`drafting-an-adr`'s own convention (verified by reading that skill's
+`SKILL.md` directly, step 11: an ADR's own sequence number is assigned by
+"re-check[ing] the target directory's actual current highest number
+immediately before writing," entirely independent of any issue/PR
+number): the two are genuinely unrelated identifiers, so the visual
+near-collision in the format line is a real clarity defect, not a
+false alarm. The candidate adds one clarifying sentence immediately
+after the format block stating plainly that `#NNN` is the citing
+issue/PR number, `NNNN` is the ADR's own independent sequence number, and
+the two must never be assumed equal.
+
+Classification: **ordinary** (adds a clarifying sentence; not a deletion).
+
+### A new fixture was authored to test the actual failure mode, empirically tied on both model tiers
+
+`why-not-issue-and-adr-numbers-stay-distinct.yaml` (new, **test** split):
+gives the model both a concrete issue number (#340) and a concrete,
+different ADR sequence number (0012) in the prompt, and checks the
+written comment preserves both numbers distinctly rather than
+substituting one for the other (`output_not_contains: "adr/0340"` catches
+the specific conflation failure this ambiguity invites -- reusing the
+issue number as the ADR number). One fresh dispatch per side, per tier,
+against only `why-not-issue-and-adr-numbers-stay-distinct.yaml` -- not a
+full-corpus selection-split gate table (see the first iteration's "Gate
+result" table above for that):
+
+| Fixture | Tier | Before (old text) | After (new text) |
+|---|---|---|---|
+| `why-not-issue-and-adr-numbers-stay-distinct.yaml` | this session's model | 1.000000 | 1.000000 |
+| `why-not-issue-and-adr-numbers-stay-distinct.yaml` | Haiku 4.5 | 1.000000 | 1.000000 |
+
+A genuine tie on both tiers, not manufactured: when both numbers are
+handed to the model concretely in the prompt, every dispatch on both
+tiers correctly kept them distinct even under the old, ambiguous prose --
+the failure mode the ambiguity invites (silently *deriving* one number
+from the other) doesn't reproduce when the model only has to copy given
+facts rather than infer a missing one. This is a real, disclosed finding
+about *when* the ambiguity could bite (an underspecified prompt forcing
+the model to invent or infer the ADR number, which this fixture does not
+construct -- doing so risks the same construct-validity problem already
+disclosed for this file's other new fixtures) rather than evidence the
+defect doesn't matter: the reviewer's catch is about a documentation
+clarity gap for a *human or model reading the skill's prose itself*, not
+strictly about a reproducible generation-time error in this one concrete
+scenario.
+
+`edge.yaml` was re-dispatched once more against the new text as an
+additional regression spot-check (not a second selection-scope claim):
+scored 1.000000 this run, versus the 0.500000 recorded earlier in the
+`## Iteration: issue #609 (continued)` section above for the same
+fixture and the same "old" text. This is not an improvement caused by
+this edit -- it is the same disclosed assertion-fragility class scoring
+differently across independent dispatches for reasons unrelated to the
+skill text (this run's response happened not to restate the correct
+future comment syntax, so it didn't trip the `output_not_contains:
+"# why-not(#"` ban that the prior dispatch tripped). Recorded here as
+further confirmation of the pre-existing fragility, not as a second
+gate result for this iteration.
+
+### Why this is landed anyway, outside the scorer-gate's scope
+
+Same reasoning as both prior `## Iteration: issue #609` sections: no
+`selection`-split fixture exercises the changed branch, and the one
+`test`-split fixture built specifically to probe this defect ties on
+both model tiers for a reason that itself narrows (rather than voids)
+the finding -- the concrete scenario tested doesn't force the ambiguity
+to bite, not that the ambiguity was never real. `#NNN` and `NNNN`
+sitting one character apart with no disambiguating text remains an
+actual, reviewer-caught documentation defect, verified against
+`drafting-an-adr`'s own real (and independently numbered) ADR-sequence
+convention. Landed as a clarity-accuracy fix outside the gate's
+behavioral scope, per this file's own established precedent, rather than
+claimed as a scorer-validated behavioral KEEP it did not earn.
+
+### Rejected-edit log
+
+**Behavioral verdict: REJECT (ties on both tiers on the one fixture
+built to probe this; no selection-split fixture in scope).** No wording
+was discarded after the fact -- this is the accepted, disclosed result.
+
+### Verdict
+
+**Behavioral gate: REJECT (out of scorer-gate scope by construction) --
+landed anyway as a documentation-clarity fix**, per the reasoning above.
+The reviewer's catch (a real, human-legible ambiguity between two
+adjacent-looking placeholders denoting two unrelated identifiers) is
+corrected in the prose; the new fixture's tie on both tiers is disclosed
+honestly as evidence about *when* the ambiguity manifests in generated
+output, not as proof the defect was never real.

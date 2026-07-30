@@ -37,3 +37,16 @@ edit-unrelated assertion-fragility reason -- see `split.md`'s
 `## Iteration: issue #609 (continued)` section for the full record and
 the reasoning for landing it as a governance-grounding-accuracy fix
 outside the scorer-gate's scope.
+
+A fourth iteration (issue #609, continued again) fixed a reviewer-caught
+clarity defect: the why-not comment's format line places the issue/PR
+number placeholder (`#NNN`) and the ADR's own independent sequence-number
+placeholder (`NNNN`) one character apart with nothing disambiguating
+them, confirmed against `drafting-an-adr`'s own convention (an ADR
+number is assigned from the current highest file in `docs/adr/`,
+unrelated to any issue number). A new test fixture giving the model both
+numbers concretely ties at 1.000000 on both this session's model and
+Haiku 4.5, old text and new text alike -- disclosed as evidence about
+when the ambiguity manifests, not as proof it was never real -- see
+`split.md`'s `## Iteration: issue #609 (continued again)` section. The
+corpus is now 14 fixtures (3:2:9).

@@ -45,6 +45,14 @@ into the wrong artifact.
   # why-not(#NNN): <=120 chars [-> docs/adr/NNNN-*.md]
   ```
 
+  `#NNN` and the path's `NNNN` are two unrelated numbers, not the same
+  value in different padding: `#NNN` is the citing issue/PR number,
+  while `NNNN` is that ADR's own independent sequence number (assigned
+  by scanning `docs/adr/`'s current highest file, per this repository's
+  ADR-drafting convention) -- an ADR can exist (and be cited) with no
+  issue at all, and one issue can cite different ADRs across different
+  comments. Never assume or write the same digits for both.
+
   Requires a citable issue/PR/ADR that actually evaluated the rejected
   alternative. If nothing can be cited, do not write the comment — never
   fabricate a rationale. The underlying principle is real governance

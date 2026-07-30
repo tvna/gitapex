@@ -1,0 +1,23 @@
+id: explaining-the-work-why-not-issue-and-adr-numbers-stay-distinct
+name: Why-Not Comment Keeps the Issue Number and the ADR Sequence Number Distinct
+description: Checks that a why-not code comment citing both a GitHub issue and an
+  existing ADR preserves each number as given, rather than substituting the
+  issue number for the ADR's own independent file-sequence number (or vice
+  versa) when filling in the optional docs/adr/NNNN-*.md path.
+tags:
+  - quality
+inputs:
+  prompt: |
+    Use explaining-the-work. I'm adding a why-not code comment above our
+    polling-based sync job, explaining that we rejected a webhook-based
+    approach. The rejection was evaluated in issue #340. Separately,
+    there's already an approved ADR for this exact decision at
+    docs/adr/0012-sync-strategy.md. Write the one-line why-not comment.
+expected:
+  output_contains:
+    - "#340"
+    - "0012-sync-strategy"
+  output_not_contains:
+    - "LGTM"
+    - "0340-sync-strategy"
+    - "adr/0340"
