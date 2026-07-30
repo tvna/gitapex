@@ -13,14 +13,17 @@ skill; `eval-status.md` previously noted no committed run existed.
 
 ## Corpus size caveat
 
-SkillOpt's default split ratio is 2:1:7. At 10 fixtures that ratio is not
-literally achievable; following the precedent already set in
-`skills/scorer-gated-skill-edits/references/worked-example.md` ("the
-ratio is aspirational" for a small fixture count) and
+SkillOpt's default split ratio is 2:1:7. This corpus's actual counts were
+already stale in this file and in `eval-status.md` (both said "10
+fixtures" / "2:2:6" when the true count following the #599 iteration was
+3:2:7 = 12) -- fixed here (issue #609) alongside adding one more test
+fixture, for a corrected, current 3:2:8 = 13. Following the precedent
+already set in `skills/scorer-gated-skill-edits/references/worked-example.md`
+("the ratio is aspirational" for a small fixture count) and
 `evals/evaluating-skill-quality/split.md`'s own disclosed deviations,
-this split uses 2:2:6, named explicitly as a deviation from the 2:1:7
-default. The honest minimal groundwork is a larger fixture corpus over
-time, not a smaller gate.
+this split's ratio is a named deviation from the 2:1:7 default, not a
+literal match. The honest minimal groundwork is a larger fixture corpus
+over time, not a smaller gate.
 
 ## Assignment
 
@@ -42,7 +45,10 @@ time, not a smaller gate.
   than renamed, since the fixture id is stable and referenced above;
   assigned to test, not selection, so it does not retroactively expand
   this iteration's already-recorded selection-split gate table above,
-  which belongs to the unrelated Commit-log-rule edit).
+  which belongs to the unrelated Commit-log-rule edit),
+  `commit-why-keeps-distinct-reasons.yaml` (new, issue #609; assigned to
+  test rather than selection because it did not demonstrate a behavioral
+  improvement -- see the `## Iteration: issue #609` section below).
 
 ## Equivalence classes
 
@@ -202,3 +208,137 @@ fixtures continue to pass (the two contraction-fragility scores are a
 disclosed, pre-existing, edit-unrelated scorer quirk, not a regression),
 and the transfer check on an adjacent model tier shows no regression.
 **KEEP.**
+
+## Iteration: issue #609, Commit-log citation and brevity-cap correction
+
+Candidate edit: direct verification (real fetches of [beams]/[kerneldoc]/
+[progit], not memory) after issue #599 merged found two inaccuracies in
+its own References work: (a) the quoted phrase "long since forgotten the
+immediate details of the discussion" is [kerneldoc]'s alone -- neither
+[beams] nor [progit] contains it or its permanent-record framing -- but
+the Commit-log bullet attributed it to all three collectively; (b) "one
+to a few sentences, not a design essay" is not supported by any of the
+three (none gives a sentence-count rule; [beams]/[progit] give a 72-char
+wrap width, [kerneldoc] a different 75-column one, and [kerneldoc] if
+anything argues for *more* detail for a reader "weeks, months or even
+years later"). The candidate rewrites the same few sentences to fix both,
+preserving "design essay" and "issue/PR body" verbatim since
+`guardrail.yaml` (train) asserts on the former. Two further, independent
+corrections travel in the same commit: the Code-comments bullet gains a
+sentence disclosing that requiring a citable issue/PR/ADR is this
+repository's own stricter-than-consensus policy (no source checked --
+Google's C++ style guide, Ousterhout, Clean Code, kerneldoc's own
+coding-style guidance -- restricts comments this narrowly), and the Notes
+section gains a disclosure that no source checked gives any quantitative
+comment-necessity threshold, mirroring `drafting-an-adr`'s own disclosed
+ADR-significance-threshold silence. Full text: see this PR's diff.
+
+Classification: **ordinary** (rewords existing text and adds new
+disclosure sentences; not a pure deletion, so the pruning-only exception
+does not apply).
+
+### A new fixture was authored, empirically tested against its own
+### hypothesis, and found not to discriminate -- disclosed, not hidden
+
+`commit-why-keeps-distinct-reasons.yaml` was written specifically to test
+whether removing the false brevity cap changes model behavior: a commit
+with three distinct, concrete causal reasons (harder to compress than
+two), asking for "just the message itself" (mirroring
+`commit-includes-terse-why.yaml`'s own established fix for prompt-level
+false ties), asserting only `output_contains` on one keyword per reason
+(never `output_not_contains`/`_near`, and nothing about `Closes`/`Refs`,
+so it does not quietly close this file's already-disclosed Blind spot
+gap). Dispatched once against the old (merged) text and once against the
+candidate text: **both scored 1.000000** -- a model asked for a terse
+commit compressed all three real reasons into a few sentences regardless
+of whether the routing rule stated a fixed sentence-count cap or not.
+This is treated as a genuine finding, not iterated away: the fixture is
+placed in **test** (read-once, non-gating), not `selection`, since it did
+not demonstrate the hypothesized improvement and per this skill's own
+Stop boundary against motivating or leaking from a scored split, its
+design was not reworked after seeing this result. The true corpus size
+(already stale at 12, not the previously-recorded 10, before this
+iteration) updates to 13; `## Corpus size caveat` and `eval-status.md`'s
+stale fixture-count text are both corrected in this same change.
+
+### Gate result -- scored, tied, not a behavioral KEEP
+
+Same fresh-dispatch-per-cell method as the #599 iteration above (full
+skill text, old side pinned via `git show dc79540:...`, new side the
+candidate; `score_contract.py`).
+
+| Fixture | Split | Before (old text) | After (new text) |
+|---|---|---|---|
+| `commit-why-keeps-distinct-reasons.yaml` | test (new) | 1.000000 | 1.000000 |
+| `guardrail.yaml` | train | -- (unaffected assertions; re-run for `design essay` preservation) | 1.000000 |
+| `normal.yaml` | train | -- (unaffected assertions) | 1.000000 |
+| `commit-includes-terse-why.yaml` | selection | -- (unaffected assertions) | 1.000000 |
+| `closes-when-fully-satisfied.yaml` | selection | -- (unaffected assertions) | 1.000000 |
+
+Selection-split mean: before 1.000000 (already-recorded #599 baseline,
+unaffected by this edit), after 1.000000 -- a **tie**.
+`score_contract.py --compare-to 1.000000 --scores <after-selection-scores.txt>`
+would print `1.000000 REJECT` under the strict ordinary gate (a tie is
+rejected, not kept).
+
+### Why this is landed anyway, outside the scorer-gate's scope
+
+Per `scorer-gated-skill-edits/references/worked-example.md`'s own Edit-B
+precedent, a tied reword is rejected and not kept -- and that precedent
+is followed here for the *behavioral* verdict: this candidate does not
+pass the strict improve-or-reject gate, and is **not** claimed as a
+scorer-validated behavioral improvement. But unlike Edit B (a plausible-
+sounding reword with no independent justification beyond the hope that it
+reads better), this candidate corrects a verified factual inaccuracy in
+what the skill's own References section claims its cited sources say --
+an axis of quality (is this prose accurate to its citations) that no
+fixture in this corpus, existing or newly authored, has any way to
+observe, the same way a broken link or a typo fix would not move a
+behavioral score either. Manufacturing a fixture to force a non-tie for
+a citation-accuracy correction would itself be the kind of construct-
+validity violation `lint_fixture_assertions.py` exists to catch (see
+issue #609's own investigation for the reasoning). The corrected prose
+is therefore landed as a documentation-accuracy fix, explicitly outside
+this gate's behavioral jurisdiction, not smuggled through as a false
+KEEP.
+
+### Transfer check
+
+Re-ran the 2 selection fixtures plus the new test fixture on Haiku 4.5 --
+an adjacent, weaker model tier, same method as the #599 iteration's own
+transfer check -- against the candidate (new) text:
+
+| Fixture | Haiku (new text) |
+|---|---|
+| `closes-when-fully-satisfied.yaml` | 1.000000 |
+| `commit-includes-terse-why.yaml` | 1.000000 |
+| `commit-why-keeps-distinct-reasons.yaml` | 0.750000 |
+
+No regression on the two selection fixtures. The new test fixture is
+notable: on Haiku, the response dropped the third reason (Redis already
+running for session storage) and kept only the first two (pod-restart
+reset, per-pod counter scaling) -- the same real behavior the fixture was
+designed to detect, but surfacing on the weaker tier where the strong-tier
+dispatch (this session's own model, scored 1.000000 both before and
+after) did not exhibit it. This is disclosed as a genuine, tier-dependent
+finding, not smoothed over: removing the false brevity cap does not
+reliably prevent a weaker model from dropping a real reason under
+terseness pressure. No no-skill baseline was separately measured this
+iteration -- the same disclosed gap `evaluating-skill-quality/split.md`
+and this file's own #599 transfer check already carry.
+
+### Rejected-edit log
+
+**Behavioral verdict: REJECT (tie).** No candidate wording was discarded
+after the fact -- the tie was the actual, accepted, disclosed result of
+the one candidate scored, not a defect hidden by retrying. See "Why this
+is landed anyway" above for why the corrected prose ships despite this.
+
+### Verdict
+
+**Behavioral gate: REJECT (tie) -- landed anyway as a documentation-
+accuracy fix outside the gate's scope**, per the reasoning above. No
+regression on any train, selection, or test fixture (all still score
+1.000000 or their already-disclosed pre-existing baseline); the new test
+fixture's tie is a genuine, disclosed finding about model behavior under
+brevity-cap removal, not a defect.

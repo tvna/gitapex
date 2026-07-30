@@ -18,19 +18,27 @@ into the wrong artifact.
   already says.
 - **Test code -> What**, expressed through the test name. Use a docstring
   only when the test name itself cannot carry an issue reference.
-- **Commit log -> a terse Why, not the full Why.** Per git-community
-  consensus ([beams]; [kerneldoc]; [progit]) the commit body is a
-  permanent record that outlives the discussion that produced it, so it
-  must carry enough Why for a reader who has "long since forgotten the
-  immediate details of the discussion." A commit is a subject line, a
-  short Why (what problem this solves and why this approach -- one to a
-  few sentences, not a design essay), and an issue pointer -- `Closes #N`
-  when the change fully satisfies #N's acceptance criteria, `Refs #N`
-  when it only partially addresses or relates to it -- with any
-  repo-mandated trailers (e.g. `Co-Authored-By`) excepted. The fuller
-  Why, tagged Fact (verified/observed) or Speculation (unverified) rather
-  than blended, still lives in the issue/PR body; the commit's Why is a
-  terse pointer to it, never a duplicate design writeup.
+- **Commit log -> a terse Why, not the full Why.** Per [kerneldoc], the
+  explanation "will be committed to the permanent source changelog, so
+  should make sense to a competent reader who has long since forgotten
+  the immediate details of the discussion that might have led to this
+  patch" -- this permanent-record, forgetful-reader framing is
+  [kerneldoc]'s alone. [beams] and [progit] agree only that the body
+  should explain the change's motivation (what and why, not how;
+  contrast with previous behavior), and both wrap the body at 72
+  characters, distinct from [kerneldoc]'s own 75-column convention;
+  none of the three gives a sentence- or word-count rule for how long
+  the Why itself should be. A commit is a subject line, a Why sized to
+  what that reader needs to grasp the reasoning -- not a fixed count,
+  not a duplicate of the fuller design essay -- and an issue pointer --
+  `Closes #N` when the change fully satisfies #N's acceptance criteria,
+  `Refs #N` when it only partially addresses or relates to it -- with
+  any repo-mandated trailers (e.g. `Co-Authored-By`) excepted. The
+  fuller design essay -- alternatives considered, dead ends, the
+  discussion's back-and-forth -- stays in the issue/PR body, tagged
+  Fact (verified/observed) or Speculation (unverified) rather than
+  blended; the commit's Why is self-contained for a reader who cannot
+  see that body, never a duplicate of the design essay.
 - **Code comments -> Why-not / durable constraints only**, one-line form:
 
   ```
@@ -39,10 +47,18 @@ into the wrong artifact.
 
   Requires a citable issue/PR/ADR that actually evaluated the rejected
   alternative. If nothing can be cited, do not write the comment — never
-  fabricate a rationale. The mechanical part (line length, the
-  `why-not(#NNN):` prefix, the optional ADR path form) is a good fit for a
-  small lint-hook or pre-commit check where the repo has one; keep the
-  judgment call (is a rejected alternative actually citable) in-model.
+  fabricate a rationale. This citable-evidence requirement is this
+  repository's own policy choice, stricter than general software-
+  engineering practice: no primary source checked (Google's C++ style
+  guide, Ousterhout's *A Philosophy of Software Design*, Robert C.
+  Martin's *Clean Code*, the Linux kernel's own coding-style guidance)
+  restricts a good comment to why-not-for-a-rejected-alternative or
+  requires a citation to license one -- all of them sanction broader Why
+  (and sometimes tricky How) with no such gate. The mechanical part (line
+  length, the `why-not(#NNN):` prefix, the optional ADR path form) is a
+  good fit for a small lint-hook or pre-commit check where the repo has
+  one; keep the judgment call (is a rejected alternative actually
+  citable) in-model.
 
 ## Precedence
 
@@ -66,6 +82,14 @@ Portability: the why-not comment's `docs/adr/NNNN-*.md` path and the
 "commit + `Closes #N`/`Refs #N`" convention are this repository's own
 conventions; adapt the literal path/trailer form to whatever issue and
 ADR conventions the calling repository actually uses.
+
+No primary source checked for this skill -- [beams], [kerneldoc],
+[progit], Google's C++ style guide, Ousterhout, or Clean Code -- gives a
+quantitative or measurable threshold for when a comment is necessary or
+how long one may be; every source's own guidance is qualitative
+("obvious," "tricky," "non-obvious"). This silence is itself the honest
+finding, the same shape as `drafting-an-adr`'s own disclosed absence of
+a numeric ADR-significance threshold -- not a gap in this search.
 
 ## References
 

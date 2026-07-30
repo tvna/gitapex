@@ -12,5 +12,14 @@ the train/selection/test assignment and the recorded before/after gate
 result (single dispatch per fixture, not the 3-trials-per-task protocol
 this file's first paragraph still asks for; that fuller protocol remains
 uncommitted). A Haiku-tier transfer check was run for that same
-iteration; no cross-model sweep across the full 10-fixture corpus has
-been done.
+iteration; no cross-model sweep across the full corpus has been done.
+
+A second iteration (issue #609) corrected two citation inaccuracies in
+the #599 Commit-log text and added one disclosure sentence each to the
+Code-comments and Notes sections -- see `split.md`'s own
+`## Iteration: issue #609` section for the full record, including a
+genuine tied (not improved) gate result and the reasoning for landing
+the correction anyway as a documentation-accuracy fix outside the
+scorer-gate's behavioral scope. The corpus is 13 fixtures (corrected
+from a stale "10" this file previously carried, itself already stale
+relative to the true post-#599 count of 12).
