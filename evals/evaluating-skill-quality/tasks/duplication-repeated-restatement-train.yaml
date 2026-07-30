@@ -1,0 +1,45 @@
+id: evaluating-skill-quality-duplication-repeated-restatement-train
+name: Same Rule Restated in Full at Three Sites Instead of Cross-Referenced
+description: Motivates the new dimension-2 duplication example for repeated verbatim restatement -- a SKILL.md states the same "escalate to a human after fewer than 2 of 5 confirmation re-runs fail" rule in full, independently worded but identical in substance, in three separate sections (Procedure, Stop boundaries, and a Notes section) instead of stating it once and cross-referencing. The review must flag this as duplication even though each individual restatement reads fine on its own.
+tags:
+  - quality
+  - conciseness
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "flaky-test-quarantiner". Is this a good skill?
+
+    ---
+    name: flaky-test-quarantiner
+    description: Quarantine a test that fails intermittently in CI. Use when the user asks to quarantine or investigate a flaky test.
+    ---
+
+    # Flaky Test Quarantiner
+
+    ## Procedure
+
+    1. Re-run the failing test 5 times to confirm it is flaky, not broken.
+    2. If it fails fewer than 2 of the 5 re-runs, quarantine it and escalate
+       to a human reviewer for a permanent fix, since two or more failures
+       out of five is not confirmed flakiness.
+
+    ## Stop boundaries
+
+    - Never quarantine a test without escalating it to a human reviewer:
+      any test that failed fewer than 2 of its 5 confirmation re-runs must
+      be handed to a human for a permanent fix, not left quarantined
+      indefinitely.
+
+    ## Notes
+
+    Escalation policy: a test quarantined after confirming flakiness (fewer
+    than 2 failures out of 5 re-runs) is always escalated to a human
+    reviewer for a permanent fix -- quarantine alone is never the final
+    state.
+expected:
+  output_contains:
+    - "duplication"
+    - "cross-reference"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"

@@ -1,0 +1,29 @@
+id: evaluating-skill-quality-sediment-correction-narration-selection
+name: Reference File Narrates a Classification Correction, Different Domain
+description: A different domain and correction type from the train fixture (a category relabeling, not a numeric miscount) -- a reference file says "An earlier draft of this section classified the timeout handler as a retry wrapper; corrected here to a circuit breaker, the pattern it actually implements" instead of stating the corrected classification plainly. The gate measures whether the new sediment example generalizes to a distinct correction type and domain rather than memorizing the train fixture's retry-limit wording.
+tags:
+  - quality
+  - conciseness
+  - opus5-prompting
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft reference file excerpt
+    for a skill called "resilience-pattern-cataloger". Is this a good
+    reference file?
+
+    ---
+    ## Timeout handler
+
+    The `TimeoutGuard` class implements a circuit breaker (An earlier
+    draft of this section classified the timeout handler as a retry
+    wrapper; corrected here to a circuit breaker, the pattern it actually
+    implements, rather than left standing): it opens after 3 consecutive
+    failures and stays open for 30 seconds before allowing a probe
+    request through.
+expected:
+  output_contains:
+    - "sediment"
+    - "narrat"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"

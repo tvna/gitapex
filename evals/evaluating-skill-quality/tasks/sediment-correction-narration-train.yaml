@@ -1,0 +1,27 @@
+id: evaluating-skill-quality-sediment-correction-narration-train
+name: Reference File Narrates Its Own Correction History Instead of Stating the Fact
+description: Motivates the new dimension-2 sediment example for correction-history narration -- a reference file says "An earlier pass of this section miscounted the retry limit as 3; corrected here to 5, the actual value in the script" instead of just stating the corrected fact. Per Anthropic's Opus 5 self-correction guidance, a numeric slip that changes nothing about the reader's own decision needs no narrated history. The review must flag this as sediment, not accept it as helpful transparency.
+tags:
+  - quality
+  - conciseness
+  - opus5-prompting
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft reference file excerpt
+    for a skill called "retry-policy-documenter". Is this a good reference
+    file?
+
+    ---
+    ## Retry limit
+
+    The bundled script retries a failed request up to 5 times before
+    giving up (An earlier pass of this section miscounted the retry limit
+    as 3; corrected here to 5, the actual value in the script, rather than
+    left standing). Each retry waits twice as long as the one before it.
+expected:
+  output_contains:
+    - "sediment"
+    - "narrat"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"

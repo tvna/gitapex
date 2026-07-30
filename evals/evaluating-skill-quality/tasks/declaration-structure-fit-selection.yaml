@@ -1,0 +1,55 @@
+id: evaluating-skill-quality-declaration-structure-fit-selection
+name: Frontier Declaration Pinned Against the Ceiling, Different Domain
+description: A different domain and declared level from the train fixture (Frontier, not Broad; a different rare-path block) -- the target's SKILL.md sits at 498/500 lines while declaring Frontier, with a full inline advanced-configuration block that would fit references/ under Adaptive, and no disclosure of that tradeoff anywhere. The gate measures whether the new Declaration-vs-structure-fit check generalizes to a distinct target and declared level rather than memorizing the train fixture's Broad/schema wording.
+tags:
+  - quality
+  - capability-assumption
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "invoice-line-item-auditor". Its SKILL.md body is 498 of a
+    500-line hard limit (confirmed via check_skill_shape.py), and its
+    metadata/gitapex.yaml declares capabilityAssumption: Frontier, with no
+    entry anywhere in its decision log mentioning Adaptive.
+
+    ---
+    name: invoice-line-item-auditor
+    description: Audit an invoice's line items against a purchase order for discrepancies. Use when the user asks to audit or reconcile an invoice.
+    ---
+
+    # Invoice Line-Item Auditor
+
+    ## Optional: tolerance override
+
+    Optional. `spec.toleranceOverride` in the sidecar declares a
+    per-category variance tolerance when the default 2% doesn't fit:
+
+    ```yaml
+    spec:
+      toleranceOverride:
+        categories:
+          - name: freight
+            percent: 5
+          - name: tax
+            percent: 0
+    ```
+
+    - `name`: required, a non-empty string naming a line-item category.
+    - `percent`: required, a non-negative number.
+    - An unrecognized category name is a validation failure, not a silent no-op.
+    - This field is optional; a skill declaring none uses the default 2%
+      tolerance for every category.
+
+    ## Procedure
+
+    1. Read the invoice's line items and the matching purchase order.
+    2. Flag any line item whose price or quantity variance exceeds the
+       applicable tolerance.
+    3. Report each flagged discrepancy with the exact variance percentage.
+expected:
+  output_contains:
+    - "Declaration-vs-structure"
+    - "Adaptive"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"

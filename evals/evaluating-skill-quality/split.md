@@ -23,9 +23,12 @@ opus5-prompting-fit addition (gitapex#495), a 1:1:0
 confidentiality-awareness addition (gitapex#537), a 0:1:0
 payment-data sub-category addition (gitapex#537 follow-up), a 0:1:0
 MNPI/insider-trading-adjacent sub-category addition (gitapex#537
-follow-up), and a 0:1:0 trade-secret/competitive-harm broadening (gitapex#537
-follow-up), for a resulting 23:27:12 partition. This is named explicitly
-as a deviation from the 2:1:7 default. The
+follow-up), a 0:1:0 trade-secret/competitive-harm broadening (gitapex#537
+follow-up), and a 3:3:0 addition for the three new evaluation criteria
+issue #614's own retrospective motivated (gitapex#619:
+declaration-vs-structure fit, correction-narration sediment, repeated-
+restatement duplication), for a resulting 26:30:12 partition. This is
+named explicitly as a deviation from the 2:1:7 default. The
 honest minimal groundwork, per that same worked example, is a larger
 fixture corpus over time, not a smaller gate.
 
@@ -52,7 +55,10 @@ fixture corpus over time, not a smaller gate.
   `confidentiality-awareness-train.yaml`,
   `dispatch-required-negative-control.yaml` (issue #584 -- see that entry in
   `eval-status.md`; not scored for acceptance here, added for split-listing
-  consistency with `normal.yaml`).
+  consistency with `normal.yaml`),
+  `declaration-structure-fit-train.yaml`,
+  `sediment-correction-narration-train.yaml`,
+  `duplication-repeated-restatement-train.yaml`.
 - **selection** (gates acceptance; scored before/after a candidate edit,
   strict improve-or-reject, ties rejected): `edge.yaml`,
   `mechanism-fit-subagent.yaml`, `third-party-not-authoritative.yaml`,
@@ -78,7 +84,10 @@ fixture corpus over time, not a smaller gate.
   `confidentiality-awareness-selection.yaml`,
   `confidentiality-awareness-payment-data-selection.yaml`,
   `confidentiality-awareness-mnpi-selection.yaml`,
-  `confidentiality-awareness-trade-secret-selection.yaml`.
+  `confidentiality-awareness-trade-secret-selection.yaml`,
+  `declaration-structure-fit-selection.yaml`,
+  `sediment-correction-narration-selection.yaml`,
+  `duplication-repeated-restatement-selection.yaml`.
 - **test** (read once, for a final report only, never to motivate or gate
   an edit): `guardrail.yaml`, `no-fabricated-violation.yaml`,
   `portability-classification.yaml`, `blind-spot-pass-not-silent.yaml`,
