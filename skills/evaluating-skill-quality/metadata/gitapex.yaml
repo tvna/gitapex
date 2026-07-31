@@ -258,6 +258,17 @@ spec:
     - kind: deferral
       anchor: "https://github.com/tvna/gitapex/issues/619"
       summary: "Open question 2/2, not blocking KEEP: whether the duplication bullet adds discriminating power beyond the pre-existing dimension-2 Conciseness check. Both tested fixtures describe an obvious 3x-verbatim restatement dimension-2 already catches; a fixture built around the bullet's actual lowered 2-site threshold would test this more fairly. That fixture doesn't exist yet."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/621"
+      summary: "Folded the marketplace/plugin-install isolated-dispatch mechanism (verified ad hoc during issue/619's own gate correction) into references/adversarial-self-audit.md's Isolation verification registry as a durable, dated Known entry, alongside the existing Agent-tool and --plugin-dir entries. SKILL.md and rubric.md unchanged; capabilityAssumption stays Broad."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/621"
+      summary: "Dispatch-infra fix (same class as issue/584's check_dispatch_trace.py addition), not a rubric.md edit -- scorer-gated-skill-edits' held-out gate does not apply. check_skill_shape.py 58/58, full pytest (100% coverage on the touched script). Live proof on this session's own pinned platform: no-manifest copy made run --marketplace-source/--plugin-name fail loudly (exit 2, no dispatch attempted); manifest-present copy with real plugin registration against a scratch $HOME succeeded."
+      outcome:
+        verdict: KEEP
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/621"
+      summary: "An independent adversarial pass over the new code found and fixed two real defects before merge: empty-string --marketplace-source/--plugin-name values fell through the mutual-requirement bool() check as if omitted, silently skipping registration (the same silent-degradation class this fix exists to close); a relative --marketplace-source was never resolved before the subprocess calls, unlike --isolated-home. Both fixed, regression-tested, re-verified live."
   skillDependencies:
     requires: []
     relatedTo:

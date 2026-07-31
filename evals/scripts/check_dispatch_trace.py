@@ -38,6 +38,22 @@ this module's design:
    dispatch; a checker that only matched `tool_use` names against a fixed
    dispatch-tool set would silently miss it. `dispatch_bash_pattern` lets a
    caller opt into recognizing this second, equally valid dispatch shape.
+3. **The Skill tool cannot discover a target it was never told exists.**
+   `--plugin-dir` auto-triggers Skill-tool discovery, but only because it
+   loads the skill directly; a caller that instead wants an isolated target
+   to be discovered the way a real downstream consumer would install it --
+   via `claude plugin marketplace add` + `claude plugin install` -- gets
+   nothing if the isolated copy has no `.claude-plugin/marketplace.json`.
+   Two consecutive gate cycles (gitapex issues #614 and #619) silently ran
+   in this degraded mode: the dispatch, unable to find the skill, fell back
+   to reading `SKILL.md` directly and reasoning about it in prose instead of
+   invoking a real subagent (gitapex issue #621's root-cause writeup, and
+   `references/adversarial-self-audit.md`'s Isolation-verification registry
+   entry for this mechanism, have the full history). `run`'s
+   `--marketplace-source`/`--plugin-name` flags below run that real
+   registration and fail loudly -- before any dispatch is attempted -- if
+   the isolated copy has no `.claude-plugin/marketplace.json`, rather than
+   silently letting the dispatch proceed in degraded mode.
 
 Standard library only, matching this repository's other `evals/scripts/*.py`
 tooling.
@@ -196,6 +212,75 @@ def build_isolated_home(base_dir: Path) -> Path:
     return isolated_home
 
 
+class PluginRegistrationError(Exception):
+    """Raised when ``claude plugin marketplace add`` or ``claude plugin
+    install`` exits non-zero against an isolated ``$HOME`` -- a failed
+    registration must stop the run, not silently fall through to a dispatch
+    that cannot actually discover the target skill."""
+
+
+_DEFAULT_PLUGIN_REGISTRATION_TIMEOUT_SECONDS = 120
+
+
+def register_plugin_marketplace(
+    marketplace_source: Path,
+    plugin_name: str,
+    *,
+    isolated_home: Path,
+    isolated_cwd: Path,
+    claude_bin: str = "claude",
+    timeout_seconds: float | None = _DEFAULT_PLUGIN_REGISTRATION_TIMEOUT_SECONDS,
+) -> None:
+    """Register ``marketplace_source`` as a plugin marketplace and install
+    ``plugin_name`` from it, against the isolated ``isolated_home``, so a
+    subsequent dispatch's Skill tool can discover the target skill the same
+    way a real downstream consumer would -- rather than via ``--plugin-dir``,
+    which loads skill content directly and never exercises this discovery
+    path (see this module's docstring, lesson 3).
+
+    Raises ``FileNotFoundError`` *before* running any subprocess if
+    ``marketplace_source`` has no ``.claude-plugin/marketplace.json`` -- this
+    is the durable fix for gitapex issue #621: two consecutive gate cycles
+    silently dispatched against a target the Skill tool could never actually
+    discover, because nothing checked for this file's presence and the
+    dispatch quietly fell back to prose reasoning about ``SKILL.md`` instead
+    of a real subagent invocation. Failing loudly here means that can no
+    longer happen unnoticed.
+
+    Raises ``PluginRegistrationError`` if either ``claude plugin marketplace
+    add`` or ``claude plugin install`` exits non-zero. Raises
+    ``OSError``/``FileNotFoundError`` if ``claude_bin`` is not launchable, and
+    ``subprocess.TimeoutExpired`` if either command stalls past
+    ``timeout_seconds`` -- callers should catch these the same way they
+    already catch ``run_live_dispatch``'s failure modes.
+    """
+    marketplace_json = marketplace_source / ".claude-plugin" / "marketplace.json"
+    if not marketplace_json.is_file():
+        raise FileNotFoundError(
+            f"no {marketplace_json} -- the isolated copy has no marketplace "
+            "manifest, so the Skill tool cannot discover the target plugin; "
+            "refusing to dispatch in degraded/simulated mode (gitapex #621)"
+        )
+
+    env = dict(os.environ)
+    env.pop("CLAUDE_CODE_SESSION_ID", None)
+    env["HOME"] = str(isolated_home)
+    env["PWD"] = str(isolated_cwd)
+
+    for argv in (
+        [claude_bin, "plugin", "marketplace", "add", str(marketplace_source)],
+        [claude_bin, "plugin", "install", plugin_name],
+    ):
+        result = subprocess.run(
+            argv, cwd=str(isolated_cwd), env=env, capture_output=True,
+            text=True, check=False, timeout=timeout_seconds,
+        )
+        if result.returncode != 0:
+            raise PluginRegistrationError(
+                f"{' '.join(argv)} exited {result.returncode}: {result.stderr}"
+            )
+
+
 _DEFAULT_LIVE_DISPATCH_TIMEOUT_SECONDS = 600
 
 
@@ -313,8 +398,53 @@ def main(argv: list[str] | None = None) -> int:
         help="Seconds before a stalled live dispatch is killed (default 600). "
              "0 or negative disables the timeout.",
     )
+    run_p.add_argument(
+        "--marketplace-source", default=None,
+        help="Path to an isolated copy that should contain "
+             ".claude-plugin/marketplace.json. When given (with --plugin-name), "
+             "runs `claude plugin marketplace add`/`claude plugin install` "
+             "against the isolated $HOME before dispatching, and fails loudly "
+             "(exit 2) if the manifest is missing, rather than dispatching in "
+             "degraded mode (gitapex #621). Must be given together with "
+             "--plugin-name.",
+    )
+    run_p.add_argument(
+        "--plugin-name", default=None,
+        help="Plugin name to `claude plugin install` (e.g. gitapex@gitapex). "
+             "Must be given together with --marketplace-source.",
+    )
 
     args = parser.parse_args(argv)
+
+    # `None` (the flag was never passed -- check-transcript's own sub-parser
+    # doesn't define these two flags at all, so getattr's default covers that
+    # case too) means "opted out of marketplace registration", legitimate.
+    # An explicitly-passed value that strips to empty (e.g. an unset
+    # environment variable interpolated as `--marketplace-source ""` by a
+    # caller's own shell wiring) is a DIFFERENT case -- the caller opted in
+    # but supplied a broken value -- and must fail loudly here rather than
+    # being silently treated the same as "opted out": that would fall
+    # through to an ordinary dispatch with no marketplace registration and
+    # no error, reproducing the exact silent-degraded-dispatch failure mode
+    # this flag exists to close.
+    raw_marketplace_source = getattr(args, "marketplace_source", None)
+    raw_plugin_name = getattr(args, "plugin_name", None)
+    marketplace_source = (raw_marketplace_source or "").strip()
+    plugin_name = (raw_plugin_name or "").strip()
+    if args.command == "run":
+        given = (raw_marketplace_source is not None, raw_plugin_name is not None)
+        if given[0] != given[1]:
+            print(
+                "error: --marketplace-source and --plugin-name must be given together",
+                file=sys.stderr,
+            )
+            return 2
+        if any(given) and not (marketplace_source and plugin_name):
+            print(
+                "error: --marketplace-source and --plugin-name must not be blank",
+                file=sys.stderr,
+            )
+            return 2
 
     try:
         pattern = re.compile(args.dispatch_bash_pattern) if args.dispatch_bash_pattern is not None else None
@@ -359,6 +489,35 @@ def main(argv: list[str] | None = None) -> int:
             except FileNotFoundError as exc:
                 print(f"error: {exc}", file=sys.stderr)
                 return 2
+
+        if marketplace_source:
+            try:
+                register_plugin_marketplace(
+                    # Resolved eagerly: the subprocess calls below run with
+                    # cwd=isolated_cwd (a fresh tempdir unrelated to this
+                    # process's real cwd), so a relative path must be
+                    # resolved against *this* process's cwd first -- the
+                    # same reasoning --isolated-home already applies above.
+                    Path(marketplace_source).resolve(), plugin_name,
+                    isolated_home=isolated_home, isolated_cwd=isolated_cwd,
+                    claude_bin=args.claude_bin,
+                )
+            except PluginRegistrationError as exc:
+                print(f"error: plugin registration failed: {exc}", file=sys.stderr)
+                return 2
+            except OSError as exc:
+                # Covers both this function's own FileNotFoundError (missing
+                # .claude-plugin/marketplace.json -- the fail-loud check
+                # itself, message already fully descriptive) and a genuinely
+                # unlaunchable claude_bin (also FileNotFoundError, raised by
+                # subprocess.run) -- the two are the same exception type and
+                # not worth distinguishing further here.
+                print(f"error: {exc}", file=sys.stderr)
+                return 2
+            except subprocess.TimeoutExpired:
+                print("error: plugin registration did not finish in time -- killed", file=sys.stderr)
+                return 2
+
         try:
             result = run_live_dispatch(
                 prompt, transcript_out,
