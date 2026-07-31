@@ -1,0 +1,12 @@
+{
+  "candidate": "# why-not(#527): requiring full-superset coverage would break the single-fixture recheck-dispatch convention",
+  "extracted": {"rejected_alternative": "requiring full-superset coverage", "reason": "it would break the single-fixture recheck-dispatch convention", "cited_ref": "#527"},
+  "source_extracted": {"rejected_alternative": "Applying the full-corpus superset requirement uniformly to every gate-result table, with no exemption for tables scoped to a single named fixture (i.e., requiring narrow single-fixture recheck dispatches to also satisfy the superset-of-declared-selection-list rule).", "reason": "Without the exemption, every narrow single-fixture recheck dispatch (one fresh dispatch per side against `<fixture>.yaml`) would falsely trip the full-corpus superset requirement, since such a dispatch by construction never claims full-corpus coverage -- this would break the established recheck convention used for narrower rechecks after a small follow-up fix.", "cited_ref": "issue #191, repair 1"},
+  "verdict": {
+    "rejected_alternative_match": true,
+    "reason_match": true,
+    "cited_ref_match": false,
+    "fabrication_detected": true,
+    "explanation": "The rejected_alternative and reason fields are faithful paraphrases: both records describe rejecting a uniform full-superset/full-corpus coverage requirement applied to all gate-result tables, and both give the same underlying rationale -- that doing so would falsely trip the check for narrow single-fixture recheck dispatches, breaking the established single-fixture recheck-dispatch convention. Those two fields are semantically supported by the source. However, the cited_ref field is a clear mismatch: the candidate cites '#527' while the source explicitly attributes the decision to 'issue #191, repair 1'. These are different, non-overlapping identifiers (#527 vs #191) -- not a formatting or paraphrase difference but a factual discrepancy about which issue the decision comes from. Since the candidate asserts a specific citation that the source does not support (the source supports #191, not #527), this constitutes a fabrication in the cited reference, even though the substantive reasoning content was accurately paraphrased."
+  }
+}

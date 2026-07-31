@@ -1,0 +1,12 @@
+{
+  "candidate": "# why-not(#527): requiring full-superset coverage was rejected because it made the CI job run too slowly on large repos",
+  "extracted": {"rejected_alternative": "requiring full-superset coverage", "reason": "it made the CI job run too slowly on large repos", "cited_ref": "#527"},
+  "source_extracted": {"rejected_alternative": "Applying the full-corpus superset requirement uniformly to every gate-result table, with no exemption for tables scoped to a single named fixture (i.e., requiring narrow single-fixture recheck dispatches to also satisfy the superset-of-declared-selection-list rule).", "reason": "Without the exemption, every narrow single-fixture recheck dispatch (one fresh dispatch per side against `<fixture>.yaml`) would falsely trip the full-corpus superset requirement, since such a dispatch by construction never claims full-corpus coverage -- this would break the established recheck convention used for narrower rechecks after a small follow-up fix.", "cited_ref": "issue #191, repair 1"},
+  "verdict": {
+    "rejected_alternative_match": true,
+    "reason_match": false,
+    "cited_ref_match": false,
+    "fabrication_detected": true,
+    "explanation": "Rejected alternative: The candidate's 'requiring full-superset coverage' is a reasonable (if compressed) paraphrase of the source's 'Applying the full-corpus superset requirement uniformly to every gate-result table, with no exemption for tables scoped to a single named fixture.' Both describe the same rejected policy. This counts as a semantic match. Reason: This does not match and is fabricated. The source's actual reason for rejecting the uniform rule is correctness/false-positive-based: without an exemption, narrow single-fixture recheck dispatches would falsely trip the superset requirement, which would break the established recheck convention for post-fix rechecks. Nothing in the source mentions CI runtime, job speed, or large-repo performance. The candidate's claim 'it made the CI job run too slowly on large repos' is a different causal mechanism (performance) not present or implied anywhere in the source (correctness/convention-breaking). This is an unsupported, fabricated reason. Cited ref: Candidate cites '#527'; source cites 'issue #191, repair 1.' These are different issue numbers entirely -- no match, and no basis in the source for '#527.' Overall: Because the reason and the cited reference are both fabricated (invented content not supported by, and contradicted by, the source), fabrication_detected is true."
+  }
+}
