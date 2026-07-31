@@ -1,0 +1,21 @@
+id: drafting-an-adr-normal
+name: Drafts a Full ADR for a Real Architecturally-Significant Decision
+description: Recognizes a structural/interface decision as warranting an ADR via the significance checklist, then drafts Considered Options and both-sided Consequences from real, stated facts.
+tags:
+  - quality
+inputs:
+  prompt: |
+    Use drafting-an-adr. We just decided to introduce an API gateway in
+    front of our microservices, replacing direct client-to-service calls,
+    because clients were coupling directly to service-discovery details
+    and every service had to reimplement auth and rate-limiting
+    separately. We considered keeping direct calls with a shared auth
+    library instead, but rejected that because it didn't solve the
+    service-discovery coupling. Draft the ADR for this.
+expected:
+  output_contains:
+    - "Considered Options"
+    - "Bad, because"
+    - "Proposed"
+  output_not_contains:
+    - "LGTM"

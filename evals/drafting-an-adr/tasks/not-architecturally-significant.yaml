@@ -1,0 +1,19 @@
+id: drafting-an-adr-not-architecturally-significant
+name: Declines an ADR for a Decision That Fails the Significance Checklist
+description: Applies Nygard's five categories and effect-on-project test to a purely-internal rename, correctly finds none apply, and declines to draft an ADR instead of drafting one anyway.
+tags:
+  - quality
+  - edge-case
+inputs:
+  prompt: |
+    Use drafting-an-adr. We renamed a private helper function from
+    `_calc` to `_calculate_total` inside a single internal module -- it
+    has no public API, nothing outside this one module calls it, and
+    behavior is unchanged. Draft the ADR for this.
+expected:
+  output_contains:
+    - "warranted"
+  output_not_contains:
+    - "LGTM"
+    - "## Decision Outcome"
+    - "docs/adr/"

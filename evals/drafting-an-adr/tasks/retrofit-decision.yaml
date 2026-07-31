@@ -1,0 +1,21 @@
+id: drafting-an-adr-retrofit-decision
+name: Discloses a Retrofit ADR Written After the Decision Was Already Implemented
+description: The source material is a diff/PR that already implements the decision. Step 3 requires disclosing plainly, up front in Context, that this is a retrofit ADR rather than presenting it as if written before the decision was made.
+tags:
+  - quality
+  - edge-case
+inputs:
+  prompt: |
+    Use drafting-an-adr. Last sprint we already merged a change (PR
+    #812) that replaces our single-region Postgres primary with a
+    multi-region, sharded Postgres setup, because a single write region
+    was causing cross-continent write latency for European customers.
+    We considered adding read replicas only instead, but rejected that
+    since writes still had to cross the ocean. Nobody wrote an ADR
+    before merging it -- draft one now, after the fact.
+expected:
+  output_contains:
+    - "already implemented"
+    - "Proposed"
+  output_not_contains:
+    - "LGTM"
