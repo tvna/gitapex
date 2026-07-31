@@ -13,14 +13,20 @@ skill; `eval-status.md` previously noted no committed run existed.
 
 ## Corpus size caveat
 
-SkillOpt's default split ratio is 2:1:7. At 10 fixtures that ratio is not
-literally achievable; following the precedent already set in
-`skills/scorer-gated-skill-edits/references/worked-example.md` ("the
-ratio is aspirational" for a small fixture count) and
+SkillOpt's default split ratio is 2:1:7. This corpus's actual counts were
+already stale in this file and in `eval-status.md` (both said "10
+fixtures" / "2:2:6" when the true count following the #599 iteration was
+3:2:7 = 12) -- fixed here (issue #609) alongside adding one more test
+fixture, for a corrected, current 3:2:8 = 13, and now 3:2:9 = 14 with one
+further test fixture (issue #609, continued again -- see the
+`## Iteration: issue #609 (continued again)` section below). Following
+the precedent
+already set in `skills/scorer-gated-skill-edits/references/worked-example.md`
+("the ratio is aspirational" for a small fixture count) and
 `evals/evaluating-skill-quality/split.md`'s own disclosed deviations,
-this split uses 2:2:6, named explicitly as a deviation from the 2:1:7
-default. The honest minimal groundwork is a larger fixture corpus over
-time, not a smaller gate.
+this split's ratio is a named deviation from the 2:1:7 default, not a
+literal match. The honest minimal groundwork is a larger fixture corpus
+over time, not a smaller gate.
 
 ## Assignment
 
@@ -42,7 +48,14 @@ time, not a smaller gate.
   than renamed, since the fixture id is stable and referenced above;
   assigned to test, not selection, so it does not retroactively expand
   this iteration's already-recorded selection-split gate table above,
-  which belongs to the unrelated Commit-log-rule edit).
+  which belongs to the unrelated Commit-log-rule edit),
+  `commit-why-keeps-distinct-reasons.yaml` (new, issue #609; assigned to
+  test rather than selection because it did not demonstrate a behavioral
+  improvement -- see the `## Iteration: issue #609` section below),
+  `why-not-issue-and-adr-numbers-stay-distinct.yaml` (new, issue #609
+  continued again; assigned to test, not selection, for the same
+  reason -- see the `## Iteration: issue #609 (continued again)` section
+  below).
 
 ## Equivalence classes
 
@@ -203,6 +216,380 @@ disclosed, pre-existing, edit-unrelated scorer quirk, not a regression),
 and the transfer check on an adjacent model tier shows no regression.
 **KEEP.**
 
+## Iteration: issue #609, Commit-log citation and brevity-cap correction
+
+Candidate edit: direct verification (real fetches of [beams]/[kerneldoc]/
+[progit], not memory) after issue #599 merged found two inaccuracies in
+its own References work: (a) the quoted phrase "long since forgotten the
+immediate details of the discussion" is [kerneldoc]'s alone -- neither
+[beams] nor [progit] contains it or its permanent-record framing -- but
+the Commit-log bullet attributed it to all three collectively; (b) "one
+to a few sentences, not a design essay" is not supported by any of the
+three (none gives a sentence-count rule; [beams]/[progit] give a 72-char
+wrap width, [kerneldoc] a different 75-column one, and [kerneldoc] if
+anything argues for *more* detail for a reader "weeks, months or even
+years later"). The candidate rewrites the same few sentences to fix both,
+preserving "design essay" and "issue/PR body" verbatim since
+`guardrail.yaml` (train) asserts on the former. Two further, independent
+corrections travel in the same commit: the Code-comments bullet gains a
+sentence disclosing that requiring a citable issue/PR/ADR is this
+repository's own stricter-than-consensus policy (no source checked --
+Google's C++ style guide, Ousterhout, Clean Code, kerneldoc's own
+coding-style guidance -- restricts comments this narrowly), and the Notes
+section gains a disclosure that no source checked gives any quantitative
+comment-necessity threshold, mirroring `drafting-an-adr`'s own disclosed
+ADR-significance-threshold silence. Full text: see this PR's diff.
+
+Classification: **ordinary** (rewords existing text and adds new
+disclosure sentences; not a pure deletion, so the pruning-only exception
+does not apply).
+
+### A new fixture was authored, empirically tested against its own
+### hypothesis, and found not to discriminate -- disclosed, not hidden
+
+`commit-why-keeps-distinct-reasons.yaml` was written specifically to test
+whether removing the false brevity cap changes model behavior: a commit
+with three distinct, concrete causal reasons (harder to compress than
+two), asking for "just the message itself" (mirroring
+`commit-includes-terse-why.yaml`'s own established fix for prompt-level
+false ties), asserting only `output_contains` on one keyword per reason
+(never `output_not_contains`/`_near`, and nothing about `Closes`/`Refs`,
+so it does not quietly close this file's already-disclosed Blind spot
+gap). Dispatched once against the old (merged) text and once against the
+candidate text: **both scored 1.000000** -- a model asked for a terse
+commit compressed all three real reasons into a few sentences regardless
+of whether the routing rule stated a fixed sentence-count cap or not.
+This is treated as a genuine finding, not iterated away: the fixture is
+placed in **test** (read-once, non-gating), not `selection`, since it did
+not demonstrate the hypothesized improvement and per this skill's own
+Stop boundary against motivating or leaking from a scored split, its
+design was not reworked after seeing this result. The true corpus size
+(already stale at 12, not the previously-recorded 10, before this
+iteration) updates to 13; `## Corpus size caveat` and `eval-status.md`'s
+stale fixture-count text are both corrected in this same change.
+
+### Gate result -- scored, tied, not a behavioral KEEP
+
+Same fresh-dispatch-per-cell method as the #599 iteration above (full
+skill text, old side pinned via `git show dc79540:...`, new side the
+candidate; `score_contract.py`).
+
+| Fixture | Split | Before (old text) | After (new text) |
+|---|---|---|---|
+| `commit-why-keeps-distinct-reasons.yaml` | test (new) | 1.000000 | 1.000000 |
+| `guardrail.yaml` | train | -- (unaffected assertions; re-run for `design essay` preservation) | 1.000000 |
+| `normal.yaml` | train | -- (unaffected assertions) | 1.000000 |
+| `commit-includes-terse-why.yaml` | selection | -- (unaffected assertions) | 1.000000 |
+| `closes-when-fully-satisfied.yaml` | selection | -- (unaffected assertions) | 1.000000 |
+
+Selection-split mean: before 1.000000 (already-recorded #599 baseline,
+unaffected by this edit), after 1.000000 -- a **tie**.
+`score_contract.py --compare-to 1.000000 --scores <after-selection-scores.txt>`
+would print `1.000000 REJECT` under the strict ordinary gate (a tie is
+rejected, not kept).
+
+### Why this is landed anyway, outside the scorer-gate's scope
+
+Per `scorer-gated-skill-edits/references/worked-example.md`'s own Edit-B
+precedent, a tied reword is rejected and not kept -- and that precedent
+is followed here for the *behavioral* verdict: this candidate does not
+pass the strict improve-or-reject gate, and is **not** claimed as a
+scorer-validated behavioral improvement. But unlike Edit B (a plausible-
+sounding reword with no independent justification beyond the hope that it
+reads better), this candidate corrects a verified factual inaccuracy in
+what the skill's own References section claims its cited sources say --
+an axis of quality (is this prose accurate to its citations) that no
+fixture in this corpus, existing or newly authored, has any way to
+observe, the same way a broken link or a typo fix would not move a
+behavioral score either. Manufacturing a fixture to force a non-tie for
+a citation-accuracy correction would itself be the kind of construct-
+validity violation `lint_fixture_assertions.py` exists to catch (see
+issue #609's own investigation for the reasoning). The corrected prose
+is therefore landed as a documentation-accuracy fix, explicitly outside
+this gate's behavioral jurisdiction, not smuggled through as a false
+KEEP.
+
+### Transfer check
+
+Re-ran the 2 selection fixtures plus the new test fixture on Haiku 4.5 --
+an adjacent, weaker model tier, same method as the #599 iteration's own
+transfer check -- against the candidate (new) text:
+
+| Fixture | Haiku (new text) |
+|---|---|
+| `closes-when-fully-satisfied.yaml` | 1.000000 |
+| `commit-includes-terse-why.yaml` | 1.000000 |
+| `commit-why-keeps-distinct-reasons.yaml` | 0.750000 |
+
+No regression on the two selection fixtures. The new test fixture is
+notable: on Haiku, the response dropped the third reason (Redis already
+running for session storage) and kept only the first two (pod-restart
+reset, per-pod counter scaling) -- the same real behavior the fixture was
+designed to detect, but surfacing on the weaker tier where the strong-tier
+dispatch (this session's own model, scored 1.000000 both before and
+after) did not exhibit it. This is disclosed as a genuine, tier-dependent
+finding, not smoothed over: removing the false brevity cap does not
+reliably prevent a weaker model from dropping a real reason under
+terseness pressure. No no-skill baseline was separately measured this
+iteration -- the same disclosed gap `evaluating-skill-quality/split.md`
+and this file's own #599 transfer check already carry.
+
+### Rejected-edit log
+
+**Behavioral verdict: REJECT (tie).** No candidate wording was discarded
+after the fact -- the tie was the actual, accepted, disclosed result of
+the one candidate scored, not a defect hidden by retrying. See "Why this
+is landed anyway" above for why the corrected prose ships despite this.
+
+### Verdict
+
+**Behavioral gate: REJECT (tie) -- landed anyway as a documentation-
+accuracy fix outside the gate's scope**, per the reasoning above. No
+regression on any train, selection, or test fixture (all still score
+1.000000 or their already-disclosed pre-existing baseline); the new test
+fixture's tie is a genuine, disclosed finding about model behavior under
+brevity-cap removal, not a defect.
+
+## Iteration: issue #609 (continued), Code-comments/Notes governance-grounding correction
+
+Candidate edit: the Code-comments bullet's citable-evidence disclosure
+(added in the iteration above) said only that requiring a citation was
+"this repository's own policy choice," with no positive grounding for
+*why* recording a rejected alternative's rationale is a reasonable thing
+to require at all. Direct verification this session (real `WebFetch`
+reads, not memory) found that the underlying principle -- decisions and
+their rationale should be documented and kept traceable to what they
+concern -- is real, citable governance practice: ISO/IEC/IEEE 42010
+("architecture description") requires that architecture decisions and
+their rationale be documented and kept traceable to the stakeholder
+concerns they address, and IBIS (Kunz & Rittel, Issues/Positions/
+Arguments, 1970) has treated a rejected position's counter-argument as a
+recordable, first-class part of a design's rationale for over fifty
+years. The candidate rewrites the same disclosure sentence to cite both
+([42010], [ibis]), while narrowing the "this repository's own choice"
+claim to what it actually is: enforcing that principle at the granularity
+of a single code comment via a *mandatory citation gate*, plus the
+comment's specific one-line syntax/`why-not(#NNN):` prefix/`<=120`-char
+cap -- none of which either source mandates. A second, smaller addition
+to Notes discloses a real residual verification gap rather than hiding
+it: [42010]'s own maintainer site (`iso-architecture.org`) returned an
+HTTP 503 on every direct fetch attempted this session, so its
+requirements are confirmed through [arc42]'s and Wikipedia's published
+summaries, not a direct read of the ISO/IEC/IEEE 42010:2022 text itself;
+and neither source makes "record the rejected alternative" specifically
+a named requirement -- [42010] mandates decision-plus-rationale
+traceability in general, [ibis]'s con-argument is the closest analogue
+for a rejected position specifically, and the two claims are adjacent,
+not identical. Three new `## References` entries ([42010], [arc42],
+[ibis]) cite the sources actually fetched. Full text: see this PR's diff.
+
+Classification: **ordinary** (rewords and extends existing disclosure
+sentences with new citations; not a pure deletion, so the pruning-only
+exception does not apply).
+
+### No selection fixture exercises the changed branches at all -- a starker case than the prior iteration's tie
+
+Unlike the Commit-log-bullet edit above, this candidate touches only the
+Code-comments and Notes sections. Neither `selection` fixture
+(`commit-includes-terse-why.yaml`, `closes-when-fully-satisfied.yaml`)
+exercises either section -- both test only the Commit-log branch, which
+this candidate leaves byte-identical. The selection-split mean therefore
+cannot move by construction, not merely tie empirically: there is no
+fixture in scope of the strict gate that could observe this edit at all.
+
+The one **test**-split fixture that does exercise the changed branch,
+`edge.yaml` (Code comments, "Declines a Why-Not Comment With No Citable
+Source"), was scored with one fresh dispatch per side against only
+`edge.yaml` -- real dispatches, not assumed, and not a full-corpus
+selection-split gate table (see the prior iteration's "Gate result"
+table above for that):
+
+| Fixture | Split | Before (old text) | After (new text) |
+|---|---|---|---|
+| `edge.yaml` | test | 0.500000 | 0.500000 |
+
+A genuine tie. Both responses correctly refuse the comment and cite
+`citable` as required, but both also spell out the *correct future*
+`why-not(#<real-number>):` syntax as part of explaining what the user
+should do once a real issue exists -- which trips this fixture's own
+`output_not_contains: "# why-not(#"` ban (intended to catch a model that
+writes the comment anyway, not one that quotes the correct syntax while
+declining). This is the same recurring fixture-assertion-fragility class
+`split.md` already discloses for this file (the #599 iteration's
+`edge.yaml`/`no-auto-generated-adr.yaml` "can't" vs. "cannot" note): a
+construct-validity gap in the fixture's own assertions, identical old vs.
+new, not a regression introduced by this edit. `guardrail.yaml` and
+`normal.yaml` were also re-dispatched (fresh, not reused) as a sanity
+check even though their Commit-log-only content is untouched by this
+edit: `guardrail.yaml` scored 0.833333 old / 1.000000 new and
+`normal.yaml` scored 1.000000 / 1.000000 -- since the branch they test is
+byte-identical between old and new, this spread is ordinary model
+response variance on an unrelated, unchanged branch (one dispatch phrased
+"the PR/issue body," the fixture wants the literal order "issue/PR
+body"), not signal attributable to this candidate, and is disclosed here
+rather than mistaken for either a regression or an improvement.
+
+### Why this is landed anyway, outside the scorer-gate's scope
+
+Same reasoning as the prior `## Iteration: issue #609` section's own
+precedent, one step further: that iteration's candidate at least *could*
+have moved a fixture and happened to tie; this one's changed branches
+have no fixture inside the gate's jurisdiction (`selection`) that could
+observe them at all, and the one `test`-split fixture that comes closest
+(`edge.yaml`) ties for a reason unrelated to the edit (a pre-existing
+assertion fragility, not new to this candidate). Per
+`scorer-gated-skill-edits/references/worked-example.md`'s Edit-B
+precedent, a change with no demonstrated behavioral improvement is not
+claimed as a scorer-validated KEEP. But this candidate corrects the same
+class of defect the prior iteration's Track B already established as
+outside the gate's behavioral jurisdiction: an accuracy/grounding
+correction to what the skill's own prose asserts about its citations and
+their justification, verified against real primary-source fetches this
+session, not a routing-behavior change. Manufacturing a fixture
+specifically to force this correction through the gate would repeat the
+construct-validity violation `lint_fixture_assertions.py` exists to
+catch (see this iteration's own investigation, and the user's explicit
+instruction this session to investigate primary sources rather than
+leave an unsupported claim in place). The corrected prose is landed as a
+documentation/governance-grounding-accuracy fix, explicitly outside this
+gate's behavioral scope, not smuggled through as a false KEEP.
+
+### Transfer check
+
+Re-ran `edge.yaml` (the one test-split fixture exercising the changed
+branch) on Haiku 4.5 against the candidate (new) text, same method as
+prior iterations:
+
+| Fixture | Haiku (new text) |
+|---|---|
+| `edge.yaml` | 0.500000 |
+
+Identical to the strong-tier score (0.500000) and for the identical
+reason (the same "# why-not(#" ban trips on a correctly-declined
+response's own syntax example) -- no tier-dependent regression observed
+for this candidate, unlike the prior iteration's disclosed tier-dependent
+finding on `commit-why-keeps-distinct-reasons.yaml`.
+
+### Rejected-edit log
+
+**Behavioral verdict: REJECT (no selection-split fixture in scope; the
+one relevant test fixture ties for a pre-existing, edit-unrelated
+reason).** No candidate wording was discarded after the fact -- this is
+the actual, accepted, disclosed result of the one candidate scored, not a
+defect hidden by retrying.
+
+### Verdict
+
+**Behavioral gate: REJECT (out of scorer-gate scope by construction) --
+landed anyway as a governance-grounding-accuracy fix**, per the reasoning
+above. No regression on any train, selection, or test fixture (`edge.yaml`
+ties for a disclosed, pre-existing, edit-unrelated assertion-fragility
+reason; `guardrail.yaml`/`normal.yaml` variance reflects unrelated model
+response noise on an untouched branch). The prior "no primary source
+checked" disclosure for the citable-evidence requirement is now narrowed
+to what remains genuinely ungrounded (the exact comment syntax and the
+mandatory-citation *gate* itself), while the underlying governance
+principle is grounded in [42010] and [ibis] -- with the residual
+verification gap ([42010]'s own site returning HTTP 503, reliance on
+[arc42]/Wikipedia secondary summaries) disclosed plainly rather than
+smoothed over.
+
+## Iteration: issue #609 (continued again), Issue/ADR number-conflation clarification
+
+Candidate edit: reviewer feedback caught that the Code-comments format
+line, `# why-not(#NNN): <=120 chars [-> docs/adr/NNNN-*.md]`, places two
+different placeholders one character apart (`#NNN`, three digits with a
+`#`; `NNNN`, four digits, no `#`) with nothing in the prose stating they
+are two independent number spaces. Confirmed against
+`drafting-an-adr`'s own convention (verified by reading that skill's
+`SKILL.md` directly, step 11: an ADR's own sequence number is assigned by
+"re-check[ing] the target directory's actual current highest number
+immediately before writing," entirely independent of any issue/PR
+number): the two are genuinely unrelated identifiers, so the visual
+near-collision in the format line is a real clarity defect, not a
+false alarm. The candidate adds one clarifying sentence immediately
+after the format block stating plainly that `#NNN` is the citing
+issue/PR number, `NNNN` is the ADR's own independent sequence number, and
+the two must never be assumed equal.
+
+Classification: **ordinary** (adds a clarifying sentence; not a deletion).
+
+### A new fixture was authored to test the actual failure mode, empirically tied on both model tiers
+
+`why-not-issue-and-adr-numbers-stay-distinct.yaml` (new, **test** split):
+gives the model both a concrete issue number (#340) and a concrete,
+different ADR sequence number (0012) in the prompt, and checks the
+written comment preserves both numbers distinctly rather than
+substituting one for the other (`output_not_contains: "adr/0340"` catches
+the specific conflation failure this ambiguity invites -- reusing the
+issue number as the ADR number). One fresh dispatch per side, per tier,
+against only `why-not-issue-and-adr-numbers-stay-distinct.yaml` -- not a
+full-corpus selection-split gate table (see the first iteration's "Gate
+result" table above for that):
+
+| Fixture | Tier | Before (old text) | After (new text) |
+|---|---|---|---|
+| `why-not-issue-and-adr-numbers-stay-distinct.yaml` | this session's model | 1.000000 | 1.000000 |
+| `why-not-issue-and-adr-numbers-stay-distinct.yaml` | Haiku 4.5 | 1.000000 | 1.000000 |
+
+A genuine tie on both tiers, not manufactured: when both numbers are
+handed to the model concretely in the prompt, every dispatch on both
+tiers correctly kept them distinct even under the old, ambiguous prose --
+the failure mode the ambiguity invites (silently *deriving* one number
+from the other) doesn't reproduce when the model only has to copy given
+facts rather than infer a missing one. This is a real, disclosed finding
+about *when* the ambiguity could bite (an underspecified prompt forcing
+the model to invent or infer the ADR number, which this fixture does not
+construct -- doing so risks the same construct-validity problem already
+disclosed for this file's other new fixtures) rather than evidence the
+defect doesn't matter: the reviewer's catch is about a documentation
+clarity gap for a *human or model reading the skill's prose itself*, not
+strictly about a reproducible generation-time error in this one concrete
+scenario.
+
+`edge.yaml` was re-dispatched once more against the new text as an
+additional regression spot-check (not a second selection-scope claim):
+scored 1.000000 this run, versus the 0.500000 recorded earlier in the
+`## Iteration: issue #609 (continued)` section above for the same
+fixture and the same "old" text. This is not an improvement caused by
+this edit -- it is the same disclosed assertion-fragility class scoring
+differently across independent dispatches for reasons unrelated to the
+skill text (this run's response happened not to restate the correct
+future comment syntax, so it didn't trip the `output_not_contains:
+"# why-not(#"` ban that the prior dispatch tripped). Recorded here as
+further confirmation of the pre-existing fragility, not as a second
+gate result for this iteration.
+
+### Why this is landed anyway, outside the scorer-gate's scope
+
+Same reasoning as both prior `## Iteration: issue #609` sections: no
+`selection`-split fixture exercises the changed branch, and the one
+`test`-split fixture built specifically to probe this defect ties on
+both model tiers for a reason that itself narrows (rather than voids)
+the finding -- the concrete scenario tested doesn't force the ambiguity
+to bite, not that the ambiguity was never real. `#NNN` and `NNNN`
+sitting one character apart with no disambiguating text remains an
+actual, reviewer-caught documentation defect, verified against
+`drafting-an-adr`'s own real (and independently numbered) ADR-sequence
+convention. Landed as a clarity-accuracy fix outside the gate's
+behavioral scope, per this file's own established precedent, rather than
+claimed as a scorer-validated behavioral KEEP it did not earn.
+
+### Rejected-edit log
+
+**Behavioral verdict: REJECT (ties on both tiers on the one fixture
+built to probe this; no selection-split fixture in scope).** No wording
+was discarded after the fact -- this is the accepted, disclosed result.
+
+### Verdict
+
+**Behavioral gate: REJECT (out of scorer-gate scope by construction) --
+landed anyway as a documentation-clarity fix**, per the reasoning above.
+The reviewer's catch (a real, human-legible ambiguity between two
+adjacent-looking placeholders denoting two unrelated identifiers) is
+corrected in the prose; the new fixture's tie on both tiers is disclosed
+honestly as evidence about *when* the ambiguity manifests in generated
+output, not as proof the defect was never real.
 ## Iteration: issue #631, Routing section restructure + exercises: declaration coverage
 
 Candidate edit: issue #629's adversarial review of a proposed mechanical

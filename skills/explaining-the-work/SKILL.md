@@ -25,18 +25,25 @@ itself cannot carry an issue reference.
 
 ### Commit log -> a terse Why, not the full Why
 
-Per git-community consensus ([beams]; [kerneldoc]; [progit]) the commit
-body is a permanent record that outlives the discussion that produced it,
-so it must carry enough Why for a reader who has "long since forgotten
-the immediate details of the discussion." A commit is a subject line, a
-short Why (what problem this solves and why this approach -- one to a
-few sentences, not a design essay), and an issue pointer -- `Closes #N`
-when the change fully satisfies #N's acceptance criteria, `Refs #N`
-when it only partially addresses or relates to it -- with any
-repo-mandated trailers (e.g. `Co-Authored-By`) excepted. The fuller
-Why, tagged Fact (verified/observed) or Speculation (unverified) rather
-than blended, still lives in the issue/PR body; the commit's Why is a
-terse pointer to it, never a duplicate design writeup.
+Per [kerneldoc], the explanation "will be committed to the permanent
+source changelog, so should make sense to a competent reader who has long
+since forgotten the immediate details of the discussion that might have
+led to this patch" -- this permanent-record, forgetful-reader framing is
+[kerneldoc]'s alone. [beams] and [progit] agree only that the body should
+explain the change's motivation (what and why, not how; contrast with
+previous behavior), and both wrap the body at 72 characters, distinct
+from [kerneldoc]'s own 75-column convention; none of the three gives a
+sentence- or word-count rule for how long the Why itself should be. A
+commit is a subject line, a Why sized to what that reader needs to grasp
+the reasoning -- not a fixed count, not a duplicate of the fuller design
+essay -- and an issue pointer -- `Closes #N` when the change fully
+satisfies #N's acceptance criteria, `Refs #N` when it only partially
+addresses or relates to it -- with any repo-mandated trailers (e.g.
+`Co-Authored-By`) excepted. The fuller design essay -- alternatives
+considered, dead ends, the discussion's back-and-forth -- stays in the
+issue/PR body, tagged Fact (verified/observed) or Speculation
+(unverified) rather than blended; the commit's Why is self-contained for
+a reader who cannot see that body, never a duplicate of the design essay.
 
 ### Code comments -> Why-not / durable constraints only
 
@@ -46,12 +53,37 @@ One-line form:
 # why-not(#NNN): <=120 chars [-> docs/adr/NNNN-*.md]
 ```
 
+`#NNN` and the path's `NNNN` are two unrelated numbers, not the same
+value in different padding: `#NNN` is the citing issue/PR number, while
+`NNNN` is that ADR's own independent sequence number (assigned by
+scanning `docs/adr/`'s current highest file, per this repository's
+ADR-drafting convention) -- an ADR can exist (and be cited) with no issue
+at all, and one issue can cite different ADRs across different comments.
+Never assume or write the same digits for both.
+
 Requires a citable issue/PR/ADR that actually evaluated the rejected
 alternative. If nothing can be cited, do not write the comment — never
-fabricate a rationale. The mechanical part (line length, the
-`why-not(#NNN):` prefix, the optional ADR path form) is a good fit for a
+fabricate a rationale. The underlying principle is real governance
+practice, not invented for this skill: [42010] requires that
+architecture decisions and their rationale be documented and traceable
+to the concerns they address, and [ibis] has treated a rejected
+position's counter-argument as a first-class, recordable part of a
+design's rationale since the 1970s. What remains this repository's own
+policy choice, stricter than general software-engineering practice, is
+enforcing that principle at the granularity of a single code comment via
+a mandatory citation gate: no primary source checked (Google's C++ style
+guide, Ousterhout's *A Philosophy of Software Design*, Robert C.
+Martin's *Clean Code*, the Linux kernel's own coding-style guidance)
+requires a citation to license a why-not comment specifically -- all of
+them sanction broader Why (and sometimes tricky How) with no such gate --
+and neither [42010] nor [ibis] mandates this comment's one-line syntax,
+the `why-not(#NNN):` prefix, or the <=120-char cap; those stay this
+repository's own implementation choice. The mechanical part (line
+length, the prefix, the optional ADR path form) is a good fit for a
 small lint-hook or pre-commit check where the repo has one; keep the
 judgment call (is a rejected alternative actually citable) in-model.
+When no ADR exists yet for a citable why-not, use `drafting-an-adr` to
+author one before citing its path here.
 
 ## Precedence
 
@@ -74,7 +106,28 @@ precedence over this skill. Do not enumerate exceptions to those gates here.
 Portability: the why-not comment's `docs/adr/NNNN-*.md` path and the
 "commit + `Closes #N`/`Refs #N`" convention are this repository's own
 conventions; adapt the literal path/trailer form to whatever issue and
-ADR conventions the calling repository actually uses.
+ADR conventions the calling repository actually uses. This skill only
+cites an ADR; see `drafting-an-adr` for how one actually gets authored
+and approved.
+
+No primary source checked for this skill -- [beams], [kerneldoc],
+[progit], Google's C++ style guide, Ousterhout, or Clean Code -- gives a
+quantitative or measurable threshold for when a comment is necessary or
+how long one may be; every source's own guidance is qualitative
+("obvious," "tricky," "non-obvious"). This silence is itself the honest
+finding, the same shape as `drafting-an-adr`'s own disclosed absence of
+a numeric ADR-significance threshold -- not a gap in this search.
+
+Verification gap on the governance grounding above, disclosed rather than
+smoothed over: [42010]'s own maintainer site returned a server error on
+every direct fetch attempted for this skill, so its requirements above
+are confirmed through [arc42]'s and Wikipedia's published summaries of
+the standard, not a direct read of the ISO/IEC/IEEE 42010:2022 text
+itself. Neither source makes "record the rejected alternative" a named
+requirement: [42010] mandates decision-plus-rationale traceability in
+general, and [ibis]'s con-argument is the closest analogue for recording
+a rejected position specifically, not a name-checked clause inside
+[42010] itself -- the two sources ground adjacent, not identical, claims.
 
 ## References
 
@@ -85,3 +138,15 @@ ADR conventions the calling repository actually uses.
 - **[progit]** Scott Chacon and Ben Straub -- Pro Git, Distributed Git --
   Contributing to a Project.
   <https://git-scm.com/book/en/v2/Distributed-Git-Contributing-to-a-Project>
+- **[42010]** ISO/IEC/IEEE 42010, Architecture description -- requirements
+  summarized via Wikipedia (the standard's own maintainer site returned a
+  server error on every direct fetch attempted this session).
+  <https://en.wikipedia.org/wiki/ISO/IEC_42010>
+- **[arc42]** arc42 Quality Model -- ISO 42010 mapping, the secondary
+  source actually fetched for [42010]'s decision/rationale/traceability
+  wording above. <https://quality.arc42.org/standards/iso-42010>
+- **[ibis]** Werner Kunz and Horst W. J. Rittel -- Issues as Elements of
+  Information Systems, Working Paper No. 131, Institute of Urban and
+  Regional Development, University of California, Berkeley (1970);
+  Issues/Positions/Arguments summary via Wikipedia.
+  <https://en.wikipedia.org/wiki/Issue-based_information_system>

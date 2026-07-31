@@ -54,6 +54,41 @@ It reads a skill's own stable text (its `rubric.md`, if it has one, and its
      and "X occurred"), not just the negative one. (Historical:
      `force-push-not-claimable-test.yaml` scored 1.0 against an
      unsupported positive claim before this was added -- see issue #352.)
+  5b. Unsatisfiable/redundant assertion pair (#628) -- since
+     `score_contract.py` gained opt-in case-insensitive
+     `output_icontains`/`output_not_icontains` keys, a fixture can now
+     combine a case-sensitive requirement with a case-insensitive ban on
+     the same substring in a way that can never jointly score 1.0: an
+     `output_contains` entry (or a member of an `output_contains_near`
+     entry's `all` list -- satisfying that check also requires literal
+     presence) guarantees the substring's casefolded form appears in the
+     casefolded text, which unconditionally fails an `output_not_icontains`
+     ban on the same casefolded substring. Flagged as
+     `unsatisfiable-assertion-pair`, distinct from and more severe than the
+     same-polarity case below. Deliberately NOT flagged in the mirrored
+     direction (`output_not_contains` + `output_icontains` on the same
+     substring): that pairing is satisfiable (e.g. text containing only
+     "FOO" satisfies both `output_not_contains: ["Foo"]` and
+     `output_icontains: ["foo"]` at once), so flagging it would be a false
+     alarm -- confirmed via a Workflow-based adversarial review before this
+     was implemented. Separately, an `output_contains` and `output_icontains`
+     entry naming the identical casefolded substring is not a contradiction,
+     just redundant authoring (the icontains form alone already covers it),
+     flagged as the lower-severity `redundant-assertion-pair`.
+
+     Checks 2-4 above (negation trap, paraphrase drift, short-word
+     collision) are extended to also run against `output_icontains`/
+     `output_not_icontains` entries, since the underlying authoring-mistake
+     risk they catch does not depend on whether the assertion happens to be
+     case-sensitive. Check 1 (case-sensitivity) is deliberately NOT
+     extended to `output_icontains`: that check's entire purpose is
+     flagging an assertion that differs in casing from the rubric's own
+     wording, which is expected and correct for a key whose whole point is
+     to ignore case -- extending it there would just be noise. Check 5
+     (symmetric ban) now also counts `output_icontains`/`output_not_icontains`
+     entries as valid positive/ban declarations, so a fixture using the new
+     keys for its indeterminate-direction ban is not wrongly flagged as
+     having "no bans in either direction".
 
 Two further checks exist but ship **off by default**, opt in with
 `--check-prompt-echo` / `--check-cross-task`, and never affect the exit
@@ -401,6 +436,89 @@ def check_short_word_collision(value: str) -> str | None:
     return hits[0] if hits else None
 
 
+def check_unsatisfiable_assertion_pair(expected: dict) -> list[tuple[str, str, str, str]]:
+    """Detect assertion pairs across ``output_contains``/``output_icontains``/
+    ``output_not_icontains``/``output_contains_near`` that can never jointly
+    score 1.0, or that redundantly assert the same casefolded substring
+    twice (#628). Returns a list of ``(key, value, rule, detail)`` tuples,
+    mirroring ``lint_task``'s other per-value checks.
+
+    See the module docstring's check 5b for the full reasoning, including
+    why the mirrored ``output_not_contains``/``output_icontains`` direction
+    is deliberately NOT flagged (it is satisfiable, unlike this direction).
+
+    An adversarial code review (issue #628) caught two gaps in this
+    function's first draft, both fixed here: (1) ``output_icontains`` and
+    ``output_not_icontains`` naming the identical casefolded substring is
+    itself an unconditional contradiction (both keys already match
+    case-insensitively, so requiring and banning the same folded value can
+    never both hold) -- the first draft only built its literal-requirement
+    set from ``output_contains``/``output_contains_near``, missing this
+    most-direct case entirely; (2) ``output_not_contains`` and
+    ``output_not_icontains`` naming the identical casefolded substring is
+    redundant the same way the positive-direction pair is (the stronger,
+    case-insensitive ban always subsumes the weaker, case-sensitive one on
+    that substring) -- the first draft only checked the positive direction.
+    """
+    contains = [v for v in (expected.get("output_contains") or []) if isinstance(v, str)]
+    icontains = [v for v in (expected.get("output_icontains") or []) if isinstance(v, str)]
+    not_contains = [v for v in (expected.get("output_not_contains") or []) if isinstance(v, str)]
+    not_icontains = [v for v in (expected.get("output_not_icontains") or []) if isinstance(v, str)]
+    near_members = [
+        v for entry in (expected.get("output_contains_near") or [])
+        if isinstance(entry, dict)
+        for v in (entry.get("all") or [])
+        if isinstance(v, str)
+    ]
+
+    # Anything that guarantees the substring's casefolded form is present:
+    # a literal-presence requirement (output_contains, or a
+    # output_contains_near "all" member, which the near-check also
+    # requires to be literally present), OR output_icontains itself
+    # (which already matches case-insensitively).
+    require_casefolded_presence: dict[str, str] = {}
+    for value in contains + near_members + icontains:
+        require_casefolded_presence.setdefault(value.casefold(), value)
+    not_icontains_by_fold: dict[str, str] = {}
+    for value in not_icontains:
+        not_icontains_by_fold.setdefault(value.casefold(), value)
+
+    findings: list[tuple[str, str, str, str]] = []
+    for folded, required in require_casefolded_presence.items():
+        banned = not_icontains_by_fold.get(folded)
+        if banned is not None:
+            findings.append((
+                "output_not_icontains", banned, "unsatisfiable-assertion-pair",
+                f"{required!r} is required (via output_contains/"
+                f"output_contains_near/output_icontains) and {banned!r} is "
+                f"banned case-insensitively for the same substring -- "
+                f"satisfying the requirement guarantees the ban fails, so "
+                f"this fixture can never score 1.0"))
+
+    def _redundant_pairs(strong: list[str], weak: list[str], strong_key: str, weak_key: str):
+        strong_by_fold: dict[str, str] = {}
+        for value in strong:
+            strong_by_fold.setdefault(value.casefold(), value)
+        seen: set[str] = set()
+        for value in weak:
+            folded = value.casefold()
+            matched = strong_by_fold.get(folded)
+            if matched is not None and folded not in seen:
+                seen.add(folded)
+                findings.append((
+                    strong_key, matched, "redundant-assertion-pair",
+                    f"{matched!r} ({strong_key}) duplicates {weak_key}: "
+                    f"{value!r} (same substring, case-insensitively) -- the "
+                    f"{strong_key} form alone already covers it"))
+
+    # Same-polarity redundancy, both directions: the case-insensitive form
+    # (icontains/not_icontains) alone already covers the case-sensitive
+    # form (contains/not_contains) for the identical folded substring.
+    _redundant_pairs(icontains, contains, "output_icontains", "output_contains")
+    _redundant_pairs(not_icontains, not_contains, "output_not_icontains", "output_not_contains")
+    return findings
+
+
 def classify_ban_direction(value: str) -> str:
     """"negative" for a ban shaped like "no X occurred" / "never happened" /
     "doesn't apply"; "positive" (the declarative-claim direction) otherwise."""
@@ -430,9 +548,11 @@ def check_symmetric_bans(data: dict) -> str | None:
         return None
     expected = data.get("expected") or {}
     positives = [v for v in (expected.get("output_contains") or []) if isinstance(v, str)]
+    positives += [v for v in (expected.get("output_icontains") or []) if isinstance(v, str)]
     if any(ENUM_TOKEN_RE.fullmatch(v) and "indeterminate" in v.lower() for v in positives):
         return None
     bans = [v for v in (expected.get("output_not_contains") or []) if isinstance(v, str)]
+    bans += [v for v in (expected.get("output_not_icontains") or []) if isinstance(v, str)]
     if not bans:
         return ("claims the underlying fact cannot be determined but declares "
                 "no output_not_contains bans in either direction")
@@ -566,6 +686,26 @@ def lint_task(task_path: Path, data: dict, anchors: list[str], corpus_flat: str,
                     name, "output_contains", value, "prompt-echo", echo,
                     blocking=False))
 
+    # output_icontains (#628): checks 3-4 (paraphrase drift, short-word
+    # collision) apply the same way regardless of case-sensitivity. Check 1
+    # (case-sensitivity) is deliberately NOT run here -- see the module
+    # docstring's check 5b for why a casing difference is expected, not a
+    # defect, for a key whose whole point is to ignore case.
+    for value in expected.get("output_icontains") or []:
+        if not isinstance(value, str):
+            continue
+        drift = check_paraphrase(value, corpus_flat, corpus_tokens)
+        if drift:
+            warnings.append(Warning_(
+                name, "output_icontains", value, "paraphrase-drift",
+                f"not a rubric substring but {drift}"))
+        collision = check_short_word_collision(value)
+        if collision:
+            warnings.append(Warning_(
+                name, "output_icontains", value, "short-word-collision",
+                f"short and alphabetic; also a bare substring of the common "
+                f"word {collision!r}"))
+
     for value in expected.get("output_not_contains") or []:
         if not isinstance(value, str):
             continue
@@ -582,11 +722,25 @@ def lint_task(task_path: Path, data: dict, anchors: list[str], corpus_flat: str,
                     f"exactly bans a string that {collider} requires via "
                     f"output_contains", blocking=False))
 
+    # output_not_icontains (#628): check 2 (negation trap) applies the same
+    # way regardless of case-sensitivity.
+    for value in expected.get("output_not_icontains") or []:
+        if not isinstance(value, str):
+            continue
+        neg = check_negation(value, negation_haystack)
+        if neg:
+            warnings.append(Warning_(
+                name, "output_not_icontains", value, "negation-trap",
+                f"banning it also rejects a correct denial -- {neg}"))
+
     symmetric = check_symmetric_bans(data)
     if symmetric:
         warnings.append(Warning_(
             name, "output_not_contains", str(data.get("id", name)),
             "symmetric-ban", symmetric))
+
+    for key, value, rule, detail in check_unsatisfiable_assertion_pair(expected):
+        warnings.append(Warning_(name, key, value, rule, detail))
 
     return warnings
 
