@@ -250,9 +250,68 @@ mechanism, not only the ones already recorded below.
   precedent for a session with no registered Skill tool -- see this
   skill's own `eval-status.md` for that history) over relying on this
   auto-trigger path, and budget substantially more time/turns if it does
-  rely on it.
+  rely on it. See the entry below for a second mechanism that discovers the
+  target through a real marketplace/plugin install instead of `--plugin-dir`
+  loading it directly.
 - **Dated**: 2026-07-30, same version pin as the entry above; re-run the
   Verification procedure if this entry looks stale.
+
+#### `claude plugin marketplace add` + `claude plugin install` combined with cwd/HOME isolation
+
+- **Identifying signal**: same platform as the two entries above
+  (`CLAUDE_CODE_REMOTE=true`, `claude --version` `2.1.220 (Claude Code)`),
+  additionally: the isolated target directory used for the dispatch is a
+  copy of this repository containing `.claude-plugin/marketplace.json` and
+  `skills/`, and `claude plugin marketplace add <path-to-that-copy>` +
+  `claude plugin install gitapex@gitapex` are run against the isolated
+  `$HOME` (the same one this section's cwd/HOME recipe already builds)
+  *before* the dispatch, rather than pointing `--plugin-dir` at the copy
+  directly.
+- **Why this is a separate mechanism from `--plugin-dir` above, not a
+  restatement of it**: `--plugin-dir` loads skill content directly into the
+  session, which auto-triggers the Skill tool but never exercises the
+  Skill-tool *discovery* path a real downstream consumer goes through when
+  installing this repository the way it documents itself as installable.
+  This entry tests that discovery path itself. Its only precondition is a
+  `.claude-plugin/marketplace.json` inside the isolated target; without one,
+  `claude plugin marketplace add` has nothing to register and the Skill tool
+  cannot find the target skill by name at all.
+- **Result: this precondition was missed, more than once, with a real and
+  disclosed cost.** Two consecutive gate cycles for this skill's own
+  `references/rubric.md` ran their isolated `claude -p` scoring dispatches
+  against a target copy with no `.claude-plugin/marketplace.json`. Each
+  dispatch, unable to discover the skill through the Skill tool, silently
+  fell back to reading `SKILL.md` directly and reasoning about it in prose --
+  simulated dispatch, not this skill's own real `Subagent dispatch`
+  procedure -- and the resulting scores were reported as genuine. Once
+  caught mid-cycle, a genuine re-dispatch of the same fixtures, this time
+  with `.claude-plugin/marketplace.json` copied into the target and `claude
+  plugin marketplace add`/`claude plugin install gitapex@gitapex` actually
+  run first, retracted the prior "zero regressions" claim for two of three
+  motivating fixtures. Full before/after numbers, and the retraction
+  writeup: this skill's own `eval-status.md` and `metadata/gitapex.yaml`
+  sidecar's decision/audit/caveat/deferral entries for that cycle.
+- **Companion flags, also verified necessary in that same re-dispatch**: run
+  the dispatch itself with `--permission-mode acceptEdits --allowedTools
+  "Bash(python3 *)" "Bash(git *)"` (narrowly scoped, not a blanket bypass) --
+  without it, the shape-checker step this skill's own Procedure step 3
+  requires hits a Bash-approval prompt the default permission mode blocks
+  on, which silently truncates the dispatch's output to a bare approval
+  request instead of a real review.
+- **This is now a default, checked-for step, not prose alone.** This
+  repository's own `evals/scripts/check_dispatch_trace.py`'s `run`
+  subcommand takes `--marketplace-source`/`--plugin-name`, which run this
+  exact registration
+  against the isolated `$HOME` and **fail loudly (exit 2) before any
+  dispatch is attempted** if the target has no
+  `.claude-plugin/marketplace.json` -- the missed-precondition failure mode
+  above can no longer pass through undetected. A caller reproducing this
+  recipe by hand outside that script must still perform the same check
+  itself: confirm `.claude-plugin/marketplace.json` exists in the isolated
+  target before treating any resulting score as evidence of genuine
+  dispatch.
+- **Dated**: 2026-07-31, same version pin as the two entries above; re-run
+  the Verification procedure if this entry looks stale.
 
 ### Unlisted platform
 

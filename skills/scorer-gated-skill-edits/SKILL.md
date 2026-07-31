@@ -178,6 +178,19 @@ just measures the wrong thing.
   [references/worked-example.md](references/worked-example.md).
 - This skill iterates a skill document; it does not build a training-loop
   executor, and it does not review a skill for merge.
+- Never report an isolated-dispatch selection score as this Gate step's
+  "same model and harness" evidence when the scorer is itself a Skill-tool
+  invocation, unless the isolated copy's plugin/marketplace registration was
+  independently confirmed. A dispatch that cannot discover the scorer skill
+  by name silently falls back to reading its target file directly and
+  reasoning about it in prose instead of running the real scorer -- a
+  simulated score, not a measured one, even though it still returns a
+  number. Where a sibling skill's own isolation-verification recipe exists
+  (e.g. `evaluating-skill-quality`'s `references/adversarial-self-audit.md`
+  Isolation verification section), follow its currently-recorded mechanism
+  and confirm it before trusting any resulting score; an equivalent target
+  skill without such a recipe needs the same confirmation by whatever means
+  its own harness provides.
 
 ## Notes
 
