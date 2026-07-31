@@ -5,6 +5,8 @@ metadata:
 spec:
   portability: Portable
   capabilityAssumption: Broad
+  lifecycle:
+    renamedFrom: driving-pr-to-merge
   skillDependencies:
     requires: []
     relatedTo:
