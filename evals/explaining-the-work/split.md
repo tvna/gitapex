@@ -202,3 +202,88 @@ fixtures continue to pass (the two contraction-fragility scores are a
 disclosed, pre-existing, edit-unrelated scorer quirk, not a regression),
 and the transfer check on an adjacent model tier shows no regression.
 **KEEP.**
+
+## Iteration: issue #631, Routing section restructure + exercises: declaration coverage
+
+Candidate edit: issue #629's adversarial review of a proposed mechanical
+"out-of-scope" classifier found that `skills/explaining-the-work/SKILL.md`
+has no real section unit -- "Commit log," "Code comments," "Code body," and
+"Test code" are bold bullet lead-ins nested under one single `## Routing`
+heading, not headings themselves -- which blocked any mechanical way to
+know which section a fixture's prompt is designed to exercise. The
+candidate converts the 4 bold bullet lead-ins under `## Routing` into real
+`### <label> -> <original text>` sub-headings, with **zero wording change**
+beyond what the heading conversion mechanically requires (dropping a
+now-irrelevant trailing comma/period right after the bold close;
+capitalizing a word that is now sentence-initial in the body paragraph
+that follows). Separately, `.github/scripts/gate_split_fixture_coverage.py`
+gains a third check (Check C): every fixture a `split.md`'s declared
+`selection` split names must declare a well-formed `expected.exercises`
+(non-empty list of section labels, mirroring
+`lint_fixture_assertions.py`'s `_is_real_dispatch_declaration` shape
+validation) matching a real current `###`-level section label in the
+sibling SKILL.md -- closing the specific vacuous-declaration gap issue
+#629 found, without building the rest of the proposed classifier (a
+CEILING/OUT_OF_SCOPE verdict remains explicitly out of scope, per that
+issue's own research). `commit-includes-terse-why.yaml` and
+`closes-when-fully-satisfied.yaml` (this file's 2 existing selection
+fixtures) are backfilled with `exercises: ["Commit log"]`.
+
+Classification: **pruning-only on the SKILL.md side** (markup restructure,
+no wording change to any routing rule) **plus an additive, opt-in fixture
+field and a new, independently-scoped CI check** -- neither branch removes
+or reweights any existing behavioral rule.
+
+### No selection fixture's score can move -- verified directly, not assumed
+
+Both selection fixtures (`commit-includes-terse-why.yaml`,
+`closes-when-fully-satisfied.yaml`) were re-dispatched, one fresh dispatch
+per side, against the old (bullet-form) and new (heading-form) SKILL.md
+text:
+
+| Fixture | Before (old text) | After (new text) |
+|---|---|---|
+| `commit-includes-terse-why.yaml` | 1.000000 | 1.000000 |
+| `closes-when-fully-satisfied.yaml` | 1.000000 | 1.000000 |
+
+Both responses contained the same required substrings under both texts
+("worker pool" / "Closes #401"; "Closes #212"), confirming the restructure
+is behaviorally a no-op for the one branch these 2 fixtures observe, not
+merely assumed from the wording being unchanged. `python3
+evals/scripts/lint_fixture_assertions.py` (full discovery-mode run) is
+byte-identical before and after this change, diffed directly against a
+pre-change checkout.
+
+### Gate result -- not a scorer-gate candidate; verified by direct diff instead
+
+This edit changes no assertion any existing fixture scores against (the
+new `exercises:` field is read only by the new Check C, never by
+`score_contract.score()`), so there is no selection-split mean to compute
+before/after -- the same "no fixture in scope of the strict gate could
+observe this edit at all" situation as the `## Iteration: issue #609
+(continued)` entry above, this time because the branch touched carries no
+wording change at all rather than because no fixture exercises that
+branch.
+
+### Why this is landed anyway, outside the scorer-gate's scope
+
+Same reasoning as this file's prior `## Iteration: issue #609` sections:
+a markup-only restructure with a directly-verified-identical behavioral
+surface, plus a new opt-in fixture field and CI check that no existing
+scoring path reads, are outside `scorer-gated-skill-edits`' behavioral
+jurisdiction by construction. Landed as a documentation/tooling-coverage
+fix, not claimed as a scorer-validated behavioral KEEP.
+
+### Rejected-edit log
+
+None this iteration -- the restructure's behavioral-no-op status was
+confirmed by direct dispatch before landing, not assumed and later found
+wrong.
+
+### Verdict
+
+**Behavioral gate: N/A (no fixture assertion this edit could move) --
+landed as a structural/tooling fix**, verified via direct real dispatch
+(both selection fixtures score identically old vs. new text) and a
+byte-identical `lint_fixture_assertions.py` full-repo run, per the
+reasoning above.
