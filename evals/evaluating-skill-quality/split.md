@@ -3016,13 +3016,33 @@ gitapex@gitapex` against a scratch `HOME`), combined with
 shape-checker step triggers, genuine dispatch became possible -- and was
 run against the 3 new/motivating fixtures (the ones this iteration's own
 checks are meant to catch), before/after, on the same commits pinned
-above:
+above -- three separate single-fixture tables, this repository's own
+established convention for a scoped recheck that does not claim
+full-corpus coverage:
 
-| Fixture | Before (real dispatch) | After (real dispatch) | Before (table above, simulated) | After (table above, simulated) |
-|---|---|---|---|---|
-| `declaration-structure-fit-selection.yaml` | 0.750000 | 1.000000 | 0.750000 | 1.000000 |
-| `sediment-correction-narration-selection.yaml` | 1.000000 | 0.750000 | 1.000000 | 1.000000 |
-| `duplication-repeated-restatement-selection.yaml` | 0.500000 | 0.500000 | 0.750000 | 1.000000 |
+One fresh genuine dispatch per side against only
+`declaration-structure-fit-selection.yaml` (simulated table above: 0.75
+-> 1.0):
+
+| Fixture | Before | After |
+|---|---|---|
+| `declaration-structure-fit-selection.yaml` | 0.750000 | 1.000000 |
+
+One fresh genuine dispatch per side against only
+`sediment-correction-narration-selection.yaml` (simulated table above:
+1.0 -> 1.0):
+
+| Fixture | Before | After |
+|---|---|---|
+| `sediment-correction-narration-selection.yaml` | 1.000000 | 0.750000 |
+
+One fresh genuine dispatch per side against only
+`duplication-repeated-restatement-selection.yaml` (simulated table
+above: 0.75 -> 1.0):
+
+| Fixture | Before | After |
+|---|---|---|
+| `duplication-repeated-restatement-selection.yaml` | 0.500000 | 0.500000 |
 
 This **retracts the "zero regressions" claim above** for two of the
 three motivating fixtures; the simulated numbers materially overstated
