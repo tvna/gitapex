@@ -706,3 +706,260 @@ def test_cli_run_malformed_captured_transcript_exit_2(tmp_path: Path, monkeypatc
         "--dispatch-tool-name", "Agent",
     ])
     assert rc == 2
+
+
+# ---- register_plugin_marketplace (issue #621) ------------------------------
+
+
+def test_register_plugin_marketplace_raises_without_manifest(tmp_path: Path, monkeypatch):
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("subprocess.run must not be called when marketplace.json is missing")
+
+    monkeypatch.setattr(cdt.subprocess, "run", fail_if_called)
+
+    marketplace_source = tmp_path / "isolated-target"
+    marketplace_source.mkdir()
+    isolated_home = tmp_path / "home"
+    isolated_home.mkdir()
+    isolated_cwd = tmp_path / "cwd"
+    isolated_cwd.mkdir()
+
+    with pytest.raises(FileNotFoundError, match="marketplace.json"):
+        cdt.register_plugin_marketplace(
+            marketplace_source, "gitapex@gitapex",
+            isolated_home=isolated_home, isolated_cwd=isolated_cwd,
+        )
+
+
+def test_register_plugin_marketplace_succeeds_with_manifest(tmp_path: Path, monkeypatch):
+    (tmp_path / "isolated-target" / ".claude-plugin").mkdir(parents=True)
+    (tmp_path / "isolated-target" / ".claude-plugin" / "marketplace.json").write_text("{}", encoding="utf-8")
+    marketplace_source = tmp_path / "isolated-target"
+    isolated_home = tmp_path / "home"
+    isolated_home.mkdir()
+    isolated_cwd = tmp_path / "cwd"
+    isolated_cwd.mkdir()
+
+    calls = []
+
+    def fake_run(argv, cwd, env, capture_output, text, check, timeout=None):
+        calls.append({"argv": argv, "cwd": cwd, "env": env})
+        return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(cdt.subprocess, "run", fake_run)
+    monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", "should-be-unset")
+
+    cdt.register_plugin_marketplace(
+        marketplace_source, "gitapex@gitapex",
+        isolated_home=isolated_home, isolated_cwd=isolated_cwd,
+    )
+
+    assert len(calls) == 2
+    assert calls[0]["argv"] == ["claude", "plugin", "marketplace", "add", str(marketplace_source)]
+    assert calls[1]["argv"] == ["claude", "plugin", "install", "gitapex@gitapex"]
+    for call in calls:
+        assert call["cwd"] == str(isolated_cwd)
+        assert call["env"]["HOME"] == str(isolated_home)
+        assert "CLAUDE_CODE_SESSION_ID" not in call["env"]
+
+
+def test_register_plugin_marketplace_raises_on_marketplace_add_failure(tmp_path: Path, monkeypatch):
+    (tmp_path / "isolated-target" / ".claude-plugin").mkdir(parents=True)
+    (tmp_path / "isolated-target" / ".claude-plugin" / "marketplace.json").write_text("{}", encoding="utf-8")
+
+    def fake_run(argv, cwd, env, capture_output, text, check, timeout=None):
+        return subprocess.CompletedProcess(argv, 1, stdout="", stderr="marketplace add boom")
+
+    monkeypatch.setattr(cdt.subprocess, "run", fake_run)
+
+    with pytest.raises(cdt.PluginRegistrationError, match="marketplace add boom"):
+        cdt.register_plugin_marketplace(
+            tmp_path / "isolated-target", "gitapex@gitapex",
+            isolated_home=tmp_path / "home", isolated_cwd=tmp_path / "cwd",
+        )
+
+
+def test_register_plugin_marketplace_raises_on_plugin_install_failure(tmp_path: Path, monkeypatch):
+    (tmp_path / "isolated-target" / ".claude-plugin").mkdir(parents=True)
+    (tmp_path / "isolated-target" / ".claude-plugin" / "marketplace.json").write_text("{}", encoding="utf-8")
+
+    calls = []
+
+    def fake_run(argv, cwd, env, capture_output, text, check, timeout=None):
+        calls.append(argv)
+        if len(calls) == 1:
+            return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+        return subprocess.CompletedProcess(argv, 1, stdout="", stderr="install boom")
+
+    monkeypatch.setattr(cdt.subprocess, "run", fake_run)
+
+    with pytest.raises(cdt.PluginRegistrationError, match="install boom"):
+        cdt.register_plugin_marketplace(
+            tmp_path / "isolated-target", "gitapex@gitapex",
+            isolated_home=tmp_path / "home", isolated_cwd=tmp_path / "cwd",
+        )
+    assert len(calls) == 2
+
+
+# ---- CLI: run --marketplace-source/--plugin-name (issue #621) -------------
+
+
+def test_cli_run_marketplace_source_without_manifest_exits_2_no_dispatch(tmp_path: Path, monkeypatch):
+    real_home = tmp_path / "real-home"
+    (real_home / ".claude").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(real_home))
+
+    marketplace_source = tmp_path / "isolated-target"
+    marketplace_source.mkdir()  # no .claude-plugin/marketplace.json inside
+
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("dispatch", encoding="utf-8")
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("run_live_dispatch must not be called when marketplace registration fails")
+
+    monkeypatch.setattr(cdt, "run_live_dispatch", fail_if_called)
+
+    rc = cdt.main([
+        "run", "--prompt-file", str(prompt_file),
+        "--transcript-out", str(tmp_path / "out.jsonl"),
+        "--dispatch-tool-name", "Agent",
+        "--marketplace-source", str(marketplace_source),
+        "--plugin-name", "gitapex@gitapex",
+    ])
+    assert rc == 2
+
+
+def test_cli_run_marketplace_registration_failure_exits_2_no_dispatch(tmp_path: Path, monkeypatch):
+    real_home = tmp_path / "real-home"
+    (real_home / ".claude").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(real_home))
+
+    marketplace_source = tmp_path / "isolated-target"
+    (marketplace_source / ".claude-plugin").mkdir(parents=True)
+    (marketplace_source / ".claude-plugin" / "marketplace.json").write_text("{}", encoding="utf-8")
+
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("dispatch", encoding="utf-8")
+
+    def fake_run(argv, cwd, env, capture_output, text, check, timeout=None):
+        return subprocess.CompletedProcess(argv, 1, stdout="", stderr="marketplace add boom")
+
+    monkeypatch.setattr(cdt.subprocess, "run", fake_run)
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("run_live_dispatch must not be called when plugin registration fails")
+
+    monkeypatch.setattr(cdt, "run_live_dispatch", fail_if_called)
+
+    rc = cdt.main([
+        "run", "--prompt-file", str(prompt_file),
+        "--transcript-out", str(tmp_path / "out.jsonl"),
+        "--dispatch-tool-name", "Agent",
+        "--marketplace-source", str(marketplace_source),
+        "--plugin-name", "gitapex@gitapex",
+    ])
+    assert rc == 2
+
+
+def test_cli_run_marketplace_registration_missing_claude_binary_exits_2(tmp_path: Path, monkeypatch):
+    real_home = tmp_path / "real-home"
+    (real_home / ".claude").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(real_home))
+
+    marketplace_source = tmp_path / "isolated-target"
+    (marketplace_source / ".claude-plugin").mkdir(parents=True)
+    (marketplace_source / ".claude-plugin" / "marketplace.json").write_text("{}", encoding="utf-8")
+
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("dispatch", encoding="utf-8")
+
+    def fake_run(argv, cwd, env, capture_output, text, check, timeout=None):
+        raise FileNotFoundError("[Errno 2] No such file or directory: 'claude'")
+
+    monkeypatch.setattr(cdt.subprocess, "run", fake_run)
+
+    rc = cdt.main([
+        "run", "--prompt-file", str(prompt_file),
+        "--transcript-out", str(tmp_path / "out.jsonl"),
+        "--dispatch-tool-name", "Agent",
+        "--marketplace-source", str(marketplace_source),
+        "--plugin-name", "gitapex@gitapex",
+    ])
+    assert rc == 2
+
+
+def test_cli_run_marketplace_registration_timeout_exits_2(tmp_path: Path, monkeypatch):
+    real_home = tmp_path / "real-home"
+    (real_home / ".claude").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(real_home))
+
+    marketplace_source = tmp_path / "isolated-target"
+    (marketplace_source / ".claude-plugin").mkdir(parents=True)
+    (marketplace_source / ".claude-plugin" / "marketplace.json").write_text("{}", encoding="utf-8")
+
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("dispatch", encoding="utf-8")
+
+    def fake_run(argv, cwd, env, capture_output, text, check, timeout=None):
+        raise subprocess.TimeoutExpired(cmd=argv, timeout=timeout)
+
+    monkeypatch.setattr(cdt.subprocess, "run", fake_run)
+
+    rc = cdt.main([
+        "run", "--prompt-file", str(prompt_file),
+        "--transcript-out", str(tmp_path / "out.jsonl"),
+        "--dispatch-tool-name", "Agent",
+        "--marketplace-source", str(marketplace_source),
+        "--plugin-name", "gitapex@gitapex",
+    ])
+    assert rc == 2
+
+
+def test_cli_run_marketplace_flags_must_be_given_together(tmp_path: Path, monkeypatch):
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("dispatch", encoding="utf-8")
+
+    rc = cdt.main([
+        "run", "--prompt-file", str(prompt_file),
+        "--transcript-out", str(tmp_path / "out.jsonl"),
+        "--dispatch-tool-name", "Agent",
+        "--marketplace-source", str(tmp_path / "isolated-target"),
+    ])
+    assert rc == 2
+
+
+def test_cli_run_marketplace_success_then_dispatch_mocked(tmp_path: Path, monkeypatch):
+    real_home = tmp_path / "real-home"
+    (real_home / ".claude").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(real_home))
+
+    marketplace_source = tmp_path / "isolated-target"
+    (marketplace_source / ".claude-plugin").mkdir(parents=True)
+    (marketplace_source / ".claude-plugin" / "marketplace.json").write_text("{}", encoding="utf-8")
+
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("dispatch a subagent", encoding="utf-8")
+    transcript_out = tmp_path / "out.jsonl"
+
+    registration_calls = []
+
+    def fake_run(argv, cwd, env, **kwargs):
+        if argv[:2] == ["claude", "plugin"]:
+            registration_calls.append(argv)
+            return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+        kwargs["stdout"].write(TRANSCRIPT_ONE_AGENT_DISPATCH)
+        return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(cdt.subprocess, "run", fake_run)
+
+    rc = cdt.main([
+        "run", "--prompt-file", str(prompt_file),
+        "--transcript-out", str(transcript_out),
+        "--dispatch-tool-name", "Agent",
+        "--marketplace-source", str(marketplace_source),
+        "--plugin-name", "gitapex@gitapex",
+    ])
+    assert rc == 0
+    assert len(registration_calls) == 2
+    assert transcript_out.read_text(encoding="utf-8") == TRANSCRIPT_ONE_AGENT_DISPATCH
