@@ -1,0 +1,55 @@
+id: evaluating-skill-quality-declaration-structure-fit-train
+name: Broad Declaration Pinned Against the Body-Length Ceiling With No Adaptive Disclosure
+description: Motivates the new Capability-assumption Declaration-vs-structure-fit check -- the target's SKILL.md sits at 496/500 lines (near check_skill_shape.py's BODY_MAX_LINES ceiling) while declaring capabilityAssumption Broad, with a full inline YAML schema block that would fit references/ under Adaptive just as well, and metadata/gitapex.yaml's decision log has no mention of Adaptive being considered. The review must flag the missing disclosure, not silently accept Broad as-is.
+tags:
+  - quality
+  - capability-assumption
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "release-notes-formatter". Its SKILL.md body is 496 of a
+    500-line hard limit (confirmed via check_skill_shape.py), and its
+    metadata/gitapex.yaml declares capabilityAssumption: Broad, with no
+    entry anywhere in its decision log mentioning Adaptive.
+
+    ---
+    name: release-notes-formatter
+    description: Format a release's changelog into a structured release-notes document. Use when the user asks to draft or format release notes.
+    ---
+
+    # Release Notes Formatter
+
+    ## Optional: custom section schema
+
+    Optional. `spec.sectionSchema` in the sidecar declares custom release-note
+    section names and ordering when the default (Added/Changed/Fixed/Removed)
+    doesn't fit:
+
+    ```yaml
+    spec:
+      sectionSchema:
+        sections:
+          - name: Security
+            order: 1
+          - name: Performance
+            order: 2
+    ```
+
+    - `name`: required, a non-empty string.
+    - `order`: required, a positive integer; ties broken by declaration order.
+    - Unknown top-level keys under `sectionSchema` fail validation.
+    - This field is optional; a skill declaring none uses the default four
+      sections in their default order.
+
+    ## Procedure
+
+    1. Read the changelog entries for the release.
+    2. Group them into sections per the schema above (or the default four).
+    3. Emit the formatted release-notes document.
+expected:
+  output_contains:
+    - "Declaration-vs-structure"
+    - "Adaptive"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"

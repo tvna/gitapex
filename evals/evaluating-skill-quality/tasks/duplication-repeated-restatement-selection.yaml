@@ -1,0 +1,43 @@
+id: evaluating-skill-quality-duplication-repeated-restatement-selection
+name: Same Rule Restated in Full at Three Sites, Different Domain
+description: A different domain and rule from the train fixture (a rate-limit backoff rule, not an escalation rule) -- a SKILL.md states "wait 60 seconds before retrying after a 429 response" in full, independently worded but identical in substance, in three separate sections instead of stating it once and cross-referencing. The gate measures whether the new duplication example generalizes to a distinct rule and domain rather than memorizing the train fixture's escalation wording.
+tags:
+  - quality
+  - conciseness
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "api-rate-limit-backoff". Is this a good skill?
+
+    ---
+    name: api-rate-limit-backoff
+    description: Handle a 429 rate-limit response from an external API with backoff. Use when the user asks to add or review rate-limit handling.
+    ---
+
+    # API Rate-Limit Backoff
+
+    ## Procedure
+
+    1. Call the API. If it returns 429, wait 60 seconds before the next
+       attempt, since the API's own documented rate window is 60 seconds.
+    2. Retry once after the 60-second wait. If it 429s again, stop and
+       report the failure.
+
+    ## Stop boundaries
+
+    - Never retry a 429 response before waiting the full 60 seconds: the
+      API's documented rate window is 60 seconds, and retrying sooner
+      only extends the block.
+
+    ## Notes
+
+    Backoff policy: every 429 response gets exactly one 60-second wait
+    before the single retry, matching the API's documented 60-second rate
+    window -- never shorter, never a second retry.
+expected:
+  output_contains:
+    - "duplication"
+    - "cross-reference"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"

@@ -841,6 +841,44 @@ compatible with staying broadly effective elsewhere); only a `Frontier`
 declaration paired with a weak-tier pin asserts something the declaration
 itself contradicts.
 
+**Declaration-vs-structure fit** is a distinct check from both checks
+above: not a pin the target's content makes, but whether the *declared
+level itself* still matches how the target is actually built. Fires when
+a target declares `Broad` or `Frontier`, its `SKILL.md` body sits at or
+above 90% of `scripts/check_skill_shape.py`'s own `BODY_MAX_LINES`
+ceiling (a vendored target with an equivalent hard body-length limit
+qualifies the same way), and a meaningful fraction of that body is
+rare-path, schema, or deep procedural detail that would fit Adaptive's
+own definition (a lean body plus deeper `references/`) at least as well.
+If genuinely unsure whether the near-ceiling content is a meaningful
+fraction or would fit Adaptive at least as well, default to treating the
+check as firing rather than silently passing -- the disclosure this check
+asks for costs one sentence, while a missed real foreclosure risk costs a
+structural rewrite later. **Check**: does the target's own Notes section
+or `metadata/gitapex.yaml` decision log disclose that Adaptive was
+considered, name the specific rare-path/schema/procedural content
+responsible for a meaningful share of the near-ceiling body (not one
+token, unrepresentative example), and give a real cost/benefit reason for
+keeping `Broad`/`Frontier` anyway -- not merely assert that a tradeoff was
+"considered"? **Fail**: no such disclosure exists, or one exists but
+names only a minor/unrepresentative block, or states no reason beyond the
+bare fact of having decided (a "we considered Adaptive but kept Broad"
+sentence satisfies the letter of a disclosure requirement without meeting
+this bar, the same substance-over-presence standard this dimension's
+Confidentiality-acknowledged check already applies to a safeguard claim)
+-- name the specific body content that would plausibly move, and that the
+declaration is foreclosing a structural fix rather than a considered
+choice. **Pass**: `Broad`/`Frontier` carries a disclosure meeting the bar
+above, or there is no ceiling pressure to begin with. Grounded in this
+skill's own history:
+`evaluating-skill-quality`'s own `SKILL.md` sat at 497-498/500 lines
+while declaring `Broad`, with no disclosure of the Adaptive tradeoff
+anywhere until an operator asked -- resolved by `metadata/gitapex.yaml`'s
+issue/614 decision entry, the worked precedent this check generalizes
+from. A step-level finding graded during dimension 2's walk (the ceiling
+pressure is a conciseness symptom), not a new precondition step -- it
+needs no new `SKILL.md` Procedure checkpoint.
+
 **Per-dimension grading effect:**
 
 - **Dimension 2 (Conciseness).**
@@ -1125,11 +1163,40 @@ apply the plain examples below only when no declaration exists or applies.
   Broad-declared target is excused, since a weaker or more economical model
   may genuinely need to be told explicitly to verify or double-check its own
   work.
+- **Narrating a correction inside the document's own prose is sediment, not
+  disclosure, unless the correction itself changes what a reader does.**
+  Anthropic's Opus 5 guidance on self-correction ([opus5]) states: "State
+  corrections plainly and briefly, then continue the task. For slips that
+  change nothing for the user, make the fix and move on without noting it."
+  A worked example, changelog-style note, or reference file that says "an
+  earlier pass of this section got X wrong, corrected here" is this same
+  pattern applied to written content instead of a live turn: the corrected
+  *fact* is what a reader needs, the story of how it was reached is
+  sediment once the fix lands. Keep a correction's own history only when
+  the *conclusion itself* changed (a verdict, a recommendation), and even
+  then state it as one plain sentence, not a narrated before/after; a
+  purely numeric or classification fix needs no narration at all.
+- **The same extended rule or disclosure restated in full at two or more
+  sites is duplication even when each restatement is independently
+  well-written.** One canonical statement plus a short cross-reference at
+  each other site carries the same information at a fraction of the cost.
+  This is Contract discipline's "never both" rule (a check runs in exactly
+  one place, never in both) applied at its own literal threshold to prose
+  restatement, not only to procedure-step ownership. Distinct from
+  dimension 5's co-location concern (below), which this bullet does not
+  override: a short, deliberately-repeated critical warning placed at each
+  of several independently-reachable entry points, for a reader who won't
+  traverse the others, is co-location, not duplication -- the defect here
+  is restating an extended rule or rationale in full, not repeating a
+  brief pointer-level warning.
 - **Fail:** explaining what a well-known format or tool is; retaining
   irrelevant, duplicate, sedimentary, or sprawling text without a
   behavior-controlling reason; claiming an unmeasured sentence is a no-op; an
   unhedged generic verification or self-correction-narration instruction on
-  Frontier (or Adaptive-body) content with no domain-specific reason stated.
+  Frontier (or Adaptive-body) content with no domain-specific reason stated;
+  narrating a written correction's history rather than stating its
+  corrected conclusion plainly; the same rule or disclosure restated in
+  full at 2+ sites instead of one canonical statement plus cross-references.
 - **Pass:** assumes competence, states only the project- or task-specific
   delta, reaches actionable content fast, and distinguishes static pruning
   evidence from measured no-op evidence.
