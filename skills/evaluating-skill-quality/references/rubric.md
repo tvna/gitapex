@@ -851,13 +851,20 @@ qualifies the same way), and a meaningful fraction of that body is
 rare-path, schema, or deep procedural detail that would fit Adaptive's
 own definition (a lean body plus deeper `references/`) at least as well.
 **Check**: does the target's own Notes section or `metadata/gitapex.yaml`
-decision log disclose that Adaptive was considered and state why
-`Broad`/`Frontier` was kept anyway? **Fail**: no such disclosure exists --
-name the specific body content that would plausibly move, and that the
-declaration is foreclosing a structural fix rather than a considered
-choice. **Pass**: the declaration is `Adaptive` and the split matches it,
-`Broad`/`Frontier` carries a stated reason, or there is no ceiling
-pressure to begin with. Grounded in this skill's own history:
+decision log disclose that Adaptive was considered, name the specific
+rare-path/schema/procedural content that would plausibly move to
+`references/` under it, and state why `Broad`/`Frontier` was kept anyway
+-- not merely assert that a tradeoff was "considered"? **Fail**: no such
+disclosure exists, or one exists but doesn't name the specific content
+that would move (a bare "we considered Adaptive but kept Broad" sentence
+satisfies the letter of a disclosure requirement without meeting this
+bar, the same substance-over-presence standard this dimension's
+Confidentiality-acknowledged check already applies to a safeguard
+claim) -- name the specific body content that would plausibly move, and
+that the declaration is foreclosing a structural fix rather than a
+considered choice. **Pass**: `Broad`/`Frontier` carries a disclosure
+meeting the bar above, or there is no ceiling pressure to begin with.
+Grounded in this skill's own history:
 `evaluating-skill-quality`'s own `SKILL.md` sat at 497-498/500 lines
 while declaring `Broad`, with no disclosure of the Adaptive tradeoff
 anywhere until an operator asked -- resolved by `metadata/gitapex.yaml`'s
@@ -1163,12 +1170,13 @@ apply the plain examples below only when no declaration exists or applies.
   the *conclusion itself* changed (a verdict, a recommendation), and even
   then state it as one plain sentence, not a narrated before/after; a
   purely numeric or classification fix needs no narration at all.
-- **The same rule or disclosure restated in full at three or more sites is
+- **The same rule or disclosure restated in full at two or more sites is
   duplication even when each restatement is independently well-written.**
   One canonical statement plus a short cross-reference at each other site
   carries the same information at a fraction of the cost. This is Contract
-  discipline's "never both" rule (a check runs in exactly one place)
-  applied to prose restatement, not only to procedure-step ownership.
+  discipline's "never both" rule (a check runs in exactly one place, never
+  in both) applied at its own literal threshold to prose restatement, not
+  only to procedure-step ownership.
 - **Fail:** explaining what a well-known format or tool is; retaining
   irrelevant, duplicate, sedimentary, or sprawling text without a
   behavior-controlling reason; claiming an unmeasured sentence is a no-op; an
@@ -1176,7 +1184,7 @@ apply the plain examples below only when no declaration exists or applies.
   Frontier (or Adaptive-body) content with no domain-specific reason stated;
   narrating a written correction's history rather than stating its
   corrected conclusion plainly; the same rule or disclosure restated in
-  full at 3+ sites instead of one canonical statement plus cross-references.
+  full at 2+ sites instead of one canonical statement plus cross-references.
 - **Pass:** assumes competence, states only the project- or task-specific
   delta, reaches actionable content fast, and distinguishes static pruning
   evidence from measured no-op evidence.
