@@ -185,6 +185,54 @@ extra proof of accuracy.
   8 cases -- not just 1 -- cleanly separate `genuine` from
   `wrongCitation`.
 
+## Effect measurement: before (mechanical check) vs. after (semantic scorer)
+
+Issue #625 exists because "現在の仕様では出力結果の意味を評価できてない" -- the
+prior evaluation approach, `score_contract.py`'s substring/format-presence
+scoring (the SAME mechanism this repo's own `SKILL.md` says a why-not
+comment's mechanical part -- the `why-not(#NNN):` prefix, line length -- is
+"a good fit for"), can only ever check that a comment looks right, never
+that its claim is true. This load test's 24 candidate texts let that
+before/after delta be measured directly, not just asserted: the exact same
+24 comments were scored both ways.
+
+`mechanical_baseline.py` reconstructs the 24 candidates and scores each
+with the real, unmodified `score_contract.score()` against an assertion
+`{"output_contains": ["why-not(", ":"], "output_not_contains": ["TODO",
+"FIXME"]}` -- the mechanical part `SKILL.md` explicitly delegates to a
+lint-hook. Run it yourself: `python3
+evals/semantic-rationale-load-test/mechanical_baseline.py`.
+
+| Variant | n | Mechanical check (before) | Semantic scorer (after) -- mean score | Fabrication caught |
+|---|---|---|---|---|
+| genuine | 8 | **1.000 (24/24 pass)** | 0.458 | -- |
+| wrongReason | 8 | **1.000 (8/8 pass)** | **0.083** | 8/8 |
+| wrongCitation | 8 | **1.000 (8/8 pass)** | 0.458 (1/8 unconfounded case: 0.667, correctly flagged on `cited_ref`) | 8/8 (1/8 unconfounded) |
+
+The measured effect: **the mechanical check passes all 24 candidates,
+including all 16 fabricated ones, at 1.000 every time** -- it structurally
+cannot do otherwise, since a fabricated reason or a swapped citation number
+is still, textually, a `why-not(#N): <=120 chars`-shaped string containing
+a colon and no `TODO`/`FIXME`. It has zero power to catch either kind of
+fabrication tested here. The semantic scorer catches **16/16 (100%)** of
+those same fabricated candidates (`fabrication_detected: true`, and for
+`wrongReason` -- the unconfounded comparison -- a mean score of 0.083
+against genuine's 0.458, roughly a 5.5x collapse). That is the concrete,
+reproducible effect of this change: converting a 0%-detectable class of
+error (content that reads correctly but is not actually true of its cited
+source) into a 100%-detected one, on every fabricated case this load test
+tried.
+
+This does not mean the mechanical check should be replaced -- `SKILL.md`
+still assigns it the line-length/prefix-format role it's suited for, and
+the semantic scorer is 3 model calls per comparison vs. `score_contract`'s
+zero; the two are complementary layers (format hook + semantic check),
+not a swap. The honest caveat from earlier sections applies here too: this
+table's `wrongCitation` mean is confounded for 7/8 cases by the same
+citation-embedding gap (finding #1), so the clean, unconfounded per-variant
+delta this table can currently support is `genuine` vs. `wrongReason`
+(0.458 vs 0.083), not yet a full 3-way separation.
+
 ## Files
 
 - `load-test.workflow.js` -- the exact Workflow script run (attempt 2,
@@ -193,3 +241,6 @@ extra proof of accuracy.
   `allResults` entries (case, variant, verdict, score), the 8-entry
   `falsePositives` list, the empty `falseNegatives` list, and all 3
   `consistency` recheck pairs with both verdicts' full explanations.
+- `mechanical_baseline.py` -- reconstructs the 24 candidates and scores
+  them with the repo's existing mechanical scorer, to quantify the
+  before/after effect above. Reproducible, standard-library only.
