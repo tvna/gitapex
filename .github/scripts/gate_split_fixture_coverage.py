@@ -41,19 +41,51 @@ that `split.md`'s `## Equivalence classes` table to have a row that both
 mentions "precedence"/"priority" and names two fixtures (a train one and a
 held-out one).
 
-Both checks are heuristic text parsing over Markdown prose, not a formal
-grammar -- the issue's own Acceptance Criteria Map names this residual
-risk explicitly ("Parsing split.md's prose-based Assignment section and
-gate tables reliably needs a defined, stable format convention" /
-"Detecting... phrases in free-form SKILL.md prose needs a heuristic that
-could miss some phrasings or over-trigger on unrelated conditional
-language"). Scope is deliberately narrowed to the exact conventions this
-repository's own four `split.md` files already use, verified directly
-against all of them (`evals/evaluating-skill-quality/split.md`,
+Check C (issue #631, following issue #629's blocker 2 finding). A proposed
+mechanical "out-of-scope" classifier for `scorer-gated-skill-edits`' gate
+(issue #629, "Spec B") found that a fixture-side `exercises:` declaration
+-- which section(s) of a skill's `SKILL.md` a fixture's prompt is designed
+to exercise -- would silently read a missing/empty declaration as "declares
+no sections," making an out-of-scope verdict vacuously true for every
+future edit. This check closes that half of the gap on its own (the
+classifier itself is explicitly NOT built here -- see issue #631): for
+every fixture a `split.md`'s `## Assignment` section declares for the
+`selection` split, when the sibling `SKILL.md` has at least one `###`-level
+section heading (this repository's convention for a routing-style
+sub-heading, e.g. `### Commit log -> a terse Why, not the full Why`,
+established by `skills/explaining-the-work/SKILL.md`), that fixture's own
+YAML must declare a well-formed `expected.exercises` (a non-empty list of
+section labels -- not merely truthy, mirroring
+`lint_fixture_assertions.py`'s `_is_real_dispatch_declaration` shape-
+validation pattern), and every declared label must casefold-match a real
+current section label (the heading text before ` -> `, when present) in
+that `SKILL.md` -- never resolved by staleness (a fixture whose exercises:
+label no longer matches any heading fails loudly, the same declare+verify
+precedent as Check A/B above, not a stale pointer left unnoticed).
+Scoped automatically to skills that both have a `split.md` and use this
+`###` sub-heading convention -- not an enumerated allowlist like issue
+#584's `DISPATCH_MANDATE_SKILLS`, since the two skills in this repository
+that use `###` headings for an unrelated purpose (`evaluating-deterministic-
+gate-quality`'s evaluation axes, `vetting-attack-surface`'s check
+categories) have no `split.md` at all today, so this check never reaches
+them; a future skill combining both conventions in an unrelated way would
+need this scoping revisited, the same class of residual heuristic-scope
+risk Check B's own docstring already discloses for its narrower text scan.
+
+All three checks are heuristic text parsing over Markdown prose, not a
+formal grammar -- the issue's own Acceptance Criteria Map names this
+residual risk explicitly ("Parsing split.md's prose-based Assignment
+section and gate tables reliably needs a defined, stable format
+convention" / "Detecting... phrases in free-form SKILL.md prose needs a
+heuristic that could miss some phrasings or over-trigger on unrelated
+conditional language"). Scope is deliberately narrowed to the exact
+conventions this repository's own `split.md` files already use, verified
+directly against all of them (`evals/evaluating-skill-quality/split.md`,
 `evals/scorer-gated-skill-edits/split.md`,
 `evals/battle-testing-a-skill/split.md`,
-`evals/merge-retrospective/split.md`) before writing this gate -- not a
-general-purpose Markdown parser.
+`evals/merge-retrospective/split.md`,
+`evals/explaining-the-work/split.md`) before writing this gate (Check C)
+-- not a general-purpose Markdown parser.
 
 Mirrors `gate_retro_title_convention_citation.py`'s shape: the calling
 workflow computes which `split.md`/`SKILL.md` files this PR actually added
@@ -83,6 +115,8 @@ import argparse
 import re
 import sys
 from pathlib import Path
+
+import yaml
 
 _YAML_NAME_RE = re.compile(r"`([A-Za-z0-9._-]+\.yaml)`")
 
@@ -119,6 +153,11 @@ _SCOPED_TABLE_RE = re.compile(r"against\s+(?:only\s+)?`([A-Za-z0-9._-]+\.yaml)`"
 # skills/merge-retrospective/SKILL.md) to avoid over-triggering on
 # unrelated conditional language.
 _PRECEDENCE_RE = re.compile(r"\btakes?\s+(?:precedence|priority)\s+over\b", re.IGNORECASE)
+
+# A `###`-level heading, this repository's routing-style sub-heading
+# convention (issue #631), e.g. `### Commit log -> a terse Why, not the
+# full Why`.
+_SECTION_HEADING_RE = re.compile(r"^###[ \t]+(.+?)[ \t]*$", re.MULTILINE)
 
 
 def _section(text: str, heading_re: re.Pattern[str]) -> str:
@@ -249,6 +288,117 @@ def check_precedence_branch_coverage(skill_md_path: Path, skill_text: str, repo_
     )
 
 
+_FENCE_RE = re.compile(r"^\s*(?:```|~~~)")
+
+
+def _strip_fenced_code_blocks(text: str) -> str:
+    """Blank out every line inside a fenced code block (``` or ~~~), so a
+    `###`-prefixed line inside a fence illustrating Markdown syntax is
+    never mistaken for a real heading (adversarial review, issue #631) --
+    mirrors `check_skill_shape.py`'s own `_strip_illustrative_spans`
+    fence-toggle logic. Line count is preserved (blanked, not removed) so
+    this stays a drop-in substitute for callers that care about offsets;
+    `parse_section_labels` below does not, but keeping the shape consistent
+    with that established precedent costs nothing."""
+    out: list[str] = []
+    in_fence = False
+    for line in text.splitlines():
+        if _FENCE_RE.match(line):
+            in_fence = not in_fence
+            out.append("")
+            continue
+        out.append("" if in_fence else line)
+    return "\n".join(out)
+
+
+def parse_section_labels(skill_text: str) -> set[str]:
+    """Every `###`-level section's canonical label, casefolded, from a
+    SKILL.md's routing-style sub-headings (issue #631). The label is the
+    heading text before ` -> ` when present (e.g. `### Commit log -> a
+    terse Why, not the full Why` -> `commit log`), else the whole heading
+    text casefolded. Fenced code blocks are stripped first, so a
+    `###`-prefixed line only illustrating Markdown syntax inside a fence
+    is never counted as a real section."""
+    labels: set[str] = set()
+    for match in _SECTION_HEADING_RE.finditer(_strip_fenced_code_blocks(skill_text)):
+        heading = match.group(1).strip()
+        label = heading.split(" -> ", 1)[0].strip()
+        labels.add(label.casefold())
+    return labels
+
+
+def _is_real_exercises_declaration(value: object) -> bool:
+    """True iff `value` (a fixture's `expected.exercises`) is a non-empty
+    list of non-blank strings -- not merely truthy (issue #631, mirroring
+    `lint_fixture_assertions.py`'s `_is_real_dispatch_declaration`, which
+    closed the identical bare-truthy-declaration gap for issue #584)."""
+    return (
+        isinstance(value, list)
+        and len(value) > 0
+        and all(isinstance(item, str) and item.strip() for item in value)
+    )
+
+
+def check_exercises_declaration_coverage(
+    split_md_path: Path, split_text: str, repo_root: Path
+) -> str | None:
+    """Return an offender message if any fixture `split_md_path`'s
+    `selection` split declares either lacks a well-formed
+    `expected.exercises` declaration, or names a section label matching no
+    real `###`-level section in the sibling SKILL.md, else None (issue
+    #631, closing issue #629's blocker 2: a missing/bare-truthy
+    declaration must fail loudly, never be silently read as "declares no
+    sections"). Out of scope (returns None) when the sibling SKILL.md
+    either does not exist or has no `###`-level section at all -- see the
+    module docstring for why this is a structural scope gate, not an
+    enumerated allowlist.
+    """
+    declared_selection = parse_assignment_fixtures(split_text)["selection"]
+    if not declared_selection:
+        return None
+    skill_name = split_md_path.parent.name
+    skill_md_path = repo_root / "skills" / skill_name / "SKILL.md"
+    if not skill_md_path.is_file():
+        return None
+    skill_text = skill_md_path.read_text(encoding="utf-8")
+    section_labels = parse_section_labels(skill_text)
+    if not section_labels:
+        return None
+
+    tasks_dir = repo_root / "evals" / skill_name / "tasks"
+    problems: list[str] = []
+    for fixture_name in declared_selection:
+        fixture_path = tasks_dir / fixture_name
+        if not fixture_path.is_file():
+            problems.append(f"{fixture_name}: file not found under {tasks_dir}")
+            continue
+        try:
+            data = yaml.safe_load(fixture_path.read_text(encoding="utf-8")) or {}
+        except yaml.YAMLError as error:
+            problems.append(f"{fixture_name}: could not parse YAML ({error})")
+            continue
+        expected = data.get("expected") if isinstance(data, dict) else None
+        exercises = expected.get("exercises") if isinstance(expected, dict) else None
+        if not _is_real_exercises_declaration(exercises):
+            problems.append(
+                f"{fixture_name}: no well-formed expected.exercises declaration "
+                "(a non-empty list of section labels)"
+            )
+            continue
+        unmatched = [label for label in exercises if label.casefold() not in section_labels]
+        if unmatched:
+            problems.append(
+                f"{fixture_name}: exercises {unmatched!r} match no real "
+                f"###-level section in {skill_md_path}"
+            )
+    if not problems:
+        return None
+    return (
+        f"{split_md_path}: selection-split fixture(s) with an exercises-"
+        f"declaration gap -- {'; '.join(problems)}"
+    )
+
+
 def _read(path: Path) -> str | None:
     try:
         return path.read_text(encoding="utf-8")
@@ -261,17 +411,32 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--split-md", nargs="*", default=[], help="split.md files this PR added or modified.")
     parser.add_argument("--skill-md", nargs="*", default=[], help="SKILL.md files this PR added or modified.")
-    parser.add_argument("--repo-root", default=".", help="Repository root, for resolving a skill's split.md.")
+    parser.add_argument("--repo-root", default=".", help="Repository root, for resolving a skill's split.md/SKILL.md/tasks.")
     args = parser.parse_args(argv)
     repo_root = Path(args.repo_root)
 
     offenders: list[str] = []
+    # Check C (issue #631) is keyed by split.md path, but must fire whether
+    # the *split.md* or its *sibling SKILL.md* is the one that changed --
+    # a SKILL.md-only diff (e.g. renaming a ###-level section, with no
+    # split.md edit in the same PR) is exactly the staleness scenario this
+    # check exists to catch, and the calling workflow populates --split-md/
+    # --skill-md independently from whichever file type actually changed
+    # (see .github/workflows/split-fixture-coverage-gate.yml), so relying
+    # on --split-md alone would silently skip it. Tracked so a PR touching
+    # both sides of the same pair is not checked (and reported) twice.
+    exercises_checked: set[Path] = set()
+
     for raw_path in args.split_md:
         path = Path(raw_path)
         text = _read(path)
         if text is None:
             return 1
         offender = check_latest_gate_table_coverage(path, text)
+        if offender:
+            offenders.append(offender)
+        exercises_checked.add(path)
+        offender = check_exercises_declaration_coverage(path, text, repo_root)
         if offender:
             offenders.append(offender)
 
@@ -283,6 +448,15 @@ def main(argv: list[str] | None = None) -> int:
         offender = check_precedence_branch_coverage(path, text, repo_root)
         if offender:
             offenders.append(offender)
+        sibling_split_md = repo_root / "evals" / path.parent.name / "split.md"
+        if sibling_split_md.is_file() and sibling_split_md not in exercises_checked:
+            exercises_checked.add(sibling_split_md)
+            sibling_text = _read(sibling_split_md)
+            if sibling_text is None:
+                return 1
+            offender = check_exercises_declaration_coverage(sibling_split_md, sibling_text, repo_root)
+            if offender:
+                offenders.append(offender)
 
     if not offenders:
         print("PASS: split.md fixture-table coverage checks satisfied")

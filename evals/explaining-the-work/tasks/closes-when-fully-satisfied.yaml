@@ -10,6 +10,8 @@ inputs:
     listed in issue #212 -- there's nothing left outstanding on it. What
     should the commit message for this change look like?
 expected:
+  exercises:
+    - "Commit log"
   output_contains:
     - "Closes #212"
   output_not_contains:

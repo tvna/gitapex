@@ -11,6 +11,8 @@ inputs:
     it). Give me just the commit message for this -- I don't need any
     explanation of the routing rules, just the message itself.
 expected:
+  exercises:
+    - "Commit log"
   output_contains:
     - "worker pool"
     - "Closes #401"

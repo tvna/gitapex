@@ -14,68 +14,76 @@ into the wrong artifact.
 
 ## Routing
 
-- **Code body -> How only** (naming/structure). Never restate what the code
-  already says.
-- **Test code -> What**, expressed through the test name. Use a docstring
-  only when the test name itself cannot carry an issue reference.
-- **Commit log -> a terse Why, not the full Why.** Per [kerneldoc], the
-  explanation "will be committed to the permanent source changelog, so
-  should make sense to a competent reader who has long since forgotten
-  the immediate details of the discussion that might have led to this
-  patch" -- this permanent-record, forgetful-reader framing is
-  [kerneldoc]'s alone. [beams] and [progit] agree only that the body
-  should explain the change's motivation (what and why, not how;
-  contrast with previous behavior), and both wrap the body at 72
-  characters, distinct from [kerneldoc]'s own 75-column convention;
-  none of the three gives a sentence- or word-count rule for how long
-  the Why itself should be. A commit is a subject line, a Why sized to
-  what that reader needs to grasp the reasoning -- not a fixed count,
-  not a duplicate of the fuller design essay -- and an issue pointer --
-  `Closes #N` when the change fully satisfies #N's acceptance criteria,
-  `Refs #N` when it only partially addresses or relates to it -- with
-  any repo-mandated trailers (e.g. `Co-Authored-By`) excepted. The
-  fuller design essay -- alternatives considered, dead ends, the
-  discussion's back-and-forth -- stays in the issue/PR body, tagged
-  Fact (verified/observed) or Speculation (unverified) rather than
-  blended; the commit's Why is self-contained for a reader who cannot
-  see that body, never a duplicate of the design essay.
-- **Code comments -> Why-not / durable constraints only**, one-line form:
+### Code body -> How only
 
-  ```
-  # why-not(#NNN): <=120 chars [-> docs/adr/NNNN-*.md]
-  ```
+(naming/structure). Never restate what the code already says.
 
-  `#NNN` and the path's `NNNN` are two unrelated numbers, not the same
-  value in different padding: `#NNN` is the citing issue/PR number,
-  while `NNNN` is that ADR's own independent sequence number (assigned
-  by scanning `docs/adr/`'s current highest file, per this repository's
-  ADR-drafting convention) -- an ADR can exist (and be cited) with no
-  issue at all, and one issue can cite different ADRs across different
-  comments. Never assume or write the same digits for both.
+### Test code -> What
 
-  Requires a citable issue/PR/ADR that actually evaluated the rejected
-  alternative. If nothing can be cited, do not write the comment — never
-  fabricate a rationale. The underlying principle is real governance
-  practice, not invented for this skill: [42010] requires that
-  architecture decisions and their rationale be documented and traceable
-  to the concerns they address, and [ibis] has treated a rejected
-  position's counter-argument as a first-class, recordable part of a
-  design's rationale since the 1970s. What remains this repository's own
-  policy choice, stricter than general software-engineering practice, is
-  enforcing that principle at the granularity of a single code comment
-  via a mandatory citation gate: no primary source checked (Google's C++
-  style guide, Ousterhout's *A Philosophy of Software Design*, Robert C.
-  Martin's *Clean Code*, the Linux kernel's own coding-style guidance)
-  requires a citation to license a why-not comment specifically -- all of
-  them sanction broader Why (and sometimes tricky How) with no such gate
-  -- and neither [42010] nor [ibis] mandates this comment's one-line
-  syntax, the `why-not(#NNN):` prefix, or the <=120-char cap; those stay
-  this repository's own implementation choice. The mechanical part (line
-  length, the prefix, the optional ADR path form) is a good fit for a
-  small lint-hook or pre-commit check where the repo has one; keep the
-  judgment call (is a rejected alternative actually citable) in-model.
-  When no ADR exists yet for a citable why-not, use `drafting-an-adr` to
-  author one before citing its path here.
+Expressed through the test name. Use a docstring only when the test name
+itself cannot carry an issue reference.
+
+### Commit log -> a terse Why, not the full Why
+
+Per [kerneldoc], the explanation "will be committed to the permanent
+source changelog, so should make sense to a competent reader who has long
+since forgotten the immediate details of the discussion that might have
+led to this patch" -- this permanent-record, forgetful-reader framing is
+[kerneldoc]'s alone. [beams] and [progit] agree only that the body should
+explain the change's motivation (what and why, not how; contrast with
+previous behavior), and both wrap the body at 72 characters, distinct
+from [kerneldoc]'s own 75-column convention; none of the three gives a
+sentence- or word-count rule for how long the Why itself should be. A
+commit is a subject line, a Why sized to what that reader needs to grasp
+the reasoning -- not a fixed count, not a duplicate of the fuller design
+essay -- and an issue pointer -- `Closes #N` when the change fully
+satisfies #N's acceptance criteria, `Refs #N` when it only partially
+addresses or relates to it -- with any repo-mandated trailers (e.g.
+`Co-Authored-By`) excepted. The fuller design essay -- alternatives
+considered, dead ends, the discussion's back-and-forth -- stays in the
+issue/PR body, tagged Fact (verified/observed) or Speculation
+(unverified) rather than blended; the commit's Why is self-contained for
+a reader who cannot see that body, never a duplicate of the design essay.
+
+### Code comments -> Why-not / durable constraints only
+
+One-line form:
+
+```
+# why-not(#NNN): <=120 chars [-> docs/adr/NNNN-*.md]
+```
+
+`#NNN` and the path's `NNNN` are two unrelated numbers, not the same
+value in different padding: `#NNN` is the citing issue/PR number, while
+`NNNN` is that ADR's own independent sequence number (assigned by
+scanning `docs/adr/`'s current highest file, per this repository's
+ADR-drafting convention) -- an ADR can exist (and be cited) with no issue
+at all, and one issue can cite different ADRs across different comments.
+Never assume or write the same digits for both.
+
+Requires a citable issue/PR/ADR that actually evaluated the rejected
+alternative. If nothing can be cited, do not write the comment — never
+fabricate a rationale. The underlying principle is real governance
+practice, not invented for this skill: [42010] requires that
+architecture decisions and their rationale be documented and traceable
+to the concerns they address, and [ibis] has treated a rejected
+position's counter-argument as a first-class, recordable part of a
+design's rationale since the 1970s. What remains this repository's own
+policy choice, stricter than general software-engineering practice, is
+enforcing that principle at the granularity of a single code comment via
+a mandatory citation gate: no primary source checked (Google's C++ style
+guide, Ousterhout's *A Philosophy of Software Design*, Robert C.
+Martin's *Clean Code*, the Linux kernel's own coding-style guidance)
+requires a citation to license a why-not comment specifically -- all of
+them sanction broader Why (and sometimes tricky How) with no such gate --
+and neither [42010] nor [ibis] mandates this comment's one-line syntax,
+the `why-not(#NNN):` prefix, or the <=120-char cap; those stay this
+repository's own implementation choice. The mechanical part (line
+length, the prefix, the optional ADR path form) is a good fit for a
+small lint-hook or pre-commit check where the repo has one; keep the
+judgment call (is a rejected alternative actually citable) in-model.
+When no ADR exists yet for a citable why-not, use `drafting-an-adr` to
+author one before citing its path here.
 
 ## Precedence
 
