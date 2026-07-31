@@ -55,6 +55,15 @@ def test_build_extraction_command_includes_bare_and_json_schema():
     assert schema == ssr._DECISION_RECORD_SCHEMA
 
 
+def test_build_extraction_command_disables_all_tools():
+    # Closed-book requirement (issue #626): --bare alone still grants
+    # Bash/Read/Edit by default (confirmed against Claude Code's own
+    # docs), so this call must also explicitly disable every tool.
+    argv = ssr.build_extraction_command("claude", "some text")
+    assert "--tools" in argv
+    assert argv[argv.index("--tools") + 1] == ""
+
+
 def test_build_extraction_command_embeds_the_text_in_the_prompt():
     argv = ssr.build_extraction_command("claude", "the actual source text")
     prompt = argv[argv.index("-p") + 1]
@@ -74,6 +83,18 @@ def test_build_comparison_command_embeds_both_records():
     assert '"rejected_alternative": "A"' in prompt
     schema = json.loads(argv[argv.index("--json-schema") + 1])
     assert schema == ssr._VERDICT_SCHEMA
+
+
+def test_build_comparison_command_disables_all_tools():
+    # Closed-book requirement (issue #626): the compare step is the one a
+    # real Workflow-tool load test caught using the GitHub MCP tool and
+    # git history mid-comparison, so this call must explicitly disable
+    # every tool rather than relying on --bare's default grant.
+    candidate = {"rejected_alternative": "A", "reason": "slow", "cited_ref": "#1"}
+    source = {"rejected_alternative": "A", "reason": "slow", "cited_ref": "#1"}
+    argv = ssr.build_comparison_command("claude", candidate, source)
+    assert "--tools" in argv
+    assert argv[argv.index("--tools") + 1] == ""
 
 
 # ---------------------------------------------------------------------------

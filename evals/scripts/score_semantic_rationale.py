@@ -58,6 +58,28 @@ reads per that same page) -- the identical, already-disclosed precondition
 shape and interface are therefore built and unit-tested against a stub
 executor first, exactly as `run_ablation.py` was.
 
+Closed-book requirement (issue #626): the whole comparison step's validity
+depends on the judge reasoning ONLY from the two given JSON records, not
+from independently reading the real repository. `--bare` alone does not
+guarantee this -- fetched directly this session, `headless.md`/
+`cli-reference.md`/`tools-reference.md` all confirm bare mode still grants
+Bash and file-read/file-edit tool access by default (it only skips
+auto-discovery of hooks/skills/plugins/MCP servers/memory/CLAUDE.md, not
+tool registration itself), and a real Workflow-tool load test of this same
+comparison logic (`evals/semantic-rationale-load-test/report.md`) caught
+judge agents disclosing, in their own returned explanations, that they had
+used the GitHub MCP tool and read git history mid-comparison. Both command
+builders below therefore also pass `--tools ""` ("restrict which built-in
+tools Claude can use... use `""` to disable all", per `cli-reference.md`),
+a registration-time removal, not a prompt-level request -- combined with
+`--bare` never loading `.mcp.json`, this leaves no tool (built-in or MCP)
+registered for either call. This flag combination was confirmed to parse
+and reach the auth stage in a live `--bare -p ... --tools ""` invocation in
+this environment; the full behavioral proof (a genuine zero-tool-call run
+still returning a valid structured_output) remains blocked by the same
+missing-`ANTHROPIC_API_KEY` precondition as the rest of this script's live
+path -- disclosed here, not claimed as fully verified.
+
 Standard library plus this repository's own `score_contract` module (for
 the same fraction-based scoring convention used elsewhere in this corpus).
 The `sys.path` bootstrap mirrors `run_ablation.py`'s own, for the same
@@ -169,7 +191,14 @@ def _require_nonblank_str(value: object, field: str) -> str:
 
 
 def build_extraction_command(model_cli: str, text: str) -> list[str]:
-    """Build the argv for one schema-constrained extraction call."""
+    """Build the argv for one schema-constrained extraction call.
+
+    Includes ``--tools ""`` (issue #626): a registration-time removal of
+    all built-in tools, combined with ``--bare`` never loading an MCP
+    config, so this call has no tool to invoke at all -- see the module
+    docstring's "Closed-book requirement" section for why this is needed
+    and what remains unverified about it.
+    """
     model_cli = _require_nonblank_str(model_cli, "model_cli")
     prompt = _EXTRACTION_PROMPT_TEMPLATE.format(text=text)
     return [
@@ -181,13 +210,20 @@ def build_extraction_command(model_cli: str, text: str) -> list[str]:
         "json",
         "--json-schema",
         json.dumps(_DECISION_RECORD_SCHEMA),
+        "--tools",
+        "",
     ]
 
 
 def build_comparison_command(
     model_cli: str, candidate_record: dict, source_record: dict
 ) -> list[str]:
-    """Build the argv for the schema-constrained semantic-comparison call."""
+    """Build the argv for the schema-constrained semantic-comparison call.
+
+    Includes ``--tools ""`` (issue #626) for the same closed-book reason as
+    ``build_extraction_command`` -- see that function's docstring and this
+    module's docstring for the full reasoning.
+    """
     model_cli = _require_nonblank_str(model_cli, "model_cli")
     prompt = _COMPARISON_PROMPT_TEMPLATE.format(
         candidate_record=json.dumps(candidate_record, sort_keys=True),
@@ -202,6 +238,8 @@ def build_comparison_command(
         "json",
         "--json-schema",
         json.dumps(_VERDICT_SCHEMA),
+        "--tools",
+        "",
     ]
 
 
