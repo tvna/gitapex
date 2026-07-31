@@ -432,6 +432,26 @@ def test_exercises_coverage_non_dict_fixture_does_not_crash(tmp_path: pathlib.Pa
     assert "no well-formed expected.exercises" in offender
 
 
+def test_parse_section_labels_ignores_heading_shaped_line_inside_fence():
+    # Adversarial review (issue #631): a "### Fake heading" line only
+    # illustrating Markdown syntax inside a fenced code block must not be
+    # mistaken for a real section.
+    text = (
+        "### Code body -> How only\n\ntext\n\n"
+        "```markdown\n### Fake heading -> not real\n```\n\n"
+        "### Test code -> What\n\ntext\n"
+    )
+    assert gate.parse_section_labels(text) == {"code body", "test code"}
+
+
+def test_parse_section_labels_still_matches_after_a_closed_fence():
+    # Regression guard on the fence-toggle logic itself: a heading after a
+    # properly closed fence must still be counted (in_fence must flip back
+    # off, not stay stuck on).
+    text = "```\nsome code\n```\n\n### Real heading -> text\n"
+    assert gate.parse_section_labels(text) == {"real heading"}
+
+
 def test_explaining_the_work_skill_md_actually_has_section_headings():
     # Sanity check that the self-validation test above (and the repo-wide
     # one below) isn't vacuously true because no real file ever triggers
@@ -464,6 +484,60 @@ def test_main_returns_one_when_split_md_unreadable(tmp_path: pathlib.Path):
 
 def test_main_returns_zero_with_no_files():
     assert gate.main([]) == 0
+
+
+def _write_split_and_skill_md(tmp_path: pathlib.Path, skill_name: str, skill_md_body: str, fixtures: dict, selection: list[str]):
+    skill_md = _write_skill_and_tasks(tmp_path, skill_name, skill_md_body, fixtures)
+    split_md = tmp_path / "evals" / skill_name / "split.md"
+    selection_yaml = ", ".join(f"`{name}`" for name in selection)
+    split_md.write_text(
+        f"## Assignment\n\n- **selection**: {selection_yaml}.\n", encoding="utf-8"
+    )
+    return skill_md, split_md
+
+
+def test_main_check_c_fires_on_skill_md_only_diff(tmp_path: pathlib.Path):
+    # Regression (adversarial review, issue #631): the calling workflow
+    # populates --split-md/--skill-md independently based on which file
+    # type actually changed in a PR's diff -- a SKILL.md-only diff (e.g.
+    # renaming a ###-level section, with no split.md edit in the same PR)
+    # must still run Check C via the sibling split.md, not silently skip
+    # it because --split-md was never passed.
+    skill_md, split_md = _write_split_and_skill_md(
+        tmp_path, "widget-polisher", _ROUTING_SKILL_MD, {}, ["a.yaml"]
+    )
+    assert gate.main(["--skill-md", str(skill_md), "--repo-root", str(tmp_path)]) == 1
+
+
+def test_main_check_c_passes_on_skill_md_only_diff_with_valid_declaration(tmp_path: pathlib.Path):
+    skill_md, split_md = _write_split_and_skill_md(
+        tmp_path, "widget-polisher", _ROUTING_SKILL_MD,
+        {"a.yaml": "expected:\n  exercises:\n    - \"Commit log\"\n  output_contains:\n    - \"x\"\n"},
+        ["a.yaml"],
+    )
+    assert gate.main(["--skill-md", str(skill_md), "--repo-root", str(tmp_path)]) == 0
+
+
+def test_main_check_c_not_double_reported_when_both_sides_passed(tmp_path: pathlib.Path, capsys):
+    # Both --split-md and --skill-md naming the same pair (a PR touching
+    # both files) must check Check C once, not report the same offender
+    # twice.
+    skill_md, split_md = _write_split_and_skill_md(
+        tmp_path, "widget-polisher", _ROUTING_SKILL_MD, {}, ["a.yaml"]
+    )
+    rc = gate.main([
+        "--split-md", str(split_md), "--skill-md", str(skill_md), "--repo-root", str(tmp_path),
+    ])
+    assert rc == 1
+    stderr = capsys.readouterr().err
+    assert stderr.count("exercises-declaration gap") == 1
+
+
+def test_main_check_c_absent_when_sibling_split_md_missing(tmp_path: pathlib.Path):
+    skill_md = tmp_path / "skills" / "widget-polisher" / "SKILL.md"
+    skill_md.parent.mkdir(parents=True)
+    skill_md.write_text(_ROUTING_SKILL_MD, encoding="utf-8")
+    assert gate.main(["--skill-md", str(skill_md), "--repo-root", str(tmp_path)]) == 0
 
 
 # ---------------------------------------------------------------------------

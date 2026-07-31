@@ -288,14 +288,39 @@ def check_precedence_branch_coverage(skill_md_path: Path, skill_text: str, repo_
     )
 
 
+_FENCE_RE = re.compile(r"^\s*(?:```|~~~)")
+
+
+def _strip_fenced_code_blocks(text: str) -> str:
+    """Blank out every line inside a fenced code block (``` or ~~~), so a
+    `###`-prefixed line inside a fence illustrating Markdown syntax is
+    never mistaken for a real heading (adversarial review, issue #631) --
+    mirrors `check_skill_shape.py`'s own `_strip_illustrative_spans`
+    fence-toggle logic. Line count is preserved (blanked, not removed) so
+    this stays a drop-in substitute for callers that care about offsets;
+    `parse_section_labels` below does not, but keeping the shape consistent
+    with that established precedent costs nothing."""
+    out: list[str] = []
+    in_fence = False
+    for line in text.splitlines():
+        if _FENCE_RE.match(line):
+            in_fence = not in_fence
+            out.append("")
+            continue
+        out.append("" if in_fence else line)
+    return "\n".join(out)
+
+
 def parse_section_labels(skill_text: str) -> set[str]:
     """Every `###`-level section's canonical label, casefolded, from a
     SKILL.md's routing-style sub-headings (issue #631). The label is the
     heading text before ` -> ` when present (e.g. `### Commit log -> a
     terse Why, not the full Why` -> `commit log`), else the whole heading
-    text casefolded."""
+    text casefolded. Fenced code blocks are stripped first, so a
+    `###`-prefixed line only illustrating Markdown syntax inside a fence
+    is never counted as a real section."""
     labels: set[str] = set()
-    for match in _SECTION_HEADING_RE.finditer(skill_text):
+    for match in _SECTION_HEADING_RE.finditer(_strip_fenced_code_blocks(skill_text)):
         heading = match.group(1).strip()
         label = heading.split(" -> ", 1)[0].strip()
         labels.add(label.casefold())
@@ -391,6 +416,17 @@ def main(argv: list[str] | None = None) -> int:
     repo_root = Path(args.repo_root)
 
     offenders: list[str] = []
+    # Check C (issue #631) is keyed by split.md path, but must fire whether
+    # the *split.md* or its *sibling SKILL.md* is the one that changed --
+    # a SKILL.md-only diff (e.g. renaming a ###-level section, with no
+    # split.md edit in the same PR) is exactly the staleness scenario this
+    # check exists to catch, and the calling workflow populates --split-md/
+    # --skill-md independently from whichever file type actually changed
+    # (see .github/workflows/split-fixture-coverage-gate.yml), so relying
+    # on --split-md alone would silently skip it. Tracked so a PR touching
+    # both sides of the same pair is not checked (and reported) twice.
+    exercises_checked: set[Path] = set()
+
     for raw_path in args.split_md:
         path = Path(raw_path)
         text = _read(path)
@@ -399,6 +435,7 @@ def main(argv: list[str] | None = None) -> int:
         offender = check_latest_gate_table_coverage(path, text)
         if offender:
             offenders.append(offender)
+        exercises_checked.add(path)
         offender = check_exercises_declaration_coverage(path, text, repo_root)
         if offender:
             offenders.append(offender)
@@ -411,6 +448,15 @@ def main(argv: list[str] | None = None) -> int:
         offender = check_precedence_branch_coverage(path, text, repo_root)
         if offender:
             offenders.append(offender)
+        sibling_split_md = repo_root / "evals" / path.parent.name / "split.md"
+        if sibling_split_md.is_file() and sibling_split_md not in exercises_checked:
+            exercises_checked.add(sibling_split_md)
+            sibling_text = _read(sibling_split_md)
+            if sibling_text is None:
+                return 1
+            offender = check_exercises_declaration_coverage(sibling_split_md, sibling_text, repo_root)
+            if offender:
+                offenders.append(offender)
 
     if not offenders:
         print("PASS: split.md fixture-table coverage checks satisfied")
