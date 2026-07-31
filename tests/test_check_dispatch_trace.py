@@ -929,6 +929,95 @@ def test_cli_run_marketplace_flags_must_be_given_together(tmp_path: Path, monkey
     assert rc == 2
 
 
+def test_cli_run_marketplace_empty_string_flags_do_not_bypass_gate(tmp_path: Path, monkeypatch):
+    # An empty-string value for both flags (e.g. an unset env var
+    # interpolated by a caller's own shell wiring as `--marketplace-source
+    # ""`) is a caller opting IN to marketplace mode with a broken value --
+    # it must be rejected (exit 2), not silently re-treated as "neither flag
+    # given" and allowed to fall through to an ordinary, unregistered
+    # dispatch. That silent fallthrough is exactly the degraded-dispatch bug
+    # this feature exists to close, even though passing "" isn't literally
+    # omitting the flag.
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("dispatch", encoding="utf-8")
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("register_plugin_marketplace must not be reachable this way either")
+
+    monkeypatch.setattr(cdt, "register_plugin_marketplace", fail_if_called)
+
+    def fail_if_dispatched(*args, **kwargs):
+        raise AssertionError("run_live_dispatch must not be reached either -- this must fail before any dispatch")
+
+    monkeypatch.setattr(cdt, "run_live_dispatch", fail_if_dispatched)
+
+    rc = cdt.main([
+        "run", "--prompt-file", str(prompt_file),
+        "--transcript-out", str(tmp_path / "out.jsonl"),
+        "--dispatch-tool-name", "Agent",
+        "--marketplace-source", "",
+        "--plugin-name", "",
+    ])
+    assert rc == 2
+
+
+def test_cli_run_marketplace_one_blank_one_set_is_rejected(tmp_path: Path, monkeypatch):
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("dispatch", encoding="utf-8")
+
+    rc = cdt.main([
+        "run", "--prompt-file", str(prompt_file),
+        "--transcript-out", str(tmp_path / "out.jsonl"),
+        "--dispatch-tool-name", "Agent",
+        "--marketplace-source", "   ",
+        "--plugin-name", "gitapex@gitapex",
+    ])
+    assert rc == 2
+
+
+def test_cli_run_marketplace_source_relative_path_resolved_against_cwd(tmp_path: Path, monkeypatch):
+    # register_plugin_marketplace must receive an already-resolved absolute
+    # path: the live dispatch below runs subprocess calls with
+    # cwd=isolated_cwd (an unrelated tempdir), so a relative
+    # --marketplace-source that resolved correctly against *this* process's
+    # cwd must not be silently re-interpreted against that different cwd.
+    real_home = tmp_path / "real-home"
+    (real_home / ".claude").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(real_home))
+
+    marketplace_source = tmp_path / "isolated-target"
+    (marketplace_source / ".claude-plugin").mkdir(parents=True)
+    (marketplace_source / ".claude-plugin" / "marketplace.json").write_text("{}", encoding="utf-8")
+
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("dispatch a subagent", encoding="utf-8")
+    transcript_out = tmp_path / "out.jsonl"
+
+    registration_argvs = []
+
+    def fake_run(argv, cwd, env, **kwargs):
+        if argv[:2] == ["claude", "plugin"]:
+            registration_argvs.append(argv)
+            return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+        kwargs["stdout"].write(TRANSCRIPT_ONE_AGENT_DISPATCH)
+        return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(cdt.subprocess, "run", fake_run)
+    monkeypatch.chdir(tmp_path)
+
+    rc = cdt.main([
+        "run", "--prompt-file", str(prompt_file),
+        "--transcript-out", str(transcript_out),
+        "--dispatch-tool-name", "Agent",
+        "--marketplace-source", "isolated-target",  # relative
+        "--plugin-name", "gitapex@gitapex",
+    ])
+    assert rc == 0
+    assert registration_argvs[0] == [
+        "claude", "plugin", "marketplace", "add", str(marketplace_source.resolve()),
+    ]
+
+
 def test_cli_run_marketplace_success_then_dispatch_mocked(tmp_path: Path, monkeypatch):
     real_home = tmp_path / "real-home"
     (real_home / ".claude").mkdir(parents=True)

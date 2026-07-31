@@ -416,12 +416,35 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
 
-    if args.command == "run" and bool(args.marketplace_source) != bool(args.plugin_name):
-        print(
-            "error: --marketplace-source and --plugin-name must be given together",
-            file=sys.stderr,
-        )
-        return 2
+    # `None` (the flag was never passed -- check-transcript's own sub-parser
+    # doesn't define these two flags at all, so getattr's default covers that
+    # case too) means "opted out of marketplace registration", legitimate.
+    # An explicitly-passed value that strips to empty (e.g. an unset
+    # environment variable interpolated as `--marketplace-source ""` by a
+    # caller's own shell wiring) is a DIFFERENT case -- the caller opted in
+    # but supplied a broken value -- and must fail loudly here rather than
+    # being silently treated the same as "opted out": that would fall
+    # through to an ordinary dispatch with no marketplace registration and
+    # no error, reproducing the exact silent-degraded-dispatch failure mode
+    # this flag exists to close.
+    raw_marketplace_source = getattr(args, "marketplace_source", None)
+    raw_plugin_name = getattr(args, "plugin_name", None)
+    marketplace_source = (raw_marketplace_source or "").strip()
+    plugin_name = (raw_plugin_name or "").strip()
+    if args.command == "run":
+        given = (raw_marketplace_source is not None, raw_plugin_name is not None)
+        if given[0] != given[1]:
+            print(
+                "error: --marketplace-source and --plugin-name must be given together",
+                file=sys.stderr,
+            )
+            return 2
+        if any(given) and not (marketplace_source and plugin_name):
+            print(
+                "error: --marketplace-source and --plugin-name must not be blank",
+                file=sys.stderr,
+            )
+            return 2
 
     try:
         pattern = re.compile(args.dispatch_bash_pattern) if args.dispatch_bash_pattern is not None else None
@@ -467,10 +490,15 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"error: {exc}", file=sys.stderr)
                 return 2
 
-        if args.marketplace_source:
+        if marketplace_source:
             try:
                 register_plugin_marketplace(
-                    Path(args.marketplace_source), args.plugin_name,
+                    # Resolved eagerly: the subprocess calls below run with
+                    # cwd=isolated_cwd (a fresh tempdir unrelated to this
+                    # process's real cwd), so a relative path must be
+                    # resolved against *this* process's cwd first -- the
+                    # same reasoning --isolated-home already applies above.
+                    Path(marketplace_source).resolve(), plugin_name,
                     isolated_home=isolated_home, isolated_cwd=isolated_cwd,
                     claude_bin=args.claude_bin,
                 )
