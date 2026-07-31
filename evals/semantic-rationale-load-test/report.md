@@ -159,7 +159,97 @@ alone. This wasn't controlled for in this load test's design and is worth
 disclosing as an open methodological question, not quietly treated as
 extra proof of accuracy.
 
-## What this does and does not prove
+## v2: corrected re-run -- the confound is actually resolved, and a deeper finding surfaces
+
+Following up on this report's own disclosed gaps and a user request to
+address them within this session (not just note them for later), all 8
+cases were re-verified directly against the real committed files/issues
+(`git log -S`, direct file reads, and the real GitHub issue text) and
+rebuilt (`load-test-v2.workflow.js`), fixing:
+
+1. **The citation-embedding confound** (finding #1): every `sourceText`
+   now explicitly states its own citation, not just 1/8.
+2. **Two real digit-transposition-style citation bugs** this run's own v1
+   judge had already caught: `lint_fixture_assertions_collision_pairs`'s
+   true citation is `#218`, not v1's `#518`; `gate_retro_title_convention`'s
+   true citation is `Issue #520, refs #344`, not v1's bare `#520`.
+2b. **Two previously-assumed-"fictional" citations that turned out to be
+   real** once actually checked: `gate_skill_branch_fixture_coverage`'s
+   real citation is `Issue #49, repair 1` (v1 used a fictional `#540`);
+   `gate_transfer_check_disclosure`'s is `Issue #517, refs #487` (v1 used
+   a fictional `#552`).
+3. **Two invented-elaboration reason clauses** v1's own judge flagged as
+   unsupported, trimmed to only verifiable content.
+
+Re-run live (not just claimed): 59/59 agents succeeded, 2,158,273 tokens,
+186 tool calls.
+
+### Result: the confound is gone
+
+| Variant | v1 mean | v2 mean | v1 fabrication rate | v2 fabrication rate |
+|---|---|---|---|---|
+| genuine | 0.458 | **0.708** | 100% | **50%** |
+| wrongReason | 0.083 | 0.375 | 100% | 100% |
+| wrongCitation | 0.458 (confounded) | **0.333** | 100% | 100% |
+
+`wrongCitation` (0.333) is now clearly, cleanly below `genuine` (0.708) --
+a ~0.375-point gap across the **full 8-case corpus**, not just the one
+case v1 could demonstrate it on. Per-case detail
+(`results-v2.json`/`allResults`): every one of the 8 `wrongCitation` rows
+now has `cited_ref_match: false` while most `genuine` rows have
+`cited_ref_match: true` -- the citation-swap signal now fires consistently,
+corpus-wide. **4 of 8 genuine cases now score a clean, perfect 1.000**
+(`score_contract_near_check`, `gate_split_fixture_coverage_check_a`,
+`lint_fixture_assertions_collision_pairs`,
+`gate_retro_title_convention_citation_narrow_scope`), up from 0 of 8 in
+v1. `falseNegatives` is still `[]` -- 16/16 fabricated candidates still
+caught, unchanged. The 3 judge-consistency rechecks are still 3/3 stable.
+
+### The 4 remaining genuine false positives -- and a major finding about the judge itself
+
+The other 4 genuine cases are still flagged, but for two different,
+now-distinguishable reasons -- and getting to that distinction produced
+this session's most important new finding.
+
+**Already-tracked (issue #627)**: `run_ablation_bare_mode` inverted
+`rejected_alternative` again, identically to v1 -- confirms this is a
+real, reproducible extraction-prompt limitation, not a one-off.
+
+**New: the compare-step judge is demonstrably not closed-book.** For
+`gate_skill_branch_fixture_coverage_growth_only`'s false positive, the
+judge's own explanation states outright: *"I read the actual cited
+artifact -- `.github/scripts/gate_skill_branch_fixture_coverage.py`'s
+module docstring -- and also fetched the real GitHub Issue #49 (repair 1)
+text via the GitHub MCP tool."* For `gate_transfer_check_disclosure`'s
+false positive: *"I traced the actual cited source in the repo: commit
+87c96fc ... and its follow-up 5b83ba2."* This is no longer the
+suspicious-but-circumstantial data point the original report flagged as
+an open question (issue #626) -- it is direct, explicit proof that these
+Workflow-dispatched judge agents actively use tool access (GitHub MCP,
+git history, file reads) to independently verify claims against ground
+truth, rather than reasoning solely from the two JSON records they were
+handed. Issue #626 has been updated with this evidence.
+
+This cuts both ways, disclosed honestly:
+- **It makes the judge far more rigorous than a closed-book design would
+  be**: it caught that Issue #49's real text never mentions delta-scoping
+  at all (that refinement is the gate script's own later addition), and
+  that the real commits behind `gate_transfer_check_disclosure` never
+  discuss an H2-vs-bold-line heading decision -- both genuine imprecisions
+  in this report's own hand-authored case data, not scorer defects.
+- **It means this load test cannot claim to have measured closed-book
+  semantic comparison** -- what it actually measured, for at least these 2
+  of 24 comparisons, is "does the judge, given tool access, correctly
+  determine the candidate's claim is unsupported by ground truth" -- a
+  stronger but different claim than the mechanism's own docstring
+  describes for its shipped `--bare` CLI path (see issue #626 for why the
+  shipped script's own execution path likely isn't affected, and what's
+  still unverified about that).
+
+### Files (v2 additions)
+
+- `load-test-v2.workflow.js` -- the corrected script, actually run.
+- `results-v2.json` -- full v2 results, same shape as `results.json`.
 
 - **Proven, with real evidence from 59 successful dispatches**: the
   mechanism reliably distinguishes a fabricated causal reason from a
