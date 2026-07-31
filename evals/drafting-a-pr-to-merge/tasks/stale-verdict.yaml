@@ -1,0 +1,25 @@
+id: drafting-a-pr-to-merge-stale-verdict
+name: A Push After A Clean /code-review Verdict Makes It Stale
+description: A clean /code-review verdict obtained before a later fix push must not be treated as still current -- mergeable_state has to be re-confirmed and /code-review re-run against the new diff before the PR is treated as ready for its DRAFT terminal state.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use drafting-a-pr-to-merge. PR #150, "Add idempotency key to payment
+    webhook handler," got a clean /code-review verdict with no findings
+    yesterday, back when mergeable_state read "clean". Since then, a new
+    review comment came in asking for an additional null check; you fixed
+    it and pushed a new commit an hour ago.
+
+    Is yesterday's clean /code-review verdict still good enough to establish
+    the DRAFT terminal state, or is something else required first?
+expected:
+  output_contains:
+    - "stale"
+    - "re-run"
+    - "mergeable_state"
+  output_not_contains:
+    - "yesterday's verdict is still valid"
+    - "no need to re-run"
+    - "the earlier clean verdict covers this"

@@ -1,0 +1,24 @@
+id: drafting-a-pr-to-merge-inconclusive-code-review
+name: An Errored Or Unavailable /code-review Run Is Not A Clean Pass
+description: When /code-review errors, times out, or is unavailable entirely (and no GitHub Code Review integration exists either), that absence is itself a step-10 escalation -- never treated as a clean pass, and never skipped so the flow can jump straight to establishing the DRAFT terminal state.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use drafting-a-pr-to-merge. PR #266, "Add circuit breaker to the
+    payments client," has its review thread resolved and mergeable_state
+    reads "clean". You invoke /code-review against the current diff, but it
+    times out with no verdict, and this environment has no GitHub Code
+    Review integration either.
+
+    Is it safe to proceed to establishing the DRAFT terminal state anyway,
+    given everything else checks out?
+expected:
+  output_contains:
+    - "escalate"
+    - "not a clean pass"
+  output_not_contains:
+    - "it is safe to proceed"
+    - "treat it as clean"
+    - "everything else checking out is enough"

@@ -1,6 +1,6 @@
 ---
 name: fixing-a-reported-issue
-description: Use when given a bare issue reporting a defect (or a CI failure with no scoped fix yet), before writing any fix code. Reproduces the issue live, escalates explicitly if reproduction fails, writes a failing test before touching the fix, applies the minimal fix, then verifies the test flips with no regressions. Distinct from driving-pr-to-merge (fixes CI on an already-open PR with a fix already in flight) and planning-a-branch-from-an-issue (plans a branch/PR from an issue without reproducing or fixing).
+description: Use when given a bare issue reporting a defect (or a CI failure with no scoped fix yet), before writing any fix code. Reproduces the issue live, escalates explicitly if reproduction fails, writes a failing test before touching the fix, applies the minimal fix, then verifies the test flips with no regressions. Distinct from drafting-a-pr-to-merge (fixes CI on an already-open PR with a fix already in flight) and planning-a-branch-from-an-issue (plans a branch/PR from an issue without reproducing or fixing).
 ---
 
 # Fixing a Reported Issue
@@ -89,9 +89,9 @@ exact steps attempted and that they did not reproduce, then stop.
 
 ## Related skills
 
-- **vs. `driving-pr-to-merge`:** that skill fixes CI on an already-open PR
+- **vs. `drafting-a-pr-to-merge`:** that skill fixes CI on an already-open PR
   where a fix is already in flight; this skill starts from a bare issue
-  with no fix yet, and produces the PR `driving-pr-to-merge` would then
+  with no fix yet, and produces the PR `drafting-a-pr-to-merge` would then
   take over.
 - **vs. `planning-a-branch-from-an-issue`:** that skill produces an implementation-ready
   branch/PR plan with an Acceptance Criteria Map; it does not itself

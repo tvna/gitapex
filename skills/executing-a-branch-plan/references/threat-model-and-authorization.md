@@ -291,7 +291,7 @@ excluded categories: `git push`, `mcp__github__*` writes, and
 package-manager installs are each genuinely needed by this skill's own
 *main-thread* steps (step 4's branch publish, step 5/9's PR writes,
 Decision 19's post-screening install step) and by other skills'
-main-thread operations (`planning-a-branch-from-an-issue`, `driving-pr-to-merge`) -- a
+main-thread operations (`planning-a-branch-from-an-issue`, `drafting-a-pr-to-merge`) -- a
 session-wide deny on any of these would break legitimate, already-relied-
 upon behavior, not just close a gap. The `branch-plan-task` subagent type
 is the correctly-scoped mechanism: restrictive only for task-agent

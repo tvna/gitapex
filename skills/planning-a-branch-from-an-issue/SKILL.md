@@ -103,7 +103,7 @@ Pattern: **Facts** -> **Assumptions** -> **Acceptance Criteria Map** ->
   stops: it consumes the Branch Plan and ACM this skill produces (or
   independently re-verifies a stale one, per this skill's own Step 4
   draft-not-pre-verified rule), decomposes the ACM into tasks, executes
-  them, and opens the PR `driving-pr-to-merge` then takes over.
+  them, and opens the PR `drafting-a-pr-to-merge` then takes over.
 - **vs. `fixing-a-reported-issue`:** that skill is scoped to "a bare issue reporting
   a defect" and both reproduces and fixes it directly, without this
   skill's own Acceptance-Criteria-Map-then-plan shape. Distinct from

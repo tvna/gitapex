@@ -1,13 +1,13 @@
 ---
 name: executing-a-branch-plan
-description: Use when a Branch Plan and Acceptance Criteria Map (from planning-a-branch-from-an-issue) are approved and ready to execute -- decomposes the ACM into tasks, dispatches them (Workflow tool per wave, or a sequential fallback), and opens the PR driving-pr-to-merge then takes over. Distinct from planning-a-branch-from-an-issue (produces the Branch Plan, explicitly does not implement) and fixing-a-reported-issue (reproduces and fixes a bare defect report, not a decomposed multi-task Branch Plan).
+description: Use when a Branch Plan and Acceptance Criteria Map (from planning-a-branch-from-an-issue) are approved and ready to execute -- decomposes the ACM into tasks, dispatches them (Workflow tool per wave, or a sequential fallback), and opens the PR drafting-a-pr-to-merge then takes over. Distinct from planning-a-branch-from-an-issue (produces the Branch Plan, explicitly does not implement) and fixing-a-reported-issue (reproduces and fixes a bare defect report, not a decomposed multi-task Branch Plan).
 ---
 
 # Executing a Branch Plan
 
 Turns an approved Branch Plan and Acceptance Criteria Map into committed
 code, a decomposed task history, and an opened PR that
-`driving-pr-to-merge` picks up from its own "PR has just been opened"
+`drafting-a-pr-to-merge` picks up from its own "PR has just been opened"
 entry point. Design source: `docs/superpowers/specs/2026-07-22-plan-
 execution-handoff-design.md` (19 Decisions; this SKILL.md and its
 `references/` implement the doc's own "New skill: consolidated sequence"
@@ -55,7 +55,7 @@ first, not skimmed.
    carrying the ACM and a seeded `## Execution log` section (`PlanApproved`
    event). Subscribe to the draft PR's own CI/review/comment activity in
    this same step; this skill owns responding to it until step 9, not
-   `driving-pr-to-merge`. Event vocabulary and log format: [domain events
+   `drafting-a-pr-to-merge`. Event vocabulary and log format: [domain events
    reference](references/domain-events-and-failure-handling.md).
 6. **Execute, one Workflow run per wave** (Decision 16, 4, 13, 14). For
    each wave from step 3: dispatch one Workflow run containing only that
@@ -118,14 +118,14 @@ first, not skimmed.
    not assumed from step 6/8's own per-step pushes alone), mark the PR
    ready for
    review. This "ready for review" marking is a handoff signal, not a
-   self-certifying guarantee `driving-pr-to-merge` is expected to trust
+   self-certifying guarantee `drafting-a-pr-to-merge` is expected to trust
    blindly: that skill's own step 5 ("verify `mergeable_state` directly
    ... never infer from green CI or 'LGTM'") already re-derives PR state
    from the platform rather than from this skill's own claim, which is
    the intended downstream check on a misfiring or partially-compromised
    execution reaching this step in error -- named here explicitly so the
    connection is not left implicit. Ownership of the PR's activity passes
-   to `driving-pr-to-merge`'s normal entry point at this point -- no code
+   to `drafting-a-pr-to-merge`'s normal entry point at this point -- no code
    change there, only this explicit handoff point.
 
 ## Output
@@ -141,7 +141,7 @@ first, not skimmed.
 - **PR:** the opened (then ready-for-review) PR, carrying the ACM and
   Execution log.
 - **Next Move:** the concrete next action (still executing a wave,
-  blocked on step 7's dispatch, or handed off to `driving-pr-to-merge`).
+  blocked on step 7's dispatch, or handed off to `drafting-a-pr-to-merge`).
 
 Pattern: **Facts** -> **Task list** -> **Authorization record** ->
 **Execution log** (updated per wave) -> **PR** -> **Next Move**.
@@ -203,12 +203,23 @@ combined diff, then the draft PR converts to ready-for-review.
   task decomposition or wave parallelism. This skill is the general
   (feature/chore/refactor) case, for a Branch Plan whose ACM may have many
   rows needing decomposition into many tasks.
-- **vs. `driving-pr-to-merge`:** that skill starts from "a PR has just
-  been opened" and drives it to a terminal state. This skill owns the PR
-  from draft-open through ready-for-review (step 5-9); ownership passes to
-  `driving-pr-to-merge` only at step 9, matching that skill's own `"draft"`
-  dispatch note (escalate rather than treat a draft as something to fix,
-  when invoked standalone outside an active execution context).
+- **vs. `drafting-a-pr-to-merge`:** that skill starts from "a PR has just
+  been opened" and drives it to a terminal state -- also DRAFT, but for a
+  different reason: this skill's own draft (step 5) is a WIP marker during
+  execution, converted to ready-for-review once done; that skill's own
+  draft (its step 8) is the *finished*, human-merge-pending state it
+  deliberately leaves the PR in. This skill owns the PR from draft-open
+  through ready-for-review (step 5-9); ownership passes to
+  `drafting-a-pr-to-merge` only at step 9. If that skill is ever invoked
+  standalone against a PR this skill has not yet marked ready for review
+  (execution still mid-flight), its own step 6 `"draft"` branch checks the
+  mergeable field/checks/reviews directly rather than escalating on the
+  label alone -- a mid-execution draft that happens to look clean at that exact
+  instant could be misread as that skill's own terminal state and left
+  alone rather than flagged. In practice this skill's own step-5
+  subscribe-and-own-activity boundary is what prevents that (this skill,
+  not `drafting-a-pr-to-merge`, is the one watching and acting during
+  steps 5-9); the edge case is recorded here rather than assumed away.
 - **vs. `stop-and-replan`:** not a sibling with a distinct trigger --
   step 7's plan-was-wrong dispatch reuses that skill's own Stop action
   (close the PR, comment rationale, re-plan), extended to a new trigger

@@ -20,7 +20,7 @@ file/convention anywhere in this repository). This matches two
 already-shipped precedents in this repository: the Acceptance Criteria
 Map already lives in the PR body (`planning-a-branch-from-an-issue` step 8), and the
 `## Skill audit evidence` section already lives there too. The PR body is
-also already the artifact `driving-pr-to-merge` reads, so no second file
+also already the artifact `drafting-a-pr-to-merge` reads, so no second file
 needs to be kept in sync with the PR at handoff time, and cross-session
 resume becomes a direct read: a fresh session reopening the same PR calls
 `github:pull_request_read` method `get`/`get_comments` and reads the
@@ -124,10 +124,10 @@ The draft PR opens immediately once the step-1 authorization gate passes
 seeded with `PlanApproved`. This skill subscribes to the draft PR's own
 CI/review/comment activity at this same moment and owns responding to it
 for the entire task-execution window -- it does not wait for or delegate
-to `driving-pr-to-merge` during that window. The draft PR converts to
+to `drafting-a-pr-to-merge` during that window. The draft PR converts to
 ready-for-review only once every task has a `TaskCompleted` event and the
 refactor/adversarial-review gate (step 8) is clean, at which point
-ownership of its activity passes to `driving-pr-to-merge`'s normal entry
+ownership of its activity passes to `drafting-a-pr-to-merge`'s normal entry
 point.
 
 **Handling an incoming review comment or CI signal during this window
@@ -146,7 +146,7 @@ actually is:
   review comment or CI failure as its source instead of an ACM row, run
   it through the normal Red-Green/screening/merge-back/push cycle (step
   6), then explicitly resolve the review thread via the platform's own
-  resolve-review-thread call once the fix lands -- `driving-pr-to-merge`
+  resolve-review-thread call once the fix lands -- `drafting-a-pr-to-merge`
   Stop boundary's own rule ("a reply comment alone does not resolve
   `required_review_thread_resolution`") applies here too, even though
   that skill is not itself driving this window.

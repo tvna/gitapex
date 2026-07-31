@@ -1,4 +1,4 @@
-id: driving-pr-to-merge-code-review-finding
+id: drafting-a-pr-to-merge-code-review-finding
 name: Independent Evaluator Finding Blocks Done, Green State Alone Does Not
 description: When mergeable_state is "clean" and the review thread is resolved, still invokes /code-review as an independent evaluator before treating the PR as done, and treats a real finding from it as a defect to fix rather than noise or a rubber-stamp pass.
 tags:
@@ -6,7 +6,7 @@ tags:
   - guardrail
 inputs:
   prompt: |
-    Use driving-pr-to-merge. PR #412, "Add retry to the webhook sender,"
+    Use drafting-a-pr-to-merge. PR #412, "Add retry to the webhook sender,"
     has all CI checks passing (green), its one open review thread was
     already resolved via resolve_review_thread, and calling
     github:pull_request_read method get on PR #412 reports

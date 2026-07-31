@@ -1,4 +1,4 @@
-id: driving-pr-to-merge-edge
+id: drafting-a-pr-to-merge-edge
 name: Ambiguous "unstable" mergeable_state After a Push
 description: When mergeable_state reads "unstable" after a push, inspects the actual check-run and review details before deciding whether to wait or loop back to fixing, rather than assuming a fixed meaning from the state name alone.
 tags:
@@ -6,7 +6,7 @@ tags:
   - edge-case
 inputs:
   prompt: |
-    Use driving-pr-to-merge. PR #217, "Cache invalidation for search
+    Use drafting-a-pr-to-merge. PR #217, "Cache invalidation for search
     index," already had its failing check fixed and its review thread
     resolved via resolve_review_thread. After pushing that fix, calling
     github:pull_request_read method get on PR #217 now reports

@@ -1,0 +1,29 @@
+id: drafting-a-pr-to-merge-draft-monitoring
+name: A Conflict Discovered After DRAFT Conversion Still Gets Fixed
+description: Reaching the DRAFT terminal state is not a reason to stop watching a PR -- a new conflict introduced by the base branch advancing after draft conversion is still detected (via the mergeable field, since mergeable_state itself keeps reading "draft") and looped back to fix.
+tags:
+  - quality
+  - edge-case
+inputs:
+  prompt: |
+    Use drafting-a-pr-to-merge. PR #88, "Refactor auth token validation," was
+    converted to a draft pull request by this skill several days ago, after
+    its review thread was resolved, mergeable_state read "clean", and
+    /code-review came back with no findings.
+
+    Since then, three unrelated PRs merged into the base branch. A fresh
+    check on PR #88 -- calling github:pull_request_read method get -- now
+    reports mergeable_state: "draft" (unchanged) but mergeable: false, and
+    the check-runs show all CI still green.
+
+    What should happen next?
+expected:
+  output_contains:
+    - "mergeable"
+    - "conflict"
+    - "loop back to step 2"
+  output_not_contains:
+    - "nothing to do"
+    - "already handled"
+    - "draft PRs don't need to be checked"
+    - "no further action"

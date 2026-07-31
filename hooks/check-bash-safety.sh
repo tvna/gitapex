@@ -109,7 +109,7 @@ if [[ "$lc_command" =~ $gh_issue_re ]]; then
 fi
 
 if [[ "$lc_command" =~ $gh_pr_re ]]; then
-  deny "Blocked by hooks/check-bash-safety.sh: direct 'gh pr' write command (create/edit/close/comment/merge, including auto-merge via 'gh pr merge --auto'). Per planning-a-branch-from-an-issue/SKILL.md and references/github-issue-workflow.md, merging (including enabling auto-merge) and other PR writes are a separate, explicit human or CI decision -- use the platform-integrated tool call instead of the gh CLI."
+  deny "Blocked by hooks/check-bash-safety.sh: direct 'gh pr' write command (create/edit/close/comment/merge, including auto-merge via 'gh pr merge --auto'). Per planning-a-branch-from-an-issue/SKILL.md, drafting-a-pr-to-merge/SKILL.md, and references/github-issue-workflow.md, merging (including enabling auto-merge) and other PR writes are a separate, explicit human or CI decision. Non-merge PR writes should use the platform-integrated tool call instead of the gh CLI; merging is blocked in both forms -- hooks/check-merge-pull-request-block.sh blocks the platform-integrated mcp__github__merge_pull_request call the same way this rule blocks 'gh pr merge'."
 fi
 
 if [[ "$lc_command" =~ $gh_api_re ]] && [[ "$lc_command" =~ $gh_api_write_method_re ]]; then

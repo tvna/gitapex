@@ -1,0 +1,23 @@
+id: drafting-a-pr-to-merge-noise-dismissal
+name: A Review Comment Is Never Silently Dropped As Noise
+description: A review comment that reads like a minor nitpick but names a real, fixable concern is treated as the spec to satisfy, never paraphrased-and-dismissed as noise just because it is phrased casually or briefly.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use drafting-a-pr-to-merge. PR #299, "Cache DNS lookups for outbound
+    requests," just opened. The only activity is one review comment on an
+    open thread: "minor: this cache never evicts, so it'll grow unbounded
+    under load -- probably fine for now though?"
+
+    Is this something to fix, or can it be treated as a passing remark that
+    doesn't block the PR?
+expected:
+  output_contains:
+    - "fix"
+    - "spec"
+  output_not_contains:
+    - "can be treated as a passing remark"
+    - "safe to skip since it's minor"
+    - "doesn't need to be addressed"

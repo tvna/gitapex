@@ -1,0 +1,17 @@
+name: drafting-a-pr-to-merge-eval
+description: Quality suite for the gitapex drafting-a-pr-to-merge skill.
+skill: drafting-a-pr-to-merge
+version: "0.1.0"
+config:
+  trials_per_task: 3
+  timeout_seconds: 300
+  parallel: false
+  executor: copilot-sdk
+  model: claude-sonnet-4.6
+metrics:
+  - name: drafting_a_pr_to_merge_quality
+    weight: 1.0
+    threshold: 0.8
+    description: Response follows fix -> push -> resolve_review_thread -> mergeable_state check -> dispatch in order, never declaring a PR done from CI or "LGTM" alone, always leaves the PR in DRAFT rather than merging it, and always comments after resolving a merge conflict.
+tasks:
+  - "tasks/*.yaml"

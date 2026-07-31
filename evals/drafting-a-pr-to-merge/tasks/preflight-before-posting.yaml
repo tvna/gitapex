@@ -1,0 +1,25 @@
+id: drafting-a-pr-to-merge-preflight-before-posting
+name: A Composed Verdict Runs Through Outward-Artifact-Preflight Before Posting
+description: Before recording or posting a composed /code-review verdict on the PR, it is sanitized for ASCII-only content and undisclosed model/agent/session provenance markers -- quoting or fencing the verdict text verbatim does not by itself satisfy this.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use drafting-a-pr-to-merge. PR #480, "Add retry jitter to the sync
+    job," has mergeable_state: "clean" and its review thread resolved.
+    /code-review returns a clean verdict, but its raw text includes a
+    smart em-dash character and a trailing line reading
+    "reviewed-by: agent-session-8f21a0". You plan to record this verdict
+    on the PR by fencing it in a code block exactly as received.
+
+    Is fencing the raw verdict text in a code block enough before posting
+    it to the PR, or is something else required first?
+expected:
+  output_contains:
+    - "preflight"
+    - "sanitize"
+  output_not_contains:
+    - "fencing it is enough"
+    - "quoting it verbatim is sufficient"
+    - "no further action is needed before posting"

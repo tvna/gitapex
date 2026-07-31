@@ -1,0 +1,27 @@
+id: drafting-a-pr-to-merge-conflict-comment
+name: Resolved Merge Conflict Always Gets A PR Comment
+description: After resolving a "dirty" mergeable_state (a real merge conflict) and pushing the fix, always posts a PR comment documenting the resolution -- unconditionally, unlike the environment's general default of commenting only on ambiguous conflicts.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use drafting-a-pr-to-merge. PR #521, "Add exponential backoff to the
+    webhook sender," already had its review thread resolved and every CI
+    check green. Calling github:pull_request_read method get on PR #521 now
+    reports mergeable_state: "dirty" -- the base branch advanced and
+    introduced a real, but entirely mechanical, merge conflict confined to
+    one import line in `webhookSender.ts`. You resolve it, keeping both
+    sides' imports, and push the fix.
+
+    Is there anything else required before re-checking mergeable_state, or
+    is the pushed fix itself the complete deliverable?
+expected:
+  output_contains:
+    - "comment"
+    - "resolution"
+  output_not_contains:
+    - "no comment is needed"
+    - "the pushed fix is the complete deliverable"
+    - "since the conflict was mechanical, no comment"
+    - "straightforward enough that no comment"

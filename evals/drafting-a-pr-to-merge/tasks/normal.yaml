@@ -1,11 +1,11 @@
-id: driving-pr-to-merge-normal
+id: drafting-a-pr-to-merge-normal
 name: Standard PR-Open Drive-to-Merge
 description: Drives a freshly opened PR with a failing lint check and an open review thread through fix, push, explicit thread resolution, and a mergeable_state check before treating it as done.
 tags:
   - quality
 inputs:
   prompt: |
-    Use driving-pr-to-merge. PR #58, "Add pagination to search results," was
+    Use drafting-a-pr-to-merge. PR #58, "Add pagination to search results," was
     just opened.
 
     Latest activity:

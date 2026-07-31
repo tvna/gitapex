@@ -11,7 +11,7 @@ spec:
     relatedTo:
       - planning-a-branch-from-an-issue
       - fixing-a-reported-issue
-      - driving-pr-to-merge
+      - drafting-a-pr-to-merge
       - stop-and-replan
       - untrusted-input-triage
       - screening-a-low-trust-contribution
