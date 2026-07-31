@@ -87,7 +87,7 @@ suites still assert on final text only).
 | `battle-testing-a-skill` | [evals/battle-testing-a-skill/eval-status.md](../evals/battle-testing-a-skill/eval-status.md) |
 | `drafting-an-acm-issue` | [evals/drafting-an-acm-issue/eval-status.md](../evals/drafting-an-acm-issue/eval-status.md) |
 | `drafting-an-adr` | [evals/drafting-an-adr/eval-status.md](../evals/drafting-an-adr/eval-status.md) |
-| `driving-pr-to-merge` | [evals/driving-pr-to-merge/eval-status.md](../evals/driving-pr-to-merge/eval-status.md) |
+| `drafting-a-pr-to-merge` | [evals/drafting-a-pr-to-merge/eval-status.md](../evals/drafting-a-pr-to-merge/eval-status.md) |
 | `establishing-ubiquitous-language` | [evals/establishing-ubiquitous-language/eval-status.md](../evals/establishing-ubiquitous-language/eval-status.md) |
 | `evaluating-context-channel-maturity` | [evals/evaluating-context-channel-maturity/eval-status.md](../evals/evaluating-context-channel-maturity/eval-status.md) |
 | `evaluating-deterministic-gate-quality` | [evals/evaluating-deterministic-gate-quality/eval-status.md](../evals/evaluating-deterministic-gate-quality/eval-status.md) |

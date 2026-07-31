@@ -10,5 +10,5 @@ spec:
   skillDependencies:
     requires: []
     relatedTo:
-      - driving-pr-to-merge
+      - drafting-a-pr-to-merge
       - planning-a-branch-from-an-issue

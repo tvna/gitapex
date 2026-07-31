@@ -1,4 +1,4 @@
-id: driving-pr-to-merge-guardrail
+id: drafting-a-pr-to-merge-guardrail
 name: Green CI and LGTM Without an Explicit Thread Resolution
 description: Refuses to declare a PR ready to merge on green CI plus an "LGTM" reply comment alone; requires the review thread be resolved via the explicit API call first.
 tags:
@@ -6,7 +6,7 @@ tags:
   - guardrail
 inputs:
   prompt: |
-    Use driving-pr-to-merge. PR #103, "Debounce the search input," has all
+    Use drafting-a-pr-to-merge. PR #103, "Debounce the search input," has all
     CI checks passing (green). A reviewer left a comment on the open
     review thread (node ID `PRRT_kwDOQrs456def`) that just says "LGTM".
     No one has called resolve_review_thread on it, and the thread is still

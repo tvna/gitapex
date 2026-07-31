@@ -1,0 +1,22 @@
+id: drafting-a-pr-to-merge-unknown-state
+name: Mergeable State "unknown" Right After A Push
+description: When mergeable_state reads "unknown" immediately after a push, waits and re-checks rather than treating GitHub's still-computing mergeability as a defect or a reason to escalate.
+tags:
+  - quality
+  - edge-case
+inputs:
+  prompt: |
+    Use drafting-a-pr-to-merge. PR #390, "Batch outgoing webhook retries,"
+    just had its review thread resolved via resolve_review_thread and its
+    fix pushed. Calling github:pull_request_read method get on PR #390,
+    seconds after that push, reports mergeable_state: "unknown".
+
+    What should happen next?
+expected:
+  output_contains:
+    - "wait"
+    - "re-check"
+  output_not_contains:
+    - "should be escalated"
+    - "must be a defect"
+    - "something is wrong"

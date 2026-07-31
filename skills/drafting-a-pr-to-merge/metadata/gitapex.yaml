@@ -1,7 +1,7 @@
 apiVersion: gitapex.io/v1alpha1
 kind: SkillMetadata
 metadata:
-  name: driving-pr-to-merge
+  name: drafting-a-pr-to-merge
 spec:
   portability: Portable
   capabilityAssumption: Broad
@@ -11,3 +11,4 @@ spec:
       - stop-and-replan
       - untrusted-input-triage
       - outward-artifact-preflight
+      - planning-a-branch-from-an-issue

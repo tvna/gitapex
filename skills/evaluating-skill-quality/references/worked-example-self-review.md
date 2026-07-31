@@ -180,7 +180,7 @@ Verdict on shape alone: **well-formed** (exit code 0).
 ### 1. Discovery
 
 Pass, with the description fix above now applied. Sibling skills in this
-repository as of this review (`driving-pr-to-merge`,
+repository as of this review (`drafting-a-pr-to-merge`,
 `establishing-ubiquitous-language`, `planning-a-branch-from-an-issue`, `merge-retrospective`,
 `outward-artifact-preflight`, `stop-and-replan`, `untrusted-input-triage`,
 `explaining-the-work`) have triggers that do not overlap this skill's

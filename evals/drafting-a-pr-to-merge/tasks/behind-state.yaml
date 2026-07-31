@@ -1,4 +1,4 @@
-id: driving-pr-to-merge-behind-state
+id: drafting-a-pr-to-merge-behind-state
 name: Mergeable State "behind" After The Base Branch Advances
 description: When mergeable_state reads "behind", updates the branch against its base rather than treating it as a code or review defect to hunt down.
 tags:
@@ -6,7 +6,7 @@ tags:
   - edge-case
 inputs:
   prompt: |
-    Use driving-pr-to-merge. PR #341, "Add rate limiting to the webhook
+    Use drafting-a-pr-to-merge. PR #341, "Add rate limiting to the webhook
     receiver," already had its failing check fixed and its review thread
     resolved via resolve_review_thread. After pushing that fix, calling
     github:pull_request_read method get on PR #341 now reports

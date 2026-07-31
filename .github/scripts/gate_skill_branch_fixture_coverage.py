@@ -6,7 +6,7 @@ as a result of the current diff.
 Issue #49 repair 1: the first `waza` eval-authoring pass bulk-authored a
 fixed 3-fixture quota per skill regardless of how many Stop-boundary
 bullets or N-way dispatch branches that skill's own SKILL.md actually
-declared (e.g. `driving-pr-to-merge` tested 1 of 6 `mergeable_state`
+declared (e.g. `drafting-a-pr-to-merge` tested 1 of 6 `mergeable_state`
 values; `evaluating-skill-quality` tested 3 of 7 Stop boundaries at the
 time). Issue #49 proposed, but never built, "a script that parses each
 SKILL.md's 'Stop boundar*' bullets and named dispatch branches, counts
@@ -26,8 +26,8 @@ derived from the two concrete precedents #49/#419 actually cite):
      `## Stop boundary` or `## Stop boundaries` heading (any heading
      level, case-insensitive), up to the next heading of any level.
      `merge-retrospective/SKILL.md` uses the singular heading with 5
-     bullets; `driving-pr-to-merge/SKILL.md` uses the plural heading with
-     7 -- both real, both counted the same way.
+     bullets; `drafting-a-pr-to-merge/SKILL.md` uses the plural heading with
+     10 -- both real, both counted the same way.
   2. Named dispatch branches: a `- ` bullet (any indentation, INCLUDING a
      nested sub-bullet inside a Stop-boundary section that was not itself
      counted as one of that section's own top-level bullets -- a

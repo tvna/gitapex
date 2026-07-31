@@ -1,0 +1,32 @@
+id: drafting-a-pr-to-merge-draft-state
+name: Mergeable State "draft" With Everything Else Clean Is The Terminal State
+description: When mergeable_state reads "draft" and mergeable/checks/reviews are all independently confirmed clean, recognizes this as the skill's own intended terminal state rather than escalating it as an anomaly -- and keeps monitoring rather than treating it as fully closed out.
+tags:
+  - quality
+  - edge-case
+inputs:
+  prompt: |
+    Use drafting-a-pr-to-merge. PR #88, "Refactor auth token validation," was
+    already driven through this skill in an earlier turn: its review thread
+    was resolved, mergeable_state read "clean", and /code-review came back
+    with no findings, so it was converted to a draft pull request via
+    github:update_pull_request with draft: true.
+
+    Now, on a fresh check, calling github:pull_request_read method get on PR
+    #88 reports mergeable_state: "draft", mergeable: true, every CI check
+    still green, and no open review threads.
+
+    What should happen next?
+expected:
+  output_contains:
+    - "terminal"
+    - "mergeable"
+    - "keep"
+  output_not_contains:
+    - "should escalate"
+    - "escalate to the owner"
+    - "escalate this"
+    - "hand it to the owner"
+    - "loop back to step 2"
+    - "must be a defect"
+    - "hunt for what's broken"
