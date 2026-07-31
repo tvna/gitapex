@@ -249,6 +249,151 @@ def test_symmetric_bans_still_flags_lowercase_indeterminate_claim():
     assert detail is not None
 
 
+# ---- check_unsatisfiable_assertion_pair (issue #628) ----
+
+def test_unsatisfiable_pair_flags_contains_vs_not_icontains():
+    expected = {"output_contains": ["Foo"], "output_not_icontains": ["foo"]}
+    findings = L.check_unsatisfiable_assertion_pair(expected)
+    assert len(findings) == 1
+    key, value, rule, detail = findings[0]
+    assert key == "output_not_icontains"
+    assert rule == "unsatisfiable-assertion-pair"
+    assert "foo" in value
+
+
+def test_unsatisfiable_pair_flags_near_member_vs_not_icontains():
+    # Satisfying output_contains_near also requires literal presence of
+    # every member in its "all" list, so the same contradiction applies.
+    expected = {
+        "output_contains_near": [{"all": ["Foo", "Bar"], "window": 100}],
+        "output_not_icontains": ["foo"],
+    }
+    findings = L.check_unsatisfiable_assertion_pair(expected)
+    assert any(rule == "unsatisfiable-assertion-pair" for _, _, rule, _ in findings)
+
+
+def test_unsatisfiable_pair_does_not_flag_mirrored_direction():
+    # output_not_contains + output_icontains on the same substring is
+    # satisfiable (e.g. text containing only "FOO" satisfies both), so it
+    # must NOT be flagged -- confirmed via adversarial review before this
+    # check was implemented.
+    expected = {"output_not_contains": ["Foo"], "output_icontains": ["foo"]}
+    assert L.check_unsatisfiable_assertion_pair(expected) == []
+
+
+def test_unsatisfiable_pair_flags_redundant_same_polarity_pair():
+    expected = {"output_contains": ["Foo"], "output_icontains": ["foo"]}
+    findings = L.check_unsatisfiable_assertion_pair(expected)
+    assert len(findings) == 1
+    key, value, rule, detail = findings[0]
+    assert key == "output_icontains"
+    assert rule == "redundant-assertion-pair"
+
+
+def test_unsatisfiable_pair_passes_unrelated_assertions():
+    expected = {"output_contains": ["Foo"], "output_icontains": ["bar"]}
+    assert L.check_unsatisfiable_assertion_pair(expected) == []
+
+
+def test_unsatisfiable_pair_passes_empty_expected():
+    assert L.check_unsatisfiable_assertion_pair({}) == []
+
+
+def test_unsatisfiable_pair_is_wired_into_lint_task_via_main(tmp_path):
+    # End-to-end: the check must actually be invoked and its findings
+    # surfaced as blocking warnings, not just correct in isolation.
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    _write_task(tasks, {"output_contains": ["Foo"], "output_not_icontains": ["foo"]})
+    rubric, skill = _corpus_files(tmp_path)
+    assert L.main(["--tasks-glob", str(tasks / "*.yaml"),
+                   "--rubric", str(rubric), "--skill", str(skill)]) == 1
+
+
+# ---- checks 2-4 extended to output_icontains/output_not_icontains, and
+# check 1 (case-sensitivity) deliberately NOT extended (issue #628) ----
+
+def test_icontains_paraphrase_drift_is_flagged(tmp_path):
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    _write_task(tasks, {"output_icontains": ["hooks or permission"]})
+    rubric, skill = _corpus_files(tmp_path)
+    assert L.main(["--tasks-glob", str(tasks / "*.yaml"),
+                   "--rubric", str(rubric), "--skill", str(skill)]) == 1
+
+
+def test_icontains_short_word_collision_is_flagged(tmp_path):
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    _write_task(tasks, {"output_icontains": ["actor"]})
+    rubric, skill = _corpus_files(tmp_path)
+    assert L.main(["--tasks-glob", str(tasks / "*.yaml"),
+                   "--rubric", str(rubric), "--skill", str(skill)]) == 1
+
+
+def test_not_icontains_negation_trap_is_flagged(tmp_path):
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    _write_task(tasks, {"output_not_icontains": ["tenth dimension"]})
+    rubric, skill = _corpus_files(tmp_path)
+    assert L.main(["--tasks-glob", str(tasks / "*.yaml"),
+                   "--rubric", str(rubric), "--skill", str(skill)]) == 1
+
+
+def test_icontains_different_case_than_anchor_is_not_flagged_for_case_sensitivity(tmp_path):
+    # check_case is deliberately NOT run against output_icontains: a casing
+    # difference is expected and correct for a key whose whole point is to
+    # ignore case, so this must exit 0, not warn about case-sensitivity.
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    _write_task(tasks, {"output_icontains": ["blind spot"]})
+    rubric, skill = _corpus_files(tmp_path)
+    assert L.main(["--tasks-glob", str(tasks / "*.yaml"),
+                   "--rubric", str(rubric), "--skill", str(skill)]) == 0
+
+
+# ---- check_symmetric_bans extended to icontains/not_icontains (issue #628) ----
+
+def test_symmetric_bans_exempts_enum_style_indeterminate_status_via_icontains():
+    # Same exemption as the output_contains case, but declared via the new
+    # output_icontains key -- proves the key is actually consulted, not
+    # just present without effect.
+    task = {
+        "id": "t", "name": "T",
+        "description": "Requires an unknown caller to stop as INDETERMINATE.",
+        "expected": {
+            "output_icontains": ["route_status", "INDETERMINATE"],
+            "output_not_contains": ["model_route: inherited"],
+        },
+    }
+    assert L.check_symmetric_bans(task) is None
+
+
+def test_symmetric_bans_counts_not_icontains_as_a_ban():
+    detail = L.check_symmetric_bans({
+        "id": "t", "name": "T",
+        "description": "Whether X occurred cannot be determined from available data.",
+        "expected": {"output_not_icontains": ["no force-push occurred"]},
+    })
+    assert detail is not None
+    assert "positive-claim" in detail
+
+
+def test_symmetric_bans_passes_both_directions_via_not_icontains():
+    # Both ban directions can now be split across output_not_contains and
+    # output_not_icontains -- proves output_not_icontains entries are
+    # actually merged into the "bans" set, not silently ignored.
+    detail = L.check_symmetric_bans({
+        "id": "t", "name": "T",
+        "description": "Whether X occurred cannot be determined from available data.",
+        "expected": {
+            "output_not_contains": ["A force-push occurred"],
+            "output_not_icontains": ["no force-push occurred"],
+        },
+    })
+    assert detail is None
+
+
 # ---- check_prompt_echo (issue #516, #191 -- opt in, non-blocking) ----
 
 def test_prompt_echo_flags_verbatim_substring():
