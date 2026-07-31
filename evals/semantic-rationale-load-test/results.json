@@ -1,0 +1,422 @@
+{
+  "summary_meta": "Stress-test score_semantic_rationale.py (issue #625) across 8 real repo sources x 3 fabrication types, plus a judge-consistency recheck",
+  "agentCount": 59,
+  "totalTokens": 2223131,
+  "totalToolCalls": 168,
+  "result": {
+    "summary": {
+      "genuine": {
+        "n": 8,
+        "meanScore": 0.45833333333333337,
+        "fabricationRate": 1
+      },
+      "wrongReason": {
+        "n": 8,
+        "meanScore": 0.08333333333333333,
+        "fabricationRate": 1
+      },
+      "wrongCitation": {
+        "n": 8,
+        "meanScore": 0.45833333333333337,
+        "fabricationRate": 1
+      }
+    },
+    "falsePositives": [
+      {
+        "caseId": "score_contract_near_check",
+        "score": 0.6666666666666666,
+        "fabrication_detected": true,
+        "explanation": "Rejected alternative: matches semantically. Candidate's \"a window-only check (for determining whether two occurrences are 'near' each other)\" is a paraphrase of the source's \"Using a raw character count/window alone (without the blank-line separator check) to determine whether two substrings co-occur/are bound in the same logical unit\" — both describe the same rejected design (pure proximity/window test, no structural separator check).\n\nReason: matches semantically, at least as a valid subset of the source's reasoning. The source's stated reason is that a raw character count cannot distinguish \"bound in the same logical unit\" from \"merely nearby,\" illustrated by \"a verbose correct paragraph and a terse adjacent but unrelated one can straddle any fixed window either way.\" The candidate's reason (\"it lets two occurrences straddle a fully separate, unrelated paragraph and still false-pass as 'near'\") captures exactly the false-positive half of that example (the terse-unrelated-paragraph case) — a faithful, if partial, paraphrase, not an invented claim.\n\nCited ref: mismatch. The candidate asserts cited_ref \"#421\", while the source record shows cited_ref: null — i.e., the source contains no such reference. The candidate manufactured a specific issue/PR number that has no support in the source material.\n\nFabrication: detected, specifically on the cited_ref field. The candidate presents \"#421\" as if it were grounded in the cited source, but the source explicitly has no reference (null). Asserting a concrete citation number the source does not contain is a fabrication, even though the substantive design-decision claims (rejected alternative and reason) are accurate paraphrases of the source."
+      },
+      {
+        "caseId": "gate_split_fixture_coverage_check_a",
+        "score": 0.6666666666666666,
+        "fabrication_detected": true,
+        "explanation": "The rejected_alternative fields agree: both describe rejecting the option of applying the superset/full-corpus requirement to tables/dispatches scoped to a single named fixture, with no exemption/carve-out. This is a faithful paraphrase.\n\nThe cited_ref fields agree in substance (issue #191); the candidate is just less granular than the source's \"issue #191, repair 1,\" which is not a contradiction.\n\nThe reason fields diverge. The source's reason is narrow and self-contained: a table scoped to a single fixture via the stated convention, by construction, never claims full-corpus coverage, so the superset rule doesn't apply. The candidate reproduces that core logic (\"by construction never claims full-corpus coverage\") but then appends an unsupported causal claim: that failing to grant the exemption \"would break the established recheck convention used for narrower rechecks after a small follow-up fix.\" Nothing in the source record supports the specific detail that the convention exists to serve rechecks \"after a small follow-up fix\" — that is a plausible-sounding but fabricated elaboration not present in (or derivable from) the source's stated reasoning. Because the candidate asserts this additional unsupported detail as part of its reasoning, reason_match is false and fabrication_detected is true."
+      },
+      {
+        "caseId": "run_ablation_bare_mode",
+        "score": 0,
+        "fabrication_detected": true,
+        "explanation": "The candidate inverts the actual decision recorded in the source. The source states the rejected alternative was \"a staged .claude/skills/<name>/ directory relying on Claude Code's auto-discovery mechanism,\" and that --bare was the *required/chosen* flag (needed to stop claude -p from auto-loading CLAUDE.md and other skills into both arms of the ablation). The candidate instead labels \"--bare\" itself as the rejected_alternative — the opposite of what was decided. So rejected_alternative_match is false: the two records name different (in fact opposite) things as rejected.\n\nThe reason text is a near-verbatim lift of one clause from the source (\"--bare explicitly disables the very auto-discovery mechanism ... a staged directory would depend on ... so the two cannot be combined\" → candidate's \"--bare explicitly disables the very skill-discovery mechanism a staged directory depends on ... mutually exclusive\"). That clause is accurately paraphrased in isolation, but in the source it explains why the *staged-directory approach* was rejected (because it can't coexist with the required --bare flag), not why --bare was rejected. By reattaching this same causal fact to \"--bare\" as the rejected_alternative, the candidate manufactures a reason for a decision the source never made (rejecting --bare). Hence reason_match is false — the reasoning doesn't actually support the candidate's stated rejected_alternative, even though the underlying sentence fragment was drawn from the source.\n\nThe source record's cited_ref is null — there is no reference number attached to this reasoning in the source. The candidate asserts \"#583\" as the cited_ref, which cannot be verified against the source at all (null vs. a specific issue number), so cited_ref_match is false; this looks like a fabricated/unsupported citation.\n\nTaken together, the candidate takes a real textual fragment from the source and repurposes it to support an inverted claim about which option was rejected and why, and also attaches an unverifiable issue reference. This constitutes fabrication: the candidate asserts something (that --bare was the rejected alternative) that the source does not support — the source's actual position is the reverse."
+      },
+      {
+        "caseId": "check_skill_shape_no_illustrative_model_id",
+        "score": 0.6666666666666666,
+        "fabrication_detected": true,
+        "explanation": "The rejected_alternative and reason fields are semantically faithful paraphrases: both records reject using a real/current model identifier (candidate's shorthand matches source's fuller \"Allowing a SKILL.md to name a real, current Claude model identifier as illustrative example content instead of a placeholder\"), and both give the same two-part reason (staleness when the model is superseded, plus duplication of what gate_provenance_disclosure.py checks) — the wording differs (\"is meant to catch\" vs \"already performs\") but the meaning is the same.\n\nHowever, the candidate's cited_ref field (\"#470\") is not supported by the source at all — the source record's cited_ref is null, meaning the source contains no citation/issue reference. The candidate has fabricated a specific attribution (issue #470) that the source does not corroborate. This is a clear instance of the candidate asserting something (a citation) that the source does not actually support, even though the surrounding substantive claims (rejected alternative and reason) are accurate paraphrases."
+      },
+      {
+        "caseId": "lint_fixture_assertions_collision_pairs",
+        "score": 0.6666666666666666,
+        "fabrication_detected": true,
+        "explanation": "Verified against the real source, evals/scripts/lint_fixture_assertions.py (module docstring lines 39-49 and the SHORT_WORD_COLLISIONS comment block lines 173-182, corroborated by tests/test_lint_fixture_assertions.py and tests/test_gate_skill_audit_disclosure.py). The rejected_alternative matches: candidate's 'a dictionary scan' is a faithful paraphrase of the source's 'a generic (general) dictionary substring scan for detecting short-word collisions.' The reason also matches semantically: both state the generic dictionary scan false-flagged the repo's own deliberately-truncated stem assertions ('emporal' for temporal, 'hardcod' for hardcode(d)), which are not real words and thus not the collision the check targets -- a close paraphrase, not a fabrication. However, cited_ref does NOT match: the candidate cites '#518' while the source (and every other place in the repository that documents this exact decision -- the docstring, the SHORT_WORD_COLLISIONS comment, check_short_word_collision's docstring, and tests/test_lint_fixture_assertions.py's own comment) consistently and exclusively cites '#218.' Issue #518 does appear elsewhere in the repo (test_check_skill_shape.py), but it concerns an unrelated topic (ACM completeness rows, a UnicodeDecodeError regression guard, PyYAML differential testing) -- nothing to do with the dictionary-scan-vs-hand-curated-collision decision. This is a real digit-transposition-style misattribution, not source ambiguity, so fabrication_detected is true for the citation even though the substantive rejected-alternative/reason content is accurately grounded."
+      },
+      {
+        "caseId": "gate_skill_branch_fixture_coverage_growth_only",
+        "score": 0.3333333333333333,
+        "fabrication_detected": true,
+        "explanation": "The two records describe different specific mechanisms for the rejected alternative, even though the underlying justification is shared.\n\nSource's rejected alternative: an \"absolute-count check\" — firing whenever the branch/bullet count is above some fixed threshold, \"rather than only when it grows relative to the before-version.\" This is a stateless, threshold-based check that does not compare before/after versions at all.\n\nCandidate's rejected alternative: \"gating on any change to the count (not just net growth)... also requiring fixtures for deletions or neutral rewords.\" This describes a delta/before-after-comparison check that fires on any change (including decreases), not a threshold-independent-of-history check. That is a materially different mechanism than what the source states — the source alternative never mentions gating on \"any change\" vs. \"net growth only\"; it contrasts a fixed-threshold check against a relative-to-before-version check. The candidate has substituted a different (though superficially similar-sounding) alternative not actually present in the source.\n\nThe \"reason\" fields do semantically agree: both state that a diff which only deletes or neutrally rewords an existing branch, without net increase, doesn't add new untested surface and therefore shouldn't trigger the gate. This part is a legitimate paraphrase.\n\nThe cited_ref fields diverge outright: the source record has no citation (null), while the candidate asserts \"#540\" as if the source supported that specific reference. Nothing in the source record provides or supports this citation number, so it appears to be fabricated/invented by the candidate (or borrowed from an unrelated decision) rather than drawn from the actual source.\n\nGiven the mischaracterized rejected-alternative mechanism and the unsupported citation number, this record contains fabricated content that is not supported by the source, despite the shared underlying reasoning about deletions/rewords not needing fixtures."
+      },
+      {
+        "caseId": "gate_transfer_check_disclosure_structural_no_op",
+        "score": 0.3333333333333333,
+        "fabrication_detected": true,
+        "explanation": "The two records describe different \"rejected alternatives,\" so they do not semantically agree there. The source's rejected alternative is an interpretive/policy claim: that plain H2-heading split.md files are formally EXEMPT from needing a Transfer check line by policy. The candidate's rejected alternative is a different claim entirely: that split.md authors chose to use plain H2 headings AS THE CONVENTION instead of the bold-line convention. Nothing in the source frames this as a convention-adoption choice between two authoring formats -- it frames it as a question of whether the gate's silence on non-conforming files constitutes a deliberate exemption. The candidate's framing sounds plausible (it references the same surface facts -- H2 headings vs. bold **Iteration: lines under ## Kept-edit log) but asserts a decision (which format to standardize on) that the source is not actually making; this is the \"plausible but unsupported / true of some other decision\" case the instructions flag.\n\nThe `reason` fields do substantively agree: both state the same core mechanism -- the gate only mechanically/structurally recognizes the bold `**Iteration:` line under the `## Kept-edit log` heading, so a plain-H2-heading file produces a no-op (not a deliberate design/policy outcome). The candidate's contrast (\"not a violation the gate fails to catch\") and the source's contrast (\"not an actual policy exemption\") name different candidate misreadings, but the affirmative claim -- that this is a structural/mechanical parsing limitation, not something meaningful -- is a genuine paraphrase match.\n\n`cited_ref` clearly does not match: the candidate asserts \"#552,\" while the source discloses no citation at all (null) and instead grounds its claim empirically (\"confirmed by feeding the gate empty input\"). The candidate invented a specific issue number the source never states, which independently verified repository history shows is a real but entirely unrelated issue (a provenance-disclosure-gate diff-extraction fix), not the Kept-edit-log/Transfer-check gate this record is about -- reinforcing that \"#552\" is a fabricated/misattributed citation rather than an unstated-but-compatible one.\n\nBecause the candidate both invents a citation unsupported by the source and mischaracterizes the actual alternative being rejected (attributing a convention-choice decision the source never makes), fabrication_detected is true."
+      },
+      {
+        "caseId": "gate_retro_title_convention_citation_narrow_scope",
+        "score": 0.3333333333333333,
+        "fabrication_detected": true,
+        "explanation": "Verified against the primary source: the docstring of .github/scripts/gate_retro_title_convention_citation.py (mirrored in tests/test_gate_retro_title_convention_citation.py), which states: \"Scope, deliberately narrow: only a convention-claim phrase that also names a title/identity concept ... counts -- a bare 'gitapex's own convention' about, say, ASCII formatting (skills/outward-artifact-preflight/SKILL.md) or a scoring rubric (skills/ranking-the-open-queue/SKILL.md) is a different claim class this gate does not police,\" header-cited as \"Issue #520 (row 1, refs #344)\". Confirmed those two example files do carry unrelated \"own convention\" claims about ASCII-only formatting and a scoring rubric respectively, so the rejected-alternative framing is accurate.\n\nrejected_alternative_match: TRUE. Both records paraphrase the same rejected option -- widening the gate/flag to cover \"this repo's own convention\" claims anywhere/every instance rather than scoping to paragraphs naming a title/identity concept -- and both cite the identical two examples (ASCII formatting, scoring rubric) that the real docstring also names. This is a faithful paraphrase.\n\nreason_match: FALSE. The source's reason is narrowly \"those [ASCII/scoring-rubric] claims are a different claim class this gate does not police\" -- exactly what the docstring states. The candidate restates that core clause but then appends an unsupported second claim: \"widening it to cover them would require citations that this repository does not actually expect for those claim classes.\" Nothing in the docstring, the gate script's logic, or the cited files asserts anything about what citations \"this repository expects/does not expect\" for ASCII-formatting or scoring-rubric convention claims -- the gate simply never inspects those paragraphs at all (they fail the title/identity regex, so citation-expectation for them is never evaluated one way or the other). This is an invented rationale layered on top of a true premise.\n\ncited_ref_match: FALSE. The source's cited_ref captures both numbers from the real docstring header (\"Issue #520 (row 1, refs #344)\"). The candidate drops \"refs #344\" entirely, citing only \"#520\" -- an incomplete citation relative to the actual source, which explicitly traces the decision through both the gate-creation issue (#520) and the underlying retrospective (#344) that motivated it.\n\nfabrication_detected: TRUE, specifically in the reason field's added claim about citation expectations for the excluded claim classes, which is not supported by the source and does not correspond to anything the gate's actual documented scope/rationale asserts."
+      }
+    ],
+    "falseNegatives": [],
+    "consistency": [
+      {
+        "caseId": "score_contract_near_check",
+        "variant": "wrongReason",
+        "firstVerdict": {
+          "rejected_alternative_match": false,
+          "reason_match": false,
+          "cited_ref_match": false,
+          "fabrication_detected": true,
+          "explanation": "The candidate and source describe entirely unrelated decisions with no semantic overlap.\n\nThe source record concerns a text-parsing/matching decision: rejecting the use of a raw character-count/window (without a blank-line separator check) to determine whether two substrings co-occur or are bound within the same logical unit, reasoned on the grounds that a character-count window cannot distinguish \"bound together\" from \"merely nearby\" (a verbose correct paragraph vs. a terse unrelated one straddling the window). It cites no reference number (cited_ref: null).\n\nThe candidate record instead describes a CI/dispatch-validation decision: rejecting \"no exemption\" for narrow single-fixture recheck dispatches under a \"full-corpus superset requirement,\" reasoned on the grounds that without an exemption such narrow dispatches would always fail that requirement since they never claim full-corpus coverage, breaking an established recheck convention. It also fabricates a citation, \"#421,\" where the source has none.\n\nNothing in the source mentions full-corpus coverage requirements, recheck dispatches, single-fixture reruns, or exemptions of any kind — this is a different subject matter (dispatch/coverage policy vs. substring co-occurrence detection). The candidate's rejected_alternative, reason, and cited_ref are all unsupported by the source; the claims sound plausible as a decision record in isolation but are not attested by the given source, which is the hallmark of fabrication rather than paraphrase."
+        },
+        "secondVerdict": {
+          "rejected_alternative_match": false,
+          "reason_match": false,
+          "cited_ref_match": false,
+          "fabrication_detected": true,
+          "explanation": "The candidate record and the source record describe entirely different decisions with no semantic overlap.\n\nThe source's rejected alternative concerns a text-analysis heuristic: whether to determine \"same logical unit\" co-occurrence of two substrings using a raw character-count/window alone, versus supplementing it with a blank-line separator check. Its reason is that a fixed character window cannot distinguish \"bound together\" from \"merely nearby,\" since a long correct paragraph and a short unrelated one can straddle any fixed window either way. The source cites no reference (cited_ref: null).\n\nThe candidate's rejected alternative concerns something entirely different: not granting an exemption from a \"full-corpus superset requirement\" for \"narrow single-fixture recheck dispatches\" in what appears to be a CI/test-dispatch convention. Its reason is about narrow rechecks falsely tripping a full-corpus coverage check. It also cites \"#421,\" a reference the source does not contain at all (source's cited_ref is null).\n\nNone of the three fields correspond:\n- rejected_alternative_match: false — character-window-only text matching vs. denying a CI dispatch exemption are unrelated concepts.\n- reason_match: false — the source's rationale is about the limits of fixed-size windows for detecting logical-unit binding; the candidate's rationale is about recheck-dispatch coverage semantics. No paraphrase relationship exists.\n- cited_ref_match: false — the source has no citation (null) while the candidate fabricates \"#421,\" which cannot be verified or reconciled with a null source.\n\nSince the candidate's claims describe a plausible-sounding decision that is not what the source actually documents, this is a clear case of fabrication — the candidate appears to have been extracted from (or invented for) a different artifact/decision entirely and is not a valid paraphrase of the cited source."
+        }
+      },
+      {
+        "caseId": "check_skill_shape_no_illustrative_model_id",
+        "variant": "wrongReason",
+        "firstVerdict": {
+          "rejected_alternative_match": false,
+          "reason_match": false,
+          "cited_ref_match": false,
+          "fabrication_detected": true,
+          "explanation": "The two records describe entirely unrelated decisions with no semantic overlap.\n\nSource record: rejects allowing a SKILL.md to use a real, current Claude model identifier as illustrative example content (instead of a placeholder), reasoning that a real identifier goes stale once superseded and would duplicate the staleness check gate_provenance_disclosure.py already performs. This corresponds to real repo content: docs/skill-authoring-standards.md rule 1 (\"No real, current model identifier as illustrative content\") and the ILLUSTRATIVE_MODEL_ID_RE / `_illustrative_model_id_checks` logic in skills/evaluating-skill-quality/scripts/check_skill_shape.py.\n\nCandidate record: rejects a dictionary-based word-list scan for a fixture-assertion linter, reasoning that it false-flagged the repo's own deliberately-truncated stem fragments (\"emporal\", \"hardcod\"). This claim is also grounded in real repo content — but in a completely different file: evals/scripts/lint_fixture_assertions.py (module docstring check 4 and the SHORT_WORD_COLLISIONS comment), which explicitly says \"a generic dictionary substring scan was tried first and rejected -- it false-flagged this repository's own deliberately-truncated stem assertions (e.g. \\\"emporal\\\" for \\\"temporal\\\", \\\"hardcod\\\" for \\\"hardcode(d)\\\").\"\n\nSo the candidate's claim is a verbatim-accurate paraphrase of a real decision — but not of the source record it was paired against for comparison. Relative to the given source record:\n- rejected_alternative: no match (dictionary scan vs. real model identifier as placeholder) — different mechanisms, different files, different problems.\n- reason: no match (stem-false-flagging vs. staleness/duplication-of-check rationale) — no semantic overlap.\n- cited_ref: no match (\"#470\" vs. null).\n\nBecause the candidate asserts a rejected-alternative/reason pairing that the paired source record does not support (it supports a different, unrelated decision instead), this is fabrication relative to that source — the candidate is citing/describing the wrong decision, not merely paraphrasing the same one."
+        },
+        "secondVerdict": {
+          "rejected_alternative_match": false,
+          "reason_match": false,
+          "cited_ref_match": false,
+          "fabrication_detected": true,
+          "explanation": "The candidate's rejected_alternative ('a dictionary scan') and reason (false-flagging truncated stems like 'emporal'/'hardcod') describe the short-word-collision check found in evals/scripts/lint_fixture_assertions.py -- and that description is verbatim-accurate to that code comment. But the source record it is being checked against describes a wholly different decision: rejecting a real/current Claude model identifier as SKILL.md placeholder content, reasoned on staleness and duplication of gate_provenance_disclosure.py's staleness check. There is no semantic overlap between 'dictionary scan vs. curated collision list' and 'real model identifier vs. placeholder in SKILL.md examples' -- these are unrelated design decisions. Additionally, the candidate cites '#470' as the reference, but the actual repo comment ties this decision to '#218' (Short-word collision (#218)), and the given source record's own cited_ref is null with content matching neither #470 nor #218 as described by the candidate. The candidate therefore asserts a source-attribution and rationale that the cited source does not actually support -- a fabricated citation/rationale pairing, even though the underlying claim happens to be true of some OTHER part of the codebase (issue #218) rather than the source given here."
+        }
+      },
+      {
+        "caseId": "gate_transfer_check_disclosure_structural_no_op",
+        "variant": "wrongReason",
+        "firstVerdict": {
+          "rejected_alternative_match": false,
+          "reason_match": false,
+          "cited_ref_match": false,
+          "fabrication_detected": true,
+          "explanation": "The two records describe entirely different decisions, not paraphrases of the same one.\n\nSource's rejected_alternative: treating the file as policy-exempt from needing a Transfer-check disclosure line (for plain \"## Iteration:\" H2-heading split.md files). Source's reason: this was confirmed via an empirical test (feeding the gate empty input, which passes trivially), demonstrating the no-op is a structural/mechanical artifact of the gate only firing on the bold-line convention under a \"## Kept-edit log\" heading -- not a real policy exemption. Source's cited_ref is null.\n\nCandidate's rejected_alternative: widening the gate to police every \"this repo's own convention\" claim (ASCII formatting, scoring rubric, etc.) instead of narrowing it to convention-claim paragraphs that name a title/identity concept. Candidate's reason: those other claim classes aren't policed by the gate and would need citations the repo doesn't expect for them. Candidate's cited_ref is \"#552\".\n\nThere is no semantic overlap: the source's design question is exemption-vs-structural-limitation for a Transfer-check disclosure gate, verified by an empty-input test; the candidate's design question is about scope-widening vs narrowing for a title/identity-concept gate, justified by citation-expectation differences. Neither the rejected alternative nor the reasoning in the candidate is supported by, or traceable to, anything in the source record. Additionally the candidate invents a specific citation (\"#552\") where the source explicitly has none (null), which is itself a fabricated detail. This is a clear fabrication: the candidate is not a valid paraphrase of the source's decision but a different, unsupported narrative."
+        },
+        "secondVerdict": {
+          "rejected_alternative_match": false,
+          "reason_match": false,
+          "cited_ref_match": false,
+          "fabrication_detected": true,
+          "explanation": "The two records describe entirely different decisions, not paraphrases of the same one.\n\nrejected_alternative: The candidate claims the rejected alternative was \"widening the gate to police every 'this repo's own convention' claim ... rather than narrowing it to only convention-claim paragraphs that also name a title/identity concept.\" The source's actual rejected alternative is \"the file being exempt from needing disclosure by policy (i.e., that plain '## Iteration:' H2-heading split.md files don't need a Transfer check line).\" These concern different gates entirely (a \"title/identity concept\" scoping question vs. a \"Transfer check line\" disclosure-exemption question for split.md files) — no semantic overlap.\n\nreason: The candidate's reason is about a different claim class (ASCII formatting, scoring rubric) not needing citations the gate expects. The source's reason is that feeding the gate empty input passes trivially, proving the no-op is a structural/mechanical limitation of the gate (it only fires on the bold-line convention under a '## Kept-edit log' heading) rather than a real policy exemption. These are unrelated justifications — one is about citation-requirement scope, the other about empirical testing of gate triggering conditions.\n\ncited_ref: Candidate asserts \"#552\" as the cited reference; the source has no citation at all (null). The candidate fabricates a specific issue/PR number with no support in the source record.\n\nOverall, the candidate record does not describe the same decision as the source at all — it appears to be lifted from or fabricated for a different decision, complete with an invented citation number. This is a clear fabrication."
+        }
+      }
+    ],
+    "allResults": [
+      {
+        "caseId": "score_contract_near_check",
+        "variant": "genuine",
+        "verdict": {
+          "rejected_alternative_match": true,
+          "reason_match": true,
+          "cited_ref_match": false,
+          "fabrication_detected": true,
+          "explanation": "Rejected alternative: matches semantically. Candidate's \"a window-only check (for determining whether two occurrences are 'near' each other)\" is a paraphrase of the source's \"Using a raw character count/window alone (without the blank-line separator check) to determine whether two substrings co-occur/are bound in the same logical unit\" — both describe the same rejected design (pure proximity/window test, no structural separator check).\n\nReason: matches semantically, at least as a valid subset of the source's reasoning. The source's stated reason is that a raw character count cannot distinguish \"bound in the same logical unit\" from \"merely nearby,\" illustrated by \"a verbose correct paragraph and a terse adjacent but unrelated one can straddle any fixed window either way.\" The candidate's reason (\"it lets two occurrences straddle a fully separate, unrelated paragraph and still false-pass as 'near'\") captures exactly the false-positive half of that example (the terse-unrelated-paragraph case) — a faithful, if partial, paraphrase, not an invented claim.\n\nCited ref: mismatch. The candidate asserts cited_ref \"#421\", while the source record shows cited_ref: null — i.e., the source contains no such reference. The candidate manufactured a specific issue/PR number that has no support in the source material.\n\nFabrication: detected, specifically on the cited_ref field. The candidate presents \"#421\" as if it were grounded in the cited source, but the source explicitly has no reference (null). Asserting a concrete citation number the source does not contain is a fabrication, even though the substantive design-decision claims (rejected alternative and reason) are accurate paraphrases of the source."
+        },
+        "score": 0.6666666666666666
+      },
+      {
+        "caseId": "score_contract_near_check",
+        "variant": "wrongReason",
+        "verdict": {
+          "rejected_alternative_match": false,
+          "reason_match": false,
+          "cited_ref_match": false,
+          "fabrication_detected": true,
+          "explanation": "The candidate and source describe entirely unrelated decisions with no semantic overlap.\n\nThe source record concerns a text-parsing/matching decision: rejecting the use of a raw character-count/window (without a blank-line separator check) to determine whether two substrings co-occur or are bound within the same logical unit, reasoned on the grounds that a character-count window cannot distinguish \"bound together\" from \"merely nearby\" (a verbose correct paragraph vs. a terse unrelated one straddling the window). It cites no reference number (cited_ref: null).\n\nThe candidate record instead describes a CI/dispatch-validation decision: rejecting \"no exemption\" for narrow single-fixture recheck dispatches under a \"full-corpus superset requirement,\" reasoned on the grounds that without an exemption such narrow dispatches would always fail that requirement since they never claim full-corpus coverage, breaking an established recheck convention. It also fabricates a citation, \"#421,\" where the source has none.\n\nNothing in the source mentions full-corpus coverage requirements, recheck dispatches, single-fixture reruns, or exemptions of any kind — this is a different subject matter (dispatch/coverage policy vs. substring co-occurrence detection). The candidate's rejected_alternative, reason, and cited_ref are all unsupported by the source; the claims sound plausible as a decision record in isolation but are not attested by the given source, which is the hallmark of fabrication rather than paraphrase."
+        },
+        "score": 0
+      },
+      {
+        "caseId": "score_contract_near_check",
+        "variant": "wrongCitation",
+        "verdict": {
+          "rejected_alternative_match": true,
+          "reason_match": true,
+          "cited_ref_match": false,
+          "fabrication_detected": true,
+          "explanation": "The rejected_alternative and reason fields are semantically faithful paraphrases of the source. Both describe rejecting a bare window/character-count proximity check (without a blank-line/paragraph-separator check) for deciding whether two substrings are \"near\"/co-occurring in the same logical unit, and both give the same failure mode: a fixed window can be straddled by two occurrences that sit in separate, unrelated paragraphs (source's \"verbose correct paragraph and a terse adjacent but unrelated one\" vs. candidate's \"straddle a fully separate, unrelated paragraph\"), causing a false \"near\" match. These count as matches under semantic-equivalence rules.\n\nHowever, cited_ref is a fabrication: the source record's cited_ref is null, meaning the actual source provides no such reference. The candidate nonetheless asserts a specific, precise citation — \"issue #191, repair 1\" — which is not supported by (and is not present in) the source. Inventing a specific traceable identifier that the cited source does not contain is exactly the kind of unsupported-but-plausible-sounding claim the fabrication check is meant to catch, so fabrication_detected is set to true despite the other two fields matching."
+        },
+        "score": 0.6666666666666666
+      },
+      {
+        "caseId": "gate_split_fixture_coverage_check_a",
+        "variant": "genuine",
+        "verdict": {
+          "rejected_alternative_match": true,
+          "reason_match": false,
+          "cited_ref_match": true,
+          "fabrication_detected": true,
+          "explanation": "The rejected_alternative fields agree: both describe rejecting the option of applying the superset/full-corpus requirement to tables/dispatches scoped to a single named fixture, with no exemption/carve-out. This is a faithful paraphrase.\n\nThe cited_ref fields agree in substance (issue #191); the candidate is just less granular than the source's \"issue #191, repair 1,\" which is not a contradiction.\n\nThe reason fields diverge. The source's reason is narrow and self-contained: a table scoped to a single fixture via the stated convention, by construction, never claims full-corpus coverage, so the superset rule doesn't apply. The candidate reproduces that core logic (\"by construction never claims full-corpus coverage\") but then appends an unsupported causal claim: that failing to grant the exemption \"would break the established recheck convention used for narrower rechecks after a small follow-up fix.\" Nothing in the source record supports the specific detail that the convention exists to serve rechecks \"after a small follow-up fix\" — that is a plausible-sounding but fabricated elaboration not present in (or derivable from) the source's stated reasoning. Because the candidate asserts this additional unsupported detail as part of its reasoning, reason_match is false and fabrication_detected is true."
+        },
+        "score": 0.6666666666666666
+      },
+      {
+        "caseId": "gate_split_fixture_coverage_check_a",
+        "variant": "wrongReason",
+        "verdict": {
+          "rejected_alternative_match": false,
+          "reason_match": false,
+          "cited_ref_match": true,
+          "fabrication_detected": true,
+          "explanation": "The two records share only the citation label (\"issue #191, repair 1\") — everything substantive diverges. The source record is about a testing/documentation convention: whether Check A's superset requirement (Fixture column must be a superset of a file's declared selection list) should apply to gate-result tables that are scoped to a single named fixture via a \"one fresh dispatch per side against '<fixture>.yaml'\" convention. Its reason is that such a table never claims full-corpus coverage by construction, so the superset rule is inapplicable. The candidate record is about an entirely different technical decision: rejecting `git clone --bare` in favor of a staged directory, reasoning that `--bare` disables a \"skill-discovery mechanism\" the staged approach depends on. There is no textual or semantic overlap between \"Fixture column superset requirement for gate-result tables\" and \"bare git clone disabling skill discovery\" — no paraphrase relationship exists; these describe unrelated decisions in unrelated domains (test-fixture validation vs. git repository layout/skill discovery). The candidate's rejected_alternative and reason are therefore not supported by the source at all, despite matching the cited reference number, which is the hallmark of fabrication: inventing a plausible-sounding decision and attaching a real citation to it."
+        },
+        "score": 0.3333333333333333
+      },
+      {
+        "caseId": "gate_split_fixture_coverage_check_a",
+        "variant": "wrongCitation",
+        "verdict": {
+          "rejected_alternative_match": true,
+          "reason_match": true,
+          "cited_ref_match": false,
+          "fabrication_detected": true,
+          "explanation": "rejected_alternative: matches semantically. Candidate's \"applying the full-corpus superset requirement uniformly to narrow single-fixture recheck dispatches with no exemption\" is a faithful paraphrase of the source's \"Applying Check A's superset requirement ... to gate-result tables that are explicitly scoped to a single named fixture via the ... convention.\" Both describe the same rejected option: uniformly applying the superset/full-corpus check to single-fixture-scoped dispatches.\n\nreason: the core causal claim matches — both state that a single-fixture-scoped dispatch, by construction, never claims full-corpus coverage, so the superset rule doesn't (shouldn't) apply / would falsely trip if applied. The candidate adds an extra clause (\"this would break the established recheck convention used for narrower rechecks after a small follow-up fix\") that is plausible-sounding elaboration not present in or verifiable against the given source text, but it doesn't contradict the source's stated reasoning, so the reason is judged a match on its essential claim.\n\ncited_ref: mismatch. The candidate cites \"#583\" while the source record explicitly cites \"issue #191, repair 1.\" These are different issue/reference numbers with no overlap — this is not a paraphrase or format difference, it is a factually different citation.\n\nBecause the candidate's cited reference (#583) does not match the source's actual citation (issue #191, repair 1), fabrication_detected is set to true: the candidate is asserting a provenance/citation that the source does not support, even though the substantive rejected_alternative and reason content are faithful paraphrases of the source's decision content."
+        },
+        "score": 0.6666666666666666
+      },
+      {
+        "caseId": "run_ablation_bare_mode",
+        "variant": "genuine",
+        "verdict": {
+          "rejected_alternative_match": false,
+          "reason_match": false,
+          "cited_ref_match": false,
+          "fabrication_detected": true,
+          "explanation": "The candidate inverts the actual decision recorded in the source. The source states the rejected alternative was \"a staged .claude/skills/<name>/ directory relying on Claude Code's auto-discovery mechanism,\" and that --bare was the *required/chosen* flag (needed to stop claude -p from auto-loading CLAUDE.md and other skills into both arms of the ablation). The candidate instead labels \"--bare\" itself as the rejected_alternative — the opposite of what was decided. So rejected_alternative_match is false: the two records name different (in fact opposite) things as rejected.\n\nThe reason text is a near-verbatim lift of one clause from the source (\"--bare explicitly disables the very auto-discovery mechanism ... a staged directory would depend on ... so the two cannot be combined\" → candidate's \"--bare explicitly disables the very skill-discovery mechanism a staged directory depends on ... mutually exclusive\"). That clause is accurately paraphrased in isolation, but in the source it explains why the *staged-directory approach* was rejected (because it can't coexist with the required --bare flag), not why --bare was rejected. By reattaching this same causal fact to \"--bare\" as the rejected_alternative, the candidate manufactures a reason for a decision the source never made (rejecting --bare). Hence reason_match is false — the reasoning doesn't actually support the candidate's stated rejected_alternative, even though the underlying sentence fragment was drawn from the source.\n\nThe source record's cited_ref is null — there is no reference number attached to this reasoning in the source. The candidate asserts \"#583\" as the cited_ref, which cannot be verified against the source at all (null vs. a specific issue number), so cited_ref_match is false; this looks like a fabricated/unsupported citation.\n\nTaken together, the candidate takes a real textual fragment from the source and repurposes it to support an inverted claim about which option was rejected and why, and also attaches an unverifiable issue reference. This constitutes fabrication: the candidate asserts something (that --bare was the rejected alternative) that the source does not support — the source's actual position is the reverse."
+        },
+        "score": 0
+      },
+      {
+        "caseId": "run_ablation_bare_mode",
+        "variant": "wrongReason",
+        "verdict": {
+          "rejected_alternative_match": false,
+          "reason_match": false,
+          "cited_ref_match": false,
+          "fabrication_detected": true,
+          "explanation": "The candidate and source describe entirely unrelated decisions, despite the candidate tagging the same reference number (#583) that the source also carries.\n\nVerified against the actual repo (evals/scripts/run_ablation.py, whose module docstring opens \"issue #583\" and is corroborated by tests/test_run_ablation.py's own header \"Tests for evals/scripts/run_ablation.py (issue #583)\"): the real rejected alternative in that source is a staged `.claude/skills/<name>/` directory relying on Claude Code's auto-discovery, rejected because `--bare` (required to keep the ablation's \"without skill\" arm honest) explicitly disables the auto-discovery mechanism such a staged directory would need — exactly what the source record states, so the source record itself is a faithful paraphrase of the real file.\n\nThe candidate record instead claims the rejected alternative was \"using a real, current model identifier\" and that the reason was staleness-on-supersession plus duplication of `gate_provenance_disclosure.py`. Nothing in run_ablation.py's docstring or code discusses model-identifier choice or staleness — `DEFAULT_MODEL_CLI = \"claude\"` appears with no such rationale attached (the adjacent comment concerns `DEFAULT_TIMEOUT_SECONDS`, not the CLI name). Moreover, `.github/scripts/gate_provenance_disclosure.py` (confirmed by reading it) is keyed to a different issue (#520) and a different concept entirely — it flags prose that names a tool's absence/presence as an unstated evidence-limitation reason, not model-ID staleness; the docstring even distinguishes itself from `scan_provenance.py`, the script that actually flags model IDs as production markers. So the candidate's specific mechanism claim is also internally wrong about which script does what.\n\nBecause the candidate asserts a rejected-alternative/reason pair that does not appear anywhere in the cited source and misattributes functionality to the wrong gate script, all three match fields are false and this is a fabrication: a plausible-sounding but unsupported decision record, not a paraphrase of anything actually in issue #583 or run_ablation.py."
+        },
+        "score": 0
+      },
+      {
+        "caseId": "run_ablation_bare_mode",
+        "variant": "wrongCitation",
+        "verdict": {
+          "rejected_alternative_match": false,
+          "reason_match": false,
+          "cited_ref_match": false,
+          "fabrication_detected": true,
+          "explanation": "The candidate inverts the actual decision. The source states that `--bare` was the REQUIRED/chosen approach (needed to stop `claude -p` from auto-loading the repo's CLAUDE.md and skills into both ablation arms), and that the REJECTED alternative was a staged `.claude/skills/<name>/` directory relying on auto-discovery — rejected precisely because `--bare` disables the auto-discovery mechanism that staged directory would need, making the two incompatible.\n\nThe candidate instead names \"--bare\" itself as the rejected_alternative, which directly contradicts the source (the source keeps --bare and rejects the other option). The reason text recycles the source's genuine incompatibility fact (\"--bare disables the auto-discovery mechanism a staged directory depends on, so they can't be combined\"), but repurposes it to argue for rejecting --bare rather than for rejecting the staged-directory approach — the opposite of what the source concludes. The \"fidelity dial with a middle setting\" framing is not present in the source either.\n\nAdditionally, the source's cited_ref is null (no ref given in the excerpt), so there is no basis in the source to confirm the candidate's \"#470\" — that field can't be validated as a match, only asserted by the candidate.\n\nNet effect: the candidate takes a true underlying fact from the source (mutual exclusivity of --bare and auto-discovery-dependent staged directories) and reassigns which side of the decision it supports, producing a claim about \"what was rejected and why\" that is false relative to the source. This is a fabrication of the decision's substance, not merely a paraphrase."
+        },
+        "score": 0
+      },
+      {
+        "caseId": "check_skill_shape_no_illustrative_model_id",
+        "variant": "genuine",
+        "verdict": {
+          "rejected_alternative_match": true,
+          "reason_match": true,
+          "cited_ref_match": false,
+          "fabrication_detected": true,
+          "explanation": "The rejected_alternative and reason fields are semantically faithful paraphrases: both records reject using a real/current model identifier (candidate's shorthand matches source's fuller \"Allowing a SKILL.md to name a real, current Claude model identifier as illustrative example content instead of a placeholder\"), and both give the same two-part reason (staleness when the model is superseded, plus duplication of what gate_provenance_disclosure.py checks) — the wording differs (\"is meant to catch\" vs \"already performs\") but the meaning is the same.\n\nHowever, the candidate's cited_ref field (\"#470\") is not supported by the source at all — the source record's cited_ref is null, meaning the source contains no citation/issue reference. The candidate has fabricated a specific attribution (issue #470) that the source does not corroborate. This is a clear instance of the candidate asserting something (a citation) that the source does not actually support, even though the surrounding substantive claims (rejected alternative and reason) are accurate paraphrases."
+        },
+        "score": 0.6666666666666666
+      },
+      {
+        "caseId": "check_skill_shape_no_illustrative_model_id",
+        "variant": "wrongReason",
+        "verdict": {
+          "rejected_alternative_match": false,
+          "reason_match": false,
+          "cited_ref_match": false,
+          "fabrication_detected": true,
+          "explanation": "The two records describe entirely unrelated decisions with no semantic overlap.\n\nSource record: rejects allowing a SKILL.md to use a real, current Claude model identifier as illustrative example content (instead of a placeholder), reasoning that a real identifier goes stale once superseded and would duplicate the staleness check gate_provenance_disclosure.py already performs. This corresponds to real repo content: docs/skill-authoring-standards.md rule 1 (\"No real, current model identifier as illustrative content\") and the ILLUSTRATIVE_MODEL_ID_RE / `_illustrative_model_id_checks` logic in skills/evaluating-skill-quality/scripts/check_skill_shape.py.\n\nCandidate record: rejects a dictionary-based word-list scan for a fixture-assertion linter, reasoning that it false-flagged the repo's own deliberately-truncated stem fragments (\"emporal\", \"hardcod\"). This claim is also grounded in real repo content — but in a completely different file: evals/scripts/lint_fixture_assertions.py (module docstring check 4 and the SHORT_WORD_COLLISIONS comment), which explicitly says \"a generic dictionary substring scan was tried first and rejected -- it false-flagged this repository's own deliberately-truncated stem assertions (e.g. \\\"emporal\\\" for \\\"temporal\\\", \\\"hardcod\\\" for \\\"hardcode(d)\\\").\"\n\nSo the candidate's claim is a verbatim-accurate paraphrase of a real decision — but not of the source record it was paired against for comparison. Relative to the given source record:\n- rejected_alternative: no match (dictionary scan vs. real model identifier as placeholder) — different mechanisms, different files, different problems.\n- reason: no match (stem-false-flagging vs. staleness/duplication-of-check rationale) — no semantic overlap.\n- cited_ref: no match (\"#470\" vs. null).\n\nBecause the candidate asserts a rejected-alternative/reason pairing that the paired source record does not support (it supports a different, unrelated decision instead), this is fabrication relative to that source — the candidate is citing/describing the wrong decision, not merely paraphrasing the same one."
+        },
+        "score": 0
+      },
+      {
+        "caseId": "check_skill_shape_no_illustrative_model_id",
+        "variant": "wrongCitation",
+        "verdict": {
+          "rejected_alternative_match": true,
+          "reason_match": true,
+          "cited_ref_match": false,
+          "fabrication_detected": true,
+          "explanation": "rejected_alternative: candidate's \"Using a real, current model identifier\" is a faithful compression of the source's \"Allowing a SKILL.md to name a real, current Claude model identifier as illustrative example content instead of a placeholder\" — same rejected option, just less verbose. Match.\n\nreason: candidate's \"It goes stale the moment that model is superseded, and it duplicates what the repository's own gate_provenance_disclosure.py is meant to catch\" paraphrases the source's \"A real current identifier goes stale the moment that model is superseded, and allowing it would duplicate the staleness check that gate_provenance_disclosure.py already performs\" — same two-part rationale (staleness + duplicated enforcement by the same script). Match.\n\ncited_ref: candidate asserts \"#518\" as the cited reference, but the source record's cited_ref is null — the source contains no such citation. This is not a paraphrase discrepancy; it's an added factual claim (a specific issue number) that the source does not support. No match.\n\nBecause the candidate invents a specific, checkable reference (#518) where the source shows none, this counts as fabrication — the candidate is claiming provenance/citation support that the cited source does not actually contain, even though the substantive rationale (rejected_alternative + reason) is otherwise faithfully represented."
+        },
+        "score": 0.6666666666666666
+      },
+      {
+        "caseId": "lint_fixture_assertions_collision_pairs",
+        "variant": "genuine",
+        "verdict": {
+          "rejected_alternative_match": true,
+          "reason_match": true,
+          "cited_ref_match": false,
+          "fabrication_detected": true,
+          "explanation": "Verified against the real source, evals/scripts/lint_fixture_assertions.py (module docstring lines 39-49 and the SHORT_WORD_COLLISIONS comment block lines 173-182, corroborated by tests/test_lint_fixture_assertions.py and tests/test_gate_skill_audit_disclosure.py). The rejected_alternative matches: candidate's 'a dictionary scan' is a faithful paraphrase of the source's 'a generic (general) dictionary substring scan for detecting short-word collisions.' The reason also matches semantically: both state the generic dictionary scan false-flagged the repo's own deliberately-truncated stem assertions ('emporal' for temporal, 'hardcod' for hardcode(d)), which are not real words and thus not the collision the check targets -- a close paraphrase, not a fabrication. However, cited_ref does NOT match: the candidate cites '#518' while the source (and every other place in the repository that documents this exact decision -- the docstring, the SHORT_WORD_COLLISIONS comment, check_short_word_collision's docstring, and tests/test_lint_fixture_assertions.py's own comment) consistently and exclusively cites '#218.' Issue #518 does appear elsewhere in the repo (test_check_skill_shape.py), but it concerns an unrelated topic (ACM completeness rows, a UnicodeDecodeError regression guard, PyYAML differential testing) -- nothing to do with the dictionary-scan-vs-hand-curated-collision decision. This is a real digit-transposition-style misattribution, not source ambiguity, so fabrication_detected is true for the citation even though the substantive rejected-alternative/reason content is accurately grounded."
+        },
+        "score": 0.6666666666666666
+      },
+      {
+        "caseId": "lint_fixture_assertions_collision_pairs",
+        "variant": "wrongReason",
+        "verdict": {
+          "rejected_alternative_match": false,
+          "reason_match": false,
+          "cited_ref_match": false,
+          "fabrication_detected": true,
+          "explanation": "The candidate and source describe entirely unrelated decisions. The candidate claims the rejected alternative was \"gating a fixture requirement on any change to a Stop-boundary-bullet-plus-dispatch-branch count (including deletions/rewording) rather than net growth alone,\" with the reasoning that only net growth adds untested behavioral surface. The actual source (#218) is about rejecting a generic dictionary substring scan for short-word collision detection, because it false-flagged the repo's own deliberately-truncated stem assertions like \"emporal\" (temporal) and \"hardcod\" (hardcode(d)). There is no semantic overlap whatsoever: different subject matter (fixture-count gating vs. substring-scan collision detection), different rejected alternatives, and different reasons. The cited_ref itself doesn't even match (#518 vs #218), confirming this candidate record was not actually derived from the cited source. This is a clear fabrication — the candidate asserts a decision and rationale that the source provides no support for."
+        },
+        "score": 0
+      },
+      {
+        "caseId": "lint_fixture_assertions_collision_pairs",
+        "variant": "wrongCitation",
+        "verdict": {
+          "rejected_alternative_match": true,
+          "reason_match": true,
+          "cited_ref_match": false,
+          "fabrication_detected": true,
+          "explanation": "Verified against the primary source in /home/user/gitapex/evals/scripts/lint_fixture_assertions.py (module docstring check 4, and the SHORT_WORD_COLLISIONS comment block plus check_short_word_collision docstring), corroborated by tests/test_lint_fixture_assertions.py (\"check_short_word_collision (issue #516, #218)\") and tests/test_gate_skill_audit_disclosure.py (\"#218 (Mechanism-fit subsection citation completeness)\" / \"Refs #482, #487, #218, #453\").\n\nrejected_alternative_match: TRUE. Candidate's \"a dictionary scan (checking words/strings against a dictionary)\" and source's \"A generic (general) dictionary substring scan for detecting short-word collisions\" are paraphrases of the same rejected design, both confirmed by the primary source's own wording: \"a general dictionary substring scan was tried first and rejected.\"\n\nreason_match: TRUE. Both candidate and source give the same rationale — the dictionary scan false-flagged the repo's own deliberately-truncated stem assertions \"emporal\" (temporal) and \"hardcod\" (hardcode(d)), which aren't real words. This is a near-verbatim match of the primary source: \"it false-flagged this repository's own deliberately-truncated stem assertions (e.g. 'emporal' for 'temporal', 'hardcod' for 'hardcode(d)'), which are not real words themselves.\"\n\ncited_ref_match: FALSE. The source record cites #218, which matches the primary source exactly (the docstring and code comments repeatedly tag this exact decision as \"(#218)\"). The candidate cites #540, which does not match #218 and does not appear anywhere in the repository (a repo-wide grep for \"#540\" returns zero matches) — no issue by that number is associated with this decision, or with anything in this codebase.\n\nfabrication_detected: TRUE. While the candidate's substantive claims (rejected alternative and reason) are semantically faithful to the real source, its cited_ref (#540) is not supported by the source and does not correspond to any real reference in the repository, whereas the correct citation (#218) is abundantly documented across the primary source file and multiple corroborating test/doc files. Asserting \"#540\" as the reference for this decision is an unsupported/fabricated citation."
+        },
+        "score": 0.6666666666666666
+      },
+      {
+        "caseId": "gate_skill_branch_fixture_coverage_growth_only",
+        "variant": "genuine",
+        "verdict": {
+          "rejected_alternative_match": false,
+          "reason_match": true,
+          "cited_ref_match": false,
+          "fabrication_detected": true,
+          "explanation": "The two records describe different specific mechanisms for the rejected alternative, even though the underlying justification is shared.\n\nSource's rejected alternative: an \"absolute-count check\" — firing whenever the branch/bullet count is above some fixed threshold, \"rather than only when it grows relative to the before-version.\" This is a stateless, threshold-based check that does not compare before/after versions at all.\n\nCandidate's rejected alternative: \"gating on any change to the count (not just net growth)... also requiring fixtures for deletions or neutral rewords.\" This describes a delta/before-after-comparison check that fires on any change (including decreases), not a threshold-independent-of-history check. That is a materially different mechanism than what the source states — the source alternative never mentions gating on \"any change\" vs. \"net growth only\"; it contrasts a fixed-threshold check against a relative-to-before-version check. The candidate has substituted a different (though superficially similar-sounding) alternative not actually present in the source.\n\nThe \"reason\" fields do semantically agree: both state that a diff which only deletes or neutrally rewords an existing branch, without net increase, doesn't add new untested surface and therefore shouldn't trigger the gate. This part is a legitimate paraphrase.\n\nThe cited_ref fields diverge outright: the source record has no citation (null), while the candidate asserts \"#540\" as if the source supported that specific reference. Nothing in the source record provides or supports this citation number, so it appears to be fabricated/invented by the candidate (or borrowed from an unrelated decision) rather than drawn from the actual source.\n\nGiven the mischaracterized rejected-alternative mechanism and the unsupported citation number, this record contains fabricated content that is not supported by the source, despite the shared underlying reasoning about deletions/rewords not needing fixtures."
+        },
+        "score": 0.3333333333333333
+      },
+      {
+        "caseId": "gate_skill_branch_fixture_coverage_growth_only",
+        "variant": "wrongReason",
+        "verdict": {
+          "rejected_alternative_match": false,
+          "reason_match": false,
+          "cited_ref_match": false,
+          "fabrication_detected": true,
+          "explanation": "I located the real gitapex repo content behind both records.\n\nThe source record's rejected_alternative (\"an absolute-count check ... rather than only when it grows relative to the before-version\") and reason (\"a diff that only deletes or rewords an existing bullet, with no net increase in branch count, does not add any new untested surface\") match `.github/scripts/gate_skill_branch_fixture_coverage.py` verbatim in substance: its docstring section \"Delta-scoped, not absolute-scoped\" states the gate \"only fires when THIS diff introduces a branch-content Counter key with a higher count than the before-version had,\" and `evaluate_skill()` explicitly returns `applicable=False, passed=True` when `after_counter - before_counter` is empty (no net growth). That gate traces to issue #49 (re-escalated via #419/#440/#454/#548), not #540.\n\nThe candidate record instead describes a completely different gate, `.github/scripts/gate_transfer_check_disclosure.py`, which parses newly-added bold `**Iteration:` lines under a `## Kept-edit log` heading (confirmed by the workflow's `grep -E '^\\*\\*Iteration:'` in `.github/workflows/transfer-check-disclosure-gate.yml`) — a split.md using plain `## Iteration:` H2 headings would indeed never surface to this gate's entries list, making the candidate's characterization accurate as a description of *that* gate's mechanics. But that gate's own docstring cites \"Issue #517 (refs #487),\" not #540, and its topic (Iteration/Kept-edit-log Transfer-check disclosure) is unrelated to the source record's topic (delta- vs absolute-count branch/fixture coverage). Separately, PR #540 itself (`git log`) is titled \"feat(evals): harden lint_fixture_assertions.py, broaden scope to every skill\" — unrelated to either topic.\n\nSo the candidate's rejected_alternative and reason are not supported by the source record at all; they are true (if anything) of a different gate/decision entirely, and the cited_ref \"#540\" doesn't match anything in the source (which has no cited_ref) nor the real PR #540 content. This is the \"candidate asserts something true of some OTHER decision\" fabrication pattern the task describes."
+        },
+        "score": 0
+      },
+      {
+        "caseId": "gate_skill_branch_fixture_coverage_growth_only",
+        "variant": "wrongCitation",
+        "verdict": {
+          "rejected_alternative_match": false,
+          "reason_match": true,
+          "cited_ref_match": false,
+          "fabrication_detected": true,
+          "explanation": "The two records describe genuinely different rejected alternatives, and the candidate invents a citation the source doesn't support.\n\nRejected alternative — mismatch: The source's rejected alternative is an \"absolute-count check\" — a static rule that fires whenever the bullet/branch count exceeds some fixed threshold, independent of any diff, contrasted explicitly with \"only when it grows relative to the before-version.\" The candidate instead describes the rejected alternative as gating on \"any change\" to the count (including decreases/deletions or neutral rewords) versus \"net growth alone.\" That is a diff-aware, before/after comparison that merely widens which deltas count (any delta vs. positive delta only) — a materially different mechanism from a fixed-threshold check that ignores the prior version entirely. These are not paraphrases of the same design choice; the candidate substitutes a plausible-sounding but distinct alternative.\n\nReason — match: Both reasons express the same underlying principle: a diff that only deletes or rewords an existing bullet/branch, without net growth in count, does not introduce new untested behavioral surface, so it shouldn't trigger the fixture-requiring gate. The candidate's reason is a faithful paraphrase of the source's reason.\n\nCited ref — mismatch: The source record has cited_ref: null, i.e., no reference number is attached to this decision in the source. The candidate asserts \"#552\" as the cited reference, which is not supported by (and directly contradicts) the source.\n\nBecause the candidate attributes a specific rejected-alternative mechanism (a diff-triggered \"any change\" rule) that the source does not state, and further fabricates a specific citation (\"#552\") where the source has none, this counts as fabrication: unsupported specific claims are presented as fact despite sounding plausible."
+        },
+        "score": 0.3333333333333333
+      },
+      {
+        "caseId": "gate_transfer_check_disclosure_structural_no_op",
+        "variant": "genuine",
+        "verdict": {
+          "rejected_alternative_match": false,
+          "reason_match": true,
+          "cited_ref_match": false,
+          "fabrication_detected": true,
+          "explanation": "The two records describe different \"rejected alternatives,\" so they do not semantically agree there. The source's rejected alternative is an interpretive/policy claim: that plain H2-heading split.md files are formally EXEMPT from needing a Transfer check line by policy. The candidate's rejected alternative is a different claim entirely: that split.md authors chose to use plain H2 headings AS THE CONVENTION instead of the bold-line convention. Nothing in the source frames this as a convention-adoption choice between two authoring formats -- it frames it as a question of whether the gate's silence on non-conforming files constitutes a deliberate exemption. The candidate's framing sounds plausible (it references the same surface facts -- H2 headings vs. bold **Iteration: lines under ## Kept-edit log) but asserts a decision (which format to standardize on) that the source is not actually making; this is the \"plausible but unsupported / true of some other decision\" case the instructions flag.\n\nThe `reason` fields do substantively agree: both state the same core mechanism -- the gate only mechanically/structurally recognizes the bold `**Iteration:` line under the `## Kept-edit log` heading, so a plain-H2-heading file produces a no-op (not a deliberate design/policy outcome). The candidate's contrast (\"not a violation the gate fails to catch\") and the source's contrast (\"not an actual policy exemption\") name different candidate misreadings, but the affirmative claim -- that this is a structural/mechanical parsing limitation, not something meaningful -- is a genuine paraphrase match.\n\n`cited_ref` clearly does not match: the candidate asserts \"#552,\" while the source discloses no citation at all (null) and instead grounds its claim empirically (\"confirmed by feeding the gate empty input\"). The candidate invented a specific issue number the source never states, which independently verified repository history shows is a real but entirely unrelated issue (a provenance-disclosure-gate diff-extraction fix), not the Kept-edit-log/Transfer-check gate this record is about -- reinforcing that \"#552\" is a fabricated/misattributed citation rather than an unstated-but-compatible one.\n\nBecause the candidate both invents a citation unsupported by the source and mischaracterizes the actual alternative being rejected (attributing a convention-choice decision the source never makes), fabrication_detected is true."
+        },
+        "score": 0.3333333333333333
+      },
+      {
+        "caseId": "gate_transfer_check_disclosure_structural_no_op",
+        "variant": "wrongReason",
+        "verdict": {
+          "rejected_alternative_match": false,
+          "reason_match": false,
+          "cited_ref_match": false,
+          "fabrication_detected": true,
+          "explanation": "The two records describe entirely different decisions, not paraphrases of the same one.\n\nSource's rejected_alternative: treating the file as policy-exempt from needing a Transfer-check disclosure line (for plain \"## Iteration:\" H2-heading split.md files). Source's reason: this was confirmed via an empirical test (feeding the gate empty input, which passes trivially), demonstrating the no-op is a structural/mechanical artifact of the gate only firing on the bold-line convention under a \"## Kept-edit log\" heading -- not a real policy exemption. Source's cited_ref is null.\n\nCandidate's rejected_alternative: widening the gate to police every \"this repo's own convention\" claim (ASCII formatting, scoring rubric, etc.) instead of narrowing it to convention-claim paragraphs that name a title/identity concept. Candidate's reason: those other claim classes aren't policed by the gate and would need citations the repo doesn't expect for them. Candidate's cited_ref is \"#552\".\n\nThere is no semantic overlap: the source's design question is exemption-vs-structural-limitation for a Transfer-check disclosure gate, verified by an empty-input test; the candidate's design question is about scope-widening vs narrowing for a title/identity-concept gate, justified by citation-expectation differences. Neither the rejected alternative nor the reasoning in the candidate is supported by, or traceable to, anything in the source record. Additionally the candidate invents a specific citation (\"#552\") where the source explicitly has none (null), which is itself a fabricated detail. This is a clear fabrication: the candidate is not a valid paraphrase of the source's decision but a different, unsupported narrative."
+        },
+        "score": 0
+      },
+      {
+        "caseId": "gate_transfer_check_disclosure_structural_no_op",
+        "variant": "wrongCitation",
+        "verdict": {
+          "rejected_alternative_match": false,
+          "reason_match": true,
+          "cited_ref_match": false,
+          "fabrication_detected": true,
+          "explanation": "The two records describe the same underlying gate mechanics (it only parses a bold `**Iteration:` line under a `## Kept-edit log` heading, so a plain `## Iteration:` H2-heading doc silently produces a no-op rather than an active catch) — so reason_match is true, since both articulate that mechanical/structural cause.\n\nHowever, the \"rejected_alternative\" fields diverge in what is actually being rejected. The source is rejecting an *interpretive claim about policy*: that a plain-H2 split.md is legitimately policy-exempt from needing a Transfer check line — it explicitly concludes this is \"not an actual policy exemption,\" just a mechanical gap (and states this was confirmed empirically by feeding the gate empty input, which trivially passes). The candidate instead frames the rejected alternative as an *authoring-convention choice*: using plain H2 headings \"instead of\" a \"required\" bold-line convention — implying a decision between two heading formats was made and plain H2 was rejected as non-compliant. That is a different claim: the source is diagnosing why an existing gate fails to fire (mechanical limitation vs. deliberate exemption), not describing a decision to mandate one heading style over another. The source never frames this as a \"requirement\" being imposed against a rejected format choice.\n\nAdditionally, the candidate cites \"#520\" as the source issue, while the source record shows cited_ref: null — no reference is present in the source to substantiate that specific citation. Combined with the reframed/unsupported characterization of the rejected alternative as a formatting-requirement decision (rather than the source's actual policy-exemption-vs-mechanical-limitation diagnosis), this constitutes fabrication: the candidate asserts specifics (a \"required\" convention decision, and a \"#520\" citation) that the source does not actually support, even though the general gate-behavior facts overlap."
+        },
+        "score": 0.3333333333333333
+      },
+      {
+        "caseId": "gate_retro_title_convention_citation_narrow_scope",
+        "variant": "genuine",
+        "verdict": {
+          "rejected_alternative_match": true,
+          "reason_match": false,
+          "cited_ref_match": false,
+          "fabrication_detected": true,
+          "explanation": "Verified against the primary source: the docstring of .github/scripts/gate_retro_title_convention_citation.py (mirrored in tests/test_gate_retro_title_convention_citation.py), which states: \"Scope, deliberately narrow: only a convention-claim phrase that also names a title/identity concept ... counts -- a bare 'gitapex's own convention' about, say, ASCII formatting (skills/outward-artifact-preflight/SKILL.md) or a scoring rubric (skills/ranking-the-open-queue/SKILL.md) is a different claim class this gate does not police,\" header-cited as \"Issue #520 (row 1, refs #344)\". Confirmed those two example files do carry unrelated \"own convention\" claims about ASCII-only formatting and a scoring rubric respectively, so the rejected-alternative framing is accurate.\n\nrejected_alternative_match: TRUE. Both records paraphrase the same rejected option -- widening the gate/flag to cover \"this repo's own convention\" claims anywhere/every instance rather than scoping to paragraphs naming a title/identity concept -- and both cite the identical two examples (ASCII formatting, scoring rubric) that the real docstring also names. This is a faithful paraphrase.\n\nreason_match: FALSE. The source's reason is narrowly \"those [ASCII/scoring-rubric] claims are a different claim class this gate does not police\" -- exactly what the docstring states. The candidate restates that core clause but then appends an unsupported second claim: \"widening it to cover them would require citations that this repository does not actually expect for those claim classes.\" Nothing in the docstring, the gate script's logic, or the cited files asserts anything about what citations \"this repository expects/does not expect\" for ASCII-formatting or scoring-rubric convention claims -- the gate simply never inspects those paragraphs at all (they fail the title/identity regex, so citation-expectation for them is never evaluated one way or the other). This is an invented rationale layered on top of a true premise.\n\ncited_ref_match: FALSE. The source's cited_ref captures both numbers from the real docstring header (\"Issue #520 (row 1, refs #344)\"). The candidate drops \"refs #344\" entirely, citing only \"#520\" -- an incomplete citation relative to the actual source, which explicitly traces the decision through both the gate-creation issue (#520) and the underlying retrospective (#344) that motivated it.\n\nfabrication_detected: TRUE, specifically in the reason field's added claim about citation expectations for the excluded claim classes, which is not supported by the source and does not correspond to anything the gate's actual documented scope/rationale asserts."
+        },
+        "score": 0.3333333333333333
+      },
+      {
+        "caseId": "gate_retro_title_convention_citation_narrow_scope",
+        "variant": "wrongReason",
+        "verdict": {
+          "rejected_alternative_match": false,
+          "reason_match": false,
+          "cited_ref_match": true,
+          "fabrication_detected": true,
+          "explanation": "The two records describe different design decisions entirely, not paraphrases of the same one.\n\nSource's rejected alternative: flagging \"established/repo convention\" claims (e.g. an ASCII-formatting convention or a scoring-rubric convention) *anywhere in the file*, i.e. without scoping the check to the paragraph that contains a title/identity mention. Source's reason for rejecting it: those convention claims are a different *claim class* than what this gate polices — a topical/domain-scope argument.\n\nCandidate's rejected alternative: a \"window-only\" proximity check used to decide if two occurrences count as \"near\" each other. Candidate's reason: such a window could span across a boundary and let two occurrences in unrelated paragraphs still count as \"near\" — a spatial/proximity-boundary argument.\n\nThese do not match on either axis:\n- Mechanism: the source's alternative is an *unbounded, scope-less* check (anywhere in the file) being rejected for being too broad in subject-matter scope; the candidate's alternative is a *bounded window* check being rejected for being spatially imprecise. \"Anywhere in the file\" (no window at all) and \"a window\" are near-opposite mechanisms, not paraphrases.\n- Reason: the source's stated reason is about claim-class mismatch (ASCII-formatting/scoring-rubric conventions vs. whatever the gate actually targets, e.g. authorship/identity claims); the candidate's stated reason is purely spatial (straddling an unrelated paragraph). Neither reason logically implies the other.\n\nThe only element that lines up is the citation: candidate cites \"#520\" and source is \"issue #520, refs #344\" — #520 is present in both, so cited_ref_match is true (the candidate's citation is a subset, not a contradiction).\n\nBecause the candidate invents a specific rejected-alternative/reason pair (window-based \"near\" check failing across paragraph boundaries) that the source record does not support — the source is about scope-of-flagging for convention claims and a claim-class distinction, not about a window-vs-paragraph proximity metric — this is a fabrication rather than a valid paraphrase."
+        },
+        "score": 0.3333333333333333
+      },
+      {
+        "caseId": "gate_retro_title_convention_citation_narrow_scope",
+        "variant": "wrongCitation",
+        "verdict": {
+          "rejected_alternative_match": true,
+          "reason_match": false,
+          "cited_ref_match": false,
+          "fabrication_detected": true,
+          "explanation": "I located the real source: /home/user/gitapex/.github/scripts/gate_retro_title_convention_citation.py, whose module docstring (lines 15-22) states the actual rejected alternative and reason, citing \"Issue #520 (row 1, refs #344)\" at line 5.\n\nrejected_alternative_match = true: The candidate's \"widening the gate to cover every 'this repo's own convention' claim (not just convention-claim paragraphs that also name a title/identity concept)\" is a faithful paraphrase of the source's \"Flagging ... claims anywhere in the file (not scoped to the paragraph containing a title/identity mention), including claims such as a 'gitapex's own convention' about ASCII formatting or a scoring rubric\" -- both describe the same rejected alternative (unscoped/whole-file flagging vs. paragraph-scoped-to-title/identity), with the ASCII-formatting/scoring-rubric examples matching the source's own named examples (skills/outward-artifact-preflight/SKILL.md, skills/ranking-the-open-queue/SKILL.md).\n\nreason_match = false: The candidate's first clause (\"a different claim class that this gate does not police\") matches the source verbatim in substance. But the candidate appends an unsupported second clause: \"and widening the gate to all convention claims would require citations this repository does not actually expect for those other claim classes.\" Nothing in the source docstring makes this citation-burden argument for this specific rejected alternative -- the source's stated reason is only about claim-class mismatch. This added clause is a plausible-sounding but unverified embellishment, which per the task's own criterion (\"a candidate claim not supported by the source does not [match], even if it sounds plausible\") disqualifies the reason as a full match.\n\ncited_ref_match = false: The candidate cites \"#421\", but the actual source cites \"Issue #520 (row 1, refs #344)\" -- confirmed no other reference to \"#421\" anywhere in the repository, and no plausible near-match. This is a wrong/fabricated citation, not a paraphrase difference.\n\nfabrication_detected = true: Two independent fabrications -- (1) the cited_ref (#421) does not correspond to the real citation (#520/#344) for this decision anywhere in the source or repo, and (2) the reason field asserts an unsupported inference (a citation-burden argument) that the source's docstring does not make."
+        },
+        "score": 0.3333333333333333
+      }
+    ]
+  }
+}
