@@ -295,6 +295,37 @@ def test_unsatisfiable_pair_passes_unrelated_assertions():
     assert L.check_unsatisfiable_assertion_pair(expected) == []
 
 
+def test_unsatisfiable_pair_flags_icontains_vs_not_icontains_same_fold():
+    # Regression (adversarial review, issue #628): both keys already match
+    # case-insensitively, so requiring and banning the identical folded
+    # substring via icontains/not_icontains is an unconditional
+    # contradiction -- the first draft only built its literal-requirement
+    # set from output_contains/output_contains_near and missed this direct
+    # case entirely (score_contract.score() confirmed capped at 0.5 for
+    # every output text tried).
+    expected = {"output_icontains": ["Test"], "output_not_icontains": ["test"]}
+    findings = L.check_unsatisfiable_assertion_pair(expected)
+    assert len(findings) == 1
+    key, value, rule, detail = findings[0]
+    assert key == "output_not_icontains"
+    assert rule == "unsatisfiable-assertion-pair"
+
+
+def test_unsatisfiable_pair_flags_redundant_not_contains_vs_not_icontains():
+    # Regression (adversarial review, issue #628): the mirrored ban-side
+    # redundancy -- output_not_icontains banning a substring case-
+    # insensitively always also satisfies output_not_contains banning the
+    # same substring case-sensitively, the same logic as the already-
+    # covered positive-direction pair, but the first draft only checked
+    # that positive direction.
+    expected = {"output_not_contains": ["Foo"], "output_not_icontains": ["foo"]}
+    findings = L.check_unsatisfiable_assertion_pair(expected)
+    assert len(findings) == 1
+    key, value, rule, detail = findings[0]
+    assert key == "output_not_icontains"
+    assert rule == "redundant-assertion-pair"
+
+
 def test_unsatisfiable_pair_passes_empty_expected():
     assert L.check_unsatisfiable_assertion_pair({}) == []
 

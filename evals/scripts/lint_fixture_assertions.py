@@ -446,9 +446,23 @@ def check_unsatisfiable_assertion_pair(expected: dict) -> list[tuple[str, str, s
     See the module docstring's check 5b for the full reasoning, including
     why the mirrored ``output_not_contains``/``output_icontains`` direction
     is deliberately NOT flagged (it is satisfiable, unlike this direction).
+
+    An adversarial code review (issue #628) caught two gaps in this
+    function's first draft, both fixed here: (1) ``output_icontains`` and
+    ``output_not_icontains`` naming the identical casefolded substring is
+    itself an unconditional contradiction (both keys already match
+    case-insensitively, so requiring and banning the same folded value can
+    never both hold) -- the first draft only built its literal-requirement
+    set from ``output_contains``/``output_contains_near``, missing this
+    most-direct case entirely; (2) ``output_not_contains`` and
+    ``output_not_icontains`` naming the identical casefolded substring is
+    redundant the same way the positive-direction pair is (the stronger,
+    case-insensitive ban always subsumes the weaker, case-sensitive one on
+    that substring) -- the first draft only checked the positive direction.
     """
     contains = [v for v in (expected.get("output_contains") or []) if isinstance(v, str)]
     icontains = [v for v in (expected.get("output_icontains") or []) if isinstance(v, str)]
+    not_contains = [v for v in (expected.get("output_not_contains") or []) if isinstance(v, str)]
     not_icontains = [v for v in (expected.get("output_not_icontains") or []) if isinstance(v, str)]
     near_members = [
         v for entry in (expected.get("output_contains_near") or [])
@@ -457,39 +471,51 @@ def check_unsatisfiable_assertion_pair(expected: dict) -> list[tuple[str, str, s
         if isinstance(v, str)
     ]
 
-    require_literal: dict[str, str] = {}
-    for value in contains + near_members:
-        require_literal.setdefault(value.casefold(), value)
+    # Anything that guarantees the substring's casefolded form is present:
+    # a literal-presence requirement (output_contains, or a
+    # output_contains_near "all" member, which the near-check also
+    # requires to be literally present), OR output_icontains itself
+    # (which already matches case-insensitively).
+    require_casefolded_presence: dict[str, str] = {}
+    for value in contains + near_members + icontains:
+        require_casefolded_presence.setdefault(value.casefold(), value)
     not_icontains_by_fold: dict[str, str] = {}
     for value in not_icontains:
         not_icontains_by_fold.setdefault(value.casefold(), value)
 
     findings: list[tuple[str, str, str, str]] = []
-    for folded, required in require_literal.items():
+    for folded, required in require_casefolded_presence.items():
         banned = not_icontains_by_fold.get(folded)
         if banned is not None:
             findings.append((
                 "output_not_icontains", banned, "unsatisfiable-assertion-pair",
                 f"{required!r} is required (via output_contains/"
-                f"output_contains_near) and {banned!r} is banned "
-                f"case-insensitively for the same substring -- satisfying "
-                f"the requirement guarantees the ban fails, so this "
-                f"fixture can never score 1.0"))
+                f"output_contains_near/output_icontains) and {banned!r} is "
+                f"banned case-insensitively for the same substring -- "
+                f"satisfying the requirement guarantees the ban fails, so "
+                f"this fixture can never score 1.0"))
 
-    contains_by_fold: dict[str, str] = {}
-    for value in contains:
-        contains_by_fold.setdefault(value.casefold(), value)
-    seen_redundant: set[str] = set()
-    for value in icontains:
-        folded = value.casefold()
-        matched = contains_by_fold.get(folded)
-        if matched is not None and folded not in seen_redundant:
-            seen_redundant.add(folded)
-            findings.append((
-                "output_icontains", value, "redundant-assertion-pair",
-                f"{value!r} duplicates output_contains: {matched!r} (same "
-                f"substring, case-insensitively) -- the icontains form "
-                f"alone already covers it"))
+    def _redundant_pairs(strong: list[str], weak: list[str], strong_key: str, weak_key: str):
+        strong_by_fold: dict[str, str] = {}
+        for value in strong:
+            strong_by_fold.setdefault(value.casefold(), value)
+        seen: set[str] = set()
+        for value in weak:
+            folded = value.casefold()
+            matched = strong_by_fold.get(folded)
+            if matched is not None and folded not in seen:
+                seen.add(folded)
+                findings.append((
+                    strong_key, matched, "redundant-assertion-pair",
+                    f"{matched!r} ({strong_key}) duplicates {weak_key}: "
+                    f"{value!r} (same substring, case-insensitively) -- the "
+                    f"{strong_key} form alone already covers it"))
+
+    # Same-polarity redundancy, both directions: the case-insensitive form
+    # (icontains/not_icontains) alone already covers the case-sensitive
+    # form (contains/not_contains) for the identical folded substring.
+    _redundant_pairs(icontains, contains, "output_icontains", "output_contains")
+    _redundant_pairs(not_icontains, not_contains, "output_not_icontains", "output_not_contains")
     return findings
 
 
