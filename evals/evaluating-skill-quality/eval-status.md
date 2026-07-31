@@ -753,3 +753,42 @@ capped subagent-delegation-escalation paragraph) closes a gap
 self-flagged, rather than opening one. `check_skill_shape.py`: 58/58.
 Full record, per-fixture scores, and the investigated-regression writeup:
 `evals/evaluating-skill-quality/split.md`'s Kept-edit log. Refs #614.
+
+**Issue #619 (three new evaluation criteria from issue #614's own
+cycle):** `references/rubric.md` gained three new checks -- a
+Declaration-vs-structure fit precondition-check paragraph (does a Broad/
+Frontier-declared skill near its own body line-limit ceiling, with
+Adaptive-shaped content, disclose that tradeoff), and two named
+Fail-bullet examples (correction-narration "sediment," same-rule-
+restated-in-full "duplication"). New content, so this went through
+`scorer-gated-skill-edits`' ordinary (not pruning-only) gate: strict
+improve-or-reject on the paired mean, ties rejected. 6 fixtures freshly
+paired-scored via isolated `claude -p` dispatches (direct sequential Bash
+calls, not a `Workflow` fan-out, per the prior iteration's own disclosed
+classifier-block experience) -- paired mean 0.875000 -> 0.958333, zero
+regressions, driven primarily by the motivating fixture directly
+demonstrating the new check's discriminating power (0.75 -> 1.0). The
+remaining 24 selection fixtures were reasoned content-disjoint by
+inspection rather than live-scored (the diff is a near-pure insertion
+touching no existing clause's wording). Two dispatch-methodology gaps
+were found and fixed before any usable score existed: the ad hoc
+isolated copy has no plugin/marketplace registration, so the Skill tool
+cannot auto-discover the target skill by name (silently affected 7 of the
+prior iteration's own 44 unit outputs, undetected at the time); and one
+fixture's prompt reproducibly caused the dispatched instance to hang
+trying to literally follow the target skill's own Subagent-dispatch step
+from inside an already-isolated context. A diff-scoped
+`battle-testing-a-skill` pass took three rounds to reach PASS: round 1
+and round 2 each found real, textually-concrete gaps (a disclosure check
+that tested presence, not substance, letting a token sentence rubber-
+stamp past it; a duplication threshold that cited a stricter authority
+than it actually enforced; a missing escalation-on-uncertainty default;
+a conflict with the pre-existing Progressive-disclosure co-location
+rule) -- all fixed and re-verified live before round 3 returned a clean
+PASS. A diff-scoped self-review independently re-derived
+**WELL-FORMED-AND-MATURE**, naming one non-blocking dimension-8 gap
+(missing `metadata/gitapex.yaml` decision/audit entry, closed by this
+same commit) and one soft, non-blocking dimension-2/5 observation.
+`check_skill_shape.py`: 58/58. Full record, per-fixture scores, and the
+three battle-test rounds' findings: `evals/evaluating-skill-quality/
+split.md`'s Kept-edit log. Refs #619.

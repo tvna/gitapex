@@ -224,6 +224,23 @@ spec:
       outcome:
         verdict: WELL-FORMED-AND-MATURE
         battle_test: PASS
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/619"
+      summary: "Added three references/rubric.md checks issue/614's own cycle motivated: Declaration-vs-structure fit (a Broad/Frontier skill near its own body ceiling with Adaptive-shaped content needs a disclosed tradeoff) plus named sediment and duplication Fail-bullet examples. SKILL.md unchanged; capabilityAssumption stays Broad."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/619"
+      summary: "scorer-gated-skill-edits ordinary gate: 6 fixtures freshly paired-scored via isolated claude -p dispatches, paired mean 0.875->0.958333, zero regressions. Remaining 24 selection fixtures reasoned content-disjoint by inspection (near-pure-insertion diff). Full record: split.md."
+      outcome:
+        verdict: KEEP
+        before: 0.875
+        after: 0.958333
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/619"
+      summary: "Diff-scoped battle-testing-a-skill took 3 rounds to PASS: rounds 1-2 each found real gaps (disclosure tested presence not substance; duplication threshold weaker than its own cited authority; missing uncertainty default; a co-location conflict), all fixed and re-verified live. Diff-scoped self-review: WELL-FORMED-AND-MATURE."
+      outcome:
+        verdict: WELL-FORMED-AND-MATURE
+        battle_test: PASS
+        battle_test_rounds: 3
   skillDependencies:
     requires: []
     relatedTo:

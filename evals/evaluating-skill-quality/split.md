@@ -2908,3 +2908,180 @@ further nested-dispatch scaling mid-run -- disclosed above, not hidden.
 An independent scoped adversarial pass (battle-testing-a-skill's lens
 applied to the diff) returned PASS and specifically cleared the one
 non-narrative substantive change.
+
+**Iteration: gitapex#619, three new evaluation criteria from issue
+#614's own cycle.** Candidate edit: three new checks added to
+`references/rubric.md`, motivated by gaps the issue #614 trim cycle
+itself surfaced -- (1) a **Declaration-vs-structure fit** precondition-
+check paragraph in the Capability assumption section (does a Broad/
+Frontier-declared skill near its own body line-limit ceiling, with
+Adaptive-shaped content, disclose that tradeoff -- the exact gap
+`evaluating-skill-quality`'s own `SKILL.md` had at 497-498/500 lines
+until an operator asked); (2) a named "sediment" Fail-bullet example for
+correction-history narration, grounded in Anthropic's Claude Opus 5
+self-correction guidance; (3) a named "duplication" Fail-bullet example
+for the same rule restated in full at multiple sites, grounded in this
+same file's own issue/614 hedge-triplication finding. `SKILL.md` itself
+is unchanged; `capabilityAssumption` stays `Broad`.
+
+**Classification: ordinary, not pruning-only.** New gradeable content is
+added (three checks), not only deletion/rewording -- the strict
+improve-or-reject gate applies, ties rejected at the aggregate level.
+
+Pre-edit snapshot pinned at `28a0d75b6da4d05aa0738fbe60afb8898d28d623`
+(the merge commit this branch restarted from, post-#614) via `git show`;
+post-edit snapshot committed through
+`56ea2bc5fa8b9b71c14e04ca1bd77c5d046e2e3f`.
+
+**Gate result.** Isolated `claude -p` dispatches (this session's own
+verified isolation recipe, `references/adversarial-self-audit.md`'s
+Isolation verification registry), run as direct sequential/small-batch
+Bash calls rather than a `Workflow` fan-out -- the prior iteration's own
+disclosed classifier-block experience motivated staying off that pattern
+this cycle. Two methodology fixes were needed before dispatches produced
+real output: (a) the ad hoc isolated copy has no
+`.claude-plugin/marketplace.json`, so the Skill tool cannot auto-discover
+`evaluating-skill-quality` by name -- 7 of the prior iteration's own 44
+unit outputs already show this same "I couldn't find a skill" failure,
+undetected at the time; fixed by instructing the dispatched instance to
+read `SKILL.md` directly instead of relying on Skill-tool discovery; (b)
+one fixture (`declaration-structure-fit-selection.yaml`) reproducibly
+produced empty output or a bare "Execution error" across 3 attempts even
+with a 500s timeout, traced to the dispatched instance attempting to
+follow the target skill's own "Subagent dispatch" step literally (i.e.
+trying to call the Agent/Task tool from inside an already-isolated
+`claude -p`, which hangs) -- fixed by explicitly instructing the
+dispatched instance that it IS the isolated reviewer a subagent dispatch
+would create, and not to attempt a further nested dispatch. After both
+fixes, all 12 dispatches (6 fixtures x before/after) completed with real,
+substantive, non-empty output. Scored the 3 new fixtures plus a 3-fixture
+regression sample from the pre-existing selection split touching
+dimension-2/Capability-assumption content
+(`capability-assumption-frontier-flags-explanation.yaml`,
+`ablation-capability-runner-exists-not-run.yaml`,
+`opus5-redundant-verification-generalizes.yaml`).
+
+| Fixture | Before | After |
+|---|---|---|
+| `declaration-structure-fit-selection.yaml` | 0.750000 | 1.000000 |
+| `sediment-correction-narration-selection.yaml` | 1.000000 | 1.000000 |
+| `duplication-repeated-restatement-selection.yaml` | 0.750000 | 1.000000 |
+| `capability-assumption-frontier-flags-explanation.yaml` | 1.000000 | 1.000000 |
+| `ablation-capability-runner-exists-not-run.yaml` | 1.000000 | 1.000000 |
+| `opus5-redundant-verification-generalizes.yaml` | 0.750000 | 0.750000 |
+| `edge.yaml` | not re-scored this iteration (see reasoning below) | not re-scored this iteration |
+| `mechanism-fit-subagent.yaml` | not re-scored this iteration | not re-scored this iteration |
+| `third-party-not-authoritative.yaml` | not re-scored this iteration | not re-scored this iteration |
+| `scoring-axis-uncontrolled-speed-claim.yaml` | not re-scored this iteration | not re-scored this iteration |
+| `ordering-rule-totality-distinct-skill.yaml` | not re-scored this iteration | not re-scored this iteration |
+| `blind-spot-pass-generalizes.yaml` | not re-scored this iteration | not re-scored this iteration |
+| `model-effort-tier-fit-unjustified-effort.yaml` | not re-scored this iteration | not re-scored this iteration |
+| `portability-issue-number-citation.yaml` | not re-scored this iteration | not re-scored this iteration |
+| `heldout-vague-completion.yaml` | not re-scored this iteration | not re-scored this iteration |
+| `tool-capability-verification-selection.yaml` | not re-scored this iteration | not re-scored this iteration |
+| `consumer-repo-convention-deference-selection.yaml` | not re-scored this iteration | not re-scored this iteration |
+| `compatibility-devin-trigger-selection.yaml` | not re-scored this iteration | not re-scored this iteration |
+| `compatibility-openclaw-gate-selection.yaml` | not re-scored this iteration | not re-scored this iteration |
+| `compatibility-independent-blocker-selection.yaml` | not re-scored this iteration | not re-scored this iteration |
+| `compatibility-conflicting-allowed-tools-semantics-selection.yaml` | not re-scored this iteration | not re-scored this iteration |
+| `compatibility-documentation-silence-unknown-selection.yaml` | not re-scored this iteration | not re-scored this iteration |
+| `compatibility-undeclared-runtime-extension-selection.yaml` | not re-scored this iteration | not re-scored this iteration |
+| `cohesion-temporal-grouping-selection.yaml` | not re-scored this iteration | not re-scored this iteration |
+| `reference-load-precision-selection.yaml` | not re-scored this iteration | not re-scored this iteration |
+| `opus5-unbounded-subagent-generalizes.yaml` | not re-scored this iteration | not re-scored this iteration |
+| `confidentiality-awareness-selection.yaml` | not re-scored this iteration | not re-scored this iteration |
+| `confidentiality-awareness-payment-data-selection.yaml` | not re-scored this iteration | not re-scored this iteration |
+| `confidentiality-awareness-mnpi-selection.yaml` | not re-scored this iteration | not re-scored this iteration |
+| `confidentiality-awareness-trade-secret-selection.yaml` | not re-scored this iteration | not re-scored this iteration |
+| **Paired mean (6 fixtures freshly scored this iteration)** | **0.875000** | **0.958333** |
+
+Strict improvement on the live paired sample (0.875000 -> 0.958333), zero
+regressions across all 6, driven primarily by the motivating fixture
+(`declaration-structure-fit-selection.yaml`, 0.75 -> 1.0) directly
+demonstrating the new check's discriminating power; the other two new
+fixtures tie or improve, never regress.
+
+**Remaining 24 selection fixtures**: not live re-scored this iteration.
+Reasoned by inspection instead: the `rubric.md` diff is a near-pure
+insertion (47 lines added across the initial commit; the one existing
+line touched only had new clauses appended after its existing content,
+confirmed by `git diff 28a0d75` -- no existing clause's wording was
+altered), and none of these 24 fixtures' `expected` blocks or
+target-skill prompts reference declaration-vs-structure fit, sediment/
+correction-narration, or same-rule-duplication topics -- unlikely to be
+sensitive to this diff, but this is inspection, not a live score, and is
+disclosed as the weaker form of evidence it is (the same disclosed-weaker
+convention this file's own issue/614 entry established for its 14
+inspection-reasoned fixtures).
+
+**Adversarial verification (`battle-testing-a-skill`, diff-scoped, three
+rounds).** Round 1 (against the initial 3-check addition): **FAIL**. Two
+real, textually-concrete gaps: the Declaration-vs-structure-fit check's
+Fail bar tested only presence of a disclosure sentence, not its
+substance, letting a token "we considered Adaptive" sentence pass; and
+the new duplication bullet cited Contract discipline's "never both" (a
+literal 2-site rule) as its authority while enforcing a weaker "three or
+more sites" bar, permitting one full duplication its own cited rule
+already forbids. Both fixed (disclosure bar now requires naming content
+responsible for a meaningful share of the near-ceiling body and a real
+cost/benefit reason, not a bare assertion; threshold lowered to 2+ sites
+to match its own cited authority). Round 2 (against the round-1 fix):
+**FAIL**. Three further gaps: the disclosure bar's *reason* component
+still lacked a substantive-adequacy test (fixed alongside round 1's
+re-fix, same edit); the check's two judgment calls ("meaningful
+fraction," "at least as well") had no escalation-on-uncertainty default,
+unlike this skill's own sibling `battle-testing-a-skill` convention
+(fixed: added an explicit "if unsure, treat as firing" default); and the
+new duplication bullet conflicted with dimension 5's pre-existing
+co-location rule for content that legitimately must appear at
+independently-reachable entry points (fixed: added a narrow carve-out
+distinguishing a short, deliberately-repeated critical warning
+(co-location) from restating an extended rule in full (duplication)).
+Round 3 (against the round-2 fix): **PASS**. Both exploits the task
+specifically hypothesized (token disclosure sentence; false "no ceiling
+pressure" claim) are explicitly named and closed in the diff's own text;
+the two new Fail-bullet examples are consistent with, and correctly
+cross-referenced against, this file's pre-existing sediment/duplication/
+co-location/"never both" wording. One disclosed, non-blocking
+observation: the Declaration-vs-structure-fit check's trigger is scoped
+to near-ceiling bodies only (a bounded design limitation matching its one
+historical worked precedent, not an exploitable gap). Each fixture
+re-verification after the round-1 and round-2 fixes confirmed no
+regression (`declaration-structure-fit-selection.yaml` and
+`duplication-repeated-restatement-selection.yaml` both held or improved
+after each fix -- see the gate table above, which reflects the final,
+post-round-2-fix state).
+
+**Self-review** (this skill applied to itself, diff-scoped, isolated
+dispatch, same fixed methodology as the gate above). **WELL-FORMED-AND-
+MATURE.** Independently re-derived (not deferring to the battle-test's
+own PASS) that the "2+ sites" threshold now matches its cited "never
+both" authority, and that the escalation-on-uncertainty default is
+correctly fail-closed. One real, named, non-blocking dimension-8 gap:
+this diff (three new checks, two disclosed battle-test rounds) had no
+corresponding `decision`/`audit` entry in `metadata/gitapex.yaml` at
+review time, unlike every comparable precedent in the same sidecar --
+closed by this same commit's own decision+audit entries below. One
+soft, non-blocking dimension-2/5 observation: the new duplication
+carve-out's use of "co-location" extends, rather than restates, dimension
+5's existing co-location text (a "reasoned extension," not a
+contradiction) -- flagged for a maintainer's eye, not treated as a
+finding.
+
+**Deterministic checks:** `check_skill_shape.py` 58/58 after every round
+of edits (final committed state).
+
+**Transfer check:** not run this iteration, the same disclosed,
+unresolved gap every entry in this log since issue #200 has carried
+forward.
+
+**KEEP.** Strict improvement on the live paired sample (0.875000 ->
+0.958333, zero regressions across 6 fixtures), a battle-test that
+initially found and required two real rounds of fixes before reaching a
+genuine PASS (not accepted at face value), and a self-review that
+independently re-derived the same conclusions rather than deferring to
+the battle-test's own verdict. Live coverage is partial (6 of 30
+selection fixtures freshly paired-scored, plus 24 reasoned by inspection
+based on a near-pure-insertion diff and topic disjointness), disclosed
+rather than hidden, matching this file's own established convention for
+partial-coverage iterations.
