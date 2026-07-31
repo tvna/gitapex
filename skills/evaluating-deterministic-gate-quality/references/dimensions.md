@@ -27,23 +27,13 @@ established for this build rather than left implicit:
 1. [Deterministic-shape checks](#deterministic-shape-checks)
 2. [Probabilistic-maturity dimensions](#probabilistic-maturity-dimensions)
 
-This numbering is a re-derivation for this skill's own build, not a
-verbatim carry-over of any prior draft's numbering -- one dimension from
-an earlier draft (trust/blast-radius classification) was promoted out of
-this list into its own axis in `SKILL.md`, since it earns the same
-cross-cutting treatment as Compatibility awareness and Reproducibility,
-not a single-artifact check.
-
-A fourth cross-cutting axis, Security-level / Zero-Trust maturity
-classification, was added later still, directly in `SKILL.md` -- not
-promoted out of this numbered list, since it was never one of these
-dimensions. It classifies a gate's control strength against an external
-Foundation/Enterprise/Advanced maturity ladder, a different question from
-dimension 1 (non-bypassable deny path) or dimension 15 (fail-closed
-default) below: those ask whether a gate's own mechanics realize a
-property at all; the axis asks where the resulting control honestly sits
-on that ladder given that they do or don't. See `SKILL.md`'s own axis
-section and `references/security-level.md` for the full test.
+This numbering is a re-derivation for this skill's own build: one earlier
+dimension (trust/blast-radius classification) was promoted into its own
+`SKILL.md` axis, and a fourth cross-cutting axis (Security-level /
+Zero-Trust maturity classification) was added later still, directly in
+`SKILL.md` rather than as a numbered dimension here. See `SKILL.md`'s own
+axis section and `references/security-level.md` for the full test and its
+differentiation from dimensions 1 and 15 below.
 
 ## Deterministic-shape checks
 
@@ -249,12 +239,10 @@ section and `references/security-level.md` for the full test.
     change that holds the gate's own deny / self-revalidation / fail-closed
     behavior fixed while reducing its cost. A gate's own comment, docstring,
     or commit message claiming its cost is "already optimized" is not
-    itself evidence for this dimension -- the same empirical-verification
-    discipline dimension 10 applies to a claimed deny/allow outcome applies
-    here to a claimed cost: ground the finding in a direct reading of the
-    actual code path (does it really skip the network round-trip, the full
-    scan, or the cold start the claim describes?) or a live measurement,
-    never the claim alone.
+    itself evidence -- apply dimension 10's empirical-verification
+    discipline to a claimed cost too: ground the finding in a direct
+    reading of the actual code path or a live measurement, never the claim
+    alone.
     *Domains:* generalizes with adaptation. Agent-harness hook: does the
     hook re-run expensive recomputation on every matching tool call, or
     scope/cache to only the changed surface since its last run? CI job

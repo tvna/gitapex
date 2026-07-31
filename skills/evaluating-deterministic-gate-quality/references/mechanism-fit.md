@@ -77,9 +77,6 @@ CLAUDE.md content, or a human review step, not a deterministic gate; this
 finding is itself the item's verdict (`SKILL.md` Procedure step 6) -- and
 do not proceed to Domain placement below, the axes, the three-way
 division of responsibility, or Procedure steps 3-5 for that policy.
-Continuing past a "no gate" verdict to grade a domain placement that was
-never warranted wastes exactly the context this two-question split
-exists to avoid spending.
 
 ## Domain placement
 

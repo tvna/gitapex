@@ -6,7 +6,10 @@ and issue number below is gitapex's own -- an illustrative example of the
 portable categories in `SKILL.md` and `references/`, not an assumption
 that a target repository being reviewed has the same layout. Substitute
 the target's actual equivalents; do not expect these specific files to
-exist elsewhere.
+exist elsewhere. Every elided issue number in a quote below is recorded
+once in `metadata/gitapex.yaml`'s sidecar, per this skill's own
+no-bare-citation rule for body prose -- in-body mentions are marked
+`[elided]` rather than repeating that rule each time.
 
 Source: `docs/superpowers/reports/2026-07-27-hook-evaluation-quality-research.md`
 (the adversarially-verified research report this skill's model is built
@@ -37,11 +40,10 @@ repository:
 | `.github/scripts/gate_acm_issue_disclosure.py` | 3 (CI/CD) | Environment-independent -- fires on the `issues` webhook regardless of which client created the issue |
 
 `gate_acm_issue_disclosure.py`'s own docstring states the rationale for
-needing all three explicitly (lines 5-12; verbatim except the two elided
-backing-issue numbers, moved to this skill's own `metadata/gitapex.yaml`
-sidecar per this skill's own no-bare-citation rule for body prose):
-"[a prior investigation] found that no workflow in this repository
-triggers on `issues:` events, so a missing ACM on an issue body... had no
+needing all three explicitly (lines 5-12; verbatim except two `[elided]`
+backing-issue numbers): "[a prior investigation] found that no workflow
+in this repository triggers on `issues:` events, so a missing ACM on an
+issue body... had no
 universal, environment-independent backstop -- only a per-session
 skill-trigger (probabilistic) and a PreToolUse hook (the paired
 agent-harness hook mentioned above, which only fires where this repo's
@@ -61,9 +63,8 @@ Dimension 15 (fail-closed default) applied to a real gate.
 ## Worked example: retrospective-identity, single-source-of-truth predicate
 
 `.github/scripts/scan_retrospective_gate_drift.py`'s own docstring (lines
-4-8; verbatim except the four elided issue numbers, moved to this
-skill's own `metadata/gitapex.yaml` sidecar per this skill's own
-no-bare-citation rule for body prose): "[an issue, itself referencing
+4-8; verbatim except four `[elided]` issue numbers): "[an issue, itself
+referencing
 three earlier ones]: `merge-retrospective`'s Step 0 requires, every
 cycle, a manual search of every `retrospective`-labelled issue for a
 commit on `main` citing it. [The first of those earlier issues] proposed
@@ -82,10 +83,9 @@ drift-detecting meta-gate, not only a one-time audit.
 
 ## Worked example: dimension 12 (deployment-mode portability) and sibling-repository provenance
 
-`.github/scripts/gate_owasp_asi_mapping.py:4` (verbatim except the elided
-backing-issue number, moved to this skill's own `metadata/gitapex.yaml`
-sidecar per this skill's own no-bare-citation rule for body prose):
-"[an issue] ports `tvna/claude-md`'s OWASP Agentic Top 10 mapping..." --
+`.github/scripts/gate_owasp_asi_mapping.py:4` (verbatim except one
+`[elided]` backing-issue number): "[an issue] ports `tvna/claude-md`'s
+OWASP Agentic Top 10 mapping..." --
 `.github/scripts/gate_owasp_llm_mapping.py:6-11` (verified verbatim)
 calls itself "a **sibling** gate to `gate_owasp_asi_mapping.py`, not an
 extension of it... Same discipline as the ASI gate -- completeness only...
@@ -122,10 +122,8 @@ prove the procedure can surface, not something staged for this record.
 `PreToolUse`, matcher `mcp__github__issue_write`, timeout 10s. Its
 top-level `description` states it "backs [a specific issue, itself a
 sub-issue of an earlier one]: blocking a new-issue-creation tool call
-whose body lacks an Acceptance Criteria Map or an explicit waiver" (the
-two elided issue numbers are recorded in this skill's own
-`metadata/gitapex.yaml` sidecar, per this skill's own no-bare-citation
-rule for body prose). The hook shells out to its sibling
+whose body lacks an Acceptance Criteria Map or an explicit waiver" (two
+`[elided]` issue numbers). The hook shells out to its sibling
 `check_acm_present_or_waiver.py` and denies via `exit 2` if absent. This
 is a Domain-2 artifact paired with a documented Domain-3 CI backstop
 (`.github/workflows/acm-issue-gate.yml` +
@@ -222,10 +220,9 @@ proving this skill's own procedure works -- not something introduced by
 this skill's build. Fixing `hooks/check-issue-acm-disclosure.sh` itself
 is out of this PR's own scope (a different artifact, a different
 concern, and CLAUDE.md's own "touch only what the active task requires"
-convention) -- filed instead as its own follow-up issue (recorded in
-this skill's own `metadata/gitapex.yaml` sidecar, per this skill's own
-no-bare-citation rule for body prose) per this repository's own "open a
-GitHub issue before any branch, commit, or PR" convention.
+convention) -- filed instead as its own follow-up issue (`[elided]`) per
+this repository's own "open a GitHub issue before any branch, commit, or
+PR" convention.
 
 ## Worked example: Security-level / Zero-Trust maturity classification axis (this repository's own established ceiling)
 
@@ -294,9 +291,7 @@ verdict for this exact hook (`LLM05 Improper Output Handling`:
 `partially covered`, coverage scoped to specific sinks with named gaps) --
 the security-level axis's own verdict is corroborated by, not contradicted
 by, the already-shipped control inventory. The defect is already filed as
-its own follow-up issue (recorded in this skill's own
-`metadata/gitapex.yaml` sidecar, per this skill's own no-bare-citation
-rule for body prose).
+its own follow-up issue (`[elided]`).
 
 **Verdict:** This control does **not** honestly clear Foundation today.
 The ACM-disclosure category itself is tier-scalable and, once the
@@ -414,21 +409,10 @@ dimension's own verification-mandate clause.
 
 ## Audit history: Security-level axis hardening round
 
-Two fresh, isolated audit rounds hardened the fourth axis (Security-level
-/ Zero-Trust maturity classification) after it was first added, per this
-skill's own Subagent-dispatch requirement -- a standard
-`evaluating-skill-quality` + `battle-testing-a-skill` pass, then a
-Fable-model blind-spot analysis followed by eight adversarial trials
-against mock hostile repositories, synthesized by an independent
-re-verification dispatch. Both rounds found real gaps, not a clean pass.
-All findings are now fixed, across `SKILL.md`'s Stop boundaries,
-`references/grading-procedure.md`, `references/security-level.md`, and
-`references/dimensions.md`. This section is not the place for the
-round-by-round finding narrative: that history has no bearing on
-applying this skill to a target gate today, and duplicating it here
-alongside `metadata/gitapex.yaml`'s own account is exactly the
-duplication this skill's own dimension 12 warns against. Further build
-history: `metadata/gitapex.yaml`'s `spec.references` and
-`spec.lifecycle.experimental.reason` (maintainer-facing, not
-auto-loaded -- the correct home for this kind of record, not a
-`references/` file every reviewer applying this skill loads).
+Two fresh, isolated audit rounds (a standard `evaluating-skill-quality` +
+`battle-testing-a-skill` pass, then a Fable-model blind-spot analysis plus
+eight adversarial trials) hardened the fourth axis after it was first
+added; both found real gaps, now all fixed across `SKILL.md`'s Stop
+boundaries, `references/grading-procedure.md`, `references/security-level.md`,
+and `references/dimensions.md`. Round-by-round detail:
+`metadata/gitapex.yaml`'s `spec.references`.
