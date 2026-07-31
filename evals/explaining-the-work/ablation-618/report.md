@@ -59,6 +59,57 @@ merged into #612 -- it is a measurement artifact on its own branch.
 Mean: old 0.860000, new 0.860000 -- identical means, driven by an apparent
 regression and an apparent improvement that cancel out.
 
+## Character-count effect (issue #618 follow-up question)
+
+The substring-assertion score above says nothing about *length* -- a
+follow-up question asked whether #612 measurably shortened (or lengthened)
+the generated artifacts. Two distinct things were measured, since they point
+in different directions:
+
+**`SKILL.md` itself grew, substantially, not shrank.** `main` (pre-#612):
+3,623 chars / 78 lines. PR #612 tip: 7,696 chars / 140 lines -- +4,073
+chars / +62 lines (+~112%), across all three commits (+24, +30, +8 net
+lines respectively). This is expected and was never the goal: #612 adds
+citation corrections and governance grounding (more accurate prose), not a
+trim -- a size *reduction* was never the intended effect here, unlike, say,
+a "trim narrative bloat" PR elsewhere in this repo's history.
+
+**The generated commit message itself (the artifact the Commit-log bullet's
+"terse Why, not the full Why" rule actually governs) got shorter under the
+new text, consistently, across all 5 real-script scenarios** -- isolating
+just the commit-message code block from each of the 10 saved dispatch
+transcripts:
+
+| Script | Old commit msg (chars) | New commit msg (chars) | Diff |
+|---|---|---|---|
+| `score_contract.py` | 361 | 360 | -1 |
+| `gate_split_fixture_coverage.py` | 470 | 453 | -17 |
+| `run_ablation.py` | 366 | 349 | -17 |
+| `check_skill_shape.py` | 423 | 293 | -130 |
+| `lint_fixture_assertions.py` | 378 | 333 | -45 |
+
+Total: 1,998 -> 1,788 chars, a **-210 char / ~10.5% reduction**, and every
+single one of the 5 scenarios moved the same direction (shorter or flat,
+never longer) -- not a mixed/noisy result. Spot-checked for substance, not
+just length (e.g. `check_skill_shape.py`'s -130 chars): the new-text commit
+message ("Reject real model IDs as illustrative SKILL.md content ... A real
+model identifier reads as a concrete example, but it goes stale the moment
+that model is superseded, and it duplicates the staleness check
+gate_provenance_disclosure.py already performs.") still carries the same
+two real reasons as the old-text version, just phrased more economically --
+this reads as a genuine terseness effect, not information loss.
+
+Caveat, disclosed rather than overclaimed: n=5, one dispatch per cell (not
+averaged over repeated trials), so this is suggestive, not a statistically
+robust effect size -- consistent with this repository's own disclosed
+single-dispatch-per-fixture limitation elsewhere in `split.md`. The whole-
+response character counts (including surrounding prose/explanation, not
+just the commit-message block) moved the *opposite* direction in 4 of 5
+cases (see the raw dispatch `.txt` files) -- the new text's added citation
+apparatus appears to make the model *explain itself* more, while the actual
+commit artifact it produces got more concise. These are two different
+things and neither contradicts the other.
+
 ## Honest interpretation -- not a real effect, a scorer-construct artifact
 
 The `score_contract.py` "regression" (1.0 -> 0.75) and the
