@@ -792,3 +792,23 @@ same commit) and one soft, non-blocking dimension-2/5 observation.
 `check_skill_shape.py`: 58/58. Full record, per-fixture scores, and the
 three battle-test rounds' findings: `evals/evaluating-skill-quality/
 split.md`'s Kept-edit log. Refs #619.
+
+**Correction to the #619 entry above:** the `0.875000 -> 0.958333, zero
+regressions` gate result was measured via simulated dispatch (the
+isolated copy lacked a plugin/marketplace registration, so dispatches
+read `SKILL.md` directly and reasoned in prose instead of invoking a real
+subagent). Once that tooling gap was fixed and the 3 new/motivating
+fixtures were re-run under genuine dispatch, only
+`declaration-structure-fit-selection.yaml` held (0.75 -> 1.0, confirmed).
+`sediment-correction-narration-selection.yaml` regressed under real
+dispatch (1.0 -> 0.75, cause not fully resolved -- the real review fixes
+the defect but grounds it in a sibling skill's vocabulary rather than
+this rubric's own "sediment" term) and
+`duplication-repeated-restatement-selection.yaml` showed no measured
+benefit (0.5 -> 0.5 on both, likely a fixture-design gap rather than a
+useless check). The `KEEP` verdict stands -- the battle-test and
+self-review findings didn't depend on the simulated numbers -- but the
+"zero regressions" claim is retracted for two of the three checks pending
+better fixtures or further investigation. Full writeup: `evals/
+evaluating-skill-quality/split.md`'s Kept-edit log, "Correction, same
+iteration" subsection. Refs #619.

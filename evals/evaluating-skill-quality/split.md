@@ -3001,6 +3001,92 @@ regressions across all 6, driven primarily by the motivating fixture
 demonstrating the new check's discriminating power; the other two new
 fixtures tie or improve, never regress.
 
+**Correction, same iteration: genuine-dispatch re-verification of the
+gate above.** The isolated dispatches scored in the table above never
+actually invoked the Skill tool or a nested subagent -- the ad hoc
+isolated copy had no `.claude-plugin/marketplace.json`, so each dispatch
+was told to read `SKILL.md` directly and reason about the target in
+prose instead. That is simulated dispatch, not this skill's own real
+`Subagent dispatch` procedure. Once the marketplace file was copied into
+the isolated target and the plugin genuinely installed
+(`claude plugin marketplace add` + `claude plugin install
+gitapex@gitapex` against a scratch `HOME`), combined with
+`--permission-mode acceptEdits --allowedTools "Bash(python3 *)"
+"Bash(git *)"` to clear the Bash-approval prompt the real procedure's
+shape-checker step triggers, genuine dispatch became possible -- and was
+run against the 3 new/motivating fixtures (the ones this iteration's own
+checks are meant to catch), before/after, on the same commits pinned
+above:
+
+| Fixture | Before (real dispatch) | After (real dispatch) | Before (table above, simulated) | After (table above, simulated) |
+|---|---|---|---|---|
+| `declaration-structure-fit-selection.yaml` | 0.750000 | 1.000000 | 0.750000 | 1.000000 |
+| `sediment-correction-narration-selection.yaml` | 1.000000 | 0.750000 | 1.000000 | 1.000000 |
+| `duplication-repeated-restatement-selection.yaml` | 0.500000 | 0.500000 | 0.750000 | 1.000000 |
+
+This **retracts the "zero regressions" claim above** for two of the
+three motivating fixtures; the simulated numbers materially overstated
+the gate. Per-fixture:
+
+- **`declaration-structure-fit-selection.yaml`: CONFIRMED.** The real
+  after-dispatch report states, verbatim, `"Declaration-vs-structure-fit:
+  FAILS."`, correctly names all three trigger conditions (`Frontier`
+  declared, body at 99.6% of the line ceiling, visible content matching
+  the Adaptive-shaped-schema description), and cites this rubric's own
+  "when unsure whether it's a representative share, default to firing"
+  escalation clause by name. The strongest and only cleanly confirmed
+  result of the three.
+- **`sediment-correction-narration-selection.yaml`: regression under
+  real dispatch, cause not fully resolved.** The real after-dispatch
+  review correctly finds and fixes the exact defect (identifies the
+  parenthetical as edit-history narration, quotes it, gives the same
+  corrected sentence this fixture's train pair expects) but never uses
+  the literal word "sediment" -- it instead names the pattern via a
+  *different* real skill in this same plugin,
+  `stop-and-replan` ("exactly the anti-pattern `stop-and-replan` calls
+  out: a self-correcting phrase... kept in place instead of the record
+  just being rewritten clean"). Because the isolated target now has the
+  *whole* plugin installed (not just this one skill), the dispatched
+  reviewer has legitimate access to cross-skill grounding it didn't have
+  under the simulated methodology -- so this may be the check correctly
+  generalizing through a sibling skill's vocabulary rather than failing,
+  or it may mean this rubric's own "sediment" term isn't what's actually
+  driving the correct verdict on this fixture. Not resolved either way;
+  flagged rather than silently scored around. The fixture's
+  `output_contains: ["sediment", "narrat"]` assertion was left unchanged
+  pending that resolution -- widening it without understanding which
+  explanation is true would hide the open question, not answer it.
+- **`duplication-repeated-restatement-selection.yaml`: no measured
+  benefit from the new bullet on either tested fixture.** Both the real
+  before- and after-dispatch reviews independently name the exact same
+  defect ("the same rule... restated verbatim three times") at the same
+  severity, crediting the pre-existing dimension-2 Conciseness check, not
+  the new duplication bullet -- neither review uses "duplication" or
+  "cross-reference" as this rubric now defines them. The most likely
+  explanation is a fixture-design gap, not a useless check: both
+  fixtures describe a blatant, three-times-verbatim restatement obvious
+  enough that dimension 2 alone already catches it without needing the
+  new bullet's more specific vocabulary. A fixture built around a
+  *subtler* 2-site duplication (the new bullet's actual lowered
+  threshold, added in battle-test round 2) would more fairly test
+  whether the bullet adds discriminating power beyond dimension 2. That
+  fixture doesn't exist yet.
+
+**Disposition left open, not resolved by this correction.** Issue #619's
+own motivation for the duplication and sediment checks was grounded in
+real operator experience (this same file's hedge-triplication finding,
+Anthropic's Opus 5 self-correction guidance), not solely in fixture
+performance -- so this finding is evidence against fixture-measured
+confidence, not proof the checks themselves are wrong. Dropping either
+bullet is a scope reduction on a check issue #619 explicitly asked for;
+this write-up does not make that call. What it does establish: the
+`0.875000 -> 0.958333, zero regressions` headline above should not be
+read as confirming all three new checks under genuine dispatch --  only
+`declaration-structure-fit` is. A tooling-gap follow-up issue (the
+marketplace-copy + Bash-permission fix that made this re-verification
+possible in the first place) is filed separately so this class of gap
+gets a durable harness fix rather than a one-off repair.
+
 **Remaining 24 selection fixtures**: not live re-scored this iteration.
 Reasoned by inspection instead: the `rubric.md` diff is a near-pure
 insertion (47 lines added across the initial commit; the one existing
@@ -3075,13 +3161,20 @@ of edits (final committed state).
 unresolved gap every entry in this log since issue #200 has carried
 forward.
 
-**KEEP.** Strict improvement on the live paired sample (0.875000 ->
-0.958333, zero regressions across 6 fixtures), a battle-test that
-initially found and required two real rounds of fixes before reaching a
-genuine PASS (not accepted at face value), and a self-review that
-independently re-derived the same conclusions rather than deferring to
-the battle-test's own verdict. Live coverage is partial (6 of 30
-selection fixtures freshly paired-scored, plus 24 reasoned by inspection
-based on a near-pure-insertion diff and topic disjointness), disclosed
-rather than hidden, matching this file's own established convention for
-partial-coverage iterations.
+**KEEP, qualified by the genuine-dispatch correction above.** The
+`0.875000 -> 0.958333, zero regressions` figure reflects the initial
+gate's simulated-dispatch methodology, since retracted for two of the
+three motivating fixtures once real dispatch was run -- see "Correction,
+same iteration" above. Only `declaration-structure-fit-selection.yaml`
+is confirmed by genuine dispatch (0.75 -> 1.0, exact-reasoning match). A
+battle-test that initially found and required two real rounds of fixes
+before reaching a genuine PASS (not accepted at face value), and a
+self-review that independently re-derived the same conclusions rather
+than deferring to the battle-test's own verdict, both still stand --
+neither depended on the simulated gate numbers. KEEP reflects that this
+diff is not reverted pending the open sediment/duplication questions
+above, not that all three new checks are fixture-confirmed. Live
+coverage is partial (6 of 30 selection fixtures freshly paired-scored,
+plus 24 reasoned by inspection based on a near-pure-insertion diff and
+topic disjointness), disclosed rather than hidden, matching this file's
+own established convention for partial-coverage iterations.

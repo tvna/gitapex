@@ -241,6 +241,23 @@ spec:
         verdict: WELL-FORMED-AND-MATURE
         battle_test: PASS
         battle_test_rounds: 3
+    - kind: caveat
+      anchor: "https://github.com/tvna/gitapex/issues/619"
+      summary: "The prior audit entry's gate result (0.875->0.958333, zero regressions) was measured via simulated dispatch: the isolated copy had no plugin/marketplace registration, so dispatches read SKILL.md directly and reasoned in prose instead of invoking a real subagent. A genuine-dispatch re-run (marketplace.json copied in, plugin actually installed) retracts zero-regressions for 2 of 3 new checks. KEEP still stands. Full writeup: split.md's Kept-edit log, 'Correction, same iteration' subsection."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/619"
+      summary: "Genuine-dispatch re-verification, 3 motivating fixtures, before->after: declaration-structure-fit-selection.yaml 0.75->1.0 (confirmed, exact-reasoning match). sediment-correction-narration-selection.yaml 1.0->0.75 (regressed; real review fixes the defect but names it via a sibling skill's vocabulary, not this rubric's 'sediment' term). duplication-repeated-restatement-selection.yaml 0.5->0.5 (no measured benefit; likely fixture-design gap, not a useless check)."
+      outcome:
+        verdict: KEEP
+        declaration_structure_fit: CONFIRMED
+        sediment: REGRESSED_UNRESOLVED
+        duplication: NO_MEASURED_BENEFIT
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/619"
+      summary: "Open question 1/2, not blocking KEEP: whether sediment-correction-narration's check is actually grounded in this rubric's own 'sediment' wording, or is being caught by a different, pre-existing plugin skill's (stop-and-replan's) overlapping vocabulary instead. Fixture assertion left unchanged pending resolution -- widening it without knowing which is true would hide the question, not answer it."
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/619"
+      summary: "Open question 2/2, not blocking KEEP: whether the duplication bullet adds discriminating power beyond the pre-existing dimension-2 Conciseness check. Both tested fixtures describe an obvious 3x-verbatim restatement dimension-2 already catches; a fixture built around the bullet's actual lowered 2-site threshold would test this more fairly. That fixture doesn't exist yet."
   skillDependencies:
     requires: []
     relatedTo:
