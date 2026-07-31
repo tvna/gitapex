@@ -266,6 +266,9 @@ spec:
       summary: "Dispatch-infra fix (same class as issue/584's check_dispatch_trace.py addition), not a rubric.md edit -- scorer-gated-skill-edits' held-out gate does not apply. check_skill_shape.py 58/58, full pytest (100% coverage on the touched script). Live proof on this session's own pinned platform: no-manifest copy made run --marketplace-source/--plugin-name fail loudly (exit 2, no dispatch attempted); manifest-present copy with real plugin registration against a scratch $HOME succeeded."
       outcome:
         verdict: KEEP
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/621"
+      summary: "An independent adversarial pass over the new code found and fixed two real defects before merge: empty-string --marketplace-source/--plugin-name values fell through the mutual-requirement bool() check as if omitted, silently skipping registration (the same silent-degradation class this fix exists to close); a relative --marketplace-source was never resolved before the subprocess calls, unlike --isolated-home. Both fixed, regression-tested, re-verified live."
   skillDependencies:
     requires: []
     relatedTo:
