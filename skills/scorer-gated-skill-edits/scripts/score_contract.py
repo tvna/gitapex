@@ -7,6 +7,29 @@ returns the fraction of assertions satisfied as a deterministic ``float`` in
 external dependency. Producing the run output is out of scope: only the
 scoring step is made deterministic here.
 
+``output_icontains``/``output_not_icontains`` (issue #628) are a separate,
+opt-in, case-insensitive form of ``output_contains``/``output_not_contains``
+-- same shape (a list of substrings), matched via ``str.casefold()`` on both
+sides instead of raw ``in``. This exists because a real, twice-observed
+defect (a real-script ablation for issue #618, ``output_contains: ["test
+name"]`` failing against a response whose only occurrence was the title-cased
+heading ``**Test name**``) showed that case-SENSITIVE matching produces false
+regressions/improvements that are a scorer artifact, not a real behavioral
+difference -- the same pattern every established substring-assertion
+framework handles as a *separate, explicit* assertion type rather than a
+silent mode change (promptfoo's ``contains``/``icontains``; Hamcrest's
+``containsString``/``containsStringIgnoringCase``; AssertJ's
+``contains``/``containsIgnoringCase``). Strictly additive: ``output_contains``
+/``output_not_contains`` keep their existing case-sensitive semantics
+unchanged, and no already-banked score that used only those keys is affected.
+Not extended to ``output_contains_near``/``output_not_contains_near`` in this
+change -- the near-check's blank-line-boundary logic is a separate, higher-
+risk surface this defect never implicated; deferred, not silently dropped.
+``casefold()`` (not ``lower()``) is used for Unicode-correct caseless
+matching per Python's own docs, with the disclosed edge case that it can
+over-normalize beyond ASCII (e.g. German "straße" -> "strasse") -- irrelevant
+to this repository's ASCII-dominated assertion corpus.
+
 ``output_contains``/``output_not_contains`` check presence/absence anywhere
 in the text, independently of each other -- they cannot verify that two
 substrings are actually *bound together* (e.g. a repair's own description
@@ -115,11 +138,14 @@ def score(output_text, assertions):
 
     ``assertions`` is a mapping with optional ``output_contains`` (each
     substring must appear in ``output_text``), ``output_not_contains`` (each
-    must be absent), ``output_contains_near`` (each entry's substrings must
-    co-occur within a character window), and ``output_not_contains_near``
-    (each entry's substrings must NOT co-occur within a character window --
-    see this module's docstring for both `near` forms). Identical inputs
-    always produce the same value.
+    must be absent), ``output_icontains``/``output_not_icontains`` (the same
+    two checks, case-insensitively via ``str.casefold()`` -- see this
+    module's docstring for why this is a separate opt-in key rather than a
+    mode change on ``output_contains``), ``output_contains_near`` (each
+    entry's substrings must co-occur within a character window), and
+    ``output_not_contains_near`` (each entry's substrings must NOT co-occur
+    within a character window -- see this module's docstring for both `near`
+    forms). Identical inputs always produce the same value.
 
     A ``None`` ``output_text`` is treated as the empty string. Each list
     entry is one assertion, so a duplicated substring is weighted twice and
@@ -134,19 +160,29 @@ def score(output_text, assertions):
         )
     contains = _assertion_list(assertions, "output_contains")
     not_contains = _assertion_list(assertions, "output_not_contains")
+    icontains = _assertion_list(assertions, "output_icontains")
+    not_icontains = _assertion_list(assertions, "output_not_icontains")
     near = _near_entry_list(assertions, "output_contains_near")
     not_near = _near_entry_list(assertions, "output_not_contains_near")
-    total = len(contains) + len(not_contains) + len(near) + len(not_near)
+    total = (
+        len(contains) + len(not_contains)
+        + len(icontains) + len(not_icontains)
+        + len(near) + len(not_near)
+    )
     if total == 0:
         raise ValueError(
             "empty assertion set: a fixture with no output_contains, "
-            "output_not_contains, output_contains_near, or "
-            "output_not_contains_near cannot score a run"
+            "output_not_contains, output_icontains, output_not_icontains, "
+            "output_contains_near, or output_not_contains_near cannot score "
+            "a run"
         )
     text = output_text or ""
+    text_casefold = text.casefold()
     satisfied = (
         sum(s in text for s in contains)
         + sum(s not in text for s in not_contains)
+        + sum(s.casefold() in text_casefold for s in icontains)
+        + sum(s.casefold() not in text_casefold for s in not_icontains)
         + sum(_near_satisfied(text, entry) for entry in near)
         + sum(not _near_satisfied(text, entry) for entry in not_near)
     )

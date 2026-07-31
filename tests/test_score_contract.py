@@ -580,6 +580,65 @@ def test_main_rejects_non_finite_context_costs(tmp_path, capsys, invalid):
 
 
 # ---------------------------------------------------------------------------
+# output_icontains / output_not_icontains (issue #628): opt-in
+# case-insensitive forms of output_contains/output_not_contains.
+# ---------------------------------------------------------------------------
+
+
+def test_icontains_matches_different_case():
+    assertions = {"output_icontains": ["test name"]}
+    assert score_contract.score("The **Test name** heading", assertions) == 1.0
+
+
+def test_icontains_absent_scores_zero():
+    assertions = {"output_icontains": ["test name"]}
+    assert score_contract.score("nothing relevant here", assertions) == 0.0
+
+
+def test_not_icontains_satisfied_when_absent_any_case():
+    assertions = {"output_not_icontains": ["lgtm"]}
+    assert score_contract.score("a careful review", assertions) == 1.0
+
+
+def test_not_icontains_violated_regardless_of_case():
+    assertions = {"output_not_icontains": ["lgtm"]}
+    assert score_contract.score("LGTM ship it", assertions) == 0.0
+
+
+def test_icontains_and_not_icontains_do_not_affect_case_sensitive_keys():
+    # output_contains stays case-sensitive even when output_icontains is
+    # also present in the same assertion set -- strictly additive.
+    assertions = {
+        "output_contains": ["TEST NAME"],
+        "output_icontains": ["test name"],
+    }
+    # "TEST NAME" (exact case) is absent; "test name" (any case) is present
+    # via "**Test name**" -> 1 of 2 satisfied.
+    assert score_contract.score("The **Test name** heading", assertions) == pytest.approx(0.5)
+
+
+def test_icontains_uses_casefold_not_lower():
+    # casefold() normalizes the German sharp s; documented edge case.
+    assertions = {"output_icontains": ["strasse"]}
+    assert score_contract.score("Die Straße ist lang", assertions) == 1.0
+
+
+def test_only_icontains_assertions_is_a_valid_nonempty_set():
+    assertions = {"output_icontains": ["ok"]}
+    assert score_contract.score("OK", assertions) == 1.0
+
+
+def test_only_not_icontains_assertions_is_a_valid_nonempty_set():
+    assertions = {"output_not_icontains": ["lgtm"]}
+    assert score_contract.score("fine", assertions) == 1.0
+
+
+def test_empty_icontains_lists_alone_raise_value_error():
+    with pytest.raises(ValueError):
+        score_contract.score("anything", {"output_icontains": [], "output_not_icontains": []})
+
+
+# ---------------------------------------------------------------------------
 # Remaining branches: empty score list, TypeError-raising inputs to the
 # correctness/context-cost validators, and main()'s CLI-argument and
 # file-handling error paths (issue #562 coverage floor).
