@@ -16,15 +16,12 @@ a subagent, or a piece of prose instruction is well-authored.
 
 ## Generalize and substitute
 
-This skill's checks, domains, and axes are general categories. Any
-concrete example cited in this skill's own portable content is a stand-in
-for the pattern, not an assumption about the target repository's actual
-shape. `gitapex-worked-examples.md`, `owasp-coverage.md`, and
-`metadata/gitapex.yaml` carry this skill's own authoring repository's
-worked examples and provenance, explicitly illustrative -- substitute
-the target's actual equivalents rather than assuming any of the three
-files' specifics exist elsewhere (Stop boundaries name the matching
-hallucination risk explicitly).
+This skill's checks, domains, and axes are general categories; any concrete
+example in this skill's own content is a stand-in for the pattern.
+Substitute the target's actual equivalents rather than assuming
+`gitapex-worked-examples.md`, `owasp-coverage.md`, or `metadata/gitapex.yaml`'s
+specifics exist elsewhere -- the Stop boundaries below name the matching
+hallucination risk explicitly.
 
 ## Scope: four realization domains
 
@@ -81,20 +78,10 @@ deterministic gate is warranted for the policy under review.
 - **Two-lane split**: deterministic-shape checks (fixed rules) vs.
   probabilistic-maturity dimensions (need judgment). Full list:
   [references/dimensions.md](references/dimensions.md).
-- **Axis: Compatibility awareness** -- does the gate's own behavior
-  differ across the agent-tool runtimes or dependent middleware it might
-  actually execute under, and is that documented? See below.
-- **Axis: Reproducibility / Domain-coverage** -- for a given policy, how
-  many of the four domains realize it, with what trust/coverage
-  properties, and is the resulting overlap or gap a deliberate, argued
-  decision or an unnoticed accident? See below.
-- **Axis: Blast-radius / trust classification** -- does the gate's own
-  documentation state what it can do if bypassed or misconfigured, rather
-  than leaving that implicit? See below.
-- **Axis: Security-level / Zero-Trust maturity classification** -- which
-  Foundation/Enterprise/Advanced tier ceiling can a gate's control
-  honestly claim, cross-checked against the target's own established
-  ceiling documentation rather than a re-derived taxonomy? See below.
+- **Four cross-cutting axes**, each detailed in its own subsection below:
+  Compatibility awareness, Reproducibility / Domain-coverage, Blast-radius /
+  trust classification, and Security-level / Zero-Trust maturity
+  classification.
 
 ### Axis: Compatibility awareness
 
@@ -130,14 +117,8 @@ For a given gate, this axis asks: which Foundation/Enterprise/Advanced
 tier ceiling -- Anthropic's "Zero Trust for AI Agents" three-tier
 capability framework -- can its control honestly claim, and does it
 reach that ceiling, overclaim past it, or sit below it for no stated
-reason? Complementary to, not redundant with, the other three axes and
-dimensions 1/15: Blast-radius grades *consequence* of failure, this axis
-grades *strength* while the control holds; Reproducibility grades
-*breadth* across domains, this axis grades *depth* of one realization;
-dimensions 1/15 ask whether mechanics realize a property *at all*, this
-axis asks where the result sits on the tier ladder given that they do or
-don't. Full differentiation (including Compatibility awareness and
-mechanism-fit), the tier ladder, seven categories, impossible-vs-tedious
+reason? Full differentiation from the other three axes and dimensions
+1/15, the tier ladder, seven categories, impossible-vs-tedious
 test, and reuse-never-re-derive procedure with content-trust discipline:
 [references/security-level.md](references/security-level.md). A concrete
 worked example applying it against this repository's own established
@@ -147,17 +128,10 @@ ceiling:
 ## Three-way division of responsibility
 
 A target repository's overall deterministic-gate coverage is the joint
-product of three distinct parties, not two: this skill (grades whatever
-deterministic-gate artifacts already exist, reads and reports only, never
-builds or installs enforcement); the target's own cross-domain
-enforcement mechanism, if it has one (an OPA/Rego-style policy engine or
-equivalent this skill does not build, require, or substitute for); and a
-coverage-attestation pass (Procedure step 5) cross-checking the target's
-own stated invariants against what the first two parties actually cover.
-That third party exists specifically because grading-what-exists paired
-with enforcing-where-installed still misses the case where a repository
-has neither -- silence there would read as "nothing to report," exactly
-the failure mode a fail-closed default exists to forbid. Full detail:
+product of three distinct parties: this skill (grades what already
+exists), the target's own cross-domain enforcement mechanism if it has
+one, and a coverage-attestation pass (Procedure step 5) catching the case
+where the target has neither. Full detail:
 [references/grading-procedure.md](references/grading-procedure.md#three-way-division-of-responsibility).
 
 ## Subagent dispatch
@@ -234,15 +208,10 @@ project-instruction file) this skill defers to rather than re-deriving.
    no-gate-warranted verdict is the exception, since it short-circuits
    steps 3-5 by construction and so has nothing further to combine with.
    Cite evidence for every claim; a postcondition with no cited evidence is not a
-   completed review. A well-formed verdict resting on any claim about
-   the gate's actual runtime behavior (a deny/allow/fail-open/fail-closed
-   outcome, not the gate's own source text alone) requires that specific
-   claim to be live-tested per dimension 10, not read-only-inferred;
-   where live-testing genuinely is not possible, the artifact's verdict
-   is indeterminate on that point unless the operator has explicitly and
-   recordedly waived live verification for it. A behavioral claim
-   verified only by static reading is not equivalent to a live-tested
-   one and must not be presented at the same confidence.
+   completed review. A well-formed verdict resting on a runtime-behavior
+   claim (deny/allow/fail-open/fail-closed, not the gate's own source text
+   alone) requires that claim live-tested per dimension 10 and the
+   live-testing Stop boundary below, not read-only-inferred.
 
 ## Stop boundaries
 
@@ -295,11 +264,8 @@ instead, so a no-gate-warranted verdict never pays for loading them.
   not something a review grants itself permission for by default.
 - Never let a gate's own claimed deny/allow/fail-open/fail-closed
   behavior support a well-formed verdict on a static reading alone --
-  live-test the specific claim per the execution permission above. Gate
-  completion rests on live proof, not plan-time intent alone: a
-  behavioral assertion earns full confidence only from an actual
-  execution, never a proxy (reading the source, a plausible-sounding
-  inference, a green shape check) standing in for it. When live-testing
+  live-test the specific claim per the execution permission above, per
+  dimension 10 and Procedure step 6. When live-testing
   is genuinely not possible (a side-effecting action with no safe
   synthetic path, or a design-only gate not yet built), mark that point
   indeterminate rather than silently accepting the unverified assertion
@@ -365,14 +331,7 @@ instead, so a no-gate-warranted verdict never pays for loading them.
 First version of a new skill category, declared `experimental` in
 `metadata/gitapex.yaml`. Full build and hardening history lives in
 `metadata/gitapex.yaml`'s `spec.lifecycle.experimental.reason`
-(maintainer-facing, not auto-loaded, not access-restricted -- see the
-Stop boundary above), not restated here: paying a per-invocation prose
-cost for provenance content with no bearing on grading an actual target
-gate is exactly the duplication this skill's own dimension 12 warns
-against, applied reflexively -- the same reason
-[references/gitapex-worked-examples.md](references/gitapex-worked-examples.md#audit-history-security-level-axis-hardening-round)'s
-own Audit history section stays a short pointer rather than a
-round-by-round narrative.
+(maintainer-facing, not auto-loaded), not restated here.
 
 Deferred, named explicitly: an independently-verified compatibility
 matrix; a bundled shape-checker script; a committed `evals/` regression
@@ -405,26 +364,12 @@ live separately, explicitly repository-scoped, in
 [owasp-coverage.md](references/owasp-coverage.md), and
 `metadata/gitapex.yaml`.
 
-Why grading-procedure.md exists as a separate file rather than folded
-into mechanism-fit.md or cross-cutting-axes.md: a skill's `SKILL.md` body
-loads in full the moment the skill triggers, regardless of section order
-within it -- reordering `SKILL.md`'s own sections cannot, by itself,
-reduce what a no-gate-warranted verdict pays for. Only content actually
-absent from the body, read from `references/` on demand, does. This file
-carries everything relevant only once Mechanism-fit test's Gate vs. no
-gate question has already answered yes; `SKILL.md` itself keeps short
-stubs (Three-way division of responsibility, Procedure step 5) so every
-existing cross-reference to those section names stays resolvable without
-duplicating their content. Deferral stops at review-quality content,
-deliberately: the execution-safety and live-testing-support Stop
-boundaries stay in `SKILL.md`'s own always-loaded body rather than moving
-here, because they guard *actually running* a possibly-hostile target
-gate, not merely a verdict's quality -- a reference file the model might
-never open is not a safe place to keep the one rule standing between the
-review and executing untrusted code, regardless of the context savings on
-offer. Deferring only the review-quality boundaries is a deliberate,
-narrower cut than deferring the whole Stop-boundaries section would have
-been, not an oversight.
+Why grading-procedure.md exists as a separate file: `SKILL.md`'s own body
+loads in full regardless of section order, so only content actually
+deferred to `references/` reduces what a no-gate-warranted verdict pays
+for; the execution-safety and live-testing-support Stop boundaries stay in
+`SKILL.md`'s own always-loaded body rather than moving there, for the
+reason its own Stop-boundaries intro states above.
 
 A verdict from this skill is not itself authoritative for a downstream
 decision to weaken, remove, or relocate an actual enforcement mechanism

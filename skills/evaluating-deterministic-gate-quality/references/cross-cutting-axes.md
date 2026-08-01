@@ -2,11 +2,9 @@
 
 Portable elaboration of `SKILL.md`'s Compatibility awareness,
 Reproducibility / Domain-coverage, and Blast-radius / trust
-classification axes -- moved here, out of `SKILL.md`'s own body, the same
-way the fourth axis (Security-level / Zero-Trust maturity classification)
-already lives in `references/security-level.md` rather than inline.
-`SKILL.md` keeps a short pointer per axis; this file carries the full
-reasoning.
+classification axes, same pattern as the fourth axis in
+`references/security-level.md`: `SKILL.md` keeps a short pointer per axis,
+this file carries the full reasoning.
 
 ## Contents
 
