@@ -1,9 +1,37 @@
 from __future__ import annotations
 
 import json
+import urllib.error
 
 import pytest
 import release_tag_publish as rtp
+
+
+class Response:
+    """Test double for the urlopen response `apply_call` expects: a
+    context-managed, status+read()-bearing object. Shared across every
+    `apply_call` test below (previously each test defined its own
+    near-identical inline class) and doubles as the `fp` argument to a
+    constructed `HTTPError` via `http_error()`, matching
+    test_release_pr_publish.py's equivalent test double for the sibling
+    script."""
+
+    def __init__(self, status: int, body: str = "") -> None:
+        self.status = status
+        self._body = body.encode()
+
+    def __enter__(self) -> Response:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        return None
+
+    def read(self) -> bytes:
+        return self._body
+
+
+def http_error(code: int, body: str = "") -> urllib.error.HTTPError:
+    return urllib.error.HTTPError("https://example.test", code, "err", {}, Response(code, body))  # type: ignore[arg-type]
 
 
 class _FakeApplyCall:
@@ -46,20 +74,6 @@ def _write_manifest(tmp_path, version: str, rel_path: str = ".claude-plugin/plug
 def test_apply_call_happy_path() -> None:
     sleeps: list[float] = []
 
-    class Response:
-        def __init__(self, status: int, body: str) -> None:
-            self.status = status
-            self._body = body.encode()
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *args):
-            return None
-
-        def read(self) -> bytes:
-            return self._body
-
     def opener(request):
         assert request.headers["Authorization"] == "Bearer tok"
         return Response(201, '{"ok":true}')
@@ -73,22 +87,12 @@ def test_apply_call_happy_path() -> None:
 
 
 def test_apply_call_breaks_on_4xx() -> None:
-    import urllib.error
-
     calls = 0
-
-    class Response:
-        def __init__(self, status, body):
-            self.status = status
-            self._body = body.encode()
-
-        def read(self):
-            return self._body
 
     def opener(request):
         nonlocal calls
         calls += 1
-        raise urllib.error.HTTPError("https://example.test", 422, "err", {}, Response(422, "bad"))
+        raise http_error(422, "bad")
 
     code, body = rtp.apply_call(method="GET", url="https://api.github.com/x", payload=None, token="tok", opener=opener)
     assert code == 422
@@ -97,23 +101,7 @@ def test_apply_call_breaks_on_4xx() -> None:
 
 
 def test_apply_call_retries_5xx_then_succeeds() -> None:
-    import urllib.error
-
-    class Response:
-        def __init__(self, status, body=""):
-            self.status = status
-            self._body = body.encode()
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *args):
-            return None
-
-        def read(self):
-            return self._body
-
-    responses = [urllib.error.HTTPError("https://example.test", 503, "err", {}, Response(503, "one")), Response(200, "ok")]
+    responses: list[urllib.error.HTTPError | Response] = [http_error(503, "one"), Response(200, "ok")]
     sleeps: list[float] = []
 
     def opener(request):
@@ -131,8 +119,6 @@ def test_apply_call_retries_5xx_then_succeeds() -> None:
 
 
 def test_apply_call_network_failure_retries_three_times() -> None:
-    import urllib.error
-
     calls = 0
     sleeps: list[float] = []
 
@@ -153,21 +139,9 @@ def test_apply_call_network_failure_retries_three_times() -> None:
 def test_apply_call_uses_default_opener(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, object] = {}
 
-    class Response:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *args):
-            return None
-
-        status = 200
-
-        def read(self):
-            return b"ok"
-
     def fake_urlopen(request, timeout=None):
         captured["timeout"] = timeout
-        return Response()
+        return Response(200, "ok")
 
     monkeypatch.setattr(rtp.urllib.request, "urlopen", fake_urlopen)
     code, _body = rtp.apply_call(method="GET", url="https://api.github.com/x", payload=None, token="tok")
