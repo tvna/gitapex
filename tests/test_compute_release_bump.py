@@ -440,6 +440,40 @@ def test_write_bumped_manifests_apm_missing_version_raises(tmp_path):
     assert apm_path.read_text() == broken_apm
 
 
+def test_write_bumped_manifests_apm_empty_version_value_raises(tmp_path):
+    # Regression: an apm.yml whose `version:` key carries no value must
+    # fail loud, NOT swallow the following line. The version-line pattern
+    # must not let its inter-token whitespace cross a newline: with `\s*`
+    # (which matches "\n") the match ran from `version:` through the *next*
+    # key, counted as exactly one match, and the substitution then wrote
+    # `version: 0.2.0` over both lines -- silently deleting `dependencies:`
+    # and leaving a structurally broken manifest that the "exactly one
+    # match" guard was supposed to make impossible.
+    plugin_path = tmp_path / "plugin.json"
+    apm_path = tmp_path / "apm.yml"
+    plugin_path.write_text(_PLUGIN_JSON_FIXTURE)
+    broken_apm = _APM_YML_FIXTURE.replace("version: 0.1.0\n", "version:\n")
+    apm_path.write_text(broken_apm)
+
+    with pytest.raises(RuntimeError):
+        crb.write_bumped_manifests(plugin_path, apm_path, "0.2.0")
+
+    # The manifest is untouched -- in particular the key that followed the
+    # valueless `version:` line is still there.
+    assert apm_path.read_text() == broken_apm
+    assert "dependencies:" in apm_path.read_text()
+
+
+def test_apm_version_pattern_never_matches_across_a_newline():
+    # Directly pin the property the bug violated: the pattern's whitespace
+    # run may not span a line break, so it can never consume a following
+    # key as if it were the version value.
+    swallowing = "name: gitapex\nversion:\ndependencies:\n  apm:\n    - a/b\n"
+    assert crb._APM_VERSION_RE.findall(swallowing) == []
+    # ...while a normal one-line `version: X.Y.Z` still matches exactly once.
+    assert len(crb._APM_VERSION_RE.findall("name: x\nversion: 0.1.0\n")) == 1
+
+
 # ---------------------------------------------------------------------
 # render_notes
 # ---------------------------------------------------------------------

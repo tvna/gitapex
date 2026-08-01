@@ -94,7 +94,13 @@ _HEADER_RE = re.compile(
 _BREAKING_FOOTER_RE = re.compile(r"^BREAKING CHANGE:", re.MULTILINE)
 _SEMVER_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
 _PLUGIN_VERSION_RE = re.compile(r'"version":\s*"\d+\.\d+\.\d+"')
-_APM_VERSION_RE = re.compile(r"^version:\s*\S+$", re.MULTILINE)
+# `[ \t]*`, deliberately not `\s*`: `\s` matches "\n", so `\s*` let a match
+# starting at a valueless `version:` line run on into the *next* line and
+# treat that line's key as the version value -- still exactly one match, so
+# the "exactly one match" guard below passed and the substitution silently
+# deleted the following key. Keeping the whitespace run line-local means a
+# valueless `version:` yields zero matches and fails loud instead.
+_APM_VERSION_RE = re.compile(r"^version:[ \t]*\S+$", re.MULTILINE)
 
 _LAST_TAG_GLOB = "gitapex--v*"
 _FIELD_SEP = "\x1f"
