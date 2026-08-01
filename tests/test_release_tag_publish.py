@@ -176,6 +176,27 @@ def test_tag_exists_raises_on_500() -> None:
 
 
 # ---------------------------------------------------------------------------
+# release_exists
+# ---------------------------------------------------------------------------
+
+
+def test_release_exists_true_on_200() -> None:
+    fake = _FakeApplyCall({"GET https://api.github.com/repos/o/r/releases/tags/gitapex--v1.2.3": (200, "{}")})
+    assert rtp.release_exists("o/r", "1.2.3", "tok", apply_call=fake) is True
+
+
+def test_release_exists_false_on_404() -> None:
+    fake = _FakeApplyCall({"GET https://api.github.com/repos/o/r/releases/tags/gitapex--v1.2.3": (404, "not found")})
+    assert rtp.release_exists("o/r", "1.2.3", "tok", apply_call=fake) is False
+
+
+def test_release_exists_raises_on_500() -> None:
+    fake = _FakeApplyCall({"GET https://api.github.com/repos/o/r/releases/tags/gitapex--v1.2.3": (500, "boom")})
+    with pytest.raises(RuntimeError, match="500"):
+        rtp.release_exists("o/r", "1.2.3", "tok", apply_call=fake)
+
+
+# ---------------------------------------------------------------------------
 # extract_release_notes
 # ---------------------------------------------------------------------------
 
@@ -373,7 +394,12 @@ def test_main_repo_env_var_fallback(monkeypatch: pytest.MonkeyPatch, tmp_path) -
     _write_manifest(tmp_path, "1.2.3")
     monkeypatch.setenv("GH_TOKEN", "tok")
     monkeypatch.setenv("REPO", "o/r")
-    fake = _FakeApplyCall({"GET https://api.github.com/repos/o/r/git/ref/tags/gitapex--v1.2.3": (200, "{}")})
+    fake = _FakeApplyCall(
+        {
+            "GET https://api.github.com/repos/o/r/git/ref/tags/gitapex--v1.2.3": (200, "{}"),
+            "GET https://api.github.com/repos/o/r/releases/tags/gitapex--v1.2.3": (200, "{}"),
+        }
+    )
     rc = rtp.main(["--repo-root", str(tmp_path), "--sha", "deadbeef"], apply_call=fake)
     assert rc == 0
 
@@ -390,19 +416,62 @@ def test_main_manifest_error_surfaces_as_error(monkeypatch: pytest.MonkeyPatch, 
 # ---------------------------------------------------------------------------
 
 
-def test_main_no_op_when_tag_already_exists(monkeypatch: pytest.MonkeyPatch, tmp_path, capsys) -> None:
+def test_main_no_op_when_tag_and_release_already_exist(
+    monkeypatch: pytest.MonkeyPatch, tmp_path, capsys
+) -> None:
     _write_manifest(tmp_path, "1.2.3")
     monkeypatch.setenv("GH_TOKEN", "tok")
-    # Only the tag-existence GET is a legal call here -- _FakeApplyCall
+    # Only the two existence GETs are legal calls here -- _FakeApplyCall
     # raises AssertionError on anything else, so this proves the no-op path
     # never reaches find_merged_pr_for_commit or publish_tag_and_release.
-    fake = _FakeApplyCall({"GET https://api.github.com/repos/o/r/git/ref/tags/gitapex--v1.2.3": (200, "{}")})
+    fake = _FakeApplyCall(
+        {
+            "GET https://api.github.com/repos/o/r/git/ref/tags/gitapex--v1.2.3": (200, "{}"),
+            "GET https://api.github.com/repos/o/r/releases/tags/gitapex--v1.2.3": (200, "{}"),
+        }
+    )
 
     rc = rtp.main(["--repo-root", str(tmp_path), "--sha", "deadbeef", "--repo", "o/r"], apply_call=fake)
 
     assert rc == 0
-    assert "already exists" in capsys.readouterr().out
-    assert fake.calls == [("GET", "https://api.github.com/repos/o/r/git/ref/tags/gitapex--v1.2.3", None)]
+    assert "already published" in capsys.readouterr().out
+    assert fake.calls == [
+        ("GET", "https://api.github.com/repos/o/r/git/ref/tags/gitapex--v1.2.3", None),
+        ("GET", "https://api.github.com/repos/o/r/releases/tags/gitapex--v1.2.3", None),
+    ]
+
+
+def test_main_completes_missing_release_when_tag_already_exists(
+    monkeypatch: pytest.MonkeyPatch, tmp_path, capsys
+) -> None:
+    # Regression: a run that created the tag ref and then failed on the
+    # Release POST used to be unrecoverable. The tag alone was treated as
+    # "already published", so every retry exited 0 (green) while the
+    # GitHub Release stayed permanently missing. A retry must instead
+    # finish the job -- create the Release, and NOT re-create the tag.
+    _write_manifest(tmp_path, "1.2.3")
+    monkeypatch.setenv("GH_TOKEN", "tok")
+    pr_body = "<!-- release-notes:start -->\nNotable change.\n<!-- release-notes:end -->"
+    prs = [{"number": 9, "merged_at": "2026-08-01T00:00:00Z", "body": pr_body}]
+    fake = _FakeApplyCall(
+        {
+            "GET https://api.github.com/repos/o/r/git/ref/tags/gitapex--v1.2.3": (200, "{}"),
+            "GET https://api.github.com/repos/o/r/releases/tags/gitapex--v1.2.3": (404, ""),
+            "GET https://api.github.com/repos/o/r/commits/deadbeef/pulls": (200, json.dumps(prs)),
+            "POST https://api.github.com/repos/o/r/releases": (201, "{}"),
+        }
+    )
+
+    rc = rtp.main(["--repo-root", str(tmp_path), "--sha", "deadbeef", "--repo", "o/r"], apply_call=fake)
+
+    assert rc == 0
+    posts = [c for c in fake.calls if c[0] == "POST"]
+    # Exactly one POST, and it is the Release -- the already-existing tag
+    # object/ref must not be created a second time.
+    assert len(posts) == 1
+    assert posts[0][1] == "https://api.github.com/repos/o/r/releases"
+    assert posts[0][2]["body"] == "Notable change."
+    assert "published gitapex--v1.2.3" in capsys.readouterr().err
 
 
 def test_main_publishes_tag_and_release_when_absent(monkeypatch: pytest.MonkeyPatch, tmp_path, capsys) -> None:
@@ -418,6 +487,7 @@ def test_main_publishes_tag_and_release_when_absent(monkeypatch: pytest.MonkeyPa
     fake = _FakeApplyCall(
         {
             "GET https://api.github.com/repos/o/r/git/ref/tags/gitapex--v1.2.3": (404, ""),
+            "GET https://api.github.com/repos/o/r/releases/tags/gitapex--v1.2.3": (404, ""),
             "GET https://api.github.com/repos/o/r/commits/deadbeef/pulls": (200, json.dumps(prs)),
             "POST https://api.github.com/repos/o/r/git/tags": (201, json.dumps({"sha": "tagsha123"})),
             "POST https://api.github.com/repos/o/r/git/refs": (201, "{}"),
@@ -443,6 +513,7 @@ def test_main_raises_when_no_merged_pr_found(monkeypatch: pytest.MonkeyPatch, tm
     fake = _FakeApplyCall(
         {
             "GET https://api.github.com/repos/o/r/git/ref/tags/gitapex--v1.2.3": (404, ""),
+            "GET https://api.github.com/repos/o/r/releases/tags/gitapex--v1.2.3": (404, ""),
             "GET https://api.github.com/repos/o/r/commits/deadbeef/pulls": (200, "[]"),
         }
     )
@@ -460,6 +531,7 @@ def test_main_missing_release_notes_markers_raises(monkeypatch: pytest.MonkeyPat
     fake = _FakeApplyCall(
         {
             "GET https://api.github.com/repos/o/r/git/ref/tags/gitapex--v1.2.3": (404, ""),
+            "GET https://api.github.com/repos/o/r/releases/tags/gitapex--v1.2.3": (404, ""),
             "GET https://api.github.com/repos/o/r/commits/deadbeef/pulls": (200, json.dumps(prs)),
         }
     )

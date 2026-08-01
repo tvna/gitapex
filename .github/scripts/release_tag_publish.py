@@ -12,9 +12,14 @@ versions from tags of the form ``<plugin-name>--v<version>``, so the tag must
 be prefixed with this plugin's own name (``gitapex``), not the literal word
 "plugin".
 
-Idempotency: the tag's existence is the single source of truth for "already
-published". If ``gitapex--v{version}`` already exists, this script is a
-no-op (exit 0) -- safe to re-run after a partial failure or a workflow retry.
+Idempotency: "already published" means the tag ref *and* the GitHub Release
+both exist. Only then is this script a no-op (exit 0). Publishing is three
+API calls (tag object, tag ref, Release), so a run can die in between: the
+tag alone is not proof the Release shipped. Treating it as proof made that
+partial state unrecoverable -- every retry saw the tag, exited 0, and left
+the Release permanently missing. Checking both instead means a retry
+finishes whatever is left (creating the Release without re-creating the
+tag), so re-running after a partial failure really is safe.
 
 Release notes come from the merged PR's body, extracted from between two
 literal HTML-comment markers (``<!-- release-notes:start -->`` /
@@ -135,6 +140,28 @@ def tag_exists(
     raise RuntimeError(f"Check tag gitapex--v{version} failed: HTTP {code}: {body[:200]}")
 
 
+def release_exists(
+    repo: str,
+    version: str,
+    token: str,
+    apply_call: Callable[..., tuple[int, str]] = apply_call,
+) -> bool:
+    """Return True when a GitHub Release for ``gitapex--v{version}`` exists.
+
+    Checked separately from ``tag_exists`` because the tag ref is created
+    before the Release: between those two calls the tag exists while the
+    Release does not, and only this check can tell that partial state apart
+    from a fully published one.
+    """
+    url = f"{_API_ROOT}/repos/{repo}/releases/tags/gitapex--v{version}"
+    code, body = apply_call(method="GET", url=url, payload=None, token=token)
+    if code == 200:
+        return True
+    if code == 404:
+        return False
+    raise RuntimeError(f"Check release gitapex--v{version} failed: HTTP {code}: {body[:200]}")
+
+
 def find_merged_pr_for_commit(
     repo: str,
     sha: str,
@@ -179,35 +206,42 @@ def publish_tag_and_release(
     notes: str,
     token: str,
     apply_call: Callable[..., tuple[int, str]] = apply_call,
+    skip_tag: bool = False,
 ) -> None:
     """Create an annotated tag object, point ``refs/tags/gitapex--v{version}``
     at it, then publish a GitHub Release for that tag.
+
+    ``skip_tag`` skips both tag steps, for the recovery case where a previous
+    run already created the tag ref but died before the Release: re-POSTing
+    the ref would just fail with "Reference already exists" and strand the
+    Release again.
 
     Raises ``RuntimeError`` (with status/body) on the first non-2xx response
     and does not continue past the failed step.
     """
     tag_name = f"gitapex--v{version}"
 
-    code, body = apply_call(
-        method="POST",
-        url=f"{_API_ROOT}/repos/{repo}/git/tags",
-        payload={"tag": tag_name, "message": f"gitapex v{version}", "object": sha, "type": "commit"},
-        token=token,
-    )
-    if not (200 <= code < 300):
-        raise RuntimeError(f"Create tag object {tag_name} failed: HTTP {code}: {body[:200]}")
-    tag_sha = json.loads(body).get("sha")
-    if not isinstance(tag_sha, str) or not tag_sha:
-        raise RuntimeError(f"Create tag object {tag_name} response missing sha: {body[:200]}")
+    if not skip_tag:
+        code, body = apply_call(
+            method="POST",
+            url=f"{_API_ROOT}/repos/{repo}/git/tags",
+            payload={"tag": tag_name, "message": f"gitapex v{version}", "object": sha, "type": "commit"},
+            token=token,
+        )
+        if not (200 <= code < 300):
+            raise RuntimeError(f"Create tag object {tag_name} failed: HTTP {code}: {body[:200]}")
+        tag_sha = json.loads(body).get("sha")
+        if not isinstance(tag_sha, str) or not tag_sha:
+            raise RuntimeError(f"Create tag object {tag_name} response missing sha: {body[:200]}")
 
-    code, body = apply_call(
-        method="POST",
-        url=f"{_API_ROOT}/repos/{repo}/git/refs",
-        payload={"ref": f"refs/tags/{tag_name}", "sha": tag_sha},
-        token=token,
-    )
-    if not (200 <= code < 300):
-        raise RuntimeError(f"Create tag ref {tag_name} failed: HTTP {code}: {body[:200]}")
+        code, body = apply_call(
+            method="POST",
+            url=f"{_API_ROOT}/repos/{repo}/git/refs",
+            payload={"ref": f"refs/tags/{tag_name}", "sha": tag_sha},
+            token=token,
+        )
+        if not (200 <= code < 300):
+            raise RuntimeError(f"Create tag ref {tag_name} failed: HTTP {code}: {body[:200]}")
 
     code, body = apply_call(
         method="POST",
@@ -272,8 +306,10 @@ def main(
     try:
         version = _read_version(manifest_path)
         tag_name = f"gitapex--v{version}"
-        if tag_exists(repo, version, token, apply_call=apply_call):
-            print(f"release-tag-publish: {tag_name} already exists (refs/tags/{tag_name}) -- no-op")
+        has_tag = tag_exists(repo, version, token, apply_call=apply_call)
+        has_release = release_exists(repo, version, token, apply_call=apply_call)
+        if has_tag and has_release:
+            print(f"release-tag-publish: {tag_name} already published (tag + release) -- no-op")
             return 0
         pr = find_merged_pr_for_commit(repo, args.sha, token, apply_call=apply_call)
         if pr is None:
@@ -283,7 +319,9 @@ def main(
                 "silently no-op"
             )
         notes = extract_release_notes(pr.get("body") or "")
-        publish_tag_and_release(repo, version, args.sha, notes, token, apply_call=apply_call)
+        publish_tag_and_release(
+            repo, version, args.sha, notes, token, apply_call=apply_call, skip_tag=has_tag
+        )
     except RuntimeError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
