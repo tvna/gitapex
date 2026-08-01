@@ -19,29 +19,36 @@ than an apm-specific workaround: it stays correct even if apm later widens
 its substitution.
 
 Scope is deliberately narrow (CLAUDE.md section 4): only *hook command*
-surfaces are read -- `hooks.json` manifests and the YAML frontmatter of
-agent definitions, the two places this repository actually carries hook
-commands. Prose that merely names the variable (for example
-`skills/executing-a-branch-plan/references/threat-model-and-authorization.md`
-discussing when it is unset) is not a violation and is never read.
+values are graded -- `command` entries in a `hooks.json` manifest and
+`command:` keys in an agent definition's YAML frontmatter, the two places
+this repository carries hook commands. Prose naming the variable is never
+graded, in a body or in a frontmatter `description:` alike.
 
-Two misses are deliberate, both found by adversarially probing this gate
-before it shipped rather than left to be discovered later:
+Discovery asks git for tracked files rather than walking the filesystem
+behind a denylist. That is not a style preference: a filesystem walk made
+every gitignored path a false-positive candidate, and an earlier revision's
+denylist demonstrably missed two of them -- `.claude/worktrees/<task>/`
+(a full checkout of another commit, which still carries the unbraced form
+this gate was written to remove) and any `.claude/hooks|skills` apm deploy
+tree nested below the scan root. The tracked-file set is exactly "this
+repository's own source," so both classes, and any future ignored
+directory, are excluded by construction. `tests/conftest.py` already shells
+out to git for this same class of question.
 
-- A hook command written into `.claude/settings.json` is not read. That
-  file is gitignored here and is written by `apm install`, so scanning it
-  would grade a third party's notation, not this repository's.
-- A `"command"` whose value is a list rather than a string is not read. That
-  is not a shape Claude Code documents, so such a hook would already be
-  inert; the gate exists to protect hooks that would otherwise work.
-
-A future hook mechanism carrying commands in some third shape would likewise
-not be covered; that limit is stated in issue #650's Acceptance Criteria Map
-rather than left implicit.
+One shape is still deliberately not graded: a `command` whose value is a
+list rather than a string. Claude Code documents `command` as a string, so
+such a hook would already be inert, and this gate exists to protect hooks
+that would otherwise work.
 
 Standard library only, so the calling workflow needs no dependency install.
 
-Run standalone (exit 1 on violation) or via the pytest gate in
+Exit codes: 0 clean, 1 violation found, 2 the scan could not be trusted
+(no surfaces discovered, an unreadable or malformed file). The 2 case
+mirrors `gate_evals_scripts_coverage.py`'s own rule that an empty match set
+is an error, never a silent pass -- otherwise a renamed `hooks.json` turns
+this gate into a permanent green no-op nobody notices.
+
+Run standalone or via the pytest gate in
 `tests/test_gate_plugin_root_brace_notation.py`.
 """
 
@@ -51,12 +58,14 @@ import argparse
 import json
 import pathlib
 import re
+import subprocess
 import sys
 from collections.abc import Iterator
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 _VARIABLE = "CLAUDE_PLUGIN_ROOT"
+_BRACED = "${" + _VARIABLE + "}"
 
 # Matches the unbraced `$CLAUDE_PLUGIN_ROOT` only: `${CLAUDE_PLUGIN_ROOT}`
 # has `{` where this pattern requires `C`, so the braced form never matches.
@@ -66,24 +75,19 @@ _VARIABLE = "CLAUDE_PLUGIN_ROOT"
 # boundary does not fire there.
 _UNBRACED_RE = re.compile(r"\$" + _VARIABLE + r"\b")
 
-# Path segments that are not this repository's own source. `apm_modules/` is
-# apm's package cache and `.claude/skills`, `.claude/hooks` are the trees
-# `apm install` deploys into; all three can hold third-party `hooks.json`
-# files whose notation this repository neither owns nor can fix. They are
-# gitignored, so they only exist in a working tree where `apm install` has
-# been run -- CI never sees them, but a contributor running this script
-# locally would, and a third party's notation must not fail this repo's PR.
-_EXCLUDED_PARTS = frozenset({".git", ".venv", "apm_modules", "node_modules"})
-_EXCLUDED_PREFIXES = ((".claude", "skills"), (".claude", "hooks"))
+# A frontmatter hook command, as `command: <value>` or `- command: <value>`.
+# Anything else in the block (`description:`, `name:`, prose) is not a
+# command and is never graded.
+_FRONTMATTER_COMMAND_RE = re.compile(r"^[ \t]*(?:-[ \t]*)?command[ \t]*:[ \t]*(\S.*)$")
 
-# Agent definitions carry hook commands in YAML frontmatter rather than in a
-# `hooks.json`; both locations are scanned because Claude Code loads agents
-# from a plugin's `agents/` and a project's `.claude/agents/`. Recursive
-# (`**`) rather than a flat `*`: an adversarial probe of an earlier revision
-# of this gate showed a violating command in `agents/<sub>/a.md` slipping
-# through a flat glob, and nothing stops an author from grouping agent
-# definitions in subdirectories.
-_AGENT_GLOBS = ("agents/**/*.md", ".claude/agents/**/*.md")
+# git pathspec `*` crosses `/` (verified against this repository: a
+# `skills/*.md` pathspec matches `skills/<skill>/references/<file>.md`), so
+# these four patterns cover a manifest or agent definition at any depth.
+_PATHSPECS = ("hooks.json", "*/hooks.json", "agents/*.md", ".claude/agents/*.md")
+
+
+class ScanError(Exception):
+    """The scan could not be trusted -- exit 2, never a silent pass."""
 
 
 def commands_in_hook_manifest(data: object) -> Iterator[str]:
@@ -104,75 +108,92 @@ def commands_in_hook_manifest(data: object) -> Iterator[str]:
             yield from commands_in_hook_manifest(item)
 
 
-def frontmatter(text: str) -> str:
-    """Return the YAML frontmatter block of ``text``, or ``""`` when absent.
+def frontmatter(text: str) -> str | None:
+    """Return the YAML frontmatter block, ``""`` when there is none, or
+    ``None`` when a block opens but never closes.
 
+    The three-way return is what lets the caller fail closed on a malformed
+    block while still accepting a plain Markdown file that legitimately has
+    no frontmatter -- the same distinction
+    `.github/scripts/skill_security_relevance.py` draws for the same reason.
     Line-based rather than a substring search for ``\\n---`` so a horizontal
-    rule of four or more dashes inside the block does not end it early. A
-    leading BOM is stripped the same way this repository's other frontmatter
-    readers do.
+    rule of four or more dashes inside the block does not end it early.
     """
     lines = text.lstrip("\ufeff").split("\n")
-    if not lines or lines[0].strip() != "---":
+    if lines[0].strip() != "---":
         return ""
     for index, line in enumerate(lines[1:], start=1):
         if line.strip() == "---":
             return "\n".join(lines[1:index])
-    return ""
+    return None
 
 
-def offending_lines(path: pathlib.Path) -> list[str]:
-    """Return the offending command strings (or frontmatter lines) in ``path``.
+def hook_commands(path: pathlib.Path) -> list[str]:
+    """Return every hook command declared in ``path``.
 
-    A `hooks.json` is parsed and only its ``command`` values are graded; any
-    other file is treated as an agent definition and only its frontmatter is
-    graded, so prose in the body is never read.
+    Raises ``ScanError`` rather than returning an empty list when the file
+    cannot be read or parsed: nothing downstream can tell whether an
+    unreadable file hides a violation.
     """
-    text = path.read_text(encoding="utf-8")
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as error:
+        raise ScanError(f"{path}: cannot be read as UTF-8 text: {error}") from error
+
     if path.name == "hooks.json":
         try:
             manifest = json.loads(text)
         except json.JSONDecodeError as error:
-            # A malformed manifest is a real failure, not something to pass
-            # over: nothing downstream can tell whether it hides a violation.
-            # Re-raised with the offending path attached so CI shows an
-            # actionable message instead of a bare decoder traceback.
-            raise ValueError(f"{path}: not valid JSON: {error}") from error
-        candidates = commands_in_hook_manifest(manifest)
-    else:
-        candidates = (line.strip() for line in frontmatter(text).split("\n"))
-    return [candidate for candidate in candidates if _UNBRACED_RE.search(candidate)]
+            raise ScanError(f"{path}: not valid JSON: {error}") from error
+        return list(commands_in_hook_manifest(manifest))
 
-
-def _is_excluded(path: pathlib.Path, root: pathlib.Path) -> bool:
-    parts = path.relative_to(root).parts
-    if _EXCLUDED_PARTS.intersection(parts):
-        return True
-    return any(parts[: len(prefix)] == prefix for prefix in _EXCLUDED_PREFIXES)
+    block = frontmatter(text)
+    if block is None:
+        raise ScanError(f"{path}: frontmatter block opens but never closes")
+    return [
+        match.group(1).strip()
+        for match in (_FRONTMATTER_COMMAND_RE.match(line) for line in block.split("\n"))
+        if match
+    ]
 
 
 def discover(root: pathlib.Path) -> list[pathlib.Path]:
-    """Return every hook-command surface under ``root``, sorted and deduped."""
-    found = {p for p in root.rglob("hooks.json") if not _is_excluded(p, root)}
-    for pattern in _AGENT_GLOBS:
-        found.update(p for p in root.glob(pattern) if not _is_excluded(p, root))
-    return sorted(found)
+    """Return every repository-tracked hook-command surface under ``root``."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root), "ls-files", "-z", "--", *_PATHSPECS],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError as error:  # git missing entirely
+        raise ScanError(f"cannot run git to list tracked files: {error}") from error
+    if result.returncode != 0:
+        raise ScanError(f"{root}: git ls-files failed: {result.stderr.strip()}")
+    return sorted(root / name for name in result.stdout.split("\0") if name)
 
 
 def find_violations(root: pathlib.Path) -> list[tuple[str, str]]:
-    """Return ``(relative path, offending text)`` for every violation."""
+    """Return ``(relative path, offending command)`` for every violation."""
+    return violations_in(discover(root), root)
+
+
+def violations_in(paths: list[pathlib.Path], root: pathlib.Path) -> list[tuple[str, str]]:
+    """Grade already-discovered ``paths``, so a caller that also needs the
+    path list does not walk for it twice."""
     violations = []
-    for path in discover(root):
-        for offender in offending_lines(path):
-            violations.append((str(path.relative_to(root)), offender))
+    for path in paths:
+        for command in hook_commands(path):
+            if _UNBRACED_RE.search(command):
+                violations.append((str(path.relative_to(root)), command))
     return violations
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI: exit 1 if any hook command uses the unbraced variable form."""
+    """CLI: 0 clean, 1 violation found, 2 the scan could not be trusted."""
     parser = argparse.ArgumentParser(
-        description="Check that hook commands reference the plugin root as "
-        "${CLAUDE_PLUGIN_ROOT}, not $CLAUDE_PLUGIN_ROOT."
+        description=f"Check that hook commands reference the plugin root as "
+        f"{_BRACED}, not ${_VARIABLE}."
     )
     parser.add_argument(
         "--root",
@@ -183,28 +204,37 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        violations = find_violations(args.root)
-    except ValueError as error:
+        paths = discover(args.root)
+        if not paths:
+            raise ScanError(
+                f"{args.root}: no tracked hook-command surface matched "
+                f"{list(_PATHSPECS)}. An empty match set most plausibly means "
+                "the scan ran against the wrong root, or a manifest was "
+                "renamed -- either way this gate would otherwise pass while "
+                "checking nothing."
+            )
+        violations = violations_in(paths, args.root)
+    except ScanError as error:
         print(f"{error}", file=sys.stderr)
-        return 1
+        return 2
+
     if violations:
-        for path, offender in violations:
+        for path, command in violations:
             print(
-                f"{path}: hook command uses ${_VARIABLE} (unbraced): {offender}",
+                f"{path}: hook command uses ${_VARIABLE} (unbraced): {command}",
                 file=sys.stderr,
             )
         print(
             f"\n{len(violations)} hook command(s) use the unbraced "
-            f"${_VARIABLE}. apm substitutes only the braced "
-            f"${{{_VARIABLE}}} form, so an apm-installed consumer would "
-            "receive a command that cannot resolve, with no error at "
-            "install time. Use the braced form (refs #650).",
+            f"${_VARIABLE}. apm substitutes only the braced {_BRACED} form, "
+            "so an apm-installed consumer would receive a command that "
+            "cannot resolve, with no error at install time. Use the braced "
+            "form (refs #650).",
             file=sys.stderr,
         )
         return 1
 
-    surfaces = len(discover(args.root))
-    print(f"OK: {surfaces} hook-command surface(s) brace ${_VARIABLE}.")
+    print(f"OK: {len(paths)} hook-command surface(s) brace {_BRACED}.")
     return 0
 
 

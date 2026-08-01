@@ -4,45 +4,53 @@
 Refs #650. The gate exists because `hooks/hooks.json` authored every hook
 command with the unbraced `$CLAUDE_PLUGIN_ROOT`, which apm 0.25.0 copies
 verbatim instead of rewriting -- so an apm-installed consumer silently
-received seven hook commands that could not resolve. These tests pin both
-directions: the real repository must stay braced, and an injected unbraced
-command must fail rather than pass.
+received seven hook commands that could not resolve.
 
-The defeat-cases matter as much as the happy path here: a gate that also
-fired on prose naming the variable would be reverted the first time someone
-documented this bug, and a gate that read apm's own deployed trees would
-fail a gitapex PR over a third party's notation.
+The defeat-cases carry as much weight here as the happy path, and several
+of them are regressions for defects a code review found in this gate's own
+first revision: a gate that fired on prose in a `description:` would be
+reverted the first time someone documented this bug, one that passed on an
+unterminated frontmatter block would miss a real command, and one that
+reported success having discovered nothing would be a permanent green
+no-op. Each is pinned below.
 """
 
 from __future__ import annotations
 
 import json
 import pathlib
+import subprocess
 
 import gate_plugin_root_brace_notation as gate
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 
-_BRACED = '"${CLAUDE_PLUGIN_ROOT}/hooks/check.sh"'
-_UNBRACED = '"$CLAUDE_PLUGIN_ROOT/hooks/check.sh"'
+_BRACED = "${CLAUDE_PLUGIN_ROOT}/hooks/check.sh"
+_UNBRACED = "$CLAUDE_PLUGIN_ROOT/hooks/check.sh"
 
 
-def _write_hooks_json(root: pathlib.Path, command: str) -> pathlib.Path:
-    path = root / "hooks" / "hooks.json"
+def _repo(tmp_path: pathlib.Path) -> pathlib.Path:
+    """Init a git repository -- discovery reads tracked files, not the tree."""
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    return tmp_path
+
+
+def _write(root: pathlib.Path, relative: str, content: str, *, track: bool = True):
+    path = root / relative
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(
-            {
-                "hooks": {
-                    "PreToolUse": [
-                        {"matcher": "Bash", "hooks": [{"type": "command", "command": command}]}
-                    ]
-                }
-            }
-        ),
-        encoding="utf-8",
-    )
+    path.write_text(content, encoding="utf-8")
+    if track:
+        subprocess.run(["git", "-C", str(root), "add", "--", relative], check=True)
     return path
+
+
+def _manifest(command) -> str:
+    return json.dumps(
+        {"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"command": command}]}]}}
+    )
+
+
+# --- the real repository -----------------------------------------------
 
 
 def test_repository_hook_commands_all_brace_the_variable():
@@ -50,150 +58,177 @@ def test_repository_hook_commands_all_brace_the_variable():
     assert gate.find_violations(REPO_ROOT) == []
 
 
-def test_repository_scan_reaches_the_real_hook_manifest():
-    """discover() must actually find this repo's own surfaces.
-
-    Without this, a discovery bug that silently found nothing would make
-    the test above pass for the wrong reason.
-    """
+def test_repository_scan_reaches_the_real_hook_surfaces():
+    """Without this, a discovery bug that found nothing would make the test
+    above pass for the wrong reason."""
     discovered = {p.relative_to(REPO_ROOT).as_posix() for p in gate.discover(REPO_ROOT)}
     assert "hooks/hooks.json" in discovered
     assert "agents/branch-plan-task.md" in discovered
+    assert ".claude/agents/branch-plan-task.md" in discovered
+
+
+# --- violations ---------------------------------------------------------
 
 
 def test_unbraced_command_in_hooks_json_is_a_violation(tmp_path):
-    _write_hooks_json(tmp_path, _UNBRACED.strip('"'))
-    violations = gate.find_violations(tmp_path)
-    assert [path for path, _ in violations] == ["hooks/hooks.json"]
+    root = _repo(tmp_path)
+    _write(root, "hooks/hooks.json", _manifest(_UNBRACED))
+    assert [path for path, _ in gate.find_violations(root)] == ["hooks/hooks.json"]
 
 
 def test_braced_command_in_hooks_json_passes(tmp_path):
-    _write_hooks_json(tmp_path, _BRACED.strip('"'))
-    assert gate.find_violations(tmp_path) == []
+    root = _repo(tmp_path)
+    _write(root, "hooks/hooks.json", _manifest(_BRACED))
+    assert gate.find_violations(root) == []
 
 
 def test_command_nested_under_an_unknown_event_name_is_still_read(tmp_path):
     """The walker must not depend on Claude Code's hook-event vocabulary."""
-    path = tmp_path / "hooks" / "hooks.json"
-    path.parent.mkdir(parents=True)
-    path.write_text(
-        json.dumps({"hooks": {"SomeFutureEvent": [[{"command": _UNBRACED.strip('"')}]]}}),
-        encoding="utf-8",
-    )
-    assert len(gate.find_violations(tmp_path)) == 1
-
-
-def test_non_string_command_value_does_not_crash_the_walker(tmp_path):
-    path = tmp_path / "hooks" / "hooks.json"
-    path.parent.mkdir(parents=True)
-    path.write_text(json.dumps({"hooks": {"X": [{"command": {"nested": 1}}]}}), encoding="utf-8")
-    assert gate.find_violations(tmp_path) == []
-
-
-def test_unbraced_variable_in_agent_frontmatter_is_a_violation(tmp_path):
-    path = tmp_path / "agents" / "a.md"
-    path.parent.mkdir(parents=True)
-    path.write_text(
-        f"---\nname: a\nhooks:\n  PreToolUse:\n    - command: {_UNBRACED}\n---\n\nBody.\n",
-        encoding="utf-8",
-    )
-    assert [p for p, _ in gate.find_violations(tmp_path)] == ["agents/a.md"]
-
-
-def test_prose_naming_the_variable_is_not_a_violation(tmp_path):
-    """A doc paragraph explaining the bug must never fail this gate."""
-    path = tmp_path / "agents" / "a.md"
-    path.parent.mkdir(parents=True)
-    path.write_text(
-        "---\nname: a\n---\n\nThis fires only when $CLAUDE_PLUGIN_ROOT is set.\n",
-        encoding="utf-8",
-    )
-    assert gate.find_violations(tmp_path) == []
-
-
-def test_a_longer_variable_name_sharing_the_prefix_is_not_flagged(tmp_path):
-    _write_hooks_json(tmp_path, "$CLAUDE_PLUGIN_ROOT_BACKUP/hooks/check.sh")
-    assert gate.find_violations(tmp_path) == []
-
-
-def test_apm_cache_and_deploy_trees_are_excluded(tmp_path):
-    """A third party's notation must not fail this repository's PR."""
-    for relative in (
-        "apm_modules/obra/superpowers/hooks/hooks.json",
-        ".claude/hooks/superpowers/hooks/hooks.json",
-        ".claude/skills/x/hooks/hooks.json",
-    ):
-        path = tmp_path / relative
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps({"command": _UNBRACED.strip('"')}), encoding="utf-8")
-    assert gate.find_violations(tmp_path) == []
-
-
-def test_project_agents_directory_is_scanned(tmp_path):
-    """`.claude/agents/` is in scope even though `.claude/hooks/` is not."""
-    path = tmp_path / ".claude" / "agents" / "a.md"
-    path.parent.mkdir(parents=True)
-    path.write_text(f"---\ncommand: {_UNBRACED}\n---\n", encoding="utf-8")
-    assert [p for p, _ in gate.find_violations(tmp_path)] == [".claude/agents/a.md"]
-
-
-def test_agent_in_a_subdirectory_is_scanned(tmp_path):
-    """Regression: a flat `agents/*.md` glob let `agents/<sub>/a.md` through.
-
-    Found by adversarially probing this gate before it shipped, not by a
-    later incident; nothing stops an author from grouping agent definitions
-    into subdirectories.
-    """
-    path = tmp_path / "agents" / "sub" / "a.md"
-    path.parent.mkdir(parents=True)
-    path.write_text(f"---\ncommand: {_UNBRACED}\n---\n", encoding="utf-8")
-    assert [p for p, _ in gate.find_violations(tmp_path)] == ["agents/sub/a.md"]
+    root = _repo(tmp_path)
+    _write(root, "hooks/hooks.json", json.dumps({"hooks": {"Future": [[{"command": _UNBRACED}]]}}))
+    assert len(gate.find_violations(root)) == 1
 
 
 def test_variable_buried_in_a_longer_shell_command_is_caught(tmp_path):
-    _write_hooks_json(tmp_path, 'bash -c "$CLAUDE_PLUGIN_ROOT/hooks/x.sh --flag"')
-    assert len(gate.find_violations(tmp_path)) == 1
+    root = _repo(tmp_path)
+    _write(root, "hooks/hooks.json", _manifest(f'bash -c "{_UNBRACED} --flag"'))
+    assert len(gate.find_violations(root)) == 1
 
 
-def test_malformed_hooks_json_fails_loudly_with_the_path(tmp_path, capsys):
-    """A manifest that cannot be parsed must fail, and name the file.
-
-    Passing it over would be the silent-default this repository's own
-    instructions forbid: nothing downstream can tell whether an unparseable
-    manifest hides a violation.
-    """
-    path = tmp_path / "hooks" / "hooks.json"
-    path.parent.mkdir(parents=True)
-    path.write_text("{not json", encoding="utf-8")
-    assert gate.main(["--root", str(tmp_path)]) == 1
-    assert "not valid JSON" in capsys.readouterr().err
+def test_unbraced_command_in_agent_frontmatter_is_a_violation(tmp_path):
+    root = _repo(tmp_path)
+    _write(root, "agents/a.md", f'---\nname: a\ncommand: "{_UNBRACED}"\n---\n\nBody.\n')
+    assert [path for path, _ in gate.find_violations(root)] == ["agents/a.md"]
 
 
-def test_settings_json_hook_commands_are_out_of_scope(tmp_path):
-    """Deliberate miss: `.claude/settings.json` is apm-written, not ours."""
-    path = tmp_path / ".claude" / "settings.json"
-    path.parent.mkdir(parents=True)
-    path.write_text(
-        json.dumps({"hooks": {"PreToolUse": [{"hooks": [{"command": _UNBRACED.strip('"')}]}]}}),
-        encoding="utf-8",
+def test_agent_in_a_subdirectory_is_scanned(tmp_path):
+    """A flat glob would miss an author who groups agents into folders."""
+    root = _repo(tmp_path)
+    _write(root, "agents/sub/a.md", f'---\ncommand: "{_UNBRACED}"\n---\n')
+    assert [path for path, _ in gate.find_violations(root)] == ["agents/sub/a.md"]
+
+
+# --- must not fire ------------------------------------------------------
+
+
+def test_prose_in_the_body_naming_the_variable_is_not_a_violation(tmp_path):
+    root = _repo(tmp_path)
+    _write(root, "agents/a.md", f"---\nname: a\n---\n\nFires only when {_UNBRACED} is set.\n")
+    assert gate.find_violations(root) == []
+
+
+def test_prose_in_frontmatter_naming_the_variable_is_not_a_violation(tmp_path):
+    """Regression: an earlier revision grepped every frontmatter line, so a
+    `description:` discussing the variable failed a file declaring no hook.
+    `agents/branch-plan-task.md`'s own description discusses exactly that."""
+    root = _repo(tmp_path)
+    _write(
+        root,
+        "agents/a.md",
+        f"---\nname: a\ndescription: carries no hook, so {_UNBRACED} never resolves here.\n---\n",
     )
-    assert gate.find_violations(tmp_path) == []
+    assert gate.find_violations(root) == []
+
+
+def test_a_longer_variable_name_sharing_the_prefix_is_not_flagged(tmp_path):
+    root = _repo(tmp_path)
+    _write(root, "hooks/hooks.json", _manifest("$CLAUDE_PLUGIN_ROOT_BACKUP/hooks/check.sh"))
+    assert gate.find_violations(root) == []
 
 
 def test_list_valued_command_is_out_of_scope(tmp_path):
     """Deliberate miss: Claude Code documents `command` as a string only."""
-    path = tmp_path / "hooks" / "hooks.json"
-    path.parent.mkdir(parents=True)
-    path.write_text(json.dumps({"command": [_UNBRACED.strip('"')]}), encoding="utf-8")
-    assert gate.find_violations(tmp_path) == []
+    root = _repo(tmp_path)
+    _write(root, "hooks/hooks.json", _manifest([_UNBRACED]))
+    assert gate.find_violations(root) == []
 
 
-def test_frontmatter_absent_returns_empty():
+def test_untracked_files_are_not_scanned(tmp_path):
+    """Regression: a filesystem walk graded apm's deploy trees and the repo's
+    own `.claude/worktrees/` checkouts -- content that is not this diff's.
+    Reading tracked files excludes every ignored path by construction."""
+    root = _repo(tmp_path)
+    _write(root, "hooks/hooks.json", _manifest(_BRACED))
+    for untracked in (
+        ".claude/worktrees/task-1/hooks/hooks.json",
+        ".claude/hooks/superpowers/hooks/hooks.json",
+        "sub/.claude/hooks/superpowers/hooks/hooks.json",
+        "apm_modules/obra/superpowers/hooks/hooks.json",
+    ):
+        _write(root, untracked, _manifest(_UNBRACED), track=False)
+    assert gate.find_violations(root) == []
+
+
+def test_agent_file_without_frontmatter_is_not_an_error(tmp_path):
+    """A plain Markdown file under agents/ (a README) is legitimate."""
+    root = _repo(tmp_path)
+    _write(root, "hooks/hooks.json", _manifest(_BRACED))
+    _write(root, "agents/README.md", "# Agents\n\nNo frontmatter here.\n")
+    assert gate.main(["--root", str(root)]) == 0
+
+
+# --- fail closed (exit 2) ----------------------------------------------
+
+
+def test_discovering_nothing_is_an_error_not_a_pass(tmp_path, capsys):
+    """Regression: reporting success having checked nothing would make this
+    a permanent green no-op after a rename or a wrong scan root."""
+    root = _repo(tmp_path)
+    assert gate.main(["--root", str(root)]) == 2
+    assert "checking nothing" in capsys.readouterr().err
+
+
+def test_malformed_hooks_json_fails_closed_naming_the_file(tmp_path, capsys):
+    root = _repo(tmp_path)
+    _write(root, "hooks/hooks.json", "{not json")
+    assert gate.main(["--root", str(root)]) == 2
+    stderr = capsys.readouterr().err
+    assert "not valid JSON" in stderr
+    assert "hooks.json" in stderr
+
+
+def test_unterminated_frontmatter_fails_closed(tmp_path, capsys):
+    """Regression: an earlier revision returned an empty block here, so a
+    real unbraced command inside it was never graded and the gate passed."""
+    root = _repo(tmp_path)
+    _write(root, "agents/a.md", f'---\nname: a\ncommand: "{_UNBRACED}"\n')
+    assert gate.main(["--root", str(root)]) == 2
+    assert "never closes" in capsys.readouterr().err
+
+
+def test_non_utf8_file_fails_closed_naming_the_file(tmp_path, capsys):
+    root = _repo(tmp_path)
+    path = _write(root, "hooks/hooks.json", _manifest(_BRACED))
+    path.write_bytes(b'{"command": "\xff\xfe"}')
+    assert gate.main(["--root", str(root)]) == 2
+    assert "hooks.json" in capsys.readouterr().err
+
+
+def test_a_non_repository_root_fails_closed(tmp_path, capsys):
+    assert gate.main(["--root", str(tmp_path)]) == 2
+    assert "git ls-files failed" in capsys.readouterr().err
+
+
+def test_git_missing_entirely_fails_closed(tmp_path, capsys, monkeypatch):
+    """No git on PATH must not surface as a raw traceback."""
+
+    def _no_git(*args, **kwargs):
+        raise OSError("No such file or directory: 'git'")
+
+    monkeypatch.setattr(gate.subprocess, "run", _no_git)
+    assert gate.main(["--root", str(tmp_path)]) == 2
+    assert "cannot run git" in capsys.readouterr().err
+
+
+# --- frontmatter helper -------------------------------------------------
+
+
+def test_frontmatter_absent_returns_empty_string():
     assert gate.frontmatter("no frontmatter here\n") == ""
 
 
-def test_frontmatter_unterminated_returns_empty():
-    assert gate.frontmatter("---\nname: a\nstill going\n") == ""
+def test_frontmatter_unterminated_returns_none():
+    assert gate.frontmatter("---\nname: a\nstill going\n") is None
 
 
 def test_frontmatter_survives_a_longer_dash_rule_inside_the_block():
@@ -205,14 +240,26 @@ def test_frontmatter_tolerates_a_leading_bom():
     assert gate.frontmatter("\ufeff---\na: 1\n---\n") == "a: 1"
 
 
+# --- CLI ----------------------------------------------------------------
+
+
 def test_main_returns_zero_on_the_real_repository(capsys):
     assert gate.main(["--root", str(REPO_ROOT)]) == 0
     assert "OK:" in capsys.readouterr().out
 
 
+def test_success_message_shows_the_braced_form(capsys):
+    """Regression: the OK line rendered the very token the gate forbids."""
+    gate.main(["--root", str(REPO_ROOT)])
+    out = capsys.readouterr().out
+    assert "${CLAUDE_PLUGIN_ROOT}" in out
+    assert "brace $CLAUDE_PLUGIN_ROOT." not in out
+
+
 def test_main_returns_one_and_explains_the_failure(tmp_path, capsys):
-    _write_hooks_json(tmp_path, _UNBRACED.strip('"'))
-    assert gate.main(["--root", str(tmp_path)]) == 1
+    root = _repo(tmp_path)
+    _write(root, "hooks/hooks.json", _manifest(_UNBRACED))
+    assert gate.main(["--root", str(root)]) == 1
     stderr = capsys.readouterr().err
     assert "unbraced" in stderr
     assert "#650" in stderr

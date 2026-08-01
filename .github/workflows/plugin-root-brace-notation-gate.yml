@@ -41,7 +41,9 @@ jobs:
           persist-credentials: false
 
       # No dependency install step: the gate is standard library only, and
-      # ubuntu-latest ships python3.
+      # ubuntu-latest ships python3. It does shell out to `git ls-files` to
+      # read the tracked-file set, which the checkout above provides; a
+      # shallow clone is sufficient, so no fetch-depth override is needed.
       - name: Check hook commands brace the plugin-root variable
         run: |
           set -euo pipefail
