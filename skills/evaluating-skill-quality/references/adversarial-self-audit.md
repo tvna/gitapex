@@ -211,6 +211,40 @@ mechanism, not only the ones already recorded below.
     above never needed any `HOME` change, only the cwd change; the
     `HOME`-copy step is required only when a dispatch must also avoid this
     second leak.
+- **Reconfirmed 2026-08-01, with `--model claude-fable-5` selected, plus a
+  methodology pitfall found along the way.** Same identifying signals as
+  above (`CLAUDE_CODE_REMOTE=true`, `CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=
+  cloud_default`, `claude --version` again `2.1.220 (Claude Code)`). Run
+  while battle-testing a sibling skill in this repository whose Procedure
+  needed a specific `--model` selected for the cold-enumeration step (see
+  `battle-testing-a-skill`'s own citation of fable for blind-spot/unknown-
+  unknown enumeration in `references/provenance-and-caveats.md`) -- the
+  first time this registry records the verified alternative tested with an
+  explicit `--model` flag rather than the default.
+  - Positive control (repo root, real `$HOME`, `--model claude-fable-5`):
+    correctly quoted a real, distinctive CLAUDE.md sentence.
+  - Negative control (isolated cwd + isolated `$HOME`, same model):
+    correctly reported no CLAUDE.md/AGENTS.md loaded.
+  - The verified alternative still holds at this version, now also
+    confirmed compatible with an explicit `--model claude-fable-5`
+    selection.
+  - **Methodology pitfall, disclosed because it produced a false-positive
+    contamination signal on the first attempt:** setting `PWD` as an
+    environment variable without an actual `chdir` does **not** isolate
+    the dispatch. A first negative-control attempt ran (in effect)
+    `env PWD=<isolated-cwd> HOME=<isolated-home> claude -p ...` with no
+    real `cd` beforehand, and it incorrectly quoted this repository's real
+    CLAUDE.md content -- not a platform leak, but a test-harness bug: the
+    process's actual working directory (`getcwd()`) was still the caller's
+    original cwd, since only the `$PWD` string was set, not the real cwd.
+    `claude`'s CLAUDE.md/AGENTS.md discovery follows the real process
+    working directory, not the `$PWD` environment variable. Wrapping the
+    invocation in a real `(cd <isolated-cwd> && ...)` (or an equivalent
+    `cwd=` subprocess argument, as `evals/scripts/check_dispatch_trace.py`'s
+    `run_live_dispatch` already does correctly) fixed it, and the
+    corrected run is the negative control recorded above. Recorded here so
+    a future caller hand-rolling this recipe outside that script does not
+    repeat the same mistake.
 
 #### `claude -p --plugin-dir` combined with cwd/HOME isolation
 
