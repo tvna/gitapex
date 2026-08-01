@@ -269,6 +269,12 @@ spec:
     - kind: audit
       anchor: "https://github.com/tvna/gitapex/issues/621"
       summary: "An independent adversarial pass over the new code found and fixed two real defects before merge: empty-string --marketplace-source/--plugin-name values fell through the mutual-requirement bool() check as if omitted, silently skipping registration (the same silent-degradation class this fix exists to close); a relative --marketplace-source was never resolved before the subprocess calls, unlike --isolated-home. Both fixed, regression-tested, re-verified live."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/652"
+      summary: "Added a ninth Mechanism-fit check, Invocation-mode fit: the review had no step establishing who may invoke a target at all, so a skill whose description promises an automatic trigger while disable-model-invocation switches model invocation off graded as a dimension-1 pass. Re-verified the Claude Code runtime-compatibility row on 2026-08-01 (the field was recorded only on the Cursor row, as a Cursor-only extension); recorded the two runtimes' identical meaning as an agreement, not a Conflict."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/652"
+      summary: "Split the same gap across both lanes rather than prose alone: the semantic mode-vs-trigger contradiction stays model-judged in rubric.md, while check_skill_shape.py's new invocation-mode-well-formed gates only what a script can decide -- a value outside Claude Code's documented boolean literals, and the disable-model-invocation + user-invocable: false combination that leaves a skill invocable by nobody. capabilityAssumption stays Broad."
   skillDependencies:
     requires: []
     relatedTo:

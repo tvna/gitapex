@@ -32,6 +32,7 @@ skill's own folder.
   - [Model/effort tier fit](#modeleffort-tier-fit)
   - [Tool-capability verification](#tool-capability-verification)
   - [Subagent delegation scope](#subagent-delegation-scope)
+  - [Invocation-mode fit](#invocation-mode-fit)
 - [Portability level](#portability-level)
 - [Compatibility awareness](#compatibility-awareness)
 - [Confidentiality awareness](#confidentiality-awareness)
@@ -572,6 +573,77 @@ genuinely independent, sizeable task from a small one.
 
 Step-level finding, the same standing as the three checks above.
 
+### Invocation-mode fit
+
+A ninth Mechanism-fit check, distinct from the eight above: not whether the
+target chose the right artifact, tier, tool claim, or delegation bound, but
+whether *who is actually allowed to invoke it* matches the trigger its own
+content claims. Grounded in [Claude Code skills][cc], which documents the
+two fields that gate this and states the default plainly: by default "both
+you and Claude can invoke any skill," `disable-model-invocation: true`
+means "Only you can invoke the skill," and `user-invocable: false` means
+"Only Claude can invoke the skill." The same source records two further
+effects of `disable-model-invocation` beyond the obvious one -- it also
+stops the skill being preloaded into subagents, and (from v2.1.196) stops a
+scheduled task firing with the skill as its prompt. See
+[runtime-compatibility.md](runtime-compatibility.md)'s Claude Code row for
+the versioned evidence, and its Cursor row for the second runtime that
+documents the same field with the same meaning.
+
+**Applicability.** Every target, unlike the applicability-gated checks
+above, which fire only when the target's own content happens to pin a
+tier, claim a tool capability, or instruct a dispatch. The absence
+of both fields is not "no pin to judge" here -- it *is* a mode (invocable by
+both), so there is always an effective mode to establish and always a
+trigger to compare it against. Establish the mode from frontmatter first,
+applying each field's documented default when it is absent; dimension 1
+consumes that result rather than re-deriving it ([Contract
+discipline](#contract-discipline)'s "never both").
+
+**Fail -- dead trigger.** The target's `description`, `when_to_use`, or
+procedure promises an automatic trigger ("Use when a pull request has just
+been opened," "on X, before closing the turn") while its frontmatter sets
+`disable-model-invocation` truthy. That trigger can never fire: the prose
+describes a mechanism the frontmatter has switched off, and no amount of
+description polish reaches it. Report the exact trigger sentence and the
+exact field line together. Step-level by default; **escalates to the
+headline finding when the unreachable trigger is the skill's own primary
+one** -- a skill that cannot start the way it says it starts is a broken
+artifact, not a nit, and the standing then matches a wrong-mechanism
+finding rather than sitting below it.
+
+**Fail -- unguarded side effects.** The converse direction. The target's
+procedure performs outward-facing or irreversible work -- the source's own
+examples are `/commit`, `/deploy`, `/send-slack-message`, and its stated
+rationale is "You don't want Claude deciding to deploy because your code
+looks ready" -- yet the skill stays model-invocable with no stated reason.
+Propose `disable-model-invocation: true`, or an explicit justification for
+leaving automatic invocation open. Step-level finding. This is about *who
+may start the procedure*; whether the procedure's own irreversible steps
+carry confirmations is the separate Skill-vs-hook backing question above,
+and both can be true at once.
+
+**Fail -- user-invocable mismatch.** `user-invocable: false` on a skill
+whose body is an actionable procedure a human would plausibly want to run
+by name, or its absence on a skill that is pure background knowledge with
+no action to take. Minor step-level finding; say which of the two
+directions applies.
+
+**Pass, and say so explicitly.** Most skills correctly declare neither
+field and correctly inherit "invocable by both," and that match is not a
+finding -- same restraint discipline as [Model/effort tier
+fit](#modeleffort-tier-fit)'s. State the established mode and that the
+target's trigger matches it (e.g. "invocation mode: both (neither field
+declared) -- matches the description's model-facing trigger"), so a reader
+can tell the check ran from a silent one that skipped it.
+
+**Relation to the warning-only axis.** The standard defines neither field,
+so declaring one is also a runtime-specific dependency and [Compatibility
+awareness](#compatibility-awareness) fires on its own terms. Classify the
+two independently, per that section's own precedence rule: the
+compatibility warning never changes a verdict, while a dead trigger is a
+Mechanism-fit finding that does. Never let one absorb the other.
+
 ## Portability level
 
 One of this review's own preconditions (see [Contract
@@ -1101,6 +1173,16 @@ whole skill, not a formality.
   that mismatch does not break invocation. It is still worth flagging as
   a readability/consistency nit (a human skimming the directory listing
   benefits from the two agreeing), just not as a shape violation.
+- **Grade the trigger against the effective invocation mode**, which
+  [Invocation-mode fit](#invocation-mode-fit) already established at step 2
+  -- do not re-derive it here. "The right trigger" is not one fixed target:
+  for a model-invocable skill the trigger clause has to win a router
+  decision, while for a manual-only one (`disable-model-invocation` truthy)
+  it addresses a human scanning the `/` menu, and generic-but-readable
+  wording that would fail the first test can be adequate for the second. A
+  trigger clause promising automatic firing on a manual-only skill is
+  already reported as that check's dead-trigger finding; do not count it a
+  second time here.
 - **Fail example:** a description that only says what the skill does, with
   no trigger, or a trigger so generic it would also match a sibling's
   request.

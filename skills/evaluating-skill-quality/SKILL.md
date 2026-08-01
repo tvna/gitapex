@@ -99,6 +99,14 @@ have been a different mechanism is not fixed by polishing it further.
   `references/rubric.md`'s Mechanism fit section.
 - **Subagent delegation scope**: subagent dispatch with no criterion or cap
   is a step-level finding -- `references/rubric.md`.
+- **Invocation-mode fit**: establish who may actually invoke the target --
+  `disable-model-invocation`, `user-invocable`, and their documented
+  defaults -- and compare that against the trigger its own content claims.
+  A description promising automatic firing on a manual-only skill is a
+  dead trigger no wording fixes. Runs on every target, since the defaults
+  are themselves a mode; step-level, escalating to the headline finding
+  when the unreachable trigger is the skill's primary one. Dimension 1
+  consumes this result instead of re-deriving it -- `references/rubric.md`.
 
 Full rationale and citation: [references/rubric.md](references/rubric.md)'s
 Mechanism fit section.
@@ -444,6 +452,11 @@ actually specifies.
 - Never revise a dimension verdict in the main thread after the dispatch
   returns it -- Subagent dispatch's second-independent-dispatch rule
   above, not a patch made in place.
+- Never grade a description's trigger clause before the effective
+  invocation mode is established, and never treat an automatic-trigger
+  sentence as a working trigger on a skill whose own frontmatter disables
+  model invocation -- a well-written trigger for a mechanism that is
+  switched off is not a passing dimension 1.
 - Never leave the Blind spot pass unaddressed -- an explicit "no gap found"
   and a silently skipped question are not the same thing; the latter is
   not a completed review.

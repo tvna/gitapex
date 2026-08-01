@@ -33,6 +33,17 @@ Checks (the canonical list -- the manual fallback is to apply these):
     so this is a dedicated check rather than a side effect of parsing.
   - name (only if present): lowercase-hyphenated, <= 64 chars,
     no XML tags, contains no reserved word (anthropic, claude)
+  - invocation control (invocation-mode-well-formed): disable-model-invocation
+    and user-invocable, each only if present, carry one of Claude Code's
+    documented boolean literals (true/false/yes/no/on/off/1/0, any letter
+    case); and the two do not together leave the skill invocable by nobody
+    (disable-model-invocation truthy AND user-invocable false, which blocks
+    the model and hides the skill from the / menu at the same time).
+    Neither field present passes -- the documented defaults
+    (disable-model-invocation false, user-invocable true) are the normal
+    state. Deliberately does NOT judge whether the declared mode matches the
+    trigger the skill's own description claims; that semantic question stays
+    with the model-judged Invocation-mode fit check in references/rubric.md.
   - SKILL.md body: <= 500 lines
   - metadata sidecar (metadata/gitapex.yaml, under the skill directory):
     present; has no malformed top-level lines (manifest-parsable -- a
@@ -468,6 +479,26 @@ BODY_MAX_LINES = 500
 # threshold past which skimming a flat file gets slow.
 TOC_MIN_LINES = 100
 RESERVED_NAME_WORDS = ("anthropic", "claude")
+
+# Invocation-control frontmatter. Both fields are Claude Code product
+# extensions the Agent Skills standard does not define; both are booleans
+# whose accepted literals are documented at code.claude.com/docs/en/skills
+# ("Boolean fields accept yes, no, on, off, 1, and 0 in any letter case, in
+# addition to true and false"), so the VALUE is lowercased before lookup.
+# The KEY is matched case-sensitively and deliberately so: YAML keys are
+# case-sensitive and the documented field names are lowercase, so a
+# differently-cased "Disable-Model-Invocation" is a different key the
+# runtime would not read either -- correctly invisible to this check.
+INVOCATION_TRUE_LITERALS = ("true", "yes", "on", "1")
+INVOCATION_FALSE_LITERALS = ("false", "no", "off", "0")
+# disable-model-invocation defaults to false (Claude may auto-load);
+# user-invocable defaults to true (the skill shows in the / menu). The
+# defaults matter here because the pair only fails as a COMBINATION, so an
+# absent field still has to resolve to a value.
+INVOCATION_FIELD_DEFAULTS = {
+    "disable-model-invocation": False,
+    "user-invocable": True,
+}
 
 # The sidecar is this repository's own metadata convention, not part of the
 # Anthropic Agent Skills standard -- hence its own metadata/ subdirectory
@@ -2843,6 +2874,74 @@ def _references_grammar_check(references: object) -> CheckResult:
              f"kind: {offenders[0]!r}")
 
 
+def _invocation_mode_check(fields: dict[str, str]) -> CheckResult:
+    """The two invocation-control frontmatter fields must each carry a
+    documented boolean literal, and must not together leave the skill
+    invocable by nobody.
+
+    Deliberately narrow. Whether the declared mode *matches the trigger the
+    skill's own description and procedure claim* -- a manual-only skill
+    promising to fire automatically on some event -- is the semantic
+    question, and it stays with the model-judged Invocation-mode fit check
+    in references/rubric.md; a script cannot read a trigger sentence's
+    intent. What a script CAN decide is exactly two things:
+
+    - a value outside Claude Code's documented boolean literal set, where
+      the runtime's own behavior (rejected, or silently read as one branch)
+      is Unknown per the runtime-compatibility baseline, so the author's
+      intent is unknowable from the file alone; and
+    - ``disable-model-invocation`` truthy together with
+      ``user-invocable`` false, which removes both invocation paths the
+      product documents and leaves a skill nothing can start. That
+      combination is never a deliberate state -- unlike either field alone,
+      each of which is a documented, useful choice.
+
+    Absent fields pass: the documented defaults (auto-loadable, and visible
+    in the / menu) are the normal, overwhelmingly common state.
+
+    Known false positive, disclosed rather than worked around: a value
+    carrying a trailing inline YAML comment (``true  # manual only``)
+    fails, because ``_parse_frontmatter`` deliberately does not strip
+    inline comments and reads the whole remainder as the value. This is
+    the same fail-closed-against-an-expected-literal tradeoff
+    ``_parse_manifest``'s own docstring already states for the sidecar's
+    enum fields, applied here to a frontmatter field for the first time --
+    a loud failure naming the exact offending raw value, never a silent
+    pass.
+    """
+    rule = ("disable-model-invocation/user-invocable, if present, each carry a "
+            "documented boolean literal, and do not together disable both "
+            "invocation paths")
+    declared = {k: v for k, v in fields.items() if k in INVOCATION_FIELD_DEFAULTS}
+    if not declared:
+        return CheckResult("invocation-mode-well-formed", True, rule,
+                           "not declared (optional)")
+    resolved: dict[str, bool] = dict(INVOCATION_FIELD_DEFAULTS)
+    malformed: list[str] = []
+    for key, raw in declared.items():
+        literal = raw.strip().lower()
+        if literal in INVOCATION_TRUE_LITERALS:
+            resolved[key] = True
+        elif literal in INVOCATION_FALSE_LITERALS:
+            resolved[key] = False
+        else:
+            malformed.append(f"{key}: {raw!r}")
+    if malformed:
+        return CheckResult(
+            "invocation-mode-well-formed", False, rule,
+            f"value outside {INVOCATION_TRUE_LITERALS + INVOCATION_FALSE_LITERALS} "
+            f"(case-insensitive): {', '.join(malformed)}")
+    if resolved["disable-model-invocation"] and not resolved["user-invocable"]:
+        return CheckResult(
+            "invocation-mode-well-formed", False, rule,
+            "invocable by nobody: disable-model-invocation blocks the model "
+            "and user-invocable: false hides it from the / menu")
+    return CheckResult(
+        "invocation-mode-well-formed", True, rule,
+        "declared: " + ", ".join(f"{k}={str(resolved[k]).lower()}"
+                                 for k in sorted(declared)))
+
+
 def check_shape(target: Path) -> list[CheckResult]:
     skill_md = _resolve_skill_md(target)
     skill_dir = skill_md.parent
@@ -2920,6 +3019,8 @@ def check_shape(target: Path) -> list[CheckResult]:
             "name-not-reserved", not reserved_hit,
             f"name contains no reserved word {RESERVED_NAME_WORDS}",
             repr(name)))
+
+    results.append(_invocation_mode_check(fields))
 
     body_lines = len(text.splitlines())
     results.append(CheckResult(
