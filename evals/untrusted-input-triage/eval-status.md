@@ -40,9 +40,11 @@ an aggregate dimension.
 Full report: [`battle-test-2026-08-01.md`](battle-test-2026-08-01.md). Raw
 trials, isolation proof, and methodology:
 [`results/2026-08-01-issue-645-battle-test/`](results/2026-08-01-issue-645-battle-test/).
-Remediation deferred to a separate follow-up issue (#646), not implemented
-as part of this verification pass, per `battle-testing-a-skill`'s own
-testing-vs-editing boundary.
+Remediation was initially deferred to a separate follow-up issue (#646),
+per `battle-testing-a-skill`'s own testing-vs-editing boundary -- see the
+Remediation entry below for its current, since-updated status. Do not read
+this section as describing the file's present content; it is the historical
+record of what the pre-remediation `SKILL.md` looked like.
 
 This battle-test is a distinct mechanism from the paragraph above it: it
 adversarially audits the `SKILL.md` prose itself across 22 dimensions; it
@@ -85,5 +87,44 @@ Full report: [`behavioral-eval-2026-08-01.md`](behavioral-eval-2026-08-01.md).
 Raw runs and methodology:
 [`results/2026-08-01-issue-645-behavioral-eval/`](results/2026-08-01-issue-645-behavioral-eval/).
 Remediation (both the fixture brittleness and the `normal`-task regression)
-folded into issue #646 alongside the battle-test findings, not implemented
-in this pass.
+was initially folded into issue #646 alongside the battle-test findings --
+see the Remediation entry below for current status. As with the battle-test
+section above, this section describes the pre-remediation fixtures; the
+committed `tasks/*.yaml` have since been edited (see Remediation below).
+
+## Remediation (issue #646, 2026-08-01, in progress)
+
+A candidate fix landed (commit `4187c9c`, plus an iteration-2 follow-up
+commit) addressing: dim 12 (install/vendoring-time provenance caveat), dim
+13 (persisted-memory scope extension), dim 15 (multi-turn re-derivation
+Stop boundary + new `tasks/multi-turn-escalation.yaml` fixture), dim 17
+(delimiter-safe quoting rule), a bonus dim 9 guard (degenerate input), and
+`eval.yaml`'s retired model pin. Fixture wording brittleness fixed
+(`Base64`/`adversarial`/`flagged`/`Fact:`/`Speculation:`/`refuse` exact
+matches replaced with `output_icontains: ["inject"]`-style robust anchors,
+validated against the actual committed raw outputs above before choosing
+the replacement wording, not guessed).
+
+**Iteration 1 gate result (3 fresh isolated battle-test trials against the
+candidate):** all 3 independently confirmed dims 12/13/15/17 now `PASS` on
+the file's actual content -- but all 3 also surfaced two things this
+iteration had not yet fixed: (a) this file and `metadata/gitapex.yaml`
+still described the fix as "deferred, not implemented" even though it had
+landed, which the trials correctly read as evidence dimension 14
+(regression corpus) does not actually gate real edits -- the inconsistency
+you are reading the fix for right now; (b) the untrusted-artifact/URL-
+dereference gap the original audit found in only 1 of 3 trials recurred in
+all 3 of these, with concrete exfiltration-via-fetch scenarios, and 1 of 3
+additionally flagged that the new quoting rule guards against structural
+breakout but not against republishing a secret/PII value that happens to be
+present in a quoted excerpt.
+
+**Iteration 2** (this update): added URL/attachment-dereference and
+excerpt-redaction guidance to `SKILL.md`, and is updating this file and the
+metadata sidecar in the same change that lands the content fix, closing the
+staleness gap iteration 1 found. A second live 3-trial gate re-run,
+against a clean-root copy that includes the full `evals/untrusted-input-
+triage/` directory (not just `eval.yaml`/`eval-status.md`/`tasks/`, which
+is what iteration 1's clean-root omitted and which partly fed the dimension-
+14 finding), is in progress; its result will be recorded here before this
+branch is presented for merge.

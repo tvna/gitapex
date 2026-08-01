@@ -27,3 +27,9 @@ spec:
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/645"
       summary: "eval.yaml's pinned model claude-sonnet-4.6 is retired (confirmed live via the CLI's own retirement warning as of 2026-06-15); substituted claude-sonnet-5 for the live behavioral-eval run above, disclosed rather than silently swapped. Updating eval.yaml's own declared model is left to the remediation follow-up (see the deferral entry above), not changed here."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/646"
+      summary: "A candidate fix for dims 12/13/15/17 (commit 4187c9c) landed without updating this sidecar or eval-status.md, leaving both stale vs. SKILL.md's actual content. A fresh battle-test gate independently caught this in 3/3 trials, charged to dimension 14. Fixed here (iteration 2), plus URL-dereference and excerpt-redaction guidance the same gate surfaced (3/3, 1/3). See eval-status.md's Remediation section; a second gate re-run is in progress."
+      outcome:
+        verdict: fixed
+        scope: dim-14-staleness-plus-url-dereference-plus-redaction
