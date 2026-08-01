@@ -18,3 +18,12 @@ spec:
     - kind: deferral
       anchor: "https://github.com/tvna/gitapex/issues/645 -> https://github.com/tvna/gitapex/issues/646"
       summary: "Remediation for the 5 unanimous battle-test FAILs (dimensions 12/13/14/15/17) and the single-trial URL-dereference finding deferred to this follow-up issue, kept separate from the verification pass per battle-testing-a-skill's own testing-vs-editing boundary."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/645"
+      summary: "Live run of the 4 committed evals/untrusted-input-triage/tasks/*.yaml fixtures at trials_per_task: 3 plus an added without-skill baseline (24 dispatches). Raw with-vs-without score delta was 0.000 on all 4 tasks, but real behavioral differences exist in the raw outputs: (1) fixture/scorer brittleness makes the suite's own 0.8 threshold unreachable for 3 of 4 tasks even on substantively correct responses (42 of 48 missed output_contains checks are vocabulary mismatches, not real misses); (2) a real, 3-for-3-reproduced regression on the normal task, not isolated from the necessarily tool-less test harness. Full report: evals/untrusted-input-triage/behavioral-eval-2026-08-01.md."
+      outcome:
+        verdict: fail
+        scope: fixture-brittleness-and-normal-task-regression
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/645"
+      summary: "eval.yaml's pinned model claude-sonnet-4.6 is retired (confirmed live via the CLI's own retirement warning as of 2026-06-15); substituted claude-sonnet-5 for the live behavioral-eval run above, disclosed rather than silently swapped. Updating eval.yaml's own declared model is left to whoever picks up issue #646, not changed here."
