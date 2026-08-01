@@ -23,10 +23,21 @@ surfaces are read -- `hooks.json` manifests and the YAML frontmatter of
 agent definitions, the two places this repository actually carries hook
 commands. Prose that merely names the variable (for example
 `skills/executing-a-branch-plan/references/threat-model-and-authorization.md`
-discussing when it is unset) is not a violation and is never read. A future
-hook mechanism carrying commands in some third shape would not be covered;
-that limit is stated in issue #650's Acceptance Criteria Map rather than
-left implicit.
+discussing when it is unset) is not a violation and is never read.
+
+Two misses are deliberate, both found by adversarially probing this gate
+before it shipped rather than left to be discovered later:
+
+- A hook command written into `.claude/settings.json` is not read. That
+  file is gitignored here and is written by `apm install`, so scanning it
+  would grade a third party's notation, not this repository's.
+- A `"command"` whose value is a list rather than a string is not read. That
+  is not a shape Claude Code documents, so such a hook would already be
+  inert; the gate exists to protect hooks that would otherwise work.
+
+A future hook mechanism carrying commands in some third shape would likewise
+not be covered; that limit is stated in issue #650's Acceptance Criteria Map
+rather than left implicit.
 
 Standard library only, so the calling workflow needs no dependency install.
 
@@ -67,8 +78,12 @@ _EXCLUDED_PREFIXES = ((".claude", "skills"), (".claude", "hooks"))
 
 # Agent definitions carry hook commands in YAML frontmatter rather than in a
 # `hooks.json`; both locations are scanned because Claude Code loads agents
-# from a plugin's `agents/` and a project's `.claude/agents/`.
-_AGENT_GLOBS = ("agents/*.md", ".claude/agents/*.md")
+# from a plugin's `agents/` and a project's `.claude/agents/`. Recursive
+# (`**`) rather than a flat `*`: an adversarial probe of an earlier revision
+# of this gate showed a violating command in `agents/<sub>/a.md` slipping
+# through a flat glob, and nothing stops an author from grouping agent
+# definitions in subdirectories.
+_AGENT_GLOBS = ("agents/**/*.md", ".claude/agents/**/*.md")
 
 
 def commands_in_hook_manifest(data: object) -> Iterator[str]:
@@ -115,7 +130,15 @@ def offending_lines(path: pathlib.Path) -> list[str]:
     """
     text = path.read_text(encoding="utf-8")
     if path.name == "hooks.json":
-        candidates = commands_in_hook_manifest(json.loads(text))
+        try:
+            manifest = json.loads(text)
+        except json.JSONDecodeError as error:
+            # A malformed manifest is a real failure, not something to pass
+            # over: nothing downstream can tell whether it hides a violation.
+            # Re-raised with the offending path attached so CI shows an
+            # actionable message instead of a bare decoder traceback.
+            raise ValueError(f"{path}: not valid JSON: {error}") from error
+        candidates = commands_in_hook_manifest(manifest)
     else:
         candidates = (line.strip() for line in frontmatter(text).split("\n"))
     return [candidate for candidate in candidates if _UNBRACED_RE.search(candidate)]
@@ -159,7 +182,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    violations = find_violations(args.root)
+    try:
+        violations = find_violations(args.root)
+    except ValueError as error:
+        print(f"{error}", file=sys.stderr)
+        return 1
     if violations:
         for path, offender in violations:
             print(

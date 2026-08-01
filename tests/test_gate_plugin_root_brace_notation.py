@@ -137,6 +137,57 @@ def test_project_agents_directory_is_scanned(tmp_path):
     assert [p for p, _ in gate.find_violations(tmp_path)] == [".claude/agents/a.md"]
 
 
+def test_agent_in_a_subdirectory_is_scanned(tmp_path):
+    """Regression: a flat `agents/*.md` glob let `agents/<sub>/a.md` through.
+
+    Found by adversarially probing this gate before it shipped, not by a
+    later incident; nothing stops an author from grouping agent definitions
+    into subdirectories.
+    """
+    path = tmp_path / "agents" / "sub" / "a.md"
+    path.parent.mkdir(parents=True)
+    path.write_text(f"---\ncommand: {_UNBRACED}\n---\n", encoding="utf-8")
+    assert [p for p, _ in gate.find_violations(tmp_path)] == ["agents/sub/a.md"]
+
+
+def test_variable_buried_in_a_longer_shell_command_is_caught(tmp_path):
+    _write_hooks_json(tmp_path, 'bash -c "$CLAUDE_PLUGIN_ROOT/hooks/x.sh --flag"')
+    assert len(gate.find_violations(tmp_path)) == 1
+
+
+def test_malformed_hooks_json_fails_loudly_with_the_path(tmp_path, capsys):
+    """A manifest that cannot be parsed must fail, and name the file.
+
+    Passing it over would be the silent-default this repository's own
+    instructions forbid: nothing downstream can tell whether an unparseable
+    manifest hides a violation.
+    """
+    path = tmp_path / "hooks" / "hooks.json"
+    path.parent.mkdir(parents=True)
+    path.write_text("{not json", encoding="utf-8")
+    assert gate.main(["--root", str(tmp_path)]) == 1
+    assert "not valid JSON" in capsys.readouterr().err
+
+
+def test_settings_json_hook_commands_are_out_of_scope(tmp_path):
+    """Deliberate miss: `.claude/settings.json` is apm-written, not ours."""
+    path = tmp_path / ".claude" / "settings.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        json.dumps({"hooks": {"PreToolUse": [{"hooks": [{"command": _UNBRACED.strip('"')}]}]}}),
+        encoding="utf-8",
+    )
+    assert gate.find_violations(tmp_path) == []
+
+
+def test_list_valued_command_is_out_of_scope(tmp_path):
+    """Deliberate miss: Claude Code documents `command` as a string only."""
+    path = tmp_path / "hooks" / "hooks.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({"command": [_UNBRACED.strip('"')]}), encoding="utf-8")
+    assert gate.find_violations(tmp_path) == []
+
+
 def test_frontmatter_absent_returns_empty():
     assert gate.frontmatter("no frontmatter here\n") == ""
 
