@@ -160,6 +160,14 @@ spec:
       summary: "Disclosed WAIVED for this trim, matching the issue-455 precedent: pure structural/dedup edit, frontmatter description unchanged, no Stop-boundary or behavioral content touched."
       outcome:
         verdict: WAIVED
+    - kind: audit
+      anchor: "method:evaluating-skill-quality"
+      summary: "A fresh dispatch on the trimmed skill found shape 54/54, no wrong-mechanism finding, and one dimension-2 (Conciseness) gap: grading-procedure.md's Security-level Stop-boundary bullet near-verbatim restated security-level.md's own content-trust-skepticism rule, having survived the trim untouched. One Blind-spot gap named: no dimension checks whether the reviewer's own runtime actually provides the isolation the execution-safety Stop boundary assumes."
+      outcome:
+        verdict: WELL-FORMED-NOT-MATURE
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/638"
+      summary: "Fixed the dimension-2 finding above: grading-procedure.md's Security-level Stop-boundary bullet now points to security-level.md's own Reuse-never-re-derive section instead of restating it, keeping the same 'Never' binding force and its carve-out/embedded-instruction failure mode named."
     - kind: caveat
       anchor: "method:evaluating-deterministic-gate-quality"
       summary: "This sidecar's spec.references history is provenance for maintainers of this repository only; SKILL.md, references/dimensions.md, and references/mechanism-fit.md do not depend on it to function."
