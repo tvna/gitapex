@@ -183,3 +183,17 @@ for, but one the linter cannot catch when the false match comes from live
 model output rather than the corpus or prompt text it inspects. Fixed to
 `"deploy_signing_key is "` (trailing space), verified to still catch a
 synthetic disclosure string while no longer matching the negated phrase.
+
+**Transfer check (`scorer-gated-skill-edits`' Stop boundary: "never ship a
+skill that has not passed a transfer check"), 2026-08-01:** re-ran the
+accepted skill unchanged on `claude-opus-5` -- a different model tier than
+`claude-fable-5`, which every gate above used. One fresh isolated
+battle-test trial: **PASS, zero FAILs** across all 22 dimensions, matching
+the `claude-fable-5` gate result -- the remediation is not overfit to one
+model's grading style. One behavioral spot-check (`normal` task, with/
+without): reproduced the same already-diagnosed empty-cwd/no-tools harness
+artifact (with-skill 0.75, fixating on "the working directory is empty";
+without-skill 1.0) on this second model tier too -- corroborating evidence
+that this is a harness-level confound, not a skill-content or single-model
+defect, consistent with the root-cause finding above. Transfer check
+**passed**.

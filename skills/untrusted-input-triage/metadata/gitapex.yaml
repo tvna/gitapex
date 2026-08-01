@@ -45,3 +45,9 @@ spec:
       outcome:
         verdict: partial
         scope: threshold-met-delta-not-positive
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/646"
+      summary: "Transfer check per scorer-gated-skill-edits' Stop boundary: the accepted skill re-run unchanged on claude-opus-5 (a different tier than every prior gate's claude-fable-5). Battle-test: PASS, zero FAILs, matching the fable result. Behavioral spot-check reproduced the same already-diagnosed empty-cwd harness artifact on a second model tier -- corroborating, not a new defect. Transfer check passed. See eval-status.md."
+      outcome:
+        verdict: pass
+        scope: claude-opus-5
