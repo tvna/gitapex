@@ -452,7 +452,14 @@ def test_main_completes_missing_release_when_tag_already_exists(
     _write_manifest(tmp_path, "1.2.3")
     monkeypatch.setenv("GH_TOKEN", "tok")
     pr_body = "<!-- release-notes:start -->\nNotable change.\n<!-- release-notes:end -->"
-    prs = [{"number": 9, "merged_at": "2026-08-01T00:00:00Z", "body": pr_body}]
+    prs = [
+        {
+            "number": 9,
+            "merged_at": "2026-08-01T00:00:00Z",
+            "body": pr_body,
+            "head": {"ref": "chore/release-plugin-bump"},
+        }
+    ]
     fake = _FakeApplyCall(
         {
             "GET https://api.github.com/repos/o/r/git/ref/tags/gitapex--v1.2.3": (200, "{}"),
@@ -483,7 +490,14 @@ def test_main_publishes_tag_and_release_when_absent(monkeypatch: pytest.MonkeyPa
         "Notable change one.\nNotable change two.\n"
         "<!-- release-notes:end -->\n\nRefs #642"
     )
-    prs = [{"number": 9, "merged_at": "2026-08-01T00:00:00Z", "body": pr_body}]
+    prs = [
+        {
+            "number": 9,
+            "merged_at": "2026-08-01T00:00:00Z",
+            "body": pr_body,
+            "head": {"ref": "chore/release-plugin-bump"},
+        }
+    ]
     fake = _FakeApplyCall(
         {
             "GET https://api.github.com/repos/o/r/git/ref/tags/gitapex--v1.2.3": (404, ""),
@@ -507,7 +521,11 @@ def test_main_publishes_tag_and_release_when_absent(monkeypatch: pytest.MonkeyPa
     assert "published gitapex--v1.2.3" in capsys.readouterr().err
 
 
-def test_main_raises_when_no_merged_pr_found(monkeypatch: pytest.MonkeyPatch, tmp_path, capsys) -> None:
+def test_main_skips_quietly_when_no_merged_pr_found(monkeypatch: pytest.MonkeyPatch, tmp_path, capsys) -> None:
+    # A plugin.json-touching push to main with no merged PR behind the
+    # commit at all (e.g. a direct push, or the commits/pulls lookup racing
+    # ahead of GitHub's own indexing) is treated the same as "not a
+    # release-PR merge" -- skip quietly, do not fail the workflow.
     _write_manifest(tmp_path, "1.2.3")
     monkeypatch.setenv("GH_TOKEN", "tok")
     fake = _FakeApplyCall(
@@ -520,14 +538,61 @@ def test_main_raises_when_no_merged_pr_found(monkeypatch: pytest.MonkeyPatch, tm
 
     rc = rtp.main(["--repo-root", str(tmp_path), "--sha", "deadbeef", "--repo", "o/r"], apply_call=fake)
 
-    assert rc == 1
-    assert "No merged PR found" in capsys.readouterr().err
+    assert rc == 0
+    assert "not a release-PR merge, skipping" in capsys.readouterr().out
+    assert not [c for c in fake.calls if c[0] == "POST"]
+
+
+def test_main_skips_quietly_when_merged_pr_is_not_the_release_bump_branch(
+    monkeypatch: pytest.MonkeyPatch, tmp_path, capsys
+) -> None:
+    # Regression: release-tag.yml triggers on EVERY push to main that
+    # touches plugin.json, not only release-PR merges -- an ordinary PR
+    # editing plugin.json (a metadata field, or the deliberate manual
+    # major-version bump docs/versioning.md prescribes) merges from some
+    # other branch and must not make this workflow fail.
+    _write_manifest(tmp_path, "1.2.3")
+    monkeypatch.setenv("GH_TOKEN", "tok")
+    prs = [
+        {
+            "number": 12,
+            "merged_at": "2026-08-01T00:00:00Z",
+            "body": "Bump the license field.",
+            "head": {"ref": "chore/tidy-plugin-metadata"},
+        }
+    ]
+    fake = _FakeApplyCall(
+        {
+            "GET https://api.github.com/repos/o/r/git/ref/tags/gitapex--v1.2.3": (404, ""),
+            "GET https://api.github.com/repos/o/r/releases/tags/gitapex--v1.2.3": (404, ""),
+            "GET https://api.github.com/repos/o/r/commits/deadbeef/pulls": (200, json.dumps(prs)),
+        }
+    )
+
+    rc = rtp.main(["--repo-root", str(tmp_path), "--sha", "deadbeef", "--repo", "o/r"], apply_call=fake)
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "not a release-PR merge, skipping" in out
+    assert "chore/tidy-plugin-metadata" in out
+    assert not [c for c in fake.calls if c[0] == "POST"]
 
 
 def test_main_missing_release_notes_markers_raises(monkeypatch: pytest.MonkeyPatch, tmp_path, capsys) -> None:
+    # Unlike the two skip cases above, a merged PR that IS from the
+    # release-bump branch but somehow lacks the release-notes markers is a
+    # genuine bug (release_pr_publish.py always writes them) and must still
+    # fail loudly, not skip.
     _write_manifest(tmp_path, "1.2.3")
     monkeypatch.setenv("GH_TOKEN", "tok")
-    prs = [{"number": 9, "merged_at": "2026-08-01T00:00:00Z", "body": "no markers here"}]
+    prs = [
+        {
+            "number": 9,
+            "merged_at": "2026-08-01T00:00:00Z",
+            "body": "no markers here",
+            "head": {"ref": "chore/release-plugin-bump"},
+        }
+    ]
     fake = _FakeApplyCall(
         {
             "GET https://api.github.com/repos/o/r/git/ref/tags/gitapex--v1.2.3": (404, ""),

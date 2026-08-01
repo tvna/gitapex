@@ -41,9 +41,14 @@ Environment variables:
               not passed).
 
 Exit codes:
-    0  Success, including the no-op "already tagged" case.
-    1  Missing env var, missing/invalid manifest, no merged PR found for the
-       commit, missing release-notes markers, or a GitHub API error.
+    0  Success, including the no-op "already published" case, and the
+       "not a release-PR merge" skip (no merged PR found for the commit, or
+       the merged PR's head branch is not the release-bump branch -- this
+       workflow triggers on every plugin.json-touching push to main, not
+       only release-PR merges, so an ordinary edit to the file must not
+       fail the run).
+    1  Missing env var, missing/invalid manifest, missing release-notes
+       markers on a release-bump-branch PR, or a GitHub API error.
 """
 
 from __future__ import annotations
@@ -67,6 +72,11 @@ _HTTP_TIMEOUT_SECONDS = 30
 _RELEASE_NOTES_START = "<!-- release-notes:start -->"
 _RELEASE_NOTES_END = "<!-- release-notes:end -->"
 _RELEASE_NOTES_RE = re.compile(re.escape(_RELEASE_NOTES_START) + r"(.*?)" + re.escape(_RELEASE_NOTES_END), re.DOTALL)
+
+# Must match release_pr_publish.py's own `_DEFAULT_BRANCH` literal. Not
+# imported -- this repo's `.github/scripts/*.py` files deliberately do not
+# import each other (see release_pr_publish.py's own module docstring).
+_RELEASE_BUMP_BRANCH = "chore/release-plugin-bump"
 
 
 def _default_opener(request: urllib.request.Request) -> Any:
@@ -312,12 +322,22 @@ def main(
             print(f"release-tag-publish: {tag_name} already published (tag + release) -- no-op")
             return 0
         pr = find_merged_pr_for_commit(repo, args.sha, token, apply_call=apply_call)
-        if pr is None:
-            raise RuntimeError(
-                f"No merged PR found for commit {args.sha} in {repo}: a plugin.json version "
-                "bump reached the base branch outside the release-PR flow -- refusing to "
-                "silently no-op"
+        head_ref = (pr.get("head") or {}).get("ref") if pr is not None else None
+        if pr is None or head_ref != _RELEASE_BUMP_BRANCH:
+            # This workflow triggers on every push to main that touches
+            # plugin.json, not only release-PR merges -- an ordinary PR
+            # editing plugin.json (a metadata field, or the deliberate
+            # manual major-version bump docs/versioning.md prescribes) is
+            # expected to reach this point with no release-PR-shaped merge
+            # behind it. That is not an error: skip quietly rather than
+            # raising, so this workflow does not go red on a legitimate,
+            # non-release change to the same file.
+            print(
+                f"release-tag-publish: commit {args.sha} was not merged from "
+                f"'{_RELEASE_BUMP_BRANCH}' (found: {head_ref!r}) -- not a release-PR "
+                "merge, skipping"
             )
+            return 0
         notes = extract_release_notes(pr.get("body") or "")
         publish_tag_and_release(
             repo, version, args.sha, notes, token, apply_call=apply_call, skip_tag=has_tag

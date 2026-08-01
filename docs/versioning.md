@@ -62,12 +62,13 @@ Three pieces now implement release automation for the **plugin** product:
 
 ### Bump rule
 
-- A `feat(plugin)` commit, or any commit marked breaking, bumps the
-  **minor** version.
-- A `fix(plugin)`, `refactor(plugin)`, or `perf(plugin)` commit bumps the
-  **patch** version.
-- `docs`, `chore`, `test`, `build`, and `ci` commits, and commits scoped
-  to anything other than `plugin`, trigger **no bump**.
+- A `feat(plugin)` commit, or any `plugin`-scoped commit marked breaking
+  (regardless of its type), bumps the **minor** version.
+- A non-breaking `fix(plugin)`, `refactor(plugin)`, or `perf(plugin)`
+  commit bumps the **patch** version.
+- A non-breaking `docs(plugin)`, `chore(plugin)`, `test(plugin)`,
+  `build(plugin)`, or `ci(plugin)` commit, and any commit scoped to
+  anything other than `plugin`, trigger **no bump**.
 
 **The major version is never bumped automatically.** Reaching `1.0.0` (or
 any future major version) is always a deliberate, manual edit to

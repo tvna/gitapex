@@ -705,6 +705,65 @@ def test_publish_release_pr_no_open_pr_no_existing_branch_creates() -> None:
     assert ("DELETE", "https://api.github.com/repos/o/r/git/refs/heads/chore/release-plugin-bump") in calls
 
 
+def test_publish_release_pr_no_open_pr_stale_branch_deletes_and_recreates() -> None:
+    # Coverage gap closed (flagged by the Step 8 adversarial review, not a
+    # bug -- the code path was already correct): unlike the "no existing
+    # branch" case above, here the branch DOES already exist (e.g. left
+    # over from a prior run whose PR was merged or closed without deleting
+    # it) but no open PR currently targets it. This is exactly the "stale,
+    # possibly-unsigned-ancestor branch" case the module docstring says
+    # must be deleted and recreated fresh off base, never appended to.
+    responses = {
+        "https://api.github.com/repos/o/r/pulls?head=o:chore/release-plugin-bump&state=open&per_page=1": (
+            200,
+            json.dumps([]),
+        ),
+        # The DELETE call gets a real 204 (something existed and was
+        # actually removed), not the "already gone" 404 the sibling test
+        # above simulates -- proving this path handles a genuine stale
+        # branch, not only a no-op delete against nothing.
+        "https://api.github.com/repos/o/r/git/refs/heads/chore/release-plugin-bump": (204, ""),
+        # After that real deletion, the branch is gone -- the subsequent
+        # existence check correctly sees 404, so the code recreates fresh
+        # off base rather than appending onto a branch that no longer
+        # exists.
+        "https://api.github.com/repos/o/r/git/ref/heads/chore/release-plugin-bump": (404, ""),
+        "https://api.github.com/repos/o/r/git/ref/heads/main": (200, json.dumps({"object": {"sha": "basesha"}})),
+        "https://api.github.com/repos/o/r/git/refs": (201, ""),
+        "https://api.github.com/repos/o/r/pulls": (201, json.dumps({"number": 7})),
+    }
+    fake, calls = _fake_apply_call(responses)
+    captured_additions: list[dict[str, str]] = []
+
+    def fake_graphql(*, query, variables, token):
+        assert variables["input"]["expectedHeadOid"] == "basesha"
+        captured_additions.extend(variables["input"]["fileChanges"]["additions"])
+        return 200, {"data": {"createCommitOnBranch": {"commit": {"oid": "newsha"}}}}
+
+    result = rpp.publish_release_pr(
+        repo="o/r",
+        additions=[(".claude-plugin/plugin.json", b'{"version": "0.2.0"}'), ("apm.yml", b"version: 0.2.0")],
+        base="main",
+        branch="chore/release-plugin-bump",
+        title="chore(plugin): bump version to 0.2.0",
+        body="b",
+        commit_subject="chore(plugin): bump version to 0.2.0",
+        commit_body="",
+        token="tok",
+        apply_call=fake,
+        graphql_call=fake_graphql,
+    )
+
+    assert result == "created:7"
+    assert len(captured_additions) == 2
+    # The stale branch must actually be deleted before recreation, and the
+    # recreated branch's ref must come from base's sha, not the stale
+    # branch's own tip (proven above via expectedHeadOid == "basesha").
+    assert ("DELETE", "https://api.github.com/repos/o/r/git/refs/heads/chore/release-plugin-bump") in calls
+    create_ref_calls = [c for c in calls if c == ("POST", "https://api.github.com/repos/o/r/git/refs")]
+    assert len(create_ref_calls) == 1
+
+
 def test_publish_release_pr_open_pr_updates_and_leaves_branch_alone() -> None:
     responses = {
         "https://api.github.com/repos/o/r/pulls?head=o:chore/release-plugin-bump&state=open&per_page=1": (

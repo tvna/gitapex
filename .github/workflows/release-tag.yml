@@ -9,6 +9,15 @@ on:
 permissions:
   contents: read
 
+# Two plugin.json-touching pushes landing close together must not race: both
+# runs would otherwise see "no tag yet" concurrently and could both attempt
+# to create it, with one losing to a 422 and stranding a tag object with no
+# ref. Serializing (not cancelling -- each push may carry a different
+# version to tag) removes that window.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
 jobs:
   release-tag:
     runs-on: ubuntu-latest
