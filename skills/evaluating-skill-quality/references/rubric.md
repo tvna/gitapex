@@ -590,7 +590,9 @@ scheduled task firing with the skill as its prompt. See
 the versioned evidence, and its Cursor row for the second runtime that
 documents the same field with the same meaning.
 
-**Applicability.** Every target, unlike the four checks above. The absence
+**Applicability.** Every target, unlike the applicability-gated checks
+above, which fire only when the target's own content happens to pin a
+tier, claim a tool capability, or instruct a dispatch. The absence
 of both fields is not "no pin to judge" here -- it *is* a mode (invocable by
 both), so there is always an effective mode to establish and always a
 trigger to compare it against. Establish the mode from frontmatter first,

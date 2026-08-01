@@ -484,7 +484,11 @@ RESERVED_NAME_WORDS = ("anthropic", "claude")
 # extensions the Agent Skills standard does not define; both are booleans
 # whose accepted literals are documented at code.claude.com/docs/en/skills
 # ("Boolean fields accept yes, no, on, off, 1, and 0 in any letter case, in
-# addition to true and false"). Keyed lowercase; lookup lowercases first.
+# addition to true and false"), so the VALUE is lowercased before lookup.
+# The KEY is matched case-sensitively and deliberately so: YAML keys are
+# case-sensitive and the documented field names are lowercase, so a
+# differently-cased "Disable-Model-Invocation" is a different key the
+# runtime would not read either -- correctly invisible to this check.
 INVOCATION_TRUE_LITERALS = ("true", "yes", "on", "1")
 INVOCATION_FALSE_LITERALS = ("false", "no", "off", "0")
 # disable-model-invocation defaults to false (Claude may auto-load);
@@ -2893,8 +2897,17 @@ def _invocation_mode_check(fields: dict[str, str]) -> CheckResult:
       each of which is a documented, useful choice.
 
     Absent fields pass: the documented defaults (auto-loadable, and visible
-    in the / menu) are the overwhelmingly common and correct state, and
-    every skill in this repository is currently in it.
+    in the / menu) are the normal, overwhelmingly common state.
+
+    Known false positive, disclosed rather than worked around: a value
+    carrying a trailing inline YAML comment (``true  # manual only``)
+    fails, because ``_parse_frontmatter`` deliberately does not strip
+    inline comments and reads the whole remainder as the value. This is
+    the same fail-closed-against-an-expected-literal tradeoff
+    ``_parse_manifest``'s own docstring already states for the sidecar's
+    enum fields, applied here to a frontmatter field for the first time --
+    a loud failure naming the exact offending raw value, never a silent
+    pass.
     """
     rule = ("disable-model-invocation/user-invocable, if present, each carry a "
             "documented boolean literal, and do not together disable both "

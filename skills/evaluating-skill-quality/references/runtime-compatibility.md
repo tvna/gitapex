@@ -1,6 +1,8 @@
 # Runtime compatibility baseline
 
-Snapshot date: 2026-07-27.
+Snapshot date: 2026-07-27. Claude Code row re-verified 2026-08-01 (its
+invocation-control fields); every other row still carries the snapshot date
+above and was not re-checked since.
 
 This is an evidence baseline for the warning-only compatibility-awareness
 axis. It is not an enforcement adapter and does not claim that a runtime
@@ -42,7 +44,7 @@ Classification uses three evidence states:
 
 | Runtime | Documented standard relationship | Documented runtime-specific behavior | Unknowns relevant to review |
 |---|---|---|---|
-| Claude Code (row re-verified 2026-08-01) | Supports `SKILL.md` plus product-specific frontmatter | `context: fork`, `agent`, and `background` control subagent execution. `allowed-tools` pre-approves tools for the invoking turn and does not restrict other tools; `disallowed-tools` is the product restriction field. Dynamic command substitution runs before skill injection. Invocation control is a separate pair of fields, both booleans: `disable-model-invocation` (default `false`) set to `true` "prevent[s] Claude from automatically loading this skill", also prevents the skill from being preloaded into subagents, and -- as of v2.1.196 -- also prevents it running when a scheduled task fires with the skill as its prompt; `user-invocable` (default `true`) set to `false` hides it from the `/` menu. `paths` narrows automatic loading to files matching its globs. Boolean fields accept `yes`, `no`, `on`, `off`, `1`, and `0` in any letter case besides `true`/`false` (v2.1.218+; earlier versions took only `true`/`false`). | The Agent Skills standard does not define the Claude-specific fields or dynamic substitution semantics. Whether a value outside the documented boolean literals is rejected, or silently read as one branch, is Unknown. |
+| Claude Code | Supports `SKILL.md` plus product-specific frontmatter | `context: fork`, `agent`, and `background` control subagent execution. `allowed-tools` pre-approves tools for the invoking turn and does not restrict other tools; `disallowed-tools` is the product restriction field. Dynamic command substitution runs before skill injection. Invocation control is a separate pair of fields, both booleans: `disable-model-invocation` (default `false`) set to `true` "prevent[s] Claude from automatically loading this skill", also prevents the skill from being preloaded into subagents, and -- as of v2.1.196 -- also prevents it running when a scheduled task fires with the skill as its prompt; `user-invocable` (default `true`) set to `false` hides it from the `/` menu. `paths` narrows automatic loading to files matching its globs. Boolean fields accept `yes`, `no`, `on`, `off`, `1`, and `0` in any letter case besides `true`/`false` (v2.1.218+; earlier versions took only `true`/`false`). | The Agent Skills standard does not define the Claude-specific fields or dynamic substitution semantics. Whether a value outside the documented boolean literals is rejected, or silently read as one branch, is Unknown. |
 | Codex | OpenAI states that Skills follow the Agent Skills open standard and are supported in Codex. | No Codex-specific `SKILL.md` frontmatter behavior was established by the public source used for this snapshot. | Treatment of each vendor extension is Unknown unless current Codex documentation or observed runtime behavior establishes it. |
 | Gemini CLI | Official documentation says Agent Skills are based on the open standard. | Activation requires consent, injects the body and folder structure, and adds the skill directory to allowed file paths for bundled assets. | The documentation used here does not establish that `compatibility` or `allowed-tools` is enforced. |
 | Devin | Official documentation says skills follow the Agent Skills standard. | Devin says `allowed-tools` restricts the active skill to the listed tools; it also adds `argument-hint` and `triggers`, and expands arguments plus command-output substitutions at invocation. | The restrictive Devin meaning conflicts with Claude Code's pre-approval meaning for the same experimental field. Behavior for other vendor extensions is Unknown. |
@@ -101,8 +103,9 @@ Classification uses three evidence states:
    non-standard value structure and can create a runtime dependency.
 5. Refresh the source before asserting current support. Record the checked
    date in the review when compatibility is material.
-6. Frontmatter that gates *who may invoke* a skill (`disable-model-invocation`,
-   `user-invocable`, `paths`) is behavior-affecting, not decorative: it decides
+6. Frontmatter that gates *who* may invoke a skill (`disable-model-invocation`,
+   `user-invocable`) or *when* it may be loaded automatically (`paths`) is
+   behavior-affecting, not decorative: it decides
    whether the skill's own trigger prose can ever fire. Read those fields and
    compare them with the trigger the target claims for itself. That comparison
    is a Mechanism-fit finding under
