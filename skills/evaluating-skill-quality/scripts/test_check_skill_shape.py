@@ -5095,3 +5095,108 @@ def test_step_location_ceding_only_resolves_the_ceded_pair(tmp_path):
     assert result.passed is False
     assert "step 6" in result.evidence
     assert "worker pool" in result.evidence
+
+
+def _invocation_skill(tmp_path, *frontmatter_lines):
+    """A minimal skill whose frontmatter carries the given extra lines,
+    used to exercise invocation-mode-well-formed in isolation."""
+    fm = "\n".join(("---", "name: s", "description: d. Use when x.",
+                    *frontmatter_lines, "---"))
+    return _write_raw(tmp_path, fm + "\n\n# body\nmore\n")
+
+
+def test_invocation_mode_absent_fields_pass(tmp_path):
+    result = _by_name(css.check_shape(_invocation_skill(
+        tmp_path)))["invocation-mode-well-formed"]
+    assert result.passed is True
+    assert result.evidence == "not declared (optional)"
+
+
+def test_invocation_mode_manual_only_passes(tmp_path):
+    # disable-model-invocation alone is a documented, deliberate choice
+    # (a /deploy-shaped skill); only the both-off COMBINATION is broken.
+    result = _by_name(css.check_shape(_invocation_skill(
+        tmp_path, "disable-model-invocation: true")))[
+            "invocation-mode-well-formed"]
+    assert result.passed is True
+    assert "disable-model-invocation=true" in result.evidence
+
+
+def test_invocation_mode_model_only_passes(tmp_path):
+    result = _by_name(css.check_shape(_invocation_skill(
+        tmp_path, "user-invocable: false")))["invocation-mode-well-formed"]
+    assert result.passed is True
+    assert "user-invocable=false" in result.evidence
+
+
+@pytest.mark.parametrize("literal", ["true", "TRUE", "yes", "On", "1"])
+def test_invocation_mode_accepts_every_documented_true_literal(
+        tmp_path, literal):
+    # Claude Code documents yes/no/on/off/1/0 alongside true/false, in any
+    # letter case -- a checker that only knew true/false would flag a
+    # perfectly valid file.
+    result = _by_name(css.check_shape(_invocation_skill(
+        tmp_path, f"disable-model-invocation: {literal}")))[
+            "invocation-mode-well-formed"]
+    assert result.passed is True
+
+
+@pytest.mark.parametrize("literal", ["false", "FALSE", "no", "Off", "0"])
+def test_invocation_mode_accepts_every_documented_false_literal(
+        tmp_path, literal):
+    result = _by_name(css.check_shape(_invocation_skill(
+        tmp_path, f"user-invocable: {literal}")))[
+            "invocation-mode-well-formed"]
+    assert result.passed is True
+
+
+@pytest.mark.parametrize("value", ["manual", "TRUE!", "", "maybe"])
+def test_invocation_mode_undocumented_value_fails(tmp_path, value):
+    result = _by_name(css.check_shape(_invocation_skill(
+        tmp_path, f"disable-model-invocation: {value}")))[
+            "invocation-mode-well-formed"]
+    assert result.passed is False
+    assert "disable-model-invocation" in result.evidence
+
+
+def test_invocation_mode_invocable_by_nobody_fails(tmp_path):
+    result = _by_name(css.check_shape(_invocation_skill(
+        tmp_path,
+        "disable-model-invocation: true",
+        "user-invocable: false")))["invocation-mode-well-formed"]
+    assert result.passed is False
+    assert "invocable by nobody" in result.evidence
+
+
+def test_invocation_mode_invocable_by_nobody_via_other_literals_fails(tmp_path):
+    # The combination check must resolve literals, not string-match "true".
+    result = _by_name(css.check_shape(_invocation_skill(
+        tmp_path,
+        "disable-model-invocation: YES",
+        "user-invocable: 0")))["invocation-mode-well-formed"]
+    assert result.passed is False
+    assert "invocable by nobody" in result.evidence
+
+
+def test_invocation_mode_both_declared_but_open_passes(tmp_path):
+    result = _by_name(css.check_shape(_invocation_skill(
+        tmp_path,
+        "disable-model-invocation: false",
+        "user-invocable: true")))["invocation-mode-well-formed"]
+    assert result.passed is True
+
+
+def test_invocation_mode_quoted_value_accepted(tmp_path):
+    # _parse_frontmatter unquotes before this check sees the value, so a
+    # quoted boolean must not read as an undocumented literal.
+    result = _by_name(css.check_shape(_invocation_skill(
+        tmp_path, 'disable-model-invocation: "true"')))[
+            "invocation-mode-well-formed"]
+    assert result.passed is True
+
+
+def test_invocation_mode_failure_fails_the_cli(tmp_path):
+    d = _invocation_skill(tmp_path,
+                          "disable-model-invocation: true",
+                          "user-invocable: false")
+    assert css.main([str(d)]) != 0
