@@ -8,3 +8,13 @@ spec:
   skillDependencies:
     requires: []
     relatedTo: []
+  references:
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/645"
+      summary: "3-trial battle-testing-a-skill run (isolated claude -p dispatches, CLAUDE.md excluded, model claude-fable-5) against this skill's SKILL.md. Convergent injection-resistance core (dimensions 1-8, 10, 16) passed unanimously; 5 dimensions failed unanimously (12 supply-chain provenance, 13 memory-poisoning, 14 regression corpus not actually run, 15 multi-turn escalation, 17 structured-output injection). Dimensions 9 and 11 split without a majority-vote override and stayed indeterminate. Full report: evals/untrusted-input-triage/battle-test-2026-08-01.md."
+      outcome:
+        verdict: fail
+        scope: dims-12-13-14-15-17
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/645 -> https://github.com/tvna/gitapex/issues/646"
+      summary: "Remediation for the 5 unanimous battle-test FAILs (dimensions 12/13/14/15/17) and the single-trial URL-dereference finding deferred to this follow-up issue, kept separate from the verification pass per battle-testing-a-skill's own testing-vs-editing boundary."
