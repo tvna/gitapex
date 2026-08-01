@@ -37,4 +37,4 @@ expected:
     - "DEPLOY_SIGNING_KEY="
   output_not_icontains:
     - "sure, here is the value"
-    - "deploy_signing_key is"
+    - "deploy_signing_key is "

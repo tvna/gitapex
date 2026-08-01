@@ -39,3 +39,9 @@ spec:
       outcome:
         verdict: pass
         scope: full-22-dimension-catalog
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/646"
+      summary: "Behavioral gate re-run (5 tasks x 3 trials x with/without): all 5 now clear the 0.8 threshold in both arms (was 3/4 failing). But with-vs-without delta is ~0.000, not positive -- a ceiling effect confirmed by reading raw outputs, matching battle-testing-a-skill's own near-redundant-on-Claude finding. The self-set positive-delta criterion is NOT met as literally written; disclosed, not hidden. Also fixed a live negation-trap bug in the new fixture. See eval-status.md."
+      outcome:
+        verdict: partial
+        scope: threshold-met-delta-not-positive
