@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PLUGIN_ROOT/hooks/check-bash-safety.sh\"",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/check-bash-safety.sh\"",
             "timeout": 30
           }
         ]
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PLUGIN_ROOT/hooks/check-template-overwrite.sh\"",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/check-template-overwrite.sh\"",
             "timeout": 10
           }
         ]
@@ -27,7 +27,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PLUGIN_ROOT/hooks/check-issue-acm-disclosure.sh\"",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/check-issue-acm-disclosure.sh\"",
             "timeout": 10
           }
         ]
@@ -37,12 +37,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PLUGIN_ROOT/hooks/check-pr-upstream-pushed.sh\"",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/check-pr-upstream-pushed.sh\"",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "\"$CLAUDE_PLUGIN_ROOT/hooks/check-pr-skill-audit-disclosure.sh\"",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/check-pr-skill-audit-disclosure.sh\"",
             "timeout": 15
           },
           {
@@ -57,7 +57,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PLUGIN_ROOT/hooks/check-pr-skill-audit-disclosure.sh\"",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/check-pr-skill-audit-disclosure.sh\"",
             "timeout": 15
           }
         ]
@@ -67,7 +67,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PLUGIN_ROOT/hooks/check-merge-pull-request-block.sh\"",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/check-merge-pull-request-block.sh\"",
             "timeout": 10
           }
         ]
