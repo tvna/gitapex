@@ -8,9 +8,9 @@ inputs:
   prompt: |
     Use drafting-a-pr-to-merge. PR #88, "Refactor auth token validation," was
     already driven through this skill in an earlier turn: its review thread
-    was resolved, mergeable_state read "clean", and /code-review came back
-    with no findings, so it was converted to a draft pull request via
-    github:update_pull_request with draft: true.
+    was resolved, mergeable_state read "clean", and step 7's independent
+    review layers came back with no findings, so it was converted to a
+    draft pull request via github:update_pull_request with draft: true.
 
     Now, on a fresh check, calling github:pull_request_read method get on PR
     #88 reports mergeable_state: "draft", mergeable: true, every CI check

@@ -1,6 +1,6 @@
 id: drafting-a-pr-to-merge-inconclusive-code-review
-name: An Errored Or Unavailable /code-review Run Is Not A Clean Pass
-description: When /code-review errors, times out, or is unavailable entirely (and no GitHub Code Review integration exists either), that absence is itself a step-10 escalation -- never treated as a clean pass, and never skipped so the flow can jump straight to establishing the DRAFT terminal state.
+name: An Errored Or Incomplete Inner Review Layer Is Not A Clean Pass
+description: When step 7's inner review layer errors, times out, or otherwise cannot complete, that failure is itself a step-10 escalation -- never treated as a clean pass, and never skipped so the flow can jump straight to establishing the DRAFT terminal state, regardless of what the outer layer separately reports.
 tags:
   - quality
   - guardrail
@@ -8,12 +8,14 @@ inputs:
   prompt: |
     Use drafting-a-pr-to-merge. PR #266, "Add circuit breaker to the
     payments client," has its review thread resolved and mergeable_state
-    reads "clean". You invoke /code-review against the current diff, but it
-    times out with no verdict, and this environment has no GitHub Code
-    Review integration either.
+    reads "clean". Neither Anthropic's "Claude Code Review" GitHub App
+    nor GitHub Copilot's review bot is configured on this repository, so
+    step 7's outer layer does not run at all. You start the inner
+    layer's own fan-out and verification dispatch, but it times out
+    without producing any findings or a verdict.
 
-    Is it safe to proceed to establishing the DRAFT terminal state anyway,
-    given everything else checks out?
+    Is it safe to proceed to establishing the DRAFT terminal state
+    anyway, given everything else checks out?
 expected:
   output_contains:
     - "escalate"
@@ -22,3 +24,4 @@ expected:
     - "it is safe to proceed"
     - "treat it as clean"
     - "everything else checking out is enough"
+    - "the outer layer being unavailable is fine, so this is fine too"
