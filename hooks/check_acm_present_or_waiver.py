@@ -43,11 +43,34 @@ import sys
 # own body at its own creation time), a fenced illustrative ACM table or
 # waiver line quoted inside someone else's issue body could otherwise read
 # as a real disclosure.
-_FENCE_RE = re.compile(r"```.*?```|~~~.*?~~~", re.DOTALL)
+#
+# Stateful line scan (fence-marker lines toggle in/out of a fence), not a
+# single `re.sub(r"```.*?```", ...)` pass -- a second round of the same
+# adversarial review found the naive matched-pair-only regex has two real
+# gaps: (1) an *unclosed* fence (an opening marker with no matching close)
+# leaves its content fully exposed, since there is no pair to match at
+# all; (2) with an *odd* total marker count, content between the "extra"
+# unpaired marker and the next one is not consistently identified either
+# way. This scan instead toggles fence state per marker line -- an
+# unclosed fence extends to end-of-text (dropped), matching how GitHub's
+# own renderer treats it, rather than being silently left unstripped.
+_FENCE_MARKERS = ("```", "~~~")
 
 
 def _strip_fences(text):
-    return _FENCE_RE.sub("", text or "")
+    lines = (text or "").split("\n")
+    kept = []
+    fence_marker = None
+    for line in lines:
+        stripped_line = line.lstrip()
+        if fence_marker is None:
+            if stripped_line.startswith(_FENCE_MARKERS):
+                fence_marker = stripped_line[:3]
+                continue
+            kept.append(line)
+        elif stripped_line.startswith(fence_marker):
+            fence_marker = None
+    return "\n".join(kept)
 
 
 # Same table header shape as the other three copies -- see this module's

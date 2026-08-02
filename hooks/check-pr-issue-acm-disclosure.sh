@@ -38,8 +38,16 @@ set -euo pipefail
 
 deny() {
   local reason="$1"
-  jq -n --arg msg "$reason" \
-    '{"hookSpecificOutput": {"permissionDecision": "deny"}, "systemMessage": $msg}' >&2
+  # Piped via stdin (jq -Rs: raw input, slurped to one string), not
+  # `--arg` -- an adversarial review of issue #657 found `--arg`-based
+  # construction elsewhere in this script hits the OS's ARG_MAX on a
+  # large enough value (a giant PR body/title), crashing past this very
+  # function with exit 126 ("Argument list too long"). `$reason` is
+  # normally a short, hook-authored string, but the one call site that
+  # interpolates `$check_output` (below) could in principle be large, so
+  # this function is hardened the same way on general principle.
+  printf '%s' "$reason" | jq -Rs \
+    '{"hookSpecificOutput": {"permissionDecision": "deny"}, "systemMessage": .}' >&2
   exit 2
 }
 
@@ -65,10 +73,17 @@ if [ "$tool_name" != "mcp__github__create_pull_request" ]; then
   exit 0
 fi
 
-owner=$(printf '%s' "$input" | jq -r '.tool_input.owner // empty')
-repo=$(printf '%s' "$input" | jq -r '.tool_input.repo // empty')
-title=$(printf '%s' "$input" | jq -r '.tool_input.title // empty')
-body=$(printf '%s' "$input" | jq -r '.tool_input.body // empty')
+# The top-level shape check above says nothing about `.tool_input` itself --
+# a second round of issue #657's own adversarial review found that a
+# well-formed object payload with `tool_input` set to an array/string/
+# number/bool still crashes every `.tool_input.<field>` access below with
+# jq's own "Cannot index X with string" runtime error, the same fail-open
+# class as the top-level check guards against. `null`/absent are fine (the
+# `// {}` default below tolerates both) since jq indexes `null` as `null`,
+# not an error.
+if ! printf '%s' "$input" | jq -e '(.tool_input // {}) | type == "object"' >/dev/null 2>&1; then
+  deny "Blocked by hooks/check-pr-issue-acm-disclosure.sh: tool_input in the payload is not a JSON object. Failing closed."
+fi
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 check_script="$script_dir/check_pr_issue_acm_disclosure.py"
@@ -77,8 +92,17 @@ if [ ! -f "$check_script" ]; then
   deny "Blocked by hooks/check-pr-issue-acm-disclosure.sh: cannot verify the cited issue's ACM/waiver disclosure -- check_pr_issue_acm_disclosure.py was not found at $check_script (corrupted or incomplete plugin bundle). Failing closed."
 fi
 
-payload=$(jq -n --arg owner "$owner" --arg repo "$repo" --arg title "$title" --arg body "$body" \
-  '{owner: $owner, repo: $repo, title: $title, body: $body}')
+# Extracts owner/repo/title/body directly from $input in one jq call and
+# re-shapes them into the payload the Python checker expects -- $input is
+# read via stdin the whole way through, never re-passed as a `--arg`
+# command-line argument. An earlier version extracted each field into a
+# shell variable first, then rebuilt the payload via `jq -n --arg title
+# "$title" ...`; issue #657's own adversarial review found that a large
+# enough title/body (an attacker/tool-controlled field, evaluated before
+# this hook, not after GitHub's own PR-body size limit) blows the OS's
+# ARG_MAX on that `--arg` expansion, crashing past deny() with exit 126.
+payload=$(printf '%s' "$input" | jq -c \
+  '{owner: (.tool_input.owner // ""), repo: (.tool_input.repo // ""), title: (.tool_input.title // ""), body: (.tool_input.body // "")}')
 
 if check_output=$(printf '%s' "$payload" | python3 "$check_script" 2>&1); then
   check_exit=0

@@ -30,6 +30,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import pytest
+
 SCRIPT = Path(__file__).parent / "check-pr-issue-acm-disclosure.sh"
 CHECKER = Path(__file__).parent / "check_pr_issue_acm_disclosure.py"
 ACM_CHECKER = Path(__file__).parent / "check_acm_present_or_waiver.py"
@@ -217,3 +219,70 @@ def test_denied_when_stdin_is_empty() -> None:
     assert result.returncode == 2
     payload = json.loads(result.stderr)
     assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+@pytest.mark.parametrize("tool_input", ["[1,2,3]", '"oops"', "5", "true"])
+def test_denied_when_tool_input_is_not_an_object(tool_input: str) -> None:
+    # A second round of issue #657's own adversarial review: the top-level
+    # "is this an object" check alone missed that a well-formed object
+    # payload with a non-object tool_input (array/string/number/bool)
+    # still crashes every `.tool_input.<field>` jq access below it with a
+    # "Cannot index X with string" error, past deny(), the same fail-open
+    # class as the top-level check guards against.
+    raw = '{"tool_name":"mcp__github__create_pull_request","tool_input":' + tool_input + "}"
+    result = _run_raw(raw)
+    assert result.returncode == 2, f"tool_input={tool_input}: expected deny (exit 2), got {result.returncode}"
+    payload = json.loads(result.stderr)
+    assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "tool_input" in payload["systemMessage"]
+
+
+def test_allowed_when_tool_input_is_absent_or_null() -> None:
+    # jq indexes `null`/a missing key as `null`, not a runtime error, so
+    # these fall through to the normal "cites nothing" deny path (a real
+    # verdict, not a crash) -- unlike the non-object shapes above.
+    for raw in (
+        '{"tool_name":"mcp__github__create_pull_request"}',
+        '{"tool_name":"mcp__github__create_pull_request","tool_input":null}',
+    ):
+        result = _run_raw(raw)
+        assert result.returncode == 2
+        payload = json.loads(result.stderr)
+        assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"
+        assert "cites no issue" in payload["systemMessage"]
+
+
+def test_denied_not_crashed_on_a_title_too_large_for_argv() -> None:
+    # Regression for issue #657's own adversarial review: an earlier
+    # version rebuilt the JSON payload via `jq -n --arg title "$title"
+    # ...`, passing each field as a command-line argument -- a large
+    # enough title/body (evaluated by this hook before GitHub's own PR
+    # body size limit would ever apply) exceeds the OS's ARG_MAX and
+    # crashes the script with exit 126 ("Argument list too long"), past
+    # deny(). The current version reshapes the payload via a single jq
+    # filter reading $input over stdin, never re-passing large values as
+    # argv. 3MB comfortably exceeds this machine's observed ARG_MAX
+    # (~2MB) without being implausibly large for a hostile/buggy caller.
+    payload = json.dumps(
+        {
+            "tool_name": "mcp__github__create_pull_request",
+            "tool_input": {"owner": "tvna", "repo": "gitapex", "title": "A" * 3_000_000, "body": "no citation"},
+        }
+    )
+    env = dict(os.environ)
+    env.pop("CLAUDE_PROJECT_DIR", None)
+    env.pop("CLAUDE_PLUGIN_ROOT", None)
+    env.pop("GH_TOKEN", None)
+    env.pop("GITHUB_TOKEN", None)
+    result = subprocess.run(
+        ["bash", str(SCRIPT)],
+        input=payload,
+        capture_output=True,
+        text=True,
+        timeout=15,
+        env=env,
+        cwd=str(REPO_ROOT),
+    )
+    assert result.returncode == 2, f"expected deny (exit 2), got {result.returncode}: stderr={result.stderr[:300]!r}"
+    payload_json = json.loads(result.stderr)
+    assert payload_json["hookSpecificOutput"]["permissionDecision"] == "deny"

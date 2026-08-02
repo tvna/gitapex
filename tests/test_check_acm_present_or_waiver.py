@@ -98,3 +98,76 @@ def test_waiver_category_still_reads_a_real_backtick_wrapped_waiver():
 
 def test_waiver_category_returns_none_for_no_waiver():
     assert checker.waiver_category("just a plain body") is None
+
+
+# ---------------------------------------------------------------------------
+# Fence-stripping edge cases: an adversarial re-verification of the fix
+# above found the naive matched-pair-only regex it originally used had two
+# real gaps (unclosed fence, odd marker count). _strip_fences was rewritten
+# as a stateful per-line scan (fence markers toggle in/out of a fence)
+# specifically to close them -- see that function's own comment.
+# ---------------------------------------------------------------------------
+
+
+def test_unclosed_fence_extends_to_end_of_text():
+    # An opening marker with no matching close: a naive `re.sub(r"```.*?```",
+    # ...)` finds no pair at all and leaves everything after the opening
+    # marker fully exposed. The real GitHub renderer treats an unclosed
+    # fence as extending to end-of-text; this scan matches that.
+    body = (
+        "```\n"
+        "I have not actually filled one in, example only.\n\n"
+        f"{_VALID_ACM_TABLE}"
+    )
+    assert checker.has_acm_disclosure(body) is False
+
+
+def test_unclosed_tilde_fence_extends_to_end_of_text():
+    body = "~~~\nACM: not-applicable (chore): fake, never closed\n"
+    assert checker.has_acm_disclosure(body) is False
+
+
+def test_odd_fence_marker_count_leaves_a_genuine_unfenced_line_detected():
+    # Three total markers: the first pair forms one complete, closed
+    # fenced block; the third marker opens a second, unclosed block. A
+    # real Markdown renderer shows the line between the 2nd and 3rd
+    # markers as ordinary, unfenced prose -- not visually distinguished
+    # as quoted/illustrative in any way -- so a genuine disclosure line
+    # placed there is correctly still detected: it isn't actually hidden
+    # by anything, the same as writing it with no fences at all.
+    body = "```\nreal code sample\n```\nACM: not-applicable (chore): genuinely unfenced text\n```\nmore code\n"
+    assert checker.has_acm_disclosure(body) is True
+
+
+def test_content_between_two_separate_closed_fences_stays_stripped_in_each():
+    # Two independent, individually well-formed fenced blocks (4 markers
+    # total, matched pairwise) -- content inside either must still strip;
+    # only the genuinely-unfenced line between them survives.
+    body = f"```\n{_VALID_ACM_TABLE}```\nACM: not-applicable (docs): ok\n```\nfake table again\n```"
+    assert checker.has_acm_disclosure(body) is True
+    # Remove the real disclosure and confirm both fenced blocks alone
+    # (with no genuine unfenced content at all) do not pass.
+    body_no_real = f"```\n{_VALID_ACM_TABLE}```\njust some prose in between, no disclosure here\n```\nfake table\n```"
+    assert checker.has_acm_disclosure(body_no_real) is False
+
+
+def test_known_residual_gap_single_backtick_multiline_span_not_stripped():
+    # Named, disclosed limitation (not fixed by the fence-stripping work
+    # above, and not a regression from it either -- this was never
+    # stripped, before or after issue #657's own fence fix): a multi-line
+    # span delimited by a single backtick pair is not treated as fenced,
+    # by design (stripping single backticks would break _ACM_WAIVER_RE's
+    # own legitimate `` `ACM`: ... `` syntax -- see this module's own
+    # _strip_fences comment). An issue author can still place misleading
+    # content inside one and have it detected as a real disclosure.
+    body = "`\nACM: not-applicable (chore): fake, inside a multi-line single-backtick span\n`"
+    assert checker.has_acm_disclosure(body) is True
+
+
+def test_known_residual_gap_four_space_indented_block_not_stripped():
+    # Named, disclosed limitation: this module only recognizes fenced
+    # (```/~~~) code blocks, not Markdown's traditional 4-space-indent
+    # code-block convention -- a pre-existing gap, not introduced or
+    # claimed to be closed by issue #657's fence-stripping fix.
+    body = "    ACM: not-applicable (chore): fake, 4-space indented\n"
+    assert checker.has_acm_disclosure(body) is True
