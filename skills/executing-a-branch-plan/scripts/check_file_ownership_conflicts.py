@@ -39,15 +39,7 @@ import json
 import sys
 from collections import defaultdict
 
-
-def _normalize(path):
-    """Light path normalization: strip a leading './', collapse backslashes
-    to forward slashes. Not a full path-canonicalization -- see module
-    docstring's own scope note."""
-    normalized = path.replace("\\", "/")
-    while normalized.startswith("./"):
-        normalized = normalized[2:]
-    return normalized
+from _path_normalize import normalize as _normalize
 
 
 def find_conflicts(task_files):

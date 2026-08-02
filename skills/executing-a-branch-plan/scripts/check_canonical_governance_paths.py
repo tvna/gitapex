@@ -37,6 +37,8 @@ from __future__ import annotations
 import argparse
 import sys
 
+from _path_normalize import normalize as _normalize
+
 # Exact-prefix or exact-filename matches only, drawn from
 # screening-a-low-trust-contribution/SKILL.md checks 2, 4, and 5's own
 # illustrative examples -- not exhaustive, and deliberately not meant to
@@ -72,13 +74,6 @@ _DEPENDENCY_MANIFEST_FILENAMES = (
     "Gemfile.lock",
     "requirements.txt",
 )
-
-
-def _normalize(path):
-    normalized = path.replace("\\", "/")
-    while normalized.startswith("./"):
-        normalized = normalized[2:]
-    return normalized
 
 
 def _is_skill_governance_path(segments):
