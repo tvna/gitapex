@@ -75,9 +75,14 @@ follow it exactly.
    sequence's success path -- after Step 5's verification, never on the
    Step 2 escalation path, where no PR follows. Before any PR is opened
    for this fix:
-   - Fetch the target issue's current body (e.g. `github:issue_read`)
-     and check it against the same deterministic disclosure check
-     gitapex's own PreToolUse hook enforces at PR-creation time (see
+   - Fetch the target issue's current body (e.g. `github:issue_read`).
+     If the fetch itself fails, or returns no body content at all, stop
+     and escalate rather than guessing -- never construct Step 6's
+     `update` call from an unknown or possibly-partial body; a fetch
+     that did not clearly succeed is not evidence of what the issue
+     currently contains. Otherwise check the fetched body against the
+     same deterministic disclosure check gitapex's own PreToolUse hook
+     enforces at PR-creation time (see
      `hooks/check_acm_present_or_waiver.py`'s `has_acm_disclosure`): an
      Acceptance Criteria Map table header, or a waiver line of the exact
      form `ACM: not-applicable (<category>): <reason>`. Never substitute
