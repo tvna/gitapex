@@ -164,7 +164,10 @@ platform naming.
    candidate finding
    surfaced this way, run an independent verification pass against the
    actual code's behavior only — never the finder pass's own assertion —
-   and discard anything that does not clear an explicit confidence bar; a
+   and discard anything that does not clear an explicit confidence bar:
+   0.7, the same reporting threshold this repository's own bundled
+   `/security-review` prompt already applies (below it, do not report) —
+   missing a real finding is preferable to reporting a false one. A
    theoretical finding that cannot be confirmed this way is treated as
    not found, not as a weak pass. For each finding that survives
    verification, trace the changed symbol's call sites to establish
