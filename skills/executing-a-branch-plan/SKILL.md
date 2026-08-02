@@ -270,7 +270,9 @@ Steps 1, 2, 4, 5, 7, 8, 9 use only GitHub-connector calls and
 skill-to-skill reuse, both portable.
 
 Install/vendoring-time integrity (whether this SKILL.md, its
-`references/`, its bundled `scripts/check_task_bash_safety.sh`, and both
+`references/`, its bundled `scripts/` (`check_task_bash_safety.sh`,
+`check_file_ownership_conflicts.py`, `check_canonical_governance_paths.py`,
+and their shared `_path_normalize.py` helper), and both
 `branch-plan-task` agent-definition variants are themselves the
 untampered, intended copies) is a separate question from the runtime
 content trust the threat-model reference covers -- a step-1 PASS says
