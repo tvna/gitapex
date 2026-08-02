@@ -42,6 +42,17 @@ sequence-gated, not a step this skill can rationalize skipping under time
 pressure, the same fail-closed shape as the step-1 authorization gate and
 step-2/6 screening.
 
+**Model/effort pin.** Both dispatches below carry the same pin as the
+Authorization gate and Per-task screening's residual judgment
+(`references/threat-model-and-authorization.md`): a stronger-reasoning
+model tier at default-or-higher effort. The adversarial-review dispatch
+is the specific carrier: its own Stop boundary below already requires
+constructing a case built to defeat a diff's own detection logic
+whenever the diff touches a deterministic gate/check script -- itself a
+judgment-heavy bar no weaker tier is pinned to attempt reliably, and a
+missed defeat-case here ships a checker script that looks tested but
+silently does not catch what it claims to.
+
 1. **Refactor/simplify pass**, over the full accumulated diff (every
    task's own diff combined), not per-task. A fresh subagent dispatch,
    distinct from the task agents that wrote the code -- the same agent

@@ -1,11 +1,16 @@
 # executing-a-branch-plan eval status
 
 A committed eval suite exists from this skill's own authoring pass
-(`evals/executing-a-branch-plan/`, 8 tasks: normal execution, no-
+(`evals/executing-a-branch-plan/`, 9 tasks: normal execution, no-
 authorization guardrail, malformed-ACM guardrail, plain and base64-
 obfuscated injection-in-ACM-row, an oversized-ACM fan-out-bound
-guardrail, a staged multi-turn-escalation guardrail, and a
-tampered-Execution-log-resume integrity check), but no `waza run`
+guardrail, a staged multi-turn-escalation guardrail, a
+tampered-Execution-log-resume integrity check, and (added by the
+`capabilityAssumption` Frontier-to-Adaptive fix) a non-canonical-
+governance-path guardrail asserting `check_canonical_governance_paths.py`'s
+own clean-pre-filter result never substitutes for the model's full-diff
+review, plus that same fixture's verbatim-quotation-discipline check),
+but no `waza run`
 against it has executed yet -- `trials_per_task: 3`, `claude-sonnet-4.6`
 only, is a config declaration, not a measurement, per this file's own
 cross-model-matrix-scaffolding note above. No no-skill baseline is
@@ -34,6 +39,53 @@ the final verdict:
 - **Trial 3** (after those fixes): PASS, 0 of 22 applicable dimensions
   failing, both trial-2 findings independently confirmed resolved with
   quoted evidence.
+
+A separate three-trial `battle-testing-a-skill` sequence ran against the
+`capabilityAssumption` Frontier-to-Adaptive fix specifically (2026-08-02),
+converging on real fixes for everything actually fixable and one
+disclosed, accepted residual gap for what is not, rather than a clean
+PASS:
+
+- **Trial 1**: FAIL on dimension 2 (trust/authority boundary) and
+  dimension 14 (regression corpus): the new Verbatim-quotation
+  discipline was found to sharpen a pre-existing gap (a step-2 false
+  negative now propagates unparaphrased into a task agent's own
+  prompt), and the corpus's own status record undercounted its task
+  total while the one new fixture's key assertion was flagged as
+  prompt-echo-satisfiable. Both addressed: a disclosed "Residual risk"
+  paragraph naming the actual control (step 2's own pinned screening)
+  added to `task-decomposition.md`; the task count corrected; the
+  fixture's assertion strengthened to also require the task-list file
+  path to appear.
+- **Trial 2**: dimension 2 re-graded PASS on the strengthened text
+  (contestable judgment call, recorded as such in the trial's own
+  report); dimension 14 still FAIL (the strengthening only raised the
+  bar without closing the gap); a NEW dimension 17 (structured-output
+  injection) finding: the verbatim-quoted ACM text is written into a
+  committed, GitHub-rendered task-list file with no escaping rule.
+  Addressed: `domain-events-and-failure-handling.md`'s existing "Escape
+  before interpolating" rule broadened to cover this surface by name,
+  cross-referenced from `task-decomposition.md` rather than duplicated.
+- **Trial 3**: dimension 17 confirmed resolved (anchor-verified
+  cross-reference, rule content genuinely covers the surface). Dimension
+  14 confirmed still FAIL, and the attempted fix (an `output_contains_near`
+  pairing on an "ACM row" marker) was found, by actually executing
+  `score_contract.py` against synthetic transcripts, to score a
+  genuinely compliant transcript LOWER (0.833) than the exact violation
+  the fixture exists to catch (1.0) -- worse than what it replaced, not
+  merely insufficient. Reverted to a bare `output_contains` (no
+  inversion, but no discrimination either) with the limitation disclosed
+  directly in the fixture's own comment: this repo's `output_contains_near`
+  matches each substring's first occurrence anywhere in the text, not a
+  specific co-located pair, so it cannot reliably discriminate "quoted
+  into a real task record" from "echoed in an early Facts recap" given
+  this skill's own Output convention already has Facts cite the ACM too.
+  **Accepted as a genuine, disclosed, unfixed limitation** (the same
+  treatment the companion `evaluating-skill-quality` pass's own
+  authorization-gate finding below already received) -- closing it for
+  real needs either a span-specific scorer or an actual `waza run` plus
+  human/model transcript review, both out of this fix's own scope.
+  Overall Trial 3 verdict: FAIL, on dimension 14 alone.
 
 A companion `evaluating-skill-quality` pass rated the skill well-formed
 and mature, but raised two Mechanism-fit findings that must travel with

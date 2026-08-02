@@ -14,14 +14,17 @@ mechanism), Decision 18 (rollback), Decision 19 (the `NeedsInput` event).
 
 ## Where the log lives
 
-The PR body, in a `## Execution log` section -- not a new file, not
-`implementation-notes` (a diagram label only, not an established
-file/convention anywhere in this repository). This matches two
+The PR body, in a `## Execution log` section, is gitapex's own
+illustrative default -- substitute the calling repository's actual
+equivalent heading/location where it differs; the load-bearing property
+this section depends on is only that whatever location is chosen is (a)
+part of the same artifact `drafting-a-pr-to-merge` (or the calling
+repository's equivalent handoff skill) already reads, so no second file
+needs to be kept in sync with the PR at handoff time, and (b) durably
+readable back across sessions. gitapex's own default matches two
 already-shipped precedents in this repository: the Acceptance Criteria
 Map already lives in the PR body (`planning-a-branch-from-an-issue` step 8), and the
-`## Skill audit evidence` section already lives there too. The PR body is
-also already the artifact `drafting-a-pr-to-merge` reads, so no second file
-needs to be kept in sync with the PR at handoff time, and cross-session
+`## Skill audit evidence` section already lives there too. Cross-session
 resume becomes a direct read: a fresh session reopening the same PR calls
 `github:pull_request_read` method `get`/`get_comments` and reads the
 Execution log to know exactly which tasks completed, which failed, and
@@ -65,14 +68,18 @@ session believes it contains.
   `retry` / `stop-and-replan` / `escalate`.
 
 **Escape before interpolating.** Every event's free-text fields
-(`TaskFailed.reason`, `NeedsInput.question`, `StageDeviated.reason`) and
-the ACM itself are ultimately sourced from, or generated in response to,
-untrusted issue-body text. Before writing any of it into the PR body or a
-comment, neutralize a raw pipe character, a code-fence marker, or another
-Markdown/HTML control sequence it might carry -- the same escaping rule
-`drafting-an-acm-issue` Step 4 already applies to ACM cells, extended
-here to every Execution-log field, so a task's own failure reason cannot
-break the PR body's own table rendering or forge an unintended heading or
+(`TaskFailed.reason`, `NeedsInput.question`, `StageDeviated.reason`), the
+ACM itself, and a task record's own quoted ACM Planned-ops text
+(`task-decomposition.md`'s Verbatim-quotation discipline) are ultimately
+sourced from, or generated in response to, untrusted issue-body text.
+Before writing any of it into the task-list file (step 3), the PR body,
+or a comment, neutralize a raw pipe character, a code-fence marker, or
+another Markdown/HTML control sequence it might carry -- the same
+escaping rule `drafting-an-acm-issue` Step 4 already applies to ACM
+cells, extended here to every Execution-log field and to a task record's
+own verbatim-quoted text, so a task's own failure reason, or an ACM row
+quoted into its own task record, cannot break the PR body's or task-list
+file's own table/heading rendering or forge an unintended heading or
 event line elsewhere in it.
 
 ## Failure dispatch (step 7)
