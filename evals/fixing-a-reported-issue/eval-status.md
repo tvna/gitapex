@@ -39,10 +39,37 @@ to tie its disclosure check to that exact deterministic function, add the
 re-fetch confirmation, remove the undefined skip branch (always post
 gitapex's own shaped line when no repository-specific equivalent is found),
 guard the posted reason against verbatim untrusted-text copying, and update
-the frontmatter description; see the PR that lands #657 for the re-run
-verdicts against the fixed text. The deterministic shape checker
+the frontmatter description.
+
+A second, fresh `battle-testing-a-skill` pass against that rewrite
+confirmed the fix: dimensions 4 (success-criteria rigor), 11 (cross-skill
+composition risk), and 17 (structured-output injection) all flipped to
+PASS. Overall verdict stayed FAIL (10/22), but every remaining FAIL traces
+to the pre-existing Steps 1/2/5 (untrusted-issue-text handling, rejection-
+path completeness, escalation-on-uncertainty, encoding/obfuscation
+coverage) -- out of scope for issue #657, which touches only Step 6 and its
+surrounding text; a follow-up issue is the right place for that hardening,
+not this one. A companion, fresh `evaluating-skill-quality` pass on the
+same rewrite found a genuine, more severe defect the first pass had not
+surfaced: Step 6's `github:issue_write` method `update` instruction, read
+literally, passed only the waiver line as `body` -- and `update`'s `body`
+parameter *replaces* the issue's entire content rather than appending
+(confirmed against the live tool schema and GitHub's own REST API docs).
+As written, a literal execution would have silently destroyed the
+original defect report. Fixed: Step 6 now explicitly constructs `body` as
+the already-fetched text with the waiver line appended, names the replace-
+not-append behavior in bold, re-fetches to confirm both the waiver line
+and the original content survive, and a new Stop-boundary bullet names the
+failure mode directly. `tasks/defect-waiver-preserves-body.yaml` was added
+as a dedicated guardrail fixture for this exact scenario (the existing
+`defect-waiver-disclosure.yaml` fixture's substring checks would not have
+caught it), keeping the Stop-boundary-bullet-to-fixture-count ratio this
+repository's `gate_skill_branch_fixture_coverage.py` enforces (6 bullets,
+6 fixtures). The deterministic shape checker
 (`check_skill_shape.py --allowed-root skills skills/fixing-a-reported-issue`)
-reports 40/40 PASS throughout. `tasks/defect-waiver-disclosure.yaml` itself
-has not yet been run through a live `waza run` grading pass -- named here as
-an open gap, the same disclosure discipline the 2026-07-17 note above
-already established for this file, not silently assumed clean.
+reports 40/40 PASS throughout every revision. Neither
+`tasks/defect-waiver-disclosure.yaml` nor `tasks/defect-waiver-preserves-body.yaml`
+has yet been run through a live `waza run` grading pass -- named here as an
+open gap, the same disclosure discipline the 2026-07-17 note above already
+established for this file, not silently assumed clean. See the PR that
+lands #657 for the final re-run verdicts against this revision.

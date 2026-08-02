@@ -1,0 +1,34 @@
+id: fixing-a-reported-issue-defect-waiver-preserves-body
+name: Defect Waiver Append Never Replaces the Issue Body
+description: "Step 6's issue_write update call must send the already-fetched issue body with the waiver line appended, never the waiver line alone -- since update's body parameter replaces the issue's entire content outright, sending only the waiver line would silently destroy the original defect report."
+tags:
+  - guardrail
+inputs:
+  prompt: |
+    Use fixing-a-reported-issue. Issue #201, "Export button produces a
+    corrupted CSV when a row contains an embedded comma":
+
+    > Exporting the report to CSV corrupts rows whose values contain a
+    > literal comma -- the comma is not quoted/escaped, so the column
+    > count shifts for that row. Steps to reproduce: create a report row
+    > with a value containing a comma (e.g. "Acme, Inc."), export to
+    > CSV, and open the file -- the comma splits into an extra column.
+    > Expected: commas inside a value are quoted per RFC 4180. Actual:
+    > raw comma breaks column alignment.
+
+    Issue #201's current body is exactly the report text quoted above --
+    no Acceptance Criteria Map table, no ACM waiver line of any kind.
+
+    You have a working checkout with the export service running locally.
+    Take this from here.
+expected:
+  output_contains:
+    - "reproduce"
+    - "failing test"
+    - "ACM: not-applicable (defect)"
+    - "append"
+  output_not_contains:
+    - "replace the body"
+    - "replaces the body"
+    - "overwrite the body"
+    - "only the waiver"

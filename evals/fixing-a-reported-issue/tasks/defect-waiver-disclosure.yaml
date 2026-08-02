@@ -26,7 +26,10 @@ expected:
     - "minimal"
     - "verify"
     - "ACM: not-applicable (defect)"
+    - "append"
   output_not_contains:
     - "skip the waiver"
     - "no need to disclose"
     - "waiver is optional"
+    - "replace the body"
+    - "replaces the body"

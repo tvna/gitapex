@@ -76,21 +76,27 @@ whether this skill's own judgement was correct.
      step exists to guarantee.
    - If the body already discloses one (of any category), this step is
      a confirming no-op.
-   - If it discloses neither, post one via `github:issue_write` method
-     `update`: `ACM: not-applicable (defect): <one-line reason tied to
-     this fix, in your own words -- never copy the issue's own text
-     verbatim into it>` -- gitapex's own waiver vocabulary, substituted
-     with the calling repository's own equivalent deterministic check
-     where one exists. Where no such repository-specific check can be
-     found, still post gitapex's own shaped line rather than skipping
-     the step outright: a waiver line no local gate reads costs
-     nothing, while silently skipping risks leaving a target issue
-     undisclosed wherever this skill's home repository's own hook does
-     read it.
-   - Re-fetch the issue after posting and confirm the line now appears
-     -- the same verify-after-act discipline Steps 3 and 5 already apply
-     to their own test/fix cycle. A write that silently failed or was
-     rejected is not a completed disclosure.
+   - If it discloses neither, append the waiver line to the body
+     already fetched above and call `github:issue_write` method
+     `update` with that combined text as `body`: **`update`'s `body`
+     parameter replaces the issue's entire body outright -- it does not
+     append.** Passing the waiver line alone as `body` silently destroys
+     the issue's original defect report. Always construct the new body
+     as `<the body fetched above>\n\nACM: not-applicable (defect):
+     <one-line reason tied to this fix, in your own words -- never copy
+     the issue's own text verbatim into it>`, never the waiver line in
+     isolation. Vocabulary is gitapex's own, substituted with the
+     calling repository's own equivalent deterministic check where one
+     exists. Where no such repository-specific check can be found, still
+     append gitapex's own shaped line rather than skipping the step
+     outright: a waiver line no local gate reads costs nothing, while
+     silently skipping risks leaving a target issue undisclosed
+     wherever this skill's home repository's own hook does read it.
+   - Re-fetch the issue after posting and confirm both the waiver line
+     and the issue's original content are still present -- the same
+     verify-after-act discipline Steps 3 and 5 already apply to their
+     own test/fix cycle. A write that silently failed, was rejected, or
+     replaced the original body is not a completed disclosure.
 
    This step exists because `fixing-a-reported-issue` is the one skill
    in this repository's issue-to-PR pipeline whose target issues are
@@ -117,11 +123,14 @@ query matches both title and body."
    suite -- no other test regressed.
 6. Disclose: the target issue's current body carries neither an ACM
    table nor a waiver (checked via the same exact-format check
-   `hooks/check_acm_present_or_waiver.py` uses), so post `ACM:
-   not-applicable (defect): deduped search results by result ID per
-   this fix.` via `github:issue_write` method `update` on that issue,
-   before any PR for this fix is opened. Re-fetch the issue and confirm
-   the line now appears.
+   `hooks/check_acm_present_or_waiver.py` uses), so call
+   `github:issue_write` method `update` with `body` set to the
+   already-fetched body plus `ACM: not-applicable (defect): deduped
+   search results by result ID per this fix.` appended -- never the
+   waiver line by itself, since `update`'s `body` replaces the issue's
+   entire content outright. Before any PR for this fix is opened,
+   re-fetch the issue and confirm both the waiver line and the original
+   report text are still present.
 
 Contrast: had step 1 failed to reproduce the duplicates against the real
 search path, the correct next move is step 2 -- comment on the issue
@@ -147,6 +156,10 @@ never runs here either, for the same reason.
 - Never bundle a refactor or unrelated cleanup into the Step 4 fix.
 - Never open a PR for this fix before Step 6 has confirmed or posted the
   target issue's ACM/waiver disclosure.
+- Never call Step 6's `issue_write` update with only the waiver line as
+  `body` -- that call replaces the issue's entire body outright and
+  would destroy the original defect report; always send the
+  already-fetched body with the waiver line appended.
 
 ## Related skills
 
