@@ -21,13 +21,18 @@ follow the exact order below; do not reorder or skip a step. Never fix
 what has not been reproduced.
 
 This skill stays invocable without an explicit human trigger by design:
-every GitHub write it performs (Step 2's comment/new-issue escalation,
-Step 6's waiver disclosure) is a narrow, low-freedom action gated by its
-own exact-format check, not a broad or irreversible one, and a
-repository with its own deterministic write-side gates (e.g. gitapex's
-own `hooks/check-issue-acm-disclosure.sh` and
-`hooks/check-pr-issue-acm-disclosure.sh`) backstops it independently of
-whether this skill's own judgement was correct.
+every GitHub write it performs is narrow and low-freedom, not broad or
+open-ended. Step 2's `create` call is backstopped independently of this
+skill's own judgement by gitapex's own
+`hooks/check-issue-acm-disclosure.sh` (denies an issue-creation call
+carrying no ACM table or waiver line -- see Step 2's own waiver-line
+requirement below). Step 6's `update` call has no equivalent hook
+backing: `check-issue-acm-disclosure.sh` is scoped to `create` calls
+only by design, and gitapex's own `hooks/check-pr-issue-acm-disclosure.sh`
+only re-checks waiver *presence* at PR-creation time, never whether
+Step 6's own write preserved the issue's original content -- so Step 6's
+append-not-replace discipline rests on this skill's own prose alone;
+follow it exactly.
 
 ## Exact sequence
 
@@ -41,9 +46,16 @@ whether this skill's own judgement was correct.
    - If the input is a standalone CI failure with no linked issue (for
      example, a scheduled workflow run with no issue tracking it), open a
      new issue (e.g. `github:issue_write` method `create`) recording the
-     same: what was tried and what did not reproduce. This follows the
-     repository's own "open an issue before any branch, commit, or PR"
-     convention rather than leaving a CI signal with nowhere to land.
+     same: what was tried and what did not reproduce, plus the same
+     `ACM: not-applicable (defect): <reason>` waiver line Step 6 uses --
+     a bare incident record like this one never carries an Acceptance
+     Criteria Map by design, the same rationale Step 6 states in full
+     below. This follows the repository's own "open an issue before any
+     branch, commit, or PR" convention rather than leaving a CI signal
+     with nowhere to land, and keeps this new issue from being denied
+     outright by a repository whose own issue-creation-time hook
+     requires this disclosure (gitapex's own
+     `hooks/check-issue-acm-disclosure.sh` is one example).
 
    Either way, stop -- do not guess at a fix for an unreproduced defect.
    This is the same "ambiguous input earns a question, evidence earns a
@@ -126,11 +138,9 @@ query matches both title and body."
    `hooks/check_acm_present_or_waiver.py` uses), so call
    `github:issue_write` method `update` with `body` set to the
    already-fetched body plus `ACM: not-applicable (defect): deduped
-   search results by result ID per this fix.` appended -- never the
-   waiver line by itself, since `update`'s `body` replaces the issue's
-   entire content outright. Before any PR for this fix is opened,
-   re-fetch the issue and confirm both the waiver line and the original
-   report text are still present.
+   search results by result ID per this fix.` appended. Before any PR
+   for this fix is opened, re-fetch the issue and confirm both the
+   waiver line and the original report text are still present.
 
 Contrast: had step 1 failed to reproduce the duplicates against the real
 search path, the correct next move is step 2 -- comment on the issue
@@ -142,8 +152,10 @@ Contrast (no linked issue): a scheduled nightly workflow fails with no
 issue tracking it, and attempting the same steps that failed in CI does
 not reproduce the failure locally. Step 2's first bullet does not apply
 -- there is no issue to comment on -- so open a new issue recording the
-exact steps attempted and that they did not reproduce, then stop. Step 6
-never runs here either, for the same reason.
+exact steps attempted and that they did not reproduce, plus an `ACM:
+not-applicable (defect): unreproducible CI failure, recorded for
+investigation.` waiver line, then stop. Step 6 never runs here either,
+for the same reason.
 
 ## Stop boundaries
 

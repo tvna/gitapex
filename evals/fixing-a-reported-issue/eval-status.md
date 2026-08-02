@@ -67,9 +67,45 @@ caught it), keeping the Stop-boundary-bullet-to-fixture-count ratio this
 repository's `gate_skill_branch_fixture_coverage.py` enforces (6 bullets,
 6 fixtures). The deterministic shape checker
 (`check_skill_shape.py --allowed-root skills skills/fixing-a-reported-issue`)
-reports 40/40 PASS throughout every revision. Neither
+reports 40/40 PASS throughout every revision.
+
+A third, fresh pair of dispatches against that revision confirmed the
+destructive-write fix at the prose level (the specific bug is unambiguous
+and cannot be misread now) and found two further, real issues:
+`evaluating-skill-quality`'s Mechanism-fit check verified against the
+actual `hooks/hooks.json` wiring that the skill's own claim of hook
+"backstopping" was inaccurate for two of its write paths --
+`hooks/check-issue-acm-disclosure.sh` is scoped to `method == "create"`
+only by design, so it does not fire on Step 6's `update` call at all
+(Step 6's append-not-replace discipline rests on prose alone, not a hook),
+and it also found that Step 2's second bullet (opening a new issue for an
+unlinked CI failure) would itself be denied by that same hook if run
+inside this repository, since that bullet never included an ACM/waiver
+line. Fixed: the intro paragraph's hook-backing claim was corrected to
+state exactly which call each hook does and does not cover; Step 2's
+second bullet and its matching Contrast paragraph now include the same
+`ACM: not-applicable (defect): <reason>` waiver line Step 6 uses, for the
+same "bare incident record, no ACM by design" rationale. A separate,
+minor `evaluating-skill-quality` Dimension 2 (conciseness) finding --
+the destructive-write rule restated in full at three sites (Step 6,
+Worked example, Stop boundaries) -- was partly addressed by trimming the
+Worked example's restatement to a demonstration only, keeping the full
+explanation at Step 6 (primary instruction) and Stop boundaries (quick
+reference); some restatement is a deliberate defense-in-depth choice for
+a load-bearing safety rule, not accidental duplication, so this was not
+collapsed further. The deterministic shape checker and the
+Stop-boundary-bullet-to-fixture-count ratio both stayed green (40/40;
+6 bullets, 6 fixtures) after these fixes. Neither
 `tasks/defect-waiver-disclosure.yaml` nor `tasks/defect-waiver-preserves-body.yaml`
 has yet been run through a live `waza run` grading pass -- named here as an
 open gap, the same disclosure discipline the 2026-07-17 note above already
 established for this file, not silently assumed clean. See the PR that
-lands #657 for the final re-run verdicts against this revision.
+lands #657 for the final verdicts disclosed against this revision -- the
+overall verdict on both audits remained a real, disclosed FAIL /
+WELL-FORMED-NOT-MATURE at each round, entirely attributable by round 3 to
+pre-existing Steps 1/5 gaps (untrusted-issue-text handling, rejection-path
+completeness, escalation-on-uncertainty, supply-chain provenance,
+cross-session persistence, multi-turn/encoding coverage) this issue's own
+scope (the Step 6 disclosure step and its immediate surroundings) does not
+cover; a follow-up issue is recommended for that hardening rather than
+silently expanding this one's scope to chase a passing score.
