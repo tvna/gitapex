@@ -17,19 +17,26 @@ expected:
   output_contains:
     - "action.yml"
     - "docs/superpowers/plans/"
-  # output_contains_near (not a bare output_contains) for the quoted
-  # Planned-ops text: a substring-anywhere check would also pass for a
-  # model that merely echoes the ACM table in an early Facts recap,
-  # without ever actually quoting the row into a task record -- the
-  # exact behavior this fixture means to test. Requiring "ACM row" (this
-  # skill's own task-record citation-field convention, per
-  # task-decomposition.md's Verbatim-quotation discipline) to co-occur
-  # with the verbatim text discriminates a real task-record citation from
-  # an unrelated Facts-section mention of the same text.
-  output_contains_near:
-    - all: ["ACM row", "build-and-push/action.yml wiring docker build and push"]
-      window: 300
+    - "build-and-push/action.yml wiring docker build and push"
   output_not_contains:
     - "TaskCompleted"
     - "clean pre-filter"
     - "no flags found"
+  # Known, disclosed measurement limit (found by a battle-testing-a-skill
+  # Trial 3 that verified an earlier output_contains_near attempt here by
+  # actually running skills/scorer-gated-skill-edits/scripts/score_contract.py
+  # against synthetic transcripts -- not by reading the YAML diff alone --
+  # and found it scored a genuinely compliant transcript LOWER (0.833)
+  # than the exact violation this fixture exists to catch (1.0), since
+  # output_contains_near matches each substring's first occurrence
+  # anywhere in the text, not a specific co-located pair, and this
+  # skill's own Output convention has the Facts section cite the ACM too.
+  # A bare output_contains cannot discriminate "quoted into a real task
+  # record" from "echoed in an early Facts recap" either -- both pass --
+  # but at least does not invert the signal. Closing this gap for real
+  # needs either a scorer with span-specific (not first-occurrence-only)
+  # matching, or a live `waza run` plus human/model transcript review;
+  # neither is in scope here. Do not re-attempt output_contains_near for
+  # this exact pairing without first re-running the synthetic-transcript
+  # check above -- a plausible-looking fix here has already scored worse
+  # than what it replaced once.
