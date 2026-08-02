@@ -118,8 +118,9 @@ _HEADER_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Issue #357's own named waiver vocabulary: `ACM: not-applicable (chore|docs|tracking|defect): <reason>`.
-# `defect` (issue #657) covers fixing-a-reported-issue's bare defect-report
+# Issue #357's own named waiver vocabulary (`chore|docs|tracking`), plus
+# `defect` (issue #657): `ACM: not-applicable (chore|docs|tracking|defect): <reason>`.
+# `defect` covers fixing-a-reported-issue's bare defect-report
 # issues, which by design never carry an ACM table. A non-empty trailing
 # reason is required, mirroring gate_skill_audit_disclosure.py's own
 # `WAIVED: <reason>` requirement -- a bare "ACM: not-applicable (chore):" with

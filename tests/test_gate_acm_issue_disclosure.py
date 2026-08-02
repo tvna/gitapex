@@ -3,9 +3,10 @@
 
 Issue #414 (sub-issue of #357): flags a GitHub issue whose body carries
 neither an Acceptance Criteria Map table nor an explicit
-`ACM: not-applicable (chore|docs|tracking): <reason>` waiver line, via a
-label (`needs-acm`) and a one-time comment, regardless of which session
-or environment created the issue.
+`ACM: not-applicable (chore|docs|tracking|defect): <reason>` waiver line
+(the `defect` category added by issue #657), via a label (`needs-acm`)
+and a one-time comment, regardless of which session or environment
+created the issue.
 
 No test in this file makes a real network call -- the network layer is
 exercised through an injected `opener`, mirroring
@@ -307,6 +308,21 @@ def test_post_comment_includes_marker_and_waiver_guidance():
     assert captured["url"] == "https://api.github.com/repos/tvna/gitapex/issues/414/comments"
     assert gate._MARKER in captured["payload"]["body"]
     assert "ACM: not-applicable" in captured["payload"]["body"]
+
+
+def test_post_comment_waiver_guidance_lists_all_four_categories():
+    # Regression: the substring check above ("ACM: not-applicable" alone)
+    # would stay green even if a future wording edit dropped a category
+    # from the displayed example while the regex itself kept accepting it
+    # -- assert the full category list is actually shown to the requester.
+    captured = {}
+
+    def opener(request: urllib.request.Request) -> Response:
+        captured["payload"] = json.loads(request.data.decode())
+        return Response(201, "{}")
+
+    gate.post_comment("tvna", "gitapex", 414, "tok", opener=opener)
+    assert "(chore|docs|tracking|defect)" in captured["payload"]["body"]
 
 
 # ---------------------------------------------------------------------------
