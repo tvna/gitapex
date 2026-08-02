@@ -340,6 +340,19 @@
       "tracking_issue": 123,
       "status": "active",
       "supersedes": null
+    },
+    {
+      "id": "plugin-root-brace-notation",
+      "kind": "script",
+      "script": ".github/scripts/gate_plugin_root_brace_notation.py",
+      "rule": "Every hook command in a hooks.json manifest or an agent definition's frontmatter must reference the plugin root as ${CLAUDE_PLUGIN_ROOT}; the unbraced $CLAUDE_PLUGIN_ROOT fails. apm substitutes only the braced form, so an unbraced command is deployed verbatim into a consumer's .claude/settings.json, resolves against an unset variable, and its hook silently never fires while the install log still reports it integrated. Only command values are graded, never prose. Discovery reads git-tracked files, so every ignored path (apm's package cache and deploy trees, worktree checkouts) is out of scope by construction. Exits 2, never a silent pass, when no surface is discovered or a file is unreadable or malformed.",
+      "planes": ["ci"],
+      "trigger": ".github/workflows/plugin-root-brace-notation-gate.yml on pull_request, plus tests/test_gate_plugin_root_brace_notation.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "supply-chain",
+      "tracking_issue": 650,
+      "status": "active",
+      "supersedes": null
     }
   ],
   "clusters": {

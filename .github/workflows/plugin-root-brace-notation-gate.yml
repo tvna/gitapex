@@ -1,0 +1,50 @@
+# Issue #650: keep every hook command on the braced ${CLAUDE_PLUGIN_ROOT}
+# form. apm 0.25.0 substitutes only that form, so an unbraced command is
+# copied verbatim into a consumer's .claude/settings.json, resolves against
+# an unset variable, and its hook never fires -- while apm's own install log
+# still reports the hook as integrated. A silent loss of every PreToolUse
+# gate is exactly the failure class a deterministic gate has to catch.
+#
+# Deliberately no `paths:` filter, following waza-eval-gate.yml's own
+# rationale: a workflow that never fires for a given PR leaves a required
+# status check Pending forever, whereas a job that runs and passes is safe
+# to promote to required later. The scan is stdlib-only Python over three
+# small files, so running it unconditionally costs a few seconds.
+name: Plugin-root brace notation gate
+
+on:
+  pull_request: {}
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plugin-root-brace-notation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      # No dependency install step: the gate is standard library only, and
+      # ubuntu-latest ships python3. It does shell out to `git ls-files` to
+      # read the tracked-file set, which the checkout above provides; a
+      # shallow clone is sufficient, so no fetch-depth override is needed.
+      - name: Check hook commands brace the plugin-root variable
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/gate_plugin_root_brace_notation.py
