@@ -8,10 +8,11 @@ description: Use when a pull request has just been opened, or has an open CI fai
 This skill depends only on a connected GitHub MCP server and this
 session's own reasoning -- both general product capabilities, addressed
 via the portable `Server:tool` shorthand documented below -- no
-this-repository tooling. (Steps 1 and 9 below are additionally backed by
-deterministic PreToolUse hooks -- `hooks/check-pr-issue-acm-disclosure.sh`
-and `hooks/check-merge-pull-request-block.sh` respectively; see each step
-for how its portable prose and the repository-local backstop relate.)
+this-repository tooling. (Steps 1 and 9 below are additionally backed,
+where this repository's own hooks are installed and confirmed to bind, by
+`hooks/check-pr-issue-acm-disclosure.sh` and
+`hooks/check-merge-pull-request-block.sh` respectively; see each step for
+how its portable prose and the repository-local backstop relate.)
 
 A fragile, order-dependent sequence, not a matter of prose judgement. Follow
 the exact order below; do not reorder or skip a step.
@@ -309,12 +310,11 @@ platform naming.
     the same cadence as before draft conversion. On finding a real
     blocker, loop back to step 3/7 exactly as if the PR were not draft;
     resolving it never requires leaving draft first. Where the environment
-    offers no native long-lived subscription, a periodic self-check-in is
-    one fallback mechanism among others — for example, an environment
-    might offer a scheduled-wakeup or reminder tool to re-run this check
-    on a roughly hourly cadence; name whatever equivalent the current
-    environment actually provides rather than assuming one specific tool,
-    the same portable posture step 2 already takes for push-subscription.
+    offers no native long-lived subscription, a periodic self-check-in
+    (e.g. a scheduled-wakeup or reminder tool, on a roughly hourly
+    cadence) is one fallback mechanism among others — name whatever the
+    current environment actually provides, the same portable posture
+    step 2 already takes for push-subscription.
 11. **Escalate to the owner** only when blocked by access, secrets, or a
     pending human decision the agent cannot resolve itself — not for
     anything the agent can fix on its own. This is also the only path to
