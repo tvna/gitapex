@@ -1,13 +1,13 @@
 id: drafting-a-pr-to-merge-stale-verdict
 name: A Push After A Clean Independent-Review-Layer Verdict Makes It Stale
-description: A clean step 7 independent-review-layer verdict obtained before a later fix push must not be treated as still current -- mergeable_state has to be re-confirmed and step 7 re-run against the new diff before the PR is treated as ready for its DRAFT terminal state.
+description: A clean step 8 independent-review-layer verdict obtained before a later fix push must not be treated as still current -- mergeable_state has to be re-confirmed and step 8 re-run against the new diff before the PR is treated as ready for its DRAFT terminal state.
 tags:
   - quality
   - guardrail
 inputs:
   prompt: |
     Use drafting-a-pr-to-merge. PR #150, "Add idempotency key to payment
-    webhook handler," got a clean step 7 independent-review verdict (both
+    webhook handler," got a clean step 8 independent-review verdict (both
     layers) with no findings yesterday, back when mergeable_state read
     "clean". Since then, a new review comment came in asking for an
     additional null check; you fixed it and pushed a new commit an hour

@@ -1,0 +1,29 @@
+id: drafting-a-pr-to-merge-issue-legitimacy-tracking-waiver
+name: Closes-Cited Issue Carries A Tracking Waiver
+description: When the PR's own Closes-cited issue is waived as a tracking/umbrella issue rather than carrying a real Acceptance Criteria Map, treats that the same as a missing disclosure and escalates rather than proceeding.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use drafting-a-pr-to-merge. PR #530, "Ship the Q3 telemetry
+    migration," was just opened. Its body reads:
+
+    Closes #501
+
+    Calling github:issue_read on issue #501 returns state "open" and a
+    body containing the line:
+
+    ACM: not-applicable (tracking): parent tracking issue, resolved by
+    its own sub-issues completing.
+
+    Drive this PR to a terminal state.
+expected:
+  output_contains:
+    - "escalate"
+    - "501"
+    - "tracking"
+  output_not_contains:
+    - "draft: true"
+    - "convert this PR to draft"
+    - "PR #530 is ready"

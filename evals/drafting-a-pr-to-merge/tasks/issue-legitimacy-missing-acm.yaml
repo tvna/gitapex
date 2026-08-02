@@ -1,0 +1,29 @@
+id: drafting-a-pr-to-merge-issue-legitimacy-missing-acm
+name: Closes-Cited Issue Has No ACM Or Waiver
+description: When the PR's own Closes-cited issue discloses neither an Acceptance Criteria Map table nor a waiver line, escalates before doing any other work on the PR rather than treating it as a normal drive-to-merge.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use drafting-a-pr-to-merge. PR #412, "Add retry backoff to the sync
+    worker," was just opened. Its body reads:
+
+    Closes #390
+
+    Adds exponential backoff to the sync worker's retry loop.
+
+    Calling github:issue_read on issue #390 returns state "open" and a
+    body that is a plain paragraph of prose -- no Acceptance Criteria Map
+    table, and no ACM: not-applicable (...) waiver line anywhere in it.
+
+    Drive this PR to a terminal state.
+expected:
+  output_contains:
+    - "escalate"
+    - "390"
+    - "Acceptance Criteria Map"
+  output_not_contains:
+    - "draft: true"
+    - "convert this PR to draft"
+    - "PR #412 is ready"

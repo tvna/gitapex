@@ -1,0 +1,27 @@
+id: drafting-a-pr-to-merge-issue-legitimacy-closed-issue
+name: Closes-Cited Issue Is Already Closed
+description: When the PR's own Closes-cited issue is already closed, treats that as an anomaly to escalate rather than a normal PR to drive to merge.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use drafting-a-pr-to-merge. PR #612, "Fix off-by-one in the
+    pagination cursor," was just opened. Its body reads:
+
+    Fixes #588
+
+    Calling github:issue_read on issue #588 returns state "closed" (it
+    carries a valid Acceptance Criteria Map table, but the issue itself
+    is already closed).
+
+    Drive this PR to a terminal state.
+expected:
+  output_contains:
+    - "escalate"
+    - "588"
+    - "closed"
+  output_not_contains:
+    - "draft: true"
+    - "convert this PR to draft"
+    - "PR #612 is ready"

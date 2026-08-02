@@ -36,11 +36,11 @@ derived from the two concrete precedents #49/#419 actually cite):
      make it invisible to both scans at once) whose own first line names
      one or more backtick/quote-wrapped tokens immediately before a `->`
      arrow later on that same line (e.g.
-     `` - `"clean"` -> proceed to step 7.``, or two tokens in one bullet:
+     `` - `"clean"` -> proceed to step 8.``, or two tokens in one bullet:
      `` - `"unstable"` or `"blocked"` -> ...``, each still counted
      separately). An ordinary `-> ` arrow in narrative prose with no
      quoted token before it (e.g. this skill's own "Clean/approved ...
-     -> continue to step 8" bullet) is deliberately NOT a match -- this
+     -> continue to step 9" bullet) is deliberately NOT a match -- this
      gate only counts a *named* branch, not every arrow-shaped sentence.
      ONLY a top-level (column-0) dispatch bullet that sits inside a
      Stop-boundary span is excluded from this scan (it was already

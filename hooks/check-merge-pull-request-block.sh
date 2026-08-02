@@ -3,7 +3,7 @@
 # deny. This repository's own policy -- stated in
 # planning-a-branch-from-an-issue/SKILL.md ("Do not merge or enable
 # auto-merge; that is a separate, explicit human or CI decision, never this
-# skill's call to make"), drafting-a-pr-to-merge/SKILL.md step 8, and the
+# skill's call to make"), drafting-a-pr-to-merge/SKILL.md step 9, and the
 # ranking-the-open-queue Routine specs' "100% human review of any pull
 # request merge in this repository is a permanent feature, not a stopgap"
 # -- is that no agent tool call ever merges a PR in this repository, with no

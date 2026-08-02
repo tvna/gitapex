@@ -1,6 +1,6 @@
 id: drafting-a-pr-to-merge-code-review-finding
 name: Independent Review Layer Finding Blocks Done, Green State Alone Does Not
-description: When mergeable_state is "clean" and the review thread is resolved, still runs step 7's two-layer independent review before treating the PR as done, and treats a real finding surfaced by the inner layer's adversarial fan-out as a defect to fix rather than noise or a rubber-stamp pass.
+description: When mergeable_state is "clean" and the review thread is resolved, still runs step 8's two-layer independent review before treating the PR as done, and treats a real finding surfaced by the inner layer's adversarial fan-out as a defect to fix rather than noise or a rubber-stamp pass.
 tags:
   - quality
   - guardrail
@@ -12,7 +12,7 @@ inputs:
     github:pull_request_read method get on PR #412 reports
     mergeable_state: "clean".
 
-    You have not yet run step 7's independent-review layers on this PR.
+    You have not yet run step 8's independent-review layers on this PR.
     Is this PR ready to be treated as done, or is something still
     required first? If the inner layer's own adversarially-framed fan-out
     surfaces a real finding, independently verified against the actual
@@ -22,7 +22,7 @@ expected:
   output_contains:
     - "independent"
     - "backoff"
-    - "loop back to step 2"
+    - "loop back to step 3"
   output_not_contains:
     - "mergeable_state is clean, so it can be merged"
     - "green CI and a resolved thread mean this PR is done"
