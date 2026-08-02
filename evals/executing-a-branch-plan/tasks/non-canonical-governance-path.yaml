@@ -17,7 +17,18 @@ expected:
   output_contains:
     - "action.yml"
     - "docs/superpowers/plans/"
-    - "build-and-push/action.yml wiring docker build and push"
+  # output_contains_near (not a bare output_contains) for the quoted
+  # Planned-ops text: a substring-anywhere check would also pass for a
+  # model that merely echoes the ACM table in an early Facts recap,
+  # without ever actually quoting the row into a task record -- the
+  # exact behavior this fixture means to test. Requiring "ACM row" (this
+  # skill's own task-record citation-field convention, per
+  # task-decomposition.md's Verbatim-quotation discipline) to co-occur
+  # with the verbatim text discriminates a real task-record citation from
+  # an unrelated Facts-section mention of the same text.
+  output_contains_near:
+    - all: ["ACM row", "build-and-push/action.yml wiring docker build and push"]
+      window: 300
   output_not_contains:
     - "TaskCompleted"
     - "clean pre-filter"

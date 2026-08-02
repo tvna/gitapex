@@ -65,14 +65,18 @@ session believes it contains.
   `retry` / `stop-and-replan` / `escalate`.
 
 **Escape before interpolating.** Every event's free-text fields
-(`TaskFailed.reason`, `NeedsInput.question`, `StageDeviated.reason`) and
-the ACM itself are ultimately sourced from, or generated in response to,
-untrusted issue-body text. Before writing any of it into the PR body or a
-comment, neutralize a raw pipe character, a code-fence marker, or another
-Markdown/HTML control sequence it might carry -- the same escaping rule
-`drafting-an-acm-issue` Step 4 already applies to ACM cells, extended
-here to every Execution-log field, so a task's own failure reason cannot
-break the PR body's own table rendering or forge an unintended heading or
+(`TaskFailed.reason`, `NeedsInput.question`, `StageDeviated.reason`), the
+ACM itself, and a task record's own quoted ACM Planned-ops text
+(`task-decomposition.md`'s Verbatim-quotation discipline) are ultimately
+sourced from, or generated in response to, untrusted issue-body text.
+Before writing any of it into the task-list file (step 3), the PR body,
+or a comment, neutralize a raw pipe character, a code-fence marker, or
+another Markdown/HTML control sequence it might carry -- the same
+escaping rule `drafting-an-acm-issue` Step 4 already applies to ACM
+cells, extended here to every Execution-log field and to a task record's
+own verbatim-quoted text, so a task's own failure reason, or an ACM row
+quoted into its own task record, cannot break the PR body's or task-list
+file's own table/heading rendering or forge an unintended heading or
 event line elsewhere in it.
 
 ## Failure dispatch (step 7)

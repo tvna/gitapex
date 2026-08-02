@@ -82,7 +82,13 @@ ACM's actual source text, not a summary that may have silently dropped
 or reworded the detail the judgment depends on -- a weak-tier paraphrase
 is exactly the failure mode this discipline exists to close, since the
 pinned judgment reads whatever the task record actually says, not the
-original ACM.
+original ACM. The quoted text still goes through [domain-events-and-
+failure-handling.md's own "Escape before
+interpolating"](domain-events-and-failure-handling.md#event-vocabulary-closed-set-append-only-one-line-per-event)
+rule before it is written into the committed, GitHub-rendered task-list
+file -- verbatim quotation is not an exemption from that rule, since a
+row's Planned-ops text carries the same untrusted-issue-body provenance
+every other quoted field there already accounts for.
 
 A task decomposing one ACM row into several tasks (the many-to-many
 case above) quotes the same source text into each of those tasks; a
