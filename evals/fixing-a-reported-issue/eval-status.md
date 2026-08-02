@@ -93,19 +93,54 @@ Worked example's restatement to a demonstration only, keeping the full
 explanation at Step 6 (primary instruction) and Stop boundaries (quick
 reference); some restatement is a deliberate defense-in-depth choice for
 a load-bearing safety rule, not accidental duplication, so this was not
-collapsed further. The deterministic shape checker and the
-Stop-boundary-bullet-to-fixture-count ratio both stayed green (40/40;
-6 bullets, 6 fixtures) after these fixes. Neither
-`tasks/defect-waiver-disclosure.yaml` nor `tasks/defect-waiver-preserves-body.yaml`
-has yet been run through a live `waza run` grading pass -- named here as an
-open gap, the same disclosure discipline the 2026-07-17 note above already
-established for this file, not silently assumed clean. See the PR that
-lands #657 for the final verdicts disclosed against this revision -- the
-overall verdict on both audits remained a real, disclosed FAIL /
-WELL-FORMED-NOT-MATURE at each round, entirely attributable by round 3 to
-pre-existing Steps 1/5 gaps (untrusted-issue-text handling, rejection-path
-completeness, escalation-on-uncertainty, supply-chain provenance,
-cross-session persistence, multi-turn/encoding coverage) this issue's own
-scope (the Step 6 disclosure step and its immediate surroundings) does not
-cover; a follow-up issue is recommended for that hardening rather than
-silently expanding this one's scope to chase a passing score.
+collapsed further.
+
+A fourth, fresh pair of dispatches against that revision independently
+re-verified both corrections directly against the real hook source and
+`hooks.json` matcher wiring and confirmed both accurate. This round's
+`battle-testing-a-skill` pass found one more real, narrowly-scoped gap
+(Dimension 9, input validation): Step 6 had no guard against a failed or
+empty `github:issue_read` fetch -- as written it would still construct
+the `update` call's body from whatever the fetch returned, including
+nothing, silently posting an issue whose only surviving content was the
+waiver line even though Step 6's own write never replaced anything (the
+loss would already have happened before Step 6 ran). Fixed: Step 6's
+first bullet now stops and escalates on a failed or empty fetch rather
+than guessing. This round's `evaluating-skill-quality` pass (dispatched
+in parallel, so it graded the version just before this specific fix)
+returned **WELL-FORMED-AND-MATURE** -- Dimensions 1-7 all cleared cleanly,
+with Dimensions 8-9 gaps named rather than silently assumed clean (cross-
+model behavior remains unmeasured; `tasks/no-linked-issue-escalation.yaml`
+had not been updated to assert the new Step 2 waiver line, a real,
+newly-surfaced coverage gap for exactly the change this round was asked to
+verify). Fixed: added `"ACM: not-applicable (defect)"` to that fixture's
+`output_contains`. Both final-round dispatches disclosed the same
+contaminated-dispatch caveat every round in this file has carried (this
+repository's own CLAUDE.md was present in each dispatch's context, which
+that skill's own procedure requires excluding) -- every verdict in this
+file, including this final WELL-FORMED-AND-MATURE, is provisional pending
+a genuinely isolated re-run, not a limitation specific to this change.
+
+The deterministic shape checker and the Stop-boundary-bullet-to-fixture-count
+ratio stayed green (40/40; 6 bullets, 6 fixtures) through every fix in
+every round. None of `tasks/defect-waiver-disclosure.yaml`,
+`tasks/defect-waiver-preserves-body.yaml`, or the updated
+`tasks/no-linked-issue-escalation.yaml` has yet been run through a live
+`waza run` grading pass -- named here as an open gap, the same disclosure
+discipline this file has carried throughout, not silently assumed clean.
+
+Final disclosed verdicts (round 4, the state this PR lands): `battle-testing-a-skill`
+**FAIL** (8/22: Dimensions 9 and 12 traced to the Step 2/6 content this
+issue touches -- 9 fixed after this dispatch as described above, 12 a
+generic install-time-provenance concern with no this-issue-specific fix
+identified; Dimensions 10/13/15/16 traced to pre-existing Steps 1/3-5
+content predating this issue; Dimensions 14/17 span the whole file/shared
+preamble text, not cleanly attributable to either side). `evaluating-skill-quality`
+**WELL-FORMED-AND-MATURE**. Both are honestly disclosed as-is rather than
+chased to a clean sweep -- the pre-existing Steps 1/3-5 gaps (untrusted-
+issue-text handling, rejection-path completeness, escalation-on-
+uncertainty, cross-session persistence, multi-turn/encoding coverage, a
+broader adversarial-corpus gap) are real and are out of this issue's own
+scope (the Step 6 disclosure step, Step 2's matching waiver requirement,
+and their immediate surroundings); a follow-up issue is the right place
+for that hardening, not this one.

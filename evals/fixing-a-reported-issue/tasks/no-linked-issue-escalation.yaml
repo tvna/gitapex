@@ -26,6 +26,7 @@ expected:
     - "open a new issue"
     - "did not reproduce"
     - "row 4821"
+    - "ACM: not-applicable (defect)"
   output_not_contains:
     - "comment on the issue"
     - "Fix minimally"
