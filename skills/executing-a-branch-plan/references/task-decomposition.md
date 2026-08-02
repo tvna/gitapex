@@ -90,6 +90,25 @@ task merging several ACM rows (the file-contention case above) quotes
 each contributing row's own text into that one task's record, not a
 fused paraphrase combining them.
 
+**Residual risk, named explicitly rather than left implicit (found by an
+adversarial `battle-testing-a-skill` pass on this discipline's own
+addition).** Verbatim quotation is safe only because step 2's own
+`untrusted-input-triage` pass already ran against the ACM's text before
+any row reaches this step -- see
+[threat-model-and-authorization.md's Per-task
+screening](threat-model-and-authorization.md#per-task-screening). A row
+that step 2 false-negatives on now propagates unparaphrased into its own
+task record and, from there, into that task's own dispatched
+`agent()` prompt -- where a paraphrase step might previously have
+diluted or reworded an injected instruction as an unintended side
+effect, verbatim quotation no longer does. This discipline does not add
+a new screening layer at the task-agent level; it deliberately trades
+away that incidental, unreliable side effect for the ACM-row-fidelity
+this section exists to guarantee, on the premise that step 2's own
+pinned judgment (not an accidental paraphrase) is the actual control
+this skill relies on to catch an injected row before it is ever quoted
+anywhere.
+
 ## Two dependency-edge types, both computed before wave assignment
 
 1. **File-ownership edge.** Build a file path -> task ID map before
