@@ -252,6 +252,37 @@ def test_allowed_when_tool_input_is_absent_or_null() -> None:
         assert "cites no issue" in payload["systemMessage"]
 
 
+def test_denied_when_jq_itself_is_missing_from_path(tmp_path: Path) -> None:
+    # A third round of issue #657's own adversarial review: deny() itself
+    # depends on jq to build its JSON output. If jq is absent from PATH
+    # entirely (a broken environment, not a malformed payload), every jq
+    # call -- including inside deny() -- crashes with exit 127 ("command
+    # not found") past the point where any deny JSON could be emitted.
+    # Builds a PATH with everything this script needs except jq, so the
+    # system's real PATH/jq installation is untouched.
+    sandbox_bin = tmp_path / "bin"
+    sandbox_bin.mkdir()
+    for name in ("bash", "cat", "dirname", "sed", "grep", "python3"):
+        found = shutil.which(name)
+        assert found, f"{name} must be on the real PATH for this test to build a sandbox PATH"
+        (sandbox_bin / name).symlink_to(found)
+
+    env = {"HOME": os.environ.get("HOME", "/root"), "PATH": str(sandbox_bin)}
+    result = subprocess.run(
+        ["bash", str(SCRIPT)],
+        input="not json at all",
+        capture_output=True,
+        text=True,
+        timeout=10,
+        env=env,
+        cwd=str(REPO_ROOT),
+    )
+    assert result.returncode == 2, f"expected deny (exit 2), got {result.returncode}: stderr={result.stderr!r}"
+    payload = json.loads(result.stderr)
+    assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "jq is not available" in payload["systemMessage"]
+
+
 def test_denied_not_crashed_on_a_title_too_large_for_argv() -> None:
     # Regression for issue #657's own adversarial review: an earlier
     # version rebuilt the JSON payload via `jq -n --arg title "$title"

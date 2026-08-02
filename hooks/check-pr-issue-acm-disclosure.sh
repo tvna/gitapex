@@ -36,6 +36,20 @@
 
 set -euo pipefail
 
+# A third round of issue #657's own adversarial review found deny() itself
+# depends on jq to construct its JSON output -- if jq is missing from
+# PATH entirely (a broken environment, not a malformed payload), deny()
+# crashes the same way every other jq call in this script would, with
+# exit 127 ("command not found") under `set -e`, past the point where
+# any deny JSON is emitted. This is the one deny path that must not
+# itself depend on jq: a fixed, statically-escaped JSON literal (no
+# interpolation, so no JSON-escaping risk), checked before anything else
+# in the script runs.
+if ! command -v jq >/dev/null 2>&1; then
+  printf '%s\n' "{\"hookSpecificOutput\": {\"permissionDecision\": \"deny\"}, \"systemMessage\": \"Blocked by hooks/check-pr-issue-acm-disclosure.sh: jq is not available on PATH -- cannot verify the cited issue's ACM/waiver disclosure. Failing closed.\"}" >&2
+  exit 2
+fi
+
 deny() {
   local reason="$1"
   # Piped via stdin (jq -Rs: raw input, slurped to one string), not
