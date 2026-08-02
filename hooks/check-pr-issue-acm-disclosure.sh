@@ -36,7 +36,26 @@
 
 set -euo pipefail
 
+deny() {
+  local reason="$1"
+  jq -n --arg msg "$reason" \
+    '{"hookSpecificOutput": {"permissionDecision": "deny"}, "systemMessage": $msg}' >&2
+  exit 2
+}
+
 input=$(cat)
+
+# A malformed payload (invalid JSON, or valid JSON that isn't an object --
+# an array/string/null/number) makes every field-extraction jq call below
+# exit non-zero, which under `set -e` would crash this script past deny()
+# with an exit code Claude Code's PreToolUse contract treats as a
+# non-blocking error (the tool call proceeds) -- a fail-open path found by
+# issue #657's own adversarial review, live-reproduced with `echo "not
+# json at all" | bash check-pr-issue-acm-disclosure.sh`. Validate the
+# shape up front and fail closed explicitly instead.
+if ! printf '%s' "$input" | jq -e 'if type == "object" then . else empty end' >/dev/null 2>&1; then
+  deny "Blocked by hooks/check-pr-issue-acm-disclosure.sh: the tool-call payload on stdin is not a JSON object. Failing closed."
+fi
 
 tool_name=$(printf '%s' "$input" | jq -r '.tool_name // empty')
 
@@ -53,13 +72,6 @@ body=$(printf '%s' "$input" | jq -r '.tool_input.body // empty')
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 check_script="$script_dir/check_pr_issue_acm_disclosure.py"
-
-deny() {
-  local reason="$1"
-  jq -n --arg msg "$reason" \
-    '{"hookSpecificOutput": {"permissionDecision": "deny"}, "systemMessage": $msg}' >&2
-  exit 2
-}
 
 if [ ! -f "$check_script" ]; then
   deny "Blocked by hooks/check-pr-issue-acm-disclosure.sh: cannot verify the cited issue's ACM/waiver disclosure -- check_pr_issue_acm_disclosure.py was not found at $check_script (corrupted or incomplete plugin bundle). Failing closed."

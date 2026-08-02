@@ -71,20 +71,20 @@ _VALID_ACM_TABLE = (
     ["close", "closes", "closed", "fix", "fixes", "fixed", "resolve", "resolves", "resolved"],
 )
 def test_every_github_closing_keyword_resolves(keyword):
-    resolving, context = checker.extract_citations("title", f"{keyword} #12")
+    resolving, context = checker.extract_citations("o", "r", "title", f"{keyword} #12")
     assert resolving == (12,)
     assert context == ()
 
 
 @pytest.mark.parametrize("keyword", ["CLOSES", "Fixes", "RESOLVED"])
 def test_resolving_keywords_are_case_insensitive(keyword):
-    resolving, _ = checker.extract_citations("title", f"{keyword} #7")
+    resolving, _ = checker.extract_citations("o", "r", "title", f"{keyword} #7")
     assert resolving == (7,)
 
 
 def test_resolving_keyword_colon_is_optional():
-    assert checker.extract_citations("t", "Closes: #10")[0] == (10,)
-    assert checker.extract_citations("t", "Closes #10")[0] == (10,)
+    assert checker.extract_citations("o", "r", "t", "Closes: #10")[0] == (10,)
+    assert checker.extract_citations("o", "r", "t", "Closes #10")[0] == (10,)
 
 
 def test_comma_separated_list_only_first_number_resolves():
@@ -92,64 +92,113 @@ def test_comma_separated_list_only_first_number_resolves():
     # followed by a bare comma-separated list does not resolve every
     # number, only the one directly following the keyword. The second
     # number still counts as a context-only citation.
-    resolving, context = checker.extract_citations("t", "Closes #12, #34")
+    resolving, context = checker.extract_citations("o", "r", "t", "Closes #12, #34")
     assert resolving == (12,)
     assert context == (34,)
 
 
 def test_refs_keyword_is_context_only():
-    resolving, context = checker.extract_citations("t", "Refs #5")
+    resolving, context = checker.extract_citations("o", "r", "t", "Refs #5")
     assert resolving == ()
     assert context == (5,)
 
 
 def test_bare_number_is_context_only():
-    resolving, context = checker.extract_citations("t", "See #5 for background.")
+    resolving, context = checker.extract_citations("o", "r", "t", "See #5 for background.")
     assert resolving == ()
     assert context == (5,)
 
 
 def test_title_bare_number_counts_as_context_but_never_resolving():
-    resolving, context = checker.extract_citations("Follow-up to #5", "Closes #12")
+    resolving, context = checker.extract_citations("o", "r", "Follow-up to #5", "Closes #12")
     assert resolving == (12,)
     assert context == (5,)
 
 
 def test_resolving_keyword_in_title_is_not_resolving():
     # GitHub never treats a title keyword as auto-closing -- only the body.
-    resolving, context = checker.extract_citations("Closes #12", "no citation here")
+    resolving, context = checker.extract_citations("o", "r", "Closes #12", "no citation here")
     assert resolving == ()
     assert context == (12,)
 
 
 def test_number_cited_both_ways_stays_resolving_only():
-    resolving, context = checker.extract_citations("t", "Closes #12. Also see Refs #12.")
+    resolving, context = checker.extract_citations("o", "r", "t", "Closes #12. Also see Refs #12.")
     assert resolving == (12,)
     assert context == ()
 
 
 def test_cross_repo_citation_is_excluded_from_both_buckets():
-    resolving, context = checker.extract_citations("t", "Closes tvna/other-repo#99")
+    # A genuinely foreign repo (not the PR's own tvna/gitapex) stays
+    # excluded from both buckets -- see the same-repo-qualified tests
+    # below for the PR's-own-repo case, which is now normalized instead.
+    resolving, context = checker.extract_citations("tvna", "gitapex", "t", "Closes tvna/other-repo#99")
+    assert resolving == ()
+    assert context == ()
+
+
+def test_same_repo_qualified_citation_resolves():
+    # Regression for issue #657's own adversarial review: a same-repo-
+    # qualified citation ("Fixes tvna/gitapex#12") auto-closes on GitHub
+    # exactly like a bare "Fixes #12" -- excluding it would be a real
+    # bypass of this hook's whole purpose, the same class of gap as
+    # excluding "Resolves" (see this module's own docstring).
+    resolving, context = checker.extract_citations("tvna", "gitapex", "t", "Fixes tvna/gitapex#12")
+    assert resolving == (12,)
+    assert context == ()
+
+
+def test_same_repo_qualified_citation_is_case_insensitive():
+    resolving, _ = checker.extract_citations("tvna", "gitapex", "t", "Fixes TVNA/GitApex#12")
+    assert resolving == (12,)
+
+
+def test_same_repo_qualified_bare_number_is_context_only():
+    resolving, context = checker.extract_citations("tvna", "gitapex", "t", "See tvna/gitapex#5 for background.")
+    assert resolving == ()
+    assert context == (5,)
+
+
+def test_same_repo_qualified_refs_keyword_is_context_only():
+    resolving, context = checker.extract_citations("tvna", "gitapex", "t", "Refs tvna/gitapex#5")
+    assert resolving == ()
+    assert context == (5,)
+
+
+def test_same_repo_qualified_citation_does_not_match_a_longer_repo_name():
+    # "tvna/gitapex-extra#12" must not be treated as a same-repo citation
+    # of tvna/gitapex -- the normalization only strips an exact
+    # "owner/repo" immediately followed by "#digit".
+    resolving, context = checker.extract_citations("tvna", "gitapex", "t", "Fixes tvna/gitapex-extra#12")
+    assert resolving == ()
+    assert context == ()
+
+
+def test_missing_owner_or_repo_does_not_normalize_anything():
+    # extract_citations must not crash or misbehave when owner/repo are
+    # falsy (e.g. an incomplete payload) -- same-repo normalization is
+    # simply skipped, matching pre-fix behavior for that input shape.
+    resolving, context = checker.extract_citations("", "", "t", "Fixes tvna/gitapex#12")
     assert resolving == ()
     assert context == ()
 
 
 def test_fenced_code_block_is_stripped_before_scanning():
     body = "no real citation.\n```\nCloses #12\n```\nRefs #34"
-    resolving, context = checker.extract_citations("t", body)
+    resolving, context = checker.extract_citations("o", "r", "t", body)
     assert resolving == ()
     assert context == (34,)
 
 
 def test_tilde_fenced_code_block_is_stripped_before_scanning():
     body = "~~~\nCloses #12\n~~~\nRefs #34"
-    resolving, context = checker.extract_citations("t", body)
+    resolving, context = checker.extract_citations("o", "r", "t", body)
     assert resolving == ()
     assert context == (34,)
 
 
 def test_no_citation_at_all_yields_two_empty_tuples():
-    assert checker.extract_citations("plain title", "plain body, nothing here") == ((), ())
+    assert checker.extract_citations("o", "r", "plain title", "plain body, nothing here") == ((), ())
 
 
 def test_inline_code_span_citation_is_stripped_before_scanning():
@@ -159,20 +208,20 @@ def test_inline_code_span_citation_is_stripped_before_scanning():
     # the syntax, not a resolution claim -- must not be misdetected as a
     # real citation of #123.
     body = "The `Closes #123` syntax auto-closes an issue. See Refs #34 too."
-    resolving, context = checker.extract_citations("t", body)
+    resolving, context = checker.extract_citations("o", "r", "t", body)
     assert resolving == ()
     assert context == (34,)
 
 
 def test_inline_code_span_does_not_swallow_content_after_it():
     body = "`Closes #12` then a real citation: Fixes #99"
-    resolving, context = checker.extract_citations("t", body)
+    resolving, context = checker.extract_citations("o", "r", "t", body)
     assert resolving == (99,)
 
 
 def test_multiple_inline_code_spans_on_one_line_are_each_stripped():
     body = "See `hooks/check_acm_present_or_waiver.py`'s `has_acm_disclosure` -- Closes #7"
-    resolving, context = checker.extract_citations("t", body)
+    resolving, context = checker.extract_citations("o", "r", "t", body)
     assert resolving == (7,)
 
 
@@ -384,6 +433,25 @@ def test_evaluate_passes_when_resolving_issue_is_clean():
         "o", "r", "title", "Closes #1", "tok", opener=_opener_for(_VALID_ACM_TABLE), sleeper=lambda _: None
     )
     assert passed is True
+
+
+def test_evaluate_does_not_bypass_a_same_repo_qualified_resolving_citation():
+    # End-to-end regression for issue #657's own adversarial review: before
+    # the fix, extract_citations excluded "Fixes tvna/gitapex#12" from
+    # both buckets entirely, so evaluate() never reached the network fetch
+    # at all and silently allowed a PR that should have been ACM-gated.
+    called = {"n": 0}
+
+    def opener(request: urllib.request.Request) -> Response:
+        called["n"] += 1
+        return Response(200, json.dumps({"body": "no disclosure here", "state": "open"}))
+
+    passed, message = checker.evaluate(
+        "tvna", "gitapex", "t", "Fixes tvna/gitapex#12", "tok", opener=opener, sleeper=lambda _: None
+    )
+    assert called["n"] == 1
+    assert passed is False
+    assert "#12" in message
 
 
 def test_evaluate_denies_and_aggregates_multiple_failures():

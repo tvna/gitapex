@@ -44,10 +44,22 @@ Citation vocabulary:
   numbers after one keyword. This module's regex matches that real
   behavior by construction (each match requires its own keyword); `#34`
   falls through to the bare-number context-only bucket instead.
-- `owner/repo#N` cross-repo citations: a named non-goal for v1. Excluded
-  from every bucket -- the bare-number regex's negative lookbehind
-  rejects a `#` directly preceded by a word character, so `repo#N` never
-  matches. Fetching a foreign repository's issue is out of scope.
+- `owner/repo#N` citations qualified with the PR's *own* target repo
+  (e.g. a PR in tvna/gitapex reading `Fixes tvna/gitapex#12`) are
+  normalized down to a bare `#12` before extraction -- GitHub really
+  does auto-close on this form, identically to a bare `#12` (see
+  docs.github.com's "Linking a pull request to an issue" page), so
+  excluding it would be the same real bypass as excluding `Resolves`
+  above. Found by an adversarial review of this hook's own v1: the
+  original bare-number regex's negative lookbehind (still used for the
+  genuinely-foreign-repo case below) rejected *any* `#` preceded by a
+  word character, same-repo-qualified or not.
+- A genuinely foreign `owner/repo#N` (a different repository) remains a
+  named non-goal: excluded from every bucket -- the bare-number regex's
+  negative lookbehind rejects a `#` directly preceded by a word
+  character, so `repo#N` never matches once the same-repo case above has
+  already been normalized away. Fetching a foreign repository's issue is
+  out of scope.
 
 Fenced code blocks (``` and ~~~) and single-backtick inline code spans are
 both stripped before any scan -- a materially worse false-positive class
@@ -163,14 +175,33 @@ def _strip_fences(text: str | None) -> str:
     return _INLINE_CODE_RE.sub("", without_fences)
 
 
-def extract_citations(title: str | None, body: str | None) -> tuple[tuple[int, ...], tuple[int, ...]]:
+def _normalize_same_repo_citations(text: str, owner: str, repo: str) -> str:
+    """Collapse a `owner/repo#N` citation down to a bare `#N` when
+    `owner/repo` names the PR's own target repo, so the extraction
+    regexes below treat it identically to an unqualified `#N` -- GitHub
+    auto-closes on this form exactly as it does on the bare form (see
+    `extract_citations`'s docstring). A genuinely foreign `owner/repo#N`
+    is left untouched and falls through to `_BARE_NUMBER_RE`'s own
+    negative lookbehind, which excludes it from every bucket."""
+    if not owner or not repo:
+        return text
+    same_repo_re = re.compile(rf"\b{re.escape(owner)}/{re.escape(repo)}(?=#\d)", re.IGNORECASE)
+    return same_repo_re.sub("", text)
+
+
+def extract_citations(
+    owner: str | None, repo: str | None, title: str | None, body: str | None
+) -> tuple[tuple[int, ...], tuple[int, ...]]:
     """Return (resolving, context) -- sorted tuples of distinct issue
     numbers cited by `title`/`body`. `resolving` is the ACM-gated set
     (a GitHub closing keyword in the body); `context` is everything else
     cited (Refs/#N, title or body) that isn't already in `resolving` --
-    a number cited both ways stays in `resolving` only."""
-    stripped_body = _strip_fences(body)
-    stripped_title = _strip_fences(title)
+    a number cited both ways stays in `resolving` only. `owner`/`repo`
+    identify the PR's own target repo, used only to normalize a
+    same-repo-qualified `owner/repo#N` citation down to a bare `#N`
+    first -- see `_normalize_same_repo_citations`."""
+    stripped_body = _normalize_same_repo_citations(_strip_fences(body), owner or "", repo or "")
+    stripped_title = _normalize_same_repo_citations(_strip_fences(title), owner or "", repo or "")
     resolving = {int(n) for n in _RESOLVING_RE.findall(stripped_body)}
     combined = stripped_title + "\n" + stripped_body
     context_candidates = {int(n) for n in _REFS_KEYWORD_RE.findall(combined)}
@@ -293,7 +324,7 @@ def evaluate(
     `token` may be falsy -- a missing token is a single global short-circuit
     fail-closed deny (see module docstring), not a per-issue failure, so
     callers must resolve it (or its absence) before calling this."""
-    resolving, context = extract_citations(title, body)
+    resolving, context = extract_citations(owner, repo, title, body)
 
     if not resolving and not context:
         return False, (

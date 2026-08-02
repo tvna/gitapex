@@ -162,3 +162,58 @@ def test_denied_message_names_the_uncited_case_explicitly() -> None:
     result = run(body="nothing here")
     payload = json.loads(result.stderr)
     assert "cites no issue" in payload["systemMessage"]
+
+
+def _run_raw(raw_stdin: str, *, script: Path = SCRIPT) -> subprocess.CompletedProcess[str]:
+    env = dict(os.environ)
+    env.pop("CLAUDE_PROJECT_DIR", None)
+    env.pop("CLAUDE_PLUGIN_ROOT", None)
+    env.pop("GH_TOKEN", None)
+    env.pop("GITHUB_TOKEN", None)
+    return subprocess.run(
+        ["bash", str(script)],
+        input=raw_stdin,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        env=env,
+        cwd=str(REPO_ROOT),
+    )
+
+
+def test_denied_when_stdin_is_not_valid_json() -> None:
+    # Regression for issue #657's own adversarial review: a `set -euo
+    # pipefail` script's unprotected jq field-extraction calls crash on
+    # malformed JSON before deny() ever runs, exiting with jq's own error
+    # code -- which Claude Code's PreToolUse contract treats as a
+    # non-blocking error (the tool call proceeds), silently defeating this
+    # hook's whole fail-closed guarantee. Live-reproduced originally with
+    # `echo "not json at all" | bash check-pr-issue-acm-disclosure.sh`.
+    result = _run_raw("not json at all")
+    assert result.returncode == 2, (
+        f"expected deny (exit 2), got {result.returncode}: stderr={result.stderr!r}"
+    )
+    payload = json.loads(result.stderr)
+    assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "not a JSON object" in payload["systemMessage"]
+
+
+def test_denied_when_stdin_is_valid_json_but_not_an_object() -> None:
+    # A second, distinct crash shape the naive `jq -e .` validity check
+    # alone would miss: valid JSON whose top level isn't an object (an
+    # array, string, null, or bare number) still crashes the very next
+    # `.tool_name` field-access jq call with a runtime "Cannot index ..."
+    # error, exiting non-zero past deny() the same way.
+    for raw in ("[1,2,3]", '"just a string"', "null", "5"):
+        result = _run_raw(raw)
+        assert result.returncode == 2, f"input {raw!r}: expected deny (exit 2), got {result.returncode}"
+        payload = json.loads(result.stderr)
+        assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"
+        assert "not a JSON object" in payload["systemMessage"]
+
+
+def test_denied_when_stdin_is_empty() -> None:
+    result = _run_raw("")
+    assert result.returncode == 2
+    payload = json.loads(result.stderr)
+    assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"

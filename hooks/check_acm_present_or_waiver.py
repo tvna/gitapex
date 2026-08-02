@@ -30,6 +30,26 @@ import argparse
 import re
 import sys
 
+# Fenced code blocks only (```/~~~), not single-backtick inline code
+# spans: `_ACM_WAIVER_RE` below optionally wraps the literal word "ACM"
+# in a single backtick pair (`` `ACM`: not-applicable... ``), so stripping
+# inline code the way hooks/check_pr_issue_acm_disclosure.py does would
+# strip that legitimate waiver's own "ACM" token and false-negative it --
+# confirmed directly before choosing fence-only stripping here, not
+# assumed safe by analogy. Added for issue #657's own adversarial review:
+# hooks/check_pr_issue_acm_disclosure.py's classify_issue() now calls
+# has_acm_disclosure()/waiver_category() on a *remotely fetched*, different
+# issue's body -- unlike this file's original use (an issue checking its
+# own body at its own creation time), a fenced illustrative ACM table or
+# waiver line quoted inside someone else's issue body could otherwise read
+# as a real disclosure.
+_FENCE_RE = re.compile(r"```.*?```|~~~.*?~~~", re.DOTALL)
+
+
+def _strip_fences(text):
+    return _FENCE_RE.sub("", text or "")
+
+
 # Same table header shape as the other three copies -- see this module's
 # own docstring and tests/test_check_acm_present_sync.py.
 _HEADER_RE = re.compile(
@@ -62,6 +82,7 @@ def has_acm_disclosure(body_text):
     # Normalize CRLF/CR line endings before matching, same rationale as
     # gate_acm_issue_disclosure.py's own has_acm_disclosure.
     normalized = (body_text or "").replace("\r\n", "\n").replace("\r", "\n")
+    normalized = _strip_fences(normalized)
     return bool(_HEADER_RE.search(normalized) or _ACM_WAIVER_RE.search(normalized))
 
 
@@ -74,6 +95,7 @@ def waiver_category(body_text):
     'tracking' with a message distinct from "no ACM/waiver at all" --
     `has_acm_disclosure`'s boolean alone cannot make that distinction."""
     normalized = (body_text or "").replace("\r\n", "\n").replace("\r", "\n")
+    normalized = _strip_fences(normalized)
     match = _ACM_WAIVER_RE.search(normalized)
     return match.group("category").lower() if match else None
 
