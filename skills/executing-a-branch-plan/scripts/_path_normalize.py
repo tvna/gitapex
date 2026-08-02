@@ -25,11 +25,27 @@ from __future__ import annotations
 
 
 def normalize(path):
+    """Fixed-point iteration, not a single fixed pass order: a leading
+    "./" immediately followed by another "/" (e.g. ".//skills/x") is
+    itself a "//"-shaped redundancy that is only exposed by collapsing
+    "//" BEFORE stripping the leading "./" -- collapse-then-strip turns
+    ".//skills/x" into "./skills/x" (now strippable) into "skills/x"; the
+    reverse order (an earlier version of this function, found wrong by
+    an independent /code-review pass on this repository's own gitapex
+    issue #659 PR) strips "./" first, leaving a bare leading "/" that no
+    longer matches either "//" or "./" and is silently never cleaned up.
+    Collapsing "/./" can likewise expose a fresh "//" (e.g. "a/.//b"), so
+    every reduction re-runs every outer iteration until none of them
+    changes the string, rather than trusting any single fixed pass
+    order."""
     normalized = path.replace("\\", "/")
-    while normalized.startswith("./"):
-        normalized = normalized[2:]
-    while "//" in normalized:
-        normalized = normalized.replace("//", "/")
-    while "/./" in normalized:
-        normalized = normalized.replace("/./", "/")
-    return normalized
+    while True:
+        previous = normalized
+        while "//" in normalized:
+            normalized = normalized.replace("//", "/")
+        if normalized.startswith("./"):
+            normalized = normalized[2:]
+        while "/./" in normalized:
+            normalized = normalized.replace("/./", "/")
+        if normalized == previous:
+            return normalized

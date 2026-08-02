@@ -97,6 +97,18 @@ def test_double_slash_still_matches_skill_governance_shape():
     assert "governance: skills//foo/SKILL.md" in result.stdout
 
 
+def test_leading_dotslash_adjacent_to_slash_still_matches():
+    # Independent /code-review finding: a leading "./" immediately
+    # followed by another "/" (".//skills/foo/SKILL.md") is a distinct
+    # case from the plain double-slash test above (no leading "./") --
+    # an earlier normalize() implementation stripped "./" before
+    # collapsing "//", leaving a stray leading "/" that made
+    # classify() fall to "no-match" instead of "governance".
+    result = run([".//skills/foo/SKILL.md"])
+    assert result.returncode == 0
+    assert "governance: .//skills/foo/SKILL.md" in result.stdout
+
+
 def test_no_paths_given():
     result = subprocess.run(
         [sys.executable, str(SCRIPT)], input="", capture_output=True, text=True, timeout=10

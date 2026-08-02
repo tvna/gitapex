@@ -64,6 +64,19 @@ def test_path_normalization_resolves_embedded_dotslash_segment():
     assert "CONFLICT: a/b.py" in result.stdout
 
 
+def test_path_normalization_handles_leading_dotslash_adjacent_to_slash():
+    # Independent /code-review finding: a leading "./" immediately
+    # followed by another "/" (".//a.py") is a distinct case from either
+    # "./a.py" or "a//b.py" alone -- an earlier normalize() implementation
+    # stripped "./" before collapsing "//", leaving a stray leading "/"
+    # neither test above (one exercises a leading "./" alone, the other a
+    # "//" with no leading "./") happened to combine, letting this bug
+    # through untested.
+    result = run({"task-a": [".//a.py"], "task-b": ["a.py"]})
+    assert result.returncode == 0
+    assert "CONFLICT: a.py" in result.stdout
+
+
 def test_duplicate_task_id_key_is_usage_error_not_silent_drop():
     # Adversarial gate finding: plain json.loads silently keeps only the
     # last occurrence of a duplicate object key, dropping the earlier
