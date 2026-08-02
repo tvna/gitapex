@@ -1,0 +1,32 @@
+id: fixing-a-reported-issue-defect-waiver-disclosure
+name: Defect Waiver Disclosed Before Any PR
+description: "After reproducing, writing a failing test, fixing minimally, and verifying a reported defect, the skill checks the target issue for an existing ACM/waiver and -- finding neither -- posts an ACM not-applicable (defect) waiver line via issue_write method update before any PR is opened for the fix."
+tags:
+  - quality
+inputs:
+  prompt: |
+    Use fixing-a-reported-issue. Issue #142, "Search returns duplicate results when a
+    query matches both title and body":
+
+    > Searching for "release notes" returns the same document twice when
+    > it matches both the title and the body. Steps to reproduce: seed the
+    > index with one document whose title and body both contain "release
+    > notes", then call GET /search?q=release+notes. Expected: the
+    > document appears once. Actual: it appears twice in the results.
+
+    Issue #142's current body carries no Acceptance Criteria Map table and
+    no ACM waiver line of any kind.
+
+    You have a working checkout with the search service running locally.
+    Take this from here.
+expected:
+  output_contains:
+    - "reproduce"
+    - "failing test"
+    - "minimal"
+    - "verify"
+    - "ACM: not-applicable (defect)"
+  output_not_contains:
+    - "skip the waiver"
+    - "no need to disclose"
+    - "waiver is optional"

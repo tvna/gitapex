@@ -6,15 +6,20 @@ deployed runtime primitives when this repository is installed as a
 plugin -- .github/ is dev-only CI tooling and is never installed into a
 consumer repository.
 
-This is a fourth, self-contained copy of the same header-table regex and
-waiver-line vocabulary duplicated across
+This is a copy of the same header-table regex duplicated across
 skills/drafting-an-acm-issue/scripts/check_acm_present.py,
 skills/planning-a-branch-from-an-issue/scripts/check_acm_present.py, and
 .github/scripts/gate_acm_issue_disclosure.py -- kept in sync by
-tests/test_check_acm_present_sync.py's explicit extras list. Deliberately
-not imported from any of those three: this file must work standalone
-from inside a distributed plugin bundle with no access to .github/ or a
-sibling skill's scripts/ directory.
+tests/test_check_acm_present_sync.py's explicit extras list. The
+waiver-line vocabulary below is a narrower claim: only this file and
+.github/scripts/gate_acm_issue_disclosure.py implement it at all (the two
+skills/*/scripts/check_acm_present.py copies check table presence only,
+by design -- neither skill they belong to accepts a waiver in lieu of the
+table), and those two are kept in sync by
+tests/test_check_acm_present_sync.py's own dedicated waiver-regex sync
+test. Deliberately not imported from any of those three: this file must
+work standalone from inside a distributed plugin bundle with no access to
+.github/ or a sibling skill's scripts/ directory.
 
 Standard library only, no network calls, no side effects.
 """
@@ -34,11 +39,20 @@ _HEADER_RE = re.compile(
 )
 
 # Same waiver vocabulary as .github/scripts/gate_acm_issue_disclosure.py:
-# `ACM: not-applicable (chore|docs|tracking): <reason>`, a non-empty
-# trailing reason required.
+# `ACM: not-applicable (chore|docs|tracking|defect): <reason>`, a
+# non-empty trailing reason required. `defect` (issue #657) covers
+# fixing-a-reported-issue's bare defect-report issues, which by design
+# never carry an ACM table. The category group is capturing (not `(?:...)`)
+# so callers -- specifically hooks/check_pr_issue_acm_disclosure.py, which
+# must distinguish a `tracking` waiver from the other three categories --
+# can read which category matched via `waiver_category()` below without a
+# second, partially-duplicate regex. gate_acm_issue_disclosure.py's own
+# copy of this pattern carries the same capturing group, even though nothing
+# there reads it, purely so the two `.pattern` strings stay byte-identical
+# -- tests/test_check_acm_present_sync.py asserts that equality directly.
 _ACM_WAIVER_RE = re.compile(
     r"^[ \t]*[-*]?[ \t]*`?ACM`?[ \t]*:[ \t]*not-applicable[ \t]*"
-    r"\((?:chore|docs|tracking)\)[ \t]*:[ \t]*\S.*$",
+    r"\((?P<category>chore|docs|tracking|defect)\)[ \t]*:[ \t]*\S.*$",
     re.IGNORECASE | re.MULTILINE,
 )
 
@@ -49,6 +63,19 @@ def has_acm_disclosure(body_text):
     # gate_acm_issue_disclosure.py's own has_acm_disclosure.
     normalized = (body_text or "").replace("\r\n", "\n").replace("\r", "\n")
     return bool(_HEADER_RE.search(normalized) or _ACM_WAIVER_RE.search(normalized))
+
+
+def waiver_category(body_text):
+    """Return the lowercased waiver category ('chore'/'docs'/'tracking'/
+    'defect') if `body_text` carries a valid waiver line, else None.
+
+    Added for issue #657's hooks/check_pr_issue_acm_disclosure.py, which
+    must deny a PR citing an issue whose waiver category is specifically
+    'tracking' with a message distinct from "no ACM/waiver at all" --
+    `has_acm_disclosure`'s boolean alone cannot make that distinction."""
+    normalized = (body_text or "").replace("\r\n", "\n").replace("\r", "\n")
+    match = _ACM_WAIVER_RE.search(normalized)
+    return match.group("category").lower() if match else None
 
 
 def main(argv=None):

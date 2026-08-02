@@ -60,7 +60,7 @@
         "hooks/check_acm_present_or_waiver.py",
         ".github/scripts/gate_acm_issue_disclosure.py"
       ],
-      "rule": "Requires a new GitHub issue's body (method==\"create\" only) to contain an ACM table header or an explicit 'ACM: not-applicable (chore|docs|tracking): <reason>' waiver; the CI twin re-checks on issues opened/edited and labels+comments (non-blocking).",
+      "rule": "Requires a new GitHub issue's body (method==\"create\" only) to contain an ACM table header or an explicit 'ACM: not-applicable (chore|docs|tracking|defect): <reason>' waiver; the CI twin re-checks on issues opened/edited and labels+comments (non-blocking).",
       "planes": ["pretooluse", "ci"],
       "trigger": "PreToolUse matcher mcp__github__issue_write (hooks/hooks.json); .github/workflows/acm-issue-gate.yml on issues:[opened, edited]",
       "policy_refs": [],
@@ -98,6 +98,23 @@
       "policy_refs": [],
       "cluster": "skill-lifecycle",
       "tracking_issue": null,
+      "status": "active",
+      "supersedes": null
+    },
+    {
+      "id": "pr-issue-acm-disclosure",
+      "kind": "script",
+      "script": [
+        "hooks/check-pr-issue-acm-disclosure.sh",
+        "hooks/check_pr_issue_acm_disclosure.py",
+        "hooks/check_acm_present_or_waiver.py"
+      ],
+      "rule": "Denies mcp__github__create_pull_request when the PR title/body cites no issue at all, or when any Closes/Fixes-cited issue lacks both an ACM table and a valid waiver, carries a 'tracking' waiver, or is already closed; fails closed on a missing GH_TOKEN/GITHUB_TOKEN or an unfetchable issue.",
+      "planes": ["pretooluse"],
+      "trigger": "PreToolUse matcher mcp__github__create_pull_request (hooks/hooks.json)",
+      "policy_refs": [],
+      "cluster": ["plan-integrity", "github-operations"],
+      "tracking_issue": 657,
       "status": "active",
       "supersedes": null
     },

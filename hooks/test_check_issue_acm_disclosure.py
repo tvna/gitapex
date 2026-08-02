@@ -39,6 +39,7 @@ _VALID_ACM_TABLE = (
     "| Thing works | It should do X | Add Y | Run Z | None |\n"
 )
 _VALID_WAIVER = "ACM: not-applicable (chore): docs-only rewording.\n"
+_VALID_DEFECT_WAIVER = "ACM: not-applicable (defect): bare defect report, see #142.\n"
 _NO_DISCLOSURE = "Just a plain issue body with no table and no waiver.\n"
 
 
@@ -111,6 +112,15 @@ def test_allowed_when_body_has_acm_table() -> None:
 
 def test_allowed_when_body_has_waiver_line() -> None:
     assert_allowed(body=_VALID_WAIVER)
+
+
+def test_allowed_when_body_has_defect_waiver_line() -> None:
+    # Issue #657 adds `defect` to the waiver vocabulary for
+    # fixing-a-reported-issue's bare defect-report issues. This hook
+    # doesn't distinguish waiver categories, so a *new* issue can now be
+    # created with a defect waiver too, not only posted via `update` on an
+    # existing one -- an accepted, named side effect, not a gap.
+    assert_allowed(body=_VALID_DEFECT_WAIVER)
 
 
 def test_allowed_when_method_is_update_even_without_disclosure() -> None:

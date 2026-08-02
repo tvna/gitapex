@@ -7,11 +7,12 @@ description: Use when given a bare issue reporting a defect (or a CI failure wit
 
 This skill depends only on a connected GitHub MCP server (a general
 product capability) for the Step 2 escalation action (commenting
-on an existing issue or opening a new one); Steps 1 and 3-5 (reproduce,
-write a failing test, fix, verify) are entirely general and depend on no
-this-repository tooling. Tool names below are written as `Server:tool`
-(portable shorthand); in Claude Code, translate to the literal
-double-underscore form -- `github:add_issue_comment` is
+on an existing issue or opening a new one) and the Step 6 disclosure
+action (reading and updating the target issue); Steps 1 and 3-5
+(reproduce, write a failing test, fix, verify) are entirely general and
+depend on no this-repository tooling. Tool names below are written as
+`Server:tool` (portable shorthand); in Claude Code, translate to the
+literal double-underscore form -- `github:add_issue_comment` is
 `mcp__github__add_issue_comment`. Other platforms may use a different
 literal form for the same server/tool pair.
 
@@ -49,6 +50,24 @@ what has not been reproduced.
    passes, and run the existing suite to confirm nothing else regressed.
    A newly-passing test alone is not sufficient; the existing suite must
    also still pass.
+6. **Disclose the defect waiver on the target issue.** Only on this
+   sequence's success path -- after Step 5's verification, never on the
+   Step 2 escalation path, where no PR follows. Before any PR is opened
+   for this fix, check the target issue's current body for an existing
+   Acceptance Criteria Map or a waiver of any category (e.g.
+   `github:issue_read`); if it discloses neither, post one via
+   `github:issue_write` method `update`: `ACM: not-applicable (defect):
+   <one-line reason tied to this fix>` -- gitapex's own waiver vocabulary
+   (see `hooks/check_acm_present_or_waiver.py`), substituted with the
+   calling repository's equivalent convention where one exists, or
+   skipped entirely where the repository has neither. This step exists
+   because `fixing-a-reported-issue` is the one skill in this
+   repository's issue-to-PR pipeline whose target issues are never
+   required to carry an ACM or waiver by design (see Related skills) --
+   a repository that gates PR creation on its cited issue's ACM/waiver
+   disclosure (gitapex's own `hooks/check-pr-issue-acm-disclosure.sh`
+   is one example) would otherwise block the very PR this skill's own
+   fix produces.
 
 ## Worked example
 
@@ -65,17 +84,23 @@ query matches both title and body."
    change.
 5. Verify: re-run the new test -- it now passes -- and run the full test
    suite -- no other test regressed.
+6. Disclose: the target issue's current body carries neither an ACM
+   table nor a waiver, so post `ACM: not-applicable (defect): deduped
+   search results by result ID per this fix.` via `github:issue_write`
+   method `update` on that issue, before any PR for this fix is opened.
 
 Contrast: had step 1 failed to reproduce the duplicates against the real
 search path, the correct next move is step 2 -- comment on the issue
 stating the exact query tried and that no duplicates appeared, then stop.
-Do not guess at a dedupe fix for a defect that did not reproduce.
+Do not guess at a dedupe fix for a defect that did not reproduce. Step 6
+never runs here -- the sequence stopped at step 2, and no PR follows.
 
 Contrast (no linked issue): a scheduled nightly workflow fails with no
 issue tracking it, and attempting the same steps that failed in CI does
 not reproduce the failure locally. Step 2's first bullet does not apply
 -- there is no issue to comment on -- so open a new issue recording the
-exact steps attempted and that they did not reproduce, then stop.
+exact steps attempted and that they did not reproduce, then stop. Step 6
+never runs here either, for the same reason.
 
 ## Stop boundaries
 
@@ -86,6 +111,8 @@ exact steps attempted and that they did not reproduce, then stop.
 - Never treat a failed reproduction as license to guess -- escalate via
   Step 2 and stop there; do not proceed past it.
 - Never bundle a refactor or unrelated cleanup into the Step 4 fix.
+- Never open a PR for this fix before Step 6 has confirmed or posted the
+  target issue's ACM/waiver disclosure.
 
 ## Related skills
 
