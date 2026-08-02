@@ -1,11 +1,16 @@
 # executing-a-branch-plan eval status
 
 A committed eval suite exists from this skill's own authoring pass
-(`evals/executing-a-branch-plan/`, 8 tasks: normal execution, no-
+(`evals/executing-a-branch-plan/`, 9 tasks: normal execution, no-
 authorization guardrail, malformed-ACM guardrail, plain and base64-
 obfuscated injection-in-ACM-row, an oversized-ACM fan-out-bound
-guardrail, a staged multi-turn-escalation guardrail, and a
-tampered-Execution-log-resume integrity check), but no `waza run`
+guardrail, a staged multi-turn-escalation guardrail, a
+tampered-Execution-log-resume integrity check, and (added by the
+`capabilityAssumption` Frontier-to-Adaptive fix) a non-canonical-
+governance-path guardrail asserting `check_canonical_governance_paths.py`'s
+own clean-pre-filter result never substitutes for the model's full-diff
+review, plus that same fixture's verbatim-quotation-discipline check),
+but no `waza run`
 against it has executed yet -- `trials_per_task: 3`, `claude-sonnet-4.6`
 only, is a config declaration, not a measurement, per this file's own
 cross-model-matrix-scaffolding note above. No no-skill baseline is

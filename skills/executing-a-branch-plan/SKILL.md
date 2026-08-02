@@ -118,13 +118,10 @@ first, not skimmed.
    12, mandatory, non-skippable). Two separate fresh subagent dispatches
    over the full diff -- a refactor/simplify pass (behavior-preserving
    only), then an independent adversarial code review -- findings
-   verified and fixed before proceeding. Both dispatches are pinned to a
-   stronger-reasoning model tier at default-or-higher effort: this
-   step's own Stop boundary already requires constructing a case built to
-   defeat a diff's own detection logic when the diff touches a
-   deterministic gate/check script (see [refactor and review gate
-   reference](references/refactor-and-review-gate.md)), itself a
-   judgment-heavy bar no weaker tier is pinned to attempt reliably. After
+   verified and fixed before proceeding. Both dispatches carry a
+   model/effort pin; see [refactor and review gate
+   reference](references/refactor-and-review-gate.md#mandatory-aggregate-refactor--adversarial-review-step-8)
+   for the rationale. After
    every CONFIRMED finding's
    fix, re-run every task's own Red-Green test, not only the one related
    to the fix. **Push every fix commit to the remote branch as it lands**
@@ -297,8 +294,10 @@ file-ownership edge, which needs no pin), and step 8's
 refactor/adversarial-review dispatch. The other five steps run at
 whatever model/effort the calling session already uses. `Adaptive` is a
 reasoned fit given this skill's own existing lean-body-plus-five-
-reference-file structure -- not a rubric-compelled choice (`Broad` was
-not attempted; see the design's own Non-goals) -- since a weaker tier
+reference-file structure -- not a rubric-compelled choice (`Broad`, a
+different, unattempted target, would additionally require auditing every
+currently-unpinned step against the rubric's own weak-tier-sufficiency
+bar) -- since a weaker tier
 reading this body still finds the four pinned steps' own deeper
 judgment protocol one reference-file link away, on demand, rather than
 inlined into the body every tier pays for on every route.
