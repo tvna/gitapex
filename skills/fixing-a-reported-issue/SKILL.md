@@ -1,6 +1,6 @@
 ---
 name: fixing-a-reported-issue
-description: Use when given a bare issue reporting a defect (or a CI failure with no scoped fix yet), before writing any fix code. Reproduces the issue live, escalates explicitly if reproduction fails, writes a failing test before touching the fix, applies the minimal fix, then verifies the test flips with no regressions. Distinct from drafting-a-pr-to-merge (fixes CI on an already-open PR with a fix already in flight) and planning-a-branch-from-an-issue (plans a branch/PR from an issue without reproducing or fixing).
+description: Use when given a bare issue reporting a defect (or a CI failure with no scoped fix yet), before writing any fix code. Reproduces the issue live, escalates explicitly if reproduction fails, writes a failing test before touching the fix, applies the minimal fix, verifies the test flips with no regressions, then discloses an ACM waiver on the target issue before any PR follows. Distinct from drafting-a-pr-to-merge (fixes CI on an already-open PR with a fix already in flight) and planning-a-branch-from-an-issue (plans a branch/PR from an issue without reproducing or fixing).
 ---
 
 # Fixing a Reported Issue
@@ -19,6 +19,15 @@ literal form for the same server/tool pair.
 A hard-gated, order-dependent sequence, not a matter of prose judgement --
 follow the exact order below; do not reorder or skip a step. Never fix
 what has not been reproduced.
+
+This skill stays invocable without an explicit human trigger by design:
+every GitHub write it performs (Step 2's comment/new-issue escalation,
+Step 6's waiver disclosure) is a narrow, low-freedom action gated by its
+own exact-format check, not a broad or irreversible one, and a
+repository with its own deterministic write-side gates (e.g. gitapex's
+own `hooks/check-issue-acm-disclosure.sh` and
+`hooks/check-pr-issue-acm-disclosure.sh`) backstops it independently of
+whether this skill's own judgement was correct.
 
 ## Exact sequence
 
@@ -53,21 +62,43 @@ what has not been reproduced.
 6. **Disclose the defect waiver on the target issue.** Only on this
    sequence's success path -- after Step 5's verification, never on the
    Step 2 escalation path, where no PR follows. Before any PR is opened
-   for this fix, check the target issue's current body for an existing
-   Acceptance Criteria Map or a waiver of any category (e.g.
-   `github:issue_read`); if it discloses neither, post one via
-   `github:issue_write` method `update`: `ACM: not-applicable (defect):
-   <one-line reason tied to this fix>` -- gitapex's own waiver vocabulary
-   (see `hooks/check_acm_present_or_waiver.py`), substituted with the
-   calling repository's equivalent convention where one exists, or
-   skipped entirely where the repository has neither. This step exists
-   because `fixing-a-reported-issue` is the one skill in this
-   repository's issue-to-PR pipeline whose target issues are never
-   required to carry an ACM or waiver by design (see Related skills) --
-   a repository that gates PR creation on its cited issue's ACM/waiver
-   disclosure (gitapex's own `hooks/check-pr-issue-acm-disclosure.sh`
-   is one example) would otherwise block the very PR this skill's own
-   fix produces.
+   for this fix:
+   - Fetch the target issue's current body (e.g. `github:issue_read`)
+     and check it against the same deterministic disclosure check
+     gitapex's own PreToolUse hook enforces at PR-creation time (see
+     `hooks/check_acm_present_or_waiver.py`'s `has_acm_disclosure`): an
+     Acceptance Criteria Map table header, or a waiver line of the exact
+     form `ACM: not-applicable (<category>): <reason>`. Never substitute
+     a looser textual judgment of "does this look like a waiver" for
+     that exact check -- a downstream hook re-derives this same check
+     independently against the issue's live state regardless, so a
+     loose pass here only risks silently skipping the disclosure this
+     step exists to guarantee.
+   - If the body already discloses one (of any category), this step is
+     a confirming no-op.
+   - If it discloses neither, post one via `github:issue_write` method
+     `update`: `ACM: not-applicable (defect): <one-line reason tied to
+     this fix, in your own words -- never copy the issue's own text
+     verbatim into it>` -- gitapex's own waiver vocabulary, substituted
+     with the calling repository's own equivalent deterministic check
+     where one exists. Where no such repository-specific check can be
+     found, still post gitapex's own shaped line rather than skipping
+     the step outright: a waiver line no local gate reads costs
+     nothing, while silently skipping risks leaving a target issue
+     undisclosed wherever this skill's home repository's own hook does
+     read it.
+   - Re-fetch the issue after posting and confirm the line now appears
+     -- the same verify-after-act discipline Steps 3 and 5 already apply
+     to their own test/fix cycle. A write that silently failed or was
+     rejected is not a completed disclosure.
+
+   This step exists because `fixing-a-reported-issue` is the one skill
+   in this repository's issue-to-PR pipeline whose target issues are
+   never required to carry an ACM or waiver by design (see Related
+   skills) -- a repository that gates PR creation on its cited issue's
+   ACM/waiver disclosure (gitapex's own
+   `hooks/check-pr-issue-acm-disclosure.sh` is one example) would
+   otherwise block the very PR this skill's own fix produces.
 
 ## Worked example
 
@@ -85,9 +116,12 @@ query matches both title and body."
 5. Verify: re-run the new test -- it now passes -- and run the full test
    suite -- no other test regressed.
 6. Disclose: the target issue's current body carries neither an ACM
-   table nor a waiver, so post `ACM: not-applicable (defect): deduped
-   search results by result ID per this fix.` via `github:issue_write`
-   method `update` on that issue, before any PR for this fix is opened.
+   table nor a waiver (checked via the same exact-format check
+   `hooks/check_acm_present_or_waiver.py` uses), so post `ACM:
+   not-applicable (defect): deduped search results by result ID per
+   this fix.` via `github:issue_write` method `update` on that issue,
+   before any PR for this fix is opened. Re-fetch the issue and confirm
+   the line now appears.
 
 Contrast: had step 1 failed to reproduce the duplicates against the real
 search path, the correct next move is step 2 -- comment on the issue
