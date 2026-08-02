@@ -49,10 +49,15 @@ Citation vocabulary:
   rejects a `#` directly preceded by a word character, so `repo#N` never
   matches. Fetching a foreign repository's issue is out of scope.
 
-Fenced code blocks (``` and ~~~) are stripped before any scan -- a
-materially worse false-positive class here than in the table/waiver
-checkers this module reuses: an example or quoted PR-body snippet inside
-a fence could otherwise read as a real resolution claim.
+Fenced code blocks (``` and ~~~) and single-backtick inline code spans are
+both stripped before any scan -- a materially worse false-positive class
+here than in the table/waiver checkers this module reuses: an example or
+quoted PR-body snippet inside a fence or code span could otherwise read
+as a real resolution claim. The inline-code case is not hypothetical: it
+was found live, against this hook's own PR body, which documents its own
+citation syntax with illustrative examples like `` `Closes #123` `` --
+without stripping, that documentation sentence would have been
+misdetected as a real citation of issue #123.
 
 Fail-closed, explicitly (issue #657's own named trade-off, matching this
 repository's general "fail closed, including on INDETERMINATE" posture):
@@ -130,6 +135,16 @@ _HTTP_TIMEOUT_SECONDS = 20
 _MAX_ATTEMPTS = 2
 
 _FENCE_RE = re.compile(r"```.*?```|~~~.*?~~~", re.DOTALL)
+# Single-backtick inline code spans, e.g. `Closes #123` used to illustrate
+# this hook's own citation syntax in prose (exactly the false positive this
+# module's own PR body triggered against itself during live-exercise: text
+# explaining "Resolves #123 auto-closes it" is documentation about the
+# syntax, not a resolution claim). Not multiline (a single backtick pair
+# spanning a paragraph break is vanishingly rare and risks swallowing real
+# content); mirrors this repository's own check_skill_shape.py, which
+# already treats an inline-code issue citation as "illustrative, does not
+# resolve live" for a related but distinct check.
+_INLINE_CODE_RE = re.compile(r"`[^`\n]*`")
 
 _RESOLVING_RE = re.compile(
     r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s*#(\d+)\b",
@@ -144,7 +159,8 @@ class GitHubApiError(RuntimeError):
 
 
 def _strip_fences(text: str | None) -> str:
-    return _FENCE_RE.sub("", text or "")
+    without_fences = _FENCE_RE.sub("", text or "")
+    return _INLINE_CODE_RE.sub("", without_fences)
 
 
 def extract_citations(title: str | None, body: str | None) -> tuple[tuple[int, ...], tuple[int, ...]]:

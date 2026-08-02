@@ -152,6 +152,30 @@ def test_no_citation_at_all_yields_two_empty_tuples():
     assert checker.extract_citations("plain title", "plain body, nothing here") == ((), ())
 
 
+def test_inline_code_span_citation_is_stripped_before_scanning():
+    # Regression: found via live-exercise against this hook's own PR body,
+    # which documents its own citation syntax with illustrative examples
+    # like `Closes #123`. A backtick-quoted example is documentation about
+    # the syntax, not a resolution claim -- must not be misdetected as a
+    # real citation of #123.
+    body = "The `Closes #123` syntax auto-closes an issue. See Refs #34 too."
+    resolving, context = checker.extract_citations("t", body)
+    assert resolving == ()
+    assert context == (34,)
+
+
+def test_inline_code_span_does_not_swallow_content_after_it():
+    body = "`Closes #12` then a real citation: Fixes #99"
+    resolving, context = checker.extract_citations("t", body)
+    assert resolving == (99,)
+
+
+def test_multiple_inline_code_spans_on_one_line_are_each_stripped():
+    body = "See `hooks/check_acm_present_or_waiver.py`'s `has_acm_disclosure` -- Closes #7"
+    resolving, context = checker.extract_citations("t", body)
+    assert resolving == (7,)
+
+
 # ---------------------------------------------------------------------------
 # _call / fetch_issue retry behavior
 # ---------------------------------------------------------------------------
