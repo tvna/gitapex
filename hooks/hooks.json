@@ -47,7 +47,7 @@
           },
           {
             "type": "command",
-            "command": "\"$CLAUDE_PLUGIN_ROOT/hooks/check-pr-issue-acm-disclosure.sh\"",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/check-pr-issue-acm-disclosure.sh\"",
             "timeout": 45
           }
         ]
