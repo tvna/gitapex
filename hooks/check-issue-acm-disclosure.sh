@@ -56,6 +56,6 @@ if printf '%s' "$body" | python3 "$check_script" >/dev/null 2>&1; then
   exit 0
 fi
 
-deny "Blocked by hooks/check-issue-acm-disclosure.sh: this issue-creation call's body carries neither an Acceptance Criteria Map table nor an explicit waiver. Per drafting-an-acm-issue/SKILL.md (issue #357), add either the ACM table (skills/drafting-an-acm-issue/references/acceptance-criteria-map.md) or a 'ACM: not-applicable (chore|docs|tracking): <reason>' waiver line."
+deny "Blocked by hooks/check-issue-acm-disclosure.sh: this issue-creation call's body carries neither an Acceptance Criteria Map table nor an explicit waiver. Per drafting-an-acm-issue/SKILL.md (issue #357), add either the ACM table (skills/drafting-an-acm-issue/references/acceptance-criteria-map.md) or a 'ACM: not-applicable (chore|docs|tracking|defect): <reason>' waiver line."
 
 exit 0

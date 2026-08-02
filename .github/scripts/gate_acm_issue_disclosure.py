@@ -16,11 +16,14 @@ Disclosure vocabulary: an issue body passes when it contains either the
 Acceptance Criteria Map table (same header shape as
 skills/drafting-an-acm-issue/scripts/check_acm_present.py and
 skills/planning-a-branch-from-an-issue/scripts/check_acm_present.py) or an
-explicit waiver line of the form ``ACM: not-applicable (chore|docs|tracking):
-<reason>`` -- the exact vocabulary named in issue #357's own Acceptance
-Criteria Map (the PreToolUse hook row), reused here so this script never
-has to classify feature/fix/refactor vs. chore/docs/tracking itself; the
-requester makes that call by choosing the waiver line or the table. This
+explicit waiver line of the form
+``ACM: not-applicable (chore|docs|tracking|defect): <reason>`` -- the
+`chore`/`docs`/`tracking` vocabulary named in issue #357's own Acceptance
+Criteria Map (the PreToolUse hook row), plus `defect` (issue #657, for
+fixing-a-reported-issue's bare defect-report issues, which never carry an
+ACM table by design), reused here so this script never has to classify
+feature/fix/refactor vs. chore/docs/tracking/defect itself; the requester
+makes that call by choosing the waiver line or the table. This
 mirrors .github/scripts/gate_skill_audit_disclosure.py's own
 disclosure-or-``WAIVED:``-reason shape, applied to a different section
 of a different document.
@@ -115,13 +118,22 @@ _HEADER_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Issue #357's own named waiver vocabulary: `ACM: not-applicable (chore|docs|tracking): <reason>`.
-# A non-empty trailing reason is required, mirroring gate_skill_audit_disclosure.py's
-# own `WAIVED: <reason>` requirement -- a bare "ACM: not-applicable (chore):" with
+# Issue #357's own named waiver vocabulary (`chore|docs|tracking`), plus
+# `defect` (issue #657): `ACM: not-applicable (chore|docs|tracking|defect): <reason>`.
+# `defect` covers fixing-a-reported-issue's bare defect-report
+# issues, which by design never carry an ACM table. A non-empty trailing
+# reason is required, mirroring gate_skill_audit_disclosure.py's own
+# `WAIVED: <reason>` requirement -- a bare "ACM: not-applicable (chore):" with
 # nothing after the colon does not satisfy this.
+#
+# The category group is capturing (not `(?:...)`) purely so this pattern
+# stays byte-identical to hooks/check_acm_present_or_waiver.py's own copy --
+# that file's waiver_category() helper reads the captured group; nothing
+# here does. tests/test_check_acm_present_sync.py asserts the two
+# `.pattern` strings match exactly.
 _ACM_WAIVER_RE = re.compile(
     r"^[ \t]*[-*]?[ \t]*`?ACM`?[ \t]*:[ \t]*not-applicable[ \t]*"
-    r"\((?:chore|docs|tracking)\)[ \t]*:[ \t]*\S.*$",
+    r"\((?P<category>chore|docs|tracking|defect)\)[ \t]*:[ \t]*\S.*$",
     re.IGNORECASE | re.MULTILINE,
 )
 
@@ -313,7 +325,7 @@ def post_comment(
         "(see issue #357), add either:\n\n"
         "- an ACM table (criterion -> interpretation -> planned ops -> proof "
         "method -> residual risk), or\n"
-        "- a waiver line: `ACM: not-applicable (chore|docs|tracking): <reason>`\n\n"
+        "- a waiver line: `ACM: not-applicable (chore|docs|tracking|defect): <reason>`\n\n"
         "This is a post-hoc, non-blocking flag (issue #414) -- it does not "
         "prevent this issue from being worked on, and applies regardless of "
         "who or what opened it."

@@ -3,9 +3,10 @@
 
 Issue #414 (sub-issue of #357): flags a GitHub issue whose body carries
 neither an Acceptance Criteria Map table nor an explicit
-`ACM: not-applicable (chore|docs|tracking): <reason>` waiver line, via a
-label (`needs-acm`) and a one-time comment, regardless of which session
-or environment created the issue.
+`ACM: not-applicable (chore|docs|tracking|defect): <reason>` waiver line
+(the `defect` category added by issue #657), via a label (`needs-acm`)
+and a one-time comment, regardless of which session or environment
+created the issue.
 
 No test in this file makes a real network call -- the network layer is
 exercised through an injected `opener`, mirroring
@@ -73,7 +74,10 @@ def test_acm_table_passes():
     assert gate.has_acm_disclosure(_VALID_ACM_TABLE) is True
 
 
-@pytest.mark.parametrize("category", ["chore", "docs", "tracking", "Chore", "DOCS", "Tracking"])
+@pytest.mark.parametrize(
+    "category",
+    ["chore", "docs", "tracking", "defect", "Chore", "DOCS", "Tracking", "Defect"],
+)
 def test_waiver_line_passes_for_each_named_category_case_insensitively(category):
     body = f"Some issue text.\n\nACM: not-applicable ({category}): docs-only rewording.\n"
     assert gate.has_acm_disclosure(body) is True
@@ -92,6 +96,14 @@ def test_waiver_with_unrecognized_category_does_not_satisfy():
 def test_waiver_accepts_leading_bullet_and_backticks():
     body = "- `ACM`: not-applicable (docs): typo fix in README.\n"
     assert gate.has_acm_disclosure(body) is True
+
+
+@pytest.mark.parametrize("category", ["chore", "docs", "tracking", "defect"])
+def test_acm_waiver_re_captures_the_matched_category(category):
+    body = f"ACM: not-applicable ({category}): some reason.\n"
+    match = gate._ACM_WAIVER_RE.search(body)
+    assert match is not None
+    assert match.group("category").lower() == category
 
 
 def test_crlf_line_endings_do_not_break_the_waiver_match():
@@ -296,6 +308,21 @@ def test_post_comment_includes_marker_and_waiver_guidance():
     assert captured["url"] == "https://api.github.com/repos/tvna/gitapex/issues/414/comments"
     assert gate._MARKER in captured["payload"]["body"]
     assert "ACM: not-applicable" in captured["payload"]["body"]
+
+
+def test_post_comment_waiver_guidance_lists_all_four_categories():
+    # Regression: the substring check above ("ACM: not-applicable" alone)
+    # would stay green even if a future wording edit dropped a category
+    # from the displayed example while the regex itself kept accepting it
+    # -- assert the full category list is actually shown to the requester.
+    captured = {}
+
+    def opener(request: urllib.request.Request) -> Response:
+        captured["payload"] = json.loads(request.data.decode())
+        return Response(201, "{}")
+
+    gate.post_comment("tvna", "gitapex", 414, "tok", opener=opener)
+    assert "(chore|docs|tracking|defect)" in captured["payload"]["body"]
 
 
 # ---------------------------------------------------------------------------

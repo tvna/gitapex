@@ -20,10 +20,21 @@ hooks/check_acm_present_or_waiver.py (issue #413) is a fourth copy, for
 the same reason: a Codex review on PR #433 found that the PreToolUse
 hook cannot depend on .github/scripts/gate_acm_issue_disclosure.py
 (never deployed with the plugin, per docs/repository-layout.md), so it
-carries its own self-contained copy of the header regex (plus the same
-waiver vocabulary as gate_acm_issue_disclosure.py) bundled beside the
-hook script itself. Also added to `_EXTRA_ACM_CHECKER_SCRIPTS` explicitly,
-same reasoning as the third copy above.
+carries its own self-contained copy of the header regex bundled beside
+the hook script itself. Also added to `_EXTRA_ACM_CHECKER_SCRIPTS`
+explicitly, same reasoning as the third copy above.
+
+Waiver vocabulary (issue #657) is a narrower, separate claim from the
+above: only the third and fourth copies -- .github/scripts/gate_acm_issue_disclosure.py
+and hooks/check_acm_present_or_waiver.py -- implement `_ACM_WAIVER_RE` at
+all. The two skills/*/scripts/check_acm_present.py copies check the ACM
+*table*'s presence only; neither skill they belong to accepts a waiver in
+lieu of the table, so no waiver concept exists in either file, by design.
+`test_waiver_regex_stays_in_sync_between_the_two_copies_that_define_one`
+below is therefore scoped to exactly those two files -- not the full
+`ACM_CHECKER_SCRIPTS` discovery list the header-regex tests above use --
+and is a *new* gate: prior to issue #657, nothing kept the two files'
+`_ACM_WAIVER_RE` patterns in sync at all.
 """
 
 from __future__ import annotations
@@ -149,4 +160,43 @@ def test_header_regex_stays_in_sync_across_all_copies():
         "If this divergence is deliberate and reviewed, add a comment "
         "containing 'intentionally diverged' to every diverging copy "
         "explaining why; otherwise update the copies' header regex to match."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Waiver vocabulary (_ACM_WAIVER_RE) sync -- issue #657. Deliberately scoped
+# to just the two files that actually define this regex (see this module's
+# own docstring), not the 4-copy ACM_CHECKER_SCRIPTS discovery list above,
+# which is about _HEADER_RE only.
+# ---------------------------------------------------------------------------
+
+_WAIVER_REGEX_SCRIPTS = (
+    REPO_ROOT / ".github" / "scripts" / "gate_acm_issue_disclosure.py",
+    REPO_ROOT / "hooks" / "check_acm_present_or_waiver.py",
+)
+
+
+def test_both_waiver_scripts_expose_a_waiver_regex():
+    missing = [
+        p for p in _WAIVER_REGEX_SCRIPTS
+        if not isinstance(getattr(_load_module(p), "_ACM_WAIVER_RE", None), re.Pattern)
+    ]
+    assert not missing, (
+        "these files are expected to expose a module-level _ACM_WAIVER_RE "
+        f"compiled pattern but do not: {[str(p.relative_to(REPO_ROOT)) for p in missing]}"
+    )
+
+
+def test_waiver_regex_stays_in_sync_between_the_two_copies_that_define_one():
+    gate_module = _load_module(_WAIVER_REGEX_SCRIPTS[0])
+    hook_module = _load_module(_WAIVER_REGEX_SCRIPTS[1])
+    gate_pattern = (gate_module._ACM_WAIVER_RE.pattern, gate_module._ACM_WAIVER_RE.flags)
+    hook_pattern = (hook_module._ACM_WAIVER_RE.pattern, hook_module._ACM_WAIVER_RE.flags)
+    assert gate_pattern == hook_pattern, (
+        "_ACM_WAIVER_RE has diverged between "
+        f"{_WAIVER_REGEX_SCRIPTS[0].relative_to(REPO_ROOT)} "
+        f"({gate_pattern[0]!r}) and "
+        f"{_WAIVER_REGEX_SCRIPTS[1].relative_to(REPO_ROOT)} ({hook_pattern[0]!r}). "
+        "Both must accept the exact same waiver vocabulary -- update the "
+        "one that changed to match the other."
     )
