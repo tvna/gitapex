@@ -19,6 +19,13 @@ handed. Deliberately no glob module and no regex wildcard beyond the
 one documented "skills/<name>/..." two-segment shape, checked via
 explicit path-segment splitting -- pure string matching, matching the
 issue's own framing of what a pre-filter this narrow can safely claim.
+Comparison is exact-string equality against the fixed lists below, over
+an already-relative path lightly normalized by `_path_normalize.py` --
+no case-folding (`claude.md` does not match `CLAUDE.md`), no
+absolute-vs-relative reconciliation (a leading "/" is not stripped), no
+".." resolution. A genuinely ambiguous case in any of these dimensions
+is exactly the kind of case this pre-filter does not claim to catch;
+that stays the model's own full-diff review below.
 
 Usage:
   python3 check_canonical_governance_paths.py --files <path-to-file-list>
@@ -50,7 +57,13 @@ _WORKFLOW_FILENAMES = (".gitlab-ci.yml", "azure-pipelines.yml", "Jenkinsfile")
 _GOVERNANCE_FILENAMES = (
     "CLAUDE.md",
     "AGENTS.md",
+    # CODEOWNERS: GitHub recognizes all three of these locations, checked
+    # in this order ("GitHub will search for them in that order and use
+    # the first one it finds," per GitHub's own CODEOWNERS docs) -- all
+    # three are canonical, not just the repo-root one.
     "CODEOWNERS",
+    ".github/CODEOWNERS",
+    "docs/CODEOWNERS",
     ".gitmodules",
     ".github/dependabot.yml",
     "renovate.json",

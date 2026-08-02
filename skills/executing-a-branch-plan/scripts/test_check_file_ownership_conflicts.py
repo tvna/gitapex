@@ -48,6 +48,39 @@ def test_path_normalization_collapses_dotslash_prefix():
     assert "CONFLICT: a.py" in result.stdout
 
 
+def test_path_normalization_collapses_double_slash():
+    # Adversarial gate finding: "a//b.py" and "a/b.py" name the exact same
+    # file on any POSIX filesystem -- must still be detected as a conflict.
+    result = run({"task-a": ["a//b.py"], "task-b": ["a/b.py"]})
+    assert result.returncode == 0
+    assert "CONFLICT: a/b.py" in result.stdout
+
+
+def test_path_normalization_resolves_embedded_dotslash_segment():
+    # Adversarial gate finding: an embedded "/./" segment (not just a
+    # leading "./") is lexically a no-op and must not hide a conflict.
+    result = run({"task-a": ["a/./b.py"], "task-b": ["a/b.py"]})
+    assert result.returncode == 0
+    assert "CONFLICT: a/b.py" in result.stdout
+
+
+def test_duplicate_task_id_key_is_usage_error_not_silent_drop():
+    # Adversarial gate finding: plain json.loads silently keeps only the
+    # last occurrence of a duplicate object key, dropping the earlier
+    # task's files with no warning -- exactly the kind of silent data loss
+    # a conflict-detection tool must not itself commit. Must be a usage
+    # error, not a clean "no conflicts" report.
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT)],
+        input='{"task-a": ["a.py"], "task-a": ["b.py"]}',
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert result.returncode == 2
+    assert "duplicate task ID" in result.stderr
+
+
 def test_malformed_json_is_usage_error():
     result = subprocess.run(
         [sys.executable, str(SCRIPT)],

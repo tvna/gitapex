@@ -14,11 +14,20 @@ carrying its own pin -- see references/task-decomposition.md.
 Read-only: reads the given task/file mapping only, writes nothing,
 network-free. Path comparison is exact-string equality after a light
 normalization (strip a leading "./", collapse backslashes to forward
-slashes) -- no glob, no symlink resolution, no case-folding. A genuinely
-ambiguous case (a glob-shaped Planned-ops description, a symlink, a
-case-insensitive-filesystem collision) is exactly the kind of case this
-pre-filter does not claim to catch; that stays the model's own step-3
-judgment.
+slashes, collapse redundant "//" runs, resolve embedded "/./"
+segments) -- no glob, no symlink resolution, no case-folding, no ".."
+resolution, no absolute-vs-relative reconciliation, no trailing-"/"
+stripping. A genuinely ambiguous case (a glob-shaped Planned-ops
+description, a symlink, a case-insensitive-filesystem collision, an
+absolute path naming the same file as a relative one) is exactly the
+kind of case this pre-filter does not claim to catch; that stays the
+model's own step-3 judgment.
+
+Also rejects, as malformed input, a raw JSON object with a duplicate
+task-ID key -- Python's own `json.loads` otherwise silently keeps only
+the last occurrence and drops the earlier one's files with no warning,
+which would silently hide a real file-ownership conflict involving the
+discarded task rather than merely mis-normalize a path.
 
 Usage:
   python3 check_file_ownership_conflicts.py --input <path-to-json>
@@ -40,6 +49,21 @@ import sys
 from collections import defaultdict
 
 from _path_normalize import normalize as _normalize
+
+
+def _reject_duplicate_keys(pairs):
+    """`object_pairs_hook` for `json.loads`: raise instead of silently
+    keeping only the last value for a repeated key. Plain `json.loads`
+    (via its default dict construction) drops every earlier occurrence
+    of a duplicate key with no warning -- exactly the kind of silent
+    data loss this conflict-detection tool must not itself commit,
+    since a dropped task's files are files this tool never checks."""
+    seen = {}
+    for key, value in pairs:
+        if key in seen:
+            raise ValueError(f"duplicate task ID in input JSON: {key!r}")
+        seen[key] = value
+    return seen
 
 
 def find_conflicts(task_files):
@@ -77,9 +101,12 @@ def main(argv=None):
         print(f"error: input file not found: {args.input}", file=sys.stderr)
         return 2
     try:
-        task_files = json.loads(raw_text)
+        task_files = json.loads(raw_text, object_pairs_hook=_reject_duplicate_keys)
     except json.JSONDecodeError as exc:
         print(f"error: input is not valid JSON: {exc}", file=sys.stderr)
+        return 2
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
         return 2
     if not isinstance(task_files, dict):
         print("error: input JSON must be an object mapping task ID -> list of file paths", file=sys.stderr)

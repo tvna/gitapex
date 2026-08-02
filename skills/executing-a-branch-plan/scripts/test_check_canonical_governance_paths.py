@@ -73,6 +73,30 @@ def test_too_many_segments_is_no_match_not_governance():
     assert "no-match: skills/foo/bar/SKILL.md" in result.stdout
 
 
+def test_codeowners_matches_all_three_github_recognized_locations():
+    # Adversarial gate finding (gitapex issue #659 review): GitHub
+    # recognizes CODEOWNERS at the repo root, .github/, AND docs/ ("GitHub
+    # will search for them in that order and use the first one it finds",
+    # per GitHub's own CODEOWNERS docs) -- an edit to any of the three
+    # weakens the code-owner review gate identically, so all three must
+    # classify as governance, not just the root one.
+    result = run(["CODEOWNERS", ".github/CODEOWNERS", "docs/CODEOWNERS"])
+    assert result.returncode == 0
+    assert "governance: CODEOWNERS" in result.stdout
+    assert "governance: .github/CODEOWNERS" in result.stdout
+    assert "governance: docs/CODEOWNERS" in result.stdout
+
+
+def test_double_slash_still_matches_skill_governance_shape():
+    # Adversarial gate finding: a redundant "//" run in an otherwise
+    # canonical skills/<name>/SKILL.md path must not defeat the
+    # segment-shape check -- _path_normalize.py collapses "//" before this
+    # script splits on "/".
+    result = run(["skills//foo/SKILL.md"])
+    assert result.returncode == 0
+    assert "governance: skills//foo/SKILL.md" in result.stdout
+
+
 def test_no_paths_given():
     result = subprocess.run(
         [sys.executable, str(SCRIPT)], input="", capture_output=True, text=True, timeout=10
