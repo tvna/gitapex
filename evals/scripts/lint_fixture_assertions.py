@@ -418,10 +418,24 @@ def _load_fixture_dict(path: Path) -> dict[str, Any]:
     pre-pydantic behavior, so a malformed fixture still surfaces as a
     heuristic finding (e.g. "no well-formed requires_fresh_dispatch
     declared") to its caller instead of crashing the lint pass outright.
+
+    Reading or parsing the file can fail in more ways than a wrong shape:
+    a genuine YAML syntax error (``yaml.YAMLError``), a non-UTF-8 byte
+    sequence (``UnicodeDecodeError``), or an OS-level failure reading the
+    path at all (``OSError`` -- permission denied, a path component too
+    long, etc.) -- ``gate_retro_title_convention_citation.py``'s own
+    file-read loop catches the same ``(OSError, UnicodeDecodeError)`` pair
+    for the same reason. None of these have a parsed value to fall back
+    to, unlike the wrong-shape case, so they return ``{}`` instead --
+    still a heuristic "nothing declared" finding, never an uncaught
+    exception (found across two rounds of adversarial review: the first
+    round's fix caught only ``yaml.YAMLError``, missing the other two).
     """
-    raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     try:
+        raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         return TaskFixture.model_validate(raw).model_dump()
+    except (OSError, UnicodeDecodeError, yaml.YAMLError):
+        return {}
     except ValidationError:
         return raw
 
@@ -867,18 +881,24 @@ def lint_skill_tasks(task_paths: list[Path], corpus: str, *,
     here, rather than this function re-reading the same files).
 
     Each fixture file is parsed and validated against ``TaskFixture``
-    (issue #684). A malformed fixture (a missing required field, a
-    wrong-typed value, an unrecognized top-level key) is reported as its
-    own blocking ``Warning_`` naming the offending file, and excluded from
-    the rest of this skill's linting -- it does NOT abort linting for any
-    other fixture, in this skill or any other (found by a Decision-12
-    adversarial review: an earlier version let ``pydantic.ValidationError``
-    propagate unguarded out of this function, so one malformed fixture
-    anywhere crashed the entire multi-skill run with an unlocalized error,
-    silently skipping the adversarial-coverage/dispatch-declaration-
-    coverage checks for every other skill too -- exactly the per-fixture
-    isolation ``_load_fixture_dict``'s own docstring already promises for
-    its own, separate call sites).
+    (issue #684). A malformed fixture -- a YAML *syntax* error, a
+    non-UTF-8 byte sequence, an OS-level read failure, or YAML that
+    parses fine but has the wrong shape (a missing required field, a
+    wrong-typed value, an unrecognized top-level key) -- is reported as
+    its own blocking ``Warning_`` naming the offending file, and excluded
+    from the rest of this skill's linting -- it does NOT abort linting
+    for any other fixture, in this skill or any other. Two successive
+    rounds of adversarial review found this guard catching only part of
+    that set: the first let ``pydantic.ValidationError`` propagate
+    unguarded (crashing the whole multi-skill run on any wrong-shape
+    fixture); the fix for that caught ``ValidationError`` but not
+    ``yaml.YAMLError`` (still crashing on broken YAML syntax); a second
+    round then found ``UnicodeDecodeError``/``OSError`` (a non-UTF-8
+    fixture, or another per-file read failure) still uncaught too. All
+    four are caught here now -- the same ``(OSError, UnicodeDecodeError)``
+    pair ``_load_fixture_dict`` and ``gate_retro_title_convention_
+    citation.py``'s own file-read loop already catch for the identical
+    reason, plus this module's own YAML/shape pair.
 
     Returns ``(warnings, task_data)``: ``task_data`` is each successfully
     validated task path's fixture, re-serialized via ``model_dump()``, so
@@ -893,10 +913,10 @@ def lint_skill_tasks(task_paths: list[Path], corpus: str, *,
     warnings: list[Warning_] = []
     fixtures: dict[Path, TaskFixture] = {}
     for p in task_paths:
-        raw = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
         try:
+            raw = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
             fixtures[p] = TaskFixture.model_validate(raw)
-        except ValidationError as exc:
+        except (OSError, UnicodeDecodeError, yaml.YAMLError, ValidationError) as exc:
             warnings.append(Warning_(
                 p.name, "(fixture)", "(top-level shape)", "fixture-shape",
                 f"{p}: malformed fixture, excluded from linting: {exc}"))

@@ -937,6 +937,71 @@ def test_lint_skill_tasks_isolates_a_malformed_fixture_from_its_siblings(tmp_pat
     assert (tasks / "good.yaml") in task_data
 
 
+def test_lint_skill_tasks_isolates_a_yaml_syntax_error_from_its_siblings(tmp_path):
+    # A second adversarial pass (post-merge) found the isolation fix above
+    # only caught pydantic.ValidationError -- a genuine YAML *syntax* error
+    # (not just the wrong shape) raised out of yaml.safe_load itself,
+    # outside that try/except, reopening the exact whole-run-abort gap the
+    # first fix closed. Confirmed by direct execution: an unterminated
+    # quoted scalar colliding with the next block key.
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    bad = tasks / "bad.yaml"
+    bad.write_text(
+        'id: broken\nname: "unterminated quote causes scanner error\n'
+        'inputs:\n  prompt: "hello"\n', encoding="utf-8")
+    (tasks / "good.yaml").write_text(
+        'id: g\nname: G\ninputs:\n  prompt: |\n    p\nexpected:\n'
+        '  output_contains:\n    - "Blind spot pass"\n'
+        '  output_not_contains:\n    - "LGTM"\n', encoding="utf-8")
+    rubric, skill = _corpus_files(tmp_path)
+    warnings, task_data = L.lint_skill_tasks(
+        [bad, tasks / "good.yaml"], L.load_corpus(rubric, skill))
+    assert [w for w in warnings if w.rule == "fixture-shape" and str(bad) in w.detail]
+    assert bad not in task_data
+    assert (tasks / "good.yaml") in task_data
+
+
+def test_lint_skill_tasks_isolates_a_non_utf8_fixture_from_its_siblings(tmp_path):
+    # A THIRD adversarial pass (still post-merge) found the widened guard
+    # above still didn't cover a non-UTF-8 fixture: path.read_text(
+    # encoding="utf-8") itself raises UnicodeDecodeError before
+    # yaml.safe_load ever runs, which the (yaml.YAMLError, ValidationError)
+    # catch from the second round did not include. Confirmed by direct
+    # execution with a raw invalid byte sequence.
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    bad = tasks / "bad.yaml"
+    bad.write_bytes(b"id: t1\nname: \xff\xfe bad utf8\n")
+    (tasks / "good.yaml").write_text(
+        'id: g\nname: G\ninputs:\n  prompt: |\n    p\nexpected:\n'
+        '  output_contains:\n    - "Blind spot pass"\n'
+        '  output_not_contains:\n    - "LGTM"\n', encoding="utf-8")
+    rubric, skill = _corpus_files(tmp_path)
+    warnings, task_data = L.lint_skill_tasks(
+        [bad, tasks / "good.yaml"], L.load_corpus(rubric, skill))
+    assert [w for w in warnings if w.rule == "fixture-shape" and str(bad) in w.detail]
+    assert bad not in task_data
+    assert (tasks / "good.yaml") in task_data
+
+
+def test_load_fixture_dict_falls_back_to_empty_dict_on_non_utf8_content(tmp_path):
+    path = tmp_path / "bad.yaml"
+    path.write_bytes(b"id: t1\nname: \xff\xfe bad utf8\n")
+    assert L._load_fixture_dict(path) == {}
+
+
+def test_load_fixture_dict_falls_back_to_empty_dict_on_yaml_syntax_error(tmp_path):
+    # Same YAML-syntax-error gap as above, in _load_fixture_dict's own
+    # separate call sites (check_adversarial_coverage/
+    # check_dispatch_declaration_coverage's task_data-is-None fallback).
+    # There is no parsed value to fall back to on a genuine parse error,
+    # unlike the wrong-shape case, so this returns {} rather than raising.
+    path = tmp_path / "bad.yaml"
+    path.write_text('name: "unterminated\ninputs:\n  prompt: x\n', encoding="utf-8")
+    assert L._load_fixture_dict(path) == {}
+
+
 def test_main_reports_malformed_fixture_as_a_blocking_warning_exit_1(tmp_path):
     # End to end: main() surfaces the malformed-fixture Warning_ via the
     # normal report/exit-code path (exit 1, a blocking warning), not the
