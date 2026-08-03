@@ -752,6 +752,36 @@ def test_gate_quality_disclosure_does_not_satisfy_checker_script():
     assert gate.find_missing_checker_script_disclosure(body, [_GATE_SCRIPT]) == [_GATE_SCRIPT]
 
 
+# The three below pin defeat-cases found by probing this check rather than
+# trusting it (#665 repair 5's lesson). Each is a fail-open candidate: a
+# disclosure that looks present to a reader but must not count.
+
+
+def test_gate_quality_line_outside_the_evidence_section_does_not_satisfy():
+    """A line under a later heading is not a disclosure -- _extract_section
+    stops at the next '## ', and this pins that it does."""
+    body = _VALID_SECTION + "\n## Verification\n\n- deterministic-gate-quality: RAN\n"
+    assert gate.find_missing_gate_quality_disclosure(body, [_GATE_SCRIPT]) == [_GATE_SCRIPT]
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["x-deterministic-gate-quality", "deterministic-gate-quality-v2"],
+)
+def test_a_neighbouring_check_name_does_not_satisfy_this_one(name):
+    """A name that merely contains this check's name, as a prefix or a
+    suffix, must not be accepted for it."""
+    body = _VALID_SECTION + f"- {name}: RAN\n"
+    assert gate.find_missing_gate_quality_disclosure(body, [_GATE_SCRIPT]) == [_GATE_SCRIPT]
+
+
+def test_gate_quality_disclosure_survives_a_crlf_body():
+    """GitHub delivers a web-UI-edited body with CRLF endings; the shared
+    _normalize_body must cover this check too, not only the older ones."""
+    body = (_VALID_SECTION + "- deterministic-gate-quality: RAN\n").replace("\n", "\r\n")
+    assert gate.find_missing_gate_quality_disclosure(body, [_GATE_SCRIPT]) == []
+
+
 # --- Issue #673: main() integration for the gate-quality check ---
 
 
@@ -817,7 +847,7 @@ def test_gate_quality_check_is_not_required_when_no_gate_script_changed(monkeypa
 #
 # This is a verbatim excerpt of that merged PR's real body (fetched via the
 # GitHub API), not the whole text: the full body is ~7000 characters and ends
-# with a generated-by footer carrying a session URL that must not be
+# with a trailing attribution line carrying a session URL that must not be
 # re-committed here. The excerpt spans the two headings around the graded
 # region, so the '## Skill audit evidence' section this gate actually reads
 # -- and its termination at the next '## ' heading -- are both reproduced
