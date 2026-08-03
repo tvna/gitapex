@@ -1,0 +1,82 @@
+# Issue #682 (refs #665, #673, #674, #680): five separate times this
+# repository has shipped the same defect into one of its own gates -- a
+# decoded read whose enclosing `try` names the wrong failure (or no failure
+# at all), and a `.get()` on a `json.loads` result that was never checked to
+# be an object. Every instance passed pytest with the affected file at 100
+# percent line coverage, because the handler that would have caught it does
+# not exist: no line, branch or `except`-line coverage metric can point at
+# an absent handler, and issue #682's own measurement found `ruff --select
+# ALL` reports zero findings on any of the three defect lines. This job runs
+# the AST scan that was measured against exactly those historical defects.
+#
+# Deliberately no `paths:` filter, following lint.yml's and
+# plugin-root-brace-notation-gate.yml's own stated rationale: GitHub
+# distinguishes a job that runs and reports `skipped` (which does not block
+# a required check) from a workflow that never fires for a given PR (which
+# leaves a required check Pending forever). This job is intended for
+# promotion to a required status check, so a filter would permanently block
+# any PR that happens not to touch a matched path. The scan is stdlib-only
+# Python over the files a diff actually adds lines to, so running it
+# unconditionally costs a few seconds.
+name: Exception-handler gap gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exception-handler-gaps:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
+        with:
+          egress-policy: audit
+
+      # `ref:` is pinned to the PR head, which every other gate workflow
+      # here leaves at the default `refs/pull/N/merge`. That is not a style
+      # difference: this gate reads each file's post-image content off the
+      # working tree and grades it against line numbers taken from
+      # `git diff`'s own post-image, so the tree has to *be* that
+      # post-image. Under the default merge-ref checkout the two diverge for
+      # any file the base branch also changed -- the diff's line numbers
+      # would be the head commit's while the file on disk is the merged
+      # one -- and every other gate here is immune only because it passes
+      # the script extracted diff text rather than reading the tree.
+      # fetch-depth: 0 so the merge-base below resolves.
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      # git merge-base (not base.sha directly), same reasoning as
+      # gitignore-pattern-coverage-gate.yml and skill-rename-lifecycle-gate.yml:
+      # a change that landed on the base branch after this PR forked must
+      # never be misattributed to this PR.
+      #
+      # No dependency install step: the gate is standard library only, and
+      # ubuntu-latest ships python3.
+      - name: Grade the decoded reads and JSON accesses this diff adds
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if ! merge_base=$(git merge-base "$BASE_SHA" "$HEAD_SHA"); then
+            echo "::error::git merge-base failed between $BASE_SHA and $HEAD_SHA" >&2
+            exit 1
+          fi
+          git diff -U0 "$merge_base" "$HEAD_SHA" -- '*.py' \
+            | python3 .github/scripts/gate_exception_handler_gaps.py
