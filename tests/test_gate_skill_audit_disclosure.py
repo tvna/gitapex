@@ -281,7 +281,7 @@ def test_eval_coverage_not_required_when_skill_list_empty():
     assert gate.find_missing_eval_coverage_disclosure("anything, no section", []) == []
 
 
-# --- Issue #427 (refs #422): _parse_skill_list ---
+# --- Issue #427 (refs #422): _parse_comma_list ---
 
 
 @pytest.mark.parametrize(
@@ -295,8 +295,8 @@ def test_eval_coverage_not_required_when_skill_list_empty():
         (",,", []),
     ],
 )
-def test_parse_skill_list(raw, expected):
-    assert gate._parse_skill_list(raw) == expected
+def test_parse_comma_list(raw, expected):
+    assert gate._parse_comma_list(raw) == expected
 
 
 # --- Issue #427 (refs #422): main() integration ---
@@ -712,10 +712,33 @@ def test_missing_gate_quality_disclosure_reported_with_no_line():
     ]
 
 
-@pytest.mark.parametrize("verdict", ["RAN", "NOT-RUN", "ran", "not-run"])
+@pytest.mark.parametrize("verdict", ["RAN", "ran", "Ran"])
 def test_gate_quality_disclosure_accepts_its_own_verdict_vocabulary(verdict):
     body = _VALID_SECTION + f"- deterministic-gate-quality: {verdict}\n"
     assert gate.find_missing_gate_quality_disclosure(body, [_GATE_SCRIPT]) == []
+
+
+@pytest.mark.parametrize("verdict", ["NOT-RUN", "not-run"])
+def test_gate_quality_disclosure_rejects_not_run(verdict):
+    """The one row that narrows the shared RAN/NOT-RUN pair. The
+    retrospective's finding was that nobody read a new gate against a
+    rubric that already existed, so "I did not read it against the rubric"
+    cannot be a passing disclosure -- it is a restatement of the defect.
+    WAIVED: <reason> remains the escape hatch, and unlike NOT-RUN it puts a
+    reason in front of a reviewer."""
+    body = _VALID_SECTION + f"- deterministic-gate-quality: {verdict}\n"
+    assert gate.find_missing_gate_quality_disclosure(body, [_GATE_SCRIPT]) == [_GATE_SCRIPT]
+
+
+@pytest.mark.parametrize(
+    "check_name", ["adversarial-coverage-mapping", "design-doc-adversarial-review", "checker-script-adversarial-review"]
+)
+def test_the_other_process_checks_still_accept_not_run(check_name):
+    """The narrowing above must not leak into the three sibling checks,
+    where NOT-RUN is a legitimate answer."""
+    body = _VALID_SECTION + f"- {check_name}: NOT-RUN\n"
+    pattern = gate._PROCESS_DISCLOSURE_LINE_RES[check_name]
+    assert gate._find_missing_disclosure(body, ["item"], pattern) == []
 
 
 def test_gate_quality_disclosure_waiver_satisfies_check():

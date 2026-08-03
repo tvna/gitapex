@@ -90,9 +90,10 @@
         "hooks/check_skill_audit_disclosure_or_waiver.py",
         ".github/scripts/gate_skill_audit_disclosure.py",
         ".github/scripts/skill_description_diff.py",
-        ".github/scripts/skill_security_relevance.py"
+        ".github/scripts/skill_security_relevance.py",
+        ".github/scripts/detect_changed_gate_scripts.py"
       ],
-      "rule": "Requires a PR touching skills/*/SKILL.md to disclose battle-testing-a-skill / evaluating-skill-quality verdicts or waivers under a '## Skill audit evidence' heading; the CI twin additionally requires disclosure for description changes, security-relevant skills, changed design docs, changed checker scripts, and changed deterministic gate scripts (.github/scripts/gate_*.py or scan_*.py, whose PR must disclose a deterministic-gate-quality verdict stating whether the change was read against skills/evaluating-deterministic-gate-quality/references/dimensions.md).",
+      "rule": "Requires a PR touching skills/*/SKILL.md to disclose battle-testing-a-skill / evaluating-skill-quality verdicts or waivers under a '## Skill audit evidence' heading; the CI twin additionally requires disclosure for description changes, security-relevant skills, changed design docs, changed checker scripts, and changed deterministic gates. Gate membership is the union of the .github/scripts/gate_*.py / scan_*.py naming convention, every gates[].script path registered in this file, and this file itself; deletions and renames count, and the disclosure must be 'deterministic-gate-quality: RAN' or an explicit waiver with a reason, never 'NOT-RUN'.",
       "planes": ["pretooluse", "ci"],
       "trigger": "PreToolUse matcher mcp__github__create_pull_request and mcp__github__update_pull_request (hooks/hooks.json); .github/workflows/skill-audit-gate.yml on pull_request",
       "policy_refs": [],
