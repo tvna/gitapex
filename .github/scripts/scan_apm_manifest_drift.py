@@ -32,6 +32,18 @@ PLUGIN_MANIFEST = REPO_ROOT / ".claude-plugin" / "plugin.json"
 MIRRORED_FIELDS = ("name", "version")
 
 
+class ManifestReadError(Exception):
+    """Either apm.yml or plugin.json could not be read as UTF-8 text --
+    exit 1, naming the offending file, never a traceback."""
+
+
+def _read_text(path: pathlib.Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as error:
+        raise ManifestReadError(f"{path}: is not valid UTF-8: {error}") from error
+
+
 def find_drift(
     apm_manifest: pathlib.Path = APM_MANIFEST,
     plugin_manifest: pathlib.Path = PLUGIN_MANIFEST,
@@ -39,11 +51,12 @@ def find_drift(
     """Return (field, plugin_json_value, apm_yml_value) for each mirrored field
     whose two copies disagree. Empty list means the manifests are in lockstep.
 
-    Fails loudly (raises) if either manifest is missing or a mirrored field is
-    absent -- a silent skip would let the gate pass on a broken manifest.
+    Fails loudly (raises) if either manifest is missing, unreadable as UTF-8
+    (ManifestReadError), or a mirrored field is absent (KeyError) -- a silent
+    skip would let the gate pass on a broken manifest.
     """
-    apm_data = yaml.safe_load(apm_manifest.read_text()) or {}
-    plugin_data = json.loads(plugin_manifest.read_text())
+    apm_data = yaml.safe_load(_read_text(apm_manifest)) or {}
+    plugin_data = json.loads(_read_text(plugin_manifest))
 
     findings: list[tuple[str, str, str]] = []
     for field in MIRRORED_FIELDS:
@@ -59,7 +72,11 @@ def find_drift(
 
 
 def main() -> int:
-    findings = find_drift()
+    try:
+        findings = find_drift()
+    except (ManifestReadError, KeyError) as error:
+        print(f"apm manifest drift: {error}")
+        return 1
     if findings:
         print(
             "apm manifest drift: apm.yml must mirror .claude-plugin/plugin.json "

@@ -355,6 +355,17 @@ def test_main_check_only_reports_error_for_missing_file(capsys):
     assert "not found" in capsys.readouterr().err
 
 
+def test_main_check_only_reports_error_for_non_utf8_body_file(tmp_path, capsys):
+    # Issue #680 Shape 2: main() caught FileNotFoundError around this same
+    # read_text(encoding="utf-8") but not UnicodeDecodeError, so a non-UTF-8
+    # body file raised an uncaught traceback instead of the documented
+    # exit-1 error path.
+    path = tmp_path / "body.bin"
+    path.write_bytes(b"\xff\xfe\x00\x01")
+    assert gate.main(["--check-only", "--body", str(path)]) == 1
+    assert "not valid UTF-8" in capsys.readouterr().err
+
+
 def test_main_check_only_never_touches_github_token(monkeypatch, capsys):
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
     assert gate.main(["--check-only", "--body", "/dev/null"]) == 1

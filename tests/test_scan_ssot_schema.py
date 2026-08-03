@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import pathlib
 
+import pytest
 import scan_ssot_schema as drift
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -312,3 +313,83 @@ def test_main_prints_findings_and_returns_one_on_drift(capsys, monkeypatch):
     assert rc == 1
     assert "ssot.json drift:" in out
     assert "script-drift: example: missing" in out
+
+
+# ---------------------------------------------------------------------------
+# Issue #680: a registry that is valid JSON but not an object (Shape 1), or
+# not valid UTF-8/JSON at all (Shape 2), must fail via RegistryReadError and
+# exit 1 with the offending filename -- never an uncaught traceback.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("bad_json", ["[]", '"a string"', "1", "null", "true"])
+def test_non_object_top_level_json_does_not_crash(tmp_path, bad_json):
+    # Regression: json.loads("[]") etc. all parse fine, so find_duplicate_ids'
+    # _get_list(instance, key) used to reach `instance.get(key)` on a
+    # non-dict `instance` and raise an uncaught AttributeError.
+    instance_path = tmp_path / "ssot.json"
+    instance_path.write_text(bad_json)
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
+    assert any(f.startswith("schema:") for f in findings)
+
+
+def test_non_dict_gates_entry_does_not_crash(tmp_path):
+    # Regression (found by adversarial review of this same fix): a
+    # schema-valid-*shaped* gates[] array can still carry a non-dict entry
+    # (e.g. a bare int) -- find_duplicate_ids' entry.get("id") used to
+    # raise an uncaught AttributeError on such an entry, one level deeper
+    # than the whole-document non-object case above.
+    instance_path = tmp_path / "ssot.json"
+    instance_path.write_text(json.dumps({"gates": [1, 2, 3], "policy_sources": []}))
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
+    assert any(f.startswith("schema:") for f in findings)
+    assert not any(f.startswith("duplicate-id:") for f in findings)
+
+
+def test_non_dict_policy_sources_entry_does_not_crash(tmp_path):
+    instance_path = tmp_path / "ssot.json"
+    instance_path.write_text(json.dumps({"gates": [], "policy_sources": ["not-a-dict"]}))
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
+    assert any(f.startswith("schema:") for f in findings)
+    assert not any(f.startswith("duplicate-id:") for f in findings)
+
+
+def test_unreadable_registry_path_raises_registry_read_error(tmp_path):
+    # Covers _load_json's OSError branch (e.g. a path that simply doesn't
+    # exist) distinctly from the UnicodeDecodeError/JSONDecodeError branches
+    # below.
+    instance_path = tmp_path / "does-not-exist" / "ssot.json"
+    with pytest.raises(drift.RegistryReadError, match="cannot be read"):
+        drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
+
+
+def test_non_utf8_registry_raises_registry_read_error_not_a_traceback(tmp_path):
+    instance_path = tmp_path / "ssot.json"
+    instance_path.write_bytes(b"\xff\xfe\x00\x01")
+    with pytest.raises(drift.RegistryReadError, match="not valid UTF-8"):
+        drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
+
+
+def test_invalid_json_syntax_raises_registry_read_error_not_a_traceback(tmp_path):
+    instance_path = tmp_path / "ssot.json"
+    instance_path.write_text("{not json")
+    with pytest.raises(drift.RegistryReadError, match="not valid JSON"):
+        drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
+
+
+def test_get_list_defaults_to_empty_when_d_is_not_a_dict():
+    assert drift._get_list([], "gates") == []
+    assert drift._get_list("not a dict", "gates") == []
+    assert drift._get_list(1, "gates") == []
+
+
+def test_main_prints_message_and_returns_one_on_registry_read_error(capsys, monkeypatch):
+    def raise_read_error():
+        raise drift.RegistryReadError("/fake/ssot.json: is not valid UTF-8: boom")
+
+    monkeypatch.setattr(drift, "find_drift", raise_read_error)
+    rc = drift.main()
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "ssot.json drift:" in out
+    assert "/fake/ssot.json: is not valid UTF-8: boom" in out
