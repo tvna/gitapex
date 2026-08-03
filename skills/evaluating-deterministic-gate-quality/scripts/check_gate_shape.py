@@ -67,10 +67,15 @@ dimensions.md`):
      ``subprocess.*``/``os.system``/``os.popen`` call whose command
      argument is built by string interpolation (an f-string, ``%``
      formatting, ``.format(``, or ``+`` concatenation) rather than passed
-     as a literal or an argv list. Shell scripts: ``eval`` combined with a
-     ``$`` variable reference on the same logical span -- the canonical
-     shell-injection shape. A heuristic static scan, not a full parser;
-     see the paired test file for concrete cases it catches and misses.
+     as a literal or an argv list; a bare identifier/expression argument
+     (not a literal or an argv list) also fails, since the call site alone
+     cannot prove it is not built from an interpolated value assigned
+     elsewhere in the script. Shell scripts: ``eval`` combined with a
+     ``$`` variable reference on the same logical span, or a
+     ``bash``/``sh -c "..."`` double-quoted string with a ``$`` variable
+     interpolated into it -- both the canonical shell-injection shape. A
+     heuristic static scan, not a full parser; see the paired test file
+     for concrete cases it catches and misses.
   6. Timeout/budget set explicitly -- two independent sub-checks, reported
      separately since they grade different things:
        6a. invocation-level bound: read from a supplied ``--hooks-json``
@@ -90,6 +95,20 @@ gate it is grading. Live-testing a gate's actual runtime behavior
 (dimension 10) is the reviewing skill's own Procedure step 6 and Stop
 boundary, under its own sandboxing discipline -- a static shape checker is
 not that, and does not attempt to be.
+
+Known limitation, named rather than silently assumed away (an adversarial
+review of this checker itself found this): every regex here scans the
+script's raw source text, including comments, docstrings, and string
+literals -- it is not comment/string-aware. A comment stating "we
+intentionally do not call sys.exit(2)" can flip dimension 1 to PASS with
+no real deny path; a comment showing an unsafe example
+(``# don't do: subprocess.run(f"...", shell=True)``) can flip dimension 5
+to FAIL on an actually-safe script. Building a real tokenizer to strip
+comments/strings first would need separate lexers for Python and shell
+and is deliberately not attempted here; treat a PASS/FAIL this checker
+reports as a strong hint to verify by direct inspection, not a proof, the
+same discipline dimension 3's own heuristic already states explicitly for
+itself.
 """
 from __future__ import annotations
 
@@ -131,11 +150,14 @@ def _is_python(script_path: Path, text: str) -> bool:
 # --- dimension 1 / 2: deny-path mechanism and dual-signal ---------------
 
 _PY_EXIT_2_RE = re.compile(r"\b(?:sys\.exit|exit|raise\s+SystemExit)\s*\(\s*2\s*\)")
+# -?\d+ so a literal `sys.exit(-1)` (still non-blocking to Claude Code,
+# same bypass class as a bare `exit(1)`) is recognized rather than missed
+# by a \d+-only pattern.
 _PY_NONZERO_NONTWO_EXIT_RE = re.compile(
-    r"\b(?:sys\.exit|exit|raise\s+SystemExit)\s*\(\s*(?!0\s*\)|2\s*\))\d+\s*\)"
+    r"\b(?:sys\.exit|exit|raise\s+SystemExit)\s*\(\s*(?!0\s*\)|2\s*\))-?\d+\s*\)"
 )
 _SH_EXIT_2_RE = re.compile(r"\bexit\s+2\b")
-_SH_NONZERO_NONTWO_EXIT_RE = re.compile(r"\bexit\s+(?!0\b|2\b)\d+\b")
+_SH_NONZERO_NONTWO_EXIT_RE = re.compile(r"\bexit\s+(?!0\b|2\b)-?\d+\b")
 _DENY_JSON_RE = re.compile(r'"?permissionDecision"?\s*:\s*"deny"', re.IGNORECASE)
 _DENY_REASON_RE = re.compile(r'"?permissionDecisionReason"?\s*:\s*"([^"]*)"')
 
@@ -234,7 +256,13 @@ def _check_dual_signal(text: str, is_python: bool, mechanism_result: CheckResult
 # --- dimension 3: self-revalidation (heuristic) -------------------------
 
 _TOOL_NAME_REF_RE = re.compile(r"tool_name")
-_TOOL_NAME_COMPARISON_RE = re.compile(r'tool_name["\']?\s*(?:!=|==)|["\']?\s*(?:!=|==)\s*["\']?\s*\$?tool_name')
+# Up to 4 trailing closing-punctuation/quote characters allowed between
+# `tool_name` and the operator, e.g. `data.get("tool_name") == "Bash"` (a
+# quote then a paren) or `["tool_name"] !=` (a quote then a bracket) --
+# not just `tool_name ==`/`tool_name !=` directly adjacent.
+_TOOL_NAME_COMPARISON_RE = re.compile(
+    r'tool_name[\'")\]]{0,4}\s*(?:!=|==)|(?:!=|==)\s*[\'"(\[]{0,4}\$?tool_name'
+)
 
 
 def _check_self_revalidation(text: str) -> CheckResult:
@@ -264,6 +292,17 @@ def _find_sibling_test(script_path: Path) -> Path | None:
     if not directory.is_dir():
         return None
     stem_norm = re.sub(r"[-.]", "_", script_path.stem)
+    # Other real (non-test-named) sibling scripts. Used below so a loose
+    # containment match never lets a shorter script's stem claim credit for
+    # a test file that actually names a different, more-specific sibling
+    # script -- e.g. check_gate.py must not claim test_check_gate_v2.py
+    # when check_gate_v2.py exists as its own separate script alongside it.
+    other_script_stems = [
+        re.sub(r"[-.]", "_", p.stem)
+        for p in directory.iterdir()
+        if p != script_path and p.is_file() and p.suffix in (".py", ".sh")
+        and not _TEST_NAME_RE.match(p.name)
+    ]
     for candidate in sorted(directory.iterdir()):
         if candidate == script_path or not candidate.is_file():
             continue
@@ -271,12 +310,24 @@ def _find_sibling_test(script_path: Path) -> Path | None:
             continue
         candidate_norm = re.sub(r"[-.]", "_", candidate.stem)
         candidate_norm = re.sub(r"^test_|_test$", "", candidate_norm)
-        if stem_norm in candidate_norm or candidate_norm in stem_norm:
-            try:
-                if candidate.stat().st_size > 0:
-                    return candidate
-            except OSError:
-                continue
+        if candidate_norm == stem_norm:
+            matched = True
+        elif stem_norm in candidate_norm or candidate_norm in stem_norm:
+            better_sibling_exists = any(
+                other != stem_norm and len(other) > len(stem_norm)
+                and (other in candidate_norm or candidate_norm in other)
+                for other in other_script_stems
+            )
+            matched = not better_sibling_exists
+        else:
+            matched = False
+        if not matched:
+            continue
+        try:
+            if candidate.stat().st_size > 0:
+                return candidate
+        except OSError:
+            continue
     return None
 
 
@@ -333,6 +384,29 @@ def _check_unsafe_interpolation_python(text: str) -> CheckResult:
                 f"found {callee}(...) with shell execution and an "
                 "interpolated (not literal) command string",
             )
+        # The call-site span alone cannot prove a bare-identifier command
+        # argument (as opposed to a literal string or an argv list) is
+        # actually a hardcoded, non-interpolated value -- it could equally
+        # be `cmd = f"git checkout {branch_name}"` assigned one line
+        # earlier. Rather than silently crediting an unverifiable dynamic
+        # command fed to a shell as safe, this is graded FAIL: the same
+        # fail-closed choice dimensions 1/15 make elsewhere in this
+        # repository ("an inability to verify is a deny, not an
+        # assume-clean"), applied here to a security-relevant static
+        # check. The known cost: a script that assigns a genuinely
+        # hardcoded literal to a variable and passes that variable to a
+        # shell=True call is also flagged -- confirm by direct inspection
+        # rather than treating this as certain.
+        first_arg = span[1:].lstrip()
+        if not first_arg.startswith(("'", '"', "[")):
+            return CheckResult(
+                "5", "No unsafe shell interpolation", VERDICT_FAILED,
+                f"found {callee}(...) with shell execution whose command "
+                "argument is a variable/expression, not a literal string "
+                "or an argv list -- cannot verify from this call site "
+                "alone that it is not built from untrusted input "
+                "elsewhere in the script",
+            )
     return CheckResult(
         "5", "No unsafe shell interpolation", VERDICT_PASSED,
         "every shell/subprocess call found uses a literal command string "
@@ -341,6 +415,10 @@ def _check_unsafe_interpolation_python(text: str) -> CheckResult:
 
 
 _SH_EVAL_WITH_VAR_RE = re.compile(r"\beval\b[^\n]*\$")
+# `bash -c "...$var..."` / `sh -c "...$var..."`: a double-quoted -c string
+# still expands $variables, so this is the same injection shape as eval
+# even though no literal `eval` keyword appears.
+_SH_DASH_C_WITH_VAR_RE = re.compile(r'\b(?:bash|sh)\s+-c\s+"[^"\n]*\$\w+[^"\n]*"')
 
 
 def _check_unsafe_interpolation_shell(text: str) -> CheckResult:
@@ -350,9 +428,16 @@ def _check_unsafe_interpolation_shell(text: str) -> CheckResult:
             "found eval combined with a $variable reference on the same "
             "line -- the canonical shell-injection shape",
         )
+    if _SH_DASH_C_WITH_VAR_RE.search(text):
+        return CheckResult(
+            "5", "No unsafe shell interpolation", VERDICT_FAILED,
+            'found bash/sh -c "..." with a $variable reference interpolated '
+            "into the double-quoted command string -- the same "
+            "shell-injection shape as eval, without the literal eval keyword",
+        )
     return CheckResult(
         "5", "No unsafe shell interpolation", VERDICT_PASSED,
-        "no eval-plus-variable-interpolation pattern found",
+        "no eval-plus-variable-interpolation or -c-plus-variable pattern found",
     )
 
 
@@ -429,7 +514,7 @@ def _check_timeout_wiring(script_path: Path, hooks_json_path: Path | None) -> Ch
         )
     try:
         data = json.loads(hooks_json_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         return CheckResult(
             "6a", "Invocation-level timeout (hooks.json wiring)", VERDICT_INDETERMINATE,
             f"could not read/parse {hooks_json_path}: {exc}",
@@ -527,7 +612,7 @@ def main(argv: list[str] | None = None) -> int:
     script_path = Path(args.script)
     try:
         text = script_path.read_text(encoding="utf-8")
-    except OSError as exc:
+    except (OSError, UnicodeDecodeError) as exc:
         print(f"error: could not read {script_path}: {exc}", file=sys.stderr)
         return 2
     hooks_json_path = Path(args.hooks_json) if args.hooks_json else None

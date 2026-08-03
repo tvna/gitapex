@@ -112,6 +112,24 @@ def test_dimension1_generic_nonzero_exit_fails():
     assert "non-blocking notice" in d1.evidence
 
 
+def test_dimension1_negative_exit_code_shell_fails():
+    # `\d+`-only regexes miss `exit -1` entirely (an adversarial review
+    # round found this) -- a negative literal exit code is just as
+    # non-blocking to Claude Code as a bare `exit 1`, the same bypass
+    # class, and must not be misgraded not_applicable.
+    text = '#!/bin/bash\nif grep -q bad <<< "$1"; then\n  exit -1\nfi\nexit 0\n'
+    results = cgs.check_gate_shape(Path("hook.sh"), text)
+    d1 = _result(results, "1")
+    assert d1.verdict == cgs.VERDICT_FAILED
+
+
+def test_dimension1_negative_exit_code_python_fails():
+    text = "import sys\nif bad:\n    sys.exit(-1)\nsys.exit(0)\n"
+    results = cgs.check_gate_shape(Path("hook.py"), text)
+    d1 = _result(results, "1")
+    assert d1.verdict == cgs.VERDICT_FAILED
+
+
 def test_dimension1_no_deny_path_is_not_applicable():
     results = cgs.check_gate_shape(Path("hook.sh"), _SH_NO_DENY_AT_ALL)
     d1 = _result(results, "1")
@@ -216,6 +234,22 @@ def test_dimension3_indeterminate_never_fail_when_absent():
     assert d3.verdict == cgs.VERDICT_INDETERMINATE
 
 
+def test_dimension3_passes_on_dict_get_comparison():
+    # `.get("tool_name")` puts a closing paren between the field name and
+    # the operator -- an earlier version of the regex required direct
+    # adjacency and missed this, the single most idiomatic Python shape
+    # (an adversarial review round found this).
+    text = (
+        'import json, sys\n'
+        'data = json.load(sys.stdin)\n'
+        'if data.get("tool_name") == "Bash":\n'
+        '    sys.exit(2)\n'
+    )
+    results = cgs.check_gate_shape(Path("hook.py"), text)
+    d3 = _result(results, "3")
+    assert d3.verdict == cgs.VERDICT_PASSED
+
+
 # --- dimension 4: bundled test exists ------------------------------------
 
 
@@ -233,6 +267,43 @@ def test_dimension4_passes_when_sibling_test_exists(tmp_path):
 def test_dimension4_fails_when_no_sibling_test(tmp_path):
     script = tmp_path / "check-template-overwrite.sh"
     script.write_text(_SH_NO_DENY_AT_ALL, encoding="utf-8")
+    results = cgs.check_gate_shape(script, script.read_text(encoding="utf-8"))
+    d4 = _result(results, "4")
+    assert d4.verdict == cgs.VERDICT_FAILED
+
+
+def test_dimension4_containment_match_accepted_when_no_better_sibling(tmp_path):
+    # Mirrors a real pattern in this repository: check-pr-issue-acm-
+    # disclosure.sh's own test file is named test_check_pr_issue_acm_
+    # disclosure_shell.py (a descriptive "_shell" suffix), not an exact
+    # stem match. No other script in the directory competes for that name.
+    script = tmp_path / "check-pr-issue-acm-disclosure.sh"
+    script.write_text(_SH_NO_DENY_AT_ALL, encoding="utf-8")
+    sibling = tmp_path / "test_check_pr_issue_acm_disclosure_shell.py"
+    sibling.write_text("def test_x(): pass\n", encoding="utf-8")
+    results = cgs.check_gate_shape(script, script.read_text(encoding="utf-8"))
+    d4 = _result(results, "4")
+    assert d4.verdict == cgs.VERDICT_PASSED
+
+
+def test_dimension4_containment_match_rejected_when_better_sibling_exists(tmp_path):
+    # An adversarial review round found the prior substring-containment
+    # rule let check_gate.py claim test_check_gate_v2.py even when
+    # check_gate_v2.py exists as its own, different, real sibling script
+    # -- the test file actually names that other script, not this one.
+    script = tmp_path / "check_gate.py"
+    script.write_text("x = 1\n", encoding="utf-8")
+    (tmp_path / "check_gate_v2.py").write_text("y = 2\n", encoding="utf-8")
+    (tmp_path / "test_check_gate_v2.py").write_text("def test_x(): pass\n", encoding="utf-8")
+    results = cgs.check_gate_shape(script, script.read_text(encoding="utf-8"))
+    d4 = _result(results, "4")
+    assert d4.verdict == cgs.VERDICT_FAILED
+
+
+def test_dimension4_fails_when_sibling_test_name_unrelated(tmp_path):
+    script = tmp_path / "check-bash-safety.sh"
+    script.write_text(_SH_NO_DENY_AT_ALL, encoding="utf-8")
+    (tmp_path / "test_completely_unrelated.py").write_text("def test_x(): pass\n", encoding="utf-8")
     results = cgs.check_gate_shape(script, script.read_text(encoding="utf-8"))
     d4 = _result(results, "4")
     assert d4.verdict == cgs.VERDICT_FAILED
@@ -295,6 +366,28 @@ _SH_SAFE_EXEC_FORM = """\
 jq -r '.tool_name' <<< "$1"
 """
 
+_PY_SHELL_TRUE_VARIABLE_BUILT_ELSEWHERE = """\
+import subprocess
+
+def run(branch_name):
+    cmd = f"git checkout {branch_name}"
+    subprocess.run(cmd, shell=True)
+"""
+
+_PY_SHELL_TRUE_VARIABLE_HOLDING_LITERAL = """\
+import subprocess
+
+def run():
+    cmd = "git status"
+    subprocess.run(cmd, shell=True, timeout=5)
+"""
+
+_SH_DASH_C_UNSAFE = """\
+#!/bin/bash
+branch="$1"
+bash -c "git checkout $branch"
+"""
+
 
 def test_dimension5_python_fstring_shell_true_fails():
     results = cgs.check_gate_shape(Path("hook.py"), _PY_SHELL_TRUE_FSTRING)
@@ -345,6 +438,35 @@ def test_dimension5_shell_exec_form_passes():
     results = cgs.check_gate_shape(Path("hook.sh"), _SH_SAFE_EXEC_FORM)
     d5 = _result(results, "5")
     assert d5.verdict == cgs.VERDICT_PASSED
+
+
+def test_dimension5_python_variable_built_from_interpolation_elsewhere_fails():
+    # An adversarial review round's exact bypass example: the unsafe
+    # f-string is assigned to a variable one line before the shell=True
+    # call, invisible to a scan of the call site alone. The command
+    # argument is a bare identifier, not a literal or an argv list, so
+    # this is now graded FAIL rather than silently PASS.
+    results = cgs.check_gate_shape(Path("hook.py"), _PY_SHELL_TRUE_VARIABLE_BUILT_ELSEWHERE)
+    d5 = _result(results, "5")
+    assert d5.verdict == cgs.VERDICT_FAILED
+
+
+def test_dimension5_python_variable_holding_literal_also_fails():
+    # Named trade-off (see check_gate_shape.py's own module docstring):
+    # this script is actually safe (cmd is a hardcoded literal with no
+    # interpolation), but the call site alone cannot distinguish it from
+    # the unsafe case above -- both are graded FAIL, a deliberate
+    # fail-closed choice, not a bug this test is pinning down as correct
+    # behavior to keep it from silently flipping back to a fail-open PASS.
+    results = cgs.check_gate_shape(Path("hook.py"), _PY_SHELL_TRUE_VARIABLE_HOLDING_LITERAL)
+    d5 = _result(results, "5")
+    assert d5.verdict == cgs.VERDICT_FAILED
+
+
+def test_dimension5_shell_dash_c_with_variable_fails():
+    results = cgs.check_gate_shape(Path("hook.sh"), _SH_DASH_C_UNSAFE)
+    d5 = _result(results, "5")
+    assert d5.verdict == cgs.VERDICT_FAILED
 
 
 # --- dimension 6b: internal subprocess/network timeout -------------------
@@ -581,6 +703,29 @@ def test_main_returns_one_on_any_fail(tmp_path):
 def test_main_returns_two_on_unreadable_script(tmp_path):
     exit_code = cgs.main([str(tmp_path / "does-not-exist.sh")])
     assert exit_code == 2
+
+
+def test_main_returns_two_on_non_utf8_script(tmp_path, capsys):
+    # UnicodeDecodeError is a ValueError subclass, not an OSError -- an
+    # earlier version only caught OSError here and crashed uncaught on
+    # invalid UTF-8 input (an adversarial review round found this),
+    # contradicting this module's own docstring claim that malformed input
+    # never crashes it.
+    script = tmp_path / "hook.sh"
+    script.write_bytes(b"#!/bin/bash\n\xff\xfe not valid utf-8\n")
+    exit_code = cgs.main([str(script)])
+    assert exit_code == 2
+    assert "error:" in capsys.readouterr().err
+
+
+def test_dimension6a_indeterminate_on_non_utf8_hooks_json(tmp_path):
+    hooks_json = tmp_path / "hooks.json"
+    hooks_json.write_bytes(b"\xff\xfe not valid utf-8")
+    results = cgs.check_gate_shape(
+        Path("hooks/check-bash-safety.sh"), _SH_GOOD_DENY, hooks_json
+    )
+    d6a = _result(results, "6a")
+    assert d6a.verdict == cgs.VERDICT_INDETERMINATE
 
 
 def test_main_accepts_hooks_json_flag(tmp_path):

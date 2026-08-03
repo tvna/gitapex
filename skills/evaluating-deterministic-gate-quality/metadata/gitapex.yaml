@@ -194,6 +194,23 @@ spec:
     - kind: deferral
       anchor: "https://github.com/tvna/gitapex/issues/704"
       summary: "The 'verified agent-tool/middleware compatibility matrix' deferral above (https://github.com/tvna/gitapex/issues/435) now has its own dedicated follow-up issue: which non-Claude-Code tool to verify this skill's portable core under is an unresolved Human Decision, since the session that closed the other two https://github.com/tvna/gitapex/issues/435 deferrals in https://github.com/tvna/gitapex/issues/587 had no other agent-tool CLI installed or credentialed."
+    - kind: audit
+      anchor: "method:evaluating-skill-quality"
+      summary: "An isolated dispatch on this build's own diff found shape clean (55/55) and the dimensions.md/check_gate_shape.py cross-reference accurate, but one real defect in the new Lifecycle-note prose: it claimed 'two of the three items originally deferred at initial ship' when this sidecar's own history above lists five deferred-at-initial-ship items, not three -- a miscount against its own cited source, newly introduced here rather than carried over."
+      outcome:
+        verdict: WELL-FORMED-NOT-MATURE
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/587"
+      summary: "Fixed the miscount above: SKILL.md's Lifecycle note no longer asserts a specific total count of originally-deferred items, since this sidecar's own history is the authoritative count and SKILL.md deliberately does not restate it."
+    - kind: audit
+      anchor: "method:evaluating-deterministic-gate-quality"
+      summary: "An independent adversarial code-review dispatch on scripts/check_gate_shape.py found 7 real findings (2 high, 3 medium, 2 low): a dimension-5 false negative for interpolation built a line before the call site; an uncaught UnicodeDecodeError crash on non-UTF-8 input; a dimension-4 substring false positive; dimension-1 regexes missing negative exit codes; no comment stripping before regex scans; a dimension-3 regex gap; a shell -c injection blind spot."
+      outcome:
+        findings: 7
+        severity: "2 high, 3 medium, 2 low"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/587"
+      summary: "Fixed 6 of the 7 findings above, each with a new regression test: a bare-identifier command fed to a shell call is now FAIL not silent PASS; both read paths catch UnicodeDecodeError; dimension 4 rejects a containment match when a longer sibling exists; dimension-1 accepts a negative exit code; dimension-3 tolerates trailing punctuation; bash/sh -c is now recognized alongside eval. Comment/string scanning stays a disclosed docstring limitation, not fixed -- a real tokenizer was out of scope."
   skillDependencies:
     requires:
       - evaluating-skill-quality
