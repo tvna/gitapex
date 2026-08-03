@@ -22,12 +22,28 @@ This scanner is the drift gate shipped alongside that registry. It fails if:
   unnoticed duplicate would silently make one entry invisible to every
   cross-reference this scanner performs).
 
-Every list/dict lookup below defaults on both an absent key and an explicit
-JSON ``null`` (a schema-invalid but not-impossible shape for a hand-edited
-instance) -- a bare ``dict.get(key, default)`` only substitutes the default
-for a missing key, not for a present-but-``null`` one, which would otherwise
-crash this scanner with an unhandled ``TypeError`` instead of surfacing the
-schema violation cleanly.
+Validation is layered. ``jsonschema.Draft202012Validator`` first checks the
+raw instance against ``.gitapex/ssot.schema.json`` and reports every
+violation with a JSON-pointer-shaped location -- the general schema-invalid
+case, with a good error message. The reference-drift checks
+(``find_script_drift``/``find_policy_ref_drift``/``find_cluster_drift``)
+then run against a ``SsotRegistry`` pydantic model parsed from that same
+instance, which gives them typed ``Gate``/``PolicySource`` objects to work
+with instead of hand-rolled ``dict.get``/``isinstance`` re-derivation. A
+schema-invalid instance (a missing required field, or an explicit JSON
+``null`` in place of an array -- a schema-invalid but not-impossible shape
+for a hand-edited file) may also fail this pydantic parse; when it does,
+``_parse_registry`` returns ``None`` rather than raising, and the three
+reference-drift checks below simply have nothing typed to check, deferring
+to ``find_schema_violations`` to report the real problem instead of
+crashing with an unhandled exception.
+
+``find_duplicate_ids`` is unchanged: it still walks the raw instance dict
+directly, not through the pydantic model, since a duplicate id can occur in
+an otherwise schema-valid and pydantic-valid instance (neither the schema
+nor these models express a cross-item uniqueness constraint) -- every
+list/dict lookup it performs still defaults on both an absent key and an
+explicit JSON ``null``, for the same reason as before.
 
 It does not check the converse -- a real gate script with no registry entry
 at all (under-registration, a "shadow gate") is a known, accepted gap; see
@@ -43,111 +59,206 @@ from __future__ import annotations
 import json
 import pathlib
 import sys
+from typing import Any, Literal, cast
 
 import jsonschema
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 SSOT_PATH = REPO_ROOT / ".gitapex" / "ssot.json"
 SCHEMA_PATH = REPO_ROOT / ".gitapex" / "ssot.schema.json"
 
 
-def _load_json(path: pathlib.Path) -> dict:
-    return json.loads(path.read_text())
+class PolicySource(BaseModel):
+    """.gitapex/ssot.json ``policy_sources[]`` entry: a file at least one
+    gate reads as authoritative data via ``policy_refs``."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    path: str
+    format: Literal["toml", "json", "yaml", "rego"]
+    authority: str
 
 
-def _get_list(d: dict, key: str) -> list:
+class Gate(BaseModel):
+    """.gitapex/ssot.json ``gates[]`` entry: one deterministic gate gitapex
+    enforces on itself. ``script``/``native_rule`` stay optional here -- the
+    schema's own if/then keeps them conditionally required by ``kind``,
+    already enforced by ``find_schema_violations`` before this model is ever
+    constructed."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    kind: Literal["script", "native", "opa-rego"]
+    script: str | list[str] | None = None
+    native_rule: str | None = None
+    rule: str
+    planes: list[Literal["pretooluse", "posttooluse", "ci"]]
+    trigger: str
+    policy_refs: list[str]
+    cluster: str | list[str]
+    tracking_issue: int | None
+    status: Literal["experimental", "active", "deprecated"]
+    supersedes: str | None
+
+
+class SsotMeta(BaseModel):
+    """.gitapex/ssot.json ``meta``: registry-level lifecycle, distinct from
+    any single gate's own status."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str
+    tracking_issue: int
+    status: Literal["draft", "active", "deprecated"]
+    phase: str
+
+
+class SsotRegistry(BaseModel):
+    """The full, already-jsonschema-checked ``.gitapex/ssot.json`` document,
+    typed for the reference-drift checks below."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    meta: SsotMeta
+    policy_sources: list[PolicySource]
+    gates: list[Gate]
+    clusters: dict[str, str]
+
+
+def _load_json(path: pathlib.Path) -> dict[str, Any]:
+    return cast(dict[str, Any], json.loads(path.read_text()))
+
+
+def _get_list(d: dict[str, Any], key: str) -> list[Any]:
     """d.get(key, []), but also defaults on an explicit JSON null (not just a
-    missing key) -- dict.get's default only covers the latter."""
+    missing key) -- dict.get's default only covers the latter. Used only by
+    find_duplicate_ids, which stays dict-based (see module docstring)."""
     value = d.get(key)
     return value if isinstance(value, list) else []
 
 
-def _get_dict(d: dict, key: str) -> dict:
-    """Same null-safety as _get_list, for a dict-valued field."""
-    value = d.get(key)
-    return value if isinstance(value, dict) else {}
-
-
-def _script_paths(gate: dict) -> list[str]:
+def _script_paths(gate: dict[str, Any]) -> list[str]:
+    """Dict-based script-path extraction. Kept for its own direct test
+    coverage (test_script_paths_defaults_to_empty_when_absent); the
+    pydantic-driven find_script_drift below normalizes Gate.script itself
+    via _as_list instead of calling this."""
     script = gate.get("script")
     if script is None:
         return []
     return [script] if isinstance(script, str) else list(script)
 
 
-def _cluster_values(gate: dict) -> list[str]:
+def _cluster_values(gate: dict[str, Any]) -> list[str]:
+    """Dict-based cluster-value extraction. Kept for its own direct test
+    coverage (test_cluster_values_defaults_to_empty_when_absent); the
+    pydantic-driven find_cluster_drift below normalizes Gate.cluster itself
+    via _as_list instead of calling this."""
     cluster = gate.get("cluster")
     if cluster is None:
         return []
     return [cluster] if isinstance(cluster, str) else list(cluster)
 
 
-def find_schema_violations(instance: dict, schema: dict) -> list[str]:
+def _as_list(value: str | list[str] | None) -> list[str]:
+    """Normalize a oneOf(string, array-of-string) pydantic field
+    (Gate.script or Gate.cluster) to a list -- the typed equivalent of
+    _script_paths/_cluster_values above, used by the pydantic-driven checks
+    below."""
+    if value is None:
+        return []
+    return [value] if isinstance(value, str) else list(value)
+
+
+def _parse_registry(instance: dict[str, Any]) -> SsotRegistry | None:
+    """Parse an already-jsonschema-checked instance dict into a typed
+    SsotRegistry. Never raises: a schema-invalid instance (a missing field,
+    an explicit null in place of an array/object) may also fail this parse,
+    in which case find_schema_violations already reports the real problem
+    and the reference-drift checks below simply have nothing typed to
+    check."""
+    try:
+        return SsotRegistry.model_validate(instance)
+    except ValidationError:
+        return None
+
+
+def find_schema_violations(instance: dict[str, Any], schema: dict[str, Any]) -> list[str]:
     """Return one message per JSON-Schema (draft 2020-12) validation error
     against the given schema. Empty list means the instance is valid."""
     validator = jsonschema.Draft202012Validator(schema)
-    findings = []
+    findings: list[str] = []
     for error in validator.iter_errors(instance):
         location = "/".join(str(p) for p in error.path) or "<root>"
         findings.append(f"schema: {location}: {error.message}")
     return findings
 
 
-def find_script_drift(instance: dict, repo_root: pathlib.Path = REPO_ROOT) -> list[str]:
+def find_script_drift(
+    registry: SsotRegistry | None, repo_root: pathlib.Path = REPO_ROOT
+) -> list[str]:
     """Return one message per gates[] script path that doesn't exist as a real
     file. Only checked for kind == "script" -- "native" gates have no repo
     file to check, and "opa-rego" gates aren't seeded yet."""
-    findings = []
-    for gate in _get_list(instance, "gates"):
-        if gate.get("kind") != "script":
+    if registry is None:
+        return []
+    findings: list[str] = []
+    for gate in registry.gates:
+        if gate.kind != "script":
             continue
-        for path in _script_paths(gate):
+        for path in _as_list(gate.script):
             if not (repo_root / path).is_file():
                 findings.append(
-                    f"script-drift: {gate.get('id', '<unknown>')}: "
+                    f"script-drift: {gate.id}: "
                     f"script path does not exist: {path}"
                 )
     return findings
 
 
-def find_policy_ref_drift(instance: dict) -> list[str]:
+def find_policy_ref_drift(registry: SsotRegistry | None) -> list[str]:
     """Return one message per gates[].policy_refs[] value that doesn't resolve
     to a real policy_sources[].id."""
-    known_ids = {source.get("id") for source in _get_list(instance, "policy_sources")}
-    findings = []
-    for gate in _get_list(instance, "gates"):
-        for ref in _get_list(gate, "policy_refs"):
+    if registry is None:
+        return []
+    known_ids = {source.id for source in registry.policy_sources}
+    findings: list[str] = []
+    for gate in registry.gates:
+        for ref in gate.policy_refs:
             if ref not in known_ids:
                 findings.append(
-                    f"policy-ref-drift: {gate.get('id', '<unknown>')}: "
+                    f"policy-ref-drift: {gate.id}: "
                     f"policy_refs references unknown policy_sources id {ref!r}"
                 )
     return findings
 
 
-def find_cluster_drift(instance: dict) -> list[str]:
+def find_cluster_drift(registry: SsotRegistry | None) -> list[str]:
     """Return one message per gates[].cluster value that doesn't name a real
     top-level clusters key."""
-    known_clusters = set(_get_dict(instance, "clusters"))
-    findings = []
-    for gate in _get_list(instance, "gates"):
-        for cluster in _cluster_values(gate):
+    if registry is None:
+        return []
+    known_clusters = set(registry.clusters)
+    findings: list[str] = []
+    for gate in registry.gates:
+        for cluster in _as_list(gate.cluster):
             if cluster not in known_clusters:
                 findings.append(
-                    f"cluster-drift: {gate.get('id', '<unknown>')}: "
+                    f"cluster-drift: {gate.id}: "
                     f"cluster references unknown clusters key {cluster!r}"
                 )
     return findings
 
 
-def find_duplicate_ids(instance: dict) -> list[str]:
+def find_duplicate_ids(instance: dict[str, Any]) -> list[str]:
     """Return one message per id used more than once across gates[] or
     across policy_sources[] (checked as two separate namespaces -- a gate
     and a policy source are never cross-referenced by the same field, so a
     shared string between the two namespaces is not itself a collision).
     An unnoticed duplicate would silently make one entry invisible to every
     cross-reference the other checks in this module perform."""
-    findings = []
+    findings: list[str] = []
     for label, key in (("gate", "gates"), ("policy-source", "policy_sources")):
         seen: dict[str, int] = {}
         for entry in _get_list(instance, key):
@@ -172,12 +283,13 @@ def find_drift(
     repo-grounded reference checks. Empty list means the registry is clean."""
     instance = _load_json(instance_path)
     schema = _load_json(schema_path)
+    registry = _parse_registry(instance)
 
     findings: list[str] = []
     findings.extend(find_schema_violations(instance, schema))
-    findings.extend(find_script_drift(instance, repo_root))
-    findings.extend(find_policy_ref_drift(instance))
-    findings.extend(find_cluster_drift(instance))
+    findings.extend(find_script_drift(registry, repo_root))
+    findings.extend(find_policy_ref_drift(registry))
+    findings.extend(find_cluster_drift(registry))
     findings.extend(find_duplicate_ids(instance))
     return findings
 

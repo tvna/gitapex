@@ -202,7 +202,6 @@ disable_error_code = ["attr-defined", "arg-type", "operator", "no-untyped-call"]
 # carried into a follow-up issue the way Tier A/B are.
 [[tool.mypy.overrides]]
 module = [
-    "scan_ssot_schema",
     "check_dispatch_trace",
     "lint_fixture_assertions",
     "run_ablation",
