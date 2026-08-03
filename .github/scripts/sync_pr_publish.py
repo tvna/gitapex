@@ -53,6 +53,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+
 _API_ROOT = "https://api.github.com"
 _GRAPHQL_URL = "https://api.github.com/graphql"
 _API_VERSION = "2022-11-28"
@@ -451,6 +453,37 @@ def _collect_additions(paths: list[str]) -> list[tuple[str, bytes]]:
     return additions
 
 
+class _CliArgs(BaseModel):
+    """Parsed-and-validated view of this script's own argparse namespace.
+    Required string fields reject blank (argparse's own ``required=True``
+    only guarantees the flag was passed, not that its value is non-empty).
+    ``body_file``'s own field validator folds in this script's pre-existing
+    hand check (``if not body_path.exists(): print(...); return 1``) rather
+    than leaving both a pydantic model and that check in place side by
+    side -- it is intentionally constructed later than
+    ``args = parser.parse_args(argv)`` in ``main`` (after the GH_TOKEN/REPO
+    environment-variable checks, exactly where the old hand check used to
+    sit) so a run missing GH_TOKEN/REPO still reports that error first,
+    unchanged, rather than a body-file error surfacing before it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    base: str = Field(min_length=1)
+    branch: str = Field(min_length=1)
+    title: str = Field(min_length=1)
+    body_file: str = Field(min_length=1)
+    commit_subject: str = Field(min_length=1)
+    commit_body: str = ""
+    add: list[str] = Field(default_factory=list)
+
+    @field_validator("body_file")
+    @classmethod
+    def _body_file_must_exist(cls, value: str) -> str:
+        if not Path(value).exists():
+            raise ValueError(f"body file not found: {value}")
+        return value
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Publish a signed PR for the agent-instructions sync.")
     parser.add_argument("--base", required=True, help="Base branch to merge into")
@@ -472,22 +505,39 @@ def main(argv: list[str] | None = None) -> int:
     if not repo:
         print("Error: REPO environment variable is required", file=sys.stderr)
         return 1
-    body_path = Path(args.body_file)
-    if not body_path.exists():
-        print(f"Error: body file not found: {args.body_file}", file=sys.stderr)
+    try:
+        cli_args = _CliArgs(
+            base=args.base, branch=args.branch, title=args.title, body_file=args.body_file,
+            commit_subject=args.commit_subject, commit_body=args.commit_body, add=args.add,
+        )
+    except ValidationError as exc:
+        # body_file's own message already fully describes the problem (it
+        # is this script's pre-existing hand-check text, see _CliArgs'
+        # docstring) -- prefixing it with "body_file: " would drift the
+        # message CI logs and operators already expect. Every other field
+        # is a brand-new check with no prior text to preserve, so it keeps
+        # the generic "field: message" form.
+        detail = "; ".join(
+            e["msg"].removeprefix("Value error, ")
+            if e["loc"] == ("body_file",)
+            else f"{e['loc'][0] if e['loc'] else 'args'}: {e['msg'].removeprefix('Value error, ')}"
+            for e in exc.errors()
+        )
+        print(f"Error: {detail}", file=sys.stderr)
         return 1
+    body_path = Path(cli_args.body_file)
 
     try:
-        additions = _collect_additions(args.add)
+        additions = _collect_additions(cli_args.add)
         result = publish_files_pr(
             repo=repo,
             additions=additions,
-            base=args.base,
-            branch=args.branch,
-            title=args.title,
+            base=cli_args.base,
+            branch=cli_args.branch,
+            title=cli_args.title,
             body=body_path.read_text(encoding="utf-8"),
-            commit_subject=args.commit_subject,
-            commit_body=args.commit_body,
+            commit_subject=cli_args.commit_subject,
+            commit_body=cli_args.commit_body,
             token=token,
         )
     except RuntimeError as exc:

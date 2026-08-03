@@ -63,7 +63,7 @@ def is_security_relevant(text):
     return bool(_SECURITY_KEYWORDS_RE.search(frontmatter))
 
 
-def main(argv=None):
+def main(argv: list[str] | None = None) -> int:
     """CLI: read a SKILL.md's content (--path or stdin), print 'relevant'
     or 'not-relevant', exit 0."""
     parser = argparse.ArgumentParser(

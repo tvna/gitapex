@@ -58,7 +58,7 @@ from pathlib import Path
 _FENCE_MARKERS = ("```", "~~~")
 
 
-def _strip_fences(text):
+def _strip_fences(text: str | None) -> str:
     lines = (text or "").split("\n")
     kept = []
     fence_marker = None
@@ -101,7 +101,7 @@ _ACM_WAIVER_RE = re.compile(
 )
 
 
-def has_acm_disclosure(body_text):
+def has_acm_disclosure(body_text: str | None) -> bool:
     """Return True iff `body_text` carries the ACM table or a valid waiver line."""
     # Normalize CRLF/CR line endings before matching, same rationale as
     # gate_acm_issue_disclosure.py's own has_acm_disclosure.
@@ -110,7 +110,7 @@ def has_acm_disclosure(body_text):
     return bool(_HEADER_RE.search(normalized) or _ACM_WAIVER_RE.search(normalized))
 
 
-def waiver_category(body_text):
+def waiver_category(body_text: str | None) -> str | None:
     """Return the lowercased waiver category ('chore'/'docs'/'tracking'/
     'defect') if `body_text` carries a valid waiver line, else None.
 
@@ -124,7 +124,7 @@ def waiver_category(body_text):
     return match.group("category").lower() if match else None
 
 
-def main(argv=None):
+def main(argv: list[str] | None = None) -> int:
     """CLI: exit 0 iff the given body discloses an ACM table or waiver, else 1."""
     parser = argparse.ArgumentParser(
         description="Check that a candidate GitHub issue body discloses an "

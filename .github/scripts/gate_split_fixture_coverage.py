@@ -115,6 +115,7 @@ import argparse
 import re
 import sys
 from pathlib import Path
+from typing import TypeGuard
 
 import yaml
 
@@ -327,7 +328,7 @@ def parse_section_labels(skill_text: str) -> set[str]:
     return labels
 
 
-def _is_real_exercises_declaration(value: object) -> bool:
+def _is_real_exercises_declaration(value: object) -> TypeGuard[list[str]]:
     """True iff `value` (a fixture's `expected.exercises`) is a non-empty
     list of non-blank strings -- not merely truthy (issue #631, mirroring
     `lint_fixture_assertions.py`'s `_is_real_dispatch_declaration`, which

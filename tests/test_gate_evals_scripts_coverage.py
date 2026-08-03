@@ -543,3 +543,21 @@ def test_main_uses_real_pyproject_by_default(capsys, tmp_path, monkeypatch):
     out = capsys.readouterr().out
     assert rc == 0
     assert f"PASS: all {len(sources)} file(s)" in out
+
+
+# ---------------------------------------------------------------------------
+# main() -- EvalsScriptsCoverageArgs validation (new pydantic-model behavior)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("min_percent", ["-1", "100.1"])
+def test_main_rejects_min_percent_outside_0_to_100(capsys, tmp_path, min_percent):
+    report_path = tmp_path / "coverage.json"
+    report_path.write_text(json.dumps(_report({"evals/scripts/a.py": 100.0})), encoding="utf-8")
+    rc = gate.main([
+        "--coverage-json", str(report_path),
+        "--include-glob", "evals/scripts/*.py",
+        "--min-percent", min_percent,
+    ])
+    assert rc == 2
+    assert "--min-percent must be between 0 and 100" in capsys.readouterr().err

@@ -246,6 +246,30 @@ def open_retro_issue(
     return int(result["number"])
 
 
+def _validate_cli_args(owner: str, repo: str, pr_number: int) -> str | None:
+    """Return a pydantic-``ValidationError``-style detail string (one
+    ``<field>: <message>`` clause per violated constraint, joined with
+    ``"; "``, in field-declaration order) if ``owner``/``repo`` are blank
+    (argparse's own ``required=True`` only guarantees the flag was passed,
+    not that its value is non-empty) or ``pr_number`` is not positive
+    (GitHub issue/PR numbers are always >= 1), else None. ``pr_title``/
+    ``pr_url`` stay unconstrained -- ``pr_title`` in particular carries
+    untrusted, fork-controlled text (see module docstring) that this script
+    already never embeds anywhere, so no shape is imposed on it here either.
+    Message text is a byte-for-byte match of the pydantic
+    ``Field(min_length=1)``/``Field(gt=0)`` errors this replaces (verified
+    directly against the installed pydantic version), so this plain-Python
+    check is a drop-in replacement, not merely an equivalent-intent one."""
+    errors: list[str] = []
+    if not owner:
+        errors.append("owner: String should have at least 1 character")
+    if not repo:
+        errors.append("repo: String should have at least 1 character")
+    if pr_number <= 0:
+        errors.append("pr_number: Input should be greater than 0")
+    return "; ".join(errors) if errors else None
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Open (with dedup) a merge-retrospective issue for a merged PR."
@@ -256,6 +280,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--pr-title", default="", help="The merged PR's title (untrusted; JSON body only)")
     parser.add_argument("--pr-url", default="", help="The merged PR's HTML URL")
     args = parser.parse_args(argv)
+    detail = _validate_cli_args(args.owner, args.repo, args.pr_number)
+    if detail is not None:
+        print(f"error: invalid arguments: {detail}", file=sys.stderr)
+        return 1
 
     token = os.environ.get("GITHUB_TOKEN", "")
     if not token:

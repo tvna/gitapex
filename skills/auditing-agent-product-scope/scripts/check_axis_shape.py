@@ -33,6 +33,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 # A "## Axis <letter>: <name>" heading. Case-sensitive "Axis" by design --
@@ -61,7 +62,7 @@ _REQUIRED_PREFIX = "owning"
 _DEFAULT_EXPECTED_LABELS = frozenset("ABCDEF")
 
 
-def _split_sections(body_text: str):
+def _split_sections(body_text: str) -> Iterator[tuple[str, str, str]]:
     """Yield (axis_label, axis_name, section_text) for every '## Axis X:'
     heading in ``body_text``, where ``section_text`` runs to the next
     '## ' heading of any kind (axis or not) or end of file."""
@@ -138,7 +139,7 @@ def check_axis_shape(
     return offenses
 
 
-def main(argv=None):
+def main(argv: list[str] | None = None) -> int:
     """CLI: exit 0 iff every axis section in the given file has all four
     required fields, else 1."""
     parser = argparse.ArgumentParser(

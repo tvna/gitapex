@@ -147,6 +147,18 @@ def test_capability_assumption():
     assert gate.capability_assumption("spec:\n  portability: Portable\n") is None
 
 
+def test_non_empty_or_none_rejects_empty_string():
+    # Plain-Python replacement for the former pydantic
+    # CapabilityAssumptionValue model: an empty string must become None,
+    # the same "no usable value" outcome capability_assumption already
+    # returns (as None) for a missing match.
+    assert gate._non_empty_or_none("") is None
+
+
+def test_non_empty_or_none_accepts_non_empty_string():
+    assert gate._non_empty_or_none("Broad") == "Broad"
+
+
 def test_capability_assumption_tolerates_trailing_comment():
     assert gate.capability_assumption(_CAPABILITY_WITH_TRAILING_COMMENT) == "Broad"
 

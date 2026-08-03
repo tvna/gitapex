@@ -203,6 +203,94 @@ def test_cluster_values_defaults_to_empty_when_absent():
     assert drift._cluster_values({}) == []
 
 
+def test_parse_registry_succeeds_on_valid_instance_with_correct_typed_values():
+    """The pydantic model's own success path: a well-formed-per-schema
+    instance parses into a typed SsotRegistry whose nested Gate/PolicySource
+    objects carry the expected field values (not just "truthy")."""
+    registry = drift._parse_registry(_VALID_INSTANCE)
+    assert registry is not None
+    assert registry.meta.tracking_issue == 123
+    assert registry.meta.status == "active"
+    assert len(registry.policy_sources) == 1
+    assert registry.policy_sources[0].id == "example-policy"
+    assert registry.policy_sources[0].format == "toml"
+    assert len(registry.gates) == 1
+    gate = registry.gates[0]
+    assert gate.id == "example-gate"
+    assert gate.kind == "script"
+    assert gate.script == "hooks/check-bash-safety.sh"
+    assert gate.policy_refs == ["example-policy"]
+    assert gate.cluster == "example-cluster"
+    assert gate.tracking_issue is None
+    assert gate.supersedes is None
+    assert registry.clusters == {"example-cluster": "an example cluster"}
+
+
+def test_parse_registry_returns_none_without_crashing_on_invalid_instance():
+    """The pydantic model's own rejection path: an instance missing a
+    required Gate field (schema-invalid too) fails the pydantic parse and
+    _parse_registry reports that as None rather than raising -- the
+    graceful-degradation contract find_script_drift/find_policy_ref_drift/
+    find_cluster_drift all rely on."""
+    bad = json.loads(json.dumps(_VALID_INSTANCE))
+    del bad["gates"][0]["kind"]
+    assert drift._parse_registry(bad) is None
+
+
+def test_parse_registry_rejects_gate_missing_id_even_though_duplicate_id_check_does_not_crash():
+    """Companion to test_duplicate_id_check_skips_entries_missing_an_id:
+    confirms *why* find_script_drift/find_policy_ref_drift/find_cluster_drift
+    see nothing for that fixture's second gate -- the pydantic parse of the
+    whole registry fails outright (id is required, no default), not just
+    that one entry silently drops out."""
+    bad = json.loads(json.dumps(_VALID_INSTANCE))
+    second_gate = json.loads(json.dumps(bad["gates"][0]))
+    del second_gate["id"]
+    bad["gates"].append(second_gate)
+    assert drift._parse_registry(bad) is None
+
+
+def test_kind_script_missing_script_field_does_not_crash_or_false_flag(tmp_path):
+    # The pydantic Gate model deliberately does not re-implement the
+    # schema's if/then ("kind: script" requires "script") -- that
+    # conditional-requirement check stays jsonschema's job alone. So a gate
+    # missing "script" while kind=="script" fails jsonschema (schema
+    # violation reported) but still parses into a Gate with script=None; the
+    # regression this guards is find_script_drift skipping that gate's
+    # script check gracefully instead of raising or fabricating a
+    # script-drift finding for a script path that was never given.
+    bad = json.loads(json.dumps(_VALID_INSTANCE))
+    del bad["gates"][0]["script"]
+    instance_path = _write_instance(tmp_path, bad)
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
+    assert any("schema:" in f and "script" in f for f in findings)
+    assert not any("script-drift" in f for f in findings)
+
+
+def test_script_paths_returns_string_and_list_values_unchanged():
+    # Companion to test_script_paths_defaults_to_empty_when_absent: covers
+    # this legacy dict-based helper's non-empty branch too (kept for its own
+    # direct test contract; no longer called by find_script_drift, which
+    # normalizes Gate.script via _as_list instead).
+    assert drift._script_paths({"script": "a.sh"}) == ["a.sh"]
+    assert drift._script_paths({"script": ["a.sh", "b.sh"]}) == ["a.sh", "b.sh"]
+
+
+def test_cluster_values_returns_string_and_list_values_unchanged():
+    # Companion to test_cluster_values_defaults_to_empty_when_absent: covers
+    # this legacy dict-based helper's non-empty branch too (kept for its own
+    # direct test contract; no longer called by find_cluster_drift, which
+    # normalizes Gate.cluster via _as_list instead).
+    assert drift._cluster_values({"cluster": "c1"}) == ["c1"]
+    assert drift._cluster_values({"cluster": ["c1", "c2"]}) == ["c1", "c2"]
+
+
+def test_as_list_normalizes_none_string_and_list():
+    assert drift._as_list(None) == []
+    assert drift._as_list("a.sh") == ["a.sh"]
+    assert drift._as_list(["a.sh", "b.sh"]) == ["a.sh", "b.sh"]
+
+
 def test_repository_ssot_is_schema_valid_and_drift_free():
     """The gate: the real .gitapex/ssot.json must validate against the real
     .gitapex/ssot.schema.json and carry no script/policy-ref/cluster drift."""

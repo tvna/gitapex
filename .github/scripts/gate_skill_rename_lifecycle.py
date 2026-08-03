@@ -60,6 +60,17 @@ LIFECYCLE_BLOCK_RE = re.compile(r"^ {2}lifecycle:[ \t]*$\n((?: {4,}.*\n?)*)", re
 RENAMED_FROM_RE = re.compile(r"^ {4}renamedFrom:[ \t]*(.*)$", re.MULTILINE)
 
 
+def _non_empty_or_none(value: str) -> str | None:
+    """Validates the already-extracted `spec.lifecycle.renamedFrom` leaf
+    string (regex extraction above is unchanged -- this only guards the
+    value actually used downstream): returns it unchanged once
+    quote-stripped and whitespace-trimmed if non-empty, else None. Plain-
+    Python replacement for a former pydantic model
+    (`Annotated[str, StringConstraints(min_length=1)]`); same "value or
+    None" outcome this file used pre-pydantic."""
+    return value if value else None
+
+
 def _strip_quotes(value: str) -> str:
     """Mirrors check_skill_shape.py's own `_unquote`: a double-quoted YAML
     scalar's escaping is a superset-safe match for JSON string escaping,
@@ -90,7 +101,7 @@ def _renamed_from(sidecar_text: str) -> str | None:
     if not match:
         return None
     value = _strip_quotes(match.group(1))
-    return value or None
+    return _non_empty_or_none(value)
 
 
 def parse_names(text: str) -> list[str]:

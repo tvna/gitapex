@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 _HEADING_RE = re.compile(r"^##[ \t]+(.+?)[ \t]*$", re.MULTILINE)
@@ -27,7 +28,7 @@ _SEPARATOR_CELL_RE = re.compile(r"^:?-{3,}:?$")
 # reshape of a table (new column, renamed/added row) updates this
 # constant in the same change, the same convention check_axis_shape.py's
 # _DEFAULT_EXPECTED_LABELS already establishes for the scope map.
-_EXPECTED_TABLES = {
+_EXPECTED_TABLES: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "Nix toolchain (`flake.nix`)": (
         ("Tool", "Class", "Why needed", "Scope of responsibility", "Supply-chain coverage"),
         ("`uv`", "`gh`", "`actionlint`", "`python312`", "`bun`", "`lychee`", "`waza`", "`apm`", "`rtk`", "`betterleaks`"),
@@ -51,7 +52,7 @@ _EXPECTED_TABLES = {
 }
 
 
-def _split_sections(body_text: str):
+def _split_sections(body_text: str) -> Iterator[tuple[str, str]]:
     """Yield (heading_text, section_text) for every '## ' heading, where
     section_text runs to the next '## ' heading or end of file."""
     matches = list(_HEADING_RE.finditer(body_text))
@@ -66,7 +67,7 @@ def _parse_cells(line: str) -> list[str]:
     return [cell.strip() for cell in inner.split("|")]
 
 
-def _first_table(section_text: str):
+def _first_table(section_text: str) -> tuple[list[str], list[list[str]]] | None:
     """Return (header_cells, [row_cells, ...]) for the first Markdown
     table block (header + '---' separator + data rows) in
     section_text, or None if no such table is present."""
@@ -94,7 +95,8 @@ def _first_table(section_text: str):
 
 
 def check_middleware_table_shape(
-    body_text: str, expected: dict = _EXPECTED_TABLES
+    body_text: str,
+    expected: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = _EXPECTED_TABLES,
 ) -> list[str]:
     """Return one evidence string per offense: an expected section
     heading missing entirely, a section with no Markdown table, a
@@ -130,7 +132,7 @@ def check_middleware_table_shape(
     return offenses
 
 
-def main(argv=None):
+def main(argv: list[str] | None = None) -> int:
     """CLI: exit 0 iff every expected section's table in the given file
     has all required columns and rows, else 1."""
     parser = argparse.ArgumentParser(

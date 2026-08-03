@@ -421,6 +421,7 @@ import json
 import os.path
 import re
 import sys
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -2734,7 +2735,7 @@ def _portable_citation_offenders(defenced_text: str) -> tuple[list[str], list[st
     return issues, paths
 
 
-def _dedup(items) -> list[str]:
+def _dedup(items: Iterable[str]) -> list[str]:
     seen: dict[str, None] = {}
     for item in items:
         seen.setdefault(item, None)

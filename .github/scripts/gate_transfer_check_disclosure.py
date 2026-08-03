@@ -122,8 +122,8 @@ def find_missing_transfer_checks(entries):
     never added to the returned list.
     """
     missing = []
-    file_lines_cache = {}
-    consumed_by_path = {}
+    file_lines_cache: dict[str, list[str] | None] = {}
+    consumed_by_path: dict[str, set[int]] = {}
     for path, iteration_line in entries:
         if path not in file_lines_cache:
             try:
@@ -168,7 +168,7 @@ def _truncate(text, limit=100):
     return text if len(text) <= limit else text[: limit - 3] + "..."
 
 
-def main(argv=None):
+def main(argv: list[str] | None = None) -> int:
     """CLI: exit 0 iff every newly-added Kept-edit-log entry handed in
     discloses a Transfer check line, else 1."""
     parser = argparse.ArgumentParser(

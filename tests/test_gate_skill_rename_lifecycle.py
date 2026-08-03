@@ -80,6 +80,18 @@ def test_renamed_from_blank_value_is_none():
     assert gate._renamed_from(text) is None
 
 
+def test_non_empty_or_none_rejects_empty_string():
+    # Plain-Python replacement for the former pydantic RenamedFromValue
+    # model: an empty string must become None -- the same "nothing usefully
+    # recorded" case test_renamed_from_blank_value_is_none exercises
+    # end-to-end above.
+    assert gate._non_empty_or_none("") is None
+
+
+def test_non_empty_or_none_accepts_non_empty_string():
+    assert gate._non_empty_or_none("old-name") == "old-name"
+
+
 def test_renamed_from_strips_double_quotes():
     text = 'spec:\n  lifecycle:\n    renamedFrom: "old-name"\n'
     assert gate._renamed_from(text) == "old-name"

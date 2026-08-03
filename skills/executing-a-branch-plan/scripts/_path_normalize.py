@@ -24,7 +24,7 @@ directly.
 from __future__ import annotations
 
 
-def normalize(path):
+def normalize(path: str) -> str:
     """Fixed-point iteration, not a single fixed pass order: a leading
     "./" immediately followed by another "/" (e.g. ".//skills/x") is
     itself a "//"-shaped redundancy that is only exposed by collapsing

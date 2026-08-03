@@ -263,3 +263,19 @@ def test_main_returns_one_and_explains_the_failure(tmp_path, capsys):
     stderr = capsys.readouterr().err
     assert "unbraced" in stderr
     assert "#650" in stderr
+
+
+# --- GatePluginRootBraceNotationArgs validation (new pydantic-model behavior) ---
+
+
+def test_main_exits_2_on_a_root_that_does_not_exist(tmp_path, capsys):
+    missing = tmp_path / "does-not-exist"
+    assert gate.main(["--root", str(missing)]) == 2
+    assert "must be an existing directory" in capsys.readouterr().err
+
+
+def test_main_exits_2_on_a_root_that_is_a_file(tmp_path, capsys):
+    a_file = tmp_path / "not-a-directory"
+    a_file.write_text("x", encoding="utf-8")
+    assert gate.main(["--root", str(a_file)]) == 2
+    assert "must be an existing directory" in capsys.readouterr().err

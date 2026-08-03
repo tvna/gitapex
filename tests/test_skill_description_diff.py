@@ -251,3 +251,16 @@ def test_main_detects_change_across_rename_with_new_description(git_repo, monkey
         == 0
     )
     assert capsys.readouterr().out.strip() == "changed"
+
+
+# ---------------------------------------------------------------------------
+# _CliArgs pydantic validation (new in this batch's CLI-pydantic-wrap)
+# ---------------------------------------------------------------------------
+
+
+def test_main_rejects_blank_base_path(capsys):
+    exit_code = sdd.main(
+        ["--base-rev", "HEAD", "--head-rev", "HEAD", "--base-path", "", "--head-path", "skills/foo/SKILL.md"]
+    )
+    assert exit_code == 1
+    assert "invalid arguments" in capsys.readouterr().err

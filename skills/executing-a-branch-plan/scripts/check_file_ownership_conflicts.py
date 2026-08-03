@@ -48,11 +48,12 @@ import json
 import sys
 from collections import defaultdict
 from pathlib import Path
+from typing import Any
 
 from _path_normalize import normalize as _normalize
 
 
-def _reject_duplicate_keys(pairs):
+def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     """`object_pairs_hook` for `json.loads`: raise instead of silently
     keeping only the last value for a repeated key. Plain `json.loads`
     (via its default dict construction) drops every earlier occurrence
@@ -67,7 +68,7 @@ def _reject_duplicate_keys(pairs):
     return seen
 
 
-def find_conflicts(task_files):
+def find_conflicts(task_files: dict[str, list[str]]) -> list[tuple[str, list[str]]]:
     """Given {task_id: [file, ...]}, return a sorted list of
     (file, sorted([task_id, ...])) tuples for every file written by more
     than one task."""
@@ -83,7 +84,7 @@ def find_conflicts(task_files):
     return sorted(conflicts)
 
 
-def main(argv=None):
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Report task pairs that would write the same file "
         "(task-decomposition.md's file-ownership edge, mechanized)."

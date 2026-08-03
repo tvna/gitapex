@@ -73,6 +73,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
+from pydantic import BaseModel, ValidationError, field_validator
 
 DEFAULT_DIMENSIONS_FILENAME = "references/dimensions.md"
 
@@ -281,6 +282,54 @@ def format_report(report: CoverageReport) -> str:
     return "\n".join(lines)
 
 
+class _CheckDimensionCoverageArgs(BaseModel):
+    """Validates the parsed CLI namespace's string values immediately after
+    ``parser.parse_args()``. No hand-validation existed here before this
+    model (argparse's own ``required=True`` only guarantees presence, not a
+    non-blank value) -- rejecting a blank ``--skill-dir``/``--tasks-glob``
+    is new, additive validation: previously an empty string would silently
+    reach ``compute_coverage`` as an unusable path/glob rather than being
+    reported as a malformed input. ``--dimensions-file`` keeps its existing
+    "omitted means absent, not an error" semantics when ``None``."""
+
+    skill_dir: str
+    tasks_glob: str
+    dimensions_file: str | None = None
+
+    @field_validator("skill_dir")
+    @classmethod
+    def _skill_dir_must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("--skill-dir must not be blank")
+        return value
+
+    @field_validator("tasks_glob")
+    @classmethod
+    def _tasks_glob_must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("--tasks-glob must not be blank")
+        return value
+
+    @field_validator("dimensions_file")
+    @classmethod
+    def _dimensions_file_must_not_be_blank_if_given(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("--dimensions-file must not be blank")
+        return value
+
+
+def _validation_error_message(exc: ValidationError) -> str:
+    """The first error's original message, unwrapped from pydantic's own
+    "Value error, " prefix -- keeps this script's own plain-text error
+    convention rather than pydantic's own formatted error text."""
+    error = exc.errors()[0]
+    ctx = error.get("ctx") or {}
+    original = ctx.get("error")
+    if isinstance(original, Exception):
+        return str(original)
+    return str(error["msg"])
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Report dimension/axis coverage of an eval corpus (read-only)."
@@ -290,10 +339,20 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dimensions-file", default=None)
     args = parser.parse_args(argv)
 
-    skill_dir = Path(args.skill_dir)
-    dimensions_file = Path(args.dimensions_file) if args.dimensions_file else None
     try:
-        report = compute_coverage(skill_dir, args.tasks_glob, dimensions_file)
+        validated_args = _CheckDimensionCoverageArgs(
+            skill_dir=args.skill_dir,
+            tasks_glob=args.tasks_glob,
+            dimensions_file=args.dimensions_file,
+        )
+    except ValidationError as exc:
+        print(f"error: {_validation_error_message(exc)}", file=sys.stderr)
+        return 2
+
+    skill_dir = Path(validated_args.skill_dir)
+    dimensions_file = Path(validated_args.dimensions_file) if validated_args.dimensions_file else None
+    try:
+        report = compute_coverage(skill_dir, validated_args.tasks_glob, dimensions_file)
     except (OSError, yaml.YAMLError, AttributeError, TypeError) as exc:
         print(f"error: could not compute coverage: {exc}", file=sys.stderr)
         return 2

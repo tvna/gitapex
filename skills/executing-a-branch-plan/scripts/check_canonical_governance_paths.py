@@ -90,7 +90,7 @@ _DEPENDENCY_MANIFEST_FILENAMES = (
 )
 
 
-def _is_skill_governance_path(segments):
+def _is_skill_governance_path(segments: list[str]) -> bool:
     """skills/<name>/SKILL.md or skills/<name>/metadata/gitapex.yaml --
     checked by explicit segment count/shape, not a glob pattern."""
     if len(segments) == 3 and segments[0] == "skills" and segments[2] == "SKILL.md":
@@ -99,12 +99,12 @@ def _is_skill_governance_path(segments):
             and segments[2] == "metadata" and segments[3] == "gitapex.yaml")
 
 
-def _is_skill_scripts_path(segments):
+def _is_skill_scripts_path(segments: list[str]) -> bool:
     """skills/<name>/scripts/... -- checked by explicit segment shape."""
     return len(segments) >= 4 and segments[0] == "skills" and segments[2] == "scripts"
 
 
-def classify(path):
+def classify(path: str) -> str:
     """Return one of 'workflow', 'governance', 'hook-script',
     'dependency-manifest', or 'no-match' for a single (already-relative)
     file path."""
@@ -122,7 +122,7 @@ def classify(path):
     return "no-match"
 
 
-def main(argv=None):
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Classify changed file paths as a literal/canonical "
         "workflow, governance, hook-script, or dependency-manifest match, "

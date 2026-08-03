@@ -346,3 +346,22 @@ def test_main_uses_default_threshold_when_unspecified(monkeypatch, capsys):
     exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex"])
     assert exit_code == 0
     assert f"threshold: {gate.DEFAULT_THRESHOLD}" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
+# _CliArgs pydantic validation (new in this batch's CLI-pydantic-wrap)
+# ---------------------------------------------------------------------------
+
+
+def test_main_rejects_blank_owner(monkeypatch, capsys):
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    exit_code = gate.main(["--owner", "", "--repo", "gitapex"])
+    assert exit_code == 1
+    assert "invalid arguments" in capsys.readouterr().err
+
+
+def test_main_rejects_blank_repo(monkeypatch, capsys):
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    exit_code = gate.main(["--owner", "tvna", "--repo", ""])
+    assert exit_code == 1
+    assert "invalid arguments" in capsys.readouterr().err

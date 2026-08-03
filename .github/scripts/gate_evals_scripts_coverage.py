@@ -105,6 +105,9 @@ import json
 import sys
 import tomllib
 from pathlib import Path
+from typing import Annotated
+
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 DEFAULT_MIN_PERCENT = 90.0
 DEFAULT_COVERAGE_JSON = "coverage.json"
@@ -152,7 +155,7 @@ def source_include_globs(sources: list[str]) -> list[str]:
     return [f"{source.rstrip('/')}/*.py" for source in sources]
 
 
-def _files_section(coverage_data: object) -> dict:
+def _files_section(coverage_data: object) -> dict[str, object]:
     """Return ``coverage_data``'s ``files`` object, raising ``ValueError`` on
     a report shape this script cannot interpret. Shared by ``select_files``
     and ``select_files_in_source`` so the same malformed-report diagnostics
@@ -241,6 +244,21 @@ def select_files_in_source(coverage_data: object, source: str) -> dict[str, floa
     return selected
 
 
+class EvalsScriptsCoverageArgs(BaseModel):
+    """Typed view of `main`'s parsed CLI namespace. `min_percent` is
+    constrained to a real percentage (0-100) -- every existing caller
+    already passes a value in that range, so this only rejects a
+    previously-unvalidated, nonsensical input a future caller could
+    otherwise pass through silently."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    coverage_json: str
+    include_glob: list[str] | None
+    pyproject: str
+    min_percent: Annotated[float, Field(ge=0.0, le=100.0)]
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Check that every file under pyproject.toml's [tool.coverage.run] "
@@ -265,6 +283,17 @@ def main(argv: list[str] | None = None) -> int:
         help=f"Minimum percent_covered required per file (default: {DEFAULT_MIN_PERCENT}).")
     args = parser.parse_args(argv)
 
+    try:
+        validated = EvalsScriptsCoverageArgs(
+            coverage_json=args.coverage_json,
+            include_glob=args.include_glob,
+            pyproject=args.pyproject,
+            min_percent=args.min_percent,
+        )
+    except ValidationError:
+        print(f"error: --min-percent must be between 0 and 100, got {args.min_percent!r}", file=sys.stderr)
+        return 2
+
     # Explicit --include-glob values are matched with the general,
     # fnmatch-based select_files (a user-supplied glob may deliberately
     # span a directory segment). The pyproject.toml-derived default scope
@@ -272,13 +301,13 @@ def main(argv: list[str] | None = None) -> int:
     # which cannot let one source's match swallow a nested source's files
     # (see that function's docstring) -- so the two paths use different
     # selectors, not just different glob strings.
-    if args.include_glob:
-        targets = args.include_glob
+    if validated.include_glob:
+        targets = validated.include_glob
         display_globs = targets
         use_source_selector = False
     else:
         try:
-            targets = read_coverage_sources(args.pyproject)
+            targets = read_coverage_sources(validated.pyproject)
         except ValueError as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 2
@@ -286,13 +315,13 @@ def main(argv: list[str] | None = None) -> int:
         use_source_selector = True
 
     try:
-        with Path(args.coverage_json).open(encoding="utf-8") as handle:
+        with Path(validated.coverage_json).open(encoding="utf-8") as handle:
             data = json.load(handle)
     except OSError as exc:
-        print(f"error: could not read coverage report {args.coverage_json!r}: {exc}", file=sys.stderr)
+        print(f"error: could not read coverage report {validated.coverage_json!r}: {exc}", file=sys.stderr)
         return 2
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-        print(f"error: {args.coverage_json!r} is not valid JSON: {exc}", file=sys.stderr)
+        print(f"error: {validated.coverage_json!r} is not valid JSON: {exc}", file=sys.stderr)
         return 2
 
     covered: dict[str, float] = {}
@@ -313,7 +342,7 @@ def main(argv: list[str] | None = None) -> int:
         if not matched:
             print(
                 f"error: no files matching {display_glob!r} found in "
-                f"{args.coverage_json!r} -- the coverage report may have been "
+                f"{validated.coverage_json!r} -- the coverage report may have been "
                 "generated with the wrong --cov scope, which would silently "
                 "turn this gate into a no-op for that target",
                 file=sys.stderr,
@@ -321,11 +350,11 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         covered.update(matched)
 
-    min_str = f"{args.min_percent:.1f}%"
+    min_str = f"{validated.min_percent:.1f}%"
     offenders: list[tuple[str, float]] = []
     for path in sorted(covered):
         pct = covered[path]
-        if pct >= args.min_percent:
+        if pct >= validated.min_percent:
             print(f"PASS: {path} -- {pct:.1f}% (minimum {min_str})")
         else:
             print(f"FAIL: {path} -- {pct:.1f}% (minimum {min_str})")

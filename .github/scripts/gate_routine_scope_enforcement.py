@@ -100,6 +100,16 @@ _READONLY_CREDENTIAL_RE = re.compile(
 )
 
 
+def _non_empty_or_none(value: str) -> str | None:
+    """Validates the already-extracted `spec.capabilityAssumption` leaf
+    string (regex extraction above is unchanged -- this only guards the
+    value actually used downstream): returns it unchanged if non-empty,
+    else None. Plain-Python replacement for a former pydantic model
+    (`Annotated[str, StringConstraints(min_length=1)]`); same "no match ->
+    None" outcome this file used pre-pydantic for an absent value."""
+    return value if value else None
+
+
 def _paragraphs(text: str) -> list[str]:
     normalized = text.replace("\r\n", "\n").replace("\r", "\n")
     return [p for p in re.split(r"\n\s*\n", normalized) if p.strip()]
@@ -136,7 +146,9 @@ def capability_assumption(sidecar_text: str) -> str | None:
     """Return the sidecar's `spec.capabilityAssumption` value, or None if
     absent."""
     match = _CAPABILITY_RE.search(sidecar_text)
-    return match.group(1) if match else None
+    if not match:
+        return None
+    return _non_empty_or_none(match.group(1))
 
 
 def _permissions_block_is_read_only(text: str) -> bool:

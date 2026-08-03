@@ -92,6 +92,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
+from pydantic import BaseModel, ValidationError, field_validator
 
 # score_contract.py lives in a sibling skill's scripts/ directory, not this
 # one. pyproject.toml's `pythonpath` entry resolves the bare `import
@@ -311,6 +312,53 @@ def run_ablation(
     )
 
 
+class _RunAblationArgs(BaseModel):
+    """Validates the two ``main()`` CLI values that were previously checked
+    by hand immediately after ``parser.parse_args()`` (``--skill-md`` must
+    name an existing file; ``--timeout`` must be a positive number of
+    seconds), replacing those two hand-rolled checks with field validators
+    that raise the exact same message text. ``--task`` and ``--model-cli``
+    are deliberately not modeled here: ``--task`` keeps its own existing
+    validation in ``load_task_fixture`` (which already raises ``ValueError``
+    with its own distinct message for a missing/malformed file), and
+    ``--model-cli`` keeps its own existing validation in ``build_command``
+    (exercised by every caller of that function, not only this CLI entry
+    point) -- duplicating either here would diverge from those functions'
+    own error text or leave two competing validators for the same value.
+    """
+
+    skill_md: Path
+    timeout: int
+
+    @field_validator("skill_md")
+    @classmethod
+    def _skill_md_must_exist(cls, value: Path) -> Path:
+        if not value.is_file():
+            raise ValueError(f"skill file not found: {value}")
+        return value
+
+    @field_validator("timeout")
+    @classmethod
+    def _timeout_must_be_positive(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError(
+                f"--timeout must be a positive number of seconds, got {value}"
+            )
+        return value
+
+
+def _validation_error_message(exc: ValidationError) -> str:
+    """The first error's original message, unwrapped from pydantic's own
+    "Value error, " prefix -- reproduces the exact text a replaced
+    hand-validation printed, not pydantic's own formatted error text."""
+    error = exc.errors()[0]
+    ctx = error.get("ctx") or {}
+    original = ctx.get("error")
+    if isinstance(original, Exception):
+        return str(original)
+    return str(error["msg"])
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Run a task fixture's prompt with and without a skill "
@@ -324,15 +372,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT_SECONDS)
     args = parser.parse_args(argv)
 
-    if not args.skill_md.is_file():
-        print(f"error: skill file not found: {args.skill_md}", file=sys.stderr)
-        return 2
-
-    if args.timeout <= 0:
-        print(
-            f"error: --timeout must be a positive number of seconds, got {args.timeout}",
-            file=sys.stderr,
-        )
+    try:
+        validated_args = _RunAblationArgs(skill_md=args.skill_md, timeout=args.timeout)
+    except ValidationError as exc:
+        print(f"error: {_validation_error_message(exc)}", file=sys.stderr)
         return 2
 
     try:
@@ -344,10 +387,10 @@ def main(argv: list[str] | None = None) -> int:
     try:
         result = run_ablation(
             fixture,
-            args.skill_md,
+            validated_args.skill_md,
             executor=subprocess_executor,
             model_cli=args.model_cli,
-            timeout=args.timeout,
+            timeout=validated_args.timeout,
         )
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)

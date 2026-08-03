@@ -156,8 +156,23 @@ not maturity. This broadened scope does not itself fix any pre-existing
 fixture defects it surfaces in skills other than `evaluating-skill-
 quality` -- that is separate follow-on triage (see issue #516's own
 stated non-goal). Standard library only except PyYAML (already a dev
-dependency, used by the repo's other fixture tooling); the fixtures are
-YAML, so a real parser is warranted rather than a hand-rolled subset.
+dependency, used by the repo's other fixture tooling) and pydantic (used
+to validate each fixture's own shape); the fixtures are YAML, so a real
+parser is warranted rather than a hand-rolled subset.
+
+Each fixture file is parsed once against `TaskFixture` (issue #684), a
+pydantic model of the actual YAML shape found across every
+`evals/*/tasks/*.yaml` file in this repository -- replacing the repeated
+`.get(...)` + `isinstance(...)` narrowing this file used to do at each of
+its own `expected`/`inputs`/`tags`-reading sites with one validated parse
+per file. Fields this linter does not itself read (`expected.exercises`,
+`expected.classification`, etc. -- consumed by sibling scripts sharing the
+same fixture files) are preserved, not rejected, via `extra="allow"` on
+`ExpectedBlock`. `expected.requires_fresh_dispatch` is deliberately typed
+as an open `object`, not a nested model: whether a given value is a
+*well-formed* declaration is `_is_real_dispatch_declaration`'s own,
+separately tested judgment (issue #584), not a shape this model should
+reject outright.
 
 Usage:
   python3 lint_fixture_assertions.py [--tasks-glob GLOB]
@@ -175,8 +190,10 @@ import re
 import sys
 from dataclasses import dataclass, replace
 from pathlib import Path
+from typing import Any
 
 import yaml
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 # The reviewing skill's own stable text, relative to the repo root. These are
 # the anchor corpus: the wording a fixture that means to quote the rubric
@@ -310,6 +327,105 @@ BOLD_RE = re.compile(r"\*\*(.+?)\*\*", re.DOTALL)
 QUOTED_RE = re.compile(r'"([^"\n]{4,80})"')
 
 
+class NearAssertion(BaseModel):
+    """One ``output_contains_near`` / ``output_not_contains_near`` entry:
+    every substring in ``all`` must (or must not, depending which key it
+    sits under) co-occur within ``window`` characters of every other, per
+    ``score_contract.py``'s own ``_near_satisfied`` semantics (see that
+    module's docstring). ``window`` defaults to 400, matching
+    ``score_contract.py``'s own ``_DEFAULT_NEAR_WINDOW``. This linter never
+    re-implements that scoring itself -- only
+    ``check_unsatisfiable_assertion_pair`` reads ``all``, for its own,
+    unrelated contradiction check -- the model exists to capture the
+    fixture's real shape, confirmed against every ``output_contains_near``
+    entry in this repository's own corpus, which always supplies both keys.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    all: list[str]
+    window: int = 400
+
+
+class ExpectedBlock(BaseModel):
+    """The ``expected:`` block of one task fixture. Only the fields this
+    linter itself reads are named here; everything else
+    (``expected.classification``, ``expected.repair_count``,
+    ``expected.retro_stub_expected``, ``output_not_contains_near``, ...)
+    belongs to a sibling script sharing the same fixture files
+    (``merge-retrospective``'s own scoring, ``run_ablation.py``) and is
+    preserved, not rejected, via ``extra="allow"``.
+
+    ``requires_fresh_dispatch`` is deliberately typed ``object | None``,
+    not a nested model: whether a given value is a *well-formed*
+    declaration is ``_is_real_dispatch_declaration``'s own, separately
+    tested judgment (issue #584) -- a bare ``true`` or a
+    ``min_dispatches: 0`` is a heuristic finding for that function to
+    surface, not a shape this model should reject outright.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    output_contains: list[str] | None = None
+    output_not_contains: list[str] | None = None
+    output_icontains: list[str] | None = None
+    output_not_icontains: list[str] | None = None
+    output_contains_near: list[NearAssertion] | None = None
+    exercises: list[str] | None = None
+    requires_fresh_dispatch: object | None = None
+
+
+class InputsBlock(BaseModel):
+    """The ``inputs:`` block. ``prompt`` is the only key any fixture in
+    this repository's own ``evals/*/tasks/*.yaml`` corpus uses."""
+
+    prompt: str
+
+
+class TaskFixture(BaseModel):
+    """One ``evals/<skill>/tasks/*.yaml`` fixture file's validated shape
+    (issue #684). ``id``/``name``/``inputs``/``expected`` are required --
+    every fixture in this repository's own corpus provides them;
+    ``description``/``tags`` are optional. ``tags`` accepts a bare string
+    as well as a list (``tags: adversarial``, forgetting the ``- item``
+    list form, is one tag, not an error -- see ``_as_tag_list``).
+
+    Extra top-level keys are rejected (``extra="forbid"``): unlike
+    ``expected:``'s own sub-keys, no fixture in this repository's corpus
+    ever uses one, so an unexpected top-level key is far more likely a
+    typo (e.g. ``expcted:``) than a legitimate field this model has not
+    yet learned about.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    name: str
+    description: str | None = None
+    tags: str | list[str] | None = None
+    inputs: InputsBlock
+    expected: ExpectedBlock
+
+
+def _load_fixture_dict(path: Path) -> dict[str, Any]:
+    """Parse and validate one fixture file into a plain dict via
+    ``TaskFixture`` -- "one validated parse per fixture file" (issue #684)
+    in place of this function's own former ``yaml.safe_load(...) or {}``,
+    duplicated across every caller that reads fixtures independently of
+    ``lint_skill_tasks``. A fixture whose shape ``TaskFixture`` rejects
+    (exactly the kind of authoring mistake this linter exists to catch)
+    falls back to the bare parsed YAML, unchanged from this function's
+    pre-pydantic behavior, so a malformed fixture still surfaces as a
+    heuristic finding (e.g. "no well-formed requires_fresh_dispatch
+    declared") to its caller instead of crashing the lint pass outright.
+    """
+    raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    try:
+        return TaskFixture.model_validate(raw).model_dump()
+    except ValidationError:
+        return raw
+
+
 @dataclass(frozen=True)
 class Warning_:
     task: str
@@ -363,12 +479,17 @@ def _content_tokens(text: str) -> list[str]:
 def _as_tag_list(value: object) -> list[str]:
     """Coerce a YAML ``tags``-shaped value into a list of strings. A bare
     scalar (``tags: adversarial``, forgetting the ``- item`` list form) is
-    one tag, not a sequence of one-character tags."""
+    one tag, not a sequence of one-character tags. Only ``None``/``str``/
+    ``list`` are real, documented ``tags`` shapes (``TaskFixture`` itself
+    only accepts these three) -- anything else is coerced the same way a
+    bare scalar is, one whole value as one tag, rather than iterated."""
     if value is None:
         return []
     if isinstance(value, str):
         return [value]
-    return [str(v) for v in value]
+    if isinstance(value, list):
+        return [str(v) for v in value]
+    return [str(value)]
 
 
 def check_case(value: str, anchors: list[str]) -> str | None:
@@ -436,7 +557,7 @@ def check_short_word_collision(value: str) -> str | None:
     return hits[0] if hits else None
 
 
-def check_unsatisfiable_assertion_pair(expected: dict) -> list[tuple[str, str, str, str]]:
+def check_unsatisfiable_assertion_pair(expected: dict[str, Any]) -> list[tuple[str, str, str, str]]:
     """Detect assertion pairs across ``output_contains``/``output_icontains``/
     ``output_not_icontains``/``output_contains_near`` that can never jointly
     score 1.0, or that redundantly assert the same casefolded substring
@@ -495,7 +616,7 @@ def check_unsatisfiable_assertion_pair(expected: dict) -> list[tuple[str, str, s
                 f"satisfying the requirement guarantees the ban fails, so "
                 f"this fixture can never score 1.0"))
 
-    def _redundant_pairs(strong: list[str], weak: list[str], strong_key: str, weak_key: str):
+    def _redundant_pairs(strong: list[str], weak: list[str], strong_key: str, weak_key: str) -> None:
         strong_by_fold: dict[str, str] = {}
         for value in strong:
             strong_by_fold.setdefault(value.casefold(), value)
@@ -525,7 +646,7 @@ def classify_ban_direction(value: str) -> str:
     return "negative" if NEGATION_CUE_RE.search(value) else "positive"
 
 
-def check_symmetric_bans(data: dict) -> str | None:
+def check_symmetric_bans(data: dict[str, Any]) -> str | None:
     """Warn when a "claim cannot be determined" fixture (#352) bans an
     unsupported claim in only one direction. Gated on
     ``INDETERMINATE_MARKER_RE`` so this never fires for an ordinary fixture
@@ -594,7 +715,7 @@ def check_cross_task_collision(task_name: str, value: str,
 
 
 def check_adversarial_coverage(skill_name: str, tasks_dir: Path, claim_text: str, *,
-                                task_data: dict[Path, dict] | None = None) -> str | None:
+                                task_data: dict[Path, dict[str, Any]] | None = None) -> str | None:
     """Blocking, discovery-mode only (#473): a skill whose own docs claim
     adversarial coverage but whose tasks/ directory has no fixture tagged
     ``adversarial``.
@@ -606,8 +727,7 @@ def check_adversarial_coverage(skill_name: str, tasks_dir: Path, claim_text: str
     if not re.search(r"\badversarial\b", claim_text, re.IGNORECASE):
         return None
     if task_data is None:
-        task_data = {p: (yaml.safe_load(p.read_text(encoding="utf-8")) or {})
-                     for p in tasks_dir.glob("*.yaml")}
+        task_data = {p: _load_fixture_dict(p) for p in tasks_dir.glob("*.yaml")}
     for data in task_data.values():
         tags = {t.strip().lower() for t in _as_tag_list(data.get("tags"))}
         if "adversarial" in tags:
@@ -617,7 +737,7 @@ def check_adversarial_coverage(skill_name: str, tasks_dir: Path, claim_text: str
 
 
 def check_dispatch_declaration_coverage(skill_name: str, tasks_dir: Path, *,
-                                         task_data: dict[Path, dict] | None = None) -> str | None:
+                                         task_data: dict[Path, dict[str, Any]] | None = None) -> str | None:
     """Blocking, discovery-mode only (#584): a skill in
     ``DISPATCH_MANDATE_SKILLS`` whose ``tasks/`` directory has zero fixtures
     declaring a well-formed ``expected.requires_fresh_dispatch`` value (see
@@ -635,8 +755,7 @@ def check_dispatch_declaration_coverage(skill_name: str, tasks_dir: Path, *,
     if skill_name not in DISPATCH_MANDATE_SKILLS:
         return None
     if task_data is None:
-        task_data = {p: (yaml.safe_load(p.read_text(encoding="utf-8")) or {})
-                     for p in tasks_dir.glob("*.yaml")}
+        task_data = {p: _load_fixture_dict(p) for p in tasks_dir.glob("*.yaml")}
     for data in task_data.values():
         expected = data.get("expected")
         if isinstance(expected, dict) and _is_real_dispatch_declaration(
@@ -647,22 +766,23 @@ def check_dispatch_declaration_coverage(skill_name: str, tasks_dir: Path, *,
             f"well-formed expected.requires_fresh_dispatch (issue #584)")
 
 
-def lint_task(task_path: Path, data: dict, anchors: list[str], corpus_flat: str,
+def lint_task(task_path: Path, fixture: TaskFixture, anchors: list[str], corpus_flat: str,
               corpus_tokens: list[str], positive_index: dict[str, set[str]], *,
               check_prompt_echo_enabled: bool,
               check_cross_task_enabled: bool) -> list[Warning_]:
-    expected = data.get("expected") or {}
-    prompt = (data.get("inputs") or {}).get("prompt") or ""
-    prompt_flat = WS_RE.sub(" ", prompt.lower())
+    # ``fixture`` is already validated by ``TaskFixture`` (one parse per
+    # fixture file, done by the caller) -- every list below is guaranteed
+    # ``list[str]`` by the model, so the per-item ``isinstance`` filtering
+    # this function used to do at each of these sites is no longer needed.
+    expected = fixture.expected
+    prompt_flat = WS_RE.sub(" ", fixture.inputs.prompt.lower())
     # #487: broaden the negation-trap detector beyond corpus-sourced denial
     # phrases to also catch an ad hoc ban this fixture's own prompt denies.
     negation_haystack = corpus_flat + " " + prompt_flat
     name = task_path.name
     warnings: list[Warning_] = []
 
-    for value in expected.get("output_contains") or []:
-        if not isinstance(value, str):
-            continue
+    for value in expected.output_contains or []:
         anchor = check_case(value, anchors)
         if anchor:
             warnings.append(Warning_(
@@ -691,9 +811,7 @@ def lint_task(task_path: Path, data: dict, anchors: list[str], corpus_flat: str,
     # (case-sensitivity) is deliberately NOT run here -- see the module
     # docstring's check 5b for why a casing difference is expected, not a
     # defect, for a key whose whole point is to ignore case.
-    for value in expected.get("output_icontains") or []:
-        if not isinstance(value, str):
-            continue
+    for value in expected.output_icontains or []:
         drift = check_paraphrase(value, corpus_flat, corpus_tokens)
         if drift:
             warnings.append(Warning_(
@@ -706,9 +824,7 @@ def lint_task(task_path: Path, data: dict, anchors: list[str], corpus_flat: str,
                 f"short and alphabetic; also a bare substring of the common "
                 f"word {collision!r}"))
 
-    for value in expected.get("output_not_contains") or []:
-        if not isinstance(value, str):
-            continue
+    for value in expected.output_not_contains or []:
         neg = check_negation(value, negation_haystack)
         if neg:
             warnings.append(Warning_(
@@ -724,22 +840,19 @@ def lint_task(task_path: Path, data: dict, anchors: list[str], corpus_flat: str,
 
     # output_not_icontains (#628): check 2 (negation trap) applies the same
     # way regardless of case-sensitivity.
-    for value in expected.get("output_not_icontains") or []:
-        if not isinstance(value, str):
-            continue
+    for value in expected.output_not_icontains or []:
         neg = check_negation(value, negation_haystack)
         if neg:
             warnings.append(Warning_(
                 name, "output_not_icontains", value, "negation-trap",
                 f"banning it also rejects a correct denial -- {neg}"))
 
-    symmetric = check_symmetric_bans(data)
+    symmetric = check_symmetric_bans(fixture.model_dump())
     if symmetric:
         warnings.append(Warning_(
-            name, "output_not_contains", str(data.get("id", name)),
-            "symmetric-ban", symmetric))
+            name, "output_not_contains", fixture.id, "symmetric-ban", symmetric))
 
-    for key, value, rule, detail in check_unsatisfiable_assertion_pair(expected):
+    for key, value, rule, detail in check_unsatisfiable_assertion_pair(expected.model_dump()):
         warnings.append(Warning_(name, key, value, rule, detail))
 
     return warnings
@@ -748,32 +861,57 @@ def lint_task(task_path: Path, data: dict, anchors: list[str], corpus_flat: str,
 def lint_skill_tasks(task_paths: list[Path], corpus: str, *,
                      check_prompt_echo_enabled: bool = False,
                      check_cross_task_enabled: bool = False,
-                     ) -> tuple[list[Warning_], dict[Path, dict]]:
+                     ) -> tuple[list[Warning_], dict[Path, dict[str, Any]]]:
     """Lint one skill's task set against its own, already-loaded anchor
     corpus (a caller reads it once via ``load_corpus`` and passes the text
     here, rather than this function re-reading the same files).
 
-    Returns ``(warnings, task_data)``: ``task_data`` is each task path's
-    parsed YAML, so a caller linting many skills (``lint_all_skills``) can
-    reuse it for the adversarial-coverage check instead of re-parsing.
+    Each fixture file is parsed and validated against ``TaskFixture``
+    (issue #684). A malformed fixture (a missing required field, a
+    wrong-typed value, an unrecognized top-level key) is reported as its
+    own blocking ``Warning_`` naming the offending file, and excluded from
+    the rest of this skill's linting -- it does NOT abort linting for any
+    other fixture, in this skill or any other (found by a Decision-12
+    adversarial review: an earlier version let ``pydantic.ValidationError``
+    propagate unguarded out of this function, so one malformed fixture
+    anywhere crashed the entire multi-skill run with an unlocalized error,
+    silently skipping the adversarial-coverage/dispatch-declaration-
+    coverage checks for every other skill too -- exactly the per-fixture
+    isolation ``_load_fixture_dict``'s own docstring already promises for
+    its own, separate call sites).
+
+    Returns ``(warnings, task_data)``: ``task_data`` is each successfully
+    validated task path's fixture, re-serialized via ``model_dump()``, so
+    a caller linting many skills (``lint_all_skills``) can reuse it for
+    the adversarial/dispatch-declaration-coverage checks instead of
+    re-parsing. A path excluded above is absent from ``task_data`` too.
     """
     anchors = extract_anchors(corpus)
     corpus_flat = WS_RE.sub(" ", corpus.lower())
     corpus_tokens = _content_tokens(corpus)
 
-    task_data = {p: (yaml.safe_load(p.read_text(encoding="utf-8")) or {}) for p in task_paths}
+    warnings: list[Warning_] = []
+    fixtures: dict[Path, TaskFixture] = {}
+    for p in task_paths:
+        raw = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+        try:
+            fixtures[p] = TaskFixture.model_validate(raw)
+        except ValidationError as exc:
+            warnings.append(Warning_(
+                p.name, "(fixture)", "(top-level shape)", "fixture-shape",
+                f"{p}: malformed fixture, excluded from linting: {exc}"))
+
     positive_index = {
-        p.name: {v.lower() for v in ((d.get("expected") or {}).get("output_contains") or [])
-                 if isinstance(v, str)}
-        for p, d in task_data.items()
+        p.name: {v.lower() for v in (fixture.expected.output_contains or [])}
+        for p, fixture in fixtures.items()
     }
 
-    warnings: list[Warning_] = []
-    for path, data in task_data.items():
+    for path, fixture in fixtures.items():
         warnings.extend(lint_task(
-            path, data, anchors, corpus_flat, corpus_tokens, positive_index,
+            path, fixture, anchors, corpus_flat, corpus_tokens, positive_index,
             check_prompt_echo_enabled=check_prompt_echo_enabled,
             check_cross_task_enabled=check_cross_task_enabled))
+    task_data = {p: fixture.model_dump() for p, fixture in fixtures.items()}
     return warnings, task_data
 
 
@@ -781,7 +919,7 @@ def discover_skills(evals_root: Path, skills_root: Path) -> list[str]:
     """Every skill name with both a non-empty ``evals/<name>/tasks/*.yaml``
     directory and a ``skills/<name>/SKILL.md`` (#296). Sorted for a stable,
     reviewable report order."""
-    names = []
+    names: list[str] = []
     if not evals_root.is_dir():
         return names
     for tasks_dir in sorted(evals_root.glob("*/tasks")):
@@ -937,7 +1075,7 @@ def main(argv: list[str] | None = None) -> int:
                 task_paths, corpus,
                 check_prompt_echo_enabled=args.check_prompt_echo,
                 check_cross_task_enabled=args.check_cross_task)
-    except (OSError, yaml.YAMLError) as exc:
+    except (OSError, yaml.YAMLError, ValidationError) as exc:
         print(f"error: could not lint fixtures: {exc}", file=sys.stderr)
         return 2
 

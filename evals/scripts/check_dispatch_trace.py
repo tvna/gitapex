@@ -68,7 +68,11 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from collections.abc import Iterable, Iterator
 from pathlib import Path
+from typing import Any, Literal
+
+from pydantic import BaseModel, ValidationError, field_validator
 
 # Directories inside $HOME/.claude that carry live session/task state rather
 # than durable configuration -- stripped from an isolated $HOME copy per the
@@ -78,7 +82,69 @@ from pathlib import Path
 _HOME_COPY_STRIP_DIRS = ("tasks", "projects", "sessions", "shell-snapshots")
 
 
-def iter_tool_use_blocks(transcript_path: Path):
+class ToolUseBlock(BaseModel):
+    """One ``tool_use`` content block inside a transcript line's
+    ``message.content`` array. Only the discriminating ``type`` field is
+    declared -- ``name``/``id``/``input`` and any other block-specific keys
+    are left unvalidated (pydantic's default ``extra="ignore"`` accepts and
+    drops them from *this model*, but ``iter_tool_use_blocks`` below never
+    reads them back off the model; it yields the original raw ``dict``
+    unchanged). This matches the pre-pydantic code's own tolerance: a
+    ``tool_use`` block missing ``name``/``input``, or carrying extra keys,
+    was still yielded as-is, never rejected -- only the ``type`` tag was
+    ever actually inspected (``block.get("type") == "tool_use"``)."""
+
+    type: Literal["tool_use"]
+
+
+class MessageEnvelope(BaseModel):
+    """The ``message`` field of one transcript line, once known to be a
+    mapping. ``content`` is left as ``list[Any]`` (its items -- individual
+    content blocks -- are narrowed one at a time against ``ToolUseBlock``
+    below, not by a single discriminated-union field here): a content list
+    routinely mixes ``tool_use`` blocks with ``text``/``thinking``/other
+    block shapes this module does not otherwise model, and the pre-pydantic
+    code tolerated any of those (and any non-dict list entry) by silently
+    not yielding it -- never raising for the line as a whole. A
+    field-level discriminated union would instead fail the entire
+    ``content`` list on one unrecognized or malformed entry, which would be
+    a real behavior change from that per-entry tolerance.
+
+    ``content`` defaults to ``None`` and is coerced to ``None`` by the
+    validator below whenever the raw JSON value is present but not a list,
+    mirroring the pre-pydantic ``isinstance(content, list)`` check, which
+    silently skipped the line rather than raising."""
+
+    content: list[Any] | None = None
+
+    @field_validator("content", mode="before")
+    @classmethod
+    def _tolerate_non_list_content(cls, value: Any) -> Any:
+        return value if isinstance(value, list) else None
+
+
+class StreamEvent(BaseModel):
+    """One line of a ``claude -p --output-format stream-json`` transcript,
+    already confirmed to be valid JSON and a JSON object by
+    ``iter_tool_use_blocks`` before this model is constructed (preserving
+    that two-stage error behavior -- and its exact error messages --
+    exactly). ``message`` defaults to ``None`` and is coerced to ``None`` by
+    the validator below whenever the raw JSON value is present but not a
+    mapping, mirroring the pre-pydantic ``isinstance(message, dict)`` check,
+    which silently skipped the line rather than raising. Most lines
+    (``system``, ``result``, ``rate_limit_event``, ``active_goal``, and
+    plain-text ``user``/``assistant`` turns) carry no ``message.content`` at
+    all and fall into this same tolerant path."""
+
+    message: MessageEnvelope | None = None
+
+    @field_validator("message", mode="before")
+    @classmethod
+    def _tolerate_non_dict_message(cls, value: Any) -> Any:
+        return value if isinstance(value, dict) else None
+
+
+def iter_tool_use_blocks(transcript_path: Path) -> Iterator[dict[str, Any]]:
     """Yield every ``tool_use`` content block from a
     ``claude -p --output-format stream-json`` transcript file, in file order.
 
@@ -89,6 +155,15 @@ def iter_tool_use_blocks(transcript_path: Path):
     JSON, or on a JSON value that is not a mapping -- a malformed transcript
     should fail loudly (exit 2 at the CLI layer), not be silently read as
     "zero dispatches found."
+
+    Structural narrowing (is this line a mapping; is its ``message`` a
+    mapping; is ``message.content`` a list; is a given content entry a
+    ``tool_use`` block) is delegated to ``StreamEvent``/``MessageEnvelope``/
+    ``ToolUseBlock`` above rather than hand-rolled here. Each yielded block
+    is still the original raw ``dict`` parsed straight off the line -- never
+    a pydantic model or a re-serialized copy -- so a caller indexing or
+    ``.get()``-ing arbitrary fields off it (e.g. ``count_dispatches`` below)
+    sees exactly the same object it always did.
     """
     with transcript_path.open(encoding="utf-8") as handle:
         for lineno, raw in enumerate(handle, start=1):
@@ -99,23 +174,32 @@ def iter_tool_use_blocks(transcript_path: Path):
                 obj = json.loads(raw)
             except json.JSONDecodeError as exc:
                 raise ValueError(f"line {lineno}: not valid JSON: {exc}") from exc
-            if not isinstance(obj, dict):
-                raise ValueError(f"line {lineno}: expected a JSON object, got {type(obj).__name__}")
-            message = obj.get("message")
-            if not isinstance(message, dict):
+            try:
+                event = StreamEvent.model_validate(obj)
+            except ValidationError as exc:
+                # The only way StreamEvent.model_validate can fail is a
+                # non-mapping top-level value -- every declared field is
+                # optional and every "wrong shape" case below the top level
+                # is coerced to None by the tolerant validators above, never
+                # rejected. type(obj).__name__ (not a type derived from the
+                # pydantic error) reproduces the pre-pydantic message exactly.
+                raise ValueError(
+                    f"line {lineno}: expected a JSON object, got {type(obj).__name__}"
+                ) from exc
+            if event.message is None or event.message.content is None:
                 continue
-            content = message.get("content")
-            if not isinstance(content, list):
-                continue
-            for block in content:
-                if isinstance(block, dict) and block.get("type") == "tool_use":
-                    yield block
+            for block in event.message.content:
+                try:
+                    ToolUseBlock.model_validate(block)
+                except ValidationError:
+                    continue
+                yield block
 
 
 def count_dispatches(
-    tool_use_blocks,
-    dispatch_tool_names,
-    dispatch_bash_pattern: re.Pattern | None = None,
+    tool_use_blocks: Iterable[dict[str, Any]],
+    dispatch_tool_names: Iterable[str],
+    dispatch_bash_pattern: re.Pattern[str] | None = None,
     bash_tool_name: str = "Bash",
 ) -> int:
     """Count dispatch-shaped ``tool_use`` blocks.
@@ -149,8 +233,8 @@ def count_dispatches(
 
 def check_transcript(
     transcript_path: Path,
-    dispatch_tool_names,
-    dispatch_bash_pattern: re.Pattern | None = None,
+    dispatch_tool_names: Iterable[str],
+    dispatch_bash_pattern: re.Pattern[str] | None = None,
     bash_tool_name: str = "Bash",
 ) -> int:
     """Return the dispatch count for ``transcript_path``. Propagates
@@ -190,7 +274,7 @@ def build_isolated_home(base_dir: Path) -> Path:
     isolated_home = base_dir / "isolated-home"
     isolated_home.mkdir(parents=True, exist_ok=True)
 
-    def _ignore_top_level_strip_dirs(directory, names):
+    def _ignore_top_level_strip_dirs(directory: str, names: list[str]) -> list[str]:
         # Only strip these names as direct children of real_claude_dir
         # itself -- an ignore_patterns-style recursive match could also
         # exclude an unrelated same-named directory nested inside a vendored
@@ -298,7 +382,7 @@ def run_live_dispatch(
     permission_mode: str = "acceptEdits",
     claude_bin: str = "claude",
     timeout_seconds: float | None = _DEFAULT_LIVE_DISPATCH_TIMEOUT_SECONDS,
-) -> subprocess.CompletedProcess:
+) -> subprocess.CompletedProcess[str]:
     """Run one live, isolated ``claude -p`` dispatch and capture its
     ``stream-json`` transcript to ``transcript_out``. Callers are responsible
     for confirming ``isolated_cwd``'s full ancestry carries no

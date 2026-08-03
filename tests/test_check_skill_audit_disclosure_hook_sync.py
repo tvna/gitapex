@@ -31,6 +31,7 @@ def _load_module(path: pathlib.Path) -> types.ModuleType:
     # tests/test_check_acm_present_sync.py's own _load_module uses.
     module_name = f"_skill_audit_disclosure_sync__{path.parent.name}_{path.stem}"
     spec = importlib.util.spec_from_file_location(module_name, path)
+    assert spec is not None and spec.loader is not None, f"could not build a module spec for {path}"
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

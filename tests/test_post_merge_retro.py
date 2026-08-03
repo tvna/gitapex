@@ -288,6 +288,25 @@ def test_main_exits_one_on_github_api_error(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# _CliArgs pydantic validation (new in this batch's CLI-pydantic-wrap)
+# ---------------------------------------------------------------------------
+
+
+def test_main_rejects_blank_owner(monkeypatch, capsys):
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    exit_code = pmr.main(["--owner", "", "--repo", "gitapex", "--pr-number", "314"])
+    assert exit_code == 1
+    assert "invalid arguments" in capsys.readouterr().err
+
+
+def test_main_rejects_non_positive_pr_number(monkeypatch, capsys):
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    exit_code = pmr.main(["--owner", "tvna", "--repo", "gitapex", "--pr-number", "0"])
+    assert exit_code == 1
+    assert "invalid arguments" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
 # Drift gate: the workflow's own "permanent human-review-of-merge" posture
 # (issue #318's own commit on post-merge-retro.yml) is enforced here, not
 # just stated in a comment. Per Codex review on PR #354: nothing previously

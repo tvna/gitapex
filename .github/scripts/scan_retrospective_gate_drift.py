@@ -168,7 +168,8 @@ def _fetch_issues_page(
             last_body = str(error)
 
         if 200 <= last_code < 300:
-            return json.loads(last_body)
+            page: list[dict[str, Any]] = json.loads(last_body)
+            return page
         print(f"Attempt {attempt}: HTTP {_format_code(last_code)} for GET {url}", file=sys.stderr)
         if last_code != 0 and last_code < 500:
             break
@@ -248,6 +249,36 @@ def git_commit_messages(
 # ---------------------------------------------------------------------------
 
 
+def _validate_cli_args(owner: str, repo: str, ref: str, cwd: str, label: str) -> str | None:
+    """Return a pydantic-``ValidationError``-style detail string (one
+    ``<field>: <message>`` clause per violated constraint, joined with
+    ``"; "``, in field-declaration order) if any of ``owner``/``repo``/
+    ``ref``/``cwd``/``label`` is blank (argparse's own ``required=True``
+    only guarantees the flag was passed, not that its value is non-empty;
+    ``ref``/``cwd``/``label`` reject blank the same way since each is used
+    as a real path/ref/query fragment downstream and an empty value there
+    was never a meaningful input), else None. ``threshold`` keeps its bare
+    ``int`` type with no floor -- a caller intentionally passing a negative
+    threshold to force a hard fail is not a malformed input, just an unusual
+    one -- so it is never checked here. Message text is a byte-for-byte
+    match of the pydantic ``Field(min_length=1)`` errors this replaces
+    (verified directly against the installed pydantic version), so this
+    plain-Python check is a drop-in replacement, not merely an
+    equivalent-intent one."""
+    errors: list[str] = []
+    if not owner:
+        errors.append("owner: String should have at least 1 character")
+    if not repo:
+        errors.append("repo: String should have at least 1 character")
+    if not ref:
+        errors.append("ref: String should have at least 1 character")
+    if not cwd:
+        errors.append("cwd: String should have at least 1 character")
+    if not label:
+        errors.append("label: String should have at least 1 character")
+    return "; ".join(errors) if errors else None
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Report and fail on retrospective-labelled issues with no citing commit."
@@ -264,6 +295,10 @@ def main(argv: list[str] | None = None) -> int:
         help=f"Fail if the no-citation count exceeds this value (default: {DEFAULT_THRESHOLD})",
     )
     args = parser.parse_args(argv)
+    detail = _validate_cli_args(args.owner, args.repo, args.ref, args.cwd, args.label)
+    if detail is not None:
+        print(f"error: invalid arguments: {detail}", file=sys.stderr)
+        return 1
 
     token = os.environ.get("GITHUB_TOKEN", "")
     if not token:

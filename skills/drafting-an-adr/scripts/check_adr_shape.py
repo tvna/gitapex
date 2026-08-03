@@ -30,7 +30,7 @@ _STATUS_VALUES = ("proposed", "accepted", "deprecated", "superseded")
 _HEADING_RE = re.compile(r"^##[ \t]+(.+?)[ \t]*$", re.MULTILINE)
 
 
-def _section_body(body_text, heading):
+def _section_body(body_text: str, heading: str) -> str | None:
     """Text between a ``## <heading>`` line (exclusive) and the next
     ``## `` heading or end of file. ``None`` if the heading is absent."""
     match = re.search(r"^##[ \t]+" + re.escape(heading) + r"[ \t]*$", body_text, re.MULTILINE)
@@ -41,7 +41,7 @@ def _section_body(body_text, heading):
     return rest[: next_heading.start()] if next_heading else rest
 
 
-def missing_headings(body_text):
+def missing_headings(body_text: str) -> list[str]:
     """Return the list of required headings absent from ``body_text``."""
     return [h for h in _REQUIRED_HEADINGS if _section_body(body_text, h) is None]
 
@@ -49,7 +49,7 @@ def missing_headings(body_text):
 _STATUS_LINE_RE = re.compile(r"^(" + "|".join(_STATUS_VALUES) + r")\b", re.IGNORECASE)
 
 
-def has_valid_status(body_text):
+def has_valid_status(body_text: str) -> bool:
     """``True`` iff the Status section's first non-blank line starts with
     one of the recognized values -- trailing detail on the same line
     (e.g. "Accepted (approved by @owner, 2026-06-02)") is allowed."""
@@ -69,7 +69,7 @@ _BAD_MARKER_RE = re.compile(r"^[\s\-\*\d\.]*bad\b", re.IGNORECASE)
 _UNKNOWN_MARKER_RE = re.compile(r"unknown,\s*pending", re.IGNORECASE)
 
 
-def has_balanced_consequences(body_text):
+def has_balanced_consequences(body_text: str) -> bool:
     """``True`` iff Consequences names at least one real entry on each side
     (a "Good" marker line and a "Bad" marker line), or an "unknown,
     pending X" line stands in for the missing side. A single one-sided
@@ -92,7 +92,7 @@ def has_balanced_consequences(body_text):
     return (has_good or has_unknown) and (has_bad or has_unknown)
 
 
-def check_adr_shape(body_text):
+def check_adr_shape(body_text: str) -> list[str]:
     """Return a list of failure-reason strings; empty means PASS."""
     failures = []
     missing = missing_headings(body_text)
@@ -112,7 +112,7 @@ def check_adr_shape(body_text):
     return failures
 
 
-def main(argv=None):
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Check that a drafted ADR body has the required sections and a valid Status."
     )

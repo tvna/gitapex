@@ -31,6 +31,7 @@ Run standalone (exit 1 on any violation) or via the pytest gate in
 from __future__ import annotations
 
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 
@@ -94,6 +95,29 @@ def override_file(path: Path, model: str) -> None:
     path.write_text(set_config_model(text, model), encoding="utf-8")
 
 
+@dataclass(frozen=True)
+class _SetConfigModelArgs:
+    """Validates the two positional CLI values used by ``main()``. ``path``
+    replaces the existing hand-rolled ``path.is_file()`` check (same message
+    text); ``model`` is carried through unvalidated here -- its own
+    non-empty/unpadded validation stays inside ``set_config_model()``
+    (exercised by every caller of that function via ``override_file``, not
+    only this CLI entry point), so it is not duplicated with a second,
+    possibly-diverging check at this layer."""
+
+    path: Path
+    model: str
+
+
+def _parse_args(path: Path, model: str) -> _SetConfigModelArgs:
+    """Validate ``path`` is an existing file (same message text the replaced
+    pydantic ``field_validator`` produced); ``model`` passes through
+    unvalidated (see ``_SetConfigModelArgs``'s own docstring)."""
+    if not path.is_file():
+        raise ValueError(f"not a file: {path}")
+    return _SetConfigModelArgs(path=path, model=model)
+
+
 def main(argv: list[str]) -> int:
     if len(argv) != 3:
         print(
@@ -101,16 +125,19 @@ def main(argv: list[str]) -> int:
             file=sys.stderr,
         )
         return 2
-    path = Path(argv[1])
-    if not path.is_file():
-        print(f"error: not a file: {path}", file=sys.stderr)
-        return 1
+
     try:
-        override_file(path, argv[2])
+        validated_args = _parse_args(Path(argv[1]), argv[2])
     except ValueError as exc:
-        print(f"error: {path}: {exc}", file=sys.stderr)
+        print(f"error: {exc}", file=sys.stderr)
         return 1
-    print(f"{path}: config.model -> {argv[2]}")
+
+    try:
+        override_file(validated_args.path, validated_args.model)
+    except ValueError as exc:
+        print(f"error: {validated_args.path}: {exc}", file=sys.stderr)
+        return 1
+    print(f"{validated_args.path}: config.model -> {validated_args.model}")
     return 0
 
 

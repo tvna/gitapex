@@ -71,13 +71,14 @@ import argparse
 import json
 import math
 import sys
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from pathlib import Path
+from typing import Any
 
 CORRECTNESS_DECIMALS = 6
 
 
-def _assertion_list(assertions, key):
+def _assertion_list(assertions: Mapping[str, Any], key: str) -> list[Any]:
     """Return ``assertions[key]`` as a list, failing loudly on a bad shape.
 
     A missing or ``None`` value is an empty list. A bare string (the natural
@@ -94,7 +95,7 @@ def _assertion_list(assertions, key):
     return value
 
 
-def _near_entry_list(assertions, key="output_contains_near"):
+def _near_entry_list(assertions: Mapping[str, Any], key: str = "output_contains_near") -> list[Any]:
     value = assertions.get(key)
     if value is None:
         return []
@@ -106,7 +107,7 @@ def _near_entry_list(assertions, key="output_contains_near"):
 _DEFAULT_NEAR_WINDOW = 400
 
 
-def _near_satisfied(text, entry):
+def _near_satisfied(text: str, entry: Any) -> bool:
     """One ``output_contains_near`` entry is satisfied iff every substring in
     ``entry["all"]`` occurs in ``text`` (each at its first occurrence), the
     whole span from the earliest start to the latest end is no wider than
@@ -134,7 +135,7 @@ def _near_satisfied(text, entry):
     return "\n\n" not in text[span_start:span_end]
 
 
-def score(output_text, assertions):
+def score(output_text: str | None, assertions: Mapping[str, Any]) -> float:
     """Return the fraction of substring assertions satisfied, in ``[0, 1]``.
 
     ``assertions`` is a mapping with optional ``output_contains`` (each
@@ -190,7 +191,7 @@ def score(output_text, assertions):
     return satisfied / total
 
 
-def split_mean(scores):
+def split_mean(scores: Iterable[float]) -> float:
     """Return the arithmetic mean of a non-empty sequence of scores."""
     scores = list(scores)
     if not scores:
@@ -200,7 +201,7 @@ def split_mean(scores):
     return sum(scores) / len(scores)
 
 
-def _validate_correctness(value, label):
+def _validate_correctness(value: float, label: str) -> None:
     """Reject correctness values outside the finite ``[0, 1]`` contract."""
     if isinstance(value, bool):
         raise ValueError(f"{label} must be a finite number in [0,1]")
@@ -212,7 +213,7 @@ def _validate_correctness(value, label):
         raise ValueError(f"{label} must be a finite number in [0,1]")
 
 
-def _validate_context_cost(value, label):
+def _validate_context_cost(value: float, label: str) -> None:
     """Reject context costs that are non-finite or negative."""
     if isinstance(value, bool):
         raise ValueError(f"{label} must be a finite non-negative number")
@@ -224,12 +225,12 @@ def _validate_context_cost(value, label):
         raise ValueError(f"{label} must be a finite non-negative number")
 
 
-def _published_correctness(value):
+def _published_correctness(value: float) -> float:
     """Normalize correctness to the precision emitted by this CLI."""
     return round(value, CORRECTNESS_DECIMALS)
 
 
-def _validate_published_prior(value):
+def _validate_published_prior(value: float) -> None:
     """Require a prior copied from this CLI's six-decimal output."""
     if value != _published_correctness(value):
         raise ValueError(
@@ -237,7 +238,7 @@ def _validate_published_prior(value):
         )
 
 
-def strict_compare(before_mean, after_mean):
+def strict_compare(before_mean: float, after_mean: float) -> str:
     """Return ``"KEEP"`` iff ``after_mean`` strictly exceeds ``before_mean``.
 
     Ties are rejected, matching the gate's strict improve-or-reject rule
@@ -251,11 +252,11 @@ def strict_compare(before_mean, after_mean):
 
 
 def pruning_compare(
-    before_correctness,
-    after_correctness,
-    before_context_cost,
-    after_context_cost,
-):
+    before_correctness: float,
+    after_correctness: float,
+    before_context_cost: float,
+    after_context_cost: float,
+) -> str:
     """Apply the predeclared correctness-first pruning gate.
 
     A correctness improvement is a normal strict improvement. At matched
@@ -275,7 +276,7 @@ def pruning_compare(
     return "KEEP" if after_context_cost < before_context_cost else "REJECT"
 
 
-def main(argv=None):
+def main(argv: list[str] | None = None) -> int:
     """CLI: score a run's output against a JSON assertions file.
 
     Reads the assertions from a JSON file (standard library only, no YAML

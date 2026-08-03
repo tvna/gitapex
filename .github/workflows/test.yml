@@ -61,3 +61,69 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage.xml
           fail_ci_if_error: false
+
+  # Issue #684: mypy across this repo's own deterministic-gate scripts.
+  # A separate job (not a step in the pytest job above) so it reports its
+  # own check-run, independently requirable in branch protection --
+  # registering it there is a repo-admin action outside this workflow's
+  # own diff, not something this job can do by itself.
+  mypy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
+      # Run per directory-group, not one repo-wide `mypy .` sweep: two
+      # files share the literal basename check_acm_present.py
+      # (skills/drafting-an-acm-issue/scripts and
+      # skills/planning-a-branch-from-an-issue/scripts, deliberately not
+      # sharing a directory) and, with no __init__.py anywhere in this
+      # repo, mypy resolves a bare module name the same way pytest's own
+      # pythonpath does -- a combined invocation errors "Duplicate module
+      # named". The first group below is exactly this repo's own
+      # [tool.pytest.ini_options] pythonpath list plus tests/ itself,
+      # since that list already encodes which directories bare-import
+      # each other (e.g. evals/scripts/run_ablation.py's own `import
+      # score_contract`); every other skill-script directory is checked
+      # alone because nothing outside it references it by bare import.
+      - name: mypy (tests + pythonpath-linked roots)
+        run: |
+          uv run --frozen mypy --config-file pyproject.toml \
+            tests hooks .github/scripts evals/scripts \
+            skills/battle-testing-a-skill/scripts \
+            skills/scorer-gated-skill-edits/scripts \
+            skills/evaluating-skill-quality/scripts \
+            skills/auditing-agent-product-scope/scripts
+
+      - name: mypy (skills/executing-a-branch-plan/scripts)
+        run: uv run --frozen mypy --config-file pyproject.toml skills/executing-a-branch-plan/scripts
+
+      - name: mypy (skills/drafting-an-adr/scripts)
+        run: uv run --frozen mypy --config-file pyproject.toml skills/drafting-an-adr/scripts
+
+      - name: mypy (skills/auditing-git-hosting-surface/scripts)
+        run: uv run --frozen mypy --config-file pyproject.toml skills/auditing-git-hosting-surface/scripts
+
+      - name: mypy (skills/outward-artifact-preflight/scripts)
+        run: uv run --frozen mypy --config-file pyproject.toml skills/outward-artifact-preflight/scripts
+
+      - name: mypy (skills/drafting-an-acm-issue/scripts)
+        run: uv run --frozen mypy --config-file pyproject.toml skills/drafting-an-acm-issue/scripts
+
+      - name: mypy (skills/planning-a-branch-from-an-issue/scripts)
+        run: uv run --frozen mypy --config-file pyproject.toml skills/planning-a-branch-from-an-issue/scripts
