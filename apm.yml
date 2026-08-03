@@ -7,7 +7,7 @@
 # .github/scripts/scan_apm_manifest_drift.py keeps the two in lockstep.
 name: gitapex
 version: 0.1.0
-dependencies:
+devDependencies:
   apm:
     - obra/superpowers
     - tvna/clairvoyance

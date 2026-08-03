@@ -1,6 +1,6 @@
 lockfile_version: '1'
-generated_at: '2026-07-21T14:08:37.296239+00:00'
-apm_version: 0.23.1
+generated_at: '2026-08-03T05:34:49.908709+00:00'
+apm_version: 0.25.0
 dependencies:
 - repo_url: obra/superpowers
   name: superpowers
@@ -10,6 +10,7 @@ dependencies:
   package_type: marketplace_plugin
   deployed_files:
   - .claude/hooks/superpowers/hooks/run-hook.cmd
+  - .claude/hooks/superpowers/hooks/session-start
   - .claude/skills/brainstorming
   - .claude/skills/brainstorming/SKILL.md
   - .claude/skills/brainstorming/scripts/frame-template.html
@@ -74,6 +75,7 @@ dependencies:
   - .claude/skills/writing-skills/testing-skills-with-subagents.md
   deployed_file_hashes:
     .claude/hooks/superpowers/hooks/run-hook.cmd: sha256:d3d9c6199678dab2858e60509dde5e7414f13c2a2b5e48a38b1d368b6e1d6abb
+    .claude/hooks/superpowers/hooks/session-start: sha256:88a060272ca8047e0d1cd73a016e1cebba8396807a44be1e296d7c02dcbb9934
     .claude/skills/brainstorming/SKILL.md: sha256:e14914605f640e0841758e45d0ab2a53243b59b921f929e47921c99668f2e61d
     .claude/skills/brainstorming/scripts/frame-template.html: sha256:6a8a4e58bd6a44b904e2e3c57de774481d909204597e1498de53f1b2fecc4c4e
     .claude/skills/brainstorming/scripts/helper.js: sha256:43c6d69954a46ec34a2a262bcc62a9a7e83e839c739f199cb72646d397c686e3
@@ -123,6 +125,7 @@ dependencies:
     .claude/skills/writing-skills/render-graphs.js: sha256:ccda971a87bb185f8febf81c56b556a20d026fa980c17b35fa3e8824fbb37852
     .claude/skills/writing-skills/testing-skills-with-subagents.md: sha256:c711346852c911b24a84aa161e0cff06a4cd7f4e2fa9e9c0a266cead5afcbade
   content_hash: sha256:fcec2b6832dc4a4ce8fd0b7883fc72531fb402dd76537b62e495ab5c09742cf4
+  is_dev: true
   declared_license: MIT
 - repo_url: tvna/clairvoyance
   name: clairvoyance
@@ -131,7 +134,12 @@ dependencies:
   version: 0.6.0
   package_type: marketplace_plugin
   deployed_files:
+  - .claude/hooks/clairvoyance/hooks/adaptive-store.sh
+  - .claude/hooks/clairvoyance/hooks/lib/json-escape.sh
   - .claude/hooks/clairvoyance/hooks/run-hook.cmd
+  - .claude/hooks/clairvoyance/hooks/session-start.sh
+  - .claude/hooks/clairvoyance/hooks/user-prompt-language.sh
+  - .claude/hooks/clairvoyance/hooks/workflow-budget-gate.sh
   - .claude/skills/adaptive-coaching
   - .claude/skills/adaptive-coaching/SKILL.md
   - .claude/skills/adaptive-coaching/references/classification.md
@@ -169,7 +177,12 @@ dependencies:
   - .claude/skills/workflow-budget
   - .claude/skills/workflow-budget/SKILL.md
   deployed_file_hashes:
+    .claude/hooks/clairvoyance/hooks/adaptive-store.sh: sha256:2c3003f2aa2ddeb09f55570b52a1491ef57c6130d94b2c2d9df9feade775b917
+    .claude/hooks/clairvoyance/hooks/lib/json-escape.sh: sha256:6b73bd2dcee0f0200ad786d61bf0d42fa584bac3b0d77b2f4920c2478e4ba73f
     .claude/hooks/clairvoyance/hooks/run-hook.cmd: sha256:f649b22da5bf437786a87779324e9c8f367de3d4738a560a5c370642c340d614
+    .claude/hooks/clairvoyance/hooks/session-start.sh: sha256:bd022e5cf11f864747a5cc8b07bba0ad0a67575b3bd5ffd0714786ec2b457ec8
+    .claude/hooks/clairvoyance/hooks/user-prompt-language.sh: sha256:e7bee053440262d95ea16c472dab6a49e9d89cc308f29da5a3b732d2f7440f27
+    .claude/hooks/clairvoyance/hooks/workflow-budget-gate.sh: sha256:ccf8ff9a4f838052881f1e6dbc5532393109eb2dfe06ce4295864665bc3273f6
     .claude/skills/adaptive-coaching/SKILL.md: sha256:69148aab67c7f891cdd0656e712b8e21c8f1236f27ddfd536c1975e2f43b514c
     .claude/skills/adaptive-coaching/references/classification.md: sha256:79374a7a3fa8289bde2e57a8d3e8a8b3d3d520878c98f66724f7a8b2d6b235e6
     .claude/skills/adaptive-coaching/references/example.md: sha256:41164750b38df74ce7c3cdd2b8f3dd917c9d0fe77fb05205c3f77343a0b863bb
@@ -197,4 +210,960 @@ dependencies:
     .claude/skills/visual-handoff/references/notation.md: sha256:ceb80c721a622abf0d5f6e623aafdc25babcd65c2844c57520523ec9df738b4b
     .claude/skills/workflow-budget/SKILL.md: sha256:4df7ec50defa79f0a39ad4f5b2eb93ccda54e94da7a9c3d0b917f399e0a75103
   content_hash: sha256:3ee11749442c38a6b3a9b55ef0763fd2687b3355f4a422b9d01cdb89e9d0cfd7
+  is_dev: true
   declared_license: MIT
+deployments:
+- kind: project-relative
+  target: claude
+  value: .claude/hooks/clairvoyance/hooks/adaptive-store.sh
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: sha256:2c3003f2aa2ddeb09f55570b52a1491ef57c6130d94b2c2d9df9feade775b917
+- kind: project-relative
+  target: claude
+  value: .claude/hooks/clairvoyance/hooks/lib/json-escape.sh
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: sha256:6b73bd2dcee0f0200ad786d61bf0d42fa584bac3b0d77b2f4920c2478e4ba73f
+- kind: project-relative
+  target: claude
+  value: .claude/hooks/clairvoyance/hooks/run-hook.cmd
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: sha256:f649b22da5bf437786a87779324e9c8f367de3d4738a560a5c370642c340d614
+- kind: project-relative
+  target: claude
+  value: .claude/hooks/clairvoyance/hooks/session-start.sh
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: sha256:bd022e5cf11f864747a5cc8b07bba0ad0a67575b3bd5ffd0714786ec2b457ec8
+- kind: project-relative
+  target: claude
+  value: .claude/hooks/clairvoyance/hooks/user-prompt-language.sh
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: sha256:e7bee053440262d95ea16c472dab6a49e9d89cc308f29da5a3b732d2f7440f27
+- kind: project-relative
+  target: claude
+  value: .claude/hooks/clairvoyance/hooks/workflow-budget-gate.sh
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: sha256:ccf8ff9a4f838052881f1e6dbc5532393109eb2dfe06ce4295864665bc3273f6
+- kind: project-relative
+  target: claude
+  value: .claude/hooks/superpowers/hooks/run-hook.cmd
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:d3d9c6199678dab2858e60509dde5e7414f13c2a2b5e48a38b1d368b6e1d6abb
+- kind: project-relative
+  target: claude
+  value: .claude/hooks/superpowers/hooks/session-start
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:88a060272ca8047e0d1cd73a016e1cebba8396807a44be1e296d7c02dcbb9934
+- kind: project-relative
+  target: claude
+  value: .claude/skills/adaptive-coaching
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/adaptive-coaching/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: sha256:69148aab67c7f891cdd0656e712b8e21c8f1236f27ddfd536c1975e2f43b514c
+- kind: project-relative
+  target: claude
+  value: .claude/skills/adaptive-coaching/references/classification.md
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: sha256:79374a7a3fa8289bde2e57a8d3e8a8b3d3d520878c98f66724f7a8b2d6b235e6
+- kind: project-relative
+  target: claude
+  value: .claude/skills/adaptive-coaching/references/example.md
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: sha256:41164750b38df74ce7c3cdd2b8f3dd917c9d0fe77fb05205c3f77343a0b863bb
+- kind: project-relative
+  target: claude
+  value: .claude/skills/adaptive-coaching/references/practice.md
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: sha256:6e3136412d4b1749f2a6e2e131195361a2e2132235792344c796ee923f99aa3c
+- kind: project-relative
+  target: claude
+  value: .claude/skills/adaptive-coaching/references/quiz.md
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: sha256:6e8aeace98304fa0572284fb1a70a923bbad235e0610f8306039986922eb6e2f
+- kind: project-relative
+  target: claude
+  value: .claude/skills/adaptive-coaching/references/store.md
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: sha256:213789748d292eb82c8225ae0fd01d138162c954abdf099e1349fddf2a658a48
+- kind: project-relative
+  target: claude
+  value: .claude/skills/architecture-tradeoff
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/architecture-tradeoff/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: sha256:7dc67e69877e3be0c6fa406b13c6864a20fe7ed0df27e3282944ae15f55df054
+- kind: project-relative
+  target: claude
+  value: .claude/skills/architecture-tradeoff/references/example.md
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: sha256:34b51e985cf928e8f681819954f20d09341ca7b73d8737f232a54a2041bda44c
+- kind: project-relative
+  target: claude
+  value: .claude/skills/brainstorming
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/brainstorming/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:e14914605f640e0841758e45d0ab2a53243b59b921f929e47921c99668f2e61d
+- kind: project-relative
+  target: claude
+  value: .claude/skills/brainstorming/scripts/frame-template.html
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:6a8a4e58bd6a44b904e2e3c57de774481d909204597e1498de53f1b2fecc4c4e
+- kind: project-relative
+  target: claude
+  value: .claude/skills/brainstorming/scripts/helper.js
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:43c6d69954a46ec34a2a262bcc62a9a7e83e839c739f199cb72646d397c686e3
+- kind: project-relative
+  target: claude
+  value: .claude/skills/brainstorming/scripts/server.cjs
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:2d2961ea8d11f56c5f4c3a1a68d22709efa5d7601a2246d8c880774e7e9e8412
+- kind: project-relative
+  target: claude
+  value: .claude/skills/brainstorming/scripts/start-server.sh
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:a4e5ae84275bcaacd2f84345afeabe59cf7b00ba080e123da7cc1fb226f12847
+- kind: project-relative
+  target: claude
+  value: .claude/skills/brainstorming/scripts/stop-server.sh
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:0b5ccbbd57f62d3ed88993f7940b5ee0e5c0fc9b21c550c623da4f6292e47daf
+- kind: project-relative
+  target: claude
+  value: .claude/skills/brainstorming/spec-document-reviewer-prompt.md
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:95a0a195de9d984be2fffa95bab16fc8c563bc296a9cfc5e9c29cb3ece0d7457
+- kind: project-relative
+  target: claude
+  value: .claude/skills/brainstorming/visual-companion.md
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:3321a044c777d03d7177df41c77bb83155ff2a6d0c16b8a3d752426d29f14ea8
+- kind: project-relative
+  target: claude
+  value: .claude/skills/clairvoyance
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/clairvoyance/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: sha256:61a41f61524f1f53520cb5e03b7fdc990ffe55564bc4ac141d876c4fc4f1309f
+- kind: project-relative
+  target: claude
+  value: .claude/skills/clairvoyance/references/decision-handoff.md
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: sha256:c088b5a4f9e7eb3560743ebb84780c851ada52c640f2dd65c19720916e24a1a4
+- kind: project-relative
+  target: claude
+  value: .claude/skills/clairvoyance/references/example.md
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: sha256:61e89a55fb288defc128b59b0d91c3fed15712dd931cbff570643d28836b1cb0
+- kind: project-relative
+  target: claude
+  value: .claude/skills/decision-coaching
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/decision-coaching/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: sha256:43f68d50dda83a8f9769546be2a1aa34bd034972a6731a126189a045d4713446
+- kind: project-relative
+  target: claude
+  value: .claude/skills/dispatching-parallel-agents
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/dispatching-parallel-agents/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:f0df13f584049059cc5619f90061405b89dcc6e28ab3f2a8517d27d99c7a46a6
+- kind: project-relative
+  target: claude
+  value: .claude/skills/executing-plans
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/executing-plans/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:bbd8d28bb655a52817cc129ce49f9e46fa7c6303f72ed5de95bfe914ef8e0ce8
+- kind: project-relative
+  target: claude
+  value: .claude/skills/finishing-a-development-branch
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/finishing-a-development-branch/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:e6d4a812de900d33c6eacfb40747f99427f25c304a7b7099120f9373b115a47f
+- kind: project-relative
+  target: claude
+  value: .claude/skills/human-harness
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/human-harness/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: sha256:0aa3f5d6311e80750f22a1867f7cc6ab2f989e23e95370ede63347553fbe4f32
+- kind: project-relative
+  target: claude
+  value: .claude/skills/human-harness/references/compliance.md
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: sha256:55502c94ad97b0346b471b56c4fdec61614996cd45fb211679773a9cdfc9991c
+- kind: project-relative
+  target: claude
+  value: .claude/skills/human-harness/references/example.md
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: sha256:08a7409b91e8b60a0fc79d38fd1095f3ae50ebba7c0b4715e0791a48925811ee
+- kind: project-relative
+  target: claude
+  value: .claude/skills/receiving-code-review
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/receiving-code-review/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:647036bbdab7bf2317e14e079595e984c9030f64295e2b4c0fb57dbeb48f25dd
+- kind: project-relative
+  target: claude
+  value: .claude/skills/requesting-code-review
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/requesting-code-review/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:1017ccdd5bc61fab67c654cf118cbdb520464b313073a0a6b9a6b9aa647a3ad6
+- kind: project-relative
+  target: claude
+  value: .claude/skills/requesting-code-review/code-reviewer.md
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:b2f2ec7596925fe52dac158fdfbca19b3a7d779d619c481e6706a6c0001662d3
+- kind: project-relative
+  target: claude
+  value: .claude/skills/review-verdict
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/review-verdict/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: sha256:df2ca84bae0937fe9a5aa7614813be48535b99c635751549590312160d910451
+- kind: project-relative
+  target: claude
+  value: .claude/skills/review-verdict/references/example.md
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: sha256:89ee31c8fdc8acfa0080b078d863f57843524885a194e945d35ad68155a7507c
+- kind: project-relative
+  target: claude
+  value: .claude/skills/session-handoff
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/session-handoff/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: sha256:ba7a86eadad80169ca68dc62ec840836e5ea4d184cd42added93d0cf39626b89
+- kind: project-relative
+  target: claude
+  value: .claude/skills/session-handoff/references/fable-optimization.md
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: sha256:97b7cb31d4b07c83b69a3d9f061e3e6f58ca63d77bb3936ffa3d3a4c7e089c52
+- kind: project-relative
+  target: claude
+  value: .claude/skills/session-handoff/references/handoff-template.md
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: sha256:e4b1eb3cc11cbd9ace78ee49f08cb8ee53ff975d100a3192e99505073b31549c
+- kind: project-relative
+  target: claude
+  value: .claude/skills/subagent-driven-development
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/subagent-driven-development/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:5e9e846ae67d153ddf7c5f4fd5102af78454c8f3cdaa0720331cec063fc8861a
+- kind: project-relative
+  target: claude
+  value: .claude/skills/subagent-driven-development/implementer-prompt.md
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:49018b28dc11bc9f3d13a28959bb10ae1a96eabc5d8f19f4079d901f9ff2bf64
+- kind: project-relative
+  target: claude
+  value: .claude/skills/subagent-driven-development/scripts/review-package
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:0c0629f6e2c46fc8bf68dcfb8a247ab24eb548b7004fe494035e6fcba9b5cdfb
+- kind: project-relative
+  target: claude
+  value: .claude/skills/subagent-driven-development/scripts/sdd-workspace
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:9430befaff459ed862415b700c1a9efe45fd34838a684802a1d8320de0c3a007
+- kind: project-relative
+  target: claude
+  value: .claude/skills/subagent-driven-development/scripts/task-brief
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:5380283f00bffa99ab82ae78482b7d248abe10655129c72ca7050bdc0b6a85e1
+- kind: project-relative
+  target: claude
+  value: .claude/skills/subagent-driven-development/task-reviewer-prompt.md
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:2eb9d54373420de25bc0bd00635d3a3123a6c0eb30c881168e6f3348e2387331
+- kind: project-relative
+  target: claude
+  value: .claude/skills/systematic-debugging
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/systematic-debugging/CREATION-LOG.md
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:c24733a5b1821bd6bed1fc950261f0b9f4e90097e0bbb96459d8179713730789
+- kind: project-relative
+  target: claude
+  value: .claude/skills/systematic-debugging/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:3b20719eca4f0461cb51a195221320d775dcf03b6859271066a03a5132a6ce7a
+- kind: project-relative
+  target: claude
+  value: .claude/skills/systematic-debugging/condition-based-waiting-example.ts
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:40ae5ebe497fdf310200e43fe986552546d0a22837c0d39e855db1cfd33eb88e
+- kind: project-relative
+  target: claude
+  value: .claude/skills/systematic-debugging/condition-based-waiting.md
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:e89fec8400d6cd50f43407cec9fab50976ba4d55d0ec2eb51c0bd68036b54c26
+- kind: project-relative
+  target: claude
+  value: .claude/skills/systematic-debugging/defense-in-depth.md
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:1e175fb86fc357e58c6aebf5441e481e1b7868b4380c0456b63a17eefbd18ba7
+- kind: project-relative
+  target: claude
+  value: .claude/skills/systematic-debugging/find-polluter.sh
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:6462747eae9b175ac145b78bcfaeab755654a75e32637f08eb633f065a9e1d7c
+- kind: project-relative
+  target: claude
+  value: .claude/skills/systematic-debugging/root-cause-tracing.md
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:6b0622269e098ca1399e123e553fd385f0b6412d88ef0e9c4f5a8ea9cf1cec7b
+- kind: project-relative
+  target: claude
+  value: .claude/skills/systematic-debugging/test-academic.md
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:fe2ba480d78ac0d686dc025f41c2a32a43d642bf533f91b0c6053a04d35d6486
+- kind: project-relative
+  target: claude
+  value: .claude/skills/systematic-debugging/test-pressure-1.md
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:0b6a915db0054577819834c79be9eb614e97bddba10d73768e1fbe91cfed048a
+- kind: project-relative
+  target: claude
+  value: .claude/skills/systematic-debugging/test-pressure-2.md
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:b2030aeffba07050e8ad573ddf87486457c4a016a786bb326235bebd856f2016
+- kind: project-relative
+  target: claude
+  value: .claude/skills/systematic-debugging/test-pressure-3.md
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:96b50a52e2c7989c9cf20fb752c47c1e9a3a70dc362f8f7989f8f5b64dac7708
+- kind: project-relative
+  target: claude
+  value: .claude/skills/test-driven-development
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/test-driven-development/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:b5b4717b8b761cce15a6cfe9022e33fd959e0894c0c39d72c9cb49c23486c10e
+- kind: project-relative
+  target: claude
+  value: .claude/skills/test-driven-development/testing-anti-patterns.md
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:bde453bc258f06543987477c837939afaa774ea2acbd9f308d702fc452bc4283
+- kind: project-relative
+  target: claude
+  value: .claude/skills/using-clairvoyance
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/using-clairvoyance/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: sha256:1d3dc7b0a28d4a30be43e8f9dafb4ed90d729721990cace91423565c1dbe9842
+- kind: project-relative
+  target: claude
+  value: .claude/skills/using-git-worktrees
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/using-git-worktrees/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:e2c3ec142e52868a51af246c620cd76ab648dcf27d6900d47e6ffd07159a9794
+- kind: project-relative
+  target: claude
+  value: .claude/skills/using-superpowers
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/using-superpowers/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:55379fe7c1c473a02c61961c822996bff30e1320d6921d9062509bc508482c05
+- kind: project-relative
+  target: claude
+  value: .claude/skills/using-superpowers/references/antigravity-tools.md
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:d0bcfa94dd0fa399fb9606a0f7c9562b43040cad02be167a2b999c3913a1d5e9
+- kind: project-relative
+  target: claude
+  value: .claude/skills/using-superpowers/references/codex-tools.md
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:9310bb2315eed2c1cebea02cd1c9e8fe121cb788fc6b41e8b8f8b5ff46f85f37
+- kind: project-relative
+  target: claude
+  value: .claude/skills/using-superpowers/references/pi-tools.md
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:703dbc83d23ecab9c6f388460c38abc482e9dee2fe6772a8c7a255152ad3a4d5
+- kind: project-relative
+  target: claude
+  value: .claude/skills/verification-before-completion
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/verification-before-completion/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:ea52d15aabaf72bc6b558efe2c126f161b53961090ddcd712000273bfe8c7b6c
+- kind: project-relative
+  target: claude
+  value: .claude/skills/visual-handoff
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/visual-handoff/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: sha256:bf9e5d37120f1b03221afeb055c2f33948f0c5d257087f48770078eb10b6ade5
+- kind: project-relative
+  target: claude
+  value: .claude/skills/visual-handoff/references/evidence.md
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: sha256:0c09ba5770695831c5f00df936f5553c3e4647dbb44efb632881ac222f27bb80
+- kind: project-relative
+  target: claude
+  value: .claude/skills/visual-handoff/references/example.md
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: sha256:98b2d0bc4464d34637906232318b2125d31b1bb8fa17f427f23d1f6e4131097a
+- kind: project-relative
+  target: claude
+  value: .claude/skills/visual-handoff/references/notation.md
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: sha256:ceb80c721a622abf0d5f6e623aafdc25babcd65c2844c57520523ec9df738b4b
+- kind: project-relative
+  target: claude
+  value: .claude/skills/workflow-budget
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/workflow-budget/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - tvna/clairvoyance
+  active_owner: tvna/clairvoyance
+  content_hash: sha256:4df7ec50defa79f0a39ad4f5b2eb93ccda54e94da7a9c3d0b917f399e0a75103
+- kind: project-relative
+  target: claude
+  value: .claude/skills/writing-plans
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/writing-plans/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:272e1af349f5062c28dc282b3e21b220d58d683a7314a10c455b7432ec91d845
+- kind: project-relative
+  target: claude
+  value: .claude/skills/writing-plans/plan-document-reviewer-prompt.md
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:aa728b96aad603c8be28875a4305637f6c984aa81ffcadcb13e743202fa2a0c7
+- kind: project-relative
+  target: claude
+  value: .claude/skills/writing-skills
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/writing-skills/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:6b8d08fe863318be8480ae8428e169640309fa9208df84bb0510012764454146
+- kind: project-relative
+  target: claude
+  value: .claude/skills/writing-skills/anthropic-best-practices.md
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:217629b356c09c9bd11017c9788e8fc654ca1b32c92d4a51cd490e16dd65e59a
+- kind: project-relative
+  target: claude
+  value: .claude/skills/writing-skills/examples/CLAUDE_MD_TESTING.md
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:0b379a3415e185d3c434b3ad283d8aa132f3022c2a4f210f168865b5986bcef0
+- kind: project-relative
+  target: claude
+  value: .claude/skills/writing-skills/graphviz-conventions.dot
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:e2890a593c91370e384b42f2f67b1a6232c9e69dddea7891a0c1c46d7b20b694
+- kind: project-relative
+  target: claude
+  value: .claude/skills/writing-skills/persuasion-principles.md
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:a51bc9bf75189ea73a27b3fb504a2fdfdb966fb1f7f1cdf03203230a216ccc03
+- kind: project-relative
+  target: claude
+  value: .claude/skills/writing-skills/render-graphs.js
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:ccda971a87bb185f8febf81c56b556a20d026fa980c17b35fa3e8824fbb37852
+- kind: project-relative
+  target: claude
+  value: .claude/skills/writing-skills/testing-skills-with-subagents.md
+  runtime: null
+  scope: project
+  owners:
+  - obra/superpowers
+  active_owner: obra/superpowers
+  content_hash: sha256:c711346852c911b24a84aa161e0cff06a4cd7f4e2fa9e9c0a266cead5afcbade
