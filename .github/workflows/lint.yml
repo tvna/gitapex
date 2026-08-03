@@ -6,26 +6,23 @@
 # ruff job already needs one admin change; this avoids needing two.
 name: Lint workflows
 
-# pyproject.toml and uv.lock are in the filter so a change to the ruff
-# configuration or to the pinned ruff version is itself checked, not just
-# changes to the Python it governs. The actionlint job also runs on a
-# Python-only change as a result -- GitHub filters paths per workflow, not
-# per job -- which costs a few seconds and cannot report a false failure,
-# since it reads only the workflow files.
+# Deliberately no `paths:` filter, for the reason waza-eval-gate.yml's own
+# header states at length and docs/superpowers/plans/
+# 2026-07-30-evals-required-merge-gate.md records as a decision: GitHub
+# distinguishes a job that runs and reports `skipped` (does not block a
+# required check) from a workflow that never fires at all for a given PR
+# (leaves the required check `Pending` forever). A `paths:` trigger filter
+# is the second case. Both jobs here are intended for promotion to required
+# status checks, so a filter would permanently block any PR that happens
+# not to touch a matched path. Running unconditionally is the
+# required-check-safe shape, and it also removes any dependence on getting
+# a `**/*.py`-style glob right under GitHub's own filter semantics.
+# The cost is a checkout plus two short jobs on every PR, the same price
+# waza-eval-gate.yml accepted for the same reason.
 on:
   push:
     branches: [main]
-    paths:
-      - ".github/workflows/**"
-      - "**/*.py"
-      - "pyproject.toml"
-      - "uv.lock"
-  pull_request:
-    paths:
-      - ".github/workflows/**"
-      - "**/*.py"
-      - "pyproject.toml"
-      - "uv.lock"
+  pull_request: {}
 
 permissions:
   contents: read
@@ -85,9 +82,16 @@ jobs:
       # here resolved from ambient PATH state rather than from the declared
       # environment; a separately-pinned CI image would leave that split in
       # place, with CI enforcing one ruff and contributors running another.
-      # `uv run --frozen` resolves the single version recorded in uv.lock
-      # (wheel hashes and all), so this job and a local run are the same
-      # ruff by construction. --frozen fails rather than silently
-      # re-resolving if uv.lock and pyproject.toml have drifted apart.
+      # `uv run` resolves the single version recorded in uv.lock, wheel
+      # hashes and all, so this job and a local run are the same ruff.
+      #
+      # --locked, NOT --frozen. The two are not interchangeable: --frozen
+      # means "run without updating uv.lock", which happily runs the locked
+      # ruff even when pyproject.toml now asks for a different one, exit 0
+      # and no warning. --locked asserts uv.lock is still in sync with
+      # pyproject.toml and errors when it is not. Only the second one
+      # actually closes the drift this gate exists to close, so bumping the
+      # pin without running `uv lock` fails here instead of silently
+      # enforcing the old rule set.
       - name: Run ruff
-        run: uv run --frozen ruff check --output-format github .
+        run: uv run --locked ruff check --output-format github .
