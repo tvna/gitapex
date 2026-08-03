@@ -100,6 +100,50 @@ def test_non_utf8_plugin_json_raises_manifest_read_error(tmp_path):
         drift.find_drift(apm, plugin)
 
 
+def test_missing_apm_yml_raises_manifest_read_error(tmp_path):
+    # A deleted/renamed/missing apm.yml used to raise an uncaught
+    # FileNotFoundError -- _read_text only caught UnicodeDecodeError, not
+    # the OSError subclass a missing file raises.
+    apm = tmp_path / "does-not-exist-apm.yml"
+    plugin = tmp_path / "plugin.json"
+    plugin.write_text(json.dumps(_VALID_PLUGIN))
+    with pytest.raises(drift.ManifestReadError, match="cannot be read"):
+        drift.find_drift(apm, plugin)
+
+
+def test_missing_plugin_json_raises_manifest_read_error(tmp_path):
+    apm = tmp_path / "apm.yml"
+    plugin = tmp_path / "does-not-exist-plugin.json"
+    apm.write_text(_VALID_APM)
+    with pytest.raises(drift.ManifestReadError, match="cannot be read"):
+        drift.find_drift(apm, plugin)
+
+
+def test_apm_yml_as_empty_yaml_list_raises_manifest_read_error(tmp_path):
+    # Regression: `_load_yaml(apm_manifest) or {}` used to silently coerce
+    # any *falsy* non-dict top-level value (here an empty list, which
+    # yaml.safe_load("[]") returns) into `{}`, bypassing the isinstance
+    # guard and surfacing a misleading KeyError instead of this
+    # ManifestReadError.
+    apm = tmp_path / "apm.yml"
+    plugin = tmp_path / "plugin.json"
+    apm.write_text("[]\n")
+    plugin.write_text(json.dumps(_VALID_PLUGIN))
+    with pytest.raises(drift.ManifestReadError, match="must be a YAML mapping"):
+        drift.find_drift(apm, plugin)
+
+
+def test_empty_apm_yml_raises_manifest_read_error(tmp_path):
+    # An empty apm.yml parses as None (also falsy, same `or {}` bug class
+    # as the empty-list case above).
+    apm = tmp_path / "apm.yml"
+    plugin = tmp_path / "plugin.json"
+    apm.write_text("")
+    plugin.write_text(json.dumps(_VALID_PLUGIN))
+    with pytest.raises(drift.ManifestReadError, match="must be a YAML mapping"):
+        drift.find_drift(apm, plugin)
+
+
 def test_apm_yml_as_yaml_list_raises_manifest_read_error(tmp_path):
     # Issue #699 (found by adversarial review of this same fix): valid YAML
     # syntax does not mean a top-level mapping -- a top-level list parses

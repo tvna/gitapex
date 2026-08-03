@@ -42,6 +42,8 @@ class ManifestReadError(Exception):
 def _read_text(path: pathlib.Path) -> str:
     try:
         return path.read_text(encoding="utf-8")
+    except OSError as error:
+        raise ManifestReadError(f"{path}: cannot be read: {error}") from error
     except UnicodeDecodeError as error:
         raise ManifestReadError(f"{path}: is not valid UTF-8: {error}") from error
 
@@ -73,15 +75,15 @@ def find_drift(
     (KeyError) -- a silent skip would let the gate pass on a broken
     manifest.
     """
-    apm_data = _load_yaml(apm_manifest) or {}
+    apm_data = _load_yaml(apm_manifest)
     plugin_data = _load_json(plugin_manifest)
 
     # Valid YAML/JSON syntax does not mean either document is shaped as a
-    # mapping/object -- a top-level list or scalar (e.g. apm.yml containing
-    # just "- name\n- version\n", or plugin.json containing "42") parses
-    # cleanly but crashed the `field not in ...`/`...[field]` lookups below
-    # with an uncaught TypeError. `or {}` above only substitutes a *falsy*
-    # apm_data (None, [], "", 0); a truthy non-dict still reaches here.
+    # mapping/object -- a top-level list, scalar, or empty document (e.g.
+    # apm.yml containing just "- name\n- version\n", "42", or nothing at
+    # all, which yaml.safe_load parses as None) parses cleanly but crashed
+    # the `field not in ...`/`...[field]` lookups below with an uncaught
+    # TypeError.
     if not isinstance(apm_data, dict):
         raise ManifestReadError(
             f"{apm_manifest}: must be a YAML mapping, got {type(apm_data).__name__}"
