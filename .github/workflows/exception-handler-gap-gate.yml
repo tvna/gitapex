@@ -49,10 +49,20 @@ jobs:
       # working tree and grades it against line numbers taken from
       # `git diff`'s own post-image, so the tree has to *be* that
       # post-image. Under the default merge-ref checkout the two diverge for
-      # any file the base branch also changed -- the diff's line numbers
-      # would be the head commit's while the file on disk is the merged
-      # one -- and every other gate here is immune only because it passes
-      # the script extracted diff text rather than reading the tree.
+      # any file the base branch also changed -- verified live, a file both
+      # branches touched grades clean under the merge ref and correctly
+      # reports its gap under the head sha. No other gate here correlates
+      # diff-derived line numbers with tree content, which is why none of
+      # them needs this; several do read the tree (for example
+      # gate_split_fixture_coverage.py and gate_transfer_check_disclosure.py)
+      # but locate what they grade by text rather than by line number.
+      #
+      # The accepted cost, stated rather than discovered later: this runs the
+      # PR branch's own copy of the gate, so a branch that forked before a
+      # hardening of the gate landed on main is graded by the older rules.
+      # Branch protection's "Require branches to be up to date" closes that,
+      # and it is a GitHub-side setting no in-repo file can record.
+      #
       # fetch-depth: 0 so the merge-base below resolves.
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -66,6 +76,22 @@ jobs:
       # a change that landed on the base branch after this PR forked must
       # never be misattributed to this PR.
       #
+      # Two `git diff` flags carry weight and are not defaults:
+      #
+      #   --no-renames, because rename detection is on by default and a file
+      #   moved into one of the graded directories arrives as a
+      #   "similarity index 100%" header with zero added lines. Promoting a
+      #   helper into .github/scripts/ is exactly how this harness grows, and
+      #   without this the promoted file enters scope ungraded -- the same
+      #   rename-shaped fail-open detect_changed_gate_scripts.py's own
+      #   docstring records having had to close.
+      #
+      #   -c core.quotePath=false, because quoting is on by default and a
+      #   non-ASCII path anywhere in the diff is then emitted as an escaped,
+      #   quoted string the gate refuses to resolve (exit 2). That would fail
+      #   the whole job over a file which may not even be in scope, and a
+      #   contributor could not fix it except by renaming their file.
+      #
       # No dependency install step: the gate is standard library only, and
       # ubuntu-latest ships python3.
       - name: Grade the decoded reads and JSON accesses this diff adds
@@ -78,5 +104,5 @@ jobs:
             echo "::error::git merge-base failed between $BASE_SHA and $HEAD_SHA" >&2
             exit 1
           fi
-          git diff -U0 "$merge_base" "$HEAD_SHA" -- '*.py' \
+          git -c core.quotePath=false diff -U0 --no-renames "$merge_base" "$HEAD_SHA" -- '*.py' \
             | python3 .github/scripts/gate_exception_handler_gaps.py

@@ -39,10 +39,13 @@ handle no exception type that a `UnicodeDecodeError` would satisfy.
 that exception or one of its ancestors.
 
 **Rule `json-shape-gap`.** A `.get(...)` on a value that came from
-`json.loads(...)` / `json.load(...)`, in a scope that never calls
-`isinstance()` on it. `[]`, `"x"`, `1`, `true` and `null` are all valid
-JSON, so `json.JSONDecodeError` never fires for them and the `.get()`
-raises `AttributeError` instead.
+`json.loads(...)` / `json.load(...)` with no `isinstance()` against a
+mapping type (`dict`, `Mapping`, `MutableMapping`) before it. `[]`, `"x"`,
+`1`, `true` and `null` are all valid JSON, so `json.JSONDecodeError` never
+fires for them and the `.get()` raises `AttributeError` instead. A
+module-level value is inherited into every function, since that is where
+`CONFIG = json.loads(...)` read back through `CONFIG.get(...)` lives;
+a parameter or a local rebinding of the same name shadows it.
 
 **Scope is the diff, not the repository, and that is the load-bearing
 design decision.** Measured against merged `main` (afd18eb) these two rules
@@ -61,8 +64,16 @@ diff-scoped rule would have caught each one at the moment it was
 introduced. It also needs no allowlist file, which would otherwise be more
 code than the gate itself, and a fail-open surface of its own.
 
-A finding counts as this diff's when any line of the offending expression
-is an added line, so a multi-line call is graded wherever it was touched.
+A finding counts as this diff's when an added line touches the offending
+expression, an enclosing `except` clause, or anything between a JSON parse
+and the access it feeds. Anchoring on the expression alone was not enough,
+and that was found by review rather than by reasoning: narrowing
+`except ValueError` to `except OSError` creates a decode gap without
+editing the read, and replacing an `isinstance` guard creates a shape gap
+without editing the `.get()`. Both are added lines; neither is inside the
+expression. A waiver, unlike a trigger, is only honoured on the offending
+expression's own lines, and only for the innermost finding containing it --
+a waiver has to name the thing it excuses.
 
 In-scope paths are this repository's deterministic checker scripts --
 `.github/scripts/*.py`, `hooks/*.py`, `evals/scripts/*.py`,
@@ -81,6 +92,13 @@ read, and a subscript or `.items()` on an unvalidated JSON result rather
 than a `.get()`. Widening any of them is a measurement, not a guess -- run
 the rule repo-wide and triage the delta first, the same way this one was.
 
+Known misses, named rather than left to be rediscovered: a
+`contextlib.suppress(UnicodeDecodeError)` around a read is not read as a
+handler (it would be a false positive, and the inline waiver covers it); a
+closure reading an *enclosing function's* JSON value is not graded, unlike
+a module-level one; and a guard deleted with nothing added in its place
+leaves no added line for any diff-scoped rule to key on.
+
 An intentional read that a *caller* guards can disclose itself inline with
 a trailing `# exception-handler-gap: WAIVED: <reason>` comment, the same
 `WAIVED: <reason>` vocabulary `gate_skill_audit_disclosure.py` already uses
@@ -92,8 +110,14 @@ Standard library only, so the calling workflow needs no dependency install.
 
 Usage::
 
-    git diff -U0 "$MERGE_BASE" "$HEAD_SHA" -- '*.py' \\
+    git -c core.quotePath=false diff -U0 --no-renames \\
+        "$MERGE_BASE" "$HEAD_SHA" -- '*.py' \\
       | python3 .github/scripts/gate_exception_handler_gaps.py
+
+Both flags are load-bearing, not tidiness: rename detection hides a file
+promoted into a graded directory behind a zero-added-line header, and
+`core.quotePath` renders a non-ASCII path as an escaped string this gate
+refuses to resolve. The calling workflow states each at its own use site.
 
 Reads a unified diff on stdin; diagnostics and violations go to stderr.
 
@@ -143,12 +167,18 @@ _DECODE_COVERING = frozenset(
 
 _JSON_PARSERS = frozenset({"loads", "load"})
 
+# The types an `isinstance()` has to name for a JSON value to count as checked.
+# `Mapping` and `MutableMapping` are here because `collections.abc` is how the
+# rest of this repository spells "a mapping" in its own annotations; an
+# attribute handler is compared by its final name, so `t.Mapping` matches too.
+_MAPPING_TYPES = frozenset({"dict", "Mapping", "MutableMapping"})
+
 # `# exception-handler-gap: WAIVED: <reason>` -- a reason is mandatory, the
 # same way `gate_skill_audit_disclosure.py`'s own `WAIVED:` clause requires
 # one. A bare marker is not a waiver and is not honoured.
 _WAIVER_RE = re.compile(r"#\s*exception-handler-gap\s*:\s*WAIVED\s*:\s*\S.*", re.IGNORECASE)
 
-_HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
+_HUNK_RE = re.compile(r"@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
 
 _DECODE_GAP = "decode-gap"
 _JSON_SHAPE_GAP = "json-shape-gap"
@@ -278,46 +308,79 @@ def _handler_names(handler: ast.ExceptHandler) -> set[str]:
     return names
 
 
-def _decode_covered_calls(tree: ast.Module) -> set[int]:
-    """Return the ``id()`` of every Call lexically inside a `try` body whose
-    handlers cover a decode failure.
+def _handler_header_lines(handler: ast.ExceptHandler) -> set[int]:
+    """Return the lines of one `except ...:` clause header, body excluded.
 
-    Only the `try` *body* counts. A read inside an `except`, `else` or
+    These are trigger lines, not just decoration: narrowing `except ValueError`
+    to `except OSError` creates a decode gap without touching the read itself,
+    which is exactly issue #682's defect F.
+    """
+    end = handler.type.end_lineno if handler.type is not None else None
+    return set(range(handler.lineno, (end if end is not None else handler.lineno) + 1))
+
+
+def _decode_coverage(tree: ast.Module) -> tuple[set[int], dict[int, set[int]]]:
+    """Return ``(ids of covered Calls, {id(Call): enclosing handler lines})``.
+
+    Only a `try` *body* protects. A read inside an `except`, `else` or
     `finally` clause is not protected by that same statement's own handlers,
     which is exactly where a "read the file again to report a better error"
     fallback tends to live.
+
+    The second return value is what makes a *narrowed handler* this diff's
+    finding: the read line is untouched in that edit, so anchoring on it alone
+    would let the defect through.
     """
     covered: set[int] = set()
+    handler_lines: dict[int, set[int]] = {}
 
-    def walk(node: ast.AST, protected: bool) -> None:
-        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda):
-            # A function *defined* inside a try body does not run inside it.
-            # Carrying protection into its body would excuse a read in a
-            # helper whose only call site is somewhere else entirely.
-            for descendant in ast.iter_child_nodes(node):
-                walk(descendant, False)
+    def walk(node: ast.AST, protected: bool, enclosing: frozenset[int]) -> None:
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+            # A function *defined* inside a try body does not run inside it, so
+            # its body loses the protection -- but its decorators and argument
+            # defaults are evaluated right there and keep it.
+            for decorator in node.decorator_list:
+                walk(decorator, protected, enclosing)
+            for default in [*node.args.defaults, *(d for d in node.args.kw_defaults if d)]:
+                walk(default, protected, enclosing)
+            for child in node.body:
+                walk(child, False, frozenset())
             return
-        if isinstance(node, ast.Try):
+        if isinstance(node, ast.Lambda | ast.GeneratorExp):
+            # Same deferred execution, without a body/decorator split: a lambda
+            # is called later, and a generator expression is consumed later --
+            # verified by execution, a `read_text` inside one raises outside
+            # the `try` that lexically encloses it. A list/set/dict
+            # comprehension is eager and is deliberately not listed here.
+            for descendant in ast.iter_child_nodes(node):
+                walk(descendant, False, frozenset())
+            return
+        if isinstance(node, ast.Try | ast.TryStar):
             handled: set[str] = set()
+            lines: set[int] = set()
             for handler in node.handlers:
                 handled |= _handler_names(handler)
+                lines |= _handler_header_lines(handler)
             body_protected = protected or bool(handled & _DECODE_COVERING)
+            body_enclosing = enclosing | lines
             for child in node.body:
-                walk(child, body_protected)
+                walk(child, body_protected, frozenset(body_enclosing))
             for handler in node.handlers:
                 for child in handler.body:
-                    walk(child, protected)
+                    walk(child, protected, enclosing)
             for child in [*node.orelse, *node.finalbody]:
-                walk(child, protected)
+                walk(child, protected, enclosing)
             return
-        if protected and isinstance(node, ast.Call):
-            covered.add(id(node))
+        if isinstance(node, ast.Call):
+            handler_lines[id(node)] = set(enclosing)
+            if protected:
+                covered.add(id(node))
         for descendant in ast.iter_child_nodes(node):
-            walk(descendant, protected)
+            walk(descendant, protected, enclosing)
 
     for statement in tree.body:
-        walk(statement, False)
-    return covered
+        walk(statement, False, frozenset())
+    return covered, handler_lines
 
 
 def _looks_like_a_mode(node: ast.expr) -> bool:
@@ -331,7 +394,6 @@ def _looks_like_a_mode(node: ast.expr) -> bool:
     return (
         isinstance(node, ast.Constant)
         and isinstance(node.value, str)
-        and bool(node.value)
         and set(node.value) <= set("rwxab+t")
     )
 
@@ -394,14 +456,20 @@ def _text_read_kind(node: ast.Call) -> str | None:
 
     positional_mode = node.args[0] if node.args and _looks_like_a_mode(node.args[0]) else None
     mode = mode_kwarg if mode_kwarg is not None else positional_mode
-    declares_text = (
-        any(keyword.arg == "encoding" for keyword in node.keywords)
-        or mode is not None
-        or (not node.args and not node.keywords)
-    )
-    if not declares_text:
-        return None
-    return "open" if _mode_is_text_read(mode, unknown_is_read=False) else None
+    if mode is not None:
+        return "open" if _mode_is_text_read(mode, unknown_is_read=False) else None
+    if not node.args:
+        # No mode and no positional receiver-specific argument: `Path.open()`
+        # defaults to "r". Keyword-only calls land here too, which is what
+        # brings `p.open(newline="")` -- the csv-reading idiom -- and
+        # `p.open(buffering=1)` into scope; requiring `encoding=` specifically
+        # missed both.
+        return "open"
+    if any(keyword.arg == "encoding" for keyword in node.keywords):
+        # `io.open(path, encoding="utf-8")`: a positional filename, but the
+        # `encoding=` says plainly that this decodes.
+        return "open"
+    return None
 
 
 def _is_json_parse(node: ast.expr) -> bool:
@@ -425,10 +493,14 @@ def _scope_body(scope: _Scope) -> Iterator[ast.AST]:
     nested functions -- those are their own scope and are walked separately.
 
     The cost of that exclusion is stated rather than hidden: a closure that
-    reads an outer function's JSON value is not graded. Sharing the outer
-    scope's taint would also share every *other* function's, so the same
-    variable name validated in one function would silence it in all of them
-    -- a fail-open in a gate whose whole subject is fail-open.
+    reads an *enclosing function's* JSON value is not graded. Sharing an
+    arbitrary outer function's taint would also share every other function's,
+    so the same variable name validated in one would silence it in all -- a
+    fail-open in a gate whose whole subject is fail-open. Module scope is the
+    exception and is inherited (see `_json_shape_gaps`): a module-level name
+    really is visible in every function, and `CONFIG = json.loads(...)` read
+    back through `CONFIG.get(...)` inside a function is the single most common
+    shape of this defect.
     """
     for child in ast.iter_child_nodes(scope):
         if isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef):
@@ -452,44 +524,142 @@ def _scopes(tree: ast.Module) -> Iterator[_Scope]:
             yield node
 
 
-def _json_shape_gaps(tree: ast.Module) -> Iterator[ast.Call]:
+def _assigned_names(node: ast.AST) -> Iterator[tuple[str, ast.expr | None]]:
+    """Yield ``(bound name, the expression bound to it)`` for one statement.
+
+    Tuple unpacking is handled positionally, so `data, extra = json.loads(raw), 1`
+    taints `data` and not `extra` -- reading the whole right-hand side as one
+    value tainted neither.
+    """
+    if isinstance(node, ast.Assign):
+        for target in node.targets:
+            if isinstance(target, ast.Name):
+                yield target.id, node.value
+            elif isinstance(target, ast.Tuple) and isinstance(node.value, ast.Tuple):
+                for element, value in zip(target.elts, node.value.elts, strict=False):
+                    if isinstance(element, ast.Name):
+                        yield element.id, value
+            elif isinstance(target, ast.Tuple):
+                for element in target.elts:
+                    if isinstance(element, ast.Name):
+                        yield element.id, None
+    elif isinstance(node, ast.AnnAssign | ast.NamedExpr):
+        if isinstance(node.target, ast.Name):
+            yield node.target.id, node.value
+    elif isinstance(node, ast.For | ast.AsyncFor) and isinstance(node.target, ast.Name):
+        yield node.target.id, None
+
+
+def _isinstance_checks_mapping(node: ast.Call) -> str | None:
+    """Return the name an `isinstance(name, dict-ish)` call validates, or None.
+
+    The second argument has to actually name a mapping type. An earlier
+    revision accepted any type, so the real double-encoded-JSON idiom --
+    `if isinstance(data, str): data = json.loads(data)` -- silenced the
+    `.get()` that followed it, while `json.loads` could still return a list.
+    """
+    if not (isinstance(node.func, ast.Name) and node.func.id == "isinstance" and len(node.args) == 2):
+        return None
+    subject = node.args[0]
+    if isinstance(subject, ast.NamedExpr) and isinstance(subject.target, ast.Name):
+        name = subject.target.id
+    elif isinstance(subject, ast.Name):
+        name = subject.id
+    else:
+        return None
+    candidates = node.args[1].elts if isinstance(node.args[1], ast.Tuple) else [node.args[1]]
+    for candidate in candidates:
+        label = (
+            candidate.id
+            if isinstance(candidate, ast.Name)
+            else candidate.attr
+            if isinstance(candidate, ast.Attribute)
+            else None
+        )
+        if label in _MAPPING_TYPES:
+            return name
+    return None
+
+
+class _JsonGap(NamedTuple):
+    """One `.get()` on an unvalidated JSON value, with the lines that make it
+    this diff's finding.
+
+    `trigger_from` is the line a guard would have to sit at or after to
+    protect this access: the parse itself when both are in one scope, or the
+    enclosing function's own `def` line when the value came from module scope.
+    Anything edited between there and the access can create or destroy this
+    finding, so anything edited there re-grades it -- without which, replacing
+    `if not isinstance(data, dict)` with a different check leaves the `.get()`
+    line untouched and the new defect ungraded.
+    """
+
+    call: ast.Call
+    trigger_from: int
+
+
+def _scope_taint(nodes: list[ast.AST]) -> tuple[dict[str, int], dict[str, int], set[str]]:
+    """Return ``(tainted name -> parse line, validated name -> earliest check
+    line, names rebound to something that is not a parse)`` for one scope."""
+    tainted: dict[str, int] = {}
+    validated: dict[str, int] = {}
+    rebound: set[str] = set()
+    for node in nodes:
+        for name, value in _assigned_names(node):
+            if value is not None and _is_json_parse(value):
+                # The parse expression's own line, not the statement's: they
+                # are the same for every real shape, and only the expression
+                # is statically known to carry one.
+                tainted.setdefault(name, value.lineno)
+            else:
+                rebound.add(name)
+        if isinstance(node, ast.Call):
+            checked = _isinstance_checks_mapping(node)
+            if checked is not None:
+                validated[checked] = min(validated.get(checked, node.lineno), node.lineno)
+    return tainted, validated, rebound
+
+
+def _json_shape_gaps(tree: ast.Module) -> Iterator[_JsonGap]:
     """Yield every `.get()` call made on an unvalidated JSON result."""
+    module_nodes = list(_scope_body(tree))
+    module_tainted, module_validated, _module_rebound = _scope_taint(module_nodes)
+
     for scope in _scopes(tree):
         nodes = list(_scope_body(scope))
-        tainted: set[str] = set()
-        # name -> the earliest line an isinstance() names it on. A check that
-        # runs *after* the access it is supposed to guard protects nothing,
-        # so the line is kept rather than a bare "was checked somewhere" flag.
-        validated: dict[str, int] = {}
-        for node in nodes:
-            if isinstance(node, ast.Assign) and _is_json_parse(node.value):
-                tainted |= {t.id for t in node.targets if isinstance(t, ast.Name)}
-            elif isinstance(node, ast.AnnAssign | ast.NamedExpr) and node.value is not None:
-                if _is_json_parse(node.value) and isinstance(node.target, ast.Name):
-                    tainted.add(node.target.id)
-            elif (
-                isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Name)
-                and node.func.id == "isinstance"
-                and node.args
-                and isinstance(node.args[0], ast.Name)
-            ):
-                name = node.args[0].id
-                validated[name] = min(validated.get(name, node.lineno), node.lineno)
+        tainted, validated, rebound = _scope_taint(nodes)
+        inherited: dict[str, int] = {}
+        if not isinstance(scope, ast.Module):
+            # A module-level name really is visible here, unlike an arbitrary
+            # enclosing function's local. Shadowing wins: a parameter or a
+            # local rebound to anything else is a different value.
+            parameters = {
+                argument.arg
+                for argument in [*scope.args.posonlyargs, *scope.args.args, *scope.args.kwonlyargs]
+            } | {a.arg for a in (scope.args.vararg, scope.args.kwarg) if a is not None}
+            shadowed = parameters | rebound | set(tainted)
+            inherited = {n: line for n, line in module_tainted.items() if n not in shadowed}
+            for name, line in module_validated.items():
+                if name not in shadowed:
+                    validated[name] = min(validated.get(name, line), line)
+
         for node in nodes:
             if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
                 continue
             if node.func.attr != "get":
                 continue
             receiver = node.func.value
-            if isinstance(receiver, ast.Name) and receiver.id in tainted:
+            if isinstance(receiver, ast.Name) and (receiver.id in tainted or receiver.id in inherited):
                 checked_at = validated.get(receiver.id)
-                if checked_at is None or checked_at > node.lineno:
-                    yield node
+                if checked_at is not None and checked_at <= node.lineno:
+                    continue
+                trigger_from = tainted.get(receiver.id, scope.lineno if not isinstance(scope, ast.Module) else 1)
+                yield _JsonGap(node, trigger_from)
             elif _is_json_parse(receiver):
                 # `json.loads(body).get(...)` -- the same defect with no
-                # variable to taint, so no isinstance() can ever guard it.
-                yield node
+                # variable to taint, so no isinstance() can ever guard it, and
+                # nothing between a parse and an access to re-grade either.
+                yield _JsonGap(node, node.lineno)
 
 
 def _waived_lines(source: str) -> set[int]:
@@ -514,10 +684,25 @@ def _waived_lines(source: str) -> set[int]:
     return waived
 
 
+class _Candidate(NamedTuple):
+    """A finding plus the two line sets that decide what happens to it.
+
+    `trigger` is what makes it *this diff's* finding: the offending expression
+    itself, plus every other line an edit could use to create it (a narrowed
+    `except` clause, a replaced JSON guard). `expression` is the narrower set a
+    waiver comment may sit on -- a waiver has to name the thing it excuses, so
+    editing an enclosing handler must never be read as waiving anything.
+    """
+
+    finding: Finding
+    trigger: frozenset[int]
+    expression: frozenset[int]
+
+
 def findings_for_source(path: str, source: str, added: set[int]) -> tuple[list[Finding], list[Finding]]:
     """Grade one file's source, returning ``(violations, honoured waivers)``.
 
-    Only findings whose expression touches an added line are returned, so a
+    Only findings an added line could have created are returned, so a
     pre-existing gap another PR owns is never this diff's failure.
     """
     try:
@@ -526,49 +711,61 @@ def findings_for_source(path: str, source: str, added: set[int]) -> tuple[list[F
         raise ScanError(f"{path}: cannot be parsed as Python: {error}") from error
 
     waived_lines = _waived_lines(source)
-    covered = _decode_covered_calls(tree)
+    covered, handler_lines = _decode_coverage(tree)
 
-    candidates: list[tuple[Finding, set[int]]] = []
+    candidates: list[_Candidate] = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
         kind = _text_read_kind(node)
-        if kind is not None and id(node) not in covered:
-            candidates.append(
-                (
-                    Finding(
-                        path,
-                        node.lineno,
-                        _DECODE_GAP,
-                        f"{kind}(...) decodes text, but no enclosing try handles UnicodeDecodeError "
-                        "(or an ancestor of it)",
-                    ),
-                    _span(node),
-                )
-            )
-    for node in _json_shape_gaps(tree):
+        if kind is None or id(node) in covered:
+            continue
+        expression = _span(node)
+        anchor = node.func.end_lineno if isinstance(node.func, ast.Attribute) else None
         candidates.append(
-            (
+            _Candidate(
                 Finding(
                     path,
-                    node.lineno,
+                    anchor if anchor is not None else node.lineno,
+                    _DECODE_GAP,
+                    f"{kind}(...) decodes text, but no enclosing try handles UnicodeDecodeError "
+                    "(or an ancestor of it)",
+                ),
+                frozenset(expression | handler_lines.get(id(node), set())),
+                frozenset(expression),
+            )
+        )
+    for gap in _json_shape_gaps(tree):
+        expression = _span(gap.call)
+        end = gap.call.end_lineno if gap.call.end_lineno is not None else gap.call.lineno
+        anchor = gap.call.func.end_lineno if isinstance(gap.call.func, ast.Attribute) else None
+        candidates.append(
+            _Candidate(
+                Finding(
+                    path,
+                    anchor if anchor is not None else gap.call.lineno,
                     _JSON_SHAPE_GAP,
                     ".get() on a json.loads result never checked with isinstance(); a valid "
                     'non-object payload ([], "x", 1, null) raises AttributeError',
                 ),
-                _span(node),
+                frozenset(expression | set(range(min(gap.trigger_from, end), end + 1))),
+                frozenset(expression),
             )
         )
 
-    violations: list[Finding] = []
-    waived: list[Finding] = []
-    for finding, span in candidates:
-        if not (span & added):
-            continue
-        if span & waived_lines:
-            waived.append(finding)
-        else:
-            violations.append(finding)
+    in_diff = [candidate for candidate in candidates if candidate.trigger & added]
+    # A waiver excuses the *innermost* finding whose own expression contains
+    # it. Matching every candidate whose expression crosses the line let a
+    # waiver written for an inner argument silence the outer call it sits
+    # inside -- with a reason that did not describe the outer defect at all.
+    waived_ids: set[int] = set()
+    for line in waived_lines:
+        containing = [c for c in in_diff if line in c.expression]
+        if containing:
+            waived_ids.add(id(min(containing, key=lambda c: len(c.expression))))
+
+    violations = [c.finding for c in in_diff if id(c) not in waived_ids]
+    waived = [c.finding for c in in_diff if id(c) in waived_ids]
     return sorted(set(violations)), sorted(set(waived))
 
 
@@ -595,7 +792,7 @@ def find_violations(diff_text: str, root: pathlib.Path) -> tuple[list[Finding], 
     waived: list[Finding] = []
     graded = 0
     for path, added in sorted(parse_added_lines(diff_text).items()):
-        if not in_scope(path) or not added:
+        if not in_scope(path):
             continue
         absolute = root / path
         try:

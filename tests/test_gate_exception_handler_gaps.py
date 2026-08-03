@@ -6,11 +6,16 @@ defect has shipped into this repository's own gates five times: a decoded
 read whose enclosing `try` names the wrong failure or no failure at all, and
 a `.get()` on a `json.loads` result never checked to be an object.
 
-The three regression fixtures below are not invented shapes. Each is the
-verbatim excerpt of a real defective commit still readable in this
-repository's history -- the same style PR #674 used for its own
-`_PR_651_BODY_EXCERPT` -- so the gate's claimed yield is re-verified here
-rather than inherited from issue #682's prose:
+The three regression fixtures below are reconstructions of real defective
+commits still readable in this repository's history, in the same style
+PR #674 used for its own `_PR_651_BODY_EXCERPT`. Issue #682's acceptance
+criterion allows either "check out or reconstruct the defective state", and
+reconstruction is what these are: each preserves the defect and every
+structure the rules have to traverse to reach it, but drops surrounding
+docstrings and adds the imports needed to parse standalone. They are
+deliberately not called verbatim. The yield claim itself was re-measured
+against the real file contents at each commit (`git show <sha>:<path>`),
+which the pytest job's own shallow checkout cannot do:
 
 * defect C -- `f91383c:.github/scripts/gate_plugin_root_brace_notation.py`
 * defect E -- `406d587:.github/scripts/detect_changed_gate_scripts.py`
@@ -70,11 +75,18 @@ def _write(root: pathlib.Path, relative: str, source: str) -> pathlib.Path:
 def _grade(
     tmp_path: pathlib.Path, source: str, *, relative: str = ".github/scripts/gate_x.py"
 ) -> list[gate.Finding]:
-    """Write `source` at `relative`, grade it as wholly added, return violations."""
+    """Write `source` at `relative`, grade it as wholly added, return violations.
+
+    The `graded == 1` assertion is load-bearing, not decoration. Every
+    "must not fire" test below asserts `== []`, and without this a gate that
+    read nothing at all -- a wrong scope rule, a wrong root -- would satisfy
+    all of them at once.
+    """
     _write(tmp_path, relative, source)
-    violations, _waived, _graded = gate.find_violations(
+    violations, _waived, graded = gate.find_violations(
         _whole_file_diff(relative, source), tmp_path
     )
+    assert graded == 1, f"{relative} was not graded at all"
     return violations
 
 
@@ -82,9 +94,13 @@ def _rules(findings: list[gate.Finding]) -> list[str]:
     return [finding.rule for finding in findings]
 
 
+def _at(findings: list[gate.Finding]) -> list[tuple[str, int]]:
+    return [(finding.rule, finding.line) for finding in findings]
+
+
 # --- regression fixtures from the real defective commits ----------------
 
-# f91383c:.github/scripts/gate_plugin_root_brace_notation.py:109-121, verbatim.
+# Reconstructed from f91383c:.github/scripts/gate_plugin_root_brace_notation.py:109-121.
 # `path.read_text(...)` sits inside no `try` at all, so a non-UTF-8 agent
 # definition produced an uncaught UnicodeDecodeError traceback.
 _DEFECT_C = '''
@@ -102,7 +118,7 @@ def offending_lines(path: pathlib.Path) -> list[str]:
     return [candidate for candidate in candidates if _UNBRACED_RE.search(candidate)]
 '''
 
-# 406d587:.github/scripts/detect_changed_gate_scripts.py:104-116, verbatim.
+# Reconstructed from 406d587:.github/scripts/detect_changed_gate_scripts.py:98-116.
 # The UnicodeDecodeError *is* handled here -- what is missing is any check
 # that the parsed JSON is an object, so `[]` reached `.get` and raised
 # AttributeError. The `isinstance(gates, list)` two lines below validates a
@@ -125,34 +141,48 @@ def registered_gate_paths(repo_root=REPO_ROOT):
         raise ScopeError(f"{path}: gate registry has no usable 'gates' list")
 '''
 
-# 0b4cedd:.github/scripts/detect_changed_gate_scripts.py:296-300, verbatim.
+# Reconstructed from 0b4cedd:.github/scripts/detect_changed_gate_scripts.py:293-307.
 # The read was wrapped -- in a handler naming only OSError, so a non-UTF-8
 # diff escaped as a traceback. This is the shape that has recurred most.
 _DEFECT_F = '''
 def main(args):
-    if args.unified_diff:
-        try:
-            diff_text = open(args.unified_diff, encoding="utf-8").read()
-        except OSError as error:
-            raise ScopeError(f"unified diff cannot be read: {error}") from error
+    try:
+        registered = registered_gate_paths(args.repo_root)
+        exempt = frozenset()
+        if args.unified_diff:
+            try:
+                diff_text = open(args.unified_diff, encoding="utf-8").read()
+            except OSError as error:
+                raise ScopeError(f"unified diff cannot be read: {error}") from error
+            exempt = pin_only_workflow_paths(diff_text)
+        selected = select(sys.stdin.read(), registered, exempt)
+    except ScopeError as error:
+        print(f"{error}", file=sys.stderr)
+        return 2
+    return 0
 '''
 
 
 def test_defect_c_uncaught_decode_on_an_unguarded_read_is_caught(tmp_path: pathlib.Path) -> None:
-    """PR #651's own shipped defect, re-measured rather than assumed."""
-    assert _rules(_grade(tmp_path, _DEFECT_C)) == ["decode-gap"]
+    """PR #651's own shipped defect, re-measured rather than assumed. The line
+    is asserted too: a rule-only assertion would pass on any finding anywhere
+    in the fixture, including one the real defect never had."""
+    assert _at(_grade(tmp_path, _DEFECT_C)) == [("decode-gap", 8)]
 
 
 def test_defect_e_get_on_an_unvalidated_json_result_is_caught(tmp_path: pathlib.Path) -> None:
     """PR #674 review round 1's defect. The read itself is correctly guarded
     here, so a rule keyed only on reads would have missed it."""
-    assert _rules(_grade(tmp_path, _DEFECT_E)) == ["json-shape-gap"]
+    assert _at(_grade(tmp_path, _DEFECT_E)) == [("json-shape-gap", 14)]
 
 
 def test_defect_f_oserror_only_handler_around_a_decoded_read_is_caught(
     tmp_path: pathlib.Path,
 ) -> None:
-    assert _rules(_grade(tmp_path, _DEFECT_F)) == ["decode-gap"]
+    """The fixture keeps the real commit's *outer* `try/except ScopeError`, so
+    this exercises the nested-try recursion the defect actually sat inside --
+    a flattened paraphrase would trip the rule for an easier reason."""
+    assert _at(_grade(tmp_path, _DEFECT_F)) == [("decode-gap", 8)]
 
 
 def test_the_fixes_that_landed_for_c_e_and_f_pass(tmp_path: pathlib.Path) -> None:
@@ -194,8 +224,11 @@ def test_open_with_no_mode_is_a_read_and_is_flagged(tmp_path: pathlib.Path) -> N
     assert _rules(_grade(tmp_path, 'fh = open("x", encoding="utf-8")\n')) == ["decode-gap"]
 
 
-def test_open_in_update_mode_is_flagged(tmp_path: pathlib.Path) -> None:
-    assert _rules(_grade(tmp_path, 'fh = open("x", "r+", encoding="utf-8")\n')) == ["decode-gap"]
+@pytest.mark.parametrize("mode", ["r+", "w+", "a+"])
+def test_open_in_an_update_mode_is_flagged(tmp_path: pathlib.Path, mode: str) -> None:
+    """`w+` and `a+` are the ones that reach the `+` branch at all -- `r+` is
+    already satisfied by the `r` test, so it alone would leave it unpinned."""
+    assert _rules(_grade(tmp_path, f'fh = open("x", "{mode}", encoding="utf-8")\n')) == ["decode-gap"]
 
 
 def test_open_with_a_non_constant_mode_fails_closed(tmp_path: pathlib.Path) -> None:
@@ -285,7 +318,7 @@ def test_read_bytes_is_out_of_scope(tmp_path: pathlib.Path) -> None:
         "webbrowser.open(url)",
         "os.open(path, os.O_RDONLY)",
         "zipfile.ZipFile(z).open(name)",
-        'zipfile.ZipFile(z).open("member.txt")',
+        'zipfile.ZipFile(z).open("secret.txt")',
         'pathlib.Path(p).open("rb")',
         'pathlib.Path(p).open("w", encoding="utf-8")',
     ],
@@ -520,6 +553,24 @@ def test_a_removed_line_whose_content_starts_with_two_dashes_is_not_a_header(
     assert gate.parse_added_lines(diff) == {".github/scripts/gate_x.py": {1}}
 
 
+def test_both_in_hunk_header_lookalikes_in_one_hunk_are_content(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The killing case for the hunk-state machine: a removed `-- ` line arms
+    nothing, and the `++ ` line after it is content. Testing either half alone
+    left both guards passing individually while jointly broken."""
+    diff = (
+        "diff --git a/.github/scripts/gate_x.py b/.github/scripts/gate_x.py\n"
+        "--- a/.github/scripts/gate_x.py\n"
+        "+++ b/.github/scripts/gate_x.py\n"
+        "@@ -1,2 +1,2 @@\n"
+        "--- an added list marker line\n"
+        "++ a list marker, not a diff header\n"
+        "+text = p.read_text()\n"
+    )
+    assert gate.parse_added_lines(diff) == {".github/scripts/gate_x.py": {1, 2}}
+
+
 def test_a_post_image_path_without_the_b_prefix_fails_closed() -> None:
     """--no-prefix output and a git-quoted path both land here. Guessing at
     either silently drops a file from grading."""
@@ -602,6 +653,247 @@ def test_against_real_git_diff_output(tmp_path: pathlib.Path) -> None:
     assert [(finding.rule, finding.line) for finding in violations] == [("decode-gap", 12)]
 
 
+# --- the edits that create a gap without touching the offending line ----
+
+
+def test_narrowing_an_enclosing_handler_is_this_diffs_finding(tmp_path: pathlib.Path) -> None:
+    """Issue #682's defect F is created by editing the `except` clause, not the
+    read. Anchoring only on the read's own lines let exactly that edit through
+    -- a fail-open in the gate, in the class the gate exists to catch."""
+    source = (
+        "def read(path):\n"
+        "    try:\n"
+        "        return path.read_text(encoding='utf-8')\n"
+        "    except OSError:\n"
+        "        return ''\n"
+    )
+    _write(tmp_path, ".github/scripts/gate_x.py", source)
+    violations, _waived, _graded = gate.find_violations(
+        _partial_diff(".github/scripts/gate_x.py", source, [4]), tmp_path
+    )
+    assert _at(violations) == [("decode-gap", 3)]
+
+
+def test_replacing_a_json_guard_is_this_diffs_finding(tmp_path: pathlib.Path) -> None:
+    """The mirror case: swapping `isinstance(data, dict)` for a different check
+    leaves the `.get()` untouched. Anything edited between the parse and the
+    access re-grades the finding, because that is where a guard has to live."""
+    source = (
+        "def load(raw):\n"
+        "    data = json.loads(raw)\n"
+        "    if not data:\n"
+        "        raise ValueError('empty')\n"
+        "    return data.get('k')\n"
+    )
+    _write(tmp_path, ".github/scripts/gate_x.py", source)
+    violations, _waived, _graded = gate.find_violations(
+        _partial_diff(".github/scripts/gate_x.py", source, [3]), tmp_path
+    )
+    assert _at(violations) == [("json-shape-gap", 5)]
+
+
+def test_an_untouched_function_elsewhere_in_the_file_stays_out_of_scope(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The widening above must not become "grade the whole file": a gap in a
+    function this diff never touched is still another PR's to own."""
+    source = (
+        "def untouched(path):\n"
+        "    return path.read_text()\n"
+        "\n"
+        "\n"
+        "def touched():\n"
+        "    return 1\n"
+    )
+    _write(tmp_path, ".github/scripts/gate_x.py", source)
+    violations, _waived, _graded = gate.find_violations(
+        _partial_diff(".github/scripts/gate_x.py", source, [6]), tmp_path
+    )
+    assert violations == []
+
+
+# --- deferred execution: a try does not protect what runs later ---------
+
+
+def test_a_generator_expression_inside_a_try_is_not_protected_by_it(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Confirmed by execution: the read runs when the generator is consumed,
+    outside the `try` that lexically encloses it."""
+    source = (
+        "def read_all(paths):\n"
+        "    try:\n"
+        "        texts = (pathlib.Path(p).read_text(encoding='utf-8') for p in paths)\n"
+        "    except ValueError:\n"
+        "        return []\n"
+        "    return list(texts)\n"
+    )
+    assert _rules(_grade(tmp_path, source)) == ["decode-gap"]
+
+
+def test_a_list_comprehension_inside_a_try_is_eager_and_stays_protected(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The other side of the same boundary, so the fix above cannot quietly
+    grow into "every comprehension"."""
+    source = (
+        "def read_all(paths):\n"
+        "    try:\n"
+        "        return [pathlib.Path(p).read_text(encoding='utf-8') for p in paths]\n"
+        "    except ValueError:\n"
+        "        return []\n"
+    )
+    assert _grade(tmp_path, source) == []
+
+
+def test_a_lambda_inside_a_try_is_not_protected_by_it(tmp_path: pathlib.Path) -> None:
+    source = "try:\n    read = lambda: p.read_text()\nexcept ValueError:\n    read = None\n"
+    assert _rules(_grade(tmp_path, source)) == ["decode-gap"]
+
+
+def test_a_decorator_evaluated_inside_a_try_keeps_its_protection(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A decorator expression and an argument default really do run inside the
+    `try`, unlike the function body they belong to."""
+    source = (
+        "try:\n"
+        "    @register(p.read_text())\n"
+        "    def handler(cache=p.read_text()):\n"
+        "        return cache\n"
+        "except ValueError:\n"
+        "    handler = None\n"
+    )
+    assert _grade(tmp_path, source) == []
+
+
+def test_except_star_handlers_are_read(tmp_path: pathlib.Path) -> None:
+    """`ast.TryStar` is not a subclass of `ast.Try`, so an exception group
+    handler was invisible and its read reported as a false positive."""
+    source = "try:\n    text = p.read_text()\nexcept* UnicodeDecodeError:\n    text = ''\n"
+    assert _grade(tmp_path, source) == []
+
+
+def test_an_attribute_handler_name_is_matched_by_its_final_component(
+    tmp_path: pathlib.Path,
+) -> None:
+    source = "try:\n    text = p.read_text()\nexcept builtins.ValueError:\n    text = ''\n"
+    assert _grade(tmp_path, source) == []
+
+
+# --- json taint: module scope, shadowing, and the type actually checked --
+
+
+def test_a_module_level_json_result_read_back_inside_a_function_is_flagged(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`CONFIG = json.loads(...)` plus `CONFIG.get(...)` in a function is the
+    commonest shape of this defect; per-scope taint with no module inheritance
+    could not see it at all."""
+    source = "CONFIG = json.loads(RAW)\n\n\ndef names():\n    return CONFIG.get('names', [])\n"
+    assert _rules(_grade(tmp_path, source)) == ["json-shape-gap"]
+
+
+def test_a_module_level_guard_clears_the_inherited_taint(tmp_path: pathlib.Path) -> None:
+    source = (
+        "CONFIG = json.loads(RAW)\n"
+        "if not isinstance(CONFIG, dict):\n"
+        "    raise SystemExit(2)\n"
+        "\n"
+        "\n"
+        "def names():\n"
+        "    return CONFIG.get('names', [])\n"
+    )
+    assert _grade(tmp_path, source) == []
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "def names(CONFIG):\n    return CONFIG.get('names', [])\n",
+        "def names():\n    CONFIG = load_defaults()\n    return CONFIG.get('names', [])\n",
+    ],
+)
+def test_a_local_name_shadowing_the_module_one_is_a_different_value(
+    tmp_path: pathlib.Path, body: str
+) -> None:
+    """Inheritance must not turn every same-named local into a finding."""
+    assert _grade(tmp_path, "CONFIG = json.loads(RAW)\n\n\n" + body) == []
+
+
+def test_an_isinstance_against_a_non_mapping_type_does_not_clear_it(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The real double-encoded-JSON idiom. `isinstance(data, str)` says nothing
+    about whether the *reparsed* value is an object, so the `.get()` below it
+    can still raise -- accepting any type here was a fail-open."""
+    source = (
+        "def load(raw):\n"
+        "    data = json.loads(raw)\n"
+        "    if isinstance(data, str):\n"
+        "        data = json.loads(data)\n"
+        "    return data.get('key')\n"
+    )
+    assert _rules(_grade(tmp_path, source)) == ["json-shape-gap"]
+
+
+@pytest.mark.parametrize("mapping_type", ["dict", "Mapping", "abc.MutableMapping", "(dict, str)"])
+def test_an_isinstance_naming_a_mapping_type_clears_it(
+    tmp_path: pathlib.Path, mapping_type: str
+) -> None:
+    source = (
+        "def load(raw):\n"
+        "    data = json.loads(raw)\n"
+        f"    if not isinstance(data, {mapping_type}):\n"
+        "        raise ValueError('x')\n"
+        "    return data.get('key')\n"
+    )
+    assert _grade(tmp_path, source) == []
+
+
+def test_a_walrus_inside_the_isinstance_call_clears_it(tmp_path: pathlib.Path) -> None:
+    source = (
+        "def load(raw):\n"
+        "    if not isinstance(data := json.loads(raw), dict):\n"
+        "        raise ValueError('x')\n"
+        "    return data.get('key')\n"
+    )
+    assert _grade(tmp_path, source) == []
+
+
+def test_tuple_unpacking_taints_only_the_json_element(tmp_path: pathlib.Path) -> None:
+    source = (
+        "def load(raw):\n"
+        "    data, extra = json.loads(raw), {}\n"
+        "    return data.get('k'), extra.get('k')\n"
+    )
+    assert _rules(_grade(tmp_path, source)) == ["json-shape-gap"]
+
+
+def test_a_parser_from_another_module_is_not_a_json_parse(tmp_path: pathlib.Path) -> None:
+    source = "def load(blob):\n    data = yaml.loads(blob)\n    return data.get('k')\n"
+    assert _grade(tmp_path, source) == []
+
+
+def test_an_async_function_is_its_own_scope_and_is_graded(tmp_path: pathlib.Path) -> None:
+    source = "async def load(raw):\n    data = json.loads(raw)\n    return data.get('k')\n"
+    assert _rules(_grade(tmp_path, source)) == ["json-shape-gap"]
+
+
+def test_the_earliest_isinstance_is_the_one_that_counts(tmp_path: pathlib.Path) -> None:
+    """A guard before the access protects it even when a second check follows."""
+    source = (
+        "def load(raw):\n"
+        "    data = json.loads(raw)\n"
+        "    if not isinstance(data, dict):\n"
+        "        raise ValueError('x')\n"
+        "    value = data.get('k')\n"
+        "    assert isinstance(data, dict)\n"
+        "    return value\n"
+    )
+    assert _grade(tmp_path, source) == []
+
+
 # --- scope --------------------------------------------------------------
 
 
@@ -670,8 +962,59 @@ def test_a_bare_marker_with_no_reason_is_not_a_waiver(tmp_path: pathlib.Path) ->
 def test_the_marker_inside_a_string_literal_does_not_waive(tmp_path: pathlib.Path) -> None:
     """This module's own docstring quotes the marker; so does the gate's.
     Read through tokenize, a quoted marker is text, not a comment."""
-    source = 'DOC = "# exception-handler-gap: WAIVED: documenting the syntax"\ntext = p.read_text()\n'
+    source = 'text = p.read_text(D["# exception-handler-gap: WAIVED: documenting the syntax"])\n'
     assert _rules(_grade(tmp_path, source)) == ["decode-gap"]
+
+
+def test_a_waiver_excuses_only_the_innermost_finding_it_sits_inside(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A waiver names the thing it excuses. Matching every finding whose span
+    crossed the line let a waiver written for an inner argument silence the
+    outer call it sits inside -- with a reason that did not describe it."""
+    source = (
+        "def load(raw, fallback):\n"
+        "    return json.loads(\n"
+        "        raw\n"
+        "    ).get(\n"
+        "        'key',\n"
+        "        pathlib.Path(fallback).read_text(),  # exception-handler-gap: WAIVED: bundled asset\n"
+        "    )\n"
+    )
+    _write(tmp_path, ".github/scripts/gate_x.py", source)
+    violations, waived, _graded = gate.find_violations(
+        _whole_file_diff(".github/scripts/gate_x.py", source), tmp_path
+    )
+    assert _rules(violations) == ["json-shape-gap"]
+    assert _rules(waived) == ["decode-gap"]
+
+
+def test_an_edit_to_an_enclosing_handler_is_not_a_place_a_waiver_can_sit(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The handler lines widen what counts as *this diff's* finding; they must
+    not also widen where a waiver is accepted, or narrowing a handler would
+    both create the defect and excuse it."""
+    source = (
+        "def read(path):\n"
+        "    try:\n"
+        "        return path.read_text()\n"
+        "    except OSError:  # exception-handler-gap: WAIVED: not where this belongs\n"
+        "        return ''\n"
+    )
+    assert _rules(_grade(tmp_path, source)) == ["decode-gap"]
+
+
+def test_the_waiver_marker_is_case_insensitive(tmp_path: pathlib.Path) -> None:
+    """Matches `gate_skill_audit_disclosure.py`'s own WAIVED vocabulary, which
+    is case-insensitive; a case-sensitive copy here would diverge silently."""
+    source = "text = p.read_text()  # Exception-Handler-Gap: waived: caller owns this read\n"
+    _write(tmp_path, ".github/scripts/gate_x.py", source)
+    violations, waived, _graded = gate.find_violations(
+        _whole_file_diff(".github/scripts/gate_x.py", source), tmp_path
+    )
+    assert violations == []
+    assert len(waived) == 1
 
 
 def test_a_waiver_on_any_line_of_a_multi_line_call_is_honoured(
@@ -853,6 +1196,28 @@ def test_a_honoured_waiver_is_printed_even_on_an_otherwise_clean_run(
 
 
 # --- the real repository ------------------------------------------------
+
+
+def test_the_workflow_passes_the_two_flags_the_gate_depends_on() -> None:
+    """Drift gate for an invariant this change establishes, per CLAUDE.md
+    section 3: both flags were added after a review found each one's absence
+    was a real defect, and both live in the caller rather than in the script,
+    so nothing else would notice them being dropped.
+
+    `--no-renames`: a file promoted into a graded directory otherwise arrives
+    as a 100%-similarity rename with zero added lines and enters scope
+    ungraded. `core.quotePath=false`: a non-ASCII path anywhere in the diff
+    otherwise arrives C-quoted, which the gate refuses to resolve (exit 2) --
+    failing the job over a file that need not even be in scope.
+    """
+    workflow = (REPO_ROOT / ".github/workflows/exception-handler-gap-gate.yml").read_text(
+        encoding="utf-8"
+    )
+    invocation = next(
+        line for line in workflow.split("\n") if "git" in line and "diff -U0" in line
+    )
+    assert "--no-renames" in invocation, invocation
+    assert "core.quotePath=false" in invocation, invocation
 
 
 def test_this_gate_grades_itself_clean() -> None:
