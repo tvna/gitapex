@@ -62,8 +62,6 @@ import subprocess
 import sys
 from collections.abc import Iterator
 
-from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
-
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 _VARIABLE = "CLAUDE_PLUGIN_ROOT"
@@ -195,22 +193,16 @@ def violations_in(paths: list[pathlib.Path], root: pathlib.Path) -> list[tuple[s
     return violations
 
 
-class GatePluginRootBraceNotationArgs(BaseModel):
+class GatePluginRootBraceNotationArgs:
     """Typed view of `main`'s parsed CLI namespace. `root` must be an
     existing directory -- every existing caller already passes one, so this
     only gives a --root pointing nowhere a clear, early error instead of
     the deeper "git ls-files failed" ScanError it would otherwise surface."""
 
-    model_config = ConfigDict(extra="forbid")
-
-    root: pathlib.Path
-
-    @field_validator("root")
-    @classmethod
-    def _must_be_existing_directory(cls, value: pathlib.Path) -> pathlib.Path:
-        if not value.is_dir():
-            raise ValueError(f"--root must be an existing directory, got {value}")
-        return value
+    def __init__(self, *, root: pathlib.Path) -> None:
+        if not root.is_dir():
+            raise ValueError(f"--root must be an existing directory, got {root}")
+        self.root = root
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -229,7 +221,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         validated = GatePluginRootBraceNotationArgs(root=args.root)
-    except ValidationError:
+    except ValueError:
         print(f"{args.root}: --root must be an existing directory", file=sys.stderr)
         return 2
 

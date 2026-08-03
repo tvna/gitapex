@@ -123,8 +123,6 @@ import pathlib
 import re
 import sys
 
-from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
-
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 SSOT_RELATIVE_PATH = ".gitapex/ssot.json"
 HOOK_WIRING_PATH = "hooks/hooks.json"
@@ -242,23 +240,17 @@ def select(name_status_text: str, registered: set[str]) -> list[str]:
     return sorted(selected)
 
 
-class DetectChangedGateScriptsArgs(BaseModel):
+class DetectChangedGateScriptsArgs:
     """Typed view of `main`'s parsed CLI namespace. `repo_root` must be an
     existing directory -- every existing caller already passes one, so this
     only gives a --repo-root pointing nowhere a clear, early error instead
     of the deeper, less specific "gate registry cannot be read" ScopeError
     it would otherwise surface."""
 
-    model_config = ConfigDict(extra="forbid")
-
-    repo_root: pathlib.Path
-
-    @field_validator("repo_root")
-    @classmethod
-    def _must_be_existing_directory(cls, value: pathlib.Path) -> pathlib.Path:
-        if not value.is_dir():
-            raise ValueError(f"--repo-root must be an existing directory, got {value}")
-        return value
+    def __init__(self, *, repo_root: pathlib.Path) -> None:
+        if not repo_root.is_dir():
+            raise ValueError(f"--repo-root must be an existing directory, got {repo_root}")
+        self.repo_root = repo_root
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -277,7 +269,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         validated = DetectChangedGateScriptsArgs(repo_root=args.repo_root)
-    except ValidationError:
+    except ValueError:
         print(f"{args.repo_root}: --repo-root must be an existing directory", file=sys.stderr)
         return 2
 

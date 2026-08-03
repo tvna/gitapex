@@ -74,8 +74,6 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
 
-from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
-
 _API_ROOT = "https://api.github.com"
 _API_VERSION = "2022-11-28"
 _HTTP_TIMEOUT_SECONDS = 30
@@ -242,24 +240,26 @@ def find_unresolvable_offenders(
     return f"{path}: title/identity convention claim cites {cited}, but none resolve to a real issue/PR"
 
 
-class RetroTitleConventionCitationArgs(BaseModel):
+class RetroTitleConventionCitationArgs:
     """Typed view of `main`'s parsed CLI namespace. `--owner`/`--repo` are
     required unless `--check-only` -- folds the hand-rolled combination
-    check `main` used to perform itself into one pydantic validator,
-    replacing rather than duplicating it."""
+    check `main` used to perform itself into one validator, replacing
+    rather than duplicating it."""
 
-    model_config = ConfigDict(extra="forbid")
-
-    files: list[str]
-    check_only: bool
-    owner: str | None
-    repo: str | None
-
-    @model_validator(mode="after")
-    def _require_owner_repo_unless_check_only(self) -> RetroTitleConventionCitationArgs:
-        if not self.check_only and (not self.owner or not self.repo):
+    def __init__(
+        self,
+        *,
+        files: list[str],
+        check_only: bool,
+        owner: str | None,
+        repo: str | None,
+    ) -> None:
+        if not check_only and (not owner or not repo):
             raise ValueError("--owner and --repo are required outside --check-only")
-        return self
+        self.files = files
+        self.check_only = check_only
+        self.owner = owner
+        self.repo = repo
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -285,7 +285,7 @@ def main(argv: list[str] | None = None) -> int:
             owner=args.owner,
             repo=args.repo,
         )
-    except ValidationError:
+    except ValueError:
         print("error: --owner and --repo are required outside --check-only", file=sys.stderr)
         return 1
 

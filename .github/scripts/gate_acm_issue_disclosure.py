@@ -94,8 +94,6 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
 
-from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
-
 _API_ROOT = "https://api.github.com"
 _API_VERSION = "2022-11-28"
 _HTTP_TIMEOUT_SECONDS = 30
@@ -336,25 +334,28 @@ def post_comment(
     _call("POST", url, token, opener, sleeper, body={"body": body})
 
 
-class AcmIssueDisclosureArgs(BaseModel):
+class AcmIssueDisclosureArgs:
     """Typed view of `main`'s parsed CLI namespace. `--owner`/`--repo`/
     `--issue-number` are required unless `--check-only` -- folds the
     hand-rolled combination check `main` used to perform itself into one
-    pydantic validator, replacing rather than duplicating it."""
+    validator, replacing rather than duplicating it."""
 
-    model_config = ConfigDict(extra="forbid")
-
-    body: str | None
-    check_only: bool
-    owner: str | None
-    repo: str | None
-    issue_number: int | None
-
-    @model_validator(mode="after")
-    def _require_owner_repo_issue_number_unless_check_only(self) -> AcmIssueDisclosureArgs:
-        if not self.check_only and (not self.owner or not self.repo or self.issue_number is None):
+    def __init__(
+        self,
+        *,
+        body: str | None,
+        check_only: bool,
+        owner: str | None,
+        repo: str | None,
+        issue_number: int | None,
+    ) -> None:
+        if not check_only and (not owner or not repo or issue_number is None):
             raise ValueError("--owner, --repo, and --issue-number are required outside --check-only")
-        return self
+        self.body = body
+        self.check_only = check_only
+        self.owner = owner
+        self.repo = repo
+        self.issue_number = issue_number
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -383,7 +384,7 @@ def main(argv: list[str] | None = None) -> int:
             repo=args.repo,
             issue_number=args.issue_number,
         )
-    except ValidationError:
+    except ValueError:
         print("error: --owner, --repo, and --issue-number are required outside --check-only", file=sys.stderr)
         return 1
 
