@@ -51,8 +51,6 @@ import urllib.request
 from collections.abc import Callable
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
-
 DEFAULT_THRESHOLD = 20
 DEFAULT_LABEL = "retrospective"
 
@@ -251,25 +249,34 @@ def git_commit_messages(
 # ---------------------------------------------------------------------------
 
 
-class _CliArgs(BaseModel):
-    """Parsed-and-validated view of this script's own argparse namespace.
-    ``owner``/``repo`` reject blank (argparse's own ``required=True`` only
-    guarantees the flag was passed, not that its value is non-empty);
-    ``ref``/``cwd``/``label`` likewise, since each is used as a real path/ref/
-    query fragment downstream and an empty value there was never a
-    meaningful input. ``threshold`` keeps its bare ``int`` type -- unlike the
-    other fields it has no natural non-negative floor (a caller intentionally
-    passing a negative threshold to force a hard fail is not a malformed
-    input, just an unusual one), so no extra constraint is added."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    owner: str = Field(min_length=1)
-    repo: str = Field(min_length=1)
-    ref: str = Field(default="HEAD", min_length=1)
-    cwd: str = Field(default=".", min_length=1)
-    label: str = Field(default=DEFAULT_LABEL, min_length=1)
-    threshold: int = DEFAULT_THRESHOLD
+def _validate_cli_args(owner: str, repo: str, ref: str, cwd: str, label: str) -> str | None:
+    """Return a pydantic-``ValidationError``-style detail string (one
+    ``<field>: <message>`` clause per violated constraint, joined with
+    ``"; "``, in field-declaration order) if any of ``owner``/``repo``/
+    ``ref``/``cwd``/``label`` is blank (argparse's own ``required=True``
+    only guarantees the flag was passed, not that its value is non-empty;
+    ``ref``/``cwd``/``label`` reject blank the same way since each is used
+    as a real path/ref/query fragment downstream and an empty value there
+    was never a meaningful input), else None. ``threshold`` keeps its bare
+    ``int`` type with no floor -- a caller intentionally passing a negative
+    threshold to force a hard fail is not a malformed input, just an unusual
+    one -- so it is never checked here. Message text is a byte-for-byte
+    match of the pydantic ``Field(min_length=1)`` errors this replaces
+    (verified directly against the installed pydantic version), so this
+    plain-Python check is a drop-in replacement, not merely an
+    equivalent-intent one."""
+    errors: list[str] = []
+    if not owner:
+        errors.append("owner: String should have at least 1 character")
+    if not repo:
+        errors.append("repo: String should have at least 1 character")
+    if not ref:
+        errors.append("ref: String should have at least 1 character")
+    if not cwd:
+        errors.append("cwd: String should have at least 1 character")
+    if not label:
+        errors.append("label: String should have at least 1 character")
+    return "; ".join(errors) if errors else None
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -288,15 +295,8 @@ def main(argv: list[str] | None = None) -> int:
         help=f"Fail if the no-citation count exceeds this value (default: {DEFAULT_THRESHOLD})",
     )
     args = parser.parse_args(argv)
-    try:
-        cli_args = _CliArgs(
-            owner=args.owner, repo=args.repo, ref=args.ref, cwd=args.cwd,
-            label=args.label, threshold=args.threshold,
-        )
-    except ValidationError as exc:
-        detail = "; ".join(
-            f"{e['loc'][0] if e['loc'] else 'args'}: {e['msg'].removeprefix('Value error, ')}" for e in exc.errors()
-        )
+    detail = _validate_cli_args(args.owner, args.repo, args.ref, args.cwd, args.label)
+    if detail is not None:
         print(f"error: invalid arguments: {detail}", file=sys.stderr)
         return 1
 
@@ -306,15 +306,15 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
-        issue_numbers = list_labelled_issues(cli_args.owner, cli_args.repo, cli_args.label, token)
-        commit_messages = git_commit_messages(cli_args.ref, cli_args.cwd)
+        issue_numbers = list_labelled_issues(args.owner, args.repo, args.label, token)
+        commit_messages = git_commit_messages(args.ref, args.cwd)
     except (GitHubApiError, GitLogError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
 
     no_citation_issues = find_no_citation_issues(issue_numbers, commit_messages)
-    print(format_report(no_citation_issues, len(issue_numbers), cli_args.threshold))
-    return 1 if evaluate(len(no_citation_issues), cli_args.threshold) else 0
+    print(format_report(no_citation_issues, len(issue_numbers), args.threshold))
+    return 1 if evaluate(len(no_citation_issues), args.threshold) else 0
 
 
 if __name__ == "__main__":

@@ -82,8 +82,6 @@ import urllib.request
 from collections.abc import Callable
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
-
 _API_ROOT = "https://api.github.com"
 _API_VERSION = "2022-11-28"
 _HTTP_TIMEOUT_SECONDS = 30
@@ -248,22 +246,28 @@ def open_retro_issue(
     return int(result["number"])
 
 
-class _CliArgs(BaseModel):
-    """Parsed-and-validated view of this script's own argparse namespace.
-    ``owner``/``repo`` reject blank (argparse's own ``required=True`` only
-    guarantees the flag was passed, not that its value is non-empty); ``pr_number``
-    must be positive (GitHub issue/PR numbers are always >= 1). ``pr_title``/
+def _validate_cli_args(owner: str, repo: str, pr_number: int) -> str | None:
+    """Return a pydantic-``ValidationError``-style detail string (one
+    ``<field>: <message>`` clause per violated constraint, joined with
+    ``"; "``, in field-declaration order) if ``owner``/``repo`` are blank
+    (argparse's own ``required=True`` only guarantees the flag was passed,
+    not that its value is non-empty) or ``pr_number`` is not positive
+    (GitHub issue/PR numbers are always >= 1), else None. ``pr_title``/
     ``pr_url`` stay unconstrained -- ``pr_title`` in particular carries
     untrusted, fork-controlled text (see module docstring) that this script
-    already never embeds anywhere, so no shape is imposed on it here either."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    owner: str = Field(min_length=1)
-    repo: str = Field(min_length=1)
-    pr_number: int = Field(gt=0)
-    pr_title: str = ""
-    pr_url: str = ""
+    already never embeds anywhere, so no shape is imposed on it here either.
+    Message text is a byte-for-byte match of the pydantic
+    ``Field(min_length=1)``/``Field(gt=0)`` errors this replaces (verified
+    directly against the installed pydantic version), so this plain-Python
+    check is a drop-in replacement, not merely an equivalent-intent one."""
+    errors: list[str] = []
+    if not owner:
+        errors.append("owner: String should have at least 1 character")
+    if not repo:
+        errors.append("repo: String should have at least 1 character")
+    if pr_number <= 0:
+        errors.append("pr_number: Input should be greater than 0")
+    return "; ".join(errors) if errors else None
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -276,15 +280,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--pr-title", default="", help="The merged PR's title (untrusted; JSON body only)")
     parser.add_argument("--pr-url", default="", help="The merged PR's HTML URL")
     args = parser.parse_args(argv)
-    try:
-        cli_args = _CliArgs(
-            owner=args.owner, repo=args.repo, pr_number=args.pr_number,
-            pr_title=args.pr_title, pr_url=args.pr_url,
-        )
-    except ValidationError as exc:
-        detail = "; ".join(
-            f"{e['loc'][0] if e['loc'] else 'args'}: {e['msg'].removeprefix('Value error, ')}" for e in exc.errors()
-        )
+    detail = _validate_cli_args(args.owner, args.repo, args.pr_number)
+    if detail is not None:
         print(f"error: invalid arguments: {detail}", file=sys.stderr)
         return 1
 
@@ -294,17 +291,17 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
-        existing = find_existing_retro_issue(cli_args.owner, cli_args.repo, cli_args.pr_number, token)
+        existing = find_existing_retro_issue(args.owner, args.repo, args.pr_number, token)
         if existing is not None:
             print(
-                f"Retrospective issue already exists for PR #{cli_args.pr_number}: "
+                f"Retrospective issue already exists for PR #{args.pr_number}: "
                 f"#{existing} -- skipping create."
             )
             return 0
         issue_number = open_retro_issue(
-            cli_args.owner, cli_args.repo, cli_args.pr_number, cli_args.pr_title, cli_args.pr_url, token
+            args.owner, args.repo, args.pr_number, args.pr_title, args.pr_url, token
         )
-        print(f"Opened retrospective issue #{issue_number} for PR #{cli_args.pr_number}.")
+        print(f"Opened retrospective issue #{issue_number} for PR #{args.pr_number}.")
         return 0
     except GitHubApiError as error:
         print(f"error: {error}", file=sys.stderr)
