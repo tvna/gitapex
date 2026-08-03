@@ -100,6 +100,28 @@ def test_non_utf8_plugin_json_raises_manifest_read_error(tmp_path):
         drift.find_drift(apm, plugin)
 
 
+def test_invalid_json_syntax_in_plugin_json_raises_manifest_read_error(tmp_path):
+    # Issue #699: _read_text's UnicodeDecodeError guard (#680) covers the
+    # decode step, but json.loads itself had no handler -- a syntactically
+    # invalid (yet valid-UTF-8) plugin.json raised an uncaught
+    # json.JSONDecodeError.
+    apm = tmp_path / "apm.yml"
+    plugin = tmp_path / "plugin.json"
+    apm.write_text(_VALID_APM)
+    plugin.write_text("{not valid json,,,}")
+    with pytest.raises(drift.ManifestReadError, match="not valid JSON"):
+        drift.find_drift(apm, plugin)
+
+
+def test_invalid_yaml_syntax_in_apm_yml_raises_manifest_read_error(tmp_path):
+    apm = tmp_path / "apm.yml"
+    plugin = tmp_path / "plugin.json"
+    apm.write_text(": not valid yaml : : :\n")
+    plugin.write_text(json.dumps(_VALID_PLUGIN))
+    with pytest.raises(drift.ManifestReadError, match="not valid YAML"):
+        drift.find_drift(apm, plugin)
+
+
 def test_main_returns_one_and_prints_message_on_manifest_read_error(capsys, monkeypatch):
     def raise_read_error():
         raise drift.ManifestReadError("/fake/apm.yml: is not valid UTF-8: boom")
