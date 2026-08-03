@@ -511,8 +511,17 @@ def main(argv: list[str] | None = None) -> int:
             commit_subject=args.commit_subject, commit_body=args.commit_body, add=args.add,
         )
     except ValidationError as exc:
+        # body_file's own message already fully describes the problem (it
+        # is this script's pre-existing hand-check text, see _CliArgs'
+        # docstring) -- prefixing it with "body_file: " would drift the
+        # message CI logs and operators already expect. Every other field
+        # is a brand-new check with no prior text to preserve, so it keeps
+        # the generic "field: message" form.
         detail = "; ".join(
-            f"{e['loc'][0] if e['loc'] else 'args'}: {e['msg'].removeprefix('Value error, ')}" for e in exc.errors()
+            e["msg"].removeprefix("Value error, ")
+            if e["loc"] == ("body_file",)
+            else f"{e['loc'][0] if e['loc'] else 'args'}: {e['msg'].removeprefix('Value error, ')}"
+            for e in exc.errors()
         )
         print(f"Error: {detail}", file=sys.stderr)
         return 1

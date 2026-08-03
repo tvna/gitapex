@@ -799,7 +799,12 @@ def test_main_missing_body_file(monkeypatch: pytest.MonkeyPatch, capsys, tmp_pat
         ]
     )
     assert rc == 1
-    assert "body file not found" in capsys.readouterr().err
+    # Exact text, not just a substring: this is the pre-existing hand-check
+    # message (see _CliArgs' docstring) and must not drift back to the
+    # generic "body_file: body file not found: ..." pydantic-prefixed form
+    # a Decision-12 adversarial review caught once already.
+    err = capsys.readouterr().err
+    assert err == f"Error: body file not found: {tmp_path / 'missing.md'}\n"
 
 
 def test_main_runtime_error_from_collect_additions(monkeypatch: pytest.MonkeyPatch, capsys, tmp_path) -> None:

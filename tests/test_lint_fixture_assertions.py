@@ -897,28 +897,55 @@ def test_load_fixture_dict_validates_well_formed_fixture(tmp_path):
     assert data["expected"]["output_contains"] == ["x"]
 
 
-def test_lint_skill_tasks_raises_validation_error_on_malformed_fixture(tmp_path):
-    # lint_skill_tasks does the one strict validated parse main() relies on
-    # -- confirms a malformed fixture (missing the required "inputs" block)
-    # actually raises rather than silently tolerating the bad shape.
+def test_lint_skill_tasks_reports_malformed_fixture_without_raising(tmp_path):
+    # A malformed fixture (missing the required "inputs" block) is reported
+    # as its own blocking Warning_ naming the file, rather than raising --
+    # see lint_skill_tasks' own docstring for why (Decision-12 adversarial
+    # review: an earlier version let ValidationError propagate unguarded,
+    # aborting the whole multi-skill run for one bad file).
     tasks = tmp_path / "tasks"
     tasks.mkdir()
-    (tasks / "t.yaml").write_text(
+    bad = tasks / "t.yaml"
+    bad.write_text(
         "id: t\nname: T\nexpected:\n  output_contains: []\n", encoding="utf-8")
     rubric, skill = _corpus_files(tmp_path)
-    with pytest.raises(L.ValidationError):
-        L.lint_skill_tasks([tasks / "t.yaml"], L.load_corpus(rubric, skill))
+    warnings, task_data = L.lint_skill_tasks([bad], L.load_corpus(rubric, skill))
+    assert len(warnings) == 1
+    assert warnings[0].blocking
+    assert warnings[0].rule == "fixture-shape"
+    assert str(bad) in warnings[0].detail
+    assert task_data == {}
 
 
-def test_main_reports_malformed_fixture_as_a_lint_error_exit_2(tmp_path):
-    # End to end: main() catches the ValidationError lint_skill_tasks
-    # raises and reports it via the same exit-2 error path as an
-    # unparsable/unreadable fixture file, rather than an uncaught
-    # traceback.
+def test_lint_skill_tasks_isolates_a_malformed_fixture_from_its_siblings(tmp_path):
+    # The point of the fix: one malformed fixture must not prevent a
+    # sibling, well-formed fixture in the same skill from being linted.
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    bad = tasks / "bad.yaml"
+    bad.write_text(
+        "id: t\nname: T\nexpected:\n  output_contains: []\n", encoding="utf-8")
+    (tasks / "good.yaml").write_text(
+        'id: g\nname: G\ninputs:\n  prompt: |\n    p\nexpected:\n'
+        '  output_contains:\n    - "Blind spot pass"\n'
+        '  output_not_contains:\n    - "LGTM"\n', encoding="utf-8")
+    rubric, skill = _corpus_files(tmp_path)
+    warnings, task_data = L.lint_skill_tasks(
+        [bad, tasks / "good.yaml"], L.load_corpus(rubric, skill))
+    assert [w for w in warnings if w.rule == "fixture-shape"]
+    assert bad not in task_data
+    assert (tasks / "good.yaml") in task_data
+
+
+def test_main_reports_malformed_fixture_as_a_blocking_warning_exit_1(tmp_path):
+    # End to end: main() surfaces the malformed-fixture Warning_ via the
+    # normal report/exit-code path (exit 1, a blocking warning), not the
+    # exit-2 unparsable-input path -- the file is readable YAML, just the
+    # wrong shape, and the report names it instead of crashing.
     tasks = tmp_path / "tasks"
     tasks.mkdir()
     (tasks / "t.yaml").write_text(
         "id: t\nname: T\nexpected:\n  output_contains: []\n", encoding="utf-8")
     rubric, skill = _corpus_files(tmp_path)
     assert L.main(["--tasks-glob", str(tasks / "*.yaml"),
-                   "--rubric", str(rubric), "--skill", str(skill)]) == 2
+                   "--rubric", str(rubric), "--skill", str(skill)]) == 1

@@ -866,33 +866,46 @@ def lint_skill_tasks(task_paths: list[Path], corpus: str, *,
     corpus (a caller reads it once via ``load_corpus`` and passes the text
     here, rather than this function re-reading the same files).
 
-    Each fixture file is parsed and validated exactly once, against
-    ``TaskFixture`` (issue #684) -- a malformed fixture (a missing required
-    field, a wrong-typed value) raises ``pydantic.ValidationError``, which
-    propagates to ``main()``'s own existing ``(OSError, yaml.YAMLError)``
-    handler (extended to also catch it), reported the same way as an
-    unreadable or unparsable fixture file.
+    Each fixture file is parsed and validated against ``TaskFixture``
+    (issue #684). A malformed fixture (a missing required field, a
+    wrong-typed value, an unrecognized top-level key) is reported as its
+    own blocking ``Warning_`` naming the offending file, and excluded from
+    the rest of this skill's linting -- it does NOT abort linting for any
+    other fixture, in this skill or any other (found by a Decision-12
+    adversarial review: an earlier version let ``pydantic.ValidationError``
+    propagate unguarded out of this function, so one malformed fixture
+    anywhere crashed the entire multi-skill run with an unlocalized error,
+    silently skipping the adversarial-coverage/dispatch-declaration-
+    coverage checks for every other skill too -- exactly the per-fixture
+    isolation ``_load_fixture_dict``'s own docstring already promises for
+    its own, separate call sites).
 
-    Returns ``(warnings, task_data)``: ``task_data`` is each task path's
-    validated fixture, re-serialized via ``model_dump()``, so a caller
-    linting many skills (``lint_all_skills``) can reuse it for the
-    adversarial/dispatch-declaration-coverage checks instead of
-    re-parsing.
+    Returns ``(warnings, task_data)``: ``task_data`` is each successfully
+    validated task path's fixture, re-serialized via ``model_dump()``, so
+    a caller linting many skills (``lint_all_skills``) can reuse it for
+    the adversarial/dispatch-declaration-coverage checks instead of
+    re-parsing. A path excluded above is absent from ``task_data`` too.
     """
     anchors = extract_anchors(corpus)
     corpus_flat = WS_RE.sub(" ", corpus.lower())
     corpus_tokens = _content_tokens(corpus)
 
-    fixtures = {
-        p: TaskFixture.model_validate(yaml.safe_load(p.read_text(encoding="utf-8")) or {})
-        for p in task_paths
-    }
+    warnings: list[Warning_] = []
+    fixtures: dict[Path, TaskFixture] = {}
+    for p in task_paths:
+        raw = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+        try:
+            fixtures[p] = TaskFixture.model_validate(raw)
+        except ValidationError as exc:
+            warnings.append(Warning_(
+                p.name, "(fixture)", "(top-level shape)", "fixture-shape",
+                f"{p}: malformed fixture, excluded from linting: {exc}"))
+
     positive_index = {
         p.name: {v.lower() for v in (fixture.expected.output_contains or [])}
         for p, fixture in fixtures.items()
     }
 
-    warnings: list[Warning_] = []
     for path, fixture in fixtures.items():
         warnings.extend(lint_task(
             path, fixture, anchors, corpus_flat, corpus_tokens, positive_index,
