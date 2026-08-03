@@ -684,3 +684,191 @@ def test_regression_pr_558_main_fails_without_waiver(monkeypatch, capsys):
     err = capsys.readouterr().err
     assert "checker-script-adversarial-review" in err
     assert "skills/evaluating-skill-quality/scripts/check_skill_shape.py" in err
+
+
+# --- Issue #673 (refs #665 repair 1): find_missing_gate_quality_disclosure ---
+#
+# Same shape as the checker-script block above, for the narrower
+# .github/scripts/gate_*.py / scan_*.py surface. The two checks are
+# deliberately independent: PR #651 satisfied checker-script-adversarial-
+# review and still shipped three fail-open defects (see the regression
+# fixture at the end of this file).
+
+_GATE_SCRIPT = ".github/scripts/gate_plugin_root_brace_notation.py"
+
+
+def test_gate_quality_disclosure_not_required_when_list_empty():
+    assert gate.find_missing_gate_quality_disclosure("anything, no section", []) == []
+
+
+def test_missing_gate_quality_disclosure_reported_with_no_section():
+    body = "# My PR\n\nNo evidence section at all.\n"
+    assert gate.find_missing_gate_quality_disclosure(body, [_GATE_SCRIPT]) == [_GATE_SCRIPT]
+
+
+def test_missing_gate_quality_disclosure_reported_with_no_line():
+    assert gate.find_missing_gate_quality_disclosure(_VALID_SECTION, [_GATE_SCRIPT]) == [
+        _GATE_SCRIPT
+    ]
+
+
+@pytest.mark.parametrize("verdict", ["RAN", "NOT-RUN", "ran", "not-run"])
+def test_gate_quality_disclosure_accepts_its_own_verdict_vocabulary(verdict):
+    body = _VALID_SECTION + f"- deterministic-gate-quality: {verdict}\n"
+    assert gate.find_missing_gate_quality_disclosure(body, [_GATE_SCRIPT]) == []
+
+
+def test_gate_quality_disclosure_waiver_satisfies_check():
+    body = (
+        _VALID_SECTION
+        + "- deterministic-gate-quality: WAIVED: comment-only change, no logic touched\n"
+    )
+    assert gate.find_missing_gate_quality_disclosure(body, [_GATE_SCRIPT]) == []
+
+
+def test_gate_quality_disclosure_bare_waiver_with_no_reason_does_not_satisfy():
+    body = _VALID_SECTION + "- deterministic-gate-quality: WAIVED\n"
+    assert gate.find_missing_gate_quality_disclosure(body, [_GATE_SCRIPT]) == [_GATE_SCRIPT]
+
+
+def test_gate_quality_disclosure_unrecognized_verdict_does_not_satisfy():
+    body = _VALID_SECTION + "- deterministic-gate-quality: PASS\n"
+    assert gate.find_missing_gate_quality_disclosure(body, [_GATE_SCRIPT]) == [_GATE_SCRIPT]
+
+
+def test_checker_script_disclosure_does_not_satisfy_gate_quality():
+    """The two checks disclose different processes, so one line must never
+    stand in for the other -- the exact substitution PR #651 would have made
+    (it disclosed checker-script-adversarial-review: RAN and shipped three
+    fail-open defects dimension 15 names)."""
+    body = _VALID_SECTION + "- checker-script-adversarial-review: RAN\n"
+    assert gate.find_missing_gate_quality_disclosure(body, [_GATE_SCRIPT]) == [_GATE_SCRIPT]
+
+
+def test_gate_quality_disclosure_does_not_satisfy_checker_script():
+    """...and the reverse direction, so neither check can be silently
+    absorbed into the other later."""
+    body = _VALID_SECTION + "- deterministic-gate-quality: RAN\n"
+    assert gate.find_missing_checker_script_disclosure(body, [_GATE_SCRIPT]) == [_GATE_SCRIPT]
+
+
+# --- Issue #673: main() integration for the gate-quality check ---
+
+
+def test_main_fails_when_gate_quality_disclosure_missing(monkeypatch, capsys):
+    monkeypatch.setattr("sys.stdin", io.StringIO(_VALID_SECTION))
+    assert gate.main(["--changed-gate-scripts", _GATE_SCRIPT]) == 1
+    err = capsys.readouterr().err
+    assert "deterministic-gate-quality" in err
+    assert _GATE_SCRIPT in err
+    # The FAIL message must point at the rubric the check exists to enforce,
+    # not merely name the check -- a reader who has never seen it needs the
+    # path (dimensions.md's own dimension 17, discoverability).
+    assert "dimensions.md" in err
+
+
+def test_main_passes_when_gate_quality_disclosure_present(monkeypatch, capsys):
+    body = _VALID_SECTION + "- deterministic-gate-quality: RAN\n"
+    monkeypatch.setattr("sys.stdin", io.StringIO(body))
+    assert gate.main(["--changed-gate-scripts", _GATE_SCRIPT]) == 0
+
+
+def test_main_reports_gate_quality_and_checker_script_failures_together(monkeypatch, capsys):
+    """A gate script is always also a checker script, so a real PR touching
+    one owes both lines; missing both must report both, not just the first."""
+    monkeypatch.setattr("sys.stdin", io.StringIO(_VALID_SECTION))
+    assert (
+        gate.main(
+            [
+                "--changed-gate-scripts",
+                _GATE_SCRIPT,
+                "--changed-checker-scripts",
+                _GATE_SCRIPT,
+            ]
+        )
+        == 1
+    )
+    err = capsys.readouterr().err
+    assert "deterministic-gate-quality" in err
+    assert "checker-script-adversarial-review" in err
+
+
+def test_gate_quality_check_is_not_required_when_no_gate_script_changed(monkeypatch):
+    """An empty --changed-gate-scripts must not make an otherwise-clean body
+    fail -- the workflow computes applicability, and a design-doc-only PR
+    has no gate script to grade."""
+    body = _VALID_SECTION + "- design-doc-adversarial-review: RAN\n"
+    monkeypatch.setattr("sys.stdin", io.StringIO(body))
+    assert gate.main(["--changed-design-docs", "foo.md", "--changed-gate-scripts", ""]) == 0
+
+
+# --- Issue #673 (refs #665 repair 1): regression against PR #651's real body ---
+#
+# PR #651 ("fix(plugin): brace ${CLAUDE_PLUGIN_ROOT} so apm-deployed hooks
+# resolve", merged as ee55c6a) added .github/scripts/gate_plugin_root_brace_
+# notation.py, and that new gate shipped three fail-open defects
+# (retrospective: issue #665 repair 1) -- zero discovered surfaces exiting 0,
+# an unterminated frontmatter block read as "no frontmatter", and an
+# unreadable file producing a filenameless message or an uncaught traceback.
+# Each contradicts dimension 15 of
+# skills/evaluating-deterministic-gate-quality/references/dimensions.md, a
+# rubric that already existed. All three passed CI and were found only by an
+# operator-run /code-review after the PR opened.
+#
+# This is a verbatim excerpt of that merged PR's real body (fetched via the
+# GitHub API), not the whole text: the full body is ~7000 characters and ends
+# with a generated-by footer carrying a session URL that must not be
+# re-committed here. The excerpt spans the two headings around the graded
+# region, so the '## Skill audit evidence' section this gate actually reads
+# -- and its termination at the next '## ' heading -- are both reproduced
+# exactly as they were.
+#
+# It is a stronger fixture than _PR_558_BODY above, which has no evidence
+# section at all: #651 fully satisfied checker-script-adversarial-review and
+# still shipped the defects, so this proves the new check catches a PR the
+# existing checks already passed.
+_PR_651_BODY_EXCERPT = """\
+## Checklist
+
+- [x] Tests pass locally (1669 passed; commands and output above)
+- [x] Docs updated if behavior changed (the gate's own docstring documents
+      the invariant, its scope, and its two deliberate non-covered shapes)
+- [x] Issue number cited in every commit (`Refs #650`)
+- [x] Skill audit evidence disclosed below (this diff adds a deterministic
+      checker script under `.github/scripts/`)
+- [ ] N/A: no `evals/*/split.md` Kept-edit-log entry in this diff
+- [ ] N/A: no `skills/*/SKILL.md` Stop-boundary or dispatch-branch change in
+      this diff
+
+## Skill audit evidence
+
+- battle-testing-a-skill: WAIVED: this diff adds or modifies no `skills/*/SKILL.md`; the two audits grade skill content, and none changed here
+- evaluating-skill-quality: WAIVED: same reason -- no `skills/*/SKILL.md` added or modified in this diff
+- checker-script-adversarial-review: RAN -- six defeat-case probes against the new gate (nested manifest, `.claude/settings.json` command, agent in a subdirectory, variable buried in a longer shell string, malformed JSON, list-valued command). Two real defects found and fixed in `6d46f90` (subdirectory agents were never read; a malformed manifest raised a bare traceback), two confirmed as deliberate scope boundaries and pinned by new tests, two already handled correctly.
+
+## Related Issue
+
+Closes #650
+"""
+
+
+def test_regression_pr_651_body_already_satisfied_the_checker_script_check():
+    """Anchors why a fifth check was needed: #651's real body passes the
+    existing check, so that check alone could never have caught it."""
+    assert (
+        gate.find_missing_checker_script_disclosure(_PR_651_BODY_EXCERPT, [_GATE_SCRIPT]) == []
+    )
+
+
+def test_regression_pr_651_body_is_missing_gate_quality_disclosure():
+    assert gate.find_missing_gate_quality_disclosure(_PR_651_BODY_EXCERPT, [_GATE_SCRIPT]) == [
+        _GATE_SCRIPT
+    ]
+
+
+def test_regression_pr_651_main_fails_without_waiver(monkeypatch, capsys):
+    monkeypatch.setattr("sys.stdin", io.StringIO(_PR_651_BODY_EXCERPT))
+    assert gate.main(["--changed-gate-scripts", _GATE_SCRIPT]) == 1
+    err = capsys.readouterr().err
+    assert "deterministic-gate-quality" in err
+    assert _GATE_SCRIPT in err

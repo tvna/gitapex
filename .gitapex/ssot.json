@@ -92,7 +92,7 @@
         ".github/scripts/skill_description_diff.py",
         ".github/scripts/skill_security_relevance.py"
       ],
-      "rule": "Requires a PR touching skills/*/SKILL.md to disclose battle-testing-a-skill / evaluating-skill-quality verdicts or waivers under a '## Skill audit evidence' heading; the CI twin additionally requires disclosure for description changes, security-relevant skills, changed design docs, and changed checker scripts.",
+      "rule": "Requires a PR touching skills/*/SKILL.md to disclose battle-testing-a-skill / evaluating-skill-quality verdicts or waivers under a '## Skill audit evidence' heading; the CI twin additionally requires disclosure for description changes, security-relevant skills, changed design docs, changed checker scripts, and changed deterministic gate scripts (.github/scripts/gate_*.py or scan_*.py, whose PR must disclose a deterministic-gate-quality verdict stating whether the change was read against skills/evaluating-deterministic-gate-quality/references/dimensions.md).",
       "planes": ["pretooluse", "ci"],
       "trigger": "PreToolUse matcher mcp__github__create_pull_request and mcp__github__update_pull_request (hooks/hooks.json); .github/workflows/skill-audit-gate.yml on pull_request",
       "policy_refs": [],

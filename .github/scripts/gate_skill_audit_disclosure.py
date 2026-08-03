@@ -53,12 +53,53 @@ RAN/NOT-RUN/WAIVED shape as the two above.
   This is why the workflow's `paths:` trigger list grows again to include
   these three globs.
 
+Issue #673 (refs #665 repair 1): a fifth process-disclosure check, same
+RAN/NOT-RUN/WAIVED shape again.
+
+- `deterministic-gate-quality`: required when the calling workflow's diff
+  adds or modifies a `.github/scripts/gate_*.py` or
+  `.github/scripts/scan_*.py` -- this repository's own deterministic
+  gates. PR #651 shipped a new gate that itself fail-opened three separate
+  ways (zero discovered surfaces exited 0; an unterminated frontmatter
+  block was read as "no frontmatter" so a real violation went ungraded; an
+  unreadable or non-UTF-8 file produced a filenameless message or an
+  uncaught traceback). Every one of those contradicts a criterion this
+  repository already owns and already wrote down --
+  `skills/evaluating-deterministic-gate-quality/references/dimensions.md`
+  dimension 15 ("Fail-closed default on incomplete or malformed input")
+  and `gate_evals_scripts_coverage.py`'s own docstring rule that an empty
+  match set is an error, never a silent pass. The rubric existed; nothing
+  made a new gate get read against it, and all three defects passed CI and
+  every pre-review check, surfacing only when an operator ran
+  `/code-review` by hand. This check is that missing step.
+
+  Deliberately *not* folded into `checker-script-adversarial-review`
+  above, even though every path this check fires on is also a checker
+  script: the two disclose different processes. That one asks whether an
+  adversarial review round happened at all; this one asks whether the
+  change was read against a specific, already-written rubric. A PR
+  touching `.github/scripts/gate_x.py` therefore owes both lines -- which
+  is the intended outcome, not double-counting. PR #651 is the direct
+  evidence: it disclosed `checker-script-adversarial-review: RAN` and
+  still shipped all three fail-open defects.
+
+  The workflow's `paths:` trigger list does *not* grow for this check.
+  Its existing `.github/scripts/*.py` entry already fires for both new
+  globs, verified live rather than assumed: PR #651 touched none of
+  `skills/**/SKILL.md`, `docs/superpowers/specs/*.md`,
+  `skills/*/scripts/*.py`, or `evals/scripts/*.py` -- only
+  `.github/scripts/gate_plugin_root_brace_notation.py` -- and this
+  workflow's own `skill-audit-disclosure` check ran and passed on it
+  (check run 91426145937). Adding `gate_*.py`/`scan_*.py` there would be
+  a strict no-op.
+
 The calling workflow decides applicability (only invoked when the PR's
 diff adds or modifies a skills/*/SKILL.md file, a
 docs/superpowers/specs/*.md design doc, or a deterministic checker
 script) and which skills had a description-line change, need
 eval-coverage disclosure, are security-relevant, which design docs
-changed, or which checker scripts changed (all of this requires git
+changed, which checker scripts changed, or which of those are this
+repository's own deterministic gate scripts (all of this requires git
 history this script deliberately does not access); this script only
 grades the body text handed to it against those workflow-supplied facts.
 Deliberately not placed inside either audited skill's own directory: both
@@ -142,23 +183,27 @@ _BATTLE_TESTING_WAIVED_RE = _waived_pattern("battle-testing-a-skill")
 _EVAL_COVERAGE_CHECK_NAME = "eval-coverage-disclosure"
 _EVAL_COVERAGE_WAIVER_RE = _waived_pattern(_EVAL_COVERAGE_CHECK_NAME)
 
-# Issue #517 (refs #454, #277) / #565 (refs #560 repair 5): three
-# process-disclosure checks, each required only when the calling workflow
-# supplies a non-empty item list for it. "RAN"/"NOT-RUN" (case-insensitive,
-# same as every other vocabulary here) discloses whether the named process
-# happened at all -- WAIVED: <reason> is accepted too, via the shared
-# _line_pattern factory, same as the two audits in _VERDICTS.
+# Issue #517 (refs #454, #277) / #565 (refs #560 repair 5) / #673 (refs
+# #665 repair 1): four process-disclosure checks, each required only when
+# the calling workflow supplies a non-empty item list for it.
+# "RAN"/"NOT-RUN" (case-insensitive, same as every other vocabulary here)
+# discloses whether the named process happened at all -- WAIVED: <reason>
+# is accepted too, via the shared _line_pattern factory, same as the two
+# audits in _VERDICTS.
 #
-# A registry, not three hand-copied name/CLI-flag/help-text/FAIL-message
-# constants: this is the third such check (adversarial-coverage-mapping,
-# design-doc-adversarial-review, checker-script-adversarial-review), each
-# previously duplicated across five places (module constant, `find_missing_*`
-# wrapper, CLI flag, main() wiring, FAIL-message block). This PR's own
+# A registry, not four hand-copied name/CLI-flag/help-text/FAIL-message
+# constants: by the third such check (adversarial-coverage-mapping,
+# design-doc-adversarial-review, checker-script-adversarial-review) each
+# was duplicated across five places (module constant, `find_missing_*`
+# wrapper, CLI flag, main() wiring, FAIL-message block). #565's own
 # checker-script-adversarial-review addition was that third copy -- the
 # signal to collapse the four still-generic places (everything but the
 # named `find_missing_*` wrappers, which stay individually named and
 # one-line since tests call them directly by name) into this table instead
-# of hand-copying a fourth time in the future.
+# of hand-copying a fourth time. #673's deterministic-gate-quality entry
+# below is that predicted fourth check, and it is exactly one table row
+# plus one wrapper: the CLI flag, main() wiring, and FAIL-message block
+# all come from this table with no edit.
 _ProcessDisclosureCheck = collections.namedtuple(
     "_ProcessDisclosureCheck",
     ["name", "cli_flag", "cli_dest", "help_text", "fail_subject", "fail_hint"],
@@ -214,6 +259,34 @@ _PROCESS_DISCLOSURE_CHECKS = (
         fail_hint=(
             ", disclosing whether an adversarial review round ran against "
             "this deterministic checker script"
+        ),
+    ),
+    # Issue #673 (refs #665 repair 1): this repository's own deterministic
+    # gates (.github/scripts/gate_*.py, scan_*.py) are the narrower subset
+    # of checker scripts for which a written grading rubric already exists
+    # -- skills/evaluating-deterministic-gate-quality/references/
+    # dimensions.md. PR #651's new gate shipped three fail-open defects,
+    # each contradicting dimension 15, while the PR disclosed
+    # checker-script-adversarial-review: RAN. So this is a distinct
+    # process, not a duplicate of the check above: "was it read against the
+    # rubric", not "did a review round happen".
+    _ProcessDisclosureCheck(
+        name="deterministic-gate-quality",
+        cli_flag="--changed-gate-scripts",
+        cli_dest="changed_gate_scripts",
+        help_text=(
+            "Comma-separated deterministic gate-script paths "
+            "(.github/scripts/gate_*.py or .github/scripts/scan_*.py) "
+            "added or modified in this diff (issue #673, refs #665 "
+            "repair 1)."
+        ),
+        fail_subject="changed deterministic gate script",
+        fail_hint=(
+            ", disclosing whether this gate was read against "
+            "skills/evaluating-deterministic-gate-quality/references/"
+            "dimensions.md -- dimension 15's fail-closed-on-malformed-input "
+            "default in particular, which PR #651's own new gate violated "
+            "three separate ways"
         ),
     ),
 )
@@ -319,6 +392,16 @@ def find_missing_checker_script_disclosure(body_text, changed_checker_scripts):
     )
 
 
+def find_missing_gate_quality_disclosure(body_text, changed_gate_scripts):
+    """Return changed_gate_scripts unchanged if none of them is covered by a
+    deterministic-gate-quality RAN/NOT-RUN/WAIVED line in the PR body
+    (issue #673, refs #665 repair 1); else [].
+    """
+    return _find_missing_disclosure(
+        body_text, changed_gate_scripts, _PROCESS_DISCLOSURE_LINE_RES["deterministic-gate-quality"]
+    )
+
+
 def _parse_skill_list(raw):
     """Comma-separated skill names -> a sorted, deduped, non-empty list."""
     return sorted({item.strip() for item in (raw or "").split(",") if item.strip()})
@@ -327,8 +410,8 @@ def _parse_skill_list(raw):
 def main(argv=None):
     """CLI: exit 0 iff the given PR body discloses every applicable check --
     the two #248 audits when a SKILL.md changed, the two #427
-    description-change-only checks, and each #517/#565 process-disclosure
-    check the workflow flags as applicable -- else 1.
+    description-change-only checks, and each #517/#565/#673
+    process-disclosure check the workflow flags as applicable -- else 1.
     """
     parser = argparse.ArgumentParser(
         description="Check that a PR body discloses the required skill-audit "

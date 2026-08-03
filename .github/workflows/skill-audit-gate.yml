@@ -47,7 +47,7 @@ jobs:
       # no new content. A three-dot (merge-base) diff is used, not a
       # two-dot direct diff, so a SKILL.md change merged to the base
       # branch after this PR forked is never misattributed to this PR.
-      - name: Determine changed SKILL.md, design-doc, and checker-script files
+      - name: Determine changed SKILL.md, design-doc, checker-script, and gate-script files
         id: diff
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -164,8 +164,71 @@ jobs:
             done <<< "$changed_checker_script_lines"
           fi
 
-          if [ -z "$changed" ] && [ -z "$changed_design_doc_lines" ] && [ -z "$changed_checker_script_lines" ]; then
-            echo "No added/modified skills/*/SKILL.md, docs/superpowers/specs/*.md, or deterministic checker script in this diff; skipping disclosure check."
+          # Issue #673 (refs #665 repair 1): a fourth, independent diff over
+          # this repository's own deterministic gates --
+          # .github/scripts/gate_*.py and .github/scripts/scan_*.py -- same
+          # add/modify-only (D/R100-excluded), `:(glob)`-scoped,
+          # validate-before-comma-join shape as the three diffs above. See
+          # the checker-script block's own comment for why `:(glob)` is
+          # mandatory here: without it git's default pathspec matching lets
+          # `*` cross `/`, pulling in a nested path this gate never intended
+          # to scope.
+          #
+          # Every path this matches is also matched by the checker-script
+          # diff above, and the two lists are graded by two separate
+          # disclosure checks on purpose (adversarial review happened at all
+          # vs. read against the written gate-quality rubric) -- see the gate
+          # script's own docstring. PR #651 disclosed the former and still
+          # shipped three fail-open defects the latter's rubric names.
+          #
+          # The workflow's `paths:` trigger above is deliberately NOT
+          # extended for this check. Its existing `.github/scripts/*.py`
+          # entry already fires for both globs, verified live rather than
+          # assumed: PR #651 touched none of `skills/**/SKILL.md`,
+          # `docs/superpowers/specs/*.md`, `skills/*/scripts/*.py`, or
+          # `evals/scripts/*.py` -- only
+          # `.github/scripts/gate_plugin_root_brace_notation.py` -- and this
+          # workflow ran and passed on it (check run 91426145937 of run
+          # 30721581500). Adding `gate_*.py`/`scan_*.py` there would be a
+          # strict no-op.
+          if ! gate_script_diff_output=$(git diff --name-status "$BASE_SHA...$HEAD_SHA" -- \
+              ':(glob).github/scripts/gate_*.py' ':(glob).github/scripts/scan_*.py'); then
+            echo "::error::git diff failed for gate scripts between $BASE_SHA and $HEAD_SHA" >&2
+            exit 1
+          fi
+          changed_gate_script_lines=$(printf '%s\n' "$gate_script_diff_output" | grep -vE '^(D|R100)[[:space:]]' || true)
+          changed_gate_scripts=""
+          if [ -n "$changed_gate_script_lines" ]; then
+            echo "Added/modified deterministic gate scripts requiring disclosure:"
+            echo "$changed_gate_script_lines"
+            while IFS=$'\t' read -r status path newpath; do
+              [ -z "$status" ] && continue
+              case "$status" in
+                R*) new_path="$newpath" ;;
+                *) new_path="$path" ;;
+              esac
+              # Same validate-before-comma-join-sink discipline as the two
+              # blocks above. The `gate_`/`scan_` prefix is part of the
+              # validated shape, not only of the pathspec, so this stays a
+              # self-revalidation of the condition being gated rather than
+              # trusting the pathspec alone (dimensions.md dimension 3).
+              if ! printf '%s' "$new_path" | grep -E \
+                  '^\.github/scripts/(gate|scan)_[A-Za-z0-9._-]*\.py$' >/dev/null; then
+                echo "::error::unsupported gate script filename for signal computation: $new_path" >&2
+                exit 1
+              fi
+              changed_gate_scripts="${changed_gate_scripts}${changed_gate_scripts:+,}${new_path}"
+            done <<< "$changed_gate_script_lines"
+          fi
+
+          # $changed_gate_script_lines is tested here even though it is
+          # currently a strict subset of $changed_checker_script_lines: the
+          # redundancy is deliberate, so that narrowing the checker-script
+          # globs later can never silently disable this check by making the
+          # job skip entirely (dimensions.md dimensions 3 and 15).
+          if [ -z "$changed" ] && [ -z "$changed_design_doc_lines" ] \
+             && [ -z "$changed_checker_script_lines" ] && [ -z "$changed_gate_script_lines" ]; then
+            echo "No added/modified skills/*/SKILL.md, docs/superpowers/specs/*.md, deterministic checker script, or deterministic gate script in this diff; skipping disclosure check."
             {
               echo "applicable=false"
               echo "description-changed-skills="
@@ -173,6 +236,7 @@ jobs:
               echo "security-relevant-skills="
               echo "changed-design-docs="
               echo "changed-checker-scripts="
+              echo "changed-gate-scripts="
               echo "skill-md-changed=false"
             } >> "$GITHUB_OUTPUT"
             exit 0
@@ -276,6 +340,7 @@ jobs:
             echo "security-relevant-skills=${security_relevant_skills}"
             echo "changed-design-docs=${changed_design_docs}"
             echo "changed-checker-scripts=${changed_checker_scripts}"
+            echo "changed-gate-scripts=${changed_gate_scripts}"
             echo "skill-md-changed=${skill_md_changed}"
           } >> "$GITHUB_OUTPUT"
 
@@ -292,6 +357,7 @@ jobs:
           SECURITY_RELEVANT_SKILLS: ${{ steps.diff.outputs.security-relevant-skills }}
           CHANGED_DESIGN_DOCS: ${{ steps.diff.outputs.changed-design-docs }}
           CHANGED_CHECKER_SCRIPTS: ${{ steps.diff.outputs.changed-checker-scripts }}
+          CHANGED_GATE_SCRIPTS: ${{ steps.diff.outputs.changed-gate-scripts }}
           SKILL_MD_CHANGED: ${{ steps.diff.outputs.skill-md-changed }}
         run: |
           set -euo pipefail
@@ -305,4 +371,5 @@ jobs:
             --security-relevant-skills "$SECURITY_RELEVANT_SKILLS" \
             --changed-design-docs "$CHANGED_DESIGN_DOCS" \
             --changed-checker-scripts "$CHANGED_CHECKER_SCRIPTS" \
+            --changed-gate-scripts "$CHANGED_GATE_SCRIPTS" \
             "${skill_md_changed_flag[@]}"
