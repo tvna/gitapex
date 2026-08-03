@@ -20,9 +20,8 @@ from __future__ import annotations
 
 import pathlib
 
-import pytest
-
 import gate_split_fixture_coverage as gate
+import pytest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 
@@ -503,14 +502,14 @@ def test_main_check_c_fires_on_skill_md_only_diff(tmp_path: pathlib.Path):
     # renaming a ###-level section, with no split.md edit in the same PR)
     # must still run Check C via the sibling split.md, not silently skip
     # it because --split-md was never passed.
-    skill_md, split_md = _write_split_and_skill_md(
+    skill_md, _split_md = _write_split_and_skill_md(
         tmp_path, "widget-polisher", _ROUTING_SKILL_MD, {}, ["a.yaml"]
     )
     assert gate.main(["--skill-md", str(skill_md), "--repo-root", str(tmp_path)]) == 1
 
 
 def test_main_check_c_passes_on_skill_md_only_diff_with_valid_declaration(tmp_path: pathlib.Path):
-    skill_md, split_md = _write_split_and_skill_md(
+    skill_md, _split_md = _write_split_and_skill_md(
         tmp_path, "widget-polisher", _ROUTING_SKILL_MD,
         {"a.yaml": "expected:\n  exercises:\n    - \"Commit log\"\n  output_contains:\n    - \"x\"\n"},
         ["a.yaml"],

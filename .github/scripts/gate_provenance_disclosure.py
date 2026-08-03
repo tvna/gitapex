@@ -69,6 +69,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from pathlib import Path
 
 _LIMITATION_CUE_RE = re.compile(
     r"\b(?:"
@@ -134,11 +135,11 @@ def main(argv: list[str] | None = None) -> int:
     sources: list[str] = []
     try:
         if args.body:
-            sources.append(open(args.body, encoding="utf-8").read())
+            sources.append(Path(args.body).read_text(encoding="utf-8"))
         elif not args.diff_added:
             sources.append(sys.stdin.read())
         for diff_path in args.diff_added:
-            sources.append(open(diff_path, encoding="utf-8").read())
+            sources.append(Path(diff_path).read_text(encoding="utf-8"))
     except FileNotFoundError as error:
         print(f"error: file not found: {error.filename}", file=sys.stderr)
         return 1

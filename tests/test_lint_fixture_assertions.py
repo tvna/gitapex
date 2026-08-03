@@ -7,8 +7,6 @@ acceptance criterion.
 """
 from pathlib import Path
 
-import pytest
-
 import lint_fixture_assertions as L
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -255,7 +253,7 @@ def test_unsatisfiable_pair_flags_contains_vs_not_icontains():
     expected = {"output_contains": ["Foo"], "output_not_icontains": ["foo"]}
     findings = L.check_unsatisfiable_assertion_pair(expected)
     assert len(findings) == 1
-    key, value, rule, detail = findings[0]
+    key, value, rule, _detail = findings[0]
     assert key == "output_not_icontains"
     assert rule == "unsatisfiable-assertion-pair"
     assert "foo" in value
@@ -285,7 +283,7 @@ def test_unsatisfiable_pair_flags_redundant_same_polarity_pair():
     expected = {"output_contains": ["Foo"], "output_icontains": ["foo"]}
     findings = L.check_unsatisfiable_assertion_pair(expected)
     assert len(findings) == 1
-    key, value, rule, detail = findings[0]
+    key, _value, rule, _detail = findings[0]
     assert key == "output_icontains"
     assert rule == "redundant-assertion-pair"
 
@@ -306,7 +304,7 @@ def test_unsatisfiable_pair_flags_icontains_vs_not_icontains_same_fold():
     expected = {"output_icontains": ["Test"], "output_not_icontains": ["test"]}
     findings = L.check_unsatisfiable_assertion_pair(expected)
     assert len(findings) == 1
-    key, value, rule, detail = findings[0]
+    key, _value, rule, _detail = findings[0]
     assert key == "output_not_icontains"
     assert rule == "unsatisfiable-assertion-pair"
 
@@ -321,7 +319,7 @@ def test_unsatisfiable_pair_flags_redundant_not_contains_vs_not_icontains():
     expected = {"output_not_contains": ["Foo"], "output_not_icontains": ["foo"]}
     findings = L.check_unsatisfiable_assertion_pair(expected)
     assert len(findings) == 1
-    key, value, rule, detail = findings[0]
+    key, _value, rule, _detail = findings[0]
     assert key == "output_not_icontains"
     assert rule == "redundant-assertion-pair"
 

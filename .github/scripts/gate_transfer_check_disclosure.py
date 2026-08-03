@@ -184,7 +184,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         text = (
-            open(args.entries, encoding="utf-8").read() if args.entries else sys.stdin.read()
+            Path(args.entries).read_text(encoding="utf-8") if args.entries else sys.stdin.read()
         )
     except FileNotFoundError:
         print(f"error: entries file not found: {args.entries}", file=sys.stderr)

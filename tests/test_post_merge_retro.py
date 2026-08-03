@@ -20,10 +20,9 @@ import pathlib
 import urllib.error
 import urllib.request
 
-import yaml
-
 import post_merge_retro as pmr
 import pytest
+import yaml
 
 
 class Response:
@@ -31,7 +30,7 @@ class Response:
         self.status = status
         self.body = body.encode()
 
-    def __enter__(self) -> "Response":
+    def __enter__(self) -> Response:
         return self
 
     def __exit__(self, *args: object) -> None:

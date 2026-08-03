@@ -226,7 +226,8 @@ def subprocess_executor(argv: Sequence[str], timeout: int) -> str:
     otherwise be indistinguishable from a malformed-input failure to this
     function's caller).
     """
-    result = subprocess.run(
+    # S603 waived: an explicit argv list from the caller, no shell.
+    result = subprocess.run(  # noqa: S603
         list(argv),
         capture_output=True,
         text=True,

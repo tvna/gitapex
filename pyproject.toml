@@ -12,11 +12,43 @@ dev = [
     "pyyaml>=6.0",
     "prek>=0.4.11",
     "jsonschema>=4.23",
+    # Bounded to one minor series for the reason upstream tvna/claude-md states
+    # for its own cap ("avoid silent rule churn on upgrade"), but at 0.15 rather
+    # than upstream's >=0.7,<0.9: the 133-finding baseline this repository was
+    # cleaned against (issue #678) was measured with ruff 0.15.x, so resolving
+    # upstream's range here would enforce a different rule set than the one
+    # proved clean. Re-measure the finding set when raising this bound.
+    "ruff>=0.15,<0.16",
 ]
 
 [tool.uv]
 # Non-package project: uv manages the environment and dev tools only.
 package = false
+
+# Ported from upstream tvna/claude-md's pyproject.toml (its issue #192), the
+# same repository this one already ports its registry schema
+# (.gitapex/ssot.json) and OWASP mapping (gate_owasp_asi_mapping.py) from.
+# select/ignore/line-length are reproduced verbatim; target-version matches this
+# repository's own requires-python = ">=3.12" exactly. Deviations are commented
+# at the point of deviation.
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["F", "E", "W", "I", "B", "A", "UP", "SIM", "RET", "PTH", "RUF", "S"]
+ignore = ["E501", "SIM108", "RET504"]
+
+# Deviation from upstream, which lists only "tests/*". Upstream keeps every test
+# under tests/; this repository also has test files under hooks/ and six
+# skills/*/scripts/ directories, so the narrow glob would report 1047 S101
+# (bare assert) findings against pytest idioms -- an artifact of layout, not of
+# quality. The two added globs port upstream's intent, they do not loosen it:
+# the rule list is unchanged, only the set of paths recognised as tests.
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011", "B017", "S101", "S105", "S106", "S108", "S404", "S603", "S607"]
+"**/test_*.py" = ["B011", "B017", "S101", "S105", "S106", "S108", "S404", "S603", "S607"]
+"**/conftest.py" = ["B011", "B017", "S101", "S105", "S106", "S108", "S404", "S603", "S607"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "skills/battle-testing-a-skill/scripts", "skills/evaluating-skill-quality/scripts", "skills/executing-a-branch-plan/scripts", "skills/auditing-agent-product-scope/scripts", "hooks"]

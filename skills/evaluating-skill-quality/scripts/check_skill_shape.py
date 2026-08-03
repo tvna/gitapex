@@ -994,7 +994,11 @@ PORTABLE_SKILL_FACT_CLAIM_RE = re.compile(
 # same-number-two-locations contradiction this check exists to catch, and
 # a false negative here (an uncaught multi-step list) is far cheaper than
 # a hand-rolled list grammar earning its own false positives.
-STEP_NUM_RE = re.compile(r"\bsteps?\s+(\d+)(?:\s*[-–]\s*\d+)?\b",
+# The \u2013 in the character class below is an EN DASH, written as an escape
+# rather than as a literal. The character is load-bearing -- SKILL.md prose
+# writes both "Steps 1-2" and "Steps 1\u20132" -- and an escape says so, where a
+# literal en dash is visually indistinguishable from the hyphen beside it.
+STEP_NUM_RE = re.compile(r"\bsteps?\s+(\d+)(?:\s*[-\u2013]\s*\d+)?\b",
                          re.IGNORECASE)
 # A closed, narrow vocabulary of execution-location assertions, grounded in
 # the exact wording of the historical incident this check mechanizes
@@ -1686,9 +1690,7 @@ def _parse_manifest(text: str) -> ManifestParse:
                 raw_text = item.group(1).strip()
                 is_quoted = (len(raw_text) >= 2 and raw_text[0] == raw_text[-1]
                              and raw_text[0] in "\"'")
-                if not is_quoted and REFERENCES_MAPPING_LIKE_RE.match(raw_text):
-                    malformed_deps.append(line.strip())
-                elif not is_quoted and _is_non_string_plain_scalar(raw_text):
+                if (not is_quoted and REFERENCES_MAPPING_LIKE_RE.match(raw_text)) or (not is_quoted and _is_non_string_plain_scalar(raw_text)):
                     malformed_deps.append(line.strip())
                 else:
                     collecting_dep_list.append(_unquote(raw_text))
@@ -1841,9 +1843,7 @@ def _parse_manifest(text: str) -> ManifestParse:
                 raw_text = item.group(1).strip()
                 is_quoted = (len(raw_text) >= 2 and raw_text[0] == raw_text[-1]
                              and raw_text[0] in "\"'")
-                if not is_quoted and REFERENCES_MAPPING_LIKE_RE.match(raw_text):
-                    malformed_exec_tools_items.append(line.strip())
-                elif not is_quoted and _is_non_string_plain_scalar(raw_text):
+                if (not is_quoted and REFERENCES_MAPPING_LIKE_RE.match(raw_text)) or (not is_quoted and _is_non_string_plain_scalar(raw_text)):
                     malformed_exec_tools_items.append(line.strip())
                 else:
                     collecting_exec_tools_list.append(_unquote(raw_text))
@@ -2089,10 +2089,10 @@ def _out_of_skill_link_targets(body_text: str, skill_dir: Path,
         path_part = target.split("#", 1)[0].split("?", 1)[0].strip()
         if not path_part:
             continue  # fragment-only or query-only link
-        if os.path.isabs(path_part):
+        if Path(path_part).is_absolute():
             normalized = os.path.normpath(path_part)
         else:
-            normalized = os.path.normpath(os.path.join(source_norm, path_part))
+            normalized = os.path.normpath(Path(source_norm) / path_part)
         if _escapes_skill_dir(normalized, skill_norm):
             offenders.append(target)
     return offenders
@@ -2297,10 +2297,10 @@ def _resolve_anchor_link_file(raw_path: str, source_dir: Path,
     already owns separately, not one this anchor check duplicates or
     re-flags.
     """
-    if os.path.isabs(raw_path):
+    if Path(raw_path).is_absolute():
         resolved = os.path.normpath(raw_path)
     else:
-        resolved = os.path.normpath(os.path.join(str(source_dir), raw_path))
+        resolved = os.path.normpath(Path(source_dir) / raw_path)
     if _escapes_skill_dir(resolved, skill_norm):
         return None
     return Path(resolved)
@@ -2789,11 +2789,16 @@ def _resolve_skill_md(target: Path) -> Path:
 
 def _validate_read_scope(target: Path, allowed_root: Path) -> None:
     """Reject an escaped or symlinked CLI target before reading any content."""
-    root = Path(os.path.abspath(allowed_root))
+    # PTH100 waived on all three abspath calls in this file: Path.resolve()
+    # follows symlinks, os.path.abspath does not. This function depends on
+    # that difference -- it absolutizes without resolving so the loop below
+    # can still see each symlinked component and reject it. Rewriting to
+    # resolve() would collapse the very links this check exists to catch.
+    root = Path(os.path.abspath(allowed_root))  # noqa: PTH100
     if not root.is_dir():
         raise ValueError(f"allowed root is not a directory: {allowed_root}")
 
-    candidate = _resolve_skill_md(Path(os.path.abspath(target)))
+    candidate = _resolve_skill_md(Path(os.path.abspath(target)))  # noqa: PTH100
     try:
         relative = candidate.relative_to(root)
     except ValueError as exc:
@@ -3164,7 +3169,10 @@ def check_shape(target: Path) -> list[CheckResult]:
                 f"apiVersion={api!r}, kind={kind_value!r}"))
             meta = manifest.get("metadata")
             meta_name = meta.get("name") if isinstance(meta, dict) else None
-            resolved_dir_name = Path(os.path.abspath(skill_dir)).name
+            # Same waiver: the name compared here must be the symlink's own
+            # basename, not the real directory it points to (see the
+            # metadata-name-matches-dir test for a symlinked skill dir).
+            resolved_dir_name = Path(os.path.abspath(skill_dir)).name  # noqa: PTH100
             results.append(CheckResult(
                 "metadata-name-matches-dir", meta_name == resolved_dir_name,
                 "metadata.name equals the skill directory name",
@@ -3807,8 +3815,10 @@ def _portable_path_citation_checks(skill_md: Path, skill_dir: Path,
             "Portable content has no bare-prose origin-repository path citation",
             "none" if not path_hits else "found: " + ", ".join(path_hits)),
     ]
+    # inline_hits_per_spec is built as one list per spec, so strict=True can
+    # only fire if that construction changes out from under this loop.
     for (check_name, _citation_re, hedge_phrases, kind_label), hits in zip(
-            _INLINE_CITATION_CHECK_SPECS, inline_hits_per_spec):
+            _INLINE_CITATION_CHECK_SPECS, inline_hits_per_spec, strict=True):
         results.append(CheckResult(
             check_name, not hits,
             f"Portable content has no inline-code {kind_label} citation "
@@ -3948,7 +3958,7 @@ def _out_of_skill_scripts_offenders(skill_dir: Path,
     offenders: list[str] = []
     for match in SCRIPTS_PATH_BARE_RE.finditer(bare):
         path = match.group(0).rstrip(".,;:)")
-        normalized = os.path.normpath(os.path.join(skill_norm, path))
+        normalized = os.path.normpath(Path(skill_norm) / path)
         if (_escapes_skill_dir(normalized, skill_norm)
                 or not Path(normalized).is_file()):
             offenders.append(path)

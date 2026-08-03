@@ -2,9 +2,8 @@ import json
 import subprocess
 from pathlib import Path
 
-import pytest
-
 import check_dispatch_trace as cdt
+import pytest
 
 # ---- synthetic stream-json transcript builders ----------------------------
 
@@ -724,7 +723,7 @@ def test_register_plugin_marketplace_raises_without_manifest(tmp_path: Path, mon
     isolated_cwd = tmp_path / "cwd"
     isolated_cwd.mkdir()
 
-    with pytest.raises(FileNotFoundError, match="marketplace.json"):
+    with pytest.raises(FileNotFoundError, match=r"marketplace\.json"):
         cdt.register_plugin_marketplace(
             marketplace_source, "gitapex@gitapex",
             isolated_home=isolated_home, isolated_cwd=isolated_cwd,

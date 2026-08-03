@@ -138,7 +138,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         text = (
-            open(args.removed, encoding="utf-8").read() if args.removed else sys.stdin.read()
+            Path(args.removed).read_text(encoding="utf-8") if args.removed else sys.stdin.read()
         )
     except FileNotFoundError:
         print(f"error: removed-names file not found: {args.removed}", file=sys.stderr)
@@ -149,7 +149,7 @@ def main(argv: list[str] | None = None) -> int:
         print("PASS: no removed skill directories in this diff")
         return 0
 
-    offenders = find_offenders(removed_names, Path("."))
+    offenders = find_offenders(removed_names, Path())
     if not offenders:
         print(f"PASS: renamedFrom recorded for all {len(removed_names)} removed skill(s)")
         return 0

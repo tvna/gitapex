@@ -3,7 +3,6 @@
 import json
 
 import pytest
-
 import score_contract
 
 

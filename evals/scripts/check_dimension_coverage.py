@@ -226,7 +226,12 @@ def discover_citations(
     # "incompatibility awareness").
     axis_res = {k: re.compile(rf"\b{re.escape(k.lower())}\b") for k in axes}
 
-    for path in sorted(Path(p) for p in globlib.glob(tasks_glob)):
+    # PTH207 waived: the argument is a whole user-supplied pattern
+    # string of unknown root (absolute or relative, any depth).
+    # Path.glob() takes a pattern relative to an already-known base,
+    # so it cannot express this without re-splitting the pattern by
+    # hand -- glob.glob is the correct tool, not a lapse.
+    for path in sorted(Path(p) for p in globlib.glob(tasks_glob)):  # noqa: PTH207
         data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         haystack = _fixture_text(data)
         cited_numbers = _cited_dimension_numbers(haystack)

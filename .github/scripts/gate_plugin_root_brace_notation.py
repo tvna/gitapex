@@ -160,8 +160,12 @@ def hook_commands(path: pathlib.Path) -> list[str]:
 def discover(root: pathlib.Path) -> list[pathlib.Path]:
     """Return every repository-tracked hook-command surface under ``root``."""
     try:
-        result = subprocess.run(
-            ["git", "-C", str(root), "ls-files", "-z", "--", *_PATHSPECS],
+        # S603/S607 waived: a fixed argv list with no shell, and `git`
+        # is intentionally resolved from PATH -- pinning an absolute path
+        # would break the three environments this has to run in (GitHub
+        # runner, the nix devShell, a contributor's machine).
+        result = subprocess.run(  # noqa: S603
+            ["git", "-C", str(root), "ls-files", "-z", "--", *_PATHSPECS],  # noqa: S607
             capture_output=True,
             text=True,
             check=False,

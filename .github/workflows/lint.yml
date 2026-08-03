@@ -1,13 +1,28 @@
+# The workflow name stays "Lint workflows" even though it now also lints
+# Python (issue #678). A branch-protection required check is identified by
+# "<workflow name> / <job id>", and that setting lives in GitHub, where no
+# in-repo tooling can read or update it. Renaming here would silently
+# invalidate any existing "Lint workflows / actionlint" entry. Adding the
+# ruff job already needs one admin change; this avoids needing two.
 name: Lint workflows
 
+# Deliberately no `paths:` filter, for the reason waza-eval-gate.yml's own
+# header states at length and docs/superpowers/plans/
+# 2026-07-30-evals-required-merge-gate.md records as a decision: GitHub
+# distinguishes a job that runs and reports `skipped` (does not block a
+# required check) from a workflow that never fires at all for a given PR
+# (leaves the required check `Pending` forever). A `paths:` trigger filter
+# is the second case. Both jobs here are intended for promotion to required
+# status checks, so a filter would permanently block any PR that happens
+# not to touch a matched path. Running unconditionally is the
+# required-check-safe shape, and it also removes any dependence on getting
+# a `**/*.py`-style glob right under GitHub's own filter semantics.
+# The cost is a checkout plus two short jobs on every PR, the same price
+# waza-eval-gate.yml accepted for the same reason.
 on:
   push:
     branches: [main]
-    paths:
-      - ".github/workflows/**"
-  pull_request:
-    paths:
-      - ".github/workflows/**"
+  pull_request: {}
 
 permissions:
   contents: read
@@ -40,3 +55,43 @@ jobs:
         uses: docker://rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
         with:
           args: -color
+
+  ruff:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
+      # Deliberately NOT a pinned ruff action or docker digest, unlike the
+      # actionlint step above. Issue #678's whole finding was that `ruff`
+      # here resolved from ambient PATH state rather than from the declared
+      # environment; a separately-pinned CI image would leave that split in
+      # place, with CI enforcing one ruff and contributors running another.
+      # `uv run` resolves the single version recorded in uv.lock, wheel
+      # hashes and all, so this job and a local run are the same ruff.
+      #
+      # --locked, NOT --frozen. The two are not interchangeable: --frozen
+      # means "run without updating uv.lock", which happily runs the locked
+      # ruff even when pyproject.toml now asks for a different one, exit 0
+      # and no warning. --locked asserts uv.lock is still in sync with
+      # pyproject.toml and errors when it is not. Only the second one
+      # actually closes the drift this gate exists to close, so bumping the
+      # pin without running `uv lock` fails here instead of silently
+      # enforcing the old rule set.
+      - name: Run ruff
+        run: uv run --locked ruff check --output-format github .

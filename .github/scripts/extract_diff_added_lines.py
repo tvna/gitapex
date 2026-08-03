@@ -145,9 +145,8 @@ def extract_added_lines_by_file(diff_text: str) -> list[list[str]]:
             # scope) -- but if it is itself blank, it is real, live
             # evidence of an actual paragraph break at this exact point
             # in the file, which a later added line must respect.
-            if line == " ":
-                if current and current[-1] != "":
-                    pending_separator = True
+            if line == " " and current and current[-1] != "":
+                pending_separator = True
         # A "-" (removed) line contributes nothing to the new file and
         # carries no paragraph-structure signal for it either.
     if current is not None:

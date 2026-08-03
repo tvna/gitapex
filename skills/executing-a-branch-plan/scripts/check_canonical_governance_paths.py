@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 from _path_normalize import normalize as _normalize
 
@@ -94,9 +95,8 @@ def _is_skill_governance_path(segments):
     checked by explicit segment count/shape, not a glob pattern."""
     if len(segments) == 3 and segments[0] == "skills" and segments[2] == "SKILL.md":
         return True
-    if len(segments) == 4 and segments[0] == "skills" and segments[2] == "metadata" and segments[3] == "gitapex.yaml":
-        return True
-    return False
+    return (len(segments) == 4 and segments[0] == "skills"
+            and segments[2] == "metadata" and segments[3] == "gitapex.yaml")
 
 
 def _is_skill_scripts_path(segments):
@@ -136,7 +136,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         raw_text = (
-            open(args.files, encoding="utf-8").read() if args.files else sys.stdin.read()
+            Path(args.files).read_text(encoding="utf-8") if args.files else sys.stdin.read()
         )
     except FileNotFoundError:
         print(f"error: files list not found: {args.files}", file=sys.stderr)

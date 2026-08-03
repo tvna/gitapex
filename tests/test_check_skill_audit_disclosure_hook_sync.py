@@ -23,7 +23,7 @@ CI_GATE_PATH = REPO_ROOT / ".github" / "scripts" / "gate_skill_audit_disclosure.
 HOOK_PATH = REPO_ROOT / "hooks" / "check_skill_audit_disclosure_or_waiver.py"
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def _load_module(path: pathlib.Path) -> types.ModuleType:
     # Loaded by file path, not `import`, since hooks/ is deliberately not
     # on pythonpath (it must work standalone from inside a distributed

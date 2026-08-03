@@ -91,6 +91,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 _API_ROOT = "https://api.github.com"
@@ -352,7 +353,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        body_text = open(args.body, encoding="utf-8").read() if args.body else sys.stdin.read()
+        body_text = Path(args.body).read_text(encoding="utf-8") if args.body else sys.stdin.read()
     except FileNotFoundError:
         print(f"error: body file not found: {args.body}", file=sys.stderr)
         return 1

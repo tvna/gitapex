@@ -72,6 +72,7 @@ import json
 import math
 import sys
 from collections.abc import Mapping
+from pathlib import Path
 
 CORRECTNESS_DECIMALS = 6
 
@@ -401,7 +402,7 @@ def main(argv=None):
     if args.compare_to is not None:
         try:
             raw = (
-                open(args.scores, encoding="utf-8").read()
+                Path(args.scores).read_text(encoding="utf-8")
                 if args.scores
                 else sys.stdin.read()
             )
@@ -432,7 +433,7 @@ def main(argv=None):
         print("error: --assertions is required unless --compare-to is used", file=sys.stderr)
         return 1
     try:
-        with open(args.assertions, encoding="utf-8") as handle:
+        with Path(args.assertions).open(encoding="utf-8") as handle:
             assertions = json.load(handle)
     except FileNotFoundError:
         print(f"error: assertions file not found: {args.assertions}", file=sys.stderr)
@@ -442,7 +443,7 @@ def main(argv=None):
         return 1
     if args.output:
         try:
-            with open(args.output, encoding="utf-8") as handle:
+            with Path(args.output).open(encoding="utf-8") as handle:
                 output_text = handle.read()
         except FileNotFoundError:
             print(f"error: output file not found: {args.output}", file=sys.stderr)

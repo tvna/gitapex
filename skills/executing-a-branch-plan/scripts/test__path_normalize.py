@@ -18,7 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from _path_normalize import normalize  # noqa: E402
+from _path_normalize import normalize
 
 
 def test_leading_dotslash_prefix():
