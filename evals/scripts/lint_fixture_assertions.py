@@ -924,7 +924,12 @@ def main(argv: list[str] | None = None) -> int:
             except OSError as exc:
                 print(f"error: could not read the anchor corpus: {exc}", file=sys.stderr)
                 return 2
-            task_paths = sorted(Path(p) for p in globlib.glob(args.tasks_glob))
+            # PTH207 waived: the argument is a whole user-supplied pattern
+            # string of unknown root (absolute or relative, any depth).
+            # Path.glob() takes a pattern relative to an already-known base,
+            # so it cannot express this without re-splitting the pattern by
+            # hand -- glob.glob is the correct tool, not a lapse.
+            task_paths = sorted(Path(p) for p in globlib.glob(args.tasks_glob))  # noqa: PTH207
             if not task_paths:
                 print(f"error: no task files matched: {args.tasks_glob}", file=sys.stderr)
                 return 2

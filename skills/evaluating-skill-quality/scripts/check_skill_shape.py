@@ -2085,10 +2085,10 @@ def _out_of_skill_link_targets(body_text: str, skill_dir: Path,
         path_part = target.split("#", 1)[0].split("?", 1)[0].strip()
         if not path_part:
             continue  # fragment-only or query-only link
-        if os.path.isabs(path_part):
+        if Path(path_part).is_absolute():
             normalized = os.path.normpath(path_part)
         else:
-            normalized = os.path.normpath(os.path.join(source_norm, path_part))
+            normalized = os.path.normpath(Path(source_norm) / path_part)
         if _escapes_skill_dir(normalized, skill_norm):
             offenders.append(target)
     return offenders
@@ -2293,10 +2293,10 @@ def _resolve_anchor_link_file(raw_path: str, source_dir: Path,
     already owns separately, not one this anchor check duplicates or
     re-flags.
     """
-    if os.path.isabs(raw_path):
+    if Path(raw_path).is_absolute():
         resolved = os.path.normpath(raw_path)
     else:
-        resolved = os.path.normpath(os.path.join(str(source_dir), raw_path))
+        resolved = os.path.normpath(Path(source_dir) / raw_path)
     if _escapes_skill_dir(resolved, skill_norm):
         return None
     return Path(resolved)
@@ -2785,11 +2785,16 @@ def _resolve_skill_md(target: Path) -> Path:
 
 def _validate_read_scope(target: Path, allowed_root: Path) -> None:
     """Reject an escaped or symlinked CLI target before reading any content."""
-    root = Path(os.path.abspath(allowed_root))
+    # PTH100 waived on all three abspath calls in this file: Path.resolve()
+    # follows symlinks, os.path.abspath does not. This function depends on
+    # that difference -- it absolutizes without resolving so the loop below
+    # can still see each symlinked component and reject it. Rewriting to
+    # resolve() would collapse the very links this check exists to catch.
+    root = Path(os.path.abspath(allowed_root))  # noqa: PTH100
     if not root.is_dir():
         raise ValueError(f"allowed root is not a directory: {allowed_root}")
 
-    candidate = _resolve_skill_md(Path(os.path.abspath(target)))
+    candidate = _resolve_skill_md(Path(os.path.abspath(target)))  # noqa: PTH100
     try:
         relative = candidate.relative_to(root)
     except ValueError as exc:
@@ -3160,7 +3165,10 @@ def check_shape(target: Path) -> list[CheckResult]:
                 f"apiVersion={api!r}, kind={kind_value!r}"))
             meta = manifest.get("metadata")
             meta_name = meta.get("name") if isinstance(meta, dict) else None
-            resolved_dir_name = Path(os.path.abspath(skill_dir)).name
+            # Same waiver: the name compared here must be the symlink's own
+            # basename, not the real directory it points to (see the
+            # metadata-name-matches-dir test for a symlinked skill dir).
+            resolved_dir_name = Path(os.path.abspath(skill_dir)).name  # noqa: PTH100
             results.append(CheckResult(
                 "metadata-name-matches-dir", meta_name == resolved_dir_name,
                 "metadata.name equals the skill directory name",
@@ -3944,7 +3952,7 @@ def _out_of_skill_scripts_offenders(skill_dir: Path,
     offenders: list[str] = []
     for match in SCRIPTS_PATH_BARE_RE.finditer(bare):
         path = match.group(0).rstrip(".,;:)")
-        normalized = os.path.normpath(os.path.join(skill_norm, path))
+        normalized = os.path.normpath(Path(skill_norm) / path)
         if (_escapes_skill_dir(normalized, skill_norm)
                 or not Path(normalized).is_file()):
             offenders.append(path)
