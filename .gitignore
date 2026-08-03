@@ -5,15 +5,28 @@ __pycache__/
 coverage.xml
 coverage.json
 
-# APM dependencies: apm_modules/ is apm's package cache; the .claude/ entries are
-# what `apm install` deploys from apm.lock.yaml (obra/superpowers, tvna/clairvoyance)
-# -- the skills, their hooks, and the settings/hook manifests that point at those
-# hooks. All are reproducible from the lockfile, and settings.json/apm-hooks.json
-# reference the gitignored hooks, so committing them would break a fresh checkout.
+# APM dependencies: apm_modules/ is apm's package cache; .claude/skills/ and the
+# apm-vendored .claude/hooks/<vendor>/ subtrees are what `apm install` deploys
+# from apm.lock.yaml (obra/superpowers, tvna/clairvoyance) -- reproducible from
+# the lockfile, so not committed.
 apm_modules/
 /.claude/skills/
-/.claude/hooks/
-/.claude/settings.json
+# `/.claude/hooks/*` (not a bare `/.claude/hooks/` dir-match) is required so the
+# negation below actually works -- git prunes traversal into an excluded
+# directory entirely and never looks for negations inside it (see `man
+# gitignore`'s own documented example). superpowers/ and clairvoyance/ still
+# match this glob and stay ignored; only the one negated path below is tracked.
+/.claude/hooks/*
+# gitapex's own session-start hook (issues #57, #690) is committed; apm's
+# per-source merge into settings.json (see below) does not touch it.
+!/.claude/hooks/session-start.sh
+# .claude/settings.json IS committed (issues #57, #690): apm install's own
+# re-runs only ever touch entries it tags via the sibling, still-gitignored
+# apm-hooks.json manifest's _apm_source field -- verified this session (a
+# hand-added SessionStart entry's content survives a full `apm install`
+# re-run byte-for-byte; the re-run does reorder the array itself, see this
+# task's commit message) -- so gitapex's own hand-added entry's content is
+# never deleted or mutated by an apm install re-run in the same file.
 /.claude/apm-hooks.json
 
 # Transient git worktrees created by Agent-tool `isolation: worktree` dispatches
