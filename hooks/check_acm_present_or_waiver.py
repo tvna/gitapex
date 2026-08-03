@@ -58,7 +58,7 @@ from pathlib import Path
 _FENCE_MARKERS = ("```", "~~~")
 
 
-def _strip_fences(text):
+def _strip_fences(text: str | None) -> str:
     lines = (text or "").split("\n")
     kept = []
     fence_marker = None
@@ -124,7 +124,7 @@ def waiver_category(body_text: str | None) -> str | None:
     return match.group("category").lower() if match else None
 
 
-def main(argv=None):
+def main(argv: list[str] | None = None) -> int:
     """CLI: exit 0 iff the given body discloses an ACM table or waiver, else 1."""
     parser = argparse.ArgumentParser(
         description="Check that a candidate GitHub issue body discloses an "

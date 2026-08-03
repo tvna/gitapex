@@ -38,6 +38,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from collections.abc import Iterable
 from pathlib import Path
 
 _SECTION_RE = re.compile(r"^##[ \t]*Skill audit evidence[ \t]*$", re.IGNORECASE | re.MULTILINE)
@@ -56,11 +57,11 @@ _VERDICTS = {
 _WAIVED_CLAUSE = r"WAIVED[ \t]*:[ \t]*\S.*"
 
 
-def _name_prefix(name):
+def _name_prefix(name: str) -> str:
     return r"^[ \t]*[-*]?[ \t]*`?" + re.escape(name) + r"`?[ \t]*:[ \t]*"
 
 
-def _line_pattern(name, verdicts):
+def _line_pattern(name: str, verdicts: Iterable[str]) -> re.Pattern[str]:
     verdict_alt = "|".join(re.escape(v) for v in verdicts)
     return re.compile(
         _name_prefix(name)
@@ -76,11 +77,11 @@ def _line_pattern(name, verdicts):
 _LINE_PATTERNS = {name: _line_pattern(name, verdicts) for name, verdicts in _VERDICTS.items()}
 
 
-def _normalize_body(body_text):
+def _normalize_body(body_text: str | None) -> str:
     return (body_text or "").replace("\r\n", "\n").replace("\r", "\n")
 
 
-def _extract_section(body_text):
+def _extract_section(body_text: str) -> str | None:
     """Return the "## Skill audit evidence" section body, or None if absent."""
     match = _SECTION_RE.search(body_text)
     if not match:
@@ -90,7 +91,7 @@ def _extract_section(body_text):
     return body_text[match.end():end]
 
 
-def find_missing_disclosures(body_text):
+def find_missing_disclosures(body_text: str | None) -> list[str]:
     """Return the list of audit names with no valid disclosure line in body_text."""
     section = _extract_section(_normalize_body(body_text))
     if section is None:
@@ -98,7 +99,7 @@ def find_missing_disclosures(body_text):
     return [name for name, pattern in _LINE_PATTERNS.items() if not pattern.search(section)]
 
 
-def main(argv=None):
+def main(argv: list[str] | None = None) -> int:
     """CLI: exit 0 iff the given body discloses both audits, else 1."""
     parser = argparse.ArgumentParser(
         description="Check that a candidate PR body discloses battle-testing-a-skill "
