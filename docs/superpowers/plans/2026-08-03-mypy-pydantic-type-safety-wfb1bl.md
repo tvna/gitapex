@@ -89,9 +89,9 @@ before wave assignment:
 #### T1 -- Foundation: dependencies, mypy config, CI job
 
 **Files:** `pyproject.toml`, `uv.lock`, `.github/workflows/test.yml`
-**ACM row:** "mypyを導入する (introduce mypy)" -- Planned ops quoted
+**ACM row:** "Introduce mypy" -- Planned ops quoted
 verbatim: *"`pyproject.toml` dependency + `[tool.mypy]` section; `uv.lock`
-regenerated"*; and "新しいmypy CIゲートは最初からブロッキング" -- Planned
+regenerated"*; and "New mypy CI gate is blocking from day one" -- Planned
 ops quoted verbatim: *"New job in `test.yml`; new `policy_sources[]` +
 `gates[]` entries in `.gitapex/ssot.json`"* (the `ssot.json` half of this
 row is T12, sequenced later; this task owns only the CI-job half).
@@ -133,8 +133,8 @@ row is T12, sequenced later; this task owns only the CI-job half).
 #### T2 -- SSOT registry pydantic model
 
 **Files:** `.github/scripts/scan_ssot_schema.py`, `tests/test_scan_ssot_schema.py`
-**ACM row:** "pydanticを導入して...型安全に、スコープの巨大さは許容する" --
-Planned ops quoted verbatim: *"New pydantic dependency; inline
+**ACM row:** "Introduce pydantic, applied comprehensively (scope size
+explicitly accepted by the owner)" -- Planned ops quoted verbatim: *"New pydantic dependency; inline
 `BaseModel` classes for the identified structured-data parsers... across
 that ~30-file set"*.
 **Edges:** depends on T1 only.
@@ -190,8 +190,8 @@ that ~30-file set"*.
 `.github/scripts/gate_routine_scope_enforcement.py`,
 `tests/test_gate_skill_rename_lifecycle.py`,
 `tests/test_gate_routine_scope_enforcement.py`
-**ACM row:** same pydantic row, plus "決定論的ゲートを型安全にしたい" --
-Planned ops quoted verbatim: *"Type-annotate every in-scope file"*.
+**ACM row:** same pydantic row, plus "Make the deterministic gates
+type-safe" -- Planned ops quoted verbatim: *"Type-annotate every in-scope file"*.
 **Edges:** depends on T1 only. No edge to `check_skill_shape.py`
 (untouched, deliberately -- see scope correction).
 
@@ -281,7 +281,7 @@ interface dependency -- proceed in the same wave).
 `skills/executing-a-branch-plan/scripts/check_canonical_governance_paths.py`,
 `skills/scorer-gated-skill-edits/scripts/score_contract.py`,
 `skills/drafting-an-adr/scripts/check_adr_shape.py`
-**ACM row:** "決定論的ゲートを型安全にしたい" -- Planned ops quoted
+**ACM row:** "Make the deterministic gates type-safe" -- Planned ops quoted
 verbatim: *"Type-annotate every in-scope file; mypy config scoped
 per-directory-group"*.
 **Edges:** depends on T1 only. No pydantic import in any of these files
@@ -323,7 +323,7 @@ register the final shape)
 
 **Files:** `docs/adr/0001-adopt-mypy-and-pydantic-for-deterministic-gates.md`
 (new)
-**ACM row:** "ADR-0001を新規作成" -- Planned ops quoted verbatim: *"New
+**ACM row:** "Draft ADR-0001" -- Planned ops quoted verbatim: *"New
 `docs/adr/0001-....md` file"*.
 **Edges:** depends on T1-T10 (documents their final, verified shape).
 
@@ -337,7 +337,7 @@ register the final shape)
 #### T12 -- `.gitapex/ssot.json` gate registration
 
 **Files:** `.gitapex/ssot.json`
-**ACM row:** "新しいmypy CIゲートは最初からブロッキング" -- Planned ops
+**ACM row:** "New mypy CI gate is blocking from day one" -- Planned ops
 quoted verbatim: *"New job in `test.yml`; new `policy_sources[]` +
 `gates[]` entries in `.gitapex/ssot.json`"*.
 **Edges:** depends on T1 (needs the real CI job name/invocation shape).
@@ -357,7 +357,7 @@ quoted verbatim: *"New job in `test.yml`; new `policy_sources[]` +
 #### T13 -- Full-suite verification
 
 **Files:** none exclusively owned (verification only).
-**ACM row:** "既存のゲート・テストの動作を壊さない" -- Planned ops quoted
+**ACM row:** "Preserve existing gate/test behavior" -- Planned ops quoted
 verbatim: *"Run full suite + coverage gate after every implementation
 wave"*.
 **Edges:** depends on T1-T12.
