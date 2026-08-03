@@ -413,6 +413,22 @@
       "supersedes": null
     },
     {
+      "id": "exception-handler-gap",
+      "kind": "script",
+      "script": [
+        ".github/scripts/gate_exception_handler_gaps.py",
+        ".github/workflows/exception-handler-gap-gate.yml"
+      ],
+      "rule": "A decoded read (read_text, or open in a text read mode), or a .get() on a json.loads result, added by a PR diff to .github/scripts/*.py, hooks/*.py, evals/scripts/*.py or skills/*/scripts/*.py must handle what it can actually raise: an enclosing try covering UnicodeDecodeError or an ancestor for the read, an isinstance() against a mapping type for the .get(). Scope is the diff, not the repository. An inline exception-handler-gap WAIVED comment carrying a reason discloses a read whose caller owns the handling, and every honoured waiver is printed. Exits 2 rather than pass silently on input it cannot grade. See the script docstring for the measurement behind the scoping decision and for the known misses and over-reports.",
+      "planes": ["ci"],
+      "trigger": ".github/workflows/exception-handler-gap-gate.yml on pull_request, plus tests/test_gate_exception_handler_gaps.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "test-integrity",
+      "tracking_issue": 682,
+      "status": "active",
+      "supersedes": null
+    },
+    {
       "id": "hidden-characters",
       "kind": "script",
       "script": ".github/scripts/gate_hidden_characters.py",
@@ -434,7 +450,7 @@
     "repo-hygiene": "Repository-file-level conventions such as .gitignore pattern test coverage.",
     "self-governance": "The repo's own doc-integrity and self-referential-claim checks (OWASP mappings, retro-title/routine-scope citation, retro backlog cap).",
     "supply-chain": "Toolchain and dependency provisioning, and manifest-identity drift.",
-    "test-integrity": "Test-suite coverage floors backing the other clusters' own gates.",
+    "test-integrity": "Quality floors on the artifacts backing the other clusters' own gates: test-suite coverage, static type checking, and static analysis of the gate scripts' own error paths.",
     "registry-integrity": "Self-validation of this registry file itself against its schema and against the repo's real files."
   }
 }
