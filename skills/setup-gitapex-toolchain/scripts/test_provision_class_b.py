@@ -3,9 +3,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import pytest
-
 import provision_class_b as pcb
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -53,24 +52,45 @@ def test_release_url_matches_flake_ghrelease_pattern() -> None:
 
 
 def test_parse_raises_on_missing_tool() -> None:
-    truncated = """
+    """Both classBData and mkClassB are structurally well-formed (real
+    let-in shape, brace-balanced) so parsing gets past the header/shape
+    regexes -- but only "waza" is defined in either table, leaving apm,
+    rtk, and betterleaks genuinely missing. This exercises the
+    missing_from_data/missing_from_meta check in parse_flake_class_b_pins,
+    not a structural-shape failure in _extract_mk_class_b_meta's header
+    regex (see the module docstring / task review for the bug this
+    guards against: a malformed fixture that raises the *wrong* error)."""
+    partial = """
     classBData = {
       waza = {
-        x86_64-linux = { asset = "w.tar.gz"; sha256 = "sha256-AAAA="; };
+        aarch64-linux  = { asset = "w-linux-arm64.tar.gz";  sha256 = "sha256-AAAA="; };
+        x86_64-linux   = { asset = "w-linux-amd64.tar.gz";  sha256 = "sha256-BBBB="; };
+        aarch64-darwin = { asset = "w-darwin-arm64.zip";    sha256 = "sha256-CCCC="; };
+        x86_64-darwin  = { asset = "w-darwin-amd64.zip";    sha256 = "sha256-DDDD="; };
       };
     };
-    mkClassB = pkgs: {
-      waza = mkReleaseBinary pkgs {
-        pname = "waza";
-        version = "0.1.0";
-        kind = "binary";
-        url = ghRelease "o" "r" "t" d.waza.${sys}.asset;
-        sha256 = d.waza.${sys}.sha256;
+
+    mkClassB = pkgs:
+      let
+        sys = pkgs.stdenv.hostPlatform.system;
+        d = classBData;
+      in
+      {
+        waza = mkReleaseBinary pkgs {
+          pname = "waza";
+          version = "0.1.0";
+          kind = "binary";
+          url = ghRelease "o" "waza" "t" d.waza.${sys}.asset;
+          sha256 = d.waza.${sys}.sha256;
+        };
       };
-    };
     """
-    with pytest.raises(pcb.FlakePinParseError):
-        pcb.parse_flake_class_b_pins(truncated)
+    with pytest.raises(pcb.FlakePinParseError, match="missing tools") as exc_info:
+        pcb.parse_flake_class_b_pins(partial)
+    message = str(exc_info.value)
+    for missing_tool in ("apm", "rtk", "betterleaks"):
+        assert missing_tool in message, f"expected {missing_tool!r} to be named as missing in: {message!r}"
+    assert "waza" not in message, f"waza is defined in both tables and should not be reported missing: {message!r}"
 
 
 @pytest.mark.parametrize(
