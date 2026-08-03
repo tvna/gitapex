@@ -1686,9 +1686,7 @@ def _parse_manifest(text: str) -> ManifestParse:
                 raw_text = item.group(1).strip()
                 is_quoted = (len(raw_text) >= 2 and raw_text[0] == raw_text[-1]
                              and raw_text[0] in "\"'")
-                if not is_quoted and REFERENCES_MAPPING_LIKE_RE.match(raw_text):
-                    malformed_deps.append(line.strip())
-                elif not is_quoted and _is_non_string_plain_scalar(raw_text):
+                if (not is_quoted and REFERENCES_MAPPING_LIKE_RE.match(raw_text)) or (not is_quoted and _is_non_string_plain_scalar(raw_text)):
                     malformed_deps.append(line.strip())
                 else:
                     collecting_dep_list.append(_unquote(raw_text))
@@ -1841,9 +1839,7 @@ def _parse_manifest(text: str) -> ManifestParse:
                 raw_text = item.group(1).strip()
                 is_quoted = (len(raw_text) >= 2 and raw_text[0] == raw_text[-1]
                              and raw_text[0] in "\"'")
-                if not is_quoted and REFERENCES_MAPPING_LIKE_RE.match(raw_text):
-                    malformed_exec_tools_items.append(line.strip())
-                elif not is_quoted and _is_non_string_plain_scalar(raw_text):
+                if (not is_quoted and REFERENCES_MAPPING_LIKE_RE.match(raw_text)) or (not is_quoted and _is_non_string_plain_scalar(raw_text)):
                     malformed_exec_tools_items.append(line.strip())
                 else:
                     collecting_exec_tools_list.append(_unquote(raw_text))

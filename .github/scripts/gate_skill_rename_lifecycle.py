@@ -149,7 +149,7 @@ def main(argv: list[str] | None = None) -> int:
         print("PASS: no removed skill directories in this diff")
         return 0
 
-    offenders = find_offenders(removed_names, Path("."))
+    offenders = find_offenders(removed_names, Path())
     if not offenders:
         print(f"PASS: renamedFrom recorded for all {len(removed_names)} removed skill(s)")
         return 0

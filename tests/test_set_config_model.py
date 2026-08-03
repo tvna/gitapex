@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import pytest
-
 import set_config_model as scm
 
 # A minimal eval.yaml shaped like the committed suites: a top-level config

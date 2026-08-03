@@ -133,7 +133,8 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import check_acm_present_or_waiver as acm_checker
 

@@ -2,9 +2,8 @@ import json
 import subprocess
 from pathlib import Path
 
-import pytest
-
 import check_dispatch_trace as cdt
+import pytest
 
 # ---- synthetic stream-json transcript builders ----------------------------
 

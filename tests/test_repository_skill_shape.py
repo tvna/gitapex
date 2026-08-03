@@ -9,9 +9,8 @@ pytest run), not only hand-built cases.
 """
 from pathlib import Path
 
-import pytest
-
 import check_skill_shape as css
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SKILL_DIRS = sorted(

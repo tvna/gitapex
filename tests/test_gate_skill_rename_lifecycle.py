@@ -16,8 +16,6 @@ from __future__ import annotations
 
 import io
 
-import pytest
-
 import gate_skill_rename_lifecycle as gate
 
 

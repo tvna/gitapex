@@ -20,9 +20,8 @@ from __future__ import annotations
 
 import pathlib
 
-import pytest
-
 import gate_split_fixture_coverage as gate
+import pytest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 

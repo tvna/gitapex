@@ -12,12 +12,10 @@ from __future__ import annotations
 import io
 import pathlib
 import subprocess
-import sys
 import types
 
-import pytest
-
 import detect_touched_eval_skills as mod
+import pytest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "waza-eval-gate.yml"

@@ -15,9 +15,8 @@ from __future__ import annotations
 import pathlib
 import re
 
-import pytest
-
 import check_skill_shape as css
+import pytest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 SKILLS_DIR = REPO_ROOT / "skills"

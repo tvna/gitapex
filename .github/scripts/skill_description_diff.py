@@ -33,7 +33,6 @@ from __future__ import annotations
 import argparse
 import re
 import subprocess
-import sys
 
 _BLOCK_SCALAR_INDICATORS = frozenset({">", ">-", ">+", "|", "|-", "|+"})
 _DESCRIPTION_KEY_RE = re.compile(r"^description:[ \t]*(.*)$")

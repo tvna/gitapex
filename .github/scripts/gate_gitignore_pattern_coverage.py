@@ -127,7 +127,7 @@ def main(argv: list[str] | None = None) -> int:
         print("PASS: no .gitignore patterns added in this diff")
         return 0
 
-    offenders = find_offenders(added_patterns, Path("."))
+    offenders = find_offenders(added_patterns, Path())
     if not offenders:
         print(f"PASS: test coverage found for all {len(added_patterns)} added pattern(s)")
         return 0

@@ -14,11 +14,9 @@ script instead parses and compares the description value directly.
 
 from __future__ import annotations
 
-import io
 import subprocess
 
 import pytest
-
 import skill_description_diff as sdd
 
 

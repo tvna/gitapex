@@ -10,9 +10,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-import pytest
-
 import check_skill_shape as css
+import pytest
 
 _SCRIPT_PATH = Path(css.__file__).resolve()
 
@@ -255,7 +254,7 @@ def test_relative_target_matches_dir_name(tmp_path, monkeypatch):
     # metadata-name-matches-dir compares against the real directory name.
     d = _write_skill(tmp_path)
     monkeypatch.chdir(d)
-    by_dot = _by_name(css.check_shape(Path(".")))
+    by_dot = _by_name(css.check_shape(Path()))
     assert by_dot["metadata-name-matches-dir"].passed is True
     assert css.main(["."]) == 0
     by_file = _by_name(css.check_shape(Path("SKILL.md")))

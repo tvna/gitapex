@@ -84,7 +84,7 @@ def _discover_acm_checker_scripts() -> list[pathlib.Path]:
 ACM_CHECKER_SCRIPTS = _discover_acm_checker_scripts()
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def _load_module(path: pathlib.Path) -> types.ModuleType:
     # Cached -- every test function below needs each copy's module, and
     # without caching each would re-read and re-exec the same file from
