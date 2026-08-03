@@ -62,6 +62,8 @@ import subprocess
 import sys
 from collections.abc import Iterator
 
+from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
+
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 _VARIABLE = "CLAUDE_PLUGIN_ROOT"
@@ -193,6 +195,24 @@ def violations_in(paths: list[pathlib.Path], root: pathlib.Path) -> list[tuple[s
     return violations
 
 
+class GatePluginRootBraceNotationArgs(BaseModel):
+    """Typed view of `main`'s parsed CLI namespace. `root` must be an
+    existing directory -- every existing caller already passes one, so this
+    only gives a --root pointing nowhere a clear, early error instead of
+    the deeper "git ls-files failed" ScanError it would otherwise surface."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    root: pathlib.Path
+
+    @field_validator("root")
+    @classmethod
+    def _must_be_existing_directory(cls, value: pathlib.Path) -> pathlib.Path:
+        if not value.is_dir():
+            raise ValueError(f"--root must be an existing directory, got {value}")
+        return value
+
+
 def main(argv: list[str] | None = None) -> int:
     """CLI: 0 clean, 1 violation found, 2 the scan could not be trusted."""
     parser = argparse.ArgumentParser(
@@ -208,16 +228,22 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        paths = discover(args.root)
+        validated = GatePluginRootBraceNotationArgs(root=args.root)
+    except ValidationError:
+        print(f"{args.root}: --root must be an existing directory", file=sys.stderr)
+        return 2
+
+    try:
+        paths = discover(validated.root)
         if not paths:
             raise ScanError(
-                f"{args.root}: no tracked hook-command surface matched "
+                f"{validated.root}: no tracked hook-command surface matched "
                 f"{list(_PATHSPECS)}. An empty match set most plausibly means "
                 "the scan ran against the wrong root, or a manifest was "
                 "renamed -- either way this gate would otherwise pass while "
                 "checking nothing."
             )
-        violations = violations_in(paths, args.root)
+        violations = violations_in(paths, validated.root)
     except ScanError as error:
         print(f"{error}", file=sys.stderr)
         return 2

@@ -337,3 +337,19 @@ def test_the_cli_exits_2_on_a_non_object_registry(monkeypatch, capsys, tmp_path,
     monkeypatch.setattr("sys.stdin", __import__("io").StringIO(""))
     assert detect.main(["--repo-root", str(tmp_path)]) == 2
     assert "must be a JSON object" in capsys.readouterr().err
+
+
+# --- DetectChangedGateScriptsArgs validation (new pydantic-model behavior) ---
+
+
+def test_the_cli_exits_2_on_a_repo_root_that_does_not_exist(tmp_path, capsys):
+    missing = tmp_path / "does-not-exist"
+    assert detect.main(["--repo-root", str(missing)]) == 2
+    assert "must be an existing directory" in capsys.readouterr().err
+
+
+def test_the_cli_exits_2_on_a_repo_root_that_is_a_file(tmp_path, capsys):
+    a_file = tmp_path / "not-a-directory"
+    a_file.write_text("x", encoding="utf-8")
+    assert detect.main(["--repo-root", str(a_file)]) == 2
+    assert "must be an existing directory" in capsys.readouterr().err

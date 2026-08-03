@@ -92,7 +92,9 @@ import urllib.parse
 import urllib.request
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
+
+from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
 
 _API_ROOT = "https://api.github.com"
 _API_VERSION = "2022-11-28"
@@ -334,6 +336,27 @@ def post_comment(
     _call("POST", url, token, opener, sleeper, body={"body": body})
 
 
+class AcmIssueDisclosureArgs(BaseModel):
+    """Typed view of `main`'s parsed CLI namespace. `--owner`/`--repo`/
+    `--issue-number` are required unless `--check-only` -- folds the
+    hand-rolled combination check `main` used to perform itself into one
+    pydantic validator, replacing rather than duplicating it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    body: str | None
+    check_only: bool
+    owner: str | None
+    repo: str | None
+    issue_number: int | None
+
+    @model_validator(mode="after")
+    def _require_owner_repo_issue_number_unless_check_only(self) -> AcmIssueDisclosureArgs:
+        if not self.check_only and (not self.owner or not self.repo or self.issue_number is None):
+            raise ValueError("--owner, --repo, and --issue-number are required outside --check-only")
+        return self
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Check a GitHub issue body for ACM disclosure (or waiver); "
@@ -353,23 +376,39 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        body_text = Path(args.body).read_text(encoding="utf-8") if args.body else sys.stdin.read()
+        validated = AcmIssueDisclosureArgs(
+            body=args.body,
+            check_only=args.check_only,
+            owner=args.owner,
+            repo=args.repo,
+            issue_number=args.issue_number,
+        )
+    except ValidationError:
+        print("error: --owner, --repo, and --issue-number are required outside --check-only", file=sys.stderr)
+        return 1
+
+    try:
+        body_text = Path(validated.body).read_text(encoding="utf-8") if validated.body else sys.stdin.read()
     except FileNotFoundError:
-        print(f"error: body file not found: {args.body}", file=sys.stderr)
+        print(f"error: body file not found: {validated.body}", file=sys.stderr)
         return 1
 
     passed = has_acm_disclosure(body_text)
 
-    if args.check_only:
+    if validated.check_only:
         if passed:
             print("PASS: Acceptance Criteria Map (or waiver) disclosed")
             return 0
         print("FAIL: no Acceptance Criteria Map table or ACM waiver line found in issue body", file=sys.stderr)
         return 1
 
-    if not args.owner or not args.repo or args.issue_number is None:
-        print("error: --owner, --repo, and --issue-number are required outside --check-only", file=sys.stderr)
-        return 1
+    # Guaranteed non-None here: AcmIssueDisclosureArgs's own validator above
+    # already rejected any non-check-only construction missing one of these;
+    # cast (not assert -- ruff S101 bans a bare assert outside tests) only
+    # narrows the static type to match that already-enforced runtime guarantee.
+    owner = cast(str, validated.owner)
+    repo = cast(str, validated.repo)
+    issue_number = cast(int, validated.issue_number)
 
     token = os.environ.get("GITHUB_TOKEN", "")
     if not token:
@@ -379,20 +418,20 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if passed:
             print("PASS: Acceptance Criteria Map (or waiver) disclosed -- removing label if present")
-            remove_label(args.owner, args.repo, args.issue_number, token)
+            remove_label(owner, repo, issue_number, token)
             return 0
 
         print(
             "FAIL: no Acceptance Criteria Map table or ACM waiver line found in issue body",
             file=sys.stderr,
         )
-        ensure_label_exists(args.owner, args.repo, token)
-        add_label(args.owner, args.repo, args.issue_number, token)
-        if has_marker_comment(args.owner, args.repo, args.issue_number, token):
+        ensure_label_exists(owner, repo, token)
+        add_label(owner, repo, issue_number, token)
+        if has_marker_comment(owner, repo, issue_number, token):
             print("Marker comment already present -- not posting again.")
         else:
-            post_comment(args.owner, args.repo, args.issue_number, token)
-            print(f"Flagged issue #{args.issue_number}: added '{_ACM_LABEL}' label and posted a comment.")
+            post_comment(owner, repo, issue_number, token)
+            print(f"Flagged issue #{issue_number}: added '{_ACM_LABEL}' label and posted a comment.")
         return 1
     except GitHubApiError as error:
         print(f"error: {error}", file=sys.stderr)

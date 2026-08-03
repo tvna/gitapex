@@ -139,6 +139,7 @@ import argparse
 import collections
 import re
 import sys
+from collections.abc import Iterable
 from pathlib import Path
 
 _SECTION_RE = re.compile(r"^##[ \t]*Skill audit evidence[ \t]*$", re.IGNORECASE | re.MULTILINE)
@@ -163,11 +164,11 @@ _VERDICTS = {
 _WAIVED_CLAUSE = r"WAIVED[ \t]*:[ \t]*\S.*"
 
 
-def _name_prefix(name):
+def _name_prefix(name: str) -> str:
     return r"^[ \t]*[-*]?[ \t]*`?" + re.escape(name) + r"`?[ \t]*:[ \t]*"
 
 
-def _line_pattern(name, verdicts):
+def _line_pattern(name: str, verdicts: Iterable[str]) -> re.Pattern[str]:
     verdict_alt = "|".join(re.escape(v) for v in verdicts)
     return re.compile(
         _name_prefix(name)
@@ -180,7 +181,7 @@ def _line_pattern(name, verdicts):
     )
 
 
-def _waived_pattern(name):
+def _waived_pattern(name: str) -> re.Pattern[str]:
     """A line disclosing `name` specifically via the WAIVED: <reason> form."""
     return re.compile(_name_prefix(name) + _WAIVED_CLAUSE + r"[ \t]*$", re.IGNORECASE | re.MULTILINE)
 
@@ -344,7 +345,7 @@ _PROCESS_DISCLOSURE_LINE_RES = {
 }
 
 
-def _normalize_body(body_text):
+def _normalize_body(body_text: str | None) -> str:
     # Normalize CRLF/CR line endings before matching: GitHub is known to
     # deliver github.event.pull_request.body with CRLF endings for PRs
     # authored/edited via the web UI, and the heading/line regexes below
@@ -352,7 +353,7 @@ def _normalize_body(body_text):
     return (body_text or "").replace("\r\n", "\n").replace("\r", "\n")
 
 
-def _extract_section(body_text):
+def _extract_section(body_text: str) -> str | None:
     """Return the "## Skill audit evidence" section body, or None if absent."""
     match = _SECTION_RE.search(body_text)
     if not match:
@@ -362,7 +363,7 @@ def _extract_section(body_text):
     return body_text[match.end():end]
 
 
-def _missing_base_disclosures(section):
+def _missing_base_disclosures(section: str | None) -> list[str]:
     """Core of `find_missing_disclosures`, over an already-extracted section.
 
     Split out so main() can grade every check against one extraction
@@ -379,12 +380,12 @@ def _missing_base_disclosures(section):
     return [name for name, pattern in _LINE_PATTERNS.items() if not pattern.search(section)]
 
 
-def find_missing_disclosures(body_text):
+def find_missing_disclosures(body_text: str | None) -> list[str]:
     """Return the list of audit names with no valid disclosure line in body_text."""
     return _missing_base_disclosures(_extract_section(_normalize_body(body_text)))
 
 
-def _disallowed_battle_testing_waiver(section, description_changed_skills):
+def _disallowed_battle_testing_waiver(section: str | None, description_changed_skills: list[str]) -> list[str]:
     """Core of `find_disallowed_battle_testing_waiver`, over an
     already-extracted section. Same single-source-of-truth reason as
     `_missing_base_disclosures` above."""
@@ -395,7 +396,9 @@ def _disallowed_battle_testing_waiver(section, description_changed_skills):
     return []
 
 
-def find_disallowed_battle_testing_waiver(body_text, description_changed_skills):
+def find_disallowed_battle_testing_waiver(
+    body_text: str | None, description_changed_skills: list[str]
+) -> list[str]:
     """Return description_changed_skills unchanged if the PR body discloses
     battle-testing-a-skill as WAIVED despite one of those skills' SKILL.md
     description line having changed in this diff (Repair 3); else [].
@@ -405,7 +408,7 @@ def find_disallowed_battle_testing_waiver(body_text, description_changed_skills)
     )
 
 
-def _missing_in_section(section, items, pattern):
+def _missing_in_section(section: str | None, items: list[str], pattern: re.Pattern[str]) -> list[str]:
     """Return `items` unchanged if `section` carries no line matching
     `pattern`; else []. `section` is the already-extracted '## Skill audit
     evidence' body, or None when the PR body has no such section.
@@ -425,14 +428,14 @@ def _missing_in_section(section, items, pattern):
     return list(items)
 
 
-def _find_missing_disclosure(body_text, items, pattern):
+def _find_missing_disclosure(body_text: str | None, items: list[str], pattern: re.Pattern[str]) -> list[str]:
     """Body-taking adapter over `_missing_in_section`, for the named
     `find_missing_*` wrappers below (tests call those directly by name) and
     for any caller grading a single check against one body."""
     return _missing_in_section(_extract_section(_normalize_body(body_text)), items, pattern)
 
 
-def find_missing_eval_coverage_disclosure(body_text, needs_eval_coverage_skills):
+def find_missing_eval_coverage_disclosure(body_text: str | None, needs_eval_coverage_skills: list[str]) -> list[str]:
     """Return needs_eval_coverage_skills unchanged if none of them is covered
     by an eval-coverage-disclosure WAIVED line in the PR body (Repair 1);
     else [].
@@ -440,7 +443,9 @@ def find_missing_eval_coverage_disclosure(body_text, needs_eval_coverage_skills)
     return _find_missing_disclosure(body_text, needs_eval_coverage_skills, _EVAL_COVERAGE_WAIVER_RE)
 
 
-def find_missing_security_coverage_disclosure(body_text, security_relevant_skills):
+def find_missing_security_coverage_disclosure(
+    body_text: str | None, security_relevant_skills: list[str]
+) -> list[str]:
     """Return security_relevant_skills unchanged if none of them is covered
     by an adversarial-coverage-mapping RAN/NOT-RUN/WAIVED line in the PR
     body (issue #517, refs #454); else [].
@@ -450,7 +455,7 @@ def find_missing_security_coverage_disclosure(body_text, security_relevant_skill
     )
 
 
-def find_missing_design_doc_disclosure(body_text, changed_design_docs):
+def find_missing_design_doc_disclosure(body_text: str | None, changed_design_docs: list[str]) -> list[str]:
     """Return changed_design_docs unchanged if none of them is covered by a
     design-doc-adversarial-review RAN/NOT-RUN/WAIVED line in the PR body
     (issue #517, refs #277); else [].
@@ -460,7 +465,9 @@ def find_missing_design_doc_disclosure(body_text, changed_design_docs):
     )
 
 
-def find_missing_checker_script_disclosure(body_text, changed_checker_scripts):
+def find_missing_checker_script_disclosure(
+    body_text: str | None, changed_checker_scripts: list[str]
+) -> list[str]:
     """Return changed_checker_scripts unchanged if none of them is covered by
     a checker-script-adversarial-review RAN/NOT-RUN/WAIVED line in the PR
     body (issue #565, refs #560 repair 5); else [].
@@ -470,7 +477,7 @@ def find_missing_checker_script_disclosure(body_text, changed_checker_scripts):
     )
 
 
-def find_missing_gate_quality_disclosure(body_text, changed_gate_scripts):
+def find_missing_gate_quality_disclosure(body_text: str | None, changed_gate_scripts: list[str]) -> list[str]:
     """Return changed_gate_scripts unchanged if none of them is covered by a
     deterministic-gate-quality disclosure line in the PR body (issue #673,
     refs #665 repair 1); else [].
@@ -487,7 +494,7 @@ def find_missing_gate_quality_disclosure(body_text, changed_gate_scripts):
     )
 
 
-def _parse_comma_list(raw):
+def _parse_comma_list(raw: str | None) -> list[str]:
     """Comma-separated tokens -> a sorted, deduped list with no empty items.
 
     Deliberately named for the wire format rather than for skill names:
@@ -508,7 +515,7 @@ def _parse_comma_list(raw):
     return sorted({item.strip() for item in (raw or "").split(",") if item.strip()})
 
 
-def main(argv=None):
+def main(argv: list[str] | None = None) -> int:
     """CLI: exit 0 iff the given PR body discloses every applicable check --
     the two #248 audits when a SKILL.md changed, the two #427
     description-change-only checks, and each #517/#565/#673

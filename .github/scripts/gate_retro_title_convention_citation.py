@@ -72,7 +72,9 @@ import urllib.error
 import urllib.request
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
+
+from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
 
 _API_ROOT = "https://api.github.com"
 _API_VERSION = "2022-11-28"
@@ -240,6 +242,26 @@ def find_unresolvable_offenders(
     return f"{path}: title/identity convention claim cites {cited}, but none resolve to a real issue/PR"
 
 
+class RetroTitleConventionCitationArgs(BaseModel):
+    """Typed view of `main`'s parsed CLI namespace. `--owner`/`--repo` are
+    required unless `--check-only` -- folds the hand-rolled combination
+    check `main` used to perform itself into one pydantic validator,
+    replacing rather than duplicating it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    files: list[str]
+    check_only: bool
+    owner: str | None
+    repo: str | None
+
+    @model_validator(mode="after")
+    def _require_owner_repo_unless_check_only(self) -> RetroTitleConventionCitationArgs:
+        if not self.check_only and (not self.owner or not self.repo):
+            raise ValueError("--owner and --repo are required outside --check-only")
+        return self
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Flag a file claiming a title/identity string is this repo's "
@@ -256,8 +278,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--repo", help="Repository name, e.g. gitapex. Required unless --check-only.")
     args = parser.parse_args(argv)
 
+    try:
+        validated = RetroTitleConventionCitationArgs(
+            files=args.files,
+            check_only=args.check_only,
+            owner=args.owner,
+            repo=args.repo,
+        )
+    except ValidationError:
+        print("error: --owner and --repo are required outside --check-only", file=sys.stderr)
+        return 1
+
     texts: dict[Path, str] = {}
-    for raw_path in args.files:
+    for raw_path in validated.files:
         path = Path(raw_path)
         try:
             texts[path] = path.read_text(encoding="utf-8")
@@ -265,7 +298,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"error: could not read {path}: {error}", file=sys.stderr)
             return 1
 
-    if args.check_only:
+    if validated.check_only:
         offenders = [
             _no_citation_message(path)
             for path, text in texts.items()
@@ -284,9 +317,14 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
-    if not args.owner or not args.repo:
-        print("error: --owner and --repo are required outside --check-only", file=sys.stderr)
-        return 1
+    # Guaranteed non-None here: RetroTitleConventionCitationArgs's own
+    # validator above already rejected any non-check-only construction
+    # missing one of these; cast (not assert -- ruff S101 bans a bare
+    # assert outside tests) only narrows the static type to match that
+    # already-enforced runtime guarantee.
+    owner = cast(str, validated.owner)
+    repo = cast(str, validated.repo)
+
     token = os.environ.get("GITHUB_TOKEN", "")
     if not token:
         print("error: GITHUB_TOKEN environment variable is not set", file=sys.stderr)
@@ -296,7 +334,7 @@ def main(argv: list[str] | None = None) -> int:
         unresolvable_offenders: list[str] = [
             unresolvable
             for path, text in texts.items()
-            if (unresolvable := find_unresolvable_offenders(path, text, args.owner, args.repo, token)) is not None
+            if (unresolvable := find_unresolvable_offenders(path, text, owner, repo, token)) is not None
         ]
     except GitHubApiError as error:
         print(f"error: {error}", file=sys.stderr)
