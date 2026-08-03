@@ -980,6 +980,32 @@ def test_a_read_with_a_substituting_errors_policy_cannot_raise(
     assert _grade(tmp_path, f'text = p.read_text(encoding="utf-8", errors="{errors}")\n') == []
 
 
+def test_a_positionally_passed_substituting_errors_policy_is_read(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`open(file, mode, buffering, encoding, errors)` -- the same argument,
+    spelled positionally."""
+    assert _grade(tmp_path, 'fh = open(p, "r", -1, "utf-8", "replace")\n') == []
+
+
+@pytest.mark.parametrize("errors", ["None", "variable", '"strict"', "0"])
+def test_an_errors_value_that_is_not_a_substituting_policy_still_reports(
+    tmp_path: pathlib.Path, errors: str
+) -> None:
+    """An allowlist, not "anything but strict". The denylist form took
+    `errors=None` out of scope, and Python documents `None` as *equivalent*
+    to strict -- it raises. So did every non-string value."""
+    source = f'text = p.read_text(encoding="utf-8", errors={errors})\n'
+    assert _rules(_grade(tmp_path, source)) == ["decode-gap"]
+
+
+def test_a_nested_walrus_still_taints_the_parsed_value(tmp_path: pathlib.Path) -> None:
+    """`(a := (b := json.loads(raw))).get(k)` -- the outer target binds a
+    walrus, not the parse, and unwrapping only one level dropped it."""
+    source = "def f(raw):\n    return (a := (b := json.loads(raw))).get('k')\n"
+    assert _rules(_grade(tmp_path, source)) == ["json-shape-gap"]
+
+
 def test_an_explicit_strict_errors_policy_still_raises_and_is_reported(
     tmp_path: pathlib.Path,
 ) -> None:
@@ -988,10 +1014,15 @@ def test_an_explicit_strict_errors_policy_still_raises_and_is_reported(
     ]
 
 
-def test_contextlib_suppress_is_read_as_a_handler(tmp_path: pathlib.Path) -> None:
-    """`suppress` is a handler written as a context manager. An earlier
-    revision filed this under "known misses" -- the wrong direction entirely,
-    since the gate was reporting it, not missing it."""
+def test_contextlib_suppress_is_a_stated_over_report(tmp_path: pathlib.Path) -> None:
+    """`suppress` really is a handler, and this gate really does report the
+    read inside one. Reading it was implemented and reverted: matching the
+    label `suppress` on any receiver silenced a same-named method on an
+    unrelated object, while missing `suppress` behind an import alias, a
+    starred argument, or a tuple constant. One syntactic match, wrong in both
+    directions, for a construct that occurs nowhere in the graded
+    directories. Pinned as an over-report so it is not rediscovered as a
+    surprise, and so the inline waiver stays its documented answer."""
     source = (
         "import contextlib\n"
         "def read(p):\n"
@@ -1000,29 +1031,18 @@ def test_contextlib_suppress_is_read_as_a_handler(tmp_path: pathlib.Path) -> Non
         "        text = p.read_text(encoding='utf-8')\n"
         "    return text\n"
     )
-    assert _grade(tmp_path, source) == []
-
-
-def test_a_suppress_of_a_different_error_does_not_cover_the_read(
-    tmp_path: pathlib.Path,
-) -> None:
-    source = (
-        "import contextlib\n"
-        "def read(p):\n"
-        "    text = ''\n"
-        "    with contextlib.suppress(OSError):\n"
-        "        text = p.read_text(encoding='utf-8')\n"
-        "    return text\n"
-    )
     assert _rules(_grade(tmp_path, source)) == ["decode-gap"]
 
 
-def test_a_handler_named_by_a_module_level_tuple_constant_is_resolved(
+def test_a_handler_named_by_a_tuple_constant_is_a_stated_over_report(
     tmp_path: pathlib.Path,
 ) -> None:
-    """`except _READ_ERRORS:` is mainstream. Reading the handler as literally
-    catching something called `_READ_ERRORS` reported correct code; a
-    module-level tuple of names is a constant table, not dataflow."""
+    """`except _READ_ERRORS:` is reported even when the constant does cover.
+    Expanding it was implemented and reverted: the table was applied by name
+    with no scope awareness, so a module-level rebinding, a local shadow, a
+    parameter default or a `for` target of the same name silenced the rule --
+    four fail-opens on exactly issue #682's own defect F shape, bought with a
+    false positive that occurs nowhere in the graded directories."""
     source = (
         "_READ_ERRORS = (OSError, ValueError)\n"
         "def read(p):\n"
@@ -1031,80 +1051,7 @@ def test_a_handler_named_by_a_module_level_tuple_constant_is_resolved(
         "    except _READ_ERRORS as error:\n"
         "        raise GateError(error) from error\n"
     )
-    assert _grade(tmp_path, source) == []
-
-
-def test_a_tuple_constant_that_does_not_cover_is_still_reported(
-    tmp_path: pathlib.Path,
-) -> None:
-    """Resolution has to work in both directions, or it is just a bypass."""
-    source = (
-        "_READ_ERRORS = (OSError, KeyError)\n"
-        "def read(p):\n"
-        "    try:\n"
-        "        return p.read_text(encoding='utf-8')\n"
-        "    except _READ_ERRORS as error:\n"
-        "        raise GateError(error) from error\n"
-    )
     assert _rules(_grade(tmp_path, source)) == ["decode-gap"]
-
-
-@pytest.mark.parametrize(
-    "constant",
-    [
-        "(OSError, exceptions.ValueError)",
-        '(OSError, "not-a-name")',
-    ],
-)
-def test_a_tuple_constant_this_gate_cannot_read_wholly_is_handled(
-    tmp_path: pathlib.Path, constant: str
-) -> None:
-    """An attribute member resolves by its final name; anything that is not a
-    name at all abandons the whole constant rather than resolving it
-    partially, since a partial expansion could invent coverage that the real
-    tuple does not have."""
-    source = (
-        f"_READ_ERRORS = {constant}\n"
-        "def read(p):\n"
-        "    try:\n"
-        "        return p.read_text(encoding='utf-8')\n"
-        "    except _READ_ERRORS as error:\n"
-        "        raise GateError(error) from error\n"
-    )
-    expected = [] if "exceptions.ValueError" in constant else ["decode-gap"]
-    assert _rules(_grade(tmp_path, source)) == expected
-
-
-def test_a_with_block_that_is_not_suppress_protects_nothing(
-    tmp_path: pathlib.Path,
-) -> None:
-    """A context manager that is a call but is not `suppress` -- the ordinary
-    `with chdir(root):` -- must not be read as catching anything."""
-    source = (
-        "def read(p):\n"
-        "    with chdir(root):\n"
-        "        return p.read_text(encoding='utf-8')\n"
-    )
-    assert _rules(_grade(tmp_path, source)) == ["decode-gap"]
-
-
-def test_a_with_item_that_is_not_a_call_at_all_protects_nothing(
-    tmp_path: pathlib.Path,
-) -> None:
-    """`with lock:` binds a name, not a call, so the `suppress` scan has to
-    step over it rather than assume every context manager is one."""
-    source = "def read(p):\n    with lock, other:\n        return p.read_text(encoding='utf-8')\n"
-    assert _rules(_grade(tmp_path, source)) == ["decode-gap"]
-
-
-def test_a_suppress_naming_an_attribute_exception_is_read(tmp_path: pathlib.Path) -> None:
-    source = (
-        "import contextlib\n"
-        "def read(p):\n"
-        "    with contextlib.suppress(builtins.ValueError):\n"
-        "        return p.read_text(encoding='utf-8')\n"
-    )
-    assert _grade(tmp_path, source) == []
 
 
 def test_an_unresolvable_handler_name_does_not_grant_coverage(

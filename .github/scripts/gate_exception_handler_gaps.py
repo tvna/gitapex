@@ -37,9 +37,9 @@ or `open(...)` in a text read mode, and not one carrying a substituting
 name no exception type that a `UnicodeDecodeError` would satisfy.
 `UnicodeDecodeError`, `UnicodeError`, `ValueError`, `Exception`,
 `BaseException` and a bare `except:` all count as covered, since each is
-that exception or one of its ancestors. A `contextlib.suppress(...)` block
-is read as the handler it is, and a handler named by a module-level tuple
-constant (`except _READ_ERRORS:`) is expanded through it.
+that exception or one of its ancestors. Handler names are read literally:
+nothing is resolved, and the two places where resolving was tried are in
+the over-report list below.
 
 **Rule `json-shape-gap`.** A `.get(...)` on a value that came from
 `json.loads(...)` / `json.load(...)` in the same scope, with no
@@ -130,17 +130,34 @@ contributors:
   `if isinstance(data, dict): pass` clears it. Deciding otherwise needs
   branch analysis, which is the class of machinery the bullets above record
   removing.
-* A handler naming something this gate cannot resolve -- a project
-  exception class -- is treated as not covering. Assuming the opposite was
-  tried and reverted within the hour: it silenced issue #682's own defect
-  F, whose outer `except ScopeError:` wraps the inner `except OSError:`.
-  The narrow, resolvable case (a module-level tuple of names) is expanded
-  instead.
 * A guard deleted with nothing added in its place leaves no added line for
   any diff-scoped rule to key on.
 
-Every miss above is pinned by a test that asserts the miss, so none can be
-reintroduced by accident or removed without a reader noticing.
+**Known over-reports.** Each of these is correct code that this gate
+reports, and for each the inline waiver is the documented answer. Every one
+of them had a fix written, measured, and reverted, because recognising the
+construct cost a fail-open on issue #682's own defect F shape -- which is
+the thing this gate exists for:
+
+* `except _READ_ERRORS:` where the tuple is a constant. Expanding it
+  applied a name table with no scope awareness, so a rebinding, a local
+  shadow, a parameter default or a `for` target of that name silenced the
+  rule outright -- four fail-opens.
+* A handler naming a project exception class this gate cannot classify.
+  Assuming an unrecognised handler covers silenced defect F itself, whose
+  outer `except ScopeError:` wraps the inner `except OSError:`.
+* `contextlib.suppress(UnicodeDecodeError)`. Matching the label `suppress`
+  on any receiver silenced a same-named method on an unrelated object,
+  while still missing `suppress` behind an import alias, a starred
+  argument, or a constant.
+* A read whose *caller* owns the handling. This is the case the inline
+  waiver was built for in the first place.
+
+None of the four occurs anywhere in the graded directories today, which is
+why each was measured as a poor trade rather than an urgent one.
+
+Every miss and every over-report above is pinned by a test asserting the
+behaviour, so none can change without a reader noticing.
 
 An intentional read that a *caller* guards can disclose itself inline with
 a trailing `# exception-handler-gap: WAIVED: <reason>` comment on the line
@@ -221,6 +238,12 @@ _DECODE_COVERING = frozenset(
 # is the exact remediation this gate's own failure message prescribes.
 _JSON_COVERING = frozenset({"AttributeError", "Exception", "BaseException"})
 
+# The `errors=` policies that substitute rather than raise. `None` and
+# `"strict"` are absent on purpose: both raise, and Python documents them as
+# equivalent.
+_SUBSTITUTING_ERRORS = frozenset(
+    {"replace", "ignore", "surrogateescape", "backslashreplace", "xmlcharrefreplace", "namereplace"}
+)
 
 
 _JSON_PARSERS = frozenset({"loads", "load"})
@@ -352,45 +375,22 @@ def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
     return added
 
 
-def _exception_aliases(tree: ast.Module) -> dict[str, set[str]]:
-    """Return module-level ``NAME = (Exc, Exc)`` constants, expanded.
-
-    `except _READ_ERRORS:` is a mainstream idiom, and reading the handler as
-    literally catching something called `_READ_ERRORS` reported correct code.
-    A module-level tuple of plain names is a constant table, not dataflow, so
-    resolving it costs nothing and needs no ordering. A handler naming
-    anything else unresolvable -- a real exception class -- stays unresolved
-    and therefore uncovering, which is what keeps issue #682's own defect F
-    (an outer `except ScopeError` around an inner `except OSError`) reported.
-    """
-    aliases: dict[str, set[str]] = {}
-    for node in tree.body:
-        if not (isinstance(node, ast.Assign) and isinstance(node.value, ast.Tuple)):
-            continue
-        members: set[str] = set()
-        for element in node.value.elts:
-            if isinstance(element, ast.Name):
-                members.add(element.id)
-            elif isinstance(element, ast.Attribute):
-                members.add(element.attr)
-            else:
-                members = set()
-                break
-        if not members:
-            continue
-        for target in node.targets:
-            if isinstance(target, ast.Name):
-                aliases[target.id] = members
-    return aliases
-
-
-def _handler_names(handler: ast.ExceptHandler, aliases: dict[str, set[str]]) -> set[str]:
-    """Return the exception names one `except` clause catches.
+def _handler_names(handler: ast.ExceptHandler) -> set[str]:
+    """Return the exception names one `except` clause catches, literally.
 
     A bare `except:` catches everything, so it reports `BaseException`. An
     attribute handler (`json.JSONDecodeError`) reports its final attribute
-    name, which is what the covering sets compare against. A name bound to a
-    module-level tuple constant is expanded through `aliases`.
+    name, which is what the covering sets compare against.
+
+    Nothing is resolved. `except _READ_ERRORS:` reports `_READ_ERRORS` and is
+    therefore reported as uncovered -- a known false positive, and the inline
+    waiver is its disclosure path. Expanding module-level tuple constants was
+    implemented and reverted: it matched by name with no scope awareness, so
+    a rebinding, a local shadow, a parameter default or a `for` target of the
+    same name silenced the rule entirely -- four fail-opens on exactly issue
+    #682's defect F shape, traded for a false positive that occurs nowhere in
+    the graded directories. Third time this gate has been offered
+    name resolution and third time it has cost more than it bought.
     """
     if handler.type is None:
         return {"BaseException"}
@@ -398,7 +398,7 @@ def _handler_names(handler: ast.ExceptHandler, aliases: dict[str, set[str]]) -> 
     names: set[str] = set()
     for part in parts:
         if isinstance(part, ast.Name):
-            names |= aliases.get(part.id, {part.id})
+            names.add(part.id)
         elif isinstance(part, ast.Attribute):
             names.add(part.attr)
     return names
@@ -415,41 +415,11 @@ def _handler_header_lines(handler: ast.ExceptHandler) -> set[int]:
     return set(range(handler.lineno, (end if end is not None else handler.lineno) + 1))
 
 
-def _suppressed_names(node: ast.With | ast.AsyncWith) -> set[str]:
-    """Return the exception names a `with contextlib.suppress(...)` silences.
-
-    `suppress` is a handler written as a context manager. Not reading it made
-    the gate demand a `try` around a read that provably cannot raise past the
-    `with` -- a false positive, and one an earlier revision had mis-filed as a
-    known miss rather than measured.
-    """
-    names: set[str] = set()
-    for item in node.items:
-        call = item.context_expr
-        if not isinstance(call, ast.Call):
-            continue
-        label = (
-            call.func.id
-            if isinstance(call.func, ast.Name)
-            else call.func.attr
-            if isinstance(call.func, ast.Attribute)
-            else None
-        )
-        if label != "suppress":
-            continue
-        for argument in call.args:
-            if isinstance(argument, ast.Name):
-                names.add(argument.id)
-            elif isinstance(argument, ast.Attribute):
-                names.add(argument.attr)
-    return names
-
-
 def _handler_coverage(tree: ast.Module) -> tuple[dict[int, set[str]], dict[int, set[int]]]:
     """Return ``({id(Call): exception names guarding it}, {id(Call): the lines
     of the `except` clauses guarding it})``.
 
-    Only a `try` *body* protects, plus a `contextlib.suppress` block. A read
+    Only a `try` *body* protects. A read
     inside an `except`, `else` or `finally` clause is not protected by that
     same statement's own handlers, which is exactly where a "read the file
     again to report a better error" fallback tends to live.
@@ -459,13 +429,20 @@ def _handler_coverage(tree: ast.Module) -> tuple[dict[int, set[str]], dict[int, 
     `except AttributeError` -- the fix this gate's own message prescribes --
     was still reported.
 
+    `contextlib.suppress(...)` is deliberately not read as a handler. It was,
+    briefly: matching the label `suppress` on any receiver silenced a
+    same-named method on an unrelated object, while missing `suppress` under
+    an import alias, a starred argument, or a tuple constant. One syntactic
+    match, wrong in both directions, for a construct that appears nowhere in
+    the graded directories. It is a known over-report instead, and the inline
+    waiver is its disclosure path.
+
     The second return value is what makes a *narrowed handler* this diff's
     finding: the read line is untouched in that edit, so anchoring on it alone
     would let the defect through.
     """
     guarded: dict[int, set[str]] = {}
     handler_lines: dict[int, set[int]] = {}
-    aliases = _exception_aliases(tree)
 
     def walk(node: ast.AST, handled: frozenset[str], enclosing: frozenset[int]) -> None:
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
@@ -487,7 +464,7 @@ def _handler_coverage(tree: ast.Module) -> tuple[dict[int, set[str]], dict[int, 
             names: set[str] = set()
             lines: set[int] = set()
             for handler in node.handlers:
-                names |= _handler_names(handler, aliases)
+                names |= _handler_names(handler)
                 lines |= _handler_header_lines(handler)
             for child in node.body:
                 walk(child, frozenset(handled | names), frozenset(enclosing | lines))
@@ -496,13 +473,6 @@ def _handler_coverage(tree: ast.Module) -> tuple[dict[int, set[str]], dict[int, 
                     walk(child, handled, enclosing)
             for child in [*node.orelse, *node.finalbody]:
                 walk(child, handled, enclosing)
-            return
-        if isinstance(node, ast.With | ast.AsyncWith):
-            suppressed = _suppressed_names(node)
-            for item in node.items:
-                walk(item.context_expr, handled, enclosing)
-            for child in node.body:
-                walk(child, frozenset(handled | suppressed), enclosing)
             return
         if isinstance(node, ast.Call):
             guarded[id(node)] = set(handled)
@@ -566,16 +536,23 @@ def _text_read_kind(node: ast.Call) -> str | None:
     here as well would report `ZipFile(z).open(name, "r")`, a binary read.
     """
     func = node.func
-    for keyword in node.keywords:
-        if keyword.arg != "errors":
-            continue
-        # `errors="replace"` / `"ignore"` / `"surrogateescape"` substitute
-        # rather than raise, so there is no UnicodeDecodeError to handle. This
-        # repository already uses that policy deliberately (see
-        # extract_diff_added_lines.py's own docstring), and reporting it made
-        # the gate demand a handler for an exception the call cannot raise.
-        if isinstance(keyword.value, ast.Constant) and keyword.value.value != "strict":
-            return None
+    errors = next((k.value for k in node.keywords if k.arg == "errors"), None)
+    if errors is None and len(node.args) >= 5:
+        # `open(file, mode, buffering, encoding, errors)` -- the positional
+        # spelling of the same argument.
+        errors = node.args[4]
+    if (
+        isinstance(errors, ast.Constant)
+        and isinstance(errors.value, str)
+        and errors.value in _SUBSTITUTING_ERRORS
+    ):
+        # A substituting policy replaces undecodable bytes instead of raising,
+        # so there is no UnicodeDecodeError to handle and demanding a handler
+        # reports code that cannot fail. An allowlist, not "anything but
+        # strict": that denylist took `errors=None` out of scope, and
+        # `None` is documented as *equivalent* to strict, so it silenced a
+        # real gap.
+        return None
 
     if isinstance(func, ast.Attribute) and func.attr == "read_text":
         return "read_text"
@@ -761,6 +738,8 @@ def _scope_taint(nodes: list[ast.AST]) -> tuple[dict[str, int], dict[str, int]]:
     rebound: set[str] = set()
     for node in nodes:
         for name, value in _assigned_names(node):
+            while isinstance(value, ast.NamedExpr):
+                value = value.value
             if value is not None and _is_json_parse(value):
                 # The parse expression's own line, not the statement's: they
                 # are the same for every real shape, and only the expression
