@@ -26,7 +26,7 @@ _PATTERNS = [
 ]
 
 
-def scan(text):
+def scan(text: str) -> list[tuple[int, str, str]]:
     """Return a list of ``(line_no, label, matched_text)`` candidate hits.
 
     A bare "model identifier" match is cheap to trigger on non-leak text
@@ -57,7 +57,7 @@ def scan(text):
     return hits
 
 
-def main(argv=None):
+def main(argv: list[str] | None = None) -> int:
     """CLI: print candidate provenance markers found in the given text."""
     parser = argparse.ArgumentParser(
         description="Scan an artifact's text for undisclosed provenance markers."

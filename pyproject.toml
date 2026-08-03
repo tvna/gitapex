@@ -93,48 +93,6 @@ disallow_untyped_calls = false
 disallow_any_generics = false
 # tracking: issue #684 (.github/scripts/)
 
-[[tool.mypy.overrides]]
-module = "check_acm_present"
-disallow_untyped_defs = false
-disallow_incomplete_defs = false
-disallow_untyped_calls = false
-disallow_any_generics = false
-# tracking: issue #684 (covers BOTH skills/drafting-an-acm-issue/scripts/
-# and skills/planning-a-branch-from-an-issue/scripts/ copies -- same bare
-# module name; kept in sync by tests/test_check_acm_present_sync.py)
-
-[[tool.mypy.overrides]]
-module = "scan_provenance"
-disallow_untyped_defs = false
-disallow_incomplete_defs = false
-disallow_untyped_calls = false
-disallow_any_generics = false
-# tracking: issue #684 (skills/outward-artifact-preflight/scripts/)
-
-[[tool.mypy.overrides]]
-module = ["check_axis_shape", "check_middleware_table_shape"]
-disallow_untyped_defs = false
-disallow_incomplete_defs = false
-disallow_untyped_calls = false
-disallow_any_generics = false
-# tracking: issue #684 (skills/auditing-agent-product-scope/scripts/)
-
-[[tool.mypy.overrides]]
-module = "scan_unpinned_actions"
-disallow_untyped_defs = false
-disallow_incomplete_defs = false
-disallow_untyped_calls = false
-disallow_any_generics = false
-# tracking: issue #684 (skills/auditing-git-hosting-surface/scripts/)
-
-[[tool.mypy.overrides]]
-module = "route_test_model"
-disallow_untyped_defs = false
-disallow_incomplete_defs = false
-disallow_untyped_calls = false
-disallow_any_generics = false
-# tracking: issue #684 (skills/battle-testing-a-skill/scripts/)
-
 # Tier C: skills/evaluating-skill-quality/scripts/check_skill_shape.py
 # (~4,440 lines, ~30% of this repo's non-test in-scope LOC by itself) is
 # already fully annotated at the def-signature level (unlike every Tier-A

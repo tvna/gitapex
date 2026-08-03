@@ -31,12 +31,12 @@ _HEADER_RE = re.compile(
 )
 
 
-def has_acm_table(body_text):
+def has_acm_table(body_text: str | None) -> bool:
     """Return ``True`` iff ``body_text`` contains the ACM header row."""
     return bool(_HEADER_RE.search(body_text or ""))
 
 
-def main(argv=None):
+def main(argv: list[str] | None = None) -> int:
     """CLI: exit 0 iff the given draft body contains the ACM table, else 1."""
     parser = argparse.ArgumentParser(
         description="Check that a drafted issue body contains the Acceptance Criteria Map table."
