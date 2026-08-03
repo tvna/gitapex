@@ -95,9 +95,8 @@ def _is_skill_governance_path(segments):
     checked by explicit segment count/shape, not a glob pattern."""
     if len(segments) == 3 and segments[0] == "skills" and segments[2] == "SKILL.md":
         return True
-    if len(segments) == 4 and segments[0] == "skills" and segments[2] == "metadata" and segments[3] == "gitapex.yaml":
-        return True
-    return False
+    return (len(segments) == 4 and segments[0] == "skills"
+            and segments[2] == "metadata" and segments[3] == "gitapex.yaml")
 
 
 def _is_skill_scripts_path(segments):

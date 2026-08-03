@@ -994,7 +994,11 @@ PORTABLE_SKILL_FACT_CLAIM_RE = re.compile(
 # same-number-two-locations contradiction this check exists to catch, and
 # a false negative here (an uncaught multi-step list) is far cheaper than
 # a hand-rolled list grammar earning its own false positives.
-STEP_NUM_RE = re.compile(r"\bsteps?\s+(\d+)(?:\s*[-–]\s*\d+)?\b",
+# The \u2013 in the character class below is an EN DASH, written as an escape
+# rather than as a literal. The character is load-bearing -- SKILL.md prose
+# writes both "Steps 1-2" and "Steps 1\u20132" -- and an escape says so, where a
+# literal en dash is visually indistinguishable from the hyphen beside it.
+STEP_NUM_RE = re.compile(r"\bsteps?\s+(\d+)(?:\s*[-\u2013]\s*\d+)?\b",
                          re.IGNORECASE)
 # A closed, narrow vocabulary of execution-location assertions, grounded in
 # the exact wording of the historical incident this check mechanizes
@@ -3811,8 +3815,10 @@ def _portable_path_citation_checks(skill_md: Path, skill_dir: Path,
             "Portable content has no bare-prose origin-repository path citation",
             "none" if not path_hits else "found: " + ", ".join(path_hits)),
     ]
+    # inline_hits_per_spec is built as one list per spec, so strict=True can
+    # only fire if that construction changes out from under this loop.
     for (check_name, _citation_re, hedge_phrases, kind_label), hits in zip(
-            _INLINE_CITATION_CHECK_SPECS, inline_hits_per_spec):
+            _INLINE_CITATION_CHECK_SPECS, inline_hits_per_spec, strict=True):
         results.append(CheckResult(
             check_name, not hits,
             f"Portable content has no inline-code {kind_label} citation "

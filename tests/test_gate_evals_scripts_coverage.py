@@ -88,7 +88,7 @@ def test_select_files_raises_on_non_dict_top_level():
 
 def test_select_files_raises_on_missing_percent_covered():
     data = {"files": {"evals/scripts/a.py": {"summary": {}}}}
-    with pytest.raises(ValueError, match="no numeric summary.percent_covered"):
+    with pytest.raises(ValueError, match=r"no numeric summary\.percent_covered"):
         gate.select_files(data, "evals/scripts/*.py")
 
 
@@ -98,7 +98,7 @@ def test_select_files_raises_on_bool_percent_covered():
     # percent_covered: true/false must not be silently accepted as a
     # numeric score.
     data = {"files": {"evals/scripts/a.py": {"summary": {"percent_covered": True}}}}
-    with pytest.raises(ValueError, match="no numeric summary.percent_covered"):
+    with pytest.raises(ValueError, match=r"no numeric summary\.percent_covered"):
         gate.select_files(data, "evals/scripts/*.py")
 
 
@@ -168,13 +168,13 @@ def test_select_files_in_source_raises_on_non_dict_top_level():
 
 def test_select_files_in_source_raises_on_missing_percent_covered():
     data = {"files": {"evals/scripts/a.py": {"summary": {}}}}
-    with pytest.raises(ValueError, match="no numeric summary.percent_covered"):
+    with pytest.raises(ValueError, match=r"no numeric summary\.percent_covered"):
         gate.select_files_in_source(data, "evals/scripts")
 
 
 def test_select_files_in_source_raises_on_bool_percent_covered():
     data = {"files": {"evals/scripts/a.py": {"summary": {"percent_covered": False}}}}
-    with pytest.raises(ValueError, match="no numeric summary.percent_covered"):
+    with pytest.raises(ValueError, match=r"no numeric summary\.percent_covered"):
         gate.select_files_in_source(data, "evals/scripts")
 
 
@@ -228,14 +228,14 @@ def test_read_coverage_sources_rejects_malformed_toml(tmp_path):
 def test_read_coverage_sources_rejects_missing_source_key(tmp_path):
     pyproject = tmp_path / "pyproject.toml"
     pyproject.write_text('[tool.coverage.run]\n', encoding="utf-8")
-    with pytest.raises(ValueError, match="no \\[tool.coverage.run\\] source list"):
+    with pytest.raises(ValueError, match=r"no \[tool\.coverage\.run\] source list"):
         gate.read_coverage_sources(str(pyproject))
 
 
 def test_read_coverage_sources_rejects_missing_coverage_table(tmp_path):
     pyproject = tmp_path / "pyproject.toml"
     pyproject.write_text('[tool.pytest.ini_options]\ntestpaths = ["tests"]\n', encoding="utf-8")
-    with pytest.raises(ValueError, match="no \\[tool.coverage.run\\] source list"):
+    with pytest.raises(ValueError, match=r"no \[tool\.coverage\.run\] source list"):
         gate.read_coverage_sources(str(pyproject))
 
 

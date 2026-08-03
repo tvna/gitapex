@@ -723,7 +723,7 @@ def test_register_plugin_marketplace_raises_without_manifest(tmp_path: Path, mon
     isolated_cwd = tmp_path / "cwd"
     isolated_cwd.mkdir()
 
-    with pytest.raises(FileNotFoundError, match="marketplace.json"):
+    with pytest.raises(FileNotFoundError, match=r"marketplace\.json"):
         cdt.register_plugin_marketplace(
             marketplace_source, "gitapex@gitapex",
             isolated_home=isolated_home, isolated_cwd=isolated_cwd,

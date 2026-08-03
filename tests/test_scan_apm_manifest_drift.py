@@ -76,7 +76,7 @@ def test_missing_field_in_plugin_json_fails_loudly(tmp_path):
         _VALID_APM,
         {"name": "gitapex"},  # no version
     )
-    with pytest.raises(KeyError, match="plugin.json"):
+    with pytest.raises(KeyError, match=r"plugin\.json"):
         drift.find_drift(apm, plugin)
 
 

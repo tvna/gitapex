@@ -142,7 +142,7 @@ def _find_requires_cycle(graph: dict[str, list[str]]) -> list[str] | None:
             if dep not in color:
                 continue
             if color[dep] == GRAY:
-                return path[path.index(dep):] + [dep]
+                return [*path[path.index(dep):], dep]
             if color[dep] == WHITE:
                 found = visit(dep)
                 if found:

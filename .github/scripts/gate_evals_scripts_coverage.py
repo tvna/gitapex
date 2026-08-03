@@ -296,7 +296,10 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     covered: dict[str, float] = {}
-    for target, display_glob in zip(targets, display_globs):
+    # strict=True is a real assertion here, not ceremony: source_include_globs
+    # returns one glob per source, in order, so a length mismatch would mean
+    # the two lists had silently desynchronised.
+    for target, display_glob in zip(targets, display_globs, strict=True):
         try:
             matched = (
                 select_files_in_source(data, target)
