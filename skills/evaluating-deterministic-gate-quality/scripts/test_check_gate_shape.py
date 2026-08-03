@@ -18,6 +18,7 @@ target for at least one of dimensions 1-6").
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
 import check_gate_shape as cgs
@@ -219,6 +220,54 @@ def test_dimension2_python_print_file_stderr_passes():
     assert d2.verdict == cgs.VERDICT_PASSED
 
 
+def test_has_stderr_message_python_empty_string_arg_not_credited():
+    text = 'import sys\nsys.stderr.write("")\n'
+    assert cgs._has_stderr_message_python(text) is False
+
+
+def test_dimension2_python_fallback_no_match_returns_false():
+    # Malformed Python (never parses) with no stderr-write/print call at
+    # all -- exercises the regex fallback's own "nothing found" path
+    # directly, distinct from the AST path's own equivalent branch.
+    text = "def broken(:\n    pass\n"
+    assert cgs._has_stderr_message_python_fallback(text) is False
+
+
+def test_dimension2_python_fallback_dispatch_matches_stderr_write(monkeypatch):
+    # Routes through the public dispatcher (_has_stderr_message_python),
+    # not the fallback function directly, so the dispatch branch itself
+    # (ast.parse fails -> call the fallback) is also covered. Forces the
+    # fallback path even for otherwise-valid Python by monkeypatching
+    # _parse_python_calls to report "did not parse".
+    monkeypatch.setattr(cgs, "_parse_python_calls", lambda text: None)
+    text = 'import sys\nsys.stderr.write("blocked: bad command")\n'
+    assert cgs._has_stderr_message_python(text) is True
+
+
+def test_dimension2_python_fallback_matches_print_file_stderr():
+    text = (
+        'import sys\n'
+        'print("blocked: bad command", file=sys.stderr)\n'
+        'x = (\n'
+    )
+    assert cgs._has_stderr_message_python_fallback(text) is True
+
+
+def test_dimension2_shell_echo_stderr_scan_is_not_quadratic():
+    # An adversarial review round measured the old single-regex
+    # (two unbounded [^\n]* spans around a quote alternation) growing
+    # ~4x in time per 2x input doubling, and a ~800KB adversarial single
+    # line without >&2 did not finish in 120s -- a real denial-of-service
+    # against this checker. The per-line substring scan that replaced it
+    # must stay fast even on a large adversarial line with no >&2 at all.
+    adversarial_line = "echo " + ('a"b\'c ' * 50_000)
+    start = time.monotonic()
+    result = cgs._has_stderr_message_shell(adversarial_line)
+    elapsed = time.monotonic() - start
+    assert elapsed < 2.0, f"took {elapsed:.2f}s -- possible ReDoS regression"
+    assert result is False
+
+
 # --- dimension 3: self-revalidation (heuristic) --------------------------
 
 
@@ -248,6 +297,18 @@ def test_dimension3_passes_on_dict_get_comparison():
     results = cgs.check_gate_shape(Path("hook.py"), text)
     d3 = _result(results, "3")
     assert d3.verdict == cgs.VERDICT_PASSED
+
+
+def test_dimension3_bare_identifier_used_elsewhere_stays_indeterminate():
+    # An adversarial review round found that widening the punctuation
+    # window to include ')' made this false-PASS: tool_name here is a
+    # bare Python variable passed to an unrelated function, never
+    # compared against anything itself -- get_command_hash(...)'s RESULT
+    # is what gets compared. Must stay indeterminate, not PASS.
+    text = 'if get_command_hash(tool_name) == cached_hash:\n    sys.exit(2)\n'
+    results = cgs.check_gate_shape(Path("hook.py"), text)
+    d3 = _result(results, "3")
+    assert d3.verdict == cgs.VERDICT_INDETERMINATE
 
 
 # --- dimension 4: bundled test exists ------------------------------------
@@ -295,6 +356,52 @@ def test_dimension4_containment_match_rejected_when_better_sibling_exists(tmp_pa
     script.write_text("x = 1\n", encoding="utf-8")
     (tmp_path / "check_gate_v2.py").write_text("y = 2\n", encoding="utf-8")
     (tmp_path / "test_check_gate_v2.py").write_text("def test_x(): pass\n", encoding="utf-8")
+    results = cgs.check_gate_shape(script, script.read_text(encoding="utf-8"))
+    d4 = _result(results, "4")
+    assert d4.verdict == cgs.VERDICT_FAILED
+
+
+def test_dimension4_reverse_direction_longer_script_does_not_steal_shorter_exact_match(tmp_path):
+    # An adversarial review round found the original guard only compared
+    # lengths one way (len(other) > len(stem_norm)), missing the reverse:
+    # check_gate_v2.py must not steal test_check_gate.py, the EXACT-match
+    # test for the separate, shorter check_gate.py sibling.
+    script = tmp_path / "check_gate_v2.py"
+    script.write_text("x = 1\n", encoding="utf-8")
+    (tmp_path / "check_gate.py").write_text("y = 2\n", encoding="utf-8")
+    (tmp_path / "test_check_gate.py").write_text("def test_x(): pass\n", encoding="utf-8")
+    results = cgs.check_gate_shape(script, script.read_text(encoding="utf-8"))
+    d4 = _result(results, "4")
+    assert d4.verdict == cgs.VERDICT_FAILED
+
+
+def test_dimension4_unrelated_sibling_script_never_blocks_a_real_match(tmp_path):
+    # An adversarial review round found the original guard blocked a
+    # correct match whenever ANY other script's stem happened to overlap
+    # the candidate test name, even when that other script is not an
+    # extension of this script's own name at all: gate.py + an unrelated
+    # shape.py must not stop test_gate_shape.py from crediting gate.py.
+    script = tmp_path / "gate.py"
+    script.write_text("x = 1\n", encoding="utf-8")
+    (tmp_path / "shape.py").write_text("y = 2\n", encoding="utf-8")
+    (tmp_path / "test_gate_shape.py").write_text("def test_x(): pass\n", encoding="utf-8")
+    results = cgs.check_gate_shape(script, script.read_text(encoding="utf-8"))
+    d4 = _result(results, "4")
+    assert d4.verdict == cgs.VERDICT_PASSED
+
+
+def test_dimension4_unreadable_directory_fails_closed_instead_of_crashing(tmp_path, monkeypatch):
+    # An adversarial review round found directory.iterdir() had no
+    # try/except anywhere in _find_sibling_test, unlike the read_text()
+    # call sites main()/dimension 6a already guard -- a permission-denied
+    # or racily-deleted directory crashed the whole tool uncaught.
+    script = tmp_path / "hook.py"
+    script.write_text("x = 1\n", encoding="utf-8")
+
+    def _raise_permission_error(self):
+        raise PermissionError("denied")
+
+    monkeypatch.setattr(Path, "iterdir", _raise_permission_error)
     results = cgs.check_gate_shape(script, script.read_text(encoding="utf-8"))
     d4 = _result(results, "4")
     assert d4.verdict == cgs.VERDICT_FAILED
@@ -414,7 +521,9 @@ def test_dimension5_python_os_system_concat_fails():
 
 
 def test_dimension5_python_tolerates_unbalanced_parens():
-    # Truncated/malformed source: the call's closing paren never appears.
+    # Truncated/malformed source: the call's closing paren never appears,
+    # so this text does not parse as valid Python at all -- exercises the
+    # regex-based fallback path (ast.parse fails), not the AST path.
     # _balanced_span must fall back to "rest of text" instead of raising.
     text = 'import subprocess\nsubprocess.run(f"echo {x}", shell=True'
     results = cgs.check_gate_shape(Path("hook.py"), text)
@@ -428,8 +537,120 @@ def test_dimension5_python_not_applicable_no_subprocess_call():
     assert d5.verdict == cgs.VERDICT_NOT_APPLICABLE
 
 
+def test_dimension5_python_unspaced_percent_formatting_fails():
+    # An adversarial review round found the old regex-marker scan
+    # required spaces around %/+ (" % ", " + "), so compact-style
+    # interpolation with no surrounding spaces slipped through as a false
+    # PASS. The AST path has no such spacing dependency: a BinOp is a
+    # BinOp regardless of source formatting.
+    text = 'import os\ndef run(path):\n    os.system("rm -rf %s"%path)\n'
+    results = cgs.check_gate_shape(Path("hook.py"), text)
+    d5 = _result(results, "5")
+    assert d5.verdict == cgs.VERDICT_FAILED
+
+
+def test_dimension5_python_shell_true_with_spaces_around_equals_fails():
+    # An adversarial review round found the old text scan did an exact
+    # substring match for the literal "shell=True", missing formatting
+    # variants like "shell = True". AST-based keyword lookup is
+    # formatting-independent.
+    text = (
+        'import subprocess\n'
+        'def run(target):\n'
+        '    subprocess.run(f"rm -rf {target}", shell = True)\n'
+    )
+    results = cgs.check_gate_shape(Path("hook.py"), text)
+    d5 = _result(results, "5")
+    assert d5.verdict == cgs.VERDICT_FAILED
+
+
+def test_dimension5_python_shell_equals_one_fails():
+    # An adversarial review round found "shell=1" (a truthy non-True
+    # constant) was invisible to the old "shell=True" substring check --
+    # combined here with an interpolated command so a PASS would mean
+    # the shell=1 form was never even recognized as shell execution at
+    # all (a literal command argument would legitimately PASS regardless).
+    text = 'import subprocess\ndef run(cmd):\n    subprocess.run(f"{cmd}", shell=1)\n'
+    results = cgs.check_gate_shape(Path("hook.py"), text)
+    d5 = _result(results, "5")
+    assert d5.verdict == cgs.VERDICT_FAILED
+
+
+def test_dimension5_python_paren_inside_string_literal_no_longer_hides_shell_true():
+    # An adversarial review round found _balanced_span counts every '('/
+    # ')' character in raw text, so a ')' embedded inside a string-literal
+    # argument truncated the scanned span before the real 'shell=True'
+    # keyword -- silently hiding a real shell-injection call. A real AST
+    # parse has no such blind spot: string-literal contents are never
+    # mistaken for syntax.
+    text = (
+        'import subprocess\n'
+        'def run(user_input):\n'
+        '    subprocess.run("echo )" + user_input, shell=True)\n'
+    )
+    results = cgs.check_gate_shape(Path("hook.py"), text)
+    d5 = _result(results, "5")
+    assert d5.verdict == cgs.VERDICT_FAILED
+
+
+def test_dimension5_python_no_positional_arg_fails():
+    text = 'import subprocess\nsubprocess.run(shell=True)\n'
+    results = cgs.check_gate_shape(Path("hook.py"), text)
+    d5 = _result(results, "5")
+    assert d5.verdict == cgs.VERDICT_FAILED
+
+
+def test_dimension5_python_argv_tuple_form_passes():
+    text = 'import subprocess\nsubprocess.run(("git", "status"), shell=True, timeout=5)\n'
+    results = cgs.check_gate_shape(Path("hook.py"), text)
+    d5 = _result(results, "5")
+    assert d5.verdict == cgs.VERDICT_PASSED
+
+
+def test_dimension5_python_fallback_not_applicable_no_calls():
+    text = "def broken(:\n    pass\n"
+    result = cgs._check_unsafe_interpolation_python_fallback(text)
+    assert result.verdict == cgs.VERDICT_NOT_APPLICABLE
+
+
+def test_dimension5_python_fallback_bare_identifier_fails():
+    text = (
+        'import subprocess\n'
+        'def run(cmd):\n'
+        '    subprocess.run(cmd, shell=True)\n'
+        'x = (\n'
+    )
+    result = cgs._check_unsafe_interpolation_python_fallback(text)
+    assert result.verdict == cgs.VERDICT_FAILED
+
+
+def test_dimension5_python_fallback_continues_past_non_shell_call_to_pass():
+    # Malformed Python (a trailing syntax error keeps ast.parse from
+    # succeeding) exercising the fallback's own "continue" path for a
+    # non-shell call, then falling through to PASS for a literal
+    # shell=True call.
+    text = (
+        'import subprocess\n'
+        'subprocess.run(["ls"])\n'
+        'subprocess.run("echo hi", shell=True)\n'
+        'x = (\n'
+    )
+    result = cgs._check_unsafe_interpolation_python_fallback(text)
+    assert result.verdict == cgs.VERDICT_PASSED
+
+
 def test_dimension5_shell_eval_with_variable_fails():
     results = cgs.check_gate_shape(Path("hook.sh"), _SH_EVAL_UNSAFE)
+    d5 = _result(results, "5")
+    assert d5.verdict == cgs.VERDICT_FAILED
+
+
+def test_dimension5_shell_dash_c_brace_expansion_variable_fails():
+    # An adversarial review round found \$\w+ misses brace-expansion
+    # syntax ${var} (the '{' immediately after '$' is not a word
+    # character), so bash -c "...${var}..." was invisible.
+    text = '#!/bin/bash\nbranch="$1"\nbash -c "git checkout ${branch}"\n'
+    results = cgs.check_gate_shape(Path("hook.sh"), text)
     d5 = _result(results, "5")
     assert d5.verdict == cgs.VERDICT_FAILED
 
@@ -525,6 +746,18 @@ def test_dimension6b_python_not_applicable_no_calls():
     assert d6b.verdict == cgs.VERDICT_NOT_APPLICABLE
 
 
+def test_dimension6b_python_timeout_word_in_unrelated_string_still_fails():
+    # An adversarial review round found the old check was a bare
+    # substring search for "timeout" over the whole call span, so the
+    # word appearing inside an unrelated string literal (a filename here)
+    # falsely satisfied it even with no real timeout= keyword at all. The
+    # AST path checks for an actual timeout= keyword argument.
+    text = 'import subprocess\nsubprocess.run(["curl", "-o", "/tmp/timeout_backup.txt"])\n'
+    results = cgs.check_gate_shape(Path("hook.py"), text)
+    d6b = _result(results, "6b")
+    assert d6b.verdict == cgs.VERDICT_FAILED
+
+
 def test_dimension6b_shell_curl_missing_timeout_fails():
     results = cgs.check_gate_shape(Path("hook.sh"), _SH_CURL_NO_TIMEOUT)
     d6b = _result(results, "6b")
@@ -547,6 +780,22 @@ def test_dimension6b_shell_not_applicable_no_network_call():
     results = cgs.check_gate_shape(Path("hook.sh"), _SH_SAFE_EXEC_FORM)
     d6b = _result(results, "6b")
     assert d6b.verdict == cgs.VERDICT_NOT_APPLICABLE
+
+
+def test_dimension6b_python_fallback_not_applicable_no_calls():
+    text = "def broken(:\n    pass\n"
+    result = cgs._check_timeout_internal_python_fallback(text)
+    assert result.verdict == cgs.VERDICT_NOT_APPLICABLE
+
+
+def test_dimension6b_python_fallback_passes_with_timeout():
+    text = (
+        'import subprocess\n'
+        'subprocess.run("echo hi", timeout=5)\n'
+        'x = (\n'
+    )
+    result = cgs._check_timeout_internal_python_fallback(text)
+    assert result.verdict == cgs.VERDICT_PASSED
 
 
 # --- dimension 6a: invocation-level timeout (hooks.json wiring) ---------
@@ -577,6 +826,30 @@ def test_dimension6a_passes_with_numeric_timeout(tmp_path):
     )
     d6a = _result(results, "6a")
     assert d6a.verdict == cgs.VERDICT_PASSED
+
+
+def test_dimension6a_fails_when_timeout_is_json_boolean_true(tmp_path):
+    # An adversarial review round found isinstance(True, (int, float)) is
+    # True in Python (bool is an int subtype), so a hooks.json entry with
+    # "timeout": true was silently credited as a valid numeric timeout.
+    hooks_json = tmp_path / "hooks.json"
+    hooks_json.write_text(json.dumps({
+        "hooks": {
+            "PreToolUse": [
+                {
+                    "matcher": "Bash",
+                    "hooks": [
+                        {"type": "command", "command": "hooks/check-bash-safety.sh", "timeout": True}
+                    ],
+                }
+            ]
+        }
+    }), encoding="utf-8")
+    results = cgs.check_gate_shape(
+        Path("hooks/check-bash-safety.sh"), _SH_GOOD_DENY, hooks_json
+    )
+    d6a = _result(results, "6a")
+    assert d6a.verdict == cgs.VERDICT_FAILED
 
 
 def test_dimension6a_fails_when_entry_has_no_timeout(tmp_path):

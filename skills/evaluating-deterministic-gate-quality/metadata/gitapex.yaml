@@ -211,6 +211,22 @@ spec:
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/587"
       summary: "Fixed 6 of the 7 findings above, each with a new regression test: a bare-identifier command fed to a shell call is now FAIL not silent PASS; both read paths catch UnicodeDecodeError; dimension 4 rejects a containment match when a longer sibling exists; dimension-1 accepts a negative exit code; dimension-3 tolerates trailing punctuation; bash/sh -c is now recognized alongside eval. Comment/string scanning stays a disclosed docstring limitation, not fixed -- a real tokenizer was out of scope."
+    - kind: audit
+      anchor: "method:evaluating-deterministic-gate-quality"
+      summary: "An 8-angle /code-review dispatch on scripts/check_gate_shape.py found: a confirmed quadratic-backtracking ReDoS in the stderr-message regex (an 800KB adversarial line did not finish in 120s); dimension-3/4 regressions from the prior fix round's own over-broad punctuation window and one-directional length guard; JSON-boolean/unspaced-marker/paren-in-string/brace-expansion bypasses across dimensions 5/6a/6b; plus lower-priority reuse/simplification/altitude notes."
+      outcome:
+        findings_confirmed: 11
+        severity_high: 2
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/587"
+      summary: "Fixed all 11 confirmed findings above. The ReDoS regex became a linear per-line scan. Dimension 3 now requires a quoted/$/dot-prefixed tool_name reference, never a bare identifier. Dimension 4's sibling guard is now symmetric (both length directions) and requires a real stem extension, not any substring overlap. Dimension 6a rejects a JSON boolean timeout value."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/587"
+      summary: "Dimensions 2/5/6b for Python-target scripts now parse the script with ast and inspect real Call/keyword nodes, falling back to the prior text-scan heuristic only when a script does not parse as valid Python -- closing the unspaced-marker/shell=True-formatting/paren-in-string-literal bug classes at once rather than patching each shape individually, per the altitude angle's own recommendation."
+      outcome:
+        tests_before: 58
+        tests_after: 81
+        coverage: "99.4%"
   skillDependencies:
     requires:
       - evaluating-skill-quality
