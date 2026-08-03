@@ -13,12 +13,19 @@ the count of issues with zero citing commits exceeds a threshold.
 Design: docs/superpowers/specs/2026-07-22-retrospective-gate-drift-design.md
 
 Split into pure logic (fixture-testable, no I/O) and I/O glue (GitHub REST
-API over `urllib`, plus a local `git log`). Deliberately stdlib-only and
-does not import `sync_pr_publish.py` -- this repository keeps
-`.github/scripts/*.py` files independently self-contained (see
-`gate_skill_rename_lifecycle.py`'s own docstring for the same rationale)
-even though the retry-with-backoff shape below mirrors
+API over `urllib`, a local `git log`, plus a `.gitapex/ssot.json` read).
+Deliberately stdlib-only and does not import `sync_pr_publish.py` -- this
+repository keeps `.github/scripts/*.py` files independently self-contained
+(see `gate_skill_rename_lifecycle.py`'s own docstring for the same
+rationale) even though the retry-with-backoff shape below mirrors
 `sync_pr_publish.apply_call`.
+
+Issue #709: a citing commit alone is not proof the issue's proposed gate
+was actually built -- `#N` in a commit message only shows someone worked
+on *something related to* issue N. An issue now clears the no-citation
+report only when a citing commit AND a corroborating
+`.gitapex/ssot.json` `gates[].tracking_issue == N` entry both agree
+(`load_gate_tracking_issues`, wired into `find_no_citation_issues`).
 
 Usage::
 
@@ -42,6 +49,7 @@ import argparse
 import http.client
 import json
 import os
+import pathlib
 import re
 import subprocess
 import sys
@@ -74,6 +82,13 @@ class GitLogError(RuntimeError):
     """Raised when the local `git log` invocation fails."""
 
 
+class SsotLedgerError(RuntimeError):
+    """Raised when `.gitapex/ssot.json` cannot be read as a usable gate
+    registry. Never caught and silently downgraded to an empty
+    corroboration set -- that would reopen the exact bare-citation
+    false-negative issue #709 exists to close."""
+
+
 # ---------------------------------------------------------------------------
 # Pure logic
 # ---------------------------------------------------------------------------
@@ -94,9 +109,21 @@ def citation_count(commit_messages: list[str], issue_number: int) -> int:
     return sum(1 for message in commit_messages if pattern.search(message))
 
 
-def find_no_citation_issues(issue_numbers: list[int], commit_messages: list[str]) -> list[int]:
-    """Return the subset of `issue_numbers` with zero citing commits."""
-    return [n for n in issue_numbers if citation_count(commit_messages, n) == 0]
+def find_no_citation_issues(
+    issue_numbers: list[int],
+    commit_messages: list[str],
+    tracking_issues: set[int],
+) -> list[int]:
+    """Return the subset of `issue_numbers` that lack either a citing
+    commit or a corroborating `.gitapex/ssot.json` `tracking_issue` entry.
+
+    Issue #709: a bare citing commit is not sufficient on its own -- it is
+    evidence someone touched *something related to* the issue, not proof
+    its proposed gate was built. An issue number clears (is excluded from
+    the returned list) only when both signals agree: at least one commit
+    cites it AND `tracking_issues` contains it.
+    """
+    return [n for n in issue_numbers if citation_count(commit_messages, n) == 0 or n not in tracking_issues]
 
 
 def evaluate(no_citation_count: int, threshold: int) -> bool:
@@ -198,10 +225,7 @@ def list_labelled_issues(
     issue_numbers: list[int] = []
     page = 1
     while True:
-        url = (
-            f"{_API_ROOT}/repos/{owner}/{repo}/issues"
-            f"?labels={label}&state=all&per_page={_PER_PAGE}&page={page}"
-        )
+        url = f"{_API_ROOT}/repos/{owner}/{repo}/issues?labels={label}&state=all&per_page={_PER_PAGE}&page={page}"
         items = _fetch_issues_page(url, token, opener, sleeper)
         if not items:
             break
@@ -244,27 +268,64 @@ def git_commit_messages(
     return messages
 
 
+def load_gate_tracking_issues(path: str) -> set[int]:
+    """Return every `.gitapex/ssot.json` `gates[].tracking_issue` value.
+
+    Issue #709's corroborating signal. Raises `SsotLedgerError` rather
+    than returning an empty set on a missing/malformed registry -- an
+    empty set here would silently widen the no-citation report back to
+    bare-citation-only behavior, the exact false-negative class this
+    check exists to close. Mirrors `detect_changed_gate_scripts.py`'s
+    `registered_gate_paths()` fail-closed shape.
+    """
+    try:
+        raw = pathlib.Path(path).read_text(encoding="utf-8")
+    except OSError as error:
+        raise SsotLedgerError(f"{path}: gate registry cannot be read: {error}") from error
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as error:
+        raise SsotLedgerError(f"{path}: gate registry is not valid JSON: {error}") from error
+
+    # `[]`, `"x"`, and `1` are all valid JSON, so a successful parse does
+    # not mean the shape is usable -- without this guard, `data.get` below
+    # would raise an uncaught AttributeError instead of the documented
+    # SsotLedgerError.
+    if not isinstance(data, dict):
+        raise SsotLedgerError(f"{path}: gate registry must be a JSON object, got {type(data).__name__}")
+    gates = data.get("gates")
+    if not isinstance(gates, list) or not gates:
+        raise SsotLedgerError(f"{path}: gate registry has no usable 'gates' list")
+
+    tracking_issues: set[int] = set()
+    for gate in gates:
+        tracking_issue = gate.get("tracking_issue") if isinstance(gate, dict) else None
+        if isinstance(tracking_issue, int):
+            tracking_issues.add(tracking_issue)
+    return tracking_issues
+
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
 
-def _validate_cli_args(owner: str, repo: str, ref: str, cwd: str, label: str) -> str | None:
+def _validate_cli_args(owner: str, repo: str, ref: str, cwd: str, label: str, ssot_path: str) -> str | None:
     """Return a pydantic-``ValidationError``-style detail string (one
     ``<field>: <message>`` clause per violated constraint, joined with
     ``"; "``, in field-declaration order) if any of ``owner``/``repo``/
-    ``ref``/``cwd``/``label`` is blank (argparse's own ``required=True``
-    only guarantees the flag was passed, not that its value is non-empty;
-    ``ref``/``cwd``/``label`` reject blank the same way since each is used
-    as a real path/ref/query fragment downstream and an empty value there
-    was never a meaningful input), else None. ``threshold`` keeps its bare
-    ``int`` type with no floor -- a caller intentionally passing a negative
-    threshold to force a hard fail is not a malformed input, just an unusual
-    one -- so it is never checked here. Message text is a byte-for-byte
-    match of the pydantic ``Field(min_length=1)`` errors this replaces
-    (verified directly against the installed pydantic version), so this
-    plain-Python check is a drop-in replacement, not merely an
-    equivalent-intent one."""
+    ``ref``/``cwd``/``label``/``ssot_path`` is blank (argparse's own
+    ``required=True`` only guarantees the flag was passed, not that its
+    value is non-empty; ``ref``/``cwd``/``label``/``ssot_path`` reject
+    blank the same way since each is used as a real path/ref/query
+    fragment downstream and an empty value there was never a meaningful
+    input), else None. ``threshold`` keeps its bare ``int`` type with no
+    floor -- a caller intentionally passing a negative threshold to force
+    a hard fail is not a malformed input, just an unusual one -- so it is
+    never checked here. Message text is a byte-for-byte match of the
+    pydantic ``Field(min_length=1)`` errors this replaces (verified
+    directly against the installed pydantic version), so this plain-Python
+    check is a drop-in replacement, not merely an equivalent-intent one."""
     errors: list[str] = []
     if not owner:
         errors.append("owner: String should have at least 1 character")
@@ -276,6 +337,8 @@ def _validate_cli_args(owner: str, repo: str, ref: str, cwd: str, label: str) ->
         errors.append("cwd: String should have at least 1 character")
     if not label:
         errors.append("label: String should have at least 1 character")
+    if not ssot_path:
+        errors.append("ssot_path: String should have at least 1 character")
     return "; ".join(errors) if errors else None
 
 
@@ -289,13 +352,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cwd", default=".", help="Repository working directory for git log (default: .)")
     parser.add_argument("--label", default=DEFAULT_LABEL, help=f"Issue label to search (default: {DEFAULT_LABEL})")
     parser.add_argument(
+        "--ssot-path",
+        default=".gitapex/ssot.json",
+        help="Path (relative to --cwd) to the gate registry used as the corroborating "
+        "signal (default: .gitapex/ssot.json)",
+    )
+    parser.add_argument(
         "--threshold",
         type=int,
         default=DEFAULT_THRESHOLD,
         help=f"Fail if the no-citation count exceeds this value (default: {DEFAULT_THRESHOLD})",
     )
     args = parser.parse_args(argv)
-    detail = _validate_cli_args(args.owner, args.repo, args.ref, args.cwd, args.label)
+    detail = _validate_cli_args(args.owner, args.repo, args.ref, args.cwd, args.label, args.ssot_path)
     if detail is not None:
         print(f"error: invalid arguments: {detail}", file=sys.stderr)
         return 1
@@ -308,11 +377,12 @@ def main(argv: list[str] | None = None) -> int:
     try:
         issue_numbers = list_labelled_issues(args.owner, args.repo, args.label, token)
         commit_messages = git_commit_messages(args.ref, args.cwd)
-    except (GitHubApiError, GitLogError) as error:
+        tracking_issues = load_gate_tracking_issues(str(pathlib.Path(args.cwd) / args.ssot_path))
+    except (GitHubApiError, GitLogError, SsotLedgerError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
 
-    no_citation_issues = find_no_citation_issues(issue_numbers, commit_messages)
+    no_citation_issues = find_no_citation_issues(issue_numbers, commit_messages, tracking_issues)
     print(format_report(no_citation_issues, len(issue_numbers), args.threshold))
     return 1 if evaluate(len(no_citation_issues), args.threshold) else 0
 

@@ -14,6 +14,7 @@ own fixture style.
 from __future__ import annotations
 
 import http.client
+import json
 import subprocess
 import urllib.error
 import urllib.request
@@ -78,12 +79,42 @@ def test_citation_count_zero_when_no_commit_cites_it():
 
 def test_find_no_citation_issues_returns_only_uncited_numbers():
     messages = ["Refs #242", "Refs #187"]
-    assert gate.find_no_citation_issues([242, 187, 118], messages) == [118]
+    assert gate.find_no_citation_issues([242, 187, 118], messages, {242, 187, 118}) == [118]
 
 
 def test_find_no_citation_issues_empty_when_all_cited():
     messages = ["Refs #1", "Refs #2"]
-    assert gate.find_no_citation_issues([1, 2], messages) == []
+    assert gate.find_no_citation_issues([1, 2], messages, {1, 2}) == []
+
+
+# ---------------------------------------------------------------------------
+# find_no_citation_issues: corroborating-signal cases (issue #709)
+# ---------------------------------------------------------------------------
+
+
+def test_find_no_citation_issues_keeps_issue_314_shape_when_citing_commit_lacks_corroboration():
+    # Reproduces #314's real false negative: a66ccbc cited "#314" while
+    # changing an unrelated workflow comment/doc, and no ssot.json gate
+    # was ever registered with tracking_issue == 314.
+    messages = ["chore(gates): document budget caps and permanent human-review-of-merge (#318)"]
+    assert gate.find_no_citation_issues([314], ["Refs #314", *messages], set()) == [314]
+
+
+def test_find_no_citation_issues_keeps_multi_proposal_issue_665_shape_when_only_one_subproposal_has_a_tracking_entry():
+    # Reproduces #665's real false negative: PR #703's commits cited
+    # "refs #665 repair 6" (repair 6 landed as the hidden-characters gate,
+    # tracking_issue 702 -- not 665), while #665's other three proposed
+    # repairs (2, 3, 4) remain unimplemented. 665 itself must stay
+    # uncleared even though a commit cites it.
+    messages = ["feat(ci): add a repository-wide hidden-character gate (refs #665 repair 6)"]
+    assert gate.find_no_citation_issues([665], messages, {702}) == [665]
+
+
+def test_find_no_citation_issues_clears_when_citation_and_tracking_issue_both_present():
+    # Guards the opposite regression: a genuine single-proposal, citing +
+    # registry-backed issue must still clear normally.
+    messages = ["fix(gates): close gaps (Refs #650)"]
+    assert gate.find_no_citation_issues([650], messages, {650}) == []
 
 
 # ---------------------------------------------------------------------------
@@ -179,9 +210,7 @@ def test_list_labelled_issues_retries_5xx_then_succeeds():
             raise response
         return response
 
-    result = gate.list_labelled_issues(
-        "tvna", "gitapex", "retrospective", "tok", opener=opener, sleeper=sleeps.append
-    )
+    result = gate.list_labelled_issues("tvna", "gitapex", "retrospective", "tok", opener=opener, sleeper=sleeps.append)
     assert result == []
     assert sleeps == [5]
 
@@ -208,9 +237,7 @@ def test_list_labelled_issues_retries_incomplete_body_read_then_succeeds():
     def opener(request: urllib.request.Request) -> Response:
         return responses.pop(0)
 
-    result = gate.list_labelled_issues(
-        "tvna", "gitapex", "retrospective", "tok", opener=opener, sleeper=sleeps.append
-    )
+    result = gate.list_labelled_issues("tvna", "gitapex", "retrospective", "tok", opener=opener, sleeper=sleeps.append)
     assert result == []
     assert sleeps == [5]
 
@@ -226,9 +253,7 @@ def test_list_labelled_issues_retries_body_read_timeout_then_succeeds():
     def opener(request: urllib.request.Request) -> Response:
         return responses.pop(0)
 
-    result = gate.list_labelled_issues(
-        "tvna", "gitapex", "retrospective", "tok", opener=opener, sleeper=sleeps.append
-    )
+    result = gate.list_labelled_issues("tvna", "gitapex", "retrospective", "tok", opener=opener, sleeper=sleeps.append)
     assert result == []
     assert sleeps == [5]
 
@@ -242,9 +267,7 @@ def test_list_labelled_issues_raises_after_repeated_network_failure():
         raise urllib.error.URLError("boom")
 
     with pytest.raises(gate.GitHubApiError):
-        gate.list_labelled_issues(
-            "tvna", "gitapex", "retrospective", "tok", opener=opener, sleeper=lambda _: None
-        )
+        gate.list_labelled_issues("tvna", "gitapex", "retrospective", "tok", opener=opener, sleeper=lambda _: None)
     assert calls == 3
 
 
@@ -291,6 +314,54 @@ def test_git_commit_messages_raises_on_nonzero_exit():
 
 
 # ---------------------------------------------------------------------------
+# load_gate_tracking_issues
+# ---------------------------------------------------------------------------
+
+
+def test_load_gate_tracking_issues_parses_ints_and_skips_null_or_missing(tmp_path):
+    ssot = tmp_path / "ssot.json"
+    ssot.write_text(
+        json.dumps(
+            {
+                "gates": [
+                    {"id": "a", "tracking_issue": 650},
+                    {"id": "b", "tracking_issue": None},
+                    {"id": "c"},
+                    {"id": "d", "tracking_issue": 297},
+                ]
+            }
+        )
+    )
+    assert gate.load_gate_tracking_issues(str(ssot)) == {650, 297}
+
+
+def test_load_gate_tracking_issues_raises_on_missing_file(tmp_path):
+    with pytest.raises(gate.SsotLedgerError):
+        gate.load_gate_tracking_issues(str(tmp_path / "nonexistent.json"))
+
+
+def test_load_gate_tracking_issues_raises_on_malformed_json(tmp_path):
+    ssot = tmp_path / "ssot.json"
+    ssot.write_text("{not valid json")
+    with pytest.raises(gate.SsotLedgerError):
+        gate.load_gate_tracking_issues(str(ssot))
+
+
+def test_load_gate_tracking_issues_raises_when_not_a_json_object(tmp_path):
+    ssot = tmp_path / "ssot.json"
+    ssot.write_text("[]")
+    with pytest.raises(gate.SsotLedgerError):
+        gate.load_gate_tracking_issues(str(ssot))
+
+
+def test_load_gate_tracking_issues_raises_when_gates_list_missing_or_empty(tmp_path):
+    ssot = tmp_path / "ssot.json"
+    ssot.write_text(json.dumps({"gates": []}))
+    with pytest.raises(gate.SsotLedgerError):
+        gate.load_gate_tracking_issues(str(ssot))
+
+
+# ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
 
@@ -299,6 +370,7 @@ def test_main_exits_zero_when_count_at_threshold(monkeypatch, capsys):
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
     monkeypatch.setattr(gate, "list_labelled_issues", lambda *a, **k: [1, 2])
     monkeypatch.setattr(gate, "git_commit_messages", lambda *a, **k: ["Refs #1", "Refs #2"])
+    monkeypatch.setattr(gate, "load_gate_tracking_issues", lambda *a, **k: {1, 2})
     exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex", "--threshold", "0"])
     assert exit_code == 0
     assert "PASS" in capsys.readouterr().out
@@ -308,6 +380,7 @@ def test_main_exits_one_when_count_exceeds_threshold(monkeypatch, capsys):
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
     monkeypatch.setattr(gate, "list_labelled_issues", lambda *a, **k: [1, 2, 3])
     monkeypatch.setattr(gate, "git_commit_messages", lambda *a, **k: [])
+    monkeypatch.setattr(gate, "load_gate_tracking_issues", lambda *a, **k: set())
     exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex", "--threshold", "1"])
     assert exit_code == 1
     assert "FAIL" in capsys.readouterr().out
@@ -339,10 +412,23 @@ def test_main_exits_one_on_git_log_error(monkeypatch):
     assert gate.main(["--owner", "tvna", "--repo", "gitapex"]) == 1
 
 
+def test_main_exits_one_on_ssot_ledger_error(monkeypatch):
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    monkeypatch.setattr(gate, "list_labelled_issues", lambda *a, **k: [1])
+    monkeypatch.setattr(gate, "git_commit_messages", lambda *a, **k: ["Refs #1"])
+
+    def raise_ssot_error(*a, **k):
+        raise gate.SsotLedgerError("boom")
+
+    monkeypatch.setattr(gate, "load_gate_tracking_issues", raise_ssot_error)
+    assert gate.main(["--owner", "tvna", "--repo", "gitapex"]) == 1
+
+
 def test_main_uses_default_threshold_when_unspecified(monkeypatch, capsys):
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
     monkeypatch.setattr(gate, "list_labelled_issues", lambda *a, **k: list(range(18)))
     monkeypatch.setattr(gate, "git_commit_messages", lambda *a, **k: [])
+    monkeypatch.setattr(gate, "load_gate_tracking_issues", lambda *a, **k: set())
     exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex"])
     assert exit_code == 0
     assert f"threshold: {gate.DEFAULT_THRESHOLD}" in capsys.readouterr().out
@@ -363,5 +449,12 @@ def test_main_rejects_blank_owner(monkeypatch, capsys):
 def test_main_rejects_blank_repo(monkeypatch, capsys):
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
     exit_code = gate.main(["--owner", "tvna", "--repo", ""])
+    assert exit_code == 1
+    assert "invalid arguments" in capsys.readouterr().err
+
+
+def test_main_rejects_blank_ssot_path(monkeypatch, capsys):
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex", "--ssot-path", ""])
     assert exit_code == 1
     assert "invalid arguments" in capsys.readouterr().err
