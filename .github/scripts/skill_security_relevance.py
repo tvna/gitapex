@@ -44,7 +44,7 @@ def extract_frontmatter(text):
     through the closing '---' line, inclusive), or None if there is no
     well-formed '---'-delimited frontmatter (missing opening or closing
     delimiter)."""
-    text = (text or "").lstrip("﻿")
+    text = (text or "").lstrip("\ufeff")
     if not text.startswith("---"):
         return None
     lines = text.splitlines()

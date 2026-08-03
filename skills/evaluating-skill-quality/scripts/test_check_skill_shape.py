@@ -518,7 +518,7 @@ def test_quoted_description_excludes_surrounding_quotes(tmp_path):
 
 
 def test_bom_prefixed_skill_parses(tmp_path):
-    text = ("﻿---\nname: bom-skill\n"
+    text = ("\ufeff---\nname: bom-skill\n"
             "description: Valid desc. Use when testing.\n---\n# body\n")
     d = _write_raw(tmp_path, text)
     assert _by_name(css.check_shape(d))["description-present"].passed is True
