@@ -591,3 +591,47 @@ def provision_all(
         except Exception as error:
             results[pname] = error
     return results
+
+
+# --- Task 6: apm install invocation + PATH env-file writing -----------------
+
+
+class ApmInstallError(RuntimeError):
+    """`apm install` exited non-zero. #690's own criterion: the requester
+    confirmed reliance on apm's own cache-hit behavior rather than custom
+    skip logic here -- this function always invokes install and lets apm
+    decide what, if anything, there is to do."""
+
+
+def run_apm_install(
+    project_dir: Path,
+    apm_binary: Path,
+    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> subprocess.CompletedProcess[str]:
+    if not (project_dir / "apm.yml").exists():
+        raise FileNotFoundError(f"{project_dir}/apm.yml not found -- refusing to run apm install outside a gitapex checkout")
+    # No suppression comment needed here (confirmed empirically, same as
+    # provision_tool's own runner call above): ruff's S603 (subprocess call:
+    # check for untrusted input) matches direct calls to subprocess.run/
+    # Popen/etc. by name, and a call through the injected `runner` parameter
+    # isn't recognized as one -- adding an S603 suppression here gets flagged
+    # as an unused directive by this repo's pinned ruff. apm_binary is this
+    # same run's own just-downloaded, hash-verified path regardless, never
+    # attacker-controlled input.
+    result = runner(
+        [str(apm_binary), "install"], cwd=str(project_dir), capture_output=True, text=True, timeout=120, check=False
+    )
+    if result.returncode != 0:
+        raise ApmInstallError(f"apm install exited {result.returncode}: {result.stderr}")
+    return result
+
+
+def write_env_file(env_file: Path | None, cache_root: Path) -> None:
+    if env_file is None:
+        return
+    export_line = f'export PATH="{cache_root / "bin"}:$PATH"\n'
+    existing = env_file.read_text(encoding="utf-8") if env_file.exists() else ""
+    if export_line in existing:
+        return
+    with env_file.open("a", encoding="utf-8") as handle:
+        handle.write(export_line)

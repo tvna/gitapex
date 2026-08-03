@@ -664,3 +664,110 @@ def test_provision_all_only_filters_to_selected_tools(tmp_path: Path) -> None:
     for result in results.values():
         assert isinstance(result, pcb.ProvisionResult)
         assert result.status == "installed"
+
+
+# --- Task 6: apm install invocation + PATH env-file writing -----------------
+
+
+def test_run_apm_install_raises_if_apm_yml_missing(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError):
+        pcb.run_apm_install(tmp_path, tmp_path / "bin" / "apm", runner=_fake_runner_success)
+
+
+def test_run_apm_install_invokes_absolute_binary_path(tmp_path: Path) -> None:
+    (tmp_path / "apm.yml").write_text("name: x\nversion: 0.1.0\n", encoding="utf-8")
+    apm_binary = tmp_path / "bin" / "apm"
+    apm_binary.parent.mkdir(parents=True)
+    apm_binary.write_text("#!/bin/sh\n", encoding="utf-8")
+
+    calls: list[list[str]] = []
+
+    def runner(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append(cmd)
+        return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="Installed 2 APM dependencies", stderr="")
+
+    result = pcb.run_apm_install(tmp_path, apm_binary, runner=runner)
+    assert result.returncode == 0
+    assert calls == [[str(apm_binary), "install"]]
+
+
+def test_run_apm_install_raises_on_nonzero_exit(tmp_path: Path) -> None:
+    (tmp_path / "apm.yml").write_text("name: x\nversion: 0.1.0\n", encoding="utf-8")
+    apm_binary = tmp_path / "bin" / "apm"
+    apm_binary.parent.mkdir(parents=True)
+    apm_binary.write_text("#!/bin/sh\n", encoding="utf-8")
+
+    def failing_runner(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(args=cmd, returncode=1, stdout="", stderr="boom")
+
+    with pytest.raises(pcb.ApmInstallError, match="boom"):
+        pcb.run_apm_install(tmp_path, apm_binary, runner=failing_runner)
+
+
+def test_write_env_file_appends_path_export(tmp_path: Path) -> None:
+    env_file = tmp_path / "env.sh"
+    env_file.write_text("export FOO=bar\n", encoding="utf-8")
+    cache_root = tmp_path / "cache"
+
+    pcb.write_env_file(env_file, cache_root)
+
+    content = env_file.read_text(encoding="utf-8")
+    assert "export FOO=bar" in content
+    assert f'export PATH="{cache_root / "bin"}:$PATH"' in content
+
+
+def test_write_env_file_is_idempotent(tmp_path: Path) -> None:
+    env_file = tmp_path / "env.sh"
+    cache_root = tmp_path / "cache"
+    pcb.write_env_file(env_file, cache_root)
+    pcb.write_env_file(env_file, cache_root)
+    content = env_file.read_text(encoding="utf-8")
+    assert content.count(str(cache_root / "bin")) == 1
+
+
+def test_write_env_file_noop_when_none() -> None:
+    pcb.write_env_file(None, Path("/does/not/matter"))  # must not raise
+
+
+# --- Task 6 supplemental: a stricter never-invoked guarantee for the missing-
+# apm.yml guard, and the exact kwargs run_apm_install passes to the runner --
+# called out explicitly because Task 7's CLI wiring depends on both: cwd
+# correctness matters for `apm install` to actually run against the right
+# project directory, and the missing-apm.yml guard must hold even under a
+# runner that would otherwise report success. -------------------------------
+
+
+def test_run_apm_install_never_invokes_runner_when_apm_yml_missing(tmp_path: Path) -> None:
+    """The brief's own test above (test_run_apm_install_raises_if_apm_yml_missing)
+    only proves FileNotFoundError is *eventually* raised -- it would still
+    pass even if a bug called the runner before checking apm.yml, because
+    _fake_runner_success always reports success and the missing-apm.yml
+    check would still fire afterward on the way out. This test uses a
+    runner that fails the test immediately if invoked at all, so it can only
+    pass if the guard runs strictly before any subprocess call."""
+
+    def runner_that_must_not_be_called(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise AssertionError("run_apm_install must not invoke the runner when apm.yml is missing")
+
+    with pytest.raises(FileNotFoundError):
+        pcb.run_apm_install(tmp_path, tmp_path / "bin" / "apm", runner=runner_that_must_not_be_called)
+
+
+def test_run_apm_install_passes_cwd_and_expected_kwargs(tmp_path: Path) -> None:
+    (tmp_path / "apm.yml").write_text("name: x\nversion: 0.1.0\n", encoding="utf-8")
+    apm_binary = tmp_path / "bin" / "apm"
+    apm_binary.parent.mkdir(parents=True)
+    apm_binary.write_text("#!/bin/sh\n", encoding="utf-8")
+
+    received_kwargs: dict[str, object] = {}
+
+    def runner(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        received_kwargs.update(kwargs)
+        return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="", stderr="")
+
+    pcb.run_apm_install(tmp_path, apm_binary, runner=runner)
+    assert received_kwargs["cwd"] == str(tmp_path)
+    assert received_kwargs["capture_output"] is True
+    assert received_kwargs["text"] is True
+    assert received_kwargs["timeout"] == 120
+    assert received_kwargs["check"] is False
