@@ -969,32 +969,56 @@ def test_a_handler_that_does_not_catch_attributeerror_leaves_it_reported(
     assert _rules(_grade(tmp_path, source)) == ["json-shape-gap"]
 
 
-@pytest.mark.parametrize("errors", ["replace", "ignore", "surrogateescape"])
+@pytest.mark.parametrize("errors", ["replace", "ignore", "surrogateescape", "backslashreplace"])
 def test_a_read_with_a_substituting_errors_policy_cannot_raise(
     tmp_path: pathlib.Path, errors: str
 ) -> None:
-    """`extract_diff_added_lines.py` documents this policy deliberately, and
-    eight files in the graded directories use it. There is no
-    UnicodeDecodeError to handle, so demanding a handler reported correct
-    code -- confirmed at runtime against a non-UTF-8 file."""
+    """Each of these four was run against a non-UTF-8 file and each
+    substituted rather than raised, so demanding a handler reports code that
+    cannot fail. The list is exactly those four -- see the sibling test for
+    the two that look like they belong and do not."""
     assert _grade(tmp_path, f'text = p.read_text(encoding="utf-8", errors="{errors}")\n') == []
 
 
-def test_a_positionally_passed_substituting_errors_policy_is_read(
-    tmp_path: pathlib.Path,
+@pytest.mark.parametrize(
+    "call",
+    [
+        'open(p, "r", -1, "utf-8", "replace")',
+        'p.open("r", -1, "utf-8", "replace")',
+        'p.read_text("utf-8", "replace")',
+    ],
+)
+def test_a_positionally_passed_errors_policy_is_a_stated_over_report(
+    tmp_path: pathlib.Path, call: str
 ) -> None:
-    """`open(file, mode, buffering, encoding, errors)` -- the same argument,
-    spelled positionally."""
-    assert _grade(tmp_path, 'fh = open(p, "r", -1, "utf-8", "replace")\n') == []
+    """None of these can raise -- all three were run against a non-UTF-8 file
+    and all three substituted. The gate reports them anyway, because the
+    positional index differs per callee (4 for the builtin `open`, 3 for
+    `Path.open`, 1 for `read_text`) and reading one index for all three got
+    two of them wrong. Guessing an index into a signature this gate cannot
+    see is the same class of guess as the name resolution this file has now
+    reverted three times."""
+    assert _rules(_grade(tmp_path, f"fh = {call}\n")) == ["decode-gap"]
 
 
-@pytest.mark.parametrize("errors", ["None", "variable", '"strict"', "0"])
+@pytest.mark.parametrize(
+    "errors",
+    ["None", "variable", '"strict"', "0", '"xmlcharrefreplace"', '"namereplace"', '"REPLACE"'],
+)
 def test_an_errors_value_that_is_not_a_substituting_policy_still_reports(
     tmp_path: pathlib.Path, errors: str
 ) -> None:
-    """An allowlist, not "anything but strict". The denylist form took
-    `errors=None` out of scope, and Python documents `None` as *equivalent*
-    to strict -- it raises. So did every non-string value."""
+    """An allowlist, not "anything but strict", and one determined by running
+    each handler rather than reading the codecs table.
+
+    `xmlcharrefreplace` and `namereplace` are the sharp ones: they look like
+    substituting policies, they are listed alongside the others in the docs,
+    and on a *decode* they raise `TypeError: don't know how to handle
+    UnicodeDecodeError in error callback`. Listing them made a read carrying
+    one grade clean while exiting 1 with an uncaught traceback -- this gate's
+    own subject, shipped by the fix for a false positive. `"REPLACE"` raises
+    `LookupError`: `codecs.lookup_error` is case-sensitive. `None` is
+    documented as equivalent to strict."""
     source = f'text = p.read_text(encoding="utf-8", errors={errors})\n'
     assert _rules(_grade(tmp_path, source)) == ["decode-gap"]
 

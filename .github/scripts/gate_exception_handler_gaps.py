@@ -37,9 +37,12 @@ or `open(...)` in a text read mode, and not one carrying a substituting
 name no exception type that a `UnicodeDecodeError` would satisfy.
 `UnicodeDecodeError`, `UnicodeError`, `ValueError`, `Exception`,
 `BaseException` and a bare `except:` all count as covered, since each is
-that exception or one of its ancestors. Handler names are read literally:
-nothing is resolved, and the two places where resolving was tried are in
-the over-report list below.
+that exception or one of its ancestors. Handler names are matched against
+that fixed table and nothing else -- no constant is expanded, no import is
+followed. The table is itself a name match, so shadowing a builtin
+(`ValueError = KeyError`, a parameter named `ValueError`) defeats it; that
+is listed below rather than defended against, because every attempt to
+resolve a name in this gate has cost more than it bought.
 
 **Rule `json-shape-gap`.** A `.get(...)` on a value that came from
 `json.loads(...)` / `json.load(...)` in the same scope, with no
@@ -132,6 +135,13 @@ contributors:
   removing.
 * A guard deleted with nothing added in its place leaves no added line for
   any diff-scoped rule to key on.
+* A walrus inside a lambda (`fn = lambda: (data := other)`) is read as
+  rebinding the enclosing scope's name, which drops that name's taint. The
+  comprehension form really does bind in the containing scope, so only the
+  lambda is wrong here.
+* Two parses into one name with an `isinstance` between them: the check
+  clears the name for every later access, including one fed by the second
+  parse.
 
 **Known over-reports.** Each of these is correct code that this gate
 reports, and for each the inline waiver is the documented answer. Every one
@@ -151,10 +161,21 @@ the thing this gate exists for:
   while still missing `suppress` behind an import alias, a starred
   argument, or a constant.
 * A read whose *caller* owns the handling. This is the case the inline
-  waiver was built for in the first place.
+  waiver was built for in the first place, and unlike the three above it
+  does occur here: `evals/scripts/set_config_model.py:94` reads a file whose
+  only caller wraps the call in `except ValueError`, and
+  `UnicodeDecodeError` is a `ValueError`. It is one of the 39 pre-existing
+  findings, and running that script against a non-UTF-8 file exits 1 with
+  its own message and no traceback.
+* `errors=` passed positionally rather than by keyword; see
+  `_text_read_kind` for why no index is guessed.
+* A `.get()` inside a comprehension or a lambda that rebinds the parsed
+  name. Only `def` bodies are treated as separate scopes.
+* A handler set defeated by shadowing a builtin exception name.
 
-None of the four occurs anywhere in the graded directories today, which is
-why each was measured as a poor trade rather than an urgent one.
+Of these, only the caller-owns-the-handling case occurs in the graded
+directories today; the others are constructed, which is why each was
+measured as a poor trade rather than an urgent one.
 
 Every miss and every over-report above is pinned by a test asserting the
 behaviour, so none can change without a reader noticing.
@@ -238,12 +259,15 @@ _DECODE_COVERING = frozenset(
 # is the exact remediation this gate's own failure message prescribes.
 _JSON_COVERING = frozenset({"AttributeError", "Exception", "BaseException"})
 
-# The `errors=` policies that substitute rather than raise. `None` and
-# `"strict"` are absent on purpose: both raise, and Python documents them as
-# equivalent.
-_SUBSTITUTING_ERRORS = frozenset(
-    {"replace", "ignore", "surrogateescape", "backslashreplace", "xmlcharrefreplace", "namereplace"}
-)
+# The `errors=` policies that substitute rather than raise *on a decode*.
+# Determined by running each against `b"ok\xffbad".decode("utf-8", errors=...)`
+# rather than read off the codecs documentation: `xmlcharrefreplace` and
+# `namereplace` are encode-only and raise `TypeError: don't know how to handle
+# UnicodeDecodeError in error callback`. Listing them made a read carrying one
+# grade clean while exiting 1 with an uncaught traceback -- the defect class in
+# this file's own opening paragraph, shipped by the fix for a false positive.
+# `None` and `"strict"` are absent for the plainer reason that both raise.
+_SUBSTITUTING_ERRORS = frozenset({"replace", "ignore", "surrogateescape", "backslashreplace"})
 
 
 _JSON_PARSERS = frozenset({"loads", "load"})
@@ -536,11 +560,13 @@ def _text_read_kind(node: ast.Call) -> str | None:
     here as well would report `ZipFile(z).open(name, "r")`, a binary read.
     """
     func = node.func
+    # By keyword only. The positional index differs per callee -- 4 for the
+    # builtin `open`, 3 for `Path.open`, 1 for `read_text` -- and reading one
+    # index for all three reported two of the three shapes this gate actually
+    # grades. Index arithmetic over a signature this gate cannot see is the
+    # same class of guess as the name resolution reverted above, so the
+    # positional spelling is an over-report instead.
     errors = next((k.value for k in node.keywords if k.arg == "errors"), None)
-    if errors is None and len(node.args) >= 5:
-        # `open(file, mode, buffering, encoding, errors)` -- the positional
-        # spelling of the same argument.
-        errors = node.args[4]
     if (
         isinstance(errors, ast.Constant)
         and isinstance(errors.value, str)
@@ -822,8 +848,8 @@ class _Candidate(NamedTuple):
     `trigger` and `window` together are what make it *this diff's* finding: the
     offending expression, every other line an edit could use to create it (a
     narrowed `except` clause), and -- as an inclusive bound pair rather than a
-    materialised set -- the region between a JSON parse and the access it
-    feeds. Waiving is not on this record at all: a waiver is matched against
+    materialised set, which keeps a long function from costing a set per
+    finding -- the region between a JSON parse and the access it feeds. Waiving is not on this record at all: a waiver is matched against
     `finding.line`, the line the gate prints.
     """
 
