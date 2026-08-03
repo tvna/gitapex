@@ -218,3 +218,50 @@ used for its own branch-protection open item.
       this is called done, per this repo's live-proof requirement.
 - [ ] Full pytest suite green; `waza-check.yml` and
       `sync-agent-instructions.yml` left byte-for-byte unchanged.
+
+## Addendum (2026-08-03): corroborating signal, per issue #709
+
+Issue #709 documented two real false negatives in the mechanism above: a
+bare citing commit (`citation_count > 0`) cleared an issue from the report
+even when that commit changed something unrelated to the issue's own
+proposed gate (#314, cleared by commit `a66ccbc`, which only touched a
+workflow comment and a doc) or when only one of several proposals in a
+multi-proposal retrospective issue had actually landed (#665, whose
+"repair 6" was implemented by PR #703 while repairs 2/3/4 remained open,
+yet the whole issue disappeared from the report the moment `#665` first
+appeared in a commit message).
+
+**Decision: an issue clears only when a citing commit AND a
+corroborating `.gitapex/ssot.json` entry both agree.** Concretely,
+`find_no_citation_issues` now also takes the set of every
+`gates[].tracking_issue` value currently registered in
+`.gitapex/ssot.json` (loaded by the new `load_gate_tracking_issues`,
+fail-closed on a missing/malformed registry -- mirroring
+`detect_changed_gate_scripts.py`'s `registered_gate_paths()`). An issue
+number is excluded from the no-citation report only if it has at least
+one citing commit *and* it appears as some gate's `tracking_issue`.
+
+This directly fixes both reproduced shapes: neither 314 nor 665 has ever
+been registered as a `tracking_issue` in `.gitapex/ssot.json` (verified
+2026-08-03 against the current registry), so both stay in the report
+regardless of any commit that happens to cite them, until a gate is
+actually registered against that specific issue number.
+
+**Explicitly named gap (not silently assumed covered), per issue #709's
+own residual-risk column:** `tracking_issue` is a per-*gate* field, one
+row per registered gate -- it has no way to represent a gate that is a
+sub-feature of an already-registered gate rather than a new standalone
+entry (e.g. issue #673's case, a check added inside
+`gate_skill_audit_disclosure.py` without a dedicated registry row of its
+own). A retrospective issue whose only proposal is implemented this way
+will permanently show as "no citation" under this narrower check, even
+though the work genuinely landed. This is an intentional
+false-positive-over-false-negative trade-off (the report over-flags
+rather than silently clearing something unverified), not a limitation to
+paper over. A dedicated implementation-ledger fallback for this specific
+gap is left as unimplemented follow-on work if it proves painful in
+practice, per issue #709's own Acceptance Criteria Map.
+
+No other decision above changes: CI posture, reporting mechanism,
+threshold, and workflow trigger/permissions are all unchanged by this
+addendum.
