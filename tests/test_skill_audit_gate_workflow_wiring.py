@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+import re
 import sys
 
 import pytest
@@ -111,18 +112,15 @@ def test_helper_scripts_the_workflow_invokes_are_registered_in_ssot():
     """Every .github/scripts helper this workflow shells out to is part of
     this gate's implementation, so the registry must say so -- otherwise
     the deterministic-gate-quality check's own registry-based scope rule
-    silently excludes the scripts that compute it."""
+    silently excludes the scripts that compute it.
+
+    Extracted from the workflow text by pattern, deliberately not compared
+    against a hardcoded list of known helper names: a list would go stale
+    exactly when it matters, when someone wires in a fifth helper and
+    forgets to register it, which is the case this test exists to catch.
+    """
     run = "\n".join(step.get("run", "") for step in _job_steps())
-    invoked = {
-        f".github/scripts/{name}"
-        for name in (
-            "gate_skill_audit_disclosure.py",
-            "detect_changed_gate_scripts.py",
-            "skill_description_diff.py",
-            "skill_security_relevance.py",
-        )
-        if f".github/scripts/{name}" in run
-    }
+    invoked = set(re.findall(r"\.github/scripts/[A-Za-z0-9_.-]+\.py", run))
     assert invoked, "the workflow invokes no .github/scripts helper at all"
 
     registry = json.loads(SSOT_PATH.read_text(encoding="utf-8"))
@@ -145,3 +143,70 @@ def test_gate_detection_helper_is_itself_in_scope_of_the_check_it_computes():
 
     registered = detect.registered_gate_paths(REPO_ROOT)
     assert detect.is_gate_path(".github/scripts/detect_changed_gate_scripts.py", registered)
+
+
+def test_every_registered_gate_path_is_reachable_by_the_paths_trigger():
+    """The scope rule is self-maintaining; the `paths:` trigger is not.
+
+    `detect_changed_gate_scripts.py` puts every registered gate in scope
+    the moment it is registered, with no edit there -- but if the job never
+    starts, that scope is never consulted. Register a gate at a path no
+    `paths:` entry matches (a `scripts/x.sh`, a `.github/workflows/*.yaml`
+    where the list only had `*.yml`) and a PR touching only that file
+    silently skips the whole check, with nothing failing. CLAUDE.md section
+    3 requires an invariant's drift gate to ship with it; this is that gate
+    for the registry-to-trigger correspondence.
+    """
+    workflow = yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
+    # `on:` parses as the boolean True under YAML 1.1.
+    trigger = workflow[True] if True in workflow else workflow["on"]
+    patterns = trigger["pull_request"]["paths"]
+
+    sys.path.insert(0, str(REPO_ROOT / ".github" / "scripts"))
+    import detect_changed_gate_scripts as detect
+
+    scoped = set(detect.registered_gate_paths(REPO_ROOT))
+    scoped.add(detect.SSOT_RELATIVE_PATH)
+    scoped.add(detect.HOOK_WIRING_PATH)
+
+    unreachable = sorted(p for p in scoped if not _matches_any(p, patterns))
+    assert not unreachable, (
+        "these paths are in the deterministic-gate-quality scope but no "
+        f"`paths:` entry can start the job for them: {unreachable}"
+    )
+
+
+def _matches_any(path, patterns):
+    """GitHub Actions path-filter semantics: `*` does not cross `/`, `**`
+    does. Implemented here rather than with fnmatch, whose `*` crosses `/`
+    and would make this test pass on patterns GitHub would not match."""
+    for pattern in patterns:
+        regex = ""
+        i = 0
+        while i < len(pattern):
+            if pattern.startswith("**", i):
+                regex += ".*"
+                i += 2
+            elif pattern[i] == "*":
+                regex += "[^/]*"
+                i += 1
+            elif pattern[i] == "?":
+                regex += "[^/]"
+                i += 1
+            else:
+                regex += re.escape(pattern[i])
+                i += 1
+        if re.fullmatch(regex, path):
+            return True
+    return False
+
+
+def test_the_paths_matcher_itself_behaves_like_github():
+    """Guards the helper above: a matcher whose `*` crossed `/` would make
+    the reachability assertion vacuous."""
+    assert _matches_any("hooks/a.sh", ["hooks/**"])
+    assert _matches_any("hooks/sub/a.sh", ["hooks/**"])
+    assert _matches_any(".github/workflows/lint.yml", [".github/workflows/*.yml"])
+    assert not _matches_any(".github/workflows/sub/lint.yml", [".github/workflows/*.yml"])
+    assert not _matches_any(".github/workflows/lint.yaml", [".github/workflows/*.yml"])
+    assert not _matches_any("scripts/x.sh", ["hooks/**", ".github/scripts/*.py"])

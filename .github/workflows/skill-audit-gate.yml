@@ -24,6 +24,7 @@ on:
       - ".github/scripts/*.py"
       - "hooks/**"
       - ".github/workflows/*.yml"
+      - ".github/workflows/*.yaml"
       - ".gitapex/ssot.json"
 
 permissions:
@@ -187,8 +188,24 @@ jobs:
             echo "::error::git diff failed for gate detection between $BASE_SHA and $HEAD_SHA" >&2
             exit 1
           fi
+          # Three of the registered gates are workflow YAML, so Dependabot's
+          # weekly github-actions update (.github/dependabot.yml) touches
+          # them -- and a bot cannot add a disclosure to its own PR body.
+          # The detector exempts a workflow file whose entire change is
+          # `uses:` pin bumps; this supplies the content it needs to tell
+          # a pin bump from a gate-logic change. Content-based, not
+          # author-based: a human pin bump is treated identically, and any
+          # non-pin line in the same file keeps it in scope.
+          workflow_diff_file=$(mktemp)
+          if ! git diff --unified=0 "$BASE_SHA...$HEAD_SHA" \
+              -- ':(glob).github/workflows/*.yml' ':(glob).github/workflows/*.yaml' \
+              > "$workflow_diff_file"; then
+            echo "::error::git diff failed for workflow pin detection between $BASE_SHA and $HEAD_SHA" >&2
+            exit 1
+          fi
           if ! changed_gate_scripts=$(printf '%s\n' "$gate_diff_output" \
-              | python3 .github/scripts/detect_changed_gate_scripts.py); then
+              | python3 .github/scripts/detect_changed_gate_scripts.py \
+                  --unified-diff "$workflow_diff_file"); then
             echo "::error::gate-path detection failed; refusing to report this check green on a scope that could not be computed" >&2
             exit 1
           fi

@@ -60,11 +60,14 @@ comment for why "NOT-RUN" is not an acceptable answer for this one.
 
 - `deterministic-gate-quality`: required when the calling workflow's diff
   touches one of this repository's own deterministic gates -- by naming
-  convention (`.github/scripts/gate_*.py`, `scan_*.py`), by registration
-  (any `.gitapex/ssot.json` `gates[].script` path), or the registry file
-  itself. `detect_changed_gate_scripts.py` computes that membership and
-  the workflow hands the result here; see that script's docstring for why
-  all three rules are needed and why a deletion or rename counts.
+  convention (`.github/scripts/gate_*.py` / `scan_*.py`,
+  `hooks/check-*.sh` / `check_*.py`), by registration (any
+  `.gitapex/ssot.json` `gates[].script` path), or by being one of the two
+  files that decide whether gates run at all (the registry itself and
+  `hooks/hooks.json`). `detect_changed_gate_scripts.py` computes that
+  membership and the workflow hands the result here; see that script's
+  docstring for why each rule is needed, why a deletion or rename counts,
+  and why a pure dependency-pin bump to a workflow does not.
   PR #651 shipped a new gate that itself fail-opened three separate
   ways (zero discovered surfaces exited 0; an unterminated frontmatter
   block was read as "no frontmatter" so a real violation went ungraded; an
@@ -355,12 +358,37 @@ def _extract_section(body_text):
     return body_text[match.end():end]
 
 
-def find_missing_disclosures(body_text):
-    """Return the list of audit names with no valid disclosure line in body_text."""
-    section = _extract_section(_normalize_body(body_text))
+def _missing_base_disclosures(section):
+    """Core of `find_missing_disclosures`, over an already-extracted section.
+
+    Split out so main() can grade every check against one extraction
+    without re-implementing this logic inline. An earlier revision did
+    inline it, which quietly broke
+    tests/test_check_skill_audit_disclosure_hook_sync.py's purpose: that
+    drift gate compares `find_missing_disclosures` against the PreToolUse
+    hook's own copy, so once CI stopped executing that function the gate
+    was comparing something real grading no longer used, and the two could
+    diverge with every test still green.
+    """
     if section is None:
         return list(_VERDICTS)
     return [name for name, pattern in _LINE_PATTERNS.items() if not pattern.search(section)]
+
+
+def find_missing_disclosures(body_text):
+    """Return the list of audit names with no valid disclosure line in body_text."""
+    return _missing_base_disclosures(_extract_section(_normalize_body(body_text)))
+
+
+def _disallowed_battle_testing_waiver(section, description_changed_skills):
+    """Core of `find_disallowed_battle_testing_waiver`, over an
+    already-extracted section. Same single-source-of-truth reason as
+    `_missing_base_disclosures` above."""
+    if not description_changed_skills or section is None:
+        return []
+    if _BATTLE_TESTING_WAIVED_RE.search(section):
+        return list(description_changed_skills)
+    return []
 
 
 def find_disallowed_battle_testing_waiver(body_text, description_changed_skills):
@@ -368,14 +396,9 @@ def find_disallowed_battle_testing_waiver(body_text, description_changed_skills)
     battle-testing-a-skill as WAIVED despite one of those skills' SKILL.md
     description line having changed in this diff (Repair 3); else [].
     """
-    if not description_changed_skills:
-        return []
-    section = _extract_section(_normalize_body(body_text))
-    if section is None:
-        return []
-    if _BATTLE_TESTING_WAIVED_RE.search(section):
-        return list(description_changed_skills)
-    return []
+    return _disallowed_battle_testing_waiver(
+        _extract_section(_normalize_body(body_text)), description_changed_skills
+    )
 
 
 def _missing_in_section(section, items, pattern):
@@ -445,8 +468,15 @@ def find_missing_checker_script_disclosure(body_text, changed_checker_scripts):
 
 def find_missing_gate_quality_disclosure(body_text, changed_gate_scripts):
     """Return changed_gate_scripts unchanged if none of them is covered by a
-    deterministic-gate-quality RAN/NOT-RUN/WAIVED line in the PR body
-    (issue #673, refs #665 repair 1); else [].
+    deterministic-gate-quality disclosure line in the PR body (issue #673,
+    refs #665 repair 1); else [].
+
+    Unlike its three siblings this check accepts RAN or a WAIVED line
+    carrying a reason, but NOT "NOT-RUN" -- see the registry row's own
+    comment. Spelled out here rather than copied from a sibling, because a
+    reader reconciling a stale "RAN/NOT-RUN/WAIVED" docstring against the
+    row would most plausibly "fix" the row and silently restore the escape
+    this check was built to remove.
     """
     return _find_missing_disclosure(
         body_text, changed_gate_scripts, _PROCESS_DISCLOSURE_LINE_RES["deterministic-gate-quality"]
@@ -534,21 +564,11 @@ def main(argv=None):
     # copies and two regex searches seven times here.
     section = _extract_section(_normalize_body(body_text))
 
-    missing = []
-    if args.skill_md_changed:
-        missing = (
-            list(_VERDICTS)
-            if section is None
-            else [name for name, pattern in _LINE_PATTERNS.items() if not pattern.search(section)]
-        )
+    missing = _missing_base_disclosures(section) if args.skill_md_changed else []
     description_changed_skills = _parse_comma_list(args.description_changed_skills)
     needs_eval_coverage_skills = _parse_comma_list(args.needs_eval_coverage_skills)
-    disallowed_waiver_skills = (
-        list(description_changed_skills)
-        if description_changed_skills
-        and section is not None
-        and _BATTLE_TESTING_WAIVED_RE.search(section)
-        else []
+    disallowed_waiver_skills = _disallowed_battle_testing_waiver(
+        section, description_changed_skills
     )
     missing_eval_coverage_skills = _missing_in_section(
         section, needs_eval_coverage_skills, _EVAL_COVERAGE_WAIVER_RE

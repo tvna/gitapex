@@ -10,11 +10,19 @@ git-access split every other signal in that workflow already uses
 (`skill_description_diff.py`, `skill_security_relevance.py`,
 `detect_touched_eval_skills.py`).
 
-Three membership rules, unioned, each covering a gap the others leave:
+Four membership rules, unioned, each covering a gap the others leave:
 
-1. **Naming convention** -- `.github/scripts/gate_*.py` and
-   `.github/scripts/scan_*.py`. Catches a brand-new gate in the window
-   before it is registered, which rule 2 cannot see.
+1. **Naming convention** -- `.github/scripts/gate_*.py`,
+   `.github/scripts/scan_*.py`, and `hooks/check-*.sh` / `hooks/check_*.py`.
+   Catches a brand-new gate in the window before it is registered, which
+   rule 2 cannot see. Both directories are covered, not just the first: 9
+   of the 25 registered gates live under `hooks/`, registration is a
+   separate unenforced step, and an earlier revision anchored this rule to
+   `.github/scripts/` alone -- so a new `hooks/check-new-deny.sh`
+   PreToolUse gate shipped entirely outside this check. That also brings
+   `hooks/check-merge-pull-request-block.sh`, a live deny gate that is
+   unregistered today, into scope without needing a registry edit
+   (`scan_ssot_schema.py` documents under-registration as a known gap).
 2. **The registry** -- any path listed in a `.gitapex/ssot.json`
    `gates[].script` value. Rule 1 alone was the first version of this
    check and it under-covered badly: 16 of the 35 registered gate script
@@ -33,6 +41,17 @@ Three membership rules, unioned, each covering a gap the others leave:
    rule 2's answer, so an edit that removes a gate from it narrows this
    check's own scope. Treating it as in-scope makes that narrowing
    visible instead of silent.
+4. **Gate wiring** -- `hooks/hooks.json`, which decides whether the
+   PreToolUse gates run at all. Same reasoning as rule 3, applied to the
+   other plane: rewriting it to unhook a gate is as complete a disable as
+   deleting the gate's script, and was invisible while only the scripts
+   themselves were in scope. `.github/workflows/skill-audit-gate.yml` is
+   covered by rule 2 instead, via its registration (see below).
+
+Excluded on purpose, and this is the fail-open the rules above are shaped
+around: nothing here selects a file merely because it *sits* in one of
+these directories. `tests/`, `hooks/hooks.json`'s siblings, and unrelated
+workflow YAML stay out.
 
 Deletions and renames are **in scope**, unlike every other signal
 `skill-audit-gate.yml` computes. Those exclude `D` and `R100` because a
@@ -80,13 +99,34 @@ import sys
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 SSOT_RELATIVE_PATH = ".gitapex/ssot.json"
+HOOK_WIRING_PATH = "hooks/hooks.json"
 
-# Rule 1. Anchored, and `[^/]*` rather than `.*` so the pattern cannot
-# cross a directory separator -- the same single-level boundary the calling
-# workflow's `:(glob)` pathspecs enforce, restated here rather than assumed
-# from them (dimension 3: re-check the condition, do not trust the caller's
-# own filter to have selected correctly).
-_CONVENTION_RE = re.compile(r"^\.github/scripts/(?:gate|scan)_[^/]*\.py$")
+# Rule 1. `[^/]*` rather than `.*` so the pattern cannot cross a directory
+# separator -- the same single-level boundary the calling workflow's
+# `:(glob)` pathspecs enforce, restated here rather than assumed from them
+# (dimension 3: re-check the condition, do not trust the caller's own
+# filter to have selected correctly).
+#
+# Always applied with `re.fullmatch`, never `re.match`: Python's `$` also
+# matches immediately before a trailing newline and `[^/]` matches `\n`, so
+# `.match` would accept ".github/scripts/gate_a.py\n" as a gate and feed a
+# newline-bearing path toward the single-line $GITHUB_OUTPUT sink.
+# `.github/scripts/detect_touched_eval_skills.py` documents this same
+# pitfall and uses fullmatch for it; this follows that precedent rather
+# than rediscovering it.
+_CONVENTION_RE = re.compile(
+    r"\.github/scripts/(?:gate|scan)_[^/]*\.py|hooks/check[-_][^/]*\.(?:sh|py)"
+)
+
+# A `uses:` pin line, with or without its YAML list-item dash and its
+# trailing version comment -- both forms occur in this repository's
+# workflows ("- uses: owner/action@sha  # vX.Y.Z" and a bare "uses:" under
+# an existing list item). Used only to decide whether a changed workflow
+# file's diff is a pure dependency-pin bump; see `pin_only_workflow_paths`.
+# The action reference must carry no whitespace, so a line that merely
+# starts with "uses:" and continues into other YAML does not match.
+_USES_PIN_RE = re.compile(r"[ \t]*(?:-[ \t]+)?uses:[ \t]*\S+[ \t]*(?:#[^\n]*)?")
+_DIFF_HEADER_PREFIXES = ("+++", "---")
 
 
 class ScopeError(Exception):
@@ -108,6 +148,18 @@ def registered_gate_paths(repo_root=REPO_ROOT):
         raise ScopeError(f"{path}: gate registry cannot be read: {error}") from error
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
         raise ScopeError(f"{path}: gate registry is not valid JSON: {error}") from error
+
+    # `[]`, `"x"` and `1` are all valid JSON, so parsing succeeding does not
+    # mean the shape is usable. Without this guard `data.get` raised an
+    # uncaught AttributeError and the script exited 1 with a raw traceback
+    # instead of the documented ScopeError/exit 2 -- literally the
+    # "unreadable file produced an uncaught traceback" defect class from
+    # PR #651 that this whole check exists to catch, reproduced inside the
+    # check itself.
+    if not isinstance(data, dict):
+        raise ScopeError(
+            f"{path}: gate registry must be a JSON object, got {type(data).__name__}"
+        )
 
     gates = data.get("gates")
     if not isinstance(gates, list) or not gates:
@@ -132,15 +184,61 @@ def registered_gate_paths(repo_root=REPO_ROOT):
 
 
 def is_gate_path(path, registered):
-    """Return True iff `path` is in scope under any of the three rules."""
+    """Return True iff `path` is in scope under any of the four rules."""
     return (
-        bool(_CONVENTION_RE.match(path))
+        bool(_CONVENTION_RE.fullmatch(path))
         or path in registered
-        or path == SSOT_RELATIVE_PATH
+        or path in (SSOT_RELATIVE_PATH, HOOK_WIRING_PATH)
     )
 
 
-def select(name_status_text, registered):
+def pin_only_workflow_paths(unified_diff_text):
+    """Return the `.github/workflows/*.yml` paths whose entire change in
+    `unified_diff_text` is dependency-pin bumps.
+
+    Three of the registered gates are implemented as workflow YAML, so
+    rule 2 puts them in scope -- correctly, since gutting one disables a
+    gate. But Dependabot's weekly `github-actions` update (see
+    `.github/dependabot.yml`) bumps the SHA pins in exactly those files,
+    and a bot cannot add a disclosure to its own PR body. Without this
+    exemption every weekly dependency PR would carry a permanently red
+    required check that its author has no way to satisfy -- which trains
+    readers to ignore a red check, the opposite of what a gate is for.
+
+    The exemption is deliberately content-based, not author-based: a human
+    bumping a pin gets the same treatment, and any change touching a line
+    that is not a `uses:` pin -- including one smuggled into the same
+    commit as a pin bump -- keeps the file in scope. Unknown or
+    unparseable content therefore falls through to "not exempt", the
+    fail-closed direction.
+    """
+    exempt, disqualified = set(), set()
+    current = None
+    for line in (unified_diff_text or "").replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+        if line.startswith("diff --git "):
+            # "diff --git a/<path> b/<path>"; take the b-side, which is the
+            # post-change name for both edits and renames.
+            parts = line.split(" b/", 1)
+            current = parts[1] if len(parts) == 2 else None
+            if current is not None and _is_workflow_yaml(current):
+                exempt.add(current)
+            else:
+                current = None
+            continue
+        if current is None or not line or line[0] not in "+-":
+            continue
+        if line.startswith(_DIFF_HEADER_PREFIXES):
+            continue
+        if not _USES_PIN_RE.fullmatch(line[1:]):
+            disqualified.add(current)
+    return exempt - disqualified
+
+
+def _is_workflow_yaml(path):
+    return bool(re.fullmatch(r"\.github/workflows/[^/]+\.ya?ml", path))
+
+
+def select(name_status_text, registered, exempt_paths=frozenset()):
     """Return the sorted, deduped gate paths named in `--name-status` output.
 
     Every status is honoured, including `D` and `R100` -- see this module's
@@ -158,7 +256,7 @@ def select(name_status_text, registered):
             raise ScopeError(f"unparseable --name-status line: {line!r}")
         for candidate in fields[1:]:
             candidate = candidate.strip()
-            if candidate and is_gate_path(candidate, registered):
+            if candidate and candidate not in exempt_paths and is_gate_path(candidate, registered):
                 selected.add(candidate)
 
     for path in selected:
@@ -183,11 +281,27 @@ def main(argv=None):
         default=REPO_ROOT,
         help="Repository root holding .gitapex/ssot.json (defaults to this checkout).",
     )
+    parser.add_argument(
+        "--unified-diff",
+        help="Path to `git diff --unified=0` output for the same range. When "
+        "given, a .github/workflows/*.yml file whose entire change is "
+        "dependency-pin bumps is exempted (see pin_only_workflow_paths). "
+        "Omitting it exempts nothing, which is the fail-closed direction.",
+    )
     args = parser.parse_args(argv)
 
     try:
         registered = registered_gate_paths(args.repo_root)
-        selected = select(sys.stdin.read(), registered)
+        exempt = frozenset()
+        if args.unified_diff:
+            try:
+                diff_text = open(args.unified_diff, encoding="utf-8").read()
+            except OSError as error:
+                raise ScopeError(f"unified diff cannot be read: {error}") from error
+            exempt = pin_only_workflow_paths(diff_text)
+            for path in sorted(exempt):
+                print(f"pin-only workflow change, not graded as a gate change: {path}", file=sys.stderr)
+        selected = select(sys.stdin.read(), registered, exempt)
     except ScopeError as error:
         print(f"{error}", file=sys.stderr)
         return 2

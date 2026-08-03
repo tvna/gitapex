@@ -56,12 +56,31 @@ def test_naming_convention_paths_are_in_scope(path, registered):
 @pytest.mark.parametrize(
     "path",
     [
+        "hooks/check-bash-safety.sh",
+        "hooks/check_acm_present_or_waiver.py",
+        "hooks/check-new-and-unregistered.sh",
+    ],
+)
+def test_hook_naming_convention_paths_are_in_scope(path, registered):
+    """Rule 1 covers hooks/ as well: 9 of the 25 registered gates live
+    there and registration is a separate, unenforced step, so anchoring the
+    convention to .github/scripts/ alone let a brand-new PreToolUse deny
+    gate ship entirely outside this check."""
+    assert detect.is_gate_path(path, registered)
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
         ".github/scripts/gate_helpers/support.py",  # must not cross '/'
         ".github/scripts/gates_foo.py",  # no underscore after the prefix word
         ".github/scripts/mygate_foo.py",  # not anchored at the start
         ".github/scripts/gate_foo.txt",  # not .py
         "skills/foo/scripts/gate_foo.py",  # right name, wrong directory
         "tests/test_gate_skill_audit_disclosure.py",
+        "hooks/checkers/deep.sh",  # must not cross '/'
+        "hooks/README.md",
+        "hooks/checkpoint.sh",  # no separator after "check"
     ],
 )
 def test_near_miss_paths_are_out_of_scope_under_the_convention(path, registered):
@@ -91,16 +110,14 @@ def test_convention_matches_a_brand_new_unregistered_gate(tmp_path):
         ".github/scripts/skill_description_diff.py",
         ".github/scripts/extract_diff_added_lines.py",
         ".github/scripts/detect_touched_eval_skills.py",
-        "hooks/check-bash-safety.sh",
-        "hooks/check_pr_issue_acm_disclosure.py",
-        "hooks/check_skill_audit_disclosure_or_waiver.py",
         ".github/workflows/lint.yml",
+        ".github/workflows/toolchain-nix.yml",
         ".github/workflows/waza-eval-gate.yml",
     ],
 )
 def test_registered_gate_paths_outside_the_convention_are_in_scope(path, registered):
     """These are the real under-coverage the glob-only version had."""
-    assert not detect._CONVENTION_RE.match(path), "fixture no longer tests rule 2"
+    assert not detect._CONVENTION_RE.fullmatch(path), "fixture no longer tests rule 2"
     assert detect.is_gate_path(path, registered)
 
 
@@ -269,5 +286,147 @@ def test_this_repository_registers_more_gates_than_the_convention_matches(regist
     """Anchors the finding that motivated rule 2: if this ever drops to
     zero, the registry rule has stopped adding coverage and someone should
     know before deleting it."""
-    outside = {p for p in registered if not detect._CONVENTION_RE.match(p)}
-    assert len(outside) >= 10, sorted(outside)
+    outside = {p for p in registered if not detect._CONVENTION_RE.fullmatch(p)}
+    assert len(outside) >= 8, sorted(outside)
+
+
+# --- rule 4 and the gate-wiring files (review findings) ---
+
+
+@pytest.mark.parametrize(
+    "path", [".gitapex/ssot.json", "hooks/hooks.json", ".github/workflows/skill-audit-gate.yml"]
+)
+def test_files_that_decide_whether_gates_run_are_in_scope(path, registered):
+    """Each of these can disable a gate without touching its script:
+    the registry defines rule 2's answer, hooks.json wires the PreToolUse
+    plane, and skill-audit-gate.yml implements this very check. All three
+    reported green for being gutted before the review caught it."""
+    assert detect.is_gate_path(path, registered)
+
+
+# --- trailing-newline anchoring ---
+
+
+def test_a_trailing_newline_does_not_make_a_path_a_gate(registered):
+    """`$` also matches before a trailing newline and `[^/]` matches `\n`,
+    so `.match` would accept this and feed a newline-bearing path toward a
+    single-line output sink. detect_touched_eval_skills.py documents the
+    same pitfall; fullmatch is why this is False."""
+    assert not detect.is_gate_path(".github/scripts/gate_a.py\n", registered)
+
+
+# --- registry shapes that parse but are unusable ---
+
+
+@pytest.mark.parametrize("payload", ["[]", '"x"', "1", "null", "true"])
+def test_a_valid_but_non_object_registry_is_a_scope_error_not_a_traceback(tmp_path, payload):
+    """These parse fine, so the JSONDecodeError branch never fires; without
+    an explicit shape guard `data.get` raised an uncaught AttributeError and
+    the CLI exited 1 with a raw traceback instead of the documented exit 2.
+    That is literally PR #651's "uncaught traceback" defect class occurring
+    inside the check built to catch it."""
+    (tmp_path / ".gitapex").mkdir()
+    (tmp_path / ".gitapex" / "ssot.json").write_text(payload, encoding="utf-8")
+    with pytest.raises(detect.ScopeError, match="must be a JSON object"):
+        detect.registered_gate_paths(tmp_path)
+
+
+@pytest.mark.parametrize("payload", ["[]", '"x"', "1"])
+def test_the_cli_exits_2_on_a_non_object_registry(monkeypatch, capsys, tmp_path, payload):
+    (tmp_path / ".gitapex").mkdir()
+    (tmp_path / ".gitapex" / "ssot.json").write_text(payload, encoding="utf-8")
+    monkeypatch.setattr("sys.stdin", __import__("io").StringIO(""))
+    assert detect.main(["--repo-root", str(tmp_path)]) == 2
+    assert "must be a JSON object" in capsys.readouterr().err
+
+
+# --- the pin-only workflow exemption ---
+
+
+_PIN_BUMP_DIFF = """\
+diff --git a/.github/workflows/lint.yml b/.github/workflows/lint.yml
+index 1111111..2222222 100644
+--- a/.github/workflows/lint.yml
++++ b/.github/workflows/lint.yml
+@@ -8 +8 @@ jobs:
+-      - uses: actions/checkout@1111111111111111111111111111111111111111  # v7.0.1
++      - uses: actions/checkout@2222222222222222222222222222222222222222  # v7.1.0
+"""
+
+
+def test_a_pure_pin_bump_is_exempt():
+    assert detect.pin_only_workflow_paths(_PIN_BUMP_DIFF) == {".github/workflows/lint.yml"}
+
+
+def test_a_bare_uses_line_without_the_list_dash_is_also_a_pin():
+    diff = _PIN_BUMP_DIFF.replace("      - uses:", "        uses:")
+    assert detect.pin_only_workflow_paths(diff) == {".github/workflows/lint.yml"}
+
+
+def test_any_non_pin_line_disqualifies_the_whole_file():
+    diff = _PIN_BUMP_DIFF + "+    continue-on-error: true\n"
+    assert detect.pin_only_workflow_paths(diff) == set()
+
+
+def test_a_removed_non_pin_line_also_disqualifies():
+    diff = _PIN_BUMP_DIFF + "-      - run: ./gate.sh\n"
+    assert detect.pin_only_workflow_paths(diff) == set()
+
+
+def test_a_uses_line_that_continues_into_other_yaml_is_not_a_pin():
+    """Guards the `\\S+` in the pattern: `uses: a@b with: {x: 1}` must not
+    be waved through as a pin."""
+    diff = _PIN_BUMP_DIFF.replace(
+        "+      - uses: actions/checkout@2222222222222222222222222222222222222222  # v7.1.0",
+        "+      - uses: actions/checkout@2222 with stuff after it",
+    )
+    assert detect.pin_only_workflow_paths(diff) == set()
+
+
+def test_a_non_workflow_file_is_never_exempted():
+    diff = _PIN_BUMP_DIFF.replace(".github/workflows/lint.yml", ".github/scripts/gate_a.py")
+    assert detect.pin_only_workflow_paths(diff) == set()
+
+
+def test_a_pin_bump_in_one_file_does_not_exempt_a_logic_change_in_another():
+    diff = _PIN_BUMP_DIFF + """\
+diff --git a/.github/workflows/other.yml b/.github/workflows/other.yml
+--- a/.github/workflows/other.yml
++++ b/.github/workflows/other.yml
+@@ -1 +1 @@
+-    if: always()
++    if: false
+"""
+    assert detect.pin_only_workflow_paths(diff) == {".github/workflows/lint.yml"}
+
+
+def test_no_diff_text_exempts_nothing():
+    """The fail-closed direction: omitting the diff must not widen the
+    exemption to everything."""
+    assert detect.pin_only_workflow_paths("") == set()
+    assert detect.pin_only_workflow_paths(None) == set()
+
+
+def test_select_honours_the_exempt_set(registered):
+    lines = "M\t.github/workflows/lint.yml\nM\t.github/scripts/gate_a.py\n"
+    assert detect.select(lines, registered, {".github/workflows/lint.yml"}) == [
+        ".github/scripts/gate_a.py"
+    ]
+
+
+def test_main_applies_the_exemption_from_a_unified_diff_file(monkeypatch, capsys, tmp_path):
+    diff_file = tmp_path / "d.txt"
+    diff_file.write_text(_PIN_BUMP_DIFF, encoding="utf-8")
+    monkeypatch.setattr(
+        "sys.stdin", __import__("io").StringIO("M\t.github/workflows/lint.yml\n")
+    )
+    assert detect.main(["--repo-root", str(REPO_ROOT), "--unified-diff", str(diff_file)]) == 0
+    captured = capsys.readouterr()
+    assert captured.out == "\n"
+    assert "pin-only workflow change" in captured.err
+
+
+def test_main_exits_2_when_the_unified_diff_file_is_unreadable(monkeypatch, capsys):
+    monkeypatch.setattr("sys.stdin", __import__("io").StringIO(""))
+    assert detect.main(["--repo-root", str(REPO_ROOT), "--unified-diff", "/no/such/file"]) == 2
+    assert "unified diff cannot be read" in capsys.readouterr().err
