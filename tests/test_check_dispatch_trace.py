@@ -110,6 +110,113 @@ def test_iter_tool_use_blocks_skips_non_list_content(tmp_path: Path):
     assert list(cdt.iter_tool_use_blocks(p)) == []
 
 
+def test_iter_tool_use_blocks_tolerates_mixed_valid_and_invalid_content_entries(tmp_path: Path):
+    # A content list mixing a non-tool_use block, a non-dict entry, and a
+    # real tool_use block must yield only the tool_use block -- one bad
+    # entry must not fail the whole line (a per-item narrowing question,
+    # distinct from the whole-line/whole-message-shape tests above).
+    p = tmp_path / "t.jsonl"
+    p.write_text(
+        _line({
+            "type": "assistant",
+            "message": {"content": [
+                {"type": "text", "text": "thinking out loud"},
+                "not a dict",
+                123,
+                None,
+                {"type": "tool_use", "name": "Agent", "id": "toolu_1", "input": {}},
+            ]},
+        }),
+        encoding="utf-8",
+    )
+    blocks = list(cdt.iter_tool_use_blocks(p))
+    assert len(blocks) == 1
+    assert blocks[0]["name"] == "Agent"
+
+
+def test_iter_tool_use_blocks_yields_original_dict_with_extra_fields_intact(tmp_path: Path):
+    # A tool_use block's own fields beyond `type` (including ones the
+    # pydantic model never declares) must survive unchanged in the yielded
+    # object -- iter_tool_use_blocks yields the original raw dict, never a
+    # pydantic model or a re-serialized copy.
+    p = tmp_path / "t.jsonl"
+    block = {
+        "type": "tool_use", "name": "Agent", "id": "toolu_9",
+        "input": {"prompt": "go"}, "cache_control": {"type": "ephemeral"},
+    }
+    p.write_text(_line({"message": {"content": [block]}}), encoding="utf-8")
+    blocks = list(cdt.iter_tool_use_blocks(p))
+    assert blocks == [block]
+
+
+# ---- ToolUseBlock / MessageEnvelope / StreamEvent (pydantic models) -------
+
+
+def test_tool_use_block_accepts_minimal_shape():
+    cdt.ToolUseBlock.model_validate({"type": "tool_use"})
+
+
+def test_tool_use_block_accepts_extra_unknown_fields():
+    # extra="ignore" (pydantic's default) must not reject a tool_use block
+    # carrying fields this model never declares.
+    cdt.ToolUseBlock.model_validate(
+        {"type": "tool_use", "name": "Agent", "input": {}, "some_future_field": 1}
+    )
+
+
+def test_tool_use_block_rejects_wrong_type_value():
+    with pytest.raises(cdt.ValidationError):
+        cdt.ToolUseBlock.model_validate({"type": "text", "text": "hi"})
+
+
+def test_tool_use_block_rejects_missing_type():
+    with pytest.raises(cdt.ValidationError):
+        cdt.ToolUseBlock.model_validate({"name": "Agent"})
+
+
+def test_tool_use_block_rejects_non_mapping_input():
+    with pytest.raises(cdt.ValidationError):
+        cdt.ToolUseBlock.model_validate("not a dict")
+
+
+def test_message_envelope_coerces_non_list_content_to_none():
+    envelope = cdt.MessageEnvelope.model_validate({"content": "plain string"})
+    assert envelope.content is None
+
+
+def test_message_envelope_keeps_list_content_untouched():
+    envelope = cdt.MessageEnvelope.model_validate({"content": [{"type": "text"}]})
+    assert envelope.content == [{"type": "text"}]
+
+
+def test_message_envelope_defaults_content_to_none_when_absent():
+    envelope = cdt.MessageEnvelope.model_validate({})
+    assert envelope.content is None
+
+
+def test_stream_event_coerces_non_dict_message_to_none():
+    event = cdt.StreamEvent.model_validate({"message": "plain string"})
+    assert event.message is None
+
+
+def test_stream_event_defaults_message_to_none_when_absent():
+    event = cdt.StreamEvent.model_validate({"type": "system"})
+    assert event.message is None
+
+
+def test_stream_event_parses_nested_tool_use_content():
+    event = cdt.StreamEvent.model_validate(
+        {"message": {"content": [{"type": "tool_use", "name": "Agent"}]}}
+    )
+    assert event.message is not None
+    assert event.message.content == [{"type": "tool_use", "name": "Agent"}]
+
+
+def test_stream_event_rejects_non_mapping_top_level_value():
+    with pytest.raises(cdt.ValidationError):
+        cdt.StreamEvent.model_validate([1, 2, 3])
+
+
 def test_count_dispatches_matches_configured_name():
     blocks = [{"name": "Agent"}, {"name": "Read"}]
     assert cdt.count_dispatches(blocks, ["Agent"]) == 1
