@@ -962,6 +962,35 @@ def test_lint_skill_tasks_isolates_a_yaml_syntax_error_from_its_siblings(tmp_pat
     assert (tasks / "good.yaml") in task_data
 
 
+def test_lint_skill_tasks_isolates_a_non_utf8_fixture_from_its_siblings(tmp_path):
+    # A THIRD adversarial pass (still post-merge) found the widened guard
+    # above still didn't cover a non-UTF-8 fixture: path.read_text(
+    # encoding="utf-8") itself raises UnicodeDecodeError before
+    # yaml.safe_load ever runs, which the (yaml.YAMLError, ValidationError)
+    # catch from the second round did not include. Confirmed by direct
+    # execution with a raw invalid byte sequence.
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    bad = tasks / "bad.yaml"
+    bad.write_bytes(b"id: t1\nname: \xff\xfe bad utf8\n")
+    (tasks / "good.yaml").write_text(
+        'id: g\nname: G\ninputs:\n  prompt: |\n    p\nexpected:\n'
+        '  output_contains:\n    - "Blind spot pass"\n'
+        '  output_not_contains:\n    - "LGTM"\n', encoding="utf-8")
+    rubric, skill = _corpus_files(tmp_path)
+    warnings, task_data = L.lint_skill_tasks(
+        [bad, tasks / "good.yaml"], L.load_corpus(rubric, skill))
+    assert [w for w in warnings if w.rule == "fixture-shape" and str(bad) in w.detail]
+    assert bad not in task_data
+    assert (tasks / "good.yaml") in task_data
+
+
+def test_load_fixture_dict_falls_back_to_empty_dict_on_non_utf8_content(tmp_path):
+    path = tmp_path / "bad.yaml"
+    path.write_bytes(b"id: t1\nname: \xff\xfe bad utf8\n")
+    assert L._load_fixture_dict(path) == {}
+
+
 def test_load_fixture_dict_falls_back_to_empty_dict_on_yaml_syntax_error(tmp_path):
     # Same YAML-syntax-error gap as above, in _load_fixture_dict's own
     # separate call sites (check_adversarial_coverage/

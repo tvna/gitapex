@@ -479,7 +479,20 @@ class _CliArgs(BaseModel):
     @field_validator("body_file")
     @classmethod
     def _body_file_must_exist(cls, value: str) -> str:
-        if not Path(value).exists():
+        # Path.exists() itself can raise OSError (e.g. ENAMETOOLONG for an
+        # over-long path component) rather than returning False -- found by
+        # adversarial review to propagate straight through pydantic
+        # uncaught, since pydantic only converts a validator's own
+        # ValueError/TypeError/AssertionError into a ValidationError, not
+        # an arbitrary OSError raised by a stdlib call inside it. Folding
+        # it into the same self-describing "body file not found" message
+        # keeps it on the one code path main()'s except ValidationError
+        # (and its body_file-message special case) already handles.
+        try:
+            exists = Path(value).exists()
+        except OSError as exc:
+            raise ValueError(f"body file not found: {value} ({exc})") from exc
+        if not exists:
             raise ValueError(f"body file not found: {value}")
         return value
 
