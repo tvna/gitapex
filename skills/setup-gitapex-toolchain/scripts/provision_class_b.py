@@ -710,6 +710,7 @@ def main(argv: list[str] | None = None) -> int:
     write_env_file(args.env_file, cache_root)
 
     if not args.skip_apm_install:
+        apm_was_requested = only is None or "apm" in only
         apm_result = results.get("apm")
         if isinstance(apm_result, ProvisionResult):
             try:
@@ -718,9 +719,21 @@ def main(argv: list[str] | None = None) -> int:
             except (ApmInstallError, FileNotFoundError) as error:
                 print(f"FAIL: apm install: {error}", file=sys.stderr)
                 failures += 1
-        else:
+        elif apm_was_requested:
+            # apm was in scope (no --tool filter, or --tool explicitly
+            # included "apm") but its entry in `results` isn't a successful
+            # ProvisionResult -- a genuine provisioning failure. Keep this
+            # message and the failure count exactly as-is: this is the real
+            # failure case, not the --tool-exclusion case below.
             print("SKIPPED: apm install (apm itself was not successfully provisioned)", file=sys.stderr)
             failures += 1
+        else:
+            # apm was never requested at all: a --tool filter was given and
+            # it does not include "apm", so provision_all's own `only` filter
+            # never attempted it and results.get("apm") is None -- the same
+            # None/ProvisionResult shape as a genuine failure, but not one.
+            # Not a failure: nothing the caller actually asked for failed.
+            print("apm install not attempted (apm was not in --tool selection)")
 
     return 1 if failures else 0
 

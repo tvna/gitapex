@@ -936,6 +936,43 @@ def test_main_apm_provisioning_failure_skips_apm_install(tmp_path: Path, monkeyp
     assert exit_code == 1
 
 
+def test_main_tool_filter_excluding_apm_is_not_counted_as_apm_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Task review finding (093c065): a --tool filter that narrows selection
+    away from "apm" entirely (e.g. --tool waza, with no --skip-apm-install)
+    must NOT be treated as "apm failed to provision". apm was never
+    requested at all, so provision_all's own `only` filter never attempts
+    it and results.get("apm") is None (not a key in results) --
+    isinstance(None, ProvisionResult) is False, the same shape as a genuine
+    apm failure. Pre-fix, main() could not tell these two cases apart, so it
+    printed the misleading "apm itself was not successfully provisioned"
+    message and counted a failure even though nothing the caller actually
+    requested (waza) failed -- contradicting SKILL.md's own "a non-zero exit
+    code if anything failed" contract. This must return exit code 0 and
+    must never invoke run_apm_install."""
+    monkeypatch.delenv("CLAUDE_ENV_FILE", raising=False)
+    fake_result: dict[str, pcb.ProvisionResult | Exception] = {
+        "waza": pcb.ProvisionResult(pname="waza", status="installed", version_output="0.38.0"),
+    }
+    monkeypatch.setattr(pcb, "provision_all", lambda *args, **kwargs: fake_result)
+
+    def runner_that_must_not_be_called(*args: object, **kwargs: object) -> object:
+        raise AssertionError("run_apm_install must not be called when apm is excluded by --tool")
+
+    monkeypatch.setattr(pcb, "run_apm_install", runner_that_must_not_be_called)
+
+    exit_code = pcb.main(
+        [
+            "--project-dir", str(REPO_ROOT),
+            "--cache-root", str(tmp_path),
+            "--system", "x86_64-linux",
+            "--tool", "waza",
+        ]
+    )
+    assert exit_code == 0
+
+
 def test_main_runs_apm_install_and_writes_env_file_when_not_skipped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Positive-control mirror of
     test_main_skip_apm_install_flag_prevents_apm_install_call: that test
