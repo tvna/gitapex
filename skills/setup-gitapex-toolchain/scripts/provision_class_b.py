@@ -15,8 +15,11 @@ from __future__ import annotations
 import base64
 import hashlib
 import io
+import json
 import re
+import shutil
 import stat
+import subprocess
 import tarfile
 import time
 import urllib.error
@@ -445,3 +448,146 @@ def extract_wrapper_dir(data: bytes, asset_name: str, bin_in_archive: str, libex
     bin_shim.parent.mkdir(parents=True, exist_ok=True)
     bin_shim.write_text(f'#!/bin/sh\nexec "{real_bin}" "$@"\n', encoding="utf-8")
     bin_shim.chmod(bin_shim.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
+
+# --- Task 5: idempotency receipts + orchestration ----------------------------
+
+
+@dataclass(frozen=True)
+class InstallReceipt:
+    pname: str
+    version: str
+    sha256_sri: str
+    asset: str
+
+
+def _receipt_path(cache_root: Path, pname: str) -> Path:
+    return cache_root / "state" / f"{pname}.json"
+
+
+def _read_receipt(cache_root: Path, pname: str) -> InstallReceipt | None:
+    path = _receipt_path(cache_root, pname)
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        return InstallReceipt(
+            pname=raw["pname"], version=raw["version"], sha256_sri=raw["sha256_sri"], asset=raw["asset"]
+        )
+    except (FileNotFoundError, json.JSONDecodeError, KeyError, TypeError):
+        return None
+
+
+def _write_receipt(cache_root: Path, receipt: InstallReceipt) -> None:
+    path = _receipt_path(cache_root, receipt.pname)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {"pname": receipt.pname, "version": receipt.version, "sha256_sri": receipt.sha256_sri, "asset": receipt.asset}
+        ),
+        encoding="utf-8",
+    )
+
+
+def _installed_bin_path(cache_root: Path, pname: str) -> Path:
+    return cache_root / "bin" / pname
+
+
+def _is_already_installed(cache_root: Path, spec: ClassBToolSpec, system: str) -> bool:
+    receipt = _read_receipt(cache_root, spec.pname)
+    if receipt is None:
+        return False
+    pin = spec.systems[system]
+    if receipt.sha256_sri != pin.sha256_sri or receipt.asset != pin.asset:
+        return False
+    return _installed_bin_path(cache_root, spec.pname).exists()
+
+
+class VerifyError(RuntimeError):
+    """A just-installed binary failed its `<tool> --version` smoke test."""
+
+
+@dataclass(frozen=True)
+class ProvisionResult:
+    pname: str
+    status: str
+    version_output: str | None
+
+
+def provision_tool(
+    spec: ClassBToolSpec,
+    system: str,
+    cache_root: Path,
+    opener: Callable[[urllib.request.Request], Any] = _default_opener,
+    sleeper: Callable[[float], None] = time.sleep,
+    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+    force: bool = False,
+) -> ProvisionResult:
+    if not force and _is_already_installed(cache_root, spec, system):
+        return ProvisionResult(pname=spec.pname, status="skipped", version_output=None)
+
+    data = verify_and_download(spec, system, opener=opener, sleeper=sleeper)
+    pin = spec.systems[system]
+    bin_path = _installed_bin_path(cache_root, spec.pname)
+
+    if spec.kind == "binary":
+        extract_binary(data, pin.asset, pin.bin_in_archive, bin_path)
+    elif spec.kind == "wrapperDir":
+        libexec_dir = cache_root / "libexec" / spec.pname
+        # A reinstall (pin change, or force=True over an already-installed
+        # tool) can find libexec_dir already populated by the previous
+        # install. extract_wrapper_dir's flatten step does `child.rename(...)`
+        # for each extracted top-level entry; os.rename() into an existing
+        # non-empty directory (e.g. a stale `_internal/`) raises a raw
+        # OSError [Errno 39] Directory not empty -- reproduced empirically
+        # against this exact reinstall path before this guard was added, not
+        # assumed. Clearing the previous install first makes a reinstall a
+        # clean replace rather than a merge of old and new trees, which also
+        # prevents a file removed upstream between versions from silently
+        # persisting forever. Only cleared here, after verify_and_download
+        # above has already succeeded, so a failed download/hash-check never
+        # destroys a previously-working install.
+        if libexec_dir.exists():
+            shutil.rmtree(libexec_dir)
+        extract_wrapper_dir(data, pin.asset, pin.bin_in_archive, libexec_dir, bin_path)
+    else:
+        raise ExtractionError(f"{spec.pname}: unknown kind {spec.kind!r}")
+
+    # No suppression comment needed here (confirmed empirically: adding one
+    # for S603 gets flagged as an unused suppression by this repo's pinned
+    # ruff). S603 (subprocess call: check for untrusted input) matches
+    # direct calls to subprocess.run/Popen/etc. by name; a call through the
+    # injected `runner` parameter isn't recognized as one. bin_path is our
+    # own just-verified, just-extracted file regardless, never attacker-
+    # controlled input.
+    proc = runner([str(bin_path), "--version"], capture_output=True, text=True, timeout=30, check=False)
+    if proc.returncode != 0:
+        raise VerifyError(f"{spec.pname}: `{bin_path} --version` exited {proc.returncode}: {proc.stderr}")
+
+    _write_receipt(cache_root, InstallReceipt(pname=spec.pname, version=spec.version, sha256_sri=pin.sha256_sri, asset=pin.asset))
+    return ProvisionResult(pname=spec.pname, status="installed", version_output=proc.stdout.strip())
+
+
+def provision_all(
+    tools: Mapping[str, ClassBToolSpec],
+    system: str,
+    cache_root: Path,
+    opener: Callable[[urllib.request.Request], Any] = _default_opener,
+    sleeper: Callable[[float], None] = time.sleep,
+    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+    only: tuple[str, ...] | None = None,
+) -> dict[str, ProvisionResult | Exception]:
+    selected = {k: v for k, v in tools.items() if only is None or k in only}
+    results: dict[str, ProvisionResult | Exception] = {}
+    for pname, spec in selected.items():
+        try:
+            results[pname] = provision_tool(spec, system, cache_root, opener=opener, sleeper=sleeper, runner=runner)
+        # Blind except-Exception is intentional: provision_all is best-effort
+        # across independent tools by design, and each exception is captured
+        # and returned (not swallowed) for the caller to inspect. No
+        # suppression comment needed (confirmed empirically: adding one for
+        # BLE001 gets flagged as both unused and referring to a disabled
+        # rule) -- flake8-blind-except's BLE prefix isn't in this repo's
+        # ruff `select` list at all (only "B" for bugbear is), so that rule
+        # can never fire here regardless.
+        except Exception as error:
+            results[pname] = error
+    return results

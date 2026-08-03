@@ -5,6 +5,7 @@ import hashlib
 import io
 import re
 import stat
+import subprocess
 import tarfile
 import urllib.error
 import urllib.request
@@ -394,3 +395,272 @@ def test_extract_wrapper_dir_raises_extraction_error_on_corrupted_zip(tmp_path: 
     bin_shim = tmp_path / "bin" / "apm"
     with pytest.raises(pcb.ExtractionError):
         pcb.extract_wrapper_dir(garbage, "apm-linux-x86_64.zip", "apm", libexec_dir, bin_shim)
+
+
+# --- Task 5: idempotency receipts + orchestration ----------------------------
+
+
+def _fake_runner_success(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+    return subprocess.CompletedProcess(args=("fake",), returncode=0, stdout="0.25.0\n", stderr="")
+
+
+def _real_apm_spec() -> pcb.ClassBToolSpec:
+    flake_text = (REPO_ROOT / "flake.nix").read_text(encoding="utf-8")
+    return pcb.parse_flake_class_b_pins(flake_text)["apm"]
+
+
+def test_provision_tool_installs_then_skips_on_second_call(tmp_path: Path) -> None:
+    spec = _real_apm_spec()
+    # Build a fake archive whose bytes we can make match the real pin by
+    # constructing it, hashing it, and monkeypatching the spec's pin --
+    # simpler: build a real archive and re-derive a spec with our own pin.
+    data = _make_tar_gz_bytes(
+        {"apm-linux-x86_64/apm": b"#!/bin/sh\necho fake-apm\n", "apm-linux-x86_64/_internal/x": b"y"}
+    )
+    fake_pin = pcb.ClassBSystemPin(asset="apm-linux-x86_64.tar.gz", sha256_sri=pcb.sha256_sri(data), bin_in_archive="apm")
+    fake_spec = pcb.ClassBToolSpec(
+        pname="apm", version="0.25.0", kind="wrapperDir", owner=spec.owner, repo=spec.repo, tag=spec.tag,
+        systems={"x86_64-linux": fake_pin},
+    )
+
+    calls = {"n": 0}
+
+    def opener(request: urllib.request.Request) -> _FakeResponse:
+        calls["n"] += 1
+        return _FakeResponse(200, data)
+
+    result1 = pcb.provision_tool(fake_spec, "x86_64-linux", tmp_path, opener=opener, sleeper=lambda _s: None, runner=_fake_runner_success)
+    assert result1.status == "installed"
+    assert calls["n"] == 1
+
+    result2 = pcb.provision_tool(fake_spec, "x86_64-linux", tmp_path, opener=opener, sleeper=lambda _s: None, runner=_fake_runner_success)
+    assert result2.status == "skipped"
+    assert calls["n"] == 1  # no second network call
+
+
+def test_provision_tool_reinstalls_when_pin_changes(tmp_path: Path) -> None:
+    spec = _real_apm_spec()
+    data_v1 = _make_tar_gz_bytes({"apm-linux-x86_64/apm": b"v1", "apm-linux-x86_64/_internal/x": b"y"})
+    data_v2 = _make_tar_gz_bytes({"apm-linux-x86_64/apm": b"v2", "apm-linux-x86_64/_internal/x": b"y"})
+
+    pin_v1 = pcb.ClassBSystemPin(asset="apm.tar.gz", sha256_sri=pcb.sha256_sri(data_v1), bin_in_archive="apm")
+    spec_v1 = pcb.ClassBToolSpec(pname="apm", version="1", kind="wrapperDir", owner=spec.owner, repo=spec.repo, tag=spec.tag, systems={"x86_64-linux": pin_v1})
+    pcb.provision_tool(spec_v1, "x86_64-linux", tmp_path, opener=lambda r: _FakeResponse(200, data_v1), sleeper=lambda _s: None, runner=_fake_runner_success)
+
+    pin_v2 = pcb.ClassBSystemPin(asset="apm.tar.gz", sha256_sri=pcb.sha256_sri(data_v2), bin_in_archive="apm")
+    spec_v2 = pcb.ClassBToolSpec(pname="apm", version="2", kind="wrapperDir", owner=spec.owner, repo=spec.repo, tag=spec.tag, systems={"x86_64-linux": pin_v2})
+    result = pcb.provision_tool(spec_v2, "x86_64-linux", tmp_path, opener=lambda r: _FakeResponse(200, data_v2), sleeper=lambda _s: None, runner=_fake_runner_success)
+
+    assert result.status == "installed"
+    assert (tmp_path / "libexec" / "apm" / "apm").read_bytes() == b"v2"
+
+
+def test_provision_all_continues_past_one_tool_failure(tmp_path: Path) -> None:
+    """NOTE on a deviation from the plan brief's literal text: the brief's own
+    version of this test reused the REAL parsed `tools["waza"]` spec (real
+    flake.nix sha256 pin) together with a locally-fabricated one-byte archive
+    body for waza's response -- those can never match (verified: it raised
+    HashMismatchError for waza too, the same failure mode as apm's 404, so
+    the test could not actually have exercised the "one tool fails, the other
+    still installs" behavior it claims to). Fixed by deriving waza's pin from
+    the fabricated body's own hash (same pattern the brief's other two Step 1
+    tests already use for apm), while still resolving apm/waza's owner/repo/
+    tag from the real flake.nix parse so the produced URLs are realistic."""
+    flake_text = (REPO_ROOT / "flake.nix").read_text(encoding="utf-8")
+    real_tools = pcb.parse_flake_class_b_pins(flake_text)
+    real_waza_pin = real_tools["waza"].systems["x86_64-linux"]
+    waza_data = _make_tar_gz_bytes({real_waza_pin.bin_in_archive: b"x"})
+    fake_waza_pin = pcb.ClassBSystemPin(
+        asset=real_waza_pin.asset, sha256_sri=pcb.sha256_sri(waza_data), bin_in_archive=real_waza_pin.bin_in_archive
+    )
+    fake_waza_spec = pcb.ClassBToolSpec(
+        pname="waza", version=real_tools["waza"].version, kind="binary",
+        owner=real_tools["waza"].owner, repo=real_tools["waza"].repo, tag=real_tools["waza"].tag,
+        systems={"x86_64-linux": fake_waza_pin},
+    )
+    tools = {"apm": real_tools["apm"], "waza": fake_waza_spec}
+
+    def failing_opener(request: urllib.request.Request) -> _FakeResponse:
+        if "apm" in request.full_url:
+            raise urllib.error.HTTPError(request.full_url, 404, "not found", Message(), io.BytesIO(b""))
+        return _FakeResponse(200, waza_data)
+
+    results = pcb.provision_all(
+        tools,
+        "x86_64-linux",
+        tmp_path,
+        opener=failing_opener,
+        sleeper=lambda _s: None,
+        runner=_fake_runner_success,
+    )
+    assert isinstance(results["apm"], Exception)
+    assert isinstance(results["waza"], pcb.ProvisionResult)
+    assert results["waza"].status == "installed"
+
+
+# --- Task 5 supplemental: receipt/idempotency edge cases not in the brief's
+# own Step 1 list -- corrupted receipt files, a receipt that matches the pin
+# but whose binary was manually removed, the force= override, the fail-closed
+# behavior on a failed post-install smoke test, and provision_all's `only`
+# filter. Each is called out explicitly because provision_tool/provision_all
+# are the exact contract Tasks 6-7 build their CLI orchestration on top of. --
+
+
+def test_provision_tool_treats_syntactically_invalid_receipt_as_not_installed(tmp_path: Path) -> None:
+    """A receipt file that isn't even valid JSON (e.g. truncated by a prior
+    crash mid-write) must be treated as "no receipt", not raise out of
+    provision_tool -- json.JSONDecodeError is a real, reachable failure mode
+    for a hand-rolled state file, not a hypothetical."""
+    spec = _real_apm_spec()
+    data = _make_tar_gz_bytes({"apm-linux-x86_64/apm": b"binary-content", "apm-linux-x86_64/_internal/x": b"y"})
+    pin = pcb.ClassBSystemPin(asset="apm.tar.gz", sha256_sri=pcb.sha256_sri(data), bin_in_archive="apm")
+    fake_spec = pcb.ClassBToolSpec(pname="apm", version="0.25.0", kind="wrapperDir", owner=spec.owner, repo=spec.repo, tag=spec.tag, systems={"x86_64-linux": pin})
+
+    receipt_path = tmp_path / "state" / "apm.json"
+    receipt_path.parent.mkdir(parents=True)
+    receipt_path.write_text("{not valid json at all", encoding="utf-8")
+
+    result = pcb.provision_tool(fake_spec, "x86_64-linux", tmp_path, opener=lambda r: _FakeResponse(200, data), sleeper=lambda _s: None, runner=_fake_runner_success)
+    assert result.status == "installed"
+    assert (tmp_path / "bin" / "apm").exists()
+
+
+def test_provision_tool_treats_receipt_missing_fields_as_not_installed(tmp_path: Path) -> None:
+    """Well-formed JSON but missing a required key (e.g. a receipt written by
+    an older/different schema) is a distinct failure mode from a syntax
+    error -- KeyError, not JSONDecodeError -- and must be handled the same
+    way: treated as absent, not raised."""
+    spec = _real_apm_spec()
+    data = _make_tar_gz_bytes({"apm-linux-x86_64/apm": b"binary-content", "apm-linux-x86_64/_internal/x": b"y"})
+    pin = pcb.ClassBSystemPin(asset="apm.tar.gz", sha256_sri=pcb.sha256_sri(data), bin_in_archive="apm")
+    fake_spec = pcb.ClassBToolSpec(pname="apm", version="0.25.0", kind="wrapperDir", owner=spec.owner, repo=spec.repo, tag=spec.tag, systems={"x86_64-linux": pin})
+
+    receipt_path = tmp_path / "state" / "apm.json"
+    receipt_path.parent.mkdir(parents=True)
+    receipt_path.write_text('{"pname": "apm"}', encoding="utf-8")  # missing version/sha256_sri/asset
+
+    result = pcb.provision_tool(fake_spec, "x86_64-linux", tmp_path, opener=lambda r: _FakeResponse(200, data), sleeper=lambda _s: None, runner=_fake_runner_success)
+    assert result.status == "installed"
+
+
+def test_provision_tool_reinstalls_when_installed_binary_was_manually_deleted(tmp_path: Path) -> None:
+    """A valid receipt whose sha256/asset still match the current pin is not
+    sufficient on its own -- if the binary file itself is gone (a human
+    `rm`'d it, or a prior run crashed after writing the receipt but before/
+    during extraction), the tool must be reinstalled, not silently reported
+    as already present."""
+    spec = _real_apm_spec()
+    data = _make_tar_gz_bytes({"apm-linux-x86_64/apm": b"binary-content", "apm-linux-x86_64/_internal/x": b"y"})
+    pin = pcb.ClassBSystemPin(asset="apm.tar.gz", sha256_sri=pcb.sha256_sri(data), bin_in_archive="apm")
+    fake_spec = pcb.ClassBToolSpec(pname="apm", version="0.25.0", kind="wrapperDir", owner=spec.owner, repo=spec.repo, tag=spec.tag, systems={"x86_64-linux": pin})
+
+    calls = {"n": 0}
+
+    def opener(request: urllib.request.Request) -> _FakeResponse:
+        calls["n"] += 1
+        return _FakeResponse(200, data)
+
+    result1 = pcb.provision_tool(fake_spec, "x86_64-linux", tmp_path, opener=opener, sleeper=lambda _s: None, runner=_fake_runner_success)
+    assert result1.status == "installed"
+    assert calls["n"] == 1
+
+    (tmp_path / "bin" / "apm").unlink()
+    assert (tmp_path / "state" / "apm.json").exists(), "receipt must survive the binary's removal for this to be a real test"
+
+    result2 = pcb.provision_tool(fake_spec, "x86_64-linux", tmp_path, opener=opener, sleeper=lambda _s: None, runner=_fake_runner_success)
+    assert result2.status == "installed"
+    assert calls["n"] == 2  # re-downloaded, not skipped
+    assert (tmp_path / "bin" / "apm").exists()
+
+
+def test_provision_tool_force_reinstalls_even_when_already_installed(tmp_path: Path) -> None:
+    spec = _real_apm_spec()
+    data = _make_tar_gz_bytes({"apm-linux-x86_64/apm": b"binary-content", "apm-linux-x86_64/_internal/x": b"y"})
+    pin = pcb.ClassBSystemPin(asset="apm.tar.gz", sha256_sri=pcb.sha256_sri(data), bin_in_archive="apm")
+    fake_spec = pcb.ClassBToolSpec(pname="apm", version="0.25.0", kind="wrapperDir", owner=spec.owner, repo=spec.repo, tag=spec.tag, systems={"x86_64-linux": pin})
+
+    calls = {"n": 0}
+
+    def opener(request: urllib.request.Request) -> _FakeResponse:
+        calls["n"] += 1
+        return _FakeResponse(200, data)
+
+    pcb.provision_tool(fake_spec, "x86_64-linux", tmp_path, opener=opener, sleeper=lambda _s: None, runner=_fake_runner_success)
+    assert calls["n"] == 1
+
+    result = pcb.provision_tool(fake_spec, "x86_64-linux", tmp_path, opener=opener, sleeper=lambda _s: None, runner=_fake_runner_success, force=True)
+    assert result.status == "installed"
+    assert calls["n"] == 2  # force bypasses the receipt-based skip entirely
+
+
+def test_provision_tool_does_not_write_receipt_when_verify_fails(tmp_path: Path) -> None:
+    """Fail-closed check: if the post-extraction `--version` smoke test
+    fails, no receipt may be written -- otherwise a later run would read
+    back a receipt claiming a tool that never actually passed verification
+    is installed."""
+    spec = _real_apm_spec()
+    data = _make_tar_gz_bytes({"apm-linux-x86_64/apm": b"binary-content", "apm-linux-x86_64/_internal/x": b"y"})
+    pin = pcb.ClassBSystemPin(asset="apm.tar.gz", sha256_sri=pcb.sha256_sri(data), bin_in_archive="apm")
+    fake_spec = pcb.ClassBToolSpec(pname="apm", version="0.25.0", kind="wrapperDir", owner=spec.owner, repo=spec.repo, tag=spec.tag, systems={"x86_64-linux": pin})
+
+    def failing_runner(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(args=("fake",), returncode=1, stdout="", stderr="boom")
+
+    with pytest.raises(pcb.VerifyError):
+        pcb.provision_tool(fake_spec, "x86_64-linux", tmp_path, opener=lambda r: _FakeResponse(200, data), sleeper=lambda _s: None, runner=failing_runner)
+
+    assert not (tmp_path / "state" / "apm.json").exists()
+
+
+def test_provision_tool_raises_extraction_error_on_unknown_kind(tmp_path: Path) -> None:
+    spec = _real_apm_spec()
+    data = _make_tar_gz_bytes({"weird": b"x"})
+    pin = pcb.ClassBSystemPin(asset="weird.tar.gz", sha256_sri=pcb.sha256_sri(data), bin_in_archive="weird")
+    fake_spec = pcb.ClassBToolSpec(pname="weird", version="1", kind="mystery-kind", owner=spec.owner, repo=spec.repo, tag=spec.tag, systems={"x86_64-linux": pin})
+
+    with pytest.raises(pcb.ExtractionError):
+        pcb.provision_tool(fake_spec, "x86_64-linux", tmp_path, opener=lambda r: _FakeResponse(200, data), sleeper=lambda _s: None, runner=_fake_runner_success)
+
+
+def test_provision_all_only_filters_to_selected_tools(tmp_path: Path) -> None:
+    """only= must narrow which tools are even attempted, not just which
+    results are returned afterward. Verified by giving the excluded tool a
+    URL the opener refuses to serve (raises AssertionError) -- if `only`
+    filtered post-hoc instead of up front, the excluded tool would still be
+    fetched, and that AssertionError would surface as an unexpected
+    `"excluded"` key in the results dict, failing the set(results) assertion
+    below."""
+
+    def make_binary_spec(pname: str, body: bytes) -> tuple[pcb.ClassBToolSpec, bytes]:
+        data = _make_tar_gz_bytes({pname: body})
+        pin = pcb.ClassBSystemPin(asset=f"{pname}.tar.gz", sha256_sri=pcb.sha256_sri(data), bin_in_archive=pname)
+        spec = pcb.ClassBToolSpec(pname=pname, version="1", kind="binary", owner="o", repo=pname, tag="t", systems={"x86_64-linux": pin})
+        return spec, data
+
+    waza_spec, waza_data = make_binary_spec("waza", b"waza-content")
+    rtk_spec, rtk_data = make_binary_spec("rtk", b"rtk-content")
+    excluded_spec, _excluded_data = make_binary_spec("excluded", b"excluded-content")
+    tools = {"waza": waza_spec, "rtk": rtk_spec, "excluded": excluded_spec}
+    data_by_url = {
+        waza_spec.release_url("x86_64-linux"): waza_data,
+        rtk_spec.release_url("x86_64-linux"): rtk_data,
+    }
+
+    def opener(request: urllib.request.Request) -> _FakeResponse:
+        if request.full_url not in data_by_url:
+            raise AssertionError(f"unexpected url requested (excluded tool should never be fetched): {request.full_url}")
+        return _FakeResponse(200, data_by_url[request.full_url])
+
+    results = pcb.provision_all(
+        tools,
+        "x86_64-linux",
+        tmp_path,
+        opener=opener,
+        sleeper=lambda _s: None,
+        runner=_fake_runner_success,
+        only=("waza", "rtk"),
+    )
+    assert set(results) == {"waza", "rtk"}
+    for result in results.values():
+        assert isinstance(result, pcb.ProvisionResult)
+        assert result.status == "installed"
