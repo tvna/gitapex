@@ -31,9 +31,8 @@ Run standalone (exit 1 on any violation) or via the pytest gate in
 from __future__ import annotations
 
 import sys
+from dataclasses import dataclass
 from pathlib import Path
-
-from pydantic import BaseModel, ValidationError, field_validator
 
 
 def set_config_model(text: str, model: str) -> str:
@@ -96,7 +95,8 @@ def override_file(path: Path, model: str) -> None:
     path.write_text(set_config_model(text, model), encoding="utf-8")
 
 
-class _SetConfigModelArgs(BaseModel):
+@dataclass(frozen=True)
+class _SetConfigModelArgs:
     """Validates the two positional CLI values used by ``main()``. ``path``
     replaces the existing hand-rolled ``path.is_file()`` check (same message
     text); ``model`` is carried through unvalidated here -- its own
@@ -108,24 +108,14 @@ class _SetConfigModelArgs(BaseModel):
     path: Path
     model: str
 
-    @field_validator("path")
-    @classmethod
-    def _path_must_be_file(cls, value: Path) -> Path:
-        if not value.is_file():
-            raise ValueError(f"not a file: {value}")
-        return value
 
-
-def _validation_error_message(exc: ValidationError) -> str:
-    """The first error's original message, unwrapped from pydantic's own
-    "Value error, " prefix -- reproduces the exact text the replaced
-    hand-validation printed, not pydantic's own formatted error text."""
-    error = exc.errors()[0]
-    ctx = error.get("ctx") or {}
-    original = ctx.get("error")
-    if isinstance(original, Exception):
-        return str(original)
-    return str(error["msg"])
+def _parse_args(path: Path, model: str) -> _SetConfigModelArgs:
+    """Validate ``path`` is an existing file (same message text the replaced
+    pydantic ``field_validator`` produced); ``model`` passes through
+    unvalidated (see ``_SetConfigModelArgs``'s own docstring)."""
+    if not path.is_file():
+        raise ValueError(f"not a file: {path}")
+    return _SetConfigModelArgs(path=path, model=model)
 
 
 def main(argv: list[str]) -> int:
@@ -137,9 +127,9 @@ def main(argv: list[str]) -> int:
         return 2
 
     try:
-        validated_args = _SetConfigModelArgs(path=Path(argv[1]), model=argv[2])
-    except ValidationError as exc:
-        print(f"error: {_validation_error_message(exc)}", file=sys.stderr)
+        validated_args = _parse_args(Path(argv[1]), argv[2])
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
         return 1
 
     try:
