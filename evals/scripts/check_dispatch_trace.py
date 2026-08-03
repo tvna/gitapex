@@ -271,7 +271,9 @@ def register_plugin_marketplace(
         [claude_bin, "plugin", "marketplace", "add", str(marketplace_source)],
         [claude_bin, "plugin", "install", plugin_name],
     ):
-        result = subprocess.run(
+        # S603 waived: argv is built above from a resolved absolute
+        # claude_bin plus fixed literals, and runs with no shell.
+        result = subprocess.run(  # noqa: S603
             argv, cwd=str(isolated_cwd), env=env, capture_output=True,
             text=True, check=False, timeout=timeout_seconds,
         )
@@ -340,7 +342,8 @@ def run_live_dispatch(
     # other than the one this isolation recipe actually controls.
     env["PWD"] = str(isolated_cwd)
     with transcript_out.open("w", encoding="utf-8") as out:
-        result = subprocess.run(
+        # S603 waived: same caller-supplied argv list, no shell.
+        result = subprocess.run(  # noqa: S603
             argv, cwd=str(isolated_cwd), env=env, stdout=out,
             stderr=subprocess.PIPE, text=True, check=False,
             timeout=timeout_seconds,
