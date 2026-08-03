@@ -178,7 +178,7 @@ def test_download_asset_retries_on_5xx_then_succeeds() -> None:
         sleeper=sleeps.append,
     )
     assert body == b"payload"
-    assert len(sleeps) == 2
+    assert sleeps == [2.0, 4.0]
 
 
 def test_download_asset_does_not_retry_on_404() -> None:
