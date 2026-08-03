@@ -316,14 +316,19 @@ jobs:
 """
 
 
-def test_a_dependabot_style_pin_bump_to_a_registered_gate_workflow_is_exempt(
+def test_a_pin_bump_to_a_registered_gate_workflow_now_requires_disclosure(
     diff_step_script, repo, outdir
 ):
-    """`.github/workflows/lint.yml` is a registered gate, so rule 2 puts it
-    in scope -- correctly. But Dependabot's weekly github-actions update
-    bumps its SHA pins, and a bot cannot add a disclosure to its own PR
-    body, so without the pin-only exemption every weekly dependency PR
-    carries a permanently red required check nobody can satisfy."""
+    """The accepted cost of deleting the pin-only exemption, pinned so it is
+    a decision on the record rather than a surprise.
+
+    `.github/workflows/lint.yml` is a registered gate, so Dependabot's
+    weekly github-actions bump into it now fails this check until the human
+    merging the PR adds a disclosure line. The exemption that used to make
+    this pass was ~130 lines of diff parsing that a review found three
+    defects in, one of which exempted deleting a gate-invoking step -- so
+    the carve-out is gone rather than patched.
+    """
     _write(repo, ".github/workflows/lint.yml", _PINNED_STEP)
     _commit(repo, "add lint.yml")
     base = _git(repo, "rev-parse", "HEAD").stdout.strip()
@@ -336,15 +341,16 @@ def test_a_dependabot_style_pin_bump_to_a_registered_gate_workflow_is_exempt(
         ),
     )
     _commit(repo, "chore(ci): bump actions/checkout")
-    code, out, log = run_diff_step(diff_step_script, repo, outdir, base=base)
+    code, out, _ = run_diff_step(diff_step_script, repo, outdir, base=base)
     assert code == 0
-    assert out["changed-gate-scripts"] == "", log
-    assert "pin-only workflow change" in log
+    assert out["changed-gate-scripts"] == ".github/workflows/lint.yml"
+    assert out["applicable"] == "true"
 
 
-def test_a_logic_change_to_the_same_workflow_is_not_exempt(diff_step_script, repo, outdir):
-    """The exemption is content-based, so smuggling a real edit alongside a
-    pin bump keeps the file in scope."""
+def test_deleting_a_gate_invoking_step_requires_disclosure(diff_step_script, repo, outdir):
+    """The defect that killed the exemption: it treated any removed `uses:`
+    line as a dependency bump, so removing the step that invokes a gate was
+    waved through -- a green required check for disabling a gate."""
     _write(repo, ".github/workflows/lint.yml", _PINNED_STEP)
     _commit(repo, "add lint.yml")
     base = _git(repo, "rev-parse", "HEAD").stdout.strip()
@@ -352,11 +358,12 @@ def test_a_logic_change_to_the_same_workflow_is_not_exempt(diff_step_script, rep
         repo,
         ".github/workflows/lint.yml",
         _PINNED_STEP.replace(
-            "3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1",
-            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  # v7.1.0",
-        ).replace("    runs-on: ubuntu-latest\n", "    runs-on: ubuntu-latest\n    continue-on-error: true\n"),
+            "      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+            "  # v7.0.1\n",
+            "",
+        ),
     )
-    _commit(repo, "sneaky")
+    _commit(repo, "remove the step")
     code, out, _ = run_diff_step(diff_step_script, repo, outdir, base=base)
     assert code == 0
     assert out["changed-gate-scripts"] == ".github/workflows/lint.yml"

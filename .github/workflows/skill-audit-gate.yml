@@ -184,28 +184,28 @@ jobs:
           # hooks/, .github/workflows/, and .gitapex/ssot.json; the helper
           # filters, and doing it there keeps one rule in one place rather
           # than a pathspec list here that must stay in sync with a registry.
+          # No exemption for dependency-pin bumps, deliberately. An earlier
+          # revision carved one out so Dependabot's weekly github-actions
+          # update would pass, since three registered gates are workflow YAML
+          # and a bot cannot add a disclosure to its own PR body. A review
+          # found three defects in those ~130 lines of diff parsing, one of
+          # which exempted *deleting the step that invokes a gate* -- the
+          # same fail-open that including deletions was meant to close,
+          # reintroduced by the code meant to narrow scope. The carve-out is
+          # deleted rather than patched: see the detector's docstring.
+          #
+          # Accepted cost, stated so it is not a surprise: a Dependabot PR
+          # that bumps a pin inside a registered gate workflow fails this
+          # check until the human merging it adds a
+          # `deterministic-gate-quality` line to the PR body. That is a
+          # supply-chain change to a gate, so a human reading it is a
+          # defensible outcome rather than pure friction.
           if ! gate_diff_output=$(git diff --name-status "$BASE_SHA...$HEAD_SHA"); then
             echo "::error::git diff failed for gate detection between $BASE_SHA and $HEAD_SHA" >&2
             exit 1
           fi
-          # Three of the registered gates are workflow YAML, so Dependabot's
-          # weekly github-actions update (.github/dependabot.yml) touches
-          # them -- and a bot cannot add a disclosure to its own PR body.
-          # The detector exempts a workflow file whose entire change is
-          # `uses:` pin bumps; this supplies the content it needs to tell
-          # a pin bump from a gate-logic change. Content-based, not
-          # author-based: a human pin bump is treated identically, and any
-          # non-pin line in the same file keeps it in scope.
-          workflow_diff_file=$(mktemp)
-          if ! git diff --unified=0 "$BASE_SHA...$HEAD_SHA" \
-              -- ':(glob).github/workflows/*.yml' ':(glob).github/workflows/*.yaml' \
-              > "$workflow_diff_file"; then
-            echo "::error::git diff failed for workflow pin detection between $BASE_SHA and $HEAD_SHA" >&2
-            exit 1
-          fi
           if ! changed_gate_scripts=$(printf '%s\n' "$gate_diff_output" \
-              | python3 .github/scripts/detect_changed_gate_scripts.py \
-                  --unified-diff "$workflow_diff_file"); then
+              | python3 .github/scripts/detect_changed_gate_scripts.py); then
             echo "::error::gate-path detection failed; refusing to report this check green on a scope that could not be computed" >&2
             exit 1
           fi

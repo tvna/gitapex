@@ -53,6 +53,32 @@ around: nothing here selects a file merely because it *sits* in one of
 these directories. `tests/`, `hooks/hooks.json`'s siblings, and unrelated
 workflow YAML stay out.
 
+**There is no exemption, and that is a deliberate reversal.** An earlier
+revision carved one out: three registered gates are workflow YAML, so
+Dependabot's weekly `github-actions` update (`.github/dependabot.yml`)
+touches them, and a bot cannot add a disclosure to its own PR body. The
+carve-out exempted a workflow file whose entire change was `uses:` pin
+bumps -- about 130 lines of hand-rolled unified-diff parsing whose only
+job was to make a check pass.
+
+A review round found three defects in those 130 lines, all of the class
+this whole check exists to catch: any added or removed `uses:` line counted
+as a pin bump, so *deleting the step that invokes a gate* was exempted (a
+green required check for disabling a gate -- the same fail-open that
+motivated including deletions above, reintroduced by the code meant to
+narrow scope), a wholesale swap to a different action was exempted, a
+`--`-prefixed removed line defeated the header skip, and a non-UTF-8 diff
+raised an uncaught traceback.
+
+So the exemption is gone rather than patched. Deciding "is this diff
+*merely* a dependency bump" is a judgment about intent, and encoding a
+judgment as a parser is what produced the defects; a gate that cannot be
+sure fails closed. The cost is real and accepted: a Dependabot PR touching
+a registered gate workflow requires a `deterministic-gate-quality`
+disclosure line, which the human merging it adds. A pin bump into a gate's
+own workflow is a supply-chain change to a gate, so a human looking at it
+is not obviously the wrong outcome.
+
 Deletions and renames are **in scope**, unlike every other signal
 `skill-audit-gate.yml` computes. Those exclude `D` and `R100` because a
 deleted or byte-identically-renamed SKILL.md or design doc has no new
@@ -118,15 +144,6 @@ _CONVENTION_RE = re.compile(
     r"\.github/scripts/(?:gate|scan)_[^/]*\.py|hooks/check[-_][^/]*\.(?:sh|py)"
 )
 
-# A `uses:` pin line, with or without its YAML list-item dash and its
-# trailing version comment -- both forms occur in this repository's
-# workflows ("- uses: owner/action@sha  # vX.Y.Z" and a bare "uses:" under
-# an existing list item). Used only to decide whether a changed workflow
-# file's diff is a pure dependency-pin bump; see `pin_only_workflow_paths`.
-# The action reference must carry no whitespace, so a line that merely
-# starts with "uses:" and continues into other YAML does not match.
-_USES_PIN_RE = re.compile(r"[ \t]*(?:-[ \t]+)?uses:[ \t]*\S+[ \t]*(?:#[^\n]*)?")
-_DIFF_HEADER_PREFIXES = ("+++", "---")
 
 
 class ScopeError(Exception):
@@ -192,53 +209,7 @@ def is_gate_path(path, registered):
     )
 
 
-def pin_only_workflow_paths(unified_diff_text):
-    """Return the `.github/workflows/*.yml` paths whose entire change in
-    `unified_diff_text` is dependency-pin bumps.
-
-    Three of the registered gates are implemented as workflow YAML, so
-    rule 2 puts them in scope -- correctly, since gutting one disables a
-    gate. But Dependabot's weekly `github-actions` update (see
-    `.github/dependabot.yml`) bumps the SHA pins in exactly those files,
-    and a bot cannot add a disclosure to its own PR body. Without this
-    exemption every weekly dependency PR would carry a permanently red
-    required check that its author has no way to satisfy -- which trains
-    readers to ignore a red check, the opposite of what a gate is for.
-
-    The exemption is deliberately content-based, not author-based: a human
-    bumping a pin gets the same treatment, and any change touching a line
-    that is not a `uses:` pin -- including one smuggled into the same
-    commit as a pin bump -- keeps the file in scope. Unknown or
-    unparseable content therefore falls through to "not exempt", the
-    fail-closed direction.
-    """
-    exempt, disqualified = set(), set()
-    current = None
-    for line in (unified_diff_text or "").replace("\r\n", "\n").replace("\r", "\n").split("\n"):
-        if line.startswith("diff --git "):
-            # "diff --git a/<path> b/<path>"; take the b-side, which is the
-            # post-change name for both edits and renames.
-            parts = line.split(" b/", 1)
-            current = parts[1] if len(parts) == 2 else None
-            if current is not None and _is_workflow_yaml(current):
-                exempt.add(current)
-            else:
-                current = None
-            continue
-        if current is None or not line or line[0] not in "+-":
-            continue
-        if line.startswith(_DIFF_HEADER_PREFIXES):
-            continue
-        if not _USES_PIN_RE.fullmatch(line[1:]):
-            disqualified.add(current)
-    return exempt - disqualified
-
-
-def _is_workflow_yaml(path):
-    return bool(re.fullmatch(r"\.github/workflows/[^/]+\.ya?ml", path))
-
-
-def select(name_status_text, registered, exempt_paths=frozenset()):
+def select(name_status_text, registered):
     """Return the sorted, deduped gate paths named in `--name-status` output.
 
     Every status is honoured, including `D` and `R100` -- see this module's
@@ -256,7 +227,7 @@ def select(name_status_text, registered, exempt_paths=frozenset()):
             raise ScopeError(f"unparseable --name-status line: {line!r}")
         for candidate in fields[1:]:
             candidate = candidate.strip()
-            if candidate and candidate not in exempt_paths and is_gate_path(candidate, registered):
+            if candidate and is_gate_path(candidate, registered):
                 selected.add(candidate)
 
     for path in selected:
@@ -281,27 +252,11 @@ def main(argv=None):
         default=REPO_ROOT,
         help="Repository root holding .gitapex/ssot.json (defaults to this checkout).",
     )
-    parser.add_argument(
-        "--unified-diff",
-        help="Path to `git diff --unified=0` output for the same range. When "
-        "given, a .github/workflows/*.yml file whose entire change is "
-        "dependency-pin bumps is exempted (see pin_only_workflow_paths). "
-        "Omitting it exempts nothing, which is the fail-closed direction.",
-    )
     args = parser.parse_args(argv)
 
     try:
         registered = registered_gate_paths(args.repo_root)
-        exempt = frozenset()
-        if args.unified_diff:
-            try:
-                diff_text = open(args.unified_diff, encoding="utf-8").read()
-            except OSError as error:
-                raise ScopeError(f"unified diff cannot be read: {error}") from error
-            exempt = pin_only_workflow_paths(diff_text)
-            for path in sorted(exempt):
-                print(f"pin-only workflow change, not graded as a gate change: {path}", file=sys.stderr)
-        selected = select(sys.stdin.read(), registered, exempt)
+        selected = select(sys.stdin.read(), registered)
     except ScopeError as error:
         print(f"{error}", file=sys.stderr)
         return 2

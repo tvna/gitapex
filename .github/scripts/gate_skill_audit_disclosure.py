@@ -67,7 +67,7 @@ comment for why "NOT-RUN" is not an acceptable answer for this one.
   `hooks/hooks.json`). `detect_changed_gate_scripts.py` computes that
   membership and the workflow hands the result here; see that script's
   docstring for why each rule is needed, why a deletion or rename counts,
-  and why a pure dependency-pin bump to a workflow does not.
+  and why it carries no dependency-pin exemption.
   PR #651 shipped a new gate that itself fail-opened three separate
   ways (zero discovered surfaces exited 0; an unterminated frontmatter
   block was read as "no frontmatter" so a real violation went ungraded; an
@@ -100,10 +100,13 @@ comment for why "NOT-RUN" is not an acceptable answer for this one.
   `.github/scripts/gate_plugin_root_brace_notation.py` -- and this
   workflow's own `skill-audit-disclosure` check ran and passed on it
   (check run 91426145937). The registration rule *does* grow that list,
-  though, to `hooks/**`, `.github/workflows/*.yml`, and
-  `.gitapex/ssot.json`: the registry names gate implementations in all
-  three places, and none of them matched any pre-existing entry, so
-  without the additions this workflow would simply never run for them.
+  though, to `hooks/**`, `.github/workflows/*.yml`,
+  `.github/workflows/*.yaml` and `.gitapex/ssot.json`: the registry names
+  gate implementations in all three places, and none of them matched any
+  pre-existing entry, so without the additions this workflow would simply
+  never run for them. tests/test_skill_audit_gate_workflow_wiring.py gates
+  that correspondence, so a gate registered at an unreachable path fails
+  rather than silently skipping the job.
 
 The calling workflow decides applicability. It is invoked when the PR's
 diff touches a skills/*/SKILL.md file, a docs/superpowers/specs/*.md
