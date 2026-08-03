@@ -142,6 +142,20 @@ contributors:
 * Two parses into one name with an `isinstance` between them: the check
   clears the name for every later access, including one fed by the second
   parse.
+* **`from json import loads` is not a parse.** Only the `json.loads(...)` /
+  `json.load(...)` attribute spelling is, so the import form is defect E
+  behind a one-line import change. Recognising it means resolving an
+  imported name -- through aliases (`as jloads`), shadowing and rebinding --
+  which is the machinery every bullet above records building and reverting.
+  The attribute spelling is the one all three historical defects used and
+  the only one this repository contains.
+* **Two findings of the same rule on one physical line report once.**
+  `a = p.read_text() + q.read_text()` is a single `decode-gap`, because
+  findings are deduplicated by `(path, line, rule, message)` and those four
+  are identical here. Printing the same line twice with the same text tells
+  a contributor nothing about which read is meant; the cost is that fixing
+  one and never touching the line again leaves the other unreported. One
+  waiver on that line likewise covers both.
 
 **Known over-reports.** Each of these is correct code that this gate
 reports, and for each the inline waiver is the documented answer. Every one
@@ -172,10 +186,27 @@ the thing this gate exists for:
 * A `.get()` inside a comprehension or a lambda that rebinds the parsed
   name. Only `def` bodies are treated as separate scopes.
 * A handler set defeated by shadowing a builtin exception name.
+* **`<expr>.open()` with no positional argument, on a receiver that is not a
+  file.** `conn.open()`, `db.open(flag=True)` and `webbrowser.open(url=...)`
+  are all reported. The zero-argument form has to be graded -- `Path(p).open()`
+  is a real text read and defect C's own shape -- and the only thing that
+  would separate it from the others is recognising the receiver, which this
+  gate does not do for the reasons above. Note the narrower positional form
+  is *not* affected: `webbrowser.open(url)` grades clean.
+* **`<expr>.open("<name>")` where the member name is built only from file-mode
+  characters.** `z.open("art")`, `"raw"`, `"war"` and `"rat"` are read as
+  mode strings and reported. `_looks_like_a_mode` narrows this -- `"name"`
+  and `"data"` are not modes, and `"bat"`/`"tab"` contain a `b` and grade as
+  binary -- but it cannot close it without knowing the receiver.
 
 Of these, only the caller-owns-the-handling case occurs in the graded
 directories today; the others are constructed, which is why each was
-measured as a poor trade rather than an urgent one.
+measured as a poor trade rather than an urgent one. The two `.open()`
+over-reports were checked rather than assumed: the graded directories
+contain five zero-argument `.open()` calls and two whose first argument is
+a mode string, and every one of the seven is a real `Path(...).open()` --
+so all of them are reported correctly, or (for the `"rb"` and `"w"` modes)
+correctly not reported at all.
 
 Every miss and every over-report above is pinned by a test asserting the
 behaviour, so none can change without a reader noticing.
@@ -481,8 +512,15 @@ def _handler_coverage(tree: ast.Module) -> tuple[dict[int, set[str]], dict[int, 
                 walk(child, frozenset(), frozenset())
             return
         if isinstance(node, ast.Lambda):
-            for descendant in ast.iter_child_nodes(node):
-                walk(descendant, frozenset(), frozenset())
+            # Same split as `FunctionDef` above, and for the same reason: the
+            # body is deferred and loses the protection, but the argument
+            # defaults are evaluated where the `lambda` is written and keep
+            # it. Walking every child with cleared state reported
+            # `lambda x=p.read_text(): x` inside a `try` that really does
+            # catch it.
+            for default in [*node.args.defaults, *(d for d in node.args.kw_defaults if d)]:
+                walk(default, handled, enclosing)
+            walk(node.body, frozenset(), frozenset())
             return
         if isinstance(node, ast.Try | ast.TryStar):
             names: set[str] = set()
@@ -634,9 +672,9 @@ def _is_json_parse(node: ast.expr) -> bool:
 _Scope = ast.Module | ast.FunctionDef | ast.AsyncFunctionDef
 
 
-def _scope_body(scope: _Scope) -> Iterator[ast.AST]:
-    """Yield every node belonging to `scope` itself, excluding the bodies of
-    nested functions -- those are their own scope and are walked separately.
+def _walk_excluding_nested_functions(node: ast.AST) -> Iterator[ast.AST]:
+    """Yield every node belonging to `node`'s own scope, excluding the bodies
+    of nested functions -- those are their own scope and are walked separately.
 
     The cost of that exclusion is stated rather than hidden: a closure that
     reads an *enclosing function's* JSON value is not graded. Sharing an
@@ -646,14 +684,6 @@ def _scope_body(scope: _Scope) -> Iterator[ast.AST]:
     an exception to that: inheriting it was implemented and reverted, for the
     reasons `_json_shape_gaps` records.
     """
-    for child in ast.iter_child_nodes(scope):
-        if isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef):
-            continue
-        yield child
-        yield from _walk_excluding_nested_functions(child)
-
-
-def _walk_excluding_nested_functions(node: ast.AST) -> Iterator[ast.AST]:
     for child in ast.iter_child_nodes(node):
         if isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef):
             continue
@@ -690,8 +720,35 @@ def _assigned_names(node: ast.AST) -> Iterator[tuple[str, ast.expr | None]]:
     elif isinstance(node, ast.AnnAssign | ast.NamedExpr):
         if isinstance(node.target, ast.Name):
             yield node.target.id, node.value
-    elif isinstance(node, ast.For | ast.AsyncFor) and isinstance(node.target, ast.Name):
-        yield node.target.id, None
+    elif isinstance(node, ast.For | ast.AsyncFor):
+        yield from _bound_targets(node.target)
+    elif isinstance(node, ast.With | ast.AsyncWith):
+        # `with ctx() as data:` rebinds `data` as plainly as an assignment
+        # does. Reading only `Assign`/`For` left three binding forms invisible,
+        # so a name the source provably rebinds kept its taint and the `.get()`
+        # after it was reported on a value that is not the parse result.
+        for item in node.items:
+            if item.optional_vars is not None:
+                yield from _bound_targets(item.optional_vars)
+    elif isinstance(node, ast.ExceptHandler) and node.name is not None:
+        yield node.name, None
+
+
+def _bound_targets(target: ast.expr) -> Iterator[tuple[str, ast.expr | None]]:
+    """Yield every name a binding target rebinds, with no value attached.
+
+    Tuple and list targets are unpacked, so `for data, _ in pairs:` and
+    `with ctx() as (data, _):` drop `data`'s taint the same way the plain
+    `for data in items:` form already did. Starred and attribute/subscript
+    targets bind nothing this gate tracks and are skipped.
+    """
+    if isinstance(target, ast.Name):
+        yield target.id, None
+    elif isinstance(target, ast.Tuple | ast.List):
+        for element in target.elts:
+            yield from _bound_targets(element)
+    elif isinstance(target, ast.Starred):
+        yield from _bound_targets(target.value)
 
 
 def _isinstance_checks_mapping(node: ast.Call) -> str | None:
@@ -794,7 +851,7 @@ def _json_shape_gaps(tree: ast.Module) -> Iterator[_JsonGap]:
     directions.
     """
     for scope in _scopes(tree):
-        nodes = list(_scope_body(scope))
+        nodes = list(_walk_excluding_nested_functions(scope))
         tainted, validated = _scope_taint(nodes)
         for node in nodes:
             if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
@@ -910,7 +967,16 @@ def findings_for_source(path: str, source: str, added: set[int]) -> tuple[list[F
                     ".get() on a json.loads result never checked with isinstance(); a valid "
                     'non-object payload ([], "x", 1, null) raises AttributeError',
                 ),
-                frozenset(expression),
+                # The enclosing `except` lines belong in the trigger for the
+                # same reason they do for a decoded read, and leaving them out
+                # was a fail-open on this gate's own subject: narrowing
+                # `except (ValueError, AttributeError)` to `except ValueError`
+                # creates the gap while touching neither the `.get()` nor
+                # anything between the parse and it, so no other part of the
+                # trigger can see the edit. The window below covers the
+                # parse-to-access region, which an `except` header never sits
+                # in -- it always follows the try body.
+                frozenset(expression | handler_lines.get(id(gap.call), set())),
                 # The guard window is carried as a bound pair, not materialised
                 # as a set: for a module-inherited value it spans a whole
                 # function, and building one set per gap made a file of 800
@@ -974,7 +1040,14 @@ def find_violations(diff_text: str, root: pathlib.Path) -> tuple[list[Finding], 
             continue
         absolute = root / path
         try:
-            source = absolute.read_text(encoding="utf-8")
+            # utf-8-sig, not utf-8: CPython strips a leading BOM from source it
+            # imports or runs, but `ast.parse` on a `str` does not, so a
+            # BOM-carrying file that python3 executes fine otherwise failed
+            # this gate with "cannot be parsed as Python: invalid
+            # non-printable character U+FEFF" -- a hard block naming a syntax
+            # error that does not exist. For a file without a BOM the two
+            # codecs are identical, and neither shifts a line number.
+            source = absolute.read_text(encoding="utf-8-sig")
         except FileNotFoundError:
             # The diff names a post-image path that is not in this checkout.
             # A deletion never reaches here (its `+++` line is /dev/null), so
@@ -1037,7 +1110,25 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{args.diff}: diff cannot be read as UTF-8 text: {error}", file=sys.stderr)
             return 2
     else:
-        diff_text = sys.stdin.read()
+        # Read bytes and decode explicitly, rather than letting text-mode
+        # stdin do it under the platform locale. `sys.stdin.read()` was this
+        # gate's own subject shipped into the gate: a non-UTF-8 byte anywhere
+        # in the diff escaped as an uncaught UnicodeDecodeError and exited 1
+        # -- "violation found" -- with a traceback, where the same bytes given
+        # to --diff exited 2. On a locale that coerces to surrogateescape it
+        # instead passed an unpaired surrogate through silently. Both failure
+        # modes are the ones extract_diff_added_lines.py's docstring already
+        # records having had to close on this same input.
+        #
+        # Fail closed rather than decoding with errors="replace" as that
+        # script does: it has no exit code for "the input could not be
+        # trusted" and this gate does, and exit 2 is what --diff already
+        # returns for these bytes.
+        try:
+            diff_text = sys.stdin.buffer.read().decode("utf-8")
+        except UnicodeDecodeError as error:
+            print(f"standard input: diff cannot be read as UTF-8 text: {error}", file=sys.stderr)
+            return 2
 
     try:
         violations, waived, graded = find_violations(diff_text, validated.root)

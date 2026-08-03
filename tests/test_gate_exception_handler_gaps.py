@@ -1394,8 +1394,11 @@ def test_a_source_file_that_does_not_parse_fails_closed(
 def test_a_source_file_that_does_not_even_tokenize_fails_closed(
     tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """The waiver scan runs before the AST parse, so it has to survive a
-    file that breaks the tokenizer outright and let the parse report it."""
+    """The AST parse runs before the waiver scan, so a file that breaks the
+    tokenizer outright is reported by the parse and never reaches
+    `_waived_lines` -- which is exactly what lets that function leave its
+    tokenize loop unguarded without shipping issue #682's own defect D (a
+    handler for a condition that cannot occur)."""
     source = 'DOC = """unterminated\n'
     _write(tmp_path, ".github/scripts/gate_x.py", source)
     _write(tmp_path, "diff.txt", _whole_file_diff(".github/scripts/gate_x.py", source))
@@ -1470,18 +1473,50 @@ def test_main_returns_one_and_explains_the_failure(
     assert "exception-handler-gap: WAIVED:" in stderr
 
 
+class _FakeStdin:
+    """Just the surface `main` uses: `sys.stdin.buffer.read()`.
+
+    Reading bytes rather than text is the point -- see
+    `test_a_non_utf8_byte_on_stdin_fails_closed_instead_of_crashing`.
+    """
+
+    def __init__(self, data: bytes) -> None:
+        import io as _io
+
+        self.buffer = _io.BytesIO(data)
+
+
 def test_main_reads_the_diff_from_stdin_when_no_flag_is_given(
     tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import io as _io
-
     source = "text = p.read_text()\n"
     _write(tmp_path, ".github/scripts/gate_x.py", source)
-    monkeypatch.setattr(
-        gate.sys, "stdin", _io.StringIO(_whole_file_diff(".github/scripts/gate_x.py", source))
-    )
+    diff = _whole_file_diff(".github/scripts/gate_x.py", source)
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(diff.encode("utf-8")))
     assert gate.main(["--root", str(tmp_path)]) == 1
     assert "decode-gap" in capsys.readouterr().err
+
+
+def test_a_non_utf8_byte_on_stdin_fails_closed_instead_of_crashing(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """This gate's own subject, once shipped into the gate itself.
+
+    `sys.stdin.read()` let a non-UTF-8 byte anywhere in the diff escape as an
+    uncaught `UnicodeDecodeError`, exiting 1 -- "violation found" -- with a
+    raw traceback, while the identical bytes passed via `--diff` exited 2.
+    A `.py` file containing latin-1 bytes makes `git diff -- '*.py'` emit
+    exactly that, and the CI job pipes into stdin, so this was the production
+    path. `extract_diff_added_lines.py`'s docstring already records having had
+    to close the same two failure modes (the uncaught raise, and the silent
+    surrogateescape pass-through on a coercing locale) on this same input.
+    """
+    source = "text = p.read_text()\n"
+    _write(tmp_path, ".github/scripts/gate_x.py", source)
+    diff = _whole_file_diff(".github/scripts/gate_x.py", source)
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(diff.encode("utf-8") + b"+# \xff\xfe\n"))
+    assert gate.main(["--root", str(tmp_path)]) == 2
+    assert "diff cannot be read as UTF-8 text" in capsys.readouterr().err
 
 
 def test_a_honoured_waiver_is_printed_even_on_an_otherwise_clean_run(
@@ -1495,6 +1530,182 @@ def test_a_honoured_waiver_is_printed_even_on_an_otherwise_clean_run(
     captured = capsys.readouterr()
     assert "waived inline" in captured.err
     assert "1 inline waiver(s) honoured" in captured.out
+
+
+# --- round-8 review findings --------------------------------------------
+
+_NARROWED_HANDLER = '''import json
+
+
+def load(raw):
+    try:
+        data = json.loads(raw)
+        return data.get("gates")
+    except ValueError:
+        return None
+'''
+
+
+def test_narrowing_a_handler_around_a_get_is_this_diffs_finding(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The `json-shape-gap` half of the trigger contract, which the rule
+    claimed and did not implement.
+
+    Both this module's docstring and the registry entry say a finding counts
+    as this diff's when an added line touches "the offending expression, an
+    enclosing except clause, or anything between a JSON parse and the
+    access". The decode rule unioned the enclosing handler lines into its
+    trigger; the JSON rule passed the expression alone, and the
+    parse-to-access window can never reach an `except` header because the
+    header always follows the try body. So editing only line 8 below --
+    dropping `AttributeError` from the handler, which is precisely issue
+    #682's defect F shape one rule over -- created the gap and no part of the
+    trigger could see it. A fail-open on this gate's own subject.
+    """
+    _write(tmp_path, ".github/scripts/gate_x.py", _NARROWED_HANDLER)
+    violations, _waived, graded = gate.find_violations(
+        _partial_diff(".github/scripts/gate_x.py", _NARROWED_HANDLER, [8]), tmp_path
+    )
+    assert graded == 1
+    assert _at(violations) == [("json-shape-gap", 7)]
+
+
+@pytest.mark.parametrize(
+    "rebinding",
+    [
+        pytest.param("    with ctx() as data:\n        return data.get('k')\n", id="with-as"),
+        pytest.param("    for data, _x in pairs:\n        return data.get('k')\n", id="tuple-for"),
+        pytest.param(
+            "    try:\n        pass\n    except ValueError as data:\n"
+            "        return data.get('k')\n",
+            id="except-as",
+        ),
+        pytest.param("    for data in pairs:\n        return data.get('k')\n", id="single-for"),
+        pytest.param("    (data, _x) = (1, 2)\n    return data.get('k')\n", id="tuple-assign"),
+        pytest.param(
+            "    with ctx() as [data, _x]:\n        return data.get('k')\n", id="list-target"
+        ),
+        pytest.param(
+            "    for *data, _x in pairs:\n        return data.get('k')\n", id="starred-for"
+        ),
+    ],
+)
+def test_a_name_rebound_by_any_binding_form_loses_its_taint(
+    tmp_path: pathlib.Path, rebinding: str
+) -> None:
+    """`_assigned_names` read `Assign`, `AnnAssign`, `NamedExpr` and a
+    single-`Name` `for` target only, so three other binding forms left a name
+    the source provably rebinds still tainted, and the `.get()` after them was
+    reported on a value that is not the parse result -- three false positives.
+
+    The single-`Name` `for` case was already handled, which is what makes the
+    others an oversight rather than one of the recorded trades: the module
+    docstring states the invariant as "a name assigned both a parse and
+    something else is dropped, wherever those assignments sit".
+    """
+    source = "import json\n\n\ndef f(raw, ctx, pairs):\n    data = json.loads(raw)\n" + rebinding
+    assert _grade(tmp_path, source) == []
+
+
+def test_a_lambda_argument_default_keeps_the_enclosing_try(tmp_path: pathlib.Path) -> None:
+    """A `lambda`'s defaults are evaluated where the `lambda` is written, so
+    an enclosing `try` really does catch them -- the same reasoning the
+    `FunctionDef` branch already implemented for `def`. Walking every child of
+    a `Lambda` with cleared handler state reported a read the handler covers.
+    """
+    source = (
+        "def f(p):\n"
+        "    try:\n"
+        "        fn = lambda x=p.read_text(): x\n"
+        "    except ValueError:\n"
+        "        fn = None\n"
+        "    return fn\n"
+    )
+    assert _grade(tmp_path, source) == []
+
+
+def test_a_lambda_body_still_loses_it(tmp_path: pathlib.Path) -> None:
+    """The other half of the same split, so the fix above cannot quietly
+    widen into "a lambda is covered by whatever encloses it". The body is
+    deferred and genuinely escapes the handler."""
+    source = (
+        "def f(p):\n"
+        "    try:\n"
+        "        fn = lambda: p.read_text()\n"
+        "    except ValueError:\n"
+        "        fn = None\n"
+        "    return fn\n"
+    )
+    assert _at(_grade(tmp_path, source)) == [("decode-gap", 3)]
+
+
+def test_a_utf8_bom_does_not_fail_the_file_closed(tmp_path: pathlib.Path) -> None:
+    """CPython strips a leading BOM from source it runs; `ast.parse` on a
+    `str` does not. Reading in-scope files as plain utf-8 therefore exited 2
+    on a file python3 executes fine, naming a syntax error that does not
+    exist ("invalid non-printable character U+FEFF") -- a hard block a
+    contributor could only clear by changing editor. utf-8-sig is identical
+    for a file without a BOM, and shifts no line number, which the asserted
+    line proves.
+    """
+    assert _at(_grade(tmp_path, "\ufefftext = p.read_text()\n")) == [("decode-gap", 1)]
+
+
+# Boundary pins: each of these is behaviour this gate is documented as
+# getting wrong, recorded so it cannot change without a reader noticing.
+# Every one of them was a round-8 review finding that reproduced, and every
+# one was left alone because the fix is the name-resolution machinery this
+# branch reverted five times -- see the module docstring's two lists.
+
+
+def test_a_zero_argument_open_on_a_non_file_receiver_is_a_known_over_report(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Grading `<expr>.open()` is not optional -- `Path(p).open()` is a real
+    text read and defect C's own shape -- and separating it from `conn.open()`
+    needs the receiver. Over-report, waivable, visible."""
+    assert _rules(_grade(tmp_path, "def f(conn):\n    return conn.open()\n")) == ["decode-gap"]
+    assert _rules(_grade(tmp_path, "def f(w, u):\n    return w.open(u)\n")) == []
+
+
+def test_a_member_name_made_of_mode_characters_is_a_known_over_report(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`_looks_like_a_mode` narrows the ZipFile-style confusion it exists for
+    without closing it: a member name built only from `rwxab+t` still reads as
+    a mode. `"bat"` and `"tab"` contain a `b` and grade as binary, so the
+    residue is names like `"art"`, `"raw"`, `"war"`, `"rat"`."""
+    assert _rules(_grade(tmp_path, 'def f(z):\n    return z.open("art")\n')) == ["decode-gap"]
+    assert _rules(_grade(tmp_path, 'def f(z):\n    return z.open("bat")\n')) == []
+    assert _rules(_grade(tmp_path, 'def f(z):\n    return z.open("name")\n')) == []
+
+
+def test_from_json_import_loads_is_a_known_miss(tmp_path: pathlib.Path) -> None:
+    """Only the `json.loads(...)` attribute spelling is read as a parse, so
+    the import form is defect E behind a one-line import change. Recognising
+    it means resolving an imported name through aliases, shadowing and
+    rebinding -- the machinery this branch reverted. The attribute spelling is
+    the one all three historical defects used."""
+    attribute = "import json\n\n\ndef f(raw):\n    d = json.loads(raw)\n    return d.get('k')\n"
+    imported = "from json import loads\n\n\ndef f(raw):\n    d = loads(raw)\n    return d.get('k')\n"
+    assert _rules(_grade(tmp_path, attribute)) == ["json-shape-gap"]
+    assert _rules(_grade(tmp_path, imported)) == []
+
+
+def test_two_findings_of_one_rule_on_one_line_report_once(tmp_path: pathlib.Path) -> None:
+    """Findings dedupe by `(path, line, rule, message)`, and for two reads on
+    one physical line all four are identical -- printing the line twice with
+    the same text would not tell a contributor which read is meant. The stated
+    cost is that fixing one and never touching the line again leaves the other
+    unreported, and one waiver there covers both."""
+    assert _at(_grade(tmp_path, "def f(p, q):\n    return p.read_text() + q.read_text()\n")) == [
+        ("decode-gap", 2)
+    ]
+    assert _at(_grade(tmp_path, "def f(p, q):\n    a = p.read_text()\n    b = q.read_text()\n")) == [
+        ("decode-gap", 2),
+        ("decode-gap", 3),
+    ]
 
 
 # --- the real repository ------------------------------------------------
@@ -1520,6 +1731,34 @@ def test_the_workflow_passes_the_two_flags_the_gate_depends_on() -> None:
     )
     assert "--no-renames" in invocation, invocation
     assert "core.quotePath=false" in invocation, invocation
+
+
+def test_the_workflow_checks_out_the_head_sha_with_full_history() -> None:
+    """The third caller-side invariant, which had no drift test while the two
+    `git diff` flags above did -- the gap CLAUDE.md section 3 names, since an
+    invariant's drift gate ships with the invariant rather than after it.
+
+    `ref: <head sha>` is what makes the working tree the diff's post-image.
+    Dropping it silently mis-grades every file the base branch also touched:
+    under the default `refs/pull/N/merge` checkout the tree and the
+    diff-derived line numbers refer to different content, and a real gap in
+    such a file grades clean. There is no exit code and no message when that
+    happens, so nothing else in this suite would notice.
+
+    `fetch-depth: 0` is load-bearing *for* that pin, not decoration. A 40-hex
+    `ref` becomes `settings.commit` with `settings.ref` empty
+    (actions/checkout `input-helper.ts`), and only the `fetchDepth <= 0`
+    branch of `git-source-provider.ts` fetches
+    `+refs/heads/*:refs/remotes/origin/*`; the shallow branch would fetch the
+    bare commit alone, leaving `$BASE_SHA` absent from the object store and
+    the `git merge-base` step failing. The two settings are therefore one
+    invariant and are asserted together.
+    """
+    workflow = (REPO_ROOT / ".github/workflows/exception-handler-gap-gate.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "ref: ${{ github.event.pull_request.head.sha }}" in workflow, workflow
+    assert "fetch-depth: 0" in workflow, workflow
 
 
 def test_this_gate_grades_itself_clean() -> None:
