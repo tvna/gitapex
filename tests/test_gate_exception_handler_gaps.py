@@ -925,6 +925,256 @@ def test_the_earliest_isinstance_is_the_one_that_counts(tmp_path: pathlib.Path) 
     assert _grade(tmp_path, source) == []
 
 
+# --- handlers the gate must read, or it reports correct code ------------
+
+
+@pytest.mark.parametrize(
+    "clause",
+    [
+        "except (json.JSONDecodeError, AttributeError):",
+        "except AttributeError:",
+        "except Exception:",
+        "except:",
+    ],
+)
+def test_a_handler_catching_attributeerror_covers_a_json_access(
+    tmp_path: pathlib.Path, clause: str
+) -> None:
+    """The `.get()` rule was blind to handlers entirely while the read rule
+    honoured them, so a `.get()` wrapped in exactly the fix this gate's own
+    failure message prescribes was still reported. Verified at runtime for
+    every payload the message names."""
+    source = (
+        "def load(raw):\n"
+        "    try:\n"
+        "        data = json.loads(raw)\n"
+        "        return data.get('gates', [])\n"
+        f"    {clause}\n"
+        "        raise GateError('bad registry')\n"
+    )
+    assert _grade(tmp_path, source) == []
+
+
+def test_a_handler_that_does_not_catch_attributeerror_leaves_it_reported(
+    tmp_path: pathlib.Path,
+) -> None:
+    source = (
+        "def load(raw):\n"
+        "    try:\n"
+        "        data = json.loads(raw)\n"
+        "        return data.get('gates', [])\n"
+        "    except OSError:\n"
+        "        raise GateError('bad registry')\n"
+    )
+    assert _rules(_grade(tmp_path, source)) == ["json-shape-gap"]
+
+
+@pytest.mark.parametrize("errors", ["replace", "ignore", "surrogateescape"])
+def test_a_read_with_a_substituting_errors_policy_cannot_raise(
+    tmp_path: pathlib.Path, errors: str
+) -> None:
+    """`extract_diff_added_lines.py` documents this policy deliberately, and
+    eight files in the graded directories use it. There is no
+    UnicodeDecodeError to handle, so demanding a handler reported correct
+    code -- confirmed at runtime against a non-UTF-8 file."""
+    assert _grade(tmp_path, f'text = p.read_text(encoding="utf-8", errors="{errors}")\n') == []
+
+
+def test_an_explicit_strict_errors_policy_still_raises_and_is_reported(
+    tmp_path: pathlib.Path,
+) -> None:
+    assert _rules(_grade(tmp_path, 'text = p.read_text(encoding="utf-8", errors="strict")\n')) == [
+        "decode-gap"
+    ]
+
+
+def test_contextlib_suppress_is_read_as_a_handler(tmp_path: pathlib.Path) -> None:
+    """`suppress` is a handler written as a context manager. An earlier
+    revision filed this under "known misses" -- the wrong direction entirely,
+    since the gate was reporting it, not missing it."""
+    source = (
+        "import contextlib\n"
+        "def read(p):\n"
+        "    text = ''\n"
+        "    with contextlib.suppress(UnicodeDecodeError):\n"
+        "        text = p.read_text(encoding='utf-8')\n"
+        "    return text\n"
+    )
+    assert _grade(tmp_path, source) == []
+
+
+def test_a_suppress_of_a_different_error_does_not_cover_the_read(
+    tmp_path: pathlib.Path,
+) -> None:
+    source = (
+        "import contextlib\n"
+        "def read(p):\n"
+        "    text = ''\n"
+        "    with contextlib.suppress(OSError):\n"
+        "        text = p.read_text(encoding='utf-8')\n"
+        "    return text\n"
+    )
+    assert _rules(_grade(tmp_path, source)) == ["decode-gap"]
+
+
+def test_a_handler_named_by_a_module_level_tuple_constant_is_resolved(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`except _READ_ERRORS:` is mainstream. Reading the handler as literally
+    catching something called `_READ_ERRORS` reported correct code; a
+    module-level tuple of names is a constant table, not dataflow."""
+    source = (
+        "_READ_ERRORS = (OSError, ValueError)\n"
+        "def read(p):\n"
+        "    try:\n"
+        "        return p.read_text(encoding='utf-8')\n"
+        "    except _READ_ERRORS as error:\n"
+        "        raise GateError(error) from error\n"
+    )
+    assert _grade(tmp_path, source) == []
+
+
+def test_a_tuple_constant_that_does_not_cover_is_still_reported(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Resolution has to work in both directions, or it is just a bypass."""
+    source = (
+        "_READ_ERRORS = (OSError, KeyError)\n"
+        "def read(p):\n"
+        "    try:\n"
+        "        return p.read_text(encoding='utf-8')\n"
+        "    except _READ_ERRORS as error:\n"
+        "        raise GateError(error) from error\n"
+    )
+    assert _rules(_grade(tmp_path, source)) == ["decode-gap"]
+
+
+@pytest.mark.parametrize(
+    "constant",
+    [
+        "(OSError, exceptions.ValueError)",
+        '(OSError, "not-a-name")',
+    ],
+)
+def test_a_tuple_constant_this_gate_cannot_read_wholly_is_handled(
+    tmp_path: pathlib.Path, constant: str
+) -> None:
+    """An attribute member resolves by its final name; anything that is not a
+    name at all abandons the whole constant rather than resolving it
+    partially, since a partial expansion could invent coverage that the real
+    tuple does not have."""
+    source = (
+        f"_READ_ERRORS = {constant}\n"
+        "def read(p):\n"
+        "    try:\n"
+        "        return p.read_text(encoding='utf-8')\n"
+        "    except _READ_ERRORS as error:\n"
+        "        raise GateError(error) from error\n"
+    )
+    expected = [] if "exceptions.ValueError" in constant else ["decode-gap"]
+    assert _rules(_grade(tmp_path, source)) == expected
+
+
+def test_a_with_block_that_is_not_suppress_protects_nothing(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A context manager that is a call but is not `suppress` -- the ordinary
+    `with chdir(root):` -- must not be read as catching anything."""
+    source = (
+        "def read(p):\n"
+        "    with chdir(root):\n"
+        "        return p.read_text(encoding='utf-8')\n"
+    )
+    assert _rules(_grade(tmp_path, source)) == ["decode-gap"]
+
+
+def test_a_with_item_that_is_not_a_call_at_all_protects_nothing(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`with lock:` binds a name, not a call, so the `suppress` scan has to
+    step over it rather than assume every context manager is one."""
+    source = "def read(p):\n    with lock, other:\n        return p.read_text(encoding='utf-8')\n"
+    assert _rules(_grade(tmp_path, source)) == ["decode-gap"]
+
+
+def test_a_suppress_naming_an_attribute_exception_is_read(tmp_path: pathlib.Path) -> None:
+    source = (
+        "import contextlib\n"
+        "def read(p):\n"
+        "    with contextlib.suppress(builtins.ValueError):\n"
+        "        return p.read_text(encoding='utf-8')\n"
+    )
+    assert _grade(tmp_path, source) == []
+
+
+def test_an_unresolvable_handler_name_does_not_grant_coverage(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Assuming an unrecognised handler covers was tried and reverted the same
+    hour: it silenced issue #682's own defect F, whose outer handler is a
+    project exception class (`except ScopeError:`) wrapping an inner
+    `except OSError:`. Only a resolvable tuple constant is expanded."""
+    source = (
+        "def read(p):\n"
+        "    try:\n"
+        "        return p.read_text(encoding='utf-8')\n"
+        "    except ScopeError as error:\n"
+        "        raise\n"
+    )
+    assert _rules(_grade(tmp_path, source)) == ["decode-gap"]
+
+
+@pytest.mark.parametrize(
+    "spelling",
+    [
+        "return json.loads(raw).get('k')",
+        "data = json.loads(raw)\n    return data.get('k')",
+        "return (data := json.loads(raw)).get('k')",
+    ],
+)
+def test_every_spelling_of_one_program_gets_one_verdict(
+    tmp_path: pathlib.Path, spelling: str
+) -> None:
+    """The walrus-receiver form was the only one of the three that graded
+    clean, which falsified the gate's own claim to be spelling-independent."""
+    assert _rules(_grade(tmp_path, f"def f(raw):\n    {spelling}\n")) == ["json-shape-gap"]
+
+
+# --- the named misses, pinned so none can vanish unnoticed --------------
+
+
+def test_a_positive_branch_isinstance_is_a_stated_miss(tmp_path: pathlib.Path) -> None:
+    """An `isinstance` anywhere in the scope before the access clears it, not
+    only one in a branch that actually guards it. Deciding that would need
+    branch analysis, which this gate deliberately does not do."""
+    source = (
+        "def load(raw):\n"
+        "    data = json.loads(raw)\n"
+        "    if isinstance(data, dict):\n"
+        "        pass\n"
+        "    return data.get('k')\n"
+    )
+    assert _grade(tmp_path, source) == []
+
+
+def test_a_guard_deleted_with_nothing_added_is_a_stated_miss(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A removal-only diff has no added line for any diff-scoped rule to key
+    on, so the file is never even opened. Inherent to the scoping choice."""
+    source = "def load(raw):\n    data = json.loads(raw)\n    return data.get('k')\n"
+    _write(tmp_path, ".github/scripts/gate_x.py", source)
+    diff = (
+        "diff --git a/.github/scripts/gate_x.py b/.github/scripts/gate_x.py\n"
+        "--- a/.github/scripts/gate_x.py\n"
+        "+++ b/.github/scripts/gate_x.py\n"
+        "@@ -3,2 +2,0 @@\n"
+        "-    if not isinstance(data, dict):\n"
+        "-        raise ValueError('x')\n"
+    )
+    assert gate.find_violations(diff, tmp_path) == ([], [], 0)
+
+
 # --- scope --------------------------------------------------------------
 
 

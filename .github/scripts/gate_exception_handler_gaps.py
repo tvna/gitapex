@@ -32,20 +32,26 @@ defect lines. This gate is the answer measured for that class.
 Two rules, both computed from the AST, both stdlib:
 
 **Rule `decode-gap`.** A call that decodes bytes to text -- `read_text(...)`,
-or `open(...)` in a text read mode -- whose enclosing `try` statements
-handle no exception type that a `UnicodeDecodeError` would satisfy.
+or `open(...)` in a text read mode, and not one carrying a substituting
+`errors=` policy, which cannot raise at all -- whose enclosing handlers
+name no exception type that a `UnicodeDecodeError` would satisfy.
 `UnicodeDecodeError`, `UnicodeError`, `ValueError`, `Exception`,
 `BaseException` and a bare `except:` all count as covered, since each is
-that exception or one of its ancestors.
+that exception or one of its ancestors. A `contextlib.suppress(...)` block
+is read as the handler it is, and a handler named by a module-level tuple
+constant (`except _READ_ERRORS:`) is expanded through it.
 
 **Rule `json-shape-gap`.** A `.get(...)` on a value that came from
 `json.loads(...)` / `json.load(...)` in the same scope, with no
 `isinstance()` against a mapping type (`dict`, `Mapping`, `MutableMapping`)
 before it, where every member of a tuple of types has to be one. `[]`,
 `"x"`, `1`, `true` and `null` are all valid JSON, so `json.JSONDecodeError`
-never fires for them and the `.get()` raises `AttributeError` instead. A
-name assigned both a parse and something else anywhere in the scope is
-dropped rather than tainted -- order-blind on purpose, see below.
+never fires for them and the `.get()` raises `AttributeError` instead. The
+same enclosing-handler analysis applies: a `.get()` inside a `try` naming
+`AttributeError` or an ancestor is covered, which is exactly the fix this
+gate's own failure message prescribes and which it used to reject. A name
+assigned both a parse and something else anywhere in the scope is dropped
+rather than tainted -- order-blind on purpose, see below.
 
 **Scope is the diff, not the repository, and that is the load-bearing
 design decision.** Measured against merged `main` (afd18eb) these two rules
@@ -121,12 +127,20 @@ contributors:
   `[x for x in y]`.
 * An `isinstance()` is read as a guard wherever it appears in the scope
   before the access, not only in a branch that actually protects it, so
-  `if isinstance(data, dict): pass` clears it.
-* A `contextlib.suppress(UnicodeDecodeError)` around a read is not read as
-  a handler; that direction would be a false positive, and the inline
-  waiver covers it.
+  `if isinstance(data, dict): pass` clears it. Deciding otherwise needs
+  branch analysis, which is the class of machinery the bullets above record
+  removing.
+* A handler naming something this gate cannot resolve -- a project
+  exception class -- is treated as not covering. Assuming the opposite was
+  tried and reverted within the hour: it silenced issue #682's own defect
+  F, whose outer `except ScopeError:` wraps the inner `except OSError:`.
+  The narrow, resolvable case (a module-level tuple of names) is expanded
+  instead.
 * A guard deleted with nothing added in its place leaves no added line for
   any diff-scoped rule to key on.
+
+Every miss above is pinned by a test that asserts the miss, so none can be
+reintroduced by accident or removed without a reader noticing.
 
 An intentional read that a *caller* guards can disclose itself inline with
 a trailing `# exception-handler-gap: WAIVED: <reason>` comment on the line
@@ -200,6 +214,15 @@ _DECODE_COVERING = frozenset(
     {"UnicodeDecodeError", "UnicodeError", "ValueError", "Exception", "BaseException"}
 )
 
+# The `.get()` rule's own covering set. AttributeError is what an unvalidated
+# JSON payload actually raises, so a handler naming it -- or any ancestor --
+# makes that access safe. Applying only the decode set here reported a
+# `.get()` wrapped in `except (json.JSONDecodeError, AttributeError)`, which
+# is the exact remediation this gate's own failure message prescribes.
+_JSON_COVERING = frozenset({"AttributeError", "Exception", "BaseException"})
+
+
+
 _JSON_PARSERS = frozenset({"loads", "load"})
 
 # The types an `isinstance()` has to name for a JSON value to count as checked.
@@ -243,6 +266,11 @@ def in_scope(path: str) -> bool:
         return False
     name = path.rsplit("/", 1)[-1]
     return not (name.startswith("test_") or name == "conftest.py")
+
+
+def _covers(handled: set[str], covering: frozenset[str]) -> bool:
+    """True iff `handled` catches the failure `covering` describes."""
+    return bool(handled & covering)
 
 
 def _diff_target_path(raw: str) -> str | None:
@@ -324,12 +352,45 @@ def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
     return added
 
 
-def _handler_names(handler: ast.ExceptHandler) -> set[str]:
+def _exception_aliases(tree: ast.Module) -> dict[str, set[str]]:
+    """Return module-level ``NAME = (Exc, Exc)`` constants, expanded.
+
+    `except _READ_ERRORS:` is a mainstream idiom, and reading the handler as
+    literally catching something called `_READ_ERRORS` reported correct code.
+    A module-level tuple of plain names is a constant table, not dataflow, so
+    resolving it costs nothing and needs no ordering. A handler naming
+    anything else unresolvable -- a real exception class -- stays unresolved
+    and therefore uncovering, which is what keeps issue #682's own defect F
+    (an outer `except ScopeError` around an inner `except OSError`) reported.
+    """
+    aliases: dict[str, set[str]] = {}
+    for node in tree.body:
+        if not (isinstance(node, ast.Assign) and isinstance(node.value, ast.Tuple)):
+            continue
+        members: set[str] = set()
+        for element in node.value.elts:
+            if isinstance(element, ast.Name):
+                members.add(element.id)
+            elif isinstance(element, ast.Attribute):
+                members.add(element.attr)
+            else:
+                members = set()
+                break
+        if not members:
+            continue
+        for target in node.targets:
+            if isinstance(target, ast.Name):
+                aliases[target.id] = members
+    return aliases
+
+
+def _handler_names(handler: ast.ExceptHandler, aliases: dict[str, set[str]]) -> set[str]:
     """Return the exception names one `except` clause catches.
 
     A bare `except:` catches everything, so it reports `BaseException`. An
     attribute handler (`json.JSONDecodeError`) reports its final attribute
-    name, which is what `_DECODE_COVERING` compares against.
+    name, which is what the covering sets compare against. A name bound to a
+    module-level tuple constant is expanded through `aliases`.
     """
     if handler.type is None:
         return {"BaseException"}
@@ -337,7 +398,7 @@ def _handler_names(handler: ast.ExceptHandler) -> set[str]:
     names: set[str] = set()
     for part in parts:
         if isinstance(part, ast.Name):
-            names.add(part.id)
+            names |= aliases.get(part.id, {part.id})
         elif isinstance(part, ast.Attribute):
             names.add(part.attr)
     return names
@@ -354,72 +415,113 @@ def _handler_header_lines(handler: ast.ExceptHandler) -> set[int]:
     return set(range(handler.lineno, (end if end is not None else handler.lineno) + 1))
 
 
-def _decode_coverage(tree: ast.Module) -> tuple[set[int], dict[int, set[int]]]:
-    """Return ``(ids of covered Calls, {id(Call): enclosing handler lines})``.
+def _suppressed_names(node: ast.With | ast.AsyncWith) -> set[str]:
+    """Return the exception names a `with contextlib.suppress(...)` silences.
 
-    Only a `try` *body* protects. A read inside an `except`, `else` or
-    `finally` clause is not protected by that same statement's own handlers,
-    which is exactly where a "read the file again to report a better error"
-    fallback tends to live.
+    `suppress` is a handler written as a context manager. Not reading it made
+    the gate demand a `try` around a read that provably cannot raise past the
+    `with` -- a false positive, and one an earlier revision had mis-filed as a
+    known miss rather than measured.
+    """
+    names: set[str] = set()
+    for item in node.items:
+        call = item.context_expr
+        if not isinstance(call, ast.Call):
+            continue
+        label = (
+            call.func.id
+            if isinstance(call.func, ast.Name)
+            else call.func.attr
+            if isinstance(call.func, ast.Attribute)
+            else None
+        )
+        if label != "suppress":
+            continue
+        for argument in call.args:
+            if isinstance(argument, ast.Name):
+                names.add(argument.id)
+            elif isinstance(argument, ast.Attribute):
+                names.add(argument.attr)
+    return names
+
+
+def _handler_coverage(tree: ast.Module) -> tuple[dict[int, set[str]], dict[int, set[int]]]:
+    """Return ``({id(Call): exception names guarding it}, {id(Call): the lines
+    of the `except` clauses guarding it})``.
+
+    Only a `try` *body* protects, plus a `contextlib.suppress` block. A read
+    inside an `except`, `else` or `finally` clause is not protected by that
+    same statement's own handlers, which is exactly where a "read the file
+    again to report a better error" fallback tends to live.
+
+    Both rules are graded from the one walk. Computing it for decoded reads
+    alone left `.get()` blind to handlers entirely, so a `.get()` wrapped in
+    `except AttributeError` -- the fix this gate's own message prescribes --
+    was still reported.
 
     The second return value is what makes a *narrowed handler* this diff's
     finding: the read line is untouched in that edit, so anchoring on it alone
     would let the defect through.
     """
-    covered: set[int] = set()
+    guarded: dict[int, set[str]] = {}
     handler_lines: dict[int, set[int]] = {}
+    aliases = _exception_aliases(tree)
 
-    def walk(node: ast.AST, protected: bool, enclosing: frozenset[int]) -> None:
+    def walk(node: ast.AST, handled: frozenset[str], enclosing: frozenset[int]) -> None:
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
             # A function *defined* inside a try body does not run inside it, so
             # its body loses the protection -- but its decorators and argument
             # defaults are evaluated right there and keep it.
             for decorator in node.decorator_list:
-                walk(decorator, protected, enclosing)
+                walk(decorator, handled, enclosing)
             for default in [*node.args.defaults, *(d for d in node.args.kw_defaults if d)]:
-                walk(default, protected, enclosing)
+                walk(default, handled, enclosing)
             for child in node.body:
-                walk(child, False, frozenset())
+                walk(child, frozenset(), frozenset())
             return
         if isinstance(node, ast.Lambda):
             for descendant in ast.iter_child_nodes(node):
-                walk(descendant, False, frozenset())
+                walk(descendant, frozenset(), frozenset())
             return
         if isinstance(node, ast.Try | ast.TryStar):
-            handled: set[str] = set()
+            names: set[str] = set()
             lines: set[int] = set()
             for handler in node.handlers:
-                handled |= _handler_names(handler)
+                names |= _handler_names(handler, aliases)
                 lines |= _handler_header_lines(handler)
-            body_protected = protected or bool(handled & _DECODE_COVERING)
-            body_enclosing = enclosing | lines
             for child in node.body:
-                walk(child, body_protected, frozenset(body_enclosing))
+                walk(child, frozenset(handled | names), frozenset(enclosing | lines))
             for handler in node.handlers:
                 for child in handler.body:
-                    walk(child, protected, enclosing)
+                    walk(child, handled, enclosing)
             for child in [*node.orelse, *node.finalbody]:
-                walk(child, protected, enclosing)
+                walk(child, handled, enclosing)
+            return
+        if isinstance(node, ast.With | ast.AsyncWith):
+            suppressed = _suppressed_names(node)
+            for item in node.items:
+                walk(item.context_expr, handled, enclosing)
+            for child in node.body:
+                walk(child, frozenset(handled | suppressed), enclosing)
             return
         if isinstance(node, ast.Call):
+            guarded[id(node)] = set(handled)
             handler_lines[id(node)] = set(enclosing)
-            if protected:
-                covered.add(id(node))
         for descendant in ast.iter_child_nodes(node):
-            walk(descendant, protected, enclosing)
+            walk(descendant, handled, enclosing)
 
     for statement in tree.body:
-        walk(statement, False, frozenset())
-    return covered, handler_lines
+        walk(statement, frozenset(), frozenset())
+    return guarded, handler_lines
 
 
 def _looks_like_a_mode(node: ast.expr) -> bool:
     """True for a string constant made only of file-mode characters.
 
     Needed because the attribute form's first positional argument is a mode
-    for `Path.open` but a member name for `ZipFile.open` -- and `"member.txt"`
-    contains an `r`, so a plain "is it a string" test would read it as a text
-    read and report a binary one.
+    for `Path.open` but a member name for `ZipFile.open` -- and a member name
+    can easily contain an `r`, so a plain "is it a string" test would read it
+    as a text read and report a binary one.
     """
     return (
         isinstance(node, ast.Constant)
@@ -464,6 +566,17 @@ def _text_read_kind(node: ast.Call) -> str | None:
     here as well would report `ZipFile(z).open(name, "r")`, a binary read.
     """
     func = node.func
+    for keyword in node.keywords:
+        if keyword.arg != "errors":
+            continue
+        # `errors="replace"` / `"ignore"` / `"surrogateescape"` substitute
+        # rather than raise, so there is no UnicodeDecodeError to handle. This
+        # repository already uses that policy deliberately (see
+        # extract_diff_added_lines.py's own docstring), and reporting it made
+        # the gate demand a handler for an exception the call cannot raise.
+        if isinstance(keyword.value, ast.Constant) and keyword.value.value != "strict":
+            return None
+
     if isinstance(func, ast.Attribute) and func.attr == "read_text":
         return "read_text"
 
@@ -526,11 +639,9 @@ def _scope_body(scope: _Scope) -> Iterator[ast.AST]:
     reads an *enclosing function's* JSON value is not graded. Sharing an
     arbitrary outer function's taint would also share every other function's,
     so the same variable name validated in one would silence it in all -- a
-    fail-open in a gate whose whole subject is fail-open. Module scope is the
-    exception and is inherited (see `_json_shape_gaps`): a module-level name
-    really is visible in every function, and `CONFIG = json.loads(...)` read
-    back through `CONFIG.get(...)` inside a function is the single most common
-    shape of this defect.
+    fail-open in a gate whose whole subject is fail-open. Module scope is not
+    an exception to that: inheriting it was implemented and reverted, for the
+    reasons `_json_shape_gaps` records.
     """
     for child in ast.iter_child_nodes(scope):
         if isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef):
@@ -621,8 +732,7 @@ class _JsonGap(NamedTuple):
     this diff's finding.
 
     `trigger_from` is the line a guard would have to sit at or after to
-    protect this access: the parse itself when both are in one scope, or the
-    enclosing function's own `def` line when the value came from module scope.
+    protect this access: the parse itself, which is always in the same scope.
     Anything edited between there and the access can create or destroy this
     finding, so anything edited there re-grades it -- without which, replacing
     `if not isinstance(data, dict)` with a different check leaves the `.get()`
@@ -687,6 +797,12 @@ def _json_shape_gaps(tree: ast.Module) -> Iterator[_JsonGap]:
             if node.func.attr != "get":
                 continue
             receiver = node.func.value
+            if isinstance(receiver, ast.NamedExpr):
+                # `(data := json.loads(raw)).get(k)` -- the walrus is the
+                # assignment and the receiver at once. Reading only the Name
+                # and the bare-parse forms made this third spelling of one
+                # program the only one that graded clean.
+                receiver = receiver.value if _is_json_parse(receiver.value) else receiver.target
             if isinstance(receiver, ast.Name) and receiver.id in tainted:
                 checked_at = validated.get(receiver.id)
                 if checked_at is not None and checked_at <= node.lineno:
@@ -749,7 +865,7 @@ def findings_for_source(path: str, source: str, added: set[int]) -> tuple[list[F
         raise ScanError(f"{path}: cannot be parsed as Python: {error}") from error
 
     waived_lines = _waived_lines(source)
-    covered, handler_lines = _decode_coverage(tree)
+    guarded, handler_lines = _handler_coverage(tree)
     sorted_added = sorted(added)
 
     candidates: list[_Candidate] = []
@@ -757,7 +873,7 @@ def findings_for_source(path: str, source: str, added: set[int]) -> tuple[list[F
         if not isinstance(node, ast.Call):
             continue
         kind = _text_read_kind(node)
-        if kind is None or id(node) in covered:
+        if kind is None or _covers(guarded.get(id(node), set()), _DECODE_COVERING):
             continue
         expression = _span(node)
         anchor = node.func.end_lineno if isinstance(node.func, ast.Attribute) else None
@@ -775,6 +891,8 @@ def findings_for_source(path: str, source: str, added: set[int]) -> tuple[list[F
             )
         )
     for gap in _json_shape_gaps(tree):
+        if _covers(guarded.get(id(gap.call), set()), _JSON_COVERING):
+            continue
         expression = _span(gap.call)
         end = gap.call.end_lineno if gap.call.end_lineno is not None else gap.call.lineno
         anchor = gap.call.func.end_lineno if isinstance(gap.call.func, ast.Attribute) else None
