@@ -4,11 +4,11 @@ Flags the mechanical, pattern-matchable part of check 1 (a bare model ID,
 a session URL, a known internal-tool fingerprint) so it is not re-reasoned
 in prose each run. Whether a flagged hit is actually undisclosed (vs. an
 agreed, ASCII-clean disclosure trailer) remains a judgment call for the
-model -- this script only surfaces candidates, it does not decide. For
-gitapex's own PR-body trailer specifically, check 1 item 5 in
-../SKILL.md already records that judgment call (ratified 2026-08-03,
-https://github.com/tvna/gitapex/issues/687) -- read it before
-re-deriving the answer from scratch. Standard library only.
+model -- this script only surfaces candidates, it does not decide. See
+../SKILL.md check 1 item 5: the calling repository's own docs may
+already record a ratified answer for a specific hit shape -- check
+there before re-deriving the judgment call from scratch. Standard
+library only.
 """
 
 from __future__ import annotations
