@@ -49,7 +49,7 @@ def extract_description(text):
     """Return the frontmatter `description` field's parsed value, or None
     if there is no parseable `---`-delimited frontmatter or no
     `description:` key inside it."""
-    text = (text or "").lstrip("﻿")
+    text = (text or "").lstrip("\ufeff")
     if not text.startswith("---"):
         return None
     lines = text.splitlines()

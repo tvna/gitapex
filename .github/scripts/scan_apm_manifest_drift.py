@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import pathlib
 import sys
+from typing import Any
 
 import yaml
 
@@ -33,15 +34,32 @@ MIRRORED_FIELDS = ("name", "version")
 
 
 class ManifestReadError(Exception):
-    """Either apm.yml or plugin.json could not be read as UTF-8 text --
-    exit 1, naming the offending file, never a traceback."""
+    """Either apm.yml or plugin.json could not be read as UTF-8 text, or
+    could not be parsed as YAML/JSON -- exit 1, naming the offending file,
+    never a traceback."""
 
 
 def _read_text(path: pathlib.Path) -> str:
     try:
         return path.read_text(encoding="utf-8")
+    except OSError as error:
+        raise ManifestReadError(f"{path}: cannot be read: {error}") from error
     except UnicodeDecodeError as error:
         raise ManifestReadError(f"{path}: is not valid UTF-8: {error}") from error
+
+
+def _load_yaml(path: pathlib.Path) -> Any:
+    try:
+        return yaml.safe_load(_read_text(path))
+    except yaml.YAMLError as error:
+        raise ManifestReadError(f"{path}: is not valid YAML: {error}") from error
+
+
+def _load_json(path: pathlib.Path) -> Any:
+    try:
+        return json.loads(_read_text(path))
+    except json.JSONDecodeError as error:
+        raise ManifestReadError(f"{path}: is not valid JSON: {error}") from error
 
 
 def find_drift(
@@ -51,12 +69,29 @@ def find_drift(
     """Return (field, plugin_json_value, apm_yml_value) for each mirrored field
     whose two copies disagree. Empty list means the manifests are in lockstep.
 
-    Fails loudly (raises) if either manifest is missing, unreadable as UTF-8
-    (ManifestReadError), or a mirrored field is absent (KeyError) -- a silent
-    skip would let the gate pass on a broken manifest.
+    Fails loudly (raises) if either manifest is missing, unreadable as UTF-8,
+    not valid YAML/JSON syntax, or syntactically valid but not a top-level
+    mapping/object (all ManifestReadError), or a mirrored field is absent
+    (KeyError) -- a silent skip would let the gate pass on a broken
+    manifest.
     """
-    apm_data = yaml.safe_load(_read_text(apm_manifest)) or {}
-    plugin_data = json.loads(_read_text(plugin_manifest))
+    apm_data = _load_yaml(apm_manifest)
+    plugin_data = _load_json(plugin_manifest)
+
+    # Valid YAML/JSON syntax does not mean either document is shaped as a
+    # mapping/object -- a top-level list, scalar, or empty document (e.g.
+    # apm.yml containing just "- name\n- version\n", "42", or nothing at
+    # all, which yaml.safe_load parses as None) parses cleanly but crashed
+    # the `field not in ...`/`...[field]` lookups below with an uncaught
+    # TypeError.
+    if not isinstance(apm_data, dict):
+        raise ManifestReadError(
+            f"{apm_manifest}: must be a YAML mapping, got {type(apm_data).__name__}"
+        )
+    if not isinstance(plugin_data, dict):
+        raise ManifestReadError(
+            f"{plugin_manifest}: must be a JSON object, got {type(plugin_data).__name__}"
+        )
 
     findings: list[tuple[str, str, str]] = []
     for field in MIRRORED_FIELDS:

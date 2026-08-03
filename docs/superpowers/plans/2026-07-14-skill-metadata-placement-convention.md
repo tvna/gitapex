@@ -128,7 +128,7 @@ Add a helper next to `_parse_frontmatter`:
 def _body_after_frontmatter(text: str) -> list[str]:
     """Lines after the closing frontmatter '---'. If there is no
     frontmatter, the whole text is the body."""
-    text = text.lstrip("﻿")  # strip a leading UTF-8 BOM, as _parse_frontmatter does
+    text = text.lstrip("\ufeff")  # strip a leading UTF-8 BOM, as _parse_frontmatter does
     lines = text.splitlines()
     if not text.startswith("---"):
         return lines

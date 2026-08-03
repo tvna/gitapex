@@ -354,6 +354,20 @@ def test_non_dict_policy_sources_entry_does_not_crash(tmp_path):
     assert not any(f.startswith("duplicate-id:") for f in findings)
 
 
+@pytest.mark.parametrize("bad_id", [["a", "b"], {"x": 1}, 42, True, None])
+def test_non_string_id_does_not_crash(tmp_path, bad_id):
+    # Issue #699: a gates[] entry that IS a dict but whose "id" value isn't
+    # a string (list/dict are unhashable, but int/bool/null are also
+    # schema-invalid) used to raise TypeError/silently miscount at
+    # seen[entry_id] = ... -- one field narrower than the non-dict-entry
+    # case above.
+    instance_path = tmp_path / "ssot.json"
+    instance_path.write_text(json.dumps({"gates": [{"id": bad_id}], "policy_sources": []}))
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
+    assert any(f.startswith("schema:") for f in findings)
+    assert not any(f.startswith("duplicate-id:") for f in findings)
+
+
 def test_unreadable_registry_path_raises_registry_read_error(tmp_path):
     # Covers _load_json's OSError branch (e.g. a path that simply doesn't
     # exist) distinctly from the UnicodeDecodeError/JSONDecodeError branches

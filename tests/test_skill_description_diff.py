@@ -62,7 +62,7 @@ def test_unterminated_frontmatter_returns_none():
 
 
 def test_bom_prefix_does_not_break_frontmatter_detection():
-    text = "﻿" + _frontmatter("description: plain")
+    text = "\ufeff" + _frontmatter("description: plain")
     assert sdd.extract_description(text) == "plain"
 
 
