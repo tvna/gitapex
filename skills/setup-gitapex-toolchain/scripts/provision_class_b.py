@@ -291,29 +291,74 @@ def _is_zip(asset_name: str) -> bool:
 def extract_binary(data: bytes, asset_name: str, bin_in_archive: str, dest: Path) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     if _is_zip(asset_name):
-        with zipfile.ZipFile(io.BytesIO(data)) as zf:
-            try:
-                content = zf.read(bin_in_archive)
-            except KeyError as error:
-                raise ExtractionError(f"{asset_name}: member {bin_in_archive!r} not found in zip") from error
+        try:
+            with zipfile.ZipFile(io.BytesIO(data)) as zf:
+                try:
+                    content = zf.read(bin_in_archive)
+                except KeyError as error:
+                    raise ExtractionError(f"{asset_name}: member {bin_in_archive!r} not found in zip") from error
+        except zipfile.BadZipFile as error:
+            raise ExtractionError(f"{asset_name}: not a valid zip archive: {error}") from error
     else:
-        with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tf:
-            # tf.extractfile raises KeyError when bin_in_archive names no
-            # member at all (verified against real tarfile semantics --
-            # this differs from the None-return path below); it returns
-            # None instead only when the name DOES exist but isn't a
-            # regular file/link (a directory, device, etc.). Both are
-            # "the expected binary isn't there" from this function's
-            # point of view, so both become ExtractionError.
-            try:
-                member = tf.extractfile(bin_in_archive)
-            except KeyError as error:
-                raise ExtractionError(f"{asset_name}: member {bin_in_archive!r} not found in tar.gz") from error
-            if member is None:
-                raise ExtractionError(f"{asset_name}: member {bin_in_archive!r} not found in tar.gz")
-            content = member.read()
+        try:
+            with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tf:
+                # tf.extractfile raises KeyError when bin_in_archive names no
+                # member at all (verified against real tarfile semantics --
+                # this differs from the None-return path below); it returns
+                # None instead only when the name DOES exist but isn't a
+                # regular file/link (a directory, device, etc.). Both are
+                # "the expected binary isn't there" from this function's
+                # point of view, so both become ExtractionError.
+                try:
+                    member = tf.extractfile(bin_in_archive)
+                except KeyError as error:
+                    raise ExtractionError(f"{asset_name}: member {bin_in_archive!r} not found in tar.gz") from error
+                if member is None:
+                    raise ExtractionError(f"{asset_name}: member {bin_in_archive!r} not found in tar.gz")
+                content = member.read()
+        except tarfile.TarError as error:
+            raise ExtractionError(f"{asset_name}: not a valid tar.gz archive: {error}") from error
     dest.write_bytes(content)
     dest.chmod(dest.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
+
+def _validate_top_level_dir(names: list[str], asset_name: str, libexec_dir: Path) -> str:
+    """Return the single top-level path segment shared by every member name
+    in a wrapperDir archive, after validating that the segment itself is
+    safe to use as a literal path component under libexec_dir -- not just
+    that exactly one such segment exists.
+
+    Cardinality alone is not a sufficient guard: a hostile archive where
+    every member is named e.g. "../../tmp/pwned" makes
+    name.split("/")[0] == ".." for *every* member, so {".."} has
+    cardinality 1 and passes a cardinality-only check. Using ".." as the
+    top-level dir name is then structurally dangerous downstream --
+    `libexec_dir / ".."` resolves to libexec_dir's own PARENT directory,
+    so a caller that later does `(libexec_dir / top_dir_name).iterdir()`
+    and relocates each child into libexec_dir would enumerate and move
+    that PARENT's contents (sibling directories -- e.g. another
+    already-installed tool) into libexec_dir, and crash with a raw OSError
+    once it reaches libexec_dir itself (renaming a directory into its own
+    subdirectory). Reproduced empirically against a real hostile zip
+    archive before this check existed; see the security-review fix report
+    for the transcript.
+
+    Must be called BEFORE the caller's own extractall -- rejecting a
+    hostile archive here means no file is ever written for it, not just
+    that the later rename step is skipped.
+    """
+    top_level = {name.split("/")[0] for name in names if name.strip("/")}
+    if len(top_level) != 1:
+        raise ExtractionError(f"{asset_name}: expected exactly one top-level dir, found {sorted(top_level)}")
+    (top_dir_name,) = top_level
+    if not top_dir_name or top_dir_name in (".", "..") or "/" in top_dir_name or "\\" in top_dir_name:
+        raise ExtractionError(f"{asset_name}: unsafe top-level dir name {top_dir_name!r}")
+    resolved_child = (libexec_dir / top_dir_name).resolve()
+    if resolved_child.parent != libexec_dir.resolve():
+        raise ExtractionError(
+            f"{asset_name}: top-level dir {top_dir_name!r} does not resolve to a direct child of {libexec_dir}"
+        )
+    return top_dir_name
 
 
 def extract_wrapper_dir(data: bytes, asset_name: str, bin_in_archive: str, libexec_dir: Path, bin_shim: Path) -> None:
@@ -324,12 +369,20 @@ def extract_wrapper_dir(data: bytes, asset_name: str, bin_in_archive: str, libex
     produces (cp -r the unpacked tree, then wrap the real binary).
 
     Path-traversal safety: extractall() is never reached against
-    unvalidated archive content. Two bounds apply, verified directly
+    unvalidated archive content, and the top-level segment later used to
+    locate the extracted tree for flattening is never used structurally
+    without first being validated as a safe literal path component (see
+    _validate_top_level_dir). Three bounds apply, verified directly
     against the installed Python 3.12 stdlib (not assumed):
 
-    1. Both branches first collect every member name and require exactly
-       one shared top-level path segment across all of them (the
-       wrapperDir shape). This runs before either branch's extractall.
+    1. Both branches first collect every member name, require exactly one
+       shared top-level path segment across all of them (the wrapperDir
+       shape), AND validate that segment itself is non-empty, not "." or
+       "..", contains no path separator, and resolves to an actual direct
+       child of libexec_dir. Cardinality alone is not sufficient -- see
+       _validate_top_level_dir's docstring for why. This full validation
+       runs before either branch's extractall, so a hostile archive is
+       rejected before any file is written.
     2. The tar branch additionally passes filter="data" (PEP 706, stdlib
        since 3.12 -- this repo's pyproject.toml requires-python is
        ">=3.12"). Reading tarfile's own data_filter/_get_filtered_attrs
@@ -339,38 +392,46 @@ def extract_wrapper_dir(data: bytes, asset_name: str, bin_in_archive: str, libex
        special-file members outright, and strips setuid/setgid/sticky
        bits from what's left -- so #1 and #2 together bound the tar
        branch even against a maliciously crafted archive, not only a
-       well-formed one. zipfile.ZipFile.extractall has no filter=
-       parameter to match (confirmed via inspect.signature against this
-       same stdlib), so #1 is the only *explicit* bound this function
-       adds on the zip branch -- acceptable here because zipfile's own
-       extraction path already strips ".."/"."/drive-letter/absolute-path
-       components before joining to the destination (see
-       zipfile.ZipFile._extract_member), and because every call site in
-       this module only ever passes flake.nix's own pinned, SHA256-hash-
-       verified Class B release asset bytes (see verify_and_download),
+       well-formed one.
+    3. zipfile.ZipFile.extractall has no filter= parameter to match
+       (confirmed via inspect.signature against this same stdlib), so #1
+       is the only *explicit* bound this function adds on the zip branch.
+       That is acceptable for the paths extractall itself writes because
+       zipfile's own extraction path already strips ".."/"."/drive-letter/
+       absolute-path components before joining to the destination (see
+       zipfile.ZipFile._extract_member) -- but #1's own validation is
+       still required, not optional, because the flatten step below uses
+       the raw top-level segment directly (nothing zipfile's extraction
+       already sanitized covers that value), and because every call site
+       in this module only ever passes flake.nix's own pinned, SHA256-
+       hash-verified Class B release asset bytes (see verify_and_download),
        never attacker-controlled input.
+
+    Archive-open/extraction failures -- a corrupted or truncated archive,
+    or the tar branch's own filter="data" rejecting a malicious member --
+    are caught and re-raised as ExtractionError; no raw tarfile.TarError
+    or zipfile.BadZipFile escapes this function.
     """
     libexec_dir.mkdir(parents=True, exist_ok=True)
     if _is_zip(asset_name):
-        with zipfile.ZipFile(io.BytesIO(data)) as zf:
-            names = zf.namelist()
-            top_level = {name.split("/")[0] for name in names if name.strip("/")}
-            if len(top_level) != 1:
-                raise ExtractionError(f"{asset_name}: expected exactly one top-level dir, found {sorted(top_level)}")
-            zf.extractall(libexec_dir)  # noqa: S202 -- ruff's S202 fires on any `.extractall()` call by method name (confirmed: it flags this zip call too, not just tarfile's), and zipfile has no filter= to satisfy it more directly; bounded instead by the top-level-dir check just above plus this function's docstring
+        try:
+            with zipfile.ZipFile(io.BytesIO(data)) as zf:
+                top_dir_name = _validate_top_level_dir(zf.namelist(), asset_name, libexec_dir)
+                zf.extractall(libexec_dir)  # noqa: S202 -- ruff's S202 fires on any `.extractall()` call by method name (confirmed: it flags this zip call too, not just tarfile's), and zipfile has no filter= to satisfy it more directly; bounded instead by _validate_top_level_dir just above plus this function's docstring
+        except zipfile.BadZipFile as error:
+            raise ExtractionError(f"{asset_name}: not a valid zip archive: {error}") from error
     else:
-        with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tf:
-            names = tf.getnames()
-            top_level = {name.split("/")[0] for name in names if name.strip("/")}
-            if len(top_level) != 1:
-                raise ExtractionError(f"{asset_name}: expected exactly one top-level dir, found {sorted(top_level)}")
-            # No noqa needed: ruff recognizes filter="data" itself as
-            # resolving S202 for tarfile (confirmed empirically -- adding
-            # one here gets flagged RUF100 unused-noqa by this repo's
-            # pinned ruff).
-            tf.extractall(libexec_dir, filter="data")
+        try:
+            with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tf:
+                top_dir_name = _validate_top_level_dir(tf.getnames(), asset_name, libexec_dir)
+                # No noqa needed: ruff recognizes filter="data" itself as
+                # resolving S202 for tarfile (confirmed empirically -- adding
+                # one here gets flagged RUF100 unused-noqa by this repo's
+                # pinned ruff).
+                tf.extractall(libexec_dir, filter="data")
+        except tarfile.TarError as error:
+            raise ExtractionError(f"{asset_name}: not a valid tar.gz archive: {error}") from error
 
-    (top_dir_name,) = top_level
     extracted_root = libexec_dir / top_dir_name
     for child in extracted_root.iterdir():
         child.rename(libexec_dir / child.name)

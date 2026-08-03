@@ -269,3 +269,128 @@ def test_extract_wrapper_dir_keeps_internal_tree_and_writes_shim(tmp_path: Path)
     shim_text = bin_shim.read_text()
     assert str(real_bin) in shim_text
     assert shim_text.startswith("#!/bin/sh")
+
+
+# --- Security review fix (task-4-report.md): extract_wrapper_dir's top-level-dir
+# validation gap, plus ExtractionError coverage for corrupted archives and the
+# tar branch's own filter="data" rejection ---------------------------------
+
+
+def test_extract_wrapper_dir_rejects_dotdot_top_level_segment_zip(tmp_path: Path) -> None:
+    """Adversarial reproduction of the review finding: every member's name is
+    "../../tmp/pwned", so name.split("/")[0] == ".." for *every* member --
+    {".."} has cardinality 1, which a cardinality-only guard accepts. Against
+    the pre-fix code this does not raise ExtractionError: zipfile silently
+    strips the ".." components during extractall (so nothing looks wrong
+    yet), then `(top_dir_name,) = top_level` binds top_dir_name = "..", so
+    `libexec_dir / ".."` resolves to libexec_dir's own PARENT -- and the
+    flatten loop enumerates and relocates that parent's contents (here: a
+    sibling "already-installed tool" directory) into libexec_dir, crashing
+    with a raw OSError once it reaches libexec_dir itself. Confirmed via a
+    live probe against the pre-fix code before this test was written; see
+    the fix report for the exact transcript.
+    """
+    data = _make_zip_bytes(
+        {
+            "../../tmp/pwned/file1": b"evil1",
+            "../../tmp/pwned/file2": b"evil2",
+        }
+    )
+    parent_dir = tmp_path / "libexec"
+    libexec_dir = parent_dir / "apm"
+    bin_shim = tmp_path / "bin" / "apm"
+
+    # A sibling directory that must survive completely untouched -- stands
+    # in for "another already-installed Class B tool's directory".
+    sibling_dir = parent_dir / "already_installed_tool"
+    sibling_dir.mkdir(parents=True)
+    canary_file = sibling_dir / "canary.txt"
+    canary_file.write_text("do-not-touch")
+
+    with pytest.raises(pcb.ExtractionError):
+        pcb.extract_wrapper_dir(data, "apm-linux-x86_64.zip", "apm", libexec_dir, bin_shim)
+
+    assert sibling_dir.is_dir(), "sibling directory outside libexec_dir must not be removed or moved"
+    assert canary_file.read_text() == "do-not-touch"
+    assert sorted(p.name for p in sibling_dir.iterdir()) == ["canary.txt"]
+    assert not (libexec_dir / sibling_dir.name).exists(), "sibling must not be relocated into libexec_dir"
+
+
+def test_extract_wrapper_dir_rejects_dotdot_top_level_segment_tar(tmp_path: Path) -> None:
+    """Same adversarial shape as the zip test above, against the tar.gz
+    branch -- locks in the shared top-level-segment validation as an
+    independent guard, not merely incidental reliance on filter="data"
+    (which would also reject this particular archive on its own, but only
+    for as long as nobody removes it)."""
+    data = _make_tar_gz_bytes(
+        {
+            "../../tmp/pwned/file1": b"evil1",
+            "../../tmp/pwned/file2": b"evil2",
+        }
+    )
+    parent_dir = tmp_path / "libexec"
+    libexec_dir = parent_dir / "apm"
+    bin_shim = tmp_path / "bin" / "apm"
+
+    sibling_dir = parent_dir / "already_installed_tool"
+    sibling_dir.mkdir(parents=True)
+    canary_file = sibling_dir / "canary.txt"
+    canary_file.write_text("do-not-touch")
+
+    with pytest.raises(pcb.ExtractionError):
+        pcb.extract_wrapper_dir(data, "apm-linux-x86_64.tar.gz", "apm", libexec_dir, bin_shim)
+
+    assert sibling_dir.is_dir()
+    assert canary_file.read_text() == "do-not-touch"
+    assert sorted(p.name for p in sibling_dir.iterdir()) == ["canary.txt"]
+    assert not (libexec_dir / sibling_dir.name).exists()
+
+
+def test_extract_wrapper_dir_wraps_tar_outside_destination_error(tmp_path: Path) -> None:
+    """A different adversarial shape from the two tests above: the shared
+    top-level segment is a legitimate single directory name
+    ("apm-linux-x86_64", passes top-level-segment validation), but one
+    member's own path inside that tree escapes via "..". This is exactly
+    what tarfile's filter="data" (PEP 706) rejects at extraction time with
+    tarfile.OutsideDestinationError -- which, pre-fix, propagated out of
+    extract_wrapper_dir as a raw stdlib exception instead of
+    ExtractionError."""
+    data = _make_tar_gz_bytes(
+        {
+            "apm-linux-x86_64/apm": b"#!/bin/sh\necho fake-apm\n",
+            "apm-linux-x86_64/../../../tmp/pwned": b"evil",
+        }
+    )
+    libexec_dir = tmp_path / "libexec" / "apm"
+    bin_shim = tmp_path / "bin" / "apm"
+
+    with pytest.raises(pcb.ExtractionError):
+        pcb.extract_wrapper_dir(data, "apm-linux-x86_64.tar.gz", "apm", libexec_dir, bin_shim)
+
+
+def test_extract_binary_raises_extraction_error_on_corrupted_tar_gz(tmp_path: Path) -> None:
+    garbage = b"this is not a valid gzip/tar stream, just filler bytes 0123456789"
+    with pytest.raises(pcb.ExtractionError):
+        pcb.extract_binary(garbage, "waza-linux-amd64.tar.gz", "waza-linux-amd64", tmp_path / "bin" / "waza")
+
+
+def test_extract_binary_raises_extraction_error_on_corrupted_zip(tmp_path: Path) -> None:
+    garbage = b"this is not a valid zip stream, just filler bytes 0123456789"
+    with pytest.raises(pcb.ExtractionError):
+        pcb.extract_binary(garbage, "waza-darwin-amd64.zip", "waza-darwin-amd64", tmp_path / "bin" / "waza")
+
+
+def test_extract_wrapper_dir_raises_extraction_error_on_corrupted_tar_gz(tmp_path: Path) -> None:
+    garbage = b"this is not a valid gzip/tar stream, just filler bytes 0123456789"
+    libexec_dir = tmp_path / "libexec" / "apm"
+    bin_shim = tmp_path / "bin" / "apm"
+    with pytest.raises(pcb.ExtractionError):
+        pcb.extract_wrapper_dir(garbage, "apm-linux-x86_64.tar.gz", "apm", libexec_dir, bin_shim)
+
+
+def test_extract_wrapper_dir_raises_extraction_error_on_corrupted_zip(tmp_path: Path) -> None:
+    garbage = b"this is not a valid zip stream, just filler bytes 0123456789"
+    libexec_dir = tmp_path / "libexec" / "apm"
+    bin_shim = tmp_path / "bin" / "apm"
+    with pytest.raises(pcb.ExtractionError):
+        pcb.extract_wrapper_dir(garbage, "apm-linux-x86_64.zip", "apm", libexec_dir, bin_shim)
