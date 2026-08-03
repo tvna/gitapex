@@ -150,7 +150,7 @@ class ScopeError(Exception):
     """The gate selection could not be trusted -- exit 2, never a silent pass."""
 
 
-def registered_gate_paths(repo_root=REPO_ROOT):
+def registered_gate_paths(repo_root: pathlib.Path = REPO_ROOT) -> set[str]:
     """Return every `gates[].script` path in `.gitapex/ssot.json` (rule 2).
 
     Raises ``ScopeError`` rather than returning an empty set when the
@@ -182,7 +182,7 @@ def registered_gate_paths(repo_root=REPO_ROOT):
     if not isinstance(gates, list) or not gates:
         raise ScopeError(f"{path}: gate registry has no usable 'gates' list")
 
-    paths = set()
+    paths: set[str] = set()
     for gate in gates:
         script = gate.get("script") if isinstance(gate, dict) else None
         if script is None:
@@ -200,7 +200,7 @@ def registered_gate_paths(repo_root=REPO_ROOT):
     return paths
 
 
-def is_gate_path(path, registered):
+def is_gate_path(path: str, registered: set[str]) -> bool:
     """Return True iff `path` is in scope under any of the four rules."""
     return (
         bool(_CONVENTION_RE.fullmatch(path))
@@ -209,7 +209,7 @@ def is_gate_path(path, registered):
     )
 
 
-def select(name_status_text, registered):
+def select(name_status_text: str, registered: set[str]) -> list[str]:
     """Return the sorted, deduped gate paths named in `--name-status` output.
 
     Every status is honoured, including `D` and `R100` -- see this module's
@@ -218,7 +218,7 @@ def select(name_status_text, registered):
     exists, and the old path because a gate that moved out from under the
     workflow step invoking it is the same breakage as one deleted.
     """
-    selected = set()
+    selected: set[str] = set()
     for line in name_status_text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
         if not line.strip():
             continue
@@ -240,7 +240,7 @@ def select(name_status_text, registered):
     return sorted(selected)
 
 
-def main(argv=None):
+def main(argv: list[str] | None = None) -> int:
     """CLI: print the comma-joined gate paths named on stdin."""
     parser = argparse.ArgumentParser(
         description="Select this repository's own deterministic gate paths "

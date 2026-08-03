@@ -168,7 +168,8 @@ def _fetch_issues_page(
             last_body = str(error)
 
         if 200 <= last_code < 300:
-            return json.loads(last_body)
+            page: list[dict[str, Any]] = json.loads(last_body)
+            return page
         print(f"Attempt {attempt}: HTTP {_format_code(last_code)} for GET {url}", file=sys.stderr)
         if last_code != 0 and last_code < 500:
             break

@@ -122,8 +122,8 @@ def find_missing_transfer_checks(entries):
     never added to the returned list.
     """
     missing = []
-    file_lines_cache = {}
-    consumed_by_path = {}
+    file_lines_cache: dict[str, list[str] | None] = {}
+    consumed_by_path: dict[str, set[int]] = {}
     for path, iteration_line in entries:
         if path not in file_lines_cache:
             try:

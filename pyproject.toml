@@ -12,11 +12,314 @@ dev = [
     "pyyaml>=6.0",
     "prek>=0.4.11",
     "jsonschema>=4.23",
+    "pydantic>=2.9",
+    "mypy>=1.13",
+    "types-PyYAML>=6.0.12",
+    "types-jsonschema>=4.23",
 ]
 
 [tool.uv]
 # Non-package project: uv manages the environment and dev tools only.
 package = false
+
+# Issue #684: mypy across gitapex's own deterministic-gate scripts,
+# phased rollout. strict=true is the global default since most in-scope
+# files (a prior audit found ~65%) are already fully annotated in modern
+# style; the override tiers below carry the *named* exceptions rather
+# than lowering the bar repo-wide. mypy_path mirrors
+# [tool.pytest.ini_options] pythonpath exactly -- these are the
+# directories bare-imported across each other (e.g.
+# evals/scripts/run_ablation.py imports score_contract from
+# skills/scorer-gated-skill-edits/scripts) and therefore the set that
+# must resolve together in one mypy invocation; see .github/workflows/
+# test.yml's mypy job for the per-directory-group invocation this drives.
+[tool.mypy]
+python_version = "3.12"
+strict = true
+# Disabled from strict=true's default, deliberately, repo-wide (not a
+# per-file override -- this is a blanket judgment call, not legacy debt):
+# these scripts are internal CLI tooling, not a published library, and
+# test files across this repo routinely monkeypatch/access a module's own
+# imported attributes (e.g. `check_dispatch_trace.subprocess`,
+# `gate_retro_title_convention_citation.urllib`) -- the exact pattern
+# --no-implicit-reexport (part of strict) exists to flag for a *library*
+# whose public API boundary matters, which is not this repo's own shape.
+implicit_reexport = true
+# Disabled repo-wide for the same "not our situation" reason, not per-file:
+# this repo's own CI strategy deliberately runs mypy as several
+# per-directory-grouped invocations (see the mypy job in
+# .github/workflows/test.yml), each seeing only a subset of the override
+# list above/below -- every invocation would otherwise permanently report
+# "unused section(s)" for every override belonging to a *different*
+# invocation's files, which is expected structural noise from the grouping
+# itself, not a signal of a stale override anyone should act on.
+warn_unused_configs = false
+mypy_path = [
+    ".github/scripts",
+    "skills/battle-testing-a-skill/scripts",
+    "skills/scorer-gated-skill-edits/scripts",
+    "skills/evaluating-skill-quality/scripts",
+    "skills/auditing-agent-product-scope/scripts",
+    "evals/scripts",
+    "hooks",
+]
+
+# Tier A: named, pre-existing untyped/partially-typed production files.
+# Relaxes the "missing annotation" flags, plus disallow_any_generics
+# (a bare `dict`/`list` return/param with no type argument is the same
+# category of pre-existing annotation debt, not a new relaxation axis) --
+# a real type error inside an unannotated body is still caught
+# (check_untyped_defs stays implied by strict=true). Each entry is
+# removed once that file/cluster is fully annotated; issue #684 is the
+# umbrella tracking reference until a dedicated follow-up issue exists
+# per file/cluster.
+[[tool.mypy.overrides]]
+module = [
+    "check_acm_present_or_waiver",
+    "check_skill_audit_disclosure_or_waiver",
+]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+disallow_untyped_calls = false
+disallow_any_generics = false
+# tracking: issue #684 (hooks/)
+
+[[tool.mypy.overrides]]
+module = [
+    "gate_skill_audit_disclosure",
+    "skill_description_diff",
+    "skill_security_relevance",
+    "gate_transfer_check_disclosure",
+]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+disallow_untyped_calls = false
+disallow_any_generics = false
+# tracking: issue #684 (.github/scripts/)
+
+[[tool.mypy.overrides]]
+module = "score_contract"
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+disallow_untyped_calls = false
+disallow_any_generics = false
+# tracking: issue #684 (skills/scorer-gated-skill-edits/scripts/ --
+# type-annotation only, no pydantic: stdlib-only deployed skill dir)
+
+[[tool.mypy.overrides]]
+module = "check_adr_shape"
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+disallow_untyped_calls = false
+disallow_any_generics = false
+# tracking: issue #684 (skills/drafting-an-adr/scripts/)
+
+[[tool.mypy.overrides]]
+module = [
+    "check_file_ownership_conflicts",
+    "check_canonical_governance_paths",
+    "_path_normalize",
+]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+disallow_untyped_calls = false
+disallow_any_generics = false
+# tracking: issue #684 (skills/executing-a-branch-plan/scripts/ cluster)
+
+[[tool.mypy.overrides]]
+module = "check_acm_present"
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+disallow_untyped_calls = false
+disallow_any_generics = false
+# tracking: issue #684 (covers BOTH skills/drafting-an-acm-issue/scripts/
+# and skills/planning-a-branch-from-an-issue/scripts/ copies -- same bare
+# module name; kept in sync by tests/test_check_acm_present_sync.py)
+
+[[tool.mypy.overrides]]
+module = "scan_provenance"
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+disallow_untyped_calls = false
+disallow_any_generics = false
+# tracking: issue #684 (skills/outward-artifact-preflight/scripts/)
+
+[[tool.mypy.overrides]]
+module = ["check_axis_shape", "check_middleware_table_shape"]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+disallow_untyped_calls = false
+disallow_any_generics = false
+# tracking: issue #684 (skills/auditing-agent-product-scope/scripts/)
+
+[[tool.mypy.overrides]]
+module = "scan_unpinned_actions"
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+disallow_untyped_calls = false
+disallow_any_generics = false
+# tracking: issue #684 (skills/auditing-git-hosting-surface/scripts/)
+
+[[tool.mypy.overrides]]
+module = "route_test_model"
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+disallow_untyped_calls = false
+disallow_any_generics = false
+# tracking: issue #684 (skills/battle-testing-a-skill/scripts/)
+
+# Tier C: skills/evaluating-skill-quality/scripts/check_skill_shape.py
+# (~4,440 lines, ~30% of this repo's non-test in-scope LOC by itself) is
+# already fully annotated at the def-signature level (unlike every Tier-A
+# file above), so the four flags above do not apply to it -- its live
+# mypy errors are genuine narrowing issues deep inside an already-typed,
+# deliberately adversarial-input-tolerant hand-rolled parser (issue #684's
+# own Acceptance Criteria Map named this exact file as the highest-
+# friction one and flagged it as likely needing its own override rather
+# than a full fix within this change). check_untyped_defs stays enabled
+# (matches Tier A/B's own "a real error inside typed code is still
+# caught" principle) -- only the specific narrowing-error codes actually
+# observed against this file are disabled, not the broader flags.
+[[tool.mypy.overrides]]
+module = "check_skill_shape"
+disable_error_code = ["attr-defined", "arg-type", "operator", "no-untyped-call"]
+# tracking: issue #684 (skills/evaluating-skill-quality/scripts/)
+
+# Tier T: temporary, same-PR-only overrides for files Wave 2/3 of this
+# same branch (docs/superpowers/plans/2026-08-03-mypy-pydantic-type-
+# safety-wfb1bl.md, tasks T2/T3/T4/T8) already plan to rewrite with a
+# pydantic model -- their current hand-rolled dict/Any narrowing throws
+# real strict-mode errors today that the pydantic rewrite itself
+# resolves structurally (a validated model replaces the untyped dict
+# traversal). Removed within this same PR once each task lands, never
+# carried into a follow-up issue the way Tier A/B are.
+[[tool.mypy.overrides]]
+module = [
+    "scan_ssot_schema",
+    "check_dispatch_trace",
+    "lint_fixture_assertions",
+    "run_ablation",
+    "check_dimension_coverage",
+]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+disallow_untyped_calls = false
+disallow_any_generics = false
+disable_error_code = ["attr-defined", "arg-type", "operator", "no-any-return", "assignment", "var-annotated"]
+# tracking: this branch's own Wave 2/3 (T2, T3, T4, T8) -- not issue #684
+# as a deferred follow-up; remove each module from this list as its task
+# lands, not after.
+
+# Tier B: the pytest suite's own historical typing debt (almost every
+# tests/*.py and skills/*/scripts/test_*.py file has zero annotated test
+# functions today; several hooks/test_*.py and a couple of others are
+# already fully typed and are simply unaffected by this override -- an
+# override only relaxes a requirement, it never tightens one). mypy's
+# `module` pattern requires each dotted component to be a literal or a
+# bare `*` (no `test_*`-style partial-string glob -- confirmed against
+# the installed mypy directly: "Patterns must be fully-qualified module
+# names, optionally with '*' in some components"), so every top-level
+# test module (none of these live in a package -- each is its own
+# dotted-name-free module) is enumerated explicitly rather than globbed.
+# One umbrella tracking reference, worked down incrementally by
+# directory in follow-up PRs rather than all at once.
+[[tool.mypy.overrides]]
+module = [
+    "test__path_normalize",
+    "test_agent_product_scope_shape",
+    "test_check_acm_present_or_waiver",
+    "test_check_acm_present_sync",
+    "test_check_adr_shape",
+    "test_check_axis_shape",
+    "test_check_bash_safety",
+    "test_check_canonical_governance_paths",
+    "test_check_dimension_coverage",
+    "test_check_dispatch_trace",
+    "test_check_file_ownership_conflicts",
+    "test_check_issue_acm_disclosure",
+    "test_check_merge_pull_request_block",
+    "test_check_middleware_table_shape",
+    "test_check_pr_issue_acm_disclosure",
+    "test_check_pr_issue_acm_disclosure_shell",
+    "test_check_pr_upstream_pushed",
+    "test_check_skill_audit_disclosure_hook_sync",
+    "test_check_skill_shape",
+    "test_check_task_bash_safety",
+    "test_cicd_gate_cluster_design_retro_prefix",
+    "test_contract_precondition_sync",
+    "test_detect_changed_gate_scripts",
+    "test_detect_touched_eval_skills",
+    "test_evaluating_deterministic_gate_quality_dimension_coverage",
+    "test_extract_diff_added_lines",
+    "test_gate_acm_issue_disclosure",
+    "test_gate_evals_scripts_coverage",
+    "test_gate_gitignore_pattern_coverage",
+    "test_gate_owasp_asi_mapping",
+    "test_gate_owasp_llm_mapping",
+    "test_gate_plugin_root_brace_notation",
+    "test_gate_provenance_disclosure",
+    "test_gate_retro_title_convention_citation",
+    "test_gate_routine_scope_enforcement",
+    "test_gate_skill_audit_disclosure",
+    "test_gate_skill_branch_fixture_coverage",
+    "test_gate_skill_rename_lifecycle",
+    "test_gate_split_fixture_coverage",
+    "test_gate_transfer_check_disclosure",
+    "test_gitignore_coverage_json",
+    "test_gitignore_worktrees",
+    "test_lint_fixture_assertions",
+    "test_merge_retrospective_record_format",
+    "test_middleware_table_shape",
+    "test_post_merge_retro",
+    "test_repository_skill_shape",
+    "test_route_test_model",
+    "test_run_ablation",
+    "test_scan_apm_manifest_drift",
+    "test_scan_retrospective_gate_drift",
+    "test_scan_ssot_schema",
+    "test_scan_toolchain_pin_drift",
+    "test_scan_unpinned_actions",
+    "test_score_contract",
+    "test_set_config_model",
+    "test_skill_audit_gate_diff_step_shell",
+    "test_skill_audit_gate_workflow_wiring",
+    "test_skill_description_diff",
+    "test_skill_eval_status_coverage",
+    "test_skill_eval_status_sync",
+    "test_skill_metadata_sidecar",
+    "test_skill_security_relevance",
+    "test_sync_pr_publish",
+]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+disallow_untyped_calls = false
+disallow_any_generics = false
+# check_untyped_defs=false is the standard, well-known mypy knob for
+# exactly this situation (a legacy/test surface with near-zero existing
+# annotations): since every function in this list is unannotated today
+# (disallow_untyped_defs=false above already permits that), mypy also
+# stops analyzing those functions' own bodies -- the heavy
+# mock/monkeypatch-style narrowing noise this test suite otherwise
+# produces (subprocess return unions, Any-typed fixture payloads) is
+# untyped-body noise, not a signal about annotated production code, which
+# stays fully checked regardless (this override is scoped to test
+# modules only). Checking resumes automatically for any of these
+# functions the moment it gains a real annotation.
+check_untyped_defs = false
+# A test function's own body is unannotated (per this override) and, with
+# check_untyped_defs=false above, mypy never analyzes its statements at
+# all -- so a local variable a nested, explicitly-typed closure (a fake
+# HTTP `opener`, a mocked handler) then reads back becomes `Any` purely
+# because mypy has no inferred type for it, not because of any real bug.
+# That Any then propagates through the closure's own typed return,
+# surfacing as `no-any-return` or `union-attr` on the closure's own
+# annotated signature -- confirmed directly against this repo's actual
+# test fixtures (e.g. tests/test_post_merge_retro.py's `opener` closures),
+# not assumed. Disabling these two codes here, not the four flags above,
+# keeps this override scoped to the specific mechanical consequence of
+# "test body deliberately unchecked," not a broader relaxation.
+disable_error_code = ["no-any-return", "union-attr"]
+# tracking: issue #684 (repo-wide pytest suite)
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "skills/battle-testing-a-skill/scripts", "skills/evaluating-skill-quality/scripts", "skills/executing-a-branch-plan/scripts", "skills/auditing-agent-product-scope/scripts", "hooks"]

@@ -100,7 +100,7 @@ _ACM_WAIVER_RE = re.compile(
 )
 
 
-def has_acm_disclosure(body_text):
+def has_acm_disclosure(body_text: str | None) -> bool:
     """Return True iff `body_text` carries the ACM table or a valid waiver line."""
     # Normalize CRLF/CR line endings before matching, same rationale as
     # gate_acm_issue_disclosure.py's own has_acm_disclosure.
@@ -109,7 +109,7 @@ def has_acm_disclosure(body_text):
     return bool(_HEADER_RE.search(normalized) or _ACM_WAIVER_RE.search(normalized))
 
 
-def waiver_category(body_text):
+def waiver_category(body_text: str | None) -> str | None:
     """Return the lowercased waiver category ('chore'/'docs'/'tracking'/
     'defect') if `body_text` carries a valid waiver line, else None.
 

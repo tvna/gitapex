@@ -93,6 +93,7 @@ def _load_module(path: pathlib.Path) -> types.ModuleType:
     # would collide.
     module_name = f"_check_acm_present_sync__{path.parent.parent.name}"
     spec = importlib.util.spec_from_file_location(module_name, path)
+    assert spec is not None and spec.loader is not None, f"could not build a module spec for {path}"
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

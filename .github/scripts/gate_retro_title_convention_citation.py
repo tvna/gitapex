@@ -294,20 +294,20 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
-        offenders = [
-            offender
+        unresolvable_offenders: list[str] = [
+            unresolvable
             for path, text in texts.items()
-            if (offender := find_unresolvable_offenders(path, text, args.owner, args.repo, token)) is not None
+            if (unresolvable := find_unresolvable_offenders(path, text, args.owner, args.repo, token)) is not None
         ]
     except GitHubApiError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
 
-    if not offenders:
+    if not unresolvable_offenders:
         print("PASS: every title/identity convention claim cites a resolvable issue")
         return 0
     print("FAIL: the following file(s) fail the convention-citation check:", file=sys.stderr)
-    for offender in offenders:
+    for offender in unresolvable_offenders:
         print(f"  - {offender}", file=sys.stderr)
     return 1
 

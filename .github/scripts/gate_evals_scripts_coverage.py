@@ -151,7 +151,7 @@ def source_include_globs(sources: list[str]) -> list[str]:
     return [f"{source.rstrip('/')}/*.py" for source in sources]
 
 
-def _files_section(coverage_data: object) -> dict:
+def _files_section(coverage_data: object) -> dict[str, object]:
     """Return ``coverage_data``'s ``files`` object, raising ``ValueError`` on
     a report shape this script cannot interpret. Shared by ``select_files``
     and ``select_files_in_source`` so the same malformed-report diagnostics
