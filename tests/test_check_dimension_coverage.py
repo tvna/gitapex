@@ -267,6 +267,51 @@ def test_main_reports_error_and_exits_two_on_malformed_fixture_shape(tmp_path):
     assert rc == 2
 
 
+# ---- new pydantic-model CLI-arg validation (added by issue #684's T8) ----
+# argparse's own required=True only guarantees presence, not a non-blank
+# value -- these three cases were not rejected before this task's pydantic
+# wrap existed (a blank --skill-dir/--tasks-glob/--dimensions-file would
+# have silently reached compute_coverage as an unusable path/glob instead).
+
+
+def test_main_rejects_blank_skill_dir_returns_2(tmp_path, capsys):
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    _write_task(tasks, "a.yaml", description="dimension 1")
+
+    rc = C.main(["--skill-dir", "   ", "--tasks-glob", str(tasks / "*.yaml")])
+
+    assert rc == 2
+    assert "error: --skill-dir must not be blank" in capsys.readouterr().err
+
+
+def test_main_rejects_blank_tasks_glob_returns_2(tmp_path, capsys):
+    skill_dir = _skill_dir(tmp_path, "1. **A.**\n", "# skill\n")
+
+    rc = C.main(["--skill-dir", str(skill_dir), "--tasks-glob", "  "])
+
+    assert rc == 2
+    assert "error: --tasks-glob must not be blank" in capsys.readouterr().err
+
+
+def test_main_rejects_blank_dimensions_file_returns_2(tmp_path, capsys):
+    skill_dir = _skill_dir(tmp_path, "1. **A.**\n", "# skill\n")
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    _write_task(tasks, "a.yaml", description="dimension 1")
+
+    rc = C.main(
+        [
+            "--skill-dir", str(skill_dir),
+            "--tasks-glob", str(tasks / "*.yaml"),
+            "--dimensions-file", "   ",
+        ]
+    )
+
+    assert rc == 2
+    assert "error: --dimensions-file must not be blank" in capsys.readouterr().err
+
+
 def test_real_corpus_coverage_matches_expected_snapshot():
     skill_dir = REPO_ROOT / "skills" / "evaluating-deterministic-gate-quality"
     tasks_glob = str(

@@ -192,27 +192,40 @@ module = "check_skill_shape"
 disable_error_code = ["attr-defined", "arg-type", "operator", "no-untyped-call"]
 # tracking: issue #684 (skills/evaluating-skill-quality/scripts/)
 
-# Tier T: temporary, same-PR-only overrides for files Wave 2/3 of this
-# same branch (docs/superpowers/plans/2026-08-03-mypy-pydantic-type-
-# safety-wfb1bl.md, tasks T2/T3/T4/T8) already plan to rewrite with a
-# pydantic model -- their current hand-rolled dict/Any narrowing throws
-# real strict-mode errors today that the pydantic rewrite itself
-# resolves structurally (a validated model replaces the untyped dict
-# traversal). Removed within this same PR once each task lands, never
-# carried into a follow-up issue the way Tier A/B are.
+# Issue #684, task T8: run_ablation.py/check_dimension_coverage.py's own CLI
+# args are now validated through a pydantic model immediately after
+# parser.parse_args() (T8's own, narrower scope: an argparse-wraps-pydantic
+# CLI-arg wrap, the same pattern T6/T7 applied, NOT the deeper internal-data
+# pydantic rewrite T2/T3/T4 gave their own files) -- this override covers the
+# residual pre-existing errors that wrap alone does not reach, each verified
+# individually rather than assumed:
+#   - disallow_any_generics: load_task_fixture's `-> dict` and run_ablation's
+#     `fixture: Mapping` (both pre-existing, still-bare-generic annotations
+#     the CLI-arg wrap does not touch).
+#   - disallow_untyped_calls: score_contract.score() is untyped; that module
+#     is owned by a different task (T9) in this same wave and is not touched
+#     here (see run_ablation.py's own module docstring/sys.path-bootstrap
+#     comment for why it is imported by bare name).
+#   - attr-defined: check_dimension_coverage.py's _fixture_text(data: object)
+#     deliberately accepts any yaml.safe_load() result and calls .get() on
+#     it, letting a malformed non-mapping fixture raise AttributeError by
+#     design (see that function's own docstring) -- pre-existing, deliberate
+#     behavior, not new debt from this task.
+# The original plan (this branch's own docs/superpowers/plans/2026-08-03-
+# mypy-pydantic-type-safety-wfb1bl.md, and this override's earlier own
+# comment) assumed T8 would fully discharge this override the way T2/T3/T4
+# discharged theirs; T8's actual dispatched task description scoped it to
+# the CLI-arg wrap only, so full removal was not achievable within that
+# scope -- flagged explicitly here rather than silently reintroduced later.
 [[tool.mypy.overrides]]
 module = [
     "run_ablation",
     "check_dimension_coverage",
 ]
-disallow_untyped_defs = false
-disallow_incomplete_defs = false
-disallow_untyped_calls = false
 disallow_any_generics = false
-disable_error_code = ["attr-defined", "arg-type", "operator", "no-any-return", "assignment", "var-annotated"]
-# tracking: this branch's own Wave 2/3 (T2, T3, T4, T8) -- not issue #684
-# as a deferred follow-up; remove each module from this list as its task
-# lands, not after.
+disallow_untyped_calls = false
+disable_error_code = ["attr-defined"]
+# tracking: issue #684
 
 # Tier B: the pytest suite's own historical typing debt (almost every
 # tests/*.py and skills/*/scripts/test_*.py file has zero annotated test

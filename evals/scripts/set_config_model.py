@@ -33,6 +33,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from pydantic import BaseModel, ValidationError, field_validator
+
 
 def set_config_model(text: str, model: str) -> str:
     """Return ``text`` with the ``config.model`` line rewritten to ``model``.
@@ -94,6 +96,38 @@ def override_file(path: Path, model: str) -> None:
     path.write_text(set_config_model(text, model), encoding="utf-8")
 
 
+class _SetConfigModelArgs(BaseModel):
+    """Validates the two positional CLI values used by ``main()``. ``path``
+    replaces the existing hand-rolled ``path.is_file()`` check (same message
+    text); ``model`` is carried through unvalidated here -- its own
+    non-empty/unpadded validation stays inside ``set_config_model()``
+    (exercised by every caller of that function via ``override_file``, not
+    only this CLI entry point), so it is not duplicated with a second,
+    possibly-diverging check at this layer."""
+
+    path: Path
+    model: str
+
+    @field_validator("path")
+    @classmethod
+    def _path_must_be_file(cls, value: Path) -> Path:
+        if not value.is_file():
+            raise ValueError(f"not a file: {value}")
+        return value
+
+
+def _validation_error_message(exc: ValidationError) -> str:
+    """The first error's original message, unwrapped from pydantic's own
+    "Value error, " prefix -- reproduces the exact text the replaced
+    hand-validation printed, not pydantic's own formatted error text."""
+    error = exc.errors()[0]
+    ctx = error.get("ctx") or {}
+    original = ctx.get("error")
+    if isinstance(original, Exception):
+        return str(original)
+    return str(error["msg"])
+
+
 def main(argv: list[str]) -> int:
     if len(argv) != 3:
         print(
@@ -101,16 +135,19 @@ def main(argv: list[str]) -> int:
             file=sys.stderr,
         )
         return 2
-    path = Path(argv[1])
-    if not path.is_file():
-        print(f"error: not a file: {path}", file=sys.stderr)
-        return 1
+
     try:
-        override_file(path, argv[2])
-    except ValueError as exc:
-        print(f"error: {path}: {exc}", file=sys.stderr)
+        validated_args = _SetConfigModelArgs(path=Path(argv[1]), model=argv[2])
+    except ValidationError as exc:
+        print(f"error: {_validation_error_message(exc)}", file=sys.stderr)
         return 1
-    print(f"{path}: config.model -> {argv[2]}")
+
+    try:
+        override_file(validated_args.path, validated_args.model)
+    except ValueError as exc:
+        print(f"error: {validated_args.path}: {exc}", file=sys.stderr)
+        return 1
+    print(f"{validated_args.path}: config.model -> {validated_args.model}")
     return 0
 
 
