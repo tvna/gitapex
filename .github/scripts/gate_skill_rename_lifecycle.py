@@ -48,9 +48,6 @@ import json
 import re
 import sys
 from pathlib import Path
-from typing import Annotated
-
-from pydantic import BaseModel, StringConstraints, ValidationError
 
 # Bounds the spec.lifecycle: block: the header line at exactly 2-space
 # indent, then every immediately-following line indented 4+ spaces (the
@@ -63,14 +60,15 @@ LIFECYCLE_BLOCK_RE = re.compile(r"^ {2}lifecycle:[ \t]*$\n((?: {4,}.*\n?)*)", re
 RENAMED_FROM_RE = re.compile(r"^ {4}renamedFrom:[ \t]*(.*)$", re.MULTILINE)
 
 
-class RenamedFromValue(BaseModel):
+def _non_empty_or_none(value: str) -> str | None:
     """Validates the already-extracted `spec.lifecycle.renamedFrom` leaf
     string (regex extraction above is unchanged -- this only guards the
-    value actually used downstream): must be non-empty once quote-stripped
-    and whitespace-trimmed, same as this file's own pre-pydantic `value or
-    None` check."""
-
-    value: Annotated[str, StringConstraints(min_length=1)]
+    value actually used downstream): returns it unchanged once
+    quote-stripped and whitespace-trimmed if non-empty, else None. Plain-
+    Python replacement for a former pydantic model
+    (`Annotated[str, StringConstraints(min_length=1)]`); same "value or
+    None" outcome this file used pre-pydantic."""
+    return value if value else None
 
 
 def _strip_quotes(value: str) -> str:
@@ -103,12 +101,7 @@ def _renamed_from(sidecar_text: str) -> str | None:
     if not match:
         return None
     value = _strip_quotes(match.group(1))
-    try:
-        return RenamedFromValue(value=value).value
-    except ValidationError:
-        # Empty/blank after quote-stripping -- same "nothing usefully
-        # recorded" outcome this function already returned pre-pydantic.
-        return None
+    return _non_empty_or_none(value)
 
 
 def parse_names(text: str) -> list[str]:

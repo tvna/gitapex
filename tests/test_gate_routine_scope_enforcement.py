@@ -10,8 +10,6 @@ instruction.
 from __future__ import annotations
 
 import gate_routine_scope_enforcement as gate
-import pytest
-from pydantic import ValidationError
 
 
 def _write_sidecar(tmp_path, name, capability):
@@ -149,16 +147,16 @@ def test_capability_assumption():
     assert gate.capability_assumption("spec:\n  portability: Portable\n") is None
 
 
-def test_capability_assumption_value_model_rejects_empty_string():
-    # The pydantic model wrapping the already-extracted leaf value must
-    # reject an empty string, the same "no usable value" outcome
-    # capability_assumption already returns (as None) for a missing match.
-    with pytest.raises(ValidationError):
-        gate.CapabilityAssumptionValue(value="")
+def test_non_empty_or_none_rejects_empty_string():
+    # Plain-Python replacement for the former pydantic
+    # CapabilityAssumptionValue model: an empty string must become None,
+    # the same "no usable value" outcome capability_assumption already
+    # returns (as None) for a missing match.
+    assert gate._non_empty_or_none("") is None
 
 
-def test_capability_assumption_value_model_accepts_non_empty_string():
-    assert gate.CapabilityAssumptionValue(value="Broad").value == "Broad"
+def test_non_empty_or_none_accepts_non_empty_string():
+    assert gate._non_empty_or_none("Broad") == "Broad"
 
 
 def test_capability_assumption_tolerates_trailing_comment():
