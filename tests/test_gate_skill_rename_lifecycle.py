@@ -17,6 +17,8 @@ from __future__ import annotations
 import io
 
 import gate_skill_rename_lifecycle as gate
+import pytest
+from pydantic import ValidationError
 
 
 def _write_sidecar(tmp_path, new_name, *, renamed_from=None, under_wrong_key=False):
@@ -78,6 +80,18 @@ def test_renamed_from_absent_is_none():
 def test_renamed_from_blank_value_is_none():
     text = "spec:\n  lifecycle:\n    renamedFrom:\n  portability: Portable\n"
     assert gate._renamed_from(text) is None
+
+
+def test_renamed_from_value_model_rejects_empty_string():
+    # The pydantic model wrapping the already-extracted leaf value must
+    # reject an empty string -- the same "nothing usefully recorded" case
+    # test_renamed_from_blank_value_is_none exercises end-to-end above.
+    with pytest.raises(ValidationError):
+        gate.RenamedFromValue(value="")
+
+
+def test_renamed_from_value_model_accepts_non_empty_string():
+    assert gate.RenamedFromValue(value="old-name").value == "old-name"
 
 
 def test_renamed_from_strips_double_quotes():

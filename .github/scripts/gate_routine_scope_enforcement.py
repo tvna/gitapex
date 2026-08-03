@@ -59,6 +59,9 @@ import argparse
 import re
 import sys
 from pathlib import Path
+from typing import Annotated
+
+from pydantic import BaseModel, StringConstraints, ValidationError
 
 _SUPERSEDED_RE = re.compile(r"\*\*Superseded\b", re.IGNORECASE)
 
@@ -100,6 +103,16 @@ _READONLY_CREDENTIAL_RE = re.compile(
 )
 
 
+class CapabilityAssumptionValue(BaseModel):
+    """Validates the already-extracted `spec.capabilityAssumption` leaf
+    string (regex extraction above is unchanged -- this only guards the
+    value actually used downstream): must be non-empty, same as this
+    file's own pre-pydantic "no match -> None" handling for an absent
+    value."""
+
+    value: Annotated[str, StringConstraints(min_length=1)]
+
+
 def _paragraphs(text: str) -> list[str]:
     normalized = text.replace("\r\n", "\n").replace("\r", "\n")
     return [p for p in re.split(r"\n\s*\n", normalized) if p.strip()]
@@ -136,7 +149,14 @@ def capability_assumption(sidecar_text: str) -> str | None:
     """Return the sidecar's `spec.capabilityAssumption` value, or None if
     absent."""
     match = _CAPABILITY_RE.search(sidecar_text)
-    return match.group(1) if match else None
+    if not match:
+        return None
+    try:
+        return CapabilityAssumptionValue(value=match.group(1)).value
+    except ValidationError:
+        # Empty/malformed extracted value -- same "no usable value" outcome
+        # this function already returned pre-pydantic for a missing match.
+        return None
 
 
 def _permissions_block_is_read_only(text: str) -> bool:
