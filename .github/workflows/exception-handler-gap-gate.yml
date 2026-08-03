@@ -90,7 +90,13 @@ jobs:
       #   non-ASCII path anywhere in the diff is then emitted as an escaped,
       #   quoted string the gate refuses to resolve (exit 2). That would fail
       #   the whole job over a file which may not even be in scope, and a
-      #   contributor could not fix it except by renaming their file.
+      #   contributor could not fix it except by renaming their file. Stated
+      #   precisely, because the flag does less than it looks like it does:
+      #   it covers the non-ASCII case only. Git still quotes a path
+      #   containing a double quote, a backslash, or a control character
+      #   whatever this is set to, and such a path still exits 2 -- fail-closed
+      #   on a name this gate cannot resolve, and not a shape a .py file in
+      #   this repository has ever had.
       #
       # No dependency install step: the gate is standard library only, and
       # ubuntu-latest ships python3.

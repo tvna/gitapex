@@ -731,6 +731,25 @@ def test_a_generator_expression_inside_a_try_is_not_protected_by_it(
     assert _rules(_grade(tmp_path, source)) == ["decode-gap"]
 
 
+@pytest.mark.parametrize("consumer", ["sorted", "list", "any", "'-'.join"])
+def test_a_generator_expression_consumed_by_the_call_it_is_passed_to_stays_protected(
+    tmp_path: pathlib.Path, consumer: str
+) -> None:
+    """Verified at runtime: `sorted(p.read_text() for p in ps)` inside a `try`
+    IS caught by it. Reporting these made the gate disagree with itself --
+    rewriting `list(x for x in y)` as `[x for x in y]`, the same program,
+    flipped the verdict -- and it is the only genexp-in-a-try shape this
+    repository actually contains."""
+    source = (
+        "def read_all(paths):\n"
+        "    try:\n"
+        f"        return {consumer}(pathlib.Path(p).read_text(encoding='utf-8') for p in paths)\n"
+        "    except ValueError:\n"
+        "        return []\n"
+    )
+    assert _grade(tmp_path, source) == []
+
+
 def test_a_list_comprehension_inside_a_try_is_eager_and_stays_protected(
     tmp_path: pathlib.Path,
 ) -> None:
@@ -821,6 +840,94 @@ def test_a_local_name_shadowing_the_module_one_is_a_different_value(
     assert _grade(tmp_path, "CONFIG = json.loads(RAW)\n\n\n" + body) == []
 
 
+def test_a_rebinding_after_the_access_does_not_shadow_the_module_value(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Collecting rebound names without their line let an assignment on the
+    line *after* the read excuse it. Confirmed at runtime: with a JSON array
+    on disk, that read raises AttributeError."""
+    source = (
+        "CONFIG = json.loads(pathlib.Path('c.json').read_text(encoding='utf-8'))\n"
+        "\n"
+        "\n"
+        "def reload_and_use():\n"
+        "    global CONFIG\n"
+        "    value = CONFIG.get('gates')\n"
+        "    CONFIG = {}\n"
+        "    return value\n"
+    )
+    assert "json-shape-gap" in _rules(_grade(tmp_path, source))
+
+
+def test_a_rebinding_before_the_access_does_shadow_it(tmp_path: pathlib.Path) -> None:
+    source = (
+        "CONFIG = json.loads(RAW)\n"
+        "\n"
+        "\n"
+        "def use():\n"
+        "    CONFIG = load_defaults()\n"
+        "    return CONFIG.get('gates')\n"
+    )
+    assert _grade(tmp_path, source) == []
+
+
+def test_a_module_level_name_reassigned_after_its_parse_is_no_longer_tainted(
+    tmp_path: pathlib.Path,
+) -> None:
+    source = (
+        "DATA = json.loads(RAW)\n"
+        "DATA = normalise(DATA)\n"
+        "\n"
+        "\n"
+        "def use():\n"
+        "    return DATA.get('k')\n"
+    )
+    assert _grade(tmp_path, source) == []
+
+
+@pytest.mark.parametrize(
+    "binder",
+    [
+        "from mypkg import config",
+        "import config",
+    ],
+)
+def test_an_import_shadows_an_inherited_module_name(
+    tmp_path: pathlib.Path, binder: str
+) -> None:
+    """An imported name is a module, not the parsed value; reporting its
+    `.get()` was a false positive."""
+    source = f"config = json.loads(RAW)\n{binder}\n\n\ndef use():\n    return config.get('k')\n"
+    assert _grade(tmp_path, source) == []
+
+
+def test_a_with_binding_shadows_an_inherited_module_name(tmp_path: pathlib.Path) -> None:
+    """`with open(...) as config` binds a file object, not the parsed value."""
+    source = (
+        "config = json.loads(RAW)\n"
+        "\n"
+        "\n"
+        "def use(path):\n"
+        "    with open_reader(path) as config:\n"
+        "        return config.get('k')\n"
+    )
+    assert _grade(tmp_path, source) == []
+
+
+def test_an_empty_isinstance_tuple_validates_nothing(tmp_path: pathlib.Path) -> None:
+    """`isinstance(x, ())` is legal and always False, so it can never be the
+    guard. Without an explicit check, an all-members loop over an empty tuple
+    reports vacuous success -- the fail-open shape of "for all" done wrong."""
+    source = (
+        "def load(raw):\n"
+        "    data = json.loads(raw)\n"
+        "    if not isinstance(data, ()):\n"
+        "        raise ValueError('x')\n"
+        "    return data.get('key')\n"
+    )
+    assert _rules(_grade(tmp_path, source)) == ["json-shape-gap"]
+
+
 def test_an_isinstance_against_a_non_mapping_type_does_not_clear_it(
     tmp_path: pathlib.Path,
 ) -> None:
@@ -837,18 +944,31 @@ def test_an_isinstance_against_a_non_mapping_type_does_not_clear_it(
     assert _rules(_grade(tmp_path, source)) == ["json-shape-gap"]
 
 
-@pytest.mark.parametrize("mapping_type", ["dict", "Mapping", "abc.MutableMapping", "(dict, str)"])
-def test_an_isinstance_naming_a_mapping_type_clears_it(
-    tmp_path: pathlib.Path, mapping_type: str
-) -> None:
-    source = (
+def _guarded_by(mapping_type: str) -> str:
+    return (
         "def load(raw):\n"
         "    data = json.loads(raw)\n"
         f"    if not isinstance(data, {mapping_type}):\n"
         "        raise ValueError('x')\n"
         "    return data.get('key')\n"
     )
-    assert _grade(tmp_path, source) == []
+
+
+@pytest.mark.parametrize("mapping_type", ["dict", "Mapping", "abc.MutableMapping", "(dict, Mapping)"])
+def test_an_isinstance_naming_a_mapping_type_clears_it(
+    tmp_path: pathlib.Path, mapping_type: str
+) -> None:
+    assert _grade(tmp_path, _guarded_by(mapping_type)) == []
+
+
+@pytest.mark.parametrize("mapping_type", ["(dict, list)", "(str, dict)"])
+def test_an_isinstance_tuple_with_a_non_mapping_member_does_not_clear_it(
+    tmp_path: pathlib.Path, mapping_type: str
+) -> None:
+    """Every member has to be a mapping type, not any: a list satisfies
+    `isinstance(data, (dict, list))` and the `.get()` after it still raises.
+    Confirmed at runtime with `json.loads('["a"]')`."""
+    assert _rules(_grade(tmp_path, _guarded_by(mapping_type))) == ["json-shape-gap"]
 
 
 def test_a_walrus_inside_the_isinstance_call_clears_it(tmp_path: pathlib.Path) -> None:
@@ -987,6 +1107,49 @@ def test_a_waiver_excuses_only_the_innermost_finding_it_sits_inside(
     )
     assert _rules(violations) == ["json-shape-gap"]
     assert _rules(waived) == ["decode-gap"]
+
+
+def test_a_waiver_for_an_inner_finding_not_in_the_diff_still_stays_with_it(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The escape the innermost rule was written to close, in the form that
+    survived the first attempt: when the inner finding is not itself in the
+    diff, searching only the in-diff candidates dropped it and the waiver fell
+    through to the unguarded outer read. The search runs over every candidate."""
+    source = (
+        "def load(inner_path):\n"
+        "    text = open(\n"
+        "        open(inner_path).read(),  # exception-handler-gap: WAIVED: caller guards the inner read\n"
+        "        encoding='utf-8',\n"
+        "    ).read()\n"
+        "    return text\n"
+    )
+    _write(tmp_path, ".github/scripts/gate_x.py", source)
+    violations, waived, _graded = gate.find_violations(
+        _partial_diff(".github/scripts/gate_x.py", source, [4]), tmp_path
+    )
+    assert _rules(violations) == ["decode-gap"]
+    assert waived == []
+
+
+def test_two_findings_on_one_line_give_the_waiver_to_the_inner_expression(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Span length cannot order two findings that occupy the same single line.
+    Depth can: in `open(data.get(...), ...)` the `.get()` is nested inside the
+    `open()`, and it is the `.get()` the reason names."""
+    source = (
+        "def load(raw):\n"
+        "    data = json.loads(raw)\n"
+        "    return open(data.get('path'), encoding='utf-8').read()"
+        "  # exception-handler-gap: WAIVED: the key is always present\n"
+    )
+    _write(tmp_path, ".github/scripts/gate_x.py", source)
+    violations, waived, _graded = gate.find_violations(
+        _whole_file_diff(".github/scripts/gate_x.py", source), tmp_path
+    )
+    assert _rules(violations) == ["decode-gap"]
+    assert _rules(waived) == ["json-shape-gap"]
 
 
 def test_an_edit_to_an_enclosing_handler_is_not_a_place_a_waiver_can_sit(
