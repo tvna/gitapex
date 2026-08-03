@@ -119,7 +119,10 @@ Exit codes:
     0  Allow -- every resolving-cited issue passed, or none was cited but
        some other citation form (Refs/#N) was.
     1  Deny -- no citation at all, or at least one resolving-cited issue
-       failed; a "FAIL: ..." reason on stderr.
+       failed; a "FAIL: ..." reason on stderr. Also 1, with an "error: ..."
+       reason instead, when the payload itself could not be read at all
+       (not valid JSON, or valid JSON that isn't an object) -- never an
+       uncaught traceback.
 """
 
 from __future__ import annotations
@@ -375,6 +378,17 @@ def main(argv: list[str] | None = None) -> int:
         payload = json.loads(raw) if raw.strip() else {}
     except json.JSONDecodeError as error:
         print(f"error: payload is not valid JSON: {error}", file=sys.stderr)
+        return 1
+
+    # `[]`, `"x"`, `1`, and `null` are all valid JSON, so parsing succeeding
+    # does not mean payload.get below is safe -- without this guard a
+    # non-object payload raised an uncaught AttributeError and the script
+    # exited 1 with a raw traceback instead of the documented FAIL: line.
+    if not isinstance(payload, dict):
+        print(
+            f"error: payload must be a JSON object, got {type(payload).__name__}",
+            file=sys.stderr,
+        )
         return 1
 
     token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")

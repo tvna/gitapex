@@ -35,6 +35,16 @@ def test_missing_file_is_drift(tmp_path):
     assert gate.find_drift(tmp_path / "does-not-exist.md") == [f"{tmp_path / 'does-not-exist.md'}: file does not exist"]
 
 
+def test_non_utf8_file_is_drift_not_a_traceback(tmp_path):
+    # Issue #680 Shape 2: read_text() with no UnicodeDecodeError handler
+    # raised an uncaught traceback on a non-UTF-8 inventory file.
+    path = tmp_path / "inventory.md"
+    path.write_bytes(b"\xff\xfe\x00\x01")
+    problems = gate.find_drift(path)
+    assert len(problems) == 1
+    assert "is not valid UTF-8" in problems[0]
+
+
 def test_missing_section_heading_is_drift(tmp_path):
     path = tmp_path / "inventory.md"
     path.write_text("# Security control inventory\n\nNo relevant section here.\n")

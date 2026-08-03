@@ -502,6 +502,16 @@ def test_main_reports_error_for_malformed_json(monkeypatch, capsys):
     assert "not valid JSON" in capsys.readouterr().err
 
 
+@pytest.mark.parametrize("payload", ["[]", '"a string"', "1", "null", "true"])
+def test_main_reports_error_for_non_object_json_payload(monkeypatch, capsys, payload):
+    # Issue #680 Shape 1: json.loads("[]") etc. all parse fine, so
+    # payload.get("owner") used to raise an uncaught AttributeError instead
+    # of the documented FAIL:/error: exit path.
+    monkeypatch.setattr("sys.stdin", io.StringIO(payload))
+    assert checker.main([]) == 1
+    assert "must be a JSON object" in capsys.readouterr().err
+
+
 def test_main_prefers_gh_token_over_github_token(monkeypatch):
     # gh CLI's own documented precedence: GH_TOKEN, GITHUB_TOKEN (in that
     # order) -- see this module's docstring for the primary-source citation.

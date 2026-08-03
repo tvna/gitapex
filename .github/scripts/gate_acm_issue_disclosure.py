@@ -393,6 +393,9 @@ def main(argv: list[str] | None = None) -> int:
     except FileNotFoundError:
         print(f"error: body file not found: {validated.body}", file=sys.stderr)
         return 1
+    except UnicodeDecodeError as error:
+        print(f"error: body file {validated.body} is not valid UTF-8: {error}", file=sys.stderr)
+        return 1
 
     passed = has_acm_disclosure(body_text)
 

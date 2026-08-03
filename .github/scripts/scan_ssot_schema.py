@@ -59,7 +59,7 @@ from __future__ import annotations
 import json
 import pathlib
 import sys
-from typing import Any, Literal, cast
+from typing import Any, Literal
 
 import jsonschema
 from pydantic import BaseModel, ConfigDict, ValidationError
@@ -67,6 +67,13 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 SSOT_PATH = REPO_ROOT / ".gitapex" / "ssot.json"
 SCHEMA_PATH = REPO_ROOT / ".gitapex" / "ssot.schema.json"
+
+
+class RegistryReadError(Exception):
+    """Either ``.gitapex/ssot.json`` or ``.gitapex/ssot.schema.json`` could
+    not be read as UTF-8 text or parsed as JSON at all -- exit 1, never a
+    traceback. Distinct from a schema-valid-JSON-but-drifted instance,
+    which ``find_schema_violations`` reports as an ordinary finding."""
 
 
 class PolicySource(BaseModel):
@@ -128,14 +135,37 @@ class SsotRegistry(BaseModel):
     clusters: dict[str, str]
 
 
-def _load_json(path: pathlib.Path) -> dict[str, Any]:
-    return cast(dict[str, Any], json.loads(path.read_text()))
+def _load_json(path: pathlib.Path) -> Any:
+    """Read and JSON-parse `path`. Raises RegistryReadError -- naming
+    `path` -- rather than letting a non-UTF-8 file or invalid JSON syntax
+    surface as an uncaught UnicodeDecodeError/JSONDecodeError traceback.
+    Does not itself check the parsed value's shape (dict vs. list/str/
+    etc.) -- callers that need a dict guard that separately, since a
+    schema-invalid-but-parseable instance (e.g. a JSON array at the top
+    level) is find_schema_violations's finding to report, not a load
+    failure."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as error:
+        raise RegistryReadError(f"{path}: cannot be read: {error}") from error
+    except UnicodeDecodeError as error:
+        raise RegistryReadError(f"{path}: is not valid UTF-8: {error}") from error
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as error:
+        raise RegistryReadError(f"{path}: is not valid JSON: {error}") from error
 
 
-def _get_list(d: dict[str, Any], key: str) -> list[Any]:
-    """d.get(key, []), but also defaults on an explicit JSON null (not just a
-    missing key) -- dict.get's default only covers the latter. Used only by
-    find_duplicate_ids, which stays dict-based (see module docstring)."""
+def _get_list(d: Any, key: str) -> list[Any]:
+    """d.get(key, []), but also defaults when `d` isn't a dict at all (not
+    just when the key's own value is an explicit JSON null) -- dict.get's
+    default only covers the latter, and callers such as find_duplicate_ids
+    may be handed a whole-instance value that jsonschema will separately
+    flag as a schema violation but that isn't itself a dict (e.g. `[]` or
+    `1` at the JSON document root). Used only by find_duplicate_ids, which
+    stays dict-based (see module docstring)."""
+    if not isinstance(d, dict):
+        return []
     value = d.get(key)
     return value if isinstance(value, list) else []
 
@@ -295,7 +325,12 @@ def find_drift(
 
 
 def main() -> int:
-    findings = find_drift()
+    try:
+        findings = find_drift()
+    except RegistryReadError as error:
+        print("ssot.json drift:")
+        print(f"  {error}")
+        return 1
     if findings:
         print("ssot.json drift:")
         for finding in findings:

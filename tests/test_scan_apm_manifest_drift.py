@@ -80,6 +80,53 @@ def test_missing_field_in_plugin_json_fails_loudly(tmp_path):
         drift.find_drift(apm, plugin)
 
 
+def test_non_utf8_apm_yml_raises_manifest_read_error(tmp_path):
+    # Issue #680 Shape 2: read_text() with no UnicodeDecodeError handler
+    # raised an uncaught traceback on a non-UTF-8 apm.yml.
+    apm = tmp_path / "apm.yml"
+    plugin = tmp_path / "plugin.json"
+    apm.write_bytes(b"\xff\xfe\x00\x01")
+    plugin.write_text(json.dumps(_VALID_PLUGIN))
+    with pytest.raises(drift.ManifestReadError, match="not valid UTF-8"):
+        drift.find_drift(apm, plugin)
+
+
+def test_non_utf8_plugin_json_raises_manifest_read_error(tmp_path):
+    apm = tmp_path / "apm.yml"
+    plugin = tmp_path / "plugin.json"
+    apm.write_text(_VALID_APM)
+    plugin.write_bytes(b"\xff\xfe\x00\x01")
+    with pytest.raises(drift.ManifestReadError, match="not valid UTF-8"):
+        drift.find_drift(apm, plugin)
+
+
+def test_main_returns_one_and_prints_message_on_manifest_read_error(capsys, monkeypatch):
+    def raise_read_error():
+        raise drift.ManifestReadError("/fake/apm.yml: is not valid UTF-8: boom")
+
+    monkeypatch.setattr(drift, "find_drift", raise_read_error)
+    rc = drift.main()
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "/fake/apm.yml: is not valid UTF-8: boom" in out
+
+
+def test_main_returns_one_and_prints_message_on_missing_field_key_error(capsys, monkeypatch):
+    # Companion to the ManifestReadError case: find_drift's pre-existing
+    # "fails loudly" KeyError contract (a missing mirrored field) must also
+    # exit cleanly through main() rather than escape as an uncaught
+    # traceback -- main() previously did not catch find_drift's own
+    # documented KeyError at all.
+    def raise_key_error():
+        raise KeyError("/fake/plugin.json: missing required field 'version'")
+
+    monkeypatch.setattr(drift, "find_drift", raise_key_error)
+    rc = drift.main()
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "missing required field" in out
+
+
 def test_repository_manifests_are_in_lockstep():
     """The gate: real apm.yml must mirror plugin.json's name and version."""
     findings = drift.find_drift()
