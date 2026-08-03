@@ -46,14 +46,14 @@ raises `AttributeError` instead.
 
 **Scope is the diff, not the repository, and that is the load-bearing
 design decision.** Measured against merged `main` (afd18eb) these two rules
-report 41 findings across 46 in-scope files, none of them triaged. The six
-that issue #680 *had* triaged and reproduced by execution are no longer
-among them: PR #696 repaired those, and running these rules over the six
-files it touched now reports zero, which is an independent confirmation of
-that repair rather than a claim inherited from it. Issue #682's own
+report 39 findings across the 46 in-scope files it then had, none of them
+triaged. The six that issue #680 *had* triaged and reproduced by execution
+are no longer among them: PR #696 repaired those, and running these rules
+over the six files it touched now reports zero, which is an independent
+confirmation of that repair rather than a claim inherited from it. Issue #682's own
 acceptance criteria require a detector's findings to be triaged before it
 becomes blocking, precisely so a gate does not land shouting about
-pre-existing debt and train its readers to ignore it -- and triaging 41 by
+pre-existing debt and train its readers to ignore it -- and triaging 39 by
 execution is its own change, not a side effect of this one. Grading only
 what a diff *adds* costs nothing against the defects this gate exists to
 prevent: all five recurrences were new code in their own PR, so a
@@ -184,18 +184,24 @@ def _diff_target_path(raw: str) -> str | None:
     """Return the post-image path named by a `+++ ` line, or None for
     `/dev/null` (a deletion, which adds nothing to grade).
 
-    Raises ``ScanError`` on a git-quoted path rather than guessing at its
-    unescaping: a path this gate cannot resolve is one it cannot decide the
-    scope of, and a wrong answer here silently drops a file from grading.
+    Anything other than `/dev/null` or git's own `b/`-prefixed post-image
+    raises ``ScanError`` rather than being guessed at -- a git-quoted path
+    (`"b/\\303\\251.py"`, which `core.quotePath` produces) and a
+    `--no-prefix` diff both land here. Guessing wrong silently drops a file
+    from grading, and a path this gate cannot resolve is one whose scope it
+    cannot decide. The calling workflow always invokes plain `git diff`, so
+    this is a wiring error, not a contributor's.
     """
     target = raw.strip()
     if target == "/dev/null":
         return None
-    if target.startswith('"'):
-        raise ScanError(f"unified diff carries a quoted path this gate cannot resolve: {target}")
-    # `git diff` prefixes the post-image with `b/`; `--no-prefix` output has
-    # no prefix at all, and both are accepted.
-    return target[2:] if target.startswith("b/") else target
+    if not target.startswith("b/"):
+        raise ScanError(
+            f"unified diff post-image is not a plain b/-prefixed path: {target!r}. "
+            "This gate reads default `git diff` output; --no-prefix and quoted "
+            "paths are not resolvable here."
+        )
+    return target[2:]
 
 
 def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
@@ -204,24 +210,42 @@ def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
     Only added lines are recorded. A removal is never a line this gate can
     grade -- there is no code left at it -- and an unchanged context line is
     pre-existing content another PR already owns.
+
+    File headers are recognised only *outside* a hunk, which is the whole
+    reason this tracks hunk state rather than matching prefixes line by line.
+    Inside a hunk every line carries a one-character prefix, so an added line
+    whose own content begins with `++ ` is emitted as `+++ ...` and a removed
+    line beginning with `-- ` as `--- ...` -- indistinguishable, prefix-first,
+    from the two header lines. A parser that took the header reading would
+    rebind the current path to nonsense and silently drop the rest of that
+    hunk from grading, which is a fail-open in the same family this gate
+    exists to catch. `@@`, `diff --git ` and `index ` need no such guard:
+    a hunk line always has its prefix, so none of them can begin a hunk line.
     """
     added: dict[str, set[int]] = {}
     path: str | None = None
     lineno = 0
+    in_hunk = False
+    saw_source_header = False
     for line in diff_text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
         if line.startswith("diff --git "):
-            # Reset before the `--- a/...` line arrives, so that line is
-            # never mistaken for a removal inside the previous file's hunk.
             path = None
+            in_hunk = False
+            saw_source_header = False
             continue
-        if line.startswith("+++ "):
+        if not in_hunk and line.startswith("--- "):
+            saw_source_header = True
+            continue
+        if not in_hunk and saw_source_header and line.startswith("+++ "):
             path = _diff_target_path(line[4:])
+            saw_source_header = False
             continue
         if line.startswith("@@"):
             match = _HUNK_RE.match(line)
             if not match:
                 raise ScanError(f"unparseable hunk header: {line!r}")
             lineno = int(match.group(1))
+            in_hunk = True
             continue
         if path is None:
             continue
@@ -266,6 +290,13 @@ def _decode_covered_calls(tree: ast.Module) -> set[int]:
     covered: set[int] = set()
 
     def walk(node: ast.AST, protected: bool) -> None:
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda):
+            # A function *defined* inside a try body does not run inside it.
+            # Carrying protection into its body would excuse a read in a
+            # helper whose only call site is somewhere else entirely.
+            for descendant in ast.iter_child_nodes(node):
+                walk(descendant, False)
+            return
         if isinstance(node, ast.Try):
             handled: set[str] = set()
             for handler in node.handlers:
@@ -289,36 +320,88 @@ def _decode_covered_calls(tree: ast.Module) -> set[int]:
     return covered
 
 
+def _looks_like_a_mode(node: ast.expr) -> bool:
+    """True for a string constant made only of file-mode characters.
+
+    Needed because the attribute form's first positional argument is a mode
+    for `Path.open` but a member name for `ZipFile.open` -- and `"member.txt"`
+    contains an `r`, so a plain "is it a string" test would read it as a text
+    read and report a binary one.
+    """
+    return (
+        isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and bool(node.value)
+        and set(node.value) <= set("rwxab+t")
+    )
+
+
+def _mode_is_text_read(mode: ast.expr | None, *, unknown_is_read: bool) -> bool:
+    """Decide a file mode. A write-only mode raises `UnicodeEncodeError`, a
+    different failure this gate was not measured against, and a binary mode
+    decodes nothing at all -- neither is graded."""
+    if mode is None:
+        return True  # `open(path)` defaults to "r".
+    if not (isinstance(mode, ast.Constant) and isinstance(mode.value, str)):
+        return unknown_is_read
+    if "b" in mode.value:
+        return False
+    return "r" in mode.value or "+" in mode.value
+
+
 def _text_read_kind(node: ast.Call) -> str | None:
     """Return the decoding-read shape `node` performs, or None.
 
-    `open()` is graded only in a text *read* mode. A write-only mode raises
-    `UnicodeEncodeError`, a different failure this gate was not measured
-    against, and a binary mode decodes nothing at all. A mode this gate
-    cannot read statically is treated as a read: guessing "probably a write"
-    would be the fail-open direction.
+    Two callables are graded, and the second is deliberately narrower than
+    the first. Bare `open(...)` is the builtin, so a mode this gate cannot
+    read statically is graded as a read -- guessing "probably a write" would
+    be the fail-open direction. `<expr>.open(...)` is *not* necessarily a
+    file: `webbrowser.open(url)`, `os.open(path, flags)` and
+    `ZipFile(z).open(name)` all share the attribute name and none of them
+    decodes text. So the attribute form is graded only when the call itself
+    says it is a text file read -- no arguments (`Path(p).open()` defaults
+    to "r"), an `encoding=`, or an explicit mode -- and an unreadable mode
+    there is left alone rather than reported, since the receiver is already
+    unknown and two unknowns do not make a finding.
+
+    The attribute form is read against `pathlib.Path.open`'s signature, where
+    the mode comes *first*. A module-level `<module>.open(filename, mode)` --
+    `io.open`, `codecs.open` -- is therefore graded only when it also passes
+    `encoding=` by keyword. Stated as the miss it is: both are unused in this
+    repository today, and reading the second positional argument as a mode
+    here as well would report `ZipFile(z).open(name, "r")`, a binary read.
     """
     func = node.func
     if isinstance(func, ast.Attribute) and func.attr == "read_text":
         return "read_text"
 
-    is_open = (isinstance(func, ast.Name) and func.id == "open") or (
-        isinstance(func, ast.Attribute) and func.attr == "open"
-    )
-    if not is_open:
-        return None
-
-    mode: ast.expr | None = node.args[1] if len(node.args) >= 2 else None
+    mode_kwarg: ast.expr | None = None
     for keyword in node.keywords:
         if keyword.arg == "mode":
-            mode = keyword.value
-    if mode is None:
-        return "open"
-    if not (isinstance(mode, ast.Constant) and isinstance(mode.value, str)):
-        return "open"
-    if "b" in mode.value:
+            mode_kwarg = keyword.value
+
+    if isinstance(func, ast.Name) and func.id == "open":
+        # The builtin: `open(file, mode, ...)`, so the mode is positional #2,
+        # and one this gate cannot read statically is graded rather than
+        # assumed to be a write.
+        builtin_mode = mode_kwarg if mode_kwarg is not None else (
+            node.args[1] if len(node.args) >= 2 else None
+        )
+        return "open" if _mode_is_text_read(builtin_mode, unknown_is_read=True) else None
+
+    if not (isinstance(func, ast.Attribute) and func.attr == "open"):
         return None
-    return "open" if ("r" in mode.value or "+" in mode.value) else None
+
+    positional_mode = node.args[0] if node.args and _looks_like_a_mode(node.args[0]) else None
+    mode = mode_kwarg if mode_kwarg is not None else positional_mode
+    declares_text = (
+        any(keyword.arg == "encoding" for keyword in node.keywords)
+        or mode is not None
+        or (not node.args and not node.keywords)
+    )
+    if not declares_text:
+        return None
+    return "open" if _mode_is_text_read(mode, unknown_is_read=False) else None
 
 
 def _is_json_parse(node: ast.expr) -> bool:
@@ -374,7 +457,10 @@ def _json_shape_gaps(tree: ast.Module) -> Iterator[ast.Call]:
     for scope in _scopes(tree):
         nodes = list(_scope_body(scope))
         tainted: set[str] = set()
-        validated: set[str] = set()
+        # name -> the earliest line an isinstance() names it on. A check that
+        # runs *after* the access it is supposed to guard protects nothing,
+        # so the line is kept rather than a bare "was checked somewhere" flag.
+        validated: dict[str, int] = {}
         for node in nodes:
             if isinstance(node, ast.Assign) and _is_json_parse(node.value):
                 tainted |= {t.id for t in node.targets if isinstance(t, ast.Name)}
@@ -388,15 +474,18 @@ def _json_shape_gaps(tree: ast.Module) -> Iterator[ast.Call]:
                 and node.args
                 and isinstance(node.args[0], ast.Name)
             ):
-                validated.add(node.args[0].id)
+                name = node.args[0].id
+                validated[name] = min(validated.get(name, node.lineno), node.lineno)
         for node in nodes:
             if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
                 continue
             if node.func.attr != "get":
                 continue
             receiver = node.func.value
-            if isinstance(receiver, ast.Name) and receiver.id in tainted and receiver.id not in validated:
-                yield node
+            if isinstance(receiver, ast.Name) and receiver.id in tainted:
+                checked_at = validated.get(receiver.id)
+                if checked_at is None or checked_at > node.lineno:
+                    yield node
             elif _is_json_parse(receiver):
                 # `json.loads(body).get(...)` -- the same defect with no
                 # variable to taint, so no isinstance() can ever guard it.

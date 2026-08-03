@@ -279,6 +279,56 @@ def test_read_bytes_is_out_of_scope(tmp_path: pathlib.Path) -> None:
     assert _grade(tmp_path, "raw = p.read_bytes()\n") == []
 
 
+@pytest.mark.parametrize(
+    "call",
+    [
+        "webbrowser.open(url)",
+        "os.open(path, os.O_RDONLY)",
+        "zipfile.ZipFile(z).open(name)",
+        'zipfile.ZipFile(z).open("member.txt")',
+        'pathlib.Path(p).open("rb")',
+        'pathlib.Path(p).open("w", encoding="utf-8")',
+    ],
+)
+def test_an_attribute_named_open_that_decodes_nothing_is_not_flagged(
+    tmp_path: pathlib.Path, call: str
+) -> None:
+    """`.open` is not a file read just because of its name. Grading the
+    attribute form on the name alone reported every one of these."""
+    assert _grade(tmp_path, f"handle = {call}\n") == []
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        "pathlib.Path(p).open()",
+        'pathlib.Path(p).open("r")',
+        'pathlib.Path(p).open(mode="r")',
+        'pathlib.Path(p).open(encoding="utf-8")',
+        'io.open(p, encoding="utf-8")',
+    ],
+)
+def test_an_attribute_open_that_declares_a_text_read_is_flagged(
+    tmp_path: pathlib.Path, call: str
+) -> None:
+    assert _rules(_grade(tmp_path, f"handle = {call}\n")) == ["decode-gap"]
+
+
+def test_a_function_defined_inside_a_try_body_is_not_protected_by_it(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The `try` runs the `def`, not the body. A helper whose only call site
+    is elsewhere would otherwise inherit protection it never has."""
+    source = (
+        "try:\n"
+        "    def helper(p):\n"
+        "        return p.read_text()\n"
+        "except UnicodeDecodeError:\n"
+        "    helper = None\n"
+    )
+    assert _rules(_grade(tmp_path, source)) == ["decode-gap"]
+
+
 # --- json-shape-gap -----------------------------------------------------
 
 
@@ -359,6 +409,22 @@ def test_module_scope_is_graded_too(tmp_path: pathlib.Path) -> None:
     assert _rules(_grade(tmp_path, source)) == ["json-shape-gap"]
 
 
+def test_an_isinstance_check_after_the_access_does_not_clear_it(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A guard that runs after the access it is meant to guard protects
+    nothing; a flow-insensitive "checked somewhere" rule would pass this."""
+    source = (
+        "def f(body):\n"
+        "    data = json.loads(body)\n"
+        "    value = data.get('k')\n"
+        "    if not isinstance(data, dict):\n"
+        "        raise ScanError('x')\n"
+        "    return value\n"
+    )
+    assert _rules(_grade(tmp_path, source)) == ["json-shape-gap"]
+
+
 def test_a_nested_function_is_its_own_scope(tmp_path: pathlib.Path) -> None:
     """Stated boundary, pinned so a future change to it is deliberate: a
     closure reading the enclosing function's JSON value is not graded."""
@@ -417,6 +483,49 @@ def test_a_deleted_file_adds_nothing_to_grade(tmp_path: pathlib.Path) -> None:
         "-text = p.read_text()\n"
     )
     assert gate.find_violations(diff, tmp_path) == ([], [], 0)
+
+
+def test_an_added_line_whose_content_starts_with_two_plusses_is_not_a_header(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Inside a hunk every line carries a prefix, so content beginning `++ `
+    is emitted as `+++ ...` -- identical, prefix-first, to the post-image
+    header. Reading it as a header rebinds the path to nonsense and silently
+    drops the rest of the hunk, a fail-open in this gate's own family."""
+    diff = (
+        "diff --git a/.github/scripts/gate_x.py b/.github/scripts/gate_x.py\n"
+        "--- a/.github/scripts/gate_x.py\n"
+        "+++ b/.github/scripts/gate_x.py\n"
+        "@@ -1,0 +1,3 @@\n"
+        '+DOC = """\n'
+        "+++ a list marker, not a diff header\n"
+        "+text = p.read_text()\n"
+    )
+    assert gate.parse_added_lines(diff) == {".github/scripts/gate_x.py": {1, 2, 3}}
+
+
+def test_a_removed_line_whose_content_starts_with_two_dashes_is_not_a_header(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The mirror case: removed content beginning `-- ` is emitted as
+    `--- ...`, and must not arm the post-image-header state machine."""
+    diff = (
+        "diff --git a/.github/scripts/gate_x.py b/.github/scripts/gate_x.py\n"
+        "--- a/.github/scripts/gate_x.py\n"
+        "+++ b/.github/scripts/gate_x.py\n"
+        "@@ -1,2 +1,1 @@\n"
+        "--- a signature dash line\n"
+        "+text = p.read_text()\n"
+    )
+    assert gate.parse_added_lines(diff) == {".github/scripts/gate_x.py": {1}}
+
+
+def test_a_post_image_path_without_the_b_prefix_fails_closed() -> None:
+    """--no-prefix output and a git-quoted path both land here. Guessing at
+    either silently drops a file from grading."""
+    diff = "diff --git a/x b/x\n--- a/x\n+++ .github/scripts/gate_x.py\n@@ -0,0 +1,1 @@\n+x = 1\n"
+    with pytest.raises(gate.ScanError, match="not a plain b/-prefixed path"):
+        gate.parse_added_lines(diff)
 
 
 def test_the_minus_header_line_is_not_counted_as_a_removal(tmp_path: pathlib.Path) -> None:
@@ -590,10 +699,18 @@ def test_an_unparseable_hunk_header_fails_closed(tmp_path: pathlib.Path, capsys:
 def test_a_git_quoted_path_fails_closed_rather_than_being_guessed_at(
     tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    diff = 'diff --git a/x b/x\n+++ "b/.github/scripts/g\\303\\251.py"\n@@ -0,0 +1,1 @@\n+text = 1\n'
+    """`core.quotePath` renders a non-ASCII path this way; unescaping it by
+    hand would be a guess, and a wrong guess drops the file from grading."""
+    diff = (
+        "diff --git a/x b/x\n"
+        "--- a/x\n"
+        '+++ "b/.github/scripts/g\\303\\251.py"\n'
+        "@@ -0,0 +1,1 @@\n"
+        "+text = 1\n"
+    )
     _write(tmp_path, "diff.txt", diff)
     assert gate.main(["--root", str(tmp_path), "--diff", str(tmp_path / "diff.txt")]) == 2
-    assert "quoted path" in capsys.readouterr().err
+    assert "not a plain b/-prefixed path" in capsys.readouterr().err
 
 
 def test_a_file_named_by_the_diff_but_missing_from_the_root_fails_closed(
