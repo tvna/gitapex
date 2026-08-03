@@ -411,6 +411,19 @@
       "tracking_issue": 650,
       "status": "active",
       "supersedes": null
+    },
+    {
+      "id": "hidden-characters",
+      "kind": "script",
+      "script": ".github/scripts/gate_hidden_characters.py",
+      "rule": "No repository-tracked file may carry a literal hidden/invisible Unicode character -- U+FEFF, the zero-width family (U+200B-U+200D), the bidi control characters (U+200E/U+200F, U+202A-U+202E, U+2066-U+2069), or word joiner (U+2060). The escape-sequence spelling of any of these (e.g. \\ufeff) is never graded -- that is the fix this gate steers authors toward. Discovery reads git-tracked files, so every ignored path is out of scope by construction. Diagnostic output never reproduces the offending character itself, naming the codepoint, its Unicode name, and line/column instead. Exits 2, never a silent pass, when no tracked file is discovered or a file cannot be read/decoded as UTF-8.",
+      "planes": ["ci"],
+      "trigger": ".github/workflows/hidden-characters-gate.yml on pull_request, plus tests/test_gate_hidden_characters.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "repo-hygiene",
+      "tracking_issue": 702,
+      "status": "active",
+      "supersedes": null
     }
   ],
   "clusters": {

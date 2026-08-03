@@ -1,0 +1,49 @@
+# Issue #702 (refs #665 repair 6): no repository-tracked file may carry a literal
+# hidden/invisible Unicode character (BOM, zero-width, bidi control) --
+# apm's own supply-chain scan already flags this repository over exactly
+# this class of defect, and PR #651's own authoring session reproduced it
+# twice in one sitting despite catching both before commit.
+#
+# Deliberately no `paths:` filter, following waza-eval-gate.yml's own
+# rationale: a workflow that never fires for a given PR leaves a required
+# status check Pending forever, whereas a job that runs and passes is safe
+# to promote to required later. The scan is stdlib-only Python over every
+# tracked file, so running it unconditionally costs a few seconds.
+name: Hidden characters gate
+
+on:
+  pull_request: {}
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hidden-characters:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      # No dependency install step: the gate is standard library only, and
+      # ubuntu-latest ships python3. It does shell out to `git ls-files` to
+      # read the tracked-file set, which the checkout above provides; a
+      # shallow clone is sufficient, so no fetch-depth override is needed.
+      - name: Check for hidden/invisible characters in tracked files
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/gate_hidden_characters.py
