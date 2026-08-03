@@ -12,12 +12,10 @@ from __future__ import annotations
 import io
 import pathlib
 import subprocess
-import sys
 import types
 
-import pytest
-
 import detect_touched_eval_skills as mod
+import pytest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "waza-eval-gate.yml"
@@ -263,11 +261,12 @@ def test_tr_based_pipeline_would_have_split_a_literal_newline_byte_in_a_path():
     # theoretical.
     data = b"evals/foo/\nweirdname.yaml\0evals/bar/eval.yaml\0"
     # A literal NUL cannot be passed as a subprocess argv element at all
-    # (Python raises "embedded null byte"), so `tr`'s NUL argument is given
-    # via a shell-quoted string instead, matching this file's other
-    # tr-based tests.
+    # (Python raises "embedded null byte"), but it does not need to be:
+    # `tr` interprets the two-character escapes \0 and \n itself, so the
+    # shell that used to be here was doing nothing but quoting. Byte-for-
+    # byte identical output, one fewer shell=True.
     converted = subprocess.run(
-        "tr '\\0' '\\n'", shell=True, input=data, check=True, capture_output=True
+        ["tr", "\\0", "\\n"], input=data, check=True, capture_output=True
     ).stdout.decode()
     broken = mod.parse_paths(converted)
     assert broken != ["evals/foo/\nweirdname.yaml", "evals/bar/eval.yaml"]
@@ -482,7 +481,12 @@ def test_fixed_git_diff_name_only_z_detects_the_non_ascii_skill(eval_gate_git_re
     # "Determine touched skills" step no longer uses `tr` at all (see the
     # embedded-newline-skill-name tests below for its real invocation).
     repo, base_sha, head_sha = eval_gate_git_repo
-    result = subprocess.run(
+    # S602 waived: the shell pipeline IS the artefact under test. These two
+    # tests reproduce the exact `git diff -z ... | tr` invocation the gate
+    # used to run, to prove the false-negative it caused; rewriting them
+    # without a shell would delete the thing being demonstrated. The only
+    # interpolated values are SHAs the test's own fixture repo just made.
+    result = subprocess.run(  # noqa: S602
         f'git diff --name-only -z "{base_sha}...{head_sha}" | tr \'\\0\' \'\\n\'',
         shell=True,
         cwd=repo,
@@ -556,7 +560,12 @@ def test_old_tr_pipeline_misses_a_skill_whose_touched_file_has_an_embedded_newli
     # NUL-turned-newline record separator, truncating the path down to a
     # bare "evals/foo/" directory fragment with no further segment.
     repo, base_sha, head_sha = eval_gate_git_repo_with_embedded_newline_filename
-    old = subprocess.run(
+    # S602 waived: the shell pipeline IS the artefact under test. These two
+    # tests reproduce the exact `git diff -z ... | tr` invocation the gate
+    # used to run, to prove the false-negative it caused; rewriting them
+    # without a shell would delete the thing being demonstrated. The only
+    # interpolated values are SHAs the test's own fixture repo just made.
+    old = subprocess.run(  # noqa: S602
         f'git diff --name-only -z "{base_sha}...{head_sha}" | tr \'\\0\' \'\\n\'',
         shell=True,
         cwd=repo,

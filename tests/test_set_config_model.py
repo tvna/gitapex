@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import pytest
-
 import set_config_model as scm
 
 # A minimal eval.yaml shaped like the committed suites: a top-level config
@@ -35,7 +34,7 @@ def test_preserves_everything_else_byte_for_byte():
     before = BASE.splitlines()
     after = out.splitlines()
     assert len(before) == len(after)
-    diffs = [(b, a) for b, a in zip(before, after) if b != a]
+    diffs = [(b, a) for b, a in zip(before, after, strict=True) if b != a]
     assert diffs == [("  model: claude-sonnet-4.6", "  model: claude-haiku-4.6")]
 
 

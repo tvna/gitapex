@@ -29,6 +29,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from pathlib import Path
 
 # Fenced code blocks only (```/~~~), not single-backtick inline code
 # spans: `_ACM_WAIVER_RE` below optionally wraps the literal word "ACM"
@@ -136,7 +137,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         body_text = (
-            open(args.body, encoding="utf-8").read() if args.body else sys.stdin.read()
+            Path(args.body).read_text(encoding="utf-8") if args.body else sys.stdin.read()
         )
     except FileNotFoundError:
         print(f"error: body file not found: {args.body}", file=sys.stderr)

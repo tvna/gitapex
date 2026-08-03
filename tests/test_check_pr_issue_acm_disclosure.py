@@ -37,7 +37,7 @@ class Response:
         self.status = status
         self.body = body.encode()
 
-    def __enter__(self) -> "Response":
+    def __enter__(self) -> Response:
         return self
 
     def __exit__(self, *args: object) -> None:
@@ -215,13 +215,13 @@ def test_inline_code_span_citation_is_stripped_before_scanning():
 
 def test_inline_code_span_does_not_swallow_content_after_it():
     body = "`Closes #12` then a real citation: Fixes #99"
-    resolving, context = checker.extract_citations("o", "r", "t", body)
+    resolving, _context = checker.extract_citations("o", "r", "t", body)
     assert resolving == (99,)
 
 
 def test_multiple_inline_code_spans_on_one_line_are_each_stripped():
     body = "See `hooks/check_acm_present_or_waiver.py`'s `has_acm_disclosure` -- Closes #7"
-    resolving, context = checker.extract_citations("o", "r", "t", body)
+    resolving, _context = checker.extract_citations("o", "r", "t", body)
     assert resolving == (7,)
 
 
@@ -429,7 +429,7 @@ def test_evaluate_denies_when_resolving_citation_but_no_token():
 
 
 def test_evaluate_passes_when_resolving_issue_is_clean():
-    passed, message = checker.evaluate(
+    passed, _message = checker.evaluate(
         "o", "r", "title", "Closes #1", "tok", opener=_opener_for(_VALID_ACM_TABLE), sleeper=lambda _: None
     )
     assert passed is True

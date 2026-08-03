@@ -33,7 +33,6 @@ from __future__ import annotations
 import argparse
 import re
 import subprocess
-import sys
 
 _BLOCK_SCALAR_INDICATORS = frozenset({">", ">-", ">+", "|", "|-", "|+"})
 _DESCRIPTION_KEY_RE = re.compile(r"^description:[ \t]*(.*)$")
@@ -94,8 +93,12 @@ def _read_at_revision(rev, path):
     """Return the file's content at `rev`, or None if it does not exist
     there (a newly added file, or the pre-rename path at head)."""
     try:
-        result = subprocess.run(
-            ["git", "show", f"{rev}:{path}"],
+        # S603/S607 waived: a fixed argv list with no shell, and `git`
+        # is intentionally resolved from PATH -- pinning an absolute path
+        # would break the three environments this has to run in (GitHub
+        # runner, the nix devShell, a contributor's machine).
+        result = subprocess.run(  # noqa: S603
+            ["git", "show", f"{rev}:{path}"],  # noqa: S607
             capture_output=True,
             text=True,
             encoding="utf-8",

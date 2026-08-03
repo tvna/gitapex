@@ -1,7 +1,6 @@
 import json
 
 import pytest
-
 import route_test_model as router
 
 

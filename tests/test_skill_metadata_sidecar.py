@@ -15,9 +15,8 @@ from __future__ import annotations
 import pathlib
 import re
 
-import pytest
-
 import check_skill_shape as css
+import pytest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 SKILLS_DIR = REPO_ROOT / "skills"
@@ -143,7 +142,7 @@ def _find_requires_cycle(graph: dict[str, list[str]]) -> list[str] | None:
             if dep not in color:
                 continue
             if color[dep] == GRAY:
-                return path[path.index(dep):] + [dep]
+                return [*path[path.index(dep):], dep]
             if color[dep] == WHITE:
                 found = visit(dep)
                 if found:

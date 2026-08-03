@@ -32,6 +32,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from pathlib import Path
 
 # \b is a prefix/suffix word-boundary, so "gated"/"gateway"/"trusted"/
 # "trustworthy" match while "aggregate"/"delegate"/"negotiate" do not.
@@ -76,7 +77,7 @@ def main(argv=None):
     )
     args = parser.parse_args(argv)
     try:
-        text = open(args.path, encoding="utf-8").read() if args.path else sys.stdin.read()
+        text = Path(args.path).read_text(encoding="utf-8") if args.path else sys.stdin.read()
     except FileNotFoundError:
         print(f"error: file not found: {args.path}", file=sys.stderr)
         return 1

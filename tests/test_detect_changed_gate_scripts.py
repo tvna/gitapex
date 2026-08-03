@@ -20,9 +20,8 @@ from __future__ import annotations
 import json
 import pathlib
 
-import pytest
-
 import detect_changed_gate_scripts as detect
+import pytest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 

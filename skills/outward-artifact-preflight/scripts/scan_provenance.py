@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from pathlib import Path
 
 # Non-exhaustive by design (see SKILL.md's open-invariant rule): these are
 # the common instances, not a closed allowlist. Add more patterns as new
@@ -67,7 +68,7 @@ def main(argv=None):
     )
     args = parser.parse_args(argv)
     try:
-        text = open(args.file, encoding="utf-8").read() if args.file else sys.stdin.read()
+        text = Path(args.file).read_text(encoding="utf-8") if args.file else sys.stdin.read()
     except FileNotFoundError:
         print(f"error: file not found: {args.file}", file=sys.stderr)
         return 1

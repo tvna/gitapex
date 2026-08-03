@@ -17,9 +17,8 @@ from __future__ import annotations
 
 import io
 
-import pytest
-
 import gate_skill_audit_disclosure as gate
+import pytest
 
 _VALID_SECTION = """\
 ## Skill audit evidence

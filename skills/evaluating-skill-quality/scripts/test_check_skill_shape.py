@@ -10,9 +10,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-import pytest
-
 import check_skill_shape as css
+import pytest
 
 _SCRIPT_PATH = Path(css.__file__).resolve()
 
@@ -37,7 +36,7 @@ def _symlinks_supported():
         with tempfile.TemporaryDirectory() as td:
             target = Path(td) / "target"
             target.mkdir()
-            os.symlink(target, Path(td) / "link", target_is_directory=True)
+            (Path(td) / "link").symlink_to(target, target_is_directory=True)
         return True
     except OSError:
         return False
@@ -213,7 +212,7 @@ def test_allowed_root_rejects_symlinked_target(tmp_path, capsys):
     approved = tmp_path / "approved"
     approved.mkdir()
     link = approved / "linked-skill"
-    os.symlink(real, link, target_is_directory=True)
+    link.symlink_to(real, target_is_directory=True)
     assert css.main([
         "--allowed-root", str(approved), str(link),
     ]) == 2
@@ -228,7 +227,7 @@ def test_allowed_root_rejects_symlink_inside_skill(tmp_path, capsys):
     refs.mkdir()
     outside = tmp_path / "outside.md"
     outside.write_text("# outside\n", encoding="utf-8")
-    os.symlink(outside, refs / "linked.md")
+    (refs / "linked.md").symlink_to(outside)
     assert css.main([
         "--allowed-root", str(tmp_path), str(d),
     ]) == 2
@@ -255,7 +254,7 @@ def test_relative_target_matches_dir_name(tmp_path, monkeypatch):
     # metadata-name-matches-dir compares against the real directory name.
     d = _write_skill(tmp_path)
     monkeypatch.chdir(d)
-    by_dot = _by_name(css.check_shape(Path(".")))
+    by_dot = _by_name(css.check_shape(Path()))
     assert by_dot["metadata-name-matches-dir"].passed is True
     assert css.main(["."]) == 0
     by_file = _by_name(css.check_shape(Path("SKILL.md")))
@@ -272,7 +271,7 @@ def test_metadata_name_matches_symlink_basename_not_target(tmp_path):
     # symlink's own name, not the real directory it points to.
     real_dir = _write_skill(tmp_path, meta_name="link-name")
     link = tmp_path / "link-name"
-    os.symlink(real_dir, link, target_is_directory=True)
+    link.symlink_to(real_dir, target_is_directory=True)
     by = _by_name(css.check_shape(link))
     assert by["metadata-name-matches-dir"].passed is True
     assert css.main([str(link)]) == 0
