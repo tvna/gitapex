@@ -1,7 +1,14 @@
 from __future__ import annotations
 
+import base64
+import hashlib
+import io
 import re
+import urllib.error
+import urllib.request
+from email.message import Message
 from pathlib import Path
+from typing import Any
 
 import provision_class_b as pcb
 import pytest
@@ -109,3 +116,88 @@ def test_detect_nix_system(sysname: str, machine: str, expected: str) -> None:
 def test_detect_nix_system_rejects_unknown() -> None:
     with pytest.raises(pcb.UnsupportedSystemError):
         pcb.detect_nix_system("Windows", "AMD64")
+
+
+# --- Task 3: download + SHA256 verification ---------------------------------
+
+
+class _FakeResponse:
+    def __init__(self, status: int, body: bytes) -> None:
+        self.status = status
+        self._body = body
+
+    def __enter__(self) -> _FakeResponse:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        return None
+
+    def read(self) -> bytes:
+        return self._body
+
+
+def _opener_returning(body: bytes) -> Any:
+    def _opener(request: urllib.request.Request) -> _FakeResponse:
+        return _FakeResponse(200, body)
+
+    return _opener
+
+
+def _opener_raising(codes: list[int]) -> Any:
+    calls = {"n": 0}
+
+    def _opener(request: urllib.request.Request) -> _FakeResponse:
+        code = codes[calls["n"]]
+        calls["n"] += 1
+        if code == 200:
+            return _FakeResponse(200, b"payload")
+        raise urllib.error.HTTPError(request.full_url, code, "err", Message(), io.BytesIO(b""))
+
+    return _opener
+
+
+def test_sha256_sri_matches_openssl_reference_value() -> None:
+    # Same value independently verified this session via
+    # `openssl dgst -sha256 -binary apm.tar.gz | openssl base64 -A`
+    # against flake.nix's pinned apm x86_64-linux hash.
+    data = b"hello world"
+    expected = "sha256-" + base64.b64encode(hashlib.sha256(data).digest()).decode("ascii")
+    assert pcb.sha256_sri(data) == expected
+
+
+def test_download_asset_returns_body_on_success() -> None:
+    body = pcb.download_asset("https://example.test/a.tar.gz", opener=_opener_returning(b"archive-bytes"))
+    assert body == b"archive-bytes"
+
+
+def test_download_asset_retries_on_5xx_then_succeeds() -> None:
+    sleeps: list[float] = []
+    body = pcb.download_asset(
+        "https://example.test/a.tar.gz",
+        opener=_opener_raising([500, 502, 200]),
+        sleeper=sleeps.append,
+    )
+    assert body == b"payload"
+    assert len(sleeps) == 2
+
+
+def test_download_asset_does_not_retry_on_404() -> None:
+    with pytest.raises(pcb.DownloadError, match="not-found"):
+        pcb.download_asset("https://example.test/a.tar.gz", opener=_opener_raising([404]))
+
+
+def test_download_asset_raises_after_exhausting_retries() -> None:
+    with pytest.raises(pcb.DownloadError, match="fetch-failed"):
+        pcb.download_asset(
+            "https://example.test/a.tar.gz",
+            opener=_opener_raising([500, 500, 500]),
+            sleeper=lambda _seconds: None,
+            max_attempts=3,
+        )
+
+
+def test_verify_and_download_raises_hash_mismatch_error() -> None:
+    flake_text = (REPO_ROOT / "flake.nix").read_text(encoding="utf-8")
+    spec = pcb.parse_flake_class_b_pins(flake_text)["apm"]
+    with pytest.raises(pcb.HashMismatchError):
+        pcb.verify_and_download(spec, "x86_64-linux", opener=_opener_returning(b"not the real archive"))

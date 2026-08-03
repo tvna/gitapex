@@ -12,10 +12,16 @@ place."
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import re
-from collections.abc import Mapping
+import time
+import urllib.error
+import urllib.request
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 CLASS_B_TOOL_NAMES: tuple[str, ...] = ("waza", "apm", "rtk", "betterleaks")
 
@@ -199,3 +205,68 @@ def current_nix_system() -> str:
     import platform
 
     return detect_nix_system(platform.system(), platform.machine())
+
+
+# --- Task 3: download + SHA256 verification ---------------------------------
+
+_HTTP_TIMEOUT_SECONDS = 30
+_MAX_ATTEMPTS = 3
+_RETRY_BASE_DELAY_SECONDS = 2.0
+
+
+def _default_opener(request: urllib.request.Request) -> Any:  # matches urlopen's own untyped response object
+    return urllib.request.urlopen(request, timeout=_HTTP_TIMEOUT_SECONDS)  # noqa: S310 -- URL is built only from flake.nix's own pinned owner/repo/tag/asset, never attacker input
+
+
+def sha256_sri(data: bytes) -> str:
+    return "sha256-" + base64.b64encode(hashlib.sha256(data).digest()).decode("ascii")
+
+
+class DownloadError(RuntimeError):
+    """A Class B release asset could not be fetched -- either a definitive
+    404 (no retry) or all retries against a transient failure exhausted."""
+
+
+def download_asset(
+    url: str,
+    opener: Callable[[urllib.request.Request], Any] = _default_opener,
+    sleeper: Callable[[float], None] = time.sleep,
+    max_attempts: int = _MAX_ATTEMPTS,
+) -> bytes:
+    request = urllib.request.Request(url)  # noqa: S310 -- same pinned-URL justification as _default_opener
+    last_error: Exception | None = None
+    for attempt in range(max_attempts):
+        try:
+            with opener(request) as response:
+                return bytes(response.read())
+        except urllib.error.HTTPError as error:
+            if error.code == 404:
+                raise DownloadError(f"not-found: {url} returned 404") from error
+            last_error = error
+        except OSError as error:
+            last_error = error
+        if attempt < max_attempts - 1:
+            sleeper(_RETRY_BASE_DELAY_SECONDS * (2**attempt))
+    raise DownloadError(f"fetch-failed: {url} failed after {max_attempts} attempts: {last_error}")
+
+
+class HashMismatchError(RuntimeError):
+    """Downloaded bytes don't match flake.nix's pin. Never extract or
+    install on this path -- fail closed."""
+
+
+def verify_and_download(
+    spec: ClassBToolSpec,
+    system: str,
+    opener: Callable[[urllib.request.Request], Any] = _default_opener,
+    sleeper: Callable[[float], None] = time.sleep,
+) -> bytes:
+    pin = spec.systems[system]
+    url = spec.release_url(system)
+    data = download_asset(url, opener=opener, sleeper=sleeper)
+    actual = sha256_sri(data)
+    if actual != pin.sha256_sri:
+        raise HashMismatchError(
+            f"{spec.pname}/{system}: expected {pin.sha256_sri}, got {actual} (url={url})"
+        )
+    return data
