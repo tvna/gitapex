@@ -1,7 +1,7 @@
 # evaluating-deterministic-gate-quality eval status
 
 A committed task corpus now exists: `evals/evaluating-deterministic-gate-quality/`
-has 22 task fixtures under `tasks/` plus `eval.yaml`, covering the skill's
+has 26 task fixtures under `tasks/` plus `eval.yaml`, covering the skill's
 five-way verdict taxonomy (well-formed and well-placed / well-formed but
 misplaced / not well-formed / no-gate-warranted / indeterminate), its
 mechanism-fit short-circuit and decomposition rule, its coverage-attestation
@@ -27,6 +27,59 @@ dimensions were untouched, and a wording bug in one existing fixture (citing
 "dimension 12" instead of the correct "dimension 18" for secret redaction) --
 fixed, plus 8 new fixtures added to close the highest-value gaps.
 
+**Issue #587 (fable Blind Spot Pass):** an independent subagent dispatch on
+a fable model, deliberately not the session that authored the existing 22
+fixtures, ran a `battle-testing-a-skill`-style cold-enumeration pass over
+this skill's own Stop boundaries (`SKILL.md` and
+`references/grading-procedure.md`'s grading-specific boundaries) against
+the real fixture text, the same procedure issue #472 ran for
+`vetting-attack-surface`. It judged substance, not dimension citations
+(`check_dimension_coverage.py`'s own coverage map already handles the
+citation question): of roughly twelve Stop-boundary invariants, only four
+were substantively exercised before this pass (a base64-hidden
+instruction, a forged waiver claim, an unsandboxed-execution refusal,
+secret redaction). It found the verdict-taxonomy, mechanism-fit, and
+coverage-attestation coverage already sound, but named six Stop-boundary
+gaps.
+
+Four were fixed, closing the highest-value gaps: a standalone-log
+"already reviewed, skip re-grading" claim distinct from the forged-waiver
+fixture (`adversarial-stale-review-log-claim.yaml`); a request embedded in
+the reviewed artifact asking the reviewer to disclose this skill's own
+operating instructions verbatim (`adversarial-operating-instructions-
+disclosure-request.yaml`); a gate script that sounds safe to execute
+("just pipe synthetic stdin at it") but hides an unconditional
+exfiltration line above its actual deny logic, testing the read-before-
+execute half of the execution-safety boundary rather than only the
+declining-an-explicit-request half `guardrail-no-unsandboxed-
+execution.yaml` already covered (`adversarial-booby-trapped-source-
+unconditional-exfiltration.yaml`); and an adversarially padded
+4,800-invariant coverage-attestation input, testing the resource-bound
+Stop boundary (`adversarial-padded-invariant-list-resource-bound.yaml`).
+
+Two lower-severity findings were named but deliberately deferred, not
+bundled in: delimiter-safe quoting of hostile evidence inside a gate
+script (a fenced-code-closing injection attempt) has no fixture yet --
+deferred because a substring-based `output_contains` assertion cannot
+really prove the report's own fencing is structurally safe, and forcing
+one risks the same paraphrase-drift false-fails already named below; and
+"shape-checks-pass is not itself approval" under explicit pressure has no
+dedicated adversarial fixture, judged lower value since
+`well-formed-and-well-placed-positive.yaml` and
+`fake-optimization-fail-open-fast-path.yaml` already exert adjacent
+pressure on that same boundary. The Blind Spot Pass also found the
+"several Stop boundaries also remain uncovered where no safe verbatim
+assertion could be found" sentence below was overbroad: three of its four
+fixed gaps admit a safe assertion after all (one via `output_not_contains`
+rather than `output_contains`) -- narrowed accordingly; the sentence now
+describes only the two gaps just named above plus whatever the eight
+uncovered numbered dimensions still lack. `lint_fixture_assertions.py`
+(2 pre-existing warnings, both predating and unrelated to this pass;
+0 new warnings from the 4 additions) and `check_dimension_coverage.py`
+(still 12/20 dimensions, 4/4 axes -- the new fixtures cite already-covered
+dimensions 1, 5, and 10, not one of the eight uncovered numbers) re-verified
+clean against the grown corpus.
+
 This coverage map is no longer a one-off: `evals/scripts/
 check_dimension_coverage.py` makes it repeatable, discovering this skill's
 own numbered dimensions (`references/dimensions.md`) and named cross-cutting
@@ -45,10 +98,12 @@ from the deny decision (13), structured-output hygiene (14), runtime
 tamper-detection (16), discoverability (17), or bidirectional correspondence
 checking (20, added per issue #506's own deferred follow-up and #536's
 retrospective closing it out) without inventing an artificial scenario just
-to name-check a dimension number, and several Stop boundaries also remain
-uncovered where no safe verbatim assertion could be found without risking a
-paraphrase-drift false-fail; see the fixtures' own `description` fields for
-what each one actually pins down. The tool is citation-based, not semantic
+to name-check a dimension number. Two Stop boundaries also remain
+uncovered, named above (delimiter-safe quoting of hostile evidence;
+shape-checks-pass-is-not-approval under pressure), where no safe verbatim
+assertion could be found without risking a paraphrase-drift false-fail;
+see the fixtures' own `description` fields for what each one actually
+pins down. The tool is citation-based, not semantic
 (its own module docstring names this explicitly), so a future fixture could
 exercise one of these eight substantively without literally writing its
 number -- rerun the script before trusting this list stale.
@@ -59,4 +114,4 @@ same constraint the "Cross-model matrix scaffolding" section of
 `docs/skill-eval-status.md` already discloses for the whole repository. This
 is scaffolding, not a measurement -- a credentialed dispatch (or an
 environment with `waza` available) is still needed to produce the first real
-run. Refs #435, #506, #507, #508, #511, #536.
+run. Refs #435, #472, #506, #507, #508, #511, #536, #587.

@@ -187,6 +187,7 @@ module = [
     "test_check_dimension_coverage",
     "test_check_dispatch_trace",
     "test_check_file_ownership_conflicts",
+    "test_check_gate_shape",
     "test_check_issue_acm_disclosure",
     "test_check_middleware_table_shape",
     "test_check_pr_issue_acm_disclosure",
@@ -293,9 +294,9 @@ ignore = ["E501", "SIM108", "RET504"]
 "**/conftest.py" = ["B011", "B017", "S101", "S105", "S106", "S108", "S404", "S603", "S607"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "skills/battle-testing-a-skill/scripts", "skills/evaluating-skill-quality/scripts", "skills/executing-a-branch-plan/scripts", "skills/auditing-agent-product-scope/scripts", "hooks"]
-pythonpath = [".github/scripts", "skills/battle-testing-a-skill/scripts", "skills/scorer-gated-skill-edits/scripts", "skills/evaluating-skill-quality/scripts", "skills/auditing-agent-product-scope/scripts", "evals/scripts", "hooks"]
-addopts = "--cov=.github/scripts --cov=skills/battle-testing-a-skill/scripts --cov=skills/scorer-gated-skill-edits/scripts --cov=skills/evaluating-skill-quality/scripts --cov=skills/auditing-agent-product-scope/scripts --cov=evals/scripts --cov=hooks --cov-report=term-missing"
+testpaths = ["tests", "skills/battle-testing-a-skill/scripts", "skills/evaluating-skill-quality/scripts", "skills/executing-a-branch-plan/scripts", "skills/auditing-agent-product-scope/scripts", "skills/evaluating-deterministic-gate-quality/scripts", "hooks"]
+pythonpath = [".github/scripts", "skills/battle-testing-a-skill/scripts", "skills/scorer-gated-skill-edits/scripts", "skills/evaluating-skill-quality/scripts", "skills/auditing-agent-product-scope/scripts", "skills/evaluating-deterministic-gate-quality/scripts", "evals/scripts", "hooks"]
+addopts = "--cov=.github/scripts --cov=skills/battle-testing-a-skill/scripts --cov=skills/scorer-gated-skill-edits/scripts --cov=skills/evaluating-skill-quality/scripts --cov=skills/auditing-agent-product-scope/scripts --cov=skills/evaluating-deterministic-gate-quality/scripts --cov=evals/scripts --cov=hooks --cov-report=term-missing"
 
 # Deliberately NOT adding "hooks" here (issue #657): gate_evals_scripts_coverage.py
 # reads this list, not addopts, as the authoritative scope for its 90%-per-file
@@ -308,7 +309,7 @@ addopts = "--cov=.github/scripts --cov=skills/battle-testing-a-skill/scripts --c
 # directly imported (e.g. hooks/check_pr_issue_acm_disclosure.py's own
 # opener-injection unit tests) via --cov-report=term-missing, without gating.
 [tool.coverage.run]
-source = [".github/scripts", "skills/battle-testing-a-skill/scripts", "skills/scorer-gated-skill-edits/scripts", "skills/evaluating-skill-quality/scripts", "skills/auditing-agent-product-scope/scripts", "evals/scripts"]
+source = [".github/scripts", "skills/battle-testing-a-skill/scripts", "skills/scorer-gated-skill-edits/scripts", "skills/evaluating-skill-quality/scripts", "skills/auditing-agent-product-scope/scripts", "skills/evaluating-deterministic-gate-quality/scripts", "evals/scripts"]
 
 [tool.coverage.report]
 exclude_lines = [

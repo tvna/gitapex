@@ -4,8 +4,15 @@ Two lanes, mirroring `evaluating-skill-quality`'s own split:
 
 - **Deterministic-shape checks** (1-6) -- fixed rules; a script could
   grade these mechanically if one existed for the target's own tooling.
-  No bundled checker ships with this skill yet (see `SKILL.md`'s Lifecycle
-  note); apply these by direct inspection.
+  `scripts/check_gate_shape.py` now mechanically grades dimensions 1, 2,
+  4, 5, and 6 (dimension 3 as a disclosed heuristic only, never a hard
+  fail) for Domain 2 (agent-harness hook subprocess) targets -- see that
+  script's own module docstring for exactly which sub-checks it runs and
+  why it is scoped to that one domain. Domains 1, 3, and 4 (git hook, CI
+  job step, MCP server subprocess) have no bundled checker yet (see
+  `SKILL.md`'s Lifecycle note); apply the checks below to those domains,
+  and to whatever a Domain-2 target's own manual judgment still requires,
+  by direct inspection.
 - **Probabilistic-maturity dimensions** (7-20) -- need judgment; walk all
   of them, quoting the specific evidence that earns each verdict.
 
