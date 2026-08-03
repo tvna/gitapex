@@ -715,11 +715,18 @@ def test_an_untouched_function_elsewhere_in_the_file_stays_out_of_scope(
 # --- deferred execution: a try does not protect what runs later ---------
 
 
-def test_a_generator_expression_inside_a_try_is_not_protected_by_it(
+def test_a_generator_expression_inside_a_try_is_a_stated_miss(
     tmp_path: pathlib.Path,
 ) -> None:
-    """Confirmed by execution: the read runs when the generator is consumed,
-    outside the `try` that lexically encloses it."""
+    """A genexp assigned inside a `try` and consumed outside it really does
+    escape that handler -- proved at runtime -- and this gate does not report
+    it. Three rules were tried: never protected (a false positive on
+    `sorted(genexp)`, which IS caught and is the only such shape in this
+    repository), protected only when passed straight into a call (four
+    reproduced false positives on keyword, starred, `for`-clause and
+    assign-then-consume forms), and protected always. The third is the one
+    that is never wrong in the reporting direction, and its miss is named
+    here rather than left to be rediscovered."""
     source = (
         "def read_all(paths):\n"
         "    try:\n"
@@ -728,37 +735,21 @@ def test_a_generator_expression_inside_a_try_is_not_protected_by_it(
         "        return []\n"
         "    return list(texts)\n"
     )
-    assert _rules(_grade(tmp_path, source)) == ["decode-gap"]
+    assert _grade(tmp_path, source) == []
 
 
 @pytest.mark.parametrize("consumer", ["sorted", "list", "any", "'-'.join"])
-def test_a_generator_expression_consumed_by_the_call_it_is_passed_to_stays_protected(
+def test_a_generator_expression_consumed_inside_the_try_is_protected(
     tmp_path: pathlib.Path, consumer: str
 ) -> None:
-    """Verified at runtime: `sorted(p.read_text() for p in ps)` inside a `try`
-    IS caught by it. Reporting these made the gate disagree with itself --
-    rewriting `list(x for x in y)` as `[x for x in y]`, the same program,
-    flipped the verdict -- and it is the only genexp-in-a-try shape this
-    repository actually contains."""
+    """The other side, and the one that occurs for real: verified at runtime,
+    `sorted(p.read_text() for p in ps)` inside a `try` IS caught by it. This
+    also keeps the gate self-consistent -- `list(x for x in y)` and
+    `[x for x in y]` are the same program and must get the same verdict."""
     source = (
         "def read_all(paths):\n"
         "    try:\n"
         f"        return {consumer}(pathlib.Path(p).read_text(encoding='utf-8') for p in paths)\n"
-        "    except ValueError:\n"
-        "        return []\n"
-    )
-    assert _grade(tmp_path, source) == []
-
-
-def test_a_list_comprehension_inside_a_try_is_eager_and_stays_protected(
-    tmp_path: pathlib.Path,
-) -> None:
-    """The other side of the same boundary, so the fix above cannot quietly
-    grow into "every comprehension"."""
-    source = (
-        "def read_all(paths):\n"
-        "    try:\n"
-        "        return [pathlib.Path(p).read_text(encoding='utf-8') for p in paths]\n"
         "    except ValueError:\n"
         "        return []\n"
     )
@@ -803,113 +794,33 @@ def test_an_attribute_handler_name_is_matched_by_its_final_component(
 # --- json taint: module scope, shadowing, and the type actually checked --
 
 
-def test_a_module_level_json_result_read_back_inside_a_function_is_flagged(
+def test_a_module_level_json_value_read_inside_a_function_is_a_stated_miss(
     tmp_path: pathlib.Path,
 ) -> None:
-    """`CONFIG = json.loads(...)` plus `CONFIG.get(...)` in a function is the
-    commonest shape of this defect; per-scope taint with no module inheritance
-    could not see it at all."""
+    """Taint does not cross a scope boundary, so `CONFIG = json.loads(...)`
+    read through `CONFIG.get(...)` in a function is not reported. Inheriting
+    it was implemented and reverted: it required parameter, local-rebinding
+    and import shadowing to avoid false positives, each of which required
+    statement order, and order-sensitivity made the verdict depend on which
+    branch of a `try/except` was written first. Pinned so the miss is a
+    decision, not an accident."""
     source = "CONFIG = json.loads(RAW)\n\n\ndef names():\n    return CONFIG.get('names', [])\n"
-    assert _rules(_grade(tmp_path, source)) == ["json-shape-gap"]
-
-
-def test_a_module_level_guard_clears_the_inherited_taint(tmp_path: pathlib.Path) -> None:
-    source = (
-        "CONFIG = json.loads(RAW)\n"
-        "if not isinstance(CONFIG, dict):\n"
-        "    raise SystemExit(2)\n"
-        "\n"
-        "\n"
-        "def names():\n"
-        "    return CONFIG.get('names', [])\n"
-    )
     assert _grade(tmp_path, source) == []
 
 
-@pytest.mark.parametrize(
-    "body",
-    [
-        "def names(CONFIG):\n    return CONFIG.get('names', [])\n",
-        "def names():\n    CONFIG = load_defaults()\n    return CONFIG.get('names', [])\n",
-    ],
-)
-def test_a_local_name_shadowing_the_module_one_is_a_different_value(
-    tmp_path: pathlib.Path, body: str
-) -> None:
-    """Inheritance must not turn every same-named local into a finding."""
-    assert _grade(tmp_path, "CONFIG = json.loads(RAW)\n\n\n" + body) == []
-
-
-def test_a_rebinding_after_the_access_does_not_shadow_the_module_value(
+def test_a_name_both_parsed_and_rebound_in_one_scope_is_not_tainted(
     tmp_path: pathlib.Path,
 ) -> None:
-    """Collecting rebound names without their line let an assignment on the
-    line *after* the read excuse it. Confirmed at runtime: with a JSON array
-    on disk, that read raises AttributeError."""
+    """Order-blind and conservative on purpose. `try: data = json.loads(...)
+    except: data = {}` is the ordinary fallback, and a rule that compared line
+    numbers reported it or not depending on branch order."""
     source = (
-        "CONFIG = json.loads(pathlib.Path('c.json').read_text(encoding='utf-8'))\n"
-        "\n"
-        "\n"
-        "def reload_and_use():\n"
-        "    global CONFIG\n"
-        "    value = CONFIG.get('gates')\n"
-        "    CONFIG = {}\n"
-        "    return value\n"
-    )
-    assert "json-shape-gap" in _rules(_grade(tmp_path, source))
-
-
-def test_a_rebinding_before_the_access_does_shadow_it(tmp_path: pathlib.Path) -> None:
-    source = (
-        "CONFIG = json.loads(RAW)\n"
-        "\n"
-        "\n"
-        "def use():\n"
-        "    CONFIG = load_defaults()\n"
-        "    return CONFIG.get('gates')\n"
-    )
-    assert _grade(tmp_path, source) == []
-
-
-def test_a_module_level_name_reassigned_after_its_parse_is_no_longer_tainted(
-    tmp_path: pathlib.Path,
-) -> None:
-    source = (
-        "DATA = json.loads(RAW)\n"
-        "DATA = normalise(DATA)\n"
-        "\n"
-        "\n"
-        "def use():\n"
-        "    return DATA.get('k')\n"
-    )
-    assert _grade(tmp_path, source) == []
-
-
-@pytest.mark.parametrize(
-    "binder",
-    [
-        "from mypkg import config",
-        "import config",
-    ],
-)
-def test_an_import_shadows_an_inherited_module_name(
-    tmp_path: pathlib.Path, binder: str
-) -> None:
-    """An imported name is a module, not the parsed value; reporting its
-    `.get()` was a false positive."""
-    source = f"config = json.loads(RAW)\n{binder}\n\n\ndef use():\n    return config.get('k')\n"
-    assert _grade(tmp_path, source) == []
-
-
-def test_a_with_binding_shadows_an_inherited_module_name(tmp_path: pathlib.Path) -> None:
-    """`with open(...) as config` binds a file object, not the parsed value."""
-    source = (
-        "config = json.loads(RAW)\n"
-        "\n"
-        "\n"
-        "def use(path):\n"
-        "    with open_reader(path) as config:\n"
-        "        return config.get('k')\n"
+        "def load(raw):\n"
+        "    try:\n"
+        "        data = json.loads(raw)\n"
+        "    except ValueError:\n"
+        "        data = {}\n"
+        "    return data.get('k')\n"
     )
     assert _grade(tmp_path, source) == []
 
@@ -1132,12 +1043,13 @@ def test_a_waiver_for_an_inner_finding_not_in_the_diff_still_stays_with_it(
     assert waived == []
 
 
-def test_two_findings_on_one_line_give_the_waiver_to_the_inner_expression(
+def test_two_findings_on_one_line_are_both_waived_by_one_comment(
     tmp_path: pathlib.Path,
 ) -> None:
-    """Span length cannot order two findings that occupy the same single line.
-    Depth can: in `open(data.get(...), ...)` the `.get()` is nested inside the
-    `open()`, and it is the `.get()` the reason names."""
+    """A waiver applies to every finding the gate reports on that line. Trying
+    to pick one of them -- by span length, then by AST depth -- spent a reason
+    written about one finding on another, left such a line impossible to waive
+    at all, and printed it as both honoured and rejected at once."""
     source = (
         "def load(raw):\n"
         "    data = json.loads(raw)\n"
@@ -1148,8 +1060,8 @@ def test_two_findings_on_one_line_give_the_waiver_to_the_inner_expression(
     violations, waived, _graded = gate.find_violations(
         _whole_file_diff(".github/scripts/gate_x.py", source), tmp_path
     )
-    assert _rules(violations) == ["decode-gap"]
-    assert _rules(waived) == ["json-shape-gap"]
+    assert violations == []
+    assert sorted(_rules(waived)) == ["decode-gap", "json-shape-gap"]
 
 
 def test_an_edit_to_an_enclosing_handler_is_not_a_place_a_waiver_can_sit(
@@ -1180,16 +1092,22 @@ def test_the_waiver_marker_is_case_insensitive(tmp_path: pathlib.Path) -> None:
     assert len(waived) == 1
 
 
-def test_a_waiver_on_any_line_of_a_multi_line_call_is_honoured(
+def test_a_waiver_must_sit_on_the_line_the_gate_reports(
     tmp_path: pathlib.Path,
 ) -> None:
-    source = 'text = p.read_text(\n    encoding="utf-8",  # exception-handler-gap: WAIVED: caller guards\n)\n'
-    _write(tmp_path, ".github/scripts/gate_x.py", source)
+    """One rule, stated as the error message states it: put the comment on the
+    line named in the finding. A waiver on a continuation line of the same
+    call is not honoured, which is the cost of having a rule a contributor can
+    predict without reading this file."""
+    reported = 'text = p.read_text(  # exception-handler-gap: WAIVED: caller guards\n    encoding="utf-8",\n)\n'
+    continuation = 'text = p.read_text(\n    encoding="utf-8",  # exception-handler-gap: WAIVED: caller guards\n)\n'
+    _write(tmp_path, ".github/scripts/gate_x.py", reported)
     violations, waived, _graded = gate.find_violations(
-        _whole_file_diff(".github/scripts/gate_x.py", source), tmp_path
+        _whole_file_diff(".github/scripts/gate_x.py", reported), tmp_path
     )
     assert violations == []
     assert len(waived) == 1
+    assert _rules(_grade(tmp_path, continuation)) == ["decode-gap"]
 
 
 # --- fail closed (exit 2) ----------------------------------------------

@@ -39,13 +39,13 @@ handle no exception type that a `UnicodeDecodeError` would satisfy.
 that exception or one of its ancestors.
 
 **Rule `json-shape-gap`.** A `.get(...)` on a value that came from
-`json.loads(...)` / `json.load(...)` with no `isinstance()` against a
-mapping type (`dict`, `Mapping`, `MutableMapping`) before it. `[]`, `"x"`,
-`1`, `true` and `null` are all valid JSON, so `json.JSONDecodeError` never
-fires for them and the `.get()` raises `AttributeError` instead. A
-module-level value is inherited into every function, since that is where
-`CONFIG = json.loads(...)` read back through `CONFIG.get(...)` lives;
-a parameter or a local rebinding of the same name shadows it.
+`json.loads(...)` / `json.load(...)` in the same scope, with no
+`isinstance()` against a mapping type (`dict`, `Mapping`, `MutableMapping`)
+before it, where every member of a tuple of types has to be one. `[]`,
+`"x"`, `1`, `true` and `null` are all valid JSON, so `json.JSONDecodeError`
+never fires for them and the `.get()` raises `AttributeError` instead. A
+name assigned both a parse and something else anywhere in the scope is
+dropped rather than tainted -- order-blind on purpose, see below.
 
 **Scope is the diff, not the repository, and that is the load-bearing
 design decision.** Measured against merged `main` (afd18eb) these two rules
@@ -71,9 +71,8 @@ and that was found by review rather than by reasoning: narrowing
 `except ValueError` to `except OSError` creates a decode gap without
 editing the read, and replacing an `isinstance` guard creates a shape gap
 without editing the `.get()`. Both are added lines; neither is inside the
-expression. A waiver, unlike a trigger, is only honoured on the offending
-expression's own lines, and only for the innermost finding containing it --
-a waiver has to name the thing it excuses.
+expression. A waiver, unlike a trigger, is honoured on exactly one line:
+the one the finding is reported at. Put the comment where the error points.
 
 In-scope paths are this repository's deterministic checker scripts --
 `.github/scripts/*.py`, `hooks/*.py`, `evals/scripts/*.py`,
@@ -92,19 +91,51 @@ read, and a subscript or `.items()` on an unvalidated JSON result rather
 than a `.get()`. Widening any of them is a measurement, not a guess -- run
 the rule repo-wide and triage the delta first, the same way this one was.
 
-Known misses, named rather than left to be rediscovered: a
-`contextlib.suppress(UnicodeDecodeError)` around a read is not read as a
-handler (it would be a false positive, and the inline waiver covers it); a
-closure reading an *enclosing function's* JSON value is not graded, unlike
-a module-level one; and a guard deleted with nothing added in its place
-leaves no added line for any diff-scoped rule to key on.
+**Known misses, each one a decision that was made and then measured, not an
+oversight.** Three of them are places where a more capable rule was built,
+found to be wrong in *both* directions under adversarial review, and
+reverted to something narrower that is only ever wrong in the missing
+direction -- which is the trade issue #682's own bar asks for, and the
+trade a blocking gate has to make if it is to survive contact with
+contributors:
+
+* **Taint does not cross a scope.** `CONFIG = json.loads(...)` at module
+  level, read through `CONFIG.get(...)` inside a function, is not reported.
+  Inheriting it needed parameter, local-rebinding and import shadowing to
+  avoid false positives; each of those needed statement order; and
+  order-sensitivity made the verdict depend on which branch of a
+  `try/except` was written first. A rule whose answer depends on branch
+  order is worse than one that misses.
+* **A name assigned both a parse and something else is dropped, wherever
+  those assignments sit.** `try: CONFIG = json.loads(...) except:
+  CONFIG = {}` is the ordinary config-with-fallback and is not reported.
+* **A generator expression is protected like a comprehension.** One
+  assigned inside a `try` and consumed outside it genuinely escapes that
+  handler, and is not reported. Treating every genexp as deferred was a
+  false positive on `sorted(p.read_text() for p in ps)` -- which IS caught,
+  and is the only genexp-in-a-try shape this repository contains -- and
+  restricting the exception to "passed straight into a call" produced four
+  more false positives (keyword argument, starred, `for`-clause,
+  assign-then-consume) while making the same program grade differently
+  depending on whether it was spelled `list(x for x in y)` or
+  `[x for x in y]`.
+* An `isinstance()` is read as a guard wherever it appears in the scope
+  before the access, not only in a branch that actually protects it, so
+  `if isinstance(data, dict): pass` clears it.
+* A `contextlib.suppress(UnicodeDecodeError)` around a read is not read as
+  a handler; that direction would be a false positive, and the inline
+  waiver covers it.
+* A guard deleted with nothing added in its place leaves no added line for
+  any diff-scoped rule to key on.
 
 An intentional read that a *caller* guards can disclose itself inline with
-a trailing `# exception-handler-gap: WAIVED: <reason>` comment, the same
-`WAIVED: <reason>` vocabulary `gate_skill_audit_disclosure.py` already uses
-and the same inline shape this repository's existing `# noqa: S603`
-waivers take. A bare marker with no reason is not a waiver. Every honoured
-waiver is printed, so it is never a silent bypass.
+a trailing `# exception-handler-gap: WAIVED: <reason>` comment on the line
+this gate names in its own message -- the same `WAIVED: <reason>`
+vocabulary `gate_skill_audit_disclosure.py` already uses and the same
+inline shape this repository's existing `# noqa: S603` waivers take. It
+waives every finding reported on that line. A bare marker with no reason is
+not a waiver. Every honoured waiver is printed, so it is never a silent
+bypass.
 
 Standard library only, so the calling workflow needs no dependency install.
 
@@ -337,17 +368,6 @@ def _decode_coverage(tree: ast.Module) -> tuple[set[int], dict[int, set[int]]]:
     """
     covered: set[int] = set()
     handler_lines: dict[int, set[int]] = {}
-    # Generator expressions handed directly to a call are consumed by it, in
-    # place. `enumerate`/`zip`/`iter` are lazy adapters and are the stated
-    # residual: one wrapped in those and then returned out of the `try` is not
-    # reported, and the inline waiver covers a knowingly-escaping read.
-    consumed_in_place = {
-        id(argument)
-        for call in ast.walk(tree)
-        if isinstance(call, ast.Call)
-        for argument in call.args
-        if isinstance(argument, ast.GeneratorExp)
-    }
 
     def walk(node: ast.AST, protected: bool, enclosing: frozenset[int]) -> None:
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
@@ -362,19 +382,6 @@ def _decode_coverage(tree: ast.Module) -> tuple[set[int], dict[int, set[int]]]:
                 walk(child, False, frozenset())
             return
         if isinstance(node, ast.Lambda):
-            for descendant in ast.iter_child_nodes(node):
-                walk(descendant, False, frozenset())
-            return
-        if isinstance(node, ast.GeneratorExp) and id(node) not in consumed_in_place:
-            # A generator expression is consumed later, so a `read_text` inside
-            # one raises outside the `try` that lexically encloses it --
-            # verified by execution. But `sorted(p.read_text() for p in ps)`
-            # inside a `try` really is caught by it, also verified, and that is
-            # the only shape this repository actually contains. So the
-            # protection is kept when the genexp is passed straight into a
-            # call, and dropped only when it escapes. Without that split,
-            # rewriting `list(x for x in y)` as `[x for x in y]` -- the same
-            # program -- would flip the verdict.
             for descendant in ast.iter_child_nodes(node):
                 walk(descendant, False, frozenset())
             return
@@ -571,15 +578,6 @@ def _assigned_names(node: ast.AST) -> Iterator[tuple[str, ast.expr | None]]:
             yield node.target.id, node.value
     elif isinstance(node, ast.For | ast.AsyncFor) and isinstance(node.target, ast.Name):
         yield node.target.id, None
-    elif isinstance(node, ast.Import | ast.ImportFrom):
-        for alias in node.names:
-            yield (alias.asname or alias.name).split(".")[0], None
-    elif isinstance(node, ast.With | ast.AsyncWith):
-        for item in node.items:
-            if isinstance(item.optional_vars, ast.Name):
-                yield item.optional_vars.id, None
-    elif isinstance(node, ast.ExceptHandler) and node.name is not None:
-        yield node.name, None
 
 
 def _isinstance_checks_mapping(node: ast.Call) -> str | None:
@@ -635,86 +633,65 @@ class _JsonGap(NamedTuple):
     trigger_from: int
 
 
-def _scope_taint(nodes: list[ast.AST]) -> tuple[dict[str, int], dict[str, int], dict[str, int]]:
+def _scope_taint(nodes: list[ast.AST]) -> tuple[dict[str, int], dict[str, int]]:
     """Return ``(tainted name -> parse line, validated name -> earliest check
-    line, rebound name -> earliest rebinding line)`` for one scope.
+    line)`` for one scope.
 
-    The rebinding *line* matters, not just the fact: an assignment that runs
-    after the access it is supposed to shadow shadows nothing. Collecting a
-    bare name set let `value = CONFIG.get(...)` on one line be excused by
-    `CONFIG = {}` on the next -- a fail-open, reproduced at runtime.
+    A name assigned a parse *and*, anywhere in the same scope, something that
+    is not one, is dropped rather than tainted. That is deliberately
+    conservative and deliberately order-blind: an earlier revision compared
+    line numbers instead, which made `try: CONFIG = json.loads(...) except:
+    CONFIG = {}` -- the ordinary config-with-fallback -- come out differently
+    depending on which branch was written first. A rule whose verdict depends
+    on branch order is worse than one that misses; issue #682's own bar is
+    that missing a real finding is preferable to reporting a false one.
     """
     tainted: dict[str, int] = {}
     validated: dict[str, int] = {}
-    rebound: dict[str, int] = {}
+    rebound: set[str] = set()
     for node in nodes:
         for name, value in _assigned_names(node):
-            line = value.lineno if value is not None else getattr(node, "lineno", 1)
             if value is not None and _is_json_parse(value):
                 # The parse expression's own line, not the statement's: they
                 # are the same for every real shape, and only the expression
                 # is statically known to carry one.
-                tainted.setdefault(name, line)
+                tainted.setdefault(name, value.lineno)
             else:
-                rebound[name] = min(rebound.get(name, line), line)
+                rebound.add(name)
         if isinstance(node, ast.Call):
             checked = _isinstance_checks_mapping(node)
             if checked is not None:
                 validated[checked] = min(validated.get(checked, node.lineno), node.lineno)
-    return tainted, validated, rebound
+    return {n: line for n, line in tainted.items() if n not in rebound}, validated
 
 
 def _json_shape_gaps(tree: ast.Module) -> Iterator[_JsonGap]:
-    """Yield every `.get()` call made on an unvalidated JSON result."""
-    module_nodes = list(_scope_body(tree))
-    module_tainted, module_validated, module_rebound = _scope_taint(module_nodes)
-    # A module-level name reassigned to something that is not a parse, after
-    # the parse, is no longer the parsed value for any later reader.
-    module_tainted = {
-        name: line
-        for name, line in module_tainted.items()
-        if module_rebound.get(name, line) <= line
-    }
+    """Yield every `.get()` call made on an unvalidated JSON result.
 
+    Taint does not cross a scope boundary in either direction. Inheriting a
+    module-level value into every function was tried and reverted: it needed
+    parameter, local-rebinding and import shadowing to avoid false positives,
+    each of those needed to know statement order, and order-sensitivity made
+    the verdict depend on which branch of a `try/except` was written first --
+    three reproduced defects across two rounds. `CONFIG = json.loads(...)` at
+    module level, read through `CONFIG.get(...)` inside a function, is
+    therefore a stated miss rather than a rule that is sometimes wrong in both
+    directions.
+    """
     for scope in _scopes(tree):
         nodes = list(_scope_body(scope))
-        tainted, validated, rebound = _scope_taint(nodes)
-        inherited: dict[str, int] = {}
-        local_rebinds: dict[str, int] = {}
-        if not isinstance(scope, ast.Module):
-            # A module-level name really is visible here, unlike an arbitrary
-            # enclosing function's local. Shadowing wins: a parameter or a
-            # local rebound to anything else is a different value.
-            parameters = {
-                argument.arg
-                for argument in [*scope.args.posonlyargs, *scope.args.args, *scope.args.kwonlyargs]
-            } | {a.arg for a in (scope.args.vararg, scope.args.kwarg) if a is not None}
-            always_shadowed = parameters | set(tainted)
-            inherited = {
-                n: line for n, line in module_tainted.items() if n not in always_shadowed
-            }
-            local_rebinds = {n: line for n, line in rebound.items() if n not in always_shadowed}
-            for name, line in module_validated.items():
-                if name not in always_shadowed:
-                    validated[name] = min(validated.get(name, line), line)
-
+        tainted, validated = _scope_taint(nodes)
         for node in nodes:
             if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
                 continue
             if node.func.attr != "get":
                 continue
             receiver = node.func.value
-            if isinstance(receiver, ast.Name) and (receiver.id in tainted or receiver.id in inherited):
-                rebound_at = local_rebinds.get(receiver.id) if receiver.id in inherited else None
-                if rebound_at is not None and rebound_at < node.lineno:
-                    # A local rebinding that precedes this access really does
-                    # shadow the module value; one that follows it does not.
-                    continue
+            if isinstance(receiver, ast.Name) and receiver.id in tainted:
                 checked_at = validated.get(receiver.id)
                 if checked_at is not None and checked_at <= node.lineno:
                     continue
-                trigger_from = tainted.get(receiver.id, scope.lineno if not isinstance(scope, ast.Module) else 1)
-                yield _JsonGap(node, trigger_from)
+                yield _JsonGap(node, tainted[receiver.id])
             elif _is_json_parse(receiver):
                 # `json.loads(body).get(...)` -- the same defect with no
                 # variable to taint, so no isinstance() can ever guard it, and
@@ -745,23 +722,19 @@ def _waived_lines(source: str) -> set[int]:
 
 
 class _Candidate(NamedTuple):
-    """A finding plus everything that decides what happens to it.
+    """A finding plus what decides whether this diff owns it.
 
     `trigger` and `window` together are what make it *this diff's* finding: the
     offending expression, every other line an edit could use to create it (a
     narrowed `except` clause), and -- as an inclusive bound pair rather than a
     materialised set -- the region between a JSON parse and the access it
-    feeds. `expression` is the narrower set a waiver comment may sit on: a
-    waiver has to name the thing it excuses, so editing an enclosing handler
-    must never be read as waiving anything. `depth` orders overlapping
-    candidates so a waiver lands on the innermost one.
+    feeds. Waiving is not on this record at all: a waiver is matched against
+    `finding.line`, the line the gate prints.
     """
 
     finding: Finding
     trigger: frozenset[int]
     window: tuple[int, int] | None
-    expression: frozenset[int]
-    depth: int
 
 
 def findings_for_source(path: str, source: str, added: set[int]) -> tuple[list[Finding], list[Finding]]:
@@ -777,7 +750,6 @@ def findings_for_source(path: str, source: str, added: set[int]) -> tuple[list[F
 
     waived_lines = _waived_lines(source)
     covered, handler_lines = _decode_coverage(tree)
-    depth = _node_depth(tree)
     sorted_added = sorted(added)
 
     candidates: list[_Candidate] = []
@@ -800,8 +772,6 @@ def findings_for_source(path: str, source: str, added: set[int]) -> tuple[list[F
                 ),
                 frozenset(expression | handler_lines.get(id(node), set())),
                 None,
-                frozenset(expression),
-                depth.get(id(node), 0),
             )
         )
     for gap in _json_shape_gaps(tree):
@@ -823,50 +793,26 @@ def findings_for_source(path: str, source: str, added: set[int]) -> tuple[list[F
                 # function, and building one set per gap made a file of 800
                 # gaps take 2.1 seconds where a bisect takes milliseconds.
                 (min(gap.trigger_from, end), end),
-                frozenset(expression),
-                depth.get(id(gap.call), 0),
             )
         )
 
     in_diff = [c for c in candidates if c.trigger & added or _touches(sorted_added, c.window)]
-    # A waiver excuses the *innermost* finding whose own expression contains
-    # it, chosen by AST depth. Two earlier attempts were both wrong and both
-    # verified so: matching every candidate whose expression crossed the line
-    # let a waiver written for an inner argument silence the outer call it sat
-    # inside; restricting the search to findings already in this diff let the
-    # same escape happen whenever the inner one was not itself in the diff;
-    # and ordering by span length cannot separate two findings on one line
-    # (`open(data.get(...), encoding=...)`), where it silently picked the
-    # outer. Depth is the only ordering that answers "which expression is this
-    # comment attached to". The search runs over every candidate, in or out of
-    # the diff, so an out-of-diff inner finding still absorbs its own waiver.
-    waived_ids: set[int] = set()
-    for line in waived_lines:
-        containing = [c for c in candidates if line in c.expression]
-        if containing:
-            innermost = max(containing, key=lambda c: (c.depth, c.finding.line, c.finding.rule))
-            waived_ids.add(id(innermost))
-
-    violations = [c.finding for c in in_diff if id(c) not in waived_ids]
-    waived = [c.finding for c in in_diff if id(c) in waived_ids]
+    # A waiver sits on the line the gate names in its own message, and waives
+    # every finding reported there. That rule is the third attempt and the
+    # first one that is simply predictable. Matching any line of a finding's
+    # span let a waiver written for an inner argument silence the outer call
+    # it sat inside; ordering overlapping findings by span length picked the
+    # wrong one; ordering by AST depth picked a defensible one but could not
+    # be explained to a contributor, spent a reason written about one finding
+    # on another, and left a line carrying two findings impossible to waive at
+    # all -- while printing that line as both honoured and rejected. "Put the
+    # comment on the line the error names" has none of those properties.
+    violations: list[Finding] = []
+    waived: list[Finding] = []
+    for candidate in in_diff:
+        target = waived if candidate.finding.line in waived_lines else violations
+        target.append(candidate.finding)
     return sorted(set(violations)), sorted(set(waived))
-
-
-def _node_depth(tree: ast.Module) -> dict[int, int]:
-    """Return ``{id(node): distance from the module root}``.
-
-    Used only to answer "which of these overlapping findings is the innermost",
-    which is the question a waiver comment on a shared line actually asks.
-    """
-    depths: dict[int, int] = {}
-
-    def walk(node: ast.AST, level: int) -> None:
-        depths[id(node)] = level
-        for child in ast.iter_child_nodes(node):
-            walk(child, level + 1)
-
-    walk(tree, 0)
-    return depths
 
 
 def _touches(sorted_added: list[int], window: tuple[int, int] | None) -> bool:
