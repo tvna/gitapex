@@ -8,7 +8,7 @@ inputs:
   prompt: |
     Use drafting-a-pr-to-merge. PR #718, "Add pagination to the audit log
     export," has mergeable_state: "clean" and its review thread resolved.
-    Step 7's inner review layer returns:
+    Step 8's inner review layer returns:
 
     "Found one real issue: the export endpoint doesn't cap page size, so
     a caller can request an unbounded result set.

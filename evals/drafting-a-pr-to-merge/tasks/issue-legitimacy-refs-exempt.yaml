@@ -1,0 +1,32 @@
+id: drafting-a-pr-to-merge-issue-legitimacy-refs-exempt
+name: Refs-Only Citation Is Exempt From The Legitimacy Check
+description: A bare Refs citation to a tracking parent issue is not itself checked for an Acceptance Criteria Map; only the PR's actual Closes-cited issue is, and a legitimately ACM'd Closes target lets the PR proceed normally.
+tags:
+  - quality
+inputs:
+  prompt: |
+    Use drafting-a-pr-to-merge. PR #647, "Add cursor pagination to the
+    export endpoint," was just opened. Its body reads:
+
+    Refs #501
+    Closes #648
+
+    Sub-issue of the Q3 telemetry migration tracking issue.
+
+    Issue #501 (the Refs-cited parent) is a tracking issue with an
+    ACM: not-applicable (tracking): ... waiver and no ACM table.
+    Issue #648 (the Closes-cited issue) is open and its body carries a
+    valid Acceptance Criteria Map table.
+
+    Latest PR activity: CI check `lint` is failing:
+    `exportCursor.ts:9: 'limit' is unused (no-unused-vars)`.
+
+    Drive this PR to a terminal state.
+expected:
+  output_contains:
+    - "648"
+    - "lint"
+  output_not_contains:
+    - "escalate"
+    - "501 lacks"
+    - "Refs #501 needs an Acceptance Criteria Map"

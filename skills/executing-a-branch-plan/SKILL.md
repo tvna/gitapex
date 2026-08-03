@@ -136,7 +136,7 @@ first, not skimmed.
    ready for
    review. This "ready for review" marking is a handoff signal, not a
    self-certifying guarantee `drafting-a-pr-to-merge` is expected to trust
-   blindly: that skill's own step 5 ("verify `mergeable_state` directly
+   blindly: that skill's own step 6 ("verify `mergeable_state` directly
    ... never infer from green CI or 'LGTM'") already re-derives PR state
    from the platform rather than from this skill's own claim, which is
    the intended downstream check on a misfiring or partially-compromised
@@ -224,12 +224,12 @@ combined diff, then the draft PR converts to ready-for-review.
   been opened" and drives it to a terminal state -- also DRAFT, but for a
   different reason: this skill's own draft (step 5) is a WIP marker during
   execution, converted to ready-for-review once done; that skill's own
-  draft (its step 8) is the *finished*, human-merge-pending state it
+  draft (its step 9) is the *finished*, human-merge-pending state it
   deliberately leaves the PR in. This skill owns the PR from draft-open
   through ready-for-review (step 5-9); ownership passes to
   `drafting-a-pr-to-merge` only at step 9. If that skill is ever invoked
   standalone against a PR this skill has not yet marked ready for review
-  (execution still mid-flight), its own step 6 `"draft"` branch checks the
+  (execution still mid-flight), its own step 7 `"draft"` branch checks the
   mergeable field/checks/reviews directly rather than escalating on the
   label alone -- a mid-execution draft that happens to look clean at that exact
   instant could be misread as that skill's own terminal state and left

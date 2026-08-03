@@ -9,7 +9,7 @@ inputs:
     Use drafting-a-pr-to-merge. PR #88, "Refactor auth token validation," was
     converted to a draft pull request by this skill several days ago, after
     its review thread was resolved, mergeable_state read "clean", and
-    step 7's independent review layers came back with no findings.
+    step 8's independent review layers came back with no findings.
 
     Since then, three unrelated PRs merged into the base branch. A fresh
     check on PR #88 -- calling github:pull_request_read method get -- now
@@ -21,7 +21,7 @@ expected:
   output_contains:
     - "mergeable"
     - "conflict"
-    - "loop back to step 2"
+    - "loop back to step 3"
   output_not_contains:
     - "nothing to do"
     - "already handled"

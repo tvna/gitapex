@@ -8,7 +8,7 @@ inputs:
   prompt: |
     Use drafting-a-pr-to-merge. PR #88, "Refactor auth token validation," was
     already driven through this skill in an earlier turn: its review thread
-    was resolved, mergeable_state read "clean", and step 7's independent
+    was resolved, mergeable_state read "clean", and step 8's independent
     review layers came back with no findings, so it was converted to a
     draft pull request via github:update_pull_request with draft: true.
 
@@ -27,6 +27,6 @@ expected:
     - "escalate to the owner"
     - "escalate this"
     - "hand it to the owner"
-    - "loop back to step 2"
+    - "loop back to step 3"
     - "must be a defect"
     - "hunt for what's broken"

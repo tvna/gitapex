@@ -4,7 +4,7 @@ matrix.
 Issue #637: a PreToolUse hook (matcher: mcp__github__merge_pull_request)
 blocking every call to that tool unconditionally -- this repository's
 policy (planning-a-branch-from-an-issue/SKILL.md,
-drafting-a-pr-to-merge/SKILL.md step 8, the ranking-the-open-queue Routine
+drafting-a-pr-to-merge/SKILL.md step 9, the ranking-the-open-queue Routine
 specs' "100% human review of any pull request merge") is that no agent tool
 call ever merges a PR here, no exceptions. hooks/check-bash-safety.sh
 already blocks the equivalent shell form (`gh pr merge`); this hook closes

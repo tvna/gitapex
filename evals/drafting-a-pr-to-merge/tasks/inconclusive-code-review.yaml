@@ -1,6 +1,6 @@
 id: drafting-a-pr-to-merge-inconclusive-code-review
 name: An Errored Or Incomplete Inner Review Layer Is Not A Clean Pass
-description: When step 7's inner review layer errors, times out, or otherwise cannot complete, that failure is itself a step-10 escalation -- never treated as a clean pass, and never skipped so the flow can jump straight to establishing the DRAFT terminal state, regardless of what the outer layer separately reports.
+description: When step 8's inner review layer errors, times out, or otherwise cannot complete, that failure is itself a step-11 escalation -- never treated as a clean pass, and never skipped so the flow can jump straight to establishing the DRAFT terminal state, regardless of what the outer layer separately reports.
 tags:
   - quality
   - guardrail
@@ -10,7 +10,7 @@ inputs:
     payments client," has its review thread resolved and mergeable_state
     reads "clean". Neither Anthropic's "Claude Code Review" GitHub App
     nor GitHub Copilot's review bot is configured on this repository, so
-    step 7's outer layer does not run at all. You start the inner
+    step 8's outer layer does not run at all. You start the inner
     layer's own fan-out and verification dispatch, but it times out
     without producing any findings or a verdict.
 
