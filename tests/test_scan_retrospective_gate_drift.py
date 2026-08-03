@@ -361,6 +361,29 @@ def test_load_gate_tracking_issues_raises_when_gates_list_missing_or_empty(tmp_p
         gate.load_gate_tracking_issues(str(ssot))
 
 
+def test_load_gate_tracking_issues_excludes_non_int_and_bool_values(tmp_path):
+    # `bool` is an `int` subclass in Python -- a stray `true`/`false` must
+    # not be silently coerced into corroborating issue #1/#0. Strings,
+    # floats, and lists are equally malformed and must also be excluded
+    # rather than crashing or being accepted.
+    ssot = tmp_path / "ssot.json"
+    ssot.write_text(
+        json.dumps(
+            {
+                "gates": [
+                    {"id": "a", "tracking_issue": True},
+                    {"id": "b", "tracking_issue": False},
+                    {"id": "c", "tracking_issue": "297"},
+                    {"id": "d", "tracking_issue": 297.0},
+                    {"id": "e", "tracking_issue": [297]},
+                    {"id": "f", "tracking_issue": 650},
+                ]
+            }
+        )
+    )
+    assert gate.load_gate_tracking_issues(str(ssot)) == {650}
+
+
 # ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------

@@ -300,7 +300,11 @@ def load_gate_tracking_issues(path: str) -> set[int]:
     tracking_issues: set[int] = set()
     for gate in gates:
         tracking_issue = gate.get("tracking_issue") if isinstance(gate, dict) else None
-        if isinstance(tracking_issue, int):
+        # `bool` is an `int` subclass in Python, so `isinstance(True, int)`
+        # is True -- without the extra check, a stray `"tracking_issue":
+        # true` would silently corroborate issue #1 instead of being
+        # skipped as the malformed value it is.
+        if isinstance(tracking_issue, int) and not isinstance(tracking_issue, bool):
             tracking_issues.add(tracking_issue)
     return tracking_issues
 
