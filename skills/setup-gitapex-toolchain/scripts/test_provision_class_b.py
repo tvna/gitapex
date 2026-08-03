@@ -4,8 +4,11 @@ import base64
 import hashlib
 import io
 import re
+import stat
+import tarfile
 import urllib.error
 import urllib.request
+import zipfile
 from email.message import Message
 from pathlib import Path
 from typing import Any
@@ -201,3 +204,68 @@ def test_verify_and_download_raises_hash_mismatch_error() -> None:
     spec = pcb.parse_flake_class_b_pins(flake_text)["apm"]
     with pytest.raises(pcb.HashMismatchError):
         pcb.verify_and_download(spec, "x86_64-linux", opener=_opener_returning(b"not the real archive"))
+
+
+# --- Task 4: archive extraction (binary and wrapperDir layouts) -------------
+
+
+def _make_tar_gz_bytes(entries: dict[str, bytes]) -> bytes:
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tf:
+        for name, content in entries.items():
+            info = tarfile.TarInfo(name=name)
+            info.size = len(content)
+            info.mode = 0o755
+            tf.addfile(info, io.BytesIO(content))
+    return buf.getvalue()
+
+
+def _make_zip_bytes(entries: dict[str, bytes]) -> bytes:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        for name, content in entries.items():
+            zf.writestr(name, content)
+    return buf.getvalue()
+
+
+def test_extract_binary_from_tar_gz(tmp_path: Path) -> None:
+    data = _make_tar_gz_bytes({"waza-linux-amd64": b"#!/bin/sh\necho fake-waza\n"})
+    dest = tmp_path / "bin" / "waza"
+    pcb.extract_binary(data, "waza-linux-amd64.tar.gz", "waza-linux-amd64", dest)
+    assert dest.read_bytes() == b"#!/bin/sh\necho fake-waza\n"
+    assert dest.stat().st_mode & stat.S_IXUSR
+
+
+def test_extract_binary_from_zip_restores_exec_bit(tmp_path: Path) -> None:
+    data = _make_zip_bytes({"waza-darwin-amd64": b"#!/bin/sh\necho fake-waza\n"})
+    dest = tmp_path / "bin" / "waza"
+    pcb.extract_binary(data, "waza-darwin-amd64.zip", "waza-darwin-amd64", dest)
+    assert dest.read_bytes() == b"#!/bin/sh\necho fake-waza\n"
+    assert dest.stat().st_mode & stat.S_IXUSR
+
+
+def test_extract_binary_raises_when_member_missing(tmp_path: Path) -> None:
+    data = _make_tar_gz_bytes({"other-file": b"x"})
+    with pytest.raises(pcb.ExtractionError):
+        pcb.extract_binary(data, "waza-linux-amd64.tar.gz", "waza-linux-amd64", tmp_path / "bin" / "waza")
+
+
+def test_extract_wrapper_dir_keeps_internal_tree_and_writes_shim(tmp_path: Path) -> None:
+    data = _make_tar_gz_bytes(
+        {
+            "apm-linux-x86_64/apm": b"#!/bin/sh\necho fake-apm\n",
+            "apm-linux-x86_64/_internal/marker.txt": b"needed-at-runtime",
+        }
+    )
+    libexec_dir = tmp_path / "libexec" / "apm"
+    bin_shim = tmp_path / "bin" / "apm"
+    pcb.extract_wrapper_dir(data, "apm-linux-x86_64.tar.gz", "apm", libexec_dir, bin_shim)
+
+    assert (libexec_dir / "_internal" / "marker.txt").read_text() == "needed-at-runtime"
+    real_bin = libexec_dir / "apm"
+    assert real_bin.stat().st_mode & stat.S_IXUSR
+    assert bin_shim.exists()
+    assert bin_shim.stat().st_mode & stat.S_IXUSR
+    shim_text = bin_shim.read_text()
+    assert str(real_bin) in shim_text
+    assert shim_text.startswith("#!/bin/sh")

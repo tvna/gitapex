@@ -14,10 +14,14 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import io
 import re
+import stat
+import tarfile
 import time
 import urllib.error
 import urllib.request
+import zipfile
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -270,3 +274,113 @@ def verify_and_download(
             f"{spec.pname}/{system}: expected {pin.sha256_sri}, got {actual} (url={url})"
         )
     return data
+
+
+# --- Task 4: archive extraction (binary and wrapperDir layouts) -------------
+
+
+class ExtractionError(RuntimeError):
+    """The expected member was not present in the downloaded archive, or
+    the archive could not be opened as the format its filename implies."""
+
+
+def _is_zip(asset_name: str) -> bool:
+    return asset_name.endswith(".zip")
+
+
+def extract_binary(data: bytes, asset_name: str, bin_in_archive: str, dest: Path) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    if _is_zip(asset_name):
+        with zipfile.ZipFile(io.BytesIO(data)) as zf:
+            try:
+                content = zf.read(bin_in_archive)
+            except KeyError as error:
+                raise ExtractionError(f"{asset_name}: member {bin_in_archive!r} not found in zip") from error
+    else:
+        with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tf:
+            # tf.extractfile raises KeyError when bin_in_archive names no
+            # member at all (verified against real tarfile semantics --
+            # this differs from the None-return path below); it returns
+            # None instead only when the name DOES exist but isn't a
+            # regular file/link (a directory, device, etc.). Both are
+            # "the expected binary isn't there" from this function's
+            # point of view, so both become ExtractionError.
+            try:
+                member = tf.extractfile(bin_in_archive)
+            except KeyError as error:
+                raise ExtractionError(f"{asset_name}: member {bin_in_archive!r} not found in tar.gz") from error
+            if member is None:
+                raise ExtractionError(f"{asset_name}: member {bin_in_archive!r} not found in tar.gz")
+            content = member.read()
+    dest.write_bytes(content)
+    dest.chmod(dest.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
+
+def extract_wrapper_dir(data: bytes, asset_name: str, bin_in_archive: str, libexec_dir: Path, bin_shim: Path) -> None:
+    """Unpack a wrapperDir-kind archive (one top-level dir holding the real
+    binary plus support files it needs at runtime, e.g. apm's PyInstaller
+    _internal/ tree) into libexec_dir, then write a thin exec shim at
+    bin_shim -- the same shape flake.nix's own wrapperDir installPhase
+    produces (cp -r the unpacked tree, then wrap the real binary).
+
+    Path-traversal safety: extractall() is never reached against
+    unvalidated archive content. Two bounds apply, verified directly
+    against the installed Python 3.12 stdlib (not assumed):
+
+    1. Both branches first collect every member name and require exactly
+       one shared top-level path segment across all of them (the
+       wrapperDir shape). This runs before either branch's extractall.
+    2. The tar branch additionally passes filter="data" (PEP 706, stdlib
+       since 3.12 -- this repo's pyproject.toml requires-python is
+       ">=3.12"). Reading tarfile's own data_filter/_get_filtered_attrs
+       source confirms it rejects absolute member paths, resolves and
+       bounds every target (and every symlink/hardlink target) to stay
+       under the destination directory, rejects device/FIFO/other
+       special-file members outright, and strips setuid/setgid/sticky
+       bits from what's left -- so #1 and #2 together bound the tar
+       branch even against a maliciously crafted archive, not only a
+       well-formed one. zipfile.ZipFile.extractall has no filter=
+       parameter to match (confirmed via inspect.signature against this
+       same stdlib), so #1 is the only *explicit* bound this function
+       adds on the zip branch -- acceptable here because zipfile's own
+       extraction path already strips ".."/"."/drive-letter/absolute-path
+       components before joining to the destination (see
+       zipfile.ZipFile._extract_member), and because every call site in
+       this module only ever passes flake.nix's own pinned, SHA256-hash-
+       verified Class B release asset bytes (see verify_and_download),
+       never attacker-controlled input.
+    """
+    libexec_dir.mkdir(parents=True, exist_ok=True)
+    if _is_zip(asset_name):
+        with zipfile.ZipFile(io.BytesIO(data)) as zf:
+            names = zf.namelist()
+            top_level = {name.split("/")[0] for name in names if name.strip("/")}
+            if len(top_level) != 1:
+                raise ExtractionError(f"{asset_name}: expected exactly one top-level dir, found {sorted(top_level)}")
+            zf.extractall(libexec_dir)  # noqa: S202 -- ruff's S202 fires on any `.extractall()` call by method name (confirmed: it flags this zip call too, not just tarfile's), and zipfile has no filter= to satisfy it more directly; bounded instead by the top-level-dir check just above plus this function's docstring
+    else:
+        with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tf:
+            names = tf.getnames()
+            top_level = {name.split("/")[0] for name in names if name.strip("/")}
+            if len(top_level) != 1:
+                raise ExtractionError(f"{asset_name}: expected exactly one top-level dir, found {sorted(top_level)}")
+            # No noqa needed: ruff recognizes filter="data" itself as
+            # resolving S202 for tarfile (confirmed empirically -- adding
+            # one here gets flagged RUF100 unused-noqa by this repo's
+            # pinned ruff).
+            tf.extractall(libexec_dir, filter="data")
+
+    (top_dir_name,) = top_level
+    extracted_root = libexec_dir / top_dir_name
+    for child in extracted_root.iterdir():
+        child.rename(libexec_dir / child.name)
+    extracted_root.rmdir()
+
+    real_bin = libexec_dir / bin_in_archive
+    if not real_bin.exists():
+        raise ExtractionError(f"{asset_name}: expected binary {bin_in_archive!r} not found after extraction")
+    real_bin.chmod(real_bin.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
+    bin_shim.parent.mkdir(parents=True, exist_ok=True)
+    bin_shim.write_text(f'#!/bin/sh\nexec "{real_bin}" "$@"\n', encoding="utf-8")
+    bin_shim.chmod(bin_shim.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
