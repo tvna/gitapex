@@ -771,3 +771,280 @@ def test_run_apm_install_passes_cwd_and_expected_kwargs(tmp_path: Path) -> None:
     assert received_kwargs["text"] is True
     assert received_kwargs["timeout"] == 120
     assert received_kwargs["check"] is False
+
+
+# --- Task 7: CLI entry point -------------------------------------------------
+
+
+def test_main_verify_mode_reports_missing_binaries_without_network(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Adapted from the brief's own given test: the brief patches
+    ``pcb._default_opener`` directly, but verified empirically (live,
+    against this real module, before writing this test) that doing so does
+    NOT intercept calls made through provision_all/download_asset/
+    verify_and_download's own ``opener`` parameter -- Python binds a
+    function's default argument value ONCE, at ``def`` time (module
+    import), so those functions' already-bound default keeps referencing
+    the ORIGINAL ``_default_opener`` object regardless of a later
+    ``monkeypatch.setattr(pcb, "_default_opener", ...)`` rebinding the
+    module attribute. Confirmed live: ``pcb.provision_all.__defaults__[0]
+    is <the original _default_opener>`` stays True even after the module
+    attribute is reassigned. As literally written, the brief's guard is
+    inert for this specific main() (whose --verify branch never calls
+    provision_all/download_asset at all) but would silently fail to catch
+    a regression that reintroduced such a call, and would then make a REAL
+    network request during what must be an offline test. Two guards that
+    are genuinely effective instead: (1) urllib.request.urlopen is looked
+    up dynamically at CALL time inside _default_opener's own body, so
+    patching it there intercepts every possible path to a real network
+    call regardless of which bound copy of _default_opener is invoked;
+    (2) provision_all is itself a bare global name main() resolves fresh
+    at call time (not a default argument), so patching it directly and
+    asserting it is never invoked proves --verify structurally never
+    reaches the provisioning/download code at all -- the same, already-
+    reliable pattern the brief's own
+    test_main_skip_apm_install_flag_prevents_apm_install_call test uses
+    for provision_all/run_apm_install below.
+    """
+    monkeypatch.delenv("CLAUDE_ENV_FILE", raising=False)
+    monkeypatch.setattr(
+        pcb.urllib.request,
+        "urlopen",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("network call in --verify mode")),
+    )
+    monkeypatch.setattr(
+        pcb,
+        "provision_all",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("--verify must never call provision_all")),
+    )
+    exit_code = pcb.main(
+        [
+            "--project-dir", str(REPO_ROOT),
+            "--cache-root", str(tmp_path),
+            "--system", "x86_64-linux",
+            "--verify",
+        ]
+    )
+    assert exit_code == 1  # nothing installed yet in this empty tmp_path cache
+
+
+def test_main_skip_apm_install_flag_prevents_apm_install_call(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CLAUDE_ENV_FILE", raising=False)
+    fake_result = {"apm": pcb.ProvisionResult(pname="apm", status="installed", version_output="0.25.0")}
+    monkeypatch.setattr(pcb, "provision_all", lambda *args, **kwargs: fake_result)
+    calls: list[object] = []
+    monkeypatch.setattr(pcb, "run_apm_install", lambda *args, **kwargs: calls.append(args))
+
+    exit_code = pcb.main(
+        [
+            "--project-dir", str(REPO_ROOT),
+            "--cache-root", str(tmp_path),
+            "--system", "x86_64-linux",
+            "--skip-apm-install",
+        ]
+    )
+    assert exit_code == 0
+    assert calls == []  # run_apm_install must not be called when --skip-apm-install is passed
+
+
+# --- Task 7 supplemental: coverage for every main() control-flow branch named
+# in the task's own "While you work" trace-through list, none of which the
+# brief's two given tests above reach: --verify with everything installed AND
+# passing, --verify's own failing-`--version` branch, apm provisioning itself
+# failing (must skip apm install, not crash or silently retry), the positive-
+# control mirror of --skip-apm-install (run_apm_install really is called when
+# nothing prevents it -- the brief's own skip-flag test alone would still pass
+# a main() that hard-codes "never call run_apm_install"), one tool failing
+# without aborting the whole run, and a flake.nix that fails to load at all
+# short-circuiting before any provisioning is attempted. -----------------------
+
+
+def _write_version_script(path: Path, output: str, returncode: int) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(f"#!/bin/sh\necho '{output}'\nexit {returncode}\n", encoding="utf-8")
+    path.chmod(path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
+
+def test_main_verify_mode_all_installed_and_passing_returns_zero(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.delenv("CLAUDE_ENV_FILE", raising=False)
+    _write_version_script(tmp_path / "bin" / "waza", "waza version 0.38.0", 0)
+    _write_version_script(tmp_path / "bin" / "apm", "apm version 0.25.0", 0)
+
+    exit_code = pcb.main(
+        [
+            "--project-dir", str(REPO_ROOT),
+            "--cache-root", str(tmp_path),
+            "--system", "x86_64-linux",
+            "--tool", "waza",
+            "--tool", "apm",
+            "--verify",
+        ]
+    )
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert "PASS: waza: waza version 0.38.0" in out
+    assert "PASS: apm: apm version 0.25.0" in out
+
+
+def test_main_verify_mode_reports_failing_version_check(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.delenv("CLAUDE_ENV_FILE", raising=False)
+    _write_version_script(tmp_path / "bin" / "waza", "boom", 1)
+
+    exit_code = pcb.main(
+        [
+            "--project-dir", str(REPO_ROOT),
+            "--cache-root", str(tmp_path),
+            "--system", "x86_64-linux",
+            "--tool", "waza",
+            "--verify",
+        ]
+    )
+    assert exit_code == 1
+    out = capsys.readouterr().out
+    assert "FAIL: waza: --version exited 1" in out
+
+
+def test_main_apm_provisioning_failure_skips_apm_install(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """apm itself failing to provision (an Exception in provision_all's
+    result dict, e.g. a real HashMismatchError/DownloadError) must be
+    treated the same as apm being absent -- run_apm_install must never be
+    invoked, and the run must still report failure overall. Explicitly
+    named in this task's own "While you work" guidance as a scenario to
+    trace through; neither of the brief's two given tests exercises it."""
+    monkeypatch.delenv("CLAUDE_ENV_FILE", raising=False)
+    fake_result: dict[str, pcb.ProvisionResult | Exception] = {
+        "waza": pcb.ProvisionResult(pname="waza", status="installed", version_output="0.38.0"),
+        "apm": pcb.DownloadError("simulated: apm release asset fetch failed after retries"),
+    }
+    monkeypatch.setattr(pcb, "provision_all", lambda *args, **kwargs: fake_result)
+
+    def runner_that_must_not_be_called(*args: object, **kwargs: object) -> object:
+        raise AssertionError("run_apm_install must not be called when apm itself failed to provision")
+
+    monkeypatch.setattr(pcb, "run_apm_install", runner_that_must_not_be_called)
+
+    exit_code = pcb.main(
+        [
+            "--project-dir", str(REPO_ROOT),
+            "--cache-root", str(tmp_path),
+            "--system", "x86_64-linux",
+        ]
+    )
+    assert exit_code == 1
+
+
+def test_main_runs_apm_install_and_writes_env_file_when_not_skipped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Positive-control mirror of
+    test_main_skip_apm_install_flag_prevents_apm_install_call: that test
+    alone only proves run_apm_install is NOT called when the flag IS
+    passed -- a main() that (buggily) never calls run_apm_install at all,
+    flag or no flag, would still pass it (``calls == []`` is satisfied
+    either way). This test proves the opposite branch is genuinely
+    reachable: when --skip-apm-install is absent and apm provisioned
+    successfully, run_apm_install really is invoked, with the just-
+    provisioned apm's own absolute binary path and the real project dir --
+    and write_env_file really runs. Verified via deliberate bug injection:
+    temporarily forcing main()'s ``if not args.skip_apm_install:`` guard to
+    ``if False:`` left the brief's own skip-flag test passing while this
+    test correctly failed; reverted immediately after confirming (see
+    task-7-report.md)."""
+    monkeypatch.delenv("CLAUDE_ENV_FILE", raising=False)
+    fake_result: dict[str, pcb.ProvisionResult | Exception] = {
+        "apm": pcb.ProvisionResult(pname="apm", status="installed", version_output="0.25.0"),
+    }
+    monkeypatch.setattr(pcb, "provision_all", lambda *args, **kwargs: fake_result)
+    calls: list[tuple[object, ...]] = []
+    monkeypatch.setattr(pcb, "run_apm_install", lambda *args, **kwargs: calls.append(args))
+
+    env_file = tmp_path / "env.sh"
+    exit_code = pcb.main(
+        [
+            "--project-dir", str(REPO_ROOT),
+            "--cache-root", str(tmp_path),
+            "--system", "x86_64-linux",
+            "--tool", "apm",
+            "--env-file", str(env_file),
+        ]
+    )
+    assert exit_code == 0
+    assert len(calls) == 1
+    called_project_dir, called_apm_binary = calls[0]
+    assert called_project_dir == REPO_ROOT
+    assert called_apm_binary == pcb._installed_bin_path(tmp_path, "apm")
+    assert env_file.exists()
+    assert f'export PATH="{tmp_path / "bin"}:$PATH"' in env_file.read_text(encoding="utf-8")
+
+
+def test_main_reports_tool_provisioning_failure_and_continues(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """One tool failing (an Exception from provision_all) must not crash
+    main() or silently swallow the other tool's outcome -- both are
+    reported, and the overall run still fails."""
+    monkeypatch.delenv("CLAUDE_ENV_FILE", raising=False)
+    fake_result: dict[str, pcb.ProvisionResult | Exception] = {
+        "waza": pcb.ProvisionResult(pname="waza", status="installed", version_output="0.38.0"),
+        "rtk": pcb.HashMismatchError("simulated: rtk sha256 mismatch"),
+    }
+    monkeypatch.setattr(pcb, "provision_all", lambda *args, **kwargs: fake_result)
+
+    exit_code = pcb.main(
+        [
+            "--project-dir", str(REPO_ROOT),
+            "--cache-root", str(tmp_path),
+            "--system", "x86_64-linux",
+            "--skip-apm-install",
+        ]
+    )
+    assert exit_code == 1  # rtk's failure alone must fail the run even though waza succeeded
+
+
+def test_main_returns_1_when_flake_pins_cannot_be_loaded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CLAUDE_ENV_FILE", raising=False)
+
+    def must_not_be_called(*args: object, **kwargs: object) -> object:
+        raise AssertionError("provision_all must not be called when flake pins fail to load")
+
+    monkeypatch.setattr(pcb, "provision_all", must_not_be_called)
+
+    exit_code = pcb.main(
+        [
+            "--project-dir", str(REPO_ROOT),
+            "--cache-root", str(tmp_path),
+            "--flake-path", str(tmp_path / "does-not-exist-flake.nix"),
+            "--system", "x86_64-linux",
+        ]
+    )
+    assert exit_code == 1
+
+
+def test_main_returns_1_when_flake_path_is_a_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Real gap found by testing main() against actual filesystem behavior
+    (not merely a nonexistent path, which FileNotFoundError already
+    covers): a --flake-path that resolves to a directory raises
+    IsADirectoryError from Path.read_text() inside load_flake_class_b_pins.
+    IsADirectoryError is an OSError subclass, not a FileNotFoundError
+    subclass -- verified live: main(), as given by the brief
+    (``except (FlakePinParseError, FileNotFoundError)``), let this
+    propagate as an uncaught traceback instead of the clean
+    ``FAIL: could not load Class B pins from ...`` message every other
+    load-error path in main() produces. A misdirected --flake-path (e.g. a
+    typo'd directory instead of a file) is plausible human error, so this
+    is handled the same way as the missing-file case rather than crashing."""
+    monkeypatch.delenv("CLAUDE_ENV_FILE", raising=False)
+
+    def must_not_be_called(*args: object, **kwargs: object) -> object:
+        raise AssertionError("provision_all must not be called when flake pins fail to load")
+
+    monkeypatch.setattr(pcb, "provision_all", must_not_be_called)
+
+    exit_code = pcb.main(
+        [
+            "--project-dir", str(REPO_ROOT),
+            "--cache-root", str(tmp_path),
+            "--flake-path", str(tmp_path),  # a directory, not a file
+            "--system", "x86_64-linux",
+        ]
+    )
+    assert exit_code == 1

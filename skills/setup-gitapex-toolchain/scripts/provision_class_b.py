@@ -12,14 +12,17 @@ place."
 
 from __future__ import annotations
 
+import argparse
 import base64
 import hashlib
 import io
 import json
+import os
 import re
 import shutil
 import stat
 import subprocess
+import sys
 import tarfile
 import time
 import urllib.error
@@ -635,3 +638,92 @@ def write_env_file(env_file: Path | None, cache_root: Path) -> None:
         return
     with env_file.open("a", encoding="utf-8") as handle:
         handle.write(export_line)
+
+
+# --- Task 7: CLI entry point -------------------------------------------------
+
+
+def _default_cache_root() -> Path:
+    xdg_cache = os.environ.get("XDG_CACHE_HOME")
+    base = Path(xdg_cache) if xdg_cache else Path.home() / ".cache"
+    return base / "gitapex" / "toolchain"
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--project-dir", type=Path, default=Path(os.environ.get("CLAUDE_PROJECT_DIR", ".")))
+    parser.add_argument("--cache-root", type=Path, default=_default_cache_root())
+    parser.add_argument("--flake-path", type=Path, default=None)
+    parser.add_argument("--system", default=None)
+    parser.add_argument("--tool", action="append", dest="tools", default=None)
+    parser.add_argument("--skip-apm-install", action="store_true")
+    parser.add_argument("--verify", action="store_true")
+    parser.add_argument("--env-file", type=Path, default=(Path(os.environ["CLAUDE_ENV_FILE"]) if os.environ.get("CLAUDE_ENV_FILE") else None))
+    args = parser.parse_args(argv)
+
+    project_dir: Path = args.project_dir
+    flake_path: Path = args.flake_path or (project_dir / "flake.nix")
+    system: str = args.system or current_nix_system()
+    cache_root: Path = args.cache_root
+    only = tuple(args.tools) if args.tools else None
+
+    try:
+        specs = load_flake_class_b_pins(flake_path)
+    # OSError, not just FileNotFoundError: a --flake-path that is a
+    # directory, unreadable (permissions), or otherwise inaccessible is
+    # plausible human error (e.g. a typo'd path) and must fail the same
+    # clean way as a missing file -- verified live that Path.read_text()
+    # raises IsADirectoryError (an OSError subclass, not a
+    # FileNotFoundError subclass) for the directory case, which the
+    # narrower except left as an uncaught traceback. FileNotFoundError
+    # remains covered since it is itself an OSError subclass.
+    except (FlakePinParseError, OSError) as error:
+        print(f"FAIL: could not load Class B pins from {flake_path}: {error}", file=sys.stderr)
+        return 1
+
+    if args.verify:
+        selected = {k: v for k, v in specs.items() if only is None or k in only}
+        failures = 0
+        for pname in selected:
+            bin_path = _installed_bin_path(cache_root, pname)
+            if not bin_path.exists():
+                print(f"FAIL: {pname}: not installed at {bin_path}")
+                failures += 1
+                continue
+            proc = subprocess.run([str(bin_path), "--version"], capture_output=True, text=True, timeout=30, check=False)  # noqa: S603 -- bin_path is our own cache-root path, not attacker input
+            if proc.returncode != 0:
+                print(f"FAIL: {pname}: --version exited {proc.returncode}")
+                failures += 1
+            else:
+                print(f"PASS: {pname}: {proc.stdout.strip()}")
+        return 1 if failures else 0
+
+    results = provision_all(specs, system, cache_root, only=only)
+    failures = 0
+    for pname, result in results.items():
+        if isinstance(result, Exception):
+            print(f"FAIL: {pname}: {result}", file=sys.stderr)
+            failures += 1
+        else:
+            print(f"{result.status.upper()}: {pname}" + (f" ({result.version_output})" if result.version_output else ""))
+
+    write_env_file(args.env_file, cache_root)
+
+    if not args.skip_apm_install:
+        apm_result = results.get("apm")
+        if isinstance(apm_result, ProvisionResult):
+            try:
+                run_apm_install(project_dir, _installed_bin_path(cache_root, "apm"))
+                print("INSTALLED: apm install")
+            except (ApmInstallError, FileNotFoundError) as error:
+                print(f"FAIL: apm install: {error}", file=sys.stderr)
+                failures += 1
+        else:
+            print("SKIPPED: apm install (apm itself was not successfully provisioned)", file=sys.stderr)
+            failures += 1
+
+    return 1 if failures else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
