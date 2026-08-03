@@ -369,10 +369,14 @@ def main(argv: list[str] | None = None) -> int:
         help="Path to a JSON file with owner/repo/title/body; reads standard input when omitted.",
     )
     args = parser.parse_args(argv)
+    payload_source = args.payload or "stdin"
     try:
         raw = Path(args.payload).read_text(encoding="utf-8") if args.payload else sys.stdin.read()
     except FileNotFoundError:
         print(f"error: payload file not found: {args.payload}", file=sys.stderr)
+        return 1
+    except UnicodeDecodeError as error:
+        print(f"error: payload ({payload_source}) is not valid UTF-8: {error}", file=sys.stderr)
         return 1
     try:
         payload = json.loads(raw) if raw.strip() else {}
@@ -386,7 +390,7 @@ def main(argv: list[str] | None = None) -> int:
     # exited 1 with a raw traceback instead of the documented FAIL: line.
     if not isinstance(payload, dict):
         print(
-            f"error: payload must be a JSON object, got {type(payload).__name__}",
+            f"error: payload ({payload_source}) must be a JSON object, got {type(payload).__name__}",
             file=sys.stderr,
         )
         return 1

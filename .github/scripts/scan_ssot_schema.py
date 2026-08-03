@@ -38,12 +38,15 @@ reference-drift checks below simply have nothing typed to check, deferring
 to ``find_schema_violations`` to report the real problem instead of
 crashing with an unhandled exception.
 
-``find_duplicate_ids`` is unchanged: it still walks the raw instance dict
-directly, not through the pydantic model, since a duplicate id can occur in
-an otherwise schema-valid and pydantic-valid instance (neither the schema
-nor these models express a cross-item uniqueness constraint) -- every
-list/dict lookup it performs still defaults on both an absent key and an
-explicit JSON ``null``, for the same reason as before.
+``find_duplicate_ids`` still walks the raw instance dict directly, not
+through the pydantic model, since a duplicate id can occur in an otherwise
+schema-valid and pydantic-valid instance (neither the schema nor these
+models express a cross-item uniqueness constraint) -- every list/dict
+lookup it performs defaults on an absent key, an explicit JSON ``null``,
+and a non-dict ``gates``/``policy_sources`` entry (e.g. a bare int or
+string), for the same reason as before: a schema-invalid entry is
+``find_schema_violations``'s finding to report, not a reason for this
+function to raise past it.
 
 It does not check the converse -- a real gate script with no registry entry
 at all (under-registration, a "shadow gate") is a known, accepted gap; see
@@ -202,7 +205,7 @@ def _as_list(value: str | list[str] | None) -> list[str]:
     return [value] if isinstance(value, str) else list(value)
 
 
-def _parse_registry(instance: dict[str, Any]) -> SsotRegistry | None:
+def _parse_registry(instance: Any) -> SsotRegistry | None:
     """Parse an already-jsonschema-checked instance dict into a typed
     SsotRegistry. Never raises: a schema-invalid instance (a missing field,
     an explicit null in place of an array/object) may also fail this parse,
@@ -215,7 +218,7 @@ def _parse_registry(instance: dict[str, Any]) -> SsotRegistry | None:
         return None
 
 
-def find_schema_violations(instance: dict[str, Any], schema: dict[str, Any]) -> list[str]:
+def find_schema_violations(instance: Any, schema: dict[str, Any]) -> list[str]:
     """Return one message per JSON-Schema (draft 2020-12) validation error
     against the given schema. Empty list means the instance is valid."""
     validator = jsonschema.Draft202012Validator(schema)
@@ -281,7 +284,7 @@ def find_cluster_drift(registry: SsotRegistry | None) -> list[str]:
     return findings
 
 
-def find_duplicate_ids(instance: dict[str, Any]) -> list[str]:
+def find_duplicate_ids(instance: Any) -> list[str]:
     """Return one message per id used more than once across gates[] or
     across policy_sources[] (checked as two separate namespaces -- a gate
     and a policy source are never cross-referenced by the same field, so a
@@ -292,6 +295,15 @@ def find_duplicate_ids(instance: dict[str, Any]) -> list[str]:
     for label, key in (("gate", "gates"), ("policy-source", "policy_sources")):
         seen: dict[str, int] = {}
         for entry in _get_list(instance, key):
+            # A schema-valid-shaped gates[]/policy_sources[] array can still
+            # carry a non-dict entry (e.g. a bare int or string, or an
+            # explicit null) -- schema-invalid, caught separately by
+            # find_schema_violations, but entry.get("id") below would raise
+            # an uncaught AttributeError on such an entry before that
+            # finding was even reported. Skip it here the same way an
+            # entry missing "id" is already skipped.
+            if not isinstance(entry, dict):
+                continue
             entry_id = entry.get("id")
             if entry_id is None:
                 continue

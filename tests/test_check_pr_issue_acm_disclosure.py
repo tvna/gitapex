@@ -509,7 +509,33 @@ def test_main_reports_error_for_non_object_json_payload(monkeypatch, capsys, pay
     # of the documented FAIL:/error: exit path.
     monkeypatch.setattr("sys.stdin", io.StringIO(payload))
     assert checker.main([]) == 1
-    assert "must be a JSON object" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "must be a JSON object" in err
+    assert "stdin" in err
+
+
+def test_main_reports_error_for_non_object_json_payload_names_the_file(tmp_path, capsys):
+    # Companion to the stdin case above: --payload's error message must
+    # name the offending file too, matching every other fix in this issue
+    # (found by adversarial review -- the first version of this message
+    # named neither stdin nor the file).
+    path = tmp_path / "payload.json"
+    path.write_text("[]", encoding="utf-8")
+    assert checker.main(["--payload", str(path)]) == 1
+    assert str(path) in capsys.readouterr().err
+
+
+def test_main_reports_error_for_non_utf8_payload_file(tmp_path, capsys):
+    # Issue #680 Shape 2, for this same file's own --payload read path
+    # (not one of the six originally-named lines, but the identical
+    # UnicodeDecodeError-on-a-decoded-read shape, one function above the
+    # Shape 1 fix in this file -- found by adversarial review).
+    path = tmp_path / "payload.bin"
+    path.write_bytes(b"\xff\xfe\x00\x01")
+    assert checker.main(["--payload", str(path)]) == 1
+    err = capsys.readouterr().err
+    assert "not valid UTF-8" in err
+    assert str(path) in err
 
 
 def test_main_prefers_gh_token_over_github_token(monkeypatch):

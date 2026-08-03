@@ -333,6 +333,27 @@ def test_non_object_top_level_json_does_not_crash(tmp_path, bad_json):
     assert any(f.startswith("schema:") for f in findings)
 
 
+def test_non_dict_gates_entry_does_not_crash(tmp_path):
+    # Regression (found by adversarial review of this same fix): a
+    # schema-valid-*shaped* gates[] array can still carry a non-dict entry
+    # (e.g. a bare int) -- find_duplicate_ids' entry.get("id") used to
+    # raise an uncaught AttributeError on such an entry, one level deeper
+    # than the whole-document non-object case above.
+    instance_path = tmp_path / "ssot.json"
+    instance_path.write_text(json.dumps({"gates": [1, 2, 3], "policy_sources": []}))
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
+    assert any(f.startswith("schema:") for f in findings)
+    assert not any(f.startswith("duplicate-id:") for f in findings)
+
+
+def test_non_dict_policy_sources_entry_does_not_crash(tmp_path):
+    instance_path = tmp_path / "ssot.json"
+    instance_path.write_text(json.dumps({"gates": [], "policy_sources": ["not-a-dict"]}))
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
+    assert any(f.startswith("schema:") for f in findings)
+    assert not any(f.startswith("duplicate-id:") for f in findings)
+
+
 def test_unreadable_registry_path_raises_registry_read_error(tmp_path):
     # Covers _load_json's OSError branch (e.g. a path that simply doesn't
     # exist) distinctly from the UnicodeDecodeError/JSONDecodeError branches
