@@ -36,6 +36,41 @@ The workflow's job runs under the `sync-bot` environment, so these secrets are
 only exposed to that job and can carry their own approval gates independent of
 other workflows in this repository.
 
+## Signed-commit release bot App
+
+The "Release PR" and "Release tag" workflows
+(`.github/workflows/release-pr.yml`, `.github/workflows/release-tag.yml`)
+propose a `.claude-plugin/plugin.json`/`apm.yml` version-bump pull request and,
+on merge, create the `gitapex--vX.Y.Z` tag and a GitHub Release. Both need a
+write identity distinct from the default `GITHUB_TOKEN`, for the same
+`required_signatures` branch-protection reason as the sync-bot App documented
+above. This is a **separate, dedicated** GitHub App — not an extension of the
+sync-bot App above — so each automation's write capability stays scoped to its
+own blast radius: a compromise or bug in one cannot use the other's
+credentials.
+
+To enable this:
+
+1. Create a GitHub App (repo or org-owned), suggested name
+   `gitapex-release-bot`, with:
+   - Repository permissions: **Contents: Read and write**, **Pull requests:
+     Read and write**.
+   - No webhook, no other permissions needed.
+2. Install the App on this repository.
+3. Generate a private key for the App and note its App ID.
+4. In this repository's settings, create an **Environment** named
+   `release-bot` (optionally with required reviewers or other protection
+   rules).
+5. Add two secrets scoped to the `release-bot` environment:
+   - `RELEASE_BOT_APP_ID` — the App ID.
+   - `RELEASE_BOT_APP_PRIVATE_KEY` — the App's private key (PEM contents).
+
+Both workflows' jobs run under the `release-bot` environment, so these secrets
+are only exposed to those jobs. **Verification:** trigger `release-pr.yml`
+once via `workflow_dispatch`, confirm the resulting bump PR's commit shows as
+Verified, merge it, and confirm `release-tag.yml` creates a Verified-tagged
+`gitapex--vX.Y.Z` and a GitHub Release carrying the PR's release-notes text.
+
 ## ranking-the-open-queue weekly digest API key
 
 The "Weekly ranking-the-open-queue digest"

@@ -1,0 +1,73 @@
+name: Release tag
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.claude-plugin/plugin.json'
+
+permissions:
+  contents: read
+
+# Two plugin.json-touching pushes landing close together must not race: both
+# runs would otherwise see "no tag yet" concurrently and could both attempt
+# to create it, with one losing to a 422 and stranding a tag object with no
+# ref. Serializing (not cancelling -- each push may carry a different
+# version to tag) removes that window.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  release-tag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # The publisher step mints its own short-lived GitHub App installation
+    # token (write scope), so the job's default GITHUB_TOKEN never needs
+    # more than read access to check out the repository.
+    permissions:
+      contents: read
+    environment:
+      name: release-bot
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0  # need tag visibility for the script's tag-existence check
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
+      # Uses the SAME App/secrets as release-pr.yml (not sync-bot's): both
+      # workflows mint credentials for the release bot identity, whereas
+      # sync-agent-instructions.yml mints a separate sync-bot App token.
+      #
+      # This is a deliberately conservative choice: whether
+      # required_signatures / tag-scoped rulesets actually cover tag-ref or
+      # GitHub-Release creation (as opposed to commits) is unverified in
+      # this repository (no ruleset config is committed here to check), so
+      # the App-token path is used regardless as the safer default. See
+      # CONTRIBUTING.md's "Signed-commit release bot App" section for how
+      # RELEASE_BOT_APP_ID / RELEASE_BOT_APP_PRIVATE_KEY are issued.
+      - name: Mint GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1  # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_BOT_APP_ID }}
+          private-key: ${{ secrets.RELEASE_BOT_APP_PRIVATE_KEY }}
+
+      - name: Publish release tag
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          uv run --frozen python3 .github/scripts/release_tag_publish.py \
+            --sha "${{ github.sha }}" \
+            --repo "${{ github.repository }}"

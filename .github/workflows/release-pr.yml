@@ -1,0 +1,99 @@
+name: Release PR
+
+on:
+  # Deliberately NOT push-triggered. Merging this workflow's own bump PR
+  # pushes to main, which would re-trigger a push-triggered version of this
+  # workflow before .github/workflows/release-tag.yml (also push-triggered,
+  # on .claude-plugin/plugin.json changes) has created the new tag --
+  # producing a phantom second bump computed against a stale baseline. A
+  # scheduled cadence avoids this race entirely (mirrors
+  # sync-agent-instructions.yml's own cron "0 6 * * *"; this workflow uses
+  # "0 5 * * *", one hour earlier, to avoid contending for the same runner
+  # minute).
+  schedule:
+    - cron: "0 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  release-pr:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # The publish step mints its own short-lived GitHub App token (write
+    # scope), so the job's default GITHUB_TOKEN never needs more than read
+    # access to check out the repository.
+    permissions:
+      contents: read
+    environment:
+      name: release-bot
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+          # Full tag history: the compute script's `git tag`/`git log` calls
+          # need it to derive the current version and bump kind.
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Capture current version
+        id: old-version
+        run: |
+          set -euo pipefail
+          old=$(python3 -c "import json;print(json.load(open('.claude-plugin/plugin.json'))['version'])")
+          echo "old_version=${old}" >> "$GITHUB_OUTPUT"
+
+      - name: Compute release bump
+        id: compute
+        run: |
+          set -euo pipefail
+          uv run --frozen python3 .github/scripts/compute_release_bump.py \
+            --write \
+            --notes-out /tmp/release-notes.md \
+            --github-output "$GITHUB_OUTPUT"
+
+      # A `git push` from the runner's default GITHUB_TOKEN produces an
+      # unsigned commit, which this repository's required_signatures
+      # branch-protection rule rejects at merge time (the original failure
+      # sync-agent-instructions.yml hit). Mint a short-lived GitHub App
+      # installation token instead; .github/scripts/release_pr_publish.py
+      # uses it to create the commit server-side, which GitHub signs and
+      # shows as Verified. See CONTRIBUTING.md -> "Signed-commit release bot
+      # App" for how RELEASE_BOT_APP_ID / RELEASE_BOT_APP_PRIVATE_KEY are
+      # issued.
+      - name: Mint GitHub App token
+        id: app-token
+        if: steps.compute.outputs.bump != 'none'
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1  # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_BOT_APP_ID }}
+          private-key: ${{ secrets.RELEASE_BOT_APP_PRIVATE_KEY }}
+
+      - name: Publish release PR
+        if: steps.compute.outputs.bump != 'none'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          uv run --frozen python3 .github/scripts/release_pr_publish.py \
+            --base "${GITHUB_REF_NAME}" \
+            --old-version "${{ steps.old-version.outputs.old_version }}" \
+            --new-version "${{ steps.compute.outputs.version }}" \
+            --bump-kind "${{ steps.compute.outputs.bump }}" \
+            --notes-file /tmp/release-notes.md
