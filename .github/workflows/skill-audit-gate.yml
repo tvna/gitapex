@@ -3,12 +3,29 @@ name: Skill audit disclosure gate
 on:
   pull_request:
     types: [opened, synchronize, reopened, edited]
+    # The last three entries exist for the deterministic-gate-quality
+    # check (issue #673): .gitapex/ssot.json registers gate implementations
+    # under hooks/ and .github/workflows/ as well as .github/scripts/, and
+    # the registry file itself determines that scope. None of them matched
+    # any pre-existing entry, so without these the job would simply never
+    # run for a PR that deleted a PreToolUse hook gate or dropped a gate
+    # from the registry.
+    #
+    # No gate_*.py / scan_*.py entry is added: the .github/scripts/*.py
+    # entry already fires for both, verified live rather than assumed --
+    # PR #651 touched none of the other four entries, only
+    # .github/scripts/gate_plugin_root_brace_notation.py, and this workflow
+    # ran and passed on it (check run 91426145937 of run 30721581500).
     paths:
       - "skills/**/SKILL.md"
       - "docs/superpowers/specs/*.md"
       - "skills/*/scripts/*.py"
       - "evals/scripts/*.py"
       - ".github/scripts/*.py"
+      - "hooks/**"
+      - ".github/workflows/*.yml"
+      - ".github/workflows/*.yaml"
+      - ".gitapex/ssot.json"
 
 permissions:
   contents: read
@@ -47,7 +64,7 @@ jobs:
       # no new content. A three-dot (merge-base) diff is used, not a
       # two-dot direct diff, so a SKILL.md change merged to the base
       # branch after this PR forked is never misattributed to this PR.
-      - name: Determine changed SKILL.md, design-doc, and checker-script files
+      - name: Determine changed SKILL.md, design-doc, checker-script, and gate-script files
         id: diff
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -60,112 +77,148 @@ jobs:
           fi
           changed=$(printf '%s\n' "$diff_output" | grep -vE '^(D|R100)[[:space:]]' || true)
 
-          # Issue #517 (refs #277): a second, independent diff over
-          # docs/superpowers/specs/*.md design docs, same add/modify-only
-          # (D/R100-excluded) rule as the SKILL.md diff above -- this is
-          # why the workflow's own `paths:` trigger list grew to include
-          # this glob too.
-          if ! design_diff_output=$(git diff --name-status "$BASE_SHA...$HEAD_SHA" -- 'docs/superpowers/specs/*.md'); then
-            echo "::error::git diff failed for design docs between $BASE_SHA and $HEAD_SHA" >&2
-            exit 1
-          fi
-          changed_design_doc_lines=$(printf '%s\n' "$design_diff_output" | grep -vE '^(D|R100)[[:space:]]' || true)
-          changed_design_docs=""
-          if [ -n "$changed_design_doc_lines" ]; then
-            echo "Added/modified design docs requiring disclosure:"
-            echo "$changed_design_doc_lines"
-            while IFS=$'\t' read -r status path newpath; do
-              [ -z "$status" ] && continue
-              case "$status" in
-                R*) new_path="$newpath" ;;
-                *) new_path="$path" ;;
-              esac
-              # Design-doc paths get comma-joined into $GITHUB_OUTPUT and
-              # later comma-split by _parse_skill_list, same sink as the
-              # skill-name list below -- a PR author fully controls this
-              # filename, so validate its shape first rather than trusting
-              # an arbitrary string (e.g. one containing a literal comma,
-              # which would corrupt the downstream comma-split) into
-              # either sink. Matches exactly the 'docs/superpowers/specs/*.md'
-              # glob this diff is already scoped to.
-              if ! printf '%s' "$new_path" | grep -E '^docs/superpowers/specs/[A-Za-z0-9._-]+\.md$' >/dev/null; then
-                echo "::error::unsupported design doc filename for signal computation: $new_path" >&2
-                exit 1
-              fi
-              changed_design_docs="${changed_design_docs}${changed_design_docs:+,}${new_path}"
-            done <<< "$changed_design_doc_lines"
-          fi
-
-          # Issue #565 (refs #560 repair 5): a third, independent diff over
-          # deterministic checker scripts -- skills/*/scripts/*.py,
-          # evals/scripts/*.py, .github/scripts/*.py -- same add/modify-only
-          # (D/R100-excluded) rule as the two diffs above. This is why the
-          # workflow's own `paths:` trigger list grows again to include
-          # these three globs. A single pathspec-list diff call covers all
-          # three globs at once; no per-glob loop is needed since none of
-          # them need to be told apart downstream (the gate script only
-          # needs the flat list of changed paths, not which glob matched).
+          # One collector for the two add/modify-only path signals below.
+          # Issue #673's review found this block hand-copied a third time;
+          # the three copies differed only in a pathspec list, a shape
+          # regex, a label, and two variable names, while each repeated the
+          # same git-diff error branch, the same D/R100 filter, the same
+          # `while IFS=$'\t' read` body, and the same comma-join -- so a
+          # bug fixed in one had to be found and fixed in three. The two
+          # regexes had already drifted (`+` in one, `*` in another) over
+          # an overlapping path set. Results come back in COLLECTED_LINES
+          # (the raw filtered diff lines, for the applicability test) and
+          # COLLECTED_PATHS (the validated comma-joined list).
           #
-          # Every pathspec below carries the `:(glob)` magic so `*` does not
-          # cross `/` -- git's *default* pathspec matching does (verified
-          # live: 'skills/*/scripts/*.py' with no `:(glob)` matches a nested
-          # path like 'skills/foo/scripts/sub/bar.py' too), the opposite of
-          # this workflow's own top-level `paths:` trigger, whose `*` never
-          # crosses `/` per GitHub Actions' own path-filter syntax. Without
-          # `:(glob)`, a stray nested checker-script path pulled in by a
-          # PR that also touches something the `paths:` trigger fired on
-          # would reach the filename-shape validation below, fail it (that
-          # validation is intentionally single-level, matching every
-          # existing skill's flat scripts/ layout), and hard-fail this
-          # entire required check for a file this gate never intended to
-          # scope in -- not a hypothetical: reproduced directly against a
-          # scratch repo before adding `:(glob)` here. Nested checker-script
-          # subdirectories are out of scope by design (matching the
-          # `paths:` trigger's own boundary and every skill's current flat
-          # layout), not an oversight.
-          if ! checker_script_diff_output=$(git diff --name-status "$BASE_SHA...$HEAD_SHA" -- \
-              ':(glob)skills/*/scripts/*.py' ':(glob)evals/scripts/*.py' ':(glob).github/scripts/*.py'); then
-            echo "::error::git diff failed for checker scripts between $BASE_SHA and $HEAD_SHA" >&2
+          # `D` and `R100` are excluded here because a deleted or
+          # byte-identically-renamed SKILL.md or design doc has no new
+          # content to audit. That rationale does NOT transfer to a gate,
+          # which is why the gate signal below does not use this function.
+          #
+          # Shape validation before the comma-join is not decoration: a PR
+          # author fully controls these filenames, both sinks
+          # ($GITHUB_OUTPUT and the gate script's comma-split) are
+          # comma-delimited, and a filename carrying a literal comma would
+          # otherwise split into two bogus entries downstream.
+          collect_paths() {
+            local label="$1" shape_re="$2"
+            shift 2
+            local diff_output filtered joined status path newpath new_path
+            if ! diff_output=$(git diff --name-status "$BASE_SHA...$HEAD_SHA" -- "$@"); then
+              echo "::error::git diff failed for $label between $BASE_SHA and $HEAD_SHA" >&2
+              return 1
+            fi
+            filtered=$(printf '%s\n' "$diff_output" | grep -vE '^(D|R100)[[:space:]]' || true)
+            joined=""
+            if [ -n "$filtered" ]; then
+              echo "Added/modified $label requiring disclosure:"
+              echo "$filtered"
+              while IFS=$'\t' read -r status path newpath; do
+                [ -z "$status" ] && continue
+                case "$status" in
+                  R*) new_path="$newpath" ;;
+                  *) new_path="$path" ;;
+                esac
+                if ! printf '%s' "$new_path" | grep -E "$shape_re" >/dev/null; then
+                  echo "::error::unsupported $label filename for signal computation: $new_path" >&2
+                  return 1
+                fi
+                joined="${joined}${joined:+,}${new_path}"
+              done <<< "$filtered"
+            fi
+            COLLECTED_LINES="$filtered"
+            COLLECTED_PATHS="$joined"
+          }
+
+          # Issue #517 (refs #277): design docs. Deliberately no `:(glob)`
+          # on this pathspec, unlike the checker-script one below: without
+          # it a nested docs/superpowers/specs/<dir>/<file>.md is selected
+          # and then hard-fails the single-level shape regex, which is the
+          # loud, fail-closed outcome wanted for a path shape nobody has
+          # decided about yet. Adding `:(glob)` here would silently drop it
+          # from scope instead -- a fail-open, not a cleanup.
+          collect_paths "design doc" '^docs/superpowers/specs/[A-Za-z0-9._-]+\.md$' \
+            'docs/superpowers/specs/*.md'
+          changed_design_doc_lines="$COLLECTED_LINES"
+          changed_design_docs="$COLLECTED_PATHS"
+
+          # Issue #565 (refs #560 repair 5): deterministic checker scripts.
+          # Every pathspec carries `:(glob)` so `*` does not cross `/` --
+          # git's *default* pathspec matching does (verified live:
+          # 'skills/*/scripts/*.py' with no `:(glob)` matches a nested
+          # 'skills/foo/scripts/sub/bar.py' too), the opposite of this
+          # workflow's own top-level `paths:` trigger, whose `*` never
+          # crosses `/` per GitHub Actions' path-filter syntax. Here the
+          # `:(glob)` is wanted, unlike the design-doc case above: nested
+          # checker-script subdirectories are an out-of-scope-by-design
+          # boundary matching every skill's flat scripts/ layout, so a
+          # stray nested path pulled in by a PR that also touched something
+          # else must not hard-fail this required check -- reproduced
+          # directly against a scratch repo before `:(glob)` was added.
+          collect_paths "checker script" \
+            '^(skills/[A-Za-z0-9_-]+/scripts/[A-Za-z0-9._-]+\.py|evals/scripts/[A-Za-z0-9._-]+\.py|\.github/scripts/[A-Za-z0-9._-]+\.py)$' \
+            ':(glob)skills/*/scripts/*.py' ':(glob)evals/scripts/*.py' ':(glob).github/scripts/*.py'
+          changed_checker_script_lines="$COLLECTED_LINES"
+          changed_checker_scripts="$COLLECTED_PATHS"
+
+          # Issue #673 (refs #665 repair 1): this repository's own
+          # deterministic gates. Not a fourth `collect_paths` call, because
+          # this signal differs on both of that function's fixed rules.
+          #
+          # Membership is not a path glob. A gate is anything matching the
+          # .github/scripts/gate_*.py / scan_*.py naming convention, OR
+          # registered in .gitapex/ssot.json's gates[].script, OR that
+          # registry file itself. The glob-only first version under-covered
+          # badly: 16 of the 35 registered gate paths did not match it,
+          # including hooks/ PreToolUse deny logic and
+          # skill_security_relevance.py, the script deciding whether this
+          # very workflow's adversarial-coverage-mapping check fires.
+          # detect_changed_gate_scripts.py owns that rule; see its docstring.
+          #
+          # Deletions and renames are in scope. `collect_paths` filters
+          # them out, which is right for a SKILL.md and wrong for a gate:
+          # verified live, a PR whose only change was `git rm` of a gate
+          # script made this whole job report applicable=false and exit 0 --
+          # a green required check for deleting a gate.
+          #
+          # The diff is unscoped because membership spans .github/scripts/,
+          # hooks/, .github/workflows/, and .gitapex/ssot.json; the helper
+          # filters, and doing it there keeps one rule in one place rather
+          # than a pathspec list here that must stay in sync with a registry.
+          # No exemption for dependency-pin bumps, deliberately. An earlier
+          # revision carved one out so Dependabot's weekly github-actions
+          # update would pass, since three registered gates are workflow YAML
+          # and a bot cannot add a disclosure to its own PR body. A review
+          # found three defects in those ~130 lines of diff parsing, one of
+          # which exempted *deleting the step that invokes a gate* -- the
+          # same fail-open that including deletions was meant to close,
+          # reintroduced by the code meant to narrow scope. The carve-out is
+          # deleted rather than patched: see the detector's docstring.
+          #
+          # Accepted cost, stated so it is not a surprise: a Dependabot PR
+          # that bumps a pin inside a registered gate workflow fails this
+          # check until the human merging it adds a
+          # `deterministic-gate-quality` line to the PR body. That is a
+          # supply-chain change to a gate, so a human reading it is a
+          # defensible outcome rather than pure friction.
+          if ! gate_diff_output=$(git diff --name-status "$BASE_SHA...$HEAD_SHA"); then
+            echo "::error::git diff failed for gate detection between $BASE_SHA and $HEAD_SHA" >&2
             exit 1
           fi
-          changed_checker_script_lines=$(printf '%s\n' "$checker_script_diff_output" | grep -vE '^(D|R100)[[:space:]]' || true)
-          changed_checker_scripts=""
-          if [ -n "$changed_checker_script_lines" ]; then
-            echo "Added/modified checker scripts requiring disclosure:"
-            echo "$changed_checker_script_lines"
-            while IFS=$'\t' read -r status path newpath; do
-              [ -z "$status" ] && continue
-              case "$status" in
-                R*) new_path="$newpath" ;;
-                *) new_path="$path" ;;
-              esac
-              # Same validate-before-comma-join-sink discipline as the
-              # design-doc block above. Two shapes are matched: one
-              # variable directory segment for skills/<name>/scripts/ (the
-              # skill name), and a fixed prefix for evals/scripts/ and
-              # .github/scripts/, which have no owning-skill component. The
-              # skill-name segment is restricted to the same
-              # [A-Za-z0-9_-]+ class the SKILL.md diff step above already
-              # requires of its own extracted `skill` variable (the
-              # `skill=$(printf ... | sed -E 's#^skills/...#\1#')` /
-              # `grep -E '^[A-Za-z0-9_-]+$'` pair earlier in this same
-              # step) -- not a permissive [^/]+ -- because that segment is
-              # never separately re-validated downstream here the way
-              # `skill` is there; an unrestricted class would let a
-              # directory name containing a literal comma corrupt the
-              # comma-join sink.
-              if ! printf '%s' "$new_path" | grep -E \
-                  '^(skills/[A-Za-z0-9_-]+/scripts/[A-Za-z0-9._-]+\.py|evals/scripts/[A-Za-z0-9._-]+\.py|\.github/scripts/[A-Za-z0-9._-]+\.py)$' \
-                  >/dev/null; then
-                echo "::error::unsupported checker script filename for signal computation: $new_path" >&2
-                exit 1
-              fi
-              changed_checker_scripts="${changed_checker_scripts}${changed_checker_scripts:+,}${new_path}"
-            done <<< "$changed_checker_script_lines"
+          if ! changed_gate_scripts=$(printf '%s\n' "$gate_diff_output" \
+              | python3 .github/scripts/detect_changed_gate_scripts.py); then
+            echo "::error::gate-path detection failed; refusing to report this check green on a scope that could not be computed" >&2
+            exit 1
           fi
 
-          if [ -z "$changed" ] && [ -z "$changed_design_doc_lines" ] && [ -z "$changed_checker_script_lines" ]; then
-            echo "No added/modified skills/*/SKILL.md, docs/superpowers/specs/*.md, or deterministic checker script in this diff; skipping disclosure check."
+          # $changed_gate_scripts is tested here as an independent term,
+          # not folded into the checker-script one it overlaps with today:
+          # narrowing the checker-script globs later must never silently
+          # disable the gate check by making the job skip entirely
+          # (dimensions.md dimensions 3 and 15). It is also the only term
+          # here that can be non-empty for a pure deletion.
+          if [ -z "$changed" ] && [ -z "$changed_design_doc_lines" ] \
+             && [ -z "$changed_checker_script_lines" ] && [ -z "$changed_gate_scripts" ]; then
+            echo "No added/modified skills/*/SKILL.md, docs/superpowers/specs/*.md, or deterministic checker script, and no changed deterministic gate, in this diff; skipping disclosure check."
             {
               echo "applicable=false"
               echo "description-changed-skills="
@@ -173,6 +226,7 @@ jobs:
               echo "security-relevant-skills="
               echo "changed-design-docs="
               echo "changed-checker-scripts="
+              echo "changed-gate-scripts="
               echo "skill-md-changed=false"
             } >> "$GITHUB_OUTPUT"
             exit 0
@@ -276,6 +330,7 @@ jobs:
             echo "security-relevant-skills=${security_relevant_skills}"
             echo "changed-design-docs=${changed_design_docs}"
             echo "changed-checker-scripts=${changed_checker_scripts}"
+            echo "changed-gate-scripts=${changed_gate_scripts}"
             echo "skill-md-changed=${skill_md_changed}"
           } >> "$GITHUB_OUTPUT"
 
@@ -292,6 +347,7 @@ jobs:
           SECURITY_RELEVANT_SKILLS: ${{ steps.diff.outputs.security-relevant-skills }}
           CHANGED_DESIGN_DOCS: ${{ steps.diff.outputs.changed-design-docs }}
           CHANGED_CHECKER_SCRIPTS: ${{ steps.diff.outputs.changed-checker-scripts }}
+          CHANGED_GATE_SCRIPTS: ${{ steps.diff.outputs.changed-gate-scripts }}
           SKILL_MD_CHANGED: ${{ steps.diff.outputs.skill-md-changed }}
         run: |
           set -euo pipefail
@@ -305,4 +361,5 @@ jobs:
             --security-relevant-skills "$SECURITY_RELEVANT_SKILLS" \
             --changed-design-docs "$CHANGED_DESIGN_DOCS" \
             --changed-checker-scripts "$CHANGED_CHECKER_SCRIPTS" \
+            --changed-gate-scripts "$CHANGED_GATE_SCRIPTS" \
             "${skill_md_changed_flag[@]}"
