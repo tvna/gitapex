@@ -305,7 +305,12 @@ def find_duplicate_ids(instance: Any) -> list[str]:
             if not isinstance(entry, dict):
                 continue
             entry_id = entry.get("id")
-            if entry_id is None:
+            # The schema requires `id` to be a string; a non-string value
+            # (missing/null, but also a list/dict/int/bool -- all
+            # schema-invalid, caught separately by find_schema_violations)
+            # is skipped here rather than used as a dict key below, which
+            # would raise an uncaught TypeError for an unhashable list/dict.
+            if not isinstance(entry_id, str):
                 continue
             seen[entry_id] = seen.get(entry_id, 0) + 1
         for entry_id, count in seen.items():
