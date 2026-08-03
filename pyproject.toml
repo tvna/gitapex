@@ -203,7 +203,6 @@ disable_error_code = ["attr-defined", "arg-type", "operator", "no-untyped-call"]
 [[tool.mypy.overrides]]
 module = [
     "check_dispatch_trace",
-    "lint_fixture_assertions",
     "run_ablation",
     "check_dimension_coverage",
 ]

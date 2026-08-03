@@ -753,3 +753,171 @@ def test_check_adversarial_coverage_reuses_supplied_task_data(tmp_path):
     assert L.check_adversarial_coverage(
         "some-skill", missing_dir, "claims adversarial coverage",
         task_data=task_data) is None
+
+
+# ---- TaskFixture / ExpectedBlock / InputsBlock / NearAssertion (issue
+# #684): the new pydantic model's own validation behavior. These are
+# additions alongside the existing suite above, not replacements -- see
+# the module docstring for why the model exists and what it does/does not
+# strictly validate (e.g. requires_fresh_dispatch is deliberately open). --
+
+def _well_formed_fixture(**overrides):
+    fixture = {
+        "id": "t", "name": "T", "inputs": {"prompt": "p"},
+        "expected": {"output_contains": ["x"]},
+    }
+    fixture.update(overrides)
+    return fixture
+
+
+def test_task_fixture_accepts_the_well_formed_shape():
+    fixture = L.TaskFixture.model_validate(_well_formed_fixture())
+    assert fixture.id == "t"
+    assert fixture.inputs.prompt == "p"
+    assert fixture.expected.output_contains == ["x"]
+
+
+def test_task_fixture_rejects_missing_id():
+    fixture = _well_formed_fixture()
+    del fixture["id"]
+    with pytest.raises(L.ValidationError):
+        L.TaskFixture.model_validate(fixture)
+
+
+def test_task_fixture_rejects_missing_inputs():
+    fixture = _well_formed_fixture()
+    del fixture["inputs"]
+    with pytest.raises(L.ValidationError):
+        L.TaskFixture.model_validate(fixture)
+
+
+def test_task_fixture_rejects_missing_expected():
+    fixture = _well_formed_fixture()
+    del fixture["expected"]
+    with pytest.raises(L.ValidationError):
+        L.TaskFixture.model_validate(fixture)
+
+
+def test_task_fixture_rejects_wrong_type_expected():
+    # expected: "todo" -- a stub scalar left by mistake, not a mapping.
+    with pytest.raises(L.ValidationError):
+        L.TaskFixture.model_validate(_well_formed_fixture(expected="todo"))
+
+
+def test_task_fixture_rejects_wrong_type_inputs_prompt():
+    with pytest.raises(L.ValidationError):
+        L.TaskFixture.model_validate(_well_formed_fixture(inputs={"prompt": 123}))
+
+
+def test_task_fixture_rejects_non_string_id():
+    with pytest.raises(L.ValidationError):
+        L.TaskFixture.model_validate(_well_formed_fixture(id=5))
+
+
+def test_task_fixture_rejects_unknown_top_level_key():
+    # extra="forbid": an unexpected top-level key is far more likely a typo
+    # (e.g. "expcted:") than a legitimate new field -- see TaskFixture's
+    # own docstring.
+    with pytest.raises(L.ValidationError):
+        L.TaskFixture.model_validate(_well_formed_fixture(expcted={}))
+
+
+def test_task_fixture_accepts_bare_string_tags():
+    # A bare scalar tags value is one tag, not an authoring mistake -- see
+    # _as_tag_list's own docstring.
+    fixture = L.TaskFixture.model_validate(_well_formed_fixture(tags="adversarial"))
+    assert fixture.tags == "adversarial"
+    assert L._as_tag_list(fixture.tags) == ["adversarial"]
+
+
+def test_task_fixture_accepts_list_tags():
+    fixture = L.TaskFixture.model_validate(
+        _well_formed_fixture(tags=["quality", "adversarial"]))
+    assert fixture.tags == ["quality", "adversarial"]
+
+
+def test_task_fixture_accepts_missing_description_and_tags():
+    # Neither is required -- confirmed against this repository's own test
+    # helper (_write_task) fixtures, which omit both.
+    fixture = L.TaskFixture.model_validate(_well_formed_fixture())
+    assert fixture.description is None
+    assert fixture.tags is None
+
+
+def test_expected_block_preserves_fields_this_linter_does_not_itself_read():
+    # merge-retrospective's own scoring reads expected.classification /
+    # expected.repair_count; this linter never does, but must not drop
+    # them -- extra="allow" round-trips them through model_dump().
+    fixture = L.TaskFixture.model_validate(_well_formed_fixture(expected={
+        "output_contains": ["x"],
+        "classification": ["missing-deterministic-gate"],
+        "repair_count": 2,
+    }))
+    dumped = fixture.model_dump()
+    assert dumped["expected"]["classification"] == ["missing-deterministic-gate"]
+    assert dumped["expected"]["repair_count"] == 2
+
+
+def test_near_assertion_rejects_missing_all():
+    with pytest.raises(L.ValidationError):
+        L.TaskFixture.model_validate(_well_formed_fixture(expected={
+            "output_contains_near": [{"window": 100}],
+        }))
+
+
+def test_near_assertion_defaults_window_to_400():
+    fixture = L.TaskFixture.model_validate(_well_formed_fixture(expected={
+        "output_contains_near": [{"all": ["a", "b"]}],
+    }))
+    assert fixture.expected.output_contains_near[0].window == 400
+
+
+def test_load_fixture_dict_falls_back_on_malformed_expected(tmp_path):
+    # A fixture whose "expected" block is the wrong type fails TaskFixture
+    # validation; _load_fixture_dict falls back to the bare parsed YAML
+    # rather than raising, matching this function's callers' pre-pydantic
+    # tolerance for a malformed shape they cannot validate but must not
+    # crash on (see check_dispatch_declaration_coverage's own tests).
+    path = tmp_path / "bad.yaml"
+    path.write_text("id: t\nname: T\ninputs:\n  prompt: p\nexpected: todo\n",
+                     encoding="utf-8")
+    assert L._load_fixture_dict(path) == {
+        "id": "t", "name": "T", "inputs": {"prompt": "p"}, "expected": "todo"}
+
+
+def test_load_fixture_dict_validates_well_formed_fixture(tmp_path):
+    path = tmp_path / "good.yaml"
+    path.write_text(
+        "id: t\nname: T\ninputs:\n  prompt: p\nexpected:\n"
+        "  output_contains:\n    - x\n",
+        encoding="utf-8")
+    data = L._load_fixture_dict(path)
+    assert data["id"] == "t"
+    assert data["expected"]["output_contains"] == ["x"]
+
+
+def test_lint_skill_tasks_raises_validation_error_on_malformed_fixture(tmp_path):
+    # lint_skill_tasks does the one strict validated parse main() relies on
+    # -- confirms a malformed fixture (missing the required "inputs" block)
+    # actually raises rather than silently tolerating the bad shape.
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    (tasks / "t.yaml").write_text(
+        "id: t\nname: T\nexpected:\n  output_contains: []\n", encoding="utf-8")
+    rubric, skill = _corpus_files(tmp_path)
+    with pytest.raises(L.ValidationError):
+        L.lint_skill_tasks([tasks / "t.yaml"], L.load_corpus(rubric, skill))
+
+
+def test_main_reports_malformed_fixture_as_a_lint_error_exit_2(tmp_path):
+    # End to end: main() catches the ValidationError lint_skill_tasks
+    # raises and reports it via the same exit-2 error path as an
+    # unparsable/unreadable fixture file, rather than an uncaught
+    # traceback.
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    (tasks / "t.yaml").write_text(
+        "id: t\nname: T\nexpected:\n  output_contains: []\n", encoding="utf-8")
+    rubric, skill = _corpus_files(tmp_path)
+    assert L.main(["--tasks-glob", str(tasks / "*.yaml"),
+                   "--rubric", str(rubric), "--skill", str(skill)]) == 2
