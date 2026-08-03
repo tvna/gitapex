@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from pathlib import Path
 
 _HEADING_RE = re.compile(r"^##[ \t]+(.+?)[ \t]*$", re.MULTILINE)
 _TABLE_LINE_RE = re.compile(r"^\|(.*)\|[ \t]*$")
@@ -139,7 +140,7 @@ def main(argv=None):
     parser.add_argument("path", help="Path to the doc to check.")
     args = parser.parse_args(argv)
     try:
-        body_text = open(args.path, encoding="utf-8").read()
+        body_text = Path(args.path).read_text(encoding="utf-8")
     except FileNotFoundError:
         print(f"error: file not found: {args.path}", file=sys.stderr)
         return 1

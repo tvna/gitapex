@@ -134,6 +134,7 @@ import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import check_acm_present_or_waiver as acm_checker
@@ -366,7 +367,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     try:
-        raw = open(args.payload, encoding="utf-8").read() if args.payload else sys.stdin.read()
+        raw = Path(args.payload).read_text(encoding="utf-8") if args.payload else sys.stdin.read()
     except FileNotFoundError:
         print(f"error: payload file not found: {args.payload}", file=sys.stderr)
         return 1

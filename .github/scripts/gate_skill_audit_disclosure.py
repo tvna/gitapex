@@ -139,6 +139,7 @@ import argparse
 import collections
 import re
 import sys
+from pathlib import Path
 
 _SECTION_RE = re.compile(r"^##[ \t]*Skill audit evidence[ \t]*$", re.IGNORECASE | re.MULTILINE)
 _NEXT_HEADING_RE = re.compile(r"^##[ \t]+\S", re.MULTILINE)
@@ -554,7 +555,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         body_text = (
-            open(args.body, encoding="utf-8").read() if args.body else sys.stdin.read()
+            Path(args.body).read_text(encoding="utf-8") if args.body else sys.stdin.read()
         )
     except FileNotFoundError:
         print(f"error: body file not found: {args.body}", file=sys.stderr)

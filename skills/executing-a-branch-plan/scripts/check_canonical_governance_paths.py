@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 from _path_normalize import normalize as _normalize
 
@@ -136,7 +137,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         raw_text = (
-            open(args.files, encoding="utf-8").read() if args.files else sys.stdin.read()
+            Path(args.files).read_text(encoding="utf-8") if args.files else sys.stdin.read()
         )
     except FileNotFoundError:
         print(f"error: files list not found: {args.files}", file=sys.stderr)

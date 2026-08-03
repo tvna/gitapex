@@ -111,7 +111,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         if args.added:
-            with open(args.added, encoding="utf-8") as handle:
+            with Path(args.added).open(encoding="utf-8") as handle:
                 text = handle.read()
         else:
             text = sys.stdin.read()

@@ -104,6 +104,7 @@ import fnmatch
 import json
 import sys
 import tomllib
+from pathlib import Path
 
 DEFAULT_MIN_PERCENT = 90.0
 DEFAULT_COVERAGE_JSON = "coverage.json"
@@ -122,7 +123,7 @@ def read_coverage_sources(pyproject_path: str) -> list[str]:
     nothing to check."
     """
     try:
-        with open(pyproject_path, "rb") as handle:
+        with Path(pyproject_path).open("rb") as handle:
             data = tomllib.load(handle)
     except OSError as exc:
         raise ValueError(f"could not read {pyproject_path!r}: {exc}") from exc
@@ -285,7 +286,7 @@ def main(argv: list[str] | None = None) -> int:
         use_source_selector = True
 
     try:
-        with open(args.coverage_json, encoding="utf-8") as handle:
+        with Path(args.coverage_json).open(encoding="utf-8") as handle:
             data = json.load(handle)
     except OSError as exc:
         print(f"error: could not read coverage report {args.coverage_json!r}: {exc}", file=sys.stderr)

@@ -47,6 +47,7 @@ import argparse
 import json
 import sys
 from collections import defaultdict
+from pathlib import Path
 
 from _path_normalize import normalize as _normalize
 
@@ -95,7 +96,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         raw_text = (
-            open(args.input, encoding="utf-8").read() if args.input else sys.stdin.read()
+            Path(args.input).read_text(encoding="utf-8") if args.input else sys.stdin.read()
         )
     except FileNotFoundError:
         print(f"error: input file not found: {args.input}", file=sys.stderr)

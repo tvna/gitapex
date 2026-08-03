@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from pathlib import Path
 
 # The table header row this skill's template uses. Match loosely (any
 # whitespace around pipes) so reasonable Markdown re-formatting still passes.
@@ -47,7 +48,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         body_text = (
-            open(args.body, encoding="utf-8").read() if args.body else sys.stdin.read()
+            Path(args.body).read_text(encoding="utf-8") if args.body else sys.stdin.read()
         )
     except FileNotFoundError:
         print(f"error: body file not found: {args.body}", file=sys.stderr)

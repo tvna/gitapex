@@ -138,7 +138,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         text = (
-            open(args.removed, encoding="utf-8").read() if args.removed else sys.stdin.read()
+            Path(args.removed).read_text(encoding="utf-8") if args.removed else sys.stdin.read()
         )
     except FileNotFoundError:
         print(f"error: removed-names file not found: {args.removed}", file=sys.stderr)
