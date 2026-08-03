@@ -68,12 +68,28 @@ def find_drift(
     whose two copies disagree. Empty list means the manifests are in lockstep.
 
     Fails loudly (raises) if either manifest is missing, unreadable as UTF-8,
-    or not valid YAML/JSON syntax (all ManifestReadError), or a mirrored
-    field is absent (KeyError) -- a silent skip would let the gate pass on a
-    broken manifest.
+    not valid YAML/JSON syntax, or syntactically valid but not a top-level
+    mapping/object (all ManifestReadError), or a mirrored field is absent
+    (KeyError) -- a silent skip would let the gate pass on a broken
+    manifest.
     """
     apm_data = _load_yaml(apm_manifest) or {}
     plugin_data = _load_json(plugin_manifest)
+
+    # Valid YAML/JSON syntax does not mean either document is shaped as a
+    # mapping/object -- a top-level list or scalar (e.g. apm.yml containing
+    # just "- name\n- version\n", or plugin.json containing "42") parses
+    # cleanly but crashed the `field not in ...`/`...[field]` lookups below
+    # with an uncaught TypeError. `or {}` above only substitutes a *falsy*
+    # apm_data (None, [], "", 0); a truthy non-dict still reaches here.
+    if not isinstance(apm_data, dict):
+        raise ManifestReadError(
+            f"{apm_manifest}: must be a YAML mapping, got {type(apm_data).__name__}"
+        )
+    if not isinstance(plugin_data, dict):
+        raise ManifestReadError(
+            f"{plugin_manifest}: must be a JSON object, got {type(plugin_data).__name__}"
+        )
 
     findings: list[tuple[str, str, str]] = []
     for field in MIRRORED_FIELDS:

@@ -100,6 +100,37 @@ def test_non_utf8_plugin_json_raises_manifest_read_error(tmp_path):
         drift.find_drift(apm, plugin)
 
 
+def test_apm_yml_as_yaml_list_raises_manifest_read_error(tmp_path):
+    # Issue #699 (found by adversarial review of this same fix): valid YAML
+    # syntax does not mean a top-level mapping -- a top-level list parses
+    # cleanly and used to crash `field not in apm_data` with an uncaught
+    # TypeError instead of the documented ManifestReadError.
+    apm = tmp_path / "apm.yml"
+    plugin = tmp_path / "plugin.json"
+    apm.write_text("- name\n- version\n")
+    plugin.write_text(json.dumps(_VALID_PLUGIN))
+    with pytest.raises(drift.ManifestReadError, match="must be a YAML mapping"):
+        drift.find_drift(apm, plugin)
+
+
+def test_apm_yml_as_yaml_scalar_raises_manifest_read_error(tmp_path):
+    apm = tmp_path / "apm.yml"
+    plugin = tmp_path / "plugin.json"
+    apm.write_text("42\n")
+    plugin.write_text(json.dumps(_VALID_PLUGIN))
+    with pytest.raises(drift.ManifestReadError, match="must be a YAML mapping"):
+        drift.find_drift(apm, plugin)
+
+
+def test_plugin_json_as_json_scalar_raises_manifest_read_error(tmp_path):
+    apm = tmp_path / "apm.yml"
+    plugin = tmp_path / "plugin.json"
+    apm.write_text(_VALID_APM)
+    plugin.write_text("42")
+    with pytest.raises(drift.ManifestReadError, match="must be a JSON object"):
+        drift.find_drift(apm, plugin)
+
+
 def test_invalid_json_syntax_in_plugin_json_raises_manifest_read_error(tmp_path):
     # Issue #699: _read_text's UnicodeDecodeError guard (#680) covers the
     # decode step, but json.loads itself had no handler -- a syntactically
