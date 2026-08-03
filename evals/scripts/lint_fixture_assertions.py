@@ -418,8 +418,14 @@ def _load_fixture_dict(path: Path) -> dict[str, Any]:
     pre-pydantic behavior, so a malformed fixture still surfaces as a
     heuristic finding (e.g. "no well-formed requires_fresh_dispatch
     declared") to its caller instead of crashing the lint pass outright.
+    A genuine YAML *syntax* error (not just a wrong shape) has no parsed
+    value to fall back to, so it returns ``{}`` instead -- still a
+    heuristic "nothing declared" finding, never an uncaught exception.
     """
-    raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    try:
+        raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError:
+        return {}
     try:
         return TaskFixture.model_validate(raw).model_dump()
     except ValidationError:
@@ -867,18 +873,25 @@ def lint_skill_tasks(task_paths: list[Path], corpus: str, *,
     here, rather than this function re-reading the same files).
 
     Each fixture file is parsed and validated against ``TaskFixture``
-    (issue #684). A malformed fixture (a missing required field, a
-    wrong-typed value, an unrecognized top-level key) is reported as its
-    own blocking ``Warning_`` naming the offending file, and excluded from
-    the rest of this skill's linting -- it does NOT abort linting for any
-    other fixture, in this skill or any other (found by a Decision-12
-    adversarial review: an earlier version let ``pydantic.ValidationError``
-    propagate unguarded out of this function, so one malformed fixture
-    anywhere crashed the entire multi-skill run with an unlocalized error,
-    silently skipping the adversarial-coverage/dispatch-declaration-
-    coverage checks for every other skill too -- exactly the per-fixture
-    isolation ``_load_fixture_dict``'s own docstring already promises for
-    its own, separate call sites).
+    (issue #684). A malformed fixture -- either a YAML *syntax* error, or
+    YAML that parses fine but has the wrong shape (a missing required
+    field, a wrong-typed value, an unrecognized top-level key) -- is
+    reported as its own blocking ``Warning_`` naming the offending file,
+    and excluded from the rest of this skill's linting -- it does NOT
+    abort linting for any other fixture, in this skill or any other
+    (found by a Decision-12 adversarial review: an earlier version let
+    ``pydantic.ValidationError`` propagate unguarded out of this
+    function, so one malformed fixture anywhere crashed the entire
+    multi-skill run with an unlocalized error, silently skipping the
+    adversarial-coverage/dispatch-declaration-coverage checks for every
+    other skill too -- exactly the per-fixture isolation
+    ``_load_fixture_dict``'s own docstring already promises for its own,
+    separate call sites. A follow-up adversarial pass after that fix
+    landed found the guard itself only caught ``ValidationError``, not a
+    genuine ``yaml.YAMLError`` parse failure, leaving the exact same
+    whole-run-abort gap open for a fixture with broken YAML syntax
+    rather than merely the wrong shape -- both exception types are
+    caught here now).
 
     Returns ``(warnings, task_data)``: ``task_data`` is each successfully
     validated task path's fixture, re-serialized via ``model_dump()``, so
@@ -893,10 +906,10 @@ def lint_skill_tasks(task_paths: list[Path], corpus: str, *,
     warnings: list[Warning_] = []
     fixtures: dict[Path, TaskFixture] = {}
     for p in task_paths:
-        raw = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
         try:
+            raw = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
             fixtures[p] = TaskFixture.model_validate(raw)
-        except ValidationError as exc:
+        except (yaml.YAMLError, ValidationError) as exc:
             warnings.append(Warning_(
                 p.name, "(fixture)", "(top-level shape)", "fixture-shape",
                 f"{p}: malformed fixture, excluded from linting: {exc}"))

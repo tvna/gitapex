@@ -511,15 +511,23 @@ def main(argv: list[str] | None = None) -> int:
             commit_subject=args.commit_subject, commit_body=args.commit_body, add=args.add,
         )
     except ValidationError as exc:
-        # body_file's own message already fully describes the problem (it
-        # is this script's pre-existing hand-check text, see _CliArgs'
-        # docstring) -- prefixing it with "body_file: " would drift the
-        # message CI logs and operators already expect. Every other field
-        # is a brand-new check with no prior text to preserve, so it keeps
-        # the generic "field: message" form.
+        # body_file's *custom field_validator* message (type "value_error",
+        # from _CliArgs._body_file_must_exist's own raise ValueError) is
+        # this script's pre-existing hand-check text, self-describing
+        # enough that a "body_file: " prefix would only drift the message
+        # CI logs and operators already expect -- see _CliArgs' docstring.
+        # A blank body_file instead trips Field(min_length=1), producing
+        # pydantic's own generic, non-self-describing "String should have
+        # at least 1 character" -- keying this special case on loc alone
+        # (not also type) wrongly stripped the field label from that
+        # message too (an adversarial review confirmed it, by direct
+        # execution, reads as an unattributable duplicate of another
+        # field's identical blank-value message when both are blank at
+        # once). Every other field, and every other body_file error type,
+        # keeps the generic "field: message" form.
         detail = "; ".join(
             e["msg"].removeprefix("Value error, ")
-            if e["loc"] == ("body_file",)
+            if e["loc"] == ("body_file",) and e["type"] == "value_error"
             else f"{e['loc'][0] if e['loc'] else 'args'}: {e['msg'].removeprefix('Value error, ')}"
             for e in exc.errors()
         )

@@ -807,6 +807,43 @@ def test_main_missing_body_file(monkeypatch: pytest.MonkeyPatch, capsys, tmp_pat
     assert err == f"Error: body file not found: {tmp_path / 'missing.md'}\n"
 
 
+def test_main_blank_body_file_keeps_field_label(monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    # A second adversarial pass (post-merge) found the body_file special
+    # case keyed on loc alone, not also error type -- so a *blank*
+    # --body-file (Field(min_length=1)'s generic, non-self-describing
+    # message, not the custom field_validator's self-describing one) had
+    # its field label silently stripped too, confirmed by direct
+    # execution to read as an unattributable duplicate when combined with
+    # another blank field's identical message. This must keep the
+    # "body_file: " label since, unlike the not-found message, the
+    # min_length text alone does not say which field failed.
+    monkeypatch.setenv("GH_TOKEN", "tok")
+    monkeypatch.setenv("REPO", "o/r")
+    rc = spp.main(
+        ["--base", "main", "--branch", "chore", "--title", "t",
+         "--body-file", "", "--commit-subject", "s"]
+    )
+    assert rc == 1
+    assert capsys.readouterr().err == "Error: body_file: String should have at least 1 character\n"
+
+
+def test_main_blank_title_and_body_file_both_labeled(monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    # Two fields sharing pydantic's identical generic blank-value message
+    # must not collapse into one unattributable, seemingly-duplicated
+    # line -- each keeps its own "field: " label.
+    monkeypatch.setenv("GH_TOKEN", "tok")
+    monkeypatch.setenv("REPO", "o/r")
+    rc = spp.main(
+        ["--base", "main", "--branch", "chore", "--title", "",
+         "--body-file", "", "--commit-subject", "s"]
+    )
+    assert rc == 1
+    assert capsys.readouterr().err == (
+        "Error: title: String should have at least 1 character; "
+        "body_file: String should have at least 1 character\n"
+    )
+
+
 def test_main_runtime_error_from_collect_additions(monkeypatch: pytest.MonkeyPatch, capsys, tmp_path) -> None:
     monkeypatch.setenv("GH_TOKEN", "tok")
     monkeypatch.setenv("REPO", "o/r")
