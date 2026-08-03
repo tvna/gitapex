@@ -8,6 +8,7 @@ acceptance criterion.
 from pathlib import Path
 
 import lint_fixture_assertions as L
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
