@@ -33,6 +33,9 @@ from __future__ import annotations
 import argparse
 import re
 import subprocess
+import sys
+
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 _BLOCK_SCALAR_INDICATORS = frozenset({">", ">-", ">+", "|", "|-", "|+"})
 _DESCRIPTION_KEY_RE = re.compile(r"^description:[ \t]*(.*)$")
@@ -111,7 +114,21 @@ def _read_at_revision(rev, path):
     return result.stdout
 
 
-def main(argv=None):
+class _CliArgs(BaseModel):
+    """Parsed-and-validated view of this script's own argparse namespace.
+    Every field rejects blank -- argparse's own ``required=True`` only
+    guarantees the flag was passed, not that its value is non-empty, and a
+    blank rev/path was never a meaningful input to ``_read_at_revision``."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    base_rev: str = Field(min_length=1)
+    head_rev: str = Field(min_length=1)
+    base_path: str = Field(min_length=1)
+    head_path: str = Field(min_length=1)
+
+
+def main(argv: list[str] | None = None) -> int:
     """CLI: print 'changed' or 'unchanged' and exit 0."""
     parser = argparse.ArgumentParser(
         description="Print 'changed' or 'unchanged' depending on whether a "
@@ -131,9 +148,20 @@ def main(argv=None):
         help="Path at --head-rev (the post-rename path for a renamed file).",
     )
     args = parser.parse_args(argv)
+    try:
+        cli_args = _CliArgs(
+            base_rev=args.base_rev, head_rev=args.head_rev,
+            base_path=args.base_path, head_path=args.head_path,
+        )
+    except ValidationError as exc:
+        detail = "; ".join(
+            f"{e['loc'][0] if e['loc'] else 'args'}: {e['msg'].removeprefix('Value error, ')}" for e in exc.errors()
+        )
+        print(f"error: invalid arguments: {detail}", file=sys.stderr)
+        return 1
 
-    base_text = _read_at_revision(args.base_rev, args.base_path)
-    head_text = _read_at_revision(args.head_rev, args.head_path)
+    base_text = _read_at_revision(cli_args.base_rev, cli_args.base_path)
+    head_text = _read_at_revision(cli_args.head_rev, cli_args.head_path)
     print("changed" if description_changed(base_text, head_text) else "unchanged")
     return 0
 

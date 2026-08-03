@@ -34,6 +34,8 @@ import re
 import sys
 from pathlib import Path
 
+from pydantic import BaseModel, ConfigDict, ValidationError
+
 # \b is a prefix/suffix word-boundary, so "gated"/"gateway"/"trusted"/
 # "trustworthy" match while "aggregate"/"delegate"/"negotiate" do not.
 _SECURITY_KEYWORDS_RE = re.compile(r"\b(security|gate|trust)", re.IGNORECASE)
@@ -63,7 +65,20 @@ def is_security_relevant(text):
     return bool(_SECURITY_KEYWORDS_RE.search(frontmatter))
 
 
-def main(argv=None):
+class _CliArgs(BaseModel):
+    """Parsed-and-validated view of this script's own argparse namespace.
+    ``path`` mirrors argparse's own type (a path string, or None when the
+    flag was never passed) -- no extra constraint is added since an
+    explicitly-passed empty string already falls through to the same
+    stdin-reading branch as None (see ``if args.path else`` below), exactly
+    as it did before this model existed."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    path: str | None = None
+
+
+def main(argv: list[str] | None = None) -> int:
     """CLI: read a SKILL.md's content (--path or stdin), print 'relevant'
     or 'not-relevant', exit 0."""
     parser = argparse.ArgumentParser(
@@ -77,9 +92,17 @@ def main(argv=None):
     )
     args = parser.parse_args(argv)
     try:
-        text = Path(args.path).read_text(encoding="utf-8") if args.path else sys.stdin.read()
+        cli_args = _CliArgs(path=args.path)
+    except ValidationError as exc:
+        detail = "; ".join(
+            f"{e['loc'][0] if e['loc'] else 'args'}: {e['msg'].removeprefix('Value error, ')}" for e in exc.errors()
+        )
+        print(f"error: invalid arguments: {detail}", file=sys.stderr)
+        return 1
+    try:
+        text = Path(cli_args.path).read_text(encoding="utf-8") if cli_args.path else sys.stdin.read()
     except FileNotFoundError:
-        print(f"error: file not found: {args.path}", file=sys.stderr)
+        print(f"error: file not found: {cli_args.path}", file=sys.stderr)
         return 1
     print("relevant" if is_security_relevant(text) else "not-relevant")
     return 0

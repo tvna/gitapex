@@ -837,3 +837,20 @@ def test_main_success_up_to_date(monkeypatch: pytest.MonkeyPatch, capsys, tmp_pa
     )
     assert rc == 0
     assert "up-to-date" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# _CliArgs pydantic validation (new in this batch's CLI-pydantic-wrap)
+# ---------------------------------------------------------------------------
+
+
+def test_main_rejects_blank_title(monkeypatch: pytest.MonkeyPatch, capsys, tmp_path) -> None:
+    monkeypatch.setenv("GH_TOKEN", "tok")
+    monkeypatch.setenv("REPO", "o/r")
+    body_file = tmp_path / "body.md"
+    body_file.write_text("body")
+    rc = spp.main(
+        ["--base", "main", "--branch", "chore", "--title", "", "--body-file", str(body_file), "--commit-subject", "s"]
+    )
+    assert rc == 1
+    assert "Error:" in capsys.readouterr().err

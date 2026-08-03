@@ -118,6 +118,7 @@ from pathlib import Path
 from typing import TypeGuard
 
 import yaml
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 _YAML_NAME_RE = re.compile(r"`([A-Za-z0-9._-]+\.yaml)`")
 
@@ -408,13 +409,31 @@ def _read(path: Path) -> str | None:
         return None
 
 
+class _CliArgs(BaseModel):
+    """Parsed-and-validated view of this script's own argparse namespace."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    split_md: list[str] = Field(default_factory=list)
+    skill_md: list[str] = Field(default_factory=list)
+    repo_root: str = "."
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--split-md", nargs="*", default=[], help="split.md files this PR added or modified.")
     parser.add_argument("--skill-md", nargs="*", default=[], help="SKILL.md files this PR added or modified.")
     parser.add_argument("--repo-root", default=".", help="Repository root, for resolving a skill's split.md/SKILL.md/tasks.")
     args = parser.parse_args(argv)
-    repo_root = Path(args.repo_root)
+    try:
+        cli_args = _CliArgs(split_md=args.split_md, skill_md=args.skill_md, repo_root=args.repo_root)
+    except ValidationError as exc:
+        detail = "; ".join(
+            f"{e['loc'][0] if e['loc'] else 'args'}: {e['msg'].removeprefix('Value error, ')}" for e in exc.errors()
+        )
+        print(f"error: invalid arguments: {detail}", file=sys.stderr)
+        return 1
+    repo_root = Path(cli_args.repo_root)
 
     offenders: list[str] = []
     # Check C (issue #631) is keyed by split.md path, but must fire whether
@@ -428,7 +447,7 @@ def main(argv: list[str] | None = None) -> int:
     # both sides of the same pair is not checked (and reported) twice.
     exercises_checked: set[Path] = set()
 
-    for raw_path in args.split_md:
+    for raw_path in cli_args.split_md:
         path = Path(raw_path)
         text = _read(path)
         if text is None:
@@ -441,7 +460,7 @@ def main(argv: list[str] | None = None) -> int:
         if offender:
             offenders.append(offender)
 
-    for raw_path in args.skill_md:
+    for raw_path in cli_args.skill_md:
         path = Path(raw_path)
         text = _read(path)
         if text is None:

@@ -152,6 +152,8 @@ from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
+from pydantic import BaseModel, ConfigDict, ValidationError
+
 # A real Markdown fence opener is a run of 3+ backticks or 3+ tildes (0-3
 # leading spaces); CommonMark closes it only on a later line whose own
 # fence run is the SAME character and AT LEAST AS LONG -- this is exactly
@@ -429,6 +431,19 @@ def format_report(results: list[CoverageResult]) -> str:
     return "\n".join(lines)
 
 
+class _CliArgs(BaseModel):
+    """Parsed-and-validated view of this script's own argparse namespace.
+    ``entries`` mirrors argparse's own type (a path string, or None when the
+    flag was never passed) -- no extra constraint is added since an
+    explicitly-passed empty string already falls through to the same
+    stdin-reading branch as None (see ``if args.entries else`` below),
+    exactly as it did before this model existed."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    entries: str | None = None
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Check that a diff never increases a SKILL.md's own Stop-boundary/"
@@ -441,9 +456,17 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     try:
-        text = Path(args.entries).read_text(encoding="utf-8") if args.entries else sys.stdin.read()
+        cli_args = _CliArgs(entries=args.entries)
+    except ValidationError as exc:
+        detail = "; ".join(
+            f"{e['loc'][0] if e['loc'] else 'args'}: {e['msg'].removeprefix('Value error, ')}" for e in exc.errors()
+        )
+        print(f"error: invalid arguments: {detail}", file=sys.stderr)
+        return 1
+    try:
+        text = Path(cli_args.entries).read_text(encoding="utf-8") if cli_args.entries else sys.stdin.read()
     except FileNotFoundError:
-        print(f"error: entries file not found: {args.entries}", file=sys.stderr)
+        print(f"error: entries file not found: {cli_args.entries}", file=sys.stderr)
         return 1
 
     parsed = _parse_entries(text)
