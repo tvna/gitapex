@@ -787,6 +787,83 @@ def run_apm_install(
     return result
 
 
+@dataclass(frozen=True)
+class ApmInstallReceipt:
+    """Idempotency receipt for the `apm install` step itself (issue #724) --
+    a separate concern from InstallReceipt above, which covers apm the
+    *binary's* own provisioning. Written to cache_root/state/apm-install.json
+    after a successful `apm install`, and consulted by
+    _is_apm_install_up_to_date before main() invokes it again, so a session
+    whose lockfile and installed apm binary are both unchanged since the
+    last successful run does not re-run the subprocess (and therefore does
+    not re-touch .claude/settings.json) on every single session start."""
+
+    lockfile_sha256: str
+    apm_binary_sha256: str
+
+
+def _apm_install_receipt_path(cache_root: Path) -> Path:
+    return cache_root / "state" / "apm-install.json"
+
+
+def _read_apm_install_receipt(cache_root: Path) -> ApmInstallReceipt | None:
+    path = _apm_install_receipt_path(cache_root)
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        return ApmInstallReceipt(lockfile_sha256=raw["lockfile_sha256"], apm_binary_sha256=raw["apm_binary_sha256"])
+    # Same try/except-on-read-errors-means-None convention as _read_receipt
+    # above: a missing, malformed, or partial receipt is indistinguishable
+    # from "no receipt" -- both force a reinstall (fail closed), never a
+    # crash.
+    except (FileNotFoundError, json.JSONDecodeError, KeyError, TypeError):
+        return None
+
+
+def _write_apm_install_receipt(cache_root: Path, receipt: ApmInstallReceipt) -> None:
+    path = _apm_install_receipt_path(cache_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps({"lockfile_sha256": receipt.lockfile_sha256, "apm_binary_sha256": receipt.apm_binary_sha256}),
+        encoding="utf-8",
+    )
+
+
+def _is_apm_install_up_to_date(project_dir: Path, cache_root: Path) -> bool:
+    """True only when `apm install` provably has nothing new to do: a
+    receipt exists from a prior successful run, project_dir's current
+    apm.lock.yaml is byte-identical to what that receipt was written
+    against, apm's own currently-installed binary (per its InstallReceipt,
+    re-verified on every provisioning run by _is_already_installed) is the
+    same binary that receipt names, and apm's own deployed manifest
+    (.claude/apm-hooks.json) is still on disk. Any missing or mismatched
+    signal returns False -- fail closed toward reinstalling, matching this
+    module's existing InstallReceipt philosophy: an inability to verify
+    freshness is a reason to reinstall, not a reason to skip.
+
+    A lockfile-hash match alone is deliberately not sufficient: it says
+    nothing about whether apm's own deployed output survived (e.g. a `git
+    clean` wiping the gitignored .claude/skills/ tree), and nothing about
+    whether flake.nix pinned a new apm release since the receipt was
+    written -- a different apm binary version could deploy the same
+    lockfile differently. All four checks below must hold.
+    """
+    receipt = _read_apm_install_receipt(cache_root)
+    if receipt is None:
+        return False
+
+    lockfile_path = project_dir / "apm.lock.yaml"
+    if not lockfile_path.exists():
+        return False
+    if sha256_sri(lockfile_path.read_bytes()) != receipt.lockfile_sha256:
+        return False
+
+    apm_receipt = _read_receipt(cache_root, "apm")
+    if apm_receipt is None or apm_receipt.installed_sha256 != receipt.apm_binary_sha256:
+        return False
+
+    return (project_dir / ".claude" / "apm-hooks.json").exists()
+
+
 def write_env_file(env_file: Path | None, cache_root: Path) -> None:
     if env_file is None:
         return
@@ -932,12 +1009,24 @@ def main(argv: list[str] | None = None) -> int:
         apm_was_requested = only is None or "apm" in only
         apm_result = results.get("apm")
         if isinstance(apm_result, ProvisionResult):
-            try:
-                run_apm_install(project_dir, _installed_bin_path(cache_root, "apm"))
-                print("INSTALLED: apm install")
-            except (ApmInstallError, FileNotFoundError, subprocess.SubprocessError, OSError) as error:
-                print(f"FAIL: apm install: {error}", file=sys.stderr)
-                failures += 1
+            if _is_apm_install_up_to_date(project_dir, cache_root):
+                print("UNCHANGED: apm install")
+            else:
+                try:
+                    run_apm_install(project_dir, _installed_bin_path(cache_root, "apm"))
+                    print("INSTALLED: apm install")
+                    apm_tool_receipt = _read_receipt(cache_root, "apm")
+                    if apm_tool_receipt is not None:
+                        _write_apm_install_receipt(
+                            cache_root,
+                            ApmInstallReceipt(
+                                lockfile_sha256=sha256_sri((project_dir / "apm.lock.yaml").read_bytes()),
+                                apm_binary_sha256=apm_tool_receipt.installed_sha256,
+                            ),
+                        )
+                except (ApmInstallError, FileNotFoundError, subprocess.SubprocessError, OSError) as error:
+                    print(f"FAIL: apm install: {error}", file=sys.stderr)
+                    failures += 1
         elif apm_was_requested:
             # apm was in scope (no --tool filter, or --tool explicitly
             # included "apm") but its entry in `results` isn't a successful

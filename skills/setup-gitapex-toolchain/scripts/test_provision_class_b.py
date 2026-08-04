@@ -1003,6 +1003,136 @@ def test_run_apm_install_passes_cwd_and_expected_kwargs(tmp_path: Path) -> None:
     assert received_kwargs["check"] is False
 
 
+# --- Issue #724: apm install idempotency receipt -----------------------------
+#
+# _is_apm_install_up_to_date gates whether main()'s apm-install phase (Task 7,
+# below) invokes run_apm_install at all. Fail-closed by design, matching this
+# file's existing InstallReceipt/_is_already_installed philosophy (an
+# inability to verify freshness is a reason to reinstall, not a reason to
+# skip): each of the checks below defaults to False on its own missing or
+# mismatched signal, and only "everything matches" returns True.
+
+
+def _write_apm_project_fixture(project_dir: Path, lockfile_content: bytes = b"apm_version: 0.25.0\n") -> None:
+    """A realistic apm.yml/apm.lock.yaml/.claude/apm-hooks.json layout under
+    project_dir -- mirrors this repository's own real files closely enough to
+    exercise _is_apm_install_up_to_date and main()'s apm-install phase,
+    without any test ever touching the real checkout's own files."""
+    project_dir.mkdir(parents=True, exist_ok=True)
+    (project_dir / "apm.yml").write_text("name: x\nversion: 0.1.0\n", encoding="utf-8")
+    (project_dir / "apm.lock.yaml").write_bytes(lockfile_content)
+    claude_dir = project_dir / ".claude"
+    claude_dir.mkdir(parents=True, exist_ok=True)
+    (claude_dir / "apm-hooks.json").write_text('{"SessionStart": []}', encoding="utf-8")
+
+
+def _write_apm_tool_receipt(cache_root: Path, installed_sha256: str = "sha256-APMBIN=") -> None:
+    """Writes apm's own per-tool InstallReceipt (the one provision_tool
+    writes after successfully provisioning "apm") -- the record
+    _is_apm_install_up_to_date cross-checks its own apm_binary_sha256
+    against, via this module's existing `_read_receipt(cache_root, "apm")`."""
+    pcb._write_receipt(
+        cache_root,
+        pcb.InstallReceipt(
+            pname="apm", version="0.25.0", sha256_sri="sha256-PINNED-ASSET=", asset="apm-x86_64-linux.tar.gz",
+            installed_sha256=installed_sha256,
+        ),
+    )
+
+
+def test_is_apm_install_up_to_date_false_when_no_receipt_exists(tmp_path: Path) -> None:
+    project_dir = tmp_path / "project"
+    cache_root = tmp_path / "cache"
+    _write_apm_project_fixture(project_dir)
+    _write_apm_tool_receipt(cache_root)
+    # No cache_root/state/apm-install.json written at all.
+    assert pcb._is_apm_install_up_to_date(project_dir, cache_root) is False
+
+
+def test_is_apm_install_up_to_date_false_when_lockfile_missing(tmp_path: Path) -> None:
+    project_dir = tmp_path / "project"
+    cache_root = tmp_path / "cache"
+    _write_apm_project_fixture(project_dir)
+    (project_dir / "apm.lock.yaml").unlink()
+    _write_apm_tool_receipt(cache_root, installed_sha256="sha256-APMBIN=")
+    pcb._write_apm_install_receipt(
+        cache_root,
+        pcb.ApmInstallReceipt(lockfile_sha256="sha256-irrelevant=", apm_binary_sha256="sha256-APMBIN="),
+    )
+    # There's nothing to compare the receipt's lockfile_sha256 against, so a
+    # missing lockfile must not be trusted as "unchanged" -- fail closed.
+    assert pcb._is_apm_install_up_to_date(project_dir, cache_root) is False
+
+
+def test_is_apm_install_up_to_date_false_when_lockfile_content_changed(tmp_path: Path) -> None:
+    project_dir = tmp_path / "project"
+    cache_root = tmp_path / "cache"
+    original_lockfile = b"apm_version: 0.25.0\n"
+    _write_apm_project_fixture(project_dir, lockfile_content=original_lockfile)
+    _write_apm_tool_receipt(cache_root, installed_sha256="sha256-APMBIN=")
+    pcb._write_apm_install_receipt(
+        cache_root,
+        pcb.ApmInstallReceipt(lockfile_sha256=pcb.sha256_sri(original_lockfile), apm_binary_sha256="sha256-APMBIN="),
+    )
+    # A dependency version bump re-resolved into apm.lock.yaml since the
+    # receipt was written -- must force a reinstall.
+    (project_dir / "apm.lock.yaml").write_bytes(b"apm_version: 0.26.0\n")
+    assert pcb._is_apm_install_up_to_date(project_dir, cache_root) is False
+
+
+def test_is_apm_install_up_to_date_false_when_apm_binary_hash_differs(tmp_path: Path) -> None:
+    """Simulates a flake.nix pin bump to a newer apm release: the lockfile is
+    byte-identical to what the receipt was written against, but apm's own
+    current InstallReceipt.installed_sha256 (re-verified by
+    _is_already_installed on every provisioning run) now names a different
+    binary. A different apm version could deploy the same lockfile
+    differently, so this alone must force a reinstall even though the
+    lockfile hash still matches."""
+    project_dir = tmp_path / "project"
+    cache_root = tmp_path / "cache"
+    lockfile_content = b"apm_version: 0.25.0\n"
+    _write_apm_project_fixture(project_dir, lockfile_content=lockfile_content)
+    _write_apm_tool_receipt(cache_root, installed_sha256="sha256-NEW-APM-BINARY-AFTER-BUMP=")
+    pcb._write_apm_install_receipt(
+        cache_root,
+        pcb.ApmInstallReceipt(
+            lockfile_sha256=pcb.sha256_sri(lockfile_content), apm_binary_sha256="sha256-OLD-APM-BINARY="
+        ),
+    )
+    assert pcb._is_apm_install_up_to_date(project_dir, cache_root) is False
+
+
+def test_is_apm_install_up_to_date_false_when_apm_hooks_json_missing(tmp_path: Path) -> None:
+    """Both hashes match the last successful run, but apm's own deployed
+    manifest is gone (e.g. a `git clean` wiped the gitignored
+    .claude/skills/ tree and this file with it) -- a lockfile-hash match
+    alone must not be trusted as proof the deployed state survived."""
+    project_dir = tmp_path / "project"
+    cache_root = tmp_path / "cache"
+    lockfile_content = b"apm_version: 0.25.0\n"
+    _write_apm_project_fixture(project_dir, lockfile_content=lockfile_content)
+    _write_apm_tool_receipt(cache_root, installed_sha256="sha256-APMBIN=")
+    pcb._write_apm_install_receipt(
+        cache_root,
+        pcb.ApmInstallReceipt(lockfile_sha256=pcb.sha256_sri(lockfile_content), apm_binary_sha256="sha256-APMBIN="),
+    )
+    (project_dir / ".claude" / "apm-hooks.json").unlink()
+    assert pcb._is_apm_install_up_to_date(project_dir, cache_root) is False
+
+
+def test_is_apm_install_up_to_date_true_when_everything_matches(tmp_path: Path) -> None:
+    project_dir = tmp_path / "project"
+    cache_root = tmp_path / "cache"
+    lockfile_content = b"apm_version: 0.25.0\n"
+    _write_apm_project_fixture(project_dir, lockfile_content=lockfile_content)
+    _write_apm_tool_receipt(cache_root, installed_sha256="sha256-APMBIN=")
+    pcb._write_apm_install_receipt(
+        cache_root,
+        pcb.ApmInstallReceipt(lockfile_sha256=pcb.sha256_sri(lockfile_content), apm_binary_sha256="sha256-APMBIN="),
+    )
+    assert pcb._is_apm_install_up_to_date(project_dir, cache_root) is True
+
+
 # --- Task 7: CLI entry point -------------------------------------------------
 
 
@@ -1305,6 +1435,104 @@ def test_main_runs_apm_install_and_writes_env_file_when_not_skipped(tmp_path: Pa
     assert called_apm_binary == pcb._installed_bin_path(tmp_path, "apm")
     assert env_file.exists()
     assert f'export PATH="{tmp_path / "bin"}:$PATH"' in env_file.read_text(encoding="utf-8")
+
+
+# --- Issue #724: apm install idempotency (main() integration) ---------------
+
+
+def test_main_second_call_reports_unchanged_and_does_not_call_run_apm_install_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Calling main() twice in a row with identical apm.lock.yaml/
+    .claude/apm-hooks.json/apm-tool-receipt state between calls must invoke
+    run_apm_install exactly once (the first call, which has no
+    apm-install.json receipt yet) -- the second call must report
+    UNCHANGED: apm install on stdout and skip the subprocess call entirely.
+
+    --flake-path is pointed at the real, committed flake.nix so
+    load_flake_class_b_pins (never mocked) succeeds; --project-dir is a
+    disposable tmp_path fixture instead, decoupled from --flake-path, so
+    apm.lock.yaml/.claude/apm-hooks.json can be controlled and mutated by
+    this test without ever touching the real checkout's own files.
+    """
+    monkeypatch.delenv("CLAUDE_ENV_FILE", raising=False)
+    project_dir = tmp_path / "project"
+    cache_root = tmp_path / "cache"
+    _write_apm_project_fixture(project_dir)
+    _write_apm_tool_receipt(cache_root, installed_sha256="sha256-APMBIN=")
+
+    fake_result: dict[str, pcb.ProvisionResult | Exception] = {
+        "apm": pcb.ProvisionResult(pname="apm", status="installed", version_output="0.25.0"),
+    }
+    monkeypatch.setattr(pcb, "provision_all", lambda *args, **kwargs: fake_result)
+    calls: list[tuple[object, ...]] = []
+    monkeypatch.setattr(pcb, "run_apm_install", lambda *args, **kwargs: calls.append(args))
+
+    argv = [
+        "--project-dir", str(project_dir),
+        "--flake-path", str(REPO_ROOT / "flake.nix"),
+        "--cache-root", str(cache_root),
+        "--system", "x86_64-linux",
+        "--tool", "apm",
+    ]
+
+    first_exit_code = pcb.main(argv)
+    assert first_exit_code == 0
+    assert len(calls) == 1  # no apm-install.json receipt yet -- must reinstall
+    first_out = capsys.readouterr().out
+    assert "INSTALLED: apm install" in first_out
+    assert "UNCHANGED: apm install" not in first_out
+
+    second_exit_code = pcb.main(argv)
+    assert second_exit_code == 0
+    assert len(calls) == 1  # still just the first call -- second call is a no-op
+    second_out = capsys.readouterr().out
+    assert "UNCHANGED: apm install" in second_out
+    assert "INSTALLED: apm install" not in second_out
+
+
+def test_main_reinstalls_when_lockfile_content_changes_between_calls(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Positive control for the test above: mutating apm.lock.yaml's content
+    between two main() calls must trigger a real reinstall on the second
+    call, not a false UNCHANGED. Without this test, a main() that (buggily)
+    never re-checks the lockfile at all would still pass the UNCHANGED test
+    above."""
+    monkeypatch.delenv("CLAUDE_ENV_FILE", raising=False)
+    project_dir = tmp_path / "project"
+    cache_root = tmp_path / "cache"
+    _write_apm_project_fixture(project_dir, lockfile_content=b"apm_version: 0.25.0\n")
+    _write_apm_tool_receipt(cache_root, installed_sha256="sha256-APMBIN=")
+
+    fake_result: dict[str, pcb.ProvisionResult | Exception] = {
+        "apm": pcb.ProvisionResult(pname="apm", status="installed", version_output="0.25.0"),
+    }
+    monkeypatch.setattr(pcb, "provision_all", lambda *args, **kwargs: fake_result)
+    calls: list[tuple[object, ...]] = []
+    monkeypatch.setattr(pcb, "run_apm_install", lambda *args, **kwargs: calls.append(args))
+
+    argv = [
+        "--project-dir", str(project_dir),
+        "--flake-path", str(REPO_ROOT / "flake.nix"),
+        "--cache-root", str(cache_root),
+        "--system", "x86_64-linux",
+        "--tool", "apm",
+    ]
+
+    first_exit_code = pcb.main(argv)
+    assert first_exit_code == 0
+    assert len(calls) == 1
+    capsys.readouterr()
+
+    (project_dir / "apm.lock.yaml").write_bytes(b"apm_version: 0.26.0\n")
+
+    second_exit_code = pcb.main(argv)
+    assert second_exit_code == 0
+    assert len(calls) == 2  # lockfile changed -- reinstall triggered
+    second_out = capsys.readouterr().out
+    assert "INSTALLED: apm install" in second_out
+    assert "UNCHANGED: apm install" not in second_out
 
 
 def test_main_reports_tool_provisioning_failure_and_continues(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

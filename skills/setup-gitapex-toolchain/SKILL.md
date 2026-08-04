@@ -78,8 +78,15 @@ binaries without running `apm install` afterward. Add `--tool NAME`
   (both are success outcomes). A tool that failed prints
   `FAIL: <tool>: <error>` on **stderr** instead.
 - The `apm install` phase (this skill's own final step, unless
-  `--skip-apm-install` was passed): `INSTALLED: apm install` on stdout on
-  success; `FAIL: apm install: <error>` on stderr on failure. If `apm`
+  `--skip-apm-install` was passed): `INSTALLED: apm install` on stdout
+  when the install subprocess actually ran and succeeded (a first run, or
+  a reinstall triggered by a lockfile or `apm`-binary change);
+  `UNCHANGED: apm install` on stdout when `apm.lock.yaml`
+  and the installed `apm` binary both matched the last successful run, so
+  nothing was re-invoked -- a success state, and a new, fourth token
+  distinct from `INSTALLED`, `FAIL`, and `SKIPPED` below (not a third
+  meaning layered onto `SKIPPED` itself, which already carries two);
+  `FAIL: apm install: <error>` on stderr on failure. If `apm`
   itself was requested but failed to provision, this phase instead prints
   `SKIPPED: apm install (apm itself was not successfully provisioned)` on
   stderr, and counts as a failure -- the opposite sense from the per-tool
@@ -122,9 +129,65 @@ binaries without running `apm install` afterward. Add `--tool NAME`
 The committed `.claude/settings.json` carries only this skill's own
 `SessionStart` entry. `apm install` (this skill's own final step) re-adds
 the apm-managed hook entries (superpowers, clairvoyance, and any future
-ones) every run, tagged via the gitignored `.claude/apm-hooks.json`. A
-working tree showing `.claude/settings.json` as modified after
-provisioning is this expected, not-to-be-committed drift -- not a bug.
+ones), tagged via the gitignored `.claude/apm-hooks.json`, only on the
+sessions where it actually re-runs -- now the exception rather than every
+session, since a matching lockfile and installed `apm` binary make it a
+fast `UNCHANGED: apm install` no-op instead (see Output above). On those
+sessions, a working tree showing `.claude/settings.json` as modified
+afterward is this expected, not-to-be-committed drift -- not a bug.
+
+## Optional: faster Class B provisioning via a setup script
+
+Claude Code cloud environments also support a "setup script" -- a
+per-environment mechanism configured through the environment dialog at
+[claude.ai/code](https://claude.ai/code), documented at
+<https://code.claude.com/docs/en/cloud-environments>. Unlike this skill's
+`SessionStart` hook (which runs on every session), a setup script's
+output is cached across session restarts within that environment: per
+the primary source, "The setup script runs the first time you start a
+session in an environment. After it completes, Anthropic snapshots the
+filesystem and reuses that snapshot as the starting point for later
+sessions... Resuming an existing session never re-runs the setup
+script."
+
+Whoever configures an environment at claude.ai/code can optionally paste
+the following into that environment's "Setup script" field, to
+pre-provision the Class B binaries once per environment instead of
+re-verifying them (a fast but non-zero receipt check) on every session:
+
+```bash
+#!/bin/bash
+python3 skills/setup-gitapex-toolchain/scripts/provision_class_b.py \
+  --project-dir "$(pwd)" --skip-apm-install || true
+```
+
+`--skip-apm-install`: the primary source draws its own line at
+project-dependency installs -- "Use a setup script to provision the VM
+itself: toolchains and CLI tools that aren't pre-installed. Use a
+SessionStart hook for project setup that should run everywhere, cloud
+and local, like `npm install`." `apm install` is exactly that latter
+case (a project-dependency install), so it belongs on this skill's
+`SessionStart` hook -- invoked every session regardless, now
+idempotency-gated on the `apm install` step itself (see Output above) --
+not duplicated into the setup script.
+
+`|| true`: per the same primary source, "if the script exits non-zero,
+the session fails to start. Append `|| true` to non-critical commands so
+an intermittent install failure doesn't block the session" -- a
+transient Class B provisioning failure here must not block session
+startup, the same reasoning `.claude/hooks/session-start.sh` itself
+already follows (it always exits 0, for the identical reason).
+
+This is a pure, optional latency optimization for whoever configures it.
+It does not remove or gate the automatic `SessionStart`-hook path, which
+keeps working exactly as it does today -- with or without a setup script
+configured -- and remains what makes a brand-new, never-configured
+environment provision automatically with zero manual steps, per this
+skill's original goal (issues #57, #690). A setup script cannot be
+committed to this repository -- per the primary source it is configured
+only through the environment dialog above, not a repository file -- so
+this section is documentation for a reader who wants to opt in, not a
+mechanism this repository wires up on its own.
 
 ## Notes
 
