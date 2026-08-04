@@ -37,8 +37,8 @@ Layered validation, mirroring .gitapex/ssot.schema.json's own scanner
      tests/test_skill_metadata_sidecar.py's own ``_find_requires_cycle``);
      genuinely repo-wide, so it cannot live in the per-skill loop below.
 
-Run standalone (exit 1 on drift, 2 on bad usage) or via the pytest gate in
-tests/test_scan_skill_metadata_schema.py.
+Run standalone (exit 0 clean, 1 on drift or a read error) or via the pytest
+gate in tests/test_scan_skill_metadata_schema.py.
 """
 
 from __future__ import annotations
@@ -90,12 +90,22 @@ def discover_skill_dirs(skills_dir: pathlib.Path = SKILLS_DIR) -> list[pathlib.P
 
 def load_sidecar(path: pathlib.Path) -> Any:
     """Read and YAML-parse ``path``. Raises SidecarReadError -- naming
-    ``path`` -- rather than letting a non-UTF-8 file or invalid YAML syntax
-    surface as an uncaught UnicodeDecodeError/YAMLError traceback. Does not
-    itself check the parsed value's shape (dict vs. list/str/None) -- a
+    ``path`` -- rather than letting a non-UTF-8 file, invalid YAML syntax, or
+    pathologically deep nesting surface as an uncaught
+    UnicodeDecodeError/YAMLError/RecursionError traceback. Does not itself
+    check the parsed value's shape (dict vs. list/str/None) -- a
     schema-invalid-but-parseable instance (e.g. a YAML document that is just
     a bare scalar) is find_schema_violations's finding to report, not a load
-    failure."""
+    failure.
+
+    RecursionError is caught alongside yaml.YAMLError, not folded into the
+    same except clause -- it is not a YAMLError subclass, so a deeply nested
+    sidecar (e.g. thousands of nested "[" flow-sequence levels) previously
+    propagated an uncaught RecursionError straight out of this function,
+    crashing the whole scan instead of reporting one clean per-sidecar
+    finding the way every other malformed-input case here does (found by
+    adversarial review of this file, since the bundled test suite's own
+    fixtures never constructed this specific malformed-input shape)."""
     try:
         text = path.read_text(encoding="utf-8")
     except OSError as error:
@@ -106,6 +116,8 @@ def load_sidecar(path: pathlib.Path) -> Any:
         return yaml.safe_load(text)
     except yaml.YAMLError as error:
         raise SidecarReadError(f"{path}: is not valid YAML: {error}") from error
+    except RecursionError as error:
+        raise SidecarReadError(f"{path}: is too deeply nested to parse: {error}") from error
 
 
 def _load_schema(schema_path: pathlib.Path) -> dict[str, Any]:
@@ -148,6 +160,28 @@ def _spec_of(instance: Any) -> dict[str, Any]:
     return spec if isinstance(spec, dict) else {}
 
 
+def _is_bare_skill_name(entry: str) -> bool:
+    """Whether ``entry`` is shaped like a real skill directory name -- a
+    bare path component (no separator, not ".", not "..", not absolute) --
+    rather than a path that could escape ``skills_dir`` when joined with
+    ``/``. ``(skills_dir / entry).is_dir()`` does not itself guard against
+    pathlib's absolute-operand-replaces-the-left-side behavior
+    (``pathlib.Path("/repo/skills") / "/etc" == pathlib.Path("/etc")``) or a
+    "../" traversal segment, so an entry that is not a bare name must never
+    be treated as potentially resolving -- found by adversarial review of
+    this file: ``find_skill_dependency_drift``/
+    ``find_deprecated_replacement_drift`` previously reported a dangling
+    "/etc" or "../../../../../../etc" entry as resolving whenever that path
+    happened to exist on disk, silently passing a reference that plainly
+    does not name a sibling skills/<name>/ directory."""
+    return (
+        entry not in ("", ".", "..")
+        and "/" not in entry
+        and "\\" not in entry
+        and not pathlib.PurePosixPath(entry).is_absolute()
+    )
+
+
 def find_name_mismatch(
     instance: Any, skill_dir: pathlib.Path
 ) -> list[str]:
@@ -177,7 +211,9 @@ def find_skill_dependency_drift(
         if not isinstance(entries, list):
             continue
         for entry in entries:
-            if isinstance(entry, str) and not (skills_dir / entry).is_dir():
+            if isinstance(entry, str) and (
+                not _is_bare_skill_name(entry) or not (skills_dir / entry).is_dir()
+            ):
                 findings.append(
                     f"skill-dependencies-resolve: {list_key} references "
                     f"unknown skill directory {entry!r}")
@@ -194,7 +230,9 @@ def find_deprecated_replacement_drift(
     lifecycle = _spec_of(instance).get("lifecycle")
     deprecated = lifecycle.get("deprecated") if isinstance(lifecycle, dict) else None
     replacement = deprecated.get("replacement") if isinstance(deprecated, dict) else None
-    if isinstance(replacement, str) and replacement and not (skills_dir / replacement).is_dir():
+    if isinstance(replacement, str) and replacement and (
+        not _is_bare_skill_name(replacement) or not (skills_dir / replacement).is_dir()
+    ):
         return [
             "lifecycle-deprecated-replacement-resolves: deprecated.replacement "
             f"references unknown skill directory {replacement!r}"

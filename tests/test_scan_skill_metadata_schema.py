@@ -192,6 +192,20 @@ def test_skill_dependencies_unknown_key_is_flagged() -> None:
     assert _violations(_mutated(skillDependencies=deps)) != []
 
 
+def test_skill_dependencies_item_rejects_absolute_path() -> None:
+    # Schema-layer half of the path-traversal defense (adversarial review):
+    # skillNameRef's kebab-case pattern rejects "/etc" outright, independent
+    # of the companion scanner's own _is_bare_skill_name guard.
+    deps: dict[str, Any] = {"requires": ["/etc"], "relatedTo": []}
+    assert _violations(_mutated(skillDependencies=deps)) != []
+
+
+def test_skill_dependencies_item_rejects_traversal_segment() -> None:
+    deps: dict[str, Any] = {
+        "requires": [], "relatedTo": ["../../../../../../etc"]}
+    assert _violations(_mutated(skillDependencies=deps)) != []
+
+
 def test_skill_dependencies_null_block_is_flagged() -> None:
     # A bare `skillDependencies:` header with nothing under it is real YAML
     # null, not an empty mapping -- must fail type: object, matching
@@ -442,6 +456,67 @@ def test_load_sidecar_raises_on_non_utf8(tmp_path: pathlib.Path) -> None:
     path.write_bytes(b"\xff\xfe\x00\x01")
     with pytest.raises(scanner.SidecarReadError):
         scanner.load_sidecar(path)
+
+
+def test_load_sidecar_raises_on_pathologically_deep_nesting(tmp_path: pathlib.Path) -> None:
+    # Regression pin (adversarial review): RecursionError is not a
+    # yaml.YAMLError subclass, so a deeply nested flow-sequence sidecar
+    # used to propagate an uncaught RecursionError straight out of
+    # load_sidecar, crashing the whole scan instead of reporting one clean
+    # SidecarReadError the way every other malformed-input case here does.
+    path = tmp_path / "gitapex.yaml"
+    path.write_text("key: " + "[" * 3000 + "]" * 3000, encoding="utf-8")
+    with pytest.raises(scanner.SidecarReadError):
+        scanner.load_sidecar(path)
+
+
+# ---- _is_bare_skill_name / path-traversal defenses (adversarial review) ----
+#
+# (skills_dir / entry).is_dir() alone does not defend against an absolute
+# path or a "../" traversal segment: pathlib's own "/" operator discards the
+# left operand entirely when the right one is absolute
+# (pathlib.Path("/repo/skills") / "/etc" == pathlib.Path("/etc")). Verified
+# live against this repository's own real SKILLS_DIR during the review that
+# found this, both entries incorrectly resolved as "found".
+
+
+def test_is_bare_skill_name_accepts_a_real_skill_name() -> None:
+    assert scanner._is_bare_skill_name("battle-testing-a-skill") is True
+
+
+def test_is_bare_skill_name_rejects_absolute_path() -> None:
+    assert scanner._is_bare_skill_name("/etc") is False
+
+
+def test_is_bare_skill_name_rejects_traversal_segment() -> None:
+    assert scanner._is_bare_skill_name("../../../../../../etc") is False
+
+
+def test_is_bare_skill_name_rejects_bare_dot_and_dotdot() -> None:
+    assert scanner._is_bare_skill_name(".") is False
+    assert scanner._is_bare_skill_name("..") is False
+
+
+def test_skill_dependency_drift_flags_absolute_path_traversal() -> None:
+    instance = _mutated(
+        skillDependencies={"requires": ["/etc"], "relatedTo": []})
+    findings = scanner.find_skill_dependency_drift(instance, REPO_ROOT / "skills")
+    assert any("/etc" in f for f in findings)
+
+
+def test_skill_dependency_drift_flags_relative_traversal() -> None:
+    instance = _mutated(
+        skillDependencies={
+            "requires": [], "relatedTo": ["../../../../../../etc"]})
+    findings = scanner.find_skill_dependency_drift(instance, REPO_ROOT / "skills")
+    assert any("etc" in f for f in findings)
+
+
+def test_deprecated_replacement_drift_flags_absolute_path_traversal() -> None:
+    lifecycle = {"deprecated": {"reason": "x", "replacement": "/etc"}}
+    instance = _mutated(lifecycle=lifecycle)
+    findings = scanner.find_deprecated_replacement_drift(instance, REPO_ROOT / "skills")
+    assert any("/etc" in f for f in findings)
 
 
 # ---- end-to-end: find_drift ----

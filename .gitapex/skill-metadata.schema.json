@@ -115,13 +115,13 @@
         "requires": {
           "type": "array",
           "uniqueItems": true,
-          "items": { "type": "string", "minLength": 1 },
+          "items": { "$ref": "#/$defs/skillNameRef" },
           "description": "Hard: the procedure cannot function without it. An empty list is a valid, deliberate 'no hard dependencies' statement, unlike spec.references. Every name must resolve to an existing skills/<name>/ directory (skill-dependencies-resolve) -- cross-file, checked by the companion scanner, not this schema. The full requires-graph across all sidecars must also be acyclic (a repo-wide invariant enforced by tests/test_skill_metadata_sidecar.py, entirely outside any single instance's own schema)."
         },
         "relatedTo": {
           "type": "array",
           "uniqueItems": true,
-          "items": { "type": "string", "minLength": 1 },
+          "items": { "$ref": "#/$defs/skillNameRef" },
           "description": "Soft: boundary/complement/see-also. Same dangling-reference and empty-list rules as requires, but a relatedTo cycle is expected and fine (two independently-usable skills can legitimately point at each other)."
         }
       }
@@ -166,8 +166,7 @@
       "properties": {
         "reason": { "$ref": "#/$defs/lifecycleReason" },
         "replacement": {
-          "type": "string",
-          "minLength": 1,
+          "$ref": "#/$defs/skillNameRef",
           "description": "Must resolve to an existing sibling skills/<name>/ directory (lifecycle-deprecated-replacement-resolves) -- cross-file, checked by the companion scanner, not this schema."
         },
         "since": { "$ref": "#/$defs/lifecycleDate" },
@@ -219,6 +218,11 @@
         "write": { "$ref": "#/$defs/toolTagList" },
         "shell": { "$ref": "#/$defs/toolTagList" }
       }
+    },
+    "skillNameRef": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "description": "The same kebab-case shape as metadata.name (NAME_RE) -- every real reference to a sibling skill in this repository is a bare directory-name component, never a path. Constraining the shape here, not just at the companion scanner's own dangling-reference check, closes a real bug an adversarial review found: (skills_dir / entry).is_dir() alone does not defend against an absolute path (pathlib's own '/' operator discards the left operand entirely when the right one is absolute, e.g. Path('/repo/skills') / '/etc' == Path('/etc')) or a '../' traversal segment -- both are schema-valid under a bare `type: string, minLength: 1` constraint, and could make a dangling reference silently read as resolving whenever the escaped path happens to exist. The companion scanner independently guards the same case in code (_is_bare_skill_name) as defense in depth, not as a substitute for this pattern."
     },
     "toolTagList": {
       "type": "array",
