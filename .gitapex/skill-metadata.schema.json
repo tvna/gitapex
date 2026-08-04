@@ -1,0 +1,234 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/tvna/gitapex/blob/main/.gitapex/skill-metadata.schema.json",
+  "title": "gitapex skill metadata sidecar (SkillMetadata gitapex.io/v1alpha1)",
+  "description": "Schema for every skills/<name>/metadata/gitapex.yaml sidecar. Kubernetes-CRD-shaped by deliberate convention (apiVersion/kind/metadata/spec envelope) -- never applied to a real cluster; the envelope buys schema versioning (apiVersion), a self-describing kind, and a clean metadata (identity) vs. spec (declared content) split. Structural/type/enum/pattern rules and the single cross-FIELD rule this format has (spec.skillDependencies.requires vs. spec.portability; spec.lifecycle.experimental vs. spec.lifecycle.stable) are expressed here. What this schema deliberately CANNOT express -- and therefore still needs a companion drift scanner, mirroring .gitapex/ssot.schema.json + .github/scripts/scan_ssot_schema.py's own split between jsonschema.Draft202012Validator (this file) and repo-grounded reference-drift checks (the scanner) -- is anything that requires reading a SECOND file: metadata.name equalling the real skill directory name; spec.skillDependencies.requires/relatedTo and spec.lifecycle.deprecated.replacement each resolving to an existing sibling skills/<name>/ directory; and the repo-wide acyclicity of the spec.skillDependencies.requires graph across all sidecars (a single instance has no view of the graph). Also out of scope, permanently, by kind rather than by gap: every check in skills/evaluating-skill-quality/scripts/check_skill_shape.py that inspects SKILL.md/references/*.md prose (bare-issue-number citation scanning, Markdown link/anchor resolution, cross-skill citation resolution, illustrative-model-identifier/placeholder scanning, step-location-contradiction detection, and more) -- those checks are not about this sidecar file's shape at all, and no JSON Schema for metadata/gitapex.yaml can ever cover them.",
+  "type": "object",
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": {
+      "const": "gitapex.io/v1alpha1",
+      "description": "A namespacing string in k8s group/version form, not a claim to own the domain. v1alpha1 signals the schema is still evolving; a future breaking change bumps this, not this file's own $id."
+    },
+    "kind": {
+      "const": "SkillMetadata",
+      "description": "The one recognized kind this schema describes."
+    },
+    "metadata": { "$ref": "#/$defs/metadata" },
+    "spec": { "$ref": "#/$defs/spec" }
+  },
+  "$defs": {
+    "metadata": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "description": "Identity only, mirroring k8s metadata's role. Every sidecar in this repository today declares only `name`; additionalProperties is false because that is the only field the checker has ever recognized here (unlike k8s's own metadata, which also carries labels/annotations/namespace) -- widen this deliberately, not by accident, if a second field is ever added.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+          "description": "Must equal the skill's own directory name (skills/<name>/) -- the metadata-name-matches-dir check. That equality is a cross-file fact this schema cannot verify on its own (it never sees the directory a given instance was read from); the companion scanner re-derives it the same way check_skill_shape.py does, from the instance's own file path. The kebab-case pattern here matches this repository's real, already-observed directory-naming convention (NAME_RE in check_skill_shape.py), not a separately gated rule of its own."
+        }
+      }
+    },
+    "spec": {
+      "type": "object",
+      "required": ["portability", "capabilityAssumption"],
+      "additionalProperties": true,
+      "description": "additionalProperties is deliberately true: check_skill_shape.py's own _parse_manifest docstring states that any spec key other than the six gated ones below (e.g. the reserved-but-ungated spec.evalStatus) is 'still deliberately skipped' -- tolerated, not rejected. Only the six keys enumerated in `properties` below carry a real shape contract; anything else is unenforced free-form space by design, not an oversight.",
+      "properties": {
+        "portability": {
+          "type": "string",
+          "enum": ["Portable", "Repository-scoped", "Mixed"],
+          "description": "PORTABILITY_LEVELS. Portable: every instruction resolves inside the skill's own directory, vendorable as-is. Mixed/Repository-scoped: at least one instruction legitimately depends on this repository's own paths/conventions."
+        },
+        "capabilityAssumption": {
+          "type": "string",
+          "enum": ["Broad", "Frontier", "Adaptive"],
+          "description": "CAPABILITY_ASSUMPTIONS. The compute/capability regime this skill's own verbosity and degree-of-freedom are calibrated for; grades the rubric's dimensions 2/3/9 (and 5, Adaptive-only) relative to this declaration rather than one fixed preference."
+        },
+        "references": {
+          "type": "array",
+          "minItems": 1,
+          "description": "spec.references, if present, must be non-empty (references-well-formed) -- an explicit empty list is not a valid way to say 'no provenance yet'; omit the key entirely instead.",
+          "items": { "$ref": "#/$defs/referenceItem" }
+        },
+        "skillDependencies": { "$ref": "#/$defs/skillDependencies" },
+        "lifecycle": { "$ref": "#/$defs/lifecycle" },
+        "executionRequirements": { "$ref": "#/$defs/executionRequirements" }
+      },
+      "allOf": [
+        {
+          "$comment": "requires-portability-compatible: a non-empty spec.skillDependencies.requires is incompatible with spec.portability: Portable -- a Portable skill's own definition (every instruction resolves inside its own directory) contradicts declaring a hard dependency on a sibling skill. This is a genuine cross-FIELD rule (both sides live in the same document), unlike the cross-FILE rules this schema cannot express -- so, unlike those, it belongs here rather than in the companion scanner.",
+          "if": {
+            "required": ["portability"],
+            "properties": { "portability": { "const": "Portable" } }
+          },
+          "then": {
+            "properties": {
+              "skillDependencies": {
+                "type": "object",
+                "properties": {
+                  "requires": { "type": "array", "maxItems": 0 }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "referenceItem": {
+      "type": "object",
+      "required": ["kind", "anchor", "summary"],
+      "additionalProperties": false,
+      "description": "One maintainer-facing provenance event (a decision, an audit round, a correction, ...) -- REFERENCES_ITEM_SUBKEYS. Deliberately one event per item, not several fused together (issue #488): an over-budget summary is a decomposition problem, not a length-limit problem.",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["decision", "audit", "deferral", "corroboration", "caveat", "elision", "correction"],
+          "description": "REFERENCES_KIND_VOCAB, a closed vocabulary derived from the entry shapes already in use across every sidecar's spec.references -- not speculative."
+        },
+        "anchor": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The provenance source: a full https://github.com/tvna/gitapex/issues/<N> (or /pull/<N>) URL, another absolute URL, a repo-relative path, or method:<skill-name> for an audit with no dedicated issue. Free-form beyond minLength -- no-bare-issue-citation (a prose scan across the whole sidecar for a bare #N/owner/repo#N token, run by check_skill_shape.py) is deliberately NOT reproduced as a schema pattern here: that scan's real implementation excludes inline code, fenced blocks, and Markdown-link spans with its own multi-hundred-line rule set, and a partial regex reimplementation here would silently diverge from it rather than genuinely cover it. This remains the companion scanner's (or check_skill_shape.py's) job, not this schema's."
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "description": "REFERENCES_ENTRY_MAX_CHARS. The WHAT/WHY of this one event."
+        },
+        "outcome": {
+          "type": "object",
+          "description": "Optional, free-form key/value atoms (verdict, found, fixed, before, after, ...) -- no closed vocabulary; real entries use too varied a set of outcome facts for a fixed schema to fit.",
+          "additionalProperties": { "type": ["string", "number", "boolean"] }
+        }
+      }
+    },
+    "skillDependencies": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The inter-skill dependency graph, split by strength. A key present but holding real YAML null (a bare `skillDependencies:` header with nothing under it) is rejected by the `type: object` constraint above, matching check_skill_shape.py's own null/absent distinction: absent means not declared (valid, optional); present-but-null is a real shape defect (skill-dependencies-well-formed), never silently read as 'declared, nothing inside'.",
+      "properties": {
+        "requires": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/skillNameRef" },
+          "description": "Hard: the procedure cannot function without it. An empty list is a valid, deliberate 'no hard dependencies' statement, unlike spec.references. Every name must resolve to an existing skills/<name>/ directory (skill-dependencies-resolve) -- cross-file, checked by the companion scanner, not this schema. The full requires-graph across all sidecars must also be acyclic (a repo-wide invariant enforced by tests/test_skill_metadata_sidecar.py, entirely outside any single instance's own schema)."
+        },
+        "relatedTo": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/skillNameRef" },
+          "description": "Soft: boundary/complement/see-also. Same dangling-reference and empty-list rules as requires, but a relatedTo cycle is expected and fine (two independently-usable skills can legitimately point at each other)."
+        }
+      }
+    },
+    "lifecycle": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Migration-lifecycle bookkeeping (Rust/Python/Go/Kubernetes-style entry+exit declarations). Absent entirely means implicitly Stable -- every skill in this repository today. Structured bookkeeping only; it has no rubric grading effect and no skill's own runtime procedure may read or branch on any part of it (the sidecar's behavior-neutrality invariant).",
+      "properties": {
+        "experimental": { "$ref": "#/$defs/lifecycleExperimental" },
+        "deprecated": { "$ref": "#/$defs/lifecycleDeprecated" },
+        "stable": { "$ref": "#/$defs/lifecycleStable" },
+        "renamedFrom": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Backward-pointing only: sits on the SURVIVING (new) skill's own sidecar, naming the old, now-nonexistent directory (a `git mv` target). Deliberately NOT resolved against sibling directories, unlike deprecated.replacement -- the whole point is that the old name no longer exists."
+        }
+      },
+      "not": {
+        "$comment": "experimental-stable-compatible: 'not yet graduated' and 'already graduated on some date' are a real logical contradiction, unlike experimental+deprecated (independent, ungated -- an experimental skill can legitimately be superseded by a different experiment).",
+        "required": ["experimental", "stable"]
+      }
+    },
+    "lifecycleExperimental": {
+      "type": "object",
+      "required": ["reason", "trackingIssue"],
+      "additionalProperties": false,
+      "properties": {
+        "reason": { "$ref": "#/$defs/lifecycleReason" },
+        "trackingIssue": {
+          "type": "string",
+          "pattern": "^https://github\\.com/tvna/gitapex/(?:issues|pull)/\\d+$",
+          "description": "A full GitHub issue/PR URL, anchoring the whole string -- deliberately not a bare #123/owner/repo#123 shape (that loses its meaning once this sidecar travels with its skill directory to another repository via vendoring). Shape-only: never resolved against a live GitHub API call, matching check_skill_shape.py's own offline/read-only design."
+        },
+        "since": { "$ref": "#/$defs/lifecycleDate" }
+      }
+    },
+    "lifecycleDeprecated": {
+      "type": "object",
+      "required": ["reason", "replacement"],
+      "additionalProperties": false,
+      "properties": {
+        "reason": { "$ref": "#/$defs/lifecycleReason" },
+        "replacement": {
+          "$ref": "#/$defs/skillNameRef",
+          "description": "Must resolve to an existing sibling skills/<name>/ directory (lifecycle-deprecated-replacement-resolves) -- cross-file, checked by the companion scanner, not this schema."
+        },
+        "since": { "$ref": "#/$defs/lifecycleDate" },
+        "removeAfter": {
+          "allOf": [{ "$ref": "#/$defs/lifecycleDate" }],
+          "description": "Documentation only, per the design's explicit non-goal -- no CI step in this repository deletes a skill once this date passes."
+        }
+      }
+    },
+    "lifecycleStable": {
+      "type": "object",
+      "required": ["since"],
+      "additionalProperties": false,
+      "properties": {
+        "since": { "$ref": "#/$defs/lifecycleDate" },
+        "compatibilityGuarantee": {
+          "type": "string",
+          "enum": ["Alpha", "Beta", "GA"],
+          "description": "COMPATIBILITY_GUARANTEE_LEVELS, Kubernetes' own alpha/beta/GA API-stability tiers borrowed as a shape-gated-only enum -- no rule ties this to a sibling's spec.skillDependencies.requires."
+        }
+      }
+    },
+    "lifecycleReason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500,
+      "description": "REFERENCES_ENTRY_MAX_CHARS, the same free-text cap spec.references' own summary field uses."
+    },
+    "lifecycleDate": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "format": "date",
+      "description": "Strict YYYY-MM-DD, and a real calendar date (e.g. 2026-02-30 must fail, not just fail the shape). The `pattern` alone only gates shape; `format: date` additionally requires a validator run with format assertion enabled (jsonschema.Draft202012Validator(..., format_checker=jsonschema.FormatChecker())) to reject an out-of-range date the same way check_skill_shape.py's own datetime.date.fromisoformat check does -- a schema consumer that ignores format assertions (permitted by the JSON Schema spec itself) only gets the shape check from `pattern`, so the companion scanner MUST enable format checking explicitly, not assume it is on by default."
+    },
+    "executionRequirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Only one recognized subkey so far (tools); further categories (filesystem/network/mcp/credentials/browser/externalServices/context) are deferred -- until they land, any key other than tools here is a real unknown key, not reserved space, matching check_skill_shape.py's own current behavior.",
+      "properties": {
+        "tools": { "$ref": "#/$defs/executionRequirementsTools" }
+      }
+    },
+    "executionRequirementsTools": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Free-form capability tags; this schema (like check_skill_shape.py) does not define a fixed vocabulary for the tag strings themselves.",
+      "properties": {
+        "read": { "$ref": "#/$defs/toolTagList" },
+        "write": { "$ref": "#/$defs/toolTagList" },
+        "shell": { "$ref": "#/$defs/toolTagList" }
+      }
+    },
+    "skillNameRef": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "description": "The same kebab-case shape as metadata.name (NAME_RE) -- every real reference to a sibling skill in this repository is a bare directory-name component, never a path. Constraining the shape here, not just at the companion scanner's own dangling-reference check, closes a real bug an adversarial review found: (skills_dir / entry).is_dir() alone does not defend against an absolute path (pathlib's own '/' operator discards the left operand entirely when the right one is absolute, e.g. Path('/repo/skills') / '/etc' == Path('/etc')) or a '../' traversal segment -- both are schema-valid under a bare `type: string, minLength: 1` constraint, and could make a dangling reference silently read as resolving whenever the escaped path happens to exist. The companion scanner independently guards the same case in code (_is_bare_skill_name) as defense in depth, not as a substitute for this pattern."
+    },
+    "toolTagList": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "An explicit empty list is a deliberate 'zero tools of this kind needed' statement, distinct from the key being absent entirely (not yet declared)."
+    }
+  }
+}
