@@ -235,6 +235,7 @@ module = [
     "test_skill_eval_status_sync",
     "test_skill_metadata_sidecar",
     "test_skill_security_relevance",
+    "test_stale_retro_stub_autoclose",
     "test_sync_pr_publish",
 ]
 disallow_untyped_defs = false

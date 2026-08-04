@@ -1,0 +1,64 @@
+name: Stale retro stub auto-close
+
+# Issue #694 (completing #314/#140's post-merge-auto-retro gate cluster):
+# a PR merged after its driving session's subscription already ended has
+# no session left to ever enrich the bare stub post_merge_retro.py opened
+# for it -- by this issue's own accepted premise, a real retrospective
+# requires session memory a fresh, memory-less CI dispatch cannot
+# substitute for. This workflow finds open `retrospective`-labelled
+# issues whose body still carries that opener's own stub marker text
+# (never enriched by skills/merge-retrospective/SKILL.md Step 4) and
+# whose age exceeds the 48h threshold, and closes each with an
+# explanatory comment. It never touches an already-enriched issue -- the
+# marker-text check, not just the label or title, is what makes that
+# distinction.
+#
+# Same permanent human-review-of-merge posture as post-merge-retro.yml
+# and ranking-the-open-queue-weekly.yml: this workflow has `issues:
+# write` (to comment and close a stub) and explicitly never gains
+# `pull-requests: write` or any merge capability -- see
+# tests/test_stale_retro_stub_autoclose.py's own workflow drift guard.
+on:
+  schedule:
+    - cron: "0 8 * * *"  # daily 08:00 UTC, offset from retrospective-gate-drift.yml's 07:00
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  stale-retro-stub-autoclose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
+        with:
+          egress-policy: audit
+
+      # Pinned to main explicitly: workflow_dispatch checks out whatever
+      # ref the operator selected in the UI, which defaults to the
+      # currently-viewed branch, not necessarily main -- matches
+      # retrospective-gate-drift.yml's own identical rationale.
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Close stale unenriched retrospective stubs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -o pipefail
+          python3 .github/scripts/stale_retro_stub_autoclose.py \
+            --owner tvna --repo gitapex --stale-hours 48 \
+            | tee -a "$GITHUB_STEP_SUMMARY"

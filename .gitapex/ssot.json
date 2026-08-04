@@ -440,6 +440,19 @@
       "tracking_issue": 702,
       "status": "active",
       "supersedes": null
+    },
+    {
+      "id": "stale-retro-stub-autoclose",
+      "kind": "script",
+      "script": ".github/scripts/stale_retro_stub_autoclose.py",
+      "rule": "Closes open retrospective-labelled issues whose body still carries post_merge_retro.py's own unenriched-stub marker text and whose created_at is older than 48 hours, posting an explanatory comment on every close; never touches an already-enriched issue.",
+      "planes": ["ci"],
+      "trigger": ".github/workflows/stale-retro-stub-autoclose.yml, daily cron 08:00 UTC + workflow_dispatch",
+      "policy_refs": [],
+      "cluster": "self-governance",
+      "tracking_issue": 694,
+      "status": "active",
+      "supersedes": null
     }
   ],
   "clusters": {
@@ -448,7 +461,7 @@
     "plan-integrity": "Pre-work planning artifacts (Acceptance Criteria Maps) required before an issue is considered ready.",
     "skill-lifecycle": "SKILL.md authoring, rename, audit-disclosure, and fixture-coverage discipline.",
     "repo-hygiene": "Repository-file-level conventions such as .gitignore pattern test coverage.",
-    "self-governance": "The repo's own doc-integrity and self-referential-claim checks (OWASP mappings, retro-title/routine-scope citation, retro backlog cap).",
+    "self-governance": "The repo's own doc-integrity and self-referential-claim checks (OWASP mappings, retro-title/routine-scope citation, retro backlog cap, stale-stub auto-close).",
     "supply-chain": "Toolchain and dependency provisioning, and manifest-identity drift.",
     "test-integrity": "Quality floors on the artifacts backing the other clusters' own gates: test-suite coverage, static type checking, and static analysis of the gate scripts' own error paths.",
     "registry-integrity": "Self-validation of this registry file itself against its schema and against the repo's real files."
