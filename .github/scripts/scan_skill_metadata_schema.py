@@ -70,11 +70,17 @@ SKILLS_DIR = REPO_ROOT / "skills"
 SCHEMA_PATH = REPO_ROOT / ".gitapex" / "skill-metadata.schema.json"
 # Mirrors check_skill_shape.py's own SIDECAR_RELATIVE_PATH constant --
 # duplicated as a literal here rather than imported, the same way every
-# other .github/scripts/*.py sidecar consumer (gate_skill_rename_lifecycle.py,
-# gate_routine_scope_enforcement.py, gate_transfer_check_disclosure.py)
-# already hardcodes this path, so this script stays runnable standalone
-# (``python3 .github/scripts/scan_skill_metadata_schema.py``) without relying
-# on skills/evaluating-skill-quality/scripts being on sys.path.
+# other .github/scripts/*.py script that actually reads the sidecar
+# (gate_skill_rename_lifecycle.py, gate_routine_scope_enforcement.py --
+# verified live, both hardcode this exact path) already hardcodes this
+# path, so this script stays runnable standalone (``python3 .github/
+# scripts/scan_skill_metadata_schema.py``) without relying on skills/
+# evaluating-skill-quality/scripts being on sys.path. A prior version of
+# this comment also named gate_transfer_check_disclosure.py, but that
+# script never reads the sidecar at all -- its one "metadata/gitapex.yaml"
+# mention is a docstring analogy describing gate_skill_rename_lifecycle.py's
+# own behavior, not code of its own (found by adversarial review of this
+# file).
 SIDECAR_RELATIVE_PATH = "metadata/gitapex.yaml"
 # Guards against discover_skill_dirs silently finding nothing (a wrong or
 # missing skills_dir, an empty/misconfigured checkout) and find_drift then
