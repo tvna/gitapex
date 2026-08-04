@@ -269,6 +269,12 @@ def test_get_ref_sha_missing_sha_raises() -> None:
         spp._get_ref_sha(repo="o/r", ref="heads/main", token="tok", apply_call=fake)
 
 
+def test_get_ref_sha_non_object_body_raises() -> None:
+    fake, _ = _fake_apply_call({"https://api.github.com/repos/o/r/git/ref/heads/main": (200, "[]")})
+    with pytest.raises(RuntimeError, match="Expected object from get ref"):
+        spp._get_ref_sha(repo="o/r", ref="heads/main", token="tok", apply_call=fake)
+
+
 def test_get_branch_head_oid_absent() -> None:
     fake, _ = _fake_apply_call({"https://api.github.com/repos/o/r/git/ref/heads/chore": (404, "")})
     assert spp._get_branch_head_oid(repo="o/r", branch="chore", token="tok", apply_call=fake) is None
@@ -292,6 +298,12 @@ def test_get_branch_head_oid_missing_sha_raises() -> None:
         {"https://api.github.com/repos/o/r/git/ref/heads/chore": (200, json.dumps({"object": {}}))}
     )
     with pytest.raises(RuntimeError, match=r"missing object\.sha"):
+        spp._get_branch_head_oid(repo="o/r", branch="chore", token="tok", apply_call=fake)
+
+
+def test_get_branch_head_oid_non_object_body_raises() -> None:
+    fake, _ = _fake_apply_call({"https://api.github.com/repos/o/r/git/ref/heads/chore": (200, "null")})
+    with pytest.raises(RuntimeError, match="Expected object from get branch ref"):
         spp._get_branch_head_oid(repo="o/r", branch="chore", token="tok", apply_call=fake)
 
 
@@ -359,6 +371,14 @@ def test_get_file_bytes_unexpected_encoding_raises() -> None:
         }
     )
     with pytest.raises(RuntimeError, match="unexpected encoding"):
+        spp._get_file_bytes(repo="o/r", path="CLAUDE.md", ref="main", token="tok", apply_call=fake)
+
+
+def test_get_file_bytes_non_object_body_raises() -> None:
+    fake, _ = _fake_apply_call(
+        {"https://api.github.com/repos/o/r/contents/CLAUDE.md?ref=main": (200, '"just a string"')}
+    )
+    with pytest.raises(RuntimeError, match="Expected object from get contents"):
         spp._get_file_bytes(repo="o/r", path="CLAUDE.md", ref="main", token="tok", apply_call=fake)
 
 
@@ -889,6 +909,20 @@ def test_main_runtime_error_from_collect_additions(monkeypatch: pytest.MonkeyPat
     )
     assert rc == 1
     assert "Error:" in capsys.readouterr().err
+
+
+def test_main_body_file_non_utf8_reports_as_error(monkeypatch: pytest.MonkeyPatch, capsys, tmp_path) -> None:
+    monkeypatch.setenv("GH_TOKEN", "tok")
+    monkeypatch.setenv("REPO", "o/r")
+    body_file = tmp_path / "body.md"
+    body_file.write_bytes(b"\xff\xfe not valid utf-8 \x80")
+    rc = spp.main(
+        ["--base", "main", "--branch", "chore", "--title", "t", "--body-file", str(body_file), "--commit-subject", "s"]
+    )
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert err.startswith("Error: ")
+    assert "Traceback" not in err
 
 
 def test_main_success_up_to_date(monkeypatch: pytest.MonkeyPatch, capsys, tmp_path) -> None:

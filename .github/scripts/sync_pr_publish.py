@@ -190,6 +190,8 @@ def _get_ref_sha(*, repo: str, ref: str, token: str, apply_call: Callable[..., t
     if not (200 <= code < 300):
         raise RuntimeError(f"Get ref {ref} failed: HTTP {code}: {body[:200]}")
     data = json.loads(body)
+    if not isinstance(data, dict):
+        raise RuntimeError(f"Expected object from get ref {ref}, got: {body[:200]}")
     sha = data.get("object", {}).get("sha")
     if not isinstance(sha, str) or not sha:
         raise RuntimeError(f"Get ref {ref} response missing object.sha: {body[:200]}")
@@ -207,6 +209,8 @@ def _get_branch_head_oid(
     if not (200 <= code < 300):
         raise RuntimeError(f"Get branch ref {branch} failed: HTTP {code}: {body[:200]}")
     data = json.loads(body)
+    if not isinstance(data, dict):
+        raise RuntimeError(f"Expected object from get branch ref {branch}, got: {body[:200]}")
     sha = data.get("object", {}).get("sha")
     if not isinstance(sha, str) or not sha:
         raise RuntimeError(f"Get branch ref {branch} response missing object.sha: {body[:200]}")
@@ -244,6 +248,8 @@ def _get_file_bytes(
     if not (200 <= code < 300):
         raise RuntimeError(f"Get contents {path}@{ref} failed: HTTP {code}: {body[:200]}")
     data = json.loads(body)
+    if not isinstance(data, dict):
+        raise RuntimeError(f"Expected object from get contents {path}@{ref}, got: {body[:200]}")
     encoding = data.get("encoding")
     content = data.get("content")
     if encoding != "base64" or not isinstance(content, str):
@@ -561,7 +567,7 @@ def main(argv: list[str] | None = None) -> int:
             commit_body=cli_args.commit_body,
             token=token,
         )
-    except RuntimeError as exc:
+    except (RuntimeError, UnicodeDecodeError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
 
