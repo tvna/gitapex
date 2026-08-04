@@ -649,6 +649,26 @@ def _default_cache_root() -> Path:
     return base / "gitapex" / "toolchain"
 
 
+def _env_file_arg(value: str) -> Path | None:
+    """argparse type= for --env-file. Treat an empty string the same as the
+    flag not being passed at all -- this is exactly what
+    .claude/hooks/session-start.sh's `--env-file "${CLAUDE_ENV_FILE:-}"`
+    passes when CLAUDE_ENV_FILE is unset (bash's unset-with-default
+    expansion becomes a literal empty argument). main() must be robust to
+    this regardless of what calls it, not just fixed in the shell wrapper.
+
+    Plain `type=Path` would instead silently convert "" to Path("") ==
+    PosixPath(".") -- the process's current directory, not "no file" --
+    and write_env_file() would then call .read_text() on that directory
+    and crash with an uncaught IsADirectoryError. Verified empirically:
+    str(Path("")) == "." (not ""), so a post-parse `str(args.env_file) ==
+    ""` check can never match the already-converted PosixPath('.') -- the
+    empty string must be intercepted here, before Path() gets to mangle
+    it.
+    """
+    return Path(value) if value != "" else None
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--project-dir", type=Path, default=Path(os.environ.get("CLAUDE_PROJECT_DIR", ".")))
@@ -658,7 +678,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--tool", action="append", dest="tools", default=None)
     parser.add_argument("--skip-apm-install", action="store_true")
     parser.add_argument("--verify", action="store_true")
-    parser.add_argument("--env-file", type=Path, default=(Path(os.environ["CLAUDE_ENV_FILE"]) if os.environ.get("CLAUDE_ENV_FILE") else None))
+    parser.add_argument(
+        "--env-file",
+        type=_env_file_arg,
+        default=(Path(os.environ["CLAUDE_ENV_FILE"]) if os.environ.get("CLAUDE_ENV_FILE") else None),
+    )
     args = parser.parse_args(argv)
 
     project_dir: Path = args.project_dir
@@ -681,6 +705,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"FAIL: could not load Class B pins from {flake_path}: {error}", file=sys.stderr)
         return 1
 
+    if only is not None:
+        unknown = set(only) - set(specs)
+        if unknown:
+            print(f"FAIL: unknown --tool value(s): {sorted(unknown)} (valid: {sorted(specs)})", file=sys.stderr)
+            return 1
+
     if args.verify:
         selected = {k: v for k, v in specs.items() if only is None or k in only}
         failures = 0
@@ -690,7 +720,12 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"FAIL: {pname}: not installed at {bin_path}")
                 failures += 1
                 continue
-            proc = subprocess.run([str(bin_path), "--version"], capture_output=True, text=True, timeout=30, check=False)  # noqa: S603 -- bin_path is our own cache-root path, not attacker input
+            try:
+                proc = subprocess.run([str(bin_path), "--version"], capture_output=True, text=True, timeout=30, check=False)  # noqa: S603 -- bin_path is our own cache-root path, not attacker input
+            except (subprocess.SubprocessError, OSError) as error:
+                print(f"FAIL: {pname}: {error}")
+                failures += 1
+                continue
             if proc.returncode != 0:
                 print(f"FAIL: {pname}: --version exited {proc.returncode}")
                 failures += 1
@@ -707,7 +742,14 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(f"{result.status.upper()}: {pname}" + (f" ({result.version_output})" if result.version_output else ""))
 
-    write_env_file(args.env_file, cache_root)
+    try:
+        write_env_file(args.env_file, cache_root)
+    except OSError as error:
+        # Deliberately does not `return` or otherwise skip the apm-install
+        # step below: a PATH export failure is independent of whether apm
+        # install should still be attempted.
+        print(f"FAIL: could not write env file: {error}", file=sys.stderr)
+        failures += 1
 
     if not args.skip_apm_install:
         apm_was_requested = only is None or "apm" in only
@@ -716,7 +758,7 @@ def main(argv: list[str] | None = None) -> int:
             try:
                 run_apm_install(project_dir, _installed_bin_path(cache_root, "apm"))
                 print("INSTALLED: apm install")
-            except (ApmInstallError, FileNotFoundError) as error:
+            except (ApmInstallError, FileNotFoundError, subprocess.SubprocessError, OSError) as error:
                 print(f"FAIL: apm install: {error}", file=sys.stderr)
                 failures += 1
         elif apm_was_requested:

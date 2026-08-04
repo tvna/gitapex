@@ -1085,3 +1085,203 @@ def test_main_returns_1_when_flake_path_is_a_directory(tmp_path: Path, monkeypat
         ]
     )
     assert exit_code == 1
+
+
+# --- Final whole-branch review fixes (final-review-fix-report.md): three
+# gaps in main()'s exception-handling contract -- every failure mode must
+# print a FAIL: line and set a non-zero exit code, never an uncaught
+# traceback and never a silent success when something was actually
+# skipped/invalid. -------------------------------------------------------
+
+
+def test_main_treats_empty_env_file_string_as_not_provided(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Finding 1: .claude/hooks/session-start.sh passes
+    `--env-file "${CLAUDE_ENV_FILE:-}"`; when CLAUDE_ENV_FILE is unset, bash
+    expands the unset-with-default form to a literal empty argument, so
+    main() receives `--env-file ""`. Plain `type=Path` turns "" into
+    Path("") == PosixPath(".") (the process's cwd), not None --
+    write_env_file(Path("."), ...) then calls .read_text() on a directory
+    and raises an uncaught IsADirectoryError, crashing main() entirely
+    instead of reporting a normal FAIL: line and a clean exit code.
+    Reproduced live against the pre-fix code (see the fix report) before
+    this test was written. --skip-apm-install isolates the env-file crash
+    from apm-install so this test exercises exactly one behavior."""
+    monkeypatch.delenv("CLAUDE_ENV_FILE", raising=False)
+    fake_result: dict[str, pcb.ProvisionResult | Exception] = {
+        "waza": pcb.ProvisionResult(pname="waza", status="installed", version_output="0.38.0"),
+    }
+    monkeypatch.setattr(pcb, "provision_all", lambda *args, **kwargs: fake_result)
+
+    exit_code = pcb.main(
+        [
+            "--project-dir", str(REPO_ROOT),
+            "--cache-root", str(tmp_path),
+            "--system", "x86_64-linux",
+            "--tool", "waza",
+            "--skip-apm-install",
+            "--env-file", "",
+        ]
+    )
+    assert exit_code == 0
+
+
+def test_main_apm_install_timeout_reports_fail_and_nonzero_exit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Finding 2, first of three uncaught-exception paths: the apm-install
+    block's except clause caught only (ApmInstallError, FileNotFoundError).
+    subprocess.TimeoutExpired is a SubprocessError, not an OSError/
+    FileNotFoundError subclass (verified: TimeoutExpired -> SubprocessError
+    -> Exception), and run_apm_install's own runner call uses timeout=120 --
+    a slow network fetch of apm's two packages could plausibly exceed that
+    in production. Simulated via a fake run_apm_install that raises
+    subprocess.TimeoutExpired directly: the same monkeypatch-run_apm_install
+    boundary every other apm-related main() test in this file already uses,
+    since main() hardcodes run_apm_install's own default `subprocess.run`
+    runner and exposes no way to inject a custom one from here."""
+    monkeypatch.delenv("CLAUDE_ENV_FILE", raising=False)
+    fake_result: dict[str, pcb.ProvisionResult | Exception] = {
+        "apm": pcb.ProvisionResult(pname="apm", status="installed", version_output="0.25.0"),
+    }
+    monkeypatch.setattr(pcb, "provision_all", lambda *args, **kwargs: fake_result)
+
+    def timing_out_apm_install(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise subprocess.TimeoutExpired(cmd=["apm", "install"], timeout=120)
+
+    monkeypatch.setattr(pcb, "run_apm_install", timing_out_apm_install)
+
+    exit_code = pcb.main(
+        [
+            "--project-dir", str(REPO_ROOT),
+            "--cache-root", str(tmp_path),
+            "--system", "x86_64-linux",
+            "--tool", "apm",
+        ]
+    )
+    assert exit_code == 1
+    err = capsys.readouterr().err
+    assert "FAIL: apm install:" in err
+
+
+def test_main_write_env_file_error_reports_fail_but_still_attempts_apm_install(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Finding 2, third of three uncaught-exception paths: write_env_file's
+    call site in main() (non-verify path) was unguarded. Even after Finding
+    1's fix (which only handles the empty-string case), a --env-file
+    pointing at a path whose parent directory does not exist still raises
+    an uncaught OSError (FileNotFoundError from Path.open("a", ...)) and
+    crashes main() before apm install ever runs. The fix must report a
+    FAIL: line, count the failure, and -- per the finding's own explicit
+    requirement -- still attempt the subsequent apm-install step, since a
+    PATH-export failure is independent of whether apm install should run."""
+    monkeypatch.delenv("CLAUDE_ENV_FILE", raising=False)
+    fake_result: dict[str, pcb.ProvisionResult | Exception] = {
+        "apm": pcb.ProvisionResult(pname="apm", status="installed", version_output="0.25.0"),
+    }
+    monkeypatch.setattr(pcb, "provision_all", lambda *args, **kwargs: fake_result)
+    calls: list[tuple[object, ...]] = []
+    monkeypatch.setattr(pcb, "run_apm_install", lambda *args, **kwargs: calls.append(args))
+
+    unwritable_env_file = tmp_path / "no-such-parent-dir" / "env.sh"
+
+    exit_code = pcb.main(
+        [
+            "--project-dir", str(REPO_ROOT),
+            "--cache-root", str(tmp_path),
+            "--system", "x86_64-linux",
+            "--tool", "apm",
+            "--env-file", str(unwritable_env_file),
+        ]
+    )
+    assert exit_code == 1
+    err = capsys.readouterr().err
+    assert "FAIL: could not write env file:" in err
+    assert len(calls) == 1  # apm install must still be attempted despite the env-file failure
+
+
+def test_main_verify_mode_reports_subprocess_error_instead_of_crashing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Finding 2, second of three uncaught-exception paths: the --verify
+    branch's `subprocess.run([bin_path, "--version"], ...)` call had NO
+    exception handling at all. A binary that exists (so the prior
+    bin_path.exists() check passes) but cannot actually be executed --
+    simulated here with a directory in place of the binary, which reliably
+    raises PermissionError even when running as root (verified live before
+    writing this test; see the fix report for the transcript) -- produced a
+    raw uncaught traceback instead of a FAIL: line."""
+    monkeypatch.delenv("CLAUDE_ENV_FILE", raising=False)
+    bin_path = tmp_path / "bin" / "waza"
+    bin_path.mkdir(parents=True)  # exists, but cannot be exec'd: not a file
+
+    exit_code = pcb.main(
+        [
+            "--project-dir", str(REPO_ROOT),
+            "--cache-root", str(tmp_path),
+            "--system", "x86_64-linux",
+            "--tool", "waza",
+            "--verify",
+        ]
+    )
+    assert exit_code == 1
+    out = capsys.readouterr().out
+    assert "FAIL: waza:" in out
+
+
+def test_main_unknown_tool_flag_fails_closed_instead_of_silent_success(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Finding 3: main() never validated args.tools/only against the actual
+    set of tool names parsed from flake.nix (specs.keys(), i.e.
+    CLASS_B_TOOL_NAMES). A typo'd --tool silently produced zero work and
+    exit 0 -- verified live pre-fix (see the fix report): `--tool
+    definitely-not-a-tool` alone printed "apm install not attempted (...)"
+    and exited 0. provision_all is monkeypatched to raise if called at all,
+    proving the fix short-circuits BEFORE the provisioning branch (not just
+    that the exit code happens to end up 1 some other way) -- against the
+    pre-fix code this AssertionError itself is what makes the test fail,
+    since old code reaches provision_all unconditionally."""
+    monkeypatch.delenv("CLAUDE_ENV_FILE", raising=False)
+
+    def must_not_be_called(*args: object, **kwargs: object) -> object:
+        raise AssertionError("provision_all must not be called for an unknown --tool value")
+
+    monkeypatch.setattr(pcb, "provision_all", must_not_be_called)
+
+    exit_code = pcb.main(
+        [
+            "--project-dir", str(REPO_ROOT),
+            "--cache-root", str(tmp_path),
+            "--system", "x86_64-linux",
+            "--tool", "definitely-not-a-tool",
+        ]
+    )
+    assert exit_code == 1
+    err = capsys.readouterr().err
+    assert "FAIL: unknown --tool value" in err
+    assert "definitely-not-a-tool" in err
+
+
+def test_main_unknown_tool_flag_fails_closed_in_verify_mode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """--verify variant of the finding-3 test above: the reviewer's live
+    repro showed `--tool definitely-not-a-tool --verify` produced NO output
+    at all and exited 0 (the --verify loop's own `selected` dict is empty
+    for an unrecognized tool name, so the loop body never runs). The fix
+    must reject this before even reaching the --verify branch."""
+    monkeypatch.delenv("CLAUDE_ENV_FILE", raising=False)
+
+    exit_code = pcb.main(
+        [
+            "--project-dir", str(REPO_ROOT),
+            "--cache-root", str(tmp_path),
+            "--system", "x86_64-linux",
+            "--tool", "definitely-not-a-tool",
+            "--verify",
+        ]
+    )
+    assert exit_code == 1
+    err = capsys.readouterr().err
+    assert "FAIL: unknown --tool value" in err
