@@ -26,7 +26,19 @@ python3 "${CLAUDE_PROJECT_DIR:-.}/skills/setup-gitapex-toolchain/scripts/provisi
 # pre-existing non-prek hook all fail soft rather than blocking session
 # start. --allow-missing-config covers a checkout of a branch/commit
 # that predates .pre-commit-config.yaml.
-if command -v uv >/dev/null 2>&1; then
+#
+# apm.yml guard, mirroring provision_class_b.py's own run_apm_install
+# check ("refusing to run apm install outside a gitapex checkout"):
+# this script is never wired into a consumer of the gitapex plugin (it
+# lives under .claude/hooks/, not hooks/hooks.json's ${CLAUDE_PLUGIN_ROOT}-
+# anchored, actually-distributed surface), but that separation is a
+# design fact elsewhere, not something this file itself enforces --
+# explicit here too, defense-in-depth, rather than relying solely on
+# `uv run` failing to spawn an undeclared `prek` if CLAUDE_PROJECT_DIR
+# were ever misconfigured to point outside this repository.
+if [ ! -f "${CLAUDE_PROJECT_DIR:-.}/apm.yml" ]; then
+  echo "gitapex: ${CLAUDE_PROJECT_DIR:-.}/apm.yml not found; skipping prek install (not a gitapex checkout)." >&2
+elif command -v uv >/dev/null 2>&1; then
   uv run --directory "${CLAUDE_PROJECT_DIR:-.}" prek -q install --allow-missing-config \
     || echo "gitapex: prek install reported a failure; the local pre-commit hook may not be active this session." >&2
 else

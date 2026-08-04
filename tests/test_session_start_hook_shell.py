@@ -32,9 +32,10 @@ def test_exits_zero_and_noop_when_not_remote() -> None:
 
 def test_exits_zero_even_when_python3_reports_failure(tmp_path: Path) -> None:
     # A directory with no flake.nix makes provision_class_b.py fail fast,
-    # and the same fake, non-git directory then makes the prek-install
-    # step (issue #749) fail too -- the hook itself must still exit 0
-    # (never block session start) through both failures.
+    # and the same fake directory (no apm.yml either) then makes the
+    # prek-install step's own apm.yml guard (issue #749) skip it too --
+    # the hook itself must still exit 0 (never block session start)
+    # through both.
     fake_project = tmp_path / "not-a-real-checkout"
     fake_project.mkdir()
     result = _run(
@@ -44,6 +45,7 @@ def test_exits_zero_even_when_python3_reports_failure(tmp_path: Path) -> None:
         }
     )
     assert result.returncode == 0
+    assert "not a gitapex checkout" in result.stderr
 
 
 def test_installs_the_prek_hook_for_a_real_checkout() -> None:
@@ -58,6 +60,24 @@ def test_installs_the_prek_hook_for_a_real_checkout() -> None:
     pre_commit_hook = REPO_ROOT / ".git" / "hooks" / "pre-commit"
     assert pre_commit_hook.exists()
     assert "prek" in pre_commit_hook.read_text(encoding="utf-8")
+
+
+def test_skips_prek_install_without_apm_yml_even_with_a_real_git_repo(tmp_path: Path) -> None:
+    # Issue #749's defense-in-depth guard: an apm.yml presence check,
+    # mirroring provision_class_b.py's own run_apm_install check ("refusing
+    # to run apm install outside a gitapex checkout"). A directory that IS
+    # a real git repository (unlike the fake-project test above, which
+    # fails for the unrelated reason of not being a git repo at all) but
+    # has no apm.yml must still skip the prek-install step -- proving the
+    # guard fires on its own specific condition, not accidentally via
+    # `prek install` itself failing for some other reason.
+    other_repo = tmp_path / "some-other-checkout"
+    other_repo.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=str(other_repo), check=True)
+    result = _run({"CLAUDE_CODE_REMOTE": "true", "CLAUDE_PROJECT_DIR": str(other_repo)})
+    assert result.returncode == 0
+    assert "not a gitapex checkout" in result.stderr
+    assert not (other_repo / ".git" / "hooks" / "pre-commit").exists()
 
 
 def test_exits_zero_and_warns_when_uv_not_on_path() -> None:
