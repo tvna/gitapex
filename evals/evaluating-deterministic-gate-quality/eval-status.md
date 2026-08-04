@@ -34,7 +34,7 @@ this skill's own Stop boundaries (`SKILL.md` and
 `references/grading-procedure.md`'s grading-specific boundaries) against
 the real fixture text, the same procedure issue #472 ran for
 `vetting-attack-surface`. It judged substance, not dimension citations
-(`check_dimension_coverage.py`'s own coverage map already handles the
+(`gitapex_check_dimension_coverage.py`'s own coverage map already handles the
 citation question): of roughly twelve Stop-boundary invariants, only four
 were substantively exercised before this pass (a base64-hidden
 instruction, a forged waiver claim, an unsandboxed-execution refusal,
@@ -73,20 +73,20 @@ assertion could be found" sentence below was overbroad: three of its four
 fixed gaps admit a safe assertion after all (one via `output_not_contains`
 rather than `output_contains`) -- narrowed accordingly; the sentence now
 describes only the two gaps just named above plus whatever the eight
-uncovered numbered dimensions still lack. `lint_fixture_assertions.py`
+uncovered numbered dimensions still lack. `gitapex_lint_fixture_assertions.py`
 (2 pre-existing warnings, both predating and unrelated to this pass;
-0 new warnings from the 4 additions) and `check_dimension_coverage.py`
+0 new warnings from the 4 additions) and `gitapex_check_dimension_coverage.py`
 (still 12/20 dimensions, 4/4 axes -- the new fixtures cite already-covered
 dimensions 1, 5, and 10, not one of the eight uncovered numbers) re-verified
 clean against the grown corpus.
 
 This coverage map is no longer a one-off: `evals/scripts/
-check_dimension_coverage.py` makes it repeatable, discovering this skill's
+gitapex_check_dimension_coverage.py` makes it repeatable, discovering this skill's
 own numbered dimensions (`references/dimensions.md`) and named cross-cutting
 axes (`SKILL.md`'s `### Axis:` headings), then cross-referencing them
 against every fixture's `id`/`name`/`description`/`tags`/`inputs.prompt`
 text for a `"dimension N"` or axis-name citation.
-`tests/test_evaluating_deterministic_gate_quality_dimension_coverage.py`
+`tests/test_gitapex_evaluating_deterministic_gate_quality_dimension_coverage.py`
 runs it against this real corpus and fails CI if any dimension it reports
 uncovered is not named right here -- so this list can't silently drift from
 the real corpus the way the "dimension 12" mislabel above did. Current

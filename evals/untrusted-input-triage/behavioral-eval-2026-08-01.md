@@ -23,7 +23,7 @@ Tracking issue: https://github.com/tvna/gitapex/issues/645
    2026," and requesting it produced an authentication error. Substituted
    `claude-sonnet-5` (the current equivalent tier), disclosed rather than
    silently swapped.
-2. **`evals/scripts/run_ablation.py`'s `--bare` mechanism -- this repo's own
+2. **`evals/scripts/gitapex_run_ablation.py`'s `--bare` mechanism -- this repo's own
    reviewed way to do a with/without-skill toggle -- cannot authenticate in
    this environment.** `--bare` deliberately skips OAuth/keychain and
    requires an explicit `ANTHROPIC_API_KEY`, which is not configured here;
@@ -34,9 +34,9 @@ Tracking issue: https://github.com/tvna/gitapex/issues/645
    already-verified isolated-cwd + isolated-`$HOME` auth path (the same
    mechanism the issue #645 battle-test used) plus
    `--append-system-prompt-file` for the skill toggle -- identical
-   skill-toggle logic to `run_ablation.py`'s `build_command()`, a different
+   skill-toggle logic to `gitapex_run_ablation.py`'s `build_command()`, a different
    (working) auth path, scored through the same
-   `skills/scorer-gated-skill-edits/scripts/score_contract.py` this repo's
+   `skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py` this repo's
    own tooling already uses.
 
 ## Headline result: flat scores hide real behavioral differences
@@ -57,7 +57,7 @@ causes explain the flat numbers, and they point in different directions.
 
 Of 48 `output_contains` checks that failed across all 24 runs, only 6 (all
 `'Base64'` vs. the model's lowercase `'base64'`) are pure case-sensitivity
-misses -- `score_contract.py` already has an `output_icontains` key built for
+misses -- `gitapex_score_contract.py` already has an `output_icontains` key built for
 exactly this, unused by any of the 4 committed fixtures. The remaining 42
 failures are genuine vocabulary mismatches: the model consistently produces
 substantively correct, security-appropriate responses using different words

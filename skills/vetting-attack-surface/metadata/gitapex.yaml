@@ -14,7 +14,7 @@ spec:
       summary: "Kept this skill explicitly distinct from docs/agent-product-scope.md's Axis B, a future runtime-enforcement adapter; this skill stays a review procedure producing findings and never performs or duplicates enforcement, named explicitly in SKILL.md to head off the name-resemblance conflation Axis B's own Non-conflation rule warns against."
     - kind: caveat
       anchor: ".github/workflows/post-merge-retro.yml"
-      summary: "The worked example (paired with .github/scripts/post_merge_retro.py) is this repository's own and explicitly illustrative; substitute the target's real equivalents rather than assuming this exact workflow or script exists elsewhere."
+      summary: "The worked example (paired with .github/scripts/gitapex_post_merge_retro.py) is this repository's own and explicitly illustrative; substitute the target's real equivalents rather than assuming this exact workflow or script exists elsewhere."
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/455 -> https://github.com/tvna/gitapex/issues/456"
       summary: "Built as a standalone skill rather than a fifth axis on evaluating-deterministic-gate-quality, since least-privilege review applies to any artifact, not only deterministic gates, matching this repository's precedent of adjacent-but-separate security-review skills linked via relatedTo (screening-a-low-trust-contribution)."
@@ -27,7 +27,7 @@ spec:
         fixed: 3
     - kind: audit
       anchor: "method:battle-testing-a-skill"
-      summary: "A real, non-waived battle-test pass is required for a new skill's description per gate_skill_audit_disclosure.py's own rule. A prior fully-recursive-isolation attempt on this branch's earlier work got stuck in a self-dispatch retry loop and was abandoned; the first real pass instead ran as a single non-recursive subagent dispatch instructed not to spawn further subagents."
+      summary: "A real, non-waived battle-test pass is required for a new skill's description per gitapex_gate_skill_audit_disclosure.py's own rule. A prior fully-recursive-isolation attempt on this branch's earlier work got stuck in a self-dispatch retry loop and was abandoned; the first real pass instead ran as a single non-recursive subagent dispatch instructed not to spawn further subagents."
       outcome:
         verdict: setup_note
     - kind: audit

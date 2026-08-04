@@ -100,6 +100,6 @@ it never changes branch protection, revokes a webhook, or rotates a key.
   decisions (see `references/gitapex-cross-links.md`, loaded in Step 2,
   for gitapex's own instruction-file citation for that rule).
 - Never write a second, divergent unpinned-actions detector -- reuse
-  `scripts/scan_unpinned_actions.py` (see `references/gitapex-cross-links.md`,
+  `scripts/gitapex_scan_unpinned_actions.py` (see `references/gitapex-cross-links.md`,
   loaded in Step 2, for the existing drift-scan precedent its shape
   reuses).

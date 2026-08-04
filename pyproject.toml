@@ -43,7 +43,7 @@ package = false
 # than lowering the bar repo-wide. mypy_path mirrors
 # [tool.pytest.ini_options] pythonpath exactly -- these are the
 # directories bare-imported across each other (e.g.
-# evals/scripts/run_ablation.py imports score_contract from
+# evals/scripts/gitapex_run_ablation.py imports gitapex_score_contract from
 # skills/scorer-gated-skill-edits/scripts) and therefore the set that
 # must resolve together in one mypy invocation; see .github/workflows/
 # test.yml's mypy job for the per-directory-group invocation this drives.
@@ -54,8 +54,8 @@ strict = true
 # per-file override -- this is a blanket judgment call, not legacy debt):
 # these scripts are internal CLI tooling, not a published library, and
 # test files across this repo routinely monkeypatch/access a module's own
-# imported attributes (e.g. `check_dispatch_trace.subprocess`,
-# `gate_retro_title_convention_citation.urllib`) -- the exact pattern
+# imported attributes (e.g. `gitapex_check_dispatch_trace.subprocess`,
+# `gitapex_gate_retro_title_convention_citation.urllib`) -- the exact pattern
 # --no-implicit-reexport (part of strict) exists to flag for a *library*
 # whose public API boundary matters, which is not this repo's own shape.
 implicit_reexport = true
@@ -88,7 +88,7 @@ mypy_path = [
 # umbrella tracking reference until a dedicated follow-up issue exists
 # per file/cluster.
 #
-# gate_skill_audit_disclosure.py is deliberately NOT listed here: this
+# gitapex_gate_skill_audit_disclosure.py is deliberately NOT listed here: this
 # task's own full-annotation pass left it mypy-strict-clean already --
 # verified empirically by removing it from this list and re-running the
 # tests+hooks+.github/scripts+evals/scripts mypy invocation, which reports
@@ -97,9 +97,9 @@ mypy_path = [
 # unannotated def there.
 [[tool.mypy.overrides]]
 module = [
-    "skill_description_diff",
-    "skill_security_relevance",
-    "gate_transfer_check_disclosure",
+    "gitapex_skill_description_diff",
+    "gitapex_skill_security_relevance",
+    "gitapex_gate_transfer_check_disclosure",
 ]
 disallow_untyped_defs = false
 disallow_incomplete_defs = false
@@ -107,7 +107,7 @@ disallow_untyped_calls = false
 disallow_any_generics = false
 # tracking: issue #684 (.github/scripts/)
 
-# Tier C: skills/evaluating-skill-quality/scripts/check_skill_shape.py
+# Tier C: skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py
 # (~4,440 lines, ~30% of this repo's non-test in-scope LOC by itself) is
 # already fully annotated at the def-signature level (unlike every Tier-A
 # file above), so the four flags above do not apply to it -- its live
@@ -120,25 +120,25 @@ disallow_any_generics = false
 # caught" principle) -- only the specific narrowing-error codes actually
 # observed against this file are disabled, not the broader flags.
 [[tool.mypy.overrides]]
-module = "check_skill_shape"
+module = "gitapex_check_skill_shape"
 disable_error_code = ["attr-defined", "arg-type", "operator", "no-untyped-call"]
 # tracking: issue #684 (skills/evaluating-skill-quality/scripts/)
 
-# Issue #684, task T8: run_ablation.py/check_dimension_coverage.py's own CLI
+# Issue #684, task T8: gitapex_run_ablation.py/gitapex_check_dimension_coverage.py's own CLI
 # args are now validated through a pydantic model immediately after
 # parser.parse_args() (T8's own, narrower scope: an argparse-wraps-pydantic
 # CLI-arg wrap, the same pattern T6/T7 applied, NOT the deeper internal-data
 # pydantic rewrite T2/T3/T4 gave their own files) -- this override covers the
 # residual pre-existing errors that wrap alone does not reach, each verified
 # individually rather than assumed:
-#   - disallow_any_generics: load_task_fixture's `-> dict` and run_ablation's
+#   - disallow_any_generics: load_task_fixture's `-> dict` and gitapex_run_ablation's
 #     `fixture: Mapping` (both pre-existing, still-bare-generic annotations
 #     the CLI-arg wrap does not touch).
-#   - disallow_untyped_calls: score_contract.score() is untyped; that module
+#   - disallow_untyped_calls: gitapex_score_contract.score() is untyped; that module
 #     is owned by a different task (T9) in this same wave and is not touched
-#     here (see run_ablation.py's own module docstring/sys.path-bootstrap
+#     here (see gitapex_run_ablation.py's own module docstring/sys.path-bootstrap
 #     comment for why it is imported by bare name).
-#   - attr-defined: check_dimension_coverage.py's _fixture_text(data: object)
+#   - attr-defined: gitapex_check_dimension_coverage.py's _fixture_text(data: object)
 #     deliberately accepts any yaml.safe_load() result and calls .get() on
 #     it, letting a malformed non-mapping fixture raise AttributeError by
 #     design (see that function's own docstring) -- pre-existing, deliberate
@@ -151,8 +151,8 @@ disable_error_code = ["attr-defined", "arg-type", "operator", "no-untyped-call"]
 # scope -- flagged explicitly here rather than silently reintroduced later.
 [[tool.mypy.overrides]]
 module = [
-    "run_ablation",
-    "check_dimension_coverage",
+    "gitapex_run_ablation",
+    "gitapex_check_dimension_coverage",
 ]
 disallow_any_generics = false
 disallow_untyped_calls = false
@@ -173,9 +173,9 @@ disable_error_code = ["attr-defined"]
 # One umbrella tracking reference, worked down incrementally by
 # directory in follow-up PRs rather than all at once.
 #
-# test_check_bash_safety, test_check_merge_pull_request_block, and
-# test_check_pr_upstream_pushed (hooks/), test_gitignore_coverage_json and
-# test_gitignore_worktrees (tests/), and test_check_task_bash_safety
+# test_gitapex_check_bash_safety, test_gitapex_check_merge_pull_request_block, and
+# test_gitapex_check_pr_upstream_pushed (hooks/), test_gitapex_gitignore_coverage_json and
+# test_gitapex_gitignore_worktrees (tests/), and test_gitapex_check_task_bash_safety
 # (skills/executing-a-branch-plan/scripts/) are deliberately NOT listed
 # here: each is already mypy-strict-clean -- verified empirically by
 # removing it from this list and re-running its own directory's mypy
@@ -184,66 +184,66 @@ disable_error_code = ["attr-defined"]
 # reintroduces an unannotated def there.
 [[tool.mypy.overrides]]
 module = [
-    "test__path_normalize",
-    "test_agent_product_scope_shape",
-    "test_check_acm_present_or_waiver",
-    "test_check_acm_present_sync",
-    "test_check_adr_shape",
-    "test_check_axis_shape",
-    "test_check_canonical_governance_paths",
-    "test_check_dimension_coverage",
-    "test_check_dispatch_trace",
-    "test_check_file_ownership_conflicts",
-    "test_check_gate_shape",
-    "test_check_issue_acm_disclosure",
-    "test_check_middleware_table_shape",
-    "test_check_pr_issue_acm_disclosure",
-    "test_check_pr_issue_acm_disclosure_shell",
-    "test_check_skill_audit_disclosure_hook_sync",
-    "test_check_skill_shape",
-    "test_cicd_gate_cluster_design_retro_prefix",
-    "test_contract_precondition_sync",
-    "test_detect_changed_gate_scripts",
-    "test_detect_touched_eval_skills",
-    "test_evaluating_deterministic_gate_quality_dimension_coverage",
-    "test_extract_diff_added_lines",
-    "test_gate_acm_issue_disclosure",
-    "test_gate_evals_scripts_coverage",
-    "test_gate_gitignore_pattern_coverage",
-    "test_gate_owasp_asi_mapping",
-    "test_gate_owasp_llm_mapping",
-    "test_gate_plugin_root_brace_notation",
-    "test_gate_provenance_disclosure",
-    "test_gate_retro_title_convention_citation",
-    "test_gate_routine_scope_enforcement",
-    "test_gate_skill_audit_disclosure",
-    "test_gate_skill_branch_fixture_coverage",
-    "test_gate_skill_rename_lifecycle",
-    "test_gate_split_fixture_coverage",
-    "test_gate_transfer_check_disclosure",
-    "test_lint_fixture_assertions",
-    "test_merge_retrospective_record_format",
-    "test_middleware_table_shape",
-    "test_post_merge_retro",
-    "test_repository_skill_shape",
-    "test_route_test_model",
-    "test_run_ablation",
-    "test_scan_apm_manifest_drift",
-    "test_scan_retrospective_gate_drift",
-    "test_scan_ssot_schema",
-    "test_scan_toolchain_pin_drift",
-    "test_scan_unpinned_actions",
-    "test_score_contract",
-    "test_set_config_model",
-    "test_skill_audit_gate_diff_step_shell",
-    "test_skill_audit_gate_workflow_wiring",
-    "test_skill_description_diff",
-    "test_skill_eval_status_coverage",
-    "test_skill_eval_status_sync",
-    "test_skill_metadata_sidecar",
-    "test_skill_security_relevance",
-    "test_stale_retro_stub_autoclose",
-    "test_sync_pr_publish",
+    "test_gitapex__path_normalize",
+    "test_gitapex_agent_product_scope_shape",
+    "test_gitapex_check_acm_present_or_waiver",
+    "test_gitapex_check_acm_present_sync",
+    "test_gitapex_check_adr_shape",
+    "test_gitapex_check_axis_shape",
+    "test_gitapex_check_canonical_governance_paths",
+    "test_gitapex_check_dimension_coverage",
+    "test_gitapex_check_dispatch_trace",
+    "test_gitapex_check_file_ownership_conflicts",
+    "test_gitapex_check_gate_shape",
+    "test_gitapex_check_issue_acm_disclosure",
+    "test_gitapex_check_middleware_table_shape",
+    "test_gitapex_check_pr_issue_acm_disclosure",
+    "test_gitapex_check_pr_issue_acm_disclosure_shell",
+    "test_gitapex_check_skill_audit_disclosure_hook_sync",
+    "test_gitapex_check_skill_shape",
+    "test_gitapex_cicd_gate_cluster_design_retro_prefix",
+    "test_gitapex_contract_precondition_sync",
+    "test_gitapex_detect_changed_gate_scripts",
+    "test_gitapex_detect_touched_eval_skills",
+    "test_gitapex_evaluating_deterministic_gate_quality_dimension_coverage",
+    "test_gitapex_extract_diff_added_lines",
+    "test_gitapex_gate_acm_issue_disclosure",
+    "test_gitapex_gate_evals_scripts_coverage",
+    "test_gitapex_gate_gitignore_pattern_coverage",
+    "test_gitapex_gate_owasp_asi_mapping",
+    "test_gitapex_gate_owasp_llm_mapping",
+    "test_gitapex_gate_plugin_root_brace_notation",
+    "test_gitapex_gate_provenance_disclosure",
+    "test_gitapex_gate_retro_title_convention_citation",
+    "test_gitapex_gate_routine_scope_enforcement",
+    "test_gitapex_gate_skill_audit_disclosure",
+    "test_gitapex_gate_skill_branch_fixture_coverage",
+    "test_gitapex_gate_skill_rename_lifecycle",
+    "test_gitapex_gate_split_fixture_coverage",
+    "test_gitapex_gate_transfer_check_disclosure",
+    "test_gitapex_lint_fixture_assertions",
+    "test_gitapex_merge_retrospective_record_format",
+    "test_gitapex_middleware_table_shape",
+    "test_gitapex_post_merge_retro",
+    "test_gitapex_repository_skill_shape",
+    "test_gitapex_route_test_model",
+    "test_gitapex_run_ablation",
+    "test_gitapex_scan_apm_manifest_drift",
+    "test_gitapex_scan_retrospective_gate_drift",
+    "test_gitapex_scan_ssot_schema",
+    "test_gitapex_scan_toolchain_pin_drift",
+    "test_gitapex_scan_unpinned_actions",
+    "test_gitapex_score_contract",
+    "test_gitapex_set_config_model",
+    "test_gitapex_skill_audit_gate_diff_step_shell",
+    "test_gitapex_skill_audit_gate_workflow_wiring",
+    "test_gitapex_skill_description_diff",
+    "test_gitapex_skill_eval_status_coverage",
+    "test_gitapex_skill_eval_status_sync",
+    "test_gitapex_skill_metadata_sidecar",
+    "test_gitapex_skill_security_relevance",
+    "test_gitapex_stale_retro_stub_autoclose",
+    "test_gitapex_sync_pr_publish",
 ]
 disallow_untyped_defs = false
 disallow_incomplete_defs = false
@@ -269,7 +269,7 @@ check_untyped_defs = false
 # That Any then propagates through the closure's own typed return,
 # surfacing as `no-any-return` or `union-attr` on the closure's own
 # annotated signature -- confirmed directly against this repo's actual
-# test fixtures (e.g. tests/test_post_merge_retro.py's `opener` closures),
+# test fixtures (e.g. tests/test_gitapex_post_merge_retro.py's `opener` closures),
 # not assumed. Disabling these two codes here, not the four flags above,
 # keeps this override scoped to the specific mechanical consequence of
 # "test body deliberately unchecked," not a broader relaxation.
@@ -278,7 +278,7 @@ disable_error_code = ["no-any-return", "union-attr"]
 
 # Ported from upstream tvna/claude-md's pyproject.toml (its issue #192), the
 # same repository this one already ports its registry schema
-# (.gitapex/ssot.json) and OWASP mapping (gate_owasp_asi_mapping.py) from.
+# (.gitapex/ssot.json) and OWASP mapping (gitapex_gate_owasp_asi_mapping.py) from.
 # select/ignore/line-length are reproduced verbatim; target-version matches this
 # repository's own requires-python = ">=3.12" exactly. Deviations are commented
 # at the point of deviation.
@@ -306,15 +306,15 @@ testpaths = ["tests", "skills/battle-testing-a-skill/scripts", "skills/evaluatin
 pythonpath = [".github/scripts", "skills/battle-testing-a-skill/scripts", "skills/scorer-gated-skill-edits/scripts", "skills/evaluating-skill-quality/scripts", "skills/auditing-agent-product-scope/scripts", "skills/evaluating-deterministic-gate-quality/scripts", "evals/scripts", "hooks"]
 addopts = "--cov=.github/scripts --cov=skills/battle-testing-a-skill/scripts --cov=skills/scorer-gated-skill-edits/scripts --cov=skills/evaluating-skill-quality/scripts --cov=skills/auditing-agent-product-scope/scripts --cov=skills/setup-gitapex-toolchain/scripts --cov=skills/evaluating-deterministic-gate-quality/scripts --cov=evals/scripts --cov=hooks --cov-report=term-missing"
 
-# Deliberately NOT adding "hooks" here (issue #657): gate_evals_scripts_coverage.py
+# Deliberately NOT adding "hooks" here (issue #657): gitapex_gate_evals_scripts_coverage.py
 # reads this list, not addopts, as the authoritative scope for its 90%-per-file
 # floor. hooks/ already has two pre-existing checker scripts
-# (check_acm_present_or_waiver.py, check_skill_audit_disclosure_or_waiver.py)
+# (gitapex_check_acm_present_or_waiver.py, gitapex_check_skill_audit_disclosure_or_waiver.py)
 # exercised only via subprocess (their own .sh wrapper's tests), never direct
 # import -- pytest-cov cannot see into a subprocess, so both would show ~0%
 # measured coverage and fail that floor for files unrelated to this change.
 # The `--cov=hooks` addopts entry above still gives visibility into what IS
-# directly imported (e.g. hooks/check_pr_issue_acm_disclosure.py's own
+# directly imported (e.g. hooks/gitapex_check_pr_issue_acm_disclosure.py's own
 # opener-injection unit tests) via --cov-report=term-missing, without gating.
 [tool.coverage.run]
 source = [".github/scripts", "skills/battle-testing-a-skill/scripts", "skills/scorer-gated-skill-edits/scripts", "skills/evaluating-skill-quality/scripts", "skills/auditing-agent-product-scope/scripts", "skills/setup-gitapex-toolchain/scripts", "skills/evaluating-deterministic-gate-quality/scripts", "evals/scripts"]

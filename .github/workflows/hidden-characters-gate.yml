@@ -46,4 +46,4 @@ jobs:
       - name: Check for hidden/invisible characters in tracked files
         run: |
           set -euo pipefail
-          python3 .github/scripts/gate_hidden_characters.py
+          python3 .github/scripts/gitapex_gate_hidden_characters.py

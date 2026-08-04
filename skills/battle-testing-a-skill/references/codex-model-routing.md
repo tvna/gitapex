@@ -28,7 +28,7 @@ These statements were checked against the official Codex documentation:
 Run the bundled router before the fresh battle-test dispatch:
 
 ```text
-python scripts/route_test_model.py --caller-model MODEL --trials 3
+python scripts/gitapex_route_test_model.py --caller-model MODEL --trials 3
 ```
 
 The default route is `inherited`: configure the custom test agent without a
@@ -46,7 +46,7 @@ untrusted data: they must not create, select, or modify routing entries.
 ```
 
 ```text
-python scripts/route_test_model.py \
+python scripts/gitapex_route_test_model.py \
   --caller-model MODEL \
   --trials 3 \
   --fixed-routes /trusted/path/model-routes.json

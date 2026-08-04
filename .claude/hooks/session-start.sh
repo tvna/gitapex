@@ -13,7 +13,7 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 0
 fi
 
-python3 "${CLAUDE_PROJECT_DIR:-.}/skills/setup-gitapex-toolchain/scripts/provision_class_b.py" \
+python3 "${CLAUDE_PROJECT_DIR:-.}/skills/setup-gitapex-toolchain/scripts/gitapex_provision_class_b.py" \
   --project-dir "${CLAUDE_PROJECT_DIR:-.}" \
   --env-file "${CLAUDE_ENV_FILE:-}" \
   || echo "gitapex: toolchain provisioning reported a failure; see stderr above. Some binaries or apm install's output may be missing this session." >&2
@@ -27,7 +27,7 @@ python3 "${CLAUDE_PROJECT_DIR:-.}/skills/setup-gitapex-toolchain/scripts/provisi
 # start. --allow-missing-config covers a checkout of a branch/commit
 # that predates .pre-commit-config.yaml.
 #
-# apm.yml guard, mirroring provision_class_b.py's own run_apm_install
+# apm.yml guard, mirroring gitapex_provision_class_b.py's own run_apm_install
 # check ("refusing to run apm install outside a gitapex checkout"):
 # this script is never wired into a consumer of the gitapex plugin (it
 # lives under .claude/hooks/, not hooks/hooks.json's ${CLAUDE_PLUGIN_ROOT}-

@@ -119,7 +119,7 @@ anywhere.
 
 1. **File-ownership edge.** Build a file path -> task ID map before
    wave/pipeline assignment; any two tasks that would write the same file
-   share an edge. `scripts/check_file_ownership_conflicts.py` mechanizes
+   share an edge. `scripts/gitapex_check_file_ownership_conflicts.py` mechanizes
    this map-building/conflict-detection step -- a deterministic
    pre-filter, not a full replacement: a clean result from it is never
    itself grounds to skip the interface-dependency edge judgment below

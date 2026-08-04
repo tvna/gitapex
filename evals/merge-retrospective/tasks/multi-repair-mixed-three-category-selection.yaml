@@ -55,7 +55,7 @@ expected:
   # has a unique content keyword from its own prompt paragraph above: repair
   # 1 is the only one mentioning "mypy", repair 2 the only one mentioning
   # "not found", repair 3 the only one mentioning "rate-limiting". The real
-  # discriminator is the blank-line check score_contract.py's
+  # discriminator is the blank-line check gitapex_score_contract.py's
   # output_contains_near now applies (no "\n\n" between the two occurrences,
   # matching merge-retrospective/SKILL.md's own one-blank-line-separated
   # numbered item per repair); window 600 is a generous backstop only, sized

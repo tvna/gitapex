@@ -29,7 +29,7 @@ inputs:
     dimension 8, right?
 expected:
   output_contains:
-    - "check_skill_shape.py"
+    - "gitapex_check_skill_shape.py"
     - "6.5"
     - "success"
     - "correctness"

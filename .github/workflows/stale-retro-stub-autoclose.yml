@@ -2,7 +2,7 @@ name: Stale retro stub auto-close
 
 # Issue #694 (completing #314/#140's post-merge-auto-retro gate cluster):
 # a PR merged after its driving session's subscription already ended has
-# no session left to ever enrich the bare stub post_merge_retro.py opened
+# no session left to ever enrich the bare stub gitapex_post_merge_retro.py opened
 # for it -- by this issue's own accepted premise, a real retrospective
 # requires session memory a fresh, memory-less CI dispatch cannot
 # substitute for. This workflow finds open `retrospective`-labelled
@@ -17,7 +17,7 @@ name: Stale retro stub auto-close
 # and ranking-the-open-queue-weekly.yml: this workflow has `issues:
 # write` (to comment and close a stub) and explicitly never gains
 # `pull-requests: write` or any merge capability -- see
-# tests/test_stale_retro_stub_autoclose.py's own workflow drift guard.
+# tests/test_gitapex_stale_retro_stub_autoclose.py's own workflow drift guard.
 on:
   schedule:
     - cron: "0 8 * * *"  # daily 08:00 UTC, offset from retrospective-gate-drift.yml's 07:00
@@ -59,6 +59,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -o pipefail
-          python3 .github/scripts/stale_retro_stub_autoclose.py \
+          python3 .github/scripts/gitapex_stale_retro_stub_autoclose.py \
             --owner tvna --repo gitapex --stale-hours 48 \
             | tee -a "$GITHUB_STEP_SUMMARY"

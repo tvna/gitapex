@@ -183,7 +183,7 @@ such taxonomy applies only `retrospective`, unchanged from before.
    - **Dedup against an existing CI-opened stub first.** Some
      repositories run an automated, deterministic opener (a CI script
      triggered on PR merge, comparable to this repository's own
-     `.github/scripts/post_merge_retro.py`) that files a bare stub
+     `.github/scripts/gitapex_post_merge_retro.py`) that files a bare stub
      retrospective issue with no repair content before this skill ever
      runs, specifically so a PR merged with no interactive session
      watching still gets a placeholder to enrich later. Running this
@@ -195,14 +195,14 @@ such taxonomy applies only `retrospective`, unchanged from before.
      time -- where the calling repository has its own established
      title convention (a single source-of-truth function like this
      repository's own `_retro_title`/`dedup_query` in
-     `post_merge_retro.py`, producing
+     `gitapex_post_merge_retro.py`, producing
      `chore(retrospective): merge retrospective for PR #N`), search that
      exact phrase plus `label:retrospective`; a repository with neither
      an opener nor its own convention has nothing to dedup against here,
      so this check is a no-op and filing proceeds as normal.
      - **Match found, body still carries the opener's own stub marker
        text** (this repository's marker: `"Automated stub opened by the
-       post-merge-auto-retro gate"`, from `post_merge_retro.py`'s own
+       post-merge-auto-retro gate"`, from `gitapex_post_merge_retro.py`'s own
        issue body -- unenriched, i.e. no session has replaced it yet) ->
        this is the stub to fill, not a reason to open a second issue.
        Call `issue_write` method `update` on that issue number instead

@@ -45,7 +45,7 @@
     },
     "clusters": {
       "type": "object",
-      "description": "cluster id -> one-line description of what the cluster groups. Every gates[].cluster value must name a key here (see scan_ssot_schema.py's drift check).",
+      "description": "cluster id -> one-line description of what the cluster groups. Every gates[].cluster value must name a key here (see gitapex_scan_ssot_schema.py's drift check).",
       "minProperties": 1,
       "additionalProperties": { "type": "string", "minLength": 1 }
     }

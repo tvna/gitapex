@@ -175,13 +175,13 @@ proposes as central to the guiding principle above:
    `--raw-field` implicit-POST) bypass the script's own comments present
    as its own standalone finding, not one credited to that security
    review -- and (c) warning, not denying, on `git push` by shelling out
-   to `outward-artifact-preflight`'s `scan_provenance.py`.
+   to `outward-artifact-preflight`'s `gitapex_scan_provenance.py`.
    Its own comments explicitly disclose a known ceiling: "Obfuscation that
    hides the verb itself -- base64-piped-to-sh and the like -- is out of
    reach of any regex gate," tracked as an open item in issue #55 (bare
    number as written in the file itself; full form
    `tvna/gitapex#55`).
-3. **`hooks/check-issue-acm-disclosure.sh`** + **`hooks/check_acm_present_or_waiver.py`**
+3. **`hooks/check-issue-acm-disclosure.sh`** + **`hooks/gitapex_check_acm_present_or_waiver.py`**
    -- Fact: an `mcp__github__issue_write`-matcher hook (fires only on
    `method == "create"`) blocking issue creation whose body lacks an
    Acceptance Criteria Map table or an explicit waiver line, backing issue
@@ -189,21 +189,21 @@ proposes as central to the guiding principle above:
    "a fourth, self-contained copy of the same header-table regex and waiver-
    line vocabulary already duplicated across"
    three sibling scripts, "kept in sync by
-   `tests/test_check_acm_present_sync.py`'s explicit extras list" -- an
+   `tests/test_gitapex_check_acm_present_sync.py`'s explicit extras list" -- an
    explicitly named, currently-accepted drift risk (four independent
    regex copies, synchronized only by a test, not a shared import), because
    a prior version that shelled out cross-directory to `.github/scripts/`
    caused a real false-deny once the repo was consumed as an installed
    plugin (caught by a Codex review on PR #433). **This policy's own
-   third realization -- the CI/CD gate `gate_acm_issue_disclosure.py` --
+   third realization -- the CI/CD gate `gitapex_gate_acm_issue_disclosure.py` --
    is the central worked example of the new Reproducibility axis below.**
 4. **`hooks/check-template-overwrite.sh`** -- Fact: a `Write`-matcher hook
    blocking any `Write` call that would overwrite an existing issue/PR/MR
    template path, case-insensitive, covering both directory-based and
    single-file template conventions (GitHub and GitLab).
-5. **Bundled tests**: `hooks/test_check_bash_safety.py` (303 lines),
-   `hooks/test_check_issue_acm_disclosure.py` (173 lines), and
-   `skills/executing-a-branch-plan/scripts/test_check_task_bash_safety.py`
+5. **Bundled tests**: `hooks/test_gitapex_check_bash_safety.py` (303 lines),
+   `hooks/test_gitapex_check_issue_acm_disclosure.py` (173 lines), and
+   `skills/executing-a-branch-plan/scripts/test_gitapex_check_task_bash_safety.py`
    (143 lines) -- Fact: a pytest suite is committed beside most, but not
    all, shipped hook scripts. `hooks/check-bash-safety.sh` and
    `hooks/check-issue-acm-disclosure.sh` each have one; the third
@@ -310,8 +310,8 @@ proposes as central to the guiding principle above:
     tests and `case` statements, so `#!/bin/bash` there is a looser
     dependency than the `[[ ]]`-using pair's. Two of the four
     (`check-bash-safety.sh`, `check-issue-acm-disclosure.sh`)
-    additionally shell out to `python3` (`scan_provenance.py`,
-    `check_acm_present_or_waiver.py` respectively); one
+    additionally shell out to `python3` (`gitapex_scan_provenance.py`,
+    `gitapex_check_acm_present_or_waiver.py` respectively); one
     (`check-bash-safety.sh`) additionally invokes `git` directly
     (`rev-parse`, `merge-base`, `log`) for its push-time provenance scan.
     None of `bash`, `jq`, `python3`, or `git` are guaranteed present by
@@ -330,7 +330,7 @@ Domain 3 with the same rigor as Domain 2 above.
     described**: this repository has no `.gitapex/` directory, and none
     of the scripts the doc names as core/protection gates
     (`scripts/auto_retro.py`, `hooks/gate_merge_safety.py`,
-    `hooks/gate_gh_cli.py`, `scripts/scan_ssot_schema.py`,
+    `hooks/gate_gh_cli.py`, `scripts/gitapex_scan_ssot_schema.py`,
     `scripts/scan_ssot_drift.py`) exist anywhere in the checked-out repo
     (confirmed by direct `find`/`grep` this session). The doc's own
     governing principle -- separate mechanism (portable) from literal
@@ -347,19 +347,19 @@ Domain 3 with the same rigor as Domain 2 above.
     on to verify a declared backstop actually exists, is referenced but
     never defined anywhere in the 504 lines.
 15. **What actually shipped instead, in `.github/scripts/`** -- Fact:
-    11 real scripts exist (`gate_acm_issue_disclosure.py`,
-    `gate_skill_audit_disclosure.py`, `gate_skill_rename_lifecycle.py`,
-    `scan_retrospective_gate_drift.py`, `scan_toolchain_pin_drift.py`,
-    `scan_apm_manifest_drift.py`, `gate_owasp_asi_mapping.py`,
-    `gate_owasp_llm_mapping.py`, `sync_pr_publish.py`,
-    `post_merge_retro.py`, `skill_description_diff.py`), none matching
-    item 14's proposed names. `post_merge_retro.py`'s own docstring
+    11 real scripts exist (`gitapex_gate_acm_issue_disclosure.py`,
+    `gitapex_gate_skill_audit_disclosure.py`, `gitapex_gate_skill_rename_lifecycle.py`,
+    `gitapex_scan_retrospective_gate_drift.py`, `gitapex_scan_toolchain_pin_drift.py`,
+    `gitapex_scan_apm_manifest_drift.py`, `gitapex_gate_owasp_asi_mapping.py`,
+    `gitapex_gate_owasp_llm_mapping.py`, `gitapex_sync_pr_publish.py`,
+    `gitapex_post_merge_retro.py`, `gitapex_skill_description_diff.py`), none matching
+    item 14's proposed names. `gitapex_post_merge_retro.py`'s own docstring
     states plainly what happened to the big proposal: "Issue #314
     (sub-issue of #140): the minimal, GITHUB_TOKEN-only slice of #140's
     post-merge-auto-retro gate cluster." The full 15-gate registry
     architecture was scoped down to a much smaller, incrementally-shipped
     reality.
-16. **`scan_retrospective_gate_drift.py` -- a textbook bottom-up gate
+16. **`gitapex_scan_retrospective_gate_drift.py` -- a textbook bottom-up gate
     origin, in this repository's own words.** Fact, its own docstring:
     "Issue #297 (refs #187, #242, #246): `merge-retrospective`'s Step 0
     requires, every cycle, a manual search of every `retrospective`-
@@ -372,13 +372,13 @@ Domain 3 with the same rigor as Domain 2 above.
     verified for the sibling repository, found instead already
     documented inside gitapex's own history.
 17. **Explicit ports from `tvna/claude-md`** -- Fact, per
-    `gate_owasp_asi_mapping.py`'s own docstring (line 4): "Issue #144
+    `gitapex_gate_owasp_asi_mapping.py`'s own docstring (line 4): "Issue #144
     ports `tvna/claude-md`'s OWASP Agentic Top 10 mapping" -- naming the
     sibling repository directly, by name, independent of the design
     doc's own repeated "the sibling" references (item 14).
-    `gate_owasp_llm_mapping.py`'s own docstring (lines 6-11) names issue
+    `gitapex_gate_owasp_llm_mapping.py`'s own docstring (lines 6-11) names issue
     #145 and calls itself "a **sibling** gate to
-    `gate_owasp_asi_mapping.py`, not an extension of it... Same
+    `gitapex_gate_owasp_asi_mapping.py`, not an extension of it... Same
     discipline as the ASI gate" -- it does not name `tvna/claude-md`
     directly itself; that attribution for the LLM gate holds only by
     chaining through its stated sibling relationship to the ASI gate,
@@ -393,7 +393,7 @@ Domain 3 with the same rigor as Domain 2 above.
     [Open questions](#open-questions--blind-spots) below, not silently
     upgraded to independently-confirmed fact.
 18. **The ACM-disclosure policy's third realization --
-    `gate_acm_issue_disclosure.py`.** Fact, its own docstring (lines
+    `gitapex_gate_acm_issue_disclosure.py`.** Fact, its own docstring (lines
     5-13): "#357's own investigation found that no workflow in this
     repository triggers on `issues:` events, so a missing ACM on an issue
     body... had no universal, environment-independent backstop -- only a
@@ -410,18 +410,18 @@ Domain 3 with the same rigor as Domain 2 above.
     [Reproducibility / Domain-coverage axis](#reproducibility--domain-coverage-axis)
     below.
 19. **Middleware/dependency consistency across the 8 gates most closely
-    inventoried this session** (`gate_acm_issue_disclosure.py`,
-    `gate_skill_audit_disclosure.py`, `gate_skill_rename_lifecycle.py`,
-    `scan_retrospective_gate_drift.py`, `scan_toolchain_pin_drift.py`,
-    `scan_apm_manifest_drift.py`, `gate_owasp_asi_mapping.py`,
-    `gate_owasp_llm_mapping.py`) -- Fact: the "thin, stdlib-only, no
-    network calls" pattern `hooks/check_acm_present_or_waiver.py` claims
+    inventoried this session** (`gitapex_gate_acm_issue_disclosure.py`,
+    `gitapex_gate_skill_audit_disclosure.py`, `gitapex_gate_skill_rename_lifecycle.py`,
+    `gitapex_scan_retrospective_gate_drift.py`, `gitapex_scan_toolchain_pin_drift.py`,
+    `gitapex_scan_apm_manifest_drift.py`, `gitapex_gate_owasp_asi_mapping.py`,
+    `gitapex_gate_owasp_llm_mapping.py`) -- Fact: the "thin, stdlib-only, no
+    network calls" pattern `hooks/gitapex_check_acm_present_or_waiver.py` claims
     for itself does **not** hold uniformly on the CI/CD side. 5 of 8 are
     stdlib-only with zero network calls; 2 of 8
-    (`gate_acm_issue_disclosure.py`, `scan_retrospective_gate_drift.py`)
+    (`gitapex_gate_acm_issue_disclosure.py`, `gitapex_scan_retrospective_gate_drift.py`)
     make live calls to `api.github.com` and require `GITHUB_TOKEN` --
     an inherent property of being check-*and*-act gates, not pure
-    checks; and 1 of 8 (`scan_apm_manifest_drift.py`) imports PyYAML, a
+    checks; and 1 of 8 (`gitapex_scan_apm_manifest_drift.py`) imports PyYAML, a
     third-party dependency, breaking the stdlib-only claim outright
     despite its own docstring saying it can "run standalone." Separately,
     none of the 8 scripts (nor the workflows invoking four of them
@@ -431,15 +431,15 @@ Domain 3 with the same rigor as Domain 2 above.
     pytest`, meaning the same script executes under two different,
     unpinned-vs-pinned Python provenances depending on entry point.
 20. **CI-gate-to-CI-gate duplication, and issue-citation convention
-    consistency.** Fact: `gate_owasp_asi_mapping.py` and
-    `gate_owasp_llm_mapping.py` are near-identical structurally and
+    consistency.** Fact: `gitapex_gate_owasp_asi_mapping.py` and
+    `gitapex_gate_owasp_llm_mapping.py` are near-identical structurally and
     textually (`_validate_table_header`, `_parse_rows`,
     `VALID_STATUSES`), explicitly framed by the LLM gate's own docstring
     as deliberate ("a **sibling** gate... not an extension of it"). Of
     the 8 gates inventoried, 7 name a specific backing issue/PR/finding
     in their own header, matching the same issue-citing convention
     already observed on the hook side (items 1, 3, 6, 8 above);
-    `scan_apm_manifest_drift.py` is the one outlier, framed purely as
+    `gitapex_scan_apm_manifest_drift.py` is the one outlier, framed purely as
     protecting a "single-source-of-truth invariant" with no issue number
     -- the same "standing invariant, no issue cited" pattern already seen
     on the hook side (`hooks/check-template-overwrite.sh`, item 4 above),
@@ -937,7 +937,7 @@ profile contains unconditional `echo` statements, the output gets
 prepended to your hook's JSON" and breaks JSON parsing entirely. On the
 CI/CD side, the same "thin, no third-party dependency" property holds
 for 5 of 8 gates inventoried but is broken outright by
-`scan_apm_manifest_drift.py`'s `import yaml` (item 19) -- middleware
+`gitapex_scan_apm_manifest_drift.py`'s `import yaml` (item 19) -- middleware
 dependency is a real, cross-domain concern, not one confined to Domain 2.
 
 - **Candidate check: middleware dependency is stated, not assumed.**
@@ -984,7 +984,7 @@ realized three times:
 |---|---|---|
 | `skills/drafting-an-acm-issue/SKILL.md` | (per-session, not domain-scoped) | Probabilistic -- depends on the agent choosing to invoke the skill |
 | `hooks/check-issue-acm-disclosure.sh` | 2 (Claude Code hook) | Environment-scoped -- fires only where this repository's own hook harness is loaded (confirmed by its own matcher, item 3) |
-| `gate_acm_issue_disclosure.py` | 3 (CI/CD) | Environment-independent -- fires on the `issues` webhook regardless of which client created the issue (item 18) |
+| `gitapex_gate_acm_issue_disclosure.py` | 3 (CI/CD) | Environment-independent -- fires on the `issues` webhook regardless of which client created the issue (item 18) |
 
 The gate script's own docstring states the rationale for needing all
 three explicitly (quoted in full at item 18): the skill trigger alone is
@@ -1011,7 +1011,7 @@ to fill out the table:
 - **Retrospective identity** (items 14-17): the *design-only* material
   proposes multi-domain coverage (a Domain-2 issue-creation-time hook
   plus a Domain-3 CI backstop, per item 14's Case C), but what actually
-  *shipped* (`post_merge_retro.py`, `scan_retrospective_gate_drift.py`,
+  *shipped* (`gitapex_post_merge_retro.py`, `gitapex_scan_retrospective_gate_drift.py`,
   item 15-16) is Domain-3 only -- no Domain-2 hook exists today gating
   retrospective-identity-adjacent actions in a live session. The
   *proposed* architecture had multi-domain coverage as an explicit,
@@ -1124,12 +1124,12 @@ work proceeds** -- the requester's own stated reason for prioritizing it
 this way. That does not mean every future gate must originate top-down.
 This repository already has a proven, working **bottom-up** mechanism
 for *discovering* which gates are needed: `merge-retrospective` and
-`scan_retrospective_gate_drift.py`'s own history (item 16) -- a proposal
+`gitapex_scan_retrospective_gate_drift.py`'s own history (item 16) -- a proposal
 sits unbuilt until repeated real incidents make the pain concrete enough
-to justify building it. `gate_skill_audit_disclosure.py` and
-`gate_skill_rename_lifecycle.py` (item 20) also cite specific incident
+to justify building it. `gitapex_gate_skill_audit_disclosure.py` and
+`gitapex_gate_skill_rename_lifecycle.py` (item 20) also cite specific incident
 issue numbers in their own headers, the same pattern --
-`scan_apm_manifest_drift.py` is the one gate among those inventoried
+`gitapex_scan_apm_manifest_drift.py` is the one gate among those inventoried
 that does not (item 20's own outlier), framed instead around a standing
 invariant with no incident cited.
 
@@ -1203,7 +1203,7 @@ each case) rather than as fully agent-verified primary-source fact.
   decision already fixed. This maps directly onto the position already
   taken above: the evaluation *model* (the standard -- what "good" means,
   fixed now) is top-down; *which specific gates* satisfy it can still be
-  discovered bottom-up (`scan_retrospective_gate_drift.py`'s own
+  discovered bottom-up (`gitapex_scan_retrospective_gate_drift.py`'s own
   incident-driven origin, item 16, is this repository's own instance of
   exactly this pattern, independently arrived at before this
   manufacturing precedent was researched).
@@ -1431,7 +1431,7 @@ of these are enforced anywhere yet.
     This repository's own `check-issue-acm-disclosure.sh` already gets
     this right (confirmed directly in `hooks/check-issue-acm-disclosure.
     sh:54-56`: it denies, with a named reason, if its own companion
-    `check_acm_present_or_waiver.py` is not found -- a behavior item 3
+    `gitapex_check_acm_present_or_waiver.py` is not found -- a behavior item 3
     above does not itself narrate, so cite the script directly rather
     than that item) -- a rubric could make this an explicit, checkable
     expectation rather than an incidental property of the scripts that
@@ -1701,7 +1701,7 @@ against found coverage is itself an act of grading, squarely inside
 the skill's Domain-2-native scope from the paragraph above); a
 *standing*, drift-detecting version of the same check belongs as its
 own Domain-3 meta-gate in the target repository, mirroring
-`scan_retrospective_gate_drift.py`'s own already-real pattern (item
+`gitapex_scan_retrospective_gate_drift.py`'s own already-real pattern (item
 16) and closing the specific "candidate 8" gap item 14 names. Neither
 alone is sufficient by this report's own Reproducibility-axis
 reasoning; both together is the same argued, multi-domain coverage
@@ -1741,7 +1741,7 @@ sorts cleanly into that split:
   must not be assumed present in a target repo): the ACM-disclosure
   three-domain case study, the OWASP-mapping ports from
   `tvna/claude-md`, the retrospective-identity bottom-up-origin story,
-  and every specific script name (`gate_acm_issue_disclosure.py`,
+  and every specific script name (`gitapex_gate_acm_issue_disclosure.py`,
   `hooks/check-bash-safety.sh`) cited throughout items 1-22.
 
 `screening-a-low-trust-contribution`'s own already-established
@@ -1781,12 +1781,12 @@ own paths exist there.
   artifacts and stays silent about invariants with no artifact at all.
   The skill should also recommend, not silently omit, that the target
   repository build its own standing Domain-3 coverage-drift gate
-  (mirroring `scan_retrospective_gate_drift.py`, item 16) rather than
+  (mirroring `gitapex_scan_retrospective_gate_drift.py`, item 16) rather than
   relying on a one-time audit alone.
 - **Declare Portable/Mixed, not silently assume Portable.** Per the
   section above, the honest declaration is Mixed -- the skill's own
   shape checker (mirroring `evaluating-skill-quality`'s own
-  `check_skill_shape.py`) should fail closed if a future edit blends
+  `gitapex_check_skill_shape.py`) should fail closed if a future edit blends
   repo-specific gitapex detail back into the portable core.
 - **The Reproducibility axis's own worked-example table must be
   replaced per target, not reused.** The ACM/install-safety/

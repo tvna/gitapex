@@ -30,7 +30,7 @@ judgment -- injection resistance, trust/authority boundary, success-criteria
 rigor, and unescaped free-text interpolation into the posted line). A
 companion `evaluating-skill-quality` pass returned WELL-FORMED-NOT-MATURE on
 the same draft, converging on the identical root cause (Mechanism fit: the
-step should invoke the same deterministic `hooks/check_acm_present_or_waiver.py`
+step should invoke the same deterministic `hooks/gitapex_check_acm_present_or_waiver.py`
 check the downstream PR-creation hook itself enforces, not re-derive the
 judgment in prose) plus a missing verify-after-act re-fetch, an undefined
 "the repository has neither [a convention]" branch, and a frontmatter
@@ -64,9 +64,9 @@ failure mode directly. `tasks/defect-waiver-preserves-body.yaml` was added
 as a dedicated guardrail fixture for this exact scenario (the existing
 `defect-waiver-disclosure.yaml` fixture's substring checks would not have
 caught it), keeping the Stop-boundary-bullet-to-fixture-count ratio this
-repository's `gate_skill_branch_fixture_coverage.py` enforces (6 bullets,
+repository's `gitapex_gate_skill_branch_fixture_coverage.py` enforces (6 bullets,
 6 fixtures). The deterministic shape checker
-(`check_skill_shape.py --allowed-root skills skills/fixing-a-reported-issue`)
+(`gitapex_check_skill_shape.py --allowed-root skills skills/fixing-a-reported-issue`)
 reports 40/40 PASS throughout every revision.
 
 A third, fresh pair of dispatches against that revision confirmed the

@@ -46,7 +46,7 @@ Scope, stated narrowly so this does not widen into a blanket exemption:
   comment, issue body, generated file, or review comment. Those stay in
   scope by default, per `skills/outward-artifact-preflight`'s own
   open-invariant rule.
-- Does not change what `scripts/scan_provenance.py` reports: it still
+- Does not change what `scripts/gitapex_scan_provenance.py` reports: it still
   flags this trailer on every hit, by design. Confirming a hit is
   *this* trailer and not a lookalike remains a judgment call each
   time -- do not add an ignore pattern, allowlist, or `--exclude` flag

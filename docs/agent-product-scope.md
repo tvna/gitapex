@@ -173,7 +173,7 @@ evidence file, and updates the relevant axis section here plus the
 touched file's own provenance notes. Do not edit the dated design-spec
 records under `superpowers/specs/` to keep them "current" -- those are
 point-in-time decisions, not living docs; this file is the living
-cross-reference instead. `python3 skills/auditing-agent-product-scope/scripts/check_axis_shape.py docs/agent-product-scope.md`
+cross-reference instead. `python3 skills/auditing-agent-product-scope/scripts/gitapex_check_axis_shape.py docs/agent-product-scope.md`
 verifies every axis section still carries its four required fields
 after an edit.
 

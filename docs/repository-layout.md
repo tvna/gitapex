@@ -27,7 +27,7 @@ skills/            one directory per skill (SKILL.md, metadata/gitapex.yaml, opt
   drafting-an-acm-issue/  drafts a new GitHub issue with an Acceptance Criteria Map before creation, so planning-a-branch-from-an-issue can read one instead of building it
 docs/              documentation (this file, versioning policy, design specs, motivation.md) — not deployed
 tests/             pytest suite for the internal CI tooling — not deployed
-.github/           CI workflows and their internal tooling (.github/scripts/sync_pr_publish.py) — not deployed
+.github/           CI workflows and their internal tooling (.github/scripts/gitapex_sync_pr_publish.py) — not deployed
 ```
 
 > **Why the root, not a `plugin/` subdirectory?** apm installs a dependency

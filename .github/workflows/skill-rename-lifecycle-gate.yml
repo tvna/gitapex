@@ -79,4 +79,4 @@ jobs:
         if: steps.diff.outputs.applicable == 'true'
         run: |
           set -euo pipefail
-          python3 .github/scripts/gate_skill_rename_lifecycle.py --removed "${{ steps.diff.outputs.removed_file }}"
+          python3 .github/scripts/gitapex_gate_skill_rename_lifecycle.py --removed "${{ steps.diff.outputs.removed_file }}"

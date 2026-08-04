@@ -47,4 +47,4 @@ jobs:
       - name: Check hook commands brace the plugin-root variable
         run: |
           set -euo pipefail
-          python3 .github/scripts/gate_plugin_root_brace_notation.py
+          python3 .github/scripts/gitapex_gate_plugin_root_brace_notation.py

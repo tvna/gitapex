@@ -54,7 +54,7 @@ jobs:
       # reports its gap under the head sha. No other gate here correlates
       # diff-derived line numbers with tree content, which is why none of
       # them needs this; several do read the tree (for example
-      # gate_split_fixture_coverage.py and gate_transfer_check_disclosure.py)
+      # gitapex_gate_split_fixture_coverage.py and gitapex_gate_transfer_check_disclosure.py)
       # but locate what they grade by text rather than by line number.
       #
       # The accepted cost, stated rather than discovered later: this runs the
@@ -83,7 +83,7 @@ jobs:
       #   "similarity index 100%" header with zero added lines. Promoting a
       #   helper into .github/scripts/ is exactly how this harness grows, and
       #   without this the promoted file enters scope ungraded -- the same
-      #   rename-shaped fail-open detect_changed_gate_scripts.py's own
+      #   rename-shaped fail-open gitapex_detect_changed_gate_scripts.py's own
       #   docstring records having had to close.
       #
       #   -c core.quotePath=false, because quoting is on by default and a
@@ -111,4 +111,4 @@ jobs:
             exit 1
           fi
           git -c core.quotePath=false diff -U0 --no-renames "$merge_base" "$HEAD_SHA" -- '*.py' \
-            | python3 .github/scripts/gate_exception_handler_gaps.py
+            | python3 .github/scripts/gitapex_gate_exception_handler_gaps.py

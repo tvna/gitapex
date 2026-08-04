@@ -335,7 +335,7 @@ First version of a new skill category, declared `experimental` in
 
 A follow-on build (see `metadata/gitapex.yaml` for the citation) delivered
 two of `metadata/gitapex.yaml`'s originally-deferred-at-initial-ship items:
-a bundled shape-checker script (`scripts/check_gate_shape.py`,
+a bundled shape-checker script (`scripts/gitapex_check_gate_shape.py`,
 Domain-2-scoped -- see its own module docstring) and a grown,
 Blind-Spot-Pass-reviewed adversarial `evals/` regression corpus. Still
 deferred, named explicitly: an independently-verified cross-tool

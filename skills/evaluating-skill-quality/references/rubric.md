@@ -917,7 +917,7 @@ itself contradicts.
 above: not a pin the target's content makes, but whether the *declared
 level itself* still matches how the target is actually built. Fires when
 a target declares `Broad` or `Frontier`, its `SKILL.md` body sits at or
-above 90% of `scripts/check_skill_shape.py`'s own `BODY_MAX_LINES`
+above 90% of `scripts/gitapex_check_skill_shape.py`'s own `BODY_MAX_LINES`
 ceiling (a vendored target with an equivalent hard body-length limit
 qualifies the same way), and a meaningful fraction of that body is
 rare-path, schema, or deep procedural detail that would fit Adaptive's
@@ -1139,7 +1139,7 @@ semantics, and rationale at
 
 ## 1. Discovery -- name and description
 
-`scripts/check_skill_shape.py` (see SKILL.md, Two lanes) confirms a
+`scripts/gitapex_check_skill_shape.py` (see SKILL.md, Two lanes) confirms a
 trigger *exists* by shape -- present, no XML tags, under the length cap,
 with the exact limits owned by that script rather than restated here.
 This dimension judges whether it is the *right* trigger -- whether the
@@ -1528,7 +1528,7 @@ bookkeeping (see above) discloses it as a deliberate, named gap -- the
 same disclosed-vs-silent distinction this dimension already applies to a
 missing baseline. A repository that maintains its own coverage-measurement
 tooling for this (this repository's own
-`evals/scripts/check_dimension_coverage.py` is one instance, run against
+`evals/scripts/gitapex_check_dimension_coverage.py` is one instance, run against
 the `evaluating-deterministic-gate-quality` skill's corpus as a worked
 example) makes this check mechanical; without one, cross-reference the
 rubric's own numbered list
@@ -1820,11 +1820,11 @@ is labeled as such.
   discipline's steps 1-4) could not be established because there was no
   readable file to grade at all: the target is missing, empty, or
   unreadable (`SKILL.md`'s Procedure step 1) -- the same failure shape
-  `scripts/check_skill_shape.py` itself treats as a hard stop distinct
+  `scripts/gitapex_check_skill_shape.py` itself treats as a hard stop distinct
   from an ordinary check failure (a missing target exits non-zero with no
   result list at all, per its own tests, rather than reporting a normal
   per-check FAIL). A target that exists and is readable but has malformed
-  or missing frontmatter is **not** this case: `check_skill_shape.py`
+  or missing frontmatter is **not** this case: `gitapex_check_skill_shape.py`
   grades that gracefully as ordinary FAILing checks (e.g.
   `description-present`), so it earns Not-well-formed, not Indeterminate
   -- the target was read and graded, it just failed. Distinct from

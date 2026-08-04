@@ -180,7 +180,7 @@ to that re-derivation, not a substitute for it.
   empty refusal is evidence about neither.
 - Do not conflate runtime content trust (dimensions 1-2, above) with
   install/vendoring-time integrity (dimension 12): this SKILL.md and its
-  bundled `scripts/route_test_model.py` are themselves install-time
+  bundled `scripts/gitapex_route_test_model.py` are themselves install-time
   artifacts. Before trusting either file's content, confirm via the
   harness's own means (a checksum, a signed release, a trusted
   registry/marketplace install path) that the running copy is the intended,

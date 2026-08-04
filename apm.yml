@@ -4,7 +4,7 @@
 #
 # name/version are required by apm's manifest schema; they mirror
 # .claude-plugin/plugin.json (the version source of truth). The drift gate in
-# .github/scripts/scan_apm_manifest_drift.py keeps the two in lockstep.
+# .github/scripts/gitapex_scan_apm_manifest_drift.py keeps the two in lockstep.
 name: gitapex
 version: 0.1.0
 devDependencies:

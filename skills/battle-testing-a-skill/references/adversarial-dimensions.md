@@ -254,7 +254,7 @@ claim from that corpus actually exercising the target's own stated
 dimensions/axes rather than only fixture count -- the latter is
 `evaluating-skill-quality`'s own Dimension 8 territory, not this one, but
 when a coverage report is available for the target (this repository's own
-`evals/scripts/check_dimension_coverage.py` is one instance) its uncovered
+`evals/scripts/gitapex_check_dimension_coverage.py` is one instance) its uncovered
 list is corroborating evidence here too: a corpus that only ever exercises
 the same two or three dimensions is not "growing" in the sense this
 dimension asks about, even if its raw fixture count keeps climbing.

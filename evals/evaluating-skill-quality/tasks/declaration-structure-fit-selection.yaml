@@ -8,7 +8,7 @@ inputs:
   prompt: |
     Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
     skill called "invoice-line-item-auditor". Its SKILL.md body is 498 of a
-    500-line hard limit (confirmed via check_skill_shape.py), and its
+    500-line hard limit (confirmed via gitapex_check_skill_shape.py), and its
     metadata/gitapex.yaml declares capabilityAssumption: Frontier, with no
     entry anywhere in its decision log mentioning Adaptive.
 

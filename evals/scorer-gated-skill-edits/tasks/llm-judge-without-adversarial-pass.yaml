@@ -9,7 +9,7 @@ inputs:
     Use scorer-gated-skill-edits. We're iterating on `skills/meeting-notes-writer/SKILL.md`.
 
     There's no deterministic scorer for this one -- the outputs are free-form
-    prose summaries, so nothing like `score_contract.py` applies here. We're
+    prose summaries, so nothing like `gitapex_score_contract.py` applies here. We're
     using an LLM judge instead to grade whether a candidate summary covers
     the required decision points.
 

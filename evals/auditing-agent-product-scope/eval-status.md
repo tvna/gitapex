@@ -13,10 +13,10 @@ case; `encoding-obfuscation-probe.yaml`, `memory-poisoning-probe.yaml`,
 and `structured-output-injection-probe.yaml` (all tagged `adversarial`)
 exercise the three Stop-boundary gaps the two prior audit passes below
 already found and fixed; `contradiction-disclosure.yaml` covers Step 7's
-never-silently-resolve rule. `evals/scripts/lint_fixture_assertions.py`
+never-silently-resolve rule. `evals/scripts/gitapex_lint_fixture_assertions.py`
 reports 0 warnings against this corpus, both in single-skill mode and in
 its repository-wide discovery mode (which now includes this skill for the
-first time); `check_axis_shape.py docs/agent-product-scope.md` and the
+first time); `gitapex_check_axis_shape.py docs/agent-product-scope.md` and the
 full `pytest` suite are both unaffected and still pass.
 
 This corpus-content change is issue #585's full scope: it does not build
@@ -46,12 +46,12 @@ quoting rule) rather than only disclosed.
 
 A companion `evaluating-skill-quality` dispatch rated the same candidate
 **WELL-FORMED-NOT-MATURE**, citing a deterministic-shape gap: the skill's own
-axis-shape checker (`check_axis_shape.py`) was invoked only via a manual
+axis-shape checker (`gitapex_check_axis_shape.py`) was invoked only via a manual
 `SKILL.md` step with no CI path actually running it against the live
 `docs/agent-product-scope.md`, plus two narrower checker gaps (missing/
 duplicate expected axis labels passing silently; the final axis section able
 to inherit fields from an unrelated later heading). All three were fixed:
-`tests/test_agent_product_scope_shape.py` now wires the checker into the
-repository's enforced `pytest` run, and `check_axis_shape.py` gained the
+`tests/test_gitapex_agent_product_scope_shape.py` now wires the checker into the
+repository's enforced `pytest` run, and `gitapex_check_axis_shape.py` gained the
 missing/duplicate-label and any-heading section-boundary checks, with 20/20
 passing unit tests. Refs #445.

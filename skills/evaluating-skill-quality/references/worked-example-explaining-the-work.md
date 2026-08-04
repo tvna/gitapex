@@ -77,7 +77,7 @@ Run the bundled checker rather than computing by hand (from the repo root,
 using the checker's path within this skill):
 
 ```
-$ python3 skills/evaluating-skill-quality/scripts/check_skill_shape.py --allowed-root . skills/explaining-the-work
+$ python3 skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py --allowed-root . skills/explaining-the-work
 CHECK                RESULT  EVIDENCE (rule)
 description-present  PASS    present  (description present and non-empty)
 description-no-xml   PASS    no tags  (description has no XML tags)

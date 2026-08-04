@@ -26,7 +26,7 @@ expected:
   output_contains:
     - "runtime-compatibility.md"
     - "Documented"
-    - "check_axis_shape.py"
+    - "gitapex_check_axis_shape.py"
     - "agent-product-scope.md"
     - "Ferrocode"
   output_not_contains:

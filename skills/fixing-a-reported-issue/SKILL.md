@@ -83,7 +83,7 @@ follow it exactly.
      currently contains. Otherwise check the fetched body against the
      same deterministic disclosure check gitapex's own PreToolUse hook
      enforces at PR-creation time (see
-     `hooks/check_acm_present_or_waiver.py`'s `has_acm_disclosure`): an
+     `hooks/gitapex_check_acm_present_or_waiver.py`'s `has_acm_disclosure`): an
      Acceptance Criteria Map table header, or a waiver line of the exact
      form `ACM: not-applicable (<category>): <reason>`. Never substitute
      a looser textual judgment of "does this look like a waiver" for
@@ -140,7 +140,7 @@ query matches both title and body."
    suite -- no other test regressed.
 6. Disclose: the target issue's current body carries neither an ACM
    table nor a waiver (checked via the same exact-format check
-   `hooks/check_acm_present_or_waiver.py` uses), so call
+   `hooks/gitapex_check_acm_present_or_waiver.py` uses), so call
    `github:issue_write` method `update` with `body` set to the
    already-fetched body plus `ACM: not-applicable (defect): deduped
    search results by result ID per this fix.` appended. Before any PR

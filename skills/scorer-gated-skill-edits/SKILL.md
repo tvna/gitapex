@@ -19,8 +19,8 @@ Before any iteration, confirm both of these exist:
 - A scorer that maps a skill run on a task to a number in `[0,1]` by a
   check a machine or a disciplined reviewer can repeat: exact-match, a
   substring/structural contract (this skill bundles
-  `scripts/score_contract.py`, which scores one deterministically -- run it
-  as `python3 scripts/score_contract.py --assertions task.json --output
+  `scripts/gitapex_score_contract.py`, which scores one deterministically -- run it
+  as `python3 scripts/gitapex_score_contract.py --assertions task.json --output
   run.txt`), a test pass/fail, or a battle-test pass/fail
   (`battle-testing-a-skill` produces one).
 - A held-out set of tasks not used to motivate any edit.
@@ -69,7 +69,7 @@ evaluation. Name the gap; never fake a score to proceed.
    correctness may not fall, and at exactly matched correctness its measured
    context cost must strictly decrease. This does not turn a style-only or
    ordinary scalar tie into a keep. When per-task scores come from
-   `scripts/score_contract.py`, use `--compare-to <prior_mean>` for the
+   `scripts/gitapex_score_contract.py`, use `--compare-to <prior_mean>` for the
    ordinary gate; add `--pruning-only --prior-context-cost <n>` and
    `--candidate-context-cost <n>` only for the predeclared pruning gate.
    The script reads one task score per line from `--scores` or stdin and
@@ -89,7 +89,7 @@ evaluation. Name the gap; never fake a score to proceed.
      approving on "looks fine". Keep the edit only if it survives that pass.
      (`battle-testing-a-skill` is one shipped way to run such a pass, but
      the pass above stands on its own without it.) This same rule also
-     covers `score_contract.py`'s own optional `--judge-verdict
+     covers `gitapex_score_contract.py`'s own optional `--judge-verdict
      {agree,disagree}` flag. (This repository has also recorded the design
      spec for that flag, for readers working in this specific repository,
      at `docs/superpowers/specs/2026-07-20-judge-mode-scorer-design.md`; a
@@ -110,7 +110,7 @@ evaluation. Name the gap; never fake a score to proceed.
 
 ## Authoring fixtures for a substring scorer
 
-When the scorer is a substring contract (`scripts/score_contract.py` here,
+When the scorer is a substring contract (`scripts/gitapex_score_contract.py` here,
 or any `output_contains` / `output_not_contains` check), the assertions are
 themselves fallible and their defects are silent: the gate still runs, it
 just measures the wrong thing.
@@ -135,8 +135,8 @@ just measures the wrong thing.
   Each of these has silently false-failed a correct run.
 - Where the environment ships a deterministic checker for the second rule,
   run it before the gate (this repository provides
-  `evals/scripts/lint_fixture_assertions.py` alongside its
-  `check_skill_shape.py`): it catches the casing, negation-trap, and
+  `evals/scripts/gitapex_lint_fixture_assertions.py` alongside its
+  `gitapex_check_skill_shape.py`): it catches the casing, negation-trap, and
   paraphrase-drift cases mechanically, leaving only the discrimination rule
   to human judgment.
 

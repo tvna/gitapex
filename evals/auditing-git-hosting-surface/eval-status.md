@@ -13,7 +13,7 @@ as an unconditional gate: no stated trust boundary for audited-repo content
 (collaborator names, workflow YAML text) it reads during the audit; an
 empirically-confirmed false-clean result on an empty/missing workflow
 directory and an unhandled crash on a non-UTF-8 workflow file in
-`scripts/scan_unpinned_actions.py`; an empirically-confirmed homoglyph-typosquat
+`scripts/gitapex_scan_unpinned_actions.py`; an empirically-confirmed homoglyph-typosquat
 bypass of that same script (a Cyrillic "а" substitution in an action name
 reports as correctly SHA-pinned); unescaped interpolation of audited-repo
 content into its own report (row-spoofing risk); and no timestamp or

@@ -5,14 +5,14 @@ name: Post-merge retrospective
 # own review discipline requires.
 #
 # Per-run caps -- this job is a deterministic GITHUB_TOKEN-authenticated CI
-# script (post_merge_retro.py), not an agent/LLM dispatch, so an LLM
+# script (gitapex_post_merge_retro.py), not an agent/LLM dispatch, so an LLM
 # token/cost budget (the kind #124/#153's own llm-budget-gate design covers)
 # does not apply to it. The caps that DO apply, both already in force and
 # restated here rather than left implicit:
 #   - Job-level `timeout-minutes: 10` below bounds total wall-clock time
 #     per run regardless of what the script does internally.
 #   - The script's own `_call()` retry ceiling (see
-#     .github/scripts/post_merge_retro.py's docstring and `_call` signature)
+#     .github/scripts/gitapex_post_merge_retro.py's docstring and `_call` signature)
 #     caps GitHub API retries at 3 attempts for idempotent GET/search calls
 #     and 1 attempt (no retry) for the non-idempotent issue-creation POST,
 #     per RFC 9110 SS9.2.2 -- a lost/truncated response after GitHub already
@@ -69,7 +69,7 @@ jobs:
       # own retrospective-gate-drift.yml pins `ref: main` explicitly rather
       # than relying on that default implicitly, so this workflow matches
       # that same paranoid convention -- only this repo's own trusted
-      # post_merge_retro.py ever executes, never PR-head-controlled code.
+      # gitapex_post_merge_retro.py ever executes, never PR-head-controlled code.
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -80,7 +80,7 @@ jobs:
       # -- open + dedup only, GITHUB_TOKEN-only, no new secret. The
       # trusted-bot allowlist, FP-prior skip, ledger, rescan, and
       # `.gitapex/ssot.json` wiring are explicitly deferred to later #140
-      # slices; see post_merge_retro.py's own docstring.
+      # slices; see gitapex_post_merge_retro.py's own docstring.
       #
       # PR title/URL are untrusted (fork-controlled) text -- they travel
       # through `env:` here rather than being spliced into this `run:`
@@ -96,7 +96,7 @@ jobs:
           PR_URL: ${{ github.event.pull_request.html_url }}
         run: |
           set -euo pipefail
-          python3 .github/scripts/post_merge_retro.py \
+          python3 .github/scripts/gitapex_post_merge_retro.py \
             --owner "$REPO_OWNER" \
             --repo "$REPO_NAME" \
             --pr-number "$PR_NUMBER" \

@@ -13,7 +13,7 @@ round a Gap up because a workaround seems achievable in the moment.
 |---|---|---|---|
 | 1 | Branch protection rules (including required reviews/checks -- the required-checks list is part of the same unexposed branch-protection settings surface, not a separately coverable item) | **Gap.** No `mcp__github__*` tool exposes branch-protection settings (no `get_branch_protection`-shaped tool in this session's tool list). | Cross-link the tracking issue for approved-but-unbuilt tooling. |
 | 2 | Actions/CI permissions (e.g. "Allow all actions" vs restricted) | **Gap.** Repo Actions-permissions settings are not exposed by any tool found. | Cross-link the tracking issue for approved-but-unbuilt tooling. |
-| 3 | Unpinned third-party actions/includes | **Covered.** Read `.github/workflows/*.yml` (via `mcp__github__get_file_contents`, or directly off disk when the repo is checked out locally) and run `scripts/scan_unpinned_actions.py <workflows_dir>`. Flags any `uses:` step pinned to a tag/branch instead of a full 40-character commit SHA. | Run the script; report its exact findings, file:line included. |
+| 3 | Unpinned third-party actions/includes | **Covered.** Read `.github/workflows/*.yml` (via `mcp__github__get_file_contents`, or directly off disk when the repo is checked out locally) and run `scripts/gitapex_scan_unpinned_actions.py <workflows_dir>`. Flags any `uses:` step pinned to a tag/branch instead of a full 40-character commit SHA. | Run the script; report its exact findings, file:line included. |
 | 4 | Webhook inventory | **Gap.** No `list_repository_webhooks`-shaped tool found. | Cross-link the tracking issue for approved-but-unbuilt tooling. |
 | 5 | Deploy-key inventory | **Gap.** No `list_deploy_keys`-shaped tool found. | Cross-link the tracking issue for approved-but-unbuilt tooling. |
 | 6 | Token scopes (of the connected app/PAT itself) | **Gap.** `mcp__github__get_me` returns user profile, not the connected token's scope list. | Cross-link the tracking issue for approved-but-unbuilt tooling. |
@@ -29,6 +29,6 @@ script's borrowed shape (item 3).
 
 ## Self-check
 
-Run `python3 scripts/scan_unpinned_actions.py <workflows_dir>` for item 3
+Run `python3 scripts/gitapex_scan_unpinned_actions.py <workflows_dir>` for item 3
 before reporting it -- never assert "no unpinned actions found" from
 memory or a partial read.

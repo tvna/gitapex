@@ -96,7 +96,7 @@ for the criteria checklist and the template itself.
    plainly that none exists yet and compliance relies on review. Never
    name a mechanism that isn't actually in place.
 9. Validate the drafted body before treating it as final:
-   `python3 scripts/check_adr_shape.py --body <draft-file>` (or pipe the
+   `python3 scripts/gitapex_check_adr_shape.py --body <draft-file>` (or pipe the
    draft on stdin) rather than re-reasoning "does this have the required
    sections" in prose each run. On a Python-less surface, apply the same
    rules by reading that script's check list directly (its module
@@ -214,7 +214,7 @@ ADR** when not applicable.
   produces "drive-by ADRs" -- the same boundary `explaining-the-work`
   already states for the comment side of this problem.
 - Do not create the file at `docs/adr/` before
-  `scripts/check_adr_shape.py` passes on the drafted body.
+  `scripts/gitapex_check_adr_shape.py` passes on the drafted body.
 
 ## Related skills
 
@@ -245,7 +245,7 @@ and leaves everything else unchanged. See `references/adr-template.md`'s
 own References section for full source citations.
 
 Install/vendoring-time integrity (whether this SKILL.md, its bundled
-`scripts/check_adr_shape.py`, and `references/this-repo-only.md` are
+`scripts/gitapex_check_adr_shape.py`, and `references/this-repo-only.md` are
 themselves the untampered, intended copies) is a separate question from
 the runtime content trust Step 1 covers -- a runtime PASS from Step 9
 says nothing about whether the copy that produced it was the one

@@ -62,7 +62,7 @@ jobs:
       # directly into this step's shell script, mirroring
       # skill-audit-gate.yml's own PR_BODY handling. The check-and-act
       # script itself only ever places it inside its own read (never a
-      # shell command or a URL), same as post_merge_retro.py's own
+      # shell command or a URL), same as gitapex_post_merge_retro.py's own
       # untrusted-input handling.
       - name: Check ACM disclosure and flag if missing
         env:
@@ -71,5 +71,5 @@ jobs:
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
           set -euo pipefail
-          printf '%s' "$ISSUE_BODY" | python3 .github/scripts/gate_acm_issue_disclosure.py \
+          printf '%s' "$ISSUE_BODY" | python3 .github/scripts/gitapex_gate_acm_issue_disclosure.py \
             --owner tvna --repo gitapex --issue-number "$ISSUE_NUMBER"

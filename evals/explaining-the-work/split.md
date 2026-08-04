@@ -5,7 +5,7 @@ established so `scorer-gated-skill-edits`' precondition gate (a real
 scorer plus a held-out split, both required before any iterative edit to
 this skill's `SKILL.md` is kept) is satisfied. See
 `skills/scorer-gated-skill-edits/SKILL.md` for the gate itself and
-`skills/scorer-gated-skill-edits/scripts/score_contract.py` for the
+`skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py` for the
 scorer, which scores each fixture's `expected.output_contains` /
 `output_not_contains` (and, where used, `output_contains_near`) block
 deterministically. This is the first iteration recorded against this
@@ -64,7 +64,7 @@ Commit-log-rule iteration below): `SKILL.md`'s pre-existing `##
 Precedence` section ("The calling repository's existing deterministic
 gates ... take precedence over this skill") had zero fixture coverage
 before this file existed at all -- `check_precedence_branch_coverage`
-(`.github/scripts/gate_split_fixture_coverage.py`, Check B) only applies
+(`.github/scripts/gitapex_gate_split_fixture_coverage.py`, Check B) only applies
 once a skill has a `split.md`, so this gap was invisible until this
 iteration created one. Same shape as the `merge-retrospective` precedent
 that check's own docstring cites (issue #352/#328).
@@ -131,7 +131,7 @@ a rubric/skill regression):
    distinction in prose while recommending the right trailer -- e.g.
    "...Refs #212 (partial/related)" and "not Closes #340" -- a
    negation-trap false-fail of a correct response, the same class
-   `lint_fixture_assertions.py`'s `check_negation` rule targets for
+   `gitapex_lint_fixture_assertions.py`'s `check_negation` rule targets for
    fixture-vs-corpus authoring but does not catch here (it checks static
    fixture/corpus consistency, not response-time contamination). Fixed
    by dropping the redundant negative ban on both fixtures -- the
@@ -142,7 +142,7 @@ a rubric/skill regression):
 
 Neither fix touched a fixture's scenario/prompt substance (except
 `commit-includes-terse-why.yaml`'s wording narrowing above, applied
-before any score was banked on either side); `lint_fixture_assertions.py`
+before any score was banked on either side); `gitapex_lint_fixture_assertions.py`
 run clean (0 warnings) against the final fixture set.
 
 **Separately observed, unrelated to this edit, not fixed here (out of
@@ -161,7 +161,7 @@ contraction requirement or accept either form).
 One fresh dispatch per (fixture, skill-version) cell -- given the full
 skill text (pinned via `git show HEAD:...` for the old side, the proposed
 text for the new side) plus the fixture's prompt, asked to respond as
-that skill, active -- scored with `score_contract.py --assertions
+that skill, active -- scored with `gitapex_score_contract.py --assertions
 <task.json> --output <run.txt>`. The other four branches (Code body, Test
 code, Code comments, Stop boundaries) are byte-identical old vs. new, so
 no old-skill dispatch was run for fixtures that exercise only those.
@@ -180,7 +180,7 @@ no old-skill dispatch was run for fixtures that exercise only those.
 | `refs-when-partial-work.yaml` | test | -- (unaffected branch) | 1.000000 |
 
 Selection-split mean: before **0.833333**, after **1.000000**.
-`score_contract.py --compare-to 0.833333 --scores <after-selection-scores.txt>`:
+`gitapex_score_contract.py --compare-to 0.833333 --scores <after-selection-scores.txt>`:
 **`1.000000 KEEP`**.
 
 ### Transfer check
@@ -272,7 +272,7 @@ stale fixture-count text are both corrected in this same change.
 
 Same fresh-dispatch-per-cell method as the #599 iteration above (full
 skill text, old side pinned via `git show dc79540:...`, new side the
-candidate; `score_contract.py`).
+candidate; `gitapex_score_contract.py`).
 
 | Fixture | Split | Before (old text) | After (new text) |
 |---|---|---|---|
@@ -284,7 +284,7 @@ candidate; `score_contract.py`).
 
 Selection-split mean: before 1.000000 (already-recorded #599 baseline,
 unaffected by this edit), after 1.000000 -- a **tie**.
-`score_contract.py --compare-to 1.000000 --scores <after-selection-scores.txt>`
+`gitapex_score_contract.py --compare-to 1.000000 --scores <after-selection-scores.txt>`
 would print `1.000000 REJECT` under the strict ordinary gate (a tie is
 rejected, not kept).
 
@@ -303,7 +303,7 @@ fixture in this corpus, existing or newly authored, has any way to
 observe, the same way a broken link or a typo fix would not move a
 behavioral score either. Manufacturing a fixture to force a non-tie for
 a citation-accuracy correction would itself be the kind of construct-
-validity violation `lint_fixture_assertions.py` exists to catch (see
+validity violation `gitapex_lint_fixture_assertions.py` exists to catch (see
 issue #609's own investigation for the reasoning). The corrected prose
 is therefore landed as a documentation-accuracy fix, explicitly outside
 this gate's behavioral jurisdiction, not smuggled through as a false
@@ -447,7 +447,7 @@ correction to what the skill's own prose asserts about its citations and
 their justification, verified against real primary-source fetches this
 session, not a routing-behavior change. Manufacturing a fixture
 specifically to force this correction through the gate would repeat the
-construct-validity violation `lint_fixture_assertions.py` exists to
+construct-validity violation `gitapex_lint_fixture_assertions.py` exists to
 catch (see this iteration's own investigation, and the user's explicit
 instruction this session to investigate primary sources rather than
 leave an unsupported claim in place). The corrected prose is landed as a
@@ -603,11 +603,11 @@ candidate converts the 4 bold bullet lead-ins under `## Routing` into real
 beyond what the heading conversion mechanically requires (dropping a
 now-irrelevant trailing comma/period right after the bold close;
 capitalizing a word that is now sentence-initial in the body paragraph
-that follows). Separately, `.github/scripts/gate_split_fixture_coverage.py`
+that follows). Separately, `.github/scripts/gitapex_gate_split_fixture_coverage.py`
 gains a third check (Check C): every fixture a `split.md`'s declared
 `selection` split names must declare a well-formed `expected.exercises`
 (non-empty list of section labels, mirroring
-`lint_fixture_assertions.py`'s `_is_real_dispatch_declaration` shape
+`gitapex_lint_fixture_assertions.py`'s `_is_real_dispatch_declaration` shape
 validation) matching a real current `###`-level section label in the
 sibling SKILL.md -- closing the specific vacuous-declaration gap issue
 #629 found, without building the rest of the proposed classifier (a
@@ -637,7 +637,7 @@ Both responses contained the same required substrings under both texts
 ("worker pool" / "Closes #401"; "Closes #212"), confirming the restructure
 is behaviorally a no-op for the one branch these 2 fixtures observe, not
 merely assumed from the wording being unchanged. `python3
-evals/scripts/lint_fixture_assertions.py` (full discovery-mode run) is
+evals/scripts/gitapex_lint_fixture_assertions.py` (full discovery-mode run) is
 byte-identical before and after this change, diffed directly against a
 pre-change checkout.
 
@@ -645,7 +645,7 @@ pre-change checkout.
 
 This edit changes no assertion any existing fixture scores against (the
 new `exercises:` field is read only by the new Check C, never by
-`score_contract.score()`), so there is no selection-split mean to compute
+`gitapex_score_contract.score()`), so there is no selection-split mean to compute
 before/after -- the same "no fixture in scope of the strict gate could
 observe this edit at all" situation as the `## Iteration: issue #609
 (continued)` entry above, this time because the branch touched carries no
@@ -672,5 +672,5 @@ wrong.
 **Behavioral gate: N/A (no fixture assertion this edit could move) --
 landed as a structural/tooling fix**, verified via direct real dispatch
 (both selection fixtures score identically old vs. new text) and a
-byte-identical `lint_fixture_assertions.py` full-repo run, per the
+byte-identical `gitapex_lint_fixture_assertions.py` full-repo run, per the
 reasoning above.

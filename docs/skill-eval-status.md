@@ -29,7 +29,7 @@ in aggregate. Concretely, as of issue #106:
   task is sampled 3 times per run rather than once. (waza's docs describe
   bootstrap confidence intervals at trials > 1; that behavior is not verified
   here, since this environment cannot run waza.)
-- `evals/scripts/set_config_model.py` rewrites a suite's `config.model` for a
+- `evals/scripts/gitapex_set_config_model.py` rewrites a suite's `config.model` for a
   given tier (waza 0.38.0 has no `--model` flag), and
   `.github/workflows/waza-eval-matrix.yml` fans that over a model list on
   manual `workflow_dispatch`. It is advisory, never a merge gate.
@@ -57,13 +57,13 @@ point via such an alternative mechanism -- see its own
 A mechanism now exists to confirm, from a live transcript's own tool-call
 trace, that a fresh subagent dispatch actually occurred for a fixture --
 not only that the fixture's final output text matches expected substrings.
-`evals/scripts/check_dispatch_trace.py` (offline `check-transcript`
+`evals/scripts/gitapex_check_dispatch_trace.py` (offline `check-transcript`
 subcommand plus a live `run` orchestrator using the isolated `claude -p`
 recipe from `skills/evaluating-skill-quality/references/
 adversarial-self-audit.md`), a new optional fixture key
 (`expected.requires_fresh_dispatch`), a non-blending
-`score_contract.py --dispatch-trace-verdict` flag, and a new blocking lint
-check in `lint_fixture_assertions.py` (check 9) together close this gap
+`gitapex_score_contract.py --dispatch-trace-verdict` flag, and a new blocking lint
+check in `gitapex_lint_fixture_assertions.py` (check 9) together close this gap
 for `evaluating-skill-quality` and `battle-testing-a-skill`, the two
 skills that disclosed it.
 
