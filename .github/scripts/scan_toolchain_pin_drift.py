@@ -46,11 +46,12 @@ def find_drift(workflows_dir: pathlib.Path = WORKFLOWS_DIR) -> list[tuple[str, i
         try:
             content = workflow.read_text()
         except UnicodeDecodeError as exc:
-            # A workflow file that isn't valid text can't be scanned for
-            # Class B repo references -- skip it with a warning rather than
-            # crashing the whole scan (and losing findings from every other
-            # file) with an unhandled traceback.
-            print(f"warning: skipping {workflow}: {exc}", file=sys.stderr)
+            # Fail closed, not skip: a workflow file that isn't valid text
+            # can't be scanned for Class B repo references, so it cannot be
+            # verified clean -- reported as a finding rather than silently
+            # skipped, since skipping would let a real drift reference hide
+            # behind a decode failure in the same file.
+            findings.append((str(workflow), 0, f"could not decode as UTF-8, cannot verify: {exc}"))
             continue
         for lineno, line in enumerate(content.splitlines(), start=1):
             if any(repo in line for repo in CLASS_B_REPOS):

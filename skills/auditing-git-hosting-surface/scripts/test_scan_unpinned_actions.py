@@ -102,19 +102,34 @@ def test_multiple_files_and_lines_all_reported(tmp_path):
     assert len(sua.find_unpinned_actions(tmp_path)) == 3
 
 
-def test_undecodable_workflow_file_is_skipped_not_crashed(tmp_path, capsys):
+def test_undecodable_workflow_file_is_skipped_not_crashed(tmp_path):
     # Regression: a non-UTF-8 workflow file raised an unhandled
-    # UnicodeDecodeError from workflow.read_text() instead of the intended
-    # graceful skip-with-warning, and clean files in the same directory
-    # must still be scanned.
+    # UnicodeDecodeError from workflow.read_text() instead of being reported
+    # as a finding, and clean files in the same directory must still be
+    # scanned.
     workflows_dir = tmp_path
     workflows_dir.mkdir(exist_ok=True)
     (workflows_dir / "bad.yml").write_bytes(b"\xff\xfe bad")
     _write(workflows_dir, "ok.yml", "      - uses: actions/checkout@v4\n")
     findings = sua.find_unpinned_actions(workflows_dir)
-    assert len(findings) == 1
-    assert findings[0][0].endswith("ok.yml")
-    assert "skipping" in capsys.readouterr().err
+    assert len(findings) == 2
+    paths = {path for path, _, _ in findings}
+    assert any(p.endswith("ok.yml") for p in paths)
+    assert any(p.endswith("bad.yml") for p in paths)
+
+
+def test_undecodable_workflow_file_fails_closed_even_when_it_is_the_only_file(tmp_path):
+    # Dimension 15 (fail-closed on malformed input): a file that cannot be
+    # decoded cannot be verified clean, so it must not scan as if it had no
+    # unpinned actions -- an inability to verify is a finding, not a silent
+    # pass, even when the corrupted file is the only one that would have
+    # carried the real violation.
+    workflows_dir = tmp_path
+    workflows_dir.mkdir(exist_ok=True)
+    (workflows_dir / "bad.yml").write_bytes(b"      - uses: actions/checkout@v4\n\xff\xfe")
+    findings = sua.find_unpinned_actions(workflows_dir)
+    assert findings != []
+    assert findings[0][0].endswith("bad.yml")
 
 
 def test_repository_workflows_are_pin_clean():

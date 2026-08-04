@@ -12,6 +12,13 @@ import io
 
 import gate_provenance_disclosure as gate
 
+
+class _FakeStdin:
+    """Just the surface `main` uses: `sys.stdin.buffer.read()`."""
+
+    def __init__(self, data: bytes) -> None:
+        self.buffer = io.BytesIO(data)
+
 _UNDISCLOSED_NOTE = (
     "The reviewing context had already read the full rubric, so this evaluation "
     "notes the absence of a registered skill invocation and a generic dispatch "
@@ -63,17 +70,26 @@ def test_has_disclosure_marker_requires_non_empty_reason():
 
 
 def test_main_stdin_pass(monkeypatch, capsys):
-    monkeypatch.setattr("sys.stdin", io.StringIO(_CLEAN_NOTE))
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(_CLEAN_NOTE.encode("utf-8")))
     exit_code = gate.main([])
     assert exit_code == 0
     assert "PASS" in capsys.readouterr().out
 
 
 def test_main_stdin_fail(monkeypatch, capsys):
-    monkeypatch.setattr("sys.stdin", io.StringIO(_UNDISCLOSED_NOTE))
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(_UNDISCLOSED_NOTE.encode("utf-8")))
     exit_code = gate.main([])
     assert exit_code == 1
     assert "FAIL" in capsys.readouterr().err
+
+
+def test_main_stdin_undecodable_errors(monkeypatch, capsys):
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(b"\xff\xfe bad"))
+    exit_code = gate.main([])
+    assert exit_code == 1
+    err = capsys.readouterr().err
+    assert "standard input" in err and "not valid UTF-8" in err
+    assert "Traceback" not in err
 
 
 def test_main_body_file_disclosed_passes(tmp_path, capsys):
@@ -95,7 +111,21 @@ def test_main_body_file_undecodable_errors(tmp_path, capsys):
     body.write_bytes(b"\xff\xfe bad")
     exit_code = gate.main(["--body", str(body)])
     assert exit_code == 1
-    assert "error" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert str(body) in err and "not valid UTF-8" in err
+    assert "Traceback" not in err
+
+
+def test_main_diff_added_file_undecodable_errors(tmp_path, capsys):
+    body = tmp_path / "body.md"
+    body.write_text(_CLEAN_NOTE, encoding="utf-8")
+    diff_added = tmp_path / "added.md"
+    diff_added.write_bytes(b"\xff\xfe bad")
+    exit_code = gate.main(["--body", str(body), "--diff-added", str(diff_added)])
+    assert exit_code == 1
+    err = capsys.readouterr().err
+    assert str(diff_added) in err and "not valid UTF-8" in err
+    assert "Traceback" not in err
 
 
 def test_main_diff_added_missing_errors(tmp_path, capsys):

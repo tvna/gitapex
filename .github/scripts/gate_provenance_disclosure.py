@@ -133,18 +133,21 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     sources: list[str] = []
+    reading: str = "standard input"
     try:
         if args.body:
+            reading = args.body
             sources.append(Path(args.body).read_text(encoding="utf-8"))
         elif not args.diff_added:
-            sources.append(sys.stdin.read())
+            sources.append(sys.stdin.buffer.read().decode("utf-8"))
         for diff_path in args.diff_added:
+            reading = diff_path
             sources.append(Path(diff_path).read_text(encoding="utf-8"))
     except FileNotFoundError as error:
         print(f"error: file not found: {error.filename}", file=sys.stderr)
         return 1
     except UnicodeDecodeError as error:
-        print(f"error: could not decode file as UTF-8: {error}", file=sys.stderr)
+        print(f"error: {reading} is not valid UTF-8: {error}", file=sys.stderr)
         return 1
 
     corpus = "\n\n".join(sources)
