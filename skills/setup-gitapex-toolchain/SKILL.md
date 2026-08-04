@@ -8,16 +8,12 @@ compatibility: "Designed for Claude Code cloud (web) sessions; requires python3 
 
 Provisions the toolchain binaries `flake.nix` pins for the Claude Code web
 (ephemeral) surface specifically, where Nix itself is not installed and
-disk caching cannot survive across sessions
-(`docs/superpowers/plans/2026-07-14-toolchain-foundation.md`: "Nix runs
-only in CI... local work uses only curl, sha256sum, python3, and uv").
-`flake.nix`'s `classBData`/`mkClassB` blocks are the single source of
-truth for tool versions, per-system asset names, and SHA256 pins; this
-skill's script parses them at runtime rather than holding its own copy,
-so there is never a second pin table that could silently drift from the
-flake (see `scripts/provision_class_b.py`'s own parser, and
-`.github/scripts/scan_toolchain_pin_drift.py`, which already guards
-against exactly this class of drift for CI workflows).
+disk caching cannot survive across sessions. `flake.nix`'s `classBData`/
+`mkClassB` blocks are the single source of truth for tool versions,
+per-system asset names, and SHA256 pins; this skill's script
+(`scripts/provision_class_b.py`) parses them at runtime rather than
+holding its own copy, so there is never a second pin table that could
+silently drift from the flake.
 
 This skill's own SHA256 verification covers only the **downloaded Class B
 release archives** against `flake.nix`'s pins -- it says nothing about
@@ -32,22 +28,21 @@ checksum or signed-release mechanism for the skill files themselves.
 
 Automatically, via `.claude/hooks/session-start.sh`, only when
 `$CLAUDE_CODE_REMOTE=true` (a Claude Code web session). Persistent
-surfaces (local CLI, CI) continue to use `nix develop .`
-(`.github/workflows/toolchain-nix.yml`) and are not expected to invoke
-this script (nothing in the script itself enforces this -- it is a
-documented convention, not a technical restriction). Claude Code cloud
-environments also support a "setup script" mechanism (configured
-per-environment at claude.ai/code, and benefits from environment caching)
-as an alternative to a SessionStart hook; this skill uses a SessionStart
-hook instead because a setup script is configured in that per-environment
-dialog and cannot be committed to this repository, so it cannot ship as
-part of the checkout the way this skill's hook does.
+surfaces (local CLI, CI) continue to use `nix develop .` and are not
+expected to invoke this script (nothing in the script itself enforces
+this -- it is a documented convention, not a technical restriction).
+Claude Code cloud environments also support a "setup script" mechanism
+(configured per-environment at claude.ai/code, and benefits from
+environment caching) as an alternative to a SessionStart hook; this
+skill uses a SessionStart hook instead because a setup script is
+configured in that per-environment dialog and cannot be committed to
+this repository, so it cannot ship as part of the checkout the way this
+skill's hook does.
 
 ## Preconditions
 
-- `python3 >= 3.12` (matches this repository's `pyproject.toml`
-  `requires-python` floor; `extract_wrapper_dir`'s tar extraction path
-  relies on `filter="data"`, PEP 706, stdlib only since 3.12).
+- `python3 >= 3.12` (`extract_wrapper_dir`'s tar extraction path relies
+  on `filter="data"`, PEP 706, stdlib only since 3.12).
 - `provision_class_b.py` is stdlib-only -- no `pip install` or `uv sync`
   needed to run it directly.
 - Outbound network access to `github.com` release assets, and whatever
