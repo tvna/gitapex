@@ -219,8 +219,19 @@ def current_nix_system() -> str:
 
 # --- Task 3: download + SHA256 verification ---------------------------------
 
+# Too short risks aborting a slow-but-healthy GitHub release-asset download
+# before it finishes; too long lets one hung connection stall the whole
+# provisioning run instead of failing fast into a retry.
 _HTTP_TIMEOUT_SECONDS = 30
+# Too few gives up on a transient blip (one dropped connection) a retry
+# would have recovered from; too many multiplies the worst-case wall-clock
+# delay (each attempt adds its own backoff) for an asset that was never
+# going to succeed.
 _MAX_ATTEMPTS = 3
+# Too small barely spaces retries apart, hammering a rate-limited or still-
+# recovering endpoint; too large makes a session wait needlessly long
+# before the next attempt when the first failure was already transient and
+# likely to clear quickly.
 _RETRY_BASE_DELAY_SECONDS = 2.0
 
 
@@ -346,8 +357,8 @@ def _validate_top_level_dir(names: list[str], asset_name: str, libexec_dir: Path
     already-installed tool) into libexec_dir, and crash with a raw OSError
     once it reaches libexec_dir itself (renaming a directory into its own
     subdirectory). Reproduced empirically against a real hostile zip
-    archive before this check existed; see the security-review fix report
-    for the transcript.
+    archive before this check existed; see
+    https://github.com/tvna/gitapex/issues/706 for the fix.
 
     Must be called BEFORE the caller's own extractall -- rejecting a
     hostile archive here means no file is ever written for it, not just
@@ -462,6 +473,13 @@ class InstallReceipt:
     version: str
     sha256_sri: str
     asset: str
+    # SHA256 (SRI format) of the actual installed entry-point executable's
+    # bytes -- see _entry_point_path -- not the downloaded archive and not
+    # (for wrapperDir) the whole _internal/ support tree. Re-verified by
+    # _is_already_installed on every "skip?" check so a stale receipt can
+    # never vouch for a binary that has since been corrupted or tampered
+    # with on disk.
+    installed_sha256: str
 
 
 def _receipt_path(cache_root: Path, pname: str) -> Path:
@@ -473,8 +491,13 @@ def _read_receipt(cache_root: Path, pname: str) -> InstallReceipt | None:
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
         return InstallReceipt(
-            pname=raw["pname"], version=raw["version"], sha256_sri=raw["sha256_sri"], asset=raw["asset"]
+            pname=raw["pname"], version=raw["version"], sha256_sri=raw["sha256_sri"], asset=raw["asset"],
+            installed_sha256=raw["installed_sha256"],
         )
+    # KeyError also covers an old receipt written before installed_sha256
+    # existed: treated as "no receipt" (same as any other malformed
+    # receipt), which forces exactly one reinstall to backfill the new
+    # field -- no separate migration code needed.
     except (FileNotFoundError, json.JSONDecodeError, KeyError, TypeError):
         return None
 
@@ -484,7 +507,13 @@ def _write_receipt(cache_root: Path, receipt: InstallReceipt) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps(
-            {"pname": receipt.pname, "version": receipt.version, "sha256_sri": receipt.sha256_sri, "asset": receipt.asset}
+            {
+                "pname": receipt.pname,
+                "version": receipt.version,
+                "sha256_sri": receipt.sha256_sri,
+                "asset": receipt.asset,
+                "installed_sha256": receipt.installed_sha256,
+            }
         ),
         encoding="utf-8",
     )
@@ -494,6 +523,20 @@ def _installed_bin_path(cache_root: Path, pname: str) -> Path:
     return cache_root / "bin" / pname
 
 
+def _entry_point_path(cache_root: Path, spec: ClassBToolSpec, pin: ClassBSystemPin) -> Path:
+    """The actual entry-point executable a --version/apm-install invocation
+    runs -- bin_path itself for a `binary`-kind tool, or the real
+    PyInstaller launcher inside libexec/ for a `wrapperDir`-kind tool
+    (never bin_shim, the tiny generated `exec` wrapper script regenerated
+    from scratch on every install, which proves nothing about the
+    underlying tree). Shared by provision_tool (to compute the receipt's
+    installed_sha256) and _is_already_installed (to re-verify it), so both
+    sides of the trust boundary agree on exactly which file is meant."""
+    if spec.kind == "wrapperDir":
+        return cache_root / "libexec" / spec.pname / pin.bin_in_archive
+    return _installed_bin_path(cache_root, spec.pname)
+
+
 def _is_already_installed(cache_root: Path, spec: ClassBToolSpec, system: str) -> bool:
     receipt = _read_receipt(cache_root, spec.pname)
     if receipt is None:
@@ -501,11 +544,48 @@ def _is_already_installed(cache_root: Path, spec: ClassBToolSpec, system: str) -
     pin = spec.systems[system]
     if receipt.sha256_sri != pin.sha256_sri or receipt.asset != pin.asset:
         return False
-    return _installed_bin_path(cache_root, spec.pname).exists()
+    if not _installed_bin_path(cache_root, spec.pname).exists():
+        return False
+    # Re-verify the entry-point executable's CURRENT on-disk bytes against
+    # the receipt, not just its existence: a receipt whose sha256_sri/asset
+    # still match the current pin says only that this tool was correctly
+    # installed at some point in the past, not that the file on disk right
+    # now is still that same, untampered file -- a partial write, disk
+    # fault, or tampering between provisioning and this later check would
+    # otherwise be silently trusted and then executed (including by `apm
+    # install`, which runs the apm binary directly as a subprocess).
+    # Deliberately scoped to this ONE entry-point file's hash, not a
+    # recursive tree hash, bounding the check to the highest-value
+    # tampering target (the file actually executed) without adding a
+    # full-tree-walk cost to the hot "skip, already installed" path that
+    # runs on every session start.
+    entry_point = _entry_point_path(cache_root, spec, pin)
+    if not entry_point.exists():
+        return False
+    return sha256_sri(entry_point.read_bytes()) == receipt.installed_sha256
 
 
 class VerifyError(RuntimeError):
     """A just-installed binary failed its `<tool> --version` smoke test."""
+
+
+# A real `--version` line is always short; a much longer value is itself a
+# signal something is wrong, not legitimate content to render in full.
+_MAX_VERSION_OUTPUT_DISPLAY_CHARS = 200
+
+
+def _sanitize_for_display(text: str) -> str:
+    """Strip terminal control/escape sequences from third-party --version
+    output before it is stored or printed. This is raw subprocess stdout
+    from running a just-installed third-party binary with --version --
+    control/escape bytes in it would be interpreted verbatim by whatever
+    displays this script's output, so nothing here trusts it unsanitized.
+    str.isprintable() already treats plain space (0x20) as printable, so
+    no separate space-preserving case is needed alongside it."""
+    cleaned = "".join(char for char in text if char.isprintable())
+    if len(cleaned) > _MAX_VERSION_OUTPUT_DISPLAY_CHARS:
+        return cleaned[:_MAX_VERSION_OUTPUT_DISPLAY_CHARS] + "...[truncated]"
+    return cleaned
 
 
 @dataclass(frozen=True)
@@ -554,6 +634,8 @@ def provision_tool(
     else:
         raise ExtractionError(f"{spec.pname}: unknown kind {spec.kind!r}")
 
+    entry_point = _entry_point_path(cache_root, spec, pin)
+
     # No suppression comment needed here (confirmed empirically: adding one
     # for S603 gets flagged as an unused suppression by this repo's pinned
     # ruff). S603 (subprocess call: check for untrusted input) matches
@@ -565,8 +647,21 @@ def provision_tool(
     if proc.returncode != 0:
         raise VerifyError(f"{spec.pname}: `{bin_path} --version` exited {proc.returncode}: {proc.stderr}")
 
-    _write_receipt(cache_root, InstallReceipt(pname=spec.pname, version=spec.version, sha256_sri=pin.sha256_sri, asset=pin.asset))
-    return ProvisionResult(pname=spec.pname, status="installed", version_output=proc.stdout.strip())
+    # Hash only the entry-point executable actually run (see
+    # _is_already_installed's own comment for why this is deliberately
+    # scoped to one file, not a full-tree hash). Computed only after the
+    # --version smoke test above has already passed, matching this
+    # function's existing fail-closed shape: no receipt (with or without
+    # this field) is ever written for a tool that didn't verify cleanly.
+    installed_sha256 = sha256_sri(entry_point.read_bytes())
+    _write_receipt(
+        cache_root,
+        InstallReceipt(
+            pname=spec.pname, version=spec.version, sha256_sri=pin.sha256_sri, asset=pin.asset,
+            installed_sha256=installed_sha256,
+        ),
+    )
+    return ProvisionResult(pname=spec.pname, status="installed", version_output=_sanitize_for_display(proc.stdout.strip()))
 
 
 def provision_all(
@@ -600,10 +695,11 @@ def provision_all(
 
 
 class ApmInstallError(RuntimeError):
-    """`apm install` exited non-zero. #690's own criterion: the requester
-    confirmed reliance on apm's own cache-hit behavior rather than custom
-    skip logic here -- this function always invokes install and lets apm
-    decide what, if anything, there is to do."""
+    """`apm install` exited non-zero. Per the criterion from
+    https://github.com/tvna/gitapex/issues/690: the requester confirmed
+    reliance on apm's own cache-hit behavior rather than custom skip logic
+    here -- this function always invokes install and lets apm decide what,
+    if anything, there is to do."""
 
 
 def run_apm_install(
@@ -621,6 +717,12 @@ def run_apm_install(
     # as an unused directive by this repo's pinned ruff. apm_binary is this
     # same run's own just-downloaded, hash-verified path regardless, never
     # attacker-controlled input.
+    #
+    # Longer budget than _HTTP_TIMEOUT_SECONDS: apm install deploys
+    # multiple skill packages over the network in one invocation, unlike a
+    # single HTTP GET -- too short would abort a healthy multi-package
+    # install still in progress; too long lets a genuinely hung apm
+    # process stall the whole session-start hook.
     result = runner(
         [str(apm_binary), "install"], cwd=str(project_dir), capture_output=True, text=True, timeout=120, check=False
     )
@@ -687,9 +789,28 @@ def main(argv: list[str] | None = None) -> int:
 
     project_dir: Path = args.project_dir
     flake_path: Path = args.flake_path or (project_dir / "flake.nix")
-    system: str = args.system or current_nix_system()
     cache_root: Path = args.cache_root
     only = tuple(args.tools) if args.tools else None
+
+    # Kept as its own try/except, separate from load_flake_class_b_pins'
+    # below, so a system-detection failure reports its own accurate
+    # message rather than the misleading "could not load Class B pins"
+    # text -- these are two different failure classes with two different
+    # causes (an exotic uname pair vs. a malformed/missing flake.nix).
+    if args.system:
+        system = args.system
+    else:
+        try:
+            system = current_nix_system()
+        # current_nix_system() raises UnsupportedSystemError (a
+        # RuntimeError subclass) for an exotic uname pair (e.g. native
+        # Windows, an unrecognized arch) this script has no Class B pins
+        # for. Pre-fix, this call sat above main()'s only try/except, so
+        # this exception crashed main() with a raw traceback instead of a
+        # clean FAIL: line and non-zero exit.
+        except UnsupportedSystemError as error:
+            print(f"FAIL: could not detect a supported Nix system: {error}", file=sys.stderr)
+            return 1
 
     try:
         specs = load_flake_class_b_pins(flake_path)
@@ -730,7 +851,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"FAIL: {pname}: --version exited {proc.returncode}")
                 failures += 1
             else:
-                print(f"PASS: {pname}: {proc.stdout.strip()}")
+                print(f"PASS: {pname}: {_sanitize_for_display(proc.stdout.strip())}")
         return 1 if failures else 0
 
     results = provision_all(specs, system, cache_root, only=only)

@@ -573,6 +573,78 @@ def test_provision_tool_reinstalls_when_installed_binary_was_manually_deleted(tm
     assert (tmp_path / "bin" / "apm").exists()
 
 
+def test_provision_tool_reinstalls_binary_kind_when_installed_bytes_are_corrupted(tmp_path: Path) -> None:
+    """A2 fix (trust-boundary gap): a receipt whose sha256_sri/asset match
+    the current pin and whose binary file merely exists is not sufficient
+    on its own -- the on-disk bytes must still match what this script
+    actually installed. A binary corrupted or modified on disk between
+    provisioning and a later 'skip' check (partial write, disk fault,
+    tampering) must not be silently trusted and then executed -- including
+    by `apm install`, which runs the apm binary directly as a subprocess."""
+    flake_text = (REPO_ROOT / "flake.nix").read_text(encoding="utf-8")
+    waza_spec = pcb.parse_flake_class_b_pins(flake_text)["waza"]
+    data = _make_tar_gz_bytes({"waza-linux-amd64": b"#!/bin/sh\necho fake-waza\n"})
+    pin = pcb.ClassBSystemPin(
+        asset="waza-linux-amd64.tar.gz", sha256_sri=pcb.sha256_sri(data), bin_in_archive="waza-linux-amd64"
+    )
+    fake_spec = pcb.ClassBToolSpec(
+        pname="waza", version="1", kind="binary", owner=waza_spec.owner, repo=waza_spec.repo, tag=waza_spec.tag,
+        systems={"x86_64-linux": pin},
+    )
+
+    result1 = pcb.provision_tool(
+        fake_spec, "x86_64-linux", tmp_path, opener=lambda r: _FakeResponse(200, data), sleeper=lambda _s: None,
+        runner=_fake_runner_success,
+    )
+    assert result1.status == "installed"
+
+    bin_path = tmp_path / "bin" / "waza"
+    bin_path.write_bytes(b"corrupted-not-the-real-binary")
+
+    result2 = pcb.provision_tool(
+        fake_spec, "x86_64-linux", tmp_path, opener=lambda r: _FakeResponse(200, data), sleeper=lambda _s: None,
+        runner=_fake_runner_success,
+    )
+    assert result2.status == "installed"  # not "skipped" -- corruption must force a reinstall
+    assert bin_path.read_bytes() == b"#!/bin/sh\necho fake-waza\n"
+
+
+def test_provision_tool_reinstalls_wrapper_dir_kind_when_installed_bytes_are_corrupted(tmp_path: Path) -> None:
+    """Same as above, for wrapperDir: the entry-point hash must cover
+    libexec/<pname>/<bin_in_archive> (the real PyInstaller launcher binary
+    actually executed), not bin_shim (the tiny generated `exec` wrapper
+    that's regenerated from scratch on every install and proves nothing
+    about the underlying tree)."""
+    spec = _real_apm_spec()
+    data = _make_tar_gz_bytes(
+        {"apm-linux-x86_64/apm": b"#!/bin/sh\necho fake-apm\n", "apm-linux-x86_64/_internal/x": b"y"}
+    )
+    pin = pcb.ClassBSystemPin(asset="apm.tar.gz", sha256_sri=pcb.sha256_sri(data), bin_in_archive="apm")
+    fake_spec = pcb.ClassBToolSpec(
+        pname="apm", version="0.25.0", kind="wrapperDir", owner=spec.owner, repo=spec.repo, tag=spec.tag,
+        systems={"x86_64-linux": pin},
+    )
+
+    result1 = pcb.provision_tool(
+        fake_spec, "x86_64-linux", tmp_path, opener=lambda r: _FakeResponse(200, data), sleeper=lambda _s: None,
+        runner=_fake_runner_success,
+    )
+    assert result1.status == "installed"
+
+    real_bin = tmp_path / "libexec" / "apm" / "apm"
+    real_bin.write_bytes(b"corrupted-not-the-real-binary")
+
+    result2 = pcb.provision_tool(
+        fake_spec, "x86_64-linux", tmp_path, opener=lambda r: _FakeResponse(200, data), sleeper=lambda _s: None,
+        runner=_fake_runner_success,
+    )
+    assert result2.status == "installed"
+    assert real_bin.read_bytes() == b"#!/bin/sh\necho fake-apm\n"
+    # bin_shim (the exec wrapper) must also have been regenerated correctly
+    # as part of the reinstall, not merely the libexec tree.
+    assert (tmp_path / "bin" / "apm").read_text().startswith("#!/bin/sh")
+
+
 def test_provision_tool_force_reinstalls_even_when_already_installed(tmp_path: Path) -> None:
     spec = _real_apm_spec()
     data = _make_tar_gz_bytes({"apm-linux-x86_64/apm": b"binary-content", "apm-linux-x86_64/_internal/x": b"y"})
@@ -591,6 +663,48 @@ def test_provision_tool_force_reinstalls_even_when_already_installed(tmp_path: P
     result = pcb.provision_tool(fake_spec, "x86_64-linux", tmp_path, opener=opener, sleeper=lambda _s: None, runner=_fake_runner_success, force=True)
     assert result.status == "installed"
     assert calls["n"] == 2  # force bypasses the receipt-based skip entirely
+
+
+def test_sanitize_for_display_strips_control_chars_and_truncates() -> None:
+    """A3 fix (unit-level): non-printable characters (terminal control/
+    escape sequences) are stripped, and output is capped to a bounded
+    length with a truncation marker -- a real `--version` line is always
+    short, so much longer output is itself a signal something is wrong,
+    not legitimate content to render in full."""
+    assert pcb._sanitize_for_display("\x1b[31mfake-version\x1b[0m\x07") == "[31mfake-version[0m"
+    long_text = "v" * 250
+    truncated = pcb._sanitize_for_display(long_text)
+    assert truncated == ("v" * 200) + "...[truncated]"
+
+
+def test_provision_tool_sanitizes_control_characters_in_version_output(tmp_path: Path) -> None:
+    """A3 fix (integration): ProvisionResult.version_output is raw,
+    untrusted subprocess stdout from running a just-installed third-party
+    binary with --version; terminal control/escape sequences in it would be
+    interpreted verbatim by whatever displays this script's output."""
+    spec = _real_apm_spec()
+    data = _make_tar_gz_bytes({"apm-linux-x86_64/apm": b"binary-content", "apm-linux-x86_64/_internal/x": b"y"})
+    pin = pcb.ClassBSystemPin(asset="apm.tar.gz", sha256_sri=pcb.sha256_sri(data), bin_in_archive="apm")
+    fake_spec = pcb.ClassBToolSpec(
+        pname="apm", version="0.25.0", kind="wrapperDir", owner=spec.owner, repo=spec.repo, tag=spec.tag,
+        systems={"x86_64-linux": pin},
+    )
+
+    def runner_with_escape_codes(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            args=("fake",), returncode=0, stdout="\x1b[31mfake-version\x1b[0m\x07", stderr=""
+        )
+
+    result = pcb.provision_tool(
+        fake_spec, "x86_64-linux", tmp_path, opener=lambda r: _FakeResponse(200, data), sleeper=lambda _s: None,
+        runner=runner_with_escape_codes,
+    )
+
+    assert result.status == "installed"
+    assert result.version_output is not None
+    assert "\x1b" not in result.version_output
+    assert "\x07" not in result.version_output
+    assert all(char.isprintable() for char in result.version_output)
 
 
 def test_provision_tool_does_not_write_receipt_when_verify_fails(tmp_path: Path) -> None:
@@ -827,6 +941,32 @@ def test_main_verify_mode_reports_missing_binaries_without_network(tmp_path: Pat
     assert exit_code == 1  # nothing installed yet in this empty tmp_path cache
 
 
+def test_main_reports_clean_failure_on_unsupported_system(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A1 fix: current_nix_system() can raise UnsupportedSystemError for an
+    exotic uname pair (native Windows, an unrecognized arch) this script has
+    no Class B pins for. Pre-fix, ``system: str = args.system or
+    current_nix_system()`` sat above main()'s only try/except (which caught
+    just (FlakePinParseError, OSError) around load_flake_class_b_pins), so
+    this exception crashed main() with a raw traceback instead of the
+    documented clean FAIL: line and non-zero exit. No --system flag is
+    passed here, so main() must call current_nix_system() itself for this
+    to actually exercise the fix rather than bypass it entirely."""
+    monkeypatch.delenv("CLAUDE_ENV_FILE", raising=False)
+    monkeypatch.setattr(
+        pcb,
+        "current_nix_system",
+        lambda: (_ for _ in ()).throw(pcb.UnsupportedSystemError("boom")),
+    )
+
+    exit_code = pcb.main(
+        [
+            "--project-dir", str(REPO_ROOT),
+            "--cache-root", str(tmp_path),
+        ]
+    )
+    assert exit_code == 1
+
+
 def test_main_skip_apm_install_flag_prevents_apm_install_call(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("CLAUDE_ENV_FILE", raising=False)
     fake_result = {"apm": pcb.ProvisionResult(pname="apm", status="installed", version_output="0.25.0")}
@@ -905,6 +1045,30 @@ def test_main_verify_mode_reports_failing_version_check(
     assert exit_code == 1
     out = capsys.readouterr().out
     assert "FAIL: waza: --version exited 1" in out
+
+
+def test_main_verify_mode_sanitizes_version_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A3 fix, --verify branch: its own PASS: line must sanitize --version
+    output the same way provision_tool's ProvisionResult.version_output
+    does -- both are raw third-party subprocess stdout."""
+    monkeypatch.delenv("CLAUDE_ENV_FILE", raising=False)
+    _write_version_script(tmp_path / "bin" / "waza", "\x1b[31mfake-version\x1b[0m", 0)
+
+    exit_code = pcb.main(
+        [
+            "--project-dir", str(REPO_ROOT),
+            "--cache-root", str(tmp_path),
+            "--system", "x86_64-linux",
+            "--tool", "waza",
+            "--verify",
+        ]
+    )
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert "\x1b" not in out
+    assert "PASS: waza:" in out
 
 
 def test_main_apm_provisioning_failure_skips_apm_install(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
