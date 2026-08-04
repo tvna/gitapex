@@ -470,6 +470,17 @@ def test_load_sidecar_raises_on_pathologically_deep_nesting(tmp_path: pathlib.Pa
         scanner.load_sidecar(path)
 
 
+def test_load_schema_raises_on_non_utf8(tmp_path: pathlib.Path) -> None:
+    # exception-handler-gaps CI gate finding: _load_schema's read_text()
+    # call caught OSError but not UnicodeDecodeError, unlike load_sidecar's
+    # own equivalent read -- a non-UTF-8 schema file would have crashed with
+    # an uncaught traceback instead of a clean SidecarReadError.
+    path = tmp_path / "schema.json"
+    path.write_bytes(b"\xff\xfe\x00\x01")
+    with pytest.raises(scanner.SidecarReadError):
+        scanner._load_schema(path)
+
+
 # ---- _is_bare_skill_name / path-traversal defenses (adversarial review) ----
 #
 # (skills_dir / entry).is_dir() alone does not defend against an absolute

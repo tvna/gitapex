@@ -125,6 +125,8 @@ def _load_schema(schema_path: pathlib.Path) -> dict[str, Any]:
         text = schema_path.read_text(encoding="utf-8")
     except OSError as error:
         raise SidecarReadError(f"{schema_path}: cannot be read: {error}") from error
+    except UnicodeDecodeError as error:
+        raise SidecarReadError(f"{schema_path}: is not valid UTF-8: {error}") from error
     try:
         parsed: dict[str, Any] = json.loads(text)
     except json.JSONDecodeError as error:
