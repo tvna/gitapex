@@ -4,7 +4,7 @@ Two lanes, mirroring `evaluating-skill-quality`'s own split:
 
 - **Deterministic-shape checks** (1-6) -- fixed rules; a script could
   grade these mechanically if one existed for the target's own tooling.
-  `scripts/check_gate_shape.py` now mechanically grades dimensions 1, 2,
+  `scripts/gitapex_check_gate_shape.py` now mechanically grades dimensions 1, 2,
   4, 5, and 6 (dimension 3 as a disclosed heuristic only, never a hard
   fail) for Domain 2 (agent-harness hook subprocess) targets -- see that
   script's own module docstring for exactly which sub-checks it runs and

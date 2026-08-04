@@ -42,7 +42,7 @@
       "id": "bash-cli-write-and-install-guard",
       "kind": "script",
       "script": "hooks/check-bash-safety.sh",
-      "rule": "Denies a Bash call matching a package/plugin-install verb; denies gh issue/gh pr write subcommands and gh api writes (POST/PUT/PATCH/DELETE, a field flag, or 'mutation' in gh api graphql); on git push, runs skills/outward-artifact-preflight/scripts/scan_provenance.py against the outgoing commit range and warns (never blocks) if it flags something.",
+      "rule": "Denies a Bash call matching a package/plugin-install verb; denies gh issue/gh pr write subcommands and gh api writes (POST/PUT/PATCH/DELETE, a field flag, or 'mutation' in gh api graphql); on git push, runs skills/outward-artifact-preflight/scripts/gitapex_scan_provenance.py against the outgoing commit range and warns (never blocks) if it flags something.",
       "planes": ["pretooluse"],
       "trigger": "PreToolUse matcher Bash (hooks/hooks.json)",
       "policy_refs": [],
@@ -69,8 +69,8 @@
       "kind": "script",
       "script": [
         "hooks/check-issue-acm-disclosure.sh",
-        "hooks/check_acm_present_or_waiver.py",
-        ".github/scripts/gate_acm_issue_disclosure.py"
+        "hooks/gitapex_check_acm_present_or_waiver.py",
+        ".github/scripts/gitapex_gate_acm_issue_disclosure.py"
       ],
       "rule": "Requires a new GitHub issue's body (method==\"create\" only) to contain an ACM table header or an explicit 'ACM: not-applicable (chore|docs|tracking|defect): <reason>' waiver; the CI twin re-checks on issues opened/edited and labels+comments (non-blocking).",
       "planes": ["pretooluse", "ci"],
@@ -99,11 +99,11 @@
       "kind": "script",
       "script": [
         "hooks/check-pr-skill-audit-disclosure.sh",
-        "hooks/check_skill_audit_disclosure_or_waiver.py",
-        ".github/scripts/gate_skill_audit_disclosure.py",
-        ".github/scripts/skill_description_diff.py",
-        ".github/scripts/skill_security_relevance.py",
-        ".github/scripts/detect_changed_gate_scripts.py",
+        "hooks/gitapex_check_skill_audit_disclosure_or_waiver.py",
+        ".github/scripts/gitapex_gate_skill_audit_disclosure.py",
+        ".github/scripts/gitapex_skill_description_diff.py",
+        ".github/scripts/gitapex_skill_security_relevance.py",
+        ".github/scripts/gitapex_detect_changed_gate_scripts.py",
         ".github/workflows/skill-audit-gate.yml",
         "hooks/hooks.json"
       ],
@@ -121,8 +121,8 @@
       "kind": "script",
       "script": [
         "hooks/check-pr-issue-acm-disclosure.sh",
-        "hooks/check_pr_issue_acm_disclosure.py",
-        "hooks/check_acm_present_or_waiver.py"
+        "hooks/gitapex_check_pr_issue_acm_disclosure.py",
+        "hooks/gitapex_check_acm_present_or_waiver.py"
       ],
       "rule": "Denies mcp__github__create_pull_request when the PR title/body cites no issue at all, or when any Closes/Fixes-cited issue lacks both an ACM table and a valid waiver, carries a 'tracking' waiver, or is already closed; fails closed on a missing GH_TOKEN/GITHUB_TOKEN or an unfetchable issue.",
       "planes": ["pretooluse"],
@@ -136,7 +136,7 @@
     {
       "id": "gitignore-pattern-test-coverage",
       "kind": "script",
-      "script": ".github/scripts/gate_gitignore_pattern_coverage.py",
+      "script": ".github/scripts/gitapex_gate_gitignore_pattern_coverage.py",
       "rule": "Every .gitignore line added in a PR diff must have its de-negated/de-slashed core text referenced, as a whole token, by some file under tests/.",
       "planes": ["ci"],
       "trigger": ".github/workflows/gitignore-pattern-coverage-gate.yml on pull_request",
@@ -150,8 +150,8 @@
       "id": "provenance-disclosure",
       "kind": "script",
       "script": [
-        ".github/scripts/gate_provenance_disclosure.py",
-        ".github/scripts/extract_diff_added_lines.py"
+        ".github/scripts/gitapex_gate_provenance_disclosure.py",
+        ".github/scripts/gitapex_extract_diff_added_lines.py"
       ],
       "rule": "Flags a paragraph (PR body, or diff-added docs/evals/skills Markdown) combining a capability-limitation cue with a tool-fingerprint cue absent an explicit 'tool-fingerprint-disclosure: WAIVED: <reason>' line.",
       "planes": ["ci"],
@@ -165,7 +165,7 @@
     {
       "id": "retro-title-convention-citation",
       "kind": "script",
-      "script": ".github/scripts/gate_retro_title_convention_citation.py",
+      "script": ".github/scripts/gitapex_gate_retro_title_convention_citation.py",
       "rule": "Any changed skills/**/*.md or docs/**/*.md paragraph asserting a title/identity string is this repo's own/established convention must cite a real #N issue.",
       "planes": ["ci"],
       "trigger": ".github/workflows/retro-title-convention-citation-gate.yml on pull_request",
@@ -178,7 +178,7 @@
     {
       "id": "routine-scope-enforcement",
       "kind": "script",
-      "script": ".github/scripts/gate_routine_scope_enforcement.py",
+      "script": ".github/scripts/gitapex_gate_routine_scope_enforcement.py",
       "rule": "A docs/superpowers/specs/*routine*.md doc naming a skill whose metadata/gitapex.yaml declares capabilityAssumption: Broad must also cite a concrete scoping mechanism.",
       "planes": ["ci"],
       "trigger": ".github/workflows/routine-scope-enforcement-gate.yml on pull_request",
@@ -191,7 +191,7 @@
     {
       "id": "skill-rename-lifecycle",
       "kind": "script",
-      "script": ".github/scripts/gate_skill_rename_lifecycle.py",
+      "script": ".github/scripts/gitapex_gate_skill_rename_lifecycle.py",
       "rule": "Any skills/ directory name removed in a diff (while at least one is added) must appear as some surviving skill's spec.lifecycle.renamedFrom value.",
       "planes": ["ci"],
       "trigger": ".github/workflows/skill-rename-lifecycle-gate.yml on pull_request",
@@ -204,7 +204,7 @@
     {
       "id": "skill-branch-fixture-coverage",
       "kind": "script",
-      "script": ".github/scripts/gate_skill_branch_fixture_coverage.py",
+      "script": ".github/scripts/gitapex_gate_skill_branch_fixture_coverage.py",
       "rule": "If a changed SKILL.md increases its own count of Stop-boundary bullets plus named dispatch branches, evals/<skill>/tasks/*.yaml must gain at least that many new fixtures.",
       "planes": ["ci"],
       "trigger": ".github/workflows/skill-branch-fixture-coverage-gate.yml on pull_request",
@@ -217,7 +217,7 @@
     {
       "id": "split-fixture-coverage",
       "kind": "script",
-      "script": ".github/scripts/gate_split_fixture_coverage.py",
+      "script": ".github/scripts/gitapex_gate_split_fixture_coverage.py",
       "rule": "A changed split.md's gate-result table Fixture column must be a superset of its own declared selection list; a changed SKILL.md precedence sentence needs a matching fixture-pair row in split.md's Equivalence classes table.",
       "planes": ["ci"],
       "trigger": ".github/workflows/split-fixture-coverage-gate.yml on pull_request",
@@ -230,7 +230,7 @@
     {
       "id": "transfer-check-disclosure",
       "kind": "script",
-      "script": ".github/scripts/gate_transfer_check_disclosure.py",
+      "script": ".github/scripts/gitapex_gate_transfer_check_disclosure.py",
       "rule": "Every newly-added '**Iteration:' entry under a '## Kept-edit log' in evals/*/split.md must contain a Transfer check line.",
       "planes": ["ci"],
       "trigger": ".github/workflows/transfer-check-disclosure-gate.yml on pull_request",
@@ -243,10 +243,10 @@
     {
       "id": "skill-metadata-schema-drift",
       "kind": "script",
-      "script": ".github/scripts/scan_skill_metadata_schema.py",
+      "script": ".github/scripts/gitapex_scan_skill_metadata_schema.py",
       "rule": "Every skills/*/metadata/gitapex.yaml sidecar must validate against .gitapex/skill-metadata.schema.json (JSON Schema draft 2020-12) and resolve its cross-file references: metadata.name matches its own skill directory name, spec.skillDependencies/spec.lifecycle.deprecated.replacement each resolve to a real sibling skill directory (one with its own SKILL.md), and the repo-wide spec.skillDependencies.requires graph is acyclic.",
       "planes": ["ci"],
-      "trigger": "tests/test_scan_skill_metadata_schema.py inside the pytest step of .github/workflows/test.yml",
+      "trigger": "tests/test_gitapex_scan_skill_metadata_schema.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": ["skill-metadata-sidecar"],
       "cluster": "skill-lifecycle",
       "tracking_issue": 745,
@@ -256,7 +256,7 @@
     {
       "id": "evals-scripts-coverage-floor",
       "kind": "script",
-      "script": ".github/scripts/gate_evals_scripts_coverage.py",
+      "script": ".github/scripts/gitapex_gate_evals_scripts_coverage.py",
       "rule": "Every file under each of pyproject.toml's [tool.coverage.run] source directories must meet a minimum per-file coverage percentage, read from coverage.json.",
       "planes": ["ci"],
       "trigger": "pytest step inside .github/workflows/test.yml",
@@ -269,10 +269,10 @@
     {
       "id": "apm-manifest-drift",
       "kind": "script",
-      "script": ".github/scripts/scan_apm_manifest_drift.py",
+      "script": ".github/scripts/gitapex_scan_apm_manifest_drift.py",
       "rule": "apm.yml's name/version must equal .claude-plugin/plugin.json's (plugin.json is authoritative); raises if either manifest is missing a mirrored field.",
       "planes": ["ci"],
-      "trigger": "tests/test_scan_apm_manifest_drift.py inside the pytest step of .github/workflows/test.yml",
+      "trigger": "tests/test_gitapex_scan_apm_manifest_drift.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": ["plugin-manifest"],
       "cluster": "supply-chain",
       "tracking_issue": 234,
@@ -282,10 +282,10 @@
     {
       "id": "toolchain-pin-drift",
       "kind": "script",
-      "script": ".github/scripts/scan_toolchain_pin_drift.py",
+      "script": ".github/scripts/gitapex_scan_toolchain_pin_drift.py",
       "rule": "No .github/workflows/*.yml/.yaml may reference a flake-owned Class B tool's (microsoft/waza, microsoft/apm, rtk-ai/rtk, betterleaks/betterleaks) upstream repo in an install context -- they must come from flake.nix only.",
       "planes": ["ci"],
-      "trigger": "tests/test_scan_toolchain_pin_drift.py inside the pytest step of .github/workflows/test.yml",
+      "trigger": "tests/test_gitapex_scan_toolchain_pin_drift.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
       "cluster": "supply-chain",
       "tracking_issue": 57,
@@ -295,10 +295,10 @@
     {
       "id": "owasp-asi-mapping-completeness",
       "kind": "script",
-      "script": ".github/scripts/gate_owasp_asi_mapping.py",
+      "script": ".github/scripts/gitapex_gate_owasp_asi_mapping.py",
       "rule": "docs/security-control-inventory.md's ASI section must have exactly one row per ASI01-ASI10, each with a status in {covered, partially covered, not covered, not applicable} and a rationale prefixed by exactly one of [deny]/[require_approval]/[allow].",
       "planes": ["ci"],
-      "trigger": "tests/test_gate_owasp_asi_mapping.py inside the pytest step of .github/workflows/test.yml",
+      "trigger": "tests/test_gitapex_gate_owasp_asi_mapping.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
       "cluster": "self-governance",
       "tracking_issue": 144,
@@ -308,10 +308,10 @@
     {
       "id": "owasp-llm-mapping-completeness",
       "kind": "script",
-      "script": ".github/scripts/gate_owasp_llm_mapping.py",
+      "script": ".github/scripts/gitapex_gate_owasp_llm_mapping.py",
       "rule": "Sibling gate to owasp-asi-mapping-completeness, for the exact-pinned heading '## OWASP Top 10 for LLM Applications and Generative AI (LLM01-10:2025)', LLM01-LLM10.",
       "planes": ["ci"],
-      "trigger": "tests/test_gate_owasp_llm_mapping.py inside the pytest step of .github/workflows/test.yml",
+      "trigger": "tests/test_gitapex_gate_owasp_llm_mapping.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
       "cluster": "self-governance",
       "tracking_issue": 145,
@@ -321,7 +321,7 @@
     {
       "id": "retrospective-gate-drift-scan",
       "kind": "script",
-      "script": ".github/scripts/scan_retrospective_gate_drift.py",
+      "script": ".github/scripts/gitapex_scan_retrospective_gate_drift.py",
       "rule": "Lists every retrospective-labelled issue (any state) and fails the job if the count with zero commit on main citing it exceeds threshold 20.",
       "planes": ["ci"],
       "trigger": ".github/workflows/retrospective-gate-drift.yml, daily cron 07:00 UTC + workflow_dispatch",
@@ -336,7 +336,7 @@
       "kind": "script",
       "script": [
         ".github/workflows/waza-eval-gate.yml",
-        ".github/scripts/detect_touched_eval_skills.py"
+        ".github/scripts/gitapex_detect_touched_eval_skills.py"
       ],
       "rule": "Executes each PR-touched skill's own evals/<skill>/ suite via 'nix run .#waza -- run <skill>' and fails the job if any suite fails; not yet a required status check.",
       "planes": ["ci"],
@@ -377,7 +377,7 @@
       "id": "mypy-type-check",
       "kind": "script",
       "script": ".github/workflows/test.yml",
-      "rule": "Runs 'uv run --frozen mypy --config-file pyproject.toml' as 7 directory-grouped invocations over tests/, hooks/, .github/scripts/, evals/scripts/, and every skills/*/scripts/ directory -- a single repo-wide sweep errors 'Duplicate module named' on two same-basename check_acm_present.py files with no shared __init__.py. strict=true by default, with a named per-module override allowlist for pre-existing typing debt (each entry cites issue #684 or a dedicated follow-up). pydantic is deliberately scoped narrower than this gate's own mypy coverage: several .github/scripts/ and evals/scripts/ files are invoked by their own small dedicated CI workflow with no dependency-install step, so they stay pydantic-free even though mypy still type-checks them.",
+      "rule": "Runs 'uv run --frozen mypy --config-file pyproject.toml' as 7 directory-grouped invocations over tests/, hooks/, .github/scripts/, evals/scripts/, and every skills/*/scripts/ directory -- a single repo-wide sweep errors 'Duplicate module named' on two same-basename gitapex_check_acm_present.py files with no shared __init__.py. strict=true by default, with a named per-module override allowlist for pre-existing typing debt (each entry cites issue #684 or a dedicated follow-up). pydantic is deliberately scoped narrower than this gate's own mypy coverage: several .github/scripts/ and evals/scripts/ files are invoked by their own small dedicated CI workflow with no dependency-install step, so they stay pydantic-free even though mypy still type-checks them.",
       "planes": ["ci"],
       "trigger": ".github/workflows/test.yml, mypy job, on every pull_request and push to main",
       "policy_refs": ["pyproject-mypy-config"],
@@ -402,10 +402,10 @@
     {
       "id": "ssot-schema-drift",
       "kind": "script",
-      "script": ".github/scripts/scan_ssot_schema.py",
+      "script": ".github/scripts/gitapex_scan_ssot_schema.py",
       "rule": "Validates .gitapex/ssot.json against .gitapex/ssot.schema.json (JSON Schema draft 2020-12); fails if any gates[].script path doesn't exist as a real file, or any policy_refs[] value doesn't resolve to a real policy_sources[].id.",
       "planes": ["ci"],
-      "trigger": "tests/test_scan_ssot_schema.py inside the pytest step of .github/workflows/test.yml",
+      "trigger": "tests/test_gitapex_scan_ssot_schema.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
       "cluster": "registry-integrity",
       "tracking_issue": 123,
@@ -415,10 +415,10 @@
     {
       "id": "plugin-root-brace-notation",
       "kind": "script",
-      "script": ".github/scripts/gate_plugin_root_brace_notation.py",
+      "script": ".github/scripts/gitapex_gate_plugin_root_brace_notation.py",
       "rule": "Every hook command in a hooks.json manifest or an agent definition's frontmatter must reference the plugin root as ${CLAUDE_PLUGIN_ROOT}; the unbraced $CLAUDE_PLUGIN_ROOT fails. apm substitutes only the braced form, so an unbraced command is deployed verbatim into a consumer's .claude/settings.json, resolves against an unset variable, and its hook silently never fires while the install log still reports it integrated. Only command values are graded, never prose. Discovery reads git-tracked files, so every ignored path (apm's package cache and deploy trees, worktree checkouts) is out of scope by construction. Exits 2, never a silent pass, when no surface is discovered or a file is unreadable or malformed.",
       "planes": ["ci"],
-      "trigger": ".github/workflows/plugin-root-brace-notation-gate.yml on pull_request, plus tests/test_gate_plugin_root_brace_notation.py inside the pytest step of .github/workflows/test.yml",
+      "trigger": ".github/workflows/plugin-root-brace-notation-gate.yml on pull_request, plus tests/test_gitapex_gate_plugin_root_brace_notation.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
       "cluster": "supply-chain",
       "tracking_issue": 650,
@@ -429,12 +429,12 @@
       "id": "exception-handler-gap",
       "kind": "script",
       "script": [
-        ".github/scripts/gate_exception_handler_gaps.py",
+        ".github/scripts/gitapex_gate_exception_handler_gaps.py",
         ".github/workflows/exception-handler-gap-gate.yml"
       ],
       "rule": "A decoded read (read_text, or open in a text read mode), or a .get() on a json.loads result, added by a PR diff to .github/scripts/*.py, hooks/*.py, evals/scripts/*.py or skills/*/scripts/*.py must handle what it can actually raise: an enclosing try covering UnicodeDecodeError or an ancestor for the read, an isinstance() against a mapping type for the .get(). Scope is the diff, not the repository. An inline exception-handler-gap WAIVED comment carrying a reason discloses a read whose caller owns the handling, and every honoured waiver is printed. Exits 2 rather than pass silently on input it cannot grade. See the script docstring for the measurement behind the scoping decision and for the known misses and over-reports.",
       "planes": ["ci"],
-      "trigger": ".github/workflows/exception-handler-gap-gate.yml on pull_request, plus tests/test_gate_exception_handler_gaps.py inside the pytest step of .github/workflows/test.yml",
+      "trigger": ".github/workflows/exception-handler-gap-gate.yml on pull_request, plus tests/test_gitapex_gate_exception_handler_gaps.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
       "cluster": "test-integrity",
       "tracking_issue": 682,
@@ -444,10 +444,10 @@
     {
       "id": "hidden-characters",
       "kind": "script",
-      "script": ".github/scripts/gate_hidden_characters.py",
+      "script": ".github/scripts/gitapex_gate_hidden_characters.py",
       "rule": "No repository-tracked file may carry a literal hidden/invisible Unicode character -- U+FEFF, the zero-width family (U+200B-U+200D), the bidi control characters (U+200E/U+200F, U+202A-U+202E, U+2066-U+2069), or word joiner (U+2060). The escape-sequence spelling of any of these (e.g. \\ufeff) is never graded -- that is the fix this gate steers authors toward. Discovery reads git-tracked files, so every ignored path is out of scope by construction. Diagnostic output never reproduces the offending character itself, naming the codepoint, its Unicode name, and line/column instead. Exits 2, never a silent pass, when no tracked file is discovered or a file cannot be read/decoded as UTF-8.",
       "planes": ["ci"],
-      "trigger": ".github/workflows/hidden-characters-gate.yml on pull_request, plus tests/test_gate_hidden_characters.py inside the pytest step of .github/workflows/test.yml",
+      "trigger": ".github/workflows/hidden-characters-gate.yml on pull_request, plus tests/test_gitapex_gate_hidden_characters.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
       "cluster": "repo-hygiene",
       "tracking_issue": 702,
@@ -458,7 +458,7 @@
       "id": "cyclomatic-complexity-floor",
       "kind": "script",
       "script": ".github/workflows/test.yml",
-      "rule": "Runs 'uv run --frozen xenon --max-absolute E --max-modules B --max-average A --exclude apm_modules/*,skills/evaluating-skill-quality/scripts/check_skill_shape.py .' inside the pytest job. Thresholds are the empirically-measured ceiling of this repo's own real code as of issue #727 (worst non-excluded block rank E, worst module average B, repo-wide average A) -- a new F-rank block, or an average regression, fails CI. check_skill_shape.py is excluded as pre-existing, explicitly tracked debt (CC 99/64, MI 0.00).",
+      "rule": "Runs 'uv run --frozen xenon --max-absolute E --max-modules B --max-average A --exclude apm_modules/*,skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py .' inside the pytest job. Thresholds are the empirically-measured ceiling of this repo's own real code as of issue #727 (worst non-excluded block rank E, worst module average B, repo-wide average A) -- a new F-rank block, or an average regression, fails CI. gitapex_check_skill_shape.py is excluded as pre-existing, explicitly tracked debt (CC 99/64, MI 0.00).",
       "planes": ["ci"],
       "trigger": ".github/workflows/test.yml, pytest job, on every pull_request and push to main",
       "policy_refs": [],
@@ -470,8 +470,8 @@
     {
       "id": "stale-retro-stub-autoclose",
       "kind": "script",
-      "script": ".github/scripts/stale_retro_stub_autoclose.py",
-      "rule": "Closes open retrospective-labelled issues whose body still carries post_merge_retro.py's own unenriched-stub marker text and whose created_at is older than 48 hours, posting an explanatory comment on every close; never touches an already-enriched issue.",
+      "script": ".github/scripts/gitapex_stale_retro_stub_autoclose.py",
+      "rule": "Closes open retrospective-labelled issues whose body still carries gitapex_post_merge_retro.py's own unenriched-stub marker text and whose created_at is older than 48 hours, posting an explanatory comment on every close; never touches an already-enriched issue.",
       "planes": ["ci"],
       "trigger": ".github/workflows/stale-retro-stub-autoclose.yml, daily cron 08:00 UTC + workflow_dispatch",
       "policy_refs": [],

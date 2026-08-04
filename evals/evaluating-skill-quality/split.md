@@ -5,7 +5,7 @@ established so `scorer-gated-skill-edits`' precondition gate (a real scorer plus
 held-out split, both required before any iterative edit to this skill's
 `references/rubric.md` is kept) is satisfied. See
 `skills/scorer-gated-skill-edits/SKILL.md` for the gate itself and
-`skills/scorer-gated-skill-edits/scripts/score_contract.py` for the scorer, which
+`skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py` for the scorer, which
 scores each fixture's `expected.output_contains` / `output_not_contains`
 block deterministically.
 
@@ -470,7 +470,7 @@ pinned at `bd6fef7`), one fresh dispatch per side against only
 |---|---|---|
 | `confidentiality-awareness-payment-data-selection.yaml` | 1.000000 (fresh) | 1.000000 (fresh) |
 
-`score_contract.py --compare-to 1.000000`: `1.000000 REJECT` (tie at the
+`gitapex_score_contract.py --compare-to 1.000000`: `1.000000 REJECT` (tie at the
 scorer's ceiling). The *before* dispatch already correctly generalized
 "PII" to cover a bare, unlabeled card number without the explicit
 category -- quoting it directly: *"a procedure step that handles a
@@ -492,7 +492,7 @@ cross-model data already shows weaker tiers under-performing specifically
 on axis-disambiguation content (the `compatibility-*` fixtures), the same
 shape of risk this edit guards against for a tier this gate has not
 tested; (3) the cost is at or near zero -- a few explicit words, no
-added ambiguity, `check_skill_shape.py` unaffected (46/46 both before and
+added ambiguity, `gitapex_check_skill_shape.py` unaffected (46/46 both before and
 after). Per this repository's own drift-correction precedent, a tie is a
 statement about what the current corpus can measure, not a verdict on the
 edit's merit -- extending the corpus with a fixture built specifically to
@@ -525,7 +525,7 @@ dispatch per side against `confidentiality-awareness-mnpi-selection.yaml`:**
 |---|---|---|
 | `confidentiality-awareness-mnpi-selection.yaml` | 1.000000 (fresh) | 1.000000 (fresh) |
 
-`score_contract.py --compare-to 1.000000`: `1.000000 REJECT` (tie at
+`gitapex_score_contract.py --compare-to 1.000000`: `1.000000 REJECT` (tie at
 ceiling, the same shape as the payment-data follow-up immediately above).
 The *before* dispatch's own text names why: it explicitly noted "the
 rubric's own Confidentiality-awareness category list doesn't quite name
@@ -579,7 +579,7 @@ dispatch per side against `confidentiality-awareness-trade-secret-selection.yaml
 |---|---|---|
 | `confidentiality-awareness-trade-secret-selection.yaml` | 1.000000 (fresh) | 1.000000 (fresh) |
 
-`score_contract.py --compare-to 1.000000`: `1.000000 REJECT` -- a third
+`gitapex_score_contract.py --compare-to 1.000000`: `1.000000 REJECT` -- a third
 consecutive tie at the scorer's ceiling. The *before* dispatch (narrow,
 insider-trading-scoped MNPI wording) already generalized `"material
 non-public business information"` past its own parenthetical's explicit
@@ -633,13 +633,13 @@ Gate result: the selection-split baseline (5 fixtures: `edge.yaml`,
 `ordering-rule-totality-distinct-skill.yaml`) was measured live -- one
 fresh subagent dispatch per fixture, following `evaluating-skill-quality`'s
 own Procedure against the *unedited* `references/rubric.md` -- and
-scored with `skills/scorer-gated-skill-edits/scripts/score_contract.py`
+scored with `skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py`
 against each fixture's `expected` block. Selection mean: **1.000000**
 (all 5 fixtures scored 1.0; the new `ordering-rule-totality-distinct-skill`
 fixture's assertions -- `Elevated`, `Standard`, `tie` -- were already
 satisfied by a careful review applying the *current* Dimension 4
 bullets, without the proposed totality item). Since
-`score_contract.py`'s score is bounded to `[0,1]` and the baseline is
+`gitapex_score_contract.py`'s score is bounded to `[0,1]` and the baseline is
 already at that ceiling, no candidate edit's after-score can exceed
 1.0 -- the strict-improve-or-reject rule (`after > before`, ties
 rejected) is therefore unsatisfiable regardless of the edit's content.
@@ -751,7 +751,7 @@ working directory outside this repository's own `CLAUDE.md` ancestry per
 (this repository still has no registered `Skill` tool for its own
 unpublished `evaluating-skill-quality` content, the same disclosed
 workaround every prior iteration in this log has used), scored with
-`skills/scorer-gated-skill-edits/scripts/score_contract.py`:
+`skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py`:
 
 | Fixture | Before | After |
 |---|---|---|
@@ -771,7 +771,7 @@ workaround every prior iteration in this log has used), scored with
 | `cohesion-temporal-grouping-selection.yaml` | 1.000000 (reused) | 1.000000 (unaffected, confirmed by inspection) |
 
 Selection mean: **before 0.957143 -> after 0.957143** (exact tie). Run via
-the ordinary gate, `score_contract.py --compare-to 0.957143 --scores
+the ordinary gate, `gitapex_score_contract.py --compare-to 0.957143 --scores
 after-scores.txt` (no pruning-only flags, per the correction above):
 `0.957143 REJECT`. Ordinary ties are rejected -- this skill's own Stop
 boundaries state it directly: "Never keep a worse-correctness edit.
@@ -884,7 +884,7 @@ state, support the tie:
    only findings about its target skill; not one references Contract
    discipline, "precondition," the precondition/postcondition/invariant
    enumeration, or the new "Keep this enumeration in sync" bullet. The
-   scorer (`score_contract.py`) matches substrings in the *review
+   scorer (`gitapex_score_contract.py`) matches substrings in the *review
    transcript*, not in `rubric.md`; text the edit adds to `rubric.md`'s
    own Contract discipline section cannot appear in any correct review of
    an unrelated target, so no fixture's score can move on account of it.
@@ -941,7 +941,7 @@ section 3 ("Establishing an invariant ... ship its drift gate in the same
 change, not a follow-up") -- and a Codex P1 review on PR #411 raising the
 same point -- that invariant is not left to prose: this PR also ships a
 deterministic drift gate,
-`skills/evaluating-skill-quality/scripts/test_contract_precondition_sync.py`,
+`skills/evaluating-skill-quality/scripts/test_gitapex_contract_precondition_sync.py`,
 which fails in CI if a checkpoint (`mechanism fit`, `Blind spot pass`,
 `deterministic shape`, `portability level`, `capability assumption`,
 `declaration-vs-pin`) is present in `SKILL.md`'s Procedure steps 1-4 but
@@ -1008,7 +1008,7 @@ first:
 6 fixtures, one fresh dispatch per fixture per side (2 for
 `blind-spot-pass-generalizes.yaml`, averaged to one fixture-level score;
 1 each for the other 5), scored with
-`skills/scorer-gated-skill-edits/scripts/score_contract.py`:**
+`skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py`:**
 
 | Fixture | Before | After |
 |---|---|---|
@@ -1020,7 +1020,7 @@ first:
 | `blind-spot-pass-generalizes.yaml` | 0.750000 (mean of 0.75, 0.75) | 1.000000 (mean of 1.00, 1.00) |
 
 Selection mean: **before 0.939815 -> after 0.981482**. Run via
-`score_contract.py --compare-to 0.939815 --scores after-scores.txt`:
+`gitapex_score_contract.py --compare-to 0.939815 --scores after-scores.txt`:
 `0.981482 KEEP`. The 5 pre-existing fixtures tie exactly (no regression,
 no improvement -- expected, since the edit adds a section and one
 sentence and touches nothing those fixtures assert on); the entire
@@ -1057,7 +1057,7 @@ needed a genuine fresh **before** dispatch (run against
 avoid a working-tree race with the edit in progress). All 7 selection
 fixtures then got a fresh **after** dispatch against the post-edit
 working tree, one fresh subagent per fixture, scored with
-`skills/scorer-gated-skill-edits/scripts/score_contract.py`:
+`skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py`:
 
 | Fixture | Before | After |
 |---|---|---|
@@ -1070,7 +1070,7 @@ working tree, one fresh subagent per fixture, scored with
 | `model-effort-tier-fit-unjustified-effort.yaml` | 0.500000 (fresh) | 1.000000 (fresh) |
 
 Selection mean: **before 0.912698 -> after 0.963719**. Run via
-`score_contract.py --compare-to 0.912698 --scores after-scores.txt`:
+`gitapex_score_contract.py --compare-to 0.912698 --scores after-scores.txt`:
 `0.963719 KEEP`.
 
 `scoring-axis-uncontrolled-speed-claim.yaml` dipped from 1.000000 to
@@ -1172,7 +1172,7 @@ methodology). Only the new selection fixture,
 immediately prior to this edit, to avoid a working-tree race). All 8
 selection fixtures then got a fresh **after** dispatch against the
 post-edit working tree, scored with
-`skills/scorer-gated-skill-edits/scripts/score_contract.py`:
+`skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py`:
 
 | Fixture | Before | After |
 |---|---|---|
@@ -1186,7 +1186,7 @@ post-edit working tree, scored with
 | `portability-issue-number-citation.yaml` | 0.750000 (fresh) | 1.000000 (fresh) |
 
 Selection mean: **before 0.937004 -> after 1.000000**. Run via
-`score_contract.py --compare-to 0.937004 --scores after-scores.txt`:
+`gitapex_score_contract.py --compare-to 0.937004 --scores after-scores.txt`:
 `1.000000 KEEP`.
 
 Two pre-existing fixtures moved up (`third-party-not-authoritative.yaml`
@@ -1274,7 +1274,7 @@ last commit to touch either file). The new selection fixture,
 fresh **before** dispatch against that same pinned snapshot. All 10
 selection fixtures then got a fresh **after** dispatch against the
 post-edit working tree, one fresh subagent per fixture, scored with
-`skills/scorer-gated-skill-edits/scripts/score_contract.py`:
+`skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py`:
 
 | Fixture | Before | After |
 |---|---|---|
@@ -1290,7 +1290,7 @@ post-edit working tree, one fresh subagent per fixture, scored with
 | `capability-assumption-frontier-flags-explanation.yaml` | 0.750000 (fresh) | 1.000000 (fresh) |
 
 Selection mean: **before 0.975000 -> after 0.985714**. Run via
-`score_contract.py --compare-to 0.975000 --scores after-scores.txt`:
+`gitapex_score_contract.py --compare-to 0.975000 --scores after-scores.txt`:
 `0.985714 KEEP`.
 
 `scoring-axis-uncontrolled-speed-claim.yaml` dipped from 1.000000 to
@@ -1299,7 +1299,7 @@ run-to-run subagent wording variance already documented twice above for
 this exact fixture (issue #149's "6.5s/$0.03" paraphrase miss): this
 round's after-dispatch answered the dimension-8 cost/success question
 correctly and in full but never happened to mention running
-`check_skill_shape.py`, an assertion unrelated to anything this edit
+`gitapex_check_skill_shape.py`, an assertion unrelated to anything this edit
 touches (the edit only changes the Capability assumption and Model/effort
 tier fit sections; this fixture exercises dimension 8 alone). Disclosed
 rather than silently rerun until it passed; it does not change the KEEP
@@ -1485,7 +1485,7 @@ registered `Skill` tool for its own unpublished `evaluating-skill-quality`
 content, so each dispatch was instructed to read `references/rubric.md`
 and `SKILL.md` directly -- `git show 228486c:...` for the before side, the
 working tree for the after side -- and follow the Procedure by hand),
-scored with `skills/scorer-gated-skill-edits/scripts/score_contract.py`:
+scored with `skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py`:
 
 | Fixture | Before | After |
 |---|---|---|
@@ -1501,7 +1501,7 @@ scored with `skills/scorer-gated-skill-edits/scripts/score_contract.py`:
 | `ablation-capability-runner-exists-not-run.yaml` | 0.750000 (fresh) | 1.000000 (fresh) |
 
 Selection mean: **before 0.975000 -> after 1.000000**. Run via
-`score_contract.py --compare-to 0.975000 --scores after-scores.txt`:
+`gitapex_score_contract.py --compare-to 0.975000 --scores after-scores.txt`:
 `1.000000 KEEP`. (The original, incomplete 9-fixture table reported
 `before 0.972222 -> after 1.000000`, also `KEEP` -- correcting the
 omission changes the precision and the fixture count, not the verdict,
@@ -1614,7 +1614,7 @@ confirming the real current state):
 | `ablation-capability-runner-exists-not-run.yaml` | 0.750000 | 1.000000 (established by #185's iteration; content is dimension-8/ablation-capability only, untouched by #183's edit) |
 
 Selection mean: **before 0.954545 -> after 1.000000**. Run via
-`score_contract.py --compare-to 0.954545 --scores after-scores.txt`:
+`gitapex_score_contract.py --compare-to 0.954545 --scores after-scores.txt`:
 `1.000000 KEEP`.
 
 `scoring-axis-uncontrolled-speed-claim.yaml` needed the one genuine fresh
@@ -1719,7 +1719,7 @@ sample happened to arrive as a nested dispatch from one of the stubbed
 attempts above; kept and averaged per this file's own
 `blind-spot-pass-generalizes.yaml` precedent for multiple genuine samples,
 not discarded), scored with
-`skills/scorer-gated-skill-edits/scripts/score_contract.py`:
+`skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py`:
 
 | Fixture | Before | After |
 |---|---|---|
@@ -1738,7 +1738,7 @@ not discarded), scored with
 | `consumer-repo-convention-deference-selection.yaml` | 0.500000 (fresh, pinned hash) | 0.750000 (fresh, mean of 2 samples: 1.000000, 0.500000) |
 
 Selection mean: **before 0.923077 -> after 0.971154**. Run via
-`score_contract.py --compare-to 0.923077 --scores after-scores.txt`:
+`gitapex_score_contract.py --compare-to 0.923077 --scores after-scores.txt`:
 `0.971154 KEEP`.
 
 The two new fixtures' averaged after-scores are honestly reported below
@@ -1944,7 +1944,7 @@ edit never touches): `third-party-not-authoritative.yaml`,
 `consumer-repo-convention-deference-selection.yaml`. New fixture
 (`cohesion-temporal-grouping-selection.yaml`): genuine fresh before
 (pinned `aa6ea019...`) and after pair. Scored with
-`skills/scorer-gated-skill-edits/scripts/score_contract.py`:
+`skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py`:
 
 | Fixture | Before | After |
 |---|---|---|
@@ -1964,7 +1964,7 @@ edit never touches): `third-party-not-authoritative.yaml`,
 | `cohesion-temporal-grouping-selection.yaml` | 0.000000 (fresh, pinned hash) | 1.000000 (fresh) |
 
 Selection mean: **before 0.901786 -> after 0.957143**. Run via
-`score_contract.py --scores after-scores.txt --compare-to 0.901786`:
+`gitapex_score_contract.py --scores after-scores.txt --compare-to 0.901786`:
 `0.957143 KEEP`.
 
 `edge.yaml` dipped on its first sample (0.800000: the dispatch paraphrased
@@ -2027,7 +2027,7 @@ own target -- the first entry in this log's history to skip that step;
 every prior Kept-edit restraint check (issues #149, #155, #165, #183)
 dispatched its own purpose-built fixture. Fixed by actually running the
 fixture: one fresh, isolated dispatch against the post-edit rubric,
-scored with `score_contract.py` against the fixture's own
+scored with `gitapex_score_contract.py` against the fixture's own
 `output_contains: ["no cohesion split finding"]` assertion.
 
 The after-edit dispatch correctly found **no cohesion split finding**,
@@ -2070,7 +2070,7 @@ actually read on the branch dimension 5 already marked as needing them,
 fired only when the target repository's own eval mechanism records
 reference-read events, defaulting to "unmeasured" otherwise. Full text:
 see this PR's diff. Confirmed before writing it, by direct inspection of
-`scorer-gated-skill-edits/scripts/score_contract.py`,
+`scorer-gated-skill-edits/scripts/gitapex_score_contract.py`,
 `evals/evaluating-skill-quality/eval.yaml`, and `docs/skill-eval-status.md`,
 that no mechanism in this repository's own eval stack observes which
 reference file a trial actually reads -- every existing scorer works from
@@ -2081,7 +2081,7 @@ Precondition and splits: satisfied (52 fixtures, 20:21:11 with this
 iteration's additions -- see Assignment above).
 
 **Live gate, matched methodology, fresh dispatch per side, scored with
-`scripts/score_contract.py`:**
+`scripts/gitapex_score_contract.py`:**
 
 | Fixture | Model | Before | After |
 |---|---|---|---|
@@ -2128,7 +2128,7 @@ being named here precisely so it isn't quietly stepped around.
 is **not** attributed to this edit either: the edit adds text after this
 fixture's own scenario and touches no sentence it asserts on: the
 before-dispatch simply did not happen to write the literal string
-`check_skill_shape.py` in its precondition caveat on this particular run,
+`gitapex_check_skill_shape.py` in its precondition caveat on this particular run,
 a dispatch-to-dispatch phrasing variance this file's own Kept-edit log has
 named before for other fixtures (see the entries above), not a
 content-driven signal.
@@ -2226,14 +2226,14 @@ paragraph's own new, specific requirement (confirm authenticity before
 classifying) rather than a conclusion generic reasoning already reaches.
 
 **Re-run selection-split result, matched methodology, one fresh dispatch
-per side, Sonnet 5, scored with `score_contract.py --assertions
+per side, Sonnet 5, scored with `gitapex_score_contract.py --assertions
 assertions.json --output run.txt`:**
 
 | Fixture | Before | After |
 |---|---|---|
 | `reference-load-precision-selection.yaml` (redesigned) | 0.600000 | 0.800000 |
 
-`score_contract.py --compare-to 0.600000 --scores after-scores.txt`:
+`gitapex_score_contract.py --compare-to 0.600000 --scores after-scores.txt`:
 `0.800000 KEEP`. Unlike the first round, this is a genuine strict
 improvement, not a disclosed tie: the before-dispatch reasoned skepticism
 generically ("testimony from memory... cannot be checked") without ever
@@ -2546,7 +2546,7 @@ per this file's own "rewrote as positive-only assertions" precedent.
 subprocess per `references/adversarial-self-audit.md`'s Isolation-
 verification registry (this platform/version's entry already confirmed;
 `Agent`-tool dispatch remains confirmed-contaminated here), scored with
-`skills/scorer-gated-skill-edits/scripts/score_contract.py`:**
+`skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py`:**
 
 | Fixture | Before | After |
 |---|---|---|
@@ -2628,7 +2628,7 @@ unresolved gap issue #200 first named and every entry in this log since
 has carried forward.
 
 **Deterministic checks, run after every fix in this iteration:**
-`check_skill_shape.py` 46/46, full pytest suite (`skills/evaluating-
+`gitapex_check_skill_shape.py` 46/46, full pytest suite (`skills/evaluating-
 skill-quality/scripts/` + `tests/`) 768/768.
 
 **KEEP.** Strict selection-split improvement (2 fixtures move 0.75 -> 1.0,
@@ -2707,13 +2707,13 @@ secret-rotation/secret-scanning tool by name
 train, not selection -- so they tie exactly and were not re-dispatched,
 the same assertion-surface-disjointness basis the gitapex#406 and
 gitapex#495 entries above already used), scored with
-`skills/scorer-gated-skill-edits/scripts/score_contract.py`:
+`skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py`:
 
 | Fixture | Before | After |
 |---|---|---|
 | `confidentiality-awareness-selection.yaml` | 0.666667 (fresh) | 1.000000 (fresh) |
 
-`score_contract.py --compare-to 0.666667`: `1.000000 KEEP`.
+`gitapex_score_contract.py --compare-to 0.666667`: `1.000000 KEEP`.
 
 **Independent corroboration, found unprompted.** The *pre-edit* dispatch's
 own Blind spot pass -- run against the unmodified rubric, with no
@@ -2729,12 +2729,12 @@ Communicational/informational cohesion split candidate and a Dimension 6
 durability gap on the same target) rather than over-firing the new axis
 in isolation from the rest of the walk.
 
-**Deterministic checks:** `check_skill_shape.py` 46/46 after the final
+**Deterministic checks:** `gitapex_check_skill_shape.py` 46/46 after the final
 content edits (one intermediate `body-length` FAIL at 515 lines was fixed
 by merging the SKILL.md pointer into the existing Compatibility-awareness
 section rather than adding a second full heading, since `SKILL.md` was
 already at the exact 500-line cap with zero slack before this edit); the
-new fixtures' YAML parses cleanly and `lint_fixture_assertions.py` flagged
+new fixtures' YAML parses cleanly and `gitapex_lint_fixture_assertions.py` flagged
 one disclosed, accepted case-sensitivity warning (both new fixtures'
 `"Confidentiality awareness"` assertion matches `rubric.md`'s own `##
 Confidentiality awareness` heading casing exactly -- the literal string
@@ -2890,7 +2890,7 @@ cap) was verified byte-for-byte against the live file and confirmed to
 close, not open, a gap `rubric.md`'s own Subagent-delegation-scope check
 had self-flagged. Full report: this iteration's PR description.
 
-**Deterministic checks:** `check_skill_shape.py` 58/58 after the edits
+**Deterministic checks:** `gitapex_check_skill_shape.py` 58/58 after the edits
 (committed state).
 
 **Transfer check:** not run this iteration, the same disclosed,
@@ -3174,7 +3174,7 @@ carve-out's use of "co-location" extends, rather than restates, dimension
 contradiction) -- flagged for a maintainer's eye, not treated as a
 finding.
 
-**Deterministic checks:** `check_skill_shape.py` 58/58 after every round
+**Deterministic checks:** `gitapex_check_skill_shape.py` 58/58 after every round
 of edits (final committed state).
 
 **Transfer check:** not run this iteration, the same disclosed,

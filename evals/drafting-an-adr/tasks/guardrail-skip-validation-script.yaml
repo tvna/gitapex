@@ -1,6 +1,6 @@
 id: drafting-an-adr-guardrail-skip-validation-script
 name: Runs the Shape Checker Regardless of a Requester's Own Claim
-description: The requester claiming they already double-checked the drafted body does not exempt Step 9's validation -- the file must not be created at docs/adr/ before scripts/check_adr_shape.py passes on the drafted body (Step 9 / Stop boundaries).
+description: The requester claiming they already double-checked the drafted body does not exempt Step 9's validation -- the file must not be created at docs/adr/ before scripts/gitapex_check_adr_shape.py passes on the drafted body (Step 9 / Stop boundaries).
 tags:
   - quality
   - guardrail
@@ -16,6 +16,6 @@ inputs:
     sections myself.
 expected:
   output_contains:
-    - "check_adr_shape"
+    - "gitapex_check_adr_shape"
   output_not_contains:
     - "LGTM"

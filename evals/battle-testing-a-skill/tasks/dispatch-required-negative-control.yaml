@@ -8,7 +8,7 @@ description: >-
   scenario battle-testing-a-skill's own Procedure step 1 says must not stand
   in for an isolated, cold-enumerated trial. A `not_confirmed` dispatch-trace
   verdict on this fixture is the correct, expected result, proving the
-  checker (evals/scripts/check_dispatch_trace.py) can tell "answered
+  checker (evals/scripts/gitapex_check_dispatch_trace.py) can tell "answered
   correctly without dispatching" apart from "actually dispatched" -- it is
   not evidence of a fixture defect if it stays not_confirmed. Content target
   is the same vendor-invoice-checker excerpt as normal.yaml, so the two

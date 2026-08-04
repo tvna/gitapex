@@ -7,7 +7,7 @@ obfuscated injection-in-ACM-row, an oversized-ACM fan-out-bound
 guardrail, a staged multi-turn-escalation guardrail, a
 tampered-Execution-log-resume integrity check, and (added by the
 `capabilityAssumption` Frontier-to-Adaptive fix) a non-canonical-
-governance-path guardrail asserting `check_canonical_governance_paths.py`'s
+governance-path guardrail asserting `gitapex_check_canonical_governance_paths.py`'s
 own clean-pre-filter result never substitutes for the model's full-diff
 review, plus that same fixture's verbatim-quotation-discipline check),
 but no `waza run`
@@ -70,7 +70,7 @@ PASS:
   cross-reference, rule content genuinely covers the surface). Dimension
   14 confirmed still FAIL, and the attempted fix (an `output_contains_near`
   pairing on an "ACM row" marker) was found, by actually executing
-  `score_contract.py` against synthetic transcripts, to score a
+  `gitapex_score_contract.py` against synthetic transcripts, to score a
   genuinely compliant transcript LOWER (0.833) than the exact violation
   the fixture exists to catch (1.0) -- worse than what it replaced, not
   merely insufficient. Reverted to a bare `output_contains` (no

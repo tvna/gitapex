@@ -69,7 +69,7 @@ reached its current state, in this repository's own bookkeeping:
 `docs/skill-eval-status.md`.
 
 **Skill-step vs. bundled script**: passes. This skill's own deterministic
-shape lane was delegated to `scripts/check_skill_shape.py`, so applying
+shape lane was delegated to `scripts/gitapex_check_skill_shape.py`, so applying
 the fifth Mechanism-fit check to this skill's own procedure finds no
 remaining step-level delegate-to-script finding.
 
@@ -140,7 +140,7 @@ special case inside dimension 1 or 6 to route around it.
 Run the bundled checker on this skill itself (from the repo root):
 
 ```
-$ python3 skills/evaluating-skill-quality/scripts/check_skill_shape.py skills/evaluating-skill-quality
+$ python3 skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py skills/evaluating-skill-quality
 CHECK                                      RESULT  EVIDENCE (rule)
 description-present                        PASS    present  (description present and non-empty)
 description-no-xml                         PASS    no tags  (description has no XML tags)
@@ -357,8 +357,8 @@ issues rather than passing by default.
 
 ### 7. Bundled scripts
 
-Applicable, not N/A -- this skill ships `scripts/check_skill_shape.py`
-(and its test, `scripts/test_check_skill_shape.py`), the deterministic
+Applicable, not N/A -- this skill ships `scripts/gitapex_check_skill_shape.py`
+(and its test, `scripts/test_gitapex_check_skill_shape.py`), the deterministic
 shape checker Step 3 above delegates to, per the Mechanism-fit section's
 own citation of that script as the shape lane's implementation.
 
@@ -378,7 +378,7 @@ codes, and the full check list. **Verifiable intermediate outputs for
 high-stakes batch work** -- not applicable; this is a single read-only
 pass/fail check, not a plan -> validate -> execute batch pattern.
 
-**Test methodology** (`scripts/test_check_skill_shape.py`, 243 tests
+**Test methodology** (`scripts/test_gitapex_check_skill_shape.py`, 243 tests
 collected as of this snapshot, per this repository's root
 `pyproject.toml`). **Test levels** -- `main(argv: list[str] | None = None) -> int` is a
 directly and thoroughly tested *function*: 11+ assertions call
@@ -413,7 +413,7 @@ the cap once quotes drop"; error-guessing/experience-based cases are
 present too (BOM-prefixed files, malformed fences, symlink-basename
 mismatches). No decision-table gap here: a decision table is for logic
 that actually *combines* independent
-conditions into one branch, and `check_skill_shape.py`'s own validation
+conditions into one branch, and `gitapex_check_skill_shape.py`'s own validation
 does not do that for portability/capabilityAssumption/lifecycle --
 `portability-declared` and `capability-assumption-declared` each check
 only their own single field against its own allowed set with no
@@ -429,7 +429,7 @@ applies equally here: say so explicitly rather than invent a gap.
 absent** -- this repository's own `pyproject.toml` already configures
 `pytest-cov` for exactly this path (`--cov=skills/evaluating-skill-quality/scripts`);
 running it (`uv run pytest ... --cov-report=term-missing`) reports 98%
-statement coverage on `check_skill_shape.py` (17 of 998 statements
+statement coverage on `gitapex_check_skill_shape.py` (17 of 998 statements
 missed), so the 243-test count is backed by a real, checkable coverage
 figure, not asserted as a proxy for one. **Static testing** -- PR review
 is this script's technical review per this repository's own workflow; no
@@ -465,7 +465,7 @@ directory) before the call and restores it after, with no substituted
 object and no interface the SUT calls into -- environment setup, not a
 test double. No Mock, Spy, or Fake either, and that absence is explained
 rather than an unstated gap:
-`check_skill_shape.py` under test is a pure filesystem-read-and-parse
+`gitapex_check_skill_shape.py` under test is a pure filesystem-read-and-parse
 script with no injected collaborator to substitute -- there is nothing
 here any test double would stand in for.
 **Named test smells** -- Mystery Guest and Interacting Tests: not present
@@ -555,7 +555,7 @@ retroactively for its whole authoring history -- each time via a
 documented held-out train/selection/test split, recorded in this
 repository's own `evals/evaluating-skill-quality/split.md`, scored
 before and after with
-`skills/scorer-gated-skill-edits/scripts/score_contract.py`, requiring a
+`skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py`, requiring a
 strict improvement (ties rejected) before the edit was kept. That is real,
 repeated instances of this discipline applied to this skill, not evidence
 every earlier edit went through it -- the paragraph above still
@@ -644,7 +644,7 @@ bookkeeping: `docs/skill-eval-status.md`.
 this skill's dimension 1-7 gaps were each fixed during this same review
 rather than left standing. Dimensions 1 (after the description fix), 3,
 4, 5, 6 (after the two portability fixes), and 7 (applicable -- this
-skill ships `check_skill_shape.py`; clears cleanly after the
+skill ships `gitapex_check_skill_shape.py`; clears cleanly after the
 constant-comment fix) all clear cleanly with cited evidence; dimensions 8
 and 9 are explicitly named as unmeasured rather than silently assumed,
 which rubric.md's Verdicts section allows for 8-9 specifically without
@@ -709,7 +709,7 @@ an absence, not a finding, per its own restraint discipline. The Blind
 spot pass found one genuine rubric gap specific to this target's
 self-referential domain: the held-out-gate discipline above covers split
 methodology (disjointness, strict improvement) but never asks whether
-the automated scorer (`score_contract.py`'s substring matching) actually
+the automated scorer (`gitapex_score_contract.py`'s substring matching) actually
 measures the judgment it is scoring -- left unfixed here, correctly, per
 the Blind spot pass's own instruction that a durable rubric change is a
 deliberate, `scorer-gated-skill-edits`-gated edit, not something a single review

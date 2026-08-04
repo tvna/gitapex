@@ -33,7 +33,7 @@ inputs:
     give us good behavioural evidence for dimension 8?
 expected:
   output_contains:
-    - "check_skill_shape.py"
+    - "gitapex_check_skill_shape.py"
     - "correctness"
     - "average completion seconds dropped from 12.4 to 4.1"
   output_not_contains:

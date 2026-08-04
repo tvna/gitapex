@@ -10,7 +10,7 @@ silently passed). This closes the specific gap PR #463 disclosed and
 waived at this skill's launch ("no committed
 `evals/evaluating-attack-surface/` regression corpus" -- the directory is
 now named `evals/vetting-attack-surface/`, following the #466/#469
-rename). `evals/scripts/lint_fixture_assertions.py`, run against
+rename). `evals/scripts/gitapex_lint_fixture_assertions.py`, run against
 `skills/vetting-attack-surface/SKILL.md` as the anchor corpus, reports 0
 warnings.
 
@@ -84,7 +84,7 @@ unreadable/truncated target -> "cannot review", the Applicability gate
 not silently applied); `multi-item-combined-verdict.yaml` exercises the
 per-item, no-aggregate-verdict discipline on a single artifact carrying
 both an exposure issue and a privilege issue. The corpus is now 11
-tasks. `lint_fixture_assertions.py` (0 warnings), `check_skill_shape.py`
+tasks. `gitapex_lint_fixture_assertions.py` (0 warnings), `gitapex_check_skill_shape.py`
 (31/31), and `pytest` (878 passed) all re-verified clean after the
 addition. This growth does not change the dimension-14 verdict above --
 the enforcement conjunct (no CI merge gate) is still the dispositive,

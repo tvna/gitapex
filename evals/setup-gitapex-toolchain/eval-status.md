@@ -5,7 +5,7 @@ now run against this skill (issues #57/#690). No `evals/setup-gitapex-toolchain/
 suite exists yet, though: no `eval.yaml`, no `tasks/` corpus, no no-skill
 baseline, no model tier evaluated. That gap is tracked separately (issue
 #721), not waived here -- a waiver is a PR-body decision
-(`gate_skill_audit_disclosure.py`, issue #248) made by a reviewer at
+(`gitapex_gate_skill_audit_disclosure.py`, issue #248) made by a reviewer at
 SKILL.md-change time, not something this file grants on its own.
 
 ## Real audit dispatches
@@ -87,7 +87,7 @@ since it is the same "run the eval mechanism for real" gap.
 - Issue #721: a real `evals/setup-gitapex-toolchain/eval.yaml` + `tasks/`
   adversarial corpus (closes battle-testing-a-skill dimension 14 and
   evaluating-skill-quality dimensions 8-9), a no-skill baseline via
-  `evals/scripts/run_ablation.py`, a cross-model run via
+  `evals/scripts/gitapex_run_ablation.py`, a cross-model run via
   `waza-eval-matrix.yml`, and a genuinely isolated re-dispatch of both
   audits per the caveat above.
 - Issue #730: the portability-taxonomy gap the C-4 non-application surfaced.
@@ -99,12 +99,12 @@ since it is the same "run the eval mechanism for real" gap.
 ## Script-level verification (pre-existing, updated)
 
 This skill is also a thin orchestration wrapper around a deterministic
-Python CLI (`scripts/provision_class_b.py`: parse `flake.nix`'s Class B pins
+Python CLI (`scripts/gitapex_provision_class_b.py`: parse `flake.nix`'s Class B pins
 at runtime, download + SHA256-verify + extract + install four binaries, run
 `apm install`), and that axis has its own, separate verification history,
 real rather than merely planned:
 
-- 79 tests in `scripts/test_provision_class_b.py` (70 original
+- 79 tests in `scripts/test_gitapex_provision_class_b.py` (70 original
   unit/integration + 8 for the apm-install idempotency fix + 1 for the
   exception-handler-gap fix)
   (`uv run --frozen pytest skills/setup-gitapex-toolchain/scripts`, all

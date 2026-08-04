@@ -83,7 +83,7 @@ boundary), and a materialized growth watch-point (`rubric.md` grown from
 565 to 806 lines across the #149 and #155 edits, with no new instance of
 the specific drift risk previously named). The Blind spot pass also
 surfaced one still-open rubric gap: the held-out gate's scorer
-(`score_contract.py`, substring matching) has no check on its own
+(`gitapex_score_contract.py`, substring matching) has no check on its own
 construct validity, evidenced by this session's own repeated
 case-sensitivity false-failures -- correctly left unfixed, per the
 rubric's own instruction that a durable rubric change is a deliberate
@@ -191,7 +191,7 @@ history, found by external PR review -- see below) and got its own fresh
 before/after pair, scoring identically (1.000000) on both sides since it
 targets dimension 4, not dimension 8. The new selection fixture needed a
 genuine fresh before/after pair too: **0.750000 -> 1.000000**. Selection
-mean: **0.975000 -> 1.000000, KEEP** (`score_contract.py --compare-to
+mean: **0.975000 -> 1.000000, KEEP** (`gitapex_score_contract.py --compare-to
 0.975000`). A negation-trap fixture-assertion bug (an
 `output_not_contains` phrase a *correct* denial would also contain -- the
 same class `references/rubric.md`'s own dimension-6 history already hit
@@ -225,7 +225,7 @@ equivalent) pip dependency. Checked, not assumed:
   held-out split) for *hand-applied* edits to this rubric is already
   satisfied and has been for six prior iterations (#149, #155, #165,
   #183, #185, #200 above) -- `skills/scorer-gated-skill-edits/scripts/
-  score_contract.py` plus `evals/evaluating-skill-quality/split.md`'s
+  gitapex_score_contract.py` plus `evals/evaluating-skill-quality/split.md`'s
   37-fixture, 16:13:8 split, current selection-split baseline
   **0.971154** (the #200 entry's after-score above). That part of #319's
   own premise is real and unchanged.
@@ -422,7 +422,7 @@ The ordinary candidate passed the corrected six-fixture selection gate:
 - pre-edit mean: `0.713937`;
 - candidate scores: six `1.000000` results;
 - candidate mean: `1.000000`;
-- `score_contract.py --compare-to 0.713937`: `KEEP`.
+- `gitapex_score_contract.py --compare-to 0.713937`: `KEEP`.
 
 Earlier selection scores are invalidated and excluded. Independent review
 found paraphrase drift, negation traps, missing nested-value-shape coverage,
@@ -473,7 +473,7 @@ scaffolding note in `docs/skill-eval-status.md`): isolated
 issue #495's own dogfood gate.
 
 Ran the selection split (23 fixtures) against Haiku 4.5 / Sonnet 5 / Opus 5,
-one trial per fixture, scored with `score_contract.py`. Full data, per-run
+one trial per fixture, scored with `gitapex_score_contract.py`. Full data, per-run
 provenance, and known scope limits:
 [results/2026-07-28-issue-500-phase1/](results/2026-07-28-issue-500-phase1/manifest.json).
 
@@ -567,7 +567,7 @@ All three kept anyway, REJECT disclosed rather than reclassified, per the
 gitapex#406 drift-correction precedent: each edit has an independent,
 freestanding rationale (a named, distinct regulatory/harm regime;
 Dimension 1's own specificity principle applied reflexively to the
-rubric's own wording; near-zero cost; `check_skill_shape.py` unaffected
+rubric's own wording; near-zero cost; `gitapex_check_skill_shape.py` unaffected
 throughout) that does not depend on this specific corpus detecting an
 improvement. The pattern itself is now named as a standing, disclosed
 measurement limit rather than re-argued per edit -- a weaker-tier and/or
@@ -606,7 +606,7 @@ need #583's ablation-runner scope (a skill-injected-vs-no-skill *score
 comparison*, a different mechanism) -- only a much narrower "did a
 dispatch-shaped tool call appear" check.
 
-**Mechanism.** New `evals/scripts/check_dispatch_trace.py`
+**Mechanism.** New `evals/scripts/gitapex_check_dispatch_trace.py`
 (`check-transcript` subcommand: offline, parses a captured `stream-json`
 transcript's `tool_use` blocks against a caller-supplied dispatch-tool-name
 set, plus an optional `--dispatch-bash-pattern` for a nested `claude -p`
@@ -614,11 +614,11 @@ dispatch invoked via `Bash`; `run` subcommand: live orchestration using the
 same isolated-cwd/isolated-`$HOME` recipe as the registry). New optional
 fixture key, `expected.requires_fresh_dispatch: {tool_names, min_dispatches}`,
 independent of `output_contains`/`output_not_contains`. New
-`score_contract.py --dispatch-trace-verdict {confirmed,not_confirmed,
+`gitapex_score_contract.py --dispatch-trace-verdict {confirmed,not_confirmed,
 unverified}` flag, mirroring the existing `--judge-verdict` non-blending
 append convention exactly -- a second, separately-recorded evidence type,
 never blended into the substring score. New blocking lint check (#9) in
-`lint_fixture_assertions.py`: `evaluating-skill-quality` and
+`gitapex_lint_fixture_assertions.py`: `evaluating-skill-quality` and
 `battle-testing-a-skill` (a small, explicit allowlist, not a generic
 "SKILL.md mentions dispatch" scan -- that broader phrase also appears in
 `executing-a-branch-plan/SKILL.md`'s own Decision 12 mandate, which this
@@ -632,7 +632,7 @@ reports the dispatch tool as `"Task"`, and the model's own self-report of
 its available tools said `"Agent"` -- but an actual dispatch's `tool_use`
 block is emitted with `name: "Agent"`, disagreeing with the system-init
 field. Only a real invocation's `tool_use.name` is ground truth; neither
-metadata nor self-report is. `check_dispatch_trace.py` never hardcodes a
+metadata nor self-report is. `gitapex_check_dispatch_trace.py` never hardcodes a
 dispatch-tool name for this reason -- `--dispatch-tool-name` is always
 caller-supplied. Separately confirmed: `claude -p --plugin-dir <this
 repo's skills/>` does auto-trigger the real Skill off the fixtures' own
@@ -643,7 +643,7 @@ triggered skill then correctly reads this same registry and shells out to
 a *nested* `claude -p` via `Bash` (since the `Agent` tool is
 confirmed-contaminated on this platform), which is real, correct behavior
 but too slow (observed >3 minutes, background polling) to run to
-completion inside this pass's proof budget. `check_dispatch_trace.py`'s
+completion inside this pass's proof budget. `gitapex_check_dispatch_trace.py`'s
 `--dispatch-bash-pattern` option exists specifically to also recognize
 that dispatch shape, so a future run using it is not silently missed.
 
@@ -652,11 +652,11 @@ dispatches: a positive control instructed to use the `Agent` tool for the
 review (Track B, matching issue #500's own precedent, since the organic-
 trigger path above was too slow to use for this proof), and the negative
 control fixture below run verbatim (instructed to answer using only inline
-reasoning, no dispatch). `check_dispatch_trace.py check-transcript
+reasoning, no dispatch). `gitapex_check_dispatch_trace.py check-transcript
 --dispatch-tool-name Agent`: positive control `DISPATCH_COUNT=1` (exit 0,
 confirmed); negative control `DISPATCH_COUNT=0` (exit 1, not_confirmed).
 The negative-control fixture's own `output_contains`/`output_not_contains`
-independently scored 1.0 while `score_contract.py --dispatch-trace-verdict
+independently scored 1.0 while `gitapex_score_contract.py --dispatch-trace-verdict
 not_confirmed` correctly reported the dispatch verdict alongside it, not
 blended into it. Full record:
 [results/2026-07-30-issue-584-dispatch-trace/](results/2026-07-30-issue-584-dispatch-trace/manifest.json).
@@ -666,15 +666,15 @@ suite's own fixture exercising exactly the Procedure steps this gap
 named). New `tasks/dispatch-required-negative-control.yaml`: a
 deliberately-forced negative control whose correct, expected
 dispatch-trace-verdict is `not_confirmed` -- not evidence of a fixture
-defect. `lint_fixture_assertions.py`'s new check 9 passes for this skill
+defect. `gitapex_lint_fixture_assertions.py`'s new check 9 passes for this skill
 (previously blocking, confirmed via a direct before/after run of the
 linter). `split.md`'s train bucket lists the new fixture for listing
-consistency (not gate-enforced -- `gate_split_fixture_coverage.py`'s
+consistency (not gate-enforced -- `gitapex_gate_split_fixture_coverage.py`'s
 actual scope does not require it).
 
 Deterministic verification: `pytest` (100% coverage on both touched/new
-scripts, `check_dispatch_trace.py` and `score_contract.py`), fixture YAML
-parse, `lint_fixture_assertions.py` (39 warnings before and after --
+scripts, `gitapex_check_dispatch_trace.py` and `gitapex_score_contract.py`), fixture YAML
+parse, `gitapex_lint_fixture_assertions.py` (39 warnings before and after --
 identical baseline, confirmed via `git stash`; the only change is the two
 previously-blocking dispatch-declaration-coverage warnings clearing).
 
@@ -688,8 +688,8 @@ confirmed viable but slow) is open follow-up work, as is wiring
 `--dispatch-bash-pattern` into a real live run. Refs #584, #583, #500.
 
 **Post-PR adversarial review round.** A multi-angle review pass against
-`check_dispatch_trace.py`, the `score_contract.py` diff, and the
-`lint_fixture_assertions.py` diff (before this, one narrower pass had
+`gitapex_check_dispatch_trace.py`, the `gitapex_score_contract.py` diff, and the
+`gitapex_lint_fixture_assertions.py` diff (before this, one narrower pass had
 already caught and fixed two crash-on-malformed-input bugs pre-merge)
 found and fixed several more real defects: `run` left `subprocess.run`'s
 `OSError`/`subprocess.TimeoutExpired` uncaught, breaking this file's own
@@ -702,11 +702,11 @@ subprocess with a different cwd; `build_isolated_home` copied the full
 `.claude` tree before deleting most of it back out; `--allowed-tools`
 defaulted to `Agent` only, so `--dispatch-bash-pattern` could never
 actually observe a nested dispatch the harness itself would deny; and
-`check_dispatch_declaration_coverage` in `lint_fixture_assertions.py`
+`check_dispatch_declaration_coverage` in `gitapex_lint_fixture_assertions.py`
 only checked `requires_fresh_dispatch` truthiness, so `true` or
 `{min_dispatches: 0}` would silently satisfy check 9 while describing no
 real, checkable dispatch expectation. All fixed, with new tests for each
-(`tests/test_check_dispatch_trace.py`, `tests/test_lint_fixture_assertions.py`).
+(`tests/test_gitapex_check_dispatch_trace.py`, `tests/test_gitapex_lint_fixture_assertions.py`).
 The same review also caught two factual errors in this file's own prose
 above and in `results/2026-07-30-issue-584-dispatch-trace/manifest.json`
 (the fixture-count denominator was wrong in both -- 63 committed fixtures,
@@ -750,7 +750,7 @@ actual diff (not a full audit) and returned **PASS**, individually
 verifying that the diff's one non-narrative substantive change (a newly
 capped subagent-delegation-escalation paragraph) closes a gap
 `rubric.md`'s own Subagent-delegation-scope check had already
-self-flagged, rather than opening one. `check_skill_shape.py`: 58/58.
+self-flagged, rather than opening one. `gitapex_check_skill_shape.py`: 58/58.
 Full record, per-fixture scores, and the investigated-regression writeup:
 `evals/evaluating-skill-quality/split.md`'s Kept-edit log. Refs #614.
 
@@ -789,7 +789,7 @@ PASS. A diff-scoped self-review independently re-derived
 **WELL-FORMED-AND-MATURE**, naming one non-blocking dimension-8 gap
 (missing `metadata/gitapex.yaml` decision/audit entry, closed by this
 same commit) and one soft, non-blocking dimension-2/5 observation.
-`check_skill_shape.py`: 58/58. Full record, per-fixture scores, and the
+`gitapex_check_skill_shape.py`: 58/58. Full record, per-fixture scores, and the
 three battle-test rounds' findings: `evals/evaluating-skill-quality/
 split.md`'s Kept-edit log. Refs #619.
 

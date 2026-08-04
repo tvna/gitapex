@@ -89,5 +89,5 @@ jobs:
           # quote/backslash interpretation -- a doc path containing a space
           # or a single quote must pass through as one argument, not get
           # split or abort xargs with "unmatched quote".
-          printf '%s\n' "$FILES" | xargs -d '\n' -r python3 .github/scripts/gate_retro_title_convention_citation.py \
+          printf '%s\n' "$FILES" | xargs -d '\n' -r python3 .github/scripts/gitapex_gate_retro_title_convention_citation.py \
             --owner "${{ github.repository_owner }}" --repo "${{ github.event.repository.name }}"

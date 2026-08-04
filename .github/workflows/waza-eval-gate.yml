@@ -57,8 +57,8 @@ jobs:
       # evals/*/eval.yaml suite is treated as touched -- a manual dispatch
       # always has something to run rather than silently no-op'ing. Either
       # way, the actual skill-name extraction is delegated to
-      # detect_touched_eval_skills.py (unit-tested in
-      # tests/test_detect_touched_eval_skills.py) rather than re-derived
+      # gitapex_detect_touched_eval_skills.py (unit-tested in
+      # tests/test_gitapex_detect_touched_eval_skills.py) rather than re-derived
       # inline here -- this step only ever produces a flat path list.
       #
       # `--name-status` (not `--name-only`) plus `-z`: a PR that deletes an
@@ -75,7 +75,7 @@ jobs:
       # index rather than assumed to be a fixed width or line-delimited (there
       # are no line boundaries at all in `-z` output). `-z` is also what
       # disables git's core.quotepath C-style quoting of a non-ASCII/special
-      # -byte path (see detect_touched_eval_skills.py's own docstring for why
+      # -byte path (see gitapex_detect_touched_eval_skills.py's own docstring for why
       # that quoting would otherwise silently defeat detection).
       #
       # The raw `-z` bytes are captured to a temp file, never a plain bash
@@ -86,13 +86,13 @@ jobs:
       # straight into a bash array (arrays hold multiple NUL-free elements
       # fine; a scalar variable is what cannot hold an embedded NUL). The
       # filtered, currently-live paths are collected into a second array and
-      # handed to detect_touched_eval_skills.py's `--nul` mode via `printf
+      # handed to gitapex_detect_touched_eval_skills.py's `--nul` mode via `printf
       # '%s\0' "${arr[@]}"` -- kept NUL-delimited all the way into Python
       # rather than converted to newline via `tr` first, since `tr '\0' '\n'`
       # cannot tell its own inserted separator apart from a literal newline
       # byte inside a real path, silently mis-splitting that one path into
-      # two (see detect_touched_eval_skills.py's docstring for the full
-      # rationale and tests/test_detect_touched_eval_skills.py for the
+      # two (see gitapex_detect_touched_eval_skills.py's docstring for the full
+      # rationale and tests/test_gitapex_detect_touched_eval_skills.py for the
       # reproduced defeat case).
       - name: Determine touched skills
         id: diff
@@ -148,8 +148,8 @@ jobs:
             done
           fi
 
-          if ! skills=$(printf '%s\0' "${touched_paths_arr[@]}" | python3 .github/scripts/detect_touched_eval_skills.py --nul); then
-            echo "::error::detect_touched_eval_skills.py rejected a touched path (see the error above)" >&2
+          if ! skills=$(printf '%s\0' "${touched_paths_arr[@]}" | python3 .github/scripts/gitapex_detect_touched_eval_skills.py --nul); then
+            echo "::error::gitapex_detect_touched_eval_skills.py rejected a touched path (see the error above)" >&2
             exit 1
           fi
           echo "Touched skills: ${skills:-(none)}"
@@ -218,7 +218,7 @@ jobs:
 
       # Run each touched skill's suite at its own committed default model --
       # unlike waza-eval-matrix.yml, there is deliberately no
-      # set_config_model.py override here, since this gate answers "does the
+      # gitapex_set_config_model.py override here, since this gate answers "does the
       # skill behave correctly" (its own pinned default), not "how does it
       # behave across models" (that matrix's own separate question). Mirrors
       # waza-eval-matrix.yml's per-suite loop/summary-table style otherwise.

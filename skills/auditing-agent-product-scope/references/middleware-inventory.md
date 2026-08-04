@@ -124,6 +124,6 @@ are pinned in flake.nix, outside any Dependabot ecosystem," tracked
 instead on a separate Renovate/custom track (`docs/agent-product-scope.md`'s
 own Axis F Boundary names the tracking issue for this gap, so it is
 not duplicated here).
-`.github/scripts/scan_toolchain_pin_drift.py` is the deterministic
+`.github/scripts/gitapex_scan_toolchain_pin_drift.py` is the deterministic
 check that guards the Class B pins themselves staying in sync with
 `flake.nix`'s own declared values.

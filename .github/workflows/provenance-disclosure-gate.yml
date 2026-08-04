@@ -49,9 +49,9 @@ jobs:
       # Issue #552: a prior `grep -E '^\+[^+]' | sed 's/^\+//'` extraction
       # dropped every blank-line-only diff addition, collapsing per-file
       # paragraph structure (and file-to-file boundaries) that
-      # gate_provenance_disclosure.py's own paragraph-scoped check depends
+      # gitapex_gate_provenance_disclosure.py's own paragraph-scoped check depends
       # on, producing false positives on a sufficiently large addition.
-      # extract_diff_added_lines.py replaces it. A first fix (tracking
+      # gitapex_extract_diff_added_lines.py replaces it. A first fix (tracking
       # per-hunk boundaries under -U0) was itself found to cause false
       # NEGATIVES: -U0 shows zero context, so two edits inside the same
       # real paragraph, separated only by an untouched non-blank line, are
@@ -71,7 +71,7 @@ jobs:
           added_file="$RUNNER_TEMP/added_lines.txt"
           if ! git diff -U1000000 "$BASE_SHA...$HEAD_SHA" -- \
               'docs/*.md' 'docs/**/*.md' 'evals/*.md' 'evals/**/*.md' 'skills/*.md' 'skills/**/*.md' \
-              | python3 .github/scripts/extract_diff_added_lines.py > "$added_file"; then
+              | python3 .github/scripts/gitapex_extract_diff_added_lines.py > "$added_file"; then
             echo "::error::git diff/extraction failed between $BASE_SHA and $HEAD_SHA" >&2
             exit 1
           fi
@@ -92,6 +92,6 @@ jobs:
       - name: Check provenance disclosure
         run: |
           set -euo pipefail
-          python3 .github/scripts/gate_provenance_disclosure.py \
+          python3 .github/scripts/gitapex_gate_provenance_disclosure.py \
             --body "$RUNNER_TEMP/pr_body.txt" \
             --diff-added "${{ steps.diff.outputs.added-file }}"

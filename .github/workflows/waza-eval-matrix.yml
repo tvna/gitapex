@@ -138,7 +138,7 @@ jobs:
             # A failed override must not fall through to `waza run`: that would
             # execute the suite at its committed default model yet record it
             # under this matrix tier -- a silently mislabelled result.
-            if ! python3 evals/scripts/set_config_model.py "$suite" "$MODEL"; then
+            if ! python3 evals/scripts/gitapex_set_config_model.py "$suite" "$MODEL"; then
               echo "| ${skill} | FAIL (model override) |" >> "$GITHUB_STEP_SUMMARY"
               failed=1
               continue
@@ -157,7 +157,7 @@ jobs:
   # consistency): does this skill survive on a structurally different,
   # non-frontier-scale model? Same fail-loud-at-preflight / advisory-only /
   # never-merge-gating shape as eval-matrix, reusing its own committed
-  # set_config_model.py override script unmodified -- no new files, no new
+  # gitapex_set_config_model.py override script unmodified -- no new files, no new
   # self-hosted runner (see the header comment above for the model-size and
   # serving-mechanism decision trail and citations).
   eval-matrix-hf-gemma4:
@@ -223,7 +223,7 @@ jobs:
           fi
 
       # For each committed suite: rewrite its config.model to the confirmed
-      # Gemma 4 model id (same set_config_model.py the eval-matrix job uses,
+      # Gemma 4 model id (same gitapex_set_config_model.py the eval-matrix job uses,
       # unmodified), then run it against the HF Inference Endpoint. The edit
       # lands only on this ephemeral checkout; committed suites stay pinned
       # to their default. HF_INFERENCE_ENDPOINT_URL is passed as
@@ -259,7 +259,7 @@ jobs:
             # A failed override must not fall through to `waza run`: that would
             # execute the suite at its committed default model yet record it
             # under this lane -- a silently mislabelled result.
-            if ! python3 evals/scripts/set_config_model.py "$suite" "$MODEL"; then
+            if ! python3 evals/scripts/gitapex_set_config_model.py "$suite" "$MODEL"; then
               echo "| ${skill} | FAIL (model override) |" >> "$GITHUB_STEP_SUMMARY"
               failed=1
               continue

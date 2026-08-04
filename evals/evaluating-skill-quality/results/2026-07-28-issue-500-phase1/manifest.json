@@ -10,7 +10,7 @@
     "opus": "claude-opus-5"
   },
   "dispatch_mechanism": "Isolated claude -p --model <tier> subprocess, per skills/evaluating-skill-quality/references/adversarial-self-audit.md's Isolation-verification registry (this platform/version's Agent-tool dispatch entry is confirmed-contaminated; the claude -p subprocess alternative, from a CLAUDE.md-free working directory with an isolated $HOME copy, is the verified mechanism). Each dispatch was instructed to read SKILL.md and references/rubric.md off disk and follow the Procedure by hand, since this session has no registered Skill tool for evaluating-skill-quality's own unpublished content (the same disclosed methodology this skill's split.md Kept-edit log has used since its earliest iterations).",
-  "scorer": "skills/scorer-gated-skill-edits/scripts/score_contract.py, scoring each fixture's output_contains/output_not_contains assertions deterministically",
+  "scorer": "skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py, scoring each fixture's output_contains/output_not_contains assertions deterministically",
   "mean_scores": {
     "claude-haiku-4-5-20251001": 0.824586,
     "claude-sonnet-5": 0.901639,

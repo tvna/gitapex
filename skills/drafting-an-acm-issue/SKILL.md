@@ -63,7 +63,7 @@ pre-verified (Step 8 states the full rule; it is not repeated here).
    (what this issue explicitly does not cover), each only from stated
    or clearly implied scope, not invention.
 6. Validate the drafted body carries the ACM table before creating the
-   issue: `python3 scripts/check_acm_present.py --body <draft-file>`
+   issue: `python3 scripts/gitapex_check_acm_present.py --body <draft-file>`
    (or pipe the draft on stdin) rather than re-reasoning "does this have
    the table" in prose each run.
 7. Ask one focused question only when a stated criterion is genuinely
@@ -137,7 +137,7 @@ Map** -> **Constraints** -> **Non-goals** -> **Next Move**. Insert
   (Step 8's draft-labeling rule).
 - Do not implement the change or open a branch/PR as part of this
   skill; it authors an issue, nothing past that.
-- Do not create the issue before `check_acm_present.py` passes on the
+- Do not create the issue before `gitapex_check_acm_present.py` passes on the
   drafted body.
 
 ## Related skills
@@ -161,7 +161,7 @@ git-hosting-specific detail, and even that degrades to whatever
 issue-creation path the calling repository actually has.
 
 Install/vendoring-time integrity (whether this SKILL.md and its
-bundled `scripts/check_acm_present.py` are themselves the untampered,
+bundled `scripts/gitapex_check_acm_present.py` are themselves the untampered,
 intended copies) is a separate question from the runtime content trust
 Step 1 covers -- a runtime PASS from Step 6 says nothing about whether
 the copy that produced it was the one actually intended for

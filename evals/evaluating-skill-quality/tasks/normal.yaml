@@ -28,7 +28,7 @@ inputs:
     shape checker against it.
 expected:
   output_contains:
-    - "check_skill_shape.py"
+    - "gitapex_check_skill_shape.py"
     - "Helps with documents and file processing tasks"
     - "Use when"
   output_not_contains:

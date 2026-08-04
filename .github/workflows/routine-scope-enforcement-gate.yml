@@ -76,4 +76,4 @@ jobs:
           # -d '\n': see retro-title-convention-citation-gate.yml's own
           # xargs step for why plain whitespace/quote splitting is unsafe
           # for a file-path list.
-          printf '%s\n' "$DOCS" | xargs -d '\n' -r python3 .github/scripts/gate_routine_scope_enforcement.py --skills-root skills
+          printf '%s\n' "$DOCS" | xargs -d '\n' -r python3 .github/scripts/gitapex_gate_routine_scope_enforcement.py --skills-root skills

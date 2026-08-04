@@ -8,7 +8,7 @@ spec:
   references:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/32"
-      summary: "Delegated this skill's own deterministic shape lane to scripts/check_skill_shape.py; the worked example in references/worked-example-self-review.md documents that delegation."
+      summary: "Delegated this skill's own deterministic shape lane to scripts/gitapex_check_skill_shape.py; the worked example in references/worked-example-self-review.md documents that delegation."
     - kind: audit
       anchor: "https://github.com/tvna/gitapex/issues/332"
       summary: "Verified the warning-only compatibility baseline on 2026-07-25 against the Agent Skills spec and docs for Claude Code, Codex, Gemini CLI, Devin, OpenClaw, and HermesAgent; evidence in references/runtime-compatibility.md."
@@ -48,7 +48,7 @@ spec:
       summary: "Self-audit tracking issue (battle-testing-a-skill and evaluating-skill-quality applied to themselves) resolved most findings: dimensions 1/2, 9, 12, 13/15/16, and 17 gained references/adversarial-self-audit.md plus SKILL.md pointers."
     - kind: audit
       anchor: "https://github.com/tvna/gitapex/issues/261"
-      summary: "Dimension 11 gained a second independent check: a real downstream consumer, .github/scripts/gate_skill_audit_disclosure.py, was found, resolving the prior INDETERMINATE verdict."
+      summary: "Dimension 11 gained a second independent check: a real downstream consumer, .github/scripts/gitapex_gate_skill_audit_disclosure.py, was found, resolving the prior INDETERMINATE verdict."
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/261"
       summary: "Closed the dimension 6/8 named-rejection-token gap in references/rubric.md's Verdicts section by adding Not-well-formed and Indeterminate verdicts."
@@ -60,7 +60,7 @@ spec:
       summary: "Deferred dimension 14 (a dedicated regression corpus for this file's own guardrail prose, distinct from evals/evaluating-skill-quality/'s existing behavior-grading corpus) to a follow-up issue."
     - kind: audit
       anchor: "https://github.com/tvna/gitapex/issues/383 -> https://github.com/tvna/gitapex/issues/390"
-      summary: "A fresh isolated self-review after the rubric.md cleanup returned WELL-FORMED-NOT-MATURE citing three gaps: dimension 2's triplicated step-level disclaimer (deduplicated), dimension 5's subagent-isolation-registry.md merged into adversarial-self-audit.md, and dimension 7's test_check_skill_shape.py gaining a subprocess CLI-boundary test group."
+      summary: "A fresh isolated self-review after the rubric.md cleanup returned WELL-FORMED-NOT-MATURE citing three gaps: dimension 2's triplicated step-level disclaimer (deduplicated), dimension 5's subagent-isolation-registry.md merged into adversarial-self-audit.md, and dimension 7's test_gitapex_check_skill_shape.py gaining a subprocess CLI-boundary test group."
       outcome:
         verdict: WELL-FORMED-NOT-MATURE
         found: 3
@@ -175,7 +175,7 @@ spec:
         found: 2
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/pull/496"
-      summary: "Codex review caught two real bugs: check_skill_shape.py's citation-URL exemption regex missed a titled inline link (CommonMark's optional title), and the restraint fixture's delegation step stated a per-batch size, not a real total cap. Both fixed and re-verified live (fixture: 0.75->1.0->1.0 clean)."
+      summary: "Codex review caught two real bugs: gitapex_check_skill_shape.py's citation-URL exemption regex missed a titled inline link (CommonMark's optional title), and the restraint fixture's delegation step stated a per-batch size, not a real total cap. Both fixed and re-verified live (fixture: 0.75->1.0->1.0 clean)."
       outcome:
         verdict: fixed
         found: 2
@@ -208,7 +208,7 @@ spec:
       summary: "Self-review gap 2/3, not blocking, deferred: Confidentiality awareness fires on this skill's own content -- Procedure step 5's mandatory verbatim quoting of a reviewed target's evidence has no stated safeguard against reproducing a credential/PII/confidential detail if the target happens to contain one. PROPOSE_CONFIDENTIALITY_SAFEGUARD, self-applied."
     - kind: deferral
       anchor: "https://github.com/tvna/gitapex/issues/537"
-      summary: "Self-review gap 3/3, not blocking, pre-existing (not introduced by this PR): dimensions 5, 7, 9 gaps -- the common-case dispatch mandatorily reads three files, check_skill_shape.py's module docstring may be stale on spec.references' real shape, and the procedure has no tier-specific scaffolding despite a Broad capability declaration."
+      summary: "Self-review gap 3/3, not blocking, pre-existing (not introduced by this PR): dimensions 5, 7, 9 gaps -- the common-case dispatch mandatorily reads three files, gitapex_check_skill_shape.py's module docstring may be stale on spec.references' real shape, and the procedure has no tier-specific scaffolding despite a Broad capability declaration."
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/614"
       summary: "Per Anthropic's Opus 5 and Prompting Opus 5 guidance (less need for verification/correction narration, readier subagent delegation, stable long-context following), trimmed narrative bloat across SKILL.md and references/*.md. capabilityAssumption stays Broad -- Adaptive was rejected, since moving Lifecycle/Execution-requirements detail out of the body needs a weak model to pull references/ on demand. Body-length ceiling (issue/537 gap 1/3) only partly relieved: narrative cuts only."
@@ -263,7 +263,7 @@ spec:
       summary: "Folded the marketplace/plugin-install isolated-dispatch mechanism (verified ad hoc during issue/619's own gate correction) into references/adversarial-self-audit.md's Isolation verification registry as a durable, dated Known entry, alongside the existing Agent-tool and --plugin-dir entries. SKILL.md and rubric.md unchanged; capabilityAssumption stays Broad."
     - kind: audit
       anchor: "https://github.com/tvna/gitapex/issues/621"
-      summary: "Dispatch-infra fix (same class as issue/584's check_dispatch_trace.py addition), not a rubric.md edit -- scorer-gated-skill-edits' held-out gate does not apply. check_skill_shape.py 58/58, full pytest (100% coverage on the touched script). Live proof on this session's own pinned platform: no-manifest copy made run --marketplace-source/--plugin-name fail loudly (exit 2, no dispatch attempted); manifest-present copy with real plugin registration against a scratch $HOME succeeded."
+      summary: "Dispatch-infra fix (same class as issue/584's gitapex_check_dispatch_trace.py addition), not a rubric.md edit -- scorer-gated-skill-edits' held-out gate does not apply. gitapex_check_skill_shape.py 58/58, full pytest (100% coverage on the touched script). Live proof on this session's own pinned platform: no-manifest copy made run --marketplace-source/--plugin-name fail loudly (exit 2, no dispatch attempted); manifest-present copy with real plugin registration against a scratch $HOME succeeded."
       outcome:
         verdict: KEEP
     - kind: audit
@@ -274,7 +274,7 @@ spec:
       summary: "Added a ninth Mechanism-fit check, Invocation-mode fit: the review had no step establishing who may invoke a target at all, so a skill whose description promises an automatic trigger while disable-model-invocation switches model invocation off graded as a dimension-1 pass. Re-verified the Claude Code runtime-compatibility row on 2026-08-01 (the field was recorded only on the Cursor row, as a Cursor-only extension); recorded the two runtimes' identical meaning as an agreement, not a Conflict."
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/652"
-      summary: "Split the same gap across both lanes rather than prose alone: the semantic mode-vs-trigger contradiction stays model-judged in rubric.md, while check_skill_shape.py's new invocation-mode-well-formed gates only what a script can decide -- a value outside Claude Code's documented boolean literals, and the disable-model-invocation + user-invocable: false combination that leaves a skill invocable by nobody. capabilityAssumption stays Broad."
+      summary: "Split the same gap across both lanes rather than prose alone: the semantic mode-vs-trigger contradiction stays model-judged in rubric.md, while gitapex_check_skill_shape.py's new invocation-mode-well-formed gates only what a script can decide -- a value outside Claude Code's documented boolean literals, and the disable-model-invocation + user-invocable: false combination that leaves a skill invocable by nobody. capabilityAssumption stays Broad."
   skillDependencies:
     requires: []
     relatedTo:

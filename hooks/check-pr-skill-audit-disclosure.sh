@@ -19,8 +19,8 @@
 # backstop regardless of what this hook can determine locally.
 #
 # Only checks the base two-audit disclosure via the self-contained
-# check_skill_audit_disclosure_or_waiver.py sibling bundled beside this
-# hook (not .github/scripts/gate_skill_audit_disclosure.py -- per
+# gitapex_check_skill_audit_disclosure_or_waiver.py sibling bundled beside this
+# hook (not .github/scripts/gitapex_gate_skill_audit_disclosure.py -- per
 # docs/repository-layout.md, only skills/ and hooks/ are deployed with
 # the plugin, .github/ never is; see that sibling script's own docstring,
 # and hooks/check-issue-acm-disclosure.sh's docstring for the same
@@ -67,10 +67,10 @@ deny() {
 }
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-check_script="$script_dir/check_skill_audit_disclosure_or_waiver.py"
+check_script="$script_dir/gitapex_check_skill_audit_disclosure_or_waiver.py"
 
 if [ ! -f "$check_script" ]; then
-  deny "Blocked by hooks/check-pr-skill-audit-disclosure.sh: cannot verify skill audit disclosure -- check_skill_audit_disclosure_or_waiver.py was not found at $check_script (corrupted or incomplete plugin bundle)."
+  deny "Blocked by hooks/check-pr-skill-audit-disclosure.sh: cannot verify skill audit disclosure -- gitapex_check_skill_audit_disclosure_or_waiver.py was not found at $check_script (corrupted or incomplete plugin bundle)."
 fi
 
 if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
@@ -127,10 +127,10 @@ if [ "$check_exit" -eq 0 ]; then
 fi
 
 if printf '%s' "$check_output" | grep -q '^FAIL:'; then
-  deny "Blocked by hooks/check-pr-skill-audit-disclosure.sh: this PR's diff adds/modifies a skills/*/SKILL.md but its body does not disclose both battle-testing-a-skill and evaluating-skill-quality audit evidence (a verdict or waiver for each). Add a '## Skill audit evidence' section -- see .github/scripts/gate_skill_audit_disclosure.py for the exact format CI enforces."
+  deny "Blocked by hooks/check-pr-skill-audit-disclosure.sh: this PR's diff adds/modifies a skills/*/SKILL.md but its body does not disclose both battle-testing-a-skill and evaluating-skill-quality audit evidence (a verdict or waiver for each). Add a '## Skill audit evidence' section -- see .github/scripts/gitapex_gate_skill_audit_disclosure.py for the exact format CI enforces."
 fi
 
-# check_skill_audit_disclosure_or_waiver.py only ever exits 0 (PASS) or 1
+# gitapex_check_skill_audit_disclosure_or_waiver.py only ever exits 0 (PASS) or 1
 # with a 'FAIL: ...' stderr message for a genuine disclosure failure --
 # anything else (a different exit code, or exit 1 with no 'FAIL:' line,
 # e.g. an uncaught traceback) means the check script itself crashed, not
@@ -138,4 +138,4 @@ fi
 # (an unverifiable body should not silently pass), but the message must
 # say so plainly rather than blame the PR body for a bug in the check
 # script.
-deny "Blocked by hooks/check-pr-skill-audit-disclosure.sh: check_skill_audit_disclosure_or_waiver.py exited $check_exit without a recognized FAIL message -- this looks like a bug in the check script itself, not a genuine disclosure failure in your PR body. Output: $check_output"
+deny "Blocked by hooks/check-pr-skill-audit-disclosure.sh: gitapex_check_skill_audit_disclosure_or_waiver.py exited $check_exit without a recognized FAIL message -- this looks like a bug in the check script itself, not a genuine disclosure failure in your PR body. Output: $check_output"

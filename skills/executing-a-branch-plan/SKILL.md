@@ -49,7 +49,7 @@ first, not skimmed.
    the ACM, quoting each source row's own Planned-ops text into its task
    record rather than paraphrasing it. Compute a file-ownership map (now
    pre-filtered by
-   `scripts/check_file_ownership_conflicts.py`, a deterministic
+   `scripts/gitapex_check_file_ownership_conflicts.py`, a deterministic
    mechanization of the pure-string-matching case) AND an
    interface-dependency map (a pinned model judgment -- see [task
    decomposition reference](references/task-decomposition.md#two-dependency-edge-types-both-computed-before-wave-assignment))
@@ -86,7 +86,7 @@ first, not skimmed.
    method is an automatable test; Refactor is never per-task, deferred
    entirely to step 8. Once a wave's run returns, in the main thread (the
    Workflow script itself has no filesystem/shell access): screen each
-   task's own `BASE..HEAD` diff -- `scripts/check_canonical_governance_paths.py`
+   task's own `BASE..HEAD` diff -- `scripts/gitapex_check_canonical_governance_paths.py`
    pre-filters the literal/canonical cases first, then the model's own
    full review (the pinned residual judgment step 2 already introduced)
    still runs regardless of that pre-filter's result -- merge the
@@ -268,8 +268,8 @@ skill-to-skill reuse, both portable.
 
 Install/vendoring-time integrity (whether this SKILL.md, its
 `references/`, its bundled `scripts/` (`check_task_bash_safety.sh`,
-`check_file_ownership_conflicts.py`, `check_canonical_governance_paths.py`,
-and their shared `_path_normalize.py` helper), and both
+`gitapex_check_file_ownership_conflicts.py`, `gitapex_check_canonical_governance_paths.py`,
+and their shared `_gitapex_path_normalize.py` helper), and both
 `branch-plan-task` agent-definition variants are themselves the
 untampered, intended copies) is a separate question from the runtime
 content trust the threat-model reference covers -- a step-1 PASS says
@@ -286,10 +286,10 @@ explicit pin now sits on exactly the four steps whose own judgment a
 less capable model is most likely to miss or false-negative on, given
 the blast radius stated at the top of this file -- step 1's
 approval-comment judgment, the residual instruction-injection judgment
-in steps 2/6 (after `scripts/check_canonical_governance_paths.py`
+in steps 2/6 (after `scripts/gitapex_check_canonical_governance_paths.py`
 mechanizes the literal/canonical sub-checks), step 3's
 interface-dependency-edge judgment (after
-`scripts/check_file_ownership_conflicts.py` mechanizes the
+`scripts/gitapex_check_file_ownership_conflicts.py` mechanizes the
 file-ownership edge, which needs no pin), and step 8's
 refactor/adversarial-review dispatch. The other five steps run at
 whatever model/effort the calling session already uses. `Adaptive` is a

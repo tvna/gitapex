@@ -28,7 +28,7 @@ destined for a public sink.
 1. **Undisclosed provenance markers.** Scan for anything identifying the
    build/runtime model, agent, or session that produced the artifact, and
    any internal tooling fingerprint, that the owner has not chosen to
-   disclose. Run `python3 scripts/scan_provenance.py --file <file>` first
+   disclose. Run `python3 scripts/gitapex_scan_provenance.py --file <file>` first
    to surface mechanical candidates (model IDs, session URLs, generic
    build/agent tags) instead of re-scanning for these patterns in prose
    each time; the script only surfaces candidates, it does not decide
@@ -59,7 +59,7 @@ destined for a public sink.
       exemption. Check there before re-deriving the judgment call from
       scratch; do not assume such a record exists just because this
       note does. A ratification narrows *what item 2 already permits*,
-      never *what this scan reports*: `scripts/scan_provenance.py`
+      never *what this scan reports*: `scripts/gitapex_scan_provenance.py`
       still flags every matching hit, by design, whether or not a
       ratification exists -- confirming a given hit is the ratified
       instance and not a lookalike remains a per-hit judgment call, not
@@ -74,7 +74,7 @@ destined for a public sink.
    the platform, not the draft:
 
    ```bash
-   python3 scripts/scan_provenance.py <<< "$ACTUAL_STORED_BODY"
+   python3 scripts/gitapex_scan_provenance.py <<< "$ACTUAL_STORED_BODY"
    ```
 
    Pipe the body in on stdin and omit `--file` entirely. `--file -` does
@@ -144,7 +144,7 @@ The drafted `body` passed to `create_pull_request` is clean: check 1's
 pre-submission scan of it finds nothing.
 
 ```bash
-python3 scripts/scan_provenance.py <<< "fix(skill): tighten the ordering rule
+python3 scripts/gitapex_scan_provenance.py <<< "fix(skill): tighten the ordering rule
 
 Refs #83"
 ```
@@ -158,7 +158,7 @@ check 2, the platform has appended a trailer that was never in the
 submitted `body`:
 
 ```bash
-python3 scripts/scan_provenance.py <<< "fix(skill): tighten the ordering rule
+python3 scripts/gitapex_scan_provenance.py <<< "fix(skill): tighten the ordering rule
 
 Refs #83
 
@@ -194,7 +194,7 @@ substitutes for the other.
   or get the owner's explicit sign-off to proceed anyway with the flag
   unresolved. Some environments back the `git push` case with a
   PreToolUse hook (this repository's own `hooks/check-bash-safety.sh` is
-  one example: it runs `scripts/scan_provenance.py` against the outgoing
+  one example: it runs `scripts/gitapex_scan_provenance.py` against the outgoing
   commits and surfaces a warning, not a block, if it flags anything). The
   script's own docstring says it surfaces candidates, it does not decide
   -- so a hit does not stop the push, but it does still require applying

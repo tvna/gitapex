@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/tvna/gitapex/blob/main/.gitapex/skill-metadata.schema.json",
   "title": "gitapex skill metadata sidecar (SkillMetadata gitapex.io/v1alpha1)",
-  "description": "Schema for every skills/<name>/metadata/gitapex.yaml sidecar. Kubernetes-CRD-shaped by deliberate convention (apiVersion/kind/metadata/spec envelope) -- never applied to a real cluster; the envelope buys schema versioning (apiVersion), a self-describing kind, and a clean metadata (identity) vs. spec (declared content) split. Structural/type/enum/pattern rules and the single cross-FIELD rule this format has (spec.skillDependencies.requires vs. spec.portability; spec.lifecycle.experimental vs. spec.lifecycle.stable) are expressed here. What this schema deliberately CANNOT express -- and therefore still needs a companion drift scanner, mirroring .gitapex/ssot.schema.json + .github/scripts/scan_ssot_schema.py's own split between jsonschema.Draft202012Validator (this file) and repo-grounded reference-drift checks (the scanner) -- is anything that requires reading a SECOND file: metadata.name equalling the real skill directory name; spec.skillDependencies.requires/relatedTo and spec.lifecycle.deprecated.replacement each resolving to an existing sibling skills/<name>/ directory; and the repo-wide acyclicity of the spec.skillDependencies.requires graph across all sidecars (a single instance has no view of the graph). Also out of scope, permanently, by kind rather than by gap: every check in skills/evaluating-skill-quality/scripts/check_skill_shape.py that inspects SKILL.md/references/*.md prose (bare-issue-number citation scanning, Markdown link/anchor resolution, cross-skill citation resolution, illustrative-model-identifier/placeholder scanning, step-location-contradiction detection, and more) -- those checks are not about this sidecar file's shape at all, and no JSON Schema for metadata/gitapex.yaml can ever cover them.",
+  "description": "Schema for every skills/<name>/metadata/gitapex.yaml sidecar. Kubernetes-CRD-shaped by deliberate convention (apiVersion/kind/metadata/spec envelope) -- never applied to a real cluster; the envelope buys schema versioning (apiVersion), a self-describing kind, and a clean metadata (identity) vs. spec (declared content) split. Structural/type/enum/pattern rules and the single cross-FIELD rule this format has (spec.skillDependencies.requires vs. spec.portability; spec.lifecycle.experimental vs. spec.lifecycle.stable) are expressed here. What this schema deliberately CANNOT express -- and therefore still needs a companion drift scanner, mirroring .gitapex/ssot.schema.json + .github/scripts/gitapex_scan_ssot_schema.py's own split between jsonschema.Draft202012Validator (this file) and repo-grounded reference-drift checks (the scanner) -- is anything that requires reading a SECOND file: metadata.name equalling the real skill directory name; spec.skillDependencies.requires/relatedTo and spec.lifecycle.deprecated.replacement each resolving to an existing sibling skills/<name>/ directory; and the repo-wide acyclicity of the spec.skillDependencies.requires graph across all sidecars (a single instance has no view of the graph). Also out of scope, permanently, by kind rather than by gap: every check in skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py that inspects SKILL.md/references/*.md prose (bare-issue-number citation scanning, Markdown link/anchor resolution, cross-skill citation resolution, illustrative-model-identifier/placeholder scanning, step-location-contradiction detection, and more) -- those checks are not about this sidecar file's shape at all, and no JSON Schema for metadata/gitapex.yaml can ever cover them.",
   "type": "object",
   "required": ["apiVersion", "kind", "metadata", "spec"],
   "additionalProperties": false,
@@ -28,7 +28,7 @@
         "name": {
           "type": "string",
           "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
-          "description": "Must equal the skill's own directory name (skills/<name>/) -- the metadata-name-matches-dir check. That equality is a cross-file fact this schema cannot verify on its own (it never sees the directory a given instance was read from); the companion scanner re-derives it the same way check_skill_shape.py does, from the instance's own file path. The kebab-case pattern here matches this repository's real, already-observed directory-naming convention (NAME_RE in check_skill_shape.py), not a separately gated rule of its own."
+          "description": "Must equal the skill's own directory name (skills/<name>/) -- the metadata-name-matches-dir check. That equality is a cross-file fact this schema cannot verify on its own (it never sees the directory a given instance was read from); the companion scanner re-derives it the same way gitapex_check_skill_shape.py does, from the instance's own file path. The kebab-case pattern here matches this repository's real, already-observed directory-naming convention (NAME_RE in gitapex_check_skill_shape.py), not a separately gated rule of its own."
         }
       }
     },
@@ -36,7 +36,7 @@
       "type": "object",
       "required": ["portability", "capabilityAssumption"],
       "additionalProperties": true,
-      "description": "additionalProperties is deliberately true: check_skill_shape.py's own _parse_manifest docstring states that any spec key other than the six gated ones below (e.g. the reserved-but-ungated spec.evalStatus) is 'still deliberately skipped' -- tolerated, not rejected. Only the six keys enumerated in `properties` below carry a real shape contract; anything else is unenforced free-form space by design, not an oversight.",
+      "description": "additionalProperties is deliberately true: gitapex_check_skill_shape.py's own _parse_manifest docstring states that any spec key other than the six gated ones below (e.g. the reserved-but-ungated spec.evalStatus) is 'still deliberately skipped' -- tolerated, not rejected. Only the six keys enumerated in `properties` below carry a real shape contract; anything else is unenforced free-form space by design, not an oversight.",
       "properties": {
         "portability": {
           "type": "string",
@@ -92,7 +92,7 @@
         "anchor": {
           "type": "string",
           "minLength": 1,
-          "description": "The provenance source: a full https://github.com/tvna/gitapex/issues/<N> (or /pull/<N>) URL, another absolute URL, a repo-relative path, or method:<skill-name> for an audit with no dedicated issue. Free-form beyond minLength -- no-bare-issue-citation (a prose scan across the whole sidecar for a bare #N/owner/repo#N token, run by check_skill_shape.py) is deliberately NOT reproduced as a schema pattern here: that scan's real implementation excludes inline code, fenced blocks, and Markdown-link spans with its own multi-hundred-line rule set, and a partial regex reimplementation here would silently diverge from it rather than genuinely cover it. This remains the companion scanner's (or check_skill_shape.py's) job, not this schema's."
+          "description": "The provenance source: a full https://github.com/tvna/gitapex/issues/<N> (or /pull/<N>) URL, another absolute URL, a repo-relative path, or method:<skill-name> for an audit with no dedicated issue. Free-form beyond minLength -- no-bare-issue-citation (a prose scan across the whole sidecar for a bare #N/owner/repo#N token, run by gitapex_check_skill_shape.py) is deliberately NOT reproduced as a schema pattern here: that scan's real implementation excludes inline code, fenced blocks, and Markdown-link spans with its own multi-hundred-line rule set, and a partial regex reimplementation here would silently diverge from it rather than genuinely cover it. This remains the companion scanner's (or gitapex_check_skill_shape.py's) job, not this schema's."
         },
         "summary": {
           "type": "string",
@@ -110,13 +110,13 @@
     "skillDependencies": {
       "type": "object",
       "additionalProperties": false,
-      "description": "The inter-skill dependency graph, split by strength. A key present but holding real YAML null (a bare `skillDependencies:` header with nothing under it) is rejected by the `type: object` constraint above, matching check_skill_shape.py's own null/absent distinction: absent means not declared (valid, optional); present-but-null is a real shape defect (skill-dependencies-well-formed), never silently read as 'declared, nothing inside'.",
+      "description": "The inter-skill dependency graph, split by strength. A key present but holding real YAML null (a bare `skillDependencies:` header with nothing under it) is rejected by the `type: object` constraint above, matching gitapex_check_skill_shape.py's own null/absent distinction: absent means not declared (valid, optional); present-but-null is a real shape defect (skill-dependencies-well-formed), never silently read as 'declared, nothing inside'.",
       "properties": {
         "requires": {
           "type": "array",
           "uniqueItems": true,
           "items": { "$ref": "#/$defs/skillNameRef" },
-          "description": "Hard: the procedure cannot function without it. An empty list is a valid, deliberate 'no hard dependencies' statement, unlike spec.references. Every name must resolve to an existing skills/<name>/ directory (skill-dependencies-resolve) -- cross-file, checked by the companion scanner, not this schema. The full requires-graph across all sidecars must also be acyclic (a repo-wide invariant enforced by tests/test_skill_metadata_sidecar.py, entirely outside any single instance's own schema)."
+          "description": "Hard: the procedure cannot function without it. An empty list is a valid, deliberate 'no hard dependencies' statement, unlike spec.references. Every name must resolve to an existing skills/<name>/ directory (skill-dependencies-resolve) -- cross-file, checked by the companion scanner, not this schema. The full requires-graph across all sidecars must also be acyclic (a repo-wide invariant enforced by tests/test_gitapex_skill_metadata_sidecar.py, entirely outside any single instance's own schema)."
         },
         "relatedTo": {
           "type": "array",
@@ -154,7 +154,7 @@
         "trackingIssue": {
           "type": "string",
           "pattern": "^https://github\\.com/tvna/gitapex/(?:issues|pull)/\\d+$",
-          "description": "A full GitHub issue/PR URL, anchoring the whole string -- deliberately not a bare #123/owner/repo#123 shape (that loses its meaning once this sidecar travels with its skill directory to another repository via vendoring). Shape-only: never resolved against a live GitHub API call, matching check_skill_shape.py's own offline/read-only design."
+          "description": "A full GitHub issue/PR URL, anchoring the whole string -- deliberately not a bare #123/owner/repo#123 shape (that loses its meaning once this sidecar travels with its skill directory to another repository via vendoring). Shape-only: never resolved against a live GitHub API call, matching gitapex_check_skill_shape.py's own offline/read-only design."
         },
         "since": { "$ref": "#/$defs/lifecycleDate" }
       }
@@ -199,12 +199,12 @@
       "type": "string",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
       "format": "date",
-      "description": "Strict YYYY-MM-DD, and a real calendar date (e.g. 2026-02-30 must fail, not just fail the shape). The `pattern` alone only gates shape; `format: date` additionally requires a validator run with format assertion enabled (jsonschema.Draft202012Validator(..., format_checker=jsonschema.FormatChecker())) to reject an out-of-range date the same way check_skill_shape.py's own datetime.date.fromisoformat check does -- a schema consumer that ignores format assertions (permitted by the JSON Schema spec itself) only gets the shape check from `pattern`, so the companion scanner MUST enable format checking explicitly, not assume it is on by default."
+      "description": "Strict YYYY-MM-DD, and a real calendar date (e.g. 2026-02-30 must fail, not just fail the shape). The `pattern` alone only gates shape; `format: date` additionally requires a validator run with format assertion enabled (jsonschema.Draft202012Validator(..., format_checker=jsonschema.FormatChecker())) to reject an out-of-range date the same way gitapex_check_skill_shape.py's own datetime.date.fromisoformat check does -- a schema consumer that ignores format assertions (permitted by the JSON Schema spec itself) only gets the shape check from `pattern`, so the companion scanner MUST enable format checking explicitly, not assume it is on by default."
     },
     "executionRequirements": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Only one recognized subkey so far (tools); further categories (filesystem/network/mcp/credentials/browser/externalServices/context) are deferred -- until they land, any key other than tools here is a real unknown key, not reserved space, matching check_skill_shape.py's own current behavior.",
+      "description": "Only one recognized subkey so far (tools); further categories (filesystem/network/mcp/credentials/browser/externalServices/context) are deferred -- until they land, any key other than tools here is a real unknown key, not reserved space, matching gitapex_check_skill_shape.py's own current behavior.",
       "properties": {
         "tools": { "$ref": "#/$defs/executionRequirementsTools" }
       }
@@ -212,7 +212,7 @@
     "executionRequirementsTools": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Free-form capability tags; this schema (like check_skill_shape.py) does not define a fixed vocabulary for the tag strings themselves.",
+      "description": "Free-form capability tags; this schema (like gitapex_check_skill_shape.py) does not define a fixed vocabulary for the tag strings themselves.",
       "properties": {
         "read": { "$ref": "#/$defs/toolTagList" },
         "write": { "$ref": "#/$defs/toolTagList" },

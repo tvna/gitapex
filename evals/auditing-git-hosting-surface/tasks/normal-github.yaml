@@ -13,7 +13,7 @@ expected:
     - "Covered"
     - "Gap"
     - "#82"
-    - "scan_unpinned_actions"
+    - "gitapex_scan_unpinned_actions"
     - "list_repository_collaborators"
   output_not_contains:
     - "audit passed"

@@ -70,7 +70,7 @@ spec:
         action: none
     - kind: audit
       anchor: "https://github.com/tvna/gitapex/issues/475"
-      summary: "battle-testing-a-skill's own audit round was waived for this fix per gate_skill_audit_disclosure.py's rule (frontmatter description unchanged): the new step 1 text reuses already-audited wording from evaluating-skill-quality/SKILL.md's shipped Subagent dispatch section rather than introducing novel judgment-bearing content, the same waiver class evaluating-deterministic-gate-quality's issue 455 entry precedents."
+      summary: "battle-testing-a-skill's own audit round was waived for this fix per gitapex_gate_skill_audit_disclosure.py's rule (frontmatter description unchanged): the new step 1 text reuses already-audited wording from evaluating-skill-quality/SKILL.md's shipped Subagent dispatch section rather than introducing novel judgment-bearing content, the same waiver class evaluating-deterministic-gate-quality's issue 455 entry precedents."
       outcome:
         verdict: waived
     - kind: correction

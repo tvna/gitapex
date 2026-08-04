@@ -94,10 +94,10 @@ its own owning issues/files, never gitapex's.
    skill-shape checker against any skill whose files changed
    (`references/gitapex-cross-links.md` names gitapex's own command),
    this skill's own axis-shape checker:
-   `python3 scripts/check_axis_shape.py <path-to-your-scope-map>`, and
+   `python3 scripts/gitapex_check_axis_shape.py <path-to-your-scope-map>`, and
    -- if the edit touched a table-rendered evidence file such as this
    skill's own `references/middleware-inventory.md` -- its table-shape
-   checker (`scripts/check_middleware_table_shape.py`), pointed at that
+   checker (`scripts/gitapex_check_middleware_table_shape.py`), pointed at that
    same file.
 
 ## Output
@@ -176,17 +176,17 @@ pattern -- a vendored copy drops that one file rather than hand-editing
 every section.
 
 In gitapex, Step 8's shape checks are not only a manual pre-commit
-step: `tests/test_agent_product_scope_shape.py` runs
-`check_axis_shape.py` against the live scope map, and
-`tests/test_middleware_table_shape.py` runs
-`check_middleware_table_shape.py` against the live
+step: `tests/test_gitapex_agent_product_scope_shape.py` runs
+`gitapex_check_axis_shape.py` against the live scope map, and
+`tests/test_gitapex_middleware_table_shape.py` runs
+`gitapex_check_middleware_table_shape.py` against the live
 `references/middleware-inventory.md`, both as part of the repository's
 own enforced `pytest` suite, so an author skipping Step 8 locally does
 not let a dropped field, an invalid axis, or a collapsed table column
 merge silently.
 
 Install/vendoring-time integrity (whether this `SKILL.md` and its
-bundled `scripts/check_axis_shape.py`/`check_middleware_table_shape.py`
+bundled `scripts/gitapex_check_axis_shape.py`/`gitapex_check_middleware_table_shape.py`
 are themselves the untampered, intended copies) is a separate question
 from the runtime content trust
 Steps 4-6 cover -- a runtime PASS from Step 8 says nothing about
@@ -205,6 +205,6 @@ Known limitations, not yet addressed:
   not attempt.
 - Step 3's non-duplication boundary (and the matching Boundary line on
   the platform axis in the scope map) is a prose promise, not
-  mechanically enforced -- `check_axis_shape.py` validates axis-section
+  mechanically enforced -- `gitapex_check_axis_shape.py` validates axis-section
   field completeness only, not whether a given edit actually honored
   Step 3's deferral to the platform-auditing skill.

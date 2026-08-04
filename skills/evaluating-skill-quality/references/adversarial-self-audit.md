@@ -50,7 +50,7 @@ not Indeterminate -- do not treat "badly shaped" as "unreadable."
 
 Runtime content trust (the section above, and the nine dimensions) is
 distinct from install/vendoring-time integrity: this skill's `SKILL.md`,
-its `references/`, and its bundled `scripts/check_skill_shape.py` are
+its `references/`, and its bundled `scripts/gitapex_check_skill_shape.py` are
 themselves install-time artifacts. Before trusting any of them, confirm via
 the harness's own means (a checksum, a signed release, a trusted
 registry/marketplace install path) that the running copy is the intended,
@@ -243,7 +243,7 @@ mechanism, not only the ones already recorded below.
     working directory, not the `$PWD` environment variable. Wrapping the
     invocation in a real `(cd <isolated-cwd> && ...)` (or an equivalent
     `cwd=` subprocess argument, as this repository's own
-    `evals/scripts/check_dispatch_trace.py`'s `run_live_dispatch` already
+    `evals/scripts/gitapex_check_dispatch_trace.py`'s `run_live_dispatch` already
     does correctly) fixed it, and the
     corrected run is the negative control recorded above. Recorded here so
     a future caller hand-rolling this recipe outside that script does not
@@ -336,7 +336,7 @@ mechanism, not only the ones already recorded below.
   on, which silently truncates the dispatch's output to a bare approval
   request instead of a real review.
 - **This is now a default, checked-for step, not prose alone.** This
-  repository's own `evals/scripts/check_dispatch_trace.py`'s `run`
+  repository's own `evals/scripts/gitapex_check_dispatch_trace.py`'s `run`
   subcommand takes `--marketplace-source`/`--plugin-name`, which run this
   exact registration
   against the isolated `$HOME` and **fail loudly (exit 2) before any

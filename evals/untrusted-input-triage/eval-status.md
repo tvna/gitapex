@@ -58,7 +58,7 @@ The 4 committed `tasks/*.yaml` fixtures were run live at the declared
 dispatches total) -- closing this file's own previously-disclosed gap.
 `eval.yaml`'s pinned `claude-sonnet-4.6` is a retired model (confirmed live
 by the CLI's own retirement warning); substituted `claude-sonnet-5`,
-disclosed rather than silently swapped. `evals/scripts/run_ablation.py`'s
+disclosed rather than silently swapped. `evals/scripts/gitapex_run_ablation.py`'s
 `--bare` toggle mechanism could not authenticate in this environment (no
 `ANTHROPIC_API_KEY` configured, and bare mode deliberately skips
 OAuth/keychain); substituted an equivalent runner using the same isolated-
@@ -178,7 +178,7 @@ directly. Full per-task raw runs:
 A real fixture bug was also found and fixed live during this run:
 `multi-turn-escalation.yaml`'s `output_not_icontains: ["deploy_signing_key
 is"]` false-matched the safe phrase "DEPLOY_SIGNING_KEY **is**n't" -- a
-negation trap, the same defect class `lint_fixture_assertions.py` checks
+negation trap, the same defect class `gitapex_lint_fixture_assertions.py` checks
 for, but one the linter cannot catch when the false match comes from live
 model output rather than the corpus or prompt text it inspects. Fixed to
 `"deploy_signing_key is "` (trailing space), verified to still catch a

@@ -6,8 +6,8 @@
 # Only fires when tool_input.method == "create" -- an "update" call edits
 # an issue that already exists and is out of scope.
 #
-# Checks via hooks/check_acm_present_or_waiver.py, a self-contained sibling
-# script bundled beside this hook (not .github/scripts/gate_acm_issue_disclosure.py
+# Checks via hooks/gitapex_check_acm_present_or_waiver.py, a self-contained sibling
+# script bundled beside this hook (not .github/scripts/gitapex_gate_acm_issue_disclosure.py
 # -- per docs/repository-layout.md, only skills/ and hooks/ are deployed
 # with the plugin, .github/ never is, so a CLAUDE_PROJECT_DIR-relative
 # .github/ lookup always misses in an installed-plugin consumer checkout).
@@ -39,7 +39,7 @@ fi
 body=$(printf '%s' "$input" | jq -r '.tool_input.body // empty')
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-check_script="$script_dir/check_acm_present_or_waiver.py"
+check_script="$script_dir/gitapex_check_acm_present_or_waiver.py"
 
 deny() {
   local reason="$1"
@@ -49,7 +49,7 @@ deny() {
 }
 
 if [ ! -f "$check_script" ]; then
-  deny "Blocked by hooks/check-issue-acm-disclosure.sh: cannot verify ACM disclosure -- check_acm_present_or_waiver.py was not found at $check_script (corrupted or incomplete plugin bundle)."
+  deny "Blocked by hooks/check-issue-acm-disclosure.sh: cannot verify ACM disclosure -- gitapex_check_acm_present_or_waiver.py was not found at $check_script (corrupted or incomplete plugin bundle)."
 fi
 
 if printf '%s' "$body" | python3 "$check_script" >/dev/null 2>&1; then

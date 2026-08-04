@@ -63,4 +63,4 @@ jobs:
         if: steps.diff.outputs.applicable == 'true'
         run: |
           set -euo pipefail
-          python3 .github/scripts/gate_gitignore_pattern_coverage.py --added "${{ steps.diff.outputs.added_file }}"
+          python3 .github/scripts/gitapex_gate_gitignore_pattern_coverage.py --added "${{ steps.diff.outputs.added_file }}"

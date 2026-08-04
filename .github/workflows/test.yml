@@ -46,7 +46,7 @@ jobs:
       # source directory (derived from pyproject.toml itself, no extra
       # flag needed here), including this gate's own .github/scripts file.
       - name: Enforce per-file coverage minimum
-        run: uv run --frozen python3 .github/scripts/gate_evals_scripts_coverage.py --coverage-json coverage.json
+        run: uv run --frozen python3 .github/scripts/gitapex_gate_evals_scripts_coverage.py --coverage-json coverage.json
 
       # Issue #727: xenon (wraps radon cc) fails the block/module/average
       # thresholds below, measured empirically against this repo's real
@@ -55,7 +55,7 @@ jobs:
       # map to whole-codebase average / per-module average / per-block
       # absolute respectively (confirmed against xenon's own source,
       # xenon/core.py, not assumed from the flag names' surface reading).
-      # check_skill_shape.py (CC 99/64, rank F, MI 0.00) is excluded as
+      # gitapex_check_skill_shape.py (CC 99/64, rank F, MI 0.00) is excluded as
       # pre-existing, already-tracked debt -- re-measure trigger: drop the
       # exclude once its two named functions (_parse_manifest,
       # check_shape) are refactored below rank F. apm_modules/* is
@@ -65,7 +65,7 @@ jobs:
       - name: Enforce cyclomatic-complexity ceiling
         run: |
           uv run --frozen xenon --max-absolute E --max-modules B --max-average A \
-            --exclude "apm_modules/*,skills/evaluating-skill-quality/scripts/check_skill_shape.py" \
+            --exclude "apm_modules/*,skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py" \
             .
 
       # if: always() -- the coverage-minimum step above can fail (exit 1)
@@ -109,7 +109,7 @@ jobs:
           enable-cache: true
 
       # Run per directory-group, not one repo-wide `mypy .` sweep: two
-      # files share the literal basename check_acm_present.py
+      # files share the literal basename gitapex_check_acm_present.py
       # (skills/drafting-an-acm-issue/scripts and
       # skills/planning-a-branch-from-an-issue/scripts, deliberately not
       # sharing a directory) and, with no __init__.py anywhere in this
@@ -118,8 +118,8 @@ jobs:
       # named". The first group below is exactly this repo's own
       # [tool.pytest.ini_options] pythonpath list plus tests/ itself,
       # since that list already encodes which directories bare-import
-      # each other (e.g. evals/scripts/run_ablation.py's own `import
-      # score_contract`); every other skill-script directory is checked
+      # each other (e.g. evals/scripts/gitapex_run_ablation.py's own `import
+      # gitapex_score_contract`); every other skill-script directory is checked
       # alone because nothing outside it references it by bare import.
       - name: mypy (tests + pythonpath-linked roots)
         run: |

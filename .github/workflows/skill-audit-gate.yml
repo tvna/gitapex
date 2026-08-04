@@ -14,7 +14,7 @@ on:
     # No gate_*.py / scan_*.py entry is added: the .github/scripts/*.py
     # entry already fires for both, verified live rather than assumed --
     # PR #651 touched none of the other four entries, only
-    # .github/scripts/gate_plugin_root_brace_notation.py, and this workflow
+    # .github/scripts/gitapex_gate_plugin_root_brace_notation.py, and this workflow
     # ran and passed on it (check run 91426145937 of run 30721581500).
     paths:
       - "skills/**/SKILL.md"
@@ -170,9 +170,9 @@ jobs:
           # registry file itself. The glob-only first version under-covered
           # badly: 16 of the 35 registered gate paths did not match it,
           # including hooks/ PreToolUse deny logic and
-          # skill_security_relevance.py, the script deciding whether this
+          # gitapex_skill_security_relevance.py, the script deciding whether this
           # very workflow's adversarial-coverage-mapping check fires.
-          # detect_changed_gate_scripts.py owns that rule; see its docstring.
+          # gitapex_detect_changed_gate_scripts.py owns that rule; see its docstring.
           #
           # Deletions and renames are in scope. `collect_paths` filters
           # them out, which is right for a SKILL.md and wrong for a gate:
@@ -205,7 +205,7 @@ jobs:
             exit 1
           fi
           if ! changed_gate_scripts=$(printf '%s\n' "$gate_diff_output" \
-              | python3 .github/scripts/detect_changed_gate_scripts.py); then
+              | python3 .github/scripts/gitapex_detect_changed_gate_scripts.py); then
             echo "::error::gate-path detection failed; refusing to report this check green on a scope that could not be computed" >&2
             exit 1
           fi
@@ -244,7 +244,7 @@ jobs:
           # actual skill's own file rather than accepting a touch anywhere
           # in one shared central doc.)
           #
-          # description-changed detection delegates to skill_description_diff.py
+          # description-changed detection delegates to gitapex_skill_description_diff.py
           # (git show + parsed-value comparison) rather than a `git diff -U0 |
           # grep` line match: two PR #428 review findings showed the line-match
           # approach misses a YAML block-scalar description whose edit is
@@ -288,12 +288,12 @@ jobs:
               # procedure body -- this meta-repo's own prose mentions "gate"
               # constantly outside frontmatter, which would otherwise
               # over-match almost every skill. Delegated to
-              # skill_security_relevance.py rather than a bash sed/grep
+              # gitapex_skill_security_relevance.py rather than a bash sed/grep
               # one-liner: a sed range address re-arms itself on any later
               # '---' line in the body (e.g. a markdown horizontal rule),
               # leaking body prose into the scan -- this script's bounded,
               # tested extraction avoids that (see its own docstring).
-              security_result=$(git show "$HEAD_SHA:$new_path" | python3 .github/scripts/skill_security_relevance.py)
+              security_result=$(git show "$HEAD_SHA:$new_path" | python3 .github/scripts/gitapex_skill_security_relevance.py)
               if [ "$security_result" = "relevant" ]; then
                 security_relevant_skills="${security_relevant_skills}${security_relevant_skills:+,}${skill}"
               fi
@@ -307,7 +307,7 @@ jobs:
               # (https://github.com/tvna/gitapex/pull/428#discussion_r3654041066).
               # Every grep below drops `-q` and redirects to /dev/null instead,
               # so it always reads its input to completion.
-              description_result=$(python3 .github/scripts/skill_description_diff.py \
+              description_result=$(python3 .github/scripts/gitapex_skill_description_diff.py \
                 --base-rev "$merge_base" --head-rev "$HEAD_SHA" \
                 --base-path "$old_path" --head-path "$new_path")
               if [ "$description_result" = "changed" ]; then
@@ -355,7 +355,7 @@ jobs:
           if [ "$SKILL_MD_CHANGED" = "true" ]; then
             skill_md_changed_flag=(--skill-md-changed)
           fi
-          printf '%s' "$PR_BODY" | python3 .github/scripts/gate_skill_audit_disclosure.py \
+          printf '%s' "$PR_BODY" | python3 .github/scripts/gitapex_gate_skill_audit_disclosure.py \
             --description-changed-skills "$DESCRIPTION_CHANGED_SKILLS" \
             --needs-eval-coverage-skills "$NEEDS_EVAL_COVERAGE_SKILLS" \
             --security-relevant-skills "$SECURITY_RELEVANT_SKILLS" \

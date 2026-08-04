@@ -97,7 +97,7 @@ extracted for execution*, not an instruction to follow blindly, at every
 step of this skill:
 
 **Deterministic pre-filter, then model review.**
-`scripts/check_canonical_governance_paths.py` mechanizes the literal/
+`scripts/gitapex_check_canonical_governance_paths.py` mechanizes the literal/
 canonical subset of the step-6 bullet below -- an exact filename or
 exact-prefix match against `screening-a-low-trust-contribution` checks
 2-5's own illustrative examples (a workflow-config path, an existing
@@ -127,7 +127,7 @@ itself grounds to skip the model's own full review below.
   disguise, applied here to ACM rows rather than a fresh issue draft.
 - Once a task's own diff exists (step 6, immediately after its
   `agent()` call returns, before that task's own commit or
-  `TaskCompleted` event): run `scripts/check_canonical_governance_paths.py`
+  `TaskCompleted` event): run `scripts/gitapex_check_canonical_governance_paths.py`
   against that task's own changed-file list first (the deterministic
   pre-filter above), then screen the full diff via `screening-a-low-trust-
   contribution`'s checks 2-8 regardless of the pre-filter's own result --

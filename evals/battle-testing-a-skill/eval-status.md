@@ -7,18 +7,18 @@ cross-model spread is unmeasured for the same reason, per
 `references/provenance-and-caveats.md`).
 
 **Ablation-capability check (issue #185, closed by issue #583), applied
-live to this skill:** issue #583 built `evals/scripts/run_ablation.py`,
+live to this skill:** issue #583 built `evals/scripts/gitapex_run_ablation.py`,
 an in-repo runner that loads a task fixture, invokes a model CLI twice on
 the identical prompt via `claude -p ... --bare` (once with a skill's
 `SKILL.md` appended through `--append-system-prompt-file`, once without),
-and scores each run's output through the existing `score_contract.py`
+and scores each run's output through the existing `gitapex_score_contract.py`
 convention. Checked directly against this repository as it stands today:
 this mechanism now exists, so per `evaluating-skill-quality`'s dimension 8
 sub-check (the same "no mechanism" vs. "not yet run" distinction issue
 #185 established) this entry reclassifies from "no ablation mechanism
 exists in this repository" to **"ablation-capable, not yet run."** The
 only evidence recorded so far
-is `tests/test_run_ablation.py`'s stub-executor unit test -- a
+is `tests/test_gitapex_run_ablation.py`'s stub-executor unit test -- a
 hand-written fake standing in for a real model call -- never a live
 model run against this skill's own tasks (e.g.
 `evals/battle-testing-a-skill/tasks/normal.yaml`). A real run remains
@@ -201,7 +201,7 @@ eval-status.md` disclosed the near-identical gap independently -- see that
 file's own new entry, same issue, for the full mechanism design and the
 Track A/B feasibility-spike detail (not repeated here in full).
 
-The mechanism, the fixture schema, the new `score_contract.py` flag, and
+The mechanism, the fixture schema, the new `gitapex_score_contract.py` flag, and
 the new lint check are shared cross-skill infrastructure, built once and
 applied to both skills -- see the `evaluating-skill-quality` entry.
 Applied to this skill specifically:
@@ -214,11 +214,11 @@ skill's own Procedure step 1 then correctly defers to
 `evaluating-skill-quality`'s Isolation-verification registry and shells
 out to a nested `claude -p`, too slow to run to completion inside this
 proof's budget), and the negative control fixture below run verbatim.
-`evals/scripts/check_dispatch_trace.py check-transcript
+`evals/scripts/gitapex_check_dispatch_trace.py check-transcript
 --dispatch-tool-name Agent`: positive control `DISPATCH_COUNT=1` (exit 0,
 confirmed); negative control `DISPATCH_COUNT=0` (exit 1, not_confirmed).
 The negative-control fixture's own `output_contains`/`output_not_contains`
-independently scored 1.0 while `score_contract.py --dispatch-trace-verdict
+independently scored 1.0 while `gitapex_score_contract.py --dispatch-trace-verdict
 not_confirmed` correctly reported the dispatch verdict alongside it, not
 blended into it. Full record:
 [results/2026-07-30-issue-584-dispatch-trace/](results/2026-07-30-issue-584-dispatch-trace/manifest.json).
@@ -227,7 +227,7 @@ blended into it. Full record:
 normal.yaml`. New `tasks/dispatch-required-negative-control.yaml`: a
 deliberately-forced negative control whose correct, expected
 dispatch-trace-verdict is `not_confirmed`, not evidence of a fixture
-defect. `lint_fixture_assertions.py`'s new check 9 passes for this skill
+defect. `gitapex_lint_fixture_assertions.py`'s new check 9 passes for this skill
 (previously blocking, confirmed via a direct before/after run of the
 linter). `split.md`'s train bucket lists the new fixture for listing
 consistency (not gate-enforced).
@@ -245,7 +245,7 @@ wiring `--dispatch-bash-pattern` into a real live run. Refs #584, #583.
 **Post-PR adversarial review round.** Same shared mechanism as
 `evaluating-skill-quality`'s own new entry above (full detail there, not
 repeated here): a multi-angle review pass found and fixed several real
-defects in `check_dispatch_trace.py`/`lint_fixture_assertions.py`
+defects in `gitapex_check_dispatch_trace.py`/`gitapex_lint_fixture_assertions.py`
 (uncaught subprocess errors, a silent `/root` HOME fallback, a truthiness
 bug on empty `--dispatch-bash-pattern`, an unresolved relative
 `--isolated-home`, a copy-then-delete inefficiency in

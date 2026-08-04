@@ -8,7 +8,7 @@ second corpus in this repository to satisfy that gate --
 `evals/evaluating-skill-quality/split.md` (37 fixtures, 16:13:8) is the
 first and the precedent this file follows for naming and ratio-deviation
 reasoning. The scorer is the same shared
-`skills/scorer-gated-skill-edits/scripts/score_contract.py`; no new script
+`skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py`; no new script
 was needed.
 
 ## Corpus size and the 2:1:7 caveat
@@ -154,7 +154,7 @@ fabricated as covered.
 
 ## Fixture-linting note
 
-`evals/scripts/lint_fixture_assertions.py --tasks-glob
+`evals/scripts/gitapex_lint_fixture_assertions.py --tasks-glob
 "evals/merge-retrospective/tasks/*.yaml" --rubric
 skills/merge-retrospective/SKILL.md --skill skills/merge-retrospective/SKILL.md`
 was run against the full eighteen-fixture corpus (re-run after PR #328's

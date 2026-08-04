@@ -14,7 +14,7 @@ skill artifact itself is good, not whether a change is correct.
 - **Deterministic shape** -- fixed rules a script decides, not judgment.
   Run the bundled checker on the target skill dir, giving both paths from
   the same working directory -- e.g. from the repo root:
-  `python3 skills/evaluating-skill-quality/scripts/check_skill_shape.py --allowed-root <approved-root> <skill-dir>`
+  `python3 skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py --allowed-root <approved-root> <skill-dir>`
   (stdlib-only, read-only). It is the single source of truth for the exact
   rules and limits and prints PASS/FAIL per check. On a
   Python-less surface, apply the same rules by reading that script's
@@ -401,7 +401,7 @@ portability checks:
 
 ## Scope
 
-Beyond the bundled read-only shape checker (`scripts/check_skill_shape.py`),
+Beyond the bundled read-only shape checker (`scripts/gitapex_check_skill_shape.py`),
 this skill carries the rubric; it does not build an eval suite or
 benchmarking harness for any target repo -- separate, deferred work. Do
 not expand the bundled checker into a general-purpose linter or add
@@ -430,7 +430,7 @@ actually specifies.
   enforcement, and if it does not, this boundary is currently prose-only
   and worth naming as a Mechanism-fit gap the same way any other
   unenforced safety-critical prohibition would be. The skill's own
-  bundled `scripts/check_skill_shape.py` is not such an install -- it
+  bundled `scripts/gitapex_check_skill_shape.py` is not such an install -- it
   ships with the skill and only reads.
 - Never patch a wrong verdict by adjusting step 5 when the real fault was
   a wrong precondition (steps 1-4). Redo the precondition instead -- the
@@ -471,7 +471,7 @@ actually specifies.
 ## Notes
 
 Portability rationale: self-contained -- carries its own rubric and bundled
-read-only `check_skill_shape.py`. Its content cites this-repository design
+read-only `gitapex_check_skill_shape.py`. Its content cites this-repository design
 docs in a few places (e.g. rubric.md's Execution requirements section),
 but always through the approved hedge convention that marks such a
 citation as deliberate, acknowledged provenance rather than an
@@ -479,7 +479,7 @@ operational dependency this skill's own procedure needs to resolve. The
 declared level itself lives in `metadata/gitapex.yaml`.
 
 Downstream verdict consumption, for readers working in this repository
-(gitapex): `.github/scripts/gate_skill_audit_disclosure.py`, wired by
+(gitapex): `.github/scripts/gitapex_gate_skill_audit_disclosure.py`, wired by
 `.github/workflows/skill-audit-gate.yml`, parses a PR body's `## Skill
 audit evidence` section for the literal verdict tokens
 `WELL-FORMED-AND-MATURE`, `WELL-FORMED-NOT-MATURE`, `NOT-WELL-FORMED`, or a

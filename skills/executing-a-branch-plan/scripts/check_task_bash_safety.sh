@@ -9,7 +9,7 @@
 # whether hooks/check-bash-safety.sh binds inside a subagent context.
 #
 # Self-contained duplicate, not a shared import: this repository's
-# convention (see skills/*/scripts/check_acm_present.py's docstring) is
+# convention (see skills/*/scripts/gitapex_check_acm_present.py's docstring) is
 # that no skill shares a scripts/ directory with another. This script
 # adapts hooks/check-bash-safety.sh's command-boundary regex and
 # install-verb pattern (Finding 1) rather than re-deriving them, but is
@@ -27,7 +27,7 @@
 #
 # If the ACM table's header row or a shared pattern ever changes shape,
 # update both copies together -- nothing enforces they stay in sync
-# automatically (same caveat check_acm_present.py's docstring states).
+# automatically (same caveat gitapex_check_acm_present.py's docstring states).
 #
 # Known ceiling, carried forward from hooks/check-bash-safety.sh's
 # identical disclosure: `git${IFS}push origin HEAD`, `gi""t push origin

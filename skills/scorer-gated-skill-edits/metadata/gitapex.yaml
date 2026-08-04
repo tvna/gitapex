@@ -8,7 +8,7 @@ spec:
   references:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/30"
-      summary: "scripts/score_contract.py's docstring refers to a held-out gate, introduced here"
+      summary: "scripts/gitapex_score_contract.py's docstring refers to a held-out gate, introduced here"
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/621"
       summary: "Added a Stop-boundary bullet: never report an isolated-dispatch selection score as this skill's Gate-step evidence when the scorer is itself a Skill-tool invocation, unless the isolated copy's plugin/marketplace registration was independently confirmed (points at evaluating-skill-quality's own Isolation-verification registry as the single source of truth, no recipe duplicated here). No procedure or gate mechanics changed; capabilityAssumption stays Broad."

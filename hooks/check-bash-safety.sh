@@ -9,7 +9,7 @@
 #      CLI GitHub write commands (gh issue/pr create|edit|close|comment|merge,
 #      gh api -X POST/PUT/PATCH/DELETE).
 #   4. [outward-artifact-preflight] SKILL.md -- before `git push`, run
-#      scan_provenance.py against the outgoing commits and warn (not block)
+#      gitapex_scan_provenance.py against the outgoing commits and warn (not block)
 #      if it flags anything -- the script surfaces candidates, it does not
 #      decide, so a hit does not stop the push.
 #
@@ -134,15 +134,15 @@ if [[ "$lc_command" =~ $gh_api_re ]] && ! [[ "$lc_command" =~ $gh_api_graphql_re
   deny "Blocked by hooks/check-bash-safety.sh: 'gh api' call with a field flag (-f/-F/--field/--raw-field). Field flags imply an implicit POST/write in gh's own convention, with no -X/--method flag required. Per planning-a-branch-from-an-issue/references/github-issue-workflow.md, never shell out to a command-line GitHub tool directly for writes -- use the platform-integrated tool call or an approved read-only wrapper."
 fi
 
-# --- Finding 4: git push gated on scan_provenance.py -----------------------
+# --- Finding 4: git push gated on gitapex_scan_provenance.py -----------------------
 push_re="${cmd_boundary}git[[:space:]]+push([[:space:]]|\$)"
 
 if [[ "$lc_command" =~ $push_re ]]; then
   project_dir="${CLAUDE_PROJECT_DIR:-$(pwd)}"
-  scan_script="$project_dir/skills/outward-artifact-preflight/scripts/scan_provenance.py"
+  scan_script="$project_dir/skills/outward-artifact-preflight/scripts/gitapex_scan_provenance.py"
 
   if [ ! -f "$scan_script" ]; then
-    deny "Blocked by hooks/check-bash-safety.sh: git push requires the outward-artifact-preflight scan, but scan_provenance.py was not found at $scan_script."
+    deny "Blocked by hooks/check-bash-safety.sh: git push requires the outward-artifact-preflight scan, but gitapex_scan_provenance.py was not found at $scan_script."
   fi
 
   # Determine the commit range being pushed. With an upstream, @{u}..HEAD is
@@ -174,14 +174,14 @@ if [[ "$lc_command" =~ $push_re ]]; then
   scan_exit=0
   scan_output=$(printf '%s' "$content" | python3 "$scan_script" 2>&1) || scan_exit=$?
 
-  # scan_provenance.py's own docstring says it "surfaces candidates, it does
+  # gitapex_scan_provenance.py's own docstring says it "surfaces candidates, it does
   # not decide" -- a hard deny here would make this mechanical regex the
   # decider, which is exactly what its docstring disclaims. Warn instead of
   # deny: surface every hit so the operator applies the checklist's judgment
   # call, but do not block the push on a mechanical false positive the regex
   # cannot rule out.
   if [ "$scan_exit" -ne 0 ]; then
-    warn "outward-artifact-preflight scan_provenance.py flagged the outgoing push for review (not blocked -- this scan surfaces candidates, it does not decide) -- $scan_output"
+    warn "outward-artifact-preflight gitapex_scan_provenance.py flagged the outgoing push for review (not blocked -- this scan surfaces candidates, it does not decide) -- $scan_output"
   fi
 fi
 

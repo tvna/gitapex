@@ -12,7 +12,7 @@ Anthropic's own field guide on working with Claude models (Thariq Shihipar,
 not a new enforced branch, so no new eval fixture was added. Refs #149.
 
 **Issue #175 (judge-mode scoring, deferred from #173 option 1):**
-`score_contract.py` gained an opt-in `--judge-verdict {agree,disagree}` flag,
+`gitapex_score_contract.py` gained an opt-in `--judge-verdict {agree,disagree}` flag,
 recorded alongside the existing `--compare-to` substring gate output as
 `JUDGE_AGREE` / `JUDGE_DISAGREE_REVIEW_REQUIRED`. The flag records the
 outcome of the adversarially-verified judge pass Procedure step 3's

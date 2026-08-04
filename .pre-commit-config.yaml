@@ -33,15 +33,15 @@ repos:
         # mypy resolves cross-file imports within each of the directory
         # groups .github/workflows/test.yml's own mypy job already checks
         # separately (two files share the literal basename
-        # check_acm_present.py in unrelated directories -- combining every
+        # gitapex_check_acm_present.py in unrelated directories -- combining every
         # group into one invocation errors "Duplicate module named"), so
         # this hook type-checks each of those same groups via
-        # .github/scripts/run_precommit_mypy.py rather than only the
+        # .github/scripts/gitapex_run_precommit_mypy.py rather than only the
         # staged files. Residual risk named by issue #725 itself: this is
         # not scoped to changed files only, so it is not as fast as ruff
         # above on a large repo -- accepted for now, named as a follow-up
         # rather than left silently unscoped.
-        entry: uv run --frozen python3 .github/scripts/run_precommit_mypy.py
+        entry: uv run --frozen python3 .github/scripts/gitapex_run_precommit_mypy.py
         language: system
         types_or: [python, pyi]
         pass_filenames: false

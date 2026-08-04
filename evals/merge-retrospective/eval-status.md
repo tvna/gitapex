@@ -16,7 +16,7 @@ fixtures (`carried-forward-gate-unimplemented-train.yaml`,
 retrospective issue, a `retrospective` label, and the "Carried-forward
 gate" subsection, both when a prior gate remains unimplemented and when
 one is found already implemented (a restraint check). `tests/
-test_skill_eval_status_sync.py` keeps this fixture count in sync with
+test_gitapex_skill_eval_status_sync.py` keeps this fixture count in sync with
 this paragraph -- see that file's own drift-check rationale, added after
 Codex review on PR #328 found this section stating a stale "five task
 files, zero Step 0 coverage" after the corpus had already grown past

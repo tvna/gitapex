@@ -25,8 +25,8 @@ repo's own `CLAUDE.md`, section 4 ("Simplicity, Bounded by Safety").
 
 ## Unpinned-actions script precedent
 
-`scripts/scan_unpinned_actions.py` reuses
-`.github/scripts/scan_toolchain_pin_drift.py`'s walk/report/exit-code
+`scripts/gitapex_scan_unpinned_actions.py` reuses
+`.github/scripts/gitapex_scan_toolchain_pin_drift.py`'s walk/report/exit-code
 shape rather than inventing a second, divergent detector -- that script
 is this repo's own existing drift-scan precedent (it guards a different
 invariant: Class B toolchain tool pins, not action pins).

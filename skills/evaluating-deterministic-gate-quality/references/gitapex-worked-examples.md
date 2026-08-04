@@ -37,9 +37,9 @@ repository:
 |---|---|---|
 | `skills/drafting-an-acm-issue/SKILL.md` | (per-session, not domain-scoped) | Probabilistic -- depends on the agent choosing to invoke the skill |
 | `hooks/check-issue-acm-disclosure.sh` | 2 (agent-harness hook) | Environment-scoped -- fires only where this repository's own hook harness is loaded |
-| `.github/scripts/gate_acm_issue_disclosure.py` | 3 (CI/CD) | Environment-independent -- fires on the `issues` webhook regardless of which client created the issue |
+| `.github/scripts/gitapex_gate_acm_issue_disclosure.py` | 3 (CI/CD) | Environment-independent -- fires on the `issues` webhook regardless of which client created the issue |
 
-`gate_acm_issue_disclosure.py`'s own docstring states the rationale for
+`gitapex_gate_acm_issue_disclosure.py`'s own docstring states the rationale for
 needing all three explicitly (lines 5-12; verbatim except two `[elided]`
 backing-issue numbers): "[a prior investigation] found that no workflow
 in this repository triggers on `issues:` events, so a missing ACM on an
@@ -56,13 +56,13 @@ stated reason each one is needed.
 Also fail-closed on a missing companion, confirmed directly in
 `hooks/check-issue-acm-disclosure.sh:54-56`: the hook denies, with a
 named reason, if its own companion script
-`hooks/check_acm_present_or_waiver.py` is not found -- rather than
+`hooks/gitapex_check_acm_present_or_waiver.py` is not found -- rather than
 silently defaulting to allow when a dependency it needs is absent.
 Dimension 15 (fail-closed default) applied to a real gate.
 
 ## Worked example: retrospective-identity, single-source-of-truth predicate
 
-`.github/scripts/scan_retrospective_gate_drift.py`'s own docstring (lines
+`.github/scripts/gitapex_scan_retrospective_gate_drift.py`'s own docstring (lines
 4-8; verbatim except four `[elided]` issue numbers): "[an issue, itself
 referencing
 three earlier ones]: `merge-retrospective`'s Step 0 requires, every
@@ -83,11 +83,11 @@ drift-detecting meta-gate, not only a one-time audit.
 
 ## Worked example: dimension 12 (deployment-mode portability) and sibling-repository provenance
 
-`.github/scripts/gate_owasp_asi_mapping.py:4` (verbatim except one
+`.github/scripts/gitapex_gate_owasp_asi_mapping.py:4` (verbatim except one
 `[elided]` backing-issue number): "[an issue] ports `tvna/claude-md`'s
 OWASP Agentic Top 10 mapping..." --
-`.github/scripts/gate_owasp_llm_mapping.py:6-11` (verified verbatim)
-calls itself "a **sibling** gate to `gate_owasp_asi_mapping.py`, not an
+`.github/scripts/gitapex_gate_owasp_llm_mapping.py:6-11` (verified verbatim)
+calls itself "a **sibling** gate to `gitapex_gate_owasp_asi_mapping.py`, not an
 extension of it... Same discipline as the ASI gate -- completeness only...
 never correctness." Both gates port a mapping discipline from a sibling
 repository (`tvna/claude-md`) rather than inventing gitapex's own from
@@ -100,7 +100,7 @@ from elsewhere rather than re-deriving one.
 Recorded below after this skill's own build: a fresh, isolated dispatch
 followed this skill's procedure (`SKILL.md`) against
 `hooks/check-issue-acm-disclosure.sh` and
-`hooks/check_acm_present_or_waiver.py`, given only this skill's own files
+`hooks/gitapex_check_acm_present_or_waiver.py`, given only this skill's own files
 (`SKILL.md`, `references/dimensions.md`, `references/mechanism-fit.md` --
 this file was deliberately withheld from that dispatch to avoid
 contaminating a fresh grading pass with pre-cooked answers) -- not this
@@ -116,7 +116,7 @@ prove the procedure can surface, not something staged for this record.
 ### Smoke-test verdict, quoted in full
 
 **Target:** `hooks/check-issue-acm-disclosure.sh` +
-`hooks/check_acm_present_or_waiver.py` (Domain 2, agent-harness hook).
+`hooks/gitapex_check_acm_present_or_waiver.py` (Domain 2, agent-harness hook).
 
 **Step 1, Discover:** `hooks/hooks.json` registers this hook under
 `PreToolUse`, matcher `mcp__github__issue_write`, timeout 10s. Its
@@ -124,10 +124,10 @@ top-level `description` states it "backs [a specific issue, itself a
 sub-issue of an earlier one]: blocking a new-issue-creation tool call
 whose body lacks an Acceptance Criteria Map or an explicit waiver" (two
 `[elided]` issue numbers). The hook shells out to its sibling
-`check_acm_present_or_waiver.py` and denies via `exit 2` if absent. This
+`gitapex_check_acm_present_or_waiver.py` and denies via `exit 2` if absent. This
 is a Domain-2 artifact paired with a documented Domain-3 CI backstop
 (`.github/workflows/acm-issue-gate.yml` +
-`.github/scripts/gate_acm_issue_disclosure.py`, its own backing issue
+`.github/scripts/gitapex_gate_acm_issue_disclosure.py`, its own backing issue
 also recorded in the sidecar).
 
 **Step 2, Mechanism-fit check:** all six criteria PASS, well-argued --
@@ -228,7 +228,7 @@ PR" convention.
 
 Applies the axis to the same Domain-2 gate pair already graded in the
 smoke test above (`hooks/check-issue-acm-disclosure.sh` +
-`hooks/check_acm_present_or_waiver.py`, paired with the Domain-3 CI
+`hooks/gitapex_check_acm_present_or_waiver.py`, paired with the Domain-3 CI
 backstop) -- reusing that smoke test's already-live-verified findings
 rather than re-testing. This worked example recasts existing evidence
 through a new lens; it makes no new live-tested claim.
@@ -305,7 +305,7 @@ way.
 ## Worked example: dimension 19 (runtime-cost optimization) applied to the same Domain-2 gate pair
 
 Reuses -- does not re-derive -- the same smoke-test target already graded
-above: `hooks/check-issue-acm-disclosure.sh` + `hooks/check_acm_present_or_waiver.py`
+above: `hooks/check-issue-acm-disclosure.sh` + `hooks/gitapex_check_acm_present_or_waiver.py`
 (Domain 2, registered in `hooks/hooks.json:26-32` under the
 `mcp__github__issue_write` matcher with a 10-second `timeout`). This is a
 live-measured pass, not an assumed one.
@@ -315,7 +315,7 @@ direct reading of both files, not assumed from their names): one `cat` of
 stdin, then three sequential `jq -r` field extractions
 (`hooks/check-issue-acm-disclosure.sh:28,36,42` -- `tool_name`, `method`,
 `body`, each gated behind the previous field's own early-exit check), then
-one `python3` cold start running `check_acm_present_or_waiver.py` (two
+one `python3` cold start running `gitapex_check_acm_present_or_waiver.py` (two
 `re.compile` calls, one `re.search` each, no network I/O, no filesystem
 scan beyond the sibling script's own existence check). That is the **allow
 path**: 1 `cat` + 3 `jq` processes + 1 `python3` process, 5 subprocess

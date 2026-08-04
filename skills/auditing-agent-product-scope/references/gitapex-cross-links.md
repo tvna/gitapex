@@ -80,6 +80,6 @@ skill's own SKILL.md for its checklists and platform-detection logic.
 
 ## Skill-shape-checker command
 
-`python3 skills/evaluating-skill-quality/scripts/check_skill_shape.py <touched-skill-dir>`
+`python3 skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py <touched-skill-dir>`
 is gitapex's own deterministic skill-shape checker, run against any
 skill whose files a candidate's research touched.

@@ -49,7 +49,7 @@ without losing the issue's acceptance criteria.
 8. Before creating or updating a PR, require its body to carry the
    Acceptance Criteria Map and verification evidence, not just a
    description of the diff. Validate the table's presence with
-   `python3 scripts/check_acm_present.py --body <pr-body-file>` (or pipe
+   `python3 scripts/gitapex_check_acm_present.py --body <pr-body-file>` (or pipe
    the drafted body on stdin) rather than re-reasoning it in prose each
    run.
 9. When the PR adds or modifies a skill's `SKILL.md`, disclose in the PR

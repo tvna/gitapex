@@ -81,7 +81,7 @@ jobs:
             # pathspec drops the *other* endpoint of a rename from git's
             # view entirely, so git cannot pair the rename and instead
             # renders the whole renamed-with-modification file as a full
-            # addition (the same class of bug skill_description_diff.py's
+            # addition (the same class of bug gitapex_skill_description_diff.py's
             # own docstring documents fixing for description-diffing, refs
             # PR #428's rename-false-positive review finding) -- every
             # pre-existing entry in a file renamed alongside an unrelated
@@ -129,4 +129,4 @@ jobs:
         if: steps.diff.outputs.applicable == 'true'
         run: |
           set -euo pipefail
-          python3 .github/scripts/gate_transfer_check_disclosure.py --entries "${{ steps.diff.outputs.entries-file }}"
+          python3 .github/scripts/gitapex_gate_transfer_check_disclosure.py --entries "${{ steps.diff.outputs.entries-file }}"

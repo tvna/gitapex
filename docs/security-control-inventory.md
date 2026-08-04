@@ -27,7 +27,7 @@ one of the three tags below, borrowing the vocabulary — not the policy
 engine — from `microsoft/agent-governance-toolkit`'s deny/require_approval/
 allow model, per #311): the tag is inlined into the existing Rationale
 cell rather than added as a fourth table column because
-`gate_owasp_asi_mapping.py`/`gate_owasp_llm_mapping.py`'s own header-row
+`gitapex_gate_owasp_asi_mapping.py`/`gitapex_gate_owasp_llm_mapping.py`'s own header-row
 regex requires the fixed 3-column `| ID | Status | Rationale |` shape —
 a new column would fail that already-passing completeness gate. Reflects
 what actually, currently enforces something (verified against this
@@ -48,7 +48,7 @@ aspirational end-state a cited design issue argues for:
 
 Source: OWASP GenAI Security Project, "OWASP Top 10 for Agentic
 Applications 2026" (ASI01-ASI10). Gate:
-`.github/scripts/gate_owasp_asi_mapping.py`.
+`.github/scripts/gitapex_gate_owasp_asi_mapping.py`.
 
 First-pass mapping for gitapex's own architecture — a redistributed
 single-binary CLI with an embedded Rego policy engine and an MCP server
@@ -61,7 +61,7 @@ shape genuinely differs).
 | ASI01 Agent Goal Hijack | partially covered | [allow] #138 Gate 6 classifies instruction-shaped external text on both planes; the read path itself is uncontrolled until the content-ingestion-hygiene gate (#144 Deliverable 2) lands. |
 | ASI02 Tool Misuse | partially covered | [deny] #138 Gate 5 (irreversible-op guards), #139 gh-cli routing deny + wrapper, #126's caller-independent MCP abuse resistance; raw-ingestion hijack surface (OWASP Agentic AI T2 Agent Hijacking) open until #144 Deliverable 2. |
 | ASI03 Identity/Privilege Abuse | partially covered | [allow] #130's verified/asserted actor-provenance split, #127's fine-grained credential-bound privilege; no short-lived/OIDC identity yet, #126's MCP mode still inherits full ambient CLI privileges (open finding). |
-| ASI04 Supply Chain | partially covered | [deny] Nix Class B SHA-pinned distribution (#125) is real and CI-verified today (`flake.nix` + `scan_toolchain_pin_drift.py`'s single-source-of-truth gate); `toolchain.lock.json` under `policy_sources[]` (#131), #140 `workflow-action-pins`, #126 tool-poisoning scan remain design-only. TOFU bootstrapping gap keeps this short of `covered`. |
+| ASI04 Supply Chain | partially covered | [deny] Nix Class B SHA-pinned distribution (#125) is real and CI-verified today (`flake.nix` + `gitapex_scan_toolchain_pin_drift.py`'s single-source-of-truth gate); `toolchain.lock.json` under `policy_sources[]` (#131), #140 `workflow-action-pins`, #126 tool-poisoning scan remain design-only. TOFU bootstrapping gap keeps this short of `covered`. |
 | ASI05 Unexpected Code Execution | partially covered | [allow] Policy is data-not-code by construction (embedded Rego, #125), but #125's addendum leaves `kind:"script"` gates unsandboxed and the regorus builtin allowlist unasserted. |
 | ASI06 Memory/Context Poisoning | partially covered | [allow] Not N/A as in claude-md: `.gitapex/ssot.json`, `policy_sources[]`, and #130's audit trail are persistent agent-consumed state. Write path covered by merge-gated registry + #140 `registry-self-validation` + #127's monotonicity check; context-ingestion path is #144 Deliverable 2's gap. |
 | ASI07 Inter-Agent Communication | partially covered | [allow] Not N/A: MCP server mode (#126) is an agent-protocol surface (stdio-only, size caps, minimal `explain_denial` disclosure, poisoning scan); TOFU baseline gap remains. |
@@ -76,8 +76,8 @@ Design record: `docs/superpowers/specs/2026-07-18-owasp-mapping-and-ingestion-hy
 Source: OWASP GenAI Security Project, "OWASP Top 10 for LLM Applications
 and Generative AI 2025" (`genai.owasp.org/llm-top-10/`, fetched
 2026-07-18 -- primary source, not from memory). Gate:
-`.github/scripts/gate_owasp_llm_mapping.py`, a **sibling** gate to
-`gate_owasp_asi_mapping.py` rather than an extension of it: the two
+`.github/scripts/gitapex_gate_owasp_llm_mapping.py`, a **sibling** gate to
+`gitapex_gate_owasp_asi_mapping.py` rather than an extension of it: the two
 OWASP lists version independently (this list revises on its own
 cadence, distinct from the Agentic Top 10's), so a version bump in one
 table's contract must never force re-verification of the other's.
@@ -94,7 +94,7 @@ independent completeness contract.
 |---|---|---|
 | LLM01 Prompt Injection | partially covered | [allow] Same base-layer risk as ASI01: #138 Gate 6 classifies instruction-shaped external text already in context; the ingestion path itself (what reaches context, and how much) stays uncontrolled until #144 Deliverable 2 (content-ingestion-hygiene) ships as code -- currently design-only. |
 | LLM02 Sensitive Information Disclosure | partially covered | [allow] #127's fine-grained credential-bound privilege narrows what any single scope can expose; #130's verified/asserted audit-trail split avoids conflating untrusted claims with confirmed facts in logs. No dedicated secret-redaction/scanning gate exists in gitapex's own tooling yet -- CLAUDE.md section 4's "never echo secret values, redact before logging" rule is a prose-level agent instruction today, not a deterministic gate. Honest, named gap. |
-| LLM03 Supply Chain | partially covered | [deny] Same controls as ASI04: Nix Class B SHA-pinned distribution (#125) is real and CI-verified today (`flake.nix` + `scan_toolchain_pin_drift.py`'s single-source-of-truth gate); `toolchain.lock.json` under `policy_sources[]` (#131), #140 `workflow-action-pins`, #126 tool-poisoning scan remain design-only. TOFU bootstrapping gap keeps this short of `covered`. |
+| LLM03 Supply Chain | partially covered | [deny] Same controls as ASI04: Nix Class B SHA-pinned distribution (#125) is real and CI-verified today (`flake.nix` + `gitapex_scan_toolchain_pin_drift.py`'s single-source-of-truth gate); `toolchain.lock.json` under `policy_sources[]` (#131), #140 `workflow-action-pins`, #126 tool-poisoning scan remain design-only. TOFU bootstrapping gap keeps this short of `covered`. |
 | LLM04 Data and Model Poisoning | not applicable | [allow] gitapex trains, fine-tunes, and embeds nothing -- it is a governance/gate layer around an agent's tool use, not model-training or embedding infrastructure. The adjacent risk of poisoning gitapex's own *persistent state* (`.gitapex/ssot.json`, `policy_sources[]`) is scoped under ASI06 above, not this LLM-specific training-data category. |
 | LLM05 Improper Output Handling | partially covered | [deny] `hooks/check-bash-safety.sh`'s PreToolUse deny/warn rules, `hooks/check-template-overwrite.sh`, and `hooks/check-issue-acm-disclosure.sh` (#413) validate agent-generated output before three specific high-risk sinks (shell commands, file overwrites, GitHub issue creation) execute. Coverage is scoped to those three hook-matched tool categories; no general validation layer exists for other downstream sinks a generated output could reach. |
 | LLM06 Excessive Agency | partially covered | [require_approval] Same controls as ASI02/ASI03: #138 Gate 5's TTL-bounded human acks gate irreversible operations, #127's credential-bound privilege caps the ceiling of any granted agency, #130's audit trail makes exercised agency reviewable. No per-invocation blast-radius cap and no runtime behavioral-anomaly detection constrain agency once a tool call is already authorized (same open gap as ASI08/ASI10). |

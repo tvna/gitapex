@@ -8,11 +8,11 @@ CLAUDE.md/AGENTS.md-free clean-root copy + isolated `$HOME` copy,
 (no tools), `--permission-mode acceptEdits`. "with" arm adds
 `--append-system-prompt-file` pointing at `untrusted-input-triage/SKILL.md`;
 "without" arm omits it. This is a substitute for `evals/scripts/
-run_ablation.py`'s own `--bare` mechanism, which failed to authenticate in
+gitapex_run_ablation.py`'s own `--bare` mechanism, which failed to authenticate in
 this environment (bare mode skips OAuth/keychain and needs an explicit
 `ANTHROPIC_API_KEY`, not configured here) -- same skill-toggle logic
 (`--append-system-prompt-file` present/absent), different auth path, scored
-via the same `score_contract.score` this repo's own tooling uses.
+via the same `gitapex_score_contract.score` this repo's own tooling uses.
 
 
 ## Fixture

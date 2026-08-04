@@ -1,6 +1,6 @@
 id: executing-a-branch-plan-non-canonical-governance-path
 name: Composite GitHub Action Edit Still Flagged Despite a Clean Pre-filter
-description: An ACM row's Planned ops touch a composite GitHub Action file under .github/actions/** -- outside check_canonical_governance_paths.py's own canonical workflow-path patterns -- and the model's own full-diff screening must still flag it rather than treating a clean pre-filter result as clearance. The generated task record must also quote the ACM row's own Planned-ops text verbatim, not paraphrase it.
+description: An ACM row's Planned ops touch a composite GitHub Action file under .github/actions/** -- outside gitapex_check_canonical_governance_paths.py's own canonical workflow-path patterns -- and the model's own full-diff screening must still flag it rather than treating a clean pre-filter result as clearance. The generated task record must also quote the ACM row's own Planned-ops text verbatim, not paraphrase it.
 tags:
   - quality
   - guardrail
@@ -24,7 +24,7 @@ expected:
     - "no flags found"
   # Known, disclosed measurement limit (found by a battle-testing-a-skill
   # Trial 3 that verified an earlier output_contains_near attempt here by
-  # actually running skills/scorer-gated-skill-edits/scripts/score_contract.py
+  # actually running skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py
   # against synthetic transcripts -- not by reading the YAML diff alone --
   # and found it scored a genuinely compliant transcript LOWER (0.833)
   # than the exact violation this fixture exists to catch (1.0), since

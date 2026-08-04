@@ -36,7 +36,7 @@ jobs:
       # dispatch branches must not outgrow its evals/<skill>/tasks/
       # fixture count. Diff-scoped (added/modified skills/*/SKILL.md,
       # D/R100-excluded) and delta-scoped -- see
-      # gate_skill_branch_fixture_coverage.py's own module docstring for
+      # gitapex_gate_skill_branch_fixture_coverage.py's own module docstring for
       # why this only fires when THIS diff increases a skill's own
       # decision-branch count, never retroactively against a pre-existing
       # gap this gate did not create. A three-dot (merge-base) diff
@@ -121,4 +121,4 @@ jobs:
         if: steps.diff.outputs.applicable == 'true'
         run: |
           set -euo pipefail
-          python3 .github/scripts/gate_skill_branch_fixture_coverage.py --entries "${{ steps.diff.outputs.entries-file }}"
+          python3 .github/scripts/gitapex_gate_skill_branch_fixture_coverage.py --entries "${{ steps.diff.outputs.entries-file }}"

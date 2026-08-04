@@ -11,13 +11,13 @@ Provisions the toolchain binaries `flake.nix` pins for the Claude Code web
 disk caching cannot survive across sessions. `flake.nix`'s `classBData`/
 `mkClassB` blocks are the single source of truth for tool versions,
 per-system asset names, and SHA256 pins; this skill's script
-(`scripts/provision_class_b.py`) parses them at runtime rather than
+(`scripts/gitapex_provision_class_b.py`) parses them at runtime rather than
 holding its own copy, so there is never a second pin table that could
 silently drift from the flake.
 
 This skill's own SHA256 verification covers only the **downloaded Class B
 release archives** against `flake.nix`'s pins -- it says nothing about
-whether `SKILL.md` or `provision_class_b.py` themselves are untampered;
+whether `SKILL.md` or `gitapex_provision_class_b.py` themselves are untampered;
 that trust path is simpler and different: this skill ships as part of the
 gitapex repository itself, so its integrity rests on the repository's own
 commit history, branch protection, and code review, the same protection
@@ -43,7 +43,7 @@ skill's hook does.
 
 - `python3 >= 3.12` (`extract_wrapper_dir`'s tar extraction path relies
   on `filter="data"`, PEP 706, stdlib only since 3.12).
-- `provision_class_b.py` is stdlib-only -- no `pip install` or `uv sync`
+- `gitapex_provision_class_b.py` is stdlib-only -- no `pip install` or `uv sync`
   needed to run it directly.
 - Outbound network access to `github.com` release assets, and whatever
   `apm install` itself reaches. A session with no network access cannot
@@ -53,7 +53,7 @@ skill's hook does.
 ## Manual invocation
 
 ```bash
-python3 skills/setup-gitapex-toolchain/scripts/provision_class_b.py \
+python3 skills/setup-gitapex-toolchain/scripts/gitapex_provision_class_b.py \
   --project-dir "$(pwd)"
 ```
 
@@ -152,7 +152,7 @@ re-verifying them (a fast but non-zero receipt check) on every session:
 
 ```bash
 #!/bin/bash
-python3 skills/setup-gitapex-toolchain/scripts/provision_class_b.py \
+python3 skills/setup-gitapex-toolchain/scripts/gitapex_provision_class_b.py \
   --project-dir "$(pwd)" --skip-apm-install || true
 ```
 

@@ -91,7 +91,7 @@ construct-validity bugs (`escalation.yaml`'s bad-claim ban evaded by
 paraphrase, same class already fixed once in `injection.yaml`;
 `guardrail.yaml` banning bare "fetch"/"primary source"/"Speculation:",
 false-failing a correct response that legitimately uses those words --
-mechanically confirmed via `evals/scripts/lint_fixture_assertions.py`
+mechanically confirmed via `evals/scripts/gitapex_lint_fixture_assertions.py`
 pointed at this skill); a Stop-boundary section that restated Procedure
 step 4 and the "When NOT to use" section almost verbatim, with the
 restatement already drifted from its source -- trimmed to pointers; the
@@ -193,7 +193,7 @@ self-censor, but not acted on given that self-assessed confidence.
 None of this round's 17 new fixtures or SKILL.md additions have run
 against any model (same "no ablation mechanism exists in this
 repository" gap as every suite in this file) or been re-audited by
-`battle-testing-a-skill`/`evaluating-skill-quality`. `check_skill_shape.py`
+`battle-testing-a-skill`/`evaluating-skill-quality`. `gitapex_check_skill_shape.py`
 and the full pytest suite were re-run after every edit in this round
 and stayed green; that confirms shape and mechanical correctness only.
 Refs #290, refs #295.
@@ -335,7 +335,7 @@ the Notes section's hook/permission claim is now correctly conditional,
 cross-checked directly against this repository's own `hooks/hooks.json`
 (backs only Bash-safety and template-overwrite gates, nothing
 grounding-related) rather than assumed. Trial 2 independently re-ran
-`lint_fixture_assertions.py` itself (0 warnings, matching the commit's
+`gitapex_lint_fixture_assertions.py` itself (0 warnings, matching the commit's
 claim) rather than trusting the commit message, and confirmed
 `which waza nix` still returns nothing (no ablation mechanism, same
 disposition as every other suite in this file). Trial 2 surfaced a new
@@ -357,7 +357,7 @@ current text, and nothing says which governs or whether the claim should
 demote to `Speculation:` pending reconciliation. Left unfixed as a
 genuine, narrower edge case outside issue #295's scope.
 
-Net state after this round: `check_skill_shape.py` 29/29 and the full
+Net state after this round: `gitapex_check_skill_shape.py` 29/29 and the full
 pytest suite (617 passed) confirmed after every edit; `lint_fixture_
 assertions.py` pointed at this skill's own SKILL.md, 0 warnings
 throughout. Both audits' trial-2 runs disclosed the same CLAUDE.md-

@@ -10,10 +10,10 @@ audits an already-drafted outgoing artifact -- a commit, PR/issue body,
 or release -- for provenance leaks and non-ASCII bytes): the rules below
 govern how a skill or durable doc's own prose and examples are authored
 in the first place. Rules 1 and 4 are enforced by
-`skills/evaluating-skill-quality/scripts/check_skill_shape.py` (the
+`skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py` (the
 `no-illustrative-model-identifier` and `no-raw-angle-bracket-placeholder`
 checks) against every `SKILL.md` and `references/*.md` file in this
-repository's own `skills/` tree, run by `tests/test_repository_skill_shape.py`
+repository's own `skills/` tree, run by `tests/test_gitapex_repository_skill_shape.py`
 on every push and PR. Rules 2 and 3 stay judgment calls -- detecting a
 git-log-position assertion or grading test-fixture completeness needs
 semantic understanding a script cannot reliably provide -- apply them by
@@ -47,7 +47,7 @@ Found via: PR #17's worked example used `claude-sonnet-5` -- a real,
 current model name -- as its flagged "bad" sample (retrospective #20,
 repair 4b).
 
-Enforcement: `check_skill_shape.py`'s `no-illustrative-model-identifier`
+Enforcement: `gitapex_check_skill_shape.py`'s `no-illustrative-model-identifier`
 check flags "claude-" followed immediately by a known model-family word
 (opus/sonnet/haiku/fable/instant) and a version-like digit, anywhere in a
 skill's `SKILL.md` or `references/*.md` -- including inside a fenced code
@@ -90,7 +90,7 @@ representative example is not enough: a check that claims to validate
 resolved via a separate `[label]: target` definition), even though both
 are ordinary CommonMark link forms.
 
-`skills/evaluating-skill-quality/scripts/check_skill_shape.py`'s
+`skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py`'s
 `_out_of_skill_link_targets` now gets this right: it explicitly covers
 both inline and reference-style Markdown links, including the
 `<...>`-wrapped destination form.
@@ -119,7 +119,7 @@ Found via: PR #35's PR body used a `skills/<NAME>/scripts/` placeholder in
 prose; GitHub's rendering dropped the `<NAME>` tag, producing
 `skills//scripts/` (retrospective #36, repair 2).
 
-Enforcement: `check_skill_shape.py`'s `no-raw-angle-bracket-placeholder`
+Enforcement: `gitapex_check_skill_shape.py`'s `no-raw-angle-bracket-placeholder`
 check flags an unclosed `<name>`-shaped token in a skill's `SKILL.md` or
 `references/*.md` bare prose, after excluding fenced code blocks, inline
 code spans, absolute URLs, and Markdown links (the same exclusions the

@@ -1,6 +1,6 @@
 id: evaluating-skill-quality-declaration-structure-fit-train
 name: Broad Declaration Pinned Against the Body-Length Ceiling With No Adaptive Disclosure
-description: Motivates the new Capability-assumption Declaration-vs-structure-fit check -- the target's SKILL.md sits at 496/500 lines (near check_skill_shape.py's BODY_MAX_LINES ceiling) while declaring capabilityAssumption Broad, with a full inline YAML schema block that would fit references/ under Adaptive just as well, and metadata/gitapex.yaml's decision log has no mention of Adaptive being considered. The review must flag the missing disclosure, not silently accept Broad as-is.
+description: Motivates the new Capability-assumption Declaration-vs-structure-fit check -- the target's SKILL.md sits at 496/500 lines (near gitapex_check_skill_shape.py's BODY_MAX_LINES ceiling) while declaring capabilityAssumption Broad, with a full inline YAML schema block that would fit references/ under Adaptive just as well, and metadata/gitapex.yaml's decision log has no mention of Adaptive being considered. The review must flag the missing disclosure, not silently accept Broad as-is.
 tags:
   - quality
   - capability-assumption
@@ -8,7 +8,7 @@ inputs:
   prompt: |
     Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
     skill called "release-notes-formatter". Its SKILL.md body is 496 of a
-    500-line hard limit (confirmed via check_skill_shape.py), and its
+    500-line hard limit (confirmed via gitapex_check_skill_shape.py), and its
     metadata/gitapex.yaml declares capabilityAssumption: Broad, with no
     entry anywhere in its decision log mentioning Adaptive.
 

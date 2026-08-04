@@ -86,7 +86,7 @@ jobs:
           set -euo pipefail
           mapfile -t split_args < <(printf '%s\n' "$SPLIT_FILES" | grep -v '^$' || true)
           mapfile -t skill_args < <(printf '%s\n' "$SKILL_FILES" | grep -v '^$' || true)
-          cmd=(python3 .github/scripts/gate_split_fixture_coverage.py --repo-root .)
+          cmd=(python3 .github/scripts/gitapex_gate_split_fixture_coverage.py --repo-root .)
           if [ "${#split_args[@]}" -gt 0 ]; then
             cmd+=(--split-md "${split_args[@]}")
           fi

@@ -10,10 +10,10 @@
 # issues, web-UI-created issues, and fixing-a-reported-issue's bare
 # defect issues specifically). This hook closes that gap.
 #
-# Checks via hooks/check_pr_issue_acm_disclosure.py, a self-contained
+# Checks via hooks/gitapex_check_pr_issue_acm_disclosure.py, a self-contained
 # sibling script bundled beside this hook (not .github/scripts/ --
 # per docs/repository-layout.md, only skills/ and hooks/ are deployed
-# with the plugin). That script itself reuses hooks/check_acm_present_or_waiver.py
+# with the plugin). That script itself reuses hooks/gitapex_check_acm_present_or_waiver.py
 # directly for the ACM/waiver text check (same directory, plain Python
 # import) rather than a fifth duplicate copy of that regex logic.
 # Resolved relative to this script's own location so it travels with the
@@ -26,7 +26,7 @@
 # GitHub API call fails after retries -- matching this repository's
 # general "fail closed, including on INDETERMINATE" posture. Named
 # trade-off: this blocks all PR creation during a transient GitHub API
-# outage; see hooks/check_pr_issue_acm_disclosure.py's own docstring and
+# outage; see hooks/gitapex_check_pr_issue_acm_disclosure.py's own docstring and
 # this PR's own body for the full rationale, not left implicit here.
 #
 # Denies via the PreToolUse hookSpecificOutput JSON on stdout AND exit 2 /
@@ -100,10 +100,10 @@ if ! printf '%s' "$input" | jq -e '(.tool_input // {}) | type == "object"' >/dev
 fi
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-check_script="$script_dir/check_pr_issue_acm_disclosure.py"
+check_script="$script_dir/gitapex_check_pr_issue_acm_disclosure.py"
 
 if [ ! -f "$check_script" ]; then
-  deny "Blocked by hooks/check-pr-issue-acm-disclosure.sh: cannot verify the cited issue's ACM/waiver disclosure -- check_pr_issue_acm_disclosure.py was not found at $check_script (corrupted or incomplete plugin bundle). Failing closed."
+  deny "Blocked by hooks/check-pr-issue-acm-disclosure.sh: cannot verify the cited issue's ACM/waiver disclosure -- gitapex_check_pr_issue_acm_disclosure.py was not found at $check_script (corrupted or incomplete plugin bundle). Failing closed."
 fi
 
 # Extracts owner/repo/title/body directly from $input in one jq call and
@@ -133,11 +133,11 @@ if printf '%s' "$check_output" | grep -q '^FAIL:'; then
   deny "Blocked by hooks/check-pr-issue-acm-disclosure.sh (issue #657): $reason (see drafting-an-acm-issue/SKILL.md's Issue<->PR ACM contract)."
 fi
 
-# check_pr_issue_acm_disclosure.py only ever exits 0 (PASS) or 1 with a
+# gitapex_check_pr_issue_acm_disclosure.py only ever exits 0 (PASS) or 1 with a
 # 'FAIL: ...' stderr message for a genuine disclosure failure -- anything
 # else (a different exit code, or exit 1 with no 'FAIL:' line, e.g. an
 # uncaught traceback) means the check script itself crashed, not a
 # verdict on the PR. Denying either way is still the safe default (an
 # unverifiable citation should not silently pass), but the message must
 # say so plainly rather than blame the PR for a bug in the check script.
-deny "Blocked by hooks/check-pr-issue-acm-disclosure.sh: check_pr_issue_acm_disclosure.py exited $check_exit without a recognized FAIL message -- this looks like a bug in the check script itself, not a genuine disclosure failure in the cited issue(s). Failing closed. Output: $check_output"
+deny "Blocked by hooks/check-pr-issue-acm-disclosure.sh: gitapex_check_pr_issue_acm_disclosure.py exited $check_exit without a recognized FAIL message -- this looks like a bug in the check script itself, not a genuine disclosure failure in the cited issue(s). Failing closed. Output: $check_output"
