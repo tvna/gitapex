@@ -164,6 +164,22 @@
               pkgs.bun
               pkgs.lychee
             ] ++ (with classB; [ waza apm rtk betterleaks ]);
+
+            # Issue #725: `prek` is a pinned dev dependency
+            # (pyproject.toml) but installs no git hook by itself --
+            # `prek install` must actually run once per clone for
+            # .pre-commit-config.yaml to take effect. Running it here
+            # covers the devShell entry path documented in
+            # CONTRIBUTING.md automatically; `prek install` is
+            # idempotent, so re-entering the shell is a no-op once
+            # installed. Only run inside a real git checkout (a `nix
+            # develop` invoked outside one, e.g. in a template eval,
+            # would otherwise fail this hook).
+            shellHook = ''
+              if [ -d .git ]; then
+                uv run prek install --quiet 2>/dev/null || true
+              fi
+            '';
           };
         });
     };

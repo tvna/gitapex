@@ -1,0 +1,48 @@
+# Wires `prek` (https://github.com/j178/prek), already an installed dev
+# dependency (pyproject.toml's [dependency-groups] dev list), into an actual
+# git pre-commit hook (issue #725). Before this file existed, `prek install`
+# had nothing to wire up and .git/hooks/pre-commit stayed a default .sample
+# file -- ruff/mypy defects were only caught by CI, after push.
+#
+# Every hook below shells out via `uv run --frozen` to the exact ruff/mypy
+# versions and [tool.ruff]/[tool.mypy] config already pinned in
+# pyproject.toml/uv.lock, rather than declaring a second copy of
+# select/ignore/strict settings here -- see issue #725's own "Constraints".
+#
+# Setup: `uv run prek install` (documented in CONTRIBUTING.md; also wired
+# into flake.nix's devShell so `nix develop` installs it automatically).
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: uv run --frozen ruff check --force-exclude
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+
+      - id: ruff-format
+        name: ruff format --check
+        entry: uv run --frozen ruff format --check --force-exclude
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+
+      - id: mypy
+        name: mypy (type check)
+        # mypy resolves cross-file imports within each of the directory
+        # groups .github/workflows/test.yml's own mypy job already checks
+        # separately (two files share the literal basename
+        # check_acm_present.py in unrelated directories -- combining every
+        # group into one invocation errors "Duplicate module named"), so
+        # this hook type-checks each of those same groups via
+        # .github/scripts/run_precommit_mypy.py rather than only the
+        # staged files. Residual risk named by issue #725 itself: this is
+        # not scoped to changed files only, so it is not as fast as ruff
+        # above on a large repo -- accepted for now, named as a follow-up
+        # rather than left silently unscoped.
+        entry: uv run --frozen python3 .github/scripts/run_precommit_mypy.py
+        language: system
+        types_or: [python, pyi]
+        pass_filenames: false
+        require_serial: true
