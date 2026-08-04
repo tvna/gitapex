@@ -280,7 +280,7 @@ def load_gate_tracking_issues(path: str) -> set[int]:
     """
     try:
         raw = pathlib.Path(path).read_text(encoding="utf-8")
-    except OSError as error:
+    except (OSError, UnicodeDecodeError) as error:
         raise SsotLedgerError(f"{path}: gate registry cannot be read: {error}") from error
     try:
         data = json.loads(raw)

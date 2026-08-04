@@ -43,7 +43,16 @@ def find_drift(workflows_dir: pathlib.Path = WORKFLOWS_DIR) -> list[tuple[str, i
     flake-owned Class B tool from outside the flake. Empty list means no drift."""
     findings: list[tuple[str, int, str]] = []
     for workflow in sorted(workflows_dir.glob("*.yml")) + sorted(workflows_dir.glob("*.yaml")):
-        for lineno, line in enumerate(workflow.read_text().splitlines(), start=1):
+        try:
+            content = workflow.read_text()
+        except UnicodeDecodeError as exc:
+            # A workflow file that isn't valid text can't be scanned for
+            # Class B repo references -- skip it with a warning rather than
+            # crashing the whole scan (and losing findings from every other
+            # file) with an unhandled traceback.
+            print(f"warning: skipping {workflow}: {exc}", file=sys.stderr)
+            continue
+        for lineno, line in enumerate(content.splitlines(), start=1):
             if any(repo in line for repo in CLASS_B_REPOS):
                 findings.append((str(workflow), lineno, line.strip()))
     return findings

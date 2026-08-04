@@ -130,6 +130,20 @@ def test_main_value_error_from_override(capsys: pytest.CaptureFixture[str], tmp_
     assert "error:" in capsys.readouterr().err
 
 
+def test_main_non_utf8_file_fails_cleanly(capsys: pytest.CaptureFixture[str], tmp_path: Path):
+    # override_file()'s own read_text() carries no try/except (waived inline,
+    # exception-handler-gap: WAIVED, on that line): its only caller, main(),
+    # wraps the call in except ValueError, and UnicodeDecodeError is a
+    # ValueError subclass, so a non-UTF-8 eval.yaml must still exit 1 with
+    # this script's own error message rather than an uncaught traceback.
+    p = tmp_path / "eval.yaml"
+    p.write_bytes(b"config:\n  model: \xff\xfebad\n")
+    assert scm.main(["set_config_model.py", str(p), "m"]) == 1
+    err = capsys.readouterr().err
+    assert "error:" in err
+    assert str(p) in err
+
+
 def test_main_success(capsys: pytest.CaptureFixture[str], tmp_path: Path):
     p = tmp_path / "eval.yaml"
     p.write_text(BASE, encoding="utf-8")

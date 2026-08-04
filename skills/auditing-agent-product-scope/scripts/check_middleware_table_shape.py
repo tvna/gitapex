@@ -146,6 +146,9 @@ def main(argv: list[str] | None = None) -> int:
     except FileNotFoundError:
         print(f"error: file not found: {args.path}", file=sys.stderr)
         return 1
+    except UnicodeDecodeError as exc:
+        print(f"error: could not decode {args.path} as UTF-8: {exc}", file=sys.stderr)
+        return 1
     offenses = check_middleware_table_shape(body_text)
     if not offenses:
         print("PASS: every expected table has its required columns and rows")

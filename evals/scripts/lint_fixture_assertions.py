@@ -458,7 +458,10 @@ def load_corpus(rubric: Path, skill: Path) -> str:
     error, not a silent empty corpus that would pass everything. Callers
     that pass the same path for both (a skill with no dedicated rubric.md)
     get that file's text once each, which is harmless for substring checks."""
-    return rubric.read_text(encoding="utf-8") + "\n" + skill.read_text(encoding="utf-8")
+    try:
+        return rubric.read_text(encoding="utf-8") + "\n" + skill.read_text(encoding="utf-8")
+    except UnicodeDecodeError as error:
+        raise OSError(f"{rubric} or {skill}: could not decode as UTF-8: {error}") from error
 
 
 def extract_anchors(corpus: str) -> list[str]:
@@ -965,10 +968,15 @@ def _skill_claim_text(skills_root: Path, evals_root: Path, name: str) -> str:
     parts = []
     skill_md = skills_root / name / "SKILL.md"
     eval_status = evals_root / name / "eval-status.md"
-    if skill_md.is_file():
-        parts.append(skill_md.read_text(encoding="utf-8"))
-    if eval_status.is_file():
-        parts.append(eval_status.read_text(encoding="utf-8"))
+    try:
+        if skill_md.is_file():
+            parts.append(skill_md.read_text(encoding="utf-8"))
+        if eval_status.is_file():
+            parts.append(eval_status.read_text(encoding="utf-8"))
+    except UnicodeDecodeError as error:
+        raise OSError(
+            f"{skill_md} or {eval_status}: could not decode as UTF-8: {error}"
+        ) from error
     return "\n".join(parts)
 
 
@@ -1079,7 +1087,7 @@ def main(argv: list[str] | None = None) -> int:
             skill = Path(args.skill) if args.skill else Path(DEFAULT_SKILL)
             try:
                 corpus = load_corpus(rubric, skill)
-            except OSError as exc:
+            except (OSError, UnicodeDecodeError) as exc:
                 print(f"error: could not read the anchor corpus: {exc}", file=sys.stderr)
                 return 2
             # PTH207 waived: the argument is a whole user-supplied pattern
@@ -1095,7 +1103,7 @@ def main(argv: list[str] | None = None) -> int:
                 task_paths, corpus,
                 check_prompt_echo_enabled=args.check_prompt_echo,
                 check_cross_task_enabled=args.check_cross_task)
-    except (OSError, yaml.YAMLError, ValidationError) as exc:
+    except (OSError, UnicodeDecodeError, yaml.YAMLError, ValidationError) as exc:
         print(f"error: could not lint fixtures: {exc}", file=sys.stderr)
         return 2
 

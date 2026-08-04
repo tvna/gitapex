@@ -158,3 +158,12 @@ def test_main_reports_error_for_unreadable_added_path(tmp_path, capsys):
     # graceful error message.
     assert gate.main(["--added", str(tmp_path)]) == 1
     assert "could not read" in capsys.readouterr().err
+
+
+def test_main_reports_error_for_undecodable_added_file(tmp_path, capsys):
+    # Regression: a non-UTF-8 added-lines file raised an unhandled
+    # UnicodeDecodeError instead of the intended graceful error message.
+    added_file = tmp_path / "added.txt"
+    added_file.write_bytes(b"\xff\xfe bad")
+    assert gate.main(["--added", str(added_file)]) == 1
+    assert "could not read" in capsys.readouterr().err

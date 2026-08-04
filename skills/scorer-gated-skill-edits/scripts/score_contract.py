@@ -439,6 +439,9 @@ def main(argv: list[str] | None = None) -> int:
     except FileNotFoundError:
         print(f"error: assertions file not found: {args.assertions}", file=sys.stderr)
         return 1
+    except UnicodeDecodeError as exc:
+        print(f"error: could not decode assertions file {args.assertions}: {exc}", file=sys.stderr)
+        return 1
     except json.JSONDecodeError as exc:
         print(f"error: invalid JSON in {args.assertions}: {exc}", file=sys.stderr)
         return 1
@@ -448,6 +451,9 @@ def main(argv: list[str] | None = None) -> int:
                 output_text = handle.read()
         except FileNotFoundError:
             print(f"error: output file not found: {args.output}", file=sys.stderr)
+            return 1
+        except UnicodeDecodeError as exc:
+            print(f"error: could not decode output file {args.output}: {exc}", file=sys.stderr)
             return 1
     else:
         output_text = sys.stdin.read()

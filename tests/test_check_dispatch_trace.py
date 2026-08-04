@@ -102,6 +102,37 @@ def test_iter_tool_use_blocks_raises_on_non_object_line(tmp_path: Path):
         list(cdt.iter_tool_use_blocks(p))
 
 
+def test_iter_tool_use_blocks_raises_unicode_decode_error_on_non_utf8_bytes(tmp_path: Path):
+    # iter_tool_use_blocks() itself carries no try/except (waived inline,
+    # exception-handler-gap: WAIVED, on the .open() line): a non-UTF-8
+    # transcript must still raise UnicodeDecodeError -- a ValueError
+    # subclass -- so check_transcript()'s callers, which only catch
+    # (ValueError, OSError), still handle it cleanly. Written with a
+    # well-formed line first so the bad byte is hit mid-generator, not on
+    # the first `next()`.
+    p = tmp_path / "t.jsonl"
+    p.write_bytes(_line({"type": "system"}).encode("utf-8") + b"bad line \xff\xfe not utf-8\n")
+    with pytest.raises(UnicodeDecodeError):
+        list(cdt.iter_tool_use_blocks(p))
+
+
+def test_check_transcript_non_utf8_transcript_raises_value_error_subclass(tmp_path: Path):
+    # Confirms the propagation this waiver relies on end to end:
+    # count_dispatches()'s plain `for block in tool_use_blocks:` loop over
+    # iter_tool_use_blocks()'s generator lets a mid-iteration
+    # UnicodeDecodeError escape check_transcript() as a bare ValueError
+    # catch would expect, since UnicodeDecodeError is one of its subclasses.
+    p = tmp_path / "t.jsonl"
+    p.write_bytes(
+        _line({"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "Agent"}]}}).encode(
+            "utf-8"
+        )
+        + b"not json and a bad byte \xff\xfe\n"
+    )
+    with pytest.raises(ValueError):
+        cdt.check_transcript(p, ["Agent"])
+
+
 def test_iter_tool_use_blocks_skips_non_list_content(tmp_path: Path):
     # A message.content that is a bare string (not the content-block-array
     # shape) must be skipped, not crash iteration.
@@ -327,6 +358,19 @@ def test_cli_check_transcript_missing_file_exit_2(tmp_path: Path, capsys):
 def test_cli_check_transcript_malformed_file_exit_2(tmp_path: Path, capsys):
     p = tmp_path / "t.jsonl"
     p.write_text("not json\n", encoding="utf-8")
+    rc = cdt.main(["check-transcript", "--transcript", str(p), "--dispatch-tool-name", "Agent"])
+    assert rc == 2
+    assert "error:" in capsys.readouterr().err
+
+
+def test_cli_check_transcript_non_utf8_file_exit_2(tmp_path: Path, capsys):
+    # check-transcript call site (~line 548): non-UTF-8 bytes must exit 2
+    # with this script's own error message, not an uncaught traceback --
+    # the (ValueError, OSError) catch here is what makes iter_tool_use_
+    # blocks()'s own unguarded .open() a caller-owns-handling waiver rather
+    # than a fix.
+    p = tmp_path / "t.jsonl"
+    p.write_bytes(b"bad byte \xff\xfe not utf-8\n")
     rc = cdt.main(["check-transcript", "--transcript", str(p), "--dispatch-tool-name", "Agent"])
     assert rc == 2
     assert "error:" in capsys.readouterr().err
@@ -744,6 +788,24 @@ def test_cli_run_missing_prompt_file(tmp_path: Path):
         "--dispatch-tool-name", "Agent",
     ])
     assert rc == 2
+
+
+def test_cli_run_non_utf8_prompt_file_exit_2(tmp_path: Path, capsys):
+    # `run`'s prompt_file.read_text() (~line 560) had no try/except at all
+    # before this fix and let UnicodeDecodeError escape as an uncaught
+    # traceback; it must now exit 2 with this script's own error message,
+    # matching --prompt-file's own "not found" convention just above.
+    p = tmp_path / "prompt.txt"
+    p.write_bytes(b"bad byte \xff\xfe not utf-8")
+    rc = cdt.main([
+        "run", "--prompt-file", str(p),
+        "--transcript-out", str(tmp_path / "out.jsonl"),
+        "--dispatch-tool-name", "Agent",
+    ])
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "error:" in err
+    assert str(p) in err
 
 
 def test_cli_run_reuses_provided_isolated_home(tmp_path: Path, monkeypatch):

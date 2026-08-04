@@ -143,6 +143,9 @@ def main(argv: list[str] | None = None) -> int:
     except FileNotFoundError as error:
         print(f"error: file not found: {error.filename}", file=sys.stderr)
         return 1
+    except UnicodeDecodeError as error:
+        print(f"error: could not decode file as UTF-8: {error}", file=sys.stderr)
+        return 1
 
     corpus = "\n\n".join(sources)
     offending = find_offending_paragraphs(corpus)

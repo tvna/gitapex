@@ -255,6 +255,49 @@ def test_main_prints_report_and_exits_zero(tmp_path, capsys):
     assert "Dimensions: 1/1 cited" in capsys.readouterr().out
 
 
+def test_main_reports_error_and_exits_two_on_non_utf8_dimensions_file(tmp_path):
+    # discover_dimensions()'s own read_text() carries no try/except; it and
+    # discover_axes()/discover_citations() (also unguarded) all share
+    # compute_coverage()'s only caller, main(), whose except tuple must
+    # include UnicodeDecodeError so a non-UTF-8 dimensions.md exits 2 with
+    # this script's own error message instead of an uncaught traceback.
+    skill_dir = _skill_dir(tmp_path, "1. **A.**\n", "# skill\n")
+    (skill_dir / "references" / "dimensions.md").write_bytes(b"1. **A \xff\xfebad.**\n")
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    _write_task(tasks, "a.yaml", description="dimension 1")
+
+    rc = C.main(["--skill-dir", str(skill_dir), "--tasks-glob", str(tasks / "*.yaml")])
+    assert rc == 2
+
+
+def test_main_reports_error_and_exits_two_on_non_utf8_skill_md(tmp_path):
+    # Same as above, but the non-UTF-8 byte is in SKILL.md, exercised via
+    # discover_axes() instead of discover_dimensions().
+    skill_dir = _skill_dir(tmp_path, "1. **A.**\n", "# skill\n")
+    (skill_dir / "SKILL.md").write_bytes(b"### Axis: bad \xff\xfe\n")
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    _write_task(tasks, "a.yaml", description="dimension 1")
+
+    rc = C.main(["--skill-dir", str(skill_dir), "--tasks-glob", str(tasks / "*.yaml")])
+    assert rc == 2
+
+
+def test_main_reports_error_and_exits_two_on_non_utf8_task_file(tmp_path):
+    # Same as above, but the non-UTF-8 byte is in a task fixture, exercised
+    # via discover_citations() instead of discover_dimensions()/discover_axes().
+    skill_dir = _skill_dir(tmp_path, "1. **A.**\n", "# skill\n")
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    (tasks / "a.yaml").write_bytes(
+        b"id: a\nname: T \xff\xfebad\ninputs:\n  prompt: hi\n"
+    )
+
+    rc = C.main(["--skill-dir", str(skill_dir), "--tasks-glob", str(tasks / "*.yaml")])
+    assert rc == 2
+
+
 def test_main_reports_error_and_exits_two_on_malformed_fixture_shape(tmp_path):
     # A task file that parses to a non-mapping top level (a bare scalar
     # string here) must not crash main() with an uncaught AttributeError.

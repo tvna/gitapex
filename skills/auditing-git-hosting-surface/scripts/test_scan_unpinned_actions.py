@@ -102,6 +102,21 @@ def test_multiple_files_and_lines_all_reported(tmp_path):
     assert len(sua.find_unpinned_actions(tmp_path)) == 3
 
 
+def test_undecodable_workflow_file_is_skipped_not_crashed(tmp_path, capsys):
+    # Regression: a non-UTF-8 workflow file raised an unhandled
+    # UnicodeDecodeError from workflow.read_text() instead of the intended
+    # graceful skip-with-warning, and clean files in the same directory
+    # must still be scanned.
+    workflows_dir = tmp_path
+    workflows_dir.mkdir(exist_ok=True)
+    (workflows_dir / "bad.yml").write_bytes(b"\xff\xfe bad")
+    _write(workflows_dir, "ok.yml", "      - uses: actions/checkout@v4\n")
+    findings = sua.find_unpinned_actions(workflows_dir)
+    assert len(findings) == 1
+    assert findings[0][0].endswith("ok.yml")
+    assert "skipping" in capsys.readouterr().err
+
+
 def test_repository_workflows_are_pin_clean():
     """The gate: this repo's real workflows must all be SHA-pinned."""
     repo_root = Path(__file__).resolve().parents[3]

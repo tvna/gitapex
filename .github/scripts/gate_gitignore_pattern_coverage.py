@@ -115,10 +115,11 @@ def main(argv: list[str] | None = None) -> int:
                 text = handle.read()
         else:
             text = sys.stdin.read()
-    except OSError as exc:
+    except (OSError, UnicodeDecodeError) as exc:
         # OSError (not just FileNotFoundError) -- a directory path
         # (IsADirectoryError) or a permission-denied file (PermissionError)
-        # must also fail with this message, not an unhandled traceback.
+        # -- and UnicodeDecodeError (a non-UTF-8 added-lines file) must also
+        # fail with this message, not an unhandled traceback.
         print(f"error: could not read added-lines file {args.added!r}: {exc}", file=sys.stderr)
         return 1
 

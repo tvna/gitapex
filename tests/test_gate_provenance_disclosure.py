@@ -90,6 +90,14 @@ def test_main_body_file_missing_errors(tmp_path, capsys):
     assert "error" in capsys.readouterr().err
 
 
+def test_main_body_file_undecodable_errors(tmp_path, capsys):
+    body = tmp_path / "body.md"
+    body.write_bytes(b"\xff\xfe bad")
+    exit_code = gate.main(["--body", str(body)])
+    assert exit_code == 1
+    assert "error" in capsys.readouterr().err
+
+
 def test_main_diff_added_missing_errors(tmp_path, capsys):
     body = tmp_path / "body.md"
     body.write_text(_CLEAN_NOTE, encoding="utf-8")

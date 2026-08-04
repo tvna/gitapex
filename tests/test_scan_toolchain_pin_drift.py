@@ -65,6 +65,19 @@ def test_all_class_b_repos_are_detected(tmp_path):
     assert len(drift.find_drift(tmp_path)) == len(drift.CLASS_B_REPOS)
 
 
+def test_undecodable_workflow_file_is_skipped_not_crashed(tmp_path, capsys):
+    # Regression: a non-UTF-8 workflow file raised an unhandled
+    # UnicodeDecodeError from workflow.read_text() instead of the intended
+    # graceful skip-with-warning, and clean files in the same directory
+    # must still be scanned.
+    (tmp_path / "bad.yml").write_bytes(b"\xff\xfe bad")
+    _write(tmp_path, "ok.yml", "      - run: go install microsoft/waza@latest\n")
+    findings = drift.find_drift(tmp_path)
+    assert len(findings) == 1
+    assert findings[0][0].endswith("ok.yml")
+    assert "skipping" in capsys.readouterr().err
+
+
 def test_repository_workflows_are_drift_free():
     """The gate: real CI workflows must provision Class B tools via the flake."""
     findings = drift.find_drift(REPO_ROOT / ".github" / "workflows")

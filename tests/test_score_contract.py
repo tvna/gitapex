@@ -724,3 +724,23 @@ def test_main_missing_output_file_fails_closed(tmp_path, capsys):
     )
     assert rc == 1
     assert "output file not found" in capsys.readouterr().err
+
+
+def test_main_undecodable_assertions_file_fails_closed(tmp_path, capsys):
+    apath = tmp_path / "assertions.json"
+    apath.write_bytes(b"\xff\xfe bad")
+    rc = score_contract.main(["--assertions", str(apath)])
+    assert rc == 1
+    assert "could not decode assertions file" in capsys.readouterr().err
+
+
+def test_main_undecodable_output_file_fails_closed(tmp_path, capsys):
+    apath = tmp_path / "assertions.json"
+    apath.write_text(json.dumps({"output_contains": ["Facts"]}), encoding="utf-8")
+    opath = tmp_path / "output.txt"
+    opath.write_bytes(b"\xff\xfe bad")
+    rc = score_contract.main(
+        ["--assertions", str(apath), "--output", str(opath)]
+    )
+    assert rc == 1
+    assert "could not decode output file" in capsys.readouterr().err

@@ -280,7 +280,10 @@ def check_precedence_branch_coverage(skill_md_path: Path, skill_text: str, repo_
     split_md_path = repo_root / "evals" / skill_md_path.parent.name / "split.md"
     if not split_md_path.is_file():
         return None
-    split_text = split_md_path.read_text(encoding="utf-8")
+    try:
+        split_text = split_md_path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as error:
+        return f"{split_md_path}: could not decode as UTF-8 ({error})"
     if has_precedence_equivalence_class_pair(split_text):
         return None
     return (
@@ -361,7 +364,10 @@ def check_exercises_declaration_coverage(
     skill_md_path = repo_root / "skills" / skill_name / "SKILL.md"
     if not skill_md_path.is_file():
         return None
-    skill_text = skill_md_path.read_text(encoding="utf-8")
+    try:
+        skill_text = skill_md_path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as error:
+        return f"{split_md_path}: could not decode {skill_md_path} as UTF-8 ({error})"
     section_labels = parse_section_labels(skill_text)
     if not section_labels:
         return None
@@ -375,7 +381,7 @@ def check_exercises_declaration_coverage(
             continue
         try:
             data = yaml.safe_load(fixture_path.read_text(encoding="utf-8")) or {}
-        except yaml.YAMLError as error:
+        except (yaml.YAMLError, UnicodeDecodeError) as error:
             problems.append(f"{fixture_name}: could not parse YAML ({error})")
             continue
         expected = data.get("expected") if isinstance(data, dict) else None
@@ -403,7 +409,7 @@ def check_exercises_declaration_coverage(
 def _read(path: Path) -> str | None:
     try:
         return path.read_text(encoding="utf-8")
-    except OSError as error:
+    except (OSError, UnicodeDecodeError) as error:
         print(f"error: could not read {path}: {error}", file=sys.stderr)
         return None
 
