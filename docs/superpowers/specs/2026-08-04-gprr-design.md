@@ -90,6 +90,17 @@ fully-classified retrospective. Either denominator may be zero for a given
 week (no classified repairs, or no merged PRs); the corresponding ratio is
 reported as `n/a` rather than dividing by zero.
 
+Verified live against this repository 2026-08-04: `gate_share_of_merged_prs`
+legitimately exceeds 100% in some weeks (2026-W31: 152 gate-preventable
+repairs of 198 classified, against only 73 PRs merged that same week). This
+is expected, not a bug -- a single retrospective issue can enumerate
+several repairs, a busy week's retrospective issues can classify repairs
+whose originating PR merged in an earlier week, and merge-retrospective
+files one issue per merged PR, not one repair per PR. The ratio answers
+"how many gate-preventable repairs were reported per merged PR that
+week," which is not bounded to 1, rather than "what fraction of merged
+PRs had one," which would be.
+
 ### 5. Informational only, no threshold, no CI failure on the metric itself
 
 Unlike its sibling, this script never exits non-zero based on the GPRR
