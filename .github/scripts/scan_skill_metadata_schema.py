@@ -1,7 +1,18 @@
 #!/usr/bin/env python3
 """Validate every skill's metadata sidecar against the SkillMetadata schema.
 
-DRAFT -- not yet wired into any CI workflow or pre-commit hook. This scanner
+DRAFT -- not wired into any dedicated CI workflow step or pre-commit hook.
+It is, however, already exercised indirectly: tests/test_scan_skill_
+metadata_schema.py's own test_real_repository_skill_sidecars_have_no_
+schema_drift calls find_drift() against the real skills/ tree with no
+fixture override, and tests/ is auto-discovered by pytest via pyproject.
+toml's [tool.pytest.ini_options] testpaths -- which .github/workflows/
+test.yml runs as a required check on every push and PR. So a future PR that
+introduces real schema drift would already fail CI through that pytest
+gate today, even though there is no standalone `python3 .github/scripts/
+scan_skill_metadata_schema.py` invocation, dedicated workflow file, or
+pre-commit hook naming this script directly (found by adversarial review
+of this file, which the original DRAFT framing understated). This scanner
 is scoped, deliberately, to a narrower job than
 skills/evaluating-skill-quality/scripts/check_skill_shape.py's own
 manifest-parsing checks: it validates metadata/gitapex.yaml's *structural*
@@ -34,8 +45,11 @@ Layered validation, mirroring .gitapex/ssot.schema.json's own scanner
      sibling skills/<name>/ directory.
    - A repo-wide ``requires`` acyclicity check across every sidecar's
      spec.skillDependencies.requires graph (mirrors
-     tests/test_skill_metadata_sidecar.py's own ``_find_requires_cycle``);
-     genuinely repo-wide, so it cannot live in the per-skill loop below.
+     tests/test_skill_metadata_sidecar.py's own ``_find_requires_cycle``).
+     The graph itself is accumulated inside the same per-skill loop that
+     runs every other check below (one sidecar read each, not two), but
+     detecting a cycle genuinely needs the WHOLE graph, so that detection
+     step still runs once, after every skill has been read.
 
 Run standalone (exit 0 clean, 1 on drift or a read error) or via the pytest
 gate in tests/test_scan_skill_metadata_schema.py.
@@ -64,12 +78,17 @@ SCHEMA_PATH = REPO_ROOT / ".gitapex" / "skill-metadata.schema.json"
 SIDECAR_RELATIVE_PATH = "metadata/gitapex.yaml"
 # Guards against discover_skill_dirs silently finding nothing (a wrong or
 # missing skills_dir, an empty/misconfigured checkout) and find_drift then
-# vacuously reporting "no drift" -- mirroring
-# tests/test_skill_metadata_sidecar.py's own MIN_EXPECTED_SKILLS floor and
-# its stated reasoning verbatim. There are 24 skills in this repository
-# today; this floor is set close to that real count with headroom, not at 1,
-# so a partial discovery failure (most, not all, skills silently dropped)
-# is caught too, not only a total-zero one.
+# vacuously reporting "no drift" -- the same purpose and the same numeric
+# value as tests/test_skill_metadata_sidecar.py's own MIN_EXPECTED_SKILLS
+# floor, but NOT its reasoning verbatim (a prior version of this comment
+# claimed otherwise; found by adversarial review of this file): that file's
+# own comment still cites "17 skills" as the real count, stale against the
+# repository's actual 24 (confirmed via `ls skills/*/SKILL.md | wc -l`) --
+# a fact this comment does not re-derive, since a stale count in a sibling
+# file is that file's own drift to fix, not this one's to inherit. This
+# floor is set close to the real, current count (24) with headroom, not at
+# 1, so a partial discovery failure (most, not all, skills silently
+# dropped) is caught too, not only a total-zero one.
 MIN_EXPECTED_SKILL_DIRS = 15
 
 
@@ -134,21 +153,40 @@ def _load_schema(schema_path: pathlib.Path) -> dict[str, Any]:
     return parsed
 
 
-def find_schema_violations(instance: Any, schema: dict[str, Any]) -> list[str]:
-    """Return one message per JSON-Schema (draft 2020-12) validation error
-    against ``schema``. ``format_checker`` is passed explicitly -- the
-    JSON Schema spec itself permits a consumer to ignore format assertions,
-    and the plain jsonschema.Draft202012Validator(schema) constructor does
-    exactly that, which would silently accept an out-of-range calendar date
-    like "2026-02-30" that only fails the schema's "format": "date" keyword,
-    not its "pattern" keyword. Empty list means the instance is valid."""
-    validator = jsonschema.Draft202012Validator(
+def _build_validator(schema: dict[str, Any]) -> jsonschema.Draft202012Validator:
+    """A Draft202012Validator for ``schema`` with format assertion enabled
+    -- the JSON Schema spec itself permits a consumer to ignore format
+    assertions, and the plain jsonschema.Draft202012Validator(schema)
+    constructor does exactly that, which would silently accept an
+    out-of-range calendar date like "2026-02-30" that only fails the
+    schema's "format": "date" keyword, not its "pattern" keyword."""
+    return jsonschema.Draft202012Validator(
         schema, format_checker=jsonschema.FormatChecker())
+
+
+def _violations_from_validator(
+    instance: Any, validator: jsonschema.Draft202012Validator
+) -> list[str]:
+    """One message per validation error ``validator`` finds against
+    ``instance``. Empty list means the instance is valid."""
     findings: list[str] = []
     for error in validator.iter_errors(instance):
         location = "/".join(str(p) for p in error.path) or "<root>"
         findings.append(f"schema: {location}: {error.message}")
     return findings
+
+
+def find_schema_violations(instance: Any, schema: dict[str, Any]) -> list[str]:
+    """Return one message per JSON-Schema (draft 2020-12) validation error
+    against ``schema``. Convenience wrapper that builds a fresh validator on
+    every call -- fine for the occasional direct caller (this module's own
+    tests), but find_drift builds one validator per run instead and reuses
+    it across every discovered skill via _violations_from_validator, rather
+    than re-compiling the same 13-$defs schema once per skill (adversarial
+    review of this file: jsonschema's validator construction performs
+    $ref resolution/registry setup, real, avoidable repeated work at the
+    repository's current 24-skill scale)."""
+    return _violations_from_validator(instance, _build_validator(schema))
 
 
 def _spec_of(instance: Any) -> dict[str, Any]:
@@ -164,9 +202,9 @@ def _spec_of(instance: Any) -> dict[str, Any]:
 
 def _is_bare_skill_name(entry: str) -> bool:
     """Whether ``entry`` is shaped like a real skill directory name -- a
-    bare path component (no separator, not ".", not "..", not absolute) --
-    rather than a path that could escape ``skills_dir`` when joined with
-    ``/``. ``(skills_dir / entry).is_dir()`` does not itself guard against
+    bare path component (no separator, not ".", not "..") -- rather than a
+    path that could escape ``skills_dir`` when joined with ``/``.
+    ``(skills_dir / entry).is_dir()`` does not itself guard against
     pathlib's absolute-operand-replaces-the-left-side behavior
     (``pathlib.Path("/repo/skills") / "/etc" == pathlib.Path("/etc")``) or a
     "../" traversal segment, so an entry that is not a bare name must never
@@ -175,12 +213,39 @@ def _is_bare_skill_name(entry: str) -> bool:
     ``find_deprecated_replacement_drift`` previously reported a dangling
     "/etc" or "../../../../../../etc" entry as resolving whenever that path
     happened to exist on disk, silently passing a reference that plainly
-    does not name a sibling skills/<name>/ directory."""
+    does not name a sibling skills/<name>/ directory.
+
+    No separate ``is_absolute()`` check: any POSIX absolute path starts with
+    "/", so the ``"/" not in entry`` clause below already excludes every
+    absolute path on its own -- a prior version of this function carried a
+    redundant ``pathlib.PurePosixPath(entry).is_absolute()`` clause that
+    could never evaluate differently once that clause held, which a reader
+    could mistake for an independent Windows-drive-letter-style defense it
+    never provided (found by adversarial review of this file)."""
     return (
         entry not in ("", ".", "..")
         and "/" not in entry
         and "\\" not in entry
-        and not pathlib.PurePosixPath(entry).is_absolute()
+    )
+
+
+def _resolves_to_sibling_skill(name: str, skills_dir: pathlib.Path) -> bool:
+    """Whether ``name`` names an existing sibling skill directory: a bare
+    name (see ``_is_bare_skill_name``) whose ``skills_dir / name`` also
+    contains a real ``SKILL.md`` -- the same "real skill directory"
+    definition ``discover_skill_dirs`` already uses, not merely
+    ``.is_dir()``. Without the ``SKILL.md`` check, any non-skill directory
+    under ``skills_dir`` (a docs folder, a work-in-progress directory with
+    no ``SKILL.md`` yet, a stray build artifact) would incorrectly read as
+    a resolved reference -- found by adversarial review of this file, and
+    verified live against a constructed fixture directory with no
+    ``SKILL.md``. Shared by ``find_skill_dependency_drift`` and
+    ``find_deprecated_replacement_drift`` so the one safety-critical
+    "does this reference resolve" predicate has exactly one implementation,
+    not two copies that could silently diverge."""
+    return (
+        _is_bare_skill_name(name)
+        and (skills_dir / name / "SKILL.md").is_file()
     )
 
 
@@ -213,9 +278,7 @@ def find_skill_dependency_drift(
         if not isinstance(entries, list):
             continue
         for entry in entries:
-            if isinstance(entry, str) and (
-                not _is_bare_skill_name(entry) or not (skills_dir / entry).is_dir()
-            ):
+            if isinstance(entry, str) and not _resolves_to_sibling_skill(entry, skills_dir):
                 findings.append(
                     f"skill-dependencies-resolve: {list_key} references "
                     f"unknown skill directory {entry!r}")
@@ -228,45 +291,28 @@ def find_deprecated_replacement_drift(
     """lifecycle-deprecated-replacement-resolves: spec.lifecycle.deprecated.
     replacement, if present, must name an existing sibling skills/<name>/
     directory -- the same dangling-reference gate as skill-dependencies-
-    resolve, one field over."""
+    resolve, one field over.
+
+    Deliberately no truthiness short-circuit on ``replacement`` beyond the
+    ``isinstance(replacement, str)`` type guard -- a prior version also
+    required ``replacement`` to be truthy before checking resolution, which
+    let an empty-string replacement silently read as "nothing to check"
+    instead of "dangling," inconsistent with find_skill_dependency_drift's
+    own sibling entries (which carry no such exemption). Masked in the full
+    find_drift() pipeline today because the schema's own skillNameRef
+    pattern already rejects an empty string, but this function's own
+    standalone behavior was wrong regardless (found by adversarial review
+    of this file, verified live: calling this function directly with
+    replacement="" returned [] before this fix)."""
     lifecycle = _spec_of(instance).get("lifecycle")
     deprecated = lifecycle.get("deprecated") if isinstance(lifecycle, dict) else None
     replacement = deprecated.get("replacement") if isinstance(deprecated, dict) else None
-    if isinstance(replacement, str) and replacement and (
-        not _is_bare_skill_name(replacement) or not (skills_dir / replacement).is_dir()
-    ):
+    if isinstance(replacement, str) and not _resolves_to_sibling_skill(replacement, skills_dir):
         return [
             "lifecycle-deprecated-replacement-resolves: deprecated.replacement "
             f"references unknown skill directory {replacement!r}"
         ]
     return []
-
-
-def _requires_graph(
-    skill_dirs: list[pathlib.Path], skills_dir: pathlib.Path
-) -> dict[str, list[str]]:
-    """skill-name -> its own spec.skillDependencies.requires list, built
-    from every skill directory whose sidecar reads as valid YAML with a
-    real requires list. A sidecar that fails to load or has a malformed
-    requires field contributes an empty list -- find_schema_violations
-    already reports that shape defect separately; this graph builder must
-    not crash on it."""
-    graph: dict[str, list[str]] = {}
-    for skill_dir in skill_dirs:
-        sidecar = skill_dir / SIDECAR_RELATIVE_PATH
-        if not sidecar.is_file():
-            continue
-        try:
-            instance = load_sidecar(sidecar)
-        except SidecarReadError:
-            graph[skill_dir.name] = []
-            continue
-        deps = _spec_of(instance).get("skillDependencies")
-        requires = deps.get("requires") if isinstance(deps, dict) else None
-        graph[skill_dir.name] = (
-            [r for r in requires if isinstance(r, str)]
-            if isinstance(requires, list) else [])
-    return graph
 
 
 def find_requires_cycle(graph: dict[str, list[str]]) -> list[str] | None:
@@ -325,8 +371,19 @@ def find_drift(
     deliberately small fixture directory (this module's own tests) must
     pass a lower value explicitly; every other caller, including
     ``main()``, keeps the real-repository-sized default.
+
+    Each sidecar is read exactly once: the requires-acyclicity graph is
+    accumulated alongside the other per-skill checks in the same loop
+    below, rather than by a second pass re-reading and re-parsing every
+    sidecar (a prior version had a dedicated ``_requires_graph`` helper
+    that did exactly that -- 48 file reads/YAML parses per run at this
+    repository's current 24-skill scale instead of 24; found by
+    adversarial review of this file). The requires-acyclicity check itself
+    still genuinely needs the WHOLE graph, so it still runs once, after
+    every skill has been read, not inside the per-skill loop.
     """
     schema = _load_schema(schema_path)
+    validator = _build_validator(schema)
     skill_dirs = discover_skill_dirs(skills_dir)
 
     if len(skill_dirs) < min_expected_skill_dirs:
@@ -339,6 +396,7 @@ def find_drift(
         ]
 
     findings: list[str] = []
+    graph: dict[str, list[str]] = {}
     for skill_dir in skill_dirs:
         sidecar = skill_dir / SIDECAR_RELATIVE_PATH
         prefix = skill_dir.name
@@ -349,15 +407,28 @@ def find_drift(
             instance = load_sidecar(sidecar)
         except SidecarReadError as error:
             findings.append(f"{prefix}: {error}")
+            # Mirrors the prior _requires_graph's own read-failure handling:
+            # a sidecar that fails to load contributes an empty requires
+            # list (a dead end for cycle detection), not a missing graph
+            # entry -- find_schema_violations has nothing to report here
+            # since there is no parsed instance, but this skill still
+            # participates in the acyclicity check as a childless node.
+            graph[prefix] = []
             continue
-        findings.extend(f"{prefix}: {f}" for f in find_schema_violations(instance, schema))
+        findings.extend(f"{prefix}: {f}" for f in _violations_from_validator(instance, validator))
         findings.extend(f"{prefix}: {f}" for f in find_name_mismatch(instance, skill_dir))
         findings.extend(
             f"{prefix}: {f}" for f in find_skill_dependency_drift(instance, skills_dir))
         findings.extend(
             f"{prefix}: {f}" for f in find_deprecated_replacement_drift(instance, skills_dir))
 
-    cycle = find_requires_cycle(_requires_graph(skill_dirs, skills_dir))
+        deps = _spec_of(instance).get("skillDependencies")
+        requires = deps.get("requires") if isinstance(deps, dict) else None
+        graph[prefix] = (
+            [r for r in requires if isinstance(r, str)]
+            if isinstance(requires, list) else [])
+
+    cycle = find_requires_cycle(graph)
     if cycle is not None:
         findings.append(
             f"requires-acyclicity: requires cycle found: {' -> '.join(cycle)}")

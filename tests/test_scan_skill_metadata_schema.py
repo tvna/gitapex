@@ -346,6 +346,17 @@ def test_execution_requirements_tools_empty_string_item_is_flagged() -> None:
     assert _violations(_mutated(executionRequirements=exec_req)) != []
 
 
+def _make_skill_dir(base: pathlib.Path, name: str) -> pathlib.Path:
+    """A real skill directory fixture: base/name/SKILL.md exists, matching
+    the definition _resolves_to_sibling_skill/discover_skill_dirs both use
+    -- a bare .mkdir() alone is not enough since the SKILL.md-check fix
+    (adversarial review)."""
+    skill_dir = base / name
+    skill_dir.mkdir(parents=True, exist_ok=True)
+    (skill_dir / "SKILL.md").write_text("---\nname: x\n---\nbody\n", encoding="utf-8")
+    return skill_dir
+
+
 # ---- cross-file: find_name_mismatch ----
 
 
@@ -376,10 +387,23 @@ def test_skill_dependency_drift_flags_dangling_name(tmp_path: pathlib.Path) -> N
 
 
 def test_skill_dependency_drift_resolves_real_sibling(tmp_path: pathlib.Path) -> None:
-    (tmp_path / "real-sibling").mkdir()
+    _make_skill_dir(tmp_path, "real-sibling")
     instance = _mutated(
         skillDependencies={"requires": [], "relatedTo": ["real-sibling"]})
     assert scanner.find_skill_dependency_drift(instance, tmp_path) == []
+
+
+def test_skill_dependency_drift_flags_directory_with_no_skill_md(tmp_path: pathlib.Path) -> None:
+    # Regression pin (adversarial review): a directory that merely exists
+    # (no SKILL.md inside) is not a real skill directory -- discover_skill_dirs
+    # already requires SKILL.md, but this function used to accept any
+    # existing directory via a bare .is_dir() check, silently treating a
+    # docs folder or a work-in-progress directory as a resolved dependency.
+    (tmp_path / "not-a-skill").mkdir()
+    instance = _mutated(
+        skillDependencies={"requires": [], "relatedTo": ["not-a-skill"]})
+    findings = scanner.find_skill_dependency_drift(instance, tmp_path)
+    assert any("not-a-skill" in f for f in findings)
 
 
 def test_skill_dependency_drift_ignores_missing_field() -> None:
@@ -397,10 +421,31 @@ def test_deprecated_replacement_drift_flags_dangling_name(tmp_path: pathlib.Path
 
 
 def test_deprecated_replacement_drift_resolves_real_sibling(tmp_path: pathlib.Path) -> None:
-    (tmp_path / "real-sibling").mkdir()
+    _make_skill_dir(tmp_path, "real-sibling")
     lifecycle = {"deprecated": {"reason": "x", "replacement": "real-sibling"}}
     instance = _mutated(lifecycle=lifecycle)
     assert scanner.find_deprecated_replacement_drift(instance, tmp_path) == []
+
+
+def test_deprecated_replacement_drift_flags_directory_with_no_skill_md(
+    tmp_path: pathlib.Path,
+) -> None:
+    (tmp_path / "not-a-skill").mkdir()
+    lifecycle = {"deprecated": {"reason": "x", "replacement": "not-a-skill"}}
+    instance = _mutated(lifecycle=lifecycle)
+    findings = scanner.find_deprecated_replacement_drift(instance, tmp_path)
+    assert any("not-a-skill" in f for f in findings)
+
+
+def test_deprecated_replacement_drift_flags_empty_string() -> None:
+    # Regression pin (adversarial review): a prior version's extra
+    # truthiness guard (`and replacement`) let an empty-string replacement
+    # silently read as "nothing to check" instead of "dangling," unlike
+    # find_skill_dependency_drift's own sibling entries.
+    lifecycle = {"deprecated": {"reason": "x", "replacement": ""}}
+    instance = _mutated(lifecycle=lifecycle)
+    findings = scanner.find_deprecated_replacement_drift(instance, REPO_ROOT / "skills")
+    assert any("''" in f for f in findings)
 
 
 # ---- cross-file: find_requires_cycle ----
@@ -543,9 +588,15 @@ def _write_sidecar(skill_dir: pathlib.Path, instance: Any) -> None:
 def test_find_drift_end_to_end_clean(tmp_path: pathlib.Path) -> None:
     skills_dir = tmp_path / "skills"
     skill_dir = skills_dir / "example-skill"
-    (skills_dir / "battle-testing-a-skill").mkdir(parents=True)
+    sibling_instance: dict[str, Any] = {
+        "apiVersion": "gitapex.io/v1alpha1",
+        "kind": "SkillMetadata",
+        "metadata": {"name": "battle-testing-a-skill"},
+        "spec": {"portability": "Portable", "capabilityAssumption": "Broad"},
+    }
+    _write_sidecar(skills_dir / "battle-testing-a-skill", sibling_instance)
     _write_sidecar(skill_dir, _VALID_INSTANCE)
-    assert scanner.find_drift(skills_dir, scanner.SCHEMA_PATH, min_expected_skill_dirs=1) == []
+    assert scanner.find_drift(skills_dir, scanner.SCHEMA_PATH, min_expected_skill_dirs=2) == []
 
 
 def test_find_drift_end_to_end_reports_prefixed_findings(tmp_path: pathlib.Path) -> None:
@@ -583,6 +634,26 @@ def test_find_drift_end_to_end_detects_requires_cycle(tmp_path: pathlib.Path) ->
     _write_sidecar(skills_dir / "skill-b", b)
     findings = scanner.find_drift(skills_dir, scanner.SCHEMA_PATH, min_expected_skill_dirs=2)
     assert any("requires-acyclicity" in f for f in findings)
+
+
+def test_find_drift_end_to_end_reports_unreadable_sidecar_without_crashing(
+    tmp_path: pathlib.Path,
+) -> None:
+    # Regression pin for the find_drift/_requires_graph merge: a sidecar
+    # that fails to load must still be reported as a finding, and must not
+    # crash the run or the acyclicity check that follows it in the same
+    # loop (the graph must still receive an empty-list entry for this
+    # skill, mirroring the pre-merge _requires_graph's own read-failure
+    # handling).
+    skills_dir = tmp_path / "skills"
+    skill_dir = skills_dir / "broken-skill"
+    (skill_dir / "metadata").mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("---\nname: x\n---\nbody\n", encoding="utf-8")
+    (skill_dir / scanner.SIDECAR_RELATIVE_PATH).write_text(
+        "key: [unterminated", encoding="utf-8")
+    findings = scanner.find_drift(skills_dir, scanner.SCHEMA_PATH, min_expected_skill_dirs=1)
+    assert any("broken-skill" in f and "is not valid YAML" in f for f in findings)
+    assert not any("requires-acyclicity" in f for f in findings)
 
 
 # ---- find_drift's discovery floor (dimension 15: fail-closed on incomplete
