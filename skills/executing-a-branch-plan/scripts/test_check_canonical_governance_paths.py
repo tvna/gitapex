@@ -125,3 +125,30 @@ def test_missing_files_arg_is_usage_error():
         timeout=10,
     )
     assert result.returncode == 2
+
+
+def test_non_utf8_files_arg_is_usage_error_not_a_traceback(tmp_path):
+    bad_file = tmp_path / "files.txt"
+    bad_file.write_bytes(b"\xff\xfe bad")
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "--files", str(bad_file)],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert result.returncode == 2
+    assert "not valid UTF-8" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_non_utf8_stdin_is_usage_error_not_a_traceback():
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT)],
+        input=b"\xff\xfe bad",
+        capture_output=True,
+        timeout=10,
+    )
+    assert result.returncode == 2
+    stderr = result.stderr.decode("utf-8", errors="replace")
+    assert "standard input" in stderr and "not valid UTF-8" in stderr
+    assert "Traceback" not in stderr

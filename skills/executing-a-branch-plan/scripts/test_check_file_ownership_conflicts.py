@@ -120,3 +120,30 @@ def test_empty_task_map_has_no_conflicts():
     result = run({})
     assert result.returncode == 0
     assert "no file-ownership conflicts found" in result.stdout
+
+
+def test_non_utf8_input_arg_is_usage_error_not_a_traceback(tmp_path):
+    bad_file = tmp_path / "input.json"
+    bad_file.write_bytes(b"\xff\xfe bad")
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "--input", str(bad_file)],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert result.returncode == 2
+    assert "not valid UTF-8" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_non_utf8_stdin_is_usage_error_not_a_traceback():
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT)],
+        input=b"\xff\xfe bad",
+        capture_output=True,
+        timeout=10,
+    )
+    assert result.returncode == 2
+    stderr = result.stderr.decode("utf-8", errors="replace")
+    assert "standard input" in stderr and "not valid UTF-8" in stderr
+    assert "Traceback" not in stderr

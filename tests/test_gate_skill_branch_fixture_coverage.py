@@ -15,6 +15,14 @@ import io
 
 import gate_skill_branch_fixture_coverage as gate
 
+
+class _FakeStdin:
+    """Just the surface `main` uses: `sys.stdin.buffer.read()`."""
+
+    def __init__(self, data: bytes) -> None:
+        self.buffer = io.BytesIO(data)
+
+
 _STOP_BOUNDARY_SKILL = """\
 ---
 name: example
@@ -372,21 +380,21 @@ def _write(tmp_path, name, content):
 
 
 def test_main_passes_with_no_entries(monkeypatch, capsys):
-    monkeypatch.setattr("sys.stdin", io.StringIO(""))
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(b""))
     assert gate.main([]) == 0
     assert "PASS" in capsys.readouterr().out
 
 
 def test_main_passes_for_new_skill_with_enough_fixtures(tmp_path, monkeypatch, capsys):
     after_path = _write(tmp_path, "after.md", _STOP_BOUNDARY_SKILL)
-    monkeypatch.setattr("sys.stdin", io.StringIO(f"example\t\t{after_path}\t3\n"))
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(f"example\t\t{after_path}\t3\n".encode()))
     assert gate.main([]) == 0
     assert "PASS" in capsys.readouterr().out
 
 
 def test_main_fails_for_new_skill_with_too_few_fixtures(tmp_path, monkeypatch, capsys):
     after_path = _write(tmp_path, "after.md", _STOP_BOUNDARY_SKILL)
-    monkeypatch.setattr("sys.stdin", io.StringIO(f"example\t\t{after_path}\t1\n"))
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(f"example\t\t{after_path}\t1\n".encode()))
     assert gate.main([]) == 1
     err_or_out = capsys.readouterr()
     assert "FAIL" in err_or_out.out
@@ -396,13 +404,13 @@ def test_main_fails_for_new_skill_with_too_few_fixtures(tmp_path, monkeypatch, c
 def test_main_skips_unchanged_branch_count(tmp_path, monkeypatch, capsys):
     before_path = _write(tmp_path, "before.md", _STOP_BOUNDARY_SKILL)
     after_path = _write(tmp_path, "after.md", _STOP_BOUNDARY_SKILL)
-    monkeypatch.setattr("sys.stdin", io.StringIO(f"example\t{before_path}\t{after_path}\t0\n"))
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(f"example\t{before_path}\t{after_path}\t0\n".encode()))
     assert gate.main([]) == 0
     assert "PASS" in capsys.readouterr().out
 
 
 def test_main_reports_error_for_missing_after_file(tmp_path, monkeypatch, capsys):
-    monkeypatch.setattr("sys.stdin", io.StringIO(f"example\t\t{tmp_path / 'missing.md'}\t0\n"))
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(f"example\t\t{tmp_path / 'missing.md'}\t0\n".encode()))
     assert gate.main([]) == 1
     assert "could not read after-content" in capsys.readouterr().err
 
@@ -410,7 +418,7 @@ def test_main_reports_error_for_missing_after_file(tmp_path, monkeypatch, capsys
 def test_main_treats_unreadable_before_file_as_new_skill(tmp_path, monkeypatch, capsys):
     after_path = _write(tmp_path, "after.md", _STOP_BOUNDARY_SKILL)
     missing_before = str(tmp_path / "missing-before.md")
-    monkeypatch.setattr("sys.stdin", io.StringIO(f"example\t{missing_before}\t{after_path}\t1\n"))
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(f"example\t{missing_before}\t{after_path}\t1\n".encode()))
     assert gate.main([]) == 1
     out = capsys.readouterr()
     assert "warning" in out.err
@@ -419,7 +427,7 @@ def test_main_treats_unreadable_before_file_as_new_skill(tmp_path, monkeypatch, 
 
 def test_main_reports_error_for_non_integer_fixture_count(tmp_path, monkeypatch, capsys):
     after_path = _write(tmp_path, "after.md", _STOP_BOUNDARY_SKILL)
-    monkeypatch.setattr("sys.stdin", io.StringIO(f"example\t\t{after_path}\tnot-a-number\n"))
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(f"example\t\t{after_path}\tnot-a-number\n".encode()))
     assert gate.main([]) == 1
     assert "non-integer fixture count" in capsys.readouterr().err
 
@@ -437,13 +445,30 @@ def test_main_reports_error_for_missing_entries_file(capsys):
     assert "not found" in capsys.readouterr().err
 
 
+def test_main_reports_error_for_non_utf8_entries_file(tmp_path, capsys):
+    path = tmp_path / "entries.tsv"
+    path.write_bytes(b"\xff\xfe bad")
+    assert gate.main(["--entries", str(path)]) == 1
+    err = capsys.readouterr().err
+    assert "not valid UTF-8" in err
+    assert "Traceback" not in err
+
+
+def test_main_reports_error_for_non_utf8_stdin(monkeypatch, capsys):
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(b"\xff\xfe bad"))
+    assert gate.main([]) == 1
+    err = capsys.readouterr().err
+    assert "standard input" in err and "not valid UTF-8" in err
+    assert "Traceback" not in err
+
+
 def test_main_hard_fails_on_entirely_malformed_nonblank_input(monkeypatch, capsys):
     # A non-blank entries input that parses to zero well-formed entries
     # (e.g. a workflow bug producing lines with the wrong field count)
     # must never be silently read as "nothing changed" -- an earlier
     # revision of this gate returned a bare PASS here (found by review
     # before this gate ever shipped).
-    monkeypatch.setattr("sys.stdin", io.StringIO("not-a-well-formed-line\nanother-bad-line\n"))
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(b"not-a-well-formed-line\nanother-bad-line\n"))
     assert gate.main([]) == 1
     assert "refusing to silently treat malformed input" in capsys.readouterr().err
 
@@ -452,7 +477,7 @@ def test_main_reports_multiple_skills_in_one_run(tmp_path, monkeypatch, capsys):
     ok_after = _write(tmp_path, "ok.md", _STOP_BOUNDARY_SKILL)
     bad_after = _write(tmp_path, "bad.md", _STOP_BOUNDARIES_PLURAL_SKILL)
     stdin_text = f"ok-skill\t\t{ok_after}\t3\nbad-skill\t\t{bad_after}\t0\n"
-    monkeypatch.setattr("sys.stdin", io.StringIO(stdin_text))
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(stdin_text.encode("utf-8")))
     assert gate.main([]) == 1
     out = capsys.readouterr().out
     assert "FAIL" in out

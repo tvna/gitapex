@@ -14,6 +14,14 @@ import io
 
 import skill_security_relevance as mod
 
+
+class _FakeStdin:
+    """Just the surface `main` uses: `sys.stdin.buffer.read()`."""
+
+    def __init__(self, data: bytes) -> None:
+        self.buffer = io.BytesIO(data)
+
+
 _WELL_FORMED = """\
 ---
 name: foo
@@ -123,13 +131,13 @@ def test_extract_frontmatter_returns_bounded_block():
 
 
 def test_main_prints_relevant(monkeypatch, capsys):
-    monkeypatch.setattr("sys.stdin", io.StringIO(_WELL_FORMED))
+    monkeypatch.setattr(mod.sys, "stdin", _FakeStdin(_WELL_FORMED.encode("utf-8")))
     assert mod.main([]) == 0
     assert capsys.readouterr().out.strip() == "relevant"
 
 
 def test_main_prints_not_relevant(monkeypatch, capsys):
-    monkeypatch.setattr("sys.stdin", io.StringIO(_NO_KEYWORD))
+    monkeypatch.setattr(mod.sys, "stdin", _FakeStdin(_NO_KEYWORD.encode("utf-8")))
     assert mod.main([]) == 0
     assert capsys.readouterr().out.strip() == "not-relevant"
 
@@ -144,3 +152,20 @@ def test_main_reads_from_file(tmp_path, capsys):
 def test_main_reports_error_for_missing_file(capsys):
     assert mod.main(["--path", "/no/such/file.md"]) == 1
     assert "not found" in capsys.readouterr().err
+
+
+def test_main_reports_error_for_non_utf8_file(tmp_path, capsys):
+    path = tmp_path / "SKILL.md"
+    path.write_bytes(b"\xff\xfe bad")
+    assert mod.main(["--path", str(path)]) == 1
+    err = capsys.readouterr().err
+    assert "not valid UTF-8" in err
+    assert "Traceback" not in err
+
+
+def test_main_reports_error_for_non_utf8_stdin(monkeypatch, capsys):
+    monkeypatch.setattr(mod.sys, "stdin", _FakeStdin(b"\xff\xfe bad"))
+    assert mod.main([]) == 1
+    err = capsys.readouterr().err
+    assert "standard input" in err and "not valid UTF-8" in err
+    assert "Traceback" not in err

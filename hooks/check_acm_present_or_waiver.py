@@ -137,10 +137,16 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         body_text = (
-            Path(args.body).read_text(encoding="utf-8") if args.body else sys.stdin.read()
+            Path(args.body).read_text(encoding="utf-8")
+            if args.body
+            else sys.stdin.buffer.read().decode("utf-8")
         )
     except FileNotFoundError:
         print(f"error: body file not found: {args.body}", file=sys.stderr)
+        return 1
+    except UnicodeDecodeError as error:
+        source = args.body if args.body else "standard input"
+        print(f"error: {source} is not valid UTF-8: {error}", file=sys.stderr)
         return 1
     if has_acm_disclosure(body_text):
         print("PASS: Acceptance Criteria Map (or waiver) disclosed")

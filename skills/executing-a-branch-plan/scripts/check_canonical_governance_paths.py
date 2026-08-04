@@ -136,10 +136,16 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         raw_text = (
-            Path(args.files).read_text(encoding="utf-8") if args.files else sys.stdin.read()
+            Path(args.files).read_text(encoding="utf-8")
+            if args.files
+            else sys.stdin.buffer.read().decode("utf-8")
         )
     except FileNotFoundError:
         print(f"error: files list not found: {args.files}", file=sys.stderr)
+        return 2
+    except UnicodeDecodeError as error:
+        source = args.files if args.files else "standard input"
+        print(f"error: {source} is not valid UTF-8: {error}", file=sys.stderr)
         return 2
 
     paths = [line.strip() for line in raw_text.splitlines() if line.strip()]

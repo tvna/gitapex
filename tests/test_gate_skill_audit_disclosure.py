@@ -20,6 +20,14 @@ import io
 import gate_skill_audit_disclosure as gate
 import pytest
 
+
+class _FakeStdin:
+    """Just the surface `main` uses: `sys.stdin.buffer.read()`."""
+
+    def __init__(self, data: bytes) -> None:
+        self.buffer = io.BytesIO(data)
+
+
 _VALID_SECTION = """\
 ## Skill audit evidence
 
@@ -154,7 +162,7 @@ def test_section_heading_case_insensitive_and_extends_to_end_of_body():
 
 
 def test_main_reads_body_from_stdin(monkeypatch, capsys):
-    monkeypatch.setattr("sys.stdin", io.StringIO(_VALID_SECTION))
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(_VALID_SECTION.encode("utf-8")))
     assert gate.main([]) == 0
     assert "PASS" in capsys.readouterr().out
 
@@ -186,6 +194,23 @@ def test_main_skips_base_check_when_skill_md_not_changed(capsys):
 def test_main_reports_error_for_missing_file(capsys):
     assert gate.main(["--body", "/no/such/file.md"]) == 1
     assert "not found" in capsys.readouterr().err
+
+
+def test_main_reports_error_for_non_utf8_body_file(tmp_path, capsys):
+    path = tmp_path / "body.md"
+    path.write_bytes(b"\xff\xfe bad")
+    assert gate.main(["--body", str(path)]) == 1
+    err = capsys.readouterr().err
+    assert "not valid UTF-8" in err
+    assert "Traceback" not in err
+
+
+def test_main_reports_error_for_non_utf8_stdin(monkeypatch, capsys):
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(b"\xff\xfe bad"))
+    assert gate.main([]) == 1
+    err = capsys.readouterr().err
+    assert "standard input" in err and "not valid UTF-8" in err
+    assert "Traceback" not in err
 
 
 def test_crlf_line_endings_do_not_break_the_heading_match():
@@ -308,7 +333,7 @@ def test_main_fails_when_battle_testing_waived_and_description_changed(monkeypat
 - battle-testing-a-skill: WAIVED: reviewed already
 - evaluating-skill-quality: WELL-FORMED-AND-MATURE
 """
-    monkeypatch.setattr("sys.stdin", io.StringIO(body))
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(body.encode("utf-8")))
     assert gate.main(["--description-changed-skills", "foo"]) == 1
     err = capsys.readouterr().err
     assert "cannot be disclosed as WAIVED" in err
@@ -316,7 +341,7 @@ def test_main_fails_when_battle_testing_waived_and_description_changed(monkeypat
 
 
 def test_main_passes_with_real_verdict_and_description_changed(monkeypatch, capsys):
-    monkeypatch.setattr("sys.stdin", io.StringIO(_VALID_SECTION))
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(_VALID_SECTION.encode("utf-8")))
     assert gate.main(["--description-changed-skills", "foo"]) == 0
     assert "PASS" in capsys.readouterr().out
 
@@ -328,12 +353,12 @@ def test_main_still_accepts_waiver_when_description_unchanged(monkeypatch, capsy
 - battle-testing-a-skill: WAIVED: docs-only rewording
 - evaluating-skill-quality: WAIVED: same reason
 """
-    monkeypatch.setattr("sys.stdin", io.StringIO(body))
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(body.encode("utf-8")))
     assert gate.main([]) == 0
 
 
 def test_main_fails_when_eval_coverage_missing(monkeypatch, capsys):
-    monkeypatch.setattr("sys.stdin", io.StringIO(_VALID_SECTION))
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(_VALID_SECTION.encode("utf-8")))
     assert gate.main(["--needs-eval-coverage-skills", "foo"]) == 1
     err = capsys.readouterr().err
     assert "eval-coverage" in err
@@ -342,7 +367,7 @@ def test_main_fails_when_eval_coverage_missing(monkeypatch, capsys):
 
 def test_main_passes_when_eval_coverage_waived(monkeypatch, capsys):
     body = _VALID_SECTION + "- eval-coverage-disclosure: WAIVED: no routing surface touched\n"
-    monkeypatch.setattr("sys.stdin", io.StringIO(body))
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(body.encode("utf-8")))
     assert gate.main(["--needs-eval-coverage-skills", "foo"]) == 0
 
 
@@ -353,7 +378,7 @@ def test_main_reports_both_new_failures_together(monkeypatch, capsys):
 - battle-testing-a-skill: WAIVED: reviewed already
 - evaluating-skill-quality: WELL-FORMED-AND-MATURE
 """
-    monkeypatch.setattr("sys.stdin", io.StringIO(body))
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(body.encode("utf-8")))
     assert (
         gate.main(
             [
@@ -378,7 +403,7 @@ def test_main_notes_waiver_would_be_rejected_when_battle_testing_missing_entirel
 
 - evaluating-skill-quality: WELL-FORMED-AND-MATURE
 """
-    monkeypatch.setattr("sys.stdin", io.StringIO(body))
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(body.encode("utf-8")))
     assert gate.main(["--description-changed-skills", "foo", "--skill-md-changed"]) == 1
     err = capsys.readouterr().err
     assert "battle-testing-a-skill" in err
@@ -460,7 +485,7 @@ def test_design_doc_disclosure_bare_waiver_with_no_reason_does_not_satisfy():
 
 
 def test_main_fails_when_security_coverage_missing(monkeypatch, capsys):
-    monkeypatch.setattr("sys.stdin", io.StringIO(_VALID_SECTION))
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(_VALID_SECTION.encode("utf-8")))
     assert gate.main(["--security-relevant-skills", "foo"]) == 1
     err = capsys.readouterr().err
     assert "adversarial-coverage-mapping" in err
@@ -469,12 +494,12 @@ def test_main_fails_when_security_coverage_missing(monkeypatch, capsys):
 
 def test_main_passes_when_security_coverage_disclosed(monkeypatch, capsys):
     body = _VALID_SECTION + "- adversarial-coverage-mapping: RAN\n"
-    monkeypatch.setattr("sys.stdin", io.StringIO(body))
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(body.encode("utf-8")))
     assert gate.main(["--security-relevant-skills", "foo"]) == 0
 
 
 def test_main_fails_when_design_doc_disclosure_missing(monkeypatch, capsys):
-    monkeypatch.setattr("sys.stdin", io.StringIO(_VALID_SECTION))
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(_VALID_SECTION.encode("utf-8")))
     assert gate.main(["--changed-design-docs", "foo.md"]) == 1
     err = capsys.readouterr().err
     assert "design-doc-adversarial-review" in err
@@ -483,12 +508,12 @@ def test_main_fails_when_design_doc_disclosure_missing(monkeypatch, capsys):
 
 def test_main_passes_when_design_doc_disclosure_present(monkeypatch, capsys):
     body = _VALID_SECTION + "- design-doc-adversarial-review: NOT-RUN\n"
-    monkeypatch.setattr("sys.stdin", io.StringIO(body))
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(body.encode("utf-8")))
     assert gate.main(["--changed-design-docs", "foo.md"]) == 0
 
 
 def test_main_reports_security_and_design_doc_failures_together(monkeypatch, capsys):
-    monkeypatch.setattr("sys.stdin", io.StringIO(_VALID_SECTION))
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(_VALID_SECTION.encode("utf-8")))
     assert (
         gate.main(
             [
@@ -557,7 +582,7 @@ def test_checker_script_disclosure_unrecognized_verdict_does_not_satisfy():
 
 
 def test_main_fails_when_checker_script_disclosure_missing(monkeypatch, capsys):
-    monkeypatch.setattr("sys.stdin", io.StringIO(_VALID_SECTION))
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(_VALID_SECTION.encode("utf-8")))
     assert gate.main(["--changed-checker-scripts", "skills/foo/scripts/bar.py"]) == 1
     err = capsys.readouterr().err
     assert "checker-script-adversarial-review" in err
@@ -566,12 +591,12 @@ def test_main_fails_when_checker_script_disclosure_missing(monkeypatch, capsys):
 
 def test_main_passes_when_checker_script_disclosure_present(monkeypatch, capsys):
     body = _VALID_SECTION + "- checker-script-adversarial-review: RAN\n"
-    monkeypatch.setattr("sys.stdin", io.StringIO(body))
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(body.encode("utf-8")))
     assert gate.main(["--changed-checker-scripts", "skills/foo/scripts/bar.py"]) == 0
 
 
 def test_main_reports_checker_script_and_design_doc_failures_together(monkeypatch, capsys):
-    monkeypatch.setattr("sys.stdin", io.StringIO(_VALID_SECTION))
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(_VALID_SECTION.encode("utf-8")))
     assert (
         gate.main(
             [
@@ -670,7 +695,7 @@ def test_regression_pr_558_body_is_missing_checker_script_disclosure():
 
 
 def test_regression_pr_558_main_fails_without_waiver(monkeypatch, capsys):
-    monkeypatch.setattr("sys.stdin", io.StringIO(_PR_558_BODY))
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(_PR_558_BODY.encode("utf-8")))
     assert (
         gate.main(
             [
@@ -808,7 +833,7 @@ def test_gate_quality_disclosure_survives_a_crlf_body():
 
 
 def test_main_fails_when_gate_quality_disclosure_missing(monkeypatch, capsys):
-    monkeypatch.setattr("sys.stdin", io.StringIO(_VALID_SECTION))
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(_VALID_SECTION.encode("utf-8")))
     assert gate.main(["--changed-gate-scripts", _GATE_SCRIPT]) == 1
     err = capsys.readouterr().err
     assert "deterministic-gate-quality" in err
@@ -821,14 +846,14 @@ def test_main_fails_when_gate_quality_disclosure_missing(monkeypatch, capsys):
 
 def test_main_passes_when_gate_quality_disclosure_present(monkeypatch, capsys):
     body = _VALID_SECTION + "- deterministic-gate-quality: RAN\n"
-    monkeypatch.setattr("sys.stdin", io.StringIO(body))
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(body.encode("utf-8")))
     assert gate.main(["--changed-gate-scripts", _GATE_SCRIPT]) == 0
 
 
 def test_main_reports_gate_quality_and_checker_script_failures_together(monkeypatch, capsys):
     """A gate script is always also a checker script, so a real PR touching
     one owes both lines; missing both must report both, not just the first."""
-    monkeypatch.setattr("sys.stdin", io.StringIO(_VALID_SECTION))
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(_VALID_SECTION.encode("utf-8")))
     assert (
         gate.main(
             [
@@ -850,7 +875,7 @@ def test_gate_quality_check_is_not_required_when_no_gate_script_changed(monkeypa
     fail -- the workflow computes applicability, and a design-doc-only PR
     has no gate script to grade."""
     body = _VALID_SECTION + "- design-doc-adversarial-review: RAN\n"
-    monkeypatch.setattr("sys.stdin", io.StringIO(body))
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(body.encode("utf-8")))
     assert gate.main(["--changed-design-docs", "foo.md", "--changed-gate-scripts", ""]) == 0
 
 
@@ -919,7 +944,7 @@ def test_regression_pr_651_body_is_missing_gate_quality_disclosure():
 
 
 def test_regression_pr_651_main_fails_without_waiver(monkeypatch, capsys):
-    monkeypatch.setattr("sys.stdin", io.StringIO(_PR_651_BODY_EXCERPT))
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(_PR_651_BODY_EXCERPT.encode("utf-8")))
     assert gate.main(["--changed-gate-scripts", _GATE_SCRIPT]) == 1
     err = capsys.readouterr().err
     assert "deterministic-gate-quality" in err

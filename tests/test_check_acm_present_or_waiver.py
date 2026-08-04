@@ -13,7 +13,17 @@ check_pr_issue_acm_disclosure -- as a plain top-level module.
 
 from __future__ import annotations
 
+import io
+
 import check_acm_present_or_waiver as checker
+
+
+class _FakeStdin:
+    """Just the surface `main` uses: `sys.stdin.buffer.read()`."""
+
+    def __init__(self, data: bytes) -> None:
+        self.buffer = io.BytesIO(data)
+
 
 _VALID_ACM_TABLE = (
     "| Criterion | Interpretation | Planned ops | Proof method | Residual risk |\n"
@@ -171,3 +181,26 @@ def test_known_residual_gap_four_space_indented_block_not_stripped():
     # claimed to be closed by issue #657's fence-stripping fix.
     body = "    ACM: not-applicable (chore): fake, 4-space indented\n"
     assert checker.has_acm_disclosure(body) is True
+
+
+# ---------------------------------------------------------------------------
+# main()'s read path: a non-UTF-8 --body file or stdin must exit cleanly
+# with the documented exit code, not an uncaught UnicodeDecodeError.
+# ---------------------------------------------------------------------------
+
+
+def test_main_reports_error_for_non_utf8_body_file(tmp_path, capsys):
+    path = tmp_path / "body.md"
+    path.write_bytes(b"\xff\xfe bad")
+    assert checker.main(["--body", str(path)]) == 1
+    err = capsys.readouterr().err
+    assert "not valid UTF-8" in err
+    assert "Traceback" not in err
+
+
+def test_main_reports_error_for_non_utf8_stdin(monkeypatch, capsys):
+    monkeypatch.setattr(checker.sys, "stdin", _FakeStdin(b"\xff\xfe bad"))
+    assert checker.main([]) == 1
+    err = capsys.readouterr().err
+    assert "standard input" in err and "not valid UTF-8" in err
+    assert "Traceback" not in err

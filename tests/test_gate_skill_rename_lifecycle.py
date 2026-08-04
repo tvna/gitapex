@@ -19,6 +19,13 @@ import io
 import gate_skill_rename_lifecycle as gate
 
 
+class _FakeStdin:
+    """Just the surface `main` uses: `sys.stdin.buffer.read()`."""
+
+    def __init__(self, data: bytes) -> None:
+        self.buffer = io.BytesIO(data)
+
+
 def _write_sidecar(tmp_path, new_name, *, renamed_from=None, under_wrong_key=False):
     skill_dir = tmp_path / "skills" / new_name
     metadata_dir = skill_dir / "metadata"
@@ -193,7 +200,7 @@ def test_main_no_removed_names_passes(capsys):
 def test_main_reads_names_from_stdin(monkeypatch, tmp_path, capsys):
     _write_sidecar(tmp_path, "new-name", renamed_from="old-name")
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr("sys.stdin", io.StringIO("old-name\n"))
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(b"old-name\n"))
     assert gate.main([]) == 0
     assert "PASS" in capsys.readouterr().out
 
@@ -220,3 +227,20 @@ def test_main_fails_and_reports_offenders(monkeypatch, tmp_path, capsys):
 def test_main_reports_error_for_missing_names_file(capsys):
     assert gate.main(["--removed", "/no/such/file.txt"]) == 1
     assert "not found" in capsys.readouterr().err
+
+
+def test_main_reports_error_for_non_utf8_names_file(tmp_path, capsys):
+    path = tmp_path / "removed.txt"
+    path.write_bytes(b"\xff\xfe bad")
+    assert gate.main(["--removed", str(path)]) == 1
+    err = capsys.readouterr().err
+    assert "not valid UTF-8" in err
+    assert "Traceback" not in err
+
+
+def test_main_reports_error_for_non_utf8_stdin(monkeypatch, capsys):
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(b"\xff\xfe bad"))
+    assert gate.main([]) == 1
+    err = capsys.readouterr().err
+    assert "standard input" in err and "not valid UTF-8" in err
+    assert "Traceback" not in err
