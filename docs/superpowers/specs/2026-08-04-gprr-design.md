@@ -33,13 +33,29 @@ second paginated-GitHub-issues client. `scan_retrospective_gate_drift.py`
 is refactored to expose `list_labelled_issue_records(...)`, returning the
 full issue record (`number`, `body`, `created_at`, `state`) instead of
 just the bare issue number `list_labelled_issues(...)` already returned.
-The retry/backoff/pagination logic (`fetch_json_page`, renamed from the
-former private `_fetch_issues_page` since it is generic JSON-array-page
-fetching, not issues-specific) is unchanged; `list_labelled_issues` becomes
-a thin wrapper that extracts `number` from each record, preserving its
-existing signature, behavior, and tests exactly. `compute_gprr.py` also
-reuses `fetch_json_page` directly for the merged-pull-request query below,
-rather than writing a third copy of the same retry loop.
+`list_labelled_issues` becomes a thin wrapper that extracts `number` from
+each record, preserving its existing signature, behavior, and tests
+exactly.
+
+The retry/backoff/pagination logic (`fetch_json_page`, generic
+JSON-array-page fetching with nothing issues-specific about it) does not
+stay inside `scan_retrospective_gate_drift.py`: an earlier revision of
+this design had `compute_gprr.py` import that function (and
+`GitHubApiError`) directly from `scan_retrospective_gate_drift.py`,
+which a review round correctly flagged as breaking this repository's
+established `.github/scripts/*.py` independence convention (see that
+file's own docstring, `gate_skill_rename_lifecycle.py`, and
+`gate_acm_issue_disclosure.py` for the same convention stated
+elsewhere) -- it made `scan_retrospective_gate_drift.py` a dependency of
+a second script with nothing signalling that at the file itself.
+`fetch_json_page`, `GitHubApiError`, and `default_opener` now live in a
+new shared `.github/scripts/_github_http.py`, imported by both scripts;
+neither depends on the other for the generic HTTP layer.
+`compute_gprr.py` still imports `scan_retrospective_gate_drift`
+directly for `list_labelled_issue_records` specifically -- that is
+issue-specific business logic the issue's own constraint named as the
+thing to reuse, not generic plumbing `_github_http.py` can absorb
+without duplicating it.
 
 ### 2. Stateless recomputation, not a persisted/committed time series
 

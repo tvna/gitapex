@@ -69,7 +69,19 @@ jobs:
       # persisting one (Decision 2), so it needs no extra write scope
       # beyond the added `pull-requests: read` above (for the merged-PR
       # denominator).
+      #
+      # `if: ${{ !cancelled() }}`: without this, GitHub Actions skips
+      # every step after the citation-drift step above fails (which it
+      # deliberately does whenever the no-citation backlog exceeds its
+      # threshold -- an expected, not exceptional, outcome). The GPRR
+      # trend is exactly the kind of context most useful to see on a day
+      # the citation-drift check is red, so it must not silently vanish
+      # from the step summary on precisely those days. Still respects an
+      # operator-cancelled run (unlike `always()`), and the job's overall
+      # pass/fail status is unaffected either way -- it still reflects
+      # the citation-drift step's own outcome.
       - name: Compute Gate-Preventable Repair Rate (GPRR)
+        if: ${{ !cancelled() }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

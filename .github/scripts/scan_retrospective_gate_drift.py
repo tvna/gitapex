@@ -46,7 +46,6 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
-import http.client
 import json
 import os
 import pathlib
@@ -54,17 +53,17 @@ import re
 import subprocess
 import sys
 import time
-import urllib.error
 import urllib.request
 from collections.abc import Callable
 from typing import Any
+
+import _github_http
+from _github_http import GitHubApiError
 
 DEFAULT_THRESHOLD = 20
 DEFAULT_LABEL = "retrospective"
 
 _API_ROOT = "https://api.github.com"
-_API_VERSION = "2022-11-28"
-_HTTP_TIMEOUT_SECONDS = 30
 _PER_PAGE = 100
 
 # Record separator (0x1e) / unit separator (0x1f): neither appears in real
@@ -72,10 +71,6 @@ _PER_PAGE = 100
 # without a risk of an attacker-controlled commit message forging a fake
 # boundary the way a printable delimiter (comma, pipe, newline) could.
 _LOG_FORMAT = "%x1e%H%x1f%B"
-
-
-class GitHubApiError(RuntimeError):
-    """Raised when the GitHub REST API returns a non-recoverable error."""
 
 
 class GitLogError(RuntimeError):
@@ -156,63 +151,14 @@ def format_report(no_citation_issues: list[int], total_issues: int, threshold: i
 # ---------------------------------------------------------------------------
 
 
-def _default_opener(request: urllib.request.Request) -> Any:
-    # S310 justification: every caller builds `request` from a fixed
-    # https://api.github.com URL plus trusted env-var-derived segments.
-    return urllib.request.urlopen(request, timeout=_HTTP_TIMEOUT_SECONDS)  # noqa: S310
-
-
-def fetch_json_page(
-    url: str,
-    token: str,
-    opener: Callable[[urllib.request.Request], Any],
-    sleeper: Callable[[float], None],
-) -> list[dict[str, Any]]:
-    """GET one page of a GitHub REST list endpoint that returns a JSON
-    array, retrying transient failures. Generic across endpoints (issues,
-    pulls, ...) -- the retry/backoff shape has nothing issues-specific
-    about it. Issue #726: promoted from a private `_fetch_issues_page` so
-    `compute_gprr.py` can reuse it for the merged-pull-request query
-    instead of hand-rolling a second paginated GitHub client."""
-    last_code = 0
-    last_body = ""
-    for attempt in range(1, 4):
-        request = urllib.request.Request(url, method="GET")  # noqa: S310 -- fixed https://api.github.com URL
-        request.add_header("Authorization", f"Bearer {token}")
-        request.add_header("Accept", "application/vnd.github+json")
-        request.add_header("X-GitHub-Api-Version", _API_VERSION)
-        try:
-            with opener(request) as response:
-                last_code = int(response.status)
-                last_body = response.read().decode("utf-8", errors="replace")
-        except urllib.error.HTTPError as error:
-            last_code = int(error.code)
-            last_body = error.read().decode("utf-8", errors="replace")
-        except (OSError, http.client.IncompleteRead) as error:
-            # Covers urllib.error.URLError (an OSError subclass, e.g. DNS/
-            # connection failures) and TimeoutError/ConnectionError, plus a
-            # body read that starts (headers arrive, `last_code` gets set)
-            # but stalls or is cut short -- IncompleteRead is not an OSError
-            # subclass, so it needs its own arm. Without this, a body-read
-            # failure escapes retry entirely and crashes the whole scan
-            # instead of getting the three attempts promised below.
-            last_code = 0
-            last_body = str(error)
-
-        if 200 <= last_code < 300:
-            page: list[dict[str, Any]] = json.loads(last_body)
-            return page
-        print(f"Attempt {attempt}: HTTP {_format_code(last_code)} for GET {url}", file=sys.stderr)
-        if last_code != 0 and last_code < 500:
-            break
-        if attempt < 3:
-            sleeper(attempt * 5)
-
-    raise GitHubApiError(f"GET {url} failed: HTTP {_format_code(last_code)}: {last_body}")
-
-
-def _format_code(code: int) -> str:
-    return str(code) if code else "network error"
+# Issue #726: the generic, endpoint-agnostic retry/pagination client
+# lives in `_github_http.py`, shared with `compute_gprr.py`, so this
+# script does not duplicate it and does not need `compute_gprr.py` (or
+# any other script) importing this file just to reach it. Re-exported
+# under their prior local names so every existing call site and test
+# below (`fetch_json_page(...)`, `opener=_default_opener`) is unchanged.
+_default_opener = _github_http.default_opener
+fetch_json_page = _github_http.fetch_json_page
 
 
 def list_labelled_issue_records(

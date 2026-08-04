@@ -15,12 +15,16 @@ see any trend.
 
 Design: docs/superpowers/specs/2026-08-04-gprr-design.md
 
-Reuses `scan_retrospective_gate_drift.py`'s existing paginated-fetch
-machinery (`fetch_json_page`, `list_labelled_issue_records`) per the
+Reuses `_github_http.py`'s generic paginated-fetch-with-retry client for
+the merged-pull-request query, and `scan_retrospective_gate_drift.py`'s
+`list_labelled_issue_records` for the issue-specific fetch, per the
 issue's own constraint, rather than a second hand-rolled GitHub API
-client. Stdlib-only, matching that sibling script and this repository's
+client. Stdlib-only, matching those two scripts and this repository's
 `.github/scripts/*.py` independence convention (see
-`gate_skill_rename_lifecycle.py`'s own docstring rationale).
+`gate_skill_rename_lifecycle.py`'s own docstring rationale, and
+`_github_http.py`'s own docstring for why the generic HTTP client is a
+third shared module rather than one script importing the other's
+low-level plumbing).
 
 Deliberately stateless: every run recomputes the full weekly series from
 `label:retrospective` issues' own `created_at` timestamps, all the way
@@ -64,18 +68,23 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import Any, TypedDict
 
+import _github_http
 import scan_retrospective_gate_drift as gate_drift
 
 _API_ROOT = "https://api.github.com"
-_HTTP_TIMEOUT_SECONDS = 30
 _PER_PAGE = 100
 
 # The fixed vocabulary `skills/merge-retrospective/SKILL.md` defines. Only
 # the first three classify a *repair*; `carried-forward` re-reports a
 # prior cycle's still-unimplemented gate and is tallied separately, never
-# folded into the GPRR ratio (SKILL.md lines 85-101).
-_REPAIR_SLUGS = ("missing-deterministic-gate", "unclear-agent-instruction", "external-human-decision")
+# folded into the GPRR ratio (SKILL.md lines 85-101). Named individually
+# (not indexed by position out of a tuple) so a slug's own field mapping
+# can never silently drift if `_REPAIR_SLUGS`'s order ever changes.
+_MISSING_DETERMINISTIC_GATE_SLUG = "missing-deterministic-gate"
+_UNCLEAR_AGENT_INSTRUCTION_SLUG = "unclear-agent-instruction"
+_EXTERNAL_HUMAN_DECISION_SLUG = "external-human-decision"
 _CARRIED_FORWARD_SLUG = "carried-forward"
+_REPAIR_SLUGS = (_MISSING_DETERMINISTIC_GATE_SLUG, _UNCLEAR_AGENT_INSTRUCTION_SLUG, _EXTERNAL_HUMAN_DECISION_SLUG)
 _ALL_SLUGS = (*_REPAIR_SLUGS, _CARRIED_FORWARD_SLUG)
 
 # Anchored to the start (optional leading whitespace, matching the
@@ -163,15 +172,15 @@ def build_weekly_series(
     series: list[WeeklyPoint] = []
     for week in weeks:
         counts = tag_buckets.get(week, Counter())
-        gate_count = counts[_REPAIR_SLUGS[0]]
+        gate_count = counts[_MISSING_DETERMINISTIC_GATE_SLUG]
         classified = sum(counts[slug] for slug in _REPAIR_SLUGS)
         merged_count = merged_buckets.get(week, 0)
         series.append(
             {
                 "week": week,
                 "missing_deterministic_gate": gate_count,
-                "unclear_agent_instruction": counts[_REPAIR_SLUGS[1]],
-                "external_human_decision": counts[_REPAIR_SLUGS[2]],
+                "unclear_agent_instruction": counts[_UNCLEAR_AGENT_INSTRUCTION_SLUG],
+                "external_human_decision": counts[_EXTERNAL_HUMAN_DECISION_SLUG],
                 "carried_forward": counts[_CARRIED_FORWARD_SLUG],
                 "total_classified": classified,
                 "merged_pr_count": merged_count,
@@ -224,10 +233,7 @@ def format_report(series: list[WeeklyPoint], label: str = gate_drift.DEFAULT_LAB
 # ---------------------------------------------------------------------------
 
 
-def _default_opener(request: urllib.request.Request) -> Any:
-    # S310 justification: every caller builds `request` from a fixed
-    # https://api.github.com URL plus trusted env-var-derived segments.
-    return urllib.request.urlopen(request, timeout=_HTTP_TIMEOUT_SECONDS)  # noqa: S310
+_default_opener = _github_http.default_opener
 
 
 def list_merged_pull_requests(
@@ -240,10 +246,9 @@ def list_merged_pull_requests(
     """Return the `merged_at` timestamp of every merged pull request, via
     paginated `GET /repos/{owner}/{repo}/pulls?state=closed` -- the closed
     state includes both merged and simply-closed PRs; only entries with a
-    non-null `merged_at` are returned. Reuses
-    `scan_retrospective_gate_drift.fetch_json_page` for the
-    pagination/retry loop (issue #726's own reuse constraint) instead of a
-    second hand-rolled client."""
+    non-null `merged_at` are returned. Reuses `_github_http.fetch_json_page`
+    for the pagination/retry loop (issue #726's own reuse constraint)
+    instead of a second hand-rolled client."""
     sleeper = sleeper if sleeper is not None else time.sleep
     merged_at_timestamps: list[str] = []
     page = 1
@@ -252,7 +257,7 @@ def list_merged_pull_requests(
             f"{_API_ROOT}/repos/{owner}/{repo}/pulls"
             f"?state=closed&sort=created&direction=asc&per_page={_PER_PAGE}&page={page}"
         )
-        items = gate_drift.fetch_json_page(url, token, opener, sleeper)
+        items = _github_http.fetch_json_page(url, token, opener, sleeper)
         if not items:
             break
         for item in items:
@@ -311,7 +316,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         issue_records = gate_drift.list_labelled_issue_records(args.owner, args.repo, args.label, token)
         merged_pr_timestamps = list_merged_pull_requests(args.owner, args.repo, token)
-    except gate_drift.GitHubApiError as error:
+    except _github_http.GitHubApiError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
 
