@@ -97,10 +97,16 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         raw_text = (
-            Path(args.input).read_text(encoding="utf-8") if args.input else sys.stdin.read()
+            Path(args.input).read_text(encoding="utf-8")
+            if args.input
+            else sys.stdin.buffer.read().decode("utf-8")
         )
     except FileNotFoundError:
         print(f"error: input file not found: {args.input}", file=sys.stderr)
+        return 2
+    except UnicodeDecodeError as error:
+        source = args.input if args.input else "standard input"
+        print(f"error: {source} is not valid UTF-8: {error}", file=sys.stderr)
         return 2
     try:
         task_files = json.loads(raw_text, object_pairs_hook=_reject_duplicate_keys)

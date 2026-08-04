@@ -71,9 +71,17 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     try:
-        text = Path(args.file).read_text(encoding="utf-8") if args.file else sys.stdin.read()
+        text = (
+            Path(args.file).read_text(encoding="utf-8")
+            if args.file
+            else sys.stdin.buffer.read().decode("utf-8")
+        )
     except FileNotFoundError:
         print(f"error: file not found: {args.file}", file=sys.stderr)
+        return 1
+    except UnicodeDecodeError as error:
+        source = args.file if args.file else "standard input"
+        print(f"error: {source} is not valid UTF-8: {error}", file=sys.stderr)
         return 1
     hits = scan(text)
     if not hits:

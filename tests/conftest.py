@@ -2,11 +2,26 @@
 
 from __future__ import annotations
 
+import io
 import pathlib
 import re
 import subprocess
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
+
+
+class FakeStdin:
+    """Just the surface a CLI's `main()` uses: `sys.stdin.buffer.read()`.
+
+    Shared by every test that monkeypatches `sys.stdin` to feed a script
+    non-UTF-8 (or otherwise arbitrary) bytes through its
+    `sys.stdin.buffer.read().decode("utf-8")` read path, so a future change
+    to this mock's surface only needs to land once (same rationale as
+    `assert_path_is_gitignored` below).
+    """
+
+    def __init__(self, data: bytes) -> None:
+        self.buffer = io.BytesIO(data)
 
 # git check-ignore -v prefixes a match with "source:linenum:pattern", then a
 # tab and the matched pathname. The pattern (and, in principle, a Windows

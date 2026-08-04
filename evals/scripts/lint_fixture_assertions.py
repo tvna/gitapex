@@ -458,7 +458,10 @@ def load_corpus(rubric: Path, skill: Path) -> str:
     error, not a silent empty corpus that would pass everything. Callers
     that pass the same path for both (a skill with no dedicated rubric.md)
     get that file's text once each, which is harmless for substring checks."""
-    return rubric.read_text(encoding="utf-8") + "\n" + skill.read_text(encoding="utf-8")
+    try:
+        return rubric.read_text(encoding="utf-8") + "\n" + skill.read_text(encoding="utf-8")
+    except UnicodeDecodeError as error:
+        raise OSError(f"{rubric} or {skill}: could not decode as UTF-8: {error}") from error
 
 
 def extract_anchors(corpus: str) -> list[str]:
@@ -966,9 +969,15 @@ def _skill_claim_text(skills_root: Path, evals_root: Path, name: str) -> str:
     skill_md = skills_root / name / "SKILL.md"
     eval_status = evals_root / name / "eval-status.md"
     if skill_md.is_file():
-        parts.append(skill_md.read_text(encoding="utf-8"))
+        try:
+            parts.append(skill_md.read_text(encoding="utf-8"))
+        except UnicodeDecodeError as error:
+            raise OSError(f"{skill_md}: could not decode as UTF-8: {error}") from error
     if eval_status.is_file():
-        parts.append(eval_status.read_text(encoding="utf-8"))
+        try:
+            parts.append(eval_status.read_text(encoding="utf-8"))
+        except UnicodeDecodeError as error:
+            raise OSError(f"{eval_status}: could not decode as UTF-8: {error}") from error
     return "\n".join(parts)
 
 

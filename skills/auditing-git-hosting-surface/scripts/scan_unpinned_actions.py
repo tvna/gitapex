@@ -56,7 +56,17 @@ def find_unpinned_actions(workflows_dir: pathlib.Path = WORKFLOWS_DIR) -> list[t
     third-party action reference in the scanned files is SHA-pinned."""
     findings: list[tuple[str, int, str]] = []
     for workflow in sorted(workflows_dir.glob("*.yml")) + sorted(workflows_dir.glob("*.yaml")):
-        for lineno, line in enumerate(workflow.read_text().splitlines(), start=1):
+        try:
+            content = workflow.read_text()
+        except UnicodeDecodeError as exc:
+            # Fail closed, not skip: a workflow file that isn't valid text
+            # can't be scanned for `uses:` lines, so it cannot be verified
+            # clean -- reported as a finding rather than silently skipped,
+            # since skipping would let a real unpinned action hide behind a
+            # decode failure in the same file.
+            findings.append((str(workflow), 0, f"could not decode as UTF-8, cannot verify: {exc}"))
+            continue
+        for lineno, line in enumerate(content.splitlines(), start=1):
             match = USES_RE.match(line)
             if not match:
                 continue

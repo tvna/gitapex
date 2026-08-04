@@ -340,6 +340,13 @@ def test_load_gate_tracking_issues_raises_on_missing_file(tmp_path):
         gate.load_gate_tracking_issues(str(tmp_path / "nonexistent.json"))
 
 
+def test_load_gate_tracking_issues_raises_on_undecodable_file(tmp_path):
+    ssot = tmp_path / "ssot.json"
+    ssot.write_bytes(b"\xff\xfe bad")
+    with pytest.raises(gate.SsotLedgerError):
+        gate.load_gate_tracking_issues(str(ssot))
+
+
 def test_load_gate_tracking_issues_raises_on_malformed_json(tmp_path):
     ssot = tmp_path / "ssot.json"
     ssot.write_text("{not valid json")

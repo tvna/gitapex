@@ -162,6 +162,14 @@ def test_cli_missing_file(capsys):
     assert "error" in capsys.readouterr().err
 
 
+def test_cli_undecodable_file_fails_closed(tmp_path, capsys):
+    doc = tmp_path / "inventory.md"
+    doc.write_bytes(b"\xff\xfe bad")
+    exit_code = cmts.main([str(doc)])
+    assert exit_code == 1
+    assert "error" in capsys.readouterr().err
+
+
 def test_lone_pipe_line_at_end_of_section_is_not_a_table():
     text = "## apm\n\n| just one line, no separator follows |\n"
     assert cmts._first_table(text.split("## apm\n\n", 1)[1]) is None

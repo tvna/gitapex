@@ -125,7 +125,10 @@ def discover_dimensions(dimensions_file: Path) -> dict[str, str]:
     """
     if not dimensions_file.is_file():
         return {}
-    text = dimensions_file.read_text(encoding="utf-8")
+    try:
+        text = dimensions_file.read_text(encoding="utf-8")
+    except UnicodeDecodeError as error:
+        raise OSError(f"{dimensions_file}: could not decode as UTF-8: {error}") from error
     found = {m.group(1): m.group(2).strip() for m in _DIMENSION_HEADING_RE.finditer(text)}
     if found:
         return found
@@ -148,7 +151,10 @@ def discover_axes(skill_md: Path) -> dict[str, str]:
     """
     if not skill_md.is_file():
         return {}
-    text = skill_md.read_text(encoding="utf-8")
+    try:
+        text = skill_md.read_text(encoding="utf-8")
+    except UnicodeDecodeError as error:
+        raise OSError(f"{skill_md}: could not decode as UTF-8: {error}") from error
     axes: dict[str, str] = {}
     for m in _AXIS_RE.finditer(text):
         full = m.group(1).strip()
@@ -233,7 +239,11 @@ def discover_citations(
     # so it cannot express this without re-splitting the pattern by
     # hand -- glob.glob is the correct tool, not a lapse.
     for path in sorted(Path(p) for p in globlib.glob(tasks_glob)):  # noqa: PTH207
-        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        try:
+            raw_text = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError as error:
+            raise OSError(f"{path}: could not decode as UTF-8: {error}") from error
+        data = yaml.safe_load(raw_text) or {}
         haystack = _fixture_text(data)
         cited_numbers = _cited_dimension_numbers(haystack)
         for number in dimensions:

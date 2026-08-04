@@ -135,6 +135,23 @@ def test_main_missing_corpus_exits_two(tmp_path):
                    "--skill", str(tmp_path / "nope2.md")]) == 2
 
 
+def test_main_non_utf8_rubric_exits_two_not_uncaught(tmp_path):
+    # load_corpus()'s own read_text() calls carry no try/except of their
+    # own; single-skill mode's caller (~line 1080) must catch
+    # UnicodeDecodeError alongside OSError, or a non-UTF-8 rubric.md would
+    # escape as an uncaught traceback instead of this script's own exit-2
+    # error message.
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    _write_task(tasks, {"output_contains": ["Blind spot pass"]})
+    rubric = tmp_path / "rubric.md"
+    rubric.write_bytes(b"# Rubric \xff\xfe bad\n")
+    skill = tmp_path / "SKILL.md"
+    skill.write_text("# skill\n", encoding="utf-8")
+    assert L.main(["--tasks-glob", str(tasks / "*.yaml"),
+                   "--rubric", str(rubric), "--skill", str(skill)]) == 2
+
+
 def test_main_no_tasks_exits_two(tmp_path):
     rubric, skill = _corpus_files(tmp_path)
     assert L.main(["--tasks-glob", str(tmp_path / "none" / "*.yaml"),
@@ -703,6 +720,29 @@ def test_main_discovery_mode_runs_when_tasks_glob_omitted(tmp_path, monkeypatch)
 
 
 def test_main_discovery_mode_exits_two_with_no_skills(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    assert L.main([]) == 2
+
+
+def test_main_discovery_mode_non_utf8_skill_md_exits_two_not_uncaught(tmp_path, monkeypatch):
+    # Discovery mode's load_corpus() call (lint_all_skills, ~line 993) and
+    # _skill_claim_text()'s own reads (~lines 969/971) share main()'s outer
+    # except clause (~line 1098), which must catch UnicodeDecodeError
+    # alongside OSError/yaml.YAMLError/ValidationError -- a non-UTF-8
+    # SKILL.md must exit 2 with this script's own error message, not an
+    # uncaught traceback.
+    _write_skill_and_tasks(tmp_path, "alpha")
+    (tmp_path / "skills" / "alpha" / "SKILL.md").write_bytes(b"# skill \xff\xfe bad\n")
+    monkeypatch.chdir(tmp_path)
+    assert L.main([]) == 2
+
+
+def test_main_discovery_mode_non_utf8_eval_status_exits_two_not_uncaught(tmp_path, monkeypatch):
+    # Same as above, but the non-UTF-8 byte is in eval-status.md, exercised
+    # via _skill_claim_text()'s second read (line 971) rather than its
+    # first (line 969) or load_corpus() (line 461).
+    _write_skill_and_tasks(tmp_path, "alpha")
+    (tmp_path / "evals" / "alpha" / "eval-status.md").write_bytes(b"# status \xff\xfe bad\n")
     monkeypatch.chdir(tmp_path)
     assert L.main([]) == 2
 

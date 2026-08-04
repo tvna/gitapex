@@ -184,10 +184,16 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         text = (
-            Path(args.entries).read_text(encoding="utf-8") if args.entries else sys.stdin.read()
+            Path(args.entries).read_text(encoding="utf-8")
+            if args.entries
+            else sys.stdin.buffer.read().decode("utf-8")
         )
     except FileNotFoundError:
         print(f"error: entries file not found: {args.entries}", file=sys.stderr)
+        return 1
+    except UnicodeDecodeError as error:
+        source = args.entries if args.entries else "standard input"
+        print(f"error: {source} is not valid UTF-8: {error}", file=sys.stderr)
         return 1
 
     entries = _parse_entries(text)

@@ -10,9 +10,8 @@ header line is new in this diff.
 
 from __future__ import annotations
 
-import io
-
 import gate_transfer_check_disclosure as gate
+from conftest import FakeStdin as _FakeStdin
 
 _ENTRY_WITH_TRANSFER_CHECK = """\
 ## Kept-edit log
@@ -218,7 +217,7 @@ def test_parse_entries_skips_blank_lines_and_lines_with_no_tab():
 
 
 def test_main_passes_with_no_entries(monkeypatch, capsys):
-    monkeypatch.setattr("sys.stdin", io.StringIO(""))
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(b""))
     assert gate.main([]) == 0
     assert "PASS" in capsys.readouterr().out
 
@@ -226,7 +225,7 @@ def test_main_passes_with_no_entries(monkeypatch, capsys):
 def test_main_passes_when_all_entries_disclose_transfer_check(tmp_path, monkeypatch, capsys):
     path = _write(tmp_path, "split.md", _ENTRY_WITH_TRANSFER_CHECK)
     monkeypatch.setattr(
-        "sys.stdin", io.StringIO(f"{path}\t**Iteration: issue #1, first edit.**\n")
+        gate.sys, "stdin", _FakeStdin(f"{path}\t**Iteration: issue #1, first edit.**\n".encode())
     )
     assert gate.main([]) == 0
     assert "PASS" in capsys.readouterr().out
@@ -235,7 +234,7 @@ def test_main_passes_when_all_entries_disclose_transfer_check(tmp_path, monkeypa
 def test_main_fails_when_an_entry_is_missing_transfer_check(tmp_path, monkeypatch, capsys):
     path = _write(tmp_path, "split.md", _ENTRY_WITHOUT_TRANSFER_CHECK)
     monkeypatch.setattr(
-        "sys.stdin", io.StringIO(f"{path}\t**Iteration: issue #2, second edit.**\n")
+        gate.sys, "stdin", _FakeStdin(f"{path}\t**Iteration: issue #2, second edit.**\n".encode())
     )
     assert gate.main([]) == 1
     err = capsys.readouterr().err
@@ -258,11 +257,28 @@ def test_main_reports_error_for_missing_entries_file(capsys):
     assert "not found" in capsys.readouterr().err
 
 
+def test_main_reports_error_for_non_utf8_entries_file(tmp_path, capsys):
+    path = tmp_path / "entries.tsv"
+    path.write_bytes(b"\xff\xfe bad")
+    assert gate.main(["--entries", str(path)]) == 1
+    err = capsys.readouterr().err
+    assert "not valid UTF-8" in err
+    assert "Traceback" not in err
+
+
+def test_main_reports_error_for_non_utf8_stdin(monkeypatch, capsys):
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(b"\xff\xfe bad"))
+    assert gate.main([]) == 1
+    err = capsys.readouterr().err
+    assert "standard input" in err and "not valid UTF-8" in err
+    assert "Traceback" not in err
+
+
 def test_main_truncates_long_iteration_snippets_in_failure_output(tmp_path, monkeypatch, capsys):
     long_line = "**Iteration: " + ("x" * 200) + ".**"
     content = f"## Kept-edit log\n\n{long_line}\nNothing else disclosed here.\n"
     path = _write(tmp_path, "split.md", content)
-    monkeypatch.setattr("sys.stdin", io.StringIO(f"{path}\t{long_line}\n"))
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(f"{path}\t{long_line}\n".encode()))
     assert gate.main([]) == 1
     err = capsys.readouterr().err
     assert "..." in err

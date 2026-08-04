@@ -149,10 +149,16 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         text = (
-            Path(args.removed).read_text(encoding="utf-8") if args.removed else sys.stdin.read()
+            Path(args.removed).read_text(encoding="utf-8")
+            if args.removed
+            else sys.stdin.buffer.read().decode("utf-8")
         )
     except FileNotFoundError:
         print(f"error: removed-names file not found: {args.removed}", file=sys.stderr)
+        return 1
+    except UnicodeDecodeError as error:
+        source = args.removed if args.removed else "standard input"
+        print(f"error: {source} is not valid UTF-8: {error}", file=sys.stderr)
         return 1
 
     removed_names = parse_names(text)

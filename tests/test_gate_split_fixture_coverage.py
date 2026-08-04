@@ -238,6 +238,18 @@ def test_check_precedence_branch_coverage_fails_when_split_md_lacks_pair(tmp_pat
     assert "precedence" in offender.lower()
 
 
+def test_check_precedence_branch_coverage_fails_loudly_on_undecodable_split_md(tmp_path: pathlib.Path):
+    skill_md = tmp_path / "skills" / "widget-polisher" / "SKILL.md"
+    skill_md.parent.mkdir(parents=True)
+    skill_md.write_text("Step 4 takes precedence over the fallback.\n", encoding="utf-8")
+    split_md = tmp_path / "evals" / "widget-polisher" / "split.md"
+    split_md.parent.mkdir(parents=True)
+    split_md.write_bytes(b"\xff\xfe bad")
+    offender = gate.check_precedence_branch_coverage(skill_md, skill_md.read_text(), tmp_path)
+    assert offender is not None
+    assert "could not decode" in offender
+
+
 def test_check_precedence_branch_coverage_passes_when_split_md_has_pair(tmp_path: pathlib.Path):
     skill_md = tmp_path / "skills" / "widget-polisher" / "SKILL.md"
     skill_md.parent.mkdir(parents=True)
@@ -389,6 +401,18 @@ def test_exercises_coverage_matches_case_insensitively(tmp_path: pathlib.Path):
     assert offender is None
 
 
+def test_exercises_coverage_fails_loudly_on_undecodable_skill_md(tmp_path: pathlib.Path):
+    skill_md = tmp_path / "skills" / "widget-polisher" / "SKILL.md"
+    skill_md.parent.mkdir(parents=True)
+    skill_md.write_bytes(b"\xff\xfe bad")
+    split_text = "## Assignment\n\n- **selection**: `a.yaml`.\n"
+    offender = gate.check_exercises_declaration_coverage(
+        tmp_path / "evals" / "widget-polisher" / "split.md", split_text, tmp_path
+    )
+    assert offender is not None
+    assert "could not decode" in offender
+
+
 def test_exercises_coverage_fails_when_fixture_file_missing(tmp_path: pathlib.Path):
     _write_skill_and_tasks(tmp_path, "widget-polisher", _ROUTING_SKILL_MD, {})
     split_text = "## Assignment\n\n- **selection**: `missing.yaml`.\n"
@@ -404,6 +428,17 @@ def test_exercises_coverage_fails_loudly_on_unparseable_yaml(tmp_path: pathlib.P
         tmp_path, "widget-polisher", _ROUTING_SKILL_MD,
         {"a.yaml": "expected:\n  exercises: [unterminated\n"},
     )
+    split_text = "## Assignment\n\n- **selection**: `a.yaml`.\n"
+    offender = gate.check_exercises_declaration_coverage(
+        tmp_path / "evals" / "widget-polisher" / "split.md", split_text, tmp_path
+    )
+    assert offender is not None
+    assert "could not parse YAML" in offender
+
+
+def test_exercises_coverage_fails_loudly_on_undecodable_fixture_yaml(tmp_path: pathlib.Path):
+    _write_skill_and_tasks(tmp_path, "widget-polisher", _ROUTING_SKILL_MD, {})
+    (tmp_path / "evals" / "widget-polisher" / "tasks" / "a.yaml").write_bytes(b"\xff\xfe bad")
     split_text = "## Assignment\n\n- **selection**: `a.yaml`.\n"
     offender = gate.check_exercises_declaration_coverage(
         tmp_path / "evals" / "widget-polisher" / "split.md", split_text, tmp_path
@@ -479,6 +514,12 @@ def test_main_returns_one_when_offender_found(tmp_path: pathlib.Path):
 def test_main_returns_one_when_split_md_unreadable(tmp_path: pathlib.Path):
     missing = tmp_path / "does-not-exist.md"
     assert gate.main(["--split-md", str(missing)]) == 1
+
+
+def test_main_returns_one_when_split_md_undecodable(tmp_path: pathlib.Path):
+    split_md = tmp_path / "split.md"
+    split_md.write_bytes(b"\xff\xfe bad")
+    assert gate.main(["--split-md", str(split_md)]) == 1
 
 
 def test_main_returns_zero_with_no_files():
