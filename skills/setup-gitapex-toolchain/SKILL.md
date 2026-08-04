@@ -56,12 +56,17 @@ commit the apm-managed dependency hooks (superpowers, clairvoyance, and
 any future ones) or their `UserPromptSubmit`/`PreToolUse` entries, even
 though a working tree that has already run `apm install` shows those
 entries merged into the same file. `apm install` -- which this skill's
-own `session-start.sh` triggers automatically -- re-adds them into
+own `session-start.sh` triggers automatically when `$CLAUDE_CODE_REMOTE=true` -- re-adds them into
 `.claude/settings.json` at runtime, tagging what it owns via
 `_apm_source` in the sibling, gitignored `.claude/apm-hooks.json`
 manifest; a hand-authored entry outside that tagging (this skill's own)
 is never touched by apm's regeneration. This keeps the committed
 baseline internally consistent -- a fresh `git clone` only references
-files that already exist in that same commit -- and keeps
-`.claude/settings.json` from showing as modified every session merely
-because apm reordered entries it manages.
+files that already exist in that same commit. Note: `.claude/settings.json`
+will still show as modified after `apm install` runs, as apm adds the
+missing hook entries from the committed baseline; this is an accepted
+consequence of the fresh-checkout-consistency fix. On non-web surfaces
+(local CLI, CI), the apm-vendored hooks (including language-detection
+and workflow-budget-gate hooks) are not registered until `apm install`
+has been run manually or via that surface's provisioning path (e.g.
+`nix develop`).
