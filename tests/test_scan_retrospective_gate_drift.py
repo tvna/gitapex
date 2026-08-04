@@ -272,6 +272,52 @@ def test_list_labelled_issues_raises_after_repeated_network_failure():
 
 
 # ---------------------------------------------------------------------------
+# list_labelled_issue_records (issue #726: shared fetch for compute_gprr.py)
+# ---------------------------------------------------------------------------
+
+
+def test_list_labelled_issue_records_returns_full_records():
+    page = [
+        {"number": 118, "body": "Status: `missing-deterministic-gate`", "created_at": "2026-07-01T00:00:00Z"},
+        {"number": 187, "body": "Status: `carried-forward`", "created_at": "2026-07-08T00:00:00Z"},
+    ]
+
+    def opener(request: urllib.request.Request) -> Response:
+        return Response(200, json.dumps(page))
+
+    result = gate.list_labelled_issue_records("tvna", "gitapex", "retrospective", "tok", opener=opener)
+    assert result == page
+
+
+def test_list_labelled_issue_records_excludes_pull_requests():
+    page = [{"number": 1, "pull_request": {}}, {"number": 2, "body": "x", "created_at": "2026-07-01T00:00:00Z"}]
+
+    def opener(request: urllib.request.Request) -> Response:
+        return Response(200, json.dumps(page))
+
+    result = gate.list_labelled_issue_records("tvna", "gitapex", "retrospective", "tok", opener=opener)
+    assert [record["number"] for record in result] == [2]
+
+
+def test_list_labelled_issue_records_paginates_until_short_page():
+    full_page = [{"number": n, "body": "", "created_at": "2026-07-01T00:00:00Z"} for n in range(100)]
+    short_page = [{"number": 999, "body": "", "created_at": "2026-07-01T00:00:00Z"}]
+    pages = [full_page, short_page]
+
+    def opener(request: urllib.request.Request) -> Response:
+        return Response(200, json.dumps(pages.pop(0)))
+
+    result = gate.list_labelled_issue_records("tvna", "gitapex", "retrospective", "tok", opener=opener)
+    assert [record["number"] for record in result] == [*range(100), 999]
+
+
+def test_list_labelled_issues_delegates_to_records(monkeypatch):
+    records = [{"number": 5, "body": "", "created_at": "2026-07-01T00:00:00Z"}]
+    monkeypatch.setattr(gate, "list_labelled_issue_records", lambda *a, **k: records)
+    assert gate.list_labelled_issues("tvna", "gitapex", "retrospective", "tok") == [5]
+
+
+# ---------------------------------------------------------------------------
 # git_commit_messages
 # ---------------------------------------------------------------------------
 

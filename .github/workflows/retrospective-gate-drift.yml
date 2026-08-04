@@ -8,6 +8,7 @@ on:
 permissions:
   contents: read
   issues: read
+  pull-requests: read
 
 concurrency:
   group: ${{ github.workflow }}
@@ -20,6 +21,7 @@ jobs:
     permissions:
       contents: read
       issues: read
+      pull-requests: read
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
@@ -52,4 +54,26 @@ jobs:
           set -o pipefail
           python3 .github/scripts/scan_retrospective_gate_drift.py \
             --owner tvna --repo gitapex --ref HEAD --threshold 20 \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # Issue #726: reports the Gate-Preventable Repair Rate (GPRR) --
+      # what share of classified retrospective repairs were
+      # missing-deterministic-gate, trended by week -- as an inspectable
+      # numeric time series rather than only this workflow's own
+      # threshold pass/fail check above. Deliberately informational: it
+      # never fails the run on the computed value itself (see
+      # docs/superpowers/specs/2026-08-04-gprr-design.md Decision 5), only
+      # on a genuine GitHub API error, so no continue-on-error is needed
+      # for that reason -- there is nothing else here that would trip it.
+      # Recomputes the full series from source every run instead of
+      # persisting one (Decision 2), so it needs no extra write scope
+      # beyond the added `pull-requests: read` above (for the merged-PR
+      # denominator).
+      - name: Compute Gate-Preventable Repair Rate (GPRR)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -o pipefail
+          python3 .github/scripts/compute_gprr.py \
+            --owner tvna --repo gitapex \
             | tee -a "$GITHUB_STEP_SUMMARY"

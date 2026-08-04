@@ -162,13 +162,18 @@ def _default_opener(request: urllib.request.Request) -> Any:
     return urllib.request.urlopen(request, timeout=_HTTP_TIMEOUT_SECONDS)  # noqa: S310
 
 
-def _fetch_issues_page(
+def fetch_json_page(
     url: str,
     token: str,
     opener: Callable[[urllib.request.Request], Any],
     sleeper: Callable[[float], None],
 ) -> list[dict[str, Any]]:
-    """GET one page of the issues-list endpoint, retrying transient failures."""
+    """GET one page of a GitHub REST list endpoint that returns a JSON
+    array, retrying transient failures. Generic across endpoints (issues,
+    pulls, ...) -- the retry/backoff shape has nothing issues-specific
+    about it. Issue #726: promoted from a private `_fetch_issues_page` so
+    `compute_gprr.py` can reuse it for the merged-pull-request query
+    instead of hand-rolling a second paginated GitHub client."""
     last_code = 0
     last_body = ""
     for attempt in range(1, 4):
@@ -210,23 +215,28 @@ def _format_code(code: int) -> str:
     return str(code) if code else "network error"
 
 
-def list_labelled_issues(
+def list_labelled_issue_records(
     owner: str,
     repo: str,
     label: str,
     token: str,
     opener: Callable[[urllib.request.Request], Any] = _default_opener,
     sleeper: Callable[[float], None] | None = None,
-) -> list[int]:
-    """Return issue numbers carrying `label`, unfiltered by state (matches
+) -> list[dict[str, Any]]:
+    """Return the full issue record (as GitHub's REST API returns it) for
+    every issue carrying `label`, unfiltered by state (matches
     merge-retrospective's own Step 0 method, which deliberately does not
-    limit the search to open issues)."""
+    limit the search to open issues). Issue #726: this is the shared fetch
+    both `list_labelled_issues` below (bare issue numbers, for the
+    citation-drift check) and `compute_gprr.py` (full records -- it needs
+    `body` and `created_at`, not just `number`) build on, so pagination and
+    retry logic exists exactly once."""
     sleeper = sleeper if sleeper is not None else time.sleep
-    issue_numbers: list[int] = []
+    records: list[dict[str, Any]] = []
     page = 1
     while True:
         url = f"{_API_ROOT}/repos/{owner}/{repo}/issues?labels={label}&state=all&per_page={_PER_PAGE}&page={page}"
-        items = _fetch_issues_page(url, token, opener, sleeper)
+        items = fetch_json_page(url, token, opener, sleeper)
         if not items:
             break
         for item in items:
@@ -235,11 +245,26 @@ def list_labelled_issues(
             # exclusion rather than an expected real-world hit.
             if "pull_request" in item:
                 continue
-            issue_numbers.append(item["number"])
+            records.append(item)
         if len(items) < _PER_PAGE:
             break
         page += 1
-    return issue_numbers
+    return records
+
+
+def list_labelled_issues(
+    owner: str,
+    repo: str,
+    label: str,
+    token: str,
+    opener: Callable[[urllib.request.Request], Any] = _default_opener,
+    sleeper: Callable[[float], None] | None = None,
+) -> list[int]:
+    """Return issue numbers carrying `label`, unfiltered by state. Thin
+    wrapper over `list_labelled_issue_records` -- see that function's
+    docstring for why the fetch itself lives there."""
+    records = list_labelled_issue_records(owner, repo, label, token, opener, sleeper)
+    return [record["number"] for record in records]
 
 
 def git_commit_messages(
