@@ -128,3 +128,6 @@ jobs:
 
       - name: mypy (skills/planning-a-branch-from-an-issue/scripts)
         run: uv run --frozen mypy --config-file pyproject.toml skills/planning-a-branch-from-an-issue/scripts
+
+      - name: mypy (skills/setup-gitapex-toolchain/scripts)
+        run: uv run --frozen mypy --config-file pyproject.toml skills/setup-gitapex-toolchain/scripts

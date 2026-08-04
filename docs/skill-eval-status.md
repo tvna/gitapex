@@ -103,6 +103,7 @@ suites still assert on final text only).
 | `responding-to-a-fresh-arrival` | [evals/responding-to-a-fresh-arrival/eval-status.md](../evals/responding-to-a-fresh-arrival/eval-status.md) |
 | `scorer-gated-skill-edits` | [evals/scorer-gated-skill-edits/eval-status.md](../evals/scorer-gated-skill-edits/eval-status.md) |
 | `screening-a-low-trust-contribution` | [evals/screening-a-low-trust-contribution/eval-status.md](../evals/screening-a-low-trust-contribution/eval-status.md) |
+| `setup-gitapex-toolchain` | [evals/setup-gitapex-toolchain/eval-status.md](../evals/setup-gitapex-toolchain/eval-status.md) |
 | `stop-and-replan` | [evals/stop-and-replan/eval-status.md](../evals/stop-and-replan/eval-status.md) |
 | `untrusted-input-triage` | [evals/untrusted-input-triage/eval-status.md](../evals/untrusted-input-triage/eval-status.md) |
 | `vetting-attack-surface` | [evals/vetting-attack-surface/eval-status.md](../evals/vetting-attack-surface/eval-status.md) |

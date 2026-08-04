@@ -1,0 +1,20 @@
+apiVersion: gitapex.io/v1alpha1
+kind: SkillMetadata
+metadata:
+  name: setup-gitapex-toolchain
+spec:
+  portability: Mixed
+  capabilityAssumption: Broad
+  references:
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/57, https://github.com/tvna/gitapex/issues/690"
+      summary: "An optional setup script is a pure latency optimization and never replaces the automatic SessionStart hook path: this skill's founding goal (these two issues) is zero-manual-step provisioning on any never-configured environment, which a setup script alone cannot deliver since it requires per-environment manual configuration"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/blob/main/docs/superpowers/specs/2026-07-21-portability-authorship-decision-table-design.md"
+      summary: "Portability is Mixed, not Repository-scoped -- Table A reserves Repository-scoped for a downstream fork hardcoding local conventions, not an origin-authored skill; this skill's mechanisms (flake.nix pins, session-start.sh, apm.yml, settings.json) are repository-specific with no portable core, same reasoning as auditing-agent-product-scope's own entry"
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/730"
+      summary: "Mixed presupposes a portable core split from repo-specific detail via a reference file; this skill has no separable portable core at all, so neither Mixed nor Repository-scoped fits cleanly -- flagged as a taxonomy gap rather than resolved unilaterally"
+  skillDependencies:
+    requires: []
+    relatedTo: []
