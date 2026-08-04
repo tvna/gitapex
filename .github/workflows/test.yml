@@ -48,6 +48,26 @@ jobs:
       - name: Enforce per-file coverage minimum
         run: uv run --frozen python3 .github/scripts/gate_evals_scripts_coverage.py --coverage-json coverage.json
 
+      # Issue #727: xenon (wraps radon cc) fails the block/module/average
+      # thresholds below, measured empirically against this repo's real
+      # tree (excluding the one named exclude) rather than picked as
+      # round numbers -- see that issue for the full derivation. -a/-m/-b
+      # map to whole-codebase average / per-module average / per-block
+      # absolute respectively (confirmed against xenon's own source,
+      # xenon/core.py, not assumed from the flag names' surface reading).
+      # check_skill_shape.py (CC 99/64, rank F, MI 0.00) is excluded as
+      # pre-existing, already-tracked debt -- re-measure trigger: drop the
+      # exclude once its two named functions (_parse_manifest,
+      # check_shape) are refactored below rank F. apm_modules/* is
+      # excluded defensively even though no workflow here populates it
+      # (it is apm's gitignored package cache), consistent with every
+      # other gate's scope never reaching into it.
+      - name: Enforce cyclomatic-complexity ceiling
+        run: |
+          uv run --frozen xenon --max-absolute E --max-modules B --max-average A \
+            --exclude "apm_modules/*,skills/evaluating-skill-quality/scripts/check_skill_shape.py" \
+            .
+
       # if: always() -- the coverage-minimum step above can fail (exit 1)
       # on a real coverage regression without pytest itself failing; the
       # coverage.xml pytest already produced is still valid and worth

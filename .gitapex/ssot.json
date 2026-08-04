@@ -442,6 +442,19 @@
       "supersedes": null
     },
     {
+      "id": "cyclomatic-complexity-floor",
+      "kind": "script",
+      "script": ".github/workflows/test.yml",
+      "rule": "Runs 'uv run --frozen xenon --max-absolute E --max-modules B --max-average A --exclude apm_modules/*,skills/evaluating-skill-quality/scripts/check_skill_shape.py .' inside the pytest job. Thresholds are the empirically-measured ceiling of this repo's own real code as of issue #727 (worst non-excluded block rank E, worst module average B, repo-wide average A) -- a new F-rank block, or an average regression, fails CI. check_skill_shape.py is excluded as pre-existing, explicitly tracked debt (CC 99/64, MI 0.00).",
+      "planes": ["ci"],
+      "trigger": ".github/workflows/test.yml, pytest job, on every pull_request and push to main",
+      "policy_refs": [],
+      "cluster": "test-integrity",
+      "tracking_issue": 727,
+      "status": "active",
+      "supersedes": null
+    },
+    {
       "id": "stale-retro-stub-autoclose",
       "kind": "script",
       "script": ".github/scripts/stale_retro_stub_autoclose.py",
