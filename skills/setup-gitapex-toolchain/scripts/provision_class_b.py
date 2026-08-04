@@ -184,8 +184,10 @@ def parse_flake_class_b_pins(flake_text: str) -> dict[str, ClassBToolSpec]:
 
 def load_flake_class_b_pins(flake_path: Path) -> dict[str, ClassBToolSpec]:
     return parse_flake_class_b_pins(
-        flake_path.read_text(encoding="utf-8")
-    )  # exception-handler-gap: WAIVED: main()'s own try/except around this call already catches UnicodeDecodeError alongside (FlakePinParseError, OSError) -- this function itself deliberately propagates, matching parse_flake_class_b_pins's own let-it-propagate design
+        flake_path.read_text(  # exception-handler-gap: WAIVED: main()'s own try/except around this call already catches UnicodeDecodeError alongside (FlakePinParseError, OSError) -- this function itself deliberately propagates, matching parse_flake_class_b_pins's own let-it-propagate design
+            encoding="utf-8"
+        )
+    )
 
 
 _UNAME_SYSTEM_MAP: dict[tuple[str, str], str] = {
@@ -315,8 +317,10 @@ def extract_binary(data: bytes, asset_name: str, bin_in_archive: str, dest: Path
     else:
         try:
             with (
-                tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tf
-            ):  # exception-handler-gap: WAIVED: binary mode ("r:gz") reads archive bytes, never decodes text -- UnicodeDecodeError cannot occur here
+                tarfile.open(  # exception-handler-gap: WAIVED: binary mode ("r:gz") reads archive bytes, never decodes text -- UnicodeDecodeError cannot occur here
+                    fileobj=io.BytesIO(data), mode="r:gz"
+                ) as tf
+            ):
                 # tf.extractfile raises KeyError when bin_in_archive names no
                 # member at all (verified against real tarfile semantics --
                 # this differs from the None-return path below); it returns
@@ -438,8 +442,10 @@ def extract_wrapper_dir(data: bytes, asset_name: str, bin_in_archive: str, libex
     else:
         try:
             with (
-                tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tf
-            ):  # exception-handler-gap: WAIVED: binary mode ("r:gz") reads archive bytes, never decodes text -- UnicodeDecodeError cannot occur here
+                tarfile.open(  # exception-handler-gap: WAIVED: binary mode ("r:gz") reads archive bytes, never decodes text -- UnicodeDecodeError cannot occur here
+                    fileobj=io.BytesIO(data), mode="r:gz"
+                ) as tf
+            ):
                 top_dir_name = _validate_top_level_dir(tf.getnames(), asset_name, libexec_dir)
                 # No noqa needed: ruff recognizes filter="data" itself as
                 # resolving S202 for tarfile (confirmed empirically -- adding
@@ -893,8 +899,12 @@ def write_env_file(env_file: Path | None, cache_root: Path) -> None:
         return
     export_line = f'export PATH="{cache_root / "bin"}:$PATH"\n'
     existing = (
-        env_file.read_text(encoding="utf-8") if env_file.exists() else ""
-    )  # exception-handler-gap: WAIVED: main()'s own try/except around this call already catches (OSError, UnicodeDecodeError) -- this function itself deliberately propagates
+        env_file.read_text(  # exception-handler-gap: WAIVED: main()'s own try/except around this call already catches (OSError, UnicodeDecodeError) -- this function itself deliberately propagates
+            encoding="utf-8"
+        )
+        if env_file.exists()
+        else ""
+    )
     if export_line in existing:
         return
     with env_file.open("a", encoding="utf-8") as handle:

@@ -86,9 +86,9 @@ def set_config_model(text: str, model: str) -> str:
 
 def override_file(path: Path, model: str) -> None:
     """Rewrite ``path`` in place, setting ``config.model`` to ``model``."""
-    text = path.read_text(
+    text = path.read_text(  # exception-handler-gap: WAIVED: override_file()'s only caller, main() (same file), wraps this call in except ValueError; UnicodeDecodeError is a ValueError subclass, so a non-UTF-8 file already exits 1 cleanly (verified by execution, no traceback)
         encoding="utf-8"
-    )  # exception-handler-gap: WAIVED: override_file()'s only caller, main() (same file), wraps this call in except ValueError; UnicodeDecodeError is a ValueError subclass, so a non-UTF-8 file already exits 1 cleanly (verified by execution, no traceback)
+    )
     path.write_text(set_config_model(text, model), encoding="utf-8")
 
 

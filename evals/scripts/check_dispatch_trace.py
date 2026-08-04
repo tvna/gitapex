@@ -167,8 +167,10 @@ def iter_tool_use_blocks(transcript_path: Path) -> Iterator[dict[str, Any]]:
     sees exactly the same object it always did.
     """
     with (
-        transcript_path.open(encoding="utf-8") as handle
-    ):  # exception-handler-gap: WAIVED: this generator's only caller, check_transcript() (same file), is invoked at both call sites in main() inside except (ValueError, OSError); UnicodeDecodeError is a ValueError subclass, and verified by execution (including mid-iteration, after several well-formed lines already yielded) that a non-UTF-8 transcript propagates cleanly through the for-loop consumer in count_dispatches() and is caught there, no traceback
+        transcript_path.open(  # exception-handler-gap: WAIVED: this generator's only caller, check_transcript() (same file), is invoked at both call sites in main() inside except (ValueError, OSError); UnicodeDecodeError is a ValueError subclass, and verified by execution (including mid-iteration, after several well-formed lines already yielded) that a non-UTF-8 transcript propagates cleanly through the for-loop consumer in count_dispatches() and is caught there, no traceback
+            encoding="utf-8"
+        ) as handle
+    ):
         for lineno, raw in enumerate(handle, start=1):
             raw = raw.strip()
             if not raw:
