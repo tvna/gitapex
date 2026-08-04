@@ -460,7 +460,10 @@ def extract_wrapper_dir(data: bytes, asset_name: str, bin_in_archive: str, libex
     real_bin.chmod(real_bin.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
     bin_shim.parent.mkdir(parents=True, exist_ok=True)
-    bin_shim.write_text(f'#!/bin/sh\nexec "{real_bin}" "$@"\n', encoding="utf-8")
+    # _expected_bin_shim_content is the single source of truth for this
+    # format -- _is_already_installed re-derives and compares against the
+    # same helper on every later "skip?" check (see its own docstring).
+    bin_shim.write_text(_expected_bin_shim_content(real_bin), encoding="utf-8")
     bin_shim.chmod(bin_shim.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
 
@@ -477,8 +480,14 @@ class InstallReceipt:
     # bytes -- see _entry_point_path -- not the downloaded archive and not
     # (for wrapperDir) the whole _internal/ support tree. Re-verified by
     # _is_already_installed on every "skip?" check so a stale receipt can
-    # never vouch for a binary that has since been corrupted or tampered
-    # with on disk.
+    # never vouch for THIS file having been corrupted or tampered with on
+    # disk. For a wrapperDir-kind tool, entry_point is the real binary
+    # under libexec/ -- a separate file from bin/<pname> (the tiny
+    # generated exec shim actually invoked, e.g. by main()'s --verify
+    # branch and by run_apm_install) -- so _is_already_installed
+    # additionally re-derives and compares the shim's own expected content
+    # (see _expected_bin_shim_content) on every check; that shim check,
+    # not this hash, is what closes the gap for that second file.
     installed_sha256: str
 
 
@@ -537,6 +546,17 @@ def _entry_point_path(cache_root: Path, spec: ClassBToolSpec, pin: ClassBSystemP
     return _installed_bin_path(cache_root, spec.pname)
 
 
+def _expected_bin_shim_content(entry_point: Path) -> str:
+    """The exact text a wrapperDir-kind tool's bin/<pname> shim must
+    contain -- the same f-string extract_wrapper_dir writes when it first
+    creates the shim. Factored out so both sides of the trust boundary
+    (the file written at install time, and the file re-verified by
+    _is_already_installed on every later "skip?" check) agree on exactly
+    one definition of what the shim is supposed to contain, the same role
+    _entry_point_path already serves for the entry-point file itself."""
+    return f'#!/bin/sh\nexec "{entry_point}" "$@"\n'
+
+
 def _is_already_installed(cache_root: Path, spec: ClassBToolSpec, system: str) -> bool:
     receipt = _read_receipt(cache_root, spec.pname)
     if receipt is None:
@@ -544,7 +564,8 @@ def _is_already_installed(cache_root: Path, spec: ClassBToolSpec, system: str) -
     pin = spec.systems[system]
     if receipt.sha256_sri != pin.sha256_sri or receipt.asset != pin.asset:
         return False
-    if not _installed_bin_path(cache_root, spec.pname).exists():
+    bin_path = _installed_bin_path(cache_root, spec.pname)
+    if not bin_path.exists():
         return False
     # Re-verify the entry-point executable's CURRENT on-disk bytes against
     # the receipt, not just its existence: a receipt whose sha256_sri/asset
@@ -562,7 +583,23 @@ def _is_already_installed(cache_root: Path, spec: ClassBToolSpec, system: str) -
     entry_point = _entry_point_path(cache_root, spec, pin)
     if not entry_point.exists():
         return False
-    return sha256_sri(entry_point.read_bytes()) == receipt.installed_sha256
+    if sha256_sri(entry_point.read_bytes()) != receipt.installed_sha256:
+        return False
+    # For a wrapperDir-kind tool, entry_point above is the real binary
+    # under libexec/ -- a SEPARATE file from bin_path, the tiny generated
+    # `exec` shim main() (--verify) and run_apm_install actually invoke.
+    # Hashing only entry_point therefore leaves bin_path itself
+    # unverified: an attacker who tampers ONLY the shim (e.g. rewriting it
+    # to `exec /tmp/evil "$@"`) is silently trusted, because the real,
+    # untampered binary's hash still matches. The shim's content is 100%
+    # deterministic (see _expected_bin_shim_content), so it can be
+    # re-derived and compared exactly rather than merely hashed against a
+    # stored value. binary-kind tools have no separate shim -- their entry
+    # point IS bin_path, already covered by the hash check above -- so
+    # this only applies to, and only runs for, wrapperDir.
+    return not (
+        spec.kind == "wrapperDir" and bin_path.read_text(encoding="utf-8") != _expected_bin_shim_content(entry_point)
+    )
 
 
 class VerifyError(RuntimeError):
@@ -575,14 +612,24 @@ _MAX_VERSION_OUTPUT_DISPLAY_CHARS = 200
 
 
 def _sanitize_for_display(text: str) -> str:
-    """Strip terminal control/escape sequences from third-party --version
-    output before it is stored or printed. This is raw subprocess stdout
-    from running a just-installed third-party binary with --version --
-    control/escape bytes in it would be interpreted verbatim by whatever
-    displays this script's output, so nothing here trusts it unsanitized.
-    str.isprintable() already treats plain space (0x20) as printable, so
-    no separate space-preserving case is needed alongside it."""
-    cleaned = "".join(char for char in text if char.isprintable())
+    """Strip terminal control/escape sequences from raw third-party
+    subprocess output before it is stored or printed -- a just-installed
+    third-party binary's --version stdout, and (the same untrusted-output
+    category) its stderr on a failed --version smoke test or a failed
+    `apm install`. Control/escape bytes in any of these would be
+    interpreted verbatim by whatever displays this script's output, so
+    nothing here trusts them unsanitized.
+
+    Whitespace-class control characters (\\n, \\r, \\t) are replaced with a
+    single space rather than dropped, so multi-line output doesn't end up
+    with words glued together across the line break; every other
+    non-printable character (ANSI escapes, BEL, bidi-override, etc.) is
+    still dropped, exactly as before. This is a separate, additional case
+    from plain space (0x20) itself: str.isprintable() already treats plain
+    space as printable, so it was never at risk of being dropped and still
+    needs no special-casing of its own alongside \\n/\\r/\\t."""
+    despaced = text.replace("\n", " ").replace("\r", " ").replace("\t", " ")
+    cleaned = "".join(char for char in despaced if char.isprintable())
     if len(cleaned) > _MAX_VERSION_OUTPUT_DISPLAY_CHARS:
         return cleaned[:_MAX_VERSION_OUTPUT_DISPLAY_CHARS] + "...[truncated]"
     return cleaned
@@ -645,7 +692,14 @@ def provision_tool(
     # controlled input.
     proc = runner([str(bin_path), "--version"], capture_output=True, text=True, timeout=30, check=False)
     if proc.returncode != 0:
-        raise VerifyError(f"{spec.pname}: `{bin_path} --version` exited {proc.returncode}: {proc.stderr}")
+        # proc.stderr is raw third-party subprocess output -- the FAILING
+        # path is the one most likely to carry adversarial bytes, since a
+        # hostile binary only needs a non-zero exit to reach this site.
+        # Same sink category _sanitize_for_display already closes for
+        # --version stdout; see its own docstring.
+        raise VerifyError(
+            f"{spec.pname}: `{bin_path} --version` exited {proc.returncode}: {_sanitize_for_display(proc.stderr)}"
+        )
 
     # Hash only the entry-point executable actually run (see
     # _is_already_installed's own comment for why this is deliberately
@@ -727,7 +781,9 @@ def run_apm_install(
         [str(apm_binary), "install"], cwd=str(project_dir), capture_output=True, text=True, timeout=120, check=False
     )
     if result.returncode != 0:
-        raise ApmInstallError(f"apm install exited {result.returncode}: {result.stderr}")
+        # Same raw-third-party-stderr sink category as VerifyError's raise
+        # site above -- sanitize before it can reach the terminal.
+        raise ApmInstallError(f"apm install exited {result.returncode}: {_sanitize_for_display(result.stderr)}")
     return result
 
 

@@ -645,6 +645,87 @@ def test_provision_tool_reinstalls_wrapper_dir_kind_when_installed_bytes_are_cor
     assert (tmp_path / "bin" / "apm").read_text().startswith("#!/bin/sh")
 
 
+# --- Independent code-review fix round (task11-12-fixround-report.md):
+# the wrapperDir shim integrity gap (Important #1) and unsanitized
+# third-party stderr at two raise sites (Important #2) -----------------------
+
+
+def test_provision_tool_reinstalls_wrapper_dir_kind_when_shim_is_tampered(tmp_path: Path) -> None:
+    """Important #1: apm (the only wrapperDir-kind tool) is actually
+    invoked via bin/<pname> -- the tiny generated `exec` shim -- not the
+    real binary under libexec/ directly (see _installed_bin_path's use in
+    main()'s --verify branch and in run_apm_install's caller). Pre-fix,
+    _is_already_installed hashed only the real entry-point binary under
+    libexec/, never re-verifying the shim itself. Tampering ONLY the shim
+    (e.g. rewriting it to exec a different path) while leaving the real,
+    untampered binary in place must still force a reinstall -- a matching
+    entry-point hash is not enough to silently trust a shim that no longer
+    matches what extract_wrapper_dir would have written."""
+    spec = _real_apm_spec()
+    data = _make_tar_gz_bytes(
+        {"apm-linux-x86_64/apm": b"#!/bin/sh\necho fake-apm\n", "apm-linux-x86_64/_internal/x": b"y"}
+    )
+    pin = pcb.ClassBSystemPin(asset="apm.tar.gz", sha256_sri=pcb.sha256_sri(data), bin_in_archive="apm")
+    fake_spec = pcb.ClassBToolSpec(
+        pname="apm", version="0.25.0", kind="wrapperDir", owner=spec.owner, repo=spec.repo, tag=spec.tag,
+        systems={"x86_64-linux": pin},
+    )
+
+    result1 = pcb.provision_tool(
+        fake_spec, "x86_64-linux", tmp_path, opener=lambda r: _FakeResponse(200, data), sleeper=lambda _s: None,
+        runner=_fake_runner_success,
+    )
+    assert result1.status == "installed"
+
+    real_bin = tmp_path / "libexec" / "apm" / "apm"
+    real_bin_bytes_before = real_bin.read_bytes()
+    shim_path = tmp_path / "bin" / "apm"
+    # Tamper ONLY the shim -- the real binary at libexec/apm/apm is never
+    # touched by this test, isolating the shim-specific gap from the
+    # already-covered entry-point-corruption case above.
+    shim_path.write_text('#!/bin/sh\nexec "/tmp/evil" "$@"\n', encoding="utf-8")
+
+    result2 = pcb.provision_tool(
+        fake_spec, "x86_64-linux", tmp_path, opener=lambda r: _FakeResponse(200, data), sleeper=lambda _s: None,
+        runner=_fake_runner_success,
+    )
+
+    assert result2.status == "installed"  # not "skipped" -- shim tampering must force a reinstall
+    assert real_bin.read_bytes() == real_bin_bytes_before  # untouched binary re-extracted identically
+    assert shim_path.read_text() == pcb._expected_bin_shim_content(real_bin)
+
+
+def test_provision_tool_sanitizes_stderr_in_verify_error_message(tmp_path: Path) -> None:
+    """Important #2, first of two raise sites: VerifyError's message
+    embedded raw proc.stderr directly, later printed to the terminal
+    unsanitized by main()'s exception handling -- the same "raw
+    third-party subprocess output reaching the terminal unsanitized"
+    category _sanitize_for_display already closes for --version stdout.
+    The FAILING path is the one most likely to carry adversarial bytes: a
+    hostile binary only needs a non-zero exit to reach this site."""
+    spec = _real_apm_spec()
+    data = _make_tar_gz_bytes({"apm-linux-x86_64/apm": b"binary-content", "apm-linux-x86_64/_internal/x": b"y"})
+    pin = pcb.ClassBSystemPin(asset="apm.tar.gz", sha256_sri=pcb.sha256_sri(data), bin_in_archive="apm")
+    fake_spec = pcb.ClassBToolSpec(
+        pname="apm", version="0.25.0", kind="wrapperDir", owner=spec.owner, repo=spec.repo, tag=spec.tag,
+        systems={"x86_64-linux": pin},
+    )
+
+    def failing_runner_with_escape_codes(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(args=("fake",), returncode=1, stdout="", stderr="\x1b[31mboom\x1b[0m")
+
+    with pytest.raises(pcb.VerifyError) as exc_info:
+        pcb.provision_tool(
+            fake_spec, "x86_64-linux", tmp_path, opener=lambda r: _FakeResponse(200, data), sleeper=lambda _s: None,
+            runner=failing_runner_with_escape_codes,
+        )
+
+    message = str(exc_info.value)
+    assert "\x1b" not in message
+    assert "boom" in message
+    assert all(char.isprintable() for char in message)
+
+
 def test_provision_tool_force_reinstalls_even_when_already_installed(tmp_path: Path) -> None:
     spec = _real_apm_spec()
     data = _make_tar_gz_bytes({"apm-linux-x86_64/apm": b"binary-content", "apm-linux-x86_64/_internal/x": b"y"})
@@ -675,6 +756,19 @@ def test_sanitize_for_display_strips_control_chars_and_truncates() -> None:
     long_text = "v" * 250
     truncated = pcb._sanitize_for_display(long_text)
     assert truncated == ("v" * 200) + "...[truncated]"
+
+
+def test_sanitize_for_display_replaces_newlines_and_tabs_with_spaces_instead_of_dropping() -> None:
+    """Minor #5(a) (independent code-review fix round): a multi-line
+    --version output like "waza 1.2.3\\nbuild abc" previously became
+    "waza 1.2.3build abc" once \\n was simply dropped along with every
+    other non-printable character -- words glued together with no
+    separator. \\n/\\r/\\t now become a single space each instead; every
+    other non-printable character (ANSI escapes, BEL, etc.) is still
+    dropped exactly as before -- confirmed unchanged by the ANSI-escape
+    assertion in the test above."""
+    assert pcb._sanitize_for_display("waza 1.2.3\nbuild abc") == "waza 1.2.3 build abc"
+    assert pcb._sanitize_for_display("a\tb\rc") == "a b c"
 
 
 def test_provision_tool_sanitizes_control_characters_in_version_output(tmp_path: Path) -> None:
@@ -818,6 +912,28 @@ def test_run_apm_install_raises_on_nonzero_exit(tmp_path: Path) -> None:
         pcb.run_apm_install(tmp_path, apm_binary, runner=failing_runner)
 
 
+def test_run_apm_install_sanitizes_stderr_in_apm_install_error_message(tmp_path: Path) -> None:
+    """Important #2, second of two raise sites: same category as
+    test_provision_tool_sanitizes_stderr_in_verify_error_message above --
+    ApmInstallError's message embedded raw result.stderr directly, later
+    printed to the terminal unsanitized by main()'s exception handling."""
+    (tmp_path / "apm.yml").write_text("name: x\nversion: 0.1.0\n", encoding="utf-8")
+    apm_binary = tmp_path / "bin" / "apm"
+    apm_binary.parent.mkdir(parents=True)
+    apm_binary.write_text("#!/bin/sh\n", encoding="utf-8")
+
+    def failing_runner_with_escape_codes(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(args=cmd, returncode=1, stdout="", stderr="\x1b[31mboom\x1b[0m")
+
+    with pytest.raises(pcb.ApmInstallError) as exc_info:
+        pcb.run_apm_install(tmp_path, apm_binary, runner=failing_runner_with_escape_codes)
+
+    message = str(exc_info.value)
+    assert "\x1b" not in message
+    assert "boom" in message
+    assert all(char.isprintable() for char in message)
+
+
 def test_write_env_file_appends_path_export(tmp_path: Path) -> None:
     env_file = tmp_path / "env.sh"
     env_file.write_text("export FOO=bar\n", encoding="utf-8")
@@ -941,7 +1057,9 @@ def test_main_verify_mode_reports_missing_binaries_without_network(tmp_path: Pat
     assert exit_code == 1  # nothing installed yet in this empty tmp_path cache
 
 
-def test_main_reports_clean_failure_on_unsupported_system(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_main_reports_clean_failure_on_unsupported_system(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     """A1 fix: current_nix_system() can raise UnsupportedSystemError for an
     exotic uname pair (native Windows, an unrecognized arch) this script has
     no Class B pins for. Pre-fix, ``system: str = args.system or
@@ -950,7 +1068,14 @@ def test_main_reports_clean_failure_on_unsupported_system(tmp_path: Path, monkey
     this exception crashed main() with a raw traceback instead of the
     documented clean FAIL: line and non-zero exit. No --system flag is
     passed here, so main() must call current_nix_system() itself for this
-    to actually exercise the fix rather than bypass it entirely."""
+    to actually exercise the fix rather than bypass it entirely.
+
+    Minor #3 (independent code-review fix round): the exit-code assertion
+    alone does not prove main() attributed the failure to the right cause
+    -- a regression that silently mis-routed this exception into the
+    generic "could not load Class B pins" branch would also return exit
+    code 1 and still pass a bare exit-code check. Assert on the printed
+    message too, so that misattribution is caught."""
     monkeypatch.delenv("CLAUDE_ENV_FILE", raising=False)
     monkeypatch.setattr(
         pcb,
@@ -965,6 +1090,9 @@ def test_main_reports_clean_failure_on_unsupported_system(tmp_path: Path, monkey
         ]
     )
     assert exit_code == 1
+    err = capsys.readouterr().err
+    assert "could not detect a supported Nix system" in err  # names the real cause
+    assert "could not load Class B pins" not in err  # not misattributed to the flake-parsing path
 
 
 def test_main_skip_apm_install_flag_prevents_apm_install_call(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

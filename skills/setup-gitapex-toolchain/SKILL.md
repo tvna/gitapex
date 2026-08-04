@@ -71,8 +71,10 @@ binaries without running `apm install` afterward. Add `--tool NAME`
 
 - Binaries installed under `${XDG_CACHE_HOME:-~/.cache}/gitapex/toolchain/bin/`.
 - `PATH` updated for the session via `$CLAUDE_ENV_FILE` (if set).
-- Per tool, on stdout: `INSTALLED: <tool> (<version>)` on a fresh install,
-  or `SKIPPED: <tool>` if it was already installed and verified current
+- Per tool, on stdout: `INSTALLED: <tool> (<version>)` on a fresh install
+  -- the `(<version>)` parenthetical appears only when that tool's own
+  `--version` output was non-empty after sanitization -- or
+  `SKIPPED: <tool>` if it was already installed and verified current
   (both are success outcomes). A tool that failed prints
   `FAIL: <tool>: <error>` on **stderr** instead.
 - The `apm install` phase (this skill's own final step, unless
@@ -90,12 +92,14 @@ binaries without running `apm install` afterward. Add `--tool NAME`
 - With `--verify`: `PASS: <tool>: <version>` or `FAIL: <tool>: <reason>`
   per tool, both on stdout -- note this differs from the default path's
   per-tool `FAIL`, which goes to stderr.
-- Exit code: non-zero if any per-tool provisioning failed, the env-file
-  write failed, or the `apm install` phase failed (including the
-  apm-itself-didn't-provision case above); zero otherwise. Failures never
-  crash the calling SessionStart hook (`session-start.sh` always exits 0
-  itself) -- check this script's own exit code and stderr directly to
-  confirm success.
+- Exit code: non-zero if the system could not be detected, `flake.nix`'s
+  Class B pins could not be loaded, an unknown `--tool` value was given,
+  (with `--verify`) any tool's check failed, or (without `--verify`) any
+  per-tool provisioning failed, the env-file write failed, or the
+  `apm install` phase failed (including the apm-itself-didn't-provision
+  case above); zero otherwise. Failures never crash the calling
+  SessionStart hook (`session-start.sh` always exits 0 itself) -- check
+  this script's own exit code and stderr directly to confirm success.
 
 ## If provisioning fails
 
