@@ -295,7 +295,7 @@ ignore = ["E501", "SIM108", "RET504"]
 [tool.pytest.ini_options]
 testpaths = ["tests", "skills/battle-testing-a-skill/scripts", "skills/evaluating-skill-quality/scripts", "skills/executing-a-branch-plan/scripts", "skills/auditing-agent-product-scope/scripts", "skills/setup-gitapex-toolchain/scripts", "hooks"]
 pythonpath = [".github/scripts", "skills/battle-testing-a-skill/scripts", "skills/scorer-gated-skill-edits/scripts", "skills/evaluating-skill-quality/scripts", "skills/auditing-agent-product-scope/scripts", "evals/scripts", "hooks"]
-addopts = "--cov=.github/scripts --cov=skills/battle-testing-a-skill/scripts --cov=skills/scorer-gated-skill-edits/scripts --cov=skills/evaluating-skill-quality/scripts --cov=skills/auditing-agent-product-scope/scripts --cov=evals/scripts --cov=hooks --cov-report=term-missing"
+addopts = "--cov=.github/scripts --cov=skills/battle-testing-a-skill/scripts --cov=skills/scorer-gated-skill-edits/scripts --cov=skills/evaluating-skill-quality/scripts --cov=skills/auditing-agent-product-scope/scripts --cov=skills/setup-gitapex-toolchain/scripts --cov=evals/scripts --cov=hooks --cov-report=term-missing"
 
 # Deliberately NOT adding "hooks" here (issue #657): gate_evals_scripts_coverage.py
 # reads this list, not addopts, as the authoritative scope for its 90%-per-file
@@ -308,7 +308,7 @@ addopts = "--cov=.github/scripts --cov=skills/battle-testing-a-skill/scripts --c
 # directly imported (e.g. hooks/check_pr_issue_acm_disclosure.py's own
 # opener-injection unit tests) via --cov-report=term-missing, without gating.
 [tool.coverage.run]
-source = [".github/scripts", "skills/battle-testing-a-skill/scripts", "skills/scorer-gated-skill-edits/scripts", "skills/evaluating-skill-quality/scripts", "skills/auditing-agent-product-scope/scripts", "evals/scripts"]
+source = [".github/scripts", "skills/battle-testing-a-skill/scripts", "skills/scorer-gated-skill-edits/scripts", "skills/evaluating-skill-quality/scripts", "skills/auditing-agent-product-scope/scripts", "skills/setup-gitapex-toolchain/scripts", "evals/scripts"]
 
 [tool.coverage.report]
 exclude_lines = [
