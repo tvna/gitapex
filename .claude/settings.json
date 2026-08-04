@@ -1,4 +1,15 @@
 {
+  "extraKnownMarketplaces": {
+    "gitapex": {
+      "source": {
+        "source": "directory",
+        "path": "."
+      }
+    }
+  },
+  "enabledPlugins": {
+    "gitapex@gitapex": true
+  },
   "hooks": {
     "SessionStart": [
       {
