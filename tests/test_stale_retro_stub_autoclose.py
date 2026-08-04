@@ -289,16 +289,34 @@ def test_close_stub_issue_raises_immediately_on_persistent_4xx():
     assert calls == ["POST"]
 
 
-def test_close_stub_issue_retries_incomplete_body_read_then_succeeds():
-    class FlakyResponse(Response):
-        def read(self) -> bytes:
-            raise http.client.IncompleteRead(b"partial")
+def test_close_stub_issue_does_not_retry_the_non_idempotent_comment_post():
+    """The comment POST is not idempotent: a lost/truncated response after
+    GitHub already created the comment must never be retried into a
+    duplicate -- mirrors post_merge_retro.py's own
+    test_open_retro_issue_does_not_retry_the_non_idempotent_post."""
+    calls = 0
 
-    responses = [FlakyResponse(201), Response(201, "{}"), Response(200, "{}")]
+    def opener(request: urllib.request.Request) -> Response:
+        nonlocal calls
+        calls += 1
+        raise http_error(503, "server error")
+
+    with pytest.raises(sra.GitHubApiError):
+        sra.close_stub_issue("tvna", "gitapex", 314, 48, "tok", opener=opener, sleeper=lambda _: None)
+    assert calls == 1
+
+
+def test_close_stub_issue_patch_close_still_retries_5xx_then_succeeds():
+    """The PATCH close is naturally idempotent and keeps the default retry
+    count, unlike the comment POST above."""
+    responses = [Response(201, "{}"), http_error(503, "{}"), Response(200, "{}")]
     sleeps: list[float] = []
 
     def opener(request: urllib.request.Request) -> Response:
-        return responses.pop(0)
+        response = responses.pop(0)
+        if isinstance(response, urllib.error.HTTPError):
+            raise response
+        return response
 
     sra.close_stub_issue("tvna", "gitapex", 314, 48, "tok", opener=opener, sleeper=sleeps.append)
     assert sleeps == [5]

@@ -286,10 +286,26 @@ def close_stub_issue(
     if the close call itself then fails (network, permissions), the
     explanation is still on the issue rather than silently lost, and a
     later run can retry the close against an issue that already explains
-    itself."""
+    itself.
+
+    max_attempts=1 on the comment POST: comment creation is not
+    idempotent -- mirrors post_merge_retro.py's own open_retro_issue
+    call, whose docstring explains why (a lost/truncated response after
+    GitHub already created the resource must never be retried into a
+    duplicate). The PATCH close below is naturally idempotent (setting
+    state=closed twice has no further effect) and keeps the default
+    retry count."""
     sleeper = sleeper if sleeper is not None else time.sleep
     comment_url = f"{_API_ROOT}/repos/{owner}/{repo}/issues/{issue_number}/comments"
-    _call("POST", comment_url, token, opener, sleeper, body={"body": format_close_comment(stale_hours)})
+    _call(
+        "POST",
+        comment_url,
+        token,
+        opener,
+        sleeper,
+        body={"body": format_close_comment(stale_hours)},
+        max_attempts=1,
+    )
     issue_url = f"{_API_ROOT}/repos/{owner}/{repo}/issues/{issue_number}"
     _call("PATCH", issue_url, token, opener, sleeper, body={"state": "closed", "state_reason": "not_planned"})
 
