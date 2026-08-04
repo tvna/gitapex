@@ -18,9 +18,7 @@ import pytest
 from conftest import FakeStdin as _FakeStdin
 
 
-def test_main_reports_error_for_non_utf8_body_file(
-    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_main_reports_error_for_non_utf8_body_file(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
     path = tmp_path / "body.md"
     path.write_bytes(b"\xff\xfe bad")
     assert checker.main(["--body", str(path)]) == 1

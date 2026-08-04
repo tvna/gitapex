@@ -27,12 +27,8 @@ _TAXONOMY_PHRASE_TO_SLUG = {
 }
 _VALID_SLUGS = set(_TAXONOMY_PHRASE_TO_SLUG.values())
 
-_REPAIR_ENTRY_RE = re.compile(
-    r"^\d+\.\s\[[^\]]+\].*?(?=\n\d+\.\s\[|\Z)", re.MULTILINE | re.DOTALL
-)
-_CLASSIFICATION_RE = re.compile(
-    r"^\s*Classification:\s*([^\n]+?)\.?$", re.MULTILINE
-)
+_REPAIR_ENTRY_RE = re.compile(r"^\d+\.\s\[[^\]]+\].*?(?=\n\d+\.\s\[|\Z)", re.MULTILINE | re.DOTALL)
+_CLASSIFICATION_RE = re.compile(r"^\s*Classification:\s*([^\n]+?)\.?$", re.MULTILINE)
 _STATUS_RE = re.compile(r"^\s*Status:\s*`([^`]+)`", re.MULTILINE)
 _PROPOSED_GATE_LINE_RE = re.compile(r"^\s*Proposed gate[^:]*:", re.MULTILINE)
 _PROPOSED_GATE_FIXED_LABEL_RE = re.compile(r"^\s*Proposed gate:", re.MULTILINE)
@@ -57,18 +53,14 @@ def _repairs_section(issue_body: str) -> str:
 
 
 def _carried_forward_section(issue_body: str) -> str:
-    start = issue_body.index("## Carried-forward gate") + len(
-        "## Carried-forward gate"
-    )
+    start = issue_body.index("## Carried-forward gate") + len("## Carried-forward gate")
     end = issue_body.index("## Notes")
     return issue_body[start:end]
 
 
 def test_repair_record_format_declares_the_three_fixed_fields():
     text = _skill_text()
-    section = text[
-        text.index("## Repair record format") : text.index("## Procedure")
-    ]
+    section = text[text.index("## Repair record format") : text.index("## Procedure")]
     assert "Classification: <exact taxonomy phrase>" in section
     assert "Status: `<machine-readable slug>`" in section
     assert "Proposed gate: <durable gate text" in section
@@ -102,13 +94,10 @@ def test_worked_example_repairs_match_the_declared_record_format():
         )
 
         status_match = _STATUS_RE.search(entry)
-        assert status_match is not None, (
-            f"repair entry {label!r} has no 'Status: `<slug>`' line."
-        )
+        assert status_match is not None, f"repair entry {label!r} has no 'Status: `<slug>`' line."
         slug = status_match.group(1)
         assert slug in _VALID_SLUGS, (
-            f"repair entry {label!r} has Status slug {slug!r}, not one of "
-            f"the three fixed slugs {sorted(_VALID_SLUGS)}."
+            f"repair entry {label!r} has Status slug {slug!r}, not one of the three fixed slugs {sorted(_VALID_SLUGS)}."
         )
         assert _TAXONOMY_PHRASE_TO_SLUG[classification] == slug, (
             f"repair entry {label!r} pairs Classification {classification!r} "
@@ -143,10 +132,7 @@ def test_carried_forward_entry_uses_its_own_two_field_schema():
     )
 
     status_match = _STATUS_RE.search(section)
-    assert status_match is not None, (
-        "the Carried-forward gate entry has no 'Status: `carried-forward`' "
-        "line."
-    )
+    assert status_match is not None, "the Carried-forward gate entry has no 'Status: `carried-forward`' line."
     assert status_match.group(1) == "carried-forward", (
         f"the Carried-forward gate entry's Status is `{status_match.group(1)}`, "
         "not the fixed literal `carried-forward` token."

@@ -16,18 +16,14 @@ def test_default_route_inherits_parent_model():
 
 
 def test_fixed_route_requires_exact_allowlist_match():
-    decision = router.route_test_model(
-        "model-1", fixed_routes={"model-1": "tester-2"}
-    )
+    decision = router.route_test_model("model-1", fixed_routes={"model-1": "tester-2"})
     assert decision["selected_tester_model"] == "tester-2"
     assert decision["model_route"] == "fixed"
     assert decision["route_status"] == "RESOLVED"
 
 
 def test_fixed_route_does_not_use_prefix_or_family_match():
-    decision = router.route_test_model(
-        "model-1-preview", fixed_routes={"model-1": "tester-2"}
-    )
+    decision = router.route_test_model("model-1-preview", fixed_routes={"model-1": "tester-2"})
     assert decision["selected_tester_model"] is None
     assert decision["model_route"] == "indeterminate"
     assert decision["route_status"] == "INDETERMINATE"
@@ -36,9 +32,7 @@ def test_fixed_route_does_not_use_prefix_or_family_match():
 def test_unknown_fixed_route_cli_fails_closed(tmp_path, capsys):
     routes = tmp_path / "routes.json"
     routes.write_text(json.dumps({"known": "tester"}), encoding="utf-8")
-    assert router.main(
-        ["--caller-model", "unknown", "--fixed-routes", str(routes)]
-    ) == 1
+    assert router.main(["--caller-model", "unknown", "--fixed-routes", str(routes)]) == 1
     output = json.loads(capsys.readouterr().out)
     assert output["route_status"] == "INDETERMINATE"
     assert output["selected_tester_model"] is None
@@ -87,28 +81,27 @@ def test_cli_emits_stable_inherited_json(capsys):
 def test_duplicate_allowlist_key_is_rejected(tmp_path, capsys):
     routes = tmp_path / "routes.json"
     routes.write_text('{"same": "a", "same": "b"}', encoding="utf-8")
-    assert router.main(
-        ["--caller-model", "same", "--fixed-routes", str(routes)]
-    ) == 2
+    assert router.main(["--caller-model", "same", "--fixed-routes", str(routes)]) == 2
     assert "duplicate fixed-route key" in capsys.readouterr().err
 
 
 def test_missing_allowlist_file_is_input_error(tmp_path, capsys):
-    assert router.main(
-        [
-            "--caller-model",
-            "model",
-            "--fixed-routes",
-            str(tmp_path / "missing.json"),
-        ]
-    ) == 2
+    assert (
+        router.main(
+            [
+                "--caller-model",
+                "model",
+                "--fixed-routes",
+                str(tmp_path / "missing.json"),
+            ]
+        )
+        == 2
+    )
     assert "not found" in capsys.readouterr().err
 
 
 def test_invalid_allowlist_json_is_input_error(tmp_path, capsys):
     routes = tmp_path / "routes.json"
     routes.write_text("{not-json", encoding="utf-8")
-    assert router.main(
-        ["--caller-model", "model", "--fixed-routes", str(routes)]
-    ) == 2
+    assert router.main(["--caller-model", "model", "--fixed-routes", str(routes)]) == 2
     assert "cannot read fixed-route JSON" in capsys.readouterr().err

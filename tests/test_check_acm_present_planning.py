@@ -28,17 +28,13 @@ _SCRIPT_PATH = (
     / "check_acm_present.py"
 )
 
-_spec = importlib.util.spec_from_file_location(
-    "_planning_a_branch_from_an_issue_check_acm_present", _SCRIPT_PATH
-)
+_spec = importlib.util.spec_from_file_location("_planning_a_branch_from_an_issue_check_acm_present", _SCRIPT_PATH)
 assert _spec is not None and _spec.loader is not None
 checker = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(checker)
 
 
-def test_main_reports_error_for_non_utf8_body_file(
-    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_main_reports_error_for_non_utf8_body_file(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
     path = tmp_path / "body.md"
     path.write_bytes(b"\xff\xfe bad")
     assert checker.main(["--body", str(path)]) == 1

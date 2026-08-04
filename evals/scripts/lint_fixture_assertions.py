@@ -182,6 +182,7 @@ Usage:
 Exit code: 0 if no *blocking* warning, 1 if any assertion is flagged
 blocking, 2 on bad usage or unreadable inputs.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -212,10 +213,32 @@ DENIAL_CUES = ("not ", "not a ", "not an ", "no ", "never ", "n't ")
 # Function words dropped before the paraphrase-drift token comparison, so
 # "hook or permission" and "hooks and permissions" compare on their content
 # words ({hook, permission}) rather than their connectives.
-STOPWORDS = frozenset({
-    "a", "an", "the", "or", "and", "of", "to", "in", "is", "are", "for",
-    "on", "with", "not", "no", "as", "at", "by", "be", "it", "this", "that",
-})
+STOPWORDS = frozenset(
+    {
+        "a",
+        "an",
+        "the",
+        "or",
+        "and",
+        "of",
+        "to",
+        "in",
+        "is",
+        "are",
+        "for",
+        "on",
+        "with",
+        "not",
+        "no",
+        "as",
+        "at",
+        "by",
+        "be",
+        "it",
+        "this",
+        "that",
+    }
+)
 
 # Paraphrase drift compares content-word sets inside a sliding corpus window
 # this many tokens wider than the assertion's own content-word count, so a
@@ -261,8 +284,7 @@ SHORT_WORD_COLLISIONS: dict[str, tuple[str, ...]] = {
 # Marks a fixture (via id/name/description/tags) as a "claim cannot be
 # determined from available data" case (#352) -- these must ban the
 # unsupported claim in both directions.
-INDETERMINATE_MARKER_RE = re.compile(
-    r"cannot be determined|not claimable|\bindeterminate\b", re.IGNORECASE)
+INDETERMINATE_MARKER_RE = re.compile(r"cannot be determined|not claimable|\bindeterminate\b", re.IGNORECASE)
 
 # A ban that reads as the negative direction of an unsupported claim ("no X
 # occurred", "never happened", "isn't present", "not observed"). Anything
@@ -270,8 +292,7 @@ INDETERMINATE_MARKER_RE = re.compile(
 # output_not_contains entries already gated by INDETERMINATE_MARKER_RE, not
 # as a general negation check. "not" is included alongside "no" for the same
 # reason DENIAL_CUES treats them as equally valid denial forms above.
-NEGATION_CUE_RE = re.compile(r"\b(no|not|never|zero|none)\b|n't\b",
-                              re.IGNORECASE)
+NEGATION_CUE_RE = re.compile(r"\b(no|not|never|zero|none)\b|n't\b", re.IGNORECASE)
 
 # Skills whose own SKILL.md mandates a fresh subagent dispatch for their
 # core judgment steps, and are known (as of issue #584) to need at least one
@@ -517,7 +538,7 @@ def check_case(value: str, anchors: list[str]) -> str | None:
     low = value.lower()
     for anchor in anchors:
         idx = anchor.lower().find(low)
-        if idx >= 0 and anchor[idx:idx + len(value)] != value:
+        if idx >= 0 and anchor[idx : idx + len(value)] != value:
             return anchor
     return None
 
@@ -539,8 +560,7 @@ def check_negation(value: str, corpus_flat: str) -> str | None:
     return None
 
 
-def check_paraphrase(value: str, corpus_flat: str,
-                     corpus_tokens: list[str]) -> str | None:
+def check_paraphrase(value: str, corpus_flat: str, corpus_tokens: list[str]) -> str | None:
     """Warn when a multi-word assertion is not a corpus substring yet all
     its content words co-occur in a short corpus window -- a likely
     paraphrase of the rubric's exact wording.
@@ -558,8 +578,8 @@ def check_paraphrase(value: str, corpus_flat: str,
         return None
     window = len(wanted) + WINDOW_SLACK
     for start in range(0, max(0, len(corpus_tokens) - window) + 1):
-        if wanted <= set(corpus_tokens[start:start + window]):
-            near = " ".join(corpus_tokens[start:start + window])
+        if wanted <= set(corpus_tokens[start : start + window]):
+            near = " ".join(corpus_tokens[start : start + window])
             return f"content words all appear near: ...{near}..."
     return None
 
@@ -603,7 +623,8 @@ def check_unsatisfiable_assertion_pair(expected: dict[str, Any]) -> list[tuple[s
     not_contains = [v for v in (expected.get("output_not_contains") or []) if isinstance(v, str)]
     not_icontains = [v for v in (expected.get("output_not_icontains") or []) if isinstance(v, str)]
     near_members = [
-        v for entry in (expected.get("output_contains_near") or [])
+        v
+        for entry in (expected.get("output_contains_near") or [])
         if isinstance(entry, dict)
         for v in (entry.get("all") or [])
         if isinstance(v, str)
@@ -625,13 +646,18 @@ def check_unsatisfiable_assertion_pair(expected: dict[str, Any]) -> list[tuple[s
     for folded, required in require_casefolded_presence.items():
         banned = not_icontains_by_fold.get(folded)
         if banned is not None:
-            findings.append((
-                "output_not_icontains", banned, "unsatisfiable-assertion-pair",
-                f"{required!r} is required (via output_contains/"
-                f"output_contains_near/output_icontains) and {banned!r} is "
-                f"banned case-insensitively for the same substring -- "
-                f"satisfying the requirement guarantees the ban fails, so "
-                f"this fixture can never score 1.0"))
+            findings.append(
+                (
+                    "output_not_icontains",
+                    banned,
+                    "unsatisfiable-assertion-pair",
+                    f"{required!r} is required (via output_contains/"
+                    f"output_contains_near/output_icontains) and {banned!r} is "
+                    f"banned case-insensitively for the same substring -- "
+                    f"satisfying the requirement guarantees the ban fails, so "
+                    f"this fixture can never score 1.0",
+                )
+            )
 
     def _redundant_pairs(strong: list[str], weak: list[str], strong_key: str, weak_key: str) -> None:
         strong_by_fold: dict[str, str] = {}
@@ -643,11 +669,16 @@ def check_unsatisfiable_assertion_pair(expected: dict[str, Any]) -> list[tuple[s
             matched = strong_by_fold.get(folded)
             if matched is not None and folded not in seen:
                 seen.add(folded)
-                findings.append((
-                    strong_key, matched, "redundant-assertion-pair",
-                    f"{matched!r} ({strong_key}) duplicates {weak_key}: "
-                    f"{value!r} (same substring, case-insensitively) -- the "
-                    f"{strong_key} form alone already covers it"))
+                findings.append(
+                    (
+                        strong_key,
+                        matched,
+                        "redundant-assertion-pair",
+                        f"{matched!r} ({strong_key}) duplicates {weak_key}: "
+                        f"{value!r} (same substring, case-insensitively) -- the "
+                        f"{strong_key} form alone already covers it",
+                    )
+                )
 
     # Same-polarity redundancy, both directions: the case-insensitive form
     # (icontains/not_icontains) alone already covers the case-sensitive
@@ -658,7 +689,7 @@ def check_unsatisfiable_assertion_pair(expected: dict[str, Any]) -> list[tuple[s
 
 
 def classify_ban_direction(value: str) -> str:
-    """"negative" for a ban shaped like "no X occurred" / "never happened" /
+    """ "negative" for a ban shaped like "no X occurred" / "never happened" /
     "doesn't apply"; "positive" (the declarative-claim direction) otherwise."""
     return "negative" if NEGATION_CUE_RE.search(value) else "positive"
 
@@ -692,15 +723,15 @@ def check_symmetric_bans(data: dict[str, Any]) -> str | None:
     bans = [v for v in (expected.get("output_not_contains") or []) if isinstance(v, str)]
     bans += [v for v in (expected.get("output_not_icontains") or []) if isinstance(v, str)]
     if not bans:
-        return ("claims the underlying fact cannot be determined but declares "
-                "no output_not_contains bans in either direction")
+        return (
+            "claims the underlying fact cannot be determined but declares "
+            "no output_not_contains bans in either direction"
+        )
     directions = {classify_ban_direction(b) for b in bans}
     if directions == {"negative"}:
-        return ('bans only the negative-claim direction ("no X occurred") -- '
-                'add a positive-claim ban ("X occurred") too')
+        return 'bans only the negative-claim direction ("no X occurred") -- add a positive-claim ban ("X occurred") too'
     if directions == {"positive"}:
-        return ('bans only the positive-claim direction ("X occurred") -- '
-                'add a negative-claim ban ("no X occurred") too')
+        return 'bans only the positive-claim direction ("X occurred") -- add a negative-claim ban ("no X occurred") too'
     return None
 
 
@@ -716,8 +747,7 @@ def check_prompt_echo(value: str, prompt_flat: str) -> str | None:
     return None
 
 
-def check_cross_task_collision(task_name: str, value: str,
-                                positive_index: dict[str, set[str]]) -> str | None:
+def check_cross_task_collision(task_name: str, value: str, positive_index: dict[str, set[str]]) -> str | None:
     """Off by default (#270, #473) -- warn when an output_not_contains ban
     exactly matches an output_contains string another task in the same
     suite requires. See the module docstring for why this is a
@@ -731,8 +761,9 @@ def check_cross_task_collision(task_name: str, value: str,
     return None
 
 
-def check_adversarial_coverage(skill_name: str, tasks_dir: Path, claim_text: str, *,
-                                task_data: dict[Path, dict[str, Any]] | None = None) -> str | None:
+def check_adversarial_coverage(
+    skill_name: str, tasks_dir: Path, claim_text: str, *, task_data: dict[Path, dict[str, Any]] | None = None
+) -> str | None:
     """Blocking, discovery-mode only (#473): a skill whose own docs claim
     adversarial coverage but whose tasks/ directory has no fixture tagged
     ``adversarial``.
@@ -749,12 +780,14 @@ def check_adversarial_coverage(skill_name: str, tasks_dir: Path, claim_text: str
         tags = {t.strip().lower() for t in _as_tag_list(data.get("tags"))}
         if "adversarial" in tags:
             return None
-    return (f"{skill_name}'s own docs claim adversarial coverage but no fixture "
-            f"under {tasks_dir} is tagged \"adversarial\"")
+    return (
+        f'{skill_name}\'s own docs claim adversarial coverage but no fixture under {tasks_dir} is tagged "adversarial"'
+    )
 
 
-def check_dispatch_declaration_coverage(skill_name: str, tasks_dir: Path, *,
-                                         task_data: dict[Path, dict[str, Any]] | None = None) -> str | None:
+def check_dispatch_declaration_coverage(
+    skill_name: str, tasks_dir: Path, *, task_data: dict[Path, dict[str, Any]] | None = None
+) -> str | None:
     """Blocking, discovery-mode only (#584): a skill in
     ``DISPATCH_MANDATE_SKILLS`` whose ``tasks/`` directory has zero fixtures
     declaring a well-formed ``expected.requires_fresh_dispatch`` value (see
@@ -775,18 +808,26 @@ def check_dispatch_declaration_coverage(skill_name: str, tasks_dir: Path, *,
         task_data = {p: _load_fixture_dict(p) for p in tasks_dir.glob("*.yaml")}
     for data in task_data.values():
         expected = data.get("expected")
-        if isinstance(expected, dict) and _is_real_dispatch_declaration(
-                expected.get("requires_fresh_dispatch")):
+        if isinstance(expected, dict) and _is_real_dispatch_declaration(expected.get("requires_fresh_dispatch")):
             return None
-    return (f"{skill_name}'s own SKILL.md mandates a fresh subagent dispatch for its "
-            f"core judgment steps, but no fixture under {tasks_dir} declares a "
-            f"well-formed expected.requires_fresh_dispatch (issue #584)")
+    return (
+        f"{skill_name}'s own SKILL.md mandates a fresh subagent dispatch for its "
+        f"core judgment steps, but no fixture under {tasks_dir} declares a "
+        f"well-formed expected.requires_fresh_dispatch (issue #584)"
+    )
 
 
-def lint_task(task_path: Path, fixture: TaskFixture, anchors: list[str], corpus_flat: str,
-              corpus_tokens: list[str], positive_index: dict[str, set[str]], *,
-              check_prompt_echo_enabled: bool,
-              check_cross_task_enabled: bool) -> list[Warning_]:
+def lint_task(
+    task_path: Path,
+    fixture: TaskFixture,
+    anchors: list[str],
+    corpus_flat: str,
+    corpus_tokens: list[str],
+    positive_index: dict[str, set[str]],
+    *,
+    check_prompt_echo_enabled: bool,
+    check_cross_task_enabled: bool,
+) -> list[Warning_]:
     # ``fixture`` is already validated by ``TaskFixture`` (one parse per
     # fixture file, done by the caller) -- every list below is guaranteed
     # ``list[str]`` by the model, so the per-item ``isinstance`` filtering
@@ -802,26 +843,35 @@ def lint_task(task_path: Path, fixture: TaskFixture, anchors: list[str], corpus_
     for value in expected.output_contains or []:
         anchor = check_case(value, anchors)
         if anchor:
-            warnings.append(Warning_(
-                name, "output_contains", value, "case-sensitivity",
-                f"matches rubric anchor {anchor!r} with different casing"))
+            warnings.append(
+                Warning_(
+                    name,
+                    "output_contains",
+                    value,
+                    "case-sensitivity",
+                    f"matches rubric anchor {anchor!r} with different casing",
+                )
+            )
         drift = check_paraphrase(value, corpus_flat, corpus_tokens)
         if drift:
-            warnings.append(Warning_(
-                name, "output_contains", value, "paraphrase-drift",
-                f"not a rubric substring but {drift}"))
+            warnings.append(
+                Warning_(name, "output_contains", value, "paraphrase-drift", f"not a rubric substring but {drift}")
+            )
         collision = check_short_word_collision(value)
         if collision:
-            warnings.append(Warning_(
-                name, "output_contains", value, "short-word-collision",
-                f"short and alphabetic; also a bare substring of the common "
-                f"word {collision!r}"))
+            warnings.append(
+                Warning_(
+                    name,
+                    "output_contains",
+                    value,
+                    "short-word-collision",
+                    f"short and alphabetic; also a bare substring of the common word {collision!r}",
+                )
+            )
         if check_prompt_echo_enabled:
             echo = check_prompt_echo(value, prompt_flat)
             if echo:
-                warnings.append(Warning_(
-                    name, "output_contains", value, "prompt-echo", echo,
-                    blocking=False))
+                warnings.append(Warning_(name, "output_contains", value, "prompt-echo", echo, blocking=False))
 
     # output_icontains (#628): checks 3-4 (paraphrase drift, short-word
     # collision) apply the same way regardless of case-sensitivity. Check 1
@@ -831,43 +881,65 @@ def lint_task(task_path: Path, fixture: TaskFixture, anchors: list[str], corpus_
     for value in expected.output_icontains or []:
         drift = check_paraphrase(value, corpus_flat, corpus_tokens)
         if drift:
-            warnings.append(Warning_(
-                name, "output_icontains", value, "paraphrase-drift",
-                f"not a rubric substring but {drift}"))
+            warnings.append(
+                Warning_(name, "output_icontains", value, "paraphrase-drift", f"not a rubric substring but {drift}")
+            )
         collision = check_short_word_collision(value)
         if collision:
-            warnings.append(Warning_(
-                name, "output_icontains", value, "short-word-collision",
-                f"short and alphabetic; also a bare substring of the common "
-                f"word {collision!r}"))
+            warnings.append(
+                Warning_(
+                    name,
+                    "output_icontains",
+                    value,
+                    "short-word-collision",
+                    f"short and alphabetic; also a bare substring of the common word {collision!r}",
+                )
+            )
 
     for value in expected.output_not_contains or []:
         neg = check_negation(value, negation_haystack)
         if neg:
-            warnings.append(Warning_(
-                name, "output_not_contains", value, "negation-trap",
-                f"banning it also rejects a correct denial -- {neg}"))
+            warnings.append(
+                Warning_(
+                    name,
+                    "output_not_contains",
+                    value,
+                    "negation-trap",
+                    f"banning it also rejects a correct denial -- {neg}",
+                )
+            )
         if check_cross_task_enabled:
             collider = check_cross_task_collision(name, value, positive_index)
             if collider:
-                warnings.append(Warning_(
-                    name, "output_not_contains", value, "cross-task-collision",
-                    f"exactly bans a string that {collider} requires via "
-                    f"output_contains", blocking=False))
+                warnings.append(
+                    Warning_(
+                        name,
+                        "output_not_contains",
+                        value,
+                        "cross-task-collision",
+                        f"exactly bans a string that {collider} requires via output_contains",
+                        blocking=False,
+                    )
+                )
 
     # output_not_icontains (#628): check 2 (negation trap) applies the same
     # way regardless of case-sensitivity.
     for value in expected.output_not_icontains or []:
         neg = check_negation(value, negation_haystack)
         if neg:
-            warnings.append(Warning_(
-                name, "output_not_icontains", value, "negation-trap",
-                f"banning it also rejects a correct denial -- {neg}"))
+            warnings.append(
+                Warning_(
+                    name,
+                    "output_not_icontains",
+                    value,
+                    "negation-trap",
+                    f"banning it also rejects a correct denial -- {neg}",
+                )
+            )
 
     symmetric = check_symmetric_bans(fixture.model_dump())
     if symmetric:
-        warnings.append(Warning_(
-            name, "output_not_contains", fixture.id, "symmetric-ban", symmetric))
+        warnings.append(Warning_(name, "output_not_contains", fixture.id, "symmetric-ban", symmetric))
 
     for key, value, rule, detail in check_unsatisfiable_assertion_pair(expected.model_dump()):
         warnings.append(Warning_(name, key, value, rule, detail))
@@ -875,10 +947,13 @@ def lint_task(task_path: Path, fixture: TaskFixture, anchors: list[str], corpus_
     return warnings
 
 
-def lint_skill_tasks(task_paths: list[Path], corpus: str, *,
-                     check_prompt_echo_enabled: bool = False,
-                     check_cross_task_enabled: bool = False,
-                     ) -> tuple[list[Warning_], dict[Path, dict[str, Any]]]:
+def lint_skill_tasks(
+    task_paths: list[Path],
+    corpus: str,
+    *,
+    check_prompt_echo_enabled: bool = False,
+    check_cross_task_enabled: bool = False,
+) -> tuple[list[Warning_], dict[Path, dict[str, Any]]]:
     """Lint one skill's task set against its own, already-loaded anchor
     corpus (a caller reads it once via ``load_corpus`` and passes the text
     here, rather than this function re-reading the same files).
@@ -920,20 +995,33 @@ def lint_skill_tasks(task_paths: list[Path], corpus: str, *,
             raw = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
             fixtures[p] = TaskFixture.model_validate(raw)
         except (OSError, UnicodeDecodeError, yaml.YAMLError, ValidationError) as exc:
-            warnings.append(Warning_(
-                p.name, "(fixture)", "(top-level shape)", "fixture-shape",
-                f"{p}: malformed fixture, excluded from linting: {exc}"))
+            warnings.append(
+                Warning_(
+                    p.name,
+                    "(fixture)",
+                    "(top-level shape)",
+                    "fixture-shape",
+                    f"{p}: malformed fixture, excluded from linting: {exc}",
+                )
+            )
 
     positive_index = {
-        p.name: {v.lower() for v in (fixture.expected.output_contains or [])}
-        for p, fixture in fixtures.items()
+        p.name: {v.lower() for v in (fixture.expected.output_contains or [])} for p, fixture in fixtures.items()
     }
 
     for path, fixture in fixtures.items():
-        warnings.extend(lint_task(
-            path, fixture, anchors, corpus_flat, corpus_tokens, positive_index,
-            check_prompt_echo_enabled=check_prompt_echo_enabled,
-            check_cross_task_enabled=check_cross_task_enabled))
+        warnings.extend(
+            lint_task(
+                path,
+                fixture,
+                anchors,
+                corpus_flat,
+                corpus_tokens,
+                positive_index,
+                check_prompt_echo_enabled=check_prompt_echo_enabled,
+                check_cross_task_enabled=check_cross_task_enabled,
+            )
+        )
     task_data = {p: fixture.model_dump() for p, fixture in fixtures.items()}
     return warnings, task_data
 
@@ -981,10 +1069,14 @@ def _skill_claim_text(skills_root: Path, evals_root: Path, name: str) -> str:
     return "\n".join(parts)
 
 
-def lint_all_skills(evals_root: Path, skills_root: Path, *,
-                    check_prompt_echo_enabled: bool = False,
-                    check_cross_task_enabled: bool = False,
-                    skill_names: list[str] | None = None) -> list[Warning_]:
+def lint_all_skills(
+    evals_root: Path,
+    skills_root: Path,
+    *,
+    check_prompt_echo_enabled: bool = False,
+    check_cross_task_enabled: bool = False,
+    skill_names: list[str] | None = None,
+) -> list[Warning_]:
     """Broadened default scope (#296): lint every discovered skill's own
     task set against its own anchor corpus, plus the discovery-mode-only
     adversarial-coverage check (#473).
@@ -1002,22 +1094,22 @@ def lint_all_skills(evals_root: Path, skills_root: Path, *,
         corpus = load_corpus(rubric_path, skill_path)
 
         skill_warnings, task_data = lint_skill_tasks(
-            task_paths, corpus,
+            task_paths,
+            corpus,
             check_prompt_echo_enabled=check_prompt_echo_enabled,
-            check_cross_task_enabled=check_cross_task_enabled)
+            check_cross_task_enabled=check_cross_task_enabled,
+        )
         warnings.extend(replace(w, task=f"{name}/{w.task}") for w in skill_warnings)
 
         claim_text = _skill_claim_text(skills_root, evals_root, name)
         coverage = check_adversarial_coverage(name, tasks_dir, claim_text, task_data=task_data)
         if coverage:
-            warnings.append(Warning_(
-                name, "(skill)", "(tasks directory)", "adversarial-coverage",
-                coverage))
+            warnings.append(Warning_(name, "(skill)", "(tasks directory)", "adversarial-coverage", coverage))
         dispatch_coverage = check_dispatch_declaration_coverage(name, tasks_dir, task_data=task_data)
         if dispatch_coverage:
-            warnings.append(Warning_(
-                name, "(skill)", "(tasks directory)", "dispatch-declaration-coverage",
-                dispatch_coverage))
+            warnings.append(
+                Warning_(name, "(skill)", "(tasks directory)", "dispatch-declaration-coverage", dispatch_coverage)
+            )
     return warnings
 
 
@@ -1046,29 +1138,34 @@ def format_report(warnings: list[Warning_]) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(
-        description="Lint eval-fixture substring assertions (read-only).")
+    parser = argparse.ArgumentParser(description="Lint eval-fixture substring assertions (read-only).")
     parser.add_argument(
-        "--tasks-glob", default=None,
+        "--tasks-glob",
+        default=None,
         help="Glob for one skill's task YAMLs. Omit to auto-discover every "
-             "skill with an evals/<name>/tasks/*.yaml directory and a "
-             "matching skills/<name>/SKILL.md (issue #296).")
-    parser.add_argument("--rubric", default=None,
-                        help=f"Only used with --tasks-glob. Default: {DEFAULT_RUBRIC}")
-    parser.add_argument("--skill", default=None,
-                        help=f"Only used with --tasks-glob. Default: {DEFAULT_SKILL}")
+        "skill with an evals/<name>/tasks/*.yaml directory and a "
+        "matching skills/<name>/SKILL.md (issue #296).",
+    )
+    parser.add_argument("--rubric", default=None, help=f"Only used with --tasks-glob. Default: {DEFAULT_RUBRIC}")
+    parser.add_argument("--skill", default=None, help=f"Only used with --tasks-glob. Default: {DEFAULT_SKILL}")
     parser.add_argument(
-        "--check-prompt-echo", action="store_true", default=False,
+        "--check-prompt-echo",
+        action="store_true",
+        default=False,
         help="Opt in to the prompt-echo check (#191). Non-blocking: never "
-             "affects the exit code. Off by default -- see the module "
-             "docstring for why it is noisy against this repository's own "
-             "corpus.")
+        "affects the exit code. Off by default -- see the module "
+        "docstring for why it is noisy against this repository's own "
+        "corpus.",
+    )
     parser.add_argument(
-        "--check-cross-task", action="store_true", default=False,
+        "--check-cross-task",
+        action="store_true",
+        default=False,
         help="Opt in to the cross-task collision check (#270, #473). "
-             "Non-blocking: never affects the exit code. Off by default -- "
-             "see the module docstring for why it is noisy against this "
-             "repository's own corpus.")
+        "Non-blocking: never affects the exit code. Off by default -- "
+        "see the module docstring for why it is noisy against this "
+        "repository's own corpus.",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -1076,13 +1173,15 @@ def main(argv: list[str] | None = None) -> int:
             evals_root, skills_root = Path("evals"), Path("skills")
             names = discover_skills(evals_root, skills_root)
             if not names:
-                print("error: no skill directories discovered under evals/ "
-                      "and skills/", file=sys.stderr)
+                print("error: no skill directories discovered under evals/ and skills/", file=sys.stderr)
                 return 2
             warnings = lint_all_skills(
-                evals_root, skills_root, skill_names=names,
+                evals_root,
+                skills_root,
+                skill_names=names,
                 check_prompt_echo_enabled=args.check_prompt_echo,
-                check_cross_task_enabled=args.check_cross_task)
+                check_cross_task_enabled=args.check_cross_task,
+            )
         else:
             rubric = Path(args.rubric) if args.rubric else Path(DEFAULT_RUBRIC)
             skill = Path(args.skill) if args.skill else Path(DEFAULT_SKILL)
@@ -1101,9 +1200,11 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"error: no task files matched: {args.tasks_glob}", file=sys.stderr)
                 return 2
             warnings, _ = lint_skill_tasks(
-                task_paths, corpus,
+                task_paths,
+                corpus,
                 check_prompt_echo_enabled=args.check_prompt_echo,
-                check_cross_task_enabled=args.check_cross_task)
+                check_cross_task_enabled=args.check_cross_task,
+            )
     except (OSError, yaml.YAMLError, ValidationError) as exc:
         print(f"error: could not lint fixtures: {exc}", file=sys.stderr)
         return 2

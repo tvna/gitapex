@@ -15,6 +15,7 @@ asserted -- dimension 3) case, per issue #587's own acceptance criterion
 ("New checker correctly grades a constructed pass-case and fail-case
 target for at least one of dimensions 1-6").
 """
+
 from __future__ import annotations
 
 import json
@@ -245,11 +246,7 @@ def test_dimension2_python_fallback_dispatch_matches_stderr_write(monkeypatch):
 
 
 def test_dimension2_python_fallback_matches_print_file_stderr():
-    text = (
-        'import sys\n'
-        'print("blocked: bad command", file=sys.stderr)\n'
-        'x = (\n'
-    )
+    text = 'import sys\nprint("blocked: bad command", file=sys.stderr)\nx = (\n'
     assert cgs._has_stderr_message_python_fallback(text) is True
 
 
@@ -260,7 +257,7 @@ def test_dimension2_shell_echo_stderr_scan_is_not_quadratic():
     # line without >&2 did not finish in 120s -- a real denial-of-service
     # against this checker. The per-line substring scan that replaced it
     # must stay fast even on a large adversarial line with no >&2 at all.
-    adversarial_line = "echo " + ('a"b\'c ' * 50_000)
+    adversarial_line = "echo " + ("a\"b'c " * 50_000)
     start = time.monotonic()
     result = cgs._has_stderr_message_shell(adversarial_line)
     elapsed = time.monotonic() - start
@@ -288,12 +285,7 @@ def test_dimension3_passes_on_dict_get_comparison():
     # the operator -- an earlier version of the regex required direct
     # adjacency and missed this, the single most idiomatic Python shape
     # (an adversarial review round found this).
-    text = (
-        'import json, sys\n'
-        'data = json.load(sys.stdin)\n'
-        'if data.get("tool_name") == "Bash":\n'
-        '    sys.exit(2)\n'
-    )
+    text = 'import json, sys\ndata = json.load(sys.stdin)\nif data.get("tool_name") == "Bash":\n    sys.exit(2)\n'
     results = cgs.check_gate_shape(Path("hook.py"), text)
     d3 = _result(results, "3")
     assert d3.verdict == cgs.VERDICT_PASSED
@@ -305,7 +297,7 @@ def test_dimension3_bare_identifier_used_elsewhere_stays_indeterminate():
     # bare Python variable passed to an unrelated function, never
     # compared against anything itself -- get_command_hash(...)'s RESULT
     # is what gets compared. Must stay indeterminate, not PASS.
-    text = 'if get_command_hash(tool_name) == cached_hash:\n    sys.exit(2)\n'
+    text = "if get_command_hash(tool_name) == cached_hash:\n    sys.exit(2)\n"
     results = cgs.check_gate_shape(Path("hook.py"), text)
     d3 = _result(results, "3")
     assert d3.verdict == cgs.VERDICT_INDETERMINATE
@@ -554,11 +546,7 @@ def test_dimension5_python_shell_true_with_spaces_around_equals_fails():
     # substring match for the literal "shell=True", missing formatting
     # variants like "shell = True". AST-based keyword lookup is
     # formatting-independent.
-    text = (
-        'import subprocess\n'
-        'def run(target):\n'
-        '    subprocess.run(f"rm -rf {target}", shell = True)\n'
-    )
+    text = 'import subprocess\ndef run(target):\n    subprocess.run(f"rm -rf {target}", shell = True)\n'
     results = cgs.check_gate_shape(Path("hook.py"), text)
     d5 = _result(results, "5")
     assert d5.verdict == cgs.VERDICT_FAILED
@@ -583,18 +571,14 @@ def test_dimension5_python_paren_inside_string_literal_no_longer_hides_shell_tru
     # keyword -- silently hiding a real shell-injection call. A real AST
     # parse has no such blind spot: string-literal contents are never
     # mistaken for syntax.
-    text = (
-        'import subprocess\n'
-        'def run(user_input):\n'
-        '    subprocess.run("echo )" + user_input, shell=True)\n'
-    )
+    text = 'import subprocess\ndef run(user_input):\n    subprocess.run("echo )" + user_input, shell=True)\n'
     results = cgs.check_gate_shape(Path("hook.py"), text)
     d5 = _result(results, "5")
     assert d5.verdict == cgs.VERDICT_FAILED
 
 
 def test_dimension5_python_no_positional_arg_fails():
-    text = 'import subprocess\nsubprocess.run(shell=True)\n'
+    text = "import subprocess\nsubprocess.run(shell=True)\n"
     results = cgs.check_gate_shape(Path("hook.py"), text)
     d5 = _result(results, "5")
     assert d5.verdict == cgs.VERDICT_FAILED
@@ -614,12 +598,7 @@ def test_dimension5_python_fallback_not_applicable_no_calls():
 
 
 def test_dimension5_python_fallback_bare_identifier_fails():
-    text = (
-        'import subprocess\n'
-        'def run(cmd):\n'
-        '    subprocess.run(cmd, shell=True)\n'
-        'x = (\n'
-    )
+    text = "import subprocess\ndef run(cmd):\n    subprocess.run(cmd, shell=True)\nx = (\n"
     result = cgs._check_unsafe_interpolation_python_fallback(text)
     assert result.verdict == cgs.VERDICT_FAILED
 
@@ -629,12 +608,7 @@ def test_dimension5_python_fallback_continues_past_non_shell_call_to_pass():
     # succeeding) exercising the fallback's own "continue" path for a
     # non-shell call, then falling through to PASS for a literal
     # shell=True call.
-    text = (
-        'import subprocess\n'
-        'subprocess.run(["ls"])\n'
-        'subprocess.run("echo hi", shell=True)\n'
-        'x = (\n'
-    )
+    text = 'import subprocess\nsubprocess.run(["ls"])\nsubprocess.run("echo hi", shell=True)\nx = (\n'
     result = cgs._check_unsafe_interpolation_python_fallback(text)
     assert result.verdict == cgs.VERDICT_PASSED
 
@@ -789,11 +763,7 @@ def test_dimension6b_python_fallback_not_applicable_no_calls():
 
 
 def test_dimension6b_python_fallback_passes_with_timeout():
-    text = (
-        'import subprocess\n'
-        'subprocess.run("echo hi", timeout=5)\n'
-        'x = (\n'
-    )
+    text = 'import subprocess\nsubprocess.run("echo hi", timeout=5)\nx = (\n'
     result = cgs._check_timeout_internal_python_fallback(text)
     assert result.verdict == cgs.VERDICT_PASSED
 
@@ -809,21 +779,22 @@ def test_dimension6a_not_applicable_without_hooks_json():
 
 def test_dimension6a_passes_with_numeric_timeout(tmp_path):
     hooks_json = tmp_path / "hooks.json"
-    hooks_json.write_text(json.dumps({
-        "hooks": {
-            "PreToolUse": [
-                {
-                    "matcher": "Bash",
-                    "hooks": [
-                        {"type": "command", "command": "hooks/check-bash-safety.sh", "timeout": 30}
-                    ],
+    hooks_json.write_text(
+        json.dumps(
+            {
+                "hooks": {
+                    "PreToolUse": [
+                        {
+                            "matcher": "Bash",
+                            "hooks": [{"type": "command", "command": "hooks/check-bash-safety.sh", "timeout": 30}],
+                        }
+                    ]
                 }
-            ]
-        }
-    }), encoding="utf-8")
-    results = cgs.check_gate_shape(
-        Path("hooks/check-bash-safety.sh"), _SH_GOOD_DENY, hooks_json
+            }
+        ),
+        encoding="utf-8",
     )
+    results = cgs.check_gate_shape(Path("hooks/check-bash-safety.sh"), _SH_GOOD_DENY, hooks_json)
     d6a = _result(results, "6a")
     assert d6a.verdict == cgs.VERDICT_PASSED
 
@@ -833,56 +804,63 @@ def test_dimension6a_fails_when_timeout_is_json_boolean_true(tmp_path):
     # True in Python (bool is an int subtype), so a hooks.json entry with
     # "timeout": true was silently credited as a valid numeric timeout.
     hooks_json = tmp_path / "hooks.json"
-    hooks_json.write_text(json.dumps({
-        "hooks": {
-            "PreToolUse": [
-                {
-                    "matcher": "Bash",
-                    "hooks": [
-                        {"type": "command", "command": "hooks/check-bash-safety.sh", "timeout": True}
-                    ],
+    hooks_json.write_text(
+        json.dumps(
+            {
+                "hooks": {
+                    "PreToolUse": [
+                        {
+                            "matcher": "Bash",
+                            "hooks": [{"type": "command", "command": "hooks/check-bash-safety.sh", "timeout": True}],
+                        }
+                    ]
                 }
-            ]
-        }
-    }), encoding="utf-8")
-    results = cgs.check_gate_shape(
-        Path("hooks/check-bash-safety.sh"), _SH_GOOD_DENY, hooks_json
+            }
+        ),
+        encoding="utf-8",
     )
+    results = cgs.check_gate_shape(Path("hooks/check-bash-safety.sh"), _SH_GOOD_DENY, hooks_json)
     d6a = _result(results, "6a")
     assert d6a.verdict == cgs.VERDICT_FAILED
 
 
 def test_dimension6a_fails_when_entry_has_no_timeout(tmp_path):
     hooks_json = tmp_path / "hooks.json"
-    hooks_json.write_text(json.dumps({
-        "hooks": {
-            "PreToolUse": [
-                {
-                    "matcher": "Bash",
-                    "hooks": [
-                        {"type": "command", "command": "hooks/check-bash-safety.sh"}
-                    ],
+    hooks_json.write_text(
+        json.dumps(
+            {
+                "hooks": {
+                    "PreToolUse": [
+                        {
+                            "matcher": "Bash",
+                            "hooks": [{"type": "command", "command": "hooks/check-bash-safety.sh"}],
+                        }
+                    ]
                 }
-            ]
-        }
-    }), encoding="utf-8")
-    results = cgs.check_gate_shape(
-        Path("hooks/check-bash-safety.sh"), _SH_GOOD_DENY, hooks_json
+            }
+        ),
+        encoding="utf-8",
     )
+    results = cgs.check_gate_shape(Path("hooks/check-bash-safety.sh"), _SH_GOOD_DENY, hooks_json)
     d6a = _result(results, "6a")
     assert d6a.verdict == cgs.VERDICT_FAILED
 
 
 def test_dimension6a_not_applicable_no_matching_entry(tmp_path):
     hooks_json = tmp_path / "hooks.json"
-    hooks_json.write_text(json.dumps({
-        "hooks": {"PreToolUse": [{"matcher": "Write", "hooks": [
-            {"type": "command", "command": "hooks/other.sh", "timeout": 10}
-        ]}]}
-    }), encoding="utf-8")
-    results = cgs.check_gate_shape(
-        Path("hooks/check-bash-safety.sh"), _SH_GOOD_DENY, hooks_json
+    hooks_json.write_text(
+        json.dumps(
+            {
+                "hooks": {
+                    "PreToolUse": [
+                        {"matcher": "Write", "hooks": [{"type": "command", "command": "hooks/other.sh", "timeout": 10}]}
+                    ]
+                }
+            }
+        ),
+        encoding="utf-8",
     )
+    results = cgs.check_gate_shape(Path("hooks/check-bash-safety.sh"), _SH_GOOD_DENY, hooks_json)
     d6a = _result(results, "6a")
     assert d6a.verdict == cgs.VERDICT_NOT_APPLICABLE
 
@@ -890,9 +868,7 @@ def test_dimension6a_not_applicable_no_matching_entry(tmp_path):
 def test_dimension6a_indeterminate_on_malformed_json(tmp_path):
     hooks_json = tmp_path / "hooks.json"
     hooks_json.write_text("{not valid json", encoding="utf-8")
-    results = cgs.check_gate_shape(
-        Path("hooks/check-bash-safety.sh"), _SH_GOOD_DENY, hooks_json
-    )
+    results = cgs.check_gate_shape(Path("hooks/check-bash-safety.sh"), _SH_GOOD_DENY, hooks_json)
     d6a = _result(results, "6a")
     assert d6a.verdict == cgs.VERDICT_INDETERMINATE
 
@@ -900,9 +876,7 @@ def test_dimension6a_indeterminate_on_malformed_json(tmp_path):
 def test_dimension6a_not_applicable_hooks_key_not_a_dict(tmp_path):
     hooks_json = tmp_path / "hooks.json"
     hooks_json.write_text(json.dumps({"hooks": "not-a-dict"}), encoding="utf-8")
-    results = cgs.check_gate_shape(
-        Path("hooks/check-bash-safety.sh"), _SH_GOOD_DENY, hooks_json
-    )
+    results = cgs.check_gate_shape(Path("hooks/check-bash-safety.sh"), _SH_GOOD_DENY, hooks_json)
     d6a = _result(results, "6a")
     assert d6a.verdict == cgs.VERDICT_NOT_APPLICABLE
 
@@ -910,21 +884,17 @@ def test_dimension6a_not_applicable_hooks_key_not_a_dict(tmp_path):
 def test_dimension6a_tolerates_event_entries_not_a_list(tmp_path):
     hooks_json = tmp_path / "hooks.json"
     hooks_json.write_text(json.dumps({"hooks": {"PreToolUse": "not-a-list"}}), encoding="utf-8")
-    results = cgs.check_gate_shape(
-        Path("hooks/check-bash-safety.sh"), _SH_GOOD_DENY, hooks_json
-    )
+    results = cgs.check_gate_shape(Path("hooks/check-bash-safety.sh"), _SH_GOOD_DENY, hooks_json)
     d6a = _result(results, "6a")
     assert d6a.verdict == cgs.VERDICT_NOT_APPLICABLE
 
 
 def test_dimension6a_tolerates_non_dict_hook_entry(tmp_path):
     hooks_json = tmp_path / "hooks.json"
-    hooks_json.write_text(json.dumps({
-        "hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [123, "not-a-dict"]}]}
-    }), encoding="utf-8")
-    results = cgs.check_gate_shape(
-        Path("hooks/check-bash-safety.sh"), _SH_GOOD_DENY, hooks_json
+    hooks_json.write_text(
+        json.dumps({"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [123, "not-a-dict"]}]}}), encoding="utf-8"
     )
+    results = cgs.check_gate_shape(Path("hooks/check-bash-safety.sh"), _SH_GOOD_DENY, hooks_json)
     d6a = _result(results, "6a")
     assert d6a.verdict == cgs.VERDICT_NOT_APPLICABLE
 
@@ -994,9 +964,7 @@ def test_main_returns_two_on_non_utf8_script(tmp_path, capsys):
 def test_dimension6a_indeterminate_on_non_utf8_hooks_json(tmp_path):
     hooks_json = tmp_path / "hooks.json"
     hooks_json.write_bytes(b"\xff\xfe not valid utf-8")
-    results = cgs.check_gate_shape(
-        Path("hooks/check-bash-safety.sh"), _SH_GOOD_DENY, hooks_json
-    )
+    results = cgs.check_gate_shape(Path("hooks/check-bash-safety.sh"), _SH_GOOD_DENY, hooks_json)
     d6a = _result(results, "6a")
     assert d6a.verdict == cgs.VERDICT_INDETERMINATE
 
@@ -1005,11 +973,18 @@ def test_main_accepts_hooks_json_flag(tmp_path):
     script = tmp_path / "hook.sh"
     script.write_text(_SH_GOOD_DENY, encoding="utf-8")
     hooks_json = tmp_path / "hooks.json"
-    hooks_json.write_text(json.dumps({
-        "hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [
-            {"type": "command", "command": str(script), "timeout": 30}
-        ]}]}
-    }), encoding="utf-8")
+    hooks_json.write_text(
+        json.dumps(
+            {
+                "hooks": {
+                    "PreToolUse": [
+                        {"matcher": "Bash", "hooks": [{"type": "command", "command": str(script), "timeout": 30}]}
+                    ]
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
     (tmp_path / "test_hook.sh").write_text("# test\n", encoding="utf-8")
     exit_code = cgs.main([str(script), "--hooks-json", str(hooks_json)])
     assert exit_code == 0

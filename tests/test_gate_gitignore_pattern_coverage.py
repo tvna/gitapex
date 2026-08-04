@@ -61,7 +61,8 @@ def test_core_handles_pattern_with_no_slashes():
 
 def test_find_offenders_pattern_referenced_by_test_passes(tmp_path):
     _write_test_file(
-        tmp_path, "test_new_pattern.py",
+        tmp_path,
+        "test_new_pattern.py",
         'PATTERN = "build/output"\n',
     )
     assert gate.find_offenders(["/build/output/"], tmp_path) == []
@@ -92,7 +93,8 @@ def test_find_offenders_does_not_match_substring_within_larger_word(tmp_path):
     # contain it as a fragment -- neither actually references the
     # "/build/" pattern itself.
     _write_test_file(
-        tmp_path, "test_unrelated_words.py",
+        tmp_path,
+        "test_unrelated_words.py",
         'REBUILD = "rebuild_step"\nBUILD_ID = "build_id"\n',
     )
     offenders = gate.find_offenders(["/build/"], tmp_path)

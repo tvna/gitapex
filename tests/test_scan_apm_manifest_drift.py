@@ -18,9 +18,7 @@ _VALID_APM = "name: gitapex\nversion: 0.1.0\n"
 _VALID_PLUGIN = {"name": "gitapex", "version": "0.1.0"}
 
 
-def _write_pair(
-    tmp_path: pathlib.Path, apm: str, plugin: dict
-) -> tuple[pathlib.Path, pathlib.Path]:
+def _write_pair(tmp_path: pathlib.Path, apm: str, plugin: dict) -> tuple[pathlib.Path, pathlib.Path]:
     apm_manifest = tmp_path / "apm.yml"
     plugin_manifest = tmp_path / "plugin.json"
     apm_manifest.write_text(apm)
@@ -241,9 +239,7 @@ def test_main_prints_no_drift_and_returns_zero_when_manifests_match(capsys, monk
 
 
 def test_main_prints_findings_and_returns_one_on_drift(capsys, monkeypatch):
-    monkeypatch.setattr(
-        drift, "find_drift", lambda: [("version", "0.1.0", "0.2.0")]
-    )
+    monkeypatch.setattr(drift, "find_drift", lambda: [("version", "0.1.0", "0.2.0")])
     rc = drift.main()
     out = capsys.readouterr().out
     assert rc == 1

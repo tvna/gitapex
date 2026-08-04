@@ -281,9 +281,7 @@ def test_new_skill_with_enough_fixtures_passes():
 
 def test_unchanged_branch_count_is_not_applicable_even_when_under_covered():
     # A pre-existing gap this diff did not create must never be retroactively flagged.
-    result = gate.evaluate_skill(
-        "legacy-skill", _STOP_BOUNDARY_SKILL, _STOP_BOUNDARY_SKILL, fixture_count=0
-    )
+    result = gate.evaluate_skill("legacy-skill", _STOP_BOUNDARY_SKILL, _STOP_BOUNDARY_SKILL, fixture_count=0)
     assert result.applicable is False
     assert result.passed is True
 

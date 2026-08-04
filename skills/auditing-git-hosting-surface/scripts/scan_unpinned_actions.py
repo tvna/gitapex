@@ -82,10 +82,7 @@ def main() -> int:
     workflows_dir = pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else WORKFLOWS_DIR
     findings = find_unpinned_actions(workflows_dir)
     if findings:
-        print(
-            "Unpinned third-party actions found (pinned to a tag/branch, "
-            "not a 40-character commit SHA):"
-        )
+        print("Unpinned third-party actions found (pinned to a tag/branch, not a 40-character commit SHA):")
         for path, lineno, line in findings:
             print(f"  {path}:{lineno}: {line}")
         return 1

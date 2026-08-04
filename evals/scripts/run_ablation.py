@@ -81,6 +81,7 @@ Usage::
     python3 evals/scripts/run_ablation.py --task TASK.yaml --skill-md SKILL.md
                                            [--model-cli claude] [--timeout 300]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -103,10 +104,7 @@ from pydantic import BaseModel, ValidationError, field_validator
 # bootstrap existed (confirmed by direct execution while reviewing this
 # script). Insert the directory explicitly so both invocation styles
 # resolve identically, without depending on pytest ever having run first.
-_SCORE_CONTRACT_DIR = (
-    Path(__file__).resolve().parents[2]
-    / "skills" / "scorer-gated-skill-edits" / "scripts"
-)
+_SCORE_CONTRACT_DIR = Path(__file__).resolve().parents[2] / "skills" / "scorer-gated-skill-edits" / "scripts"
 if str(_SCORE_CONTRACT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCORE_CONTRACT_DIR))
 
@@ -238,9 +236,7 @@ def subprocess_executor(argv: Sequence[str], timeout: int) -> str:
         check=False,
     )
     if result.returncode != 0:
-        raise RuntimeError(
-            f"model CLI exited {result.returncode}: {result.stderr.strip()}"
-        )
+        raise RuntimeError(f"model CLI exited {result.returncode}: {result.stderr.strip()}")
     return result.stdout
 
 
@@ -341,9 +337,7 @@ class _RunAblationArgs(BaseModel):
     @classmethod
     def _timeout_must_be_positive(cls, value: int) -> int:
         if value <= 0:
-            raise ValueError(
-                f"--timeout must be a positive number of seconds, got {value}"
-            )
+            raise ValueError(f"--timeout must be a positive number of seconds, got {value}")
         return value
 
 
@@ -365,9 +359,7 @@ def main(argv: list[str] | None = None) -> int:
         "injected, and print both outputs' comparable scores as JSON."
     )
     parser.add_argument("--task", required=True, type=Path, help="Path to a task fixture YAML.")
-    parser.add_argument(
-        "--skill-md", required=True, type=Path, help="Path to the skill's SKILL.md."
-    )
+    parser.add_argument("--skill-md", required=True, type=Path, help="Path to the skill's SKILL.md.")
     parser.add_argument("--model-cli", default=DEFAULT_MODEL_CLI)
     parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT_SECONDS)
     args = parser.parse_args(argv)

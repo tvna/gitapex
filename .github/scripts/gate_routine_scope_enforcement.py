@@ -231,7 +231,9 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         broad_skills = broad_skills_without_scoping(text, skills_root)
         if broad_skills:
-            offenders.append(f"{path}: cites {', '.join(broad_skills)} (capabilityAssumption: Broad) with no concrete scoping mechanism")
+            offenders.append(
+                f"{path}: cites {', '.join(broad_skills)} (capabilityAssumption: Broad) with no concrete scoping mechanism"
+            )
 
     if not offenders:
         print("PASS: no Routine-connection doc declares an unscoped Broad-capability skill")

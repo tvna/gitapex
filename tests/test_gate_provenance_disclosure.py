@@ -18,9 +18,7 @@ _UNDISCLOSED_NOTE = (
 )
 
 _DISCLOSED_NOTE = (
-    _UNDISCLOSED_NOTE
-    + "\n"
-    + "tool-fingerprint-disclosure: WAIVED: owner approved disclosing this in "
+    _UNDISCLOSED_NOTE + "\n" + "tool-fingerprint-disclosure: WAIVED: owner approved disclosing this in "
     "review on 2026-07-25\n"
 )
 
@@ -29,13 +27,9 @@ _CLEAN_NOTE = (
     "history, so reusing it would not meet the skill's own isolation bar.\n"
 )
 
-_LIMITATION_WITHOUT_TOOL_CUE = (
-    "This section notes the absence of a clear owner decision on rollout timing.\n"
-)
+_LIMITATION_WITHOUT_TOOL_CUE = "This section notes the absence of a clear owner decision on rollout timing.\n"
 
-_TOOL_CUE_WITHOUT_LIMITATION = (
-    "The generic dispatch tool routed the request to the correct subagent.\n"
-)
+_TOOL_CUE_WITHOUT_LIMITATION = "The generic dispatch tool routed the request to the correct subagent.\n"
 
 
 def test_find_offending_paragraphs_flags_undisclosed_note():
@@ -134,9 +128,7 @@ def test_main_marker_in_diff_added_covers_offense_in_body(tmp_path, capsys):
     body = tmp_path / "body.md"
     body.write_text(_UNDISCLOSED_NOTE, encoding="utf-8")
     diff_added = tmp_path / "added.md"
-    diff_added.write_text(
-        "tool-fingerprint-disclosure: WAIVED: owner approved\n", encoding="utf-8"
-    )
+    diff_added.write_text("tool-fingerprint-disclosure: WAIVED: owner approved\n", encoding="utf-8")
     exit_code = gate.main(["--body", str(body), "--diff-added", str(diff_added)])
     assert exit_code == 0
     assert "PASS" in capsys.readouterr().out

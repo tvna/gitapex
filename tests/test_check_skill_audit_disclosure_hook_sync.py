@@ -84,12 +84,10 @@ def test_base_find_missing_disclosures_behavior_stays_in_sync():
         "# My PR\n\nNo evidence section at all.\n",
         "## Skill audit evidence\n\n- battle-testing-a-skill: PASS\n"
         "- evaluating-skill-quality: WELL-FORMED-AND-MATURE\n",
-        "## Skill audit evidence\n\n- battle-testing-a-skill: WAIVED: reason\n"
-        "- evaluating-skill-quality: WAIVED\n",
-        "## Skill audit evidence\n\n- battle-testing-a-skill: PASSED\n"
-        "- evaluating-skill-quality: NOT-WELL-FORMED\n",
+        "## Skill audit evidence\n\n- battle-testing-a-skill: WAIVED: reason\n- evaluating-skill-quality: WAIVED\n",
+        "## Skill audit evidence\n\n- battle-testing-a-skill: PASSED\n- evaluating-skill-quality: NOT-WELL-FORMED\n",
     ]
     for body in bodies:
-        assert sorted(gate.find_missing_disclosures(body)) == sorted(
-            hook.find_missing_disclosures(body)
-        ), f"find_missing_disclosures diverged for body: {body!r}"
+        assert sorted(gate.find_missing_disclosures(body)) == sorted(hook.find_missing_disclosures(body)), (
+            f"find_missing_disclosures diverged for body: {body!r}"
+        )

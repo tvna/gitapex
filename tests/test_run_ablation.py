@@ -160,9 +160,7 @@ def test_load_task_fixture_rejects_missing_expected(tmp_path: Path):
 
 def test_load_task_fixture_rejects_non_mapping_expected(tmp_path: Path):
     p = tmp_path / "task.yaml"
-    p.write_text(
-        "id: x\ninputs:\n  prompt: hi\nexpected: not-a-mapping\n", encoding="utf-8"
-    )
+    p.write_text("id: x\ninputs:\n  prompt: hi\nexpected: not-a-mapping\n", encoding="utf-8")
     with pytest.raises(ValueError, match="'expected' must be a mapping"):
         run_ablation.load_task_fixture(p)
 
@@ -384,9 +382,7 @@ def test_run_ablation_calls_executor_exactly_twice_with_and_without_skill_flag(t
     skill_md.write_text("# Demo skill\n", encoding="utf-8")
     executor = _RecordingExecutor(["magic-word-present here", "no magic here"])
 
-    run_ablation.run_ablation(
-        _demo_fixture(), skill_md, executor=executor, model_cli="claude", timeout=42
-    )
+    run_ablation.run_ablation(_demo_fixture(), skill_md, executor=executor, model_cli="claude", timeout=42)
 
     assert len(executor.calls) == 2
     first_argv, first_timeout = executor.calls[0]
@@ -403,9 +399,7 @@ def test_run_ablation_computes_distinct_scores_from_stub_outputs(tmp_path: Path)
     skill_md.write_text("# Demo skill\n", encoding="utf-8")
     executor = _RecordingExecutor(["magic-word-present here", "no magic here"])
 
-    result = run_ablation.run_ablation(
-        _demo_fixture(), skill_md, executor=executor, model_cli="claude"
-    )
+    result = run_ablation.run_ablation(_demo_fixture(), skill_md, executor=executor, model_cli="claude")
 
     assert result.with_skill_score == 1.0
     assert result.without_skill_score == 0.0
@@ -416,9 +410,7 @@ def test_run_ablation_delta_is_with_minus_without(tmp_path: Path):
     skill_md.write_text("# Demo skill\n", encoding="utf-8")
     executor = _RecordingExecutor(["magic-word-present here", "no magic here"])
 
-    result = run_ablation.run_ablation(
-        _demo_fixture(), skill_md, executor=executor, model_cli="claude"
-    )
+    result = run_ablation.run_ablation(_demo_fixture(), skill_md, executor=executor, model_cli="claude")
 
     assert result.delta == pytest.approx(1.0)
     assert result.delta == result.with_skill_score - result.without_skill_score
@@ -429,9 +421,7 @@ def test_run_ablation_preserves_raw_outputs_verbatim(tmp_path: Path):
     skill_md.write_text("# Demo skill\n", encoding="utf-8")
     executor = _RecordingExecutor(["magic-word-present here", "no magic here"])
 
-    result = run_ablation.run_ablation(
-        _demo_fixture(), skill_md, executor=executor, model_cli="claude"
-    )
+    result = run_ablation.run_ablation(_demo_fixture(), skill_md, executor=executor, model_cli="claude")
 
     assert result.with_skill_output == "magic-word-present here"
     assert result.without_skill_output == "no magic here"
@@ -442,9 +432,7 @@ def test_run_ablation_task_id_comes_from_fixture(tmp_path: Path):
     skill_md.write_text("# Demo skill\n", encoding="utf-8")
     executor = _RecordingExecutor(["magic-word-present here", "no magic here"])
 
-    result = run_ablation.run_ablation(
-        _demo_fixture(), skill_md, executor=executor, model_cli="claude"
-    )
+    result = run_ablation.run_ablation(_demo_fixture(), skill_md, executor=executor, model_cli="claude")
 
     assert result.task_id == "demo-task"
 
@@ -455,9 +443,7 @@ def test_run_ablation_rejects_invalid_model_cli(tmp_path: Path):
     executor = _RecordingExecutor(["a", "b"])
 
     with pytest.raises(ValueError, match="non-empty"):
-        run_ablation.run_ablation(
-            _demo_fixture(), skill_md, executor=executor, model_cli=""
-        )
+        run_ablation.run_ablation(_demo_fixture(), skill_md, executor=executor, model_cli="")
 
 
 # ---------------------------------------------------------------------------
@@ -495,9 +481,7 @@ def test_main_success_prints_json(tmp_path: Path, monkeypatch, capsys):
     executor = _RecordingExecutor(["magic-word-present here", "no magic here"])
     monkeypatch.setattr(run_ablation, "subprocess_executor", executor)
 
-    rc = run_ablation.main(
-        ["--task", str(task), "--skill-md", str(skill_md), "--timeout", "5"]
-    )
+    rc = run_ablation.main(["--task", str(task), "--skill-md", str(skill_md), "--timeout", "5"])
 
     assert rc == 0
     out = capsys.readouterr().out
@@ -551,26 +535,20 @@ def test_main_blank_model_cli_returns_2(tmp_path: Path, capsys):
     skill_md = tmp_path / "SKILL.md"
     skill_md.write_text("# Demo skill\n", encoding="utf-8")
 
-    rc = run_ablation.main(
-        ["--task", str(task), "--skill-md", str(skill_md), "--model-cli", "   "]
-    )
+    rc = run_ablation.main(["--task", str(task), "--skill-md", str(skill_md), "--model-cli", "   "])
 
     assert rc == 2
     assert "error:" in capsys.readouterr().err
 
 
-def test_main_rejects_zero_timeout_without_launching_subprocess(
-    tmp_path: Path, monkeypatch, capsys
-):
+def test_main_rejects_zero_timeout_without_launching_subprocess(tmp_path: Path, monkeypatch, capsys):
     task = _write_demo_fixture(tmp_path)
     skill_md = tmp_path / "SKILL.md"
     skill_md.write_text("# Demo skill\n", encoding="utf-8")
     executor = _RecordingExecutor([])
     monkeypatch.setattr(run_ablation, "subprocess_executor", executor)
 
-    rc = run_ablation.main(
-        ["--task", str(task), "--skill-md", str(skill_md), "--timeout", "0"]
-    )
+    rc = run_ablation.main(["--task", str(task), "--skill-md", str(skill_md), "--timeout", "0"])
 
     assert rc == 2
     assert "positive" in capsys.readouterr().err
@@ -582,9 +560,7 @@ def test_main_rejects_negative_timeout(tmp_path: Path, capsys):
     skill_md = tmp_path / "SKILL.md"
     skill_md.write_text("# Demo skill\n", encoding="utf-8")
 
-    rc = run_ablation.main(
-        ["--task", str(task), "--skill-md", str(skill_md), "--timeout", "-5"]
-    )
+    rc = run_ablation.main(["--task", str(task), "--skill-md", str(skill_md), "--timeout", "-5"])
 
     assert rc == 2
     assert "positive" in capsys.readouterr().err

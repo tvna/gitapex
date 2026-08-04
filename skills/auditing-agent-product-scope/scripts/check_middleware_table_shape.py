@@ -31,7 +31,18 @@ _SEPARATOR_CELL_RE = re.compile(r"^:?-{3,}:?$")
 _EXPECTED_TABLES: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "Nix toolchain (`flake.nix`)": (
         ("Tool", "Class", "Why needed", "Scope of responsibility", "Supply-chain coverage"),
-        ("`uv`", "`gh`", "`actionlint`", "`python312`", "`bun`", "`lychee`", "`waza`", "`apm`", "`rtk`", "`betterleaks`"),
+        (
+            "`uv`",
+            "`gh`",
+            "`actionlint`",
+            "`python312`",
+            "`bun`",
+            "`lychee`",
+            "`waza`",
+            "`apm`",
+            "`rtk`",
+            "`betterleaks`",
+        ),
     ),
     "apm": (
         ("Dependency", "Why needed", "Scope of responsibility", "Pinned in"),
@@ -107,28 +118,20 @@ def check_middleware_table_shape(
     offenses = []
     for heading, (required_columns, required_rows) in expected.items():
         if heading not in sections:
-            offenses.append(
-                f"{heading}: expected but no '## {heading}' heading found in the document"
-            )
+            offenses.append(f"{heading}: expected but no '## {heading}' heading found in the document")
             continue
         table = _first_table(sections[heading])
         if table is None:
-            offenses.append(
-                f"{heading}: expected a Markdown table in this section, none found"
-            )
+            offenses.append(f"{heading}: expected a Markdown table in this section, none found")
             continue
         header, rows = table
         missing_columns = [c for c in required_columns if c not in header]
         if missing_columns:
-            offenses.append(
-                f"{heading}: table missing column(s) {', '.join(missing_columns)}"
-            )
+            offenses.append(f"{heading}: table missing column(s) {', '.join(missing_columns)}")
         row_labels = {r[0] for r in rows if r}
         missing_rows = [label for label in required_rows if label not in row_labels]
         if missing_rows:
-            offenses.append(
-                f"{heading}: table missing row(s) for {', '.join(missing_rows)}"
-            )
+            offenses.append(f"{heading}: table missing row(s) for {', '.join(missing_rows)}")
     return offenses
 
 

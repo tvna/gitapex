@@ -64,12 +64,7 @@ def _name_prefix(name: str) -> str:
 def _line_pattern(name: str, verdicts: Iterable[str]) -> re.Pattern[str]:
     verdict_alt = "|".join(re.escape(v) for v in verdicts)
     return re.compile(
-        _name_prefix(name)
-        + r"(?:(?:"
-        + verdict_alt
-        + r")\b(?:[ \t]+\S.*)?|"
-        + _WAIVED_CLAUSE
-        + r")[ \t]*$",
+        _name_prefix(name) + r"(?:(?:" + verdict_alt + r")\b(?:[ \t]+\S.*)?|" + _WAIVED_CLAUSE + r")[ \t]*$",
         re.IGNORECASE | re.MULTILINE,
     )
 
@@ -88,7 +83,7 @@ def _extract_section(body_text: str) -> str | None:
         return None
     next_heading = _NEXT_HEADING_RE.search(body_text, match.end())
     end = next_heading.start() if next_heading else len(body_text)
-    return body_text[match.end():end]
+    return body_text[match.end() : end]
 
 
 def find_missing_disclosures(body_text: str | None) -> list[str]:
@@ -112,9 +107,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         body_text = (
-            Path(args.body).read_text(encoding="utf-8")
-            if args.body
-            else sys.stdin.buffer.read().decode("utf-8")
+            Path(args.body).read_text(encoding="utf-8") if args.body else sys.stdin.buffer.read().decode("utf-8")
         )
     except FileNotFoundError:
         print(f"error: body file not found: {args.body}", file=sys.stderr)

@@ -214,10 +214,7 @@ def test_near_and_not_near_together_reject_the_swap_the_correct_response_survive
         "output_contains_near": [{"all": ["mypy", "missing deterministic gate"], "window": 200}],
         "output_not_contains_near": [{"all": ["mypy", "unclear agent instruction"], "window": 200}],
     }
-    correct = (
-        "1. mypy failure fixed by a type conversion. "
-        "Classification: missing deterministic gate."
-    )
+    correct = "1. mypy failure fixed by a type conversion. Classification: missing deterministic gate."
     wrongly_bound_compact = "Repair 1 (mypy failure) is unclear agent instruction."
     assert score_contract.score(correct, assertions) == 1.0
     # Neither assertion holds: "missing deterministic gate" never appears
@@ -363,9 +360,7 @@ def test_main_reports_error_for_non_utf8_scores_stdin(capsys, monkeypatch):
     assert "Traceback" not in err
 
 
-def test_main_pruning_gate_keeps_matched_correctness_with_lower_cost(
-    tmp_path, capsys
-):
+def test_main_pruning_gate_keeps_matched_correctness_with_lower_cost(tmp_path, capsys):
     scores = tmp_path / "scores.txt"
     scores.write_text("0.9\n0.9\n", encoding="utf-8")
     rc = score_contract.main(
@@ -386,9 +381,7 @@ def test_main_pruning_gate_keeps_matched_correctness_with_lower_cost(
 
 
 def test_main_rejects_context_costs_without_pruning_declaration(capsys):
-    rc = score_contract.main(
-        ["--compare-to", "0.9", "--prior-context-cost", "1400"]
-    )
+    rc = score_contract.main(["--compare-to", "0.9", "--prior-context-cost", "1400"])
     assert rc == 1
     assert "require --pruning-only" in capsys.readouterr().err
 
@@ -396,9 +389,7 @@ def test_main_rejects_context_costs_without_pruning_declaration(capsys):
 def test_main_judge_agree_appends_agree_marker(tmp_path, capsys):
     scores = tmp_path / "scores.txt"
     scores.write_text("0.9\n1.0\n", encoding="utf-8")
-    rc = score_contract.main(
-        ["--compare-to", "0.9", "--scores", str(scores), "--judge-verdict", "agree"]
-    )
+    rc = score_contract.main(["--compare-to", "0.9", "--scores", str(scores), "--judge-verdict", "agree"])
     assert rc == 0
     assert capsys.readouterr().out.strip() == "0.950000 KEEP JUDGE_AGREE"
 
@@ -406,14 +397,9 @@ def test_main_judge_agree_appends_agree_marker(tmp_path, capsys):
 def test_main_judge_disagree_appends_review_required_marker(tmp_path, capsys):
     scores = tmp_path / "scores.txt"
     scores.write_text("0.9\n1.0\n", encoding="utf-8")
-    rc = score_contract.main(
-        ["--compare-to", "0.9", "--scores", str(scores), "--judge-verdict", "disagree"]
-    )
+    rc = score_contract.main(["--compare-to", "0.9", "--scores", str(scores), "--judge-verdict", "disagree"])
     assert rc == 0
-    assert (
-        capsys.readouterr().out.strip()
-        == "0.950000 KEEP JUDGE_DISAGREE_REVIEW_REQUIRED"
-    )
+    assert capsys.readouterr().out.strip() == "0.950000 KEEP JUDGE_DISAGREE_REVIEW_REQUIRED"
 
 
 def test_main_judge_agree_on_reject_path_does_not_override_verdict(tmp_path, capsys):
@@ -422,26 +408,17 @@ def test_main_judge_agree_on_reject_path_does_not_override_verdict(tmp_path, cap
     # testing during adversarial verification of gitapex#175.
     scores = tmp_path / "scores.txt"
     scores.write_text("0.9\n1.0\n", encoding="utf-8")
-    rc = score_contract.main(
-        ["--compare-to", "0.99", "--scores", str(scores), "--judge-verdict", "agree"]
-    )
+    rc = score_contract.main(["--compare-to", "0.99", "--scores", str(scores), "--judge-verdict", "agree"])
     assert rc == 0
     assert capsys.readouterr().out.strip() == "0.950000 REJECT JUDGE_AGREE"
 
 
-def test_main_judge_disagree_on_reject_path_appends_review_required_marker(
-    tmp_path, capsys
-):
+def test_main_judge_disagree_on_reject_path_appends_review_required_marker(tmp_path, capsys):
     scores = tmp_path / "scores.txt"
     scores.write_text("0.9\n1.0\n", encoding="utf-8")
-    rc = score_contract.main(
-        ["--compare-to", "0.99", "--scores", str(scores), "--judge-verdict", "disagree"]
-    )
+    rc = score_contract.main(["--compare-to", "0.99", "--scores", str(scores), "--judge-verdict", "disagree"])
     assert rc == 0
-    assert (
-        capsys.readouterr().out.strip()
-        == "0.950000 REJECT JUDGE_DISAGREE_REVIEW_REQUIRED"
-    )
+    assert capsys.readouterr().out.strip() == "0.950000 REJECT JUDGE_DISAGREE_REVIEW_REQUIRED"
 
 
 @pytest.mark.parametrize("compare_to,gate_verdict", [("0.9", "KEEP"), ("0.99", "REJECT")])
@@ -496,10 +473,16 @@ def test_main_dispatch_trace_confirmed_appends_marker(tmp_path, capsys):
     apath.write_text(json.dumps({"output_contains": ["Facts"]}), encoding="utf-8")
     opath = tmp_path / "run.txt"
     opath.write_text("Facts and more", encoding="utf-8")
-    rc = score_contract.main([
-        "--assertions", str(apath), "--output", str(opath),
-        "--dispatch-trace-verdict", "confirmed",
-    ])
+    rc = score_contract.main(
+        [
+            "--assertions",
+            str(apath),
+            "--output",
+            str(opath),
+            "--dispatch-trace-verdict",
+            "confirmed",
+        ]
+    )
     assert rc == 0
     assert capsys.readouterr().out.strip() == "1.000000 DISPATCH_TRACE_CONFIRMED"
 
@@ -509,10 +492,16 @@ def test_main_dispatch_trace_not_confirmed_appends_marker(tmp_path, capsys):
     apath.write_text(json.dumps({"output_contains": ["Facts"]}), encoding="utf-8")
     opath = tmp_path / "run.txt"
     opath.write_text("Facts and more", encoding="utf-8")
-    rc = score_contract.main([
-        "--assertions", str(apath), "--output", str(opath),
-        "--dispatch-trace-verdict", "not_confirmed",
-    ])
+    rc = score_contract.main(
+        [
+            "--assertions",
+            str(apath),
+            "--output",
+            str(opath),
+            "--dispatch-trace-verdict",
+            "not_confirmed",
+        ]
+    )
     assert rc == 0
     assert capsys.readouterr().out.strip() == "1.000000 DISPATCH_TRACE_NOT_CONFIRMED"
 
@@ -522,10 +511,16 @@ def test_main_dispatch_trace_unverified_appends_marker(tmp_path, capsys):
     apath.write_text(json.dumps({"output_contains": ["Facts"]}), encoding="utf-8")
     opath = tmp_path / "run.txt"
     opath.write_text("no match here", encoding="utf-8")
-    rc = score_contract.main([
-        "--assertions", str(apath), "--output", str(opath),
-        "--dispatch-trace-verdict", "unverified",
-    ])
+    rc = score_contract.main(
+        [
+            "--assertions",
+            str(apath),
+            "--output",
+            str(opath),
+            "--dispatch-trace-verdict",
+            "unverified",
+        ]
+    )
     assert rc == 0
     assert capsys.readouterr().out.strip() == "0.000000 DISPATCH_TRACE_UNVERIFIED"
 
@@ -543,10 +538,16 @@ def test_main_dispatch_trace_verdict_omitted_leaves_output_unchanged(tmp_path, c
 def test_main_rejects_dispatch_trace_verdict_with_compare_to(tmp_path, capsys):
     scores = tmp_path / "scores.txt"
     scores.write_text("0.9\n1.0\n", encoding="utf-8")
-    rc = score_contract.main([
-        "--compare-to", "0.9", "--scores", str(scores),
-        "--dispatch-trace-verdict", "confirmed",
-    ])
+    rc = score_contract.main(
+        [
+            "--compare-to",
+            "0.9",
+            "--scores",
+            str(scores),
+            "--dispatch-trace-verdict",
+            "confirmed",
+        ]
+    )
     assert rc == 1
     assert "not defined for --compare-to" in capsys.readouterr().err
 
@@ -560,9 +561,7 @@ def test_main_rejects_invalid_dispatch_trace_verdict_choice(capsys):
 def test_main_rejects_invalid_correctness_scores(tmp_path, capsys, invalid):
     scores = tmp_path / "scores.txt"
     scores.write_text(f"0.9\n{invalid}\n", encoding="utf-8")
-    rc = score_contract.main(
-        ["--compare-to", "0.9", "--scores", str(scores)]
-    )
+    rc = score_contract.main(["--compare-to", "0.9", "--scores", str(scores)])
     assert rc == 1
     assert "finite number in [0,1]" in capsys.readouterr().err
 
@@ -571,9 +570,7 @@ def test_main_rejects_invalid_correctness_scores(tmp_path, capsys, invalid):
 def test_main_rejects_invalid_prior_correctness(tmp_path, capsys, invalid):
     scores = tmp_path / "scores.txt"
     scores.write_text("0.9\n", encoding="utf-8")
-    rc = score_contract.main(
-        ["--compare-to", invalid, "--scores", str(scores)]
-    )
+    rc = score_contract.main(["--compare-to", invalid, "--scores", str(scores)])
     assert rc == 1
     assert "finite number in [0,1]" in capsys.readouterr().err
 
@@ -717,10 +714,7 @@ def test_main_pruning_only_missing_one_context_cost_fails_closed(tmp_path, capsy
 def test_main_requires_assertions_or_compare_to(capsys):
     rc = score_contract.main([])
     assert rc == 1
-    assert (
-        "--assertions is required unless --compare-to is used"
-        in capsys.readouterr().err
-    )
+    assert "--assertions is required unless --compare-to is used" in capsys.readouterr().err
 
 
 def test_main_missing_assertions_file_fails_closed(capsys):
@@ -740,9 +734,7 @@ def test_main_malformed_assertions_json_fails_closed(tmp_path, capsys):
 def test_main_missing_output_file_fails_closed(tmp_path, capsys):
     apath = tmp_path / "assertions.json"
     apath.write_text(json.dumps({"output_contains": ["Facts"]}), encoding="utf-8")
-    rc = score_contract.main(
-        ["--assertions", str(apath), "--output", "/no/such/output.txt"]
-    )
+    rc = score_contract.main(["--assertions", str(apath), "--output", "/no/such/output.txt"])
     assert rc == 1
     assert "output file not found" in capsys.readouterr().err
 
@@ -760,8 +752,6 @@ def test_main_undecodable_output_file_fails_closed(tmp_path, capsys):
     apath.write_text(json.dumps({"output_contains": ["Facts"]}), encoding="utf-8")
     opath = tmp_path / "output.txt"
     opath.write_bytes(b"\xff\xfe bad")
-    rc = score_contract.main(
-        ["--assertions", str(apath), "--output", str(opath)]
-    )
+    rc = score_contract.main(["--assertions", str(apath), "--output", str(opath)])
     assert rc == 1
     assert "could not decode output file" in capsys.readouterr().err

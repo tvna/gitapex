@@ -413,6 +413,7 @@ Usage:
 Exit code: 0 if every check passes, 1 if any check fails, 2 on bad usage or
 when no readable SKILL.md is found.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -545,7 +546,8 @@ YAML_NON_STRING_SCALAR_RE = re.compile(
     r"|[Tt]rue|TRUE|[Ff]alse|FALSE"
     r"|[-+]?[0-9]+"
     r"|[-+]?(?:[0-9]+\.[0-9]*|\.[0-9]+)(?:[eE][-+]?[0-9]+)?"
-    r"|[-+]?\.(?:inf|Inf|INF)|\.(?:nan|NaN|NAN))$")
+    r"|[-+]?\.(?:inf|Inf|INF)|\.(?:nan|NaN|NAN))$"
+)
 # A real YAML comment: an unquoted "#" preceded by start-of-string or
 # whitespace -- YAML never treats a "#" glued directly onto a preceding
 # non-space character as a comment marker (e.g. "true#tag" is the
@@ -569,6 +571,7 @@ def _is_non_string_plain_scalar(raw_text: str) -> bool:
     spec.executionRequirements.tools.read/write/shell)."""
     stripped = _INLINE_COMMENT_RE.sub("", raw_text).strip()
     return bool(YAML_NON_STRING_SCALAR_RE.match(stripped))
+
 
 # spec.skillDependencies's two recognized subkeys, and the shape of their
 # lines. Subkeys sit at 4 spaces (one level under skillDependencies' own
@@ -642,8 +645,7 @@ LIFECYCLE_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 # resolves to the right place wherever it lands. Shape-only -- never
 # resolved against a live GitHub API call, since this checker is
 # offline/read-only by design.
-LIFECYCLE_ISSUE_REF_RE = re.compile(
-    r"^https://github\.com/tvna/gitapex/(?:issues|pull)/\d+$")
+LIFECYCLE_ISSUE_REF_RE = re.compile(r"^https://github\.com/tvna/gitapex/(?:issues|pull)/\d+$")
 
 # A YAML mapping key at a given indent, however it was written: a bare
 # scalar key (any run of characters up to the first unquoted ":" that
@@ -671,23 +673,19 @@ LIFECYCLE_ISSUE_REF_RE = re.compile(
 # pattern is itself flagged as unknown/malformed, not silently skipped --
 # rejecting every unmatched line at that indent, rather than only the
 # ones this regex happens to parse, is the actual fail-closed contract.
-KEY_LINE_RE_4 = re.compile(
-    r'^[ ]{4}(?:"([^"]*)"|\'([^\']*)\'|([^\s"\'#][^:]*?)):[ \t]*(.*)$')
-KEY_LINE_RE_6 = re.compile(
-    r'^[ ]{6}(?:"([^"]*)"|\'([^\']*)\'|([^\s"\'#][^:]*?)):[ \t]*(.*)$')
+KEY_LINE_RE_4 = re.compile(r'^[ ]{4}(?:"([^"]*)"|\'([^\']*)\'|([^\s"\'#][^:]*?)):[ \t]*(.*)$')
+KEY_LINE_RE_6 = re.compile(r'^[ ]{6}(?:"([^"]*)"|\'([^\']*)\'|([^\s"\'#][^:]*?)):[ \t]*(.*)$')
 # One nesting level deeper than KEY_LINE_RE_6: spec.references' own item
 # mappings nest an optional "outcome" sub-mapping (8-space indent, one
 # level under the item's own 6-space fields) -- the only field in this
 # sidecar three levels deep under spec.
-KEY_LINE_RE_8 = re.compile(
-    r'^[ ]{8}(?:"([^"]*)"|\'([^\']*)\'|([^\s"\'#][^:]*?)):[ \t]*(.*)$')
+KEY_LINE_RE_8 = re.compile(r'^[ ]{8}(?:"([^"]*)"|\'([^\']*)\'|([^\s"\'#][^:]*?)):[ \t]*(.*)$')
 # Matches a spec.references list item's own first field, given inline
 # right after its "- " marker (e.g. "kind: decision" from
 # "- kind: decision") -- same key-shape alternation as KEY_LINE_RE_4/6, but
 # with no anchored leading indent, since the "- " prefix itself already
 # consumed a variable amount of the line before this text was isolated.
-INLINE_KEY_VALUE_RE = re.compile(
-    r'^(?:"([^"]*)"|\'([^\']*)\'|([^\s"\'#][^:]*?)):[ \t]*(.*)$')
+INLINE_KEY_VALUE_RE = re.compile(r'^(?:"([^"]*)"|\'([^\']*)\'|([^\s"\'#][^:]*?)):[ \t]*(.*)$')
 
 # spec.executionRequirements' one recognized subkey so far: "tools", at
 # 4-space indent -- same depth as spec.skillDependencies' requires/
@@ -714,8 +712,7 @@ UNSAFE_COLON_RE = re.compile(r":(?:\s|$)")
 UNSAFE_COMMENT_RE = re.compile(r"(?:^|\s)#")
 NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 # Accept either "Table of contents" or a bare "Contents" heading.
-TOC_RE = re.compile(r"^#+\s+(?:table of )?contents\b",
-                    re.IGNORECASE | re.MULTILINE)
+TOC_RE = re.compile(r"^#+\s+(?:table of )?contents\b", re.IGNORECASE | re.MULTILINE)
 BLOCK_SCALAR_INDICATORS = (">", "|", ">-", "|-", ">+", "|+")
 # Markdown inline link syntax: [text](target).
 LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
@@ -739,8 +736,7 @@ REFDEF_RE = re.compile(r"^[ ]{0,3}\[[^\]]+\]:\s*(<[^>]*>|\S+)", re.MULTILINE)
 # same-repo skill-directory reference); this bullet is the one
 # consistently-used, low-ambiguity convention for one skill naming another,
 # and that convention covers its own body prose just as much as its header.
-RELATED_SKILL_BULLET_RE = re.compile(
-    r"\*\*vs\.\s+.+?:\*\*.*?(?=\n[ \t]*-\s|\n[ \t]*\n|\Z)", re.DOTALL)
+RELATED_SKILL_BULLET_RE = re.compile(r"\*\*vs\.\s+.+?:\*\*.*?(?=\n[ \t]*-\s|\n[ \t]*\n|\Z)", re.DOTALL)
 BACKTICK_SKILL_NAME_RE = re.compile(r"`([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)`")
 # An absolute-URL scheme (http:, https:, mailto:, ftp:, ...) -- anything
 # matching this is external, not a same-repo relative path.
@@ -758,14 +754,12 @@ SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.\-]*:")
 PORTABILITY_RE = re.compile(r"\bportability\s*:", re.IGNORECASE)
 PORTABILITY_MAX_BODY_LINE = 6
 PORTABLE_LEVEL_RE = re.compile(r"\bportable\b", re.IGNORECASE)
-NON_PORTABLE_LEVEL_RE = re.compile(r"\b(?:mixed|repository-scoped|repo-scoped)\b",
-                                   re.IGNORECASE)
+NON_PORTABLE_LEVEL_RE = re.compile(r"\b(?:mixed|repository-scoped|repo-scoped)\b", re.IGNORECASE)
 # A GitHub issue/PR-number citation: an optional "owner/repo" prefix, then
 # "#" and a digit run. The trailing (?![\d-]) rejects an in-page anchor slug
 # like "#1-discovery" (a digit run followed by "-word"); a real citation ends
 # at the digits.
-ISSUE_CITATION_RE = re.compile(
-    r"(?:[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*)?#\d+(?![\d-])")
+ISSUE_CITATION_RE = re.compile(r"(?:[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*)?#\d+(?![\d-])")
 # An origin-repository path citation rooted at this repo's own top-level
 # tooling dirs. Kept deliberately narrow (evals/ and docs/) -- the two roots
 # the historical incidents used -- rather than every path shape, so the scan
@@ -786,7 +780,8 @@ ISSUE_CITATION_RE = re.compile(
 # case-sensitive behavior unchanged.
 REPO_PATH_CITATION_RE = re.compile(
     r"(?:evals|docs)/[A-Za-z0-9._/-]+"
-    r"|(?i:CLAUDE\.md\s+(?:ch\.|chapter|section)\s*\d+)")
+    r"|(?i:CLAUDE\.md\s+(?:ch\.|chapter|section)\s*\d+)"
+)
 # A bare-prose "scripts/PATH" mention (issue #192, Refs #26 repair 3/#36
 # repair 3/#20 item d). Deliberately NOT folded into REPO_PATH_CITATION_RE's
 # alternation above: unlike evals/ or docs/, a "scripts/..." path routinely
@@ -821,8 +816,8 @@ SCRIPTS_PATH_BARE_RE = re.compile(r"\bscripts/[A-Za-z0-9._/-]+")
 # placeholder like "claude-example-model" never matches either, since
 # "example" is not a recognized family word.
 ILLUSTRATIVE_MODEL_ID_RE = re.compile(
-    r"\bclaude-(?:opus|sonnet|haiku|fable|instant)-?[0-9][a-z0-9.\-]*\b",
-    re.IGNORECASE)
+    r"\bclaude-(?:opus|sonnet|haiku|fable|instant)-?[0-9][a-z0-9.\-]*\b", re.IGNORECASE
+)
 # A citation to Anthropic's own documentation, in the exact forms this
 # repository's own reference lists use: a GFM autolink
 # ("<https://platform.claude.com/...>"), an inline link target, with or
@@ -846,7 +841,8 @@ ANTHROPIC_DOC_CITATION_RE = re.compile(
     r"[^)\s]*(?:\s+\"[^\"]*\"|\s+'[^']*')?\)"
     r"|^[ ]{0,3}\[[^\]]+\]:\s*<?https://"
     r"(?:platform\.claude\.com|code\.claude\.com|claude\.com)/[^\s>]*>?",
-    re.MULTILINE)
+    re.MULTILINE,
+)
 # An opening angle-bracket placeholder token in raw prose: "<" then a single
 # word of letters/digits/underscore/hyphen (no "/" or ":"), then ">". The
 # no-"/"-or-":" restriction means a GFM autolink ("<https://example.com>")
@@ -985,7 +981,8 @@ ISSUE_CITATION_HEDGE_PHRASES = (
 # ``(?=\s)`` would silently never match that either.
 PORTABLE_SKILL_FACT_CLAIM_RE = re.compile(
     r"`([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)`'s?(?![A-Za-z0-9])"
-    r"(?P<clause>[^.;\n]{0,120})")
+    r"(?P<clause>[^.;\n]{0,120})"
+)
 
 # Issue #192 (Refs #93 repair 1): a "step N" / "steps N-M" reference,
 # case-insensitive (this repo's own SKILL.md files use both "Step 1" and
@@ -999,8 +996,7 @@ PORTABLE_SKILL_FACT_CLAIM_RE = re.compile(
 # rather than as a literal. The character is load-bearing -- SKILL.md prose
 # writes both "Steps 1-2" and "Steps 1\u20132" -- and an escape says so, where a
 # literal en dash is visually indistinguishable from the hyphen beside it.
-STEP_NUM_RE = re.compile(r"\bsteps?\s+(\d+)(?:\s*[-\u2013]\s*\d+)?\b",
-                         re.IGNORECASE)
+STEP_NUM_RE = re.compile(r"\bsteps?\s+(\d+)(?:\s*[-\u2013]\s*\d+)?\b", re.IGNORECASE)
 # A closed, narrow vocabulary of execution-location assertions, grounded in
 # the exact wording of the historical incident this check mechanizes
 # (issue #93: SKILL.md's Procedure intro said step 6 "stays in the main
@@ -1019,7 +1015,9 @@ STEP_NUM_RE = re.compile(r"\bsteps?\s+(\d+)(?:\s*[-\u2013]\s*\d+)?\b",
 # because of what was said afterward in one sentence but not the other.
 STEP_LOCATION_ASSERTION_RE = re.compile(
     r"\b(?:stays?\s+in|runs?\s+(?:inside|in)|executes?\s+(?:inside|in))"
-    r"\b(?:\s+\S+){0,3}", re.IGNORECASE)
+    r"\b(?:\s+\S+){0,3}",
+    re.IGNORECASE,
+)
 # This repo's own established way (issue #93's own fix commit) of marking
 # that one location's statement is authoritative and a second, differently
 # located mention of the same step is not a real contradiction -- e.g. "see
@@ -1050,6 +1048,7 @@ class FrontmatterParse:
     field actually used, not just its already-unquoted/already-joined
     value in ``fields``.
     """
+
     fields: dict[str, str]
     plain_fields: frozenset[str]
 
@@ -1068,8 +1067,7 @@ def _parse_frontmatter(text: str) -> FrontmatterParse:
     if not text.startswith("---"):
         return FrontmatterParse(fields={}, plain_fields=frozenset())
     lines = text.splitlines()
-    end = next((i for i in range(1, len(lines))
-                if lines[i].strip() == "---"), None)
+    end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), None)
     if end is None:
         return FrontmatterParse(fields={}, plain_fields=frozenset())
     fields: dict[str, str] = {}
@@ -1084,15 +1082,13 @@ def _parse_frontmatter(text: str) -> FrontmatterParse:
         if value in BLOCK_SCALAR_INDICATORS:
             block: list[str] = []
             i += 1
-            while i < end and (lines[i].strip() == ""
-                               or lines[i][:1] in (" ", "\t")):
+            while i < end and (lines[i].strip() == "" or lines[i][:1] in (" ", "\t")):
                 block.append(lines[i].strip())
                 i += 1
             joiner = "\n" if value[0] == "|" else " "
             fields[key] = joiner.join(block).strip()
             continue
-        is_quoted = (len(value) >= 2 and value[0] == value[-1]
-                     and value[0] in "\"'")
+        is_quoted = len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'"
         fields[key] = _unquote(value)
         if not is_quoted:
             plain_fields.add(key)
@@ -1163,8 +1159,7 @@ def _match_key_line(pattern: re.Pattern[str], line: str) -> tuple[str, str] | No
     m = pattern.match(line)
     if not m:
         return None
-    key = m.group(1) if m.group(1) is not None else (
-        m.group(2) if m.group(2) is not None else m.group(3))
+    key = m.group(1) if m.group(1) is not None else (m.group(2) if m.group(2) is not None else m.group(3))
     return key, m.group(4).strip()
 
 
@@ -1237,6 +1232,7 @@ class ManifestParse:
     ``malformed_skill_dependency_items`` use one nesting level shallower.
     All three empty when the field is absent or parsed cleanly.
     """
+
     root: dict[str, object]
     malformed_lines: list[str]
     malformed_reference_items: list[str]
@@ -1502,20 +1498,17 @@ def _parse_manifest(text: str) -> ManifestParse:
     def _finalize_ref_outcome() -> None:
         nonlocal current_ref_outcome
         if current_ref_outcome is not None and current_ref_item is not None:
-            current_ref_item["outcome"] = (
-                current_ref_outcome if current_ref_outcome else None)
+            current_ref_item["outcome"] = current_ref_outcome if current_ref_outcome else None
         current_ref_outcome = None
 
     def _finalize_current_ref_item() -> None:
         nonlocal current_ref_item, current_ref_item_valid, current_ref_open_line
         _finalize_ref_outcome()
         if current_ref_item is not None:
-            missing = [k for k in REFERENCES_ITEM_REQUIRED_SUBKEYS
-                      if k not in current_ref_item]
+            missing = [k for k in REFERENCES_ITEM_REQUIRED_SUBKEYS if k not in current_ref_item]
             if current_ref_item_valid and missing:
                 joined = ", ".join(missing)
-                malformed_refs.append(
-                    f"{current_ref_open_line} (missing required field(s): {joined})")
+                malformed_refs.append(f"{current_ref_open_line} (missing required field(s): {joined})")
             elif current_ref_item_valid and collecting_refs is not None:
                 collecting_refs.append(current_ref_item)
         current_ref_item = None
@@ -1543,8 +1536,7 @@ def _parse_manifest(text: str) -> ManifestParse:
         if in_skill_deps and current is not None:
             # A block header with zero real children ever seen is real
             # YAML null, not an empty-but-present mapping.
-            current["skillDependencies"] = (
-                skill_deps if skill_deps_has_content else None)
+            current["skillDependencies"] = skill_deps if skill_deps_has_content else None
         in_skill_deps = False
         skill_deps = {}
         skill_deps_has_content = False
@@ -1552,8 +1544,7 @@ def _parse_manifest(text: str) -> ManifestParse:
     def _finalize_lifecycle_subkey() -> None:
         nonlocal lifecycle_subkey, lifecycle_field_buffer, lifecycle_subkey_has_content
         if lifecycle_subkey is not None:
-            lifecycle[lifecycle_subkey] = (
-                lifecycle_field_buffer if lifecycle_subkey_has_content else None)
+            lifecycle[lifecycle_subkey] = lifecycle_field_buffer if lifecycle_subkey_has_content else None
         lifecycle_subkey = None
         lifecycle_field_buffer = {}
         lifecycle_subkey_has_content = False
@@ -1579,8 +1570,7 @@ def _parse_manifest(text: str) -> ManifestParse:
         nonlocal in_exec_tools, exec_tools, exec_tools_has_content
         _finalize_exec_tools_list()
         if in_exec_tools:
-            execution_requirements["tools"] = (
-                exec_tools if exec_tools_has_content else None)
+            execution_requirements["tools"] = exec_tools if exec_tools_has_content else None
         in_exec_tools = False
         exec_tools = {}
         exec_tools_has_content = False
@@ -1589,8 +1579,7 @@ def _parse_manifest(text: str) -> ManifestParse:
         nonlocal in_execution_requirements, execution_requirements, exec_req_has_content
         _finalize_exec_tools()
         if in_execution_requirements and current is not None:
-            current["executionRequirements"] = (
-                execution_requirements if exec_req_has_content else None)
+            current["executionRequirements"] = execution_requirements if exec_req_has_content else None
         in_execution_requirements = False
         execution_requirements = {}
         exec_req_has_content = False
@@ -1610,8 +1599,7 @@ def _parse_manifest(text: str) -> ManifestParse:
                 raw_text = item.group(1).strip()
                 opened = _match_key_line(INLINE_KEY_VALUE_RE, raw_text)
                 current_ref_open_line = line.strip()
-                if (item_indent != REFERENCES_ITEM_INDENT or opened is None
-                        or opened[0] not in REFERENCES_ITEM_SUBKEYS):
+                if item_indent != REFERENCES_ITEM_INDENT or opened is None or opened[0] not in REFERENCES_ITEM_SUBKEYS:
                     # Wrong indent (exactly 4 spaces required -- one level
                     # under spec.references' own 2-space key, matching
                     # every other gated block's own fixed-indent
@@ -1689,9 +1677,10 @@ def _parse_manifest(text: str) -> ManifestParse:
                     malformed_deps.append(line.strip())
                     continue
                 raw_text = item.group(1).strip()
-                is_quoted = (len(raw_text) >= 2 and raw_text[0] == raw_text[-1]
-                             and raw_text[0] in "\"'")
-                if (not is_quoted and REFERENCES_MAPPING_LIKE_RE.match(raw_text)) or (not is_quoted and _is_non_string_plain_scalar(raw_text)):
+                is_quoted = len(raw_text) >= 2 and raw_text[0] == raw_text[-1] and raw_text[0] in "\"'"
+                if (not is_quoted and REFERENCES_MAPPING_LIKE_RE.match(raw_text)) or (
+                    not is_quoted and _is_non_string_plain_scalar(raw_text)
+                ):
                     malformed_deps.append(line.strip())
                 else:
                     collecting_dep_list.append(_unquote(raw_text))
@@ -1842,9 +1831,10 @@ def _parse_manifest(text: str) -> ManifestParse:
                     malformed_exec_tools_items.append(line.strip())
                     continue
                 raw_text = item.group(1).strip()
-                is_quoted = (len(raw_text) >= 2 and raw_text[0] == raw_text[-1]
-                             and raw_text[0] in "\"'")
-                if (not is_quoted and REFERENCES_MAPPING_LIKE_RE.match(raw_text)) or (not is_quoted and _is_non_string_plain_scalar(raw_text)):
+                is_quoted = len(raw_text) >= 2 and raw_text[0] == raw_text[-1] and raw_text[0] in "\"'"
+                if (not is_quoted and REFERENCES_MAPPING_LIKE_RE.match(raw_text)) or (
+                    not is_quoted and _is_non_string_plain_scalar(raw_text)
+                ):
                     malformed_exec_tools_items.append(line.strip())
                 else:
                     collecting_exec_tools_list.append(_unquote(raw_text))
@@ -1970,16 +1960,19 @@ def _parse_manifest(text: str) -> ManifestParse:
     _finalize_skill_deps()
     _finalize_lifecycle()
     _finalize_execution_requirements()
-    return ManifestParse(root=root, malformed_lines=malformed,
-                          malformed_reference_items=malformed_refs,
-                          unknown_reference_item_keys=unknown_ref_item_keys,
-                          malformed_skill_dependency_items=malformed_deps,
-                          unknown_skill_dependency_keys=unknown_dep_keys,
-                          unknown_lifecycle_keys=unknown_lifecycle_keys,
-                          unknown_lifecycle_fields=unknown_lifecycle_fields,
-                          unknown_execution_requirement_keys=unknown_exec_req_keys,
-                          unknown_execution_requirement_tools_keys=unknown_exec_tools_keys,
-                          malformed_execution_requirement_tools_items=malformed_exec_tools_items)
+    return ManifestParse(
+        root=root,
+        malformed_lines=malformed,
+        malformed_reference_items=malformed_refs,
+        unknown_reference_item_keys=unknown_ref_item_keys,
+        malformed_skill_dependency_items=malformed_deps,
+        unknown_skill_dependency_keys=unknown_dep_keys,
+        unknown_lifecycle_keys=unknown_lifecycle_keys,
+        unknown_lifecycle_fields=unknown_lifecycle_fields,
+        unknown_execution_requirement_keys=unknown_exec_req_keys,
+        unknown_execution_requirement_tools_keys=unknown_exec_tools_keys,
+        malformed_execution_requirement_tools_items=malformed_exec_tools_items,
+    )
 
 
 def spec_of(parsed: ManifestParse) -> dict[str, object] | None:
@@ -2004,11 +1997,10 @@ def _body_after_frontmatter(text: str) -> list[str]:
     lines = text.splitlines()
     if not text.startswith("---"):
         return lines
-    end = next((i for i in range(1, len(lines))
-                if lines[i].strip() == "---"), None)
+    end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), None)
     if end is None:
         return lines
-    return lines[end + 1:]
+    return lines[end + 1 :]
 
 
 def _is_ignorable(p: Path) -> bool:
@@ -2049,8 +2041,7 @@ def _escapes_skill_dir(normalized: str, skill_norm: str) -> bool:
     return normalized != skill_norm and not normalized.startswith(skill_norm + os.sep)
 
 
-def _out_of_skill_link_targets(body_text: str, skill_dir: Path,
-                               source_dir: Path | None = None) -> list[str]:
+def _out_of_skill_link_targets(body_text: str, skill_dir: Path, source_dir: Path | None = None) -> list[str]:
     """Return each Markdown link target in ``body_text`` that resolves
     outside ``skill_dir``.
 
@@ -2078,8 +2069,7 @@ def _out_of_skill_link_targets(body_text: str, skill_dir: Path,
     failure this check exists to catch, not escaping references/ alone.
     """
     skill_norm = os.path.normpath(str(skill_dir))
-    source_norm = os.path.normpath(str(source_dir if source_dir is not None
-                                       else skill_dir))
+    source_norm = os.path.normpath(str(source_dir if source_dir is not None else skill_dir))
     offenders = []
     for raw in _raw_link_targets(body_text):
         target = raw.strip()
@@ -2111,8 +2101,7 @@ def _out_of_skill_link_targets(body_text: str, skill_dir: Path,
 # "heading"). Applied only to fence-blanked text
 # (see _heading_slugs) so a heading-shaped line inside a fenced code
 # example is never read as a real heading.
-HEADING_RE = re.compile(
-    r"^[ ]{0,3}#{1,6}[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$", re.MULTILINE)
+HEADING_RE = re.compile(r"^[ ]{0,3}#{1,6}[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$", re.MULTILINE)
 # A Markdown Setext heading: a non-blank text line (0-3 leading spaces,
 # CommonMark's tolerance again), immediately followed (no blank line
 # between) by an underline of only '=' characters (renders an H1) or only
@@ -2125,9 +2114,7 @@ HEADING_RE = re.compile(
 # immediately followed by a "---" divider (a common section-break
 # convention, distinct from a Setext underline) would be misread as a
 # Setext H2 whose "text" is the whole "## Heading" line, hashes included.
-SETEXT_HEADING_RE = re.compile(
-    r"^[ ]{0,3}(?!#{1,6}(?:[ \t]|$))(\S.*?)[ \t]*\n[ ]{0,3}(?:=+|-+)[ \t]*$",
-    re.MULTILINE)
+SETEXT_HEADING_RE = re.compile(r"^[ ]{0,3}(?!#{1,6}(?:[ \t]|$))(\S.*?)[ \t]*\n[ ]{0,3}(?:=+|-+)[ \t]*$", re.MULTILINE)
 # GitHub's own heading-to-anchor slug punctuation strip set -- a denylist
 # of specific ASCII punctuation plus two Unicode "General Punctuation"/
 # "Supplemental Punctuation" blocks, matching the real github-slugger
@@ -2137,8 +2124,7 @@ SETEXT_HEADING_RE = re.compile(
 # an ASCII-only allowlist would incorrectly also delete non-ASCII Unicode
 # letters (e.g. turning "## Café Notes" into "caf-notes" instead of
 # GitHub's real "café-notes").
-ANCHOR_SLUG_STRIP_RE = re.compile(
-    r"[\u2000-\u206F\u2E00-\u2E7F\\'!\"#$%&()*+,./:;<=>?@\[\]^`{|}~]")
+ANCHOR_SLUG_STRIP_RE = re.compile(r"[\u2000-\u206F\u2E00-\u2E7F\\'!\"#$%&()*+,./:;<=>?@\[\]^`{|}~]")
 
 
 def _github_slug(heading: str, occurrences: dict[str, int]) -> str:
@@ -2237,7 +2223,8 @@ def _heading_slugs(text: str) -> frozenset[str]:
 CROSS_SKILL_CITATION_RE = re.compile(
     r"`([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)`'s?(?![A-Za-z0-9])\s*"
     r"`references/([A-Za-z0-9._-]+\.md)`\s+"
-    r"([A-Za-z0-9][A-Za-z0-9 '/-]*?)\s+[Ss]ection\b")
+    r"([A-Za-z0-9][A-Za-z0-9 '/-]*?)\s+[Ss]ection\b"
+)
 
 # Mechanism-fit subsection completeness: every ATX heading in a
 # document, this time captured WITH its own '#'-run (unlike HEADING_RE,
@@ -2245,8 +2232,7 @@ CROSS_SKILL_CITATION_RE = re.compile(
 # level-agnostic) -- the Mechanism-fit check below needs to tell a level-2
 # "## Mechanism fit" heading apart from a level-3 "### " subsection nested
 # under it, so it cannot reuse HEADING_RE's own single-capture-group shape.
-MECHANISM_FIT_HEADING_RE = re.compile(
-    r"^[ ]{0,3}(#{1,6})[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$", re.MULTILINE)
+MECHANISM_FIT_HEADING_RE = re.compile(r"^[ ]{0,3}(#{1,6})[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$", re.MULTILINE)
 # A "[label]"-style citation bracket -- this repository's own established
 # reference-style-link-label convention (e.g. "[sd]", "[ab]",
 # "[modeleffort]"), the same shape a Mechanism-fit subsection already uses
@@ -2272,11 +2258,10 @@ MECHANISM_FIT_REASONED_EXTENSION_PHRASE = "this repository's own reasoned extens
 # capture group is a bare non-whitespace run; applying this to a
 # REFDEF_RE-sourced target is harmless (no whitespace+quoted-suffix shape
 # to strip from an untitled destination).
-LINK_TITLE_RE = re.compile(r'''[ \t]+(?:"[^"]*"|'[^']*'|\([^()]*\))[ \t]*$''')
+LINK_TITLE_RE = re.compile(r"""[ \t]+(?:"[^"]*"|'[^']*'|\([^()]*\))[ \t]*$""")
 
 
-def _resolve_anchor_link_file(raw_path: str, source_dir: Path,
-                              skill_norm: str) -> Path | None:
+def _resolve_anchor_link_file(raw_path: str, source_dir: Path, skill_norm: str) -> Path | None:
     """Resolve a Markdown link's path portion to the file it actually
     points at, for the purpose of validating its ``#fragment`` -- real
     relative-link semantics, resolved against ``source_dir`` (the
@@ -2307,8 +2292,7 @@ def _resolve_anchor_link_file(raw_path: str, source_dir: Path,
     return Path(resolved)
 
 
-def _cached_target_heading_slugs(
-        path: Path, cache: dict[Path, frozenset[str] | None]) -> frozenset[str] | None:
+def _cached_target_heading_slugs(path: Path, cache: dict[Path, frozenset[str] | None]) -> frozenset[str] | None:
     """Return ``path``'s heading-slug set (see ``_heading_slugs``), reading
     and parsing the file at most once per ``check_shape`` run -- ``cache``
     is shared across the SKILL.md check and every references/*.md check in
@@ -2339,8 +2323,8 @@ def _cached_target_heading_slugs(
 
 
 def _broken_anchor_targets(
-        body_text: str, source_path: Path, skill_dir: Path,
-        cache: dict[Path, frozenset[str] | None]) -> list[str]:
+    body_text: str, source_path: Path, skill_dir: Path, cache: dict[Path, frozenset[str] | None]
+) -> list[str]:
     """Return each Markdown link target in ``body_text`` (the body of
     ``source_path``) whose ``#fragment`` does not match any real
     GitHub-rendered heading anchor in its target file.
@@ -2374,7 +2358,7 @@ def _broken_anchor_targets(
         target = raw.strip()
         title_match = LINK_TITLE_RE.search(target)
         if title_match:
-            target = target[:title_match.start()].rstrip()
+            target = target[: title_match.start()].rstrip()
         if len(target) >= 2 and target[0] == "<" and target[-1] == ">":
             target = target[1:-1].strip()
         if SCHEME_RE.match(target):
@@ -2436,6 +2420,7 @@ class SidecarPortability:
       recognised level. ``_is_portable`` returns True unconditionally in
       this state -- see its docstring for why.
     """
+
     state: str
     level: str | None = None
 
@@ -2489,9 +2474,8 @@ def _is_portable(body: list[str], sidecar: SidecarPortability) -> bool:
     for i, line in enumerate(window):
         if PORTABILITY_RE.search(line):
             decl = line
-            if not (PORTABLE_LEVEL_RE.search(line)
-                    or NON_PORTABLE_LEVEL_RE.search(line)):
-                decl = " ".join(window[i:i + 2])  # level wrapped to next line
+            if not (PORTABLE_LEVEL_RE.search(line) or NON_PORTABLE_LEVEL_RE.search(line)):
+                decl = " ".join(window[i : i + 2])  # level wrapped to next line
             return bool(PORTABLE_LEVEL_RE.search(decl)) and not NON_PORTABLE_LEVEL_RE.search(decl)
     return False
 
@@ -2562,8 +2546,7 @@ def _strip_illustrative_spans(defenced_text: str) -> str:
     return "\n".join(out)
 
 
-def _split_at_bridging_semicolon(sentence: str,
-                                 citation_res: tuple[re.Pattern[str], ...]) -> list[str]:
+def _split_at_bridging_semicolon(sentence: str, citation_res: tuple[re.Pattern[str], ...]) -> list[str]:
     """Split ``sentence`` at its first semicolon into two clauses, but ONLY
     when an inline-code citation (matching any of ``citation_res``, across
     every spec, not just one) appears on BOTH sides of it -- otherwise
@@ -2592,11 +2575,10 @@ def _split_at_bridging_semicolon(sentence: str,
     semi = sentence.find(";")
     if semi == -1:
         return [sentence]
-    before, after = sentence[:semi + 1], sentence[semi + 1:]
+    before, after = sentence[: semi + 1], sentence[semi + 1 :]
 
     def _has_citation(text: str) -> bool:
-        return any(cre.search(m.group(2))
-                  for m in INLINE_CODE_RE.finditer(text) for cre in citation_res)
+        return any(cre.search(m.group(2)) for m in INLINE_CODE_RE.finditer(text) for cre in citation_res)
 
     if _has_citation(before) and _has_citation(after):
         return [before, after]
@@ -2604,8 +2586,8 @@ def _split_at_bridging_semicolon(sentence: str,
 
 
 def _inline_citation_offenders(
-        defenced_text: str,
-        specs: tuple[tuple[re.Pattern[str], tuple[str, ...]], ...],
+    defenced_text: str,
+    specs: tuple[tuple[re.Pattern[str], tuple[str, ...]], ...],
 ) -> list[list[str]]:
     """Return, for each ``(citation_re, hedge_phrases)`` pair in ``specs``,
     the list of inline-code citations matching that ``citation_re`` in
@@ -2706,18 +2688,14 @@ def _inline_citation_offenders(
                     blanked[pos] = " "
             blanked_lower = "".join(blanked)
             for spec_idx, (citation_re, hedge_phrases) in enumerate(specs):
-                spec_matches = [cs for cs in code_spans
-                               if citation_re.search(cs.group(2))]
+                spec_matches = [cs for cs in code_spans if citation_re.search(cs.group(2))]
                 if not spec_matches:
                     continue
-                prev_has_own_citation = i > 0 and any(
-                    citation_re.search(cs.group(2)) for cs in all_code_spans[i - 1])
+                prev_has_own_citation = i > 0 and any(citation_re.search(cs.group(2)) for cs in all_code_spans[i - 1])
                 candidate_prev = "" if prev_has_own_citation else prev_lower
-                hedged = any(phrase in blanked_lower or phrase in candidate_prev
-                            for phrase in hedge_phrases)
+                hedged = any(phrase in blanked_lower or phrase in candidate_prev for phrase in hedge_phrases)
                 if not hedged:
-                    offenders_per_spec[spec_idx].extend(
-                        cs.group(0) for cs in spec_matches)
+                    offenders_per_spec[spec_idx].extend(cs.group(0) for cs in spec_matches)
     return [_dedup(offenders) for offenders in offenders_per_spec]
 
 
@@ -2745,21 +2723,20 @@ def _dedup(items: Iterable[str]) -> list[str]:
 def _no_xml_check(field: str, value: str) -> CheckResult:
     has_tag = bool(TAG_RE.search(value))
     return CheckResult(
-        f"{field}-no-xml", not has_tag, f"{field} has no XML tags",
-        "tag found" if has_tag else "no tags")
+        f"{field}-no-xml", not has_tag, f"{field} has no XML tags", "tag found" if has_tag else "no tags"
+    )
 
 
 def _length_check(field: str, value: str, limit: int) -> CheckResult:
-    return CheckResult(
-        f"{field}-length", len(value) <= limit,
-        f"{field} <= {limit} chars", f"{len(value)} chars")
+    return CheckResult(f"{field}-length", len(value) <= limit, f"{field} <= {limit} chars", f"{len(value)} chars")
 
 
-def _yaml_plain_scalar_safety_check(field: str, value: str,
-                                    is_plain_scalar: bool) -> CheckResult:
-    rule = (f"{field} (an unquoted YAML plain scalar) has no ': ', trailing "
-            "':', or ' #'/leading '#' that would break or silently "
-            "truncate under a real YAML parser")
+def _yaml_plain_scalar_safety_check(field: str, value: str, is_plain_scalar: bool) -> CheckResult:
+    rule = (
+        f"{field} (an unquoted YAML plain scalar) has no ': ', trailing "
+        "':', or ' #'/leading '#' that would break or silently "
+        "truncate under a real YAML parser"
+    )
     if not is_plain_scalar:
         # A quoted or block-scalar (>/|) value is already safe under a real
         # YAML parser regardless of what characters it contains -- the
@@ -2768,8 +2745,7 @@ def _yaml_plain_scalar_safety_check(field: str, value: str,
         # uses), so a quoted/block-scalar field is exempt rather than
         # scanned against already-unquoted/already-joined text that no
         # longer reflects how it was actually written.
-        return CheckResult(f"{field}-yaml-safe", True, rule,
-                            "safe (quoted or block scalar in source)")
+        return CheckResult(f"{field}-yaml-safe", True, rule, "safe (quoted or block scalar in source)")
     colon_hit = UNSAFE_COLON_RE.search(value)
     comment_hit = UNSAFE_COMMENT_RE.search(value)
     # Report whichever hazard occurs first in the string -- a real YAML
@@ -2803,8 +2779,7 @@ def _validate_read_scope(target: Path, allowed_root: Path) -> None:
     try:
         relative = candidate.relative_to(root)
     except ValueError as exc:
-        raise ValueError(
-            f"target is outside allowed root: {target}") from exc
+        raise ValueError(f"target is outside allowed root: {target}") from exc
 
     current = root
     for part in relative.parts:
@@ -2817,8 +2792,7 @@ def _validate_read_scope(target: Path, allowed_root: Path) -> None:
     try:
         candidate_real.relative_to(root_real)
     except ValueError as exc:
-        raise ValueError(
-            f"resolved target is outside allowed root: {target}") from exc
+        raise ValueError(f"resolved target is outside allowed root: {target}") from exc
 
     skill_dir = candidate.parent
     for directory, dirnames, filenames in os.walk(skill_dir, followlinks=False):
@@ -2831,8 +2805,7 @@ def _validate_read_scope(target: Path, allowed_root: Path) -> None:
             if path.is_symlink():
                 raise ValueError(f"symlink is not allowed in target skill: {path}")
             if not path.is_file():
-                raise ValueError(
-                    f"special file is not allowed in target skill: {path}")
+                raise ValueError(f"special file is not allowed in target skill: {path}")
 
 
 def _references_grammar_check(references: object) -> CheckResult:
@@ -2860,24 +2833,27 @@ def _references_grammar_check(references: object) -> CheckResult:
     citation anywhere in the entry), so a second, narrower anchor-shape
     regex here would just be unenforced ornamentation.
     """
-    rule = (
-        "spec.references, if present, has each entry's kind field one of "
-        f"{REFERENCES_KIND_VOCAB}")
+    rule = f"spec.references, if present, has each entry's kind field one of {REFERENCES_KIND_VOCAB}"
     if references is None:
         return CheckResult("references-grammar", True, rule, "not declared (optional)")
-    if not (isinstance(references, list) and references
-            and all(isinstance(r, dict) and isinstance(r.get("kind"), str)
-                    for r in references)):
+    if not (
+        isinstance(references, list)
+        and references
+        and all(isinstance(r, dict) and isinstance(r.get("kind"), str) for r in references)
+    ):
         return CheckResult(
-            "references-grammar", True, rule,
-            "nothing to check (already reported by references-well-formed)")
+            "references-grammar", True, rule, "nothing to check (already reported by references-well-formed)"
+        )
     offenders = [r["kind"] for r in references if r["kind"] not in REFERENCES_KIND_VOCAB]
     count = len(offenders)
     return CheckResult(
-        "references-grammar", not offenders, rule,
-        "all entries match" if not offenders
-        else f"{count} entr{'y' if count == 1 else 'ies'} with an unrecognized "
-             f"kind: {offenders[0]!r}")
+        "references-grammar",
+        not offenders,
+        rule,
+        "all entries match"
+        if not offenders
+        else f"{count} entr{'y' if count == 1 else 'ies'} with an unrecognized kind: {offenders[0]!r}",
+    )
 
 
 def _invocation_mode_check(fields: dict[str, str]) -> CheckResult:
@@ -2915,13 +2891,14 @@ def _invocation_mode_check(fields: dict[str, str]) -> CheckResult:
     a loud failure naming the exact offending raw value, never a silent
     pass.
     """
-    rule = ("disable-model-invocation/user-invocable, if present, each carry a "
-            "documented boolean literal, and do not together disable both "
-            "invocation paths")
+    rule = (
+        "disable-model-invocation/user-invocable, if present, each carry a "
+        "documented boolean literal, and do not together disable both "
+        "invocation paths"
+    )
     declared = {k: v for k, v in fields.items() if k in INVOCATION_FIELD_DEFAULTS}
     if not declared:
-        return CheckResult("invocation-mode-well-formed", True, rule,
-                           "not declared (optional)")
+        return CheckResult("invocation-mode-well-formed", True, rule, "not declared (optional)")
     resolved: dict[str, bool] = dict(INVOCATION_FIELD_DEFAULTS)
     malformed: list[str] = []
     for key, raw in declared.items():
@@ -2934,18 +2911,26 @@ def _invocation_mode_check(fields: dict[str, str]) -> CheckResult:
             malformed.append(f"{key}: {raw!r}")
     if malformed:
         return CheckResult(
-            "invocation-mode-well-formed", False, rule,
+            "invocation-mode-well-formed",
+            False,
+            rule,
             f"value outside {INVOCATION_TRUE_LITERALS + INVOCATION_FALSE_LITERALS} "
-            f"(case-insensitive): {', '.join(malformed)}")
+            f"(case-insensitive): {', '.join(malformed)}",
+        )
     if resolved["disable-model-invocation"] and not resolved["user-invocable"]:
         return CheckResult(
-            "invocation-mode-well-formed", False, rule,
+            "invocation-mode-well-formed",
+            False,
+            rule,
             "invocable by nobody: disable-model-invocation blocks the model "
-            "and user-invocable: false hides it from the / menu")
+            "and user-invocable: false hides it from the / menu",
+        )
     return CheckResult(
-        "invocation-mode-well-formed", True, rule,
-        "declared: " + ", ".join(f"{k}={str(resolved[k]).lower()}"
-                                 for k in sorted(declared)))
+        "invocation-mode-well-formed",
+        True,
+        rule,
+        "declared: " + ", ".join(f"{k}={str(resolved[k]).lower()}" for k in sorted(declared)),
+    )
 
 
 def check_shape(target: Path) -> list[CheckResult]:
@@ -2982,67 +2967,68 @@ def check_shape(target: Path) -> list[CheckResult]:
         # below) keeps that split intact for any other direct caller too.
         raise
     except (OSError, UnicodeDecodeError) as exc:
-        return [CheckResult(
-            "skill-md-readable", False,
-            "SKILL.md is readable as UTF-8 text",
-            f"unreadable: {type(exc).__name__}")]
+        return [
+            CheckResult(
+                "skill-md-readable", False, "SKILL.md is readable as UTF-8 text", f"unreadable: {type(exc).__name__}"
+            )
+        ]
     # Always emitted (pass or fail), matching every other check in this
     # module -- not only on the failure path above -- so a caller scanning
     # results for this name never has to treat its absence as a third,
     # ambiguous state.
-    results.append(CheckResult(
-        "skill-md-readable", True, "SKILL.md is readable as UTF-8 text",
-        "present"))
+    results.append(CheckResult("skill-md-readable", True, "SKILL.md is readable as UTF-8 text", "present"))
     frontmatter = _parse_frontmatter(text)
     fields = frontmatter.fields
 
     description = fields.get("description", "")
     if not description:
-        results.append(CheckResult(
-            "description-present", False,
-            "description present and non-empty", "missing or empty"))
+        results.append(
+            CheckResult("description-present", False, "description present and non-empty", "missing or empty")
+        )
     else:
-        results.append(CheckResult(
-            "description-present", True,
-            "description present and non-empty", "present"))
+        results.append(CheckResult("description-present", True, "description present and non-empty", "present"))
         results.append(_no_xml_check("description", description))
-        results.append(_length_check(
-            "description", description, DESCRIPTION_MAX_CHARS))
-        results.append(_yaml_plain_scalar_safety_check(
-            "description", description,
-            "description" in frontmatter.plain_fields))
+        results.append(_length_check("description", description, DESCRIPTION_MAX_CHARS))
+        results.append(
+            _yaml_plain_scalar_safety_check("description", description, "description" in frontmatter.plain_fields)
+        )
 
     name = fields.get("name")
     if name:
-        results.append(CheckResult(
-            "name-pattern", bool(NAME_RE.match(name)),
-            "name is lowercase-hyphenated", repr(name)))
+        results.append(
+            CheckResult("name-pattern", bool(NAME_RE.match(name)), "name is lowercase-hyphenated", repr(name))
+        )
         results.append(_length_check("name", name, NAME_MAX_CHARS))
         results.append(_no_xml_check("name", name))
         lname = name.lower()
         reserved_hit = any(word in lname for word in RESERVED_NAME_WORDS)
-        results.append(CheckResult(
-            "name-not-reserved", not reserved_hit,
-            f"name contains no reserved word {RESERVED_NAME_WORDS}",
-            repr(name)))
+        results.append(
+            CheckResult(
+                "name-not-reserved",
+                not reserved_hit,
+                f"name contains no reserved word {RESERVED_NAME_WORDS}",
+                repr(name),
+            )
+        )
 
     results.append(_invocation_mode_check(fields))
 
     body_lines = len(text.splitlines())
-    results.append(CheckResult(
-        "body-length", body_lines <= BODY_MAX_LINES,
-        f"SKILL.md body <= {BODY_MAX_LINES} lines", f"{body_lines} lines"))
+    results.append(
+        CheckResult(
+            "body-length",
+            body_lines <= BODY_MAX_LINES,
+            f"SKILL.md body <= {BODY_MAX_LINES} lines",
+            f"{body_lines} lines",
+        )
+    )
 
     sidecar = skill_dir / SIDECAR_RELATIVE_PATH
     if not sidecar.is_file():
-        results.append(CheckResult(
-            "metadata-file-present", False,
-            f"{SIDECAR_RELATIVE_PATH} exists", "missing"))
+        results.append(CheckResult("metadata-file-present", False, f"{SIDECAR_RELATIVE_PATH} exists", "missing"))
         sidecar_portability = SidecarPortability(state="absent")
     else:
-        results.append(CheckResult(
-            "metadata-file-present", True,
-            f"{SIDECAR_RELATIVE_PATH} exists", "present"))
+        results.append(CheckResult("metadata-file-present", True, f"{SIDECAR_RELATIVE_PATH} exists", "present"))
         # Single read+parse site for the sidecar in this module (see the
         # SidecarPortability docstring): a corrupt (non-UTF-8) or otherwise
         # unreadable sidecar must not raise out of check_shape -- it is a
@@ -3077,71 +3063,122 @@ def check_shape(target: Path) -> list[CheckResult]:
 
         if manifest is None:
             evidence = f"unreadable: {read_error}"
-            results.append(CheckResult(
-                "manifest-parsable", False,
-                f"{SIDECAR_RELATIVE_PATH} has no malformed top-level lines",
-                evidence))
-            results.append(CheckResult(
-                "manifest-envelope", False,
-                f"apiVersion is {EXPECTED_API_VERSION} and kind is {EXPECTED_KIND}",
-                evidence))
-            results.append(CheckResult(
-                "metadata-name-matches-dir", False,
-                "metadata.name equals the skill directory name", evidence))
-            results.append(CheckResult(
-                "portability-declared", False,
-                f"spec.portability is one of {PORTABILITY_LEVELS}", evidence))
-            results.append(CheckResult(
-                "capability-assumption-declared", False,
-                f"spec.capabilityAssumption is one of {CAPABILITY_ASSUMPTIONS}",
-                evidence))
-            results.append(CheckResult(
-                "references-well-formed", False,
-                "spec.references, if present, is a non-empty list of non-empty strings",
-                evidence))
-            results.append(CheckResult(
-                "references-grammar", False,
-                "spec.references, if present, has each entry shaped "
-                '"<kind> | <anchor> | <summary>[ | <outcome>]"',
-                evidence))
-            results.append(CheckResult(
-                "skill-dependencies-well-formed", False,
-                "spec.skillDependencies, if present, is a mapping with only "
-                "requires/relatedTo keys, each -- if present -- a list of "
-                "non-empty strings", evidence))
-            results.append(CheckResult(
-                "skill-dependencies-resolve", False,
-                "every name in spec.skillDependencies.requires/relatedTo "
-                "resolves to an existing sibling skill directory", evidence))
-            results.append(CheckResult(
-                "requires-portability-compatible", False,
-                "a non-empty spec.skillDependencies.requires is incompatible "
-                "with spec.portability: Portable", evidence))
-            results.append(CheckResult(
-                "lifecycle-well-formed", False,
-                "spec.lifecycle, if present, is a mapping with only "
-                "experimental/deprecated/stable/renamedFrom keys, each "
-                "block sub-key (experimental/deprecated/stable) -- if "
-                "present -- a mapping of its own recognized scalar fields "
-                "with required fields non-empty and since/removeAfter, if "
-                "present, real YYYY-MM-DD dates, and renamedFrom, if "
-                "present, a non-empty scalar string", evidence))
-            results.append(CheckResult(
-                "lifecycle-deprecated-replacement-resolves", False,
-                "spec.lifecycle.deprecated.replacement, if a non-empty "
-                "string, resolves to an existing sibling skill directory",
-                evidence))
-            results.append(CheckResult(
-                "experimental-stable-compatible", False,
-                "spec.lifecycle.experimental and spec.lifecycle.stable "
-                "cannot both be present -- a skill cannot be both "
-                "not-yet-graduated and already graduated", evidence))
-            results.append(CheckResult(
-                "execution-requirements-well-formed", False,
-                "spec.executionRequirements, if present, is a mapping with "
-                "only the tools key; tools, if present, is a mapping with "
-                "only read/write/shell keys, each -- if present -- a list "
-                "of non-empty strings", evidence))
+            results.append(
+                CheckResult(
+                    "manifest-parsable", False, f"{SIDECAR_RELATIVE_PATH} has no malformed top-level lines", evidence
+                )
+            )
+            results.append(
+                CheckResult(
+                    "manifest-envelope",
+                    False,
+                    f"apiVersion is {EXPECTED_API_VERSION} and kind is {EXPECTED_KIND}",
+                    evidence,
+                )
+            )
+            results.append(
+                CheckResult(
+                    "metadata-name-matches-dir", False, "metadata.name equals the skill directory name", evidence
+                )
+            )
+            results.append(
+                CheckResult("portability-declared", False, f"spec.portability is one of {PORTABILITY_LEVELS}", evidence)
+            )
+            results.append(
+                CheckResult(
+                    "capability-assumption-declared",
+                    False,
+                    f"spec.capabilityAssumption is one of {CAPABILITY_ASSUMPTIONS}",
+                    evidence,
+                )
+            )
+            results.append(
+                CheckResult(
+                    "references-well-formed",
+                    False,
+                    "spec.references, if present, is a non-empty list of non-empty strings",
+                    evidence,
+                )
+            )
+            results.append(
+                CheckResult(
+                    "references-grammar",
+                    False,
+                    'spec.references, if present, has each entry shaped "<kind> | <anchor> | <summary>[ | <outcome>]"',
+                    evidence,
+                )
+            )
+            results.append(
+                CheckResult(
+                    "skill-dependencies-well-formed",
+                    False,
+                    "spec.skillDependencies, if present, is a mapping with only "
+                    "requires/relatedTo keys, each -- if present -- a list of "
+                    "non-empty strings",
+                    evidence,
+                )
+            )
+            results.append(
+                CheckResult(
+                    "skill-dependencies-resolve",
+                    False,
+                    "every name in spec.skillDependencies.requires/relatedTo "
+                    "resolves to an existing sibling skill directory",
+                    evidence,
+                )
+            )
+            results.append(
+                CheckResult(
+                    "requires-portability-compatible",
+                    False,
+                    "a non-empty spec.skillDependencies.requires is incompatible with spec.portability: Portable",
+                    evidence,
+                )
+            )
+            results.append(
+                CheckResult(
+                    "lifecycle-well-formed",
+                    False,
+                    "spec.lifecycle, if present, is a mapping with only "
+                    "experimental/deprecated/stable/renamedFrom keys, each "
+                    "block sub-key (experimental/deprecated/stable) -- if "
+                    "present -- a mapping of its own recognized scalar fields "
+                    "with required fields non-empty and since/removeAfter, if "
+                    "present, real YYYY-MM-DD dates, and renamedFrom, if "
+                    "present, a non-empty scalar string",
+                    evidence,
+                )
+            )
+            results.append(
+                CheckResult(
+                    "lifecycle-deprecated-replacement-resolves",
+                    False,
+                    "spec.lifecycle.deprecated.replacement, if a non-empty "
+                    "string, resolves to an existing sibling skill directory",
+                    evidence,
+                )
+            )
+            results.append(
+                CheckResult(
+                    "experimental-stable-compatible",
+                    False,
+                    "spec.lifecycle.experimental and spec.lifecycle.stable "
+                    "cannot both be present -- a skill cannot be both "
+                    "not-yet-graduated and already graduated",
+                    evidence,
+                )
+            )
+            results.append(
+                CheckResult(
+                    "execution-requirements-well-formed",
+                    False,
+                    "spec.executionRequirements, if present, is a mapping with "
+                    "only the tools key; tools, if present, is a mapping with "
+                    "only read/write/shell keys, each -- if present -- a list "
+                    "of non-empty strings",
+                    evidence,
+                )
+            )
             # Deliberately not the body-marker fallback: a present-but-broken
             # sidecar is authoritative-and-failing, not absent. Running the
             # scan (rather than skipping it) lands extra findings on a skill
@@ -3152,65 +3189,90 @@ def check_shape(target: Path) -> list[CheckResult]:
             if malformed_lines:
                 count = len(malformed_lines)
                 plural = "" if count == 1 else "s"
-                manifest_parsable_evidence = (
-                    f"{count} malformed line{plural}: {malformed_lines[0]!r}")
+                manifest_parsable_evidence = f"{count} malformed line{plural}: {malformed_lines[0]!r}"
             else:
                 manifest_parsable_evidence = "no malformed lines"
-            results.append(CheckResult(
-                "manifest-parsable", not malformed_lines,
-                f"{SIDECAR_RELATIVE_PATH} has no malformed top-level lines",
-                manifest_parsable_evidence))
+            results.append(
+                CheckResult(
+                    "manifest-parsable",
+                    not malformed_lines,
+                    f"{SIDECAR_RELATIVE_PATH} has no malformed top-level lines",
+                    manifest_parsable_evidence,
+                )
+            )
             api = manifest.get("apiVersion")
             kind_value = manifest.get("kind")
-            envelope_ok = (api == EXPECTED_API_VERSION
-                           and kind_value == EXPECTED_KIND)
-            results.append(CheckResult(
-                "manifest-envelope", envelope_ok,
-                f"apiVersion is {EXPECTED_API_VERSION} and kind is {EXPECTED_KIND}",
-                f"apiVersion={api!r}, kind={kind_value!r}"))
+            envelope_ok = api == EXPECTED_API_VERSION and kind_value == EXPECTED_KIND
+            results.append(
+                CheckResult(
+                    "manifest-envelope",
+                    envelope_ok,
+                    f"apiVersion is {EXPECTED_API_VERSION} and kind is {EXPECTED_KIND}",
+                    f"apiVersion={api!r}, kind={kind_value!r}",
+                )
+            )
             meta = manifest.get("metadata")
             meta_name = meta.get("name") if isinstance(meta, dict) else None
             # Same waiver: the name compared here must be the symlink's own
             # basename, not the real directory it points to (see the
             # metadata-name-matches-dir test for a symlinked skill dir).
             resolved_dir_name = Path(os.path.abspath(skill_dir)).name  # noqa: PTH100
-            results.append(CheckResult(
-                "metadata-name-matches-dir", meta_name == resolved_dir_name,
-                "metadata.name equals the skill directory name",
-                f"{meta_name!r} vs directory {resolved_dir_name!r}"))
+            results.append(
+                CheckResult(
+                    "metadata-name-matches-dir",
+                    meta_name == resolved_dir_name,
+                    "metadata.name equals the skill directory name",
+                    f"{meta_name!r} vs directory {resolved_dir_name!r}",
+                )
+            )
             spec_raw = manifest.get("spec")
             spec_is_mapping = isinstance(spec_raw, dict)
             spec = spec_raw if spec_is_mapping else {}
             portability = spec.get("portability")
-            results.append(CheckResult(
-                "portability-declared", portability in PORTABILITY_LEVELS,
-                f"spec.portability is one of {PORTABILITY_LEVELS}",
-                repr(portability)))
+            results.append(
+                CheckResult(
+                    "portability-declared",
+                    portability in PORTABILITY_LEVELS,
+                    f"spec.portability is one of {PORTABILITY_LEVELS}",
+                    repr(portability),
+                )
+            )
             capability = spec.get("capabilityAssumption")
-            results.append(CheckResult(
-                "capability-assumption-declared",
-                capability in CAPABILITY_ASSUMPTIONS,
-                f"spec.capabilityAssumption is one of {CAPABILITY_ASSUMPTIONS}",
-                repr(capability)))
+            results.append(
+                CheckResult(
+                    "capability-assumption-declared",
+                    capability in CAPABILITY_ASSUMPTIONS,
+                    f"spec.capabilityAssumption is one of {CAPABILITY_ASSUMPTIONS}",
+                    repr(capability),
+                )
+            )
             references = spec.get("references")
             references_well_formed_rule = (
                 "spec.references, if present, is a non-empty list of "
                 "item mappings, each with kind/anchor/summary (and no "
                 f"unrecognized key), summary <= {REFERENCES_ENTRY_MAX_CHARS} "
-                "chars")
+                "chars"
+            )
             is_ref_item = lambda r: (  # noqa: E731 -- local, single use
-                isinstance(r, dict) and isinstance(r.get("kind"), str)
+                isinstance(r, dict)
+                and isinstance(r.get("kind"), str)
                 and isinstance(r.get("anchor"), str)
-                and isinstance(r.get("summary"), str))
+                and isinstance(r.get("summary"), str)
+            )
             if not spec_is_mapping:
                 # spec itself failed to parse as a mapping (e.g. "spec:
                 # some-scalar"), the same precondition failure
                 # portability-declared/capability-assumption-declared
                 # already report above -- "not declared" would misreport
                 # this as the ordinary optional-and-absent case.
-                results.append(CheckResult(
-                    "references-well-formed", False, references_well_formed_rule,
-                    f"spec is not a mapping: {spec_raw!r}"))
+                results.append(
+                    CheckResult(
+                        "references-well-formed",
+                        False,
+                        references_well_formed_rule,
+                        f"spec is not a mapping: {spec_raw!r}",
+                    )
+                )
             elif malformed_reference_items:
                 # An item whose own opening line was unrecognizable, whose
                 # first key was unrecognized, whose indent didn't match the
@@ -3220,43 +3282,53 @@ def check_shape(target: Path) -> list[CheckResult]:
                 # partial item it was excluded in favor of, even if the
                 # rest of the list otherwise looks clean.
                 count = len(malformed_reference_items)
-                results.append(CheckResult(
-                    "references-well-formed", False, references_well_formed_rule,
-                    f"{count} malformed entr{'y' if count == 1 else 'ies'}: "
-                    f"{malformed_reference_items[0]!r}"))
+                results.append(
+                    CheckResult(
+                        "references-well-formed",
+                        False,
+                        references_well_formed_rule,
+                        f"{count} malformed entr{'y' if count == 1 else 'ies'}: {malformed_reference_items[0]!r}",
+                    )
+                )
             elif unknown_reference_item_keys:
                 count = len(unknown_reference_item_keys)
-                results.append(CheckResult(
-                    "references-well-formed", False, references_well_formed_rule,
-                    f"{count} unknown key{'' if count == 1 else 's'}: "
-                    f"{unknown_reference_item_keys[0]!r}"))
+                results.append(
+                    CheckResult(
+                        "references-well-formed",
+                        False,
+                        references_well_formed_rule,
+                        f"{count} unknown key{'' if count == 1 else 's'}: {unknown_reference_item_keys[0]!r}",
+                    )
+                )
             elif references is None:
-                results.append(CheckResult(
-                    "references-well-formed", True, references_well_formed_rule,
-                    "not declared (optional)"))
-            elif not (isinstance(references, list) and references
-                      and all(is_ref_item(r) for r in references)):
-                ref_evidence = ("empty list" if references == []
-                                else f"not a list of item mappings: {references!r}")
-                results.append(CheckResult(
-                    "references-well-formed", False, references_well_formed_rule,
-                    ref_evidence))
+                results.append(
+                    CheckResult("references-well-formed", True, references_well_formed_rule, "not declared (optional)")
+                )
+            elif not (isinstance(references, list) and references and all(is_ref_item(r) for r in references)):
+                ref_evidence = "empty list" if references == [] else f"not a list of item mappings: {references!r}"
+                results.append(CheckResult("references-well-formed", False, references_well_formed_rule, ref_evidence))
             else:
-                oversized = [r for r in references
-                            if len(r["summary"]) > REFERENCES_ENTRY_MAX_CHARS]
+                oversized = [r for r in references if len(r["summary"]) > REFERENCES_ENTRY_MAX_CHARS]
                 if oversized:
-                    results.append(CheckResult(
-                        "references-well-formed", False, references_well_formed_rule,
-                        f"{len(oversized)} entr{'y' if len(oversized) == 1 else 'ies'} "
-                        f"over {REFERENCES_ENTRY_MAX_CHARS} chars: "
-                        f"{len(oversized[0]['summary'])} chars, kind="
-                        f"{oversized[0].get('kind')!r}"))
+                    results.append(
+                        CheckResult(
+                            "references-well-formed",
+                            False,
+                            references_well_formed_rule,
+                            f"{len(oversized)} entr{'y' if len(oversized) == 1 else 'ies'} "
+                            f"over {REFERENCES_ENTRY_MAX_CHARS} chars: "
+                            f"{len(oversized[0]['summary'])} chars, kind="
+                            f"{oversized[0].get('kind')!r}",
+                        )
+                    )
                 else:
                     ref_count = len(references)
                     ref_noun = "entry" if ref_count == 1 else "entries"
-                    results.append(CheckResult(
-                        "references-well-formed", True, references_well_formed_rule,
-                        f"{ref_count} {ref_noun}"))
+                    results.append(
+                        CheckResult(
+                            "references-well-formed", True, references_well_formed_rule, f"{ref_count} {ref_noun}"
+                        )
+                    )
             results.append(_references_grammar_check(references))
             if isinstance(references, list) and references:
                 ref_texts = []
@@ -3268,8 +3340,7 @@ def check_shape(target: Path) -> list[CheckResult]:
                     outcome = r.get("outcome")
                     if isinstance(outcome, dict):
                         ref_texts.extend(str(v) for v in outcome.values())
-                sidecar_citation_sources.append((
-                    "metadata/gitapex.yaml:spec.references", "\n".join(ref_texts)))
+                sidecar_citation_sources.append(("metadata/gitapex.yaml:spec.references", "\n".join(ref_texts)))
             lifecycle_raw = spec.get("lifecycle") if spec_is_mapping else None
             lifecycle_dict = lifecycle_raw if isinstance(lifecycle_raw, dict) else {}
             for lifecycle_key in ("experimental", "deprecated"):
@@ -3277,34 +3348,51 @@ def check_shape(target: Path) -> list[CheckResult]:
                 if isinstance(lifecycle_block, dict):
                     reason_text = lifecycle_block.get("reason")
                     if isinstance(reason_text, str) and reason_text:
-                        sidecar_citation_sources.append((
-                            f"metadata/gitapex.yaml:spec.lifecycle.{lifecycle_key}.reason",
-                            reason_text))
-            results.extend(_skill_dependency_checks(
-                spec_is_mapping, spec_raw, spec,
-                malformed_skill_dependency_items, unknown_skill_dependency_keys,
-                skill_dir, portability))
-            results.extend(_lifecycle_checks(
-                spec_is_mapping, spec_raw, spec,
-                unknown_lifecycle_keys, unknown_lifecycle_fields, skill_dir))
-            results.extend(_execution_requirements_checks(
-                spec_is_mapping, spec_raw, spec,
-                unknown_execution_requirement_keys,
-                unknown_execution_requirement_tools_keys,
-                malformed_execution_requirement_tools_items))
+                        sidecar_citation_sources.append(
+                            (f"metadata/gitapex.yaml:spec.lifecycle.{lifecycle_key}.reason", reason_text)
+                        )
+            results.extend(
+                _skill_dependency_checks(
+                    spec_is_mapping,
+                    spec_raw,
+                    spec,
+                    malformed_skill_dependency_items,
+                    unknown_skill_dependency_keys,
+                    skill_dir,
+                    portability,
+                )
+            )
+            results.extend(
+                _lifecycle_checks(
+                    spec_is_mapping, spec_raw, spec, unknown_lifecycle_keys, unknown_lifecycle_fields, skill_dir
+                )
+            )
+            results.extend(
+                _execution_requirements_checks(
+                    spec_is_mapping,
+                    spec_raw,
+                    spec,
+                    unknown_execution_requirement_keys,
+                    unknown_execution_requirement_tools_keys,
+                    malformed_execution_requirement_tools_items,
+                )
+            )
             if portability in PORTABILITY_LEVELS:
-                sidecar_portability = SidecarPortability(
-                    state="usable", level=portability)
+                sidecar_portability = SidecarPortability(state="usable", level=portability)
             else:
                 sidecar_portability = SidecarPortability(state="unusable")
 
     body = _body_after_frontmatter(text)
 
     offenders = _out_of_skill_link_targets("\n".join(body), skill_dir)
-    results.append(CheckResult(
-        "links-inside-skill", not offenders,
-        "Markdown link targets resolve inside the skill's own directory",
-        "all inside" if not offenders else "outside: " + ", ".join(offenders)))
+    results.append(
+        CheckResult(
+            "links-inside-skill",
+            not offenders,
+            "Markdown link targets resolve inside the skill's own directory",
+            "all inside" if not offenders else "outside: " + ", ".join(offenders),
+        )
+    )
 
     # Shared across the SKILL.md anchor check below and every
     # references/*.md anchor check in the loop that follows -- more than
@@ -3319,31 +3407,41 @@ def check_shape(target: Path) -> list[CheckResult]:
     anchor_slug_cache: dict[Path, frozenset[str] | None] = {
         skill_md: _heading_slugs("\n".join(body)),
     }
-    broken_anchors = _broken_anchor_targets(
-        "\n".join(body), skill_md, skill_dir, anchor_slug_cache)
-    results.append(CheckResult(
-        "anchor-targets-resolve", not broken_anchors,
-        "Markdown link #fragments resolve to a real heading anchor in "
-        "their target file",
-        "all resolve" if not broken_anchors
-        else "broken: " + ", ".join(broken_anchors)))
+    broken_anchors = _broken_anchor_targets("\n".join(body), skill_md, skill_dir, anchor_slug_cache)
+    results.append(
+        CheckResult(
+            "anchor-targets-resolve",
+            not broken_anchors,
+            "Markdown link #fragments resolve to a real heading anchor in their target file",
+            "all resolve" if not broken_anchors else "broken: " + ", ".join(broken_anchors),
+        )
+    )
 
     stale_refs = _stale_related_skill_references("\n".join(body), skill_dir)
-    results.append(CheckResult(
-        "related-skill-references-resolve", not stale_refs,
-        "every '**vs. `name`:**' Related-skills bullet name resolves to "
-        "an existing sibling skill directory",
-        "all resolve" if not stale_refs else "dangling: " + ", ".join(stale_refs)))
+    results.append(
+        CheckResult(
+            "related-skill-references-resolve",
+            not stale_refs,
+            "every '**vs. `name`:**' Related-skills bullet name resolves to an existing sibling skill directory",
+            "all resolve" if not stale_refs else "dangling: " + ", ".join(stale_refs),
+        )
+    )
 
     refs_dir = skill_dir / "references"
     if refs_dir.is_dir():
         nested = sorted(
-            str(p.relative_to(refs_dir)) for p in refs_dir.rglob("*")
-            if p.is_file() and p.parent != refs_dir and not _is_ignorable(p))
-        results.append(CheckResult(
-            "references-flat", not nested,
-            "references/ files are one level deep",
-            "nested: " + ", ".join(nested) if nested else "flat"))
+            str(p.relative_to(refs_dir))
+            for p in refs_dir.rglob("*")
+            if p.is_file() and p.parent != refs_dir and not _is_ignorable(p)
+        )
+        results.append(
+            CheckResult(
+                "references-flat",
+                not nested,
+                "references/ files are one level deep",
+                "nested: " + ", ".join(nested) if nested else "flat",
+            )
+        )
         for ref in sorted(refs_dir.iterdir()):
             if not ref.is_file() or _is_ignorable(ref):
                 continue
@@ -3354,33 +3452,37 @@ def check_shape(target: Path) -> list[CheckResult]:
             n = len(ref_text.splitlines())
             if n > TOC_MIN_LINES:
                 has_toc = bool(TOC_RE.search(ref_text))
-                results.append(CheckResult(
-                    f"toc:{ref.name}", has_toc,
-                    f"reference over {TOC_MIN_LINES} lines has a TOC",
-                    f"{n} lines, " + ("TOC found" if has_toc else "no TOC")))
+                results.append(
+                    CheckResult(
+                        f"toc:{ref.name}",
+                        has_toc,
+                        f"reference over {TOC_MIN_LINES} lines has a TOC",
+                        f"{n} lines, " + ("TOC found" if has_toc else "no TOC"),
+                    )
+                )
             ref_body = "\n".join(_body_after_frontmatter(ref_text))
-            ref_offenders = _out_of_skill_link_targets(
-                ref_body, skill_dir, source_dir=ref.parent)
-            results.append(CheckResult(
-                f"links-inside-skill:{ref.name}", not ref_offenders,
-                "Markdown link targets resolve inside the skill's own "
-                "directory",
-                "all inside" if not ref_offenders
-                else "outside: " + ", ".join(ref_offenders)))
+            ref_offenders = _out_of_skill_link_targets(ref_body, skill_dir, source_dir=ref.parent)
+            results.append(
+                CheckResult(
+                    f"links-inside-skill:{ref.name}",
+                    not ref_offenders,
+                    "Markdown link targets resolve inside the skill's own directory",
+                    "all inside" if not ref_offenders else "outside: " + ", ".join(ref_offenders),
+                )
+            )
             anchor_slug_cache.setdefault(ref, _heading_slugs(ref_body))
-            ref_broken_anchors = _broken_anchor_targets(
-                ref_body, ref, skill_dir, anchor_slug_cache)
-            results.append(CheckResult(
-                f"anchor-targets-resolve:{ref.name}", not ref_broken_anchors,
-                "Markdown link #fragments resolve to a real heading anchor "
-                "in their target file",
-                "all resolve" if not ref_broken_anchors
-                else "broken: " + ", ".join(ref_broken_anchors)))
+            ref_broken_anchors = _broken_anchor_targets(ref_body, ref, skill_dir, anchor_slug_cache)
+            results.append(
+                CheckResult(
+                    f"anchor-targets-resolve:{ref.name}",
+                    not ref_broken_anchors,
+                    "Markdown link #fragments resolve to a real heading anchor in their target file",
+                    "all resolve" if not ref_broken_anchors else "broken: " + ", ".join(ref_broken_anchors),
+                )
+            )
 
-    results.extend(_issue_citation_checks(
-        skill_md, skill_dir, body, extra_sources=sidecar_citation_sources))
-    results.extend(_cross_skill_citation_checks(
-        skill_md, skill_dir, body, anchor_slug_cache))
+    results.extend(_issue_citation_checks(skill_md, skill_dir, body, extra_sources=sidecar_citation_sources))
+    results.extend(_cross_skill_citation_checks(skill_md, skill_dir, body, anchor_slug_cache))
     results.extend(_mechanism_fit_checks(skill_md, skill_dir, body))
     results.extend(_illustrative_model_id_checks(skill_md, skill_dir, body))
     results.extend(_raw_placeholder_checks(skill_md, skill_dir, body))
@@ -3393,8 +3495,7 @@ def check_shape(target: Path) -> list[CheckResult]:
     return results
 
 
-def _citation_sources(skill_md: Path, skill_dir: Path,
-                      body: list[str]) -> list[tuple[str, str]]:
+def _citation_sources(skill_md: Path, skill_dir: Path, body: list[str]) -> list[tuple[str, str]]:
     """Return (label, body-text) for SKILL.md and every references/*.md
     file -- the shared source set both citation-check functions below scan.
     """
@@ -3408,15 +3509,13 @@ def _citation_sources(skill_md: Path, skill_dir: Path,
                 ref_text = ref.read_text(encoding="utf-8")
             except (UnicodeDecodeError, OSError):
                 continue
-            sources.append((f"references/{ref.name}",
-                            "\n".join(_body_after_frontmatter(ref_text))))
+            sources.append((f"references/{ref.name}", "\n".join(_body_after_frontmatter(ref_text))))
     return sources
 
 
-def _issue_citation_checks(skill_md: Path, skill_dir: Path,
-                           body: list[str],
-                           extra_sources: list[tuple[str, str]] | None = None
-                           ) -> list[CheckResult]:
+def _issue_citation_checks(
+    skill_md: Path, skill_dir: Path, body: list[str], extra_sources: list[tuple[str, str]] | None = None
+) -> list[CheckResult]:
     """The bare GitHub issue/PR-number citation scan over SKILL.md body,
     references/*.md, and (unlike every other check built on
     ``_citation_sources``) the metadata/gitapex.yaml sidecar's own
@@ -3450,23 +3549,22 @@ def _issue_citation_checks(skill_md: Path, skill_dir: Path,
         defenced = _blank_fenced_blocks(source_text)
         issues, _paths = _portable_citation_offenders(defenced)
         issue_hits += [f"{label}:{c}" for c in issues]
-    for label, source_text in (extra_sources or ()):
-        issue_hits += [f"{label}:{c}" for c in
-                       _dedup(m.group(0) for m in
-                              ISSUE_CITATION_RE.finditer(source_text))]
+    for label, source_text in extra_sources or ():
+        issue_hits += [f"{label}:{c}" for c in _dedup(m.group(0) for m in ISSUE_CITATION_RE.finditer(source_text))]
 
     return [
         CheckResult(
-            "no-bare-issue-citation", not issue_hits,
-            "No bare-prose GitHub issue/PR-number citation, at any "
-            "portability level",
-            "none" if not issue_hits else "found: " + ", ".join(issue_hits)),
+            "no-bare-issue-citation",
+            not issue_hits,
+            "No bare-prose GitHub issue/PR-number citation, at any portability level",
+            "none" if not issue_hits else "found: " + ", ".join(issue_hits),
+        ),
     ]
 
 
 def _cross_skill_citation_checks(
-        skill_md: Path, skill_dir: Path, body: list[str],
-        slug_cache: dict[Path, frozenset[str] | None]) -> list[CheckResult]:
+    skill_md: Path, skill_dir: Path, body: list[str], slug_cache: dict[Path, frozenset[str] | None]
+) -> list[CheckResult]:
     """Every cross-skill "file+heading" citation
     (CROSS_SKILL_CITATION_RE) in SKILL.md or references/*.md must resolve --
     the sibling skill directory exists (a cheaper version of this,
@@ -3521,11 +3619,13 @@ def _cross_skill_citation_checks(
     offenders = _dedup(offenders)
     return [
         CheckResult(
-            "cross-skill-citation-resolves", not offenders,
-            "Every \"SKILL-NAME's `references/FILE.md` HEADING section\" "
+            "cross-skill-citation-resolves",
+            not offenders,
+            'Every "SKILL-NAME\'s `references/FILE.md` HEADING section" '
             "cross-skill citation resolves to a real sibling skill, file, "
             "and heading",
-            "none" if not offenders else "found: " + ", ".join(offenders)),
+            "none" if not offenders else "found: " + ", ".join(offenders),
+        ),
     ]
 
 
@@ -3551,16 +3651,13 @@ def _mechanism_fit_citation_offenders(body_text: str) -> list[str]:
     content, not a sibling subsection needing its own citation.
     """
     defenced = _blank_fenced_blocks(body_text)
-    headings = [(m.start(), len(m.group(1)), m.group(2))
-                for m in MECHANISM_FIT_HEADING_RE.finditer(defenced)]
+    headings = [(m.start(), len(m.group(1)), m.group(2)) for m in MECHANISM_FIT_HEADING_RE.finditer(defenced)]
     offenders: list[str] = []
     for i, (_start, level, text) in enumerate(headings):
         if level != 2 or text.strip().lower() != "mechanism fit":
             continue
-        section_end = next(
-            (s for s, lv, _t in headings[i + 1:] if lv <= 2), len(defenced))
-        subsections = [(s, t) for s, lv, t in headings[i + 1:]
-                       if s < section_end and lv == 3]
+        section_end = next((s for s, lv, _t in headings[i + 1 :] if lv <= 2), len(defenced))
+        subsections = [(s, t) for s, lv, t in headings[i + 1 :] if s < section_end and lv == 3]
         for j, (sub_start, sub_text) in enumerate(subsections):
             sub_end = subsections[j + 1][0] if j + 1 < len(subsections) else section_end
             content = defenced[sub_start:sub_end]
@@ -3571,8 +3668,7 @@ def _mechanism_fit_citation_offenders(body_text: str) -> list[str]:
     return offenders
 
 
-def _mechanism_fit_checks(skill_md: Path, skill_dir: Path,
-                          body: list[str]) -> list[CheckResult]:
+def _mechanism_fit_checks(skill_md: Path, skill_dir: Path, body: list[str]) -> list[CheckResult]:
     """The check_shape() entry point for _mechanism_fit_citation_offenders,
     scanning SKILL.md and every references/*.md file the same way every
     other _citation_sources-based check does. Runs unconditionally, at
@@ -3586,16 +3682,17 @@ def _mechanism_fit_checks(skill_md: Path, skill_dir: Path,
     offenders = _dedup(offenders)
     return [
         CheckResult(
-            "mechanism-fit-subsections-cite-sources", not offenders,
+            "mechanism-fit-subsections-cite-sources",
+            not offenders,
             "Every '### ' subsection under a '## Mechanism fit' heading "
             "carries a '[label]'-style citation or the literal phrase "
-            "\"this repository's own reasoned extension\"",
-            "none" if not offenders else "found: " + ", ".join(offenders)),
+            '"this repository\'s own reasoned extension"',
+            "none" if not offenders else "found: " + ", ".join(offenders),
+        ),
     ]
 
 
-def _illustrative_model_id_checks(skill_md: Path, skill_dir: Path,
-                                  body: list[str]) -> list[CheckResult]:
+def _illustrative_model_id_checks(skill_md: Path, skill_dir: Path, body: list[str]) -> list[CheckResult]:
     """docs/skill-authoring-standards.md rule 1: no real, current Claude
     model identifier as illustrative content in SKILL.md or references/*.md,
     even inside a fenced "bad example" that is itself flagged and fixed.
@@ -3612,25 +3709,24 @@ def _illustrative_model_id_checks(skill_md: Path, skill_dir: Path,
     """
     offenders: list[str] = []
     for label, text in _citation_sources(skill_md, skill_dir, body):
-        citation_spans = [m.span() for m in
-                          ANTHROPIC_DOC_CITATION_RE.finditer(text)]
+        citation_spans = [m.span() for m in ANTHROPIC_DOC_CITATION_RE.finditer(text)]
         for m in ILLUSTRATIVE_MODEL_ID_RE.finditer(text):
-            if any(start <= m.start() and m.end() <= end
-                   for start, end in citation_spans):
+            if any(start <= m.start() and m.end() <= end for start, end in citation_spans):
                 continue
             offenders.append(f"{label}:{m.group(0)}")
     offenders = _dedup(offenders)
     return [
         CheckResult(
-            "no-illustrative-model-identifier", not offenders,
+            "no-illustrative-model-identifier",
+            not offenders,
             "No real, current Claude model identifier as illustrative "
             "content (docs/skill-authoring-standards.md rule 1)",
-            "none" if not offenders else "found: " + ", ".join(offenders)),
+            "none" if not offenders else "found: " + ", ".join(offenders),
+        ),
     ]
 
 
-def _raw_placeholder_checks(skill_md: Path, skill_dir: Path,
-                            body: list[str]) -> list[CheckResult]:
+def _raw_placeholder_checks(skill_md: Path, skill_dir: Path, body: list[str]) -> list[CheckResult]:
     """docs/skill-authoring-standards.md rule 4: no angle-bracket
     placeholder ("<NAME>") in raw prose -- outside a code span or fenced
     code block -- in SKILL.md or references/*.md. GitHub's Markdown/HTML
@@ -3656,10 +3752,11 @@ def _raw_placeholder_checks(skill_md: Path, skill_dir: Path,
     offenders = _dedup(offenders)
     return [
         CheckResult(
-            "no-raw-angle-bracket-placeholder", not offenders,
-            "No angle-bracket placeholder in raw prose "
-            "(docs/skill-authoring-standards.md rule 4)",
-            "none" if not offenders else "found: " + ", ".join(offenders)),
+            "no-raw-angle-bracket-placeholder",
+            not offenders,
+            "No angle-bracket placeholder in raw prose (docs/skill-authoring-standards.md rule 4)",
+            "none" if not offenders else "found: " + ", ".join(offenders),
+        ),
     ]
 
 
@@ -3728,19 +3825,18 @@ def _step_location_offenders(body_text: str) -> list[str]:
         if len(distinct_phrases) < 2:
             continue
         unresolved = [
-            (a, b) for i, a in enumerate(distinct_phrases)
-            for b in distinct_phrases[i + 1:]
-            if not (phrase_ceding[a] or phrase_ceding[b])]
+            (a, b)
+            for i, a in enumerate(distinct_phrases)
+            for b in distinct_phrases[i + 1 :]
+            if not (phrase_ceding[a] or phrase_ceding[b])
+        ]
         if not unresolved:
             continue
-        offenders.append(
-            f"step {step_num}: " +
-            "; ".join(f"{a!r} vs. {b!r}" for a, b in unresolved))
+        offenders.append(f"step {step_num}: " + "; ".join(f"{a!r} vs. {b!r}" for a, b in unresolved))
     return offenders
 
 
-def _step_location_checks(skill_md: Path, skill_dir: Path,
-                          body: list[str]) -> list[CheckResult]:
+def _step_location_checks(skill_md: Path, skill_dir: Path, body: list[str]) -> list[CheckResult]:
     """The check_shape() entry point for _step_location_offenders, scanning
     SKILL.md and every references/*.md file the same way every other
     _citation_sources-based check does -- each file checked independently,
@@ -3758,11 +3854,13 @@ def _step_location_checks(skill_md: Path, skill_dir: Path,
     offenders = _dedup(offenders)
     return [
         CheckResult(
-            "no-step-location-contradiction", not offenders,
+            "no-step-location-contradiction",
+            not offenders,
             "No 'step N'/'steps N-M' reference is asserted to execute in "
             "two different locations without one explicitly ceding "
             f"authority (a nearby {STEP_LOCATION_CEDING_PHRASE!r})",
-            "none" if not offenders else "found: " + ", ".join(offenders)),
+            "none" if not offenders else "found: " + ", ".join(offenders),
+        ),
     ]
 
 
@@ -3772,15 +3870,12 @@ def _step_location_checks(skill_md: Path, skill_dir: Path,
 # ``_portable_path_citation_checks`` below builds one ``CheckResult`` per
 # row from a single loop instead of a hand-duplicated block per kind.
 _INLINE_CITATION_CHECK_SPECS = (
-    ("portable-no-unhedged-inline-path-citation", REPO_PATH_CITATION_RE,
-     HEDGE_PHRASES, "origin-repository path"),
-    ("portable-no-unhedged-inline-issue-citation", ISSUE_CITATION_RE,
-     ISSUE_CITATION_HEDGE_PHRASES, "issue/PR-number"),
+    ("portable-no-unhedged-inline-path-citation", REPO_PATH_CITATION_RE, HEDGE_PHRASES, "origin-repository path"),
+    ("portable-no-unhedged-inline-issue-citation", ISSUE_CITATION_RE, ISSUE_CITATION_HEDGE_PHRASES, "issue/PR-number"),
 )
 
 
-def _portable_path_citation_checks(skill_md: Path, skill_dir: Path,
-                                   body: list[str]) -> list[CheckResult]:
+def _portable_path_citation_checks(skill_md: Path, skill_dir: Path, body: list[str]) -> list[CheckResult]:
     """The Portable-only repo-path and inline-code-issue-number self-citation
     checks over SKILL.md body and references/*.md. Each source contributes
     its offenders labelled by file, so a failure points at the exact file to
@@ -3794,9 +3889,9 @@ def _portable_path_citation_checks(skill_md: Path, skill_dir: Path,
     """
     path_hits: list[str] = []
     inline_hits_per_spec: list[list[str]] = [[] for _ in _INLINE_CITATION_CHECK_SPECS]
-    inline_specs = tuple((citation_re, hedge_phrases)
-                        for _name, citation_re, hedge_phrases, _label
-                        in _INLINE_CITATION_CHECK_SPECS)
+    inline_specs = tuple(
+        (citation_re, hedge_phrases) for _name, citation_re, hedge_phrases, _label in _INLINE_CITATION_CHECK_SPECS
+    )
     for label, source_text in _citation_sources(skill_md, skill_dir, body):
         # Fence-blanked once and shared -- the bare-prose scan and the
         # inline-code scan (itself now one pass covering every spec in
@@ -3812,25 +3907,31 @@ def _portable_path_citation_checks(skill_md: Path, skill_dir: Path,
 
     results = [
         CheckResult(
-            "portable-no-repo-path-citation", not path_hits,
+            "portable-no-repo-path-citation",
+            not path_hits,
             "Portable content has no bare-prose origin-repository path citation",
-            "none" if not path_hits else "found: " + ", ".join(path_hits)),
+            "none" if not path_hits else "found: " + ", ".join(path_hits),
+        ),
     ]
     # inline_hits_per_spec is built as one list per spec, so strict=True can
     # only fire if that construction changes out from under this loop.
     for (check_name, _citation_re, hedge_phrases, kind_label), hits in zip(
-            _INLINE_CITATION_CHECK_SPECS, inline_hits_per_spec, strict=True):
-        results.append(CheckResult(
-            check_name, not hits,
-            f"Portable content has no inline-code {kind_label} citation "
-            f"without an approved hedge phrase {hedge_phrases} in its own "
-            "sentence or the sentence immediately before it",
-            "none" if not hits else "found: " + ", ".join(hits)))
+        _INLINE_CITATION_CHECK_SPECS, inline_hits_per_spec, strict=True
+    ):
+        results.append(
+            CheckResult(
+                check_name,
+                not hits,
+                f"Portable content has no inline-code {kind_label} citation "
+                f"without an approved hedge phrase {hedge_phrases} in its own "
+                "sentence or the sentence immediately before it",
+                "none" if not hits else "found: " + ", ".join(hits),
+            )
+        )
     return results
 
 
-def _portable_skill_fact_claim_offenders(defenced_text: str,
-                                         skill_dir: Path) -> list[str]:
+def _portable_skill_fact_claim_offenders(defenced_text: str, skill_dir: Path) -> list[str]:
     """Return each possessive sibling-skill citation
     (PORTABLE_SKILL_FACT_CLAIM_RE) in ``defenced_text`` that names a real
     sibling skill directory, asserts its claim with "already" in the same
@@ -3878,9 +3979,8 @@ def _portable_skill_fact_claim_offenders(defenced_text: str,
             if brk > m.start():
                 break
             para_start = brk
-        para_lookback = defenced_text[para_start:m.start()]
-        prior_sentences = [s for s in _SENTENCE_SPLIT_RE.split(para_lookback)
-                           if s.strip()]
+        para_lookback = defenced_text[para_start : m.start()]
+        prior_sentences = [s for s in _SENTENCE_SPLIT_RE.split(para_lookback) if s.strip()]
         lookback = prior_sentences[-1] if prior_sentences else ""
         haystack = INLINE_CODE_RE.sub(" ", lookback + clause).lower()
         if any(phrase in haystack for phrase in HEDGE_PHRASES):
@@ -3889,8 +3989,7 @@ def _portable_skill_fact_claim_offenders(defenced_text: str,
     return offenders
 
 
-def _portable_skill_citation_checks(skill_md: Path, skill_dir: Path,
-                                    body: list[str]) -> list[CheckResult]:
+def _portable_skill_citation_checks(skill_md: Path, skill_dir: Path, body: list[str]) -> list[CheckResult]:
     """The check_shape() entry point for
     _portable_skill_fact_claim_offenders, scanning SKILL.md and every
     references/*.md file the same way every other _citation_sources-based
@@ -3907,16 +4006,17 @@ def _portable_skill_citation_checks(skill_md: Path, skill_dir: Path,
     hits = _dedup(hits)
     return [
         CheckResult(
-            "portable-no-unhedged-skill-fact-claim", not hits,
+            "portable-no-unhedged-skill-fact-claim",
+            not hits,
             "Portable content has no unhedged declarative fact-claim "
             "about a named sibling skill's own behavior "
             f"(no approved hedge phrase {HEDGE_PHRASES} nearby)",
-            "none" if not hits else "found: " + ", ".join(hits)),
+            "none" if not hits else "found: " + ", ".join(hits),
+        ),
     ]
 
 
-def _out_of_skill_scripts_offenders(skill_dir: Path,
-                                    source_text: str) -> list[str]:
+def _out_of_skill_scripts_offenders(skill_dir: Path, source_text: str) -> list[str]:
     """Issue #192 (Refs #26 repair 3, #36 repair 3, #20 item d): return
     each bare-prose "scripts/PATH" mention (SCRIPTS_PATH_BARE_RE) in
     ``source_text`` whose path does NOT resolve to a real file under
@@ -3960,14 +4060,12 @@ def _out_of_skill_scripts_offenders(skill_dir: Path,
     for match in SCRIPTS_PATH_BARE_RE.finditer(bare):
         path = match.group(0).rstrip(".,;:)")
         normalized = os.path.normpath(Path(skill_norm) / path)
-        if (_escapes_skill_dir(normalized, skill_norm)
-                or not Path(normalized).is_file()):
+        if _escapes_skill_dir(normalized, skill_norm) or not Path(normalized).is_file():
             offenders.append(path)
     return offenders
 
 
-def _out_of_skill_scripts_checks(skill_md: Path, skill_dir: Path,
-                                 body: list[str]) -> list[CheckResult]:
+def _out_of_skill_scripts_checks(skill_md: Path, skill_dir: Path, body: list[str]) -> list[CheckResult]:
     """The check_shape() entry point for _out_of_skill_scripts_offenders,
     scanning SKILL.md and every references/*.md file the same way every
     other _citation_sources-based check does. Only called when
@@ -3978,16 +4076,16 @@ def _out_of_skill_scripts_checks(skill_md: Path, skill_dir: Path,
     """
     offenders: list[str] = []
     for label, source_text in _citation_sources(skill_md, skill_dir, body):
-        for offender in _out_of_skill_scripts_offenders(skill_dir,
-                                                         source_text):
+        for offender in _out_of_skill_scripts_offenders(skill_dir, source_text):
             offenders.append(f"{label}:{offender}")
     offenders = _dedup(offenders)
     return [
         CheckResult(
-            "portable-no-out-of-skill-scripts-citation", not offenders,
-            "Portable content has no bare-prose 'scripts/...' path "
-            "citation outside the skill's own directory",
-            "none" if not offenders else "found: " + ", ".join(offenders)),
+            "portable-no-out-of-skill-scripts-citation",
+            not offenders,
+            "Portable content has no bare-prose 'scripts/...' path citation outside the skill's own directory",
+            "none" if not offenders else "found: " + ", ".join(offenders),
+        ),
     ]
 
 
@@ -3996,16 +4094,18 @@ def _valid_skill_dependency_list(value: object) -> bool:
     non-empty strings. Unlike spec.references, an empty list is valid here
     -- most skills' spec.skillDependencies.requires is expected to be
     empty (see the design spec's Sub-project D rationale)."""
-    return isinstance(value, list) and all(
-        isinstance(v, str) and v.strip() for v in value)
+    return isinstance(value, list) and all(isinstance(v, str) and v.strip() for v in value)
 
 
-def _skill_dependency_checks(spec_is_mapping: bool, spec_raw: object,
-                              spec: dict[str, object],
-                              malformed_items: list[str],
-                              unknown_keys: list[str],
-                              skill_dir: Path,
-                              portability: object) -> list[CheckResult]:
+def _skill_dependency_checks(
+    spec_is_mapping: bool,
+    spec_raw: object,
+    spec: dict[str, object],
+    malformed_items: list[str],
+    unknown_keys: list[str],
+    skill_dir: Path,
+    portability: object,
+) -> list[CheckResult]:
     """The three spec.skillDependencies checks (Sub-project D):
     ``skill-dependencies-well-formed`` (shape), ``skill-dependencies-resolve``
     (every named sibling exists -- the dangling-reference gate), and
@@ -4020,34 +4120,31 @@ def _skill_dependency_checks(spec_is_mapping: bool, spec_raw: object,
     report "nothing to check" rather than silently passing on data that was
     never actually a list.
     """
-    well_formed_rule = ("spec.skillDependencies, if present, is a mapping "
-                         "with only requires/relatedTo keys, each -- if "
-                         "present -- a list of non-empty strings")
-    resolve_rule = ("every name in spec.skillDependencies.requires/relatedTo "
-                     "resolves to an existing sibling skill directory")
-    contradiction_rule = ("a non-empty spec.skillDependencies.requires is "
-                           "incompatible with spec.portability: Portable")
+    well_formed_rule = (
+        "spec.skillDependencies, if present, is a mapping "
+        "with only requires/relatedTo keys, each -- if "
+        "present -- a list of non-empty strings"
+    )
+    resolve_rule = (
+        "every name in spec.skillDependencies.requires/relatedTo resolves to an existing sibling skill directory"
+    )
+    contradiction_rule = "a non-empty spec.skillDependencies.requires is incompatible with spec.portability: Portable"
 
     if not spec_is_mapping:
         evidence = f"spec is not a mapping: {spec_raw!r}"
         return [
-            CheckResult("skill-dependencies-well-formed", False,
-                        well_formed_rule, evidence),
-            CheckResult("skill-dependencies-resolve", True, resolve_rule,
-                        "nothing to check (spec is not a mapping)"),
-            CheckResult("requires-portability-compatible", True,
-                        contradiction_rule,
-                        "nothing to check (spec is not a mapping)"),
+            CheckResult("skill-dependencies-well-formed", False, well_formed_rule, evidence),
+            CheckResult("skill-dependencies-resolve", True, resolve_rule, "nothing to check (spec is not a mapping)"),
+            CheckResult(
+                "requires-portability-compatible", True, contradiction_rule, "nothing to check (spec is not a mapping)"
+            ),
         ]
 
     if "skillDependencies" not in spec:
         return [
-            CheckResult("skill-dependencies-well-formed", True,
-                        well_formed_rule, "not declared (optional)"),
-            CheckResult("skill-dependencies-resolve", True, resolve_rule,
-                        "not declared (optional)"),
-            CheckResult("requires-portability-compatible", True,
-                        contradiction_rule, "not declared (optional)"),
+            CheckResult("skill-dependencies-well-formed", True, well_formed_rule, "not declared (optional)"),
+            CheckResult("skill-dependencies-resolve", True, resolve_rule, "not declared (optional)"),
+            CheckResult("requires-portability-compatible", True, contradiction_rule, "not declared (optional)"),
         ]
 
     deps = spec.get("skillDependencies")
@@ -4059,37 +4156,31 @@ def _skill_dependency_checks(spec_is_mapping: bool, spec_raw: object,
     if not isinstance(deps, dict):
         evidence = f"not a mapping: {deps!r}"
         return [
-            CheckResult("skill-dependencies-well-formed", False,
-                        well_formed_rule, evidence),
-            CheckResult("skill-dependencies-resolve", True, resolve_rule,
-                        "nothing to check (not a mapping)"),
-            CheckResult("requires-portability-compatible", True,
-                        contradiction_rule, "nothing to check (not a mapping)"),
+            CheckResult("skill-dependencies-well-formed", False, well_formed_rule, evidence),
+            CheckResult("skill-dependencies-resolve", True, resolve_rule, "nothing to check (not a mapping)"),
+            CheckResult(
+                "requires-portability-compatible", True, contradiction_rule, "nothing to check (not a mapping)"
+            ),
         ]
 
     results: list[CheckResult] = []
     problems: list[str] = []
     if unknown_keys:
         count = len(unknown_keys)
-        problems.append(f"{count} unknown key{'' if count == 1 else 's'}: "
-                         f"{unknown_keys[0]!r}")
+        problems.append(f"{count} unknown key{'' if count == 1 else 's'}: {unknown_keys[0]!r}")
     if malformed_items:
         count = len(malformed_items)
-        problems.append(f"{count} malformed entr{'y' if count == 1 else 'ies'}: "
-                         f"{malformed_items[0]!r}")
+        problems.append(f"{count} malformed entr{'y' if count == 1 else 'ies'}: {malformed_items[0]!r}")
     for key in SKILL_DEPENDENCY_SUBKEYS:
         if key in deps and not _valid_skill_dependency_list(deps[key]):
-            problems.append(f"{key} is not a list of non-empty strings: "
-                             f"{deps[key]!r}")
+            problems.append(f"{key} is not a list of non-empty strings: {deps[key]!r}")
 
     if problems:
-        results.append(CheckResult("skill-dependencies-well-formed", False,
-                                    well_formed_rule, "; ".join(problems)))
+        results.append(CheckResult("skill-dependencies-well-formed", False, well_formed_rule, "; ".join(problems)))
     else:
         declared = [k for k in SKILL_DEPENDENCY_SUBKEYS if k in deps]
         evidence = f"{', '.join(declared)} declared" if declared else "no keys declared"
-        results.append(CheckResult("skill-dependencies-well-formed", True,
-                                    well_formed_rule, evidence))
+        results.append(CheckResult("skill-dependencies-well-formed", True, well_formed_rule, evidence))
 
     requires = deps.get("requires")
     requires = requires if _valid_skill_dependency_list(requires) else []
@@ -4097,15 +4188,24 @@ def _skill_dependency_checks(spec_is_mapping: bool, spec_raw: object,
     related = related if _valid_skill_dependency_list(related) else []
     named = list(dict.fromkeys(requires + related))
     dangling = [n for n in named if not (skill_dir.parent / n).is_dir()]
-    results.append(CheckResult(
-        "skill-dependencies-resolve", not dangling, resolve_rule,
-        "all resolve" if not dangling else "dangling: " + ", ".join(dangling)))
+    results.append(
+        CheckResult(
+            "skill-dependencies-resolve",
+            not dangling,
+            resolve_rule,
+            "all resolve" if not dangling else "dangling: " + ", ".join(dangling),
+        )
+    )
 
     contradiction = bool(requires) and portability == "Portable"
-    results.append(CheckResult(
-        "requires-portability-compatible", not contradiction, contradiction_rule,
-        "ok" if not contradiction
-        else f"non-empty requires with portability={portability!r}"))
+    results.append(
+        CheckResult(
+            "requires-portability-compatible",
+            not contradiction,
+            contradiction_rule,
+            "ok" if not contradiction else f"non-empty requires with portability={portability!r}",
+        )
+    )
 
     return results
 
@@ -4140,11 +4240,14 @@ def _valid_tracking_issue(value: object) -> bool:
     return isinstance(value, str) and bool(LIFECYCLE_ISSUE_REF_RE.match(value))
 
 
-def _lifecycle_checks(spec_is_mapping: bool, spec_raw: object,
-                       spec: dict[str, object],
-                       unknown_keys: list[str],
-                       unknown_fields: list[str],
-                       skill_dir: Path) -> list[CheckResult]:
+def _lifecycle_checks(
+    spec_is_mapping: bool,
+    spec_raw: object,
+    spec: dict[str, object],
+    unknown_keys: list[str],
+    unknown_fields: list[str],
+    skill_dir: Path,
+) -> list[CheckResult]:
     """The three spec.lifecycle checks: ``lifecycle-well-formed`` (shape),
     ``lifecycle-deprecated-replacement-resolves`` (the dangling-reference
     gate for ``deprecated.replacement``, mirroring
@@ -4180,33 +4283,37 @@ def _lifecycle_checks(spec_is_mapping: bool, spec_raw: object,
         f"{REFERENCES_ENTRY_MAX_CHARS} chars; trackingIssue, if present, a "
         "full https://github.com/tvna/gitapex/issues/<N> (or /pull/<N>) "
         "URL; compatibilityGuarantee, if present, one of "
-        f"{COMPATIBILITY_GUARANTEE_LEVELS}")
+        f"{COMPATIBILITY_GUARANTEE_LEVELS}"
+    )
     resolve_rule = (
-        "spec.lifecycle.deprecated.replacement, if a non-empty string, "
-        "resolves to an existing sibling skill directory")
+        "spec.lifecycle.deprecated.replacement, if a non-empty string, resolves to an existing sibling skill directory"
+    )
     contradiction_rule = (
         "spec.lifecycle.experimental and spec.lifecycle.stable cannot "
         "both be present -- a skill cannot be both not-yet-graduated and "
-        "already graduated")
+        "already graduated"
+    )
 
     if not spec_is_mapping:
         evidence = f"spec is not a mapping: {spec_raw!r}"
         return [
             CheckResult("lifecycle-well-formed", False, well_formed_rule, evidence),
-            CheckResult("lifecycle-deprecated-replacement-resolves", True,
-                        resolve_rule, "nothing to check (spec is not a mapping)"),
-            CheckResult("experimental-stable-compatible", True,
-                        contradiction_rule, "nothing to check (spec is not a mapping)"),
+            CheckResult(
+                "lifecycle-deprecated-replacement-resolves",
+                True,
+                resolve_rule,
+                "nothing to check (spec is not a mapping)",
+            ),
+            CheckResult(
+                "experimental-stable-compatible", True, contradiction_rule, "nothing to check (spec is not a mapping)"
+            ),
         ]
 
     if "lifecycle" not in spec:
         return [
-            CheckResult("lifecycle-well-formed", True, well_formed_rule,
-                        "not declared (optional)"),
-            CheckResult("lifecycle-deprecated-replacement-resolves", True,
-                        resolve_rule, "not declared (optional)"),
-            CheckResult("experimental-stable-compatible", True,
-                        contradiction_rule, "not declared (optional)"),
+            CheckResult("lifecycle-well-formed", True, well_formed_rule, "not declared (optional)"),
+            CheckResult("lifecycle-deprecated-replacement-resolves", True, resolve_rule, "not declared (optional)"),
+            CheckResult("experimental-stable-compatible", True, contradiction_rule, "not declared (optional)"),
         ]
 
     lifecycle = spec.get("lifecycle")
@@ -4217,21 +4324,19 @@ def _lifecycle_checks(spec_is_mapping: bool, spec_raw: object,
         evidence = f"not a mapping: {lifecycle!r}"
         return [
             CheckResult("lifecycle-well-formed", False, well_formed_rule, evidence),
-            CheckResult("lifecycle-deprecated-replacement-resolves", True,
-                        resolve_rule, "nothing to check (not a mapping)"),
-            CheckResult("experimental-stable-compatible", True,
-                        contradiction_rule, "nothing to check (not a mapping)"),
+            CheckResult(
+                "lifecycle-deprecated-replacement-resolves", True, resolve_rule, "nothing to check (not a mapping)"
+            ),
+            CheckResult("experimental-stable-compatible", True, contradiction_rule, "nothing to check (not a mapping)"),
         ]
 
     problems: list[str] = []
     if unknown_keys:
         count = len(unknown_keys)
-        problems.append(f"{count} unknown key{'' if count == 1 else 's'}: "
-                         f"{unknown_keys[0]!r}")
+        problems.append(f"{count} unknown key{'' if count == 1 else 's'}: {unknown_keys[0]!r}")
     if unknown_fields:
         count = len(unknown_fields)
-        problems.append(f"{count} unknown field{'' if count == 1 else 's'}: "
-                         f"{unknown_fields[0]!r}")
+        problems.append(f"{count} unknown field{'' if count == 1 else 's'}: {unknown_fields[0]!r}")
 
     sub_blocks: dict[str, dict[str, object]] = {}
     for key in LIFECYCLE_SUBKEYS:
@@ -4245,64 +4350,77 @@ def _lifecycle_checks(spec_is_mapping: bool, spec_raw: object,
         for field in LIFECYCLE_REQUIRED_FIELDS[key]:
             val = block.get(field)
             if not (isinstance(val, str) and val.strip()):
-                problems.append(
-                    f"{key}.{field} is missing or not a non-empty string: {val!r}")
+                problems.append(f"{key}.{field} is missing or not a non-empty string: {val!r}")
         for field in ("since", "removeAfter"):
             if field in block and not _valid_lifecycle_date(block[field]):
-                problems.append(
-                    f"{key}.{field} is not a YYYY-MM-DD date: {block[field]!r}")
+                problems.append(f"{key}.{field} is not a YYYY-MM-DD date: {block[field]!r}")
         reason_val = block.get("reason")
         if isinstance(reason_val, str) and len(reason_val) > REFERENCES_ENTRY_MAX_CHARS:
             problems.append(
-                f"{key}.reason is {len(reason_val)} chars, over the "
-                f"{REFERENCES_ENTRY_MAX_CHARS}-char limit")
-        if key == "experimental" and "trackingIssue" in block \
-                and not _valid_tracking_issue(block["trackingIssue"]):
+                f"{key}.reason is {len(reason_val)} chars, over the {REFERENCES_ENTRY_MAX_CHARS}-char limit"
+            )
+        if key == "experimental" and "trackingIssue" in block and not _valid_tracking_issue(block["trackingIssue"]):
             problems.append(
                 f"experimental.trackingIssue is not a full "
                 f"https://github.com/tvna/gitapex/issues/<N> (or /pull/<N>) "
-                f"URL: {block['trackingIssue']!r}")
-        if key == "stable" and "compatibilityGuarantee" in block \
-                and block["compatibilityGuarantee"] not in COMPATIBILITY_GUARANTEE_LEVELS:
+                f"URL: {block['trackingIssue']!r}"
+            )
+        if (
+            key == "stable"
+            and "compatibilityGuarantee" in block
+            and block["compatibilityGuarantee"] not in COMPATIBILITY_GUARANTEE_LEVELS
+        ):
             problems.append(
                 f"stable.compatibilityGuarantee is not one of "
                 f"{COMPATIBILITY_GUARANTEE_LEVELS}: "
-                f"{block['compatibilityGuarantee']!r}")
+                f"{block['compatibilityGuarantee']!r}"
+            )
 
     if "renamedFrom" in lifecycle:
         renamed_from = lifecycle["renamedFrom"]
         if not (isinstance(renamed_from, str) and renamed_from.strip()):
-            problems.append(
-                f"renamedFrom is not a non-empty string: {renamed_from!r}")
+            problems.append(f"renamedFrom is not a non-empty string: {renamed_from!r}")
 
     if problems:
-        results = [CheckResult("lifecycle-well-formed", False, well_formed_rule,
-                                "; ".join(problems))]
+        results = [CheckResult("lifecycle-well-formed", False, well_formed_rule, "; ".join(problems))]
     else:
         declared = [k for k in LIFECYCLE_SUBKEYS if k in sub_blocks]
         if "renamedFrom" in lifecycle:
             declared.append("renamedFrom")
         evidence = f"{', '.join(declared)} declared" if declared else "no keys declared"
-        results = [CheckResult("lifecycle-well-formed", True, well_formed_rule,
-                                evidence)]
+        results = [CheckResult("lifecycle-well-formed", True, well_formed_rule, evidence)]
 
     deprecated = sub_blocks.get("deprecated")
     replacement = deprecated.get("replacement") if deprecated else None
     if isinstance(replacement, str) and replacement.strip():
         exists = (skill_dir.parent / replacement).is_dir()
-        results.append(CheckResult(
-            "lifecycle-deprecated-replacement-resolves", exists, resolve_rule,
-            "resolves" if exists else f"dangling: {replacement!r}"))
+        results.append(
+            CheckResult(
+                "lifecycle-deprecated-replacement-resolves",
+                exists,
+                resolve_rule,
+                "resolves" if exists else f"dangling: {replacement!r}",
+            )
+        )
     else:
-        results.append(CheckResult(
-            "lifecycle-deprecated-replacement-resolves", True, resolve_rule,
-            "nothing to check (replacement missing or invalid)"))
+        results.append(
+            CheckResult(
+                "lifecycle-deprecated-replacement-resolves",
+                True,
+                resolve_rule,
+                "nothing to check (replacement missing or invalid)",
+            )
+        )
 
     contradiction = "experimental" in sub_blocks and "stable" in sub_blocks
-    results.append(CheckResult(
-        "experimental-stable-compatible", not contradiction, contradiction_rule,
-        "ok" if not contradiction
-        else "both experimental and stable are present"))
+    results.append(
+        CheckResult(
+            "experimental-stable-compatible",
+            not contradiction,
+            contradiction_rule,
+            "ok" if not contradiction else "both experimental and stable are present",
+        )
+    )
     return results
 
 
@@ -4312,16 +4430,17 @@ def _valid_execution_requirements_tools_list(value: object) -> bool:
     list is valid here too, since it is a deliberate "zero tools of this
     kind needed" statement, distinct from the subkey being absent
     entirely."""
-    return isinstance(value, list) and all(
-        isinstance(v, str) and v.strip() for v in value)
+    return isinstance(value, list) and all(isinstance(v, str) and v.strip() for v in value)
 
 
-def _execution_requirements_checks(spec_is_mapping: bool, spec_raw: object,
-                                    spec: dict[str, object],
-                                    unknown_keys: list[str],
-                                    unknown_tools_keys: list[str],
-                                    malformed_tools_items: list[str]
-                                    ) -> list[CheckResult]:
+def _execution_requirements_checks(
+    spec_is_mapping: bool,
+    spec_raw: object,
+    spec: dict[str, object],
+    unknown_keys: list[str],
+    unknown_tools_keys: list[str],
+    malformed_tools_items: list[str],
+) -> list[CheckResult]:
     """The one spec.executionRequirements check landed so far:
     ``execution-requirements-well-formed``.
 
@@ -4339,36 +4458,42 @@ def _execution_requirements_checks(spec_is_mapping: bool, spec_raw: object,
     names that resolve against sibling skill directories, and no rule
     ties this field to portability/capabilityAssumption/lifecycle.
     """
-    well_formed_rule = ("spec.executionRequirements, if present, is a "
-                         "mapping with only the tools key; tools, if "
-                         "present, is a mapping with only read/write/shell "
-                         "keys, each -- if present -- a list of non-empty "
-                         "strings")
+    well_formed_rule = (
+        "spec.executionRequirements, if present, is a "
+        "mapping with only the tools key; tools, if "
+        "present, is a mapping with only read/write/shell "
+        "keys, each -- if present -- a list of non-empty "
+        "strings"
+    )
 
     if not spec_is_mapping:
-        return [CheckResult(
-            "execution-requirements-well-formed", False, well_formed_rule,
-            f"spec is not a mapping: {spec_raw!r}")]
+        return [
+            CheckResult(
+                "execution-requirements-well-formed", False, well_formed_rule, f"spec is not a mapping: {spec_raw!r}"
+            )
+        ]
 
     if "executionRequirements" not in spec:
-        return [CheckResult(
-            "execution-requirements-well-formed", True, well_formed_rule,
-            "not declared (optional)")]
+        return [CheckResult("execution-requirements-well-formed", True, well_formed_rule, "not declared (optional)")]
 
     execution_requirements = spec.get("executionRequirements")
     # None here means present-but-blank (YAML null), distinct from absent
     # above -- isinstance(None, dict) is already False, so
     # the existing "not a mapping" branch below fails it correctly.
     if not isinstance(execution_requirements, dict):
-        return [CheckResult(
-            "execution-requirements-well-formed", False, well_formed_rule,
-            f"not a mapping: {execution_requirements!r}")]
+        return [
+            CheckResult(
+                "execution-requirements-well-formed",
+                False,
+                well_formed_rule,
+                f"not a mapping: {execution_requirements!r}",
+            )
+        ]
 
     problems: list[str] = []
     if unknown_keys:
         count = len(unknown_keys)
-        problems.append(f"{count} unknown key{'' if count == 1 else 's'}: "
-                         f"{unknown_keys[0]!r}")
+        problems.append(f"{count} unknown key{'' if count == 1 else 's'}: {unknown_keys[0]!r}")
 
     tools_present = "tools" in execution_requirements
     tools = execution_requirements.get("tools")
@@ -4380,28 +4505,20 @@ def _execution_requirements_checks(spec_is_mapping: bool, spec_raw: object,
     elif isinstance(tools, dict):
         if unknown_tools_keys:
             count = len(unknown_tools_keys)
-            problems.append(
-                f"{count} unknown tools key{'' if count == 1 else 's'}: "
-                f"{unknown_tools_keys[0]!r}")
+            problems.append(f"{count} unknown tools key{'' if count == 1 else 's'}: {unknown_tools_keys[0]!r}")
         if malformed_tools_items:
             count = len(malformed_tools_items)
-            problems.append(
-                f"{count} malformed tools entr{'y' if count == 1 else 'ies'}: "
-                f"{malformed_tools_items[0]!r}")
+            problems.append(f"{count} malformed tools entr{'y' if count == 1 else 'ies'}: {malformed_tools_items[0]!r}")
         for key in EXEC_REQ_TOOLS_SUBKEYS:
             if key in tools and not _valid_execution_requirements_tools_list(tools[key]):
-                problems.append(f"tools.{key} is not a list of non-empty "
-                                 f"strings: {tools[key]!r}")
+                problems.append(f"tools.{key} is not a list of non-empty strings: {tools[key]!r}")
 
     if problems:
-        return [CheckResult("execution-requirements-well-formed", False,
-                             well_formed_rule, "; ".join(problems))]
+        return [CheckResult("execution-requirements-well-formed", False, well_formed_rule, "; ".join(problems))]
 
-    declared = ([f"tools.{k}" for k in EXEC_REQ_TOOLS_SUBKEYS if k in tools]
-                if isinstance(tools, dict) else [])
+    declared = [f"tools.{k}" for k in EXEC_REQ_TOOLS_SUBKEYS if k in tools] if isinstance(tools, dict) else []
     evidence = ", ".join(declared) + " declared" if declared else "no keys declared"
-    return [CheckResult("execution-requirements-well-formed", True,
-                         well_formed_rule, evidence)]
+    return [CheckResult("execution-requirements-well-formed", True, well_formed_rule, evidence)]
 
 
 def format_report(results: list[CheckResult]) -> str:
@@ -4409,23 +4526,21 @@ def format_report(results: list[CheckResult]) -> str:
     lines = [f"{'CHECK'.ljust(width)}  RESULT  EVIDENCE (rule)"]
     for r in results:
         status = "PASS" if r.passed else "FAIL"
-        lines.append(f"{r.name.ljust(width)}  {status}    "
-                     f"{r.evidence}  ({r.rule})")
+        lines.append(f"{r.name.ljust(width)}  {status}    {r.evidence}  ({r.rule})")
     passed = sum(1 for r in results if r.passed)
     lines.append(f"\n{passed}/{len(results)} checks passed")
     return "\n".join(lines)
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(
-        description="Check a SKILL.md's deterministic shape (read-only).")
+    parser = argparse.ArgumentParser(description="Check a SKILL.md's deterministic shape (read-only).")
     parser.add_argument(
         "--allowed-root",
         help="Caller-approved directory that must contain the target; "
         "also rejects symlinks in the target skill. The caller must keep "
-        "the snapshot immutable while the check runs.")
-    parser.add_argument(
-        "target", help="Path to a skill directory or a SKILL.md file.")
+        "the snapshot immutable while the check runs.",
+    )
+    parser.add_argument("target", help="Path to a skill directory or a SKILL.md file.")
     args = parser.parse_args(argv)
     target = Path(args.target)
     if args.allowed_root:

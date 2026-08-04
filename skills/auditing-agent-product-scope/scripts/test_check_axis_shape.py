@@ -28,7 +28,9 @@ _COMPLETE_AXIS = """\
 **Boundary:** expanding this axis is real engineering work.
 """
 
-_COMPLETE_TWO_AXES = _COMPLETE_AXIS + """
+_COMPLETE_TWO_AXES = (
+    _COMPLETE_AXIS
+    + """
 ## Axis B: Enforcement-adapter target set
 
 **Governs:** which runtimes a future enforcement adapter targets.
@@ -39,6 +41,7 @@ _COMPLETE_TWO_AXES = _COMPLETE_AXIS + """
 
 **Boundary:** this is a target list, not an installability claim.
 """
+)
 
 _ONLY_A = frozenset("A")
 _A_AND_B = frozenset("AB")
@@ -73,9 +76,7 @@ def test_empty_field_value_flagged():
 
 
 def test_no_owning_prefix_field_flagged():
-    text = _COMPLETE_AXIS.replace(
-        "**Owning doc:** repository-layout.md.\n", ""
-    )
+    text = _COMPLETE_AXIS.replace("**Owning doc:** repository-layout.md.\n", "")
     offenses = cas.check_axis_shape(text, expected_labels=_ONLY_A)
     assert len(offenses) == 1
     assert "owning" in offenses[0]
@@ -96,9 +97,7 @@ def test_no_axis_heading_reports_offense():
 
 
 def test_second_of_two_axes_missing_field_isolated():
-    broken_second = _COMPLETE_TWO_AXES.replace(
-        "**Current scope:** six runtimes.\n", ""
-    )
+    broken_second = _COMPLETE_TWO_AXES.replace("**Current scope:** six runtimes.\n", "")
     offenses = cas.check_axis_shape(broken_second, expected_labels=_A_AND_B)
     assert len(offenses) == 1
     assert offenses[0].startswith("Axis B")
@@ -141,10 +140,7 @@ def test_unexpected_axis_label_flagged_even_when_fields_complete():
         "## Axis G: Injected axis",
     )
     offenses = cas.check_axis_shape(forged, expected_labels=_ONLY_A)
-    assert any(
-        o.startswith("Axis G") and "not in the expected set" in o
-        for o in offenses
-    )
+    assert any(o.startswith("Axis G") and "not in the expected set" in o for o in offenses)
 
 
 def test_unexpected_label_offense_does_not_also_report_missing_fields():
@@ -189,9 +185,7 @@ def test_cli_expected_labels_flag(tmp_path, capsys):
 def test_missing_expected_axis_flagged():
     offenses = cas.check_axis_shape(_COMPLETE_AXIS, expected_labels=_A_AND_B)
     assert len(offenses) == 1
-    assert offenses[0] == (
-        "Axis B: expected but no '## Axis B:' heading found in the document"
-    )
+    assert offenses[0] == ("Axis B: expected but no '## Axis B:' heading found in the document")
 
 
 def test_duplicate_axis_label_flagged():
@@ -215,9 +209,10 @@ def test_final_axis_section_does_not_leak_into_later_non_axis_heading():
     # would satisfy the "boundary" label. A correct implementation must
     # not let that later, unrelated section's field count toward the
     # axis section it does not belong to.
-    text = _COMPLETE_AXIS.replace(
-        "**Boundary:** expanding this axis is real engineering work.\n", ""
-    ) + "\n## Maintenance\n\n**Boundary:** unrelated content in a later section.\n"
+    text = (
+        _COMPLETE_AXIS.replace("**Boundary:** expanding this axis is real engineering work.\n", "")
+        + "\n## Maintenance\n\n**Boundary:** unrelated content in a later section.\n"
+    )
     offenses = cas.check_axis_shape(text, expected_labels=_ONLY_A)
     assert len(offenses) == 1
     assert offenses[0].startswith("Axis A")

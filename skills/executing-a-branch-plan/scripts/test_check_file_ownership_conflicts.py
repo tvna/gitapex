@@ -3,6 +3,7 @@ detection. Runs the shipped script via subprocess, the same convention
 test_check_task_bash_safety.py already uses in this directory -- the
 script is the thing under test, not a reimplementation of it.
 """
+
 from __future__ import annotations
 
 import json

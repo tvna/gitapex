@@ -77,11 +77,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     try:
-        text = (
-            Path(args.path).read_text(encoding="utf-8")
-            if args.path
-            else sys.stdin.buffer.read().decode("utf-8")
-        )
+        text = Path(args.path).read_text(encoding="utf-8") if args.path else sys.stdin.buffer.read().decode("utf-8")
     except FileNotFoundError:
         print(f"error: file not found: {args.path}", file=sys.stderr)
         return 1

@@ -244,9 +244,7 @@ def test_battle_testing_waiver_rejected_when_description_changed():
 - battle-testing-a-skill: WAIVED: docs-only rewording, no behavioral change
 - evaluating-skill-quality: WELL-FORMED-AND-MATURE
 """
-    assert gate.find_disallowed_battle_testing_waiver(
-        body, ["drafting-an-acm-issue"]
-    ) == ["drafting-an-acm-issue"]
+    assert gate.find_disallowed_battle_testing_waiver(body, ["drafting-an-acm-issue"]) == ["drafting-an-acm-issue"]
 
 
 def test_battle_testing_waiver_allowed_when_description_unchanged():
@@ -260,9 +258,7 @@ def test_battle_testing_waiver_allowed_when_description_unchanged():
 
 
 def test_battle_testing_real_verdict_accepted_even_when_description_changed():
-    assert gate.find_disallowed_battle_testing_waiver(
-        _VALID_SECTION, ["drafting-an-acm-issue"]
-    ) == []
+    assert gate.find_disallowed_battle_testing_waiver(_VALID_SECTION, ["drafting-an-acm-issue"]) == []
 
 
 def test_battle_testing_waiver_check_is_no_op_with_no_evidence_section():
@@ -386,9 +382,7 @@ def test_main_reports_both_new_failures_together(monkeypatch, capsys):
     assert "eval-coverage" in err
 
 
-def test_main_notes_waiver_would_be_rejected_when_battle_testing_missing_entirely(
-    monkeypatch, capsys
-):
+def test_main_notes_waiver_would_be_rejected_when_battle_testing_missing_entirely(monkeypatch, capsys):
     body = """\
 ## Skill audit evidence
 
@@ -530,15 +524,15 @@ def test_checker_script_disclosure_not_required_when_list_empty():
 
 def test_missing_checker_script_disclosure_reported_with_no_section():
     body = "# My PR\n\nNo evidence section at all.\n"
-    assert gate.find_missing_checker_script_disclosure(
-        body, ["skills/foo/scripts/bar.py"]
-    ) == ["skills/foo/scripts/bar.py"]
+    assert gate.find_missing_checker_script_disclosure(body, ["skills/foo/scripts/bar.py"]) == [
+        "skills/foo/scripts/bar.py"
+    ]
 
 
 def test_missing_checker_script_disclosure_reported_with_no_line():
-    assert gate.find_missing_checker_script_disclosure(
-        _VALID_SECTION, ["skills/foo/scripts/bar.py"]
-    ) == ["skills/foo/scripts/bar.py"]
+    assert gate.find_missing_checker_script_disclosure(_VALID_SECTION, ["skills/foo/scripts/bar.py"]) == [
+        "skills/foo/scripts/bar.py"
+    ]
 
 
 @pytest.mark.parametrize("verdict", ["RAN", "NOT-RUN", "ran", "not-run"])
@@ -548,10 +542,7 @@ def test_checker_script_disclosure_accepts_its_own_verdict_vocabulary(verdict):
 
 
 def test_checker_script_disclosure_waiver_satisfies_check():
-    body = (
-        _VALID_SECTION
-        + "- checker-script-adversarial-review: WAIVED: trivial docstring-only change\n"
-    )
+    body = _VALID_SECTION + "- checker-script-adversarial-review: WAIVED: trivial docstring-only change\n"
     assert gate.find_missing_checker_script_disclosure(body, ["skills/foo/scripts/bar.py"]) == []
 
 
@@ -722,9 +713,7 @@ def test_missing_gate_quality_disclosure_reported_with_no_section():
 
 
 def test_missing_gate_quality_disclosure_reported_with_no_line():
-    assert gate.find_missing_gate_quality_disclosure(_VALID_SECTION, [_GATE_SCRIPT]) == [
-        _GATE_SCRIPT
-    ]
+    assert gate.find_missing_gate_quality_disclosure(_VALID_SECTION, [_GATE_SCRIPT]) == [_GATE_SCRIPT]
 
 
 @pytest.mark.parametrize("verdict", ["RAN", "ran", "Ran"])
@@ -757,10 +746,7 @@ def test_the_other_process_checks_still_accept_not_run(check_name):
 
 
 def test_gate_quality_disclosure_waiver_satisfies_check():
-    body = (
-        _VALID_SECTION
-        + "- deterministic-gate-quality: WAIVED: comment-only change, no logic touched\n"
-    )
+    body = _VALID_SECTION + "- deterministic-gate-quality: WAIVED: comment-only change, no logic touched\n"
     assert gate.find_missing_gate_quality_disclosure(body, [_GATE_SCRIPT]) == []
 
 
@@ -923,15 +909,11 @@ Closes #650
 def test_regression_pr_651_body_already_satisfied_the_checker_script_check():
     """Anchors why a fifth check was needed: #651's real body passes the
     existing check, so that check alone could never have caught it."""
-    assert (
-        gate.find_missing_checker_script_disclosure(_PR_651_BODY_EXCERPT, [_GATE_SCRIPT]) == []
-    )
+    assert gate.find_missing_checker_script_disclosure(_PR_651_BODY_EXCERPT, [_GATE_SCRIPT]) == []
 
 
 def test_regression_pr_651_body_is_missing_gate_quality_disclosure():
-    assert gate.find_missing_gate_quality_disclosure(_PR_651_BODY_EXCERPT, [_GATE_SCRIPT]) == [
-        _GATE_SCRIPT
-    ]
+    assert gate.find_missing_gate_quality_disclosure(_PR_651_BODY_EXCERPT, [_GATE_SCRIPT]) == [_GATE_SCRIPT]
 
 
 def test_regression_pr_651_main_fails_without_waiver(monkeypatch, capsys):

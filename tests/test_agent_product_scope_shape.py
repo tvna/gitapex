@@ -11,6 +11,7 @@ is enforced by the test.yml pytest run, not only by an author's memory
 (mirrors test_repository_skill_shape.py's own rationale for gating
 check_skill_shape.py the same way).
 """
+
 from pathlib import Path
 
 import check_axis_shape as cas

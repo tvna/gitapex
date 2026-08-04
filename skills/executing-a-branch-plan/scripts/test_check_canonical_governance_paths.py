@@ -2,6 +2,7 @@
 category boundary. Runs the shipped script via subprocess, same
 convention as this directory's other checker-script tests.
 """
+
 from __future__ import annotations
 
 import subprocess
@@ -110,9 +111,7 @@ def test_leading_dotslash_adjacent_to_slash_still_matches():
 
 
 def test_no_paths_given():
-    result = subprocess.run(
-        [sys.executable, str(SCRIPT)], input="", capture_output=True, text=True, timeout=10
-    )
+    result = subprocess.run([sys.executable, str(SCRIPT)], input="", capture_output=True, text=True, timeout=10)
     assert result.returncode == 0
     assert "no paths given" in result.stdout
 

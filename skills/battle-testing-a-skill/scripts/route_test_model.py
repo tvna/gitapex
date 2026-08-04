@@ -33,11 +33,7 @@ def _validate_model_slug(value: object, field: str) -> str:
 
 
 def _validate_trials(value: object) -> int:
-    if (
-        isinstance(value, bool)
-        or not isinstance(value, int)
-        or not 1 <= value <= MAX_TRIALS
-    ):
+    if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= MAX_TRIALS:
         raise ValueError(f"trials must be an integer in [1,{MAX_TRIALS}]")
     return value
 
@@ -121,23 +117,18 @@ def load_fixed_routes(path: Path) -> dict[str, str]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(
-        description="Route a Codex battle-test model and print the decision as JSON."
-    )
+    parser = argparse.ArgumentParser(description="Route a Codex battle-test model and print the decision as JSON.")
     parser.add_argument("--caller-model", required=True)
     parser.add_argument("--trials", type=int, default=DEFAULT_TRIALS)
     parser.add_argument(
         "--fixed-routes",
         type=Path,
-        help="Trusted, harness-owned JSON object mapping exact caller-model "
-        "slugs to fixed tester slugs.",
+        help="Trusted, harness-owned JSON object mapping exact caller-model slugs to fixed tester slugs.",
     )
     args = parser.parse_args(argv)
 
     try:
-        fixed_routes = (
-            load_fixed_routes(args.fixed_routes) if args.fixed_routes else None
-        )
+        fixed_routes = load_fixed_routes(args.fixed_routes) if args.fixed_routes else None
         decision = route_test_model(
             args.caller_model,
             trials=args.trials,

@@ -336,16 +336,10 @@ def _is_real_exercises_declaration(value: object) -> TypeGuard[list[str]]:
     list of non-blank strings -- not merely truthy (issue #631, mirroring
     `lint_fixture_assertions.py`'s `_is_real_dispatch_declaration`, which
     closed the identical bare-truthy-declaration gap for issue #584)."""
-    return (
-        isinstance(value, list)
-        and len(value) > 0
-        and all(isinstance(item, str) and item.strip() for item in value)
-    )
+    return isinstance(value, list) and len(value) > 0 and all(isinstance(item, str) and item.strip() for item in value)
 
 
-def check_exercises_declaration_coverage(
-    split_md_path: Path, split_text: str, repo_root: Path
-) -> str | None:
+def check_exercises_declaration_coverage(split_md_path: Path, split_text: str, repo_root: Path) -> str | None:
     """Return an offender message if any fixture `split_md_path`'s
     `selection` split declares either lacks a well-formed
     `expected.exercises` declaration, or names a section label matching no
@@ -388,22 +382,17 @@ def check_exercises_declaration_coverage(
         exercises = expected.get("exercises") if isinstance(expected, dict) else None
         if not _is_real_exercises_declaration(exercises):
             problems.append(
-                f"{fixture_name}: no well-formed expected.exercises declaration "
-                "(a non-empty list of section labels)"
+                f"{fixture_name}: no well-formed expected.exercises declaration (a non-empty list of section labels)"
             )
             continue
         unmatched = [label for label in exercises if label.casefold() not in section_labels]
         if unmatched:
             problems.append(
-                f"{fixture_name}: exercises {unmatched!r} match no real "
-                f"###-level section in {skill_md_path}"
+                f"{fixture_name}: exercises {unmatched!r} match no real ###-level section in {skill_md_path}"
             )
     if not problems:
         return None
-    return (
-        f"{split_md_path}: selection-split fixture(s) with an exercises-"
-        f"declaration gap -- {'; '.join(problems)}"
-    )
+    return f"{split_md_path}: selection-split fixture(s) with an exercises-declaration gap -- {'; '.join(problems)}"
 
 
 def _read(path: Path) -> str | None:
@@ -418,7 +407,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--split-md", nargs="*", default=[], help="split.md files this PR added or modified.")
     parser.add_argument("--skill-md", nargs="*", default=[], help="SKILL.md files this PR added or modified.")
-    parser.add_argument("--repo-root", default=".", help="Repository root, for resolving a skill's split.md/SKILL.md/tasks.")
+    parser.add_argument(
+        "--repo-root", default=".", help="Repository root, for resolving a skill's split.md/SKILL.md/tasks."
+    )
     args = parser.parse_args(argv)
     repo_root = Path(args.repo_root)
 

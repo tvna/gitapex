@@ -526,8 +526,13 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     try:
         cli_args = _CliArgs(
-            base=args.base, branch=args.branch, title=args.title, body_file=args.body_file,
-            commit_subject=args.commit_subject, commit_body=args.commit_body, add=args.add,
+            base=args.base,
+            branch=args.branch,
+            title=args.title,
+            body_file=args.body_file,
+            commit_subject=args.commit_subject,
+            commit_body=args.commit_body,
+            add=args.add,
         )
     except ValidationError as exc:
         # body_file's *custom field_validator* message (type "value_error",

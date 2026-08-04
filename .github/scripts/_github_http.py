@@ -93,9 +93,7 @@ def fetch_json_page(
                 # a JSONDecodeError would escape every caller's own
                 # `except GitHubApiError` and crash as a raw traceback
                 # instead of the documented clean error/exit-1 path.
-                raise GitHubApiError(
-                    f"GET {url} returned HTTP {last_code} with unparseable JSON: {error}"
-                ) from error
+                raise GitHubApiError(f"GET {url} returned HTTP {last_code} with unparseable JSON: {error}") from error
             return page
         print(f"Attempt {attempt}: HTTP {_format_code(last_code)} for GET {url}", file=sys.stderr)
         if last_code != 0 and last_code < 500:

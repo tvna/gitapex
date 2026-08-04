@@ -115,11 +115,7 @@ def test_unclosed_fence_extends_to_end_of_text():
     # ...)` finds no pair at all and leaves everything after the opening
     # marker fully exposed. The real GitHub renderer treats an unclosed
     # fence as extending to end-of-text; this scan matches that.
-    body = (
-        "```\n"
-        "I have not actually filled one in, example only.\n\n"
-        f"{_VALID_ACM_TABLE}"
-    )
+    body = f"```\nI have not actually filled one in, example only.\n\n{_VALID_ACM_TABLE}"
     assert checker.has_acm_disclosure(body) is False
 
 

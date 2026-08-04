@@ -255,9 +255,7 @@ def test_preamble_before_first_diff_git_line_is_ignored():
         "some notice line git diff itself would never emit, defensively "
         "ignored rather than assumed impossible\n" + _SINGLE_FILE_DIFF
     )
-    assert extractor.extract_added_lines_by_file(diff_text) == [
-        ["# Title", "", "Paragraph one.", "", "Paragraph two."]
-    ]
+    assert extractor.extract_added_lines_by_file(diff_text) == [["# Title", "", "Paragraph one.", "", "Paragraph two."]]
 
 
 def test_rename_with_rewrite_and_second_file_both_extract_correctly():

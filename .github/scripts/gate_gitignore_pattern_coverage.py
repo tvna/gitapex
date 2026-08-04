@@ -53,7 +53,7 @@ def _core(pattern: str) -> str:
     negation marker, no leading/trailing slash, no surrounding whitespace."""
     value = pattern.strip()
     if value.startswith(_NEGATION_PREFIX):
-        value = value[len(_NEGATION_PREFIX):]
+        value = value[len(_NEGATION_PREFIX) :]
     return value.strip("/")
 
 
@@ -92,21 +92,18 @@ def find_offenders(added_patterns: list[str], repo_root: Path) -> list[str]:
         core = _core(pattern)
         if core and any(_core_regex(core).search(source) for source in sources):
             continue
-        offenders.append(
-            f"{pattern}: added to .gitignore in this diff, but no test "
-            f"under tests/ references it"
-        )
+        offenders.append(f"{pattern}: added to .gitignore in this diff, but no test under tests/ references it")
     return offenders
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Check that every .gitignore pattern added in this PR "
-        "is referenced by some test under tests/.")
+        description="Check that every .gitignore pattern added in this PR is referenced by some test under tests/."
+    )
     parser.add_argument(
         "--added",
-        help="Path to a file of newly-added .gitignore lines, one per "
-        "line; reads standard input when omitted.")
+        help="Path to a file of newly-added .gitignore lines, one per line; reads standard input when omitted.",
+    )
     args = parser.parse_args(argv)
 
     try:

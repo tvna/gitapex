@@ -279,9 +279,7 @@ _IN_SCOPE_RE = re.compile(
 # naming any of them already catches a decode failure, so the read is
 # covered. Attribute handlers (`json.JSONDecodeError`) are compared by their
 # final attribute name, which is why the bare names suffice here.
-_DECODE_COVERING = frozenset(
-    {"UnicodeDecodeError", "UnicodeError", "ValueError", "Exception", "BaseException"}
-)
+_DECODE_COVERING = frozenset({"UnicodeDecodeError", "UnicodeError", "ValueError", "Exception", "BaseException"})
 
 # The `.get()` rule's own covering set. AttributeError is what an unvalidated
 # JSON payload actually raises, so a handler naming it -- or any ancestor --
@@ -555,11 +553,7 @@ def _looks_like_a_mode(node: ast.expr) -> bool:
     can easily contain an `r`, so a plain "is it a string" test would read it
     as a text read and report a binary one.
     """
-    return (
-        isinstance(node, ast.Constant)
-        and isinstance(node.value, str)
-        and set(node.value) <= set("rwxab+t")
-    )
+    return isinstance(node, ast.Constant) and isinstance(node.value, str) and set(node.value) <= set("rwxab+t")
 
 
 def _mode_is_text_read(mode: ast.expr | None, *, unknown_is_read: bool) -> bool:
@@ -605,11 +599,7 @@ def _text_read_kind(node: ast.Call) -> str | None:
     # same class of guess as the name resolution reverted above, so the
     # positional spelling is an over-report instead.
     errors = next((k.value for k in node.keywords if k.arg == "errors"), None)
-    if (
-        isinstance(errors, ast.Constant)
-        and isinstance(errors.value, str)
-        and errors.value in _SUBSTITUTING_ERRORS
-    ):
+    if isinstance(errors, ast.Constant) and isinstance(errors.value, str) and errors.value in _SUBSTITUTING_ERRORS:
         # A substituting policy replaces undecodable bytes instead of raising,
         # so there is no UnicodeDecodeError to handle and demanding a handler
         # reports code that cannot fail. An allowlist, not "anything but
@@ -630,9 +620,7 @@ def _text_read_kind(node: ast.Call) -> str | None:
         # The builtin: `open(file, mode, ...)`, so the mode is positional #2,
         # and one this gate cannot read statically is graded rather than
         # assumed to be a write.
-        builtin_mode = mode_kwarg if mode_kwarg is not None else (
-            node.args[1] if len(node.args) >= 2 else None
-        )
+        builtin_mode = mode_kwarg if mode_kwarg is not None else (node.args[1] if len(node.args) >= 2 else None)
         return "open" if _mode_is_text_read(builtin_mode, unknown_is_read=True) else None
 
     if not (isinstance(func, ast.Attribute) and func.attr == "open"):
@@ -945,8 +933,7 @@ def findings_for_source(path: str, source: str, added: set[int]) -> tuple[list[F
                     path,
                     anchor if anchor is not None else node.lineno,
                     _DECODE_GAP,
-                    f"{kind}(...) decodes text, but no enclosing try handles UnicodeDecodeError "
-                    "(or an ancestor of it)",
+                    f"{kind}(...) decodes text, but no enclosing try handles UnicodeDecodeError (or an ancestor of it)",
                 ),
                 frozenset(expression | handler_lines.get(id(node), set())),
                 None,
@@ -1053,9 +1040,7 @@ def find_violations(diff_text: str, root: pathlib.Path) -> tuple[list[Finding], 
             # A deletion never reaches here (its `+++` line is /dev/null), so
             # this is a caller pointing --root at the wrong tree, or grading
             # a diff against a checkout that does not contain its head.
-            raise ScanError(
-                f"{path}: named by the diff as added or modified, but missing from {root}"
-            ) from None
+            raise ScanError(f"{path}: named by the diff as added or modified, but missing from {root}") from None
         except (OSError, UnicodeDecodeError) as error:
             raise ScanError(f"{path}: cannot be read as UTF-8 text: {error}") from error
         file_violations, file_waived = findings_for_source(path, source, added)

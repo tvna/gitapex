@@ -8,6 +8,7 @@ fixture change that silently drops a citation (or a future dimension added
 to `dimensions.md` with no fixture written for it) is caught here, not only
 by the separate disclosure-sync gate that consumes this module's output.
 """
+
 from pathlib import Path
 
 import check_dimension_coverage as C
@@ -62,6 +63,7 @@ def _write_task(tmp_path, filename, **fields):
 
 # ---- discover_dimensions ----
 
+
 def test_discover_dimensions_handles_multiline_bold_title(tmp_path):
     path = _write(tmp_path, "dimensions.md", _DIMENSIONS_MD)
     found = C.discover_dimensions(path)
@@ -81,6 +83,7 @@ def test_discover_dimensions_missing_file_is_empty_not_error(tmp_path):
 
 
 # ---- discover_axes ----
+
 
 def test_discover_axes_short_key_drops_qualifier(tmp_path):
     path = _write(tmp_path, "SKILL.md", _SKILL_MD)
@@ -107,11 +110,13 @@ def test_discover_axes_short_key_collision_is_first_match_wins(tmp_path):
 
 # ---- discover_citations ----
 
+
 def test_discover_citations_finds_dimension_in_prompt_not_only_description(tmp_path):
     tasks = tmp_path / "tasks"
     tasks.mkdir()
-    _write_task(tasks, "a.yaml", description="unrelated text",
-                prompt="Give me the verdict for dimension 2 on this gate.")
+    _write_task(
+        tasks, "a.yaml", description="unrelated text", prompt="Give me the verdict for dimension 2 on this gate."
+    )
     dims = {"1": "x", "2": "y"}
     dim_hits, _ = C.discover_citations(str(tasks / "*.yaml"), dims, {})
     assert dim_hits == {"2": ["a.yaml"]}
@@ -134,7 +139,9 @@ def test_discover_citations_axis_short_key_case_insensitive(tmp_path):
     tasks = tmp_path / "tasks"
     tasks.mkdir()
     _write_task(tasks, "a.yaml", description="exercises the COMPATIBILITY AWARENESS axis")
-    _, axis_hits = C.discover_citations(str(tasks / "*.yaml"), {}, {"Compatibility awareness": "Compatibility awareness"})
+    _, axis_hits = C.discover_citations(
+        str(tasks / "*.yaml"), {}, {"Compatibility awareness": "Compatibility awareness"}
+    )
     assert axis_hits == {"Compatibility awareness": ["a.yaml"]}
 
 
@@ -177,7 +184,8 @@ def test_discover_citations_dimension_number_stops_at_sentence_end(tmp_path):
     tasks = tmp_path / "tasks"
     tasks.mkdir()
     _write_task(
-        tasks, "a.yaml",
+        tasks,
+        "a.yaml",
         description="this exercises dimension 9. Unrelated -- see issue 12 for context.",
     )
     dims = {"9": "x", "12": "y"}
@@ -199,12 +207,12 @@ def test_discover_citations_scalar_tags_not_char_iterated(tmp_path):
 
 # ---- compute_coverage / CoverageReport ----
 
+
 def test_compute_coverage_uncovered_lists_are_sorted_numerically(tmp_path):
     skill_dir = tmp_path / "skill"
     (skill_dir / "references").mkdir(parents=True)
     _write(skill_dir, "SKILL.md", "# skill\n")
-    _write(skill_dir / "references", "dimensions.md",
-           "1. **A.**\n2. **B.**\n10. **C.**\n")
+    _write(skill_dir / "references", "dimensions.md", "1. **A.**\n2. **B.**\n10. **C.**\n")
     tasks = tmp_path / "tasks"
     tasks.mkdir()
     _write_task(tasks, "a.yaml", description="dimension 2")
@@ -217,6 +225,7 @@ def test_compute_coverage_uncovered_lists_are_sorted_numerically(tmp_path):
 
 # ---- format_report / main (CLI surface) ----
 
+
 def _skill_dir(tmp_path, dimensions_md, skill_md):
     skill_dir = tmp_path / "skill"
     (skill_dir / "references").mkdir(parents=True)
@@ -227,7 +236,8 @@ def _skill_dir(tmp_path, dimensions_md, skill_md):
 
 def test_format_report_lists_covered_and_uncovered(tmp_path):
     skill_dir = _skill_dir(
-        tmp_path, "1. **A.**\n2. **B.**\n",
+        tmp_path,
+        "1. **A.**\n2. **B.**\n",
         "# skill\n\n### Axis: Reproducibility / Domain-coverage\n\n### Axis: Blast-radius\n",
     )
     tasks = tmp_path / "tasks"
@@ -290,9 +300,7 @@ def test_main_reports_error_and_exits_two_on_non_utf8_task_file(tmp_path):
     skill_dir = _skill_dir(tmp_path, "1. **A.**\n", "# skill\n")
     tasks = tmp_path / "tasks"
     tasks.mkdir()
-    (tasks / "a.yaml").write_bytes(
-        b"id: a\nname: T \xff\xfebad\ninputs:\n  prompt: hi\n"
-    )
+    (tasks / "a.yaml").write_bytes(b"id: a\nname: T \xff\xfebad\ninputs:\n  prompt: hi\n")
 
     rc = C.main(["--skill-dir", str(skill_dir), "--tasks-glob", str(tasks / "*.yaml")])
     assert rc == 2
@@ -345,9 +353,12 @@ def test_main_rejects_blank_dimensions_file_returns_2(tmp_path, capsys):
 
     rc = C.main(
         [
-            "--skill-dir", str(skill_dir),
-            "--tasks-glob", str(tasks / "*.yaml"),
-            "--dimensions-file", "   ",
+            "--skill-dir",
+            str(skill_dir),
+            "--tasks-glob",
+            str(tasks / "*.yaml"),
+            "--dimensions-file",
+            "   ",
         ]
     )
 
@@ -357,9 +368,7 @@ def test_main_rejects_blank_dimensions_file_returns_2(tmp_path, capsys):
 
 def test_real_corpus_coverage_matches_expected_snapshot():
     skill_dir = REPO_ROOT / "skills" / "evaluating-deterministic-gate-quality"
-    tasks_glob = str(
-        REPO_ROOT / "evals" / "evaluating-deterministic-gate-quality" / "tasks" / "*.yaml"
-    )
+    tasks_glob = str(REPO_ROOT / "evals" / "evaluating-deterministic-gate-quality" / "tasks" / "*.yaml")
     report = C.compute_coverage(skill_dir, tasks_glob)
     assert len(report.dimensions) == 20
     assert report.uncovered_dimensions == ["9", "11", "12", "13", "14", "16", "17", "20"]

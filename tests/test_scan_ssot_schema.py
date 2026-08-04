@@ -89,9 +89,7 @@ def test_missing_script_file_is_flagged(tmp_path):
     bad["gates"][0]["script"] = "hooks/does-not-exist.sh"
     instance_path = _write_instance(tmp_path, bad)
     findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
-    assert any(
-        "script-drift" in f and "does-not-exist.sh" in f for f in findings
-    )
+    assert any("script-drift" in f and "does-not-exist.sh" in f for f in findings)
 
 
 def test_array_script_partial_miss_is_flagged(tmp_path):
@@ -118,9 +116,7 @@ def test_dangling_policy_ref_is_flagged(tmp_path):
     bad["gates"][0]["policy_refs"] = ["nonexistent-policy"]
     instance_path = _write_instance(tmp_path, bad)
     findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
-    assert any(
-        "policy-ref-drift" in f and "nonexistent-policy" in f for f in findings
-    )
+    assert any("policy-ref-drift" in f and "nonexistent-policy" in f for f in findings)
 
 
 def test_dangling_cluster_is_flagged(tmp_path):
@@ -128,9 +124,7 @@ def test_dangling_cluster_is_flagged(tmp_path):
     bad["gates"][0]["cluster"] = "nonexistent-cluster"
     instance_path = _write_instance(tmp_path, bad)
     findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
-    assert any(
-        "cluster-drift" in f and "nonexistent-cluster" in f for f in findings
-    )
+    assert any("cluster-drift" in f and "nonexistent-cluster" in f for f in findings)
 
 
 def test_explicit_null_gates_does_not_crash(tmp_path):
@@ -166,10 +160,7 @@ def test_duplicate_gate_id_is_flagged(tmp_path):
     dup["gates"].append(json.loads(json.dumps(dup["gates"][0])))
     instance_path = _write_instance(tmp_path, dup)
     findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
-    assert any(
-        "duplicate-id" in f and "example-gate" in f and "2 times" in f
-        for f in findings
-    )
+    assert any("duplicate-id" in f and "example-gate" in f and "2 times" in f for f in findings)
 
 
 def test_duplicate_policy_source_id_is_flagged(tmp_path):
@@ -177,10 +168,7 @@ def test_duplicate_policy_source_id_is_flagged(tmp_path):
     dup["policy_sources"].append(json.loads(json.dumps(dup["policy_sources"][0])))
     instance_path = _write_instance(tmp_path, dup)
     findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
-    assert any(
-        "duplicate-id" in f and "example-policy" in f and "2 times" in f
-        for f in findings
-    )
+    assert any("duplicate-id" in f and "example-policy" in f and "2 times" in f for f in findings)
 
 
 def test_duplicate_id_check_skips_entries_missing_an_id(tmp_path):

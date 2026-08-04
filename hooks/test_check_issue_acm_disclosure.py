@@ -81,9 +81,7 @@ def run(
 
 def assert_denied(**kwargs) -> None:
     result = run(**kwargs)
-    assert result.returncode == 2, (
-        f"expected deny (exit 2), got {result.returncode}: stderr={result.stderr!r}"
-    )
+    assert result.returncode == 2, f"expected deny (exit 2), got {result.returncode}: stderr={result.stderr!r}"
     payload = json.loads(result.stderr)
     assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"
     assert payload["systemMessage"]
@@ -91,9 +89,7 @@ def assert_denied(**kwargs) -> None:
 
 def assert_allowed(**kwargs) -> None:
     result = run(**kwargs)
-    assert result.returncode == 0, (
-        f"expected allow (exit 0), got {result.returncode}: stderr={result.stderr!r}"
-    )
+    assert result.returncode == 0, f"expected allow (exit 0), got {result.returncode}: stderr={result.stderr!r}"
     assert result.stdout == ""
     assert result.stderr == ""
 

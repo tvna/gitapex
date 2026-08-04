@@ -47,9 +47,7 @@ def test_single_skill_multiple_files_dedup_to_one_name():
 
 
 def test_multiple_distinct_skills_both_present_sorted():
-    assert mod.touched_skills(
-        ["evals/zeta/eval.yaml", "evals/alpha/tasks/x.yaml"]
-    ) == ["alpha", "zeta"]
+    assert mod.touched_skills(["evals/zeta/eval.yaml", "evals/alpha/tasks/x.yaml"]) == ["alpha", "zeta"]
 
 
 # --- exclusions ---
@@ -60,9 +58,7 @@ def test_evals_scripts_file_excluded_not_reported_as_skill_scripts():
 
 
 def test_evals_scripts_excluded_alongside_a_real_skill():
-    assert mod.touched_skills(
-        ["evals/scripts/set_config_model.py", "evals/foo/eval.yaml"]
-    ) == ["foo"]
+    assert mod.touched_skills(["evals/scripts/set_config_model.py", "evals/foo/eval.yaml"]) == ["foo"]
 
 
 def test_bare_evals_top_level_file_excluded():
@@ -107,9 +103,7 @@ def test_nested_path_under_evals_scripts_still_excluded_despite_looking_skill_sh
     # of what looks skill-shaped further down the path -- this must NOT
     # be reported as touching a skill named "looks-like-a-skill" (or
     # "subdir", or anything else).
-    result = mod.touched_skills(
-        ["evals/scripts/subdir/looks-like-a-skill/eval.yaml"]
-    )
+    result = mod.touched_skills(["evals/scripts/subdir/looks-like-a-skill/eval.yaml"])
     assert result == []
     assert "looks-like-a-skill" not in result
     assert "scripts" not in result
@@ -154,9 +148,7 @@ def test_invalid_skill_segment_does_not_silently_pass_through_or_get_dropped():
     with pytest.raises(ValueError):
         mod.touched_skills(["evals/foo/eval.yaml", "evals/bad name/x.yaml"])
     with pytest.raises(ValueError):
-        mod.touched_skills(
-            ["evals/good-skill/eval.yaml", "evals/also.bad/tasks/x.yaml"]
-        )
+        mod.touched_skills(["evals/good-skill/eval.yaml", "evals/also.bad/tasks/x.yaml"])
 
 
 @pytest.mark.parametrize("prefix", ["./", "././"])
@@ -265,9 +257,7 @@ def test_tr_based_pipeline_would_have_split_a_literal_newline_byte_in_a_path():
     # `tr` interprets the two-character escapes \0 and \n itself, so the
     # shell that used to be here was doing nothing but quoting. Byte-for-
     # byte identical output, one fewer shell=True.
-    converted = subprocess.run(
-        ["tr", "\\0", "\\n"], input=data, check=True, capture_output=True
-    ).stdout.decode()
+    converted = subprocess.run(["tr", "\\0", "\\n"], input=data, check=True, capture_output=True).stdout.decode()
     broken = mod.parse_paths(converted)
     assert broken != ["evals/foo/\nweirdname.yaml", "evals/bar/eval.yaml"]
     assert mod.touched_skills(broken) == ["bar"], (
@@ -288,9 +278,7 @@ def test_main_prints_empty_line_for_no_touched_skills(monkeypatch, capsys):
 
 
 def test_main_prints_sorted_comma_joined_skills_from_stdin(monkeypatch, capsys):
-    monkeypatch.setattr(
-        "sys.stdin", io.StringIO("evals/zeta/eval.yaml\nevals/alpha/tasks/x.yaml\n")
-    )
+    monkeypatch.setattr("sys.stdin", io.StringIO("evals/zeta/eval.yaml\nevals/alpha/tasks/x.yaml\n"))
     assert mod.main([]) == 0
     assert capsys.readouterr().out.strip() == "alpha,zeta"
 
@@ -324,17 +312,13 @@ def _fake_stdin_with_nul_buffer(data: bytes) -> types.SimpleNamespace:
 def test_main_nul_flag_reads_nul_delimited_stdin(monkeypatch, capsys):
     monkeypatch.setattr(
         "sys.stdin",
-        _fake_stdin_with_nul_buffer(
-            b"evals/zeta/eval.yaml\0evals/alpha/tasks/x.yaml\0"
-        ),
+        _fake_stdin_with_nul_buffer(b"evals/zeta/eval.yaml\0evals/alpha/tasks/x.yaml\0"),
     )
     assert mod.main(["--nul"]) == 0
     assert capsys.readouterr().out.strip() == "alpha,zeta"
 
 
-def test_main_nul_flag_detects_embedded_newline_byte_where_default_mode_could_not(
-    monkeypatch, capsys
-):
+def test_main_nul_flag_detects_embedded_newline_byte_where_default_mode_could_not(monkeypatch, capsys):
     # The embedded newline sits in the filename segment (not the
     # skill-name segment) -- an embedded newline in the skill-name segment
     # itself is correctly rejected by the existing ^[A-Za-z0-9_-]+$ check
@@ -398,8 +382,7 @@ def test_workflow_uses_name_status_z_and_never_converts_nul_via_tr():
         "newline byte inside a real path, silently mis-splitting it"
     )
     assert "--nul" in text, (
-        "the workflow must feed the filtered path list into "
-        "detect_touched_eval_skills.py's --nul mode"
+        "the workflow must feed the filtered path list into detect_touched_eval_skills.py's --nul mode"
     )
     assert "R100" in text and "D|R100" in text, (
         "the workflow's status-record filter must exclude D (deleted) and "
@@ -487,7 +470,7 @@ def test_fixed_git_diff_name_only_z_detects_the_non_ascii_skill(eval_gate_git_re
     # without a shell would delete the thing being demonstrated. The only
     # interpolated values are SHAs the test's own fixture repo just made.
     result = subprocess.run(  # noqa: S602
-        f'git diff --name-only -z "{base_sha}...{head_sha}" | tr \'\\0\' \'\\n\'',
+        f"git diff --name-only -z \"{base_sha}...{head_sha}\" | tr '\\0' '\\n'",
         shell=True,
         cwd=repo,
         check=True,
@@ -566,7 +549,7 @@ def test_old_tr_pipeline_misses_a_skill_whose_touched_file_has_an_embedded_newli
     # without a shell would delete the thing being demonstrated. The only
     # interpolated values are SHAs the test's own fixture repo just made.
     old = subprocess.run(  # noqa: S602
-        f'git diff --name-only -z "{base_sha}...{head_sha}" | tr \'\\0\' \'\\n\'',
+        f"git diff --name-only -z \"{base_sha}...{head_sha}\" | tr '\\0' '\\n'",
         shell=True,
         cwd=repo,
         check=True,

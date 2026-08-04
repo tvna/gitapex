@@ -11,6 +11,7 @@ test_leading_dotslash_immediately_followed_by_slash below) went
 untested by either -- neither consumer test suite happened to combine a
 leading "./" with an immediately adjacent "/".
 """
+
 from __future__ import annotations
 
 import sys

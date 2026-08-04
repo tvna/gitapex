@@ -25,7 +25,10 @@ _PATTERNS = [
     ("model identifier", re.compile(r"\bclaude-[a-z0-9.\-]+\b", re.IGNORECASE)),
     ("session URL", re.compile(r"https?://[^\s]*\bsession[_/][A-Za-z0-9]+", re.IGNORECASE)),
     ("anthropic session domain", re.compile(r"https?://claude\.ai/[^\s]*", re.IGNORECASE)),
-    ("generic build/agent tag", re.compile(r"\b(generated|built)[- ](by|with|using)[- ][A-Za-z0-9_.\-]+\b", re.IGNORECASE)),
+    (
+        "generic build/agent tag",
+        re.compile(r"\b(generated|built)[- ](by|with|using)[- ][A-Za-z0-9_.\-]+\b", re.IGNORECASE),
+    ),
 ]
 
 
@@ -50,9 +53,7 @@ def scan(text: str) -> list[tuple[int, str, str]]:
         for label, pattern in _PATTERNS:
             for match in pattern.finditer(line):
                 line_hits.append((label, match.group(0)))
-        has_corroborating_context = any(
-            label != "model identifier" for label, _ in line_hits
-        )
+        has_corroborating_context = any(label != "model identifier" for label, _ in line_hits)
         for label, matched in line_hits:
             if label == "model identifier" and not has_corroborating_context:
                 continue
@@ -62,20 +63,14 @@ def scan(text: str) -> list[tuple[int, str, str]]:
 
 def main(argv: list[str] | None = None) -> int:
     """CLI: print candidate provenance markers found in the given text."""
-    parser = argparse.ArgumentParser(
-        description="Scan an artifact's text for undisclosed provenance markers."
-    )
+    parser = argparse.ArgumentParser(description="Scan an artifact's text for undisclosed provenance markers.")
     parser.add_argument(
         "--file",
         help="Path to the artifact text; reads standard input when omitted.",
     )
     args = parser.parse_args(argv)
     try:
-        text = (
-            Path(args.file).read_text(encoding="utf-8")
-            if args.file
-            else sys.stdin.buffer.read().decode("utf-8")
-        )
+        text = Path(args.file).read_text(encoding="utf-8") if args.file else sys.stdin.buffer.read().decode("utf-8")
     except FileNotFoundError:
         print(f"error: file not found: {args.file}", file=sys.stderr)
         return 1

@@ -97,6 +97,7 @@ Exit codes:
     2  The coverage report or pyproject.toml is missing/unreadable/
        malformed, or no file matched some include glob at all.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -136,15 +137,10 @@ def read_coverage_sources(pyproject_path: str) -> list[str]:
     try:
         source = data["tool"]["coverage"]["run"]["source"]
     except (KeyError, TypeError) as exc:
+        raise ValueError(f"{pyproject_path!r} has no [tool.coverage.run] source list") from exc
+    if not isinstance(source, list) or not source or not all(isinstance(item, str) and item.strip() for item in source):
         raise ValueError(
-            f"{pyproject_path!r} has no [tool.coverage.run] source list"
-        ) from exc
-    if not isinstance(source, list) or not source or not all(
-        isinstance(item, str) and item.strip() for item in source
-    ):
-        raise ValueError(
-            f"{pyproject_path!r}'s [tool.coverage.run] source must be a "
-            "non-empty list of non-blank strings"
+            f"{pyproject_path!r}'s [tool.coverage.run] source must be a non-empty list of non-blank strings"
         )
     return source
 
@@ -176,10 +172,7 @@ def _percent_covered(path: str, info: object) -> float:
     summary = info.get("summary") if isinstance(info, dict) else None
     percent = summary.get("percent_covered") if isinstance(summary, dict) else None
     if isinstance(percent, bool) or not isinstance(percent, (int, float)):
-        raise ValueError(
-            f"coverage report entry for {path!r} has no numeric "
-            "summary.percent_covered"
-        )
+        raise ValueError(f"coverage report entry for {path!r} has no numeric summary.percent_covered")
     return float(percent)
 
 
@@ -265,22 +258,32 @@ def main(argv: list[str] | None = None) -> int:
         "source directories meets a minimum test coverage percentage."
     )
     parser.add_argument(
-        "--coverage-json", default=DEFAULT_COVERAGE_JSON,
-        help=f"Path to a 'coverage json' report (default: {DEFAULT_COVERAGE_JSON!r}).")
+        "--coverage-json",
+        default=DEFAULT_COVERAGE_JSON,
+        help=f"Path to a 'coverage json' report (default: {DEFAULT_COVERAGE_JSON!r}).",
+    )
     parser.add_argument(
-        "--include-glob", action="append", default=None,
+        "--include-glob",
+        action="append",
+        default=None,
         help="fnmatch glob selecting which report entries to check. Repeatable. "
         "When given, bypasses --pyproject entirely. Default (no --include-glob "
         "given): each of pyproject.toml's [tool.coverage.run] source "
         "directories, matched by exact parent directory rather than a glob "
-        "(see --pyproject).")
+        "(see --pyproject).",
+    )
     parser.add_argument(
-        "--pyproject", default=DEFAULT_PYPROJECT,
+        "--pyproject",
+        default=DEFAULT_PYPROJECT,
         help=f"Path to pyproject.toml used to derive default --include-glob "
-        f"values (default: {DEFAULT_PYPROJECT!r}). Ignored if --include-glob is given.")
+        f"values (default: {DEFAULT_PYPROJECT!r}). Ignored if --include-glob is given.",
+    )
     parser.add_argument(
-        "--min-percent", type=float, default=DEFAULT_MIN_PERCENT,
-        help=f"Minimum percent_covered required per file (default: {DEFAULT_MIN_PERCENT}).")
+        "--min-percent",
+        type=float,
+        default=DEFAULT_MIN_PERCENT,
+        help=f"Minimum percent_covered required per file (default: {DEFAULT_MIN_PERCENT}).",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -330,11 +333,7 @@ def main(argv: list[str] | None = None) -> int:
     # the two lists had silently desynchronised.
     for target, display_glob in zip(targets, display_globs, strict=True):
         try:
-            matched = (
-                select_files_in_source(data, target)
-                if use_source_selector
-                else select_files(data, target)
-            )
+            matched = select_files_in_source(data, target) if use_source_selector else select_files(data, target)
         except ValueError as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 2

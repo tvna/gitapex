@@ -137,9 +137,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         body_text = (
-            Path(args.body).read_text(encoding="utf-8")
-            if args.body
-            else sys.stdin.buffer.read().decode("utf-8")
+            Path(args.body).read_text(encoding="utf-8") if args.body else sys.stdin.buffer.read().decode("utf-8")
         )
     except FileNotFoundError:
         print(f"error: body file not found: {args.body}", file=sys.stderr)

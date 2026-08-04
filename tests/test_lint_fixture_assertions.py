@@ -5,6 +5,7 @@ self-contained; one integration test runs the linter against the repository's
 real fixture set and pins it to zero warnings, which is issue #170's first
 acceptance criterion.
 """
+
 from pathlib import Path
 
 import lint_fixture_assertions as L
@@ -31,6 +32,7 @@ TOKENS = L._content_tokens(CORPUS)
 
 # ---- check_case (issue #170 check 1) ----
 
+
 def test_case_flags_lowercase_against_heading():
     assert L.check_case("blind spot", ANCHORS) == "Blind spot pass"
 
@@ -49,6 +51,7 @@ def test_case_passes_phrase_absent_from_anchors():
 
 
 # ---- check_negation (issue #170 check 2) ----
+
 
 def test_negation_flags_phrase_the_rubric_denies():
     detail = L.check_negation("tenth dimension", FLAT)
@@ -69,6 +72,7 @@ def test_negation_passes_action_qualified_ban():
 
 
 # ---- check_paraphrase (issue #170 check 3) ----
+
 
 def test_paraphrase_flags_absent_variant():
     detail = L.check_paraphrase("hooks or permission", FLAT, TOKENS)
@@ -92,6 +96,7 @@ def test_paraphrase_passes_unrelated_target_text():
 
 # ---- end-to-end via main() ----
 
+
 def _write_task(tmp_path, expected):
     body = ["id: t", "name: T", "inputs:", "  prompt: |", "    p", "expected:"]
     for key, values in expected.items():
@@ -112,27 +117,33 @@ def _corpus_files(tmp_path):
 def test_main_clean_task_exits_zero(tmp_path):
     tasks = tmp_path / "tasks"
     tasks.mkdir()
-    _write_task(tasks, {"output_contains": ["Blind spot pass"],
-                        "output_not_contains": ["LGTM"]})
+    _write_task(tasks, {"output_contains": ["Blind spot pass"], "output_not_contains": ["LGTM"]})
     rubric, skill = _corpus_files(tmp_path)
-    assert L.main(["--tasks-glob", str(tasks / "*.yaml"),
-                   "--rubric", str(rubric), "--skill", str(skill)]) == 0
+    assert L.main(["--tasks-glob", str(tasks / "*.yaml"), "--rubric", str(rubric), "--skill", str(skill)]) == 0
 
 
 def test_main_buggy_task_exits_one(tmp_path):
     tasks = tmp_path / "tasks"
     tasks.mkdir()
-    _write_task(tasks, {"output_contains": ["blind spot"],
-                        "output_not_contains": ["tenth dimension"]})
+    _write_task(tasks, {"output_contains": ["blind spot"], "output_not_contains": ["tenth dimension"]})
     rubric, skill = _corpus_files(tmp_path)
-    assert L.main(["--tasks-glob", str(tasks / "*.yaml"),
-                   "--rubric", str(rubric), "--skill", str(skill)]) == 1
+    assert L.main(["--tasks-glob", str(tasks / "*.yaml"), "--rubric", str(rubric), "--skill", str(skill)]) == 1
 
 
 def test_main_missing_corpus_exits_two(tmp_path):
-    assert L.main(["--tasks-glob", str(tmp_path / "*.yaml"),
-                   "--rubric", str(tmp_path / "nope.md"),
-                   "--skill", str(tmp_path / "nope2.md")]) == 2
+    assert (
+        L.main(
+            [
+                "--tasks-glob",
+                str(tmp_path / "*.yaml"),
+                "--rubric",
+                str(tmp_path / "nope.md"),
+                "--skill",
+                str(tmp_path / "nope2.md"),
+            ]
+        )
+        == 2
+    )
 
 
 def test_main_non_utf8_rubric_exits_two_not_uncaught(tmp_path):
@@ -148,28 +159,34 @@ def test_main_non_utf8_rubric_exits_two_not_uncaught(tmp_path):
     rubric.write_bytes(b"# Rubric \xff\xfe bad\n")
     skill = tmp_path / "SKILL.md"
     skill.write_text("# skill\n", encoding="utf-8")
-    assert L.main(["--tasks-glob", str(tasks / "*.yaml"),
-                   "--rubric", str(rubric), "--skill", str(skill)]) == 2
+    assert L.main(["--tasks-glob", str(tasks / "*.yaml"), "--rubric", str(rubric), "--skill", str(skill)]) == 2
 
 
 def test_main_no_tasks_exits_two(tmp_path):
     rubric, skill = _corpus_files(tmp_path)
-    assert L.main(["--tasks-glob", str(tmp_path / "none" / "*.yaml"),
-                   "--rubric", str(rubric), "--skill", str(skill)]) == 2
+    assert (
+        L.main(["--tasks-glob", str(tmp_path / "none" / "*.yaml"), "--rubric", str(rubric), "--skill", str(skill)]) == 2
+    )
 
 
 def test_repository_fixtures_are_clean():
     # Issue #170 acceptance criterion 1: the current fixture set produces
     # zero warnings. Runs against the real repo paths so it stays a live gate.
-    rc = L.main([
-        "--tasks-glob", str(REPO_ROOT / "evals/evaluating-skill-quality/tasks/*.yaml"),
-        "--rubric", str(REPO_ROOT / L.DEFAULT_RUBRIC),
-        "--skill", str(REPO_ROOT / L.DEFAULT_SKILL),
-    ])
+    rc = L.main(
+        [
+            "--tasks-glob",
+            str(REPO_ROOT / "evals/evaluating-skill-quality/tasks/*.yaml"),
+            "--rubric",
+            str(REPO_ROOT / L.DEFAULT_RUBRIC),
+            "--skill",
+            str(REPO_ROOT / L.DEFAULT_SKILL),
+        ]
+    )
     assert rc == 0
 
 
 # ---- check_short_word_collision (issue #516, #218) ----
+
 
 def test_short_word_collision_flags_known_pair():
     assert L.check_short_word_collision("actor") == "factor"
@@ -192,9 +209,11 @@ def test_short_word_collision_ignores_deliberate_stem_fragment():
 
 # ---- check_symmetric_bans (issue #516, #352) ----
 
+
 def _indeterminate_task(bans):
     return {
-        "id": "t", "name": "T",
+        "id": "t",
+        "name": "T",
         "description": "Whether X occurred cannot be determined from available data.",
         "expected": {"output_not_contains": bans},
     }
@@ -213,8 +232,7 @@ def test_symmetric_bans_flags_positive_only():
 
 
 def test_symmetric_bans_passes_both_directions():
-    detail = L.check_symmetric_bans(_indeterminate_task(
-        ["no force-push occurred", "A force-push occurred"]))
+    detail = L.check_symmetric_bans(_indeterminate_task(["no force-push occurred", "A force-push occurred"]))
     assert detail is None
 
 
@@ -227,7 +245,9 @@ def test_symmetric_bans_ignores_ordinary_fixture():
     # No "cannot be determined"-style marker: an ordinary fixture with only
     # a negative-direction ban is not held to the symmetric-ban rule.
     ordinary = {
-        "id": "t", "name": "T", "description": "An ordinary review fixture.",
+        "id": "t",
+        "name": "T",
+        "description": "An ordinary review fixture.",
         "expected": {"output_not_contains": ["LGTM"]},
     }
     assert L.check_symmetric_bans(ordinary) is None
@@ -247,7 +267,8 @@ def test_symmetric_bans_exempts_enum_style_indeterminate_status():
     # against the real false positive on battle-testing-a-skill's own
     # codex-unknown-model-fail-closed.yaml.
     enum_style = {
-        "id": "t", "name": "T",
+        "id": "t",
+        "name": "T",
         "description": "Requires an unknown caller to stop as INDETERMINATE.",
         "expected": {
             "output_contains": ["route_status", "INDETERMINATE"],
@@ -266,6 +287,7 @@ def test_symmetric_bans_still_flags_lowercase_indeterminate_claim():
 
 
 # ---- check_unsatisfiable_assertion_pair (issue #628) ----
+
 
 def test_unsatisfiable_pair_flags_contains_vs_not_icontains():
     expected = {"output_contains": ["Foo"], "output_not_icontains": ["foo"]}
@@ -353,20 +375,19 @@ def test_unsatisfiable_pair_is_wired_into_lint_task_via_main(tmp_path):
     tasks.mkdir()
     _write_task(tasks, {"output_contains": ["Foo"], "output_not_icontains": ["foo"]})
     rubric, skill = _corpus_files(tmp_path)
-    assert L.main(["--tasks-glob", str(tasks / "*.yaml"),
-                   "--rubric", str(rubric), "--skill", str(skill)]) == 1
+    assert L.main(["--tasks-glob", str(tasks / "*.yaml"), "--rubric", str(rubric), "--skill", str(skill)]) == 1
 
 
 # ---- checks 2-4 extended to output_icontains/output_not_icontains, and
 # check 1 (case-sensitivity) deliberately NOT extended (issue #628) ----
+
 
 def test_icontains_paraphrase_drift_is_flagged(tmp_path):
     tasks = tmp_path / "tasks"
     tasks.mkdir()
     _write_task(tasks, {"output_icontains": ["hooks or permission"]})
     rubric, skill = _corpus_files(tmp_path)
-    assert L.main(["--tasks-glob", str(tasks / "*.yaml"),
-                   "--rubric", str(rubric), "--skill", str(skill)]) == 1
+    assert L.main(["--tasks-glob", str(tasks / "*.yaml"), "--rubric", str(rubric), "--skill", str(skill)]) == 1
 
 
 def test_icontains_short_word_collision_is_flagged(tmp_path):
@@ -374,8 +395,7 @@ def test_icontains_short_word_collision_is_flagged(tmp_path):
     tasks.mkdir()
     _write_task(tasks, {"output_icontains": ["actor"]})
     rubric, skill = _corpus_files(tmp_path)
-    assert L.main(["--tasks-glob", str(tasks / "*.yaml"),
-                   "--rubric", str(rubric), "--skill", str(skill)]) == 1
+    assert L.main(["--tasks-glob", str(tasks / "*.yaml"), "--rubric", str(rubric), "--skill", str(skill)]) == 1
 
 
 def test_not_icontains_negation_trap_is_flagged(tmp_path):
@@ -383,8 +403,7 @@ def test_not_icontains_negation_trap_is_flagged(tmp_path):
     tasks.mkdir()
     _write_task(tasks, {"output_not_icontains": ["tenth dimension"]})
     rubric, skill = _corpus_files(tmp_path)
-    assert L.main(["--tasks-glob", str(tasks / "*.yaml"),
-                   "--rubric", str(rubric), "--skill", str(skill)]) == 1
+    assert L.main(["--tasks-glob", str(tasks / "*.yaml"), "--rubric", str(rubric), "--skill", str(skill)]) == 1
 
 
 def test_icontains_different_case_than_anchor_is_not_flagged_for_case_sensitivity(tmp_path):
@@ -395,18 +414,19 @@ def test_icontains_different_case_than_anchor_is_not_flagged_for_case_sensitivit
     tasks.mkdir()
     _write_task(tasks, {"output_icontains": ["blind spot"]})
     rubric, skill = _corpus_files(tmp_path)
-    assert L.main(["--tasks-glob", str(tasks / "*.yaml"),
-                   "--rubric", str(rubric), "--skill", str(skill)]) == 0
+    assert L.main(["--tasks-glob", str(tasks / "*.yaml"), "--rubric", str(rubric), "--skill", str(skill)]) == 0
 
 
 # ---- check_symmetric_bans extended to icontains/not_icontains (issue #628) ----
+
 
 def test_symmetric_bans_exempts_enum_style_indeterminate_status_via_icontains():
     # Same exemption as the output_contains case, but declared via the new
     # output_icontains key -- proves the key is actually consulted, not
     # just present without effect.
     task = {
-        "id": "t", "name": "T",
+        "id": "t",
+        "name": "T",
         "description": "Requires an unknown caller to stop as INDETERMINATE.",
         "expected": {
             "output_icontains": ["route_status", "INDETERMINATE"],
@@ -417,11 +437,14 @@ def test_symmetric_bans_exempts_enum_style_indeterminate_status_via_icontains():
 
 
 def test_symmetric_bans_counts_not_icontains_as_a_ban():
-    detail = L.check_symmetric_bans({
-        "id": "t", "name": "T",
-        "description": "Whether X occurred cannot be determined from available data.",
-        "expected": {"output_not_icontains": ["no force-push occurred"]},
-    })
+    detail = L.check_symmetric_bans(
+        {
+            "id": "t",
+            "name": "T",
+            "description": "Whether X occurred cannot be determined from available data.",
+            "expected": {"output_not_icontains": ["no force-push occurred"]},
+        }
+    )
     assert detail is not None
     assert "positive-claim" in detail
 
@@ -430,18 +453,22 @@ def test_symmetric_bans_passes_both_directions_via_not_icontains():
     # Both ban directions can now be split across output_not_contains and
     # output_not_icontains -- proves output_not_icontains entries are
     # actually merged into the "bans" set, not silently ignored.
-    detail = L.check_symmetric_bans({
-        "id": "t", "name": "T",
-        "description": "Whether X occurred cannot be determined from available data.",
-        "expected": {
-            "output_not_contains": ["A force-push occurred"],
-            "output_not_icontains": ["no force-push occurred"],
-        },
-    })
+    detail = L.check_symmetric_bans(
+        {
+            "id": "t",
+            "name": "T",
+            "description": "Whether X occurred cannot be determined from available data.",
+            "expected": {
+                "output_not_contains": ["A force-push occurred"],
+                "output_not_icontains": ["no force-push occurred"],
+            },
+        }
+    )
     assert detail is None
 
 
 # ---- check_prompt_echo (issue #516, #191 -- opt in, non-blocking) ----
+
 
 def test_prompt_echo_flags_verbatim_substring():
     detail = L.check_prompt_echo("dimension eight", "review this for dimension eight please")
@@ -458,10 +485,10 @@ def test_prompt_echo_ignores_single_word():
 
 # ---- check_cross_task_collision (issue #516, #270, #473 -- opt in, non-blocking) ----
 
+
 def test_cross_task_collision_flags_exact_match_in_sibling_task():
     index = {"other.yaml": {"not applicable"}, "self.yaml": set()}
-    assert L.check_cross_task_collision(
-        "self.yaml", "not applicable", index) == "other.yaml"
+    assert L.check_cross_task_collision("self.yaml", "not applicable", index) == "other.yaml"
 
 
 def test_cross_task_collision_ignores_own_task():
@@ -473,25 +500,26 @@ def test_cross_task_collision_excludes_enum_style_token():
     # This repository's closed-enum classification fixtures deliberately
     # ban sibling UPPER_SNAKE_CASE labels -- a correct design, not a bug.
     index = {"other.yaml": {"status: no_compatibility_warning"}}
-    assert L.check_cross_task_collision(
-        "self.yaml", "Status: NO_COMPATIBILITY_WARNING", index) is None
+    assert L.check_cross_task_collision("self.yaml", "Status: NO_COMPATIBILITY_WARNING", index) is None
 
 
 # ---- check_adversarial_coverage (issue #516, #473 -- discovery mode only) ----
 
+
 def _write_yaml(path, tags):
     path.write_text(
-        "id: t\nname: T\ninputs:\n  prompt: p\ntags:\n" +
-        "".join(f"  - {t}\n" for t in tags) + "expected:\n  output_contains: []\n",
-        encoding="utf-8")
+        "id: t\nname: T\ninputs:\n  prompt: p\ntags:\n"
+        + "".join(f"  - {t}\n" for t in tags)
+        + "expected:\n  output_contains: []\n",
+        encoding="utf-8",
+    )
 
 
 def test_adversarial_coverage_flags_claim_without_tag(tmp_path):
     tasks = tmp_path / "tasks"
     tasks.mkdir()
     _write_yaml(tasks / "t.yaml", ["quality"])
-    detail = L.check_adversarial_coverage(
-        "some-skill", tasks, "This skill covers 22 adversarial dimensions.")
+    detail = L.check_adversarial_coverage("some-skill", tasks, "This skill covers 22 adversarial dimensions.")
     assert detail is not None
 
 
@@ -499,8 +527,7 @@ def test_adversarial_coverage_passes_with_tagged_fixture(tmp_path):
     tasks = tmp_path / "tasks"
     tasks.mkdir()
     _write_yaml(tasks / "t.yaml", ["quality", "adversarial"])
-    detail = L.check_adversarial_coverage(
-        "some-skill", tasks, "This skill covers 22 adversarial dimensions.")
+    detail = L.check_adversarial_coverage("some-skill", tasks, "This skill covers 22 adversarial dimensions.")
     assert detail is None
 
 
@@ -514,10 +541,11 @@ def test_adversarial_coverage_ignores_skill_without_claim(tmp_path):
 
 # ---- check_dispatch_declaration_coverage (issue #584 -- discovery mode only) --
 
+
 def _write_yaml_with_requires_fresh_dispatch(path, *, declared: bool):
     body = "id: t\nname: T\ninputs:\n  prompt: p\nexpected:\n  output_contains: []\n"
     if declared:
-        body += "  requires_fresh_dispatch:\n    tool_names: [\"Agent\"]\n    min_dispatches: 1\n"
+        body += '  requires_fresh_dispatch:\n    tool_names: ["Agent"]\n    min_dispatches: 1\n'
     path.write_text(body, encoding="utf-8")
 
 
@@ -552,8 +580,7 @@ def test_dispatch_declaration_coverage_ignores_skill_outside_allowlist(tmp_path)
 def test_dispatch_declaration_coverage_reuses_supplied_task_data(tmp_path):
     missing_dir = tmp_path / "does-not-exist"
     task_data = {tmp_path / "t.yaml": {"expected": {"requires_fresh_dispatch": {"tool_names": ["Agent"]}}}}
-    assert L.check_dispatch_declaration_coverage(
-        "evaluating-skill-quality", missing_dir, task_data=task_data) is None
+    assert L.check_dispatch_declaration_coverage("evaluating-skill-quality", missing_dir, task_data=task_data) is None
 
 
 def test_dispatch_declaration_coverage_empty_requires_fresh_dispatch_still_flags(tmp_path):
@@ -562,9 +589,9 @@ def test_dispatch_declaration_coverage_empty_requires_fresh_dispatch_still_flags
     tasks = tmp_path / "tasks"
     tasks.mkdir()
     (tasks / "t.yaml").write_text(
-        "id: t\nname: T\ninputs:\n  prompt: p\nexpected:\n"
-        "  output_contains: []\n  requires_fresh_dispatch:\n",
-        encoding="utf-8")
+        "id: t\nname: T\ninputs:\n  prompt: p\nexpected:\n  output_contains: []\n  requires_fresh_dispatch:\n",
+        encoding="utf-8",
+    )
     detail = L.check_dispatch_declaration_coverage("evaluating-skill-quality", tasks)
     assert detail is not None
 
@@ -575,9 +602,9 @@ def test_dispatch_declaration_coverage_bare_truthy_value_still_flags(tmp_path):
     tasks = tmp_path / "tasks"
     tasks.mkdir()
     (tasks / "t.yaml").write_text(
-        "id: t\nname: T\ninputs:\n  prompt: p\nexpected:\n"
-        "  output_contains: []\n  requires_fresh_dispatch: true\n",
-        encoding="utf-8")
+        "id: t\nname: T\ninputs:\n  prompt: p\nexpected:\n  output_contains: []\n  requires_fresh_dispatch: true\n",
+        encoding="utf-8",
+    )
     detail = L.check_dispatch_declaration_coverage("evaluating-skill-quality", tasks)
     assert detail is not None
 
@@ -592,8 +619,9 @@ def test_dispatch_declaration_coverage_zero_min_dispatches_still_flags(tmp_path)
     (tasks / "t.yaml").write_text(
         "id: t\nname: T\ninputs:\n  prompt: p\nexpected:\n"
         "  output_contains: []\n  requires_fresh_dispatch:\n"
-        "    tool_names: [\"Agent\"]\n    min_dispatches: 0\n",
-        encoding="utf-8")
+        '    tool_names: ["Agent"]\n    min_dispatches: 0\n',
+        encoding="utf-8",
+    )
     detail = L.check_dispatch_declaration_coverage("evaluating-skill-quality", tasks)
     assert detail is not None
 
@@ -603,14 +631,13 @@ def test_dispatch_declaration_coverage_non_dict_expected_does_not_crash(tmp_path
     # not crash the lint pass with an AttributeError.
     tasks = tmp_path / "tasks"
     tasks.mkdir()
-    (tasks / "t.yaml").write_text(
-        "id: t\nname: T\ninputs:\n  prompt: p\nexpected: todo\n",
-        encoding="utf-8")
+    (tasks / "t.yaml").write_text("id: t\nname: T\ninputs:\n  prompt: p\nexpected: todo\n", encoding="utf-8")
     detail = L.check_dispatch_declaration_coverage("evaluating-skill-quality", tasks)
     assert detail is not None
 
 
 # ---- _is_real_dispatch_declaration (issue #584) ----------------------------
+
 
 def test_is_real_dispatch_declaration_accepts_well_formed_dict():
     assert L._is_real_dispatch_declaration({"tool_names": ["Agent"], "min_dispatches": 1}) is True
@@ -650,6 +677,7 @@ def test_is_real_dispatch_declaration_rejects_non_int_min_dispatches():
 
 # ---- negation broadened to the fixture's own prompt (issue #516, #487) ----
 
+
 def test_negation_haystack_extended_with_own_prompt_catches_ad_hoc_ban():
     # The rubric alone never mentions "rewritten commit"; only this
     # fixture's own prompt denies it. #487 asks the negation-trap detector
@@ -664,8 +692,8 @@ def test_negation_haystack_extended_with_own_prompt_catches_ad_hoc_ban():
 
 # ---- discovery mode (issue #516, #296) ----
 
-def _write_skill_and_tasks(root, name, *, with_rubric=False,
-                           expected=None):
+
+def _write_skill_and_tasks(root, name, *, with_rubric=False, expected=None):
     skill_dir = root / "skills" / name
     skill_dir.mkdir(parents=True)
     (skill_dir / "SKILL.md").write_text(CORPUS, encoding="utf-8")
@@ -674,8 +702,7 @@ def _write_skill_and_tasks(root, name, *, with_rubric=False,
         (skill_dir / "references" / "rubric.md").write_text(CORPUS, encoding="utf-8")
     tasks_dir = root / "evals" / name / "tasks"
     tasks_dir.mkdir(parents=True)
-    _write_task(tasks_dir, expected or {"output_contains": ["Blind spot pass"],
-                                        "output_not_contains": ["LGTM"]})
+    _write_task(tasks_dir, expected or {"output_contains": ["Blind spot pass"], "output_not_contains": ["LGTM"]})
     return tasks_dir
 
 
@@ -701,10 +728,8 @@ def test_lint_all_skills_executes_across_multiple_skills(tmp_path):
     # actually runs a second skill's fixtures, not silently skipping it.
     # Each skill gets its own distinct, deliberate bug so a warning from
     # either one only appears if that skill was actually linted.
-    _write_skill_and_tasks(tmp_path, "alpha", with_rubric=True,
-                           expected={"output_contains": ["blind spot"]})
-    _write_skill_and_tasks(tmp_path, "beta",
-                           expected={"output_not_contains": ["tenth dimension"]})
+    _write_skill_and_tasks(tmp_path, "alpha", with_rubric=True, expected={"output_contains": ["blind spot"]})
+    _write_skill_and_tasks(tmp_path, "beta", expected={"output_not_contains": ["tenth dimension"]})
     warnings = L.lint_all_skills(tmp_path / "evals", tmp_path / "skills")
     linted_skills = {w.task.split("/", 1)[0] for w in warnings}
     assert linted_skills == {"alpha", "beta"}
@@ -749,6 +774,7 @@ def test_main_discovery_mode_non_utf8_eval_status_exits_two_not_uncaught(tmp_pat
 
 # ---- format_report (issue #516 follow-up) ----
 
+
 def test_format_report_clean_run_says_well_formed():
     assert "well-formed" in L.format_report([])
 
@@ -774,10 +800,13 @@ def test_format_report_blocking_warning_present():
 # ---- lint_skill_tasks / lint_all_skills reuse already-parsed task data
 # (issue #516 follow-up: avoid re-parsing each task YAML twice) ----
 
+
 def test_lint_skill_tasks_returns_parsed_task_data(tmp_path):
     tasks_dir = _write_skill_and_tasks(tmp_path, "alpha", with_rubric=True)
-    rubric, skill = (tmp_path / "skills" / "alpha" / "references" / "rubric.md",
-                     tmp_path / "skills" / "alpha" / "SKILL.md")
+    rubric, skill = (
+        tmp_path / "skills" / "alpha" / "references" / "rubric.md",
+        tmp_path / "skills" / "alpha" / "SKILL.md",
+    )
     corpus = L.load_corpus(rubric, skill)
     task_paths = sorted(tasks_dir.glob("*.yaml"))
     warnings, task_data = L.lint_skill_tasks(task_paths, corpus)
@@ -791,9 +820,10 @@ def test_check_adversarial_coverage_reuses_supplied_task_data(tmp_path):
     # -- point tasks_dir at a nonexistent directory to prove it is unused.
     missing_dir = tmp_path / "does-not-exist"
     task_data = {tmp_path / "t.yaml": {"tags": ["adversarial"]}}
-    assert L.check_adversarial_coverage(
-        "some-skill", missing_dir, "claims adversarial coverage",
-        task_data=task_data) is None
+    assert (
+        L.check_adversarial_coverage("some-skill", missing_dir, "claims adversarial coverage", task_data=task_data)
+        is None
+    )
 
 
 # ---- TaskFixture / ExpectedBlock / InputsBlock / NearAssertion (issue
@@ -802,9 +832,12 @@ def test_check_adversarial_coverage_reuses_supplied_task_data(tmp_path):
 # the module docstring for why the model exists and what it does/does not
 # strictly validate (e.g. requires_fresh_dispatch is deliberately open). --
 
+
 def _well_formed_fixture(**overrides):
     fixture = {
-        "id": "t", "name": "T", "inputs": {"prompt": "p"},
+        "id": "t",
+        "name": "T",
+        "inputs": {"prompt": "p"},
         "expected": {"output_contains": ["x"]},
     }
     fixture.update(overrides)
@@ -872,8 +905,7 @@ def test_task_fixture_accepts_bare_string_tags():
 
 
 def test_task_fixture_accepts_list_tags():
-    fixture = L.TaskFixture.model_validate(
-        _well_formed_fixture(tags=["quality", "adversarial"]))
+    fixture = L.TaskFixture.model_validate(_well_formed_fixture(tags=["quality", "adversarial"]))
     assert fixture.tags == ["quality", "adversarial"]
 
 
@@ -889,11 +921,15 @@ def test_expected_block_preserves_fields_this_linter_does_not_itself_read():
     # merge-retrospective's own scoring reads expected.classification /
     # expected.repair_count; this linter never does, but must not drop
     # them -- extra="allow" round-trips them through model_dump().
-    fixture = L.TaskFixture.model_validate(_well_formed_fixture(expected={
-        "output_contains": ["x"],
-        "classification": ["missing-deterministic-gate"],
-        "repair_count": 2,
-    }))
+    fixture = L.TaskFixture.model_validate(
+        _well_formed_fixture(
+            expected={
+                "output_contains": ["x"],
+                "classification": ["missing-deterministic-gate"],
+                "repair_count": 2,
+            }
+        )
+    )
     dumped = fixture.model_dump()
     assert dumped["expected"]["classification"] == ["missing-deterministic-gate"]
     assert dumped["expected"]["repair_count"] == 2
@@ -901,15 +937,23 @@ def test_expected_block_preserves_fields_this_linter_does_not_itself_read():
 
 def test_near_assertion_rejects_missing_all():
     with pytest.raises(L.ValidationError):
-        L.TaskFixture.model_validate(_well_formed_fixture(expected={
-            "output_contains_near": [{"window": 100}],
-        }))
+        L.TaskFixture.model_validate(
+            _well_formed_fixture(
+                expected={
+                    "output_contains_near": [{"window": 100}],
+                }
+            )
+        )
 
 
 def test_near_assertion_defaults_window_to_400():
-    fixture = L.TaskFixture.model_validate(_well_formed_fixture(expected={
-        "output_contains_near": [{"all": ["a", "b"]}],
-    }))
+    fixture = L.TaskFixture.model_validate(
+        _well_formed_fixture(
+            expected={
+                "output_contains_near": [{"all": ["a", "b"]}],
+            }
+        )
+    )
     assert fixture.expected.output_contains_near[0].window == 400
 
 
@@ -920,18 +964,13 @@ def test_load_fixture_dict_falls_back_on_malformed_expected(tmp_path):
     # tolerance for a malformed shape they cannot validate but must not
     # crash on (see check_dispatch_declaration_coverage's own tests).
     path = tmp_path / "bad.yaml"
-    path.write_text("id: t\nname: T\ninputs:\n  prompt: p\nexpected: todo\n",
-                     encoding="utf-8")
-    assert L._load_fixture_dict(path) == {
-        "id": "t", "name": "T", "inputs": {"prompt": "p"}, "expected": "todo"}
+    path.write_text("id: t\nname: T\ninputs:\n  prompt: p\nexpected: todo\n", encoding="utf-8")
+    assert L._load_fixture_dict(path) == {"id": "t", "name": "T", "inputs": {"prompt": "p"}, "expected": "todo"}
 
 
 def test_load_fixture_dict_validates_well_formed_fixture(tmp_path):
     path = tmp_path / "good.yaml"
-    path.write_text(
-        "id: t\nname: T\ninputs:\n  prompt: p\nexpected:\n"
-        "  output_contains:\n    - x\n",
-        encoding="utf-8")
+    path.write_text("id: t\nname: T\ninputs:\n  prompt: p\nexpected:\n  output_contains:\n    - x\n", encoding="utf-8")
     data = L._load_fixture_dict(path)
     assert data["id"] == "t"
     assert data["expected"]["output_contains"] == ["x"]
@@ -946,8 +985,7 @@ def test_lint_skill_tasks_reports_malformed_fixture_without_raising(tmp_path):
     tasks = tmp_path / "tasks"
     tasks.mkdir()
     bad = tasks / "t.yaml"
-    bad.write_text(
-        "id: t\nname: T\nexpected:\n  output_contains: []\n", encoding="utf-8")
+    bad.write_text("id: t\nname: T\nexpected:\n  output_contains: []\n", encoding="utf-8")
     rubric, skill = _corpus_files(tmp_path)
     warnings, task_data = L.lint_skill_tasks([bad], L.load_corpus(rubric, skill))
     assert len(warnings) == 1
@@ -963,15 +1001,15 @@ def test_lint_skill_tasks_isolates_a_malformed_fixture_from_its_siblings(tmp_pat
     tasks = tmp_path / "tasks"
     tasks.mkdir()
     bad = tasks / "bad.yaml"
-    bad.write_text(
-        "id: t\nname: T\nexpected:\n  output_contains: []\n", encoding="utf-8")
+    bad.write_text("id: t\nname: T\nexpected:\n  output_contains: []\n", encoding="utf-8")
     (tasks / "good.yaml").write_text(
-        'id: g\nname: G\ninputs:\n  prompt: |\n    p\nexpected:\n'
+        "id: g\nname: G\ninputs:\n  prompt: |\n    p\nexpected:\n"
         '  output_contains:\n    - "Blind spot pass"\n'
-        '  output_not_contains:\n    - "LGTM"\n', encoding="utf-8")
+        '  output_not_contains:\n    - "LGTM"\n',
+        encoding="utf-8",
+    )
     rubric, skill = _corpus_files(tmp_path)
-    warnings, task_data = L.lint_skill_tasks(
-        [bad, tasks / "good.yaml"], L.load_corpus(rubric, skill))
+    warnings, task_data = L.lint_skill_tasks([bad, tasks / "good.yaml"], L.load_corpus(rubric, skill))
     assert [w for w in warnings if w.rule == "fixture-shape"]
     assert bad not in task_data
     assert (tasks / "good.yaml") in task_data
@@ -988,15 +1026,16 @@ def test_lint_skill_tasks_isolates_a_yaml_syntax_error_from_its_siblings(tmp_pat
     tasks.mkdir()
     bad = tasks / "bad.yaml"
     bad.write_text(
-        'id: broken\nname: "unterminated quote causes scanner error\n'
-        'inputs:\n  prompt: "hello"\n', encoding="utf-8")
+        'id: broken\nname: "unterminated quote causes scanner error\ninputs:\n  prompt: "hello"\n', encoding="utf-8"
+    )
     (tasks / "good.yaml").write_text(
-        'id: g\nname: G\ninputs:\n  prompt: |\n    p\nexpected:\n'
+        "id: g\nname: G\ninputs:\n  prompt: |\n    p\nexpected:\n"
         '  output_contains:\n    - "Blind spot pass"\n'
-        '  output_not_contains:\n    - "LGTM"\n', encoding="utf-8")
+        '  output_not_contains:\n    - "LGTM"\n',
+        encoding="utf-8",
+    )
     rubric, skill = _corpus_files(tmp_path)
-    warnings, task_data = L.lint_skill_tasks(
-        [bad, tasks / "good.yaml"], L.load_corpus(rubric, skill))
+    warnings, task_data = L.lint_skill_tasks([bad, tasks / "good.yaml"], L.load_corpus(rubric, skill))
     assert [w for w in warnings if w.rule == "fixture-shape" and str(bad) in w.detail]
     assert bad not in task_data
     assert (tasks / "good.yaml") in task_data
@@ -1014,12 +1053,13 @@ def test_lint_skill_tasks_isolates_a_non_utf8_fixture_from_its_siblings(tmp_path
     bad = tasks / "bad.yaml"
     bad.write_bytes(b"id: t1\nname: \xff\xfe bad utf8\n")
     (tasks / "good.yaml").write_text(
-        'id: g\nname: G\ninputs:\n  prompt: |\n    p\nexpected:\n'
+        "id: g\nname: G\ninputs:\n  prompt: |\n    p\nexpected:\n"
         '  output_contains:\n    - "Blind spot pass"\n'
-        '  output_not_contains:\n    - "LGTM"\n', encoding="utf-8")
+        '  output_not_contains:\n    - "LGTM"\n',
+        encoding="utf-8",
+    )
     rubric, skill = _corpus_files(tmp_path)
-    warnings, task_data = L.lint_skill_tasks(
-        [bad, tasks / "good.yaml"], L.load_corpus(rubric, skill))
+    warnings, task_data = L.lint_skill_tasks([bad, tasks / "good.yaml"], L.load_corpus(rubric, skill))
     assert [w for w in warnings if w.rule == "fixture-shape" and str(bad) in w.detail]
     assert bad not in task_data
     assert (tasks / "good.yaml") in task_data
@@ -1049,8 +1089,6 @@ def test_main_reports_malformed_fixture_as_a_blocking_warning_exit_1(tmp_path):
     # wrong shape, and the report names it instead of crashing.
     tasks = tmp_path / "tasks"
     tasks.mkdir()
-    (tasks / "t.yaml").write_text(
-        "id: t\nname: T\nexpected:\n  output_contains: []\n", encoding="utf-8")
+    (tasks / "t.yaml").write_text("id: t\nname: T\nexpected:\n  output_contains: []\n", encoding="utf-8")
     rubric, skill = _corpus_files(tmp_path)
-    assert L.main(["--tasks-glob", str(tasks / "*.yaml"),
-                   "--rubric", str(rubric), "--skill", str(skill)]) == 1
+    assert L.main(["--tasks-glob", str(tasks / "*.yaml"), "--rubric", str(rubric), "--skill", str(skill)]) == 1

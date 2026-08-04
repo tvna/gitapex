@@ -116,8 +116,7 @@ def test_discovery_found_the_expected_number_of_copies():
 
 def test_all_copies_expose_a_header_regex():
     missing = [
-        p for p in ACM_CHECKER_SCRIPTS
-        if not isinstance(getattr(_load_module(p), "_HEADER_RE", None), re.Pattern)
+        p for p in ACM_CHECKER_SCRIPTS if not isinstance(getattr(_load_module(p), "_HEADER_RE", None), re.Pattern)
     ]
     assert not missing, (
         "these check_acm_present.py copies have no module-level _HEADER_RE "
@@ -126,10 +125,7 @@ def test_all_copies_expose_a_header_regex():
 
 
 def test_header_regex_stays_in_sync_across_all_copies():
-    patterns = {
-        p: (_load_module(p)._HEADER_RE.pattern, _load_module(p)._HEADER_RE.flags)
-        for p in ACM_CHECKER_SCRIPTS
-    }
+    patterns = {p: (_load_module(p)._HEADER_RE.pattern, _load_module(p)._HEADER_RE.flags) for p in ACM_CHECKER_SCRIPTS}
     counts = collections.Counter(patterns.values())
     if len(counts) <= 1:
         return
@@ -151,9 +147,7 @@ def test_header_regex_stays_in_sync_across_all_copies():
     if not unmarked_diverging:
         return
 
-    diffs = "\n".join(
-        f"  - {p.relative_to(REPO_ROOT)}: {patterns[p][0]!r}" for p in diverging
-    )
+    diffs = "\n".join(f"  - {p.relative_to(REPO_ROOT)}: {patterns[p][0]!r}" for p in diverging)
     assert not unmarked_diverging, (
         "check_acm_present.py copies' _HEADER_RE patterns have diverged from "
         "the consensus pattern without a '# ... intentionally diverged ...' "
@@ -179,8 +173,7 @@ _WAIVER_REGEX_SCRIPTS = (
 
 def test_both_waiver_scripts_expose_a_waiver_regex():
     missing = [
-        p for p in _WAIVER_REGEX_SCRIPTS
-        if not isinstance(getattr(_load_module(p), "_ACM_WAIVER_RE", None), re.Pattern)
+        p for p in _WAIVER_REGEX_SCRIPTS if not isinstance(getattr(_load_module(p), "_ACM_WAIVER_RE", None), re.Pattern)
     ]
     assert not missing, (
         "these files are expected to expose a module-level _ACM_WAIVER_RE "

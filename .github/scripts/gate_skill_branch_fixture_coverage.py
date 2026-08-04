@@ -196,9 +196,7 @@ def _blank_fenced_blocks(text: str) -> str:
     return "\n".join(out)
 
 
-_STOP_BOUNDARY_HEADING_RE = re.compile(
-    r"^#{1,6}[ \t]+Stop boundar(?:y|ies)\b", re.IGNORECASE | re.MULTILINE
-)
+_STOP_BOUNDARY_HEADING_RE = re.compile(r"^#{1,6}[ \t]+Stop boundar(?:y|ies)\b", re.IGNORECASE | re.MULTILINE)
 _HEADING_RE = re.compile(r"^#{1,6}[ \t]+\S", re.MULTILINE)
 _TOP_LEVEL_BULLET_LINE_RE = re.compile(r"^-[ \t]+")
 _DISPATCH_BULLET_RE = re.compile(r"^(?P<indent>[ \t]*)-[ \t]+(?P<prefix>.*?)->", re.MULTILINE)
@@ -222,11 +220,7 @@ def _section_content_span(lines: list[str], heading_index: int) -> tuple[int, in
 
 
 def _stop_boundary_spans(lines: list[str]) -> list[tuple[int, int]]:
-    return [
-        _section_content_span(lines, i)
-        for i, line in enumerate(lines)
-        if _STOP_BOUNDARY_HEADING_RE.match(line)
-    ]
+    return [_section_content_span(lines, i) for i, line in enumerate(lines) if _STOP_BOUNDARY_HEADING_RE.match(line)]
 
 
 def _stop_boundary_bullet_lines(lines: list[str]) -> list[int]:
@@ -323,9 +317,7 @@ class CoverageResult:
     passed: bool
 
 
-def evaluate_skill(
-    skill: str, before_text: str | None, after_text: str, fixture_count: int
-) -> CoverageResult:
+def evaluate_skill(skill: str, before_text: str | None, after_text: str, fixture_count: int) -> CoverageResult:
     """Delta-scoped decision: not applicable (always passes) unless this
     diff introduced a decision-branch Counter key with a higher count than
     the before-version had for that same key -- ``before_text is None`` (a
@@ -399,10 +391,7 @@ def _read_entries(entries: list[tuple[str, str, str, str]]) -> list[CoverageResu
 def format_report(results: list[CoverageResult]) -> str:
     applicable = [r for r in results if r.applicable]
     if not applicable:
-        return (
-            "PASS: no changed SKILL.md in this diff increased its own "
-            "Stop-boundary/dispatch decision-branch count."
-        )
+        return "PASS: no changed SKILL.md in this diff increased its own Stop-boundary/dispatch decision-branch count."
     failures = [r for r in applicable if not r.passed]
     if not failures:
         return (
@@ -442,9 +431,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         text = (
-            Path(args.entries).read_text(encoding="utf-8")
-            if args.entries
-            else sys.stdin.buffer.read().decode("utf-8")
+            Path(args.entries).read_text(encoding="utf-8") if args.entries else sys.stdin.buffer.read().decode("utf-8")
         )
     except FileNotFoundError:
         print(f"error: entries file not found: {args.entries}", file=sys.stderr)

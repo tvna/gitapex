@@ -48,20 +48,13 @@ def _whole_file_diff(path: str, source: str) -> str:
     """A unified diff in which every line of `source` is an added line."""
     lines = source.split("\n")
     body = "".join("+" + line + "\n" for line in lines)
-    return (
-        f"diff --git a/{path} b/{path}\n"
-        f"--- /dev/null\n"
-        f"+++ b/{path}\n"
-        f"@@ -0,0 +1,{len(lines)} @@\n" + body
-    )
+    return f"diff --git a/{path} b/{path}\n--- /dev/null\n+++ b/{path}\n@@ -0,0 +1,{len(lines)} @@\n" + body
 
 
 def _partial_diff(path: str, source: str, added: list[int]) -> str:
     """A unified diff adding only the 1-based line numbers in `added`."""
     lines = source.split("\n")
-    hunks = "".join(
-        f"@@ -{number},0 +{number},1 @@\n+{lines[number - 1]}\n" for number in added
-    )
+    hunks = "".join(f"@@ -{number},0 +{number},1 @@\n+{lines[number - 1]}\n" for number in added)
     return f"diff --git a/{path} b/{path}\n--- a/{path}\n+++ b/{path}\n{hunks}"
 
 
@@ -72,9 +65,7 @@ def _write(root: pathlib.Path, relative: str, source: str) -> pathlib.Path:
     return path
 
 
-def _grade(
-    tmp_path: pathlib.Path, source: str, *, relative: str = ".github/scripts/gate_x.py"
-) -> list[gate.Finding]:
+def _grade(tmp_path: pathlib.Path, source: str, *, relative: str = ".github/scripts/gate_x.py") -> list[gate.Finding]:
     """Write `source` at `relative`, grade it as wholly added, return violations.
 
     The `graded == 1` assertion is load-bearing, not decoration. Every
@@ -83,9 +74,7 @@ def _grade(
     all of them at once.
     """
     _write(tmp_path, relative, source)
-    violations, _waived, graded = gate.find_violations(
-        _whole_file_diff(relative, source), tmp_path
-    )
+    violations, _waived, graded = gate.find_violations(_whole_file_diff(relative, source), tmp_path)
     assert graded == 1, f"{relative} was not graded at all"
     return violations
 
@@ -123,7 +112,7 @@ def offending_lines(path: pathlib.Path) -> list[str]:
 # that the parsed JSON is an object, so `[]` reached `.get` and raised
 # AttributeError. The `isinstance(gates, list)` two lines below validates a
 # different name and must not be read as validating `data`.
-_DEFECT_E = '''
+_DEFECT_E = """
 import json
 
 
@@ -139,12 +128,12 @@ def registered_gate_paths(repo_root=REPO_ROOT):
     gates = data.get("gates")
     if not isinstance(gates, list) or not gates:
         raise ScopeError(f"{path}: gate registry has no usable 'gates' list")
-'''
+"""
 
 # Reconstructed from 0b4cedd:.github/scripts/detect_changed_gate_scripts.py:293-307.
 # The read was wrapped -- in a handler naming only OSError, so a non-UTF-8
 # diff escaped as a traceback. This is the shape that has recurred most.
-_DEFECT_F = '''
+_DEFECT_F = """
 def main(args):
     try:
         registered = registered_gate_paths(args.repo_root)
@@ -160,7 +149,7 @@ def main(args):
         print(f"{error}", file=sys.stderr)
         return 2
     return 0
-'''
+"""
 
 
 def test_defect_c_uncaught_decode_on_an_unguarded_read_is_caught(tmp_path: pathlib.Path) -> None:
@@ -202,7 +191,9 @@ def test_the_fixes_that_landed_for_c_e_and_f_pass(tmp_path: pathlib.Path) -> Non
         "        raise ScopeError(f'{path}: gate registry must be a JSON object')\n"
         '    gates = data.get("gates")\n',
     )
-    fixed_f = _DEFECT_F.replace("        except OSError as error:", "        except (OSError, UnicodeDecodeError) as error:")
+    fixed_f = _DEFECT_F.replace(
+        "        except OSError as error:", "        except (OSError, UnicodeDecodeError) as error:"
+    )
     assert _grade(tmp_path, fixed_c, relative=".github/scripts/gate_c.py") == []
     assert _grade(tmp_path, fixed_e, relative=".github/scripts/gate_e.py") == []
     assert _grade(tmp_path, fixed_f, relative=".github/scripts/gate_f.py") == []
@@ -262,9 +253,7 @@ def test_a_read_in_a_finally_clause_is_not_covered(tmp_path: pathlib.Path) -> No
     "handler",
     ["UnicodeDecodeError", "UnicodeError", "ValueError", "Exception", "BaseException"],
 )
-def test_a_handler_naming_the_error_or_an_ancestor_covers_the_read(
-    tmp_path: pathlib.Path, handler: str
-) -> None:
+def test_a_handler_naming_the_error_or_an_ancestor_covers_the_read(tmp_path: pathlib.Path, handler: str) -> None:
     source = f"try:\n    text = p.read_text()\nexcept {handler}:\n    text = ''\n"
     assert _grade(tmp_path, source) == []
 
@@ -323,9 +312,7 @@ def test_read_bytes_is_out_of_scope(tmp_path: pathlib.Path) -> None:
         'pathlib.Path(p).open("w", encoding="utf-8")',
     ],
 )
-def test_an_attribute_named_open_that_decodes_nothing_is_not_flagged(
-    tmp_path: pathlib.Path, call: str
-) -> None:
+def test_an_attribute_named_open_that_decodes_nothing_is_not_flagged(tmp_path: pathlib.Path, call: str) -> None:
     """`.open` is not a file read just because of its name. Grading the
     attribute form on the name alone reported every one of these."""
     assert _grade(tmp_path, f"handle = {call}\n") == []
@@ -341,9 +328,7 @@ def test_an_attribute_named_open_that_decodes_nothing_is_not_flagged(
         'io.open(p, encoding="utf-8")',
     ],
 )
-def test_an_attribute_open_that_declares_a_text_read_is_flagged(
-    tmp_path: pathlib.Path, call: str
-) -> None:
+def test_an_attribute_open_that_declares_a_text_read_is_flagged(tmp_path: pathlib.Path, call: str) -> None:
     assert _rules(_grade(tmp_path, f"handle = {call}\n")) == ["decode-gap"]
 
 
@@ -352,13 +337,7 @@ def test_a_function_defined_inside_a_try_body_is_not_protected_by_it(
 ) -> None:
     """The `try` runs the `def`, not the body. A helper whose only call site
     is elsewhere would otherwise inherit protection it never has."""
-    source = (
-        "try:\n"
-        "    def helper(p):\n"
-        "        return p.read_text()\n"
-        "except UnicodeDecodeError:\n"
-        "    helper = None\n"
-    )
+    source = "try:\n    def helper(p):\n        return p.read_text()\nexcept UnicodeDecodeError:\n    helper = None\n"
     assert _rules(_grade(tmp_path, source)) == ["decode-gap"]
 
 
@@ -586,9 +565,7 @@ def test_the_minus_header_line_is_not_counted_as_a_removal(tmp_path: pathlib.Pat
     source = "text = p.read_text()\n"
     _write(tmp_path, ".github/scripts/gate_a.py", source)
     _write(tmp_path, ".github/scripts/gate_b.py", source)
-    diff = _whole_file_diff(".github/scripts/gate_a.py", source) + _whole_file_diff(
-        ".github/scripts/gate_b.py", source
-    )
+    diff = _whole_file_diff(".github/scripts/gate_a.py", source) + _whole_file_diff(".github/scripts/gate_b.py", source)
     added = gate.parse_added_lines(diff)
     assert sorted(added) == [".github/scripts/gate_a.py", ".github/scripts/gate_b.py"]
     assert added[".github/scripts/gate_a.py"] == {1, 2}
@@ -697,14 +674,7 @@ def test_an_untouched_function_elsewhere_in_the_file_stays_out_of_scope(
 ) -> None:
     """The widening above must not become "grade the whole file": a gap in a
     function this diff never touched is still another PR's to own."""
-    source = (
-        "def untouched(path):\n"
-        "    return path.read_text()\n"
-        "\n"
-        "\n"
-        "def touched():\n"
-        "    return 1\n"
-    )
+    source = "def untouched(path):\n    return path.read_text()\n\n\ndef touched():\n    return 1\n"
     _write(tmp_path, ".github/scripts/gate_x.py", source)
     violations, _waived, _graded = gate.find_violations(
         _partial_diff(".github/scripts/gate_x.py", source, [6]), tmp_path
@@ -739,9 +709,7 @@ def test_a_generator_expression_inside_a_try_is_a_stated_miss(
 
 
 @pytest.mark.parametrize("consumer", ["sorted", "list", "any", "'-'.join"])
-def test_a_generator_expression_consumed_inside_the_try_is_protected(
-    tmp_path: pathlib.Path, consumer: str
-) -> None:
+def test_a_generator_expression_consumed_inside_the_try_is_protected(tmp_path: pathlib.Path, consumer: str) -> None:
     """The other side, and the one that occurs for real: verified at runtime,
     `sorted(p.read_text() for p in ps)` inside a `try` IS caught by it. This
     also keeps the gate self-consistent -- `list(x for x in y)` and
@@ -866,9 +834,7 @@ def _guarded_by(mapping_type: str) -> str:
 
 
 @pytest.mark.parametrize("mapping_type", ["dict", "Mapping", "abc.MutableMapping", "(dict, Mapping)"])
-def test_an_isinstance_naming_a_mapping_type_clears_it(
-    tmp_path: pathlib.Path, mapping_type: str
-) -> None:
+def test_an_isinstance_naming_a_mapping_type_clears_it(tmp_path: pathlib.Path, mapping_type: str) -> None:
     assert _grade(tmp_path, _guarded_by(mapping_type)) == []
 
 
@@ -893,11 +859,7 @@ def test_a_walrus_inside_the_isinstance_call_clears_it(tmp_path: pathlib.Path) -
 
 
 def test_tuple_unpacking_taints_only_the_json_element(tmp_path: pathlib.Path) -> None:
-    source = (
-        "def load(raw):\n"
-        "    data, extra = json.loads(raw), {}\n"
-        "    return data.get('k'), extra.get('k')\n"
-    )
+    source = "def load(raw):\n    data, extra = json.loads(raw), {}\n    return data.get('k'), extra.get('k')\n"
     assert _rules(_grade(tmp_path, source)) == ["json-shape-gap"]
 
 
@@ -937,9 +899,7 @@ def test_the_earliest_isinstance_is_the_one_that_counts(tmp_path: pathlib.Path) 
         "except:",
     ],
 )
-def test_a_handler_catching_attributeerror_covers_a_json_access(
-    tmp_path: pathlib.Path, clause: str
-) -> None:
+def test_a_handler_catching_attributeerror_covers_a_json_access(tmp_path: pathlib.Path, clause: str) -> None:
     """The `.get()` rule was blind to handlers entirely while the read rule
     honoured them, so a `.get()` wrapped in exactly the fix this gate's own
     failure message prescribes was still reported. Verified at runtime for
@@ -970,9 +930,7 @@ def test_a_handler_that_does_not_catch_attributeerror_leaves_it_reported(
 
 
 @pytest.mark.parametrize("errors", ["replace", "ignore", "surrogateescape", "backslashreplace"])
-def test_a_read_with_a_substituting_errors_policy_cannot_raise(
-    tmp_path: pathlib.Path, errors: str
-) -> None:
+def test_a_read_with_a_substituting_errors_policy_cannot_raise(tmp_path: pathlib.Path, errors: str) -> None:
     """Each of these four was run against a non-UTF-8 file and each
     substituted rather than raised, so demanding a handler reports code that
     cannot fail. The list is exactly those four -- see the sibling test for
@@ -988,9 +946,7 @@ def test_a_read_with_a_substituting_errors_policy_cannot_raise(
         'p.read_text("utf-8", "replace")',
     ],
 )
-def test_a_positionally_passed_errors_policy_is_a_stated_over_report(
-    tmp_path: pathlib.Path, call: str
-) -> None:
+def test_a_positionally_passed_errors_policy_is_a_stated_over_report(tmp_path: pathlib.Path, call: str) -> None:
     """None of these can raise -- all three were run against a non-UTF-8 file
     and all three substituted. The gate reports them anyway, because the
     positional index differs per callee (4 for the builtin `open`, 3 for
@@ -1005,9 +961,7 @@ def test_a_positionally_passed_errors_policy_is_a_stated_over_report(
     "errors",
     ["None", "variable", '"strict"', "0", '"xmlcharrefreplace"', '"namereplace"', '"REPLACE"'],
 )
-def test_an_errors_value_that_is_not_a_substituting_policy_still_reports(
-    tmp_path: pathlib.Path, errors: str
-) -> None:
+def test_an_errors_value_that_is_not_a_substituting_policy_still_reports(tmp_path: pathlib.Path, errors: str) -> None:
     """An allowlist, not "anything but strict", and one determined by running
     each handler rather than reading the codecs table.
 
@@ -1033,9 +987,7 @@ def test_a_nested_walrus_still_taints_the_parsed_value(tmp_path: pathlib.Path) -
 def test_an_explicit_strict_errors_policy_still_raises_and_is_reported(
     tmp_path: pathlib.Path,
 ) -> None:
-    assert _rules(_grade(tmp_path, 'text = p.read_text(encoding="utf-8", errors="strict")\n')) == [
-        "decode-gap"
-    ]
+    assert _rules(_grade(tmp_path, 'text = p.read_text(encoding="utf-8", errors="strict")\n')) == ["decode-gap"]
 
 
 def test_contextlib_suppress_is_a_stated_over_report(tmp_path: pathlib.Path) -> None:
@@ -1103,9 +1055,7 @@ def test_an_unresolvable_handler_name_does_not_grant_coverage(
         "return (data := json.loads(raw)).get('k')",
     ],
 )
-def test_every_spelling_of_one_program_gets_one_verdict(
-    tmp_path: pathlib.Path, spelling: str
-) -> None:
+def test_every_spelling_of_one_program_gets_one_verdict(tmp_path: pathlib.Path, spelling: str) -> None:
     """The walrus-receiver form was the only one of the three that graded
     clean, which falsified the gate's own claim to be spelling-independent."""
     assert _rules(_grade(tmp_path, f"def f(raw):\n    {spelling}\n")) == ["json-shape-gap"]
@@ -1199,9 +1149,7 @@ def test_an_inline_waiver_with_a_reason_is_honoured_and_reported(
 ) -> None:
     source = "text = p.read_text()  # exception-handler-gap: WAIVED: main() owns this read\n"
     _write(tmp_path, ".github/scripts/gate_x.py", source)
-    violations, waived, _graded = gate.find_violations(
-        _whole_file_diff(".github/scripts/gate_x.py", source), tmp_path
-    )
+    violations, waived, _graded = gate.find_violations(_whole_file_diff(".github/scripts/gate_x.py", source), tmp_path)
     assert violations == []
     assert _rules(waived) == ["decode-gap"]
 
@@ -1234,9 +1182,7 @@ def test_a_waiver_excuses_only_the_innermost_finding_it_sits_inside(
         "    )\n"
     )
     _write(tmp_path, ".github/scripts/gate_x.py", source)
-    violations, waived, _graded = gate.find_violations(
-        _whole_file_diff(".github/scripts/gate_x.py", source), tmp_path
-    )
+    violations, waived, _graded = gate.find_violations(_whole_file_diff(".github/scripts/gate_x.py", source), tmp_path)
     assert _rules(violations) == ["json-shape-gap"]
     assert _rules(waived) == ["decode-gap"]
 
@@ -1278,9 +1224,7 @@ def test_two_findings_on_one_line_are_both_waived_by_one_comment(
         "  # exception-handler-gap: WAIVED: the key is always present\n"
     )
     _write(tmp_path, ".github/scripts/gate_x.py", source)
-    violations, waived, _graded = gate.find_violations(
-        _whole_file_diff(".github/scripts/gate_x.py", source), tmp_path
-    )
+    violations, waived, _graded = gate.find_violations(_whole_file_diff(".github/scripts/gate_x.py", source), tmp_path)
     assert violations == []
     assert sorted(_rules(waived)) == ["decode-gap", "json-shape-gap"]
 
@@ -1306,9 +1250,7 @@ def test_the_waiver_marker_is_case_insensitive(tmp_path: pathlib.Path) -> None:
     is case-insensitive; a case-sensitive copy here would diverge silently."""
     source = "text = p.read_text()  # Exception-Handler-Gap: waived: caller owns this read\n"
     _write(tmp_path, ".github/scripts/gate_x.py", source)
-    violations, waived, _graded = gate.find_violations(
-        _whole_file_diff(".github/scripts/gate_x.py", source), tmp_path
-    )
+    violations, waived, _graded = gate.find_violations(_whole_file_diff(".github/scripts/gate_x.py", source), tmp_path)
     assert violations == []
     assert len(waived) == 1
 
@@ -1346,13 +1288,7 @@ def test_a_git_quoted_path_fails_closed_rather_than_being_guessed_at(
 ) -> None:
     """`core.quotePath` renders a non-ASCII path this way; unescaping it by
     hand would be a guess, and a wrong guess drops the file from grading."""
-    diff = (
-        "diff --git a/x b/x\n"
-        "--- a/x\n"
-        '+++ "b/.github/scripts/g\\303\\251.py"\n'
-        "@@ -0,0 +1,1 @@\n"
-        "+text = 1\n"
-    )
+    diff = 'diff --git a/x b/x\n--- a/x\n+++ "b/.github/scripts/g\\303\\251.py"\n@@ -0,0 +1,1 @@\n+text = 1\n'
     _write(tmp_path, "diff.txt", diff)
     assert gate.main(["--root", str(tmp_path), "--diff", str(tmp_path / "diff.txt")]) == 2
     assert "not a plain b/-prefixed path" in capsys.readouterr().err
@@ -1417,24 +1353,18 @@ def test_an_unreadable_directory_as_a_source_path_fails_closed(
     assert "cannot be read as UTF-8 text" in capsys.readouterr().err
 
 
-def test_main_exits_2_on_a_root_that_does_not_exist(
-    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_main_exits_2_on_a_root_that_does_not_exist(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert gate.main(["--root", str(tmp_path / "nope")]) == 2
     assert "must be an existing directory" in capsys.readouterr().err
 
 
-def test_main_exits_2_on_a_root_that_is_a_file(
-    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_main_exits_2_on_a_root_that_is_a_file(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
     a_file = _write(tmp_path, "not-a-directory", "x")
     assert gate.main(["--root", str(a_file)]) == 2
     assert "must be an existing directory" in capsys.readouterr().err
 
 
-def test_main_exits_2_when_the_diff_file_is_missing(
-    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_main_exits_2_when_the_diff_file_is_missing(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert gate.main(["--root", str(tmp_path), "--diff", str(tmp_path / "nope.diff")]) == 2
     assert "diff cannot be read" in capsys.readouterr().err
 
@@ -1451,18 +1381,14 @@ def test_main_exits_2_when_the_diff_file_is_not_utf8(
 # --- CLI ----------------------------------------------------------------
 
 
-def test_an_empty_diff_is_clean_and_says_so(
-    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_an_empty_diff_is_clean_and_says_so(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
     """The common case: a PR touching no in-scope Python at all."""
     _write(tmp_path, "diff.txt", "")
     assert gate.main(["--root", str(tmp_path), "--diff", str(tmp_path / "diff.txt")]) == 0
     assert "OK: 0 in-scope file(s) graded" in capsys.readouterr().out
 
 
-def test_main_returns_one_and_explains_the_failure(
-    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_main_returns_one_and_explains_the_failure(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
     source = "text = p.read_text()\n"
     _write(tmp_path, ".github/scripts/gate_x.py", source)
     _write(tmp_path, "diff.txt", _whole_file_diff(".github/scripts/gate_x.py", source))
@@ -1534,7 +1460,7 @@ def test_a_honoured_waiver_is_printed_even_on_an_otherwise_clean_run(
 
 # --- round-8 review findings --------------------------------------------
 
-_NARROWED_HANDLER = '''import json
+_NARROWED_HANDLER = """import json
 
 
 def load(raw):
@@ -1543,7 +1469,7 @@ def load(raw):
         return data.get("gates")
     except ValueError:
         return None
-'''
+"""
 
 
 def test_narrowing_a_handler_around_a_get_is_this_diffs_finding(
@@ -1577,23 +1503,16 @@ def test_narrowing_a_handler_around_a_get_is_this_diffs_finding(
         pytest.param("    with ctx() as data:\n        return data.get('k')\n", id="with-as"),
         pytest.param("    for data, _x in pairs:\n        return data.get('k')\n", id="tuple-for"),
         pytest.param(
-            "    try:\n        pass\n    except ValueError as data:\n"
-            "        return data.get('k')\n",
+            "    try:\n        pass\n    except ValueError as data:\n        return data.get('k')\n",
             id="except-as",
         ),
         pytest.param("    for data in pairs:\n        return data.get('k')\n", id="single-for"),
         pytest.param("    (data, _x) = (1, 2)\n    return data.get('k')\n", id="tuple-assign"),
-        pytest.param(
-            "    with ctx() as [data, _x]:\n        return data.get('k')\n", id="list-target"
-        ),
-        pytest.param(
-            "    for *data, _x in pairs:\n        return data.get('k')\n", id="starred-for"
-        ),
+        pytest.param("    with ctx() as [data, _x]:\n        return data.get('k')\n", id="list-target"),
+        pytest.param("    for *data, _x in pairs:\n        return data.get('k')\n", id="starred-for"),
     ],
 )
-def test_a_name_rebound_by_any_binding_form_loses_its_taint(
-    tmp_path: pathlib.Path, rebinding: str
-) -> None:
+def test_a_name_rebound_by_any_binding_form_loses_its_taint(tmp_path: pathlib.Path, rebinding: str) -> None:
     """`_assigned_names` read `Assign`, `AnnAssign`, `NamedExpr` and a
     single-`Name` `for` target only, so three other binding forms left a name
     the source provably rebinds still tainted, and the `.get()` after them was
@@ -1699,9 +1618,7 @@ def test_two_findings_of_one_rule_on_one_line_report_once(tmp_path: pathlib.Path
     the same text would not tell a contributor which read is meant. The stated
     cost is that fixing one and never touching the line again leaves the other
     unreported, and one waiver there covers both."""
-    assert _at(_grade(tmp_path, "def f(p, q):\n    return p.read_text() + q.read_text()\n")) == [
-        ("decode-gap", 2)
-    ]
+    assert _at(_grade(tmp_path, "def f(p, q):\n    return p.read_text() + q.read_text()\n")) == [("decode-gap", 2)]
     assert _at(_grade(tmp_path, "def f(p, q):\n    a = p.read_text()\n    b = q.read_text()\n")) == [
         ("decode-gap", 2),
         ("decode-gap", 3),
@@ -1723,12 +1640,8 @@ def test_the_workflow_passes_the_two_flags_the_gate_depends_on() -> None:
     otherwise arrives C-quoted, which the gate refuses to resolve (exit 2) --
     failing the job over a file that need not even be in scope.
     """
-    workflow = (REPO_ROOT / ".github/workflows/exception-handler-gap-gate.yml").read_text(
-        encoding="utf-8"
-    )
-    invocation = next(
-        line for line in workflow.split("\n") if "git" in line and "diff -U0" in line
-    )
+    workflow = (REPO_ROOT / ".github/workflows/exception-handler-gap-gate.yml").read_text(encoding="utf-8")
+    invocation = next(line for line in workflow.split("\n") if "git" in line and "diff -U0" in line)
     assert "--no-renames" in invocation, invocation
     assert "core.quotePath=false" in invocation, invocation
 
@@ -1754,9 +1667,7 @@ def test_the_workflow_checks_out_the_head_sha_with_full_history() -> None:
     the `git merge-base` step failing. The two settings are therefore one
     invariant and are asserted together.
     """
-    workflow = (REPO_ROOT / ".github/workflows/exception-handler-gap-gate.yml").read_text(
-        encoding="utf-8"
-    )
+    workflow = (REPO_ROOT / ".github/workflows/exception-handler-gap-gate.yml").read_text(encoding="utf-8")
     assert "ref: ${{ github.event.pull_request.head.sha }}" in workflow, workflow
     assert "fetch-depth: 0" in workflow, workflow
 
@@ -1765,9 +1676,7 @@ def test_this_gate_grades_itself_clean() -> None:
     """The gate is itself an in-scope checker script; a gate that could not
     pass its own rule would be asking for something it does not do."""
     source = (REPO_ROOT / _SCRIPT).read_text(encoding="utf-8")
-    violations, waived, graded = gate.find_violations(
-        _whole_file_diff(_SCRIPT, source), REPO_ROOT
-    )
+    violations, waived, graded = gate.find_violations(_whole_file_diff(_SCRIPT, source), REPO_ROOT)
     assert (violations, waived, graded) == ([], [], 1)
 
 
@@ -1780,7 +1689,5 @@ def test_the_repaired_versions_of_the_historical_defect_files_are_clean() -> Non
         ".github/scripts/detect_changed_gate_scripts.py",
     ):
         source = (REPO_ROOT / relative).read_text(encoding="utf-8")
-        violations, _waived, _graded = gate.find_violations(
-            _whole_file_diff(relative, source), REPO_ROOT
-        )
+        violations, _waived, _graded = gate.find_violations(_whole_file_diff(relative, source), REPO_ROOT)
         assert violations == [], f"{relative}: {violations}"

@@ -1,5 +1,25 @@
 # Contributing
 
+## Local pre-commit hook (prek)
+
+`pyproject.toml` pins `prek` (https://github.com/j178/prek) as a dev
+dependency and `.pre-commit-config.yaml` wires it to this repo's own
+`ruff check`, `ruff format --check`, and `mypy` config -- but a
+dependency alone installs no git hook. Run once per clone:
+
+```
+uv run prek install
+```
+
+This makes `git commit` reject a commit that fails ruff or mypy locally,
+before it exists, rather than only after a push reaches CI. `nix develop`
+also runs this automatically (see `flake.nix`'s devShell), so an agent or
+contributor using the Nix devShell gets it without a manual step.
+
+CI (`.github/workflows/test.yml`, `.github/workflows/lint.yml`) still runs
+the same ruff/mypy checks independently as the actual merge gate -- the
+local hook is a fast first pass, not a replacement for it.
+
 ## Issue citation convention
 
 If a PR's changes fully satisfy an issue's acceptance criteria, cite it

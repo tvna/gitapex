@@ -140,10 +140,7 @@ HOOK_WIRING_PATH = "hooks/hooks.json"
 # `.github/scripts/detect_touched_eval_skills.py` documents this same
 # pitfall and uses fullmatch for it; this follows that precedent rather
 # than rediscovering it.
-_CONVENTION_RE = re.compile(
-    r"\.github/scripts/(?:gate|scan)_[^/]*\.py|hooks/check[-_][^/]*\.(?:sh|py)"
-)
-
+_CONVENTION_RE = re.compile(r"\.github/scripts/(?:gate|scan)_[^/]*\.py|hooks/check[-_][^/]*\.(?:sh|py)")
 
 
 class ScopeError(Exception):
@@ -174,9 +171,7 @@ def registered_gate_paths(repo_root: pathlib.Path = REPO_ROOT) -> set[str]:
     # PR #651 that this whole check exists to catch, reproduced inside the
     # check itself.
     if not isinstance(data, dict):
-        raise ScopeError(
-            f"{path}: gate registry must be a JSON object, got {type(data).__name__}"
-        )
+        raise ScopeError(f"{path}: gate registry must be a JSON object, got {type(data).__name__}")
 
     gates = data.get("gates")
     if not isinstance(gates, list) or not gates:
@@ -202,11 +197,7 @@ def registered_gate_paths(repo_root: pathlib.Path = REPO_ROOT) -> set[str]:
 
 def is_gate_path(path: str, registered: set[str]) -> bool:
     """Return True iff `path` is in scope under any of the four rules."""
-    return (
-        bool(_CONVENTION_RE.fullmatch(path))
-        or path in registered
-        or path in (SSOT_RELATIVE_PATH, HOOK_WIRING_PATH)
-    )
+    return bool(_CONVENTION_RE.fullmatch(path)) or path in registered or path in (SSOT_RELATIVE_PATH, HOOK_WIRING_PATH)
 
 
 def select(name_status_text: str, registered: set[str]) -> list[str]:

@@ -184,9 +184,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         text = (
-            Path(args.entries).read_text(encoding="utf-8")
-            if args.entries
-            else sys.stdin.buffer.read().decode("utf-8")
+            Path(args.entries).read_text(encoding="utf-8") if args.entries else sys.stdin.buffer.read().decode("utf-8")
         )
     except FileNotFoundError:
         print(f"error: entries file not found: {args.entries}", file=sys.stderr)
@@ -207,8 +205,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     print(
-        "FAIL: the following newly-added Kept-edit-log entries have no "
-        "disclosed Transfer check line:",
+        "FAIL: the following newly-added Kept-edit-log entries have no disclosed Transfer check line:",
         file=sys.stderr,
     )
     for path, iteration_line in missing:

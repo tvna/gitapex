@@ -58,7 +58,10 @@ def test_release_url_matches_flake_ghrelease_pattern() -> None:
     pins = pcb.parse_flake_class_b_pins(flake_text)
     apm = pins["apm"]
     url = apm.release_url("x86_64-linux")
-    assert url == f"https://github.com/{apm.owner}/{apm.repo}/releases/download/{apm.tag}/{apm.systems['x86_64-linux'].asset}"
+    assert (
+        url
+        == f"https://github.com/{apm.owner}/{apm.repo}/releases/download/{apm.tag}/{apm.systems['x86_64-linux'].asset}"
+    )
     assert url.startswith("https://github.com/microsoft/apm/releases/download/")
 
 
@@ -417,9 +420,16 @@ def test_provision_tool_installs_then_skips_on_second_call(tmp_path: Path) -> No
     data = _make_tar_gz_bytes(
         {"apm-linux-x86_64/apm": b"#!/bin/sh\necho fake-apm\n", "apm-linux-x86_64/_internal/x": b"y"}
     )
-    fake_pin = pcb.ClassBSystemPin(asset="apm-linux-x86_64.tar.gz", sha256_sri=pcb.sha256_sri(data), bin_in_archive="apm")
+    fake_pin = pcb.ClassBSystemPin(
+        asset="apm-linux-x86_64.tar.gz", sha256_sri=pcb.sha256_sri(data), bin_in_archive="apm"
+    )
     fake_spec = pcb.ClassBToolSpec(
-        pname="apm", version="0.25.0", kind="wrapperDir", owner=spec.owner, repo=spec.repo, tag=spec.tag,
+        pname="apm",
+        version="0.25.0",
+        kind="wrapperDir",
+        owner=spec.owner,
+        repo=spec.repo,
+        tag=spec.tag,
         systems={"x86_64-linux": fake_pin},
     )
 
@@ -429,11 +439,15 @@ def test_provision_tool_installs_then_skips_on_second_call(tmp_path: Path) -> No
         calls["n"] += 1
         return _FakeResponse(200, data)
 
-    result1 = pcb.provision_tool(fake_spec, "x86_64-linux", tmp_path, opener=opener, sleeper=lambda _s: None, runner=_fake_runner_success)
+    result1 = pcb.provision_tool(
+        fake_spec, "x86_64-linux", tmp_path, opener=opener, sleeper=lambda _s: None, runner=_fake_runner_success
+    )
     assert result1.status == "installed"
     assert calls["n"] == 1
 
-    result2 = pcb.provision_tool(fake_spec, "x86_64-linux", tmp_path, opener=opener, sleeper=lambda _s: None, runner=_fake_runner_success)
+    result2 = pcb.provision_tool(
+        fake_spec, "x86_64-linux", tmp_path, opener=opener, sleeper=lambda _s: None, runner=_fake_runner_success
+    )
     assert result2.status == "skipped"
     assert calls["n"] == 1  # no second network call
 
@@ -444,12 +458,42 @@ def test_provision_tool_reinstalls_when_pin_changes(tmp_path: Path) -> None:
     data_v2 = _make_tar_gz_bytes({"apm-linux-x86_64/apm": b"v2", "apm-linux-x86_64/_internal/x": b"y"})
 
     pin_v1 = pcb.ClassBSystemPin(asset="apm.tar.gz", sha256_sri=pcb.sha256_sri(data_v1), bin_in_archive="apm")
-    spec_v1 = pcb.ClassBToolSpec(pname="apm", version="1", kind="wrapperDir", owner=spec.owner, repo=spec.repo, tag=spec.tag, systems={"x86_64-linux": pin_v1})
-    pcb.provision_tool(spec_v1, "x86_64-linux", tmp_path, opener=lambda r: _FakeResponse(200, data_v1), sleeper=lambda _s: None, runner=_fake_runner_success)
+    spec_v1 = pcb.ClassBToolSpec(
+        pname="apm",
+        version="1",
+        kind="wrapperDir",
+        owner=spec.owner,
+        repo=spec.repo,
+        tag=spec.tag,
+        systems={"x86_64-linux": pin_v1},
+    )
+    pcb.provision_tool(
+        spec_v1,
+        "x86_64-linux",
+        tmp_path,
+        opener=lambda r: _FakeResponse(200, data_v1),
+        sleeper=lambda _s: None,
+        runner=_fake_runner_success,
+    )
 
     pin_v2 = pcb.ClassBSystemPin(asset="apm.tar.gz", sha256_sri=pcb.sha256_sri(data_v2), bin_in_archive="apm")
-    spec_v2 = pcb.ClassBToolSpec(pname="apm", version="2", kind="wrapperDir", owner=spec.owner, repo=spec.repo, tag=spec.tag, systems={"x86_64-linux": pin_v2})
-    result = pcb.provision_tool(spec_v2, "x86_64-linux", tmp_path, opener=lambda r: _FakeResponse(200, data_v2), sleeper=lambda _s: None, runner=_fake_runner_success)
+    spec_v2 = pcb.ClassBToolSpec(
+        pname="apm",
+        version="2",
+        kind="wrapperDir",
+        owner=spec.owner,
+        repo=spec.repo,
+        tag=spec.tag,
+        systems={"x86_64-linux": pin_v2},
+    )
+    result = pcb.provision_tool(
+        spec_v2,
+        "x86_64-linux",
+        tmp_path,
+        opener=lambda r: _FakeResponse(200, data_v2),
+        sleeper=lambda _s: None,
+        runner=_fake_runner_success,
+    )
 
     assert result.status == "installed"
     assert (tmp_path / "libexec" / "apm" / "apm").read_bytes() == b"v2"
@@ -474,8 +518,12 @@ def test_provision_all_continues_past_one_tool_failure(tmp_path: Path) -> None:
         asset=real_waza_pin.asset, sha256_sri=pcb.sha256_sri(waza_data), bin_in_archive=real_waza_pin.bin_in_archive
     )
     fake_waza_spec = pcb.ClassBToolSpec(
-        pname="waza", version=real_tools["waza"].version, kind="binary",
-        owner=real_tools["waza"].owner, repo=real_tools["waza"].repo, tag=real_tools["waza"].tag,
+        pname="waza",
+        version=real_tools["waza"].version,
+        kind="binary",
+        owner=real_tools["waza"].owner,
+        repo=real_tools["waza"].repo,
+        tag=real_tools["waza"].tag,
         systems={"x86_64-linux": fake_waza_pin},
     )
     tools = {"apm": real_tools["apm"], "waza": fake_waza_spec}
@@ -514,13 +562,28 @@ def test_provision_tool_treats_syntactically_invalid_receipt_as_not_installed(tm
     spec = _real_apm_spec()
     data = _make_tar_gz_bytes({"apm-linux-x86_64/apm": b"binary-content", "apm-linux-x86_64/_internal/x": b"y"})
     pin = pcb.ClassBSystemPin(asset="apm.tar.gz", sha256_sri=pcb.sha256_sri(data), bin_in_archive="apm")
-    fake_spec = pcb.ClassBToolSpec(pname="apm", version="0.25.0", kind="wrapperDir", owner=spec.owner, repo=spec.repo, tag=spec.tag, systems={"x86_64-linux": pin})
+    fake_spec = pcb.ClassBToolSpec(
+        pname="apm",
+        version="0.25.0",
+        kind="wrapperDir",
+        owner=spec.owner,
+        repo=spec.repo,
+        tag=spec.tag,
+        systems={"x86_64-linux": pin},
+    )
 
     receipt_path = tmp_path / "state" / "apm.json"
     receipt_path.parent.mkdir(parents=True)
     receipt_path.write_text("{not valid json at all", encoding="utf-8")
 
-    result = pcb.provision_tool(fake_spec, "x86_64-linux", tmp_path, opener=lambda r: _FakeResponse(200, data), sleeper=lambda _s: None, runner=_fake_runner_success)
+    result = pcb.provision_tool(
+        fake_spec,
+        "x86_64-linux",
+        tmp_path,
+        opener=lambda r: _FakeResponse(200, data),
+        sleeper=lambda _s: None,
+        runner=_fake_runner_success,
+    )
     assert result.status == "installed"
     assert (tmp_path / "bin" / "apm").exists()
 
@@ -533,13 +596,28 @@ def test_provision_tool_treats_receipt_missing_fields_as_not_installed(tmp_path:
     spec = _real_apm_spec()
     data = _make_tar_gz_bytes({"apm-linux-x86_64/apm": b"binary-content", "apm-linux-x86_64/_internal/x": b"y"})
     pin = pcb.ClassBSystemPin(asset="apm.tar.gz", sha256_sri=pcb.sha256_sri(data), bin_in_archive="apm")
-    fake_spec = pcb.ClassBToolSpec(pname="apm", version="0.25.0", kind="wrapperDir", owner=spec.owner, repo=spec.repo, tag=spec.tag, systems={"x86_64-linux": pin})
+    fake_spec = pcb.ClassBToolSpec(
+        pname="apm",
+        version="0.25.0",
+        kind="wrapperDir",
+        owner=spec.owner,
+        repo=spec.repo,
+        tag=spec.tag,
+        systems={"x86_64-linux": pin},
+    )
 
     receipt_path = tmp_path / "state" / "apm.json"
     receipt_path.parent.mkdir(parents=True)
     receipt_path.write_text('{"pname": "apm"}', encoding="utf-8")  # missing version/sha256_sri/asset
 
-    result = pcb.provision_tool(fake_spec, "x86_64-linux", tmp_path, opener=lambda r: _FakeResponse(200, data), sleeper=lambda _s: None, runner=_fake_runner_success)
+    result = pcb.provision_tool(
+        fake_spec,
+        "x86_64-linux",
+        tmp_path,
+        opener=lambda r: _FakeResponse(200, data),
+        sleeper=lambda _s: None,
+        runner=_fake_runner_success,
+    )
     assert result.status == "installed"
 
 
@@ -552,7 +630,15 @@ def test_provision_tool_reinstalls_when_installed_binary_was_manually_deleted(tm
     spec = _real_apm_spec()
     data = _make_tar_gz_bytes({"apm-linux-x86_64/apm": b"binary-content", "apm-linux-x86_64/_internal/x": b"y"})
     pin = pcb.ClassBSystemPin(asset="apm.tar.gz", sha256_sri=pcb.sha256_sri(data), bin_in_archive="apm")
-    fake_spec = pcb.ClassBToolSpec(pname="apm", version="0.25.0", kind="wrapperDir", owner=spec.owner, repo=spec.repo, tag=spec.tag, systems={"x86_64-linux": pin})
+    fake_spec = pcb.ClassBToolSpec(
+        pname="apm",
+        version="0.25.0",
+        kind="wrapperDir",
+        owner=spec.owner,
+        repo=spec.repo,
+        tag=spec.tag,
+        systems={"x86_64-linux": pin},
+    )
 
     calls = {"n": 0}
 
@@ -560,14 +646,20 @@ def test_provision_tool_reinstalls_when_installed_binary_was_manually_deleted(tm
         calls["n"] += 1
         return _FakeResponse(200, data)
 
-    result1 = pcb.provision_tool(fake_spec, "x86_64-linux", tmp_path, opener=opener, sleeper=lambda _s: None, runner=_fake_runner_success)
+    result1 = pcb.provision_tool(
+        fake_spec, "x86_64-linux", tmp_path, opener=opener, sleeper=lambda _s: None, runner=_fake_runner_success
+    )
     assert result1.status == "installed"
     assert calls["n"] == 1
 
     (tmp_path / "bin" / "apm").unlink()
-    assert (tmp_path / "state" / "apm.json").exists(), "receipt must survive the binary's removal for this to be a real test"
+    assert (tmp_path / "state" / "apm.json").exists(), (
+        "receipt must survive the binary's removal for this to be a real test"
+    )
 
-    result2 = pcb.provision_tool(fake_spec, "x86_64-linux", tmp_path, opener=opener, sleeper=lambda _s: None, runner=_fake_runner_success)
+    result2 = pcb.provision_tool(
+        fake_spec, "x86_64-linux", tmp_path, opener=opener, sleeper=lambda _s: None, runner=_fake_runner_success
+    )
     assert result2.status == "installed"
     assert calls["n"] == 2  # re-downloaded, not skipped
     assert (tmp_path / "bin" / "apm").exists()
@@ -588,12 +680,21 @@ def test_provision_tool_reinstalls_binary_kind_when_installed_bytes_are_corrupte
         asset="waza-linux-amd64.tar.gz", sha256_sri=pcb.sha256_sri(data), bin_in_archive="waza-linux-amd64"
     )
     fake_spec = pcb.ClassBToolSpec(
-        pname="waza", version="1", kind="binary", owner=waza_spec.owner, repo=waza_spec.repo, tag=waza_spec.tag,
+        pname="waza",
+        version="1",
+        kind="binary",
+        owner=waza_spec.owner,
+        repo=waza_spec.repo,
+        tag=waza_spec.tag,
         systems={"x86_64-linux": pin},
     )
 
     result1 = pcb.provision_tool(
-        fake_spec, "x86_64-linux", tmp_path, opener=lambda r: _FakeResponse(200, data), sleeper=lambda _s: None,
+        fake_spec,
+        "x86_64-linux",
+        tmp_path,
+        opener=lambda r: _FakeResponse(200, data),
+        sleeper=lambda _s: None,
         runner=_fake_runner_success,
     )
     assert result1.status == "installed"
@@ -602,7 +703,11 @@ def test_provision_tool_reinstalls_binary_kind_when_installed_bytes_are_corrupte
     bin_path.write_bytes(b"corrupted-not-the-real-binary")
 
     result2 = pcb.provision_tool(
-        fake_spec, "x86_64-linux", tmp_path, opener=lambda r: _FakeResponse(200, data), sleeper=lambda _s: None,
+        fake_spec,
+        "x86_64-linux",
+        tmp_path,
+        opener=lambda r: _FakeResponse(200, data),
+        sleeper=lambda _s: None,
         runner=_fake_runner_success,
     )
     assert result2.status == "installed"  # not "skipped" -- corruption must force a reinstall
@@ -621,12 +726,21 @@ def test_provision_tool_reinstalls_wrapper_dir_kind_when_installed_bytes_are_cor
     )
     pin = pcb.ClassBSystemPin(asset="apm.tar.gz", sha256_sri=pcb.sha256_sri(data), bin_in_archive="apm")
     fake_spec = pcb.ClassBToolSpec(
-        pname="apm", version="0.25.0", kind="wrapperDir", owner=spec.owner, repo=spec.repo, tag=spec.tag,
+        pname="apm",
+        version="0.25.0",
+        kind="wrapperDir",
+        owner=spec.owner,
+        repo=spec.repo,
+        tag=spec.tag,
         systems={"x86_64-linux": pin},
     )
 
     result1 = pcb.provision_tool(
-        fake_spec, "x86_64-linux", tmp_path, opener=lambda r: _FakeResponse(200, data), sleeper=lambda _s: None,
+        fake_spec,
+        "x86_64-linux",
+        tmp_path,
+        opener=lambda r: _FakeResponse(200, data),
+        sleeper=lambda _s: None,
         runner=_fake_runner_success,
     )
     assert result1.status == "installed"
@@ -635,7 +749,11 @@ def test_provision_tool_reinstalls_wrapper_dir_kind_when_installed_bytes_are_cor
     real_bin.write_bytes(b"corrupted-not-the-real-binary")
 
     result2 = pcb.provision_tool(
-        fake_spec, "x86_64-linux", tmp_path, opener=lambda r: _FakeResponse(200, data), sleeper=lambda _s: None,
+        fake_spec,
+        "x86_64-linux",
+        tmp_path,
+        opener=lambda r: _FakeResponse(200, data),
+        sleeper=lambda _s: None,
         runner=_fake_runner_success,
     )
     assert result2.status == "installed"
@@ -667,12 +785,21 @@ def test_provision_tool_reinstalls_wrapper_dir_kind_when_shim_is_tampered(tmp_pa
     )
     pin = pcb.ClassBSystemPin(asset="apm.tar.gz", sha256_sri=pcb.sha256_sri(data), bin_in_archive="apm")
     fake_spec = pcb.ClassBToolSpec(
-        pname="apm", version="0.25.0", kind="wrapperDir", owner=spec.owner, repo=spec.repo, tag=spec.tag,
+        pname="apm",
+        version="0.25.0",
+        kind="wrapperDir",
+        owner=spec.owner,
+        repo=spec.repo,
+        tag=spec.tag,
         systems={"x86_64-linux": pin},
     )
 
     result1 = pcb.provision_tool(
-        fake_spec, "x86_64-linux", tmp_path, opener=lambda r: _FakeResponse(200, data), sleeper=lambda _s: None,
+        fake_spec,
+        "x86_64-linux",
+        tmp_path,
+        opener=lambda r: _FakeResponse(200, data),
+        sleeper=lambda _s: None,
         runner=_fake_runner_success,
     )
     assert result1.status == "installed"
@@ -686,7 +813,11 @@ def test_provision_tool_reinstalls_wrapper_dir_kind_when_shim_is_tampered(tmp_pa
     shim_path.write_text('#!/bin/sh\nexec "/tmp/evil" "$@"\n', encoding="utf-8")
 
     result2 = pcb.provision_tool(
-        fake_spec, "x86_64-linux", tmp_path, opener=lambda r: _FakeResponse(200, data), sleeper=lambda _s: None,
+        fake_spec,
+        "x86_64-linux",
+        tmp_path,
+        opener=lambda r: _FakeResponse(200, data),
+        sleeper=lambda _s: None,
         runner=_fake_runner_success,
     )
 
@@ -711,12 +842,21 @@ def test_provision_tool_reinstalls_wrapper_dir_kind_when_shim_is_non_utf8(tmp_pa
     )
     pin = pcb.ClassBSystemPin(asset="apm.tar.gz", sha256_sri=pcb.sha256_sri(data), bin_in_archive="apm")
     fake_spec = pcb.ClassBToolSpec(
-        pname="apm", version="0.25.0", kind="wrapperDir", owner=spec.owner, repo=spec.repo, tag=spec.tag,
+        pname="apm",
+        version="0.25.0",
+        kind="wrapperDir",
+        owner=spec.owner,
+        repo=spec.repo,
+        tag=spec.tag,
         systems={"x86_64-linux": pin},
     )
 
     result1 = pcb.provision_tool(
-        fake_spec, "x86_64-linux", tmp_path, opener=lambda r: _FakeResponse(200, data), sleeper=lambda _s: None,
+        fake_spec,
+        "x86_64-linux",
+        tmp_path,
+        opener=lambda r: _FakeResponse(200, data),
+        sleeper=lambda _s: None,
         runner=_fake_runner_success,
     )
     assert result1.status == "installed"
@@ -727,7 +867,11 @@ def test_provision_tool_reinstalls_wrapper_dir_kind_when_shim_is_non_utf8(tmp_pa
     shim_path.write_bytes(b"\xff\xfe\x00\x01not-valid-utf8-at-all")
 
     result2 = pcb.provision_tool(
-        fake_spec, "x86_64-linux", tmp_path, opener=lambda r: _FakeResponse(200, data), sleeper=lambda _s: None,
+        fake_spec,
+        "x86_64-linux",
+        tmp_path,
+        opener=lambda r: _FakeResponse(200, data),
+        sleeper=lambda _s: None,
         runner=_fake_runner_success,
     )
 
@@ -748,7 +892,12 @@ def test_provision_tool_sanitizes_stderr_in_verify_error_message(tmp_path: Path)
     data = _make_tar_gz_bytes({"apm-linux-x86_64/apm": b"binary-content", "apm-linux-x86_64/_internal/x": b"y"})
     pin = pcb.ClassBSystemPin(asset="apm.tar.gz", sha256_sri=pcb.sha256_sri(data), bin_in_archive="apm")
     fake_spec = pcb.ClassBToolSpec(
-        pname="apm", version="0.25.0", kind="wrapperDir", owner=spec.owner, repo=spec.repo, tag=spec.tag,
+        pname="apm",
+        version="0.25.0",
+        kind="wrapperDir",
+        owner=spec.owner,
+        repo=spec.repo,
+        tag=spec.tag,
         systems={"x86_64-linux": pin},
     )
 
@@ -757,7 +906,11 @@ def test_provision_tool_sanitizes_stderr_in_verify_error_message(tmp_path: Path)
 
     with pytest.raises(pcb.VerifyError) as exc_info:
         pcb.provision_tool(
-            fake_spec, "x86_64-linux", tmp_path, opener=lambda r: _FakeResponse(200, data), sleeper=lambda _s: None,
+            fake_spec,
+            "x86_64-linux",
+            tmp_path,
+            opener=lambda r: _FakeResponse(200, data),
+            sleeper=lambda _s: None,
             runner=failing_runner_with_escape_codes,
         )
 
@@ -771,7 +924,15 @@ def test_provision_tool_force_reinstalls_even_when_already_installed(tmp_path: P
     spec = _real_apm_spec()
     data = _make_tar_gz_bytes({"apm-linux-x86_64/apm": b"binary-content", "apm-linux-x86_64/_internal/x": b"y"})
     pin = pcb.ClassBSystemPin(asset="apm.tar.gz", sha256_sri=pcb.sha256_sri(data), bin_in_archive="apm")
-    fake_spec = pcb.ClassBToolSpec(pname="apm", version="0.25.0", kind="wrapperDir", owner=spec.owner, repo=spec.repo, tag=spec.tag, systems={"x86_64-linux": pin})
+    fake_spec = pcb.ClassBToolSpec(
+        pname="apm",
+        version="0.25.0",
+        kind="wrapperDir",
+        owner=spec.owner,
+        repo=spec.repo,
+        tag=spec.tag,
+        systems={"x86_64-linux": pin},
+    )
 
     calls = {"n": 0}
 
@@ -779,10 +940,20 @@ def test_provision_tool_force_reinstalls_even_when_already_installed(tmp_path: P
         calls["n"] += 1
         return _FakeResponse(200, data)
 
-    pcb.provision_tool(fake_spec, "x86_64-linux", tmp_path, opener=opener, sleeper=lambda _s: None, runner=_fake_runner_success)
+    pcb.provision_tool(
+        fake_spec, "x86_64-linux", tmp_path, opener=opener, sleeper=lambda _s: None, runner=_fake_runner_success
+    )
     assert calls["n"] == 1
 
-    result = pcb.provision_tool(fake_spec, "x86_64-linux", tmp_path, opener=opener, sleeper=lambda _s: None, runner=_fake_runner_success, force=True)
+    result = pcb.provision_tool(
+        fake_spec,
+        "x86_64-linux",
+        tmp_path,
+        opener=opener,
+        sleeper=lambda _s: None,
+        runner=_fake_runner_success,
+        force=True,
+    )
     assert result.status == "installed"
     assert calls["n"] == 2  # force bypasses the receipt-based skip entirely
 
@@ -821,7 +992,12 @@ def test_provision_tool_sanitizes_control_characters_in_version_output(tmp_path:
     data = _make_tar_gz_bytes({"apm-linux-x86_64/apm": b"binary-content", "apm-linux-x86_64/_internal/x": b"y"})
     pin = pcb.ClassBSystemPin(asset="apm.tar.gz", sha256_sri=pcb.sha256_sri(data), bin_in_archive="apm")
     fake_spec = pcb.ClassBToolSpec(
-        pname="apm", version="0.25.0", kind="wrapperDir", owner=spec.owner, repo=spec.repo, tag=spec.tag,
+        pname="apm",
+        version="0.25.0",
+        kind="wrapperDir",
+        owner=spec.owner,
+        repo=spec.repo,
+        tag=spec.tag,
         systems={"x86_64-linux": pin},
     )
 
@@ -831,7 +1007,11 @@ def test_provision_tool_sanitizes_control_characters_in_version_output(tmp_path:
         )
 
     result = pcb.provision_tool(
-        fake_spec, "x86_64-linux", tmp_path, opener=lambda r: _FakeResponse(200, data), sleeper=lambda _s: None,
+        fake_spec,
+        "x86_64-linux",
+        tmp_path,
+        opener=lambda r: _FakeResponse(200, data),
+        sleeper=lambda _s: None,
         runner=runner_with_escape_codes,
     )
 
@@ -850,13 +1030,28 @@ def test_provision_tool_does_not_write_receipt_when_verify_fails(tmp_path: Path)
     spec = _real_apm_spec()
     data = _make_tar_gz_bytes({"apm-linux-x86_64/apm": b"binary-content", "apm-linux-x86_64/_internal/x": b"y"})
     pin = pcb.ClassBSystemPin(asset="apm.tar.gz", sha256_sri=pcb.sha256_sri(data), bin_in_archive="apm")
-    fake_spec = pcb.ClassBToolSpec(pname="apm", version="0.25.0", kind="wrapperDir", owner=spec.owner, repo=spec.repo, tag=spec.tag, systems={"x86_64-linux": pin})
+    fake_spec = pcb.ClassBToolSpec(
+        pname="apm",
+        version="0.25.0",
+        kind="wrapperDir",
+        owner=spec.owner,
+        repo=spec.repo,
+        tag=spec.tag,
+        systems={"x86_64-linux": pin},
+    )
 
     def failing_runner(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
         return subprocess.CompletedProcess(args=("fake",), returncode=1, stdout="", stderr="boom")
 
     with pytest.raises(pcb.VerifyError):
-        pcb.provision_tool(fake_spec, "x86_64-linux", tmp_path, opener=lambda r: _FakeResponse(200, data), sleeper=lambda _s: None, runner=failing_runner)
+        pcb.provision_tool(
+            fake_spec,
+            "x86_64-linux",
+            tmp_path,
+            opener=lambda r: _FakeResponse(200, data),
+            sleeper=lambda _s: None,
+            runner=failing_runner,
+        )
 
     assert not (tmp_path / "state" / "apm.json").exists()
 
@@ -865,10 +1060,25 @@ def test_provision_tool_raises_extraction_error_on_unknown_kind(tmp_path: Path) 
     spec = _real_apm_spec()
     data = _make_tar_gz_bytes({"weird": b"x"})
     pin = pcb.ClassBSystemPin(asset="weird.tar.gz", sha256_sri=pcb.sha256_sri(data), bin_in_archive="weird")
-    fake_spec = pcb.ClassBToolSpec(pname="weird", version="1", kind="mystery-kind", owner=spec.owner, repo=spec.repo, tag=spec.tag, systems={"x86_64-linux": pin})
+    fake_spec = pcb.ClassBToolSpec(
+        pname="weird",
+        version="1",
+        kind="mystery-kind",
+        owner=spec.owner,
+        repo=spec.repo,
+        tag=spec.tag,
+        systems={"x86_64-linux": pin},
+    )
 
     with pytest.raises(pcb.ExtractionError):
-        pcb.provision_tool(fake_spec, "x86_64-linux", tmp_path, opener=lambda r: _FakeResponse(200, data), sleeper=lambda _s: None, runner=_fake_runner_success)
+        pcb.provision_tool(
+            fake_spec,
+            "x86_64-linux",
+            tmp_path,
+            opener=lambda r: _FakeResponse(200, data),
+            sleeper=lambda _s: None,
+            runner=_fake_runner_success,
+        )
 
 
 def test_provision_all_only_filters_to_selected_tools(tmp_path: Path) -> None:
@@ -883,7 +1093,9 @@ def test_provision_all_only_filters_to_selected_tools(tmp_path: Path) -> None:
     def make_binary_spec(pname: str, body: bytes) -> tuple[pcb.ClassBToolSpec, bytes]:
         data = _make_tar_gz_bytes({pname: body})
         pin = pcb.ClassBSystemPin(asset=f"{pname}.tar.gz", sha256_sri=pcb.sha256_sri(data), bin_in_archive=pname)
-        spec = pcb.ClassBToolSpec(pname=pname, version="1", kind="binary", owner="o", repo=pname, tag="t", systems={"x86_64-linux": pin})
+        spec = pcb.ClassBToolSpec(
+            pname=pname, version="1", kind="binary", owner="o", repo=pname, tag="t", systems={"x86_64-linux": pin}
+        )
         return spec, data
 
     waza_spec, waza_data = make_binary_spec("waza", b"waza-content")
@@ -897,7 +1109,9 @@ def test_provision_all_only_filters_to_selected_tools(tmp_path: Path) -> None:
 
     def opener(request: urllib.request.Request) -> _FakeResponse:
         if request.full_url not in data_by_url:
-            raise AssertionError(f"unexpected url requested (excluded tool should never be fetched): {request.full_url}")
+            raise AssertionError(
+                f"unexpected url requested (excluded tool should never be fetched): {request.full_url}"
+            )
         return _FakeResponse(200, data_by_url[request.full_url])
 
     results = pcb.provision_all(
@@ -1075,7 +1289,10 @@ def _write_apm_tool_receipt(cache_root: Path, installed_sha256: str = "sha256-AP
     pcb._write_receipt(
         cache_root,
         pcb.InstallReceipt(
-            pname="apm", version="0.25.0", sha256_sri="sha256-PINNED-ASSET=", asset="apm-x86_64-linux.tar.gz",
+            pname="apm",
+            version="0.25.0",
+            sha256_sri="sha256-PINNED-ASSET=",
+            asset="apm-x86_64-linux.tar.gz",
             installed_sha256=installed_sha256,
         ),
     )
@@ -1177,7 +1394,9 @@ def test_is_apm_install_up_to_date_true_when_everything_matches(tmp_path: Path) 
 # --- Task 7: CLI entry point -------------------------------------------------
 
 
-def test_main_verify_mode_reports_missing_binaries_without_network(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_main_verify_mode_reports_missing_binaries_without_network(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Adapted from the brief's own given test: the brief patches
     ``pcb._default_opener`` directly, but verified empirically (live,
     against this real module, before writing this test) that doing so does
@@ -1219,9 +1438,12 @@ def test_main_verify_mode_reports_missing_binaries_without_network(tmp_path: Pat
     )
     exit_code = pcb.main(
         [
-            "--project-dir", str(REPO_ROOT),
-            "--cache-root", str(tmp_path),
-            "--system", "x86_64-linux",
+            "--project-dir",
+            str(REPO_ROOT),
+            "--cache-root",
+            str(tmp_path),
+            "--system",
+            "x86_64-linux",
             "--verify",
         ]
     )
@@ -1256,8 +1478,10 @@ def test_main_reports_clean_failure_on_unsupported_system(
 
     exit_code = pcb.main(
         [
-            "--project-dir", str(REPO_ROOT),
-            "--cache-root", str(tmp_path),
+            "--project-dir",
+            str(REPO_ROOT),
+            "--cache-root",
+            str(tmp_path),
         ]
     )
     assert exit_code == 1
@@ -1275,9 +1499,12 @@ def test_main_skip_apm_install_flag_prevents_apm_install_call(tmp_path: Path, mo
 
     exit_code = pcb.main(
         [
-            "--project-dir", str(REPO_ROOT),
-            "--cache-root", str(tmp_path),
-            "--system", "x86_64-linux",
+            "--project-dir",
+            str(REPO_ROOT),
+            "--cache-root",
+            str(tmp_path),
+            "--system",
+            "x86_64-linux",
             "--skip-apm-install",
         ]
     )
@@ -1312,11 +1539,16 @@ def test_main_verify_mode_all_installed_and_passing_returns_zero(
 
     exit_code = pcb.main(
         [
-            "--project-dir", str(REPO_ROOT),
-            "--cache-root", str(tmp_path),
-            "--system", "x86_64-linux",
-            "--tool", "waza",
-            "--tool", "apm",
+            "--project-dir",
+            str(REPO_ROOT),
+            "--cache-root",
+            str(tmp_path),
+            "--system",
+            "x86_64-linux",
+            "--tool",
+            "waza",
+            "--tool",
+            "apm",
             "--verify",
         ]
     )
@@ -1334,10 +1566,14 @@ def test_main_verify_mode_reports_failing_version_check(
 
     exit_code = pcb.main(
         [
-            "--project-dir", str(REPO_ROOT),
-            "--cache-root", str(tmp_path),
-            "--system", "x86_64-linux",
-            "--tool", "waza",
+            "--project-dir",
+            str(REPO_ROOT),
+            "--cache-root",
+            str(tmp_path),
+            "--system",
+            "x86_64-linux",
+            "--tool",
+            "waza",
             "--verify",
         ]
     )
@@ -1357,10 +1593,14 @@ def test_main_verify_mode_sanitizes_version_output(
 
     exit_code = pcb.main(
         [
-            "--project-dir", str(REPO_ROOT),
-            "--cache-root", str(tmp_path),
-            "--system", "x86_64-linux",
-            "--tool", "waza",
+            "--project-dir",
+            str(REPO_ROOT),
+            "--cache-root",
+            str(tmp_path),
+            "--system",
+            "x86_64-linux",
+            "--tool",
+            "waza",
             "--verify",
         ]
     )
@@ -1391,9 +1631,12 @@ def test_main_apm_provisioning_failure_skips_apm_install(tmp_path: Path, monkeyp
 
     exit_code = pcb.main(
         [
-            "--project-dir", str(REPO_ROOT),
-            "--cache-root", str(tmp_path),
-            "--system", "x86_64-linux",
+            "--project-dir",
+            str(REPO_ROOT),
+            "--cache-root",
+            str(tmp_path),
+            "--system",
+            "x86_64-linux",
         ]
     )
     assert exit_code == 1
@@ -1427,16 +1670,22 @@ def test_main_tool_filter_excluding_apm_is_not_counted_as_apm_failure(
 
     exit_code = pcb.main(
         [
-            "--project-dir", str(REPO_ROOT),
-            "--cache-root", str(tmp_path),
-            "--system", "x86_64-linux",
-            "--tool", "waza",
+            "--project-dir",
+            str(REPO_ROOT),
+            "--cache-root",
+            str(tmp_path),
+            "--system",
+            "x86_64-linux",
+            "--tool",
+            "waza",
         ]
     )
     assert exit_code == 0
 
 
-def test_main_runs_apm_install_and_writes_env_file_when_not_skipped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_main_runs_apm_install_and_writes_env_file_when_not_skipped(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Positive-control mirror of
     test_main_skip_apm_install_flag_prevents_apm_install_call: that test
     alone only proves run_apm_install is NOT called when the flag IS
@@ -1462,11 +1711,16 @@ def test_main_runs_apm_install_and_writes_env_file_when_not_skipped(tmp_path: Pa
     env_file = tmp_path / "env.sh"
     exit_code = pcb.main(
         [
-            "--project-dir", str(REPO_ROOT),
-            "--cache-root", str(tmp_path),
-            "--system", "x86_64-linux",
-            "--tool", "apm",
-            "--env-file", str(env_file),
+            "--project-dir",
+            str(REPO_ROOT),
+            "--cache-root",
+            str(tmp_path),
+            "--system",
+            "x86_64-linux",
+            "--tool",
+            "apm",
+            "--env-file",
+            str(env_file),
         ]
     )
     assert exit_code == 0
@@ -1510,11 +1764,16 @@ def test_main_second_call_reports_unchanged_and_does_not_call_run_apm_install_ag
     monkeypatch.setattr(pcb, "run_apm_install", lambda *args, **kwargs: calls.append(args))
 
     argv = [
-        "--project-dir", str(project_dir),
-        "--flake-path", str(REPO_ROOT / "flake.nix"),
-        "--cache-root", str(cache_root),
-        "--system", "x86_64-linux",
-        "--tool", "apm",
+        "--project-dir",
+        str(project_dir),
+        "--flake-path",
+        str(REPO_ROOT / "flake.nix"),
+        "--cache-root",
+        str(cache_root),
+        "--system",
+        "x86_64-linux",
+        "--tool",
+        "apm",
     ]
 
     first_exit_code = pcb.main(argv)
@@ -1554,11 +1813,16 @@ def test_main_reinstalls_when_lockfile_content_changes_between_calls(
     monkeypatch.setattr(pcb, "run_apm_install", lambda *args, **kwargs: calls.append(args))
 
     argv = [
-        "--project-dir", str(project_dir),
-        "--flake-path", str(REPO_ROOT / "flake.nix"),
-        "--cache-root", str(cache_root),
-        "--system", "x86_64-linux",
-        "--tool", "apm",
+        "--project-dir",
+        str(project_dir),
+        "--flake-path",
+        str(REPO_ROOT / "flake.nix"),
+        "--cache-root",
+        str(cache_root),
+        "--system",
+        "x86_64-linux",
+        "--tool",
+        "apm",
     ]
 
     first_exit_code = pcb.main(argv)
@@ -1589,9 +1853,12 @@ def test_main_reports_tool_provisioning_failure_and_continues(tmp_path: Path, mo
 
     exit_code = pcb.main(
         [
-            "--project-dir", str(REPO_ROOT),
-            "--cache-root", str(tmp_path),
-            "--system", "x86_64-linux",
+            "--project-dir",
+            str(REPO_ROOT),
+            "--cache-root",
+            str(tmp_path),
+            "--system",
+            "x86_64-linux",
             "--skip-apm-install",
         ]
     )
@@ -1608,10 +1875,14 @@ def test_main_returns_1_when_flake_pins_cannot_be_loaded(tmp_path: Path, monkeyp
 
     exit_code = pcb.main(
         [
-            "--project-dir", str(REPO_ROOT),
-            "--cache-root", str(tmp_path),
-            "--flake-path", str(tmp_path / "does-not-exist-flake.nix"),
-            "--system", "x86_64-linux",
+            "--project-dir",
+            str(REPO_ROOT),
+            "--cache-root",
+            str(tmp_path),
+            "--flake-path",
+            str(tmp_path / "does-not-exist-flake.nix"),
+            "--system",
+            "x86_64-linux",
         ]
     )
     assert exit_code == 1
@@ -1639,10 +1910,14 @@ def test_main_returns_1_when_flake_path_is_a_directory(tmp_path: Path, monkeypat
 
     exit_code = pcb.main(
         [
-            "--project-dir", str(REPO_ROOT),
-            "--cache-root", str(tmp_path),
-            "--flake-path", str(tmp_path),  # a directory, not a file
-            "--system", "x86_64-linux",
+            "--project-dir",
+            str(REPO_ROOT),
+            "--cache-root",
+            str(tmp_path),
+            "--flake-path",
+            str(tmp_path),  # a directory, not a file
+            "--system",
+            "x86_64-linux",
         ]
     )
     assert exit_code == 1
@@ -1675,12 +1950,17 @@ def test_main_treats_empty_env_file_string_as_not_provided(tmp_path: Path, monke
 
     exit_code = pcb.main(
         [
-            "--project-dir", str(REPO_ROOT),
-            "--cache-root", str(tmp_path),
-            "--system", "x86_64-linux",
-            "--tool", "waza",
+            "--project-dir",
+            str(REPO_ROOT),
+            "--cache-root",
+            str(tmp_path),
+            "--system",
+            "x86_64-linux",
+            "--tool",
+            "waza",
             "--skip-apm-install",
-            "--env-file", "",
+            "--env-file",
+            "",
         ]
     )
     assert exit_code == 0
@@ -1713,10 +1993,14 @@ def test_main_apm_install_timeout_reports_fail_and_nonzero_exit(
 
     exit_code = pcb.main(
         [
-            "--project-dir", str(REPO_ROOT),
-            "--cache-root", str(tmp_path),
-            "--system", "x86_64-linux",
-            "--tool", "apm",
+            "--project-dir",
+            str(REPO_ROOT),
+            "--cache-root",
+            str(tmp_path),
+            "--system",
+            "x86_64-linux",
+            "--tool",
+            "apm",
         ]
     )
     assert exit_code == 1
@@ -1748,11 +2032,16 @@ def test_main_write_env_file_error_reports_fail_but_still_attempts_apm_install(
 
     exit_code = pcb.main(
         [
-            "--project-dir", str(REPO_ROOT),
-            "--cache-root", str(tmp_path),
-            "--system", "x86_64-linux",
-            "--tool", "apm",
-            "--env-file", str(unwritable_env_file),
+            "--project-dir",
+            str(REPO_ROOT),
+            "--cache-root",
+            str(tmp_path),
+            "--system",
+            "x86_64-linux",
+            "--tool",
+            "apm",
+            "--env-file",
+            str(unwritable_env_file),
         ]
     )
     assert exit_code == 1
@@ -1778,10 +2067,14 @@ def test_main_verify_mode_reports_subprocess_error_instead_of_crashing(
 
     exit_code = pcb.main(
         [
-            "--project-dir", str(REPO_ROOT),
-            "--cache-root", str(tmp_path),
-            "--system", "x86_64-linux",
-            "--tool", "waza",
+            "--project-dir",
+            str(REPO_ROOT),
+            "--cache-root",
+            str(tmp_path),
+            "--system",
+            "x86_64-linux",
+            "--tool",
+            "waza",
             "--verify",
         ]
     )
@@ -1812,10 +2105,14 @@ def test_main_unknown_tool_flag_fails_closed_instead_of_silent_success(
 
     exit_code = pcb.main(
         [
-            "--project-dir", str(REPO_ROOT),
-            "--cache-root", str(tmp_path),
-            "--system", "x86_64-linux",
-            "--tool", "definitely-not-a-tool",
+            "--project-dir",
+            str(REPO_ROOT),
+            "--cache-root",
+            str(tmp_path),
+            "--system",
+            "x86_64-linux",
+            "--tool",
+            "definitely-not-a-tool",
         ]
     )
     assert exit_code == 1
@@ -1836,10 +2133,14 @@ def test_main_unknown_tool_flag_fails_closed_in_verify_mode(
 
     exit_code = pcb.main(
         [
-            "--project-dir", str(REPO_ROOT),
-            "--cache-root", str(tmp_path),
-            "--system", "x86_64-linux",
-            "--tool", "definitely-not-a-tool",
+            "--project-dir",
+            str(REPO_ROOT),
+            "--cache-root",
+            str(tmp_path),
+            "--system",
+            "x86_64-linux",
+            "--tool",
+            "definitely-not-a-tool",
             "--verify",
         ]
     )

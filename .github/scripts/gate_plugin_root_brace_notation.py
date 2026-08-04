@@ -151,9 +151,7 @@ def hook_commands(path: pathlib.Path) -> list[str]:
     if block is None:
         raise ScanError(f"{path}: frontmatter block opens but never closes")
     return [
-        match.group(1).strip()
-        for match in (_FRONTMATTER_COMMAND_RE.match(line) for line in block.split("\n"))
-        if match
+        match.group(1).strip() for match in (_FRONTMATTER_COMMAND_RE.match(line) for line in block.split("\n")) if match
     ]
 
 
@@ -208,8 +206,7 @@ class GatePluginRootBraceNotationArgs:
 def main(argv: list[str] | None = None) -> int:
     """CLI: 0 clean, 1 violation found, 2 the scan could not be trusted."""
     parser = argparse.ArgumentParser(
-        description=f"Check that hook commands reference the plugin root as "
-        f"{_BRACED}, not ${_VARIABLE}."
+        description=f"Check that hook commands reference the plugin root as {_BRACED}, not ${_VARIABLE}."
     )
     parser.add_argument(
         "--root",

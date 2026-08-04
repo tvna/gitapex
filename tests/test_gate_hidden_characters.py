@@ -169,9 +169,7 @@ def test_untracked_files_are_not_scanned(tmp_path: pathlib.Path) -> None:
 # --- fail closed (exit 2) ------------------------------------------------
 
 
-def test_discovering_nothing_is_an_error_not_a_pass(
-    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_discovering_nothing_is_an_error_not_a_pass(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
     """Regression: reporting success having checked nothing would make this
     a permanent green no-op after a wrong scan root."""
     root = _repo(tmp_path)
@@ -179,9 +177,7 @@ def test_discovering_nothing_is_an_error_not_a_pass(
     assert "checking nothing" in capsys.readouterr().err
 
 
-def test_non_utf8_file_fails_closed_naming_the_file(
-    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_non_utf8_file_fails_closed_naming_the_file(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
     root = _repo(tmp_path)
     path = _write(root, "a.md", "clean\n")
     path.write_bytes(b"\xff\xfe not valid utf-8")
@@ -210,9 +206,7 @@ def test_git_missing_entirely_fails_closed(
     assert "cannot run git" in capsys.readouterr().err
 
 
-def test_main_exits_2_on_a_root_that_does_not_exist(
-    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_main_exits_2_on_a_root_that_does_not_exist(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
     missing = tmp_path / "does-not-exist"
     assert gate.main(["--root", str(missing)]) == 2
     assert "must be an existing directory" in capsys.readouterr().err
@@ -233,9 +227,7 @@ def test_main_returns_zero_on_the_real_repository(capsys: pytest.CaptureFixture[
     assert "OK:" in capsys.readouterr().out
 
 
-def test_main_returns_one_and_explains_the_failure(
-    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_main_returns_one_and_explains_the_failure(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
     root = _repo(tmp_path)
     _write(root, "a.md", f"{_BOM}\n")
     assert gate.main(["--root", str(root)]) == 1

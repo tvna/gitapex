@@ -43,9 +43,7 @@ def diff_step_script(tmp_path_factory):
 
 
 def _git(repo, *args, **kwargs):
-    return subprocess.run(
-        ["git", "-C", str(repo), *args], check=True, capture_output=True, text=True, **kwargs
-    )
+    return subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, text=True, **kwargs)
 
 
 def _write(repo, relative, content="x\n"):
@@ -97,9 +95,7 @@ def run_diff_step(script, repo, outdir, base=None):
         "HEAD_SHA": _git(repo, "rev-parse", "HEAD").stdout.strip(),
         "GITHUB_OUTPUT": str(output_file),
     }
-    proc = subprocess.run(
-        ["bash", str(script)], cwd=repo, env=env, capture_output=True, text=True
-    )
+    proc = subprocess.run(["bash", str(script)], cwd=repo, env=env, capture_output=True, text=True)
     parsed = {}
     for line in output_file.read_text(encoding="utf-8").splitlines():
         if "=" in line:
@@ -167,14 +163,10 @@ def test_renaming_a_gate_script_still_requires_disclosure(diff_step_script, repo
     code, out, _ = run_diff_step(diff_step_script, repo, outdir, base=base)
     assert code == 0
     assert out["applicable"] == "true"
-    assert out["changed-gate-scripts"] == (
-        ".github/scripts/gate_after.py,.github/scripts/gate_before.py"
-    )
+    assert out["changed-gate-scripts"] == (".github/scripts/gate_after.py,.github/scripts/gate_before.py")
 
 
-def test_a_nested_path_under_a_gate_prefixed_directory_is_out_of_scope(
-    diff_step_script, repo, outdir
-):
+def test_a_nested_path_under_a_gate_prefixed_directory_is_out_of_scope(diff_step_script, repo, outdir):
     _write(repo, ".github/scripts/gate_helpers/support.py")
     _commit(repo)
     code, out, _ = run_diff_step(diff_step_script, repo, outdir)
@@ -216,9 +208,7 @@ def test_a_deleted_checker_script_is_not_reported(diff_step_script, repo, outdir
     assert out["changed-checker-scripts"] == ""
 
 
-def test_a_nested_checker_script_is_excluded_by_the_glob_pathspec(
-    diff_step_script, repo, outdir
-):
+def test_a_nested_checker_script_is_excluded_by_the_glob_pathspec(diff_step_script, repo, outdir):
     """Without `:(glob)` git's `*` crosses `/`, the nested path reaches the
     single-level shape regex, and this required check hard-fails on a file
     it never intended to scope."""
@@ -237,9 +227,7 @@ def test_a_changed_design_doc_is_reported(diff_step_script, repo, outdir):
     assert out["changed-design-docs"] == "docs/superpowers/specs/2026-01-01-thing.md"
 
 
-def test_a_nested_design_doc_hard_fails_rather_than_being_dropped(
-    diff_step_script, repo, outdir
-):
+def test_a_nested_design_doc_hard_fails_rather_than_being_dropped(diff_step_script, repo, outdir):
     """Deliberately the opposite of the checker-script case above: the
     design-doc pathspec carries no `:(glob)`, so an undecided path shape is
     surfaced loudly instead of silently leaving scope."""
@@ -262,9 +250,7 @@ def test_multiple_paths_are_comma_joined(diff_step_script, repo, outdir):
 # --- fail closed ---
 
 
-def test_an_unreadable_registry_fails_the_step_rather_than_reporting_green(
-    diff_step_script, repo, outdir
-):
+def test_an_unreadable_registry_fails_the_step_rather_than_reporting_green(diff_step_script, repo, outdir):
     """A registry the detector cannot trust must not degrade to the
     naming-convention rule alone, which under-covers by design."""
     _write(repo, ".gitapex/ssot.json", "{not json")
@@ -286,9 +272,7 @@ def test_every_output_key_is_written_on_both_paths(diff_step_script, repo, outdi
     assert set(skipped) == set(applied), "the two $GITHUB_OUTPUT paths disagree on keys"
 
 
-def test_the_harness_leaves_no_artifact_in_the_repository_under_test(
-    diff_step_script, repo, outdir
-):
+def test_the_harness_leaves_no_artifact_in_the_repository_under_test(diff_step_script, repo, outdir):
     """Guards the fixture split above: if $GITHUB_OUTPUT ever moves back
     inside the repo, `git add -A` in `_commit` starts committing it into
     the diff being graded."""
@@ -316,9 +300,7 @@ jobs:
 """
 
 
-def test_a_pin_bump_to_a_registered_gate_workflow_now_requires_disclosure(
-    diff_step_script, repo, outdir
-):
+def test_a_pin_bump_to_a_registered_gate_workflow_now_requires_disclosure(diff_step_script, repo, outdir):
     """The accepted cost of deleting the pin-only exemption, pinned so it is
     a decision on the record rather than a surprise.
 
@@ -358,8 +340,7 @@ def test_deleting_a_gate_invoking_step_requires_disclosure(diff_step_script, rep
         repo,
         ".github/workflows/lint.yml",
         _PINNED_STEP.replace(
-            "      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
-            "  # v7.0.1\n",
+            "      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1\n",
             "",
         ),
     )

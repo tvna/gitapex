@@ -55,9 +55,7 @@ def run(
 
 def test_denied_unconditionally() -> None:
     result = run()
-    assert result.returncode == 2, (
-        f"expected deny (exit 2), got {result.returncode}: stderr={result.stderr!r}"
-    )
+    assert result.returncode == 2, f"expected deny (exit 2), got {result.returncode}: stderr={result.stderr!r}"
     payload = json.loads(result.stderr)
     assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"
     assert "merge_pull_request" in payload["systemMessage"]
@@ -74,9 +72,7 @@ def test_denied_regardless_of_pull_number_or_repo() -> None:
 def test_denied_with_merge_method_specified() -> None:
     # No override phrase or field escapes the block -- an explicit
     # merge_method (squash/rebase/merge) is still denied unconditionally.
-    result = run(
-        tool_input={"owner": "tvna", "repo": "gitapex", "pullNumber": 1, "merge_method": "squash"}
-    )
+    result = run(tool_input={"owner": "tvna", "repo": "gitapex", "pullNumber": 1, "merge_method": "squash"})
     assert result.returncode == 2
 
 
