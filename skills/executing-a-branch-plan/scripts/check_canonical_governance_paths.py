@@ -39,6 +39,7 @@ verdict, only a signal that the model's own review is where that path
 gets judged). 2 on usage error (e.g. the given --files path does not
 exist).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -95,8 +96,9 @@ def _is_skill_governance_path(segments: list[str]) -> bool:
     checked by explicit segment count/shape, not a glob pattern."""
     if len(segments) == 3 and segments[0] == "skills" and segments[2] == "SKILL.md":
         return True
-    return (len(segments) == 4 and segments[0] == "skills"
-            and segments[2] == "metadata" and segments[3] == "gitapex.yaml")
+    return (
+        len(segments) == 4 and segments[0] == "skills" and segments[2] == "metadata" and segments[3] == "gitapex.yaml"
+    )
 
 
 def _is_skill_scripts_path(segments: list[str]) -> bool:
@@ -130,15 +132,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--files",
-        help="Path to a file listing one changed path per line; reads "
-        "standard input when omitted.",
+        help="Path to a file listing one changed path per line; reads standard input when omitted.",
     )
     args = parser.parse_args(argv)
     try:
         raw_text = (
-            Path(args.files).read_text(encoding="utf-8")
-            if args.files
-            else sys.stdin.buffer.read().decode("utf-8")
+            Path(args.files).read_text(encoding="utf-8") if args.files else sys.stdin.buffer.read().decode("utf-8")
         )
     except FileNotFoundError:
         print(f"error: files list not found: {args.files}", file=sys.stderr)

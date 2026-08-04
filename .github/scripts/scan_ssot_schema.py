@@ -229,9 +229,7 @@ def find_schema_violations(instance: Any, schema: dict[str, Any]) -> list[str]:
     return findings
 
 
-def find_script_drift(
-    registry: SsotRegistry | None, repo_root: pathlib.Path = REPO_ROOT
-) -> list[str]:
+def find_script_drift(registry: SsotRegistry | None, repo_root: pathlib.Path = REPO_ROOT) -> list[str]:
     """Return one message per gates[] script path that doesn't exist as a real
     file. Only checked for kind == "script" -- "native" gates have no repo
     file to check, and "opa-rego" gates aren't seeded yet."""
@@ -243,10 +241,7 @@ def find_script_drift(
             continue
         for path in _as_list(gate.script):
             if not (repo_root / path).is_file():
-                findings.append(
-                    f"script-drift: {gate.id}: "
-                    f"script path does not exist: {path}"
-                )
+                findings.append(f"script-drift: {gate.id}: script path does not exist: {path}")
     return findings
 
 
@@ -261,8 +256,7 @@ def find_policy_ref_drift(registry: SsotRegistry | None) -> list[str]:
         for ref in gate.policy_refs:
             if ref not in known_ids:
                 findings.append(
-                    f"policy-ref-drift: {gate.id}: "
-                    f"policy_refs references unknown policy_sources id {ref!r}"
+                    f"policy-ref-drift: {gate.id}: policy_refs references unknown policy_sources id {ref!r}"
                 )
     return findings
 
@@ -277,10 +271,7 @@ def find_cluster_drift(registry: SsotRegistry | None) -> list[str]:
     for gate in registry.gates:
         for cluster in _as_list(gate.cluster):
             if cluster not in known_clusters:
-                findings.append(
-                    f"cluster-drift: {gate.id}: "
-                    f"cluster references unknown clusters key {cluster!r}"
-                )
+                findings.append(f"cluster-drift: {gate.id}: cluster references unknown clusters key {cluster!r}")
     return findings
 
 
@@ -315,9 +306,7 @@ def find_duplicate_ids(instance: Any) -> list[str]:
             seen[entry_id] = seen.get(entry_id, 0) + 1
         for entry_id, count in seen.items():
             if count > 1:
-                findings.append(
-                    f"duplicate-id: {label} id {entry_id!r} is used {count} times"
-                )
+                findings.append(f"duplicate-id: {label} id {entry_id!r} is used {count} times")
     return findings
 
 

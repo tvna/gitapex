@@ -41,6 +41,7 @@ stdout as informational output for the caller's own wave-assignment
 step -- finding a conflict is not itself a failure of this tool). 2 on
 malformed input or usage error.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -91,15 +92,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--input",
-        help="Path to a JSON file mapping task ID -> list of file paths; "
-        "reads standard input when omitted.",
+        help="Path to a JSON file mapping task ID -> list of file paths; reads standard input when omitted.",
     )
     args = parser.parse_args(argv)
     try:
         raw_text = (
-            Path(args.input).read_text(encoding="utf-8")
-            if args.input
-            else sys.stdin.buffer.read().decode("utf-8")
+            Path(args.input).read_text(encoding="utf-8") if args.input else sys.stdin.buffer.read().decode("utf-8")
         )
     except FileNotFoundError:
         print(f"error: input file not found: {args.input}", file=sys.stderr)
@@ -129,7 +127,9 @@ def main(argv: list[str] | None = None) -> int:
         print("no file-ownership conflicts found")
         return 0
     for path, task_ids in conflicts:
-        print(f"CONFLICT: {path} is written by: {', '.join(task_ids)} -- sequence these tasks, never co-assign to the same wave")
+        print(
+            f"CONFLICT: {path} is written by: {', '.join(task_ids)} -- sequence these tasks, never co-assign to the same wave"
+        )
     return 0
 
 

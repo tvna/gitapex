@@ -360,8 +360,7 @@ class AcmIssueDisclosureArgs:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Check a GitHub issue body for ACM disclosure (or waiver); "
-        "label/comment on the issue when missing."
+        description="Check a GitHub issue body for ACM disclosure (or waiver); label/comment on the issue when missing."
     )
     parser.add_argument("--body", help="Path to the issue body text; reads standard input when omitted.")
     parser.add_argument(
@@ -371,9 +370,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--owner", help="Repository owner, e.g. tvna. Required unless --check-only.")
     parser.add_argument("--repo", help="Repository name, e.g. gitapex. Required unless --check-only.")
-    parser.add_argument(
-        "--issue-number", type=int, help="The issue's number. Required unless --check-only."
-    )
+    parser.add_argument("--issue-number", type=int, help="The issue's number. Required unless --check-only.")
     args = parser.parse_args(argv)
 
     try:

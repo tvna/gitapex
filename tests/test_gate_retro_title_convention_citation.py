@@ -163,7 +163,12 @@ def test_is_resolvable_issue_retries_then_raises_on_5xx():
 def test_find_unresolvable_offenders_none_when_not_offending(tmp_path):
     opener = lambda request: Response(200, "{}")  # noqa: E731
     result = gate.find_unresolvable_offenders(
-        tmp_path / "doc.md", _UNRELATED_CONVENTION_CLAIM, "tvna", "gitapex", "tok", opener=opener,
+        tmp_path / "doc.md",
+        _UNRELATED_CONVENTION_CLAIM,
+        "tvna",
+        "gitapex",
+        "tok",
+        opener=opener,
         sleeper=lambda s: None,
     )
     assert result is None
@@ -171,8 +176,13 @@ def test_find_unresolvable_offenders_none_when_not_offending(tmp_path):
 
 def test_find_unresolvable_offenders_none_when_no_citation(tmp_path):
     result = gate.find_unresolvable_offenders(
-        tmp_path / "doc.md", _UNCITED_TITLE_CLAIM, "tvna", "gitapex", "tok",
-        opener=lambda request: Response(200, "{}"), sleeper=lambda s: None,
+        tmp_path / "doc.md",
+        _UNCITED_TITLE_CLAIM,
+        "tvna",
+        "gitapex",
+        "tok",
+        opener=lambda request: Response(200, "{}"),
+        sleeper=lambda s: None,
     )
     assert result is not None
     assert "no #<number> citation" in result
@@ -181,7 +191,13 @@ def test_find_unresolvable_offenders_none_when_no_citation(tmp_path):
 def test_find_unresolvable_offenders_resolvable_passes(tmp_path):
     opener = lambda request: Response(200, json.dumps({"number": 341}))  # noqa: E731
     result = gate.find_unresolvable_offenders(
-        tmp_path / "doc.md", _CITED_TITLE_CLAIM, "tvna", "gitapex", "tok", opener=opener, sleeper=lambda s: None,
+        tmp_path / "doc.md",
+        _CITED_TITLE_CLAIM,
+        "tvna",
+        "gitapex",
+        "tok",
+        opener=opener,
+        sleeper=lambda s: None,
     )
     assert result is None
 
@@ -189,7 +205,13 @@ def test_find_unresolvable_offenders_resolvable_passes(tmp_path):
 def test_find_unresolvable_offenders_unresolvable_fails(tmp_path):
     opener = lambda request: Response(404, "{}")  # noqa: E731
     result = gate.find_unresolvable_offenders(
-        tmp_path / "doc.md", _CITED_TITLE_CLAIM, "tvna", "gitapex", "tok", opener=opener, sleeper=lambda s: None,
+        tmp_path / "doc.md",
+        _CITED_TITLE_CLAIM,
+        "tvna",
+        "gitapex",
+        "tok",
+        opener=opener,
+        sleeper=lambda s: None,
     )
     assert result is not None
     assert "none resolve" in result

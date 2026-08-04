@@ -35,9 +35,7 @@ def has_acm_table(body_text: str | None) -> bool:
 
 def main(argv: list[str] | None = None) -> int:
     """CLI: exit 0 iff the given PR body contains the ACM table, else 1."""
-    parser = argparse.ArgumentParser(
-        description="Check that a PR body contains the Acceptance Criteria Map table."
-    )
+    parser = argparse.ArgumentParser(description="Check that a PR body contains the Acceptance Criteria Map table.")
     parser.add_argument(
         "--body",
         help="Path to the PR body text; reads standard input when omitted.",
@@ -45,9 +43,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         body_text = (
-            Path(args.body).read_text(encoding="utf-8")
-            if args.body
-            else sys.stdin.buffer.read().decode("utf-8")
+            Path(args.body).read_text(encoding="utf-8") if args.body else sys.stdin.buffer.read().decode("utf-8")
         )
     except FileNotFoundError:
         print(f"error: body file not found: {args.body}", file=sys.stderr)

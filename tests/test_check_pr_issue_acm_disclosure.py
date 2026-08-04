@@ -337,9 +337,7 @@ def _opener_for(body: str, state: str = "open"):
 
 
 def test_classify_issue_passes_with_acm_table():
-    reason = checker.classify_issue(
-        "o", "r", 1, "tok", opener=_opener_for(_VALID_ACM_TABLE), sleeper=lambda _: None
-    )
+    reason = checker.classify_issue("o", "r", 1, "tok", opener=_opener_for(_VALID_ACM_TABLE), sleeper=lambda _: None)
     assert reason is None
 
 
@@ -394,9 +392,7 @@ def test_classify_issue_reports_fetch_failure_without_echoing_body():
 
 def test_classify_issue_never_echoes_issue_body_into_the_reason():
     secret_looking_body = "SUPER-SECRET-MARKER-1234 no disclosure here"
-    reason = checker.classify_issue(
-        "o", "r", 1, "tok", opener=_opener_for(secret_looking_body), sleeper=lambda _: None
-    )
+    reason = checker.classify_issue("o", "r", 1, "tok", opener=_opener_for(secret_looking_body), sleeper=lambda _: None)
     assert "SUPER-SECRET-MARKER-1234" not in reason
 
 

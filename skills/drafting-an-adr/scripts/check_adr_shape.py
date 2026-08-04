@@ -36,7 +36,7 @@ def _section_body(body_text: str, heading: str) -> str | None:
     match = re.search(r"^##[ \t]+" + re.escape(heading) + r"[ \t]*$", body_text, re.MULTILINE)
     if not match:
         return None
-    rest = body_text[match.end():]
+    rest = body_text[match.end() :]
     next_heading = _HEADING_RE.search(rest)
     return rest[: next_heading.start()] if next_heading else rest
 
@@ -99,14 +99,11 @@ def check_adr_shape(body_text: str) -> list[str]:
     if missing:
         failures.append(f"missing required heading(s): {', '.join(missing)}")
     if not missing and not has_valid_status(body_text):
-        failures.append(
-            "Status section's value is not one of "
-            + "/".join(_STATUS_VALUES)
-        )
+        failures.append("Status section's value is not one of " + "/".join(_STATUS_VALUES))
     if not missing and not has_balanced_consequences(body_text):
         failures.append(
             "Consequences section must name at least one Good and one Bad "
-            "entry (or an explicit \"unknown, pending X\" standing in for "
+            'entry (or an explicit "unknown, pending X" standing in for '
             "the missing side) -- not only favorable or only unfavorable"
         )
     return failures
@@ -122,9 +119,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     try:
-        body_text = (
-            Path(args.body).read_text(encoding="utf-8") if args.body else sys.stdin.read()
-        )
+        body_text = Path(args.body).read_text(encoding="utf-8") if args.body else sys.stdin.read()
     except FileNotFoundError:
         print(f"error: body file not found: {args.body}", file=sys.stderr)
         return 1

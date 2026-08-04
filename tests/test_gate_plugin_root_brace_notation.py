@@ -45,9 +45,7 @@ def _write(root: pathlib.Path, relative: str, content: str, *, track: bool = Tru
 
 
 def _manifest(command) -> str:
-    return json.dumps(
-        {"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"command": command}]}]}}
-    )
+    return json.dumps({"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"command": command}]}]}})
 
 
 # --- the real repository -----------------------------------------------

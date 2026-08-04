@@ -85,13 +85,9 @@ def find_drift(
     # the `field not in ...`/`...[field]` lookups below with an uncaught
     # TypeError.
     if not isinstance(apm_data, dict):
-        raise ManifestReadError(
-            f"{apm_manifest}: must be a YAML mapping, got {type(apm_data).__name__}"
-        )
+        raise ManifestReadError(f"{apm_manifest}: must be a YAML mapping, got {type(apm_data).__name__}")
     if not isinstance(plugin_data, dict):
-        raise ManifestReadError(
-            f"{plugin_manifest}: must be a JSON object, got {type(plugin_data).__name__}"
-        )
+        raise ManifestReadError(f"{plugin_manifest}: must be a JSON object, got {type(plugin_data).__name__}")
 
     findings: list[tuple[str, str, str]] = []
     for field in MIRRORED_FIELDS:
@@ -113,10 +109,7 @@ def main() -> int:
         print(f"apm manifest drift: {error}")
         return 1
     if findings:
-        print(
-            "apm manifest drift: apm.yml must mirror .claude-plugin/plugin.json "
-            "(the version source of truth):"
-        )
+        print("apm manifest drift: apm.yml must mirror .claude-plugin/plugin.json (the version source of truth):")
         for field, plugin_value, apm_value in findings:
             print(f"  {field}: plugin.json={plugin_value!r} != apm.yml={apm_value!r}")
         return 1

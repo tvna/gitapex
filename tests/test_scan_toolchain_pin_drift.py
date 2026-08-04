@@ -43,7 +43,7 @@ def test_release_download_url_of_class_b_tool_is_drift(tmp_path):
     _write(
         tmp_path,
         "install.yml",
-        '      - run: curl -L https://github.com/rtk-ai/rtk/releases/download/v0.43.0/rtk.tar.gz\n',
+        "      - run: curl -L https://github.com/rtk-ai/rtk/releases/download/v0.43.0/rtk.tar.gz\n",
     )
     assert len(drift.find_drift(tmp_path)) == 1
 
@@ -85,9 +85,7 @@ def test_undecodable_workflow_file_fails_closed_even_when_it_is_the_only_file(tm
     # drift -- an inability to verify is a finding, not a silent pass, even
     # when the corrupted file is the only one that would have carried the
     # real violation.
-    (tmp_path / "bad.yml").write_bytes(
-        b"      - run: go install microsoft/waza@latest\n\xff\xfe"
-    )
+    (tmp_path / "bad.yml").write_bytes(b"      - run: go install microsoft/waza@latest\n\xff\xfe")
     findings = drift.find_drift(tmp_path)
     assert findings != []
     assert findings[0][0].endswith("bad.yml")

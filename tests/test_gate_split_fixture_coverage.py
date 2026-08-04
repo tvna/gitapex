@@ -352,8 +352,10 @@ def test_exercises_coverage_none_when_no_selection_fixtures_declared(tmp_path: p
 
 def test_exercises_coverage_fails_when_selection_fixture_missing_declaration(tmp_path: pathlib.Path):
     _write_skill_and_tasks(
-        tmp_path, "widget-polisher", _ROUTING_SKILL_MD,
-        {"a.yaml": "expected:\n  output_contains:\n    - \"x\"\n"},
+        tmp_path,
+        "widget-polisher",
+        _ROUTING_SKILL_MD,
+        {"a.yaml": 'expected:\n  output_contains:\n    - "x"\n'},
     )
     split_text = "## Assignment\n\n- **selection**: `a.yaml`.\n"
     offender = gate.check_exercises_declaration_coverage(
@@ -366,8 +368,10 @@ def test_exercises_coverage_fails_when_selection_fixture_missing_declaration(tmp
 
 def test_exercises_coverage_fails_when_label_matches_no_real_section(tmp_path: pathlib.Path):
     _write_skill_and_tasks(
-        tmp_path, "widget-polisher", _ROUTING_SKILL_MD,
-        {"a.yaml": "expected:\n  exercises:\n    - \"Nonexistent Section\"\n  output_contains:\n    - \"x\"\n"},
+        tmp_path,
+        "widget-polisher",
+        _ROUTING_SKILL_MD,
+        {"a.yaml": 'expected:\n  exercises:\n    - "Nonexistent Section"\n  output_contains:\n    - "x"\n'},
     )
     split_text = "## Assignment\n\n- **selection**: `a.yaml`.\n"
     offender = gate.check_exercises_declaration_coverage(
@@ -379,8 +383,10 @@ def test_exercises_coverage_fails_when_label_matches_no_real_section(tmp_path: p
 
 def test_exercises_coverage_passes_when_declaration_matches_real_section(tmp_path: pathlib.Path):
     _write_skill_and_tasks(
-        tmp_path, "widget-polisher", _ROUTING_SKILL_MD,
-        {"a.yaml": "expected:\n  exercises:\n    - \"Commit log\"\n  output_contains:\n    - \"x\"\n"},
+        tmp_path,
+        "widget-polisher",
+        _ROUTING_SKILL_MD,
+        {"a.yaml": 'expected:\n  exercises:\n    - "Commit log"\n  output_contains:\n    - "x"\n'},
     )
     split_text = "## Assignment\n\n- **selection**: `a.yaml`.\n"
     offender = gate.check_exercises_declaration_coverage(
@@ -391,8 +397,10 @@ def test_exercises_coverage_passes_when_declaration_matches_real_section(tmp_pat
 
 def test_exercises_coverage_matches_case_insensitively(tmp_path: pathlib.Path):
     _write_skill_and_tasks(
-        tmp_path, "widget-polisher", _ROUTING_SKILL_MD,
-        {"a.yaml": "expected:\n  exercises:\n    - \"COMMIT LOG\"\n  output_contains:\n    - \"x\"\n"},
+        tmp_path,
+        "widget-polisher",
+        _ROUTING_SKILL_MD,
+        {"a.yaml": 'expected:\n  exercises:\n    - "COMMIT LOG"\n  output_contains:\n    - "x"\n'},
     )
     split_text = "## Assignment\n\n- **selection**: `a.yaml`.\n"
     offender = gate.check_exercises_declaration_coverage(
@@ -425,7 +433,9 @@ def test_exercises_coverage_fails_when_fixture_file_missing(tmp_path: pathlib.Pa
 
 def test_exercises_coverage_fails_loudly_on_unparseable_yaml(tmp_path: pathlib.Path):
     _write_skill_and_tasks(
-        tmp_path, "widget-polisher", _ROUTING_SKILL_MD,
+        tmp_path,
+        "widget-polisher",
+        _ROUTING_SKILL_MD,
         {"a.yaml": "expected:\n  exercises: [unterminated\n"},
     )
     split_text = "## Assignment\n\n- **selection**: `a.yaml`.\n"
@@ -501,7 +511,9 @@ def test_explaining_the_work_skill_md_actually_has_section_headings():
 
 def test_main_returns_zero_when_clean(tmp_path: pathlib.Path):
     split_md = tmp_path / "split.md"
-    split_md.write_text(_split_md("| `edge.yaml` | 1.0 | 1.0 |\n| `c-selection.yaml` | 1.0 | 1.0 |\n"), encoding="utf-8")
+    split_md.write_text(
+        _split_md("| `edge.yaml` | 1.0 | 1.0 |\n| `c-selection.yaml` | 1.0 | 1.0 |\n"), encoding="utf-8"
+    )
     assert gate.main(["--split-md", str(split_md)]) == 0
 
 
@@ -526,13 +538,13 @@ def test_main_returns_zero_with_no_files():
     assert gate.main([]) == 0
 
 
-def _write_split_and_skill_md(tmp_path: pathlib.Path, skill_name: str, skill_md_body: str, fixtures: dict, selection: list[str]):
+def _write_split_and_skill_md(
+    tmp_path: pathlib.Path, skill_name: str, skill_md_body: str, fixtures: dict, selection: list[str]
+):
     skill_md = _write_skill_and_tasks(tmp_path, skill_name, skill_md_body, fixtures)
     split_md = tmp_path / "evals" / skill_name / "split.md"
     selection_yaml = ", ".join(f"`{name}`" for name in selection)
-    split_md.write_text(
-        f"## Assignment\n\n- **selection**: {selection_yaml}.\n", encoding="utf-8"
-    )
+    split_md.write_text(f"## Assignment\n\n- **selection**: {selection_yaml}.\n", encoding="utf-8")
     return skill_md, split_md
 
 
@@ -543,16 +555,16 @@ def test_main_check_c_fires_on_skill_md_only_diff(tmp_path: pathlib.Path):
     # renaming a ###-level section, with no split.md edit in the same PR)
     # must still run Check C via the sibling split.md, not silently skip
     # it because --split-md was never passed.
-    skill_md, _split_md = _write_split_and_skill_md(
-        tmp_path, "widget-polisher", _ROUTING_SKILL_MD, {}, ["a.yaml"]
-    )
+    skill_md, _split_md = _write_split_and_skill_md(tmp_path, "widget-polisher", _ROUTING_SKILL_MD, {}, ["a.yaml"])
     assert gate.main(["--skill-md", str(skill_md), "--repo-root", str(tmp_path)]) == 1
 
 
 def test_main_check_c_passes_on_skill_md_only_diff_with_valid_declaration(tmp_path: pathlib.Path):
     skill_md, _split_md = _write_split_and_skill_md(
-        tmp_path, "widget-polisher", _ROUTING_SKILL_MD,
-        {"a.yaml": "expected:\n  exercises:\n    - \"Commit log\"\n  output_contains:\n    - \"x\"\n"},
+        tmp_path,
+        "widget-polisher",
+        _ROUTING_SKILL_MD,
+        {"a.yaml": 'expected:\n  exercises:\n    - "Commit log"\n  output_contains:\n    - "x"\n'},
         ["a.yaml"],
     )
     assert gate.main(["--skill-md", str(skill_md), "--repo-root", str(tmp_path)]) == 0
@@ -562,12 +574,17 @@ def test_main_check_c_not_double_reported_when_both_sides_passed(tmp_path: pathl
     # Both --split-md and --skill-md naming the same pair (a PR touching
     # both files) must check Check C once, not report the same offender
     # twice.
-    skill_md, split_md = _write_split_and_skill_md(
-        tmp_path, "widget-polisher", _ROUTING_SKILL_MD, {}, ["a.yaml"]
+    skill_md, split_md = _write_split_and_skill_md(tmp_path, "widget-polisher", _ROUTING_SKILL_MD, {}, ["a.yaml"])
+    rc = gate.main(
+        [
+            "--split-md",
+            str(split_md),
+            "--skill-md",
+            str(skill_md),
+            "--repo-root",
+            str(tmp_path),
+        ]
     )
-    rc = gate.main([
-        "--split-md", str(split_md), "--skill-md", str(skill_md), "--repo-root", str(tmp_path),
-    ])
     assert rc == 1
     stderr = capsys.readouterr().err
     assert stderr.count("exercises-declaration gap") == 1
@@ -614,7 +631,5 @@ def test_merge_retrospective_skill_md_actually_has_a_precedence_phrase():
 def test_every_real_split_md_passes_check_c():
     assert _REAL_SPLIT_MD_FILES, "expected at least one real evals/*/split.md file"
     for path in _REAL_SPLIT_MD_FILES:
-        offender = gate.check_exercises_declaration_coverage(
-            path, path.read_text(encoding="utf-8"), REPO_ROOT
-        )
+        offender = gate.check_exercises_declaration_coverage(path, path.read_text(encoding="utf-8"), REPO_ROOT)
         assert offender is None, offender

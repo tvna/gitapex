@@ -71,22 +71,18 @@ class FlakePinParseError(RuntimeError):
     partial/malformed table."""
 
 
-_TOOL_BLOCK_RE = re.compile(
-    r'(?P<tool>\w+)\s*=\s*\{(?P<body>(?:[^{}]|\{[^{}]*\})*)\}\s*;', re.DOTALL
-)
+_TOOL_BLOCK_RE = re.compile(r"(?P<tool>\w+)\s*=\s*\{(?P<body>(?:[^{}]|\{[^{}]*\})*)\}\s*;", re.DOTALL)
 _SYSTEM_ENTRY_RE = re.compile(
     r'(?P<system>[\w-]+)\s*=\s*\{\s*asset\s*=\s*"(?P<asset>[^"]+)"\s*;'
     r'(?:\s*bin\s*=\s*"(?P<bin>[^"]+)"\s*;)?'
     r'\s*sha256\s*=\s*"(?P<sha256>[^"]+)"\s*;\s*\}\s*;'
 )
 _MK_RELEASE_RE = re.compile(
-    r'(?P<tool>\w+)\s*=\s*mkReleaseBinary\s+pkgs\s*\{(?P<body>(?:[^{}]|\{[^{}]*\})*)\};',
+    r"(?P<tool>\w+)\s*=\s*mkReleaseBinary\s+pkgs\s*\{(?P<body>(?:[^{}]|\{[^{}]*\})*)\};",
     re.DOTALL,
 )
 _FIELD_RE = re.compile(r'(?P<key>\w+)\s*=\s*"(?P<value>[^"]*)"\s*;')
-_GHRELEASE_CALL_RE = re.compile(
-    r'ghRelease\s+"(?P<owner>[^"]+)"\s+"(?P<repo>[^"]+)"\s+"(?P<tag>[^"]+)"'
-)
+_GHRELEASE_CALL_RE = re.compile(r'ghRelease\s+"(?P<owner>[^"]+)"\s+"(?P<repo>[^"]+)"\s+"(?P<tag>[^"]+)"')
 
 
 def _extract_balanced_block(flake_text: str, search_from: int) -> str:
@@ -118,7 +114,7 @@ def _extract_balanced_block(flake_text: str, search_from: int) -> str:
 
 
 def _extract_class_b_data(flake_text: str) -> dict[str, dict[str, ClassBSystemPin]]:
-    header = re.search(r'classBData\s*=\s*', flake_text)
+    header = re.search(r"classBData\s*=\s*", flake_text)
     if not header:
         raise FlakePinParseError("could not locate a classBData = { ... }; block in flake.nix")
     body = _extract_balanced_block(flake_text, header.end())
@@ -139,7 +135,7 @@ def _extract_class_b_data(flake_text: str) -> dict[str, dict[str, ClassBSystemPi
 
 
 def _extract_mk_class_b_meta(flake_text: str) -> dict[str, tuple[str, str, str, str, str]]:
-    header = re.search(r'mkClassB\s*=\s*pkgs:\s*\n\s*let(?P<pre>.*?)\bin\s*\n', flake_text, re.DOTALL)
+    header = re.search(r"mkClassB\s*=\s*pkgs:\s*\n\s*let(?P<pre>.*?)\bin\s*\n", flake_text, re.DOTALL)
     if not header:
         raise FlakePinParseError("could not locate an mkClassB = pkgs: ... block in flake.nix")
     body = _extract_balanced_block(flake_text, header.end())
@@ -187,7 +183,9 @@ def parse_flake_class_b_pins(flake_text: str) -> dict[str, ClassBToolSpec]:
 
 
 def load_flake_class_b_pins(flake_path: Path) -> dict[str, ClassBToolSpec]:
-    return parse_flake_class_b_pins(flake_path.read_text(encoding="utf-8"))  # exception-handler-gap: WAIVED: main()'s own try/except around this call already catches UnicodeDecodeError alongside (FlakePinParseError, OSError) -- this function itself deliberately propagates, matching parse_flake_class_b_pins's own let-it-propagate design
+    return parse_flake_class_b_pins(
+        flake_path.read_text(encoding="utf-8")
+    )  # exception-handler-gap: WAIVED: main()'s own try/except around this call already catches UnicodeDecodeError alongside (FlakePinParseError, OSError) -- this function itself deliberately propagates, matching parse_flake_class_b_pins's own let-it-propagate design
 
 
 _UNAME_SYSTEM_MAP: dict[tuple[str, str], str] = {
@@ -287,9 +285,7 @@ def verify_and_download(
     data = download_asset(url, opener=opener, sleeper=sleeper)
     actual = sha256_sri(data)
     if actual != pin.sha256_sri:
-        raise HashMismatchError(
-            f"{spec.pname}/{system}: expected {pin.sha256_sri}, got {actual} (url={url})"
-        )
+        raise HashMismatchError(f"{spec.pname}/{system}: expected {pin.sha256_sri}, got {actual} (url={url})")
     return data
 
 
@@ -318,7 +314,9 @@ def extract_binary(data: bytes, asset_name: str, bin_in_archive: str, dest: Path
             raise ExtractionError(f"{asset_name}: not a valid zip archive: {error}") from error
     else:
         try:
-            with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tf:  # exception-handler-gap: WAIVED: binary mode ("r:gz") reads archive bytes, never decodes text -- UnicodeDecodeError cannot occur here
+            with (
+                tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tf
+            ):  # exception-handler-gap: WAIVED: binary mode ("r:gz") reads archive bytes, never decodes text -- UnicodeDecodeError cannot occur here
                 # tf.extractfile raises KeyError when bin_in_archive names no
                 # member at all (verified against real tarfile semantics --
                 # this differs from the None-return path below); it returns
@@ -439,7 +437,9 @@ def extract_wrapper_dir(data: bytes, asset_name: str, bin_in_archive: str, libex
             raise ExtractionError(f"{asset_name}: not a valid zip archive: {error}") from error
     else:
         try:
-            with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tf:  # exception-handler-gap: WAIVED: binary mode ("r:gz") reads archive bytes, never decodes text -- UnicodeDecodeError cannot occur here
+            with (
+                tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tf
+            ):  # exception-handler-gap: WAIVED: binary mode ("r:gz") reads archive bytes, never decodes text -- UnicodeDecodeError cannot occur here
                 top_dir_name = _validate_top_level_dir(tf.getnames(), asset_name, libexec_dir)
                 # No noqa needed: ruff recognizes filter="data" itself as
                 # resolving S202 for tarfile (confirmed empirically -- adding
@@ -500,7 +500,10 @@ def _read_receipt(cache_root: Path, pname: str) -> InstallReceipt | None:
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
         return InstallReceipt(
-            pname=raw["pname"], version=raw["version"], sha256_sri=raw["sha256_sri"], asset=raw["asset"],
+            pname=raw["pname"],
+            version=raw["version"],
+            sha256_sri=raw["sha256_sri"],
+            asset=raw["asset"],
             installed_sha256=raw["installed_sha256"],
         )
     # KeyError also covers an old receipt written before installed_sha256
@@ -723,11 +726,16 @@ def provision_tool(
     _write_receipt(
         cache_root,
         InstallReceipt(
-            pname=spec.pname, version=spec.version, sha256_sri=pin.sha256_sri, asset=pin.asset,
+            pname=spec.pname,
+            version=spec.version,
+            sha256_sri=pin.sha256_sri,
+            asset=pin.asset,
             installed_sha256=installed_sha256,
         ),
     )
-    return ProvisionResult(pname=spec.pname, status="installed", version_output=_sanitize_for_display(proc.stdout.strip()))
+    return ProvisionResult(
+        pname=spec.pname, status="installed", version_output=_sanitize_for_display(proc.stdout.strip())
+    )
 
 
 def provision_all(
@@ -774,7 +782,9 @@ def run_apm_install(
     runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
 ) -> subprocess.CompletedProcess[str]:
     if not (project_dir / "apm.yml").exists():
-        raise FileNotFoundError(f"{project_dir}/apm.yml not found -- refusing to run apm install outside a gitapex checkout")
+        raise FileNotFoundError(
+            f"{project_dir}/apm.yml not found -- refusing to run apm install outside a gitapex checkout"
+        )
     # No suppression comment needed here (confirmed empirically, same as
     # provision_tool's own runner call above): ruff's S603 (subprocess call:
     # check for untrusted input) matches direct calls to subprocess.run/
@@ -882,7 +892,9 @@ def write_env_file(env_file: Path | None, cache_root: Path) -> None:
     if env_file is None:
         return
     export_line = f'export PATH="{cache_root / "bin"}:$PATH"\n'
-    existing = env_file.read_text(encoding="utf-8") if env_file.exists() else ""  # exception-handler-gap: WAIVED: main()'s own try/except around this call already catches (OSError, UnicodeDecodeError) -- this function itself deliberately propagates
+    existing = (
+        env_file.read_text(encoding="utf-8") if env_file.exists() else ""
+    )  # exception-handler-gap: WAIVED: main()'s own try/except around this call already catches (OSError, UnicodeDecodeError) -- this function itself deliberately propagates
     if export_line in existing:
         return
     with env_file.open("a", encoding="utf-8") as handle:
@@ -993,7 +1005,9 @@ def main(argv: list[str] | None = None) -> int:
                 failures += 1
                 continue
             try:
-                proc = subprocess.run([str(bin_path), "--version"], capture_output=True, text=True, timeout=30, check=False)  # noqa: S603 -- bin_path is our own cache-root path, not attacker input
+                proc = subprocess.run(  # noqa: S603 -- bin_path is our own cache-root path, not attacker input
+                    [str(bin_path), "--version"], capture_output=True, text=True, timeout=30, check=False
+                )
             except (subprocess.SubprocessError, OSError) as error:
                 print(f"FAIL: {pname}: {error}")
                 failures += 1
@@ -1012,7 +1026,9 @@ def main(argv: list[str] | None = None) -> int:
             print(f"FAIL: {pname}: {result}", file=sys.stderr)
             failures += 1
         else:
-            print(f"{result.status.upper()}: {pname}" + (f" ({result.version_output})" if result.version_output else ""))
+            print(
+                f"{result.status.upper()}: {pname}" + (f" ({result.version_output})" if result.version_output else "")
+            )
 
     try:
         write_env_file(args.env_file, cache_root)

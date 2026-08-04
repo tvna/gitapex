@@ -55,7 +55,7 @@ def http_error(code: int, body: str = "") -> urllib.error.HTTPError:
 def test_dedup_query_matches_creation_identity_predicate():
     query = pmr.dedup_query("tvna", "gitapex", 314)
     assert query == (
-        'repo:tvna/gitapex type:issue in:title '
+        "repo:tvna/gitapex type:issue in:title "
         '"chore(retrospective): merge retrospective for PR #314" '
         "label:retrospective"
     )
@@ -82,9 +82,7 @@ def test_dedup_query_and_open_retro_issue_title_cannot_diverge():
         captured["payload"] = json.loads(request.data.decode())
         return Response(201, json.dumps({"number": 99}))
 
-    pmr.open_retro_issue(
-        "tvna", "gitapex", 314, "t", "https://github.com/tvna/gitapex/pull/314", "tok", opener=opener
-    )
+    pmr.open_retro_issue("tvna", "gitapex", 314, "t", "https://github.com/tvna/gitapex/pull/314", "tok", opener=opener)
     created_title = captured["payload"]["title"]
     assert f'"{created_title}"' in pmr.dedup_query("tvna", "gitapex", 314)
 
@@ -122,9 +120,7 @@ def test_find_existing_retro_issue_retries_5xx_then_succeeds():
             raise response
         return response
 
-    result = pmr.find_existing_retro_issue(
-        "tvna", "gitapex", 314, "tok", opener=opener, sleeper=sleeps.append
-    )
+    result = pmr.find_existing_retro_issue("tvna", "gitapex", 314, "tok", opener=opener, sleeper=sleeps.append)
     assert result is None
     assert sleeps == [5]
 
@@ -146,9 +142,7 @@ def test_find_existing_retro_issue_raises_after_repeated_network_failure():
         raise urllib.error.URLError("boom")
 
     with pytest.raises(pmr.GitHubApiError):
-        pmr.find_existing_retro_issue(
-            "tvna", "gitapex", 314, "tok", opener=opener, sleeper=lambda _: None
-        )
+        pmr.find_existing_retro_issue("tvna", "gitapex", 314, "tok", opener=opener, sleeper=lambda _: None)
     assert calls == 3
 
 
@@ -163,9 +157,7 @@ def test_find_existing_retro_issue_retries_incomplete_body_read_then_succeeds():
     def opener(request: urllib.request.Request) -> Response:
         return responses.pop(0)
 
-    result = pmr.find_existing_retro_issue(
-        "tvna", "gitapex", 314, "tok", opener=opener, sleeper=sleeps.append
-    )
+    result = pmr.find_existing_retro_issue("tvna", "gitapex", 314, "tok", opener=opener, sleeper=sleeps.append)
     assert result is None
     assert sleeps == [5]
 
@@ -222,9 +214,7 @@ def test_open_retro_issue_raises_on_api_error():
         raise http_error(500, "server error")
 
     with pytest.raises(pmr.GitHubApiError):
-        pmr.open_retro_issue(
-            "tvna", "gitapex", 314, "t", "u", "tok", opener=opener, sleeper=lambda _: None
-        )
+        pmr.open_retro_issue("tvna", "gitapex", 314, "t", "u", "tok", opener=opener, sleeper=lambda _: None)
 
 
 def test_open_retro_issue_does_not_retry_the_non_idempotent_post():
@@ -239,9 +229,7 @@ def test_open_retro_issue_does_not_retry_the_non_idempotent_post():
         raise http_error(503, "server error")
 
     with pytest.raises(pmr.GitHubApiError):
-        pmr.open_retro_issue(
-            "tvna", "gitapex", 314, "t", "u", "tok", opener=opener, sleeper=lambda _: None
-        )
+        pmr.open_retro_issue("tvna", "gitapex", 314, "t", "u", "tok", opener=opener, sleeper=lambda _: None)
     assert calls == 1
 
 
@@ -382,9 +370,7 @@ def test_workflow_has_no_merge_capable_step():
     offenders = []
     for job_name, job in (workflow.get("jobs") or {}).items():
         for step in job.get("steps") or []:
-            haystack = " ".join(
-                str(step.get(key, "")) for key in ("run", "uses", "with")
-            ).lower()
+            haystack = " ".join(str(step.get(key, "")) for key in ("run", "uses", "with")).lower()
             hits = [marker for marker in _MERGE_CAPABLE_MARKERS if marker in haystack]
             if hits:
                 offenders.append((job_name, step.get("name", "<unnamed step>"), hits))

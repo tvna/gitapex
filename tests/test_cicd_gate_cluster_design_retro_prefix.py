@@ -20,13 +20,7 @@ import re
 import post_merge_retro as pmr
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
-DESIGN_DOC = (
-    REPO_ROOT
-    / "docs"
-    / "superpowers"
-    / "specs"
-    / "2026-07-18-cicd-gate-cluster-design.md"
-)
+DESIGN_DOC = REPO_ROOT / "docs" / "superpowers" / "specs" / "2026-07-18-cicd-gate-cluster-design.md"
 
 
 def _real_prefix() -> str:
@@ -72,8 +66,7 @@ def test_toml_sample_title_prefixes_matches_real_retro_title():
     text = DESIGN_DOC.read_text(encoding="utf-8")
     match = re.search(r'title_prefixes\s*=\s*\["([^"]+)"\]', text)
     assert match is not None, (
-        f"{DESIGN_DOC} no longer has a `title_prefixes = [...]` sample "
-        "line in its retro-identity.toml block."
+        f"{DESIGN_DOC} no longer has a `title_prefixes = [...]` sample line in its retro-identity.toml block."
     )
     assert match.group(1) == _real_prefix(), (
         f"{DESIGN_DOC}'s retro-identity.toml sample states "

@@ -36,11 +36,7 @@ TRANSCRIPT_ONE_AGENT_DISPATCH = (
     + _result_line()
 )
 
-TRANSCRIPT_NO_DISPATCH = (
-    _system_line()
-    + _assistant_text("Here is my inline review: looks fine.")
-    + _result_line()
-)
+TRANSCRIPT_NO_DISPATCH = _system_line() + _assistant_text("Here is my inline review: looks fine.") + _result_line()
 
 TRANSCRIPT_TWO_AGENT_DISPATCHES = (
     _system_line()
@@ -97,7 +93,7 @@ def test_iter_tool_use_blocks_raises_on_malformed_json(tmp_path: Path):
 
 def test_iter_tool_use_blocks_raises_on_non_object_line(tmp_path: Path):
     p = tmp_path / "t.jsonl"
-    p.write_text('[1, 2, 3]\n', encoding="utf-8")
+    p.write_text("[1, 2, 3]\n", encoding="utf-8")
     with pytest.raises(ValueError, match="expected a JSON object"):
         list(cdt.iter_tool_use_blocks(p))
 
@@ -124,9 +120,7 @@ def test_check_transcript_non_utf8_transcript_raises_value_error_subclass(tmp_pa
     # catch would expect, since UnicodeDecodeError is one of its subclasses.
     p = tmp_path / "t.jsonl"
     p.write_bytes(
-        _line({"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "Agent"}]}}).encode(
-            "utf-8"
-        )
+        _line({"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "Agent"}]}}).encode("utf-8")
         + b"not json and a bad byte \xff\xfe\n"
     )
     with pytest.raises(ValueError):
@@ -148,16 +142,20 @@ def test_iter_tool_use_blocks_tolerates_mixed_valid_and_invalid_content_entries(
     # distinct from the whole-line/whole-message-shape tests above).
     p = tmp_path / "t.jsonl"
     p.write_text(
-        _line({
-            "type": "assistant",
-            "message": {"content": [
-                {"type": "text", "text": "thinking out loud"},
-                "not a dict",
-                123,
-                None,
-                {"type": "tool_use", "name": "Agent", "id": "toolu_1", "input": {}},
-            ]},
-        }),
+        _line(
+            {
+                "type": "assistant",
+                "message": {
+                    "content": [
+                        {"type": "text", "text": "thinking out loud"},
+                        "not a dict",
+                        123,
+                        None,
+                        {"type": "tool_use", "name": "Agent", "id": "toolu_1", "input": {}},
+                    ]
+                },
+            }
+        ),
         encoding="utf-8",
     )
     blocks = list(cdt.iter_tool_use_blocks(p))
@@ -172,8 +170,11 @@ def test_iter_tool_use_blocks_yields_original_dict_with_extra_fields_intact(tmp_
     # pydantic model or a re-serialized copy.
     p = tmp_path / "t.jsonl"
     block = {
-        "type": "tool_use", "name": "Agent", "id": "toolu_9",
-        "input": {"prompt": "go"}, "cache_control": {"type": "ephemeral"},
+        "type": "tool_use",
+        "name": "Agent",
+        "id": "toolu_9",
+        "input": {"prompt": "go"},
+        "cache_control": {"type": "ephemeral"},
     }
     p.write_text(_line({"message": {"content": [block]}}), encoding="utf-8")
     blocks = list(cdt.iter_tool_use_blocks(p))
@@ -190,9 +191,7 @@ def test_tool_use_block_accepts_minimal_shape():
 def test_tool_use_block_accepts_extra_unknown_fields():
     # extra="ignore" (pydantic's default) must not reject a tool_use block
     # carrying fields this model never declares.
-    cdt.ToolUseBlock.model_validate(
-        {"type": "tool_use", "name": "Agent", "input": {}, "some_future_field": 1}
-    )
+    cdt.ToolUseBlock.model_validate({"type": "tool_use", "name": "Agent", "input": {}, "some_future_field": 1})
 
 
 def test_tool_use_block_rejects_wrong_type_value():
@@ -236,9 +235,7 @@ def test_stream_event_defaults_message_to_none_when_absent():
 
 
 def test_stream_event_parses_nested_tool_use_content():
-    event = cdt.StreamEvent.model_validate(
-        {"message": {"content": [{"type": "tool_use", "name": "Agent"}]}}
-    )
+    event = cdt.StreamEvent.model_validate({"message": {"content": [{"type": "tool_use", "name": "Agent"}]}})
     assert event.message is not None
     assert event.message.content == [{"type": "tool_use", "name": "Agent"}]
 
@@ -268,6 +265,7 @@ def test_count_dispatches_bash_pattern_counts_nested_claude_p(tmp_path: Path):
     p.write_text(TRANSCRIPT_NESTED_CLAUDE_P_VIA_BASH, encoding="utf-8")
     blocks = list(cdt.iter_tool_use_blocks(p))
     import re
+
     pattern = re.compile(r"claude\s+(-p|--print)\b")
     assert cdt.count_dispatches(blocks, ["Agent"], pattern) == 1
     # Without the bash pattern, the same transcript counts zero -- this is
@@ -278,6 +276,7 @@ def test_count_dispatches_bash_pattern_counts_nested_claude_p(tmp_path: Path):
 def test_count_dispatches_bash_pattern_ignores_non_matching_command():
     blocks = [{"name": "Bash", "input": {"command": "ls -la"}}]
     import re
+
     pattern = re.compile(r"claude\s+(-p|--print)\b")
     assert cdt.count_dispatches(blocks, ["Agent"], pattern) == 0
 
@@ -287,6 +286,7 @@ def test_count_dispatches_bash_pattern_tolerates_non_dict_input():
     # malformed/unexpected transcript shape) must not crash count_dispatches
     # -- it simply cannot match the bash pattern, not an AttributeError.
     import re
+
     pattern = re.compile(r"claude\s+(-p|--print)\b")
     blocks = [
         {"name": "Bash", "input": ["not", "a", "dict"]},
@@ -300,6 +300,7 @@ def test_count_dispatches_bash_pattern_tolerates_non_dict_input():
 def test_count_dispatches_bash_pattern_does_not_double_count_agent():
     blocks = [{"name": "Agent"}]
     import re
+
     pattern = re.compile(r"claude\s+(-p|--print)\b")
     assert cdt.count_dispatches(blocks, ["Agent"], pattern) == 1
 
@@ -312,6 +313,7 @@ def test_check_transcript_end_to_end(tmp_path: Path):
 
 def test_count_dispatches_custom_bash_tool_name():
     import re
+
     pattern = re.compile(r"claude\s+(-p|--print)\b")
     blocks = [{"name": "Shell", "input": {"command": "claude -p 'x'"}}]
     # Default bash_tool_name="Bash" does not match a "Shell"-named block.
@@ -341,10 +343,17 @@ def test_cli_check_transcript_exit_1_when_not_confirmed(tmp_path: Path, capsys):
 def test_cli_check_transcript_respects_min_dispatches(tmp_path: Path):
     p = tmp_path / "t.jsonl"
     p.write_text(TRANSCRIPT_ONE_AGENT_DISPATCH, encoding="utf-8")
-    rc = cdt.main([
-        "check-transcript", "--transcript", str(p),
-        "--dispatch-tool-name", "Agent", "--min-dispatches", "2",
-    ])
+    rc = cdt.main(
+        [
+            "check-transcript",
+            "--transcript",
+            str(p),
+            "--dispatch-tool-name",
+            "Agent",
+            "--min-dispatches",
+            "2",
+        ]
+    )
     assert rc == 1
 
 
@@ -379,32 +388,51 @@ def test_cli_check_transcript_non_utf8_file_exit_2(tmp_path: Path, capsys):
 def test_cli_check_transcript_multiple_dispatch_tool_names(tmp_path: Path):
     p = tmp_path / "t.jsonl"
     p.write_text(TRANSCRIPT_UNRELATED_TOOLS_ONLY, encoding="utf-8")
-    rc = cdt.main([
-        "check-transcript", "--transcript", str(p),
-        "--dispatch-tool-name", "Agent", "--dispatch-tool-name", "Task",
-    ])
+    rc = cdt.main(
+        [
+            "check-transcript",
+            "--transcript",
+            str(p),
+            "--dispatch-tool-name",
+            "Agent",
+            "--dispatch-tool-name",
+            "Task",
+        ]
+    )
     assert rc == 1  # neither Read nor Bash(ls) counts
 
 
 def test_cli_check_transcript_bash_pattern_flag(tmp_path: Path):
     p = tmp_path / "t.jsonl"
     p.write_text(TRANSCRIPT_NESTED_CLAUDE_P_VIA_BASH, encoding="utf-8")
-    rc = cdt.main([
-        "check-transcript", "--transcript", str(p),
-        "--dispatch-tool-name", "Agent",
-        "--dispatch-bash-pattern", r"claude\s+(-p|--print)\b",
-    ])
+    rc = cdt.main(
+        [
+            "check-transcript",
+            "--transcript",
+            str(p),
+            "--dispatch-tool-name",
+            "Agent",
+            "--dispatch-bash-pattern",
+            r"claude\s+(-p|--print)\b",
+        ]
+    )
     assert rc == 0
 
 
 def test_cli_check_transcript_invalid_bash_pattern_exit_2(tmp_path: Path, capsys):
     p = tmp_path / "t.jsonl"
     p.write_text(TRANSCRIPT_NO_DISPATCH, encoding="utf-8")
-    rc = cdt.main([
-        "check-transcript", "--transcript", str(p),
-        "--dispatch-tool-name", "Agent",
-        "--dispatch-bash-pattern", "(unclosed",
-    ])
+    rc = cdt.main(
+        [
+            "check-transcript",
+            "--transcript",
+            str(p),
+            "--dispatch-tool-name",
+            "Agent",
+            "--dispatch-bash-pattern",
+            "(unclosed",
+        ]
+    )
     assert rc == 2
     assert "invalid --dispatch-bash-pattern" in capsys.readouterr().err
 
@@ -412,12 +440,19 @@ def test_cli_check_transcript_invalid_bash_pattern_exit_2(tmp_path: Path, capsys
 def test_cli_run_invalid_bash_pattern_exit_2(tmp_path: Path):
     prompt_file = tmp_path / "prompt.txt"
     prompt_file.write_text("dispatch", encoding="utf-8")
-    rc = cdt.main([
-        "run", "--prompt-file", str(prompt_file),
-        "--transcript-out", str(tmp_path / "out.jsonl"),
-        "--dispatch-tool-name", "Agent",
-        "--dispatch-bash-pattern", "(unclosed",
-    ])
+    rc = cdt.main(
+        [
+            "run",
+            "--prompt-file",
+            str(prompt_file),
+            "--transcript-out",
+            str(tmp_path / "out.jsonl"),
+            "--dispatch-tool-name",
+            "Agent",
+            "--dispatch-bash-pattern",
+            "(unclosed",
+        ]
+    )
     assert rc == 2
 
 
@@ -481,7 +516,8 @@ def test_build_isolated_home_does_not_strip_nested_same_named_dir(tmp_path: Path
 
     assert not list((isolated_home / ".claude" / "tasks").iterdir())
     assert (isolated_home / ".claude" / "skills" / "some-skill" / "tasks" / "fixture.yaml").read_text(
-        encoding="utf-8") == "id: x"
+        encoding="utf-8"
+    ) == "id: x"
 
 
 # ---- run_live_dispatch (argv construction only, no real subprocess) --------
@@ -507,8 +543,10 @@ def test_run_live_dispatch_constructs_expected_argv(tmp_path: Path, monkeypatch)
     transcript_out = tmp_path / "out.jsonl"
 
     result = cdt.run_live_dispatch(
-        "review this", transcript_out,
-        isolated_cwd=isolated_cwd, isolated_home=isolated_home,
+        "review this",
+        transcript_out,
+        isolated_cwd=isolated_cwd,
+        isolated_home=isolated_home,
         allowed_tools="Agent",
         plugin_dir=tmp_path / "plugin",
     )
@@ -541,9 +579,12 @@ def test_run_live_dispatch_includes_add_dir(tmp_path: Path, monkeypatch):
     isolated_home.mkdir()
 
     cdt.run_live_dispatch(
-        "review this", tmp_path / "out.jsonl",
-        isolated_cwd=isolated_cwd, isolated_home=isolated_home,
-        allowed_tools="Agent", add_dir=tmp_path / "mounted-repo",
+        "review this",
+        tmp_path / "out.jsonl",
+        isolated_cwd=isolated_cwd,
+        isolated_home=isolated_home,
+        allowed_tools="Agent",
+        add_dir=tmp_path / "mounted-repo",
     )
     argv = captured["argv"]
     assert "--add-dir" in argv
@@ -568,12 +609,17 @@ def test_cli_run_end_to_end_mocked(tmp_path: Path, monkeypatch):
 
     monkeypatch.setattr(cdt.subprocess, "run", fake_run)
 
-    rc = cdt.main([
-        "run",
-        "--prompt-file", str(prompt_file),
-        "--transcript-out", str(transcript_out),
-        "--dispatch-tool-name", "Agent",
-    ])
+    rc = cdt.main(
+        [
+            "run",
+            "--prompt-file",
+            str(prompt_file),
+            "--transcript-out",
+            str(transcript_out),
+            "--dispatch-tool-name",
+            "Agent",
+        ]
+    )
     assert rc == 0
     assert transcript_out.read_text(encoding="utf-8") == TRANSCRIPT_ONE_AGENT_DISPATCH
 
@@ -592,10 +638,17 @@ def test_cli_run_reports_claude_failure(tmp_path: Path, monkeypatch):
 
     monkeypatch.setattr(cdt.subprocess, "run", fake_run)
 
-    rc = cdt.main([
-        "run", "--prompt-file", str(prompt_file), "--transcript-out", str(transcript_out),
-        "--dispatch-tool-name", "Agent",
-    ])
+    rc = cdt.main(
+        [
+            "run",
+            "--prompt-file",
+            str(prompt_file),
+            "--transcript-out",
+            str(transcript_out),
+            "--dispatch-tool-name",
+            "Agent",
+        ]
+    )
     assert rc == 2
 
 
@@ -611,11 +664,17 @@ def test_cli_run_catches_missing_claude_binary(tmp_path: Path, monkeypatch):
 
     monkeypatch.setattr(cdt.subprocess, "run", fake_run)
 
-    rc = cdt.main([
-        "run", "--prompt-file", str(prompt_file),
-        "--transcript-out", str(tmp_path / "out.jsonl"),
-        "--dispatch-tool-name", "Agent",
-    ])
+    rc = cdt.main(
+        [
+            "run",
+            "--prompt-file",
+            str(prompt_file),
+            "--transcript-out",
+            str(tmp_path / "out.jsonl"),
+            "--dispatch-tool-name",
+            "Agent",
+        ]
+    )
     assert rc == 2
 
 
@@ -631,11 +690,19 @@ def test_cli_run_catches_timeout(tmp_path: Path, monkeypatch, capsys):
 
     monkeypatch.setattr(cdt.subprocess, "run", fake_run)
 
-    rc = cdt.main([
-        "run", "--prompt-file", str(prompt_file),
-        "--transcript-out", str(tmp_path / "out.jsonl"),
-        "--dispatch-tool-name", "Agent", "--timeout", "5",
-    ])
+    rc = cdt.main(
+        [
+            "run",
+            "--prompt-file",
+            str(prompt_file),
+            "--transcript-out",
+            str(tmp_path / "out.jsonl"),
+            "--dispatch-tool-name",
+            "Agent",
+            "--timeout",
+            "5",
+        ]
+    )
     assert rc == 2
     assert "did not finish within 5" in capsys.readouterr().err
 
@@ -656,12 +723,19 @@ def test_cli_run_resolves_relative_isolated_home(tmp_path: Path, monkeypatch):
     prompt_file.write_text("dispatch", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
 
-    rc = cdt.main([
-        "run", "--prompt-file", "prompt.txt",
-        "--transcript-out", str(tmp_path / "out.jsonl"),
-        "--dispatch-tool-name", "Agent",
-        "--isolated-home", "reused-home",  # relative
-    ])
+    rc = cdt.main(
+        [
+            "run",
+            "--prompt-file",
+            "prompt.txt",
+            "--transcript-out",
+            str(tmp_path / "out.jsonl"),
+            "--dispatch-tool-name",
+            "Agent",
+            "--isolated-home",
+            "reused-home",  # relative
+        ]
+    )
     assert rc == 0
     # The child process runs with a different cwd (the tempdir isolated_cwd),
     # so a relative --isolated-home must be resolved against *this* process's
@@ -685,13 +759,21 @@ def test_cli_run_auto_appends_bash_tool_when_dispatch_bash_pattern_given(tmp_pat
     prompt_file = tmp_path / "prompt.txt"
     prompt_file.write_text("dispatch", encoding="utf-8")
 
-    cdt.main([
-        "run", "--prompt-file", str(prompt_file),
-        "--transcript-out", str(tmp_path / "out.jsonl"),
-        "--dispatch-tool-name", "Agent",
-        "--dispatch-bash-pattern", r"claude\s+-p",
-        "--allowed-tools", "Agent",
-    ])
+    cdt.main(
+        [
+            "run",
+            "--prompt-file",
+            str(prompt_file),
+            "--transcript-out",
+            str(tmp_path / "out.jsonl"),
+            "--dispatch-tool-name",
+            "Agent",
+            "--dispatch-bash-pattern",
+            r"claude\s+-p",
+            "--allowed-tools",
+            "Agent",
+        ]
+    )
     allowed_tools_index = captured["argv"].index("--allowedTools") + 1
     assert captured["argv"][allowed_tools_index] == "Agent Bash"
 
@@ -712,13 +794,21 @@ def test_cli_run_does_not_duplicate_already_allowed_bash(tmp_path: Path, monkeyp
     prompt_file = tmp_path / "prompt.txt"
     prompt_file.write_text("dispatch", encoding="utf-8")
 
-    cdt.main([
-        "run", "--prompt-file", str(prompt_file),
-        "--transcript-out", str(tmp_path / "out.jsonl"),
-        "--dispatch-tool-name", "Agent",
-        "--dispatch-bash-pattern", r"claude\s+-p",
-        "--allowed-tools", "Agent Bash",
-    ])
+    cdt.main(
+        [
+            "run",
+            "--prompt-file",
+            str(prompt_file),
+            "--transcript-out",
+            str(tmp_path / "out.jsonl"),
+            "--dispatch-tool-name",
+            "Agent",
+            "--dispatch-bash-pattern",
+            r"claude\s+-p",
+            "--allowed-tools",
+            "Agent Bash",
+        ]
+    )
     allowed_tools_index = captured["argv"].index("--allowedTools") + 1
     assert captured["argv"][allowed_tools_index] == "Agent Bash"
 
@@ -739,12 +829,19 @@ def test_cli_run_does_not_append_bash_without_dispatch_bash_pattern(tmp_path: Pa
     prompt_file = tmp_path / "prompt.txt"
     prompt_file.write_text("dispatch", encoding="utf-8")
 
-    cdt.main([
-        "run", "--prompt-file", str(prompt_file),
-        "--transcript-out", str(tmp_path / "out.jsonl"),
-        "--dispatch-tool-name", "Agent",
-        "--allowed-tools", "Agent",
-    ])
+    cdt.main(
+        [
+            "run",
+            "--prompt-file",
+            str(prompt_file),
+            "--transcript-out",
+            str(tmp_path / "out.jsonl"),
+            "--dispatch-tool-name",
+            "Agent",
+            "--allowed-tools",
+            "Agent",
+        ]
+    )
     allowed_tools_index = captured["argv"].index("--allowedTools") + 1
     assert captured["argv"][allowed_tools_index] == "Agent"
 
@@ -756,37 +853,63 @@ def test_cli_check_transcript_empty_bash_pattern_is_not_treated_as_absent(tmp_pa
     # --dispatch-bash-pattern "" must still compile and be used.
     p = tmp_path / "t.jsonl"
     p.write_text(TRANSCRIPT_NESTED_CLAUDE_P_VIA_BASH, encoding="utf-8")
-    rc = cdt.main([
-        "check-transcript", "--transcript", str(p),
-        "--dispatch-tool-name", "Agent", "--dispatch-bash-pattern", "",
-    ])
+    rc = cdt.main(
+        [
+            "check-transcript",
+            "--transcript",
+            str(p),
+            "--dispatch-tool-name",
+            "Agent",
+            "--dispatch-bash-pattern",
+            "",
+        ]
+    )
     assert rc == 0
 
 
 def test_cli_check_transcript_custom_bash_tool_name(tmp_path: Path):
     p = tmp_path / "t.jsonl"
-    p.write_text(_line({
-        "type": "assistant",
-        "message": {"content": [
-            {"type": "tool_use", "name": "Shell", "id": "t1",
-             "input": {"command": "claude -p 'x'"}},
-        ]},
-    }), encoding="utf-8")
-    rc = cdt.main([
-        "check-transcript", "--transcript", str(p),
-        "--dispatch-tool-name", "Agent",
-        "--dispatch-bash-pattern", r"claude\s+-p",
-        "--bash-tool-name", "Shell",
-    ])
+    p.write_text(
+        _line(
+            {
+                "type": "assistant",
+                "message": {
+                    "content": [
+                        {"type": "tool_use", "name": "Shell", "id": "t1", "input": {"command": "claude -p 'x'"}},
+                    ]
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    rc = cdt.main(
+        [
+            "check-transcript",
+            "--transcript",
+            str(p),
+            "--dispatch-tool-name",
+            "Agent",
+            "--dispatch-bash-pattern",
+            r"claude\s+-p",
+            "--bash-tool-name",
+            "Shell",
+        ]
+    )
     assert rc == 0
 
 
 def test_cli_run_missing_prompt_file(tmp_path: Path):
-    rc = cdt.main([
-        "run", "--prompt-file", str(tmp_path / "missing.txt"),
-        "--transcript-out", str(tmp_path / "out.jsonl"),
-        "--dispatch-tool-name", "Agent",
-    ])
+    rc = cdt.main(
+        [
+            "run",
+            "--prompt-file",
+            str(tmp_path / "missing.txt"),
+            "--transcript-out",
+            str(tmp_path / "out.jsonl"),
+            "--dispatch-tool-name",
+            "Agent",
+        ]
+    )
     assert rc == 2
 
 
@@ -797,11 +920,17 @@ def test_cli_run_non_utf8_prompt_file_exit_2(tmp_path: Path, capsys):
     # matching --prompt-file's own "not found" convention just above.
     p = tmp_path / "prompt.txt"
     p.write_bytes(b"bad byte \xff\xfe not utf-8")
-    rc = cdt.main([
-        "run", "--prompt-file", str(p),
-        "--transcript-out", str(tmp_path / "out.jsonl"),
-        "--dispatch-tool-name", "Agent",
-    ])
+    rc = cdt.main(
+        [
+            "run",
+            "--prompt-file",
+            str(p),
+            "--transcript-out",
+            str(tmp_path / "out.jsonl"),
+            "--dispatch-tool-name",
+            "Agent",
+        ]
+    )
     assert rc == 2
     err = capsys.readouterr().err
     assert "error:" in err
@@ -830,10 +959,19 @@ def test_cli_run_reuses_provided_isolated_home(tmp_path: Path, monkeypatch):
 
     monkeypatch.setattr(cdt.subprocess, "run", fake_run)
 
-    rc = cdt.main([
-        "run", "--prompt-file", str(prompt_file), "--transcript-out", str(transcript_out),
-        "--dispatch-tool-name", "Agent", "--isolated-home", str(reused_home),
-    ])
+    rc = cdt.main(
+        [
+            "run",
+            "--prompt-file",
+            str(prompt_file),
+            "--transcript-out",
+            str(transcript_out),
+            "--dispatch-tool-name",
+            "Agent",
+            "--isolated-home",
+            str(reused_home),
+        ]
+    )
     assert rc == 0
     assert captured["env"]["HOME"] == str(reused_home)
 
@@ -846,11 +984,17 @@ def test_cli_run_no_real_claude_dir_and_no_isolated_home_exit_2(tmp_path: Path, 
     prompt_file = tmp_path / "prompt.txt"
     prompt_file.write_text("dispatch", encoding="utf-8")
 
-    rc = cdt.main([
-        "run", "--prompt-file", str(prompt_file),
-        "--transcript-out", str(tmp_path / "out.jsonl"),
-        "--dispatch-tool-name", "Agent",
-    ])
+    rc = cdt.main(
+        [
+            "run",
+            "--prompt-file",
+            str(prompt_file),
+            "--transcript-out",
+            str(tmp_path / "out.jsonl"),
+            "--dispatch-tool-name",
+            "Agent",
+        ]
+    )
     assert rc == 2
 
 
@@ -869,10 +1013,17 @@ def test_cli_run_malformed_captured_transcript_exit_2(tmp_path: Path, monkeypatc
 
     monkeypatch.setattr(cdt.subprocess, "run", fake_run)
 
-    rc = cdt.main([
-        "run", "--prompt-file", str(prompt_file), "--transcript-out", str(transcript_out),
-        "--dispatch-tool-name", "Agent",
-    ])
+    rc = cdt.main(
+        [
+            "run",
+            "--prompt-file",
+            str(prompt_file),
+            "--transcript-out",
+            str(transcript_out),
+            "--dispatch-tool-name",
+            "Agent",
+        ]
+    )
     assert rc == 2
 
 
@@ -894,8 +1045,10 @@ def test_register_plugin_marketplace_raises_without_manifest(tmp_path: Path, mon
 
     with pytest.raises(FileNotFoundError, match=r"marketplace\.json"):
         cdt.register_plugin_marketplace(
-            marketplace_source, "gitapex@gitapex",
-            isolated_home=isolated_home, isolated_cwd=isolated_cwd,
+            marketplace_source,
+            "gitapex@gitapex",
+            isolated_home=isolated_home,
+            isolated_cwd=isolated_cwd,
         )
 
 
@@ -918,8 +1071,10 @@ def test_register_plugin_marketplace_succeeds_with_manifest(tmp_path: Path, monk
     monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", "should-be-unset")
 
     cdt.register_plugin_marketplace(
-        marketplace_source, "gitapex@gitapex",
-        isolated_home=isolated_home, isolated_cwd=isolated_cwd,
+        marketplace_source,
+        "gitapex@gitapex",
+        isolated_home=isolated_home,
+        isolated_cwd=isolated_cwd,
     )
 
     assert len(calls) == 2
@@ -942,8 +1097,10 @@ def test_register_plugin_marketplace_raises_on_marketplace_add_failure(tmp_path:
 
     with pytest.raises(cdt.PluginRegistrationError, match="marketplace add boom"):
         cdt.register_plugin_marketplace(
-            tmp_path / "isolated-target", "gitapex@gitapex",
-            isolated_home=tmp_path / "home", isolated_cwd=tmp_path / "cwd",
+            tmp_path / "isolated-target",
+            "gitapex@gitapex",
+            isolated_home=tmp_path / "home",
+            isolated_cwd=tmp_path / "cwd",
         )
 
 
@@ -963,8 +1120,10 @@ def test_register_plugin_marketplace_raises_on_plugin_install_failure(tmp_path: 
 
     with pytest.raises(cdt.PluginRegistrationError, match="install boom"):
         cdt.register_plugin_marketplace(
-            tmp_path / "isolated-target", "gitapex@gitapex",
-            isolated_home=tmp_path / "home", isolated_cwd=tmp_path / "cwd",
+            tmp_path / "isolated-target",
+            "gitapex@gitapex",
+            isolated_home=tmp_path / "home",
+            isolated_cwd=tmp_path / "cwd",
         )
     assert len(calls) == 2
 
@@ -988,13 +1147,21 @@ def test_cli_run_marketplace_source_without_manifest_exits_2_no_dispatch(tmp_pat
 
     monkeypatch.setattr(cdt, "run_live_dispatch", fail_if_called)
 
-    rc = cdt.main([
-        "run", "--prompt-file", str(prompt_file),
-        "--transcript-out", str(tmp_path / "out.jsonl"),
-        "--dispatch-tool-name", "Agent",
-        "--marketplace-source", str(marketplace_source),
-        "--plugin-name", "gitapex@gitapex",
-    ])
+    rc = cdt.main(
+        [
+            "run",
+            "--prompt-file",
+            str(prompt_file),
+            "--transcript-out",
+            str(tmp_path / "out.jsonl"),
+            "--dispatch-tool-name",
+            "Agent",
+            "--marketplace-source",
+            str(marketplace_source),
+            "--plugin-name",
+            "gitapex@gitapex",
+        ]
+    )
     assert rc == 2
 
 
@@ -1020,13 +1187,21 @@ def test_cli_run_marketplace_registration_failure_exits_2_no_dispatch(tmp_path: 
 
     monkeypatch.setattr(cdt, "run_live_dispatch", fail_if_called)
 
-    rc = cdt.main([
-        "run", "--prompt-file", str(prompt_file),
-        "--transcript-out", str(tmp_path / "out.jsonl"),
-        "--dispatch-tool-name", "Agent",
-        "--marketplace-source", str(marketplace_source),
-        "--plugin-name", "gitapex@gitapex",
-    ])
+    rc = cdt.main(
+        [
+            "run",
+            "--prompt-file",
+            str(prompt_file),
+            "--transcript-out",
+            str(tmp_path / "out.jsonl"),
+            "--dispatch-tool-name",
+            "Agent",
+            "--marketplace-source",
+            str(marketplace_source),
+            "--plugin-name",
+            "gitapex@gitapex",
+        ]
+    )
     assert rc == 2
 
 
@@ -1047,13 +1222,21 @@ def test_cli_run_marketplace_registration_missing_claude_binary_exits_2(tmp_path
 
     monkeypatch.setattr(cdt.subprocess, "run", fake_run)
 
-    rc = cdt.main([
-        "run", "--prompt-file", str(prompt_file),
-        "--transcript-out", str(tmp_path / "out.jsonl"),
-        "--dispatch-tool-name", "Agent",
-        "--marketplace-source", str(marketplace_source),
-        "--plugin-name", "gitapex@gitapex",
-    ])
+    rc = cdt.main(
+        [
+            "run",
+            "--prompt-file",
+            str(prompt_file),
+            "--transcript-out",
+            str(tmp_path / "out.jsonl"),
+            "--dispatch-tool-name",
+            "Agent",
+            "--marketplace-source",
+            str(marketplace_source),
+            "--plugin-name",
+            "gitapex@gitapex",
+        ]
+    )
     assert rc == 2
 
 
@@ -1074,13 +1257,21 @@ def test_cli_run_marketplace_registration_timeout_exits_2(tmp_path: Path, monkey
 
     monkeypatch.setattr(cdt.subprocess, "run", fake_run)
 
-    rc = cdt.main([
-        "run", "--prompt-file", str(prompt_file),
-        "--transcript-out", str(tmp_path / "out.jsonl"),
-        "--dispatch-tool-name", "Agent",
-        "--marketplace-source", str(marketplace_source),
-        "--plugin-name", "gitapex@gitapex",
-    ])
+    rc = cdt.main(
+        [
+            "run",
+            "--prompt-file",
+            str(prompt_file),
+            "--transcript-out",
+            str(tmp_path / "out.jsonl"),
+            "--dispatch-tool-name",
+            "Agent",
+            "--marketplace-source",
+            str(marketplace_source),
+            "--plugin-name",
+            "gitapex@gitapex",
+        ]
+    )
     assert rc == 2
 
 
@@ -1088,12 +1279,19 @@ def test_cli_run_marketplace_flags_must_be_given_together(tmp_path: Path, monkey
     prompt_file = tmp_path / "prompt.txt"
     prompt_file.write_text("dispatch", encoding="utf-8")
 
-    rc = cdt.main([
-        "run", "--prompt-file", str(prompt_file),
-        "--transcript-out", str(tmp_path / "out.jsonl"),
-        "--dispatch-tool-name", "Agent",
-        "--marketplace-source", str(tmp_path / "isolated-target"),
-    ])
+    rc = cdt.main(
+        [
+            "run",
+            "--prompt-file",
+            str(prompt_file),
+            "--transcript-out",
+            str(tmp_path / "out.jsonl"),
+            "--dispatch-tool-name",
+            "Agent",
+            "--marketplace-source",
+            str(tmp_path / "isolated-target"),
+        ]
+    )
     assert rc == 2
 
 
@@ -1119,13 +1317,21 @@ def test_cli_run_marketplace_empty_string_flags_do_not_bypass_gate(tmp_path: Pat
 
     monkeypatch.setattr(cdt, "run_live_dispatch", fail_if_dispatched)
 
-    rc = cdt.main([
-        "run", "--prompt-file", str(prompt_file),
-        "--transcript-out", str(tmp_path / "out.jsonl"),
-        "--dispatch-tool-name", "Agent",
-        "--marketplace-source", "",
-        "--plugin-name", "",
-    ])
+    rc = cdt.main(
+        [
+            "run",
+            "--prompt-file",
+            str(prompt_file),
+            "--transcript-out",
+            str(tmp_path / "out.jsonl"),
+            "--dispatch-tool-name",
+            "Agent",
+            "--marketplace-source",
+            "",
+            "--plugin-name",
+            "",
+        ]
+    )
     assert rc == 2
 
 
@@ -1133,13 +1339,21 @@ def test_cli_run_marketplace_one_blank_one_set_is_rejected(tmp_path: Path, monke
     prompt_file = tmp_path / "prompt.txt"
     prompt_file.write_text("dispatch", encoding="utf-8")
 
-    rc = cdt.main([
-        "run", "--prompt-file", str(prompt_file),
-        "--transcript-out", str(tmp_path / "out.jsonl"),
-        "--dispatch-tool-name", "Agent",
-        "--marketplace-source", "   ",
-        "--plugin-name", "gitapex@gitapex",
-    ])
+    rc = cdt.main(
+        [
+            "run",
+            "--prompt-file",
+            str(prompt_file),
+            "--transcript-out",
+            str(tmp_path / "out.jsonl"),
+            "--dispatch-tool-name",
+            "Agent",
+            "--marketplace-source",
+            "   ",
+            "--plugin-name",
+            "gitapex@gitapex",
+        ]
+    )
     assert rc == 2
 
 
@@ -1173,16 +1387,28 @@ def test_cli_run_marketplace_source_relative_path_resolved_against_cwd(tmp_path:
     monkeypatch.setattr(cdt.subprocess, "run", fake_run)
     monkeypatch.chdir(tmp_path)
 
-    rc = cdt.main([
-        "run", "--prompt-file", str(prompt_file),
-        "--transcript-out", str(transcript_out),
-        "--dispatch-tool-name", "Agent",
-        "--marketplace-source", "isolated-target",  # relative
-        "--plugin-name", "gitapex@gitapex",
-    ])
+    rc = cdt.main(
+        [
+            "run",
+            "--prompt-file",
+            str(prompt_file),
+            "--transcript-out",
+            str(transcript_out),
+            "--dispatch-tool-name",
+            "Agent",
+            "--marketplace-source",
+            "isolated-target",  # relative
+            "--plugin-name",
+            "gitapex@gitapex",
+        ]
+    )
     assert rc == 0
     assert registration_argvs[0] == [
-        "claude", "plugin", "marketplace", "add", str(marketplace_source.resolve()),
+        "claude",
+        "plugin",
+        "marketplace",
+        "add",
+        str(marketplace_source.resolve()),
     ]
 
 
@@ -1210,13 +1436,21 @@ def test_cli_run_marketplace_success_then_dispatch_mocked(tmp_path: Path, monkey
 
     monkeypatch.setattr(cdt.subprocess, "run", fake_run)
 
-    rc = cdt.main([
-        "run", "--prompt-file", str(prompt_file),
-        "--transcript-out", str(transcript_out),
-        "--dispatch-tool-name", "Agent",
-        "--marketplace-source", str(marketplace_source),
-        "--plugin-name", "gitapex@gitapex",
-    ])
+    rc = cdt.main(
+        [
+            "run",
+            "--prompt-file",
+            str(prompt_file),
+            "--transcript-out",
+            str(transcript_out),
+            "--dispatch-tool-name",
+            "Agent",
+            "--marketplace-source",
+            str(marketplace_source),
+            "--plugin-name",
+            "gitapex@gitapex",
+        ]
+    )
     assert rc == 0
     assert len(registration_calls) == 2
     assert transcript_out.read_text(encoding="utf-8") == TRANSCRIPT_ONE_AGENT_DISPATCH

@@ -271,9 +271,7 @@ def _validate_cli_args(owner: str, repo: str, pr_number: int) -> str | None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(
-        description="Open (with dedup) a merge-retrospective issue for a merged PR."
-    )
+    parser = argparse.ArgumentParser(description="Open (with dedup) a merge-retrospective issue for a merged PR.")
     parser.add_argument("--owner", required=True, help="Repository owner, e.g. tvna")
     parser.add_argument("--repo", required=True, help="Repository name, e.g. gitapex")
     parser.add_argument("--pr-number", required=True, type=int, help="The merged PR's number")
@@ -293,14 +291,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         existing = find_existing_retro_issue(args.owner, args.repo, args.pr_number, token)
         if existing is not None:
-            print(
-                f"Retrospective issue already exists for PR #{args.pr_number}: "
-                f"#{existing} -- skipping create."
-            )
+            print(f"Retrospective issue already exists for PR #{args.pr_number}: #{existing} -- skipping create.")
             return 0
-        issue_number = open_retro_issue(
-            args.owner, args.repo, args.pr_number, args.pr_title, args.pr_url, token
-        )
+        issue_number = open_retro_issue(args.owner, args.repo, args.pr_number, args.pr_title, args.pr_url, token)
         print(f"Opened retrospective issue #{issue_number} for PR #{args.pr_number}.")
         return 0
     except GitHubApiError as error:

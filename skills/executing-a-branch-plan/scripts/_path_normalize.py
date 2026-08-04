@@ -21,6 +21,7 @@ single-underscore "not a public entry point" names: this module is a
 sibling import for the two checker scripts above, not something invoked
 directly.
 """
+
 from __future__ import annotations
 
 

@@ -130,8 +130,7 @@ def find_offenders(removed_names: list[str], repo_root: Path) -> list[str]:
     that no current skill's sidecar records as its `renamedFrom`."""
     recorded = all_renamed_from_values(repo_root)
     return [
-        f"{name}: removed in this diff, but no current skill records "
-        f"spec.lifecycle.renamedFrom: {name}"
+        f"{name}: removed in this diff, but no current skill records spec.lifecycle.renamedFrom: {name}"
         for name in removed_names
         if name not in recorded
     ]
@@ -140,18 +139,17 @@ def find_offenders(removed_names: list[str], repo_root: Path) -> list[str]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Check that every skill directory removed in this PR "
-        "is recorded as some surviving skill's spec.lifecycle.renamedFrom.")
+        "is recorded as some surviving skill's spec.lifecycle.renamedFrom."
+    )
     parser.add_argument(
         "--removed",
-        help="Path to a file of removed skill directory names, one per "
-        "line; reads standard input when omitted.")
+        help="Path to a file of removed skill directory names, one per line; reads standard input when omitted.",
+    )
     args = parser.parse_args(argv)
 
     try:
         text = (
-            Path(args.removed).read_text(encoding="utf-8")
-            if args.removed
-            else sys.stdin.buffer.read().decode("utf-8")
+            Path(args.removed).read_text(encoding="utf-8") if args.removed else sys.stdin.buffer.read().decode("utf-8")
         )
     except FileNotFoundError:
         print(f"error: removed-names file not found: {args.removed}", file=sys.stderr)

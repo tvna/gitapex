@@ -17,6 +17,7 @@ uncovered in the doc -- and the "N/19 dimensions ... cited" headline count
 would go stale -- with nothing in CI to catch it. Both directions and the
 headline count are checked here.
 """
+
 from __future__ import annotations
 
 import re
@@ -26,17 +27,11 @@ import check_dimension_coverage as C
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SKILL_DIR = REPO_ROOT / "skills" / "evaluating-deterministic-gate-quality"
-TASKS_GLOB = str(
-    REPO_ROOT / "evals" / "evaluating-deterministic-gate-quality" / "tasks" / "*.yaml"
-)
+TASKS_GLOB = str(REPO_ROOT / "evals" / "evaluating-deterministic-gate-quality" / "tasks" / "*.yaml")
 STATUS_DOC = REPO_ROOT / "evals" / "evaluating-deterministic-gate-quality" / "eval-status.md"
 
-_HEADLINE_RE = re.compile(
-    r"Current\s+output:\s+(\d+)/(\d+)\s+dimensions\s+and\s+(\d+)/(\d+)\s+axes\s+cited"
-)
-_UNCOVERED_SENTENCE_RE = re.compile(
-    r"\*\*dimensions\s+(.+?)\s+remain uncovered\*\*", re.DOTALL
-)
+_HEADLINE_RE = re.compile(r"Current\s+output:\s+(\d+)/(\d+)\s+dimensions\s+and\s+(\d+)/(\d+)\s+axes\s+cited")
+_UNCOVERED_SENTENCE_RE = re.compile(r"\*\*dimensions\s+(.+?)\s+remain uncovered\*\*", re.DOTALL)
 
 
 def _disclosed_uncovered_dimensions(text: str) -> set[str]:

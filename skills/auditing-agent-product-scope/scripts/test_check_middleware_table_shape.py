@@ -88,9 +88,7 @@ def test_section_with_no_table_flagged():
         "",
     )
     offenses = cmts.check_middleware_table_shape(text)
-    assert any(
-        o.startswith("Python dev tooling:") and "none found" in o for o in offenses
-    )
+    assert any(o.startswith("Python dev tooling:") and "none found" in o for o in offenses)
 
 
 def test_missing_column_flagged():
@@ -102,21 +100,13 @@ def test_missing_column_flagged():
         "|---|---|---|---|\n| `uv` | A | dev group only | Dependabot `nix` |",
     )
     offenses = cmts.check_middleware_table_shape(text)
-    assert any(
-        o.startswith("Nix toolchain (`flake.nix`):") and "Why needed" in o
-        for o in offenses
-    )
+    assert any(o.startswith("Nix toolchain (`flake.nix`):") and "Why needed" in o for o in offenses)
 
 
 def test_missing_row_flagged():
-    text = _COMPLETE_DOC.replace(
-        "| `betterleaks` | B | secrets scanner | provisioned only | excluded |\n", ""
-    )
+    text = _COMPLETE_DOC.replace("| `betterleaks` | B | secrets scanner | provisioned only | excluded |\n", "")
     offenses = cmts.check_middleware_table_shape(text)
-    assert any(
-        o.startswith("Nix toolchain (`flake.nix`):") and "betterleaks" in o
-        for o in offenses
-    )
+    assert any(o.startswith("Nix toolchain (`flake.nix`):") and "betterleaks" in o for o in offenses)
 
 
 def test_second_table_missing_row_does_not_flag_first_table():
@@ -131,9 +121,9 @@ def test_second_table_missing_row_does_not_flag_first_table():
 
 
 def test_multiple_offenses_all_reported():
-    text = _COMPLETE_DOC.replace(
-        "| `rtk` | B | token-reducing proxy | provisioned only | excluded |\n", ""
-    ).replace("## GitHub MCP server", "## Renamed Section")
+    text = _COMPLETE_DOC.replace("| `rtk` | B | token-reducing proxy | provisioned only | excluded |\n", "").replace(
+        "## GitHub MCP server", "## Renamed Section"
+    )
     offenses = cmts.check_middleware_table_shape(text)
     assert any("rtk" in o for o in offenses)
     assert any("GitHub MCP server" in o and "no '##" in o for o in offenses)

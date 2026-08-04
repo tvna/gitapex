@@ -30,9 +30,7 @@ scan_provenance = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(scan_provenance)
 
 
-def test_main_reports_error_for_non_utf8_file(
-    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_main_reports_error_for_non_utf8_file(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
     path = tmp_path / "artifact.md"
     path.write_bytes(b"\xff\xfe bad")
     assert scan_provenance.main(["--file", str(path)]) == 1

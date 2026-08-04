@@ -63,9 +63,7 @@ def test_status_case_insensitive():
 
 
 def test_status_with_trailing_approval_detail_passes():
-    body = _VALID_ADR.replace(
-        "Proposed", "Accepted (approved by @platform-lead, 2026-06-02)"
-    )
+    body = _VALID_ADR.replace("Proposed", "Accepted (approved by @platform-lead, 2026-06-02)")
     assert cas.check_adr_shape(body) == []
 
 
@@ -123,8 +121,7 @@ def test_missing_multiple_headings_lists_all():
     body = "# Title\n\n## Status\n\nProposed\n"
     failures = cas.check_adr_shape(body)
     assert any(
-        "Context and Problem Statement" in f and "Decision Outcome" in f and "Consequences" in f
-        for f in failures
+        "Context and Problem Statement" in f and "Decision Outcome" in f and "Consequences" in f for f in failures
     )
 
 

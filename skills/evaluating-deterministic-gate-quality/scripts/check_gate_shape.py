@@ -152,6 +152,7 @@ adversarial review of this checker itself found these):
     disclosed via that fallback path's own more conservative behavior,
     not a silent skip.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -240,9 +241,7 @@ _PY_EXIT_2_RE = re.compile(r"\b(?:sys\.exit|exit|raise\s+SystemExit)\s*\(\s*2\s*
 # -?\d+ so a literal `sys.exit(-1)` (still non-blocking to Claude Code,
 # same bypass class as a bare `exit(1)`) is recognized rather than missed
 # by a \d+-only pattern.
-_PY_NONZERO_NONTWO_EXIT_RE = re.compile(
-    r"\b(?:sys\.exit|exit|raise\s+SystemExit)\s*\(\s*(?!0\s*\)|2\s*\))-?\d+\s*\)"
-)
+_PY_NONZERO_NONTWO_EXIT_RE = re.compile(r"\b(?:sys\.exit|exit|raise\s+SystemExit)\s*\(\s*(?!0\s*\)|2\s*\))-?\d+\s*\)")
 _SH_EXIT_2_RE = re.compile(r"\bexit\s+2\b")
 _SH_NONZERO_NONTWO_EXIT_RE = re.compile(r"\bexit\s+(?!0\b|2\b)-?\d+\b")
 _DENY_JSON_RE = re.compile(r'"?permissionDecision"?\s*:\s*"deny"', re.IGNORECASE)
@@ -252,9 +251,7 @@ _DENY_REASON_RE = re.compile(r'"?permissionDecisionReason"?\s*:\s*"([^"]*)"')
 def _check_deny_mechanism(text: str, is_python: bool) -> CheckResult:
     has_exit_2 = bool((_PY_EXIT_2_RE if is_python else _SH_EXIT_2_RE).search(text))
     has_deny_json = bool(_DENY_JSON_RE.search(text))
-    has_nonzero_nontwo = bool(
-        (_PY_NONZERO_NONTWO_EXIT_RE if is_python else _SH_NONZERO_NONTWO_EXIT_RE).search(text)
-    )
+    has_nonzero_nontwo = bool((_PY_NONZERO_NONTWO_EXIT_RE if is_python else _SH_NONZERO_NONTWO_EXIT_RE).search(text))
     if has_exit_2 or has_deny_json:
         mechanism = []
         if has_exit_2:
@@ -262,19 +259,25 @@ def _check_deny_mechanism(text: str, is_python: bool) -> CheckResult:
         if has_deny_json:
             mechanism.append('permissionDecision: "deny" JSON')
         return CheckResult(
-            "1", "Deny-path non-bypassable", VERDICT_PASSED,
+            "1",
+            "Deny-path non-bypassable",
+            VERDICT_PASSED,
             f"found recognized deny mechanism: {', '.join(mechanism)}",
         )
     if has_nonzero_nontwo:
         return CheckResult(
-            "1", "Deny-path non-bypassable", VERDICT_FAILED,
+            "1",
+            "Deny-path non-bypassable",
+            VERDICT_FAILED,
             "found a non-zero exit path other than 2, and no "
             'permissionDecision: "deny" JSON -- Claude Code treats any exit '
             "code other than 2 as a non-blocking notice, not a block "
             "(https://code.claude.com/docs/en/hooks)",
         )
     return CheckResult(
-        "1", "Deny-path non-bypassable", VERDICT_NOT_APPLICABLE,
+        "1",
+        "Deny-path non-bypassable",
+        VERDICT_NOT_APPLICABLE,
         "no exit-2, deny-JSON, or other non-zero exit path found -- "
         "nothing here suggests this script means to ever deny",
     )
@@ -368,22 +371,22 @@ def _has_stderr_message_shell(text: str) -> bool:
 def _check_dual_signal(text: str, is_python: bool, mechanism_result: CheckResult) -> CheckResult:
     if mechanism_result.verdict != VERDICT_PASSED:
         return CheckResult(
-            "2", "Dual-signal deny", VERDICT_NOT_APPLICABLE,
-            "dimension 1 found no recognized deny mechanism to grade for a "
-            "human-readable companion message",
+            "2",
+            "Dual-signal deny",
+            VERDICT_NOT_APPLICABLE,
+            "dimension 1 found no recognized deny mechanism to grade for a human-readable companion message",
         )
     reason_match = _DENY_REASON_RE.search(text)
     has_reason = bool(reason_match and reason_match.group(1).strip())
-    has_stderr_text = (
-        _has_stderr_message_python(text) if is_python else _has_stderr_message_shell(text)
-    )
+    has_stderr_text = _has_stderr_message_python(text) if is_python else _has_stderr_message_shell(text)
     if has_reason or has_stderr_text:
         channel = "permissionDecisionReason" if has_reason else "a non-empty stderr message"
         return CheckResult("2", "Dual-signal deny", VERDICT_PASSED, f"found {channel} alongside the deny signal")
     return CheckResult(
-        "2", "Dual-signal deny", VERDICT_FAILED,
-        "deny mechanism found, but no non-empty permissionDecisionReason "
-        "and no non-empty stderr message alongside it",
+        "2",
+        "Dual-signal deny",
+        VERDICT_FAILED,
+        "deny mechanism found, but no non-empty permissionDecisionReason and no non-empty stderr message alongside it",
     )
 
 
@@ -405,18 +408,22 @@ _TOOL_NAME_COMPARISON_WINDOW = 30
 
 def _check_self_revalidation(text: str) -> CheckResult:
     for match in _TOOL_NAME_REFERENCE_RE.finditer(text):
-        before = text[max(0, match.start() - _TOOL_NAME_COMPARISON_WINDOW):match.start()]
-        after = text[match.end():match.end() + _TOOL_NAME_COMPARISON_WINDOW]
+        before = text[max(0, match.start() - _TOOL_NAME_COMPARISON_WINDOW) : match.start()]
+        after = text[match.end() : match.end() + _TOOL_NAME_COMPARISON_WINDOW]
         if _COMPARISON_OP_RE.search(before) or _COMPARISON_OP_RE.search(after):
             return CheckResult(
-                "3", "Self-revalidation (heuristic)", VERDICT_PASSED,
+                "3",
+                "Self-revalidation (heuristic)",
+                VERDICT_PASSED,
                 "found a tool_name reference ($tool_name / quoted "
                 '"tool_name" / .tool_name) within a few characters of '
                 "!=/== -- re-checks the matcher-relevant field itself "
                 "rather than trusting hooks.json alone",
             )
     return CheckResult(
-        "3", "Self-revalidation (heuristic)", VERDICT_INDETERMINATE,
+        "3",
+        "Self-revalidation (heuristic)",
+        VERDICT_INDETERMINATE,
         "no tool_name read-and-compare pattern found -- this script may "
         "self-revalidate through a different field or shape this heuristic "
         "does not recognize; confirm by direct inspection rather than "
@@ -469,8 +476,7 @@ def _find_sibling_test(script_path: Path) -> Path | None:
     other_script_stems = [
         re.sub(r"[-.]", "_", p.stem)
         for p in entries
-        if p != script_path and p.is_file() and p.suffix in (".py", ".sh")
-        and not _TEST_NAME_RE.match(p.name)
+        if p != script_path and p.is_file() and p.suffix in (".py", ".sh") and not _TEST_NAME_RE.match(p.name)
     ]
     for candidate in sorted(entries, key=lambda p: p.name):
         if candidate == script_path or not candidate.is_file():
@@ -483,9 +489,10 @@ def _find_sibling_test(script_path: Path) -> Path | None:
         is_containment = stem_norm in candidate_norm or candidate_norm in stem_norm
         if not is_exact and not is_containment:
             continue
-        if is_containment and not is_exact and any(
-            _is_better_sibling_match(candidate_norm, stem_norm, other)
-            for other in other_script_stems
+        if (
+            is_containment
+            and not is_exact
+            and any(_is_better_sibling_match(candidate_norm, stem_norm, other) for other in other_script_stems)
         ):
             continue
         try:
@@ -500,22 +507,32 @@ def _check_bundled_test(script_path: Path) -> CheckResult:
     sibling = _find_sibling_test(script_path)
     if sibling is not None:
         return CheckResult(
-            "4", "Bundled test exists", VERDICT_PASSED,
+            "4",
+            "Bundled test exists",
+            VERDICT_PASSED,
             f"found non-empty sibling test file: {sibling.name}",
         )
     return CheckResult(
-        "4", "Bundled test exists", VERDICT_FAILED,
-        f"no non-empty sibling test file matching this script's own "
-        f"normalized stem found in {script_path.parent}",
+        "4",
+        "Bundled test exists",
+        VERDICT_FAILED,
+        f"no non-empty sibling test file matching this script's own normalized stem found in {script_path.parent}",
     )
 
 
 # --- dimension 5: unsafe shell/command interpolation ---------------------
 
-_PY_SHELL_CALLABLE_NAMES = frozenset({
-    "subprocess.run", "subprocess.call", "subprocess.check_call",
-    "subprocess.check_output", "subprocess.Popen", "os.system", "os.popen",
-})
+_PY_SHELL_CALLABLE_NAMES = frozenset(
+    {
+        "subprocess.run",
+        "subprocess.call",
+        "subprocess.check_call",
+        "subprocess.check_output",
+        "subprocess.Popen",
+        "os.system",
+        "os.popen",
+    }
+)
 
 
 def _is_shell_true(call_node: ast.Call) -> bool:
@@ -544,7 +561,9 @@ def _check_unsafe_interpolation_python_ast(calls: list[tuple[str, ast.Call]]) ->
     target_calls = [(name, node) for name, node in calls if name in _PY_SHELL_CALLABLE_NAMES]
     if not target_calls:
         return CheckResult(
-            "5", "No unsafe shell interpolation", VERDICT_NOT_APPLICABLE,
+            "5",
+            "No unsafe shell interpolation",
+            VERDICT_NOT_APPLICABLE,
             "no subprocess/os.system/os.popen call found in this script",
         )
     for name, node in target_calls:
@@ -569,27 +588,28 @@ def _check_unsafe_interpolation_python_ast(calls: list[tuple[str, ast.Call]]) ->
         # by direct inspection rather than treating this as certain.
         reason = (
             "no positional command argument this checker can interpret"
-            if safety is None else
-            "a variable/expression, not a literal string or an argv "
+            if safety is None
+            else "a variable/expression, not a literal string or an argv "
             "list -- cannot verify from this call site alone that it is "
             "not built from untrusted input elsewhere in the script"
         )
         return CheckResult(
-            "5", "No unsafe shell interpolation", VERDICT_FAILED,
-            f"found {name}(...) with shell execution whose command "
-            f"argument is {reason}",
+            "5",
+            "No unsafe shell interpolation",
+            VERDICT_FAILED,
+            f"found {name}(...) with shell execution whose command argument is {reason}",
         )
     return CheckResult(
-        "5", "No unsafe shell interpolation", VERDICT_PASSED,
+        "5",
+        "No unsafe shell interpolation",
+        VERDICT_PASSED,
         "every shell-executing call found uses a literal command string "
         "or an argv list, not an interpolated or unverifiable value",
     )
 
 
-_PY_SHELL_CALL_RE = re.compile(
-    r"\b(subprocess\.(?:run|call|check_call|check_output|Popen)|os\.system|os\.popen)\s*\("
-)
-_INTERPOLATION_MARKERS = ("f\"", "f'", ".format(", " % ", " + ")
+_PY_SHELL_CALL_RE = re.compile(r"\b(subprocess\.(?:run|call|check_call|check_output|Popen)|os\.system|os\.popen)\s*\(")
+_INTERPOLATION_MARKERS = ('f"', "f'", ".format(", " % ", " + ")
 
 
 def _balanced_span(text: str, open_paren_index: int) -> str:
@@ -613,7 +633,9 @@ def _check_unsafe_interpolation_python_fallback(text: str) -> CheckResult:
     matches = list(_PY_SHELL_CALL_RE.finditer(text))
     if not matches:
         return CheckResult(
-            "5", "No unsafe shell interpolation", VERDICT_NOT_APPLICABLE,
+            "5",
+            "No unsafe shell interpolation",
+            VERDICT_NOT_APPLICABLE,
             "no subprocess/os.system/os.popen call found in this script "
             "(fallback text scan -- this script did not parse as valid "
             "Python)",
@@ -626,7 +648,9 @@ def _check_unsafe_interpolation_python_fallback(text: str) -> CheckResult:
             continue
         if any(marker in span for marker in _INTERPOLATION_MARKERS):
             return CheckResult(
-                "5", "No unsafe shell interpolation", VERDICT_FAILED,
+                "5",
+                "No unsafe shell interpolation",
+                VERDICT_FAILED,
                 f"found {callee}(...) with shell execution and an "
                 "interpolated (not literal) command string (fallback "
                 "text scan)",
@@ -634,7 +658,9 @@ def _check_unsafe_interpolation_python_fallback(text: str) -> CheckResult:
         first_arg = span[1:].lstrip()
         if not first_arg.startswith(("'", '"', "[")):
             return CheckResult(
-                "5", "No unsafe shell interpolation", VERDICT_FAILED,
+                "5",
+                "No unsafe shell interpolation",
+                VERDICT_FAILED,
                 f"found {callee}(...) with shell execution whose command "
                 "argument is a variable/expression, not a literal string "
                 "or an argv list -- cannot verify from this call site "
@@ -642,7 +668,9 @@ def _check_unsafe_interpolation_python_fallback(text: str) -> CheckResult:
                 "elsewhere in the script (fallback text scan)",
             )
     return CheckResult(
-        "5", "No unsafe shell interpolation", VERDICT_PASSED,
+        "5",
+        "No unsafe shell interpolation",
+        VERDICT_PASSED,
         "every shell/subprocess call found uses a literal command string "
         "or an argv list, not string interpolation (fallback text scan)",
     )
@@ -666,48 +694,69 @@ _SH_DASH_C_WITH_VAR_RE = re.compile(r'\b(?:bash|sh)\s+-c\s+"[^"\n]*\$\{?\w+\}?[^
 def _check_unsafe_interpolation_shell(text: str) -> CheckResult:
     if _SH_EVAL_WITH_VAR_RE.search(text):
         return CheckResult(
-            "5", "No unsafe shell interpolation", VERDICT_FAILED,
-            "found eval combined with a $variable reference on the same "
-            "line -- the canonical shell-injection shape",
+            "5",
+            "No unsafe shell interpolation",
+            VERDICT_FAILED,
+            "found eval combined with a $variable reference on the same line -- the canonical shell-injection shape",
         )
     if _SH_DASH_C_WITH_VAR_RE.search(text):
         return CheckResult(
-            "5", "No unsafe shell interpolation", VERDICT_FAILED,
+            "5",
+            "No unsafe shell interpolation",
+            VERDICT_FAILED,
             'found bash/sh -c "..." with a $variable reference interpolated '
             "into the double-quoted command string -- the same "
             "shell-injection shape as eval, without the literal eval keyword",
         )
     return CheckResult(
-        "5", "No unsafe shell interpolation", VERDICT_PASSED,
+        "5",
+        "No unsafe shell interpolation",
+        VERDICT_PASSED,
         "no eval-plus-variable-interpolation or -c-plus-variable pattern found",
     )
 
 
 # --- dimension 6b: internal subprocess/network timeout -------------------
 
-_PY_TIMEOUT_CALLABLE_NAMES = frozenset({
-    "subprocess.run", "subprocess.call", "subprocess.check_call",
-    "subprocess.check_output", "subprocess.Popen",
-    "urllib.request.urlopen", "urlopen",
-    "requests.get", "requests.post", "requests.put", "requests.delete", "requests.request",
-})
+_PY_TIMEOUT_CALLABLE_NAMES = frozenset(
+    {
+        "subprocess.run",
+        "subprocess.call",
+        "subprocess.check_call",
+        "subprocess.check_output",
+        "subprocess.Popen",
+        "urllib.request.urlopen",
+        "urlopen",
+        "requests.get",
+        "requests.post",
+        "requests.put",
+        "requests.delete",
+        "requests.request",
+    }
+)
 
 
 def _check_timeout_internal_python_ast(calls: list[tuple[str, ast.Call]]) -> CheckResult:
     target_calls = [(name, node) for name, node in calls if name in _PY_TIMEOUT_CALLABLE_NAMES]
     if not target_calls:
         return CheckResult(
-            "6b", "Internal subprocess/network timeout", VERDICT_NOT_APPLICABLE,
+            "6b",
+            "Internal subprocess/network timeout",
+            VERDICT_NOT_APPLICABLE,
             "no subprocess/urlopen/requests call found in this script",
         )
     missing = [name for name, node in target_calls if _keyword_value(node, "timeout") is None]
     if missing:
         return CheckResult(
-            "6b", "Internal subprocess/network timeout", VERDICT_FAILED,
+            "6b",
+            "Internal subprocess/network timeout",
+            VERDICT_FAILED,
             f"call(s) with no timeout= keyword argument: {', '.join(sorted(set(missing)))}",
         )
     return CheckResult(
-        "6b", "Internal subprocess/network timeout", VERDICT_PASSED,
+        "6b",
+        "Internal subprocess/network timeout",
+        VERDICT_PASSED,
         "every subprocess/network call found sets an explicit timeout= keyword argument",
     )
 
@@ -727,7 +776,9 @@ def _check_timeout_internal_python_fallback(text: str) -> CheckResult:
     matches = list(_PY_TIMEOUT_CALL_RE.finditer(text))
     if not matches:
         return CheckResult(
-            "6b", "Internal subprocess/network timeout", VERDICT_NOT_APPLICABLE,
+            "6b",
+            "Internal subprocess/network timeout",
+            VERDICT_NOT_APPLICABLE,
             "no subprocess/urlopen/requests call found in this script "
             "(fallback text scan -- this script did not parse as valid "
             "Python)",
@@ -739,14 +790,16 @@ def _check_timeout_internal_python_fallback(text: str) -> CheckResult:
             missing.append(match.group(1))
     if missing:
         return CheckResult(
-            "6b", "Internal subprocess/network timeout", VERDICT_FAILED,
-            f"call(s) with no explicit timeout=...: "
-            f"{', '.join(sorted(set(missing)))} (fallback text scan)",
+            "6b",
+            "Internal subprocess/network timeout",
+            VERDICT_FAILED,
+            f"call(s) with no explicit timeout=...: {', '.join(sorted(set(missing)))} (fallback text scan)",
         )
     return CheckResult(
-        "6b", "Internal subprocess/network timeout", VERDICT_PASSED,
-        "every subprocess/network call found sets an explicit timeout "
-        "(fallback text scan)",
+        "6b",
+        "Internal subprocess/network timeout",
+        VERDICT_PASSED,
+        "every subprocess/network call found sets an explicit timeout (fallback text scan)",
     )
 
 
@@ -766,7 +819,9 @@ def _check_timeout_internal_shell(text: str) -> CheckResult:
     matches = list(_SH_NETWORK_CALL_RE.finditer(text))
     if not matches:
         return CheckResult(
-            "6b", "Internal subprocess/network timeout", VERDICT_NOT_APPLICABLE,
+            "6b",
+            "Internal subprocess/network timeout",
+            VERDICT_NOT_APPLICABLE,
             "no curl/wget call found in this script",
         )
     missing = []
@@ -778,11 +833,15 @@ def _check_timeout_internal_shell(text: str) -> CheckResult:
             missing.append(tool)
     if missing:
         return CheckResult(
-            "6b", "Internal subprocess/network timeout", VERDICT_FAILED,
+            "6b",
+            "Internal subprocess/network timeout",
+            VERDICT_FAILED,
             f"{', '.join(sorted(set(missing)))} call(s) with no explicit timeout flag",
         )
     return CheckResult(
-        "6b", "Internal subprocess/network timeout", VERDICT_PASSED,
+        "6b",
+        "Internal subprocess/network timeout",
+        VERDICT_PASSED,
         "every curl/wget call found sets an explicit timeout flag",
     )
 
@@ -800,7 +859,9 @@ def _is_valid_timeout_value(value: object) -> bool:
 def _check_timeout_wiring(script_path: Path, hooks_json_path: Path | None) -> CheckResult:
     if hooks_json_path is None:
         return CheckResult(
-            "6a", "Invocation-level timeout (hooks.json wiring)", VERDICT_NOT_APPLICABLE,
+            "6a",
+            "Invocation-level timeout (hooks.json wiring)",
+            VERDICT_NOT_APPLICABLE,
             "no --hooks-json supplied -- the script alone cannot establish "
             "this; grade the surrounding invocation separately",
         )
@@ -808,7 +869,9 @@ def _check_timeout_wiring(script_path: Path, hooks_json_path: Path | None) -> Ch
         data = json.loads(hooks_json_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         return CheckResult(
-            "6a", "Invocation-level timeout (hooks.json wiring)", VERDICT_INDETERMINATE,
+            "6a",
+            "Invocation-level timeout (hooks.json wiring)",
+            VERDICT_INDETERMINATE,
             f"could not read/parse {hooks_json_path}: {exc}",
         )
     basename = script_path.name
@@ -827,18 +890,23 @@ def _check_timeout_wiring(script_path: Path, hooks_json_path: Path | None) -> Ch
                         found_entries.append(hook_entry)
     if not found_entries:
         return CheckResult(
-            "6a", "Invocation-level timeout (hooks.json wiring)", VERDICT_NOT_APPLICABLE,
+            "6a",
+            "Invocation-level timeout (hooks.json wiring)",
+            VERDICT_NOT_APPLICABLE,
             f"no hooks.json entry references {basename!r}",
         )
     missing = [e for e in found_entries if not _is_valid_timeout_value(e.get("timeout"))]
     if missing:
         return CheckResult(
-            "6a", "Invocation-level timeout (hooks.json wiring)", VERDICT_FAILED,
-            f"{len(missing)} matching hooks.json entry/entries for {basename!r} "
-            "with no numeric timeout field",
+            "6a",
+            "Invocation-level timeout (hooks.json wiring)",
+            VERDICT_FAILED,
+            f"{len(missing)} matching hooks.json entry/entries for {basename!r} with no numeric timeout field",
         )
     return CheckResult(
-        "6a", "Invocation-level timeout (hooks.json wiring)", VERDICT_PASSED,
+        "6a",
+        "Invocation-level timeout (hooks.json wiring)",
+        VERDICT_PASSED,
         f"every matching hooks.json entry for {basename!r} sets a numeric timeout",
     )
 
@@ -846,9 +914,7 @@ def _check_timeout_wiring(script_path: Path, hooks_json_path: Path | None) -> Ch
 # --- public entry point --------------------------------------------------
 
 
-def check_gate_shape(
-    script_path: Path, text: str, hooks_json_path: Path | None = None
-) -> list[CheckResult]:
+def check_gate_shape(script_path: Path, text: str, hooks_json_path: Path | None = None) -> list[CheckResult]:
     """Run every mechanical dimension-1-6 check this checker implements
     against ``text`` (the already-read contents of ``script_path``,
     ``script_path`` itself only used for its suffix/name and for locating a
@@ -878,8 +944,10 @@ def format_report(results: list[CheckResult]) -> str:
     lines = []
     for result in results:
         marker = {
-            VERDICT_PASSED: "VERDICT_PASSED", VERDICT_FAILED: "VERDICT_FAILED",
-            VERDICT_NOT_APPLICABLE: "N/A ", VERDICT_INDETERMINATE: "IND ",
+            VERDICT_PASSED: "VERDICT_PASSED",
+            VERDICT_FAILED: "VERDICT_FAILED",
+            VERDICT_NOT_APPLICABLE: "N/A ",
+            VERDICT_INDETERMINATE: "IND ",
         }[result.verdict]
         lines.append(f"[{marker}] dimension {result.dimension} ({result.name}): {result.evidence}")
     return "\n".join(lines)

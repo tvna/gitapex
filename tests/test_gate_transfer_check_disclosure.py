@@ -224,18 +224,14 @@ def test_main_passes_with_no_entries(monkeypatch, capsys):
 
 def test_main_passes_when_all_entries_disclose_transfer_check(tmp_path, monkeypatch, capsys):
     path = _write(tmp_path, "split.md", _ENTRY_WITH_TRANSFER_CHECK)
-    monkeypatch.setattr(
-        gate.sys, "stdin", _FakeStdin(f"{path}\t**Iteration: issue #1, first edit.**\n".encode())
-    )
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(f"{path}\t**Iteration: issue #1, first edit.**\n".encode()))
     assert gate.main([]) == 0
     assert "PASS" in capsys.readouterr().out
 
 
 def test_main_fails_when_an_entry_is_missing_transfer_check(tmp_path, monkeypatch, capsys):
     path = _write(tmp_path, "split.md", _ENTRY_WITHOUT_TRANSFER_CHECK)
-    monkeypatch.setattr(
-        gate.sys, "stdin", _FakeStdin(f"{path}\t**Iteration: issue #2, second edit.**\n".encode())
-    )
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(f"{path}\t**Iteration: issue #2, second edit.**\n".encode()))
     assert gate.main([]) == 1
     err = capsys.readouterr().err
     assert "Transfer check" in err
@@ -245,9 +241,7 @@ def test_main_fails_when_an_entry_is_missing_transfer_check(tmp_path, monkeypatc
 def test_main_reads_entries_from_file(tmp_path, capsys):
     split_path = _write(tmp_path, "split.md", _ENTRY_WITH_TRANSFER_CHECK)
     entries_path = tmp_path / "entries.tsv"
-    entries_path.write_text(
-        f"{split_path}\t**Iteration: issue #1, first edit.**\n", encoding="utf-8"
-    )
+    entries_path.write_text(f"{split_path}\t**Iteration: issue #1, first edit.**\n", encoding="utf-8")
     assert gate.main(["--entries", str(entries_path)]) == 0
     assert "PASS" in capsys.readouterr().out
 

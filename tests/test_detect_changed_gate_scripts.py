@@ -143,23 +143,20 @@ def test_the_registry_file_itself_is_in_scope(registered):
 def test_a_deleted_gate_is_selected(registered):
     """The live-reproduced defect: filtering D made `git rm` of a gate
     report a green required check."""
-    assert detect.select("D\t.github/scripts/gate_foo.py\n", registered) == [
-        ".github/scripts/gate_foo.py"
-    ]
+    assert detect.select("D\t.github/scripts/gate_foo.py\n", registered) == [".github/scripts/gate_foo.py"]
 
 
 def test_a_byte_identical_rename_selects_both_sides(registered):
     """The new path is what exists now; the old path is what the invoking
     workflow step may still point at."""
-    assert detect.select(
-        "R100\t.github/scripts/gate_old.py\t.github/scripts/gate_new.py\n", registered
-    ) == [".github/scripts/gate_new.py", ".github/scripts/gate_old.py"]
+    assert detect.select("R100\t.github/scripts/gate_old.py\t.github/scripts/gate_new.py\n", registered) == [
+        ".github/scripts/gate_new.py",
+        ".github/scripts/gate_old.py",
+    ]
 
 
 def test_a_deleted_registered_hook_gate_is_selected(registered):
-    assert detect.select("D\thooks/check-bash-safety.sh\n", registered) == [
-        "hooks/check-bash-safety.sh"
-    ]
+    assert detect.select("D\thooks/check-bash-safety.sh\n", registered) == ["hooks/check-bash-safety.sh"]
 
 
 # --- selection over realistic --name-status input ---
@@ -271,9 +268,7 @@ def test_main_exits_2_on_an_untrusted_registry(monkeypatch, capsys, tmp_path):
 
 
 def test_main_exits_2_on_a_comma_bearing_path(monkeypatch, capsys):
-    monkeypatch.setattr(
-        "sys.stdin", __import__("io").StringIO("A\t.github/scripts/gate_a,b.py\n")
-    )
+    monkeypatch.setattr("sys.stdin", __import__("io").StringIO("A\t.github/scripts/gate_a,b.py\n"))
     assert detect.main(["--repo-root", str(REPO_ROOT)]) == 2
     assert "comma" in capsys.readouterr().err
 
@@ -292,9 +287,7 @@ def test_this_repository_registers_more_gates_than_the_convention_matches(regist
 # --- rule 4 and the gate-wiring files (review findings) ---
 
 
-@pytest.mark.parametrize(
-    "path", [".gitapex/ssot.json", "hooks/hooks.json", ".github/workflows/skill-audit-gate.yml"]
-)
+@pytest.mark.parametrize("path", [".gitapex/ssot.json", "hooks/hooks.json", ".github/workflows/skill-audit-gate.yml"])
 def test_files_that_decide_whether_gates_run_are_in_scope(path, registered):
     """Each of these can disable a gate without touching its script:
     the registry defines rule 2's answer, hooks.json wires the PreToolUse

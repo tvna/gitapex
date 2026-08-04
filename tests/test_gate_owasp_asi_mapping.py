@@ -166,9 +166,7 @@ def test_duplicate_classification_tag_is_drift(tmp_path):
     """Two tags on the same row (e.g. a bad merge leaving both the old and
     new tag) must surface as drift instead of the first one silently
     winning."""
-    rows = _complete_rows().replace(
-        "[allow] Because reasons #101.", "[allow] [deny] Because reasons #101.", 1
-    )
+    rows = _complete_rows().replace("[allow] Because reasons #101.", "[allow] [deny] Because reasons #101.", 1)
     path = _write(tmp_path, rows)
     problems = gate.find_drift(path)
     assert any("ASI01" in p and "classification tags" in p and "expected exactly 1" in p for p in problems)

@@ -27,11 +27,7 @@ def _write_sidecar(tmp_path, new_name, *, renamed_from=None, under_wrong_key=Fal
         # (e.g. accidentally placed under spec.skillDependencies) -- must
         # NOT be picked up, matching check_skill_shape.py's own
         # context-aware parser.
-        body = (
-            "  skillDependencies:\n"
-            "    requires: []\n"
-            f"    renamedFrom: {renamed_from}\n"
-        )
+        body = f"  skillDependencies:\n    requires: []\n    renamedFrom: {renamed_from}\n"
     elif renamed_from:
         body = f"  lifecycle:\n    renamedFrom: {renamed_from}\n"
     else:
@@ -45,7 +41,8 @@ def _write_sidecar(tmp_path, new_name, *, renamed_from=None, under_wrong_key=Fal
         "  portability: Portable\n"
         "  capabilityAssumption: Broad\n"
         f"{body}",
-        encoding="utf-8")
+        encoding="utf-8",
+    )
 
 
 def test_parse_names_reads_one_per_line():
@@ -124,7 +121,7 @@ def test_renamed_from_lifecycle_block_with_other_subkeys_present():
         "spec:\n"
         "  lifecycle:\n"
         "    stable:\n"
-        "      since: \"2026-07-21\"\n"
+        '      since: "2026-07-21"\n'
         "    renamedFrom: old-name\n"
         "  skillDependencies:\n"
         "    requires: []\n"

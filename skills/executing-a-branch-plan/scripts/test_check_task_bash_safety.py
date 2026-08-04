@@ -36,7 +36,9 @@ def run(command: str, tool_name: str = "Bash") -> subprocess.CompletedProcess[st
 
 def assert_denied(command: str) -> None:
     result = run(command)
-    assert result.returncode == 2, f"expected deny (exit 2) for {command!r}, got {result.returncode}: stderr={result.stderr!r}"
+    assert result.returncode == 2, (
+        f"expected deny (exit 2) for {command!r}, got {result.returncode}: stderr={result.stderr!r}"
+    )
     payload = json.loads(result.stderr)
     assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"
     assert payload["systemMessage"]
@@ -44,7 +46,9 @@ def assert_denied(command: str) -> None:
 
 def assert_allowed(command: str) -> None:
     result = run(command)
-    assert result.returncode == 0, f"expected allow (exit 0) for {command!r}, got {result.returncode}: stderr={result.stderr!r}"
+    assert result.returncode == 0, (
+        f"expected allow (exit 0) for {command!r}, got {result.returncode}: stderr={result.stderr!r}"
+    )
     # check_task_bash_safety.sh has no warn()-style path today (unlike its
     # sibling hooks/check-bash-safety.sh), so this is currently redundant
     # with the exit-code check above -- kept for consistency and so a

@@ -23,6 +23,7 @@ class FakeStdin:
     def __init__(self, data: bytes) -> None:
         self.buffer = io.BytesIO(data)
 
+
 # git check-ignore -v prefixes a match with "source:linenum:pattern", then a
 # tab and the matched pathname. The pattern (and, in principle, a Windows
 # drive-letter source path) can itself contain colons, so a plain split on
@@ -46,14 +47,9 @@ def assert_path_is_gitignored(path: pathlib.Path, description: str) -> None:
         capture_output=True,
         text=True,
     )
-    assert result.returncode == 0, (
-        f"{description} is no longer covered by .gitignore."
-    )
+    assert result.returncode == 0, f"{description} is no longer covered by .gitignore."
     match = _CHECK_IGNORE_SOURCE_RE.match(result.stdout)
-    assert match is not None, (
-        f"could not parse 'git check-ignore -v' output for {description}: "
-        f"{result.stdout!r}"
-    )
+    assert match is not None, f"could not parse 'git check-ignore -v' output for {description}: {result.stdout!r}"
     source = match.group(1)
     repo_gitignore = REPO_ROOT / ".gitignore"
     assert pathlib.Path(source).resolve() == repo_gitignore.resolve(), (

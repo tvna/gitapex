@@ -29,12 +29,7 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
 def _report(files: dict[str, float]) -> dict:
-    return {
-        "files": {
-            path: {"summary": {"percent_covered": pct}}
-            for path, pct in files.items()
-        }
-    }
+    return {"files": {path: {"summary": {"percent_covered": pct}} for path, pct in files.items()}}
 
 
 # ---------------------------------------------------------------------------
@@ -43,11 +38,13 @@ def _report(files: dict[str, float]) -> dict:
 
 
 def test_select_files_filters_by_include_glob():
-    data = _report({
-        "evals/scripts/a.py": 100.0,
-        "evals/scripts/b.py": 80.0,
-        "skills/foo/scripts/c.py": 10.0,
-    })
+    data = _report(
+        {
+            "evals/scripts/a.py": 100.0,
+            "evals/scripts/b.py": 80.0,
+            "skills/foo/scripts/c.py": 10.0,
+        }
+    )
     selected = gate.select_files(data, "evals/scripts/*.py")
     assert selected == {"evals/scripts/a.py": 100.0, "evals/scripts/b.py": 80.0}
 
@@ -59,10 +56,12 @@ def test_select_files_does_not_silently_drop_test_prefixed_production_files():
     # exactly the silent-gap failure mode this gate exists to close.
     # No evals/scripts/*.py test lives outside tests/, so nothing should
     # be excluded by name.
-    data = _report({
-        "evals/scripts/a.py": 100.0,
-        "evals/scripts/test_config_generator.py": 12.0,
-    })
+    data = _report(
+        {
+            "evals/scripts/a.py": 100.0,
+            "evals/scripts/test_config_generator.py": 12.0,
+        }
+    )
     selected = gate.select_files(data, "evals/scripts/*.py")
     assert selected == {
         "evals/scripts/a.py": 100.0,
@@ -108,11 +107,13 @@ def test_select_files_raises_on_bool_percent_covered():
 
 
 def test_select_files_in_source_matches_immediate_children_only():
-    data = _report({
-        "evals/scripts/a.py": 100.0,
-        "evals/scripts/b.py": 80.0,
-        "skills/foo/scripts/c.py": 10.0,
-    })
+    data = _report(
+        {
+            "evals/scripts/a.py": 100.0,
+            "evals/scripts/b.py": 80.0,
+            "skills/foo/scripts/c.py": 10.0,
+        }
+    )
     selected = gate.select_files_in_source(data, "evals/scripts")
     assert selected == {"evals/scripts/a.py": 100.0, "evals/scripts/b.py": 80.0}
 
@@ -123,10 +124,12 @@ def test_select_files_in_source_does_not_match_nested_subdirectory_files():
     # incorrectly ALSO match "evals/scripts/a.py", since fnmatch's '*'
     # matches '/' too. A source that is a path-prefix of another source's
     # directory must not swallow that other source's files.
-    data = _report({
-        "evals/top_level.py": 100.0,
-        "evals/scripts/a.py": 100.0,
-    })
+    data = _report(
+        {
+            "evals/top_level.py": 100.0,
+            "evals/scripts/a.py": 100.0,
+        }
+    )
     selected = gate.select_files_in_source(data, "evals")
     assert selected == {"evals/top_level.py": 100.0}
 
@@ -204,7 +207,9 @@ def test_read_coverage_sources_picks_up_a_new_source(tmp_path):
     sources = gate.read_coverage_sources(str(pyproject))
     assert sources == ["a/scripts", "b/scripts", "c/new_target"]
     assert gate.source_include_globs(sources) == [
-        "a/scripts/*.py", "b/scripts/*.py", "c/new_target/*.py",
+        "a/scripts/*.py",
+        "b/scripts/*.py",
+        "c/new_target/*.py",
     ]
 
 
@@ -227,7 +232,7 @@ def test_read_coverage_sources_rejects_malformed_toml(tmp_path):
 
 def test_read_coverage_sources_rejects_missing_source_key(tmp_path):
     pyproject = tmp_path / "pyproject.toml"
-    pyproject.write_text('[tool.coverage.run]\n', encoding="utf-8")
+    pyproject.write_text("[tool.coverage.run]\n", encoding="utf-8")
     with pytest.raises(ValueError, match=r"no \[tool\.coverage\.run\] source list"):
         gate.read_coverage_sources(str(pyproject))
 
@@ -248,7 +253,7 @@ def test_read_coverage_sources_rejects_non_list_source(tmp_path):
 
 def test_read_coverage_sources_rejects_empty_source_list(tmp_path):
     pyproject = tmp_path / "pyproject.toml"
-    pyproject.write_text('[tool.coverage.run]\nsource = []\n', encoding="utf-8")
+    pyproject.write_text("[tool.coverage.run]\nsource = []\n", encoding="utf-8")
     with pytest.raises(ValueError, match="must be a non-empty list of non-blank strings"):
         gate.read_coverage_sources(str(pyproject))
 
@@ -307,7 +312,7 @@ def test_main_non_utf8_report_fails_closed(capsys, tmp_path):
     # only caught those two, so a non-UTF-8 report crashed with an
     # uncaught traceback instead of the documented exit 2.
     bad = tmp_path / "coverage.json"
-    bad.write_bytes(b"\xff\xfe{\"files\": {}}")
+    bad.write_bytes(b'\xff\xfe{"files": {}}')
     rc = gate.main(["--coverage-json", str(bad), "--include-glob", "evals/scripts/*.py"])
     assert rc == 2
     assert "not valid JSON" in capsys.readouterr().err
@@ -328,9 +333,7 @@ def test_main_no_matching_files_fails_closed(capsys, tmp_path):
     # A coverage report generated with the wrong scope must not silently
     # pass as "nothing to check" -- that would make this gate a no-op.
     report_path = tmp_path / "coverage.json"
-    report_path.write_text(
-        json.dumps(_report({"skills/foo/scripts/c.py": 10.0})), encoding="utf-8"
-    )
+    report_path.write_text(json.dumps(_report({"skills/foo/scripts/c.py": 10.0})), encoding="utf-8")
     rc = gate.main(["--coverage-json", str(report_path), "--include-glob", "evals/scripts/*.py"])
     assert rc == 2
     assert "no files matching" in capsys.readouterr().err
@@ -342,14 +345,17 @@ def test_main_no_matching_files_fails_closed_on_the_first_empty_glob(capsys, tmp
     # the per-target version of the check above (issue #562 criterion 4:
     # narrowing any one --cov= target must not hide behind the others).
     report_path = tmp_path / "coverage.json"
-    report_path.write_text(
-        json.dumps(_report({"evals/scripts/a.py": 100.0})), encoding="utf-8"
+    report_path.write_text(json.dumps(_report({"evals/scripts/a.py": 100.0})), encoding="utf-8")
+    rc = gate.main(
+        [
+            "--coverage-json",
+            str(report_path),
+            "--include-glob",
+            "evals/scripts/*.py",
+            "--include-glob",
+            ".github/scripts/*.py",
+        ]
     )
-    rc = gate.main([
-        "--coverage-json", str(report_path),
-        "--include-glob", "evals/scripts/*.py",
-        "--include-glob", ".github/scripts/*.py",
-    ])
     assert rc == 2
     assert "no files matching '.github/scripts/*.py'" in capsys.readouterr().err
 
@@ -357,17 +363,26 @@ def test_main_no_matching_files_fails_closed_on_the_first_empty_glob(capsys, tmp
 def test_main_passes_when_all_files_meet_threshold(capsys, tmp_path):
     report_path = tmp_path / "coverage.json"
     report_path.write_text(
-        json.dumps(_report({
-            "evals/scripts/a.py": 100.0,
-            "evals/scripts/b.py": 92.0,
-        })),
+        json.dumps(
+            _report(
+                {
+                    "evals/scripts/a.py": 100.0,
+                    "evals/scripts/b.py": 92.0,
+                }
+            )
+        ),
         encoding="utf-8",
     )
-    rc = gate.main([
-        "--coverage-json", str(report_path),
-        "--include-glob", "evals/scripts/*.py",
-        "--min-percent", "90",
-    ])
+    rc = gate.main(
+        [
+            "--coverage-json",
+            str(report_path),
+            "--include-glob",
+            "evals/scripts/*.py",
+            "--min-percent",
+            "90",
+        ]
+    )
     out = capsys.readouterr().out
     assert rc == 0
     assert "PASS: all 2 file(s)" in out
@@ -376,24 +391,32 @@ def test_main_passes_when_all_files_meet_threshold(capsys, tmp_path):
 def test_main_fails_and_lists_offenders(capsys, tmp_path):
     report_path = tmp_path / "coverage.json"
     report_path.write_text(
-        json.dumps(_report({
-            "evals/scripts/a.py": 100.0,
-            "evals/scripts/b.py": 71.0,
-        })),
+        json.dumps(
+            _report(
+                {
+                    "evals/scripts/a.py": 100.0,
+                    "evals/scripts/b.py": 71.0,
+                }
+            )
+        ),
         encoding="utf-8",
     )
-    rc = gate.main([
-        "--coverage-json", str(report_path),
-        "--include-glob", "evals/scripts/*.py",
-        "--min-percent", "90",
-    ])
+    rc = gate.main(
+        [
+            "--coverage-json",
+            str(report_path),
+            "--include-glob",
+            "evals/scripts/*.py",
+            "--min-percent",
+            "90",
+        ]
+    )
     assert rc == 1
     captured = capsys.readouterr()
     assert "PASS: evals/scripts/a.py -- 100.0% (minimum 90.0%)" in captured.out
     assert "FAIL: evals/scripts/b.py -- 71.0% (minimum 90.0%)" in captured.out
     assert (
-        "FAIL: 1 of 2 file(s) matching ['evals/scripts/*.py'] are below the "
-        "90.0% minimum coverage threshold"
+        "FAIL: 1 of 2 file(s) matching ['evals/scripts/*.py'] are below the 90.0% minimum coverage threshold"
     ) in captured.err
 
 
@@ -406,14 +429,17 @@ def test_main_custom_include_glob(capsys, tmp_path):
     # the pyproject.toml-derived default so a narrower, one-off check (or
     # this test suite) does not depend on the real repository's coverage.
     report_path = tmp_path / "coverage.json"
-    report_path.write_text(
-        json.dumps(_report({"skills/foo/scripts/c.py": 50.0})), encoding="utf-8"
+    report_path.write_text(json.dumps(_report({"skills/foo/scripts/c.py": 50.0})), encoding="utf-8")
+    rc = gate.main(
+        [
+            "--coverage-json",
+            str(report_path),
+            "--include-glob",
+            "skills/*/scripts/*.py",
+            "--min-percent",
+            "90",
+        ]
     )
-    rc = gate.main([
-        "--coverage-json", str(report_path),
-        "--include-glob", "skills/*/scripts/*.py",
-        "--min-percent", "90",
-    ])
     assert rc == 1
     assert "FAIL: skills/foo/scripts/c.py -- 50.0%" in capsys.readouterr().out
 
@@ -421,18 +447,28 @@ def test_main_custom_include_glob(capsys, tmp_path):
 def test_main_include_glob_is_repeatable(capsys, tmp_path):
     report_path = tmp_path / "coverage.json"
     report_path.write_text(
-        json.dumps(_report({
-            "evals/scripts/a.py": 100.0,
-            ".github/scripts/b.py": 95.0,
-        })),
+        json.dumps(
+            _report(
+                {
+                    "evals/scripts/a.py": 100.0,
+                    ".github/scripts/b.py": 95.0,
+                }
+            )
+        ),
         encoding="utf-8",
     )
-    rc = gate.main([
-        "--coverage-json", str(report_path),
-        "--include-glob", "evals/scripts/*.py",
-        "--include-glob", ".github/scripts/*.py",
-        "--min-percent", "90",
-    ])
+    rc = gate.main(
+        [
+            "--coverage-json",
+            str(report_path),
+            "--include-glob",
+            "evals/scripts/*.py",
+            "--include-glob",
+            ".github/scripts/*.py",
+            "--min-percent",
+            "90",
+        ]
+    )
     assert rc == 0
     assert "PASS: all 2 file(s)" in capsys.readouterr().out
 
@@ -450,16 +486,24 @@ def test_main_default_scope_comes_from_pyproject(capsys, tmp_path):
     )
     report_path = tmp_path / "coverage.json"
     report_path.write_text(
-        json.dumps(_report({
-            "a/scripts/x.py": 100.0,
-            "b/scripts/y.py": 95.0,
-        })),
+        json.dumps(
+            _report(
+                {
+                    "a/scripts/x.py": 100.0,
+                    "b/scripts/y.py": 95.0,
+                }
+            )
+        ),
         encoding="utf-8",
     )
-    rc = gate.main([
-        "--coverage-json", str(report_path),
-        "--pyproject", str(pyproject),
-    ])
+    rc = gate.main(
+        [
+            "--coverage-json",
+            str(report_path),
+            "--pyproject",
+            str(pyproject),
+        ]
+    )
     out = capsys.readouterr().out
     assert rc == 0
     assert "PASS: all 2 file(s)" in out
@@ -478,17 +522,25 @@ def test_main_default_scope_fails_closed_when_a_source_is_unmeasured(capsys, tmp
     )
     report_path = tmp_path / "coverage.json"
     report_path.write_text(
-        json.dumps(_report({
-            "a/scripts/x.py": 100.0,
-            "b/scripts/y.py": 95.0,
-            # c/new_target has no entry at all in this report.
-        })),
+        json.dumps(
+            _report(
+                {
+                    "a/scripts/x.py": 100.0,
+                    "b/scripts/y.py": 95.0,
+                    # c/new_target has no entry at all in this report.
+                }
+            )
+        ),
         encoding="utf-8",
     )
-    rc = gate.main([
-        "--coverage-json", str(report_path),
-        "--pyproject", str(pyproject),
-    ])
+    rc = gate.main(
+        [
+            "--coverage-json",
+            str(report_path),
+            "--pyproject",
+            str(pyproject),
+        ]
+    )
     assert rc == 2
     assert "no files matching 'c/new_target/*.py'" in capsys.readouterr().err
 
@@ -496,10 +548,14 @@ def test_main_default_scope_fails_closed_when_a_source_is_unmeasured(capsys, tmp
 def test_main_missing_pyproject_fails_closed(capsys, tmp_path):
     report_path = tmp_path / "coverage.json"
     report_path.write_text(json.dumps(_report({"evals/scripts/a.py": 100.0})), encoding="utf-8")
-    rc = gate.main([
-        "--coverage-json", str(report_path),
-        "--pyproject", str(tmp_path / "no-such-pyproject.toml"),
-    ])
+    rc = gate.main(
+        [
+            "--coverage-json",
+            str(report_path),
+            "--pyproject",
+            str(tmp_path / "no-such-pyproject.toml"),
+        ]
+    )
     assert rc == 2
     assert "could not read" in capsys.readouterr().err
 
@@ -517,13 +573,15 @@ def test_main_default_scope_handles_a_nested_source_pair_correctly(capsys, tmp_p
         encoding="utf-8",
     )
     report_path = tmp_path / "coverage.json"
-    report_path.write_text(
-        json.dumps(_report({"evals/scripts/a.py": 100.0})), encoding="utf-8"
+    report_path.write_text(json.dumps(_report({"evals/scripts/a.py": 100.0})), encoding="utf-8")
+    rc = gate.main(
+        [
+            "--coverage-json",
+            str(report_path),
+            "--pyproject",
+            str(pyproject),
+        ]
     )
-    rc = gate.main([
-        "--coverage-json", str(report_path),
-        "--pyproject", str(pyproject),
-    ])
     assert rc == 2
     assert "no files matching 'evals/*.py'" in capsys.readouterr().err
 
@@ -554,10 +612,15 @@ def test_main_uses_real_pyproject_by_default(capsys, tmp_path, monkeypatch):
 def test_main_rejects_min_percent_outside_0_to_100(capsys, tmp_path, min_percent):
     report_path = tmp_path / "coverage.json"
     report_path.write_text(json.dumps(_report({"evals/scripts/a.py": 100.0})), encoding="utf-8")
-    rc = gate.main([
-        "--coverage-json", str(report_path),
-        "--include-glob", "evals/scripts/*.py",
-        "--min-percent", min_percent,
-    ])
+    rc = gate.main(
+        [
+            "--coverage-json",
+            str(report_path),
+            "--include-glob",
+            "evals/scripts/*.py",
+            "--min-percent",
+            min_percent,
+        ]
+    )
     assert rc == 2
     assert "--min-percent must be between 0 and 100" in capsys.readouterr().err

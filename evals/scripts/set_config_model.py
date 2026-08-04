@@ -28,6 +28,7 @@ Usage::
 Run standalone (exit 1 on any violation) or via the pytest gate in
 ``tests/test_set_config_model.py``.
 """
+
 from __future__ import annotations
 
 import sys
@@ -69,17 +70,11 @@ def set_config_model(text: str, model: str) -> str:
             config_end = i
             break
 
-    model_line_idxs = [
-        i
-        for i in range(config_start + 1, config_end)
-        if lines[i].lstrip().startswith("model:")
-    ]
+    model_line_idxs = [i for i in range(config_start + 1, config_end) if lines[i].lstrip().startswith("model:")]
     if len(model_line_idxs) == 0:
         raise ValueError("no 'model:' line inside the 'config:' block")
     if len(model_line_idxs) > 1:
-        raise ValueError(
-            f"expected exactly one 'model:' line in 'config:', found {len(model_line_idxs)}"
-        )
+        raise ValueError(f"expected exactly one 'model:' line in 'config:', found {len(model_line_idxs)}")
 
     idx = model_line_idxs[0]
     original = lines[idx]
@@ -91,7 +86,9 @@ def set_config_model(text: str, model: str) -> str:
 
 def override_file(path: Path, model: str) -> None:
     """Rewrite ``path`` in place, setting ``config.model`` to ``model``."""
-    text = path.read_text(encoding="utf-8")  # exception-handler-gap: WAIVED: override_file()'s only caller, main() (same file), wraps this call in except ValueError; UnicodeDecodeError is a ValueError subclass, so a non-UTF-8 file already exits 1 cleanly (verified by execution, no traceback)
+    text = path.read_text(
+        encoding="utf-8"
+    )  # exception-handler-gap: WAIVED: override_file()'s only caller, main() (same file), wraps this call in except ValueError; UnicodeDecodeError is a ValueError subclass, so a non-UTF-8 file already exits 1 cleanly (verified by execution, no traceback)
     path.write_text(set_config_model(text, model), encoding="utf-8")
 
 

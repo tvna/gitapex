@@ -387,9 +387,7 @@ def test_main_full_mode_requires_github_token(monkeypatch, tmp_path):
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
     path = tmp_path / "body.md"
     path.write_text(_VALID_ACM_TABLE, encoding="utf-8")
-    exit_code = gate.main(
-        ["--body", str(path), "--owner", "tvna", "--repo", "gitapex", "--issue-number", "414"]
-    )
+    exit_code = gate.main(["--body", str(path), "--owner", "tvna", "--repo", "gitapex", "--issue-number", "414"])
     assert exit_code == 1
 
 
@@ -397,13 +395,13 @@ def test_main_full_mode_pass_removes_label(monkeypatch, tmp_path, capsys):
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
     calls = []
     monkeypatch.setattr(gate, "remove_label", lambda *a, **k: calls.append(a))
-    monkeypatch.setattr(gate, "add_label", lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not label on pass")))
+    monkeypatch.setattr(
+        gate, "add_label", lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not label on pass"))
+    )
 
     path = tmp_path / "body.md"
     path.write_text(_VALID_ACM_TABLE, encoding="utf-8")
-    exit_code = gate.main(
-        ["--body", str(path), "--owner", "tvna", "--repo", "gitapex", "--issue-number", "414"]
-    )
+    exit_code = gate.main(["--body", str(path), "--owner", "tvna", "--repo", "gitapex", "--issue-number", "414"])
     assert exit_code == 0
     assert len(calls) == 1
     assert "PASS" in capsys.readouterr().out
@@ -421,9 +419,7 @@ def test_main_full_mode_fail_labels_and_comments_when_no_marker_yet(monkeypatch,
 
     path = tmp_path / "body.md"
     path.write_text("no acm here", encoding="utf-8")
-    exit_code = gate.main(
-        ["--body", str(path), "--owner", "tvna", "--repo", "gitapex", "--issue-number", "414"]
-    )
+    exit_code = gate.main(["--body", str(path), "--owner", "tvna", "--repo", "gitapex", "--issue-number", "414"])
     assert exit_code == 1
     assert len(ensure_calls) == 1
     assert len(add_calls) == 1
@@ -441,9 +437,7 @@ def test_main_full_mode_fail_does_not_repost_when_marker_already_present(monkeyp
 
     path = tmp_path / "body.md"
     path.write_text("no acm here", encoding="utf-8")
-    exit_code = gate.main(
-        ["--body", str(path), "--owner", "tvna", "--repo", "gitapex", "--issue-number", "414"]
-    )
+    exit_code = gate.main(["--body", str(path), "--owner", "tvna", "--repo", "gitapex", "--issue-number", "414"])
     assert exit_code == 1
     assert len(comment_calls) == 0
     assert "already present" in capsys.readouterr().out
@@ -458,9 +452,7 @@ def test_main_full_mode_exits_one_on_github_api_error(monkeypatch, tmp_path):
     monkeypatch.setattr(gate, "ensure_label_exists", raise_api_error)
     path = tmp_path / "body.md"
     path.write_text("no acm here", encoding="utf-8")
-    exit_code = gate.main(
-        ["--body", str(path), "--owner", "tvna", "--repo", "gitapex", "--issue-number", "414"]
-    )
+    exit_code = gate.main(["--body", str(path), "--owner", "tvna", "--repo", "gitapex", "--issue-number", "414"])
     assert exit_code == 1
 
 

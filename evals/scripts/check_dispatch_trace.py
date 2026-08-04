@@ -58,6 +58,7 @@ this module's design:
 Standard library only, matching this repository's other `evals/scripts/*.py`
 tooling.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -165,7 +166,9 @@ def iter_tool_use_blocks(transcript_path: Path) -> Iterator[dict[str, Any]]:
     ``.get()``-ing arbitrary fields off it (e.g. ``count_dispatches`` below)
     sees exactly the same object it always did.
     """
-    with transcript_path.open(encoding="utf-8") as handle:  # exception-handler-gap: WAIVED: this generator's only caller, check_transcript() (same file), is invoked at both call sites in main() inside except (ValueError, OSError); UnicodeDecodeError is a ValueError subclass, and verified by execution (including mid-iteration, after several well-formed lines already yielded) that a non-UTF-8 transcript propagates cleanly through the for-loop consumer in count_dispatches() and is caught there, no traceback
+    with (
+        transcript_path.open(encoding="utf-8") as handle
+    ):  # exception-handler-gap: WAIVED: this generator's only caller, check_transcript() (same file), is invoked at both call sites in main() inside except (ValueError, OSError); UnicodeDecodeError is a ValueError subclass, and verified by execution (including mid-iteration, after several well-formed lines already yielded) that a non-UTF-8 transcript propagates cleanly through the for-loop consumer in count_dispatches() and is caught there, no traceback
         for lineno, raw in enumerate(handle, start=1):
             raw = raw.strip()
             if not raw:
@@ -183,9 +186,7 @@ def iter_tool_use_blocks(transcript_path: Path) -> Iterator[dict[str, Any]]:
                 # is coerced to None by the tolerant validators above, never
                 # rejected. type(obj).__name__ (not a type derived from the
                 # pydantic error) reproduces the pre-pydantic message exactly.
-                raise ValueError(
-                    f"line {lineno}: expected a JSON object, got {type(obj).__name__}"
-                ) from exc
+                raise ValueError(f"line {lineno}: expected a JSON object, got {type(obj).__name__}") from exc
             if event.message is None or event.message.content is None:
                 continue
             for block in event.message.content:
@@ -245,8 +246,10 @@ def check_transcript(
     forward pass, so buffering the whole transcript in memory first would
     cost real memory on a long transcript for no benefit."""
     return count_dispatches(
-        iter_tool_use_blocks(transcript_path), dispatch_tool_names,
-        dispatch_bash_pattern, bash_tool_name,
+        iter_tool_use_blocks(transcript_path),
+        dispatch_tool_names,
+        dispatch_bash_pattern,
+        bash_tool_name,
     )
 
 
@@ -264,9 +267,7 @@ def build_isolated_home(base_dir: Path) -> Path:
     """
     home_env = os.environ.get("HOME")
     if not home_env:
-        raise FileNotFoundError(
-            "$HOME is not set -- refusing to guess a fallback location"
-        )
+        raise FileNotFoundError("$HOME is not set -- refusing to guess a fallback location")
     real_home = Path(home_env)
     real_claude_dir = real_home / ".claude"
     if not real_claude_dir.is_dir():
@@ -285,7 +286,8 @@ def build_isolated_home(base_dir: Path) -> Path:
         return []
 
     shutil.copytree(
-        real_claude_dir, isolated_home / ".claude",
+        real_claude_dir,
+        isolated_home / ".claude",
         ignore=_ignore_top_level_strip_dirs,
     )
     real_claude_json = real_home / ".claude.json"
@@ -358,13 +360,16 @@ def register_plugin_marketplace(
         # S603 waived: argv is built above from a resolved absolute
         # claude_bin plus fixed literals, and runs with no shell.
         result = subprocess.run(  # noqa: S603
-            argv, cwd=str(isolated_cwd), env=env, capture_output=True,
-            text=True, check=False, timeout=timeout_seconds,
+            argv,
+            cwd=str(isolated_cwd),
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=timeout_seconds,
         )
         if result.returncode != 0:
-            raise PluginRegistrationError(
-                f"{' '.join(argv)} exited {result.returncode}: {result.stderr}"
-            )
+            raise PluginRegistrationError(f"{' '.join(argv)} exited {result.returncode}: {result.stderr}")
 
 
 _DEFAULT_LIVE_DISPATCH_TIMEOUT_SECONDS = 600
@@ -428,8 +433,13 @@ def run_live_dispatch(
     with transcript_out.open("w", encoding="utf-8") as out:
         # S603 waived: same caller-supplied argv list, no shell.
         result = subprocess.run(  # noqa: S603
-            argv, cwd=str(isolated_cwd), env=env, stdout=out,
-            stderr=subprocess.PIPE, text=True, check=False,
+            argv,
+            cwd=str(isolated_cwd),
+            env=env,
+            stdout=out,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
             timeout=timeout_seconds,
         )
     return result
@@ -447,21 +457,23 @@ def main(argv: list[str] | None = None) -> int:
     )
     check_p.add_argument("--transcript", required=True, help="Path to a stream-json transcript file.")
     check_p.add_argument(
-        "--dispatch-tool-name", action="append", required=True, dest="dispatch_tool_names",
+        "--dispatch-tool-name",
+        action="append",
+        required=True,
+        dest="dispatch_tool_names",
         help="A tool_use name that counts as a dispatch (repeatable). Never defaulted -- "
-             "see this module's docstring for why the name must be caller-verified.",
+        "see this module's docstring for why the name must be caller-verified.",
     )
     check_p.add_argument(
-        "--dispatch-bash-pattern", default=None,
+        "--dispatch-bash-pattern",
+        default=None,
         help="Optional regex; a Bash tool_use whose input.command matches also counts as a "
-             "dispatch (a nested `claude -p` subprocess dispatch, see docstring lesson 2).",
+        "dispatch (a nested `claude -p` subprocess dispatch, see docstring lesson 2).",
     )
     check_p.add_argument("--bash-tool-name", default="Bash", help="Tool name matched by --dispatch-bash-pattern.")
     check_p.add_argument("--min-dispatches", type=int, default=1)
 
-    run_p = sub.add_parser(
-        "run", help="Live: run one isolated claude -p dispatch and check its transcript."
-    )
+    run_p = sub.add_parser("run", help="Live: run one isolated claude -p dispatch and check its transcript.")
     run_p.add_argument("--prompt-file", required=True)
     run_p.add_argument("--transcript-out", required=True)
     run_p.add_argument("--dispatch-tool-name", action="append", required=True, dest="dispatch_tool_names")
@@ -469,36 +481,42 @@ def main(argv: list[str] | None = None) -> int:
     run_p.add_argument("--bash-tool-name", default="Bash", help="Tool name matched by --dispatch-bash-pattern.")
     run_p.add_argument("--min-dispatches", type=int, default=1)
     run_p.add_argument(
-        "--allowed-tools", default="Agent",
+        "--allowed-tools",
+        default="Agent",
         help="Space-separated tools to allow in the dispatched session. If --dispatch-bash-"
-             "pattern is also given and --bash-tool-name is not already listed here, it is "
-             "auto-appended -- otherwise the nested-dispatch shape this flag exists to detect "
-             "would always be denied by the harness itself before it could ever be observed.",
+        "pattern is also given and --bash-tool-name is not already listed here, it is "
+        "auto-appended -- otherwise the nested-dispatch shape this flag exists to detect "
+        "would always be denied by the harness itself before it could ever be observed.",
     )
     run_p.add_argument("--permission-mode", default="acceptEdits")
     run_p.add_argument("--plugin-dir", default=None)
     run_p.add_argument("--add-dir", default=None)
-    run_p.add_argument("--isolated-home", default=None, help="Reuse an existing isolated $HOME; else build a fresh one.")
+    run_p.add_argument(
+        "--isolated-home", default=None, help="Reuse an existing isolated $HOME; else build a fresh one."
+    )
     run_p.add_argument("--claude-bin", default="claude")
     run_p.add_argument(
-        "--timeout", type=float, default=_DEFAULT_LIVE_DISPATCH_TIMEOUT_SECONDS,
-        help="Seconds before a stalled live dispatch is killed (default 600). "
-             "0 or negative disables the timeout.",
+        "--timeout",
+        type=float,
+        default=_DEFAULT_LIVE_DISPATCH_TIMEOUT_SECONDS,
+        help="Seconds before a stalled live dispatch is killed (default 600). 0 or negative disables the timeout.",
     )
     run_p.add_argument(
-        "--marketplace-source", default=None,
+        "--marketplace-source",
+        default=None,
         help="Path to an isolated copy that should contain "
-             ".claude-plugin/marketplace.json. When given (with --plugin-name), "
-             "runs `claude plugin marketplace add`/`claude plugin install` "
-             "against the isolated $HOME before dispatching, and fails loudly "
-             "(exit 2) if the manifest is missing, rather than dispatching in "
-             "degraded mode (gitapex #621). Must be given together with "
-             "--plugin-name.",
+        ".claude-plugin/marketplace.json. When given (with --plugin-name), "
+        "runs `claude plugin marketplace add`/`claude plugin install` "
+        "against the isolated $HOME before dispatching, and fails loudly "
+        "(exit 2) if the manifest is missing, rather than dispatching in "
+        "degraded mode (gitapex #621). Must be given together with "
+        "--plugin-name.",
     )
     run_p.add_argument(
-        "--plugin-name", default=None,
+        "--plugin-name",
+        default=None,
         help="Plugin name to `claude plugin install` (e.g. gitapex@gitapex). "
-             "Must be given together with --marketplace-source.",
+        "Must be given together with --marketplace-source.",
     )
 
     args = parser.parse_args(argv)
@@ -589,8 +607,10 @@ def main(argv: list[str] | None = None) -> int:
                     # process's real cwd), so a relative path must be
                     # resolved against *this* process's cwd first -- the
                     # same reasoning --isolated-home already applies above.
-                    Path(marketplace_source).resolve(), plugin_name,
-                    isolated_home=isolated_home, isolated_cwd=isolated_cwd,
+                    Path(marketplace_source).resolve(),
+                    plugin_name,
+                    isolated_home=isolated_home,
+                    isolated_cwd=isolated_cwd,
                     claude_bin=args.claude_bin,
                 )
             except PluginRegistrationError as exc:
@@ -611,8 +631,10 @@ def main(argv: list[str] | None = None) -> int:
 
         try:
             result = run_live_dispatch(
-                prompt, transcript_out,
-                isolated_cwd=isolated_cwd, isolated_home=isolated_home,
+                prompt,
+                transcript_out,
+                isolated_cwd=isolated_cwd,
+                isolated_home=isolated_home,
                 allowed_tools=allowed_tools,
                 plugin_dir=Path(args.plugin_dir) if args.plugin_dir else None,
                 add_dir=Path(args.add_dir) if args.add_dir else None,

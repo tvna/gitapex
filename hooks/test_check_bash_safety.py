@@ -50,7 +50,9 @@ def run(
 
 def assert_denied(command: str) -> None:
     result = run(command)
-    assert result.returncode == 2, f"expected deny (exit 2) for {command!r}, got {result.returncode}: stderr={result.stderr!r}"
+    assert result.returncode == 2, (
+        f"expected deny (exit 2) for {command!r}, got {result.returncode}: stderr={result.stderr!r}"
+    )
     payload = json.loads(result.stderr)
     assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"
     assert payload["systemMessage"]
@@ -58,7 +60,9 @@ def assert_denied(command: str) -> None:
 
 def assert_allowed(command: str) -> None:
     result = run(command)
-    assert result.returncode == 0, f"expected allow (exit 0) for {command!r}, got {result.returncode}: stderr={result.stderr!r}"
+    assert result.returncode == 0, (
+        f"expected allow (exit 0) for {command!r}, got {result.returncode}: stderr={result.stderr!r}"
+    )
     # warn() also exits 0 while emitting a systemMessage on stdout -- exit
     # code alone can't distinguish a clean allow from a regression that
     # starts warning on one of these commands, so require silence too.

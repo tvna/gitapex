@@ -63,6 +63,7 @@ module directly, not in this script's own exit code. 2 on a malformed or
 unreadable input (a fixture, dimensions file, or SKILL.md this script
 cannot parse into the shape it expects).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -132,10 +133,7 @@ def discover_dimensions(dimensions_file: Path) -> dict[str, str]:
     found = {m.group(1): m.group(2).strip() for m in _DIMENSION_HEADING_RE.finditer(text)}
     if found:
         return found
-    return {
-        m.group(1): " ".join(m.group(2).split())
-        for m in _DIMENSION_LIST_RE.finditer(text)
-    }
+    return {m.group(1): " ".join(m.group(2).split()) for m in _DIMENSION_LIST_RE.finditer(text)}
 
 
 def discover_axes(skill_md: Path) -> dict[str, str]:
@@ -210,10 +208,10 @@ def _cited_dimension_numbers(haystack: str) -> set[str]:
     """
     found: set[str] = set()
     for word_match in _DIMENSION_WORD_RE.finditer(haystack):
-        tail = haystack[word_match.end():word_match.end() + DIM_CITATION_WINDOW]
+        tail = haystack[word_match.end() : word_match.end() + DIM_CITATION_WINDOW]
         end_match = _SENTENCE_END_RE.search(tail)
         if end_match:
-            tail = tail[:end_match.start()]
+            tail = tail[: end_match.start()]
         found.update(_NUMBER_RE.findall(tail))
     return found
 
@@ -256,9 +254,7 @@ def discover_citations(
     return dimension_hits, axis_hits
 
 
-def compute_coverage(
-    skill_dir: Path, tasks_glob: str, dimensions_file: Path | None = None
-) -> CoverageReport:
+def compute_coverage(skill_dir: Path, tasks_glob: str, dimensions_file: Path | None = None) -> CoverageReport:
     dim_path = dimensions_file or (skill_dir / DEFAULT_DIMENSIONS_FILENAME)
     dimensions = discover_dimensions(dim_path)
     axes = discover_axes(skill_dir / "SKILL.md")
@@ -273,9 +269,7 @@ def _item_line(key: str, hits: list[str] | None, label: str) -> str:
 
 def format_report(report: CoverageReport) -> str:
     lines: list[str] = []
-    lines.append(
-        f"Dimensions: {len(report.dimension_hits)}/{len(report.dimensions)} cited"
-    )
+    lines.append(f"Dimensions: {len(report.dimension_hits)}/{len(report.dimensions)} cited")
     for number in sorted(report.dimensions, key=int):
         label = f"{number}. {report.dimensions[number]}"
         lines.append(_item_line(number, report.dimension_hits.get(number), label))
@@ -341,9 +335,7 @@ def _validation_error_message(exc: ValidationError) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(
-        description="Report dimension/axis coverage of an eval corpus (read-only)."
-    )
+    parser = argparse.ArgumentParser(description="Report dimension/axis coverage of an eval corpus (read-only).")
     parser.add_argument("--skill-dir", required=True)
     parser.add_argument("--tasks-glob", required=True)
     parser.add_argument("--dimensions-file", default=None)

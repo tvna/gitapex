@@ -171,12 +171,7 @@ def _name_prefix(name: str) -> str:
 def _line_pattern(name: str, verdicts: Iterable[str]) -> re.Pattern[str]:
     verdict_alt = "|".join(re.escape(v) for v in verdicts)
     return re.compile(
-        _name_prefix(name)
-        + r"(?:(?:"
-        + verdict_alt
-        + r")\b(?:[ \t]+\S.*)?|"
-        + _WAIVED_CLAUSE
-        + r")[ \t]*$",
+        _name_prefix(name) + r"(?:(?:" + verdict_alt + r")\b(?:[ \t]+\S.*)?|" + _WAIVED_CLAUSE + r")[ \t]*$",
         re.IGNORECASE | re.MULTILINE,
     )
 
@@ -254,8 +249,7 @@ _PROCESS_DISCLOSURE_CHECKS = (
         ),
         fail_subject="security-relevant skill change",
         fail_hint=(
-            ", disclosing whether an adversarial coverage-mapping round "
-            "ran against this security-relevant skill"
+            ", disclosing whether an adversarial coverage-mapping round ran against this security-relevant skill"
         ),
         verdicts=_PROCESS_DISCLOSURE_VERDICTS,
     ),
@@ -289,10 +283,7 @@ _PROCESS_DISCLOSURE_CHECKS = (
             "(issue #565, refs #560 repair 5)."
         ),
         fail_subject="changed deterministic checker script",
-        fail_hint=(
-            ", disclosing whether an adversarial review round ran against "
-            "this deterministic checker script"
-        ),
+        fail_hint=(", disclosing whether an adversarial review round ran against this deterministic checker script"),
         verdicts=_PROCESS_DISCLOSURE_VERDICTS,
     ),
     # Issue #673 (refs #665 repair 1): this repository's own deterministic
@@ -340,8 +331,7 @@ _PROCESS_DISCLOSURE_CHECKS = (
 )
 
 _PROCESS_DISCLOSURE_LINE_RES = {
-    check.name: _line_pattern(check.name, check.verdicts)
-    for check in _PROCESS_DISCLOSURE_CHECKS
+    check.name: _line_pattern(check.name, check.verdicts) for check in _PROCESS_DISCLOSURE_CHECKS
 }
 
 
@@ -360,7 +350,7 @@ def _extract_section(body_text: str) -> str | None:
         return None
     next_heading = _NEXT_HEADING_RE.search(body_text, match.end())
     end = next_heading.start() if next_heading else len(body_text)
-    return body_text[match.end():end]
+    return body_text[match.end() : end]
 
 
 def _missing_base_disclosures(section: str | None) -> list[str]:
@@ -396,16 +386,12 @@ def _disallowed_battle_testing_waiver(section: str | None, description_changed_s
     return []
 
 
-def find_disallowed_battle_testing_waiver(
-    body_text: str | None, description_changed_skills: list[str]
-) -> list[str]:
+def find_disallowed_battle_testing_waiver(body_text: str | None, description_changed_skills: list[str]) -> list[str]:
     """Return description_changed_skills unchanged if the PR body discloses
     battle-testing-a-skill as WAIVED despite one of those skills' SKILL.md
     description line having changed in this diff (Repair 3); else [].
     """
-    return _disallowed_battle_testing_waiver(
-        _extract_section(_normalize_body(body_text)), description_changed_skills
-    )
+    return _disallowed_battle_testing_waiver(_extract_section(_normalize_body(body_text)), description_changed_skills)
 
 
 def _missing_in_section(section: str | None, items: list[str], pattern: re.Pattern[str]) -> list[str]:
@@ -443,9 +429,7 @@ def find_missing_eval_coverage_disclosure(body_text: str | None, needs_eval_cove
     return _find_missing_disclosure(body_text, needs_eval_coverage_skills, _EVAL_COVERAGE_WAIVER_RE)
 
 
-def find_missing_security_coverage_disclosure(
-    body_text: str | None, security_relevant_skills: list[str]
-) -> list[str]:
+def find_missing_security_coverage_disclosure(body_text: str | None, security_relevant_skills: list[str]) -> list[str]:
     """Return security_relevant_skills unchanged if none of them is covered
     by an adversarial-coverage-mapping RAN/NOT-RUN/WAIVED line in the PR
     body (issue #517, refs #454); else [].
@@ -465,9 +449,7 @@ def find_missing_design_doc_disclosure(body_text: str | None, changed_design_doc
     )
 
 
-def find_missing_checker_script_disclosure(
-    body_text: str | None, changed_checker_scripts: list[str]
-) -> list[str]:
+def find_missing_checker_script_disclosure(body_text: str | None, changed_checker_scripts: list[str]) -> list[str]:
     """Return changed_checker_scripts unchanged if none of them is covered by
     a checker-script-adversarial-review RAN/NOT-RUN/WAIVED line in the PR
     body (issue #565, refs #560 repair 5); else [].
@@ -545,9 +527,7 @@ def main(argv: list[str] | None = None) -> int:
         "evals/<skill>/eval-status.md.",
     )
     for check in _PROCESS_DISCLOSURE_CHECKS:
-        parser.add_argument(
-            check.cli_flag, dest=check.cli_dest, default="", help=check.help_text
-        )
+        parser.add_argument(check.cli_flag, dest=check.cli_dest, default="", help=check.help_text)
     parser.add_argument(
         "--skill-md-changed",
         action="store_true",
@@ -562,9 +542,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         body_text = (
-            Path(args.body).read_text(encoding="utf-8")
-            if args.body
-            else sys.stdin.buffer.read().decode("utf-8")
+            Path(args.body).read_text(encoding="utf-8") if args.body else sys.stdin.buffer.read().decode("utf-8")
         )
     except FileNotFoundError:
         print(f"error: body file not found: {args.body}", file=sys.stderr)
@@ -584,12 +562,8 @@ def main(argv: list[str] | None = None) -> int:
     missing = _missing_base_disclosures(section) if args.skill_md_changed else []
     description_changed_skills = _parse_comma_list(args.description_changed_skills)
     needs_eval_coverage_skills = _parse_comma_list(args.needs_eval_coverage_skills)
-    disallowed_waiver_skills = _disallowed_battle_testing_waiver(
-        section, description_changed_skills
-    )
-    missing_eval_coverage_skills = _missing_in_section(
-        section, needs_eval_coverage_skills, _EVAL_COVERAGE_WAIVER_RE
-    )
+    disallowed_waiver_skills = _disallowed_battle_testing_waiver(section, description_changed_skills)
+    missing_eval_coverage_skills = _missing_in_section(section, needs_eval_coverage_skills, _EVAL_COVERAGE_WAIVER_RE)
     process_disclosure_missing = {
         check.name: _missing_in_section(
             section,
@@ -610,8 +584,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if missing:
         print(
-            "FAIL: PR body is missing a disclosed verdict (or waiver) for: "
-            + ", ".join(missing),
+            "FAIL: PR body is missing a disclosed verdict (or waiver) for: " + ", ".join(missing),
             file=sys.stderr,
         )
         print(

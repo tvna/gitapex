@@ -89,9 +89,7 @@ def _assertion_list(assertions: Mapping[str, Any], key: str) -> list[Any]:
     if value is None:
         return []
     if not isinstance(value, list):
-        raise ValueError(
-            f"{key} must be a list of substrings, got {type(value).__name__}"
-        )
+        raise ValueError(f"{key} must be a list of substrings, got {type(value).__name__}")
     return value
 
 
@@ -115,9 +113,7 @@ def _near_satisfied(text: str, entry: Any) -> bool:
     occurrences (see this module's docstring for why both checks are used
     together, not the character window alone)."""
     if not isinstance(entry, Mapping):
-        raise ValueError(
-            f"output_contains_near entries must be mappings, got {type(entry).__name__}"
-        )
+        raise ValueError(f"output_contains_near entries must be mappings, got {type(entry).__name__}")
     substrings = entry.get("all")
     if not isinstance(substrings, list) or len(substrings) < 2:
         raise ValueError("output_contains_near entries need an 'all' list of >= 2 substrings")
@@ -157,20 +153,14 @@ def score(output_text: str | None, assertions: Mapping[str, Any]) -> float:
     since a fixture with nothing to assert cannot score a run.
     """
     if not isinstance(assertions, Mapping):
-        raise ValueError(
-            f"assertions must be a mapping, got {type(assertions).__name__}"
-        )
+        raise ValueError(f"assertions must be a mapping, got {type(assertions).__name__}")
     contains = _assertion_list(assertions, "output_contains")
     not_contains = _assertion_list(assertions, "output_not_contains")
     icontains = _assertion_list(assertions, "output_icontains")
     not_icontains = _assertion_list(assertions, "output_not_icontains")
     near = _near_entry_list(assertions, "output_contains_near")
     not_near = _near_entry_list(assertions, "output_not_contains_near")
-    total = (
-        len(contains) + len(not_contains)
-        + len(icontains) + len(not_icontains)
-        + len(near) + len(not_near)
-    )
+    total = len(contains) + len(not_contains) + len(icontains) + len(not_icontains) + len(near) + len(not_near)
     if total == 0:
         raise ValueError(
             "empty assertion set: a fixture with no output_contains, "
@@ -233,9 +223,7 @@ def _published_correctness(value: float) -> float:
 def _validate_published_prior(value: float) -> None:
     """Require a prior copied from this CLI's six-decimal output."""
     if value != _published_correctness(value):
-        raise ValueError(
-            "prior correctness must use the CLI's published six-decimal precision"
-        )
+        raise ValueError("prior correctness must use the CLI's published six-decimal precision")
 
 
 def strict_compare(before_mean: float, after_mean: float) -> str:
@@ -300,9 +288,7 @@ def main(argv: list[str] | None = None) -> int:
     ``DISPATCH_TRACE_UNVERIFIED`` -- again a recorded field, never blended
     into the substring score (issue #584).
     """
-    parser = argparse.ArgumentParser(
-        description="Score a run against a task's substring assertions."
-    )
+    parser = argparse.ArgumentParser(description="Score a run against a task's substring assertions.")
     parser.add_argument(
         "--assertions",
         help="Path to a JSON file with output_contains / output_not_contains lists.",
@@ -363,12 +349,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     context_costs = (args.prior_context_cost, args.candidate_context_cost)
-    if args.pruning_only and (
-        args.compare_to is None or any(value is None for value in context_costs)
-    ):
+    if args.pruning_only and (args.compare_to is None or any(value is None for value in context_costs)):
         print(
-            "error: --pruning-only requires --compare-to, "
-            "--prior-context-cost, and --candidate-context-cost",
+            "error: --pruning-only requires --compare-to, --prior-context-cost, and --candidate-context-cost",
             file=sys.stderr,
         )
         return 1

@@ -64,9 +64,7 @@ def _precondition_bullet(rubric_text):
     """Return the Contract discipline **Precondition** bullet text."""
     section = re.search(r"\n## Contract discipline\n(.*?)\n## ", rubric_text, re.S)
     assert section, "rubric.md has no '## Contract discipline' section -- gate cannot run"
-    bullet = re.search(
-        r"- \*\*Precondition\*\*.*?(?=\n- \*\*Postcondition\*\*)", section.group(1), re.S
-    )
+    bullet = re.search(r"- \*\*Precondition\*\*.*?(?=\n- \*\*Postcondition\*\*)", section.group(1), re.S)
     assert bullet, "Contract discipline has no **Precondition** bullet in the expected shape"
     return bullet.group(0)
 

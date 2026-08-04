@@ -7,14 +7,14 @@ real `skills/*/`, so the checks -- including the issue #171 Portable
 self-citation scan -- gate actual skill content in CI (the `test.yml`
 pytest run), not only hand-built cases.
 """
+
 from pathlib import Path
 
 import check_skill_shape as css
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-SKILL_DIRS = sorted(
-    p for p in (REPO_ROOT / "skills").iterdir() if (p / "SKILL.md").is_file())
+SKILL_DIRS = sorted(p for p in (REPO_ROOT / "skills").iterdir() if (p / "SKILL.md").is_file())
 
 
 @pytest.mark.parametrize("skill_dir", SKILL_DIRS, ids=lambda p: p.name)

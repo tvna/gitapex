@@ -31,9 +31,7 @@ MIN_EXPECTED_SKILLS = 15
 def _discover_skill_dirs() -> list[pathlib.Path]:
     if not SKILLS_DIR.is_dir():
         return []
-    return sorted(
-        p.parent for p in SKILLS_DIR.glob("*/SKILL.md") if p.is_file()
-    )
+    return sorted(p.parent for p in SKILLS_DIR.glob("*/SKILL.md") if p.is_file())
 
 
 SKILL_DIRS = _discover_skill_dirs()
@@ -48,18 +46,12 @@ def test_discovery_found_a_plausible_number_of_skills():
     )
 
 
-@pytest.mark.parametrize(
-    "skill_dir", SKILL_DIRS, ids=[d.name for d in SKILL_DIRS]
-)
+@pytest.mark.parametrize("skill_dir", SKILL_DIRS, ids=[d.name for d in SKILL_DIRS])
 def test_skill_passes_deterministic_shape_checker(skill_dir):
     results = css.check_shape(skill_dir)
     failures = [r for r in results if not r.passed]
-    assert not failures, (
-        f"{skill_dir.name}: {len(failures)} shape check(s) failed:\n"
-        + "\n".join(
-            f"  - {r.name}: {r.rule} -- evidence: {r.evidence}"
-            for r in failures
-        )
+    assert not failures, f"{skill_dir.name}: {len(failures)} shape check(s) failed:\n" + "\n".join(
+        f"  - {r.name}: {r.rule} -- evidence: {r.evidence}" for r in failures
     )
 
 
@@ -92,8 +84,7 @@ def test_skill_provenance_file_stays_retired():
 @pytest.mark.parametrize("skill_name", SKILLS_WITH_MIGRATED_PROVENANCE)
 def test_migrated_provenance_stays_populated(skill_name):
     skill_dir = SKILLS_DIR / skill_name
-    parsed = css._parse_manifest(
-        (skill_dir / css.SIDECAR_RELATIVE_PATH).read_text(encoding="utf-8"))
+    parsed = css._parse_manifest((skill_dir / css.SIDECAR_RELATIVE_PATH).read_text(encoding="utf-8"))
     spec = css.spec_of(parsed)
     references = spec.get("references") if spec is not None else None
     assert isinstance(references, list) and references, (
@@ -142,7 +133,7 @@ def _find_requires_cycle(graph: dict[str, list[str]]) -> list[str] | None:
             if dep not in color:
                 continue
             if color[dep] == GRAY:
-                return [*path[path.index(dep):], dep]
+                return [*path[path.index(dep) :], dep]
             if color[dep] == WHITE:
                 found = visit(dep)
                 if found:
@@ -191,8 +182,10 @@ def test_find_requires_cycle_handles_relatedto_style_mutual_edges_if_misused():
     # of requires, a legitimate mutual/cyclic relatedTo pair (fine per the
     # design spec) would still report as a "cycle" -- confirming callers
     # must build the graph from `requires` only, never `relatedTo`.
-    graph = {"ranking-the-open-queue": ["responding-to-a-fresh-arrival"],
-             "responding-to-a-fresh-arrival": ["ranking-the-open-queue"]}
+    graph = {
+        "ranking-the-open-queue": ["responding-to-a-fresh-arrival"],
+        "responding-to-a-fresh-arrival": ["ranking-the-open-queue"],
+    }
     assert _find_requires_cycle(graph) is not None
 
 
@@ -220,10 +213,8 @@ def test_real_requires_graph_does_not_crash_on_malformed_spec_scalar(tmp_path):
     skill_dir = tmp_path / "malformed-skill"
     (skill_dir / pathlib.Path(css.SIDECAR_RELATIVE_PATH).parent).mkdir(parents=True)
     (skill_dir / css.SIDECAR_RELATIVE_PATH).write_text(
-        "apiVersion: gitapex.io/v1alpha1\n"
-        "kind: SkillMetadata\n"
-        "spec: not-a-mapping-scalar\n",
-        encoding="utf-8")
+        "apiVersion: gitapex.io/v1alpha1\nkind: SkillMetadata\nspec: not-a-mapping-scalar\n", encoding="utf-8"
+    )
     graph = _real_requires_graph(skill_dirs=[skill_dir])
     assert graph == {"malformed-skill": []}
 
@@ -257,8 +248,7 @@ _BARE_GET_SPEC_RE = re.compile(r"""\.get\(\s*["']spec["']""")
 
 def _find_bare_get_spec_offenders(text: str) -> list[int]:
     """1-based line numbers of a bare get-on-spec chain in ``text``."""
-    return [text.count("\n", 0, match.start()) + 1
-            for match in _BARE_GET_SPEC_RE.finditer(text)]
+    return [text.count("\n", 0, match.start()) + 1 for match in _BARE_GET_SPEC_RE.finditer(text)]
 
 
 def test_find_bare_get_spec_offenders_catches_multiline_call():
@@ -286,8 +276,7 @@ def _scan_for_bare_get_spec(root: pathlib.Path) -> list[str]:
         for test_file in sorted(root.glob(pattern)):
             text = test_file.read_text(encoding="utf-8")
             offenders.extend(
-                f"{test_file.relative_to(root)}:{lineno}"
-                for lineno in _find_bare_get_spec_offenders(text)
+                f"{test_file.relative_to(root)}:{lineno}" for lineno in _find_bare_get_spec_offenders(text)
             )
     return offenders
 
@@ -306,7 +295,7 @@ def test_no_bare_get_spec_chain_in_tests():
 # text never contains the offending get-on-spec substring -- otherwise
 # this file (itself scanned by test_no_bare_get_spec_chain_in_tests, since
 # it lives under tests/*.py) would flag itself.
-_OFFENDING_LINE = 'x = parsed.root.get(' + '"spec"' + ')\n'
+_OFFENDING_LINE = "x = parsed.root.get(" + '"spec"' + ")\n"
 
 
 def test_scan_for_bare_get_spec_catches_offender_in_skill_scripts_glob(tmp_path):
@@ -371,8 +360,7 @@ def test_skill_dep_list_item_re_indent_matches_its_docstrings():
 
     source_lines = pathlib.Path(css.__file__).read_text(encoding="utf-8").splitlines()
     definition_index = next(
-        i for i, line in enumerate(source_lines)
-        if line.startswith("SKILL_DEP_LIST_ITEM_RE = re.compile(")
+        i for i, line in enumerate(source_lines) if line.startswith("SKILL_DEP_LIST_ITEM_RE = re.compile(")
     )
     comment_block = _preceding_prose_block(source_lines, definition_index)
     comment_stated = _STATED_MIN_INDENT_RE.search(comment_block)
@@ -397,10 +385,8 @@ def test_skill_dep_list_item_re_indent_matches_its_docstrings():
     # review, PR #402).
     skill_deps_index = docstring.index("spec.skillDependencies")
     next_bullet = re.search(r"\n {4}- spec\.\w+", docstring[skill_deps_index:])
-    skill_deps_end = (skill_deps_index + next_bullet.start() if next_bullet
-                       else len(docstring))
-    docstring_stated = _STATED_MIN_INDENT_RE.search(
-        docstring, skill_deps_index, skill_deps_end)
+    skill_deps_end = skill_deps_index + next_bullet.start() if next_bullet else len(docstring)
+    docstring_stated = _STATED_MIN_INDENT_RE.search(docstring, skill_deps_index, skill_deps_end)
     assert docstring_stated is not None, (
         "_parse_manifest's docstring no longer states an 'N or more spaces' "
         "minimum indent for spec.skillDependencies list items -- update "

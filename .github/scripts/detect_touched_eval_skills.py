@@ -246,10 +246,7 @@ def touched_skills(paths: list[str]) -> list[str]:
         if skill == _EXCLUDED_SKILL_SEGMENT:
             continue
         if not _SKILL_NAME_RE.fullmatch(skill):
-            raise ValueError(
-                f"path {path!r} has a skill-name segment {skill!r} that does "
-                "not match ^[A-Za-z0-9_-]+$"
-            )
+            raise ValueError(f"path {path!r} has a skill-name segment {skill!r} that does not match ^[A-Za-z0-9_-]+$")
         skills.add(skill)
     return sorted(skills)
 

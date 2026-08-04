@@ -85,18 +85,13 @@ def _missing_fields(section_text: str) -> list[str]:
     for required in _REQUIRED_EXACT:
         if not found.get(required):
             missing.append(required)
-    has_owning = any(
-        label.startswith(_REQUIRED_PREFIX) and value
-        for label, value in found.items()
-    )
+    has_owning = any(label.startswith(_REQUIRED_PREFIX) and value for label, value in found.items())
     if not has_owning:
         missing.append("owning ...")
     return missing
 
 
-def check_axis_shape(
-    body_text: str, expected_labels: frozenset[str] = _DEFAULT_EXPECTED_LABELS
-) -> list[str]:
+def check_axis_shape(body_text: str, expected_labels: frozenset[str] = _DEFAULT_EXPECTED_LABELS) -> list[str]:
     """Return one evidence string per offense found: a required field
     missing from an axis section, a label outside ``expected_labels``, an
     expected label that never appears, a label appearing more than once,
@@ -120,22 +115,15 @@ def check_axis_shape(
             continue
         missing = _missing_fields(section_text)
         if missing:
-            offenses.append(
-                f"Axis {label} ({name}): missing {', '.join(missing)}"
-            )
+            offenses.append(f"Axis {label} ({name}): missing {', '.join(missing)}")
     seen_set = set(seen_labels)
     for expected in sorted(expected_labels):
         if expected not in seen_set:
-            offenses.append(
-                f"Axis {expected}: expected but no '## Axis {expected}:' "
-                "heading found in the document"
-            )
+            offenses.append(f"Axis {expected}: expected but no '## Axis {expected}:' heading found in the document")
     for label in sorted(seen_set):
         count = seen_labels.count(label)
         if count > 1:
-            offenses.append(
-                f"Axis {label}: appears {count} times, expected exactly once"
-            )
+            offenses.append(f"Axis {label}: appears {count} times, expected exactly once")
     return offenses
 
 

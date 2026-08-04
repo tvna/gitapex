@@ -839,10 +839,7 @@ def test_main_blank_body_file_keeps_field_label(monkeypatch: pytest.MonkeyPatch,
     # min_length text alone does not say which field failed.
     monkeypatch.setenv("GH_TOKEN", "tok")
     monkeypatch.setenv("REPO", "o/r")
-    rc = spp.main(
-        ["--base", "main", "--branch", "chore", "--title", "t",
-         "--body-file", "", "--commit-subject", "s"]
-    )
+    rc = spp.main(["--base", "main", "--branch", "chore", "--title", "t", "--body-file", "", "--commit-subject", "s"])
     assert rc == 1
     assert capsys.readouterr().err == "Error: body_file: String should have at least 1 character\n"
 
@@ -853,14 +850,10 @@ def test_main_blank_title_and_body_file_both_labeled(monkeypatch: pytest.MonkeyP
     # line -- each keeps its own "field: " label.
     monkeypatch.setenv("GH_TOKEN", "tok")
     monkeypatch.setenv("REPO", "o/r")
-    rc = spp.main(
-        ["--base", "main", "--branch", "chore", "--title", "",
-         "--body-file", "", "--commit-subject", "s"]
-    )
+    rc = spp.main(["--base", "main", "--branch", "chore", "--title", "", "--body-file", "", "--commit-subject", "s"])
     assert rc == 1
     assert capsys.readouterr().err == (
-        "Error: title: String should have at least 1 character; "
-        "body_file: String should have at least 1 character\n"
+        "Error: title: String should have at least 1 character; body_file: String should have at least 1 character\n"
     )
 
 
@@ -877,8 +870,7 @@ def test_main_body_file_oserror_reports_as_clean_body_file_error(monkeypatch: py
     monkeypatch.setenv("REPO", "o/r")
     over_long = "a" * 5000
     rc = spp.main(
-        ["--base", "main", "--branch", "chore", "--title", "t",
-         "--body-file", over_long, "--commit-subject", "s"]
+        ["--base", "main", "--branch", "chore", "--title", "t", "--body-file", over_long, "--commit-subject", "s"]
     )
     assert rc == 1
     err = capsys.readouterr().err
