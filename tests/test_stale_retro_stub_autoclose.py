@@ -239,30 +239,80 @@ def test_list_open_retro_issues_retries_incomplete_body_read_then_succeeds():
 
 
 # ---------------------------------------------------------------------------
+# _has_close_comment
+# ---------------------------------------------------------------------------
+
+
+def test_has_close_comment_true_when_marker_present():
+    def opener(request: urllib.request.Request) -> Response:
+        return Response(200, json.dumps([{"body": "unrelated"}, {"body": sra.format_close_comment(48)}]))
+
+    assert sra._has_close_comment("tvna", "gitapex", 314, "tok", opener, lambda _: None) is True
+
+
+def test_has_close_comment_false_when_no_comments():
+    def opener(request: urllib.request.Request) -> Response:
+        return Response(200, json.dumps([]))
+
+    assert sra._has_close_comment("tvna", "gitapex", 314, "tok", opener, lambda _: None) is False
+
+
+def test_has_close_comment_false_when_comments_are_unrelated():
+    def opener(request: urllib.request.Request) -> Response:
+        return Response(200, json.dumps([{"body": "thanks for filing this"}]))
+
+    assert sra._has_close_comment("tvna", "gitapex", 314, "tok", opener, lambda _: None) is False
+
+
+# ---------------------------------------------------------------------------
 # close_stub_issue
 # ---------------------------------------------------------------------------
 
 
-def test_close_stub_issue_comments_before_closing():
+def test_close_stub_issue_checks_comments_then_comments_then_closes():
+    """Sequence: GET existing comments, POST the close comment, PATCH close."""
     calls: list[tuple] = []
 
     def opener(request: urllib.request.Request) -> Response:
         calls.append((request.get_method(), request.full_url, request.data))
+        if request.get_method() == "GET":
+            return Response(200, json.dumps([]))
         if request.get_method() == "POST":
             return Response(201, json.dumps({"id": 1}))
         return Response(200, json.dumps({"number": 314, "state": "closed"}))
 
     sra.close_stub_issue("tvna", "gitapex", 314, 48, "tok", opener=opener, sleeper=lambda _: None)
 
-    assert calls[0][0] == "POST"
-    assert calls[0][1] == "https://api.github.com/repos/tvna/gitapex/issues/314/comments"
-    comment_payload = json.loads(calls[0][2].decode())
+    assert calls[0][0] == "GET"
+    assert calls[0][1] == "https://api.github.com/repos/tvna/gitapex/issues/314/comments?per_page=100"
+
+    assert calls[1][0] == "POST"
+    assert calls[1][1] == "https://api.github.com/repos/tvna/gitapex/issues/314/comments"
+    comment_payload = json.loads(calls[1][2].decode())
     assert "48 hours" in comment_payload["body"]
 
-    assert calls[1][0] == "PATCH"
-    assert calls[1][1] == "https://api.github.com/repos/tvna/gitapex/issues/314"
-    patch_payload = json.loads(calls[1][2].decode())
+    assert calls[2][0] == "PATCH"
+    assert calls[2][1] == "https://api.github.com/repos/tvna/gitapex/issues/314"
+    patch_payload = json.loads(calls[2][2].decode())
     assert patch_payload["state"] == "closed"
+
+
+def test_close_stub_issue_skips_repost_when_close_comment_already_exists():
+    """Regression: a prior run may have posted the close comment and then
+    failed the PATCH close. Retrying must not repost a duplicate comment --
+    this is what actually makes cross-run retry safe, not merely
+    max_attempts=1 on a single call."""
+    calls: list[str] = []
+    existing_comment_body = sra.format_close_comment(48)
+
+    def opener(request: urllib.request.Request) -> Response:
+        calls.append(request.get_method())
+        if request.get_method() == "GET":
+            return Response(200, json.dumps([{"body": existing_comment_body}]))
+        return Response(200, json.dumps({"number": 314, "state": "closed"}))
+
+    sra.close_stub_issue("tvna", "gitapex", 314, 48, "tok", opener=opener, sleeper=lambda _: None)
+    assert calls == ["GET", "PATCH"]
 
 
 def test_close_stub_issue_raises_on_comment_failure_without_closing():
@@ -270,6 +320,8 @@ def test_close_stub_issue_raises_on_comment_failure_without_closing():
 
     def opener(request: urllib.request.Request) -> Response:
         calls.append(request.get_method())
+        if request.get_method() == "GET":
+            return Response(200, json.dumps([]))
         raise http_error(500, "server error")
 
     with pytest.raises(sra.GitHubApiError):
@@ -282,11 +334,13 @@ def test_close_stub_issue_raises_immediately_on_persistent_4xx():
 
     def opener(request: urllib.request.Request) -> Response:
         calls.append(request.get_method())
+        if request.get_method() == "GET":
+            return Response(200, json.dumps([]))
         raise http_error(422, "unprocessable")
 
     with pytest.raises(sra.GitHubApiError):
         sra.close_stub_issue("tvna", "gitapex", 314, 48, "tok", opener=opener, sleeper=lambda _: None)
-    assert calls == ["POST"]
+    assert calls == ["GET", "POST"]
 
 
 def test_close_stub_issue_does_not_retry_the_non_idempotent_comment_post():
@@ -294,22 +348,24 @@ def test_close_stub_issue_does_not_retry_the_non_idempotent_comment_post():
     GitHub already created the comment must never be retried into a
     duplicate -- mirrors post_merge_retro.py's own
     test_open_retro_issue_does_not_retry_the_non_idempotent_post."""
-    calls = 0
+    post_attempts = 0
 
     def opener(request: urllib.request.Request) -> Response:
-        nonlocal calls
-        calls += 1
+        nonlocal post_attempts
+        if request.get_method() == "GET":
+            return Response(200, json.dumps([]))
+        post_attempts += 1
         raise http_error(503, "server error")
 
     with pytest.raises(sra.GitHubApiError):
         sra.close_stub_issue("tvna", "gitapex", 314, 48, "tok", opener=opener, sleeper=lambda _: None)
-    assert calls == 1
+    assert post_attempts == 1
 
 
 def test_close_stub_issue_patch_close_still_retries_5xx_then_succeeds():
     """The PATCH close is naturally idempotent and keeps the default retry
     count, unlike the comment POST above."""
-    responses = [Response(201, "{}"), http_error(503, "{}"), Response(200, "{}")]
+    responses = [Response(200, json.dumps([])), Response(201, "{}"), http_error(503, "{}"), Response(200, "{}")]
     sleeps: list[float] = []
 
     def opener(request: urllib.request.Request) -> Response:
@@ -317,6 +373,21 @@ def test_close_stub_issue_patch_close_still_retries_5xx_then_succeeds():
         if isinstance(response, urllib.error.HTTPError):
             raise response
         return response
+
+    sra.close_stub_issue("tvna", "gitapex", 314, 48, "tok", opener=opener, sleeper=sleeps.append)
+    assert sleeps == [5]
+
+
+def test_close_stub_issue_patch_close_retries_incomplete_body_read_then_succeeds():
+    class FlakyResponse(Response):
+        def read(self) -> bytes:
+            raise http.client.IncompleteRead(b"partial")
+
+    responses = [Response(200, json.dumps([])), Response(201, "{}"), FlakyResponse(200), Response(200, "{}")]
+    sleeps: list[float] = []
+
+    def opener(request: urllib.request.Request) -> Response:
+        return responses.pop(0)
 
     sra.close_stub_issue("tvna", "gitapex", 314, 48, "tok", opener=opener, sleeper=sleeps.append)
     assert sleeps == [5]
@@ -391,6 +462,35 @@ def test_main_exits_one_on_github_api_error(monkeypatch):
 
     monkeypatch.setattr(sra, "list_open_retro_issues", raise_api_error)
     assert sra.main(["--owner", "tvna", "--repo", "gitapex"]) == 1
+
+
+def test_main_isolates_one_issues_failure_and_still_reports_the_rest(monkeypatch, capsys):
+    """Regression: one issue's close failure must not discard the report of
+    issues already closed successfully this run, or block the remaining
+    ones from being attempted."""
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    monkeypatch.setattr(
+        sra,
+        "list_open_retro_issues",
+        lambda *a, **k: [_issue(1, STUB_BODY, 49), _issue(2, STUB_BODY, 49), _issue(3, STUB_BODY, 49)],
+    )
+    attempted: list[int] = []
+
+    def fake_close(owner, repo, number, stale_hours, token, **k):
+        attempted.append(number)
+        if number == 2:
+            raise sra.GitHubApiError("transient boom")
+
+    monkeypatch.setattr(sra, "close_stub_issue", fake_close)
+    exit_code = sra.main(["--owner", "tvna", "--repo", "gitapex"])
+
+    assert attempted == [1, 2, 3]
+    assert exit_code == 1
+    captured = capsys.readouterr()
+    assert "#1" in captured.out
+    assert "#3" in captured.out
+    assert "#2" not in captured.out
+    assert "issue #2" in captured.err
 
 
 # ---------------------------------------------------------------------------

@@ -78,6 +78,11 @@ _DEFAULT_STALE_HOURS = 48
 # for why this is a copy, not an import, and how drift is caught.
 _STUB_MARKER = "Automated stub opened by the post-merge-auto-retro gate"
 
+# The leading phrase of this module's own `format_close_comment` output --
+# used by `close_stub_issue` to detect a close comment already posted on a
+# prior run (see that function's own docstring for why this check exists).
+_CLOSE_COMMENT_MARKER = "Closing this retrospective stub:"
+
 
 class GitHubApiError(RuntimeError):
     """Raised when the GitHub REST API returns a non-recoverable error."""
@@ -208,14 +213,18 @@ def _fetch_issues_page(
     token: str,
     opener: Callable[[urllib.request.Request], Any],
     sleeper: Callable[[float], None],
+    max_attempts: int = 3,
 ) -> list[dict[str, Any]]:
-    """GET one page of the issues-list endpoint, retrying transient
-    failures -- mirrors `scan_retrospective_gate_drift.py`'s own function
-    of the same name (a list response, not the single-object shape `_call`
-    above assumes, so it cannot reuse `_call` directly)."""
+    """GET one page of a list endpoint (issues or comments), retrying
+    transient failures -- mirrors `scan_retrospective_gate_drift.py`'s own
+    function of the same name (a list response, not the single-object
+    shape `_call` above assumes, so it cannot reuse `_call` directly). GET
+    is naturally idempotent, so `max_attempts` defaults to 3 like `_call`'s
+    own default; the parameter exists so the two functions' retry shape
+    stays structurally consistent, not because a GET here ever needs 1."""
     last_code = 0
     last_body = ""
-    for attempt in range(1, 4):
+    for attempt in range(1, max_attempts + 1):
         request = urllib.request.Request(url, method="GET")  # noqa: S310 -- fixed https://api.github.com URL
         request.add_header("Authorization", f"Bearer {token}")
         request.add_header("Accept", "application/vnd.github+json")
@@ -237,7 +246,7 @@ def _fetch_issues_page(
         print(f"Attempt {attempt}: HTTP {_format_code(last_code)} for GET {url}", file=sys.stderr)
         if last_code != 0 and last_code < 500:
             break
-        if attempt < 3:
+        if attempt < max_attempts:
             sleeper(attempt * 5)
 
     raise GitHubApiError(f"GET {url} failed: HTTP {_format_code(last_code)}: {last_body}")
@@ -273,6 +282,24 @@ def list_open_retro_issues(
     return issues
 
 
+def _has_close_comment(
+    owner: str,
+    repo: str,
+    issue_number: int,
+    token: str,
+    opener: Callable[[urllib.request.Request], Any],
+    sleeper: Callable[[float], None],
+) -> bool:
+    """True iff `issue_number` already carries a close comment this
+    function's own marker identifies -- i.e. a prior run already posted
+    it, most likely because that prior run's own PATCH close then failed.
+    A single page (up to 100 comments) is more than sufficient for a stub
+    issue, which only ever accumulates a handful of bot comments."""
+    url = f"{_API_ROOT}/repos/{owner}/{repo}/issues/{issue_number}/comments?per_page={_PER_PAGE}"
+    comments = _fetch_issues_page(url, token, opener, sleeper)
+    return any(_CLOSE_COMMENT_MARKER in (comment.get("body") or "") for comment in comments)
+
+
 def close_stub_issue(
     owner: str,
     repo: str,
@@ -282,11 +309,18 @@ def close_stub_issue(
     opener: Callable[[urllib.request.Request], Any] = _default_opener,
     sleeper: Callable[[float], None] | None = None,
 ) -> None:
-    """Post the explanatory comment, then close the issue. Comment first:
-    if the close call itself then fails (network, permissions), the
-    explanation is still on the issue rather than silently lost, and a
-    later run can retry the close against an issue that already explains
-    itself.
+    """Post the explanatory comment (unless a prior run already posted
+    one -- see `_has_close_comment`), then close the issue. Comment
+    first: if the close call itself then fails (network, permissions),
+    the explanation is still on the issue rather than silently lost.
+
+    A later run retries safely because of the `_has_close_comment` check
+    above, not merely because the explanation is already there: without
+    it, a later run would re-run this function from the top and post a
+    second, duplicate comment before retrying the close -- exactly the
+    outcome `max_attempts=1` below exists to prevent within a single
+    call, reopened across calls if nothing here checked for one already
+    posted.
 
     max_attempts=1 on the comment POST: comment creation is not
     idempotent -- mirrors post_merge_retro.py's own open_retro_issue
@@ -297,15 +331,16 @@ def close_stub_issue(
     retry count."""
     sleeper = sleeper if sleeper is not None else time.sleep
     comment_url = f"{_API_ROOT}/repos/{owner}/{repo}/issues/{issue_number}/comments"
-    _call(
-        "POST",
-        comment_url,
-        token,
-        opener,
-        sleeper,
-        body={"body": format_close_comment(stale_hours)},
-        max_attempts=1,
-    )
+    if not _has_close_comment(owner, repo, issue_number, token, opener, sleeper):
+        _call(
+            "POST",
+            comment_url,
+            token,
+            opener,
+            sleeper,
+            body={"body": format_close_comment(stale_hours)},
+            max_attempts=1,
+        )
     issue_url = f"{_API_ROOT}/repos/{owner}/{repo}/issues/{issue_number}"
     _call("PATCH", issue_url, token, opener, sleeper, body={"state": "closed", "state_reason": "not_planned"})
 
@@ -358,17 +393,29 @@ def main(argv: list[str] | None = None) -> int:
         issues = list_open_retro_issues(args.owner, args.repo, token)
         now = datetime.now(UTC)
         stale_issues = find_stale_stub_issues(issues, now, args.stale_hours)
-        closed: list[int] = []
-        for issue in stale_issues:
-            number = int(issue["number"])
-            close_stub_issue(args.owner, args.repo, number, args.stale_hours, token)
-            closed.append(number)
     except GitHubApiError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
 
+    # Each issue is closed independently: one issue's failure (e.g. a
+    # transient API error on its PATCH) must not discard the successful
+    # closes already made this run, or skip the otherwise-healthy issues
+    # still queued behind it -- see the marker-based retry-safety
+    # `close_stub_issue`/`_has_close_comment` now provide across runs for
+    # whichever issue actually failed.
+    closed: list[int] = []
+    failed: list[int] = []
+    for issue in stale_issues:
+        number = int(issue["number"])
+        try:
+            close_stub_issue(args.owner, args.repo, number, args.stale_hours, token)
+            closed.append(number)
+        except GitHubApiError as error:
+            print(f"error: closing issue #{number} failed: {error}", file=sys.stderr)
+            failed.append(number)
+
     print(format_report(closed))
-    return 0
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":
