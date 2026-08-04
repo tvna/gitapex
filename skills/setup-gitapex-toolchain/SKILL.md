@@ -192,24 +192,13 @@ mechanism this repository wires up on its own.
 
 ## Notes
 
-- **Portability.** This skill's operative mechanisms -- `flake.nix`'s
-  Class B pin tables, `.claude/hooks/session-start.sh`, `apm.yml`,
-  `.claude/settings.json`, `.github/workflows/toolchain-nix.yml`, and its
-  four gitapex-specific tool names (`waza`, `apm`, `rtk`, `betterleaks`)
-  -- are all specific to this repository, with no portable counterpart.
-  It is declared `Mixed`, not `Repository-scoped`: this repository's own
-  portability design notes
-  (`docs/superpowers/specs/2026-07-21-portability-authorship-decision-table-design.md`,
-  Table A) reserve `Repository-scoped` for a downstream fork that
-  hardcodes its own local conventions into an installed skill, not for a
-  skill gitapex itself authors as the origin repository -- the same
-  distinction `auditing-agent-product-scope`'s own metadata sidecar
-  already records for an analogous conflict. Whether a skill with
-  effectively no separable portable core (this one) is well served by
-  either existing label -- `Mixed` ordinarily presupposes an actual
-  portable core split from repo-specific detail via a reference file --
-  is an open classification question, flagged here for a follow-up
-  decision rather than resolved unilaterally.
+- **Portability.** Declared `Mixed`: this skill's operative mechanisms
+  (`flake.nix` Class B pins, `session-start.sh`, `apm.yml`,
+  `.claude/settings.json`, four gitapex-specific tool names) have no
+  portable core separable from this repository. Full decision citation,
+  plus an open taxonomy-gap deferral
+  (`https://github.com/tvna/gitapex/issues/730`), are recorded in this
+  skill's `metadata/gitapex.yaml` under `spec.references`.
 - **Model invocation.** This skill is left invocable by both the model
   and the user (not `disable-model-invocation: true`) because the
   automatic SessionStart hook already performs identical provisioning
