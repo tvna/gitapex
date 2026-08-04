@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 """Validate every skill's metadata sidecar against the SkillMetadata schema.
 
-DRAFT -- not wired into any dedicated CI workflow step or pre-commit hook.
-It is, however, already exercised indirectly: tests/test_scan_skill_
-metadata_schema.py's own test_real_repository_skill_sidecars_have_no_
-schema_drift calls find_drift() against the real skills/ tree with no
-fixture override, and tests/ is auto-discovered by pytest via pyproject.
-toml's [tool.pytest.ini_options] testpaths -- which .github/workflows/
-test.yml runs as a required check on every push and PR. So a future PR that
-introduces real schema drift would already fail CI through that pytest
-gate today, even though there is no standalone `python3 .github/scripts/
-scan_skill_metadata_schema.py` invocation, dedicated workflow file, or
-pre-commit hook naming this script directly (found by adversarial review
-of this file, which the original DRAFT framing understated). This scanner
+ACTIVE (issue #745): registered in .gitapex/ssot.json as
+skill-metadata-schema-drift. Enforced the same way its sibling
+.github/scripts/scan_ssot_schema.py (registered there as ssot-schema-drift)
+already is -- neither has a dedicated CI workflow step or pre-commit hook;
+both are enforced solely because tests/test_scan_skill_metadata_schema.py's
+own test_real_repository_skill_sidecars_have_no_schema_drift calls
+find_drift() against the real skills/ tree with no fixture override, and
+tests/ is auto-discovered by pytest via pyproject.toml's [tool.pytest.
+ini_options] testpaths -- which .github/workflows/test.yml runs as a
+required check on every push and PR. A real schema violation fails CI
+through that pytest gate; there is no separate standalone `python3
+.github/scripts/scan_skill_metadata_schema.py` invocation anywhere in CI,
+matching this repository's own established convention for this exact gate
+shape rather than adding a second, redundant enforcement path. This scanner
 is scoped, deliberately, to a narrower job than
 skills/evaluating-skill-quality/scripts/check_skill_shape.py's own
 manifest-parsing checks: it validates metadata/gitapex.yaml's *structural*

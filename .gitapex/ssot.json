@@ -28,7 +28,7 @@
       "id": "skill-metadata-sidecar",
       "path": "skills/*/metadata/gitapex.yaml",
       "format": "yaml",
-      "authority": "per-skill capabilityAssumption (read by routine-scope-enforcement) and spec.lifecycle.renamedFrom (read by skill-rename-lifecycle); one entry stands in for the glob since every sidecar shares one schema"
+      "authority": "per-skill capabilityAssumption (read by routine-scope-enforcement), spec.lifecycle.renamedFrom (read by skill-rename-lifecycle), and the full document shape (read by skill-metadata-schema-drift against .gitapex/skill-metadata.schema.json); one entry stands in for the glob since every sidecar shares one schema"
     },
     {
       "id": "pyproject-mypy-config",
@@ -237,6 +237,19 @@
       "policy_refs": [],
       "cluster": "skill-lifecycle",
       "tracking_issue": 517,
+      "status": "active",
+      "supersedes": null
+    },
+    {
+      "id": "skill-metadata-schema-drift",
+      "kind": "script",
+      "script": ".github/scripts/scan_skill_metadata_schema.py",
+      "rule": "Every skills/*/metadata/gitapex.yaml sidecar must validate against .gitapex/skill-metadata.schema.json (JSON Schema draft 2020-12) and resolve its cross-file references: metadata.name matches its own skill directory name, spec.skillDependencies/spec.lifecycle.deprecated.replacement each resolve to a real sibling skill directory (one with its own SKILL.md), and the repo-wide spec.skillDependencies.requires graph is acyclic.",
+      "planes": ["ci"],
+      "trigger": "tests/test_scan_skill_metadata_schema.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": ["skill-metadata-sidecar"],
+      "cluster": "skill-lifecycle",
+      "tracking_issue": 745,
       "status": "active",
       "supersedes": null
     },
