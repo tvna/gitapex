@@ -39,6 +39,36 @@ def test_run_group_invokes_uv_run_frozen_mypy_with_config_file(monkeypatch: pyte
     ]
 
 
+def test_run_group_passes_a_timeout_to_subprocess_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_run(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        captured["timeout"] = kwargs.get("timeout")
+        return _completed(0)
+
+    monkeypatch.setattr(runner.subprocess, "run", fake_run)
+    runner.run_group(("tests",))
+    assert captured["timeout"] == runner._GROUP_TIMEOUT_SECONDS
+
+
+def test_main_treats_a_timed_out_group_as_a_failure(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # A git hook has no subprocess timeout of its own -- a hung mypy must
+    # still fail the commit rather than hang `git commit` indefinitely.
+    def fake_run_group(dirs: tuple[str, ...]) -> subprocess.CompletedProcess[str]:
+        if dirs == ("skills/drafting-an-adr/scripts",):
+            raise subprocess.TimeoutExpired(cmd="mypy", timeout=runner._GROUP_TIMEOUT_SECONDS)
+        return _completed(0)
+
+    monkeypatch.setattr(runner, "run_group", fake_run_group)
+    rc = runner.main()
+    err = capsys.readouterr().err
+    assert rc == 1
+    assert "skills/drafting-an-adr/scripts" in err
+    assert "timed out" in err
+
+
 def test_main_returns_zero_when_every_group_passes(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

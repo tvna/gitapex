@@ -27,6 +27,12 @@ from __future__ import annotations
 import subprocess
 import sys
 
+# Matches .github/workflows/test.yml's `mypy` job's own `timeout-minutes: 10`
+# for the whole job -- a per-group ceiling here, so a hung `mypy` process
+# fails the commit loudly instead of blocking `git commit` indefinitely (a
+# git hook has no built-in subprocess timeout of its own).
+_GROUP_TIMEOUT_SECONDS = 600
+
 # Kept in sync with .github/workflows/test.yml's `mypy` job -- see that
 # job's own step comments for why the first group bundles multiple
 # directories (pythonpath-linked roots) while the rest are each checked
@@ -67,13 +73,19 @@ def run_group(dirs: tuple[str, ...]) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         text=True,
         check=False,
+        timeout=_GROUP_TIMEOUT_SECONDS,
     )
 
 
 def main() -> int:
     failed: list[str] = []
     for label, dirs in MYPY_GROUPS:
-        result = run_group(dirs)
+        try:
+            result = run_group(dirs)
+        except subprocess.TimeoutExpired:
+            failed.append(label)
+            print(f"mypy ({label}) timed out after {_GROUP_TIMEOUT_SECONDS}s", file=sys.stderr)
+            continue
         if result.returncode != 0:
             failed.append(label)
             print(f"mypy ({label}) failed:")
