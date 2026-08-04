@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import stat
 import subprocess
 from pathlib import Path
@@ -30,8 +31,10 @@ def test_exits_zero_and_noop_when_not_remote() -> None:
 
 
 def test_exits_zero_even_when_python3_reports_failure(tmp_path: Path) -> None:
-    # A directory with no flake.nix makes provision_class_b.py fail fast --
-    # the hook itself must still exit 0 (never block session start).
+    # A directory with no flake.nix makes provision_class_b.py fail fast,
+    # and the same fake, non-git directory then makes the prek-install
+    # step (issue #749) fail too -- the hook itself must still exit 0
+    # (never block session start) through both failures.
     fake_project = tmp_path / "not-a-real-checkout"
     fake_project.mkdir()
     result = _run(
@@ -41,3 +44,45 @@ def test_exits_zero_even_when_python3_reports_failure(tmp_path: Path) -> None:
         }
     )
     assert result.returncode == 0
+
+
+def test_installs_the_prek_hook_for_a_real_checkout() -> None:
+    # Issue #749: this ephemeral-web session-start path is the third
+    # place (alongside CONTRIBUTING.md's manual step and flake.nix's
+    # devShell shellHook) prek's hook install must reach -- exercised
+    # here against this repository's own real checkout (REPO_ROOT has a
+    # real .git/ and, by the time this test runs, a real
+    # .pre-commit-config.yaml), not a fake project dir.
+    result = _run({"CLAUDE_CODE_REMOTE": "true", "CLAUDE_PROJECT_DIR": str(REPO_ROOT)})
+    assert result.returncode == 0
+    pre_commit_hook = REPO_ROOT / ".git" / "hooks" / "pre-commit"
+    assert pre_commit_hook.exists()
+    assert "prek" in pre_commit_hook.read_text(encoding="utf-8")
+
+
+def test_exits_zero_and_warns_when_uv_not_on_path() -> None:
+    # Simulate a session-start environment with no `uv` on PATH (e.g. a
+    # container image that skipped it) -- the hook must still exit 0 and
+    # explain why the pre-commit hook was not installed, not crash. PATH
+    # is trimmed to only the directories holding the binaries this
+    # script itself needs to even run (bash, to exec it; python3, so
+    # provisioning still runs) -- `uv`'s own directory is deliberately
+    # excluded so `command -v uv` genuinely finds nothing, without
+    # otherwise breaking the subprocess launch itself.
+    required = ("bash", "python3", "sh", "test", "echo")
+    dirs = []
+    for tool in required:
+        found = shutil.which(tool)
+        assert found is not None, f"{tool} must be resolvable for this test to be meaningful"
+        tool_dir = str(Path(found).parent)
+        if tool_dir not in dirs:
+            dirs.append(tool_dir)
+    result = _run(
+        {
+            "CLAUDE_CODE_REMOTE": "true",
+            "CLAUDE_PROJECT_DIR": str(REPO_ROOT),
+            "PATH": os.pathsep.join(dirs),
+        }
+    )
+    assert result.returncode == 0
+    assert "uv not found" in result.stderr

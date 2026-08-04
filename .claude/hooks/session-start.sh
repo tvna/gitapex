@@ -18,4 +18,19 @@ python3 "${CLAUDE_PROJECT_DIR:-.}/skills/setup-gitapex-toolchain/scripts/provisi
   --env-file "${CLAUDE_ENV_FILE:-}" \
   || echo "gitapex: toolchain provisioning reported a failure; see stderr above. Some binaries or apm install's output may be missing this session." >&2
 
+# Issue #749 (follow-up to #725): flake.nix's devShell shellHook
+# installs the local prek pre-commit hook automatically for persistent
+# surfaces (`nix develop`); this ephemeral-web session had no
+# equivalent, so ruff/mypy never ran locally on `git commit` here.
+# Best-effort like the step above: no `uv`, no network, or a
+# pre-existing non-prek hook all fail soft rather than blocking session
+# start. --allow-missing-config covers a checkout of a branch/commit
+# that predates .pre-commit-config.yaml.
+if command -v uv >/dev/null 2>&1; then
+  uv run --directory "${CLAUDE_PROJECT_DIR:-.}" prek -q install --allow-missing-config \
+    || echo "gitapex: prek install reported a failure; the local pre-commit hook may not be active this session." >&2
+else
+  echo "gitapex: uv not found; cannot install the local pre-commit hook this session." >&2
+fi
+
 exit 0
