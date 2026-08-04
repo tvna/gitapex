@@ -80,6 +80,150 @@ def test_missing_field_in_plugin_json_fails_loudly(tmp_path):
         drift.find_drift(apm, plugin)
 
 
+def test_non_utf8_apm_yml_raises_manifest_read_error(tmp_path):
+    # Issue #680 Shape 2: read_text() with no UnicodeDecodeError handler
+    # raised an uncaught traceback on a non-UTF-8 apm.yml.
+    apm = tmp_path / "apm.yml"
+    plugin = tmp_path / "plugin.json"
+    apm.write_bytes(b"\xff\xfe\x00\x01")
+    plugin.write_text(json.dumps(_VALID_PLUGIN))
+    with pytest.raises(drift.ManifestReadError, match="not valid UTF-8"):
+        drift.find_drift(apm, plugin)
+
+
+def test_non_utf8_plugin_json_raises_manifest_read_error(tmp_path):
+    apm = tmp_path / "apm.yml"
+    plugin = tmp_path / "plugin.json"
+    apm.write_text(_VALID_APM)
+    plugin.write_bytes(b"\xff\xfe\x00\x01")
+    with pytest.raises(drift.ManifestReadError, match="not valid UTF-8"):
+        drift.find_drift(apm, plugin)
+
+
+def test_missing_apm_yml_raises_manifest_read_error(tmp_path):
+    # A deleted/renamed/missing apm.yml used to raise an uncaught
+    # FileNotFoundError -- _read_text only caught UnicodeDecodeError, not
+    # the OSError subclass a missing file raises.
+    apm = tmp_path / "does-not-exist-apm.yml"
+    plugin = tmp_path / "plugin.json"
+    plugin.write_text(json.dumps(_VALID_PLUGIN))
+    with pytest.raises(drift.ManifestReadError, match="cannot be read"):
+        drift.find_drift(apm, plugin)
+
+
+def test_missing_plugin_json_raises_manifest_read_error(tmp_path):
+    apm = tmp_path / "apm.yml"
+    plugin = tmp_path / "does-not-exist-plugin.json"
+    apm.write_text(_VALID_APM)
+    with pytest.raises(drift.ManifestReadError, match="cannot be read"):
+        drift.find_drift(apm, plugin)
+
+
+def test_apm_yml_as_empty_yaml_list_raises_manifest_read_error(tmp_path):
+    # Regression: `_load_yaml(apm_manifest) or {}` used to silently coerce
+    # any *falsy* non-dict top-level value (here an empty list, which
+    # yaml.safe_load("[]") returns) into `{}`, bypassing the isinstance
+    # guard and surfacing a misleading KeyError instead of this
+    # ManifestReadError.
+    apm = tmp_path / "apm.yml"
+    plugin = tmp_path / "plugin.json"
+    apm.write_text("[]\n")
+    plugin.write_text(json.dumps(_VALID_PLUGIN))
+    with pytest.raises(drift.ManifestReadError, match="must be a YAML mapping"):
+        drift.find_drift(apm, plugin)
+
+
+def test_empty_apm_yml_raises_manifest_read_error(tmp_path):
+    # An empty apm.yml parses as None (also falsy, same `or {}` bug class
+    # as the empty-list case above).
+    apm = tmp_path / "apm.yml"
+    plugin = tmp_path / "plugin.json"
+    apm.write_text("")
+    plugin.write_text(json.dumps(_VALID_PLUGIN))
+    with pytest.raises(drift.ManifestReadError, match="must be a YAML mapping"):
+        drift.find_drift(apm, plugin)
+
+
+def test_apm_yml_as_yaml_list_raises_manifest_read_error(tmp_path):
+    # Issue #699 (found by adversarial review of this same fix): valid YAML
+    # syntax does not mean a top-level mapping -- a top-level list parses
+    # cleanly and used to crash `field not in apm_data` with an uncaught
+    # TypeError instead of the documented ManifestReadError.
+    apm = tmp_path / "apm.yml"
+    plugin = tmp_path / "plugin.json"
+    apm.write_text("- name\n- version\n")
+    plugin.write_text(json.dumps(_VALID_PLUGIN))
+    with pytest.raises(drift.ManifestReadError, match="must be a YAML mapping"):
+        drift.find_drift(apm, plugin)
+
+
+def test_apm_yml_as_yaml_scalar_raises_manifest_read_error(tmp_path):
+    apm = tmp_path / "apm.yml"
+    plugin = tmp_path / "plugin.json"
+    apm.write_text("42\n")
+    plugin.write_text(json.dumps(_VALID_PLUGIN))
+    with pytest.raises(drift.ManifestReadError, match="must be a YAML mapping"):
+        drift.find_drift(apm, plugin)
+
+
+def test_plugin_json_as_json_scalar_raises_manifest_read_error(tmp_path):
+    apm = tmp_path / "apm.yml"
+    plugin = tmp_path / "plugin.json"
+    apm.write_text(_VALID_APM)
+    plugin.write_text("42")
+    with pytest.raises(drift.ManifestReadError, match="must be a JSON object"):
+        drift.find_drift(apm, plugin)
+
+
+def test_invalid_json_syntax_in_plugin_json_raises_manifest_read_error(tmp_path):
+    # Issue #699: _read_text's UnicodeDecodeError guard (#680) covers the
+    # decode step, but json.loads itself had no handler -- a syntactically
+    # invalid (yet valid-UTF-8) plugin.json raised an uncaught
+    # json.JSONDecodeError.
+    apm = tmp_path / "apm.yml"
+    plugin = tmp_path / "plugin.json"
+    apm.write_text(_VALID_APM)
+    plugin.write_text("{not valid json,,,}")
+    with pytest.raises(drift.ManifestReadError, match="not valid JSON"):
+        drift.find_drift(apm, plugin)
+
+
+def test_invalid_yaml_syntax_in_apm_yml_raises_manifest_read_error(tmp_path):
+    apm = tmp_path / "apm.yml"
+    plugin = tmp_path / "plugin.json"
+    apm.write_text(": not valid yaml : : :\n")
+    plugin.write_text(json.dumps(_VALID_PLUGIN))
+    with pytest.raises(drift.ManifestReadError, match="not valid YAML"):
+        drift.find_drift(apm, plugin)
+
+
+def test_main_returns_one_and_prints_message_on_manifest_read_error(capsys, monkeypatch):
+    def raise_read_error():
+        raise drift.ManifestReadError("/fake/apm.yml: is not valid UTF-8: boom")
+
+    monkeypatch.setattr(drift, "find_drift", raise_read_error)
+    rc = drift.main()
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "/fake/apm.yml: is not valid UTF-8: boom" in out
+
+
+def test_main_returns_one_and_prints_message_on_missing_field_key_error(capsys, monkeypatch):
+    # Companion to the ManifestReadError case: find_drift's pre-existing
+    # "fails loudly" KeyError contract (a missing mirrored field) must also
+    # exit cleanly through main() rather than escape as an uncaught
+    # traceback -- main() previously did not catch find_drift's own
+    # documented KeyError at all.
+    def raise_key_error():
+        raise KeyError("/fake/plugin.json: missing required field 'version'")
+
+    monkeypatch.setattr(drift, "find_drift", raise_key_error)
+    rc = drift.main()
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "missing required field" in out
+
+
 def test_repository_manifests_are_in_lockstep():
     """The gate: real apm.yml must mirror plugin.json's name and version."""
     findings = drift.find_drift()

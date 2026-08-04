@@ -161,6 +161,9 @@ def main(argv: list[str] | None = None) -> int:
     except FileNotFoundError:
         print(f"error: file not found: {args.path}", file=sys.stderr)
         return 1
+    except UnicodeDecodeError as exc:
+        print(f"error: could not decode {args.path} as UTF-8: {exc}", file=sys.stderr)
+        return 1
     expected_labels = frozenset(args.expected_labels)
     offenses = check_axis_shape(body_text, expected_labels)
     if not offenses:

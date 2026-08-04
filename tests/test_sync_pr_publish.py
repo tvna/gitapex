@@ -269,6 +269,12 @@ def test_get_ref_sha_missing_sha_raises() -> None:
         spp._get_ref_sha(repo="o/r", ref="heads/main", token="tok", apply_call=fake)
 
 
+def test_get_ref_sha_non_object_body_raises() -> None:
+    fake, _ = _fake_apply_call({"https://api.github.com/repos/o/r/git/ref/heads/main": (200, "[]")})
+    with pytest.raises(RuntimeError, match="Expected object from get ref"):
+        spp._get_ref_sha(repo="o/r", ref="heads/main", token="tok", apply_call=fake)
+
+
 def test_get_branch_head_oid_absent() -> None:
     fake, _ = _fake_apply_call({"https://api.github.com/repos/o/r/git/ref/heads/chore": (404, "")})
     assert spp._get_branch_head_oid(repo="o/r", branch="chore", token="tok", apply_call=fake) is None
@@ -292,6 +298,12 @@ def test_get_branch_head_oid_missing_sha_raises() -> None:
         {"https://api.github.com/repos/o/r/git/ref/heads/chore": (200, json.dumps({"object": {}}))}
     )
     with pytest.raises(RuntimeError, match=r"missing object\.sha"):
+        spp._get_branch_head_oid(repo="o/r", branch="chore", token="tok", apply_call=fake)
+
+
+def test_get_branch_head_oid_non_object_body_raises() -> None:
+    fake, _ = _fake_apply_call({"https://api.github.com/repos/o/r/git/ref/heads/chore": (200, "null")})
+    with pytest.raises(RuntimeError, match="Expected object from get branch ref"):
         spp._get_branch_head_oid(repo="o/r", branch="chore", token="tok", apply_call=fake)
 
 
@@ -359,6 +371,14 @@ def test_get_file_bytes_unexpected_encoding_raises() -> None:
         }
     )
     with pytest.raises(RuntimeError, match="unexpected encoding"):
+        spp._get_file_bytes(repo="o/r", path="CLAUDE.md", ref="main", token="tok", apply_call=fake)
+
+
+def test_get_file_bytes_non_object_body_raises() -> None:
+    fake, _ = _fake_apply_call(
+        {"https://api.github.com/repos/o/r/contents/CLAUDE.md?ref=main": (200, '"just a string"')}
+    )
+    with pytest.raises(RuntimeError, match="Expected object from get contents"):
         spp._get_file_bytes(repo="o/r", path="CLAUDE.md", ref="main", token="tok", apply_call=fake)
 
 
@@ -807,6 +827,65 @@ def test_main_missing_body_file(monkeypatch: pytest.MonkeyPatch, capsys, tmp_pat
     assert err == f"Error: body file not found: {tmp_path / 'missing.md'}\n"
 
 
+def test_main_blank_body_file_keeps_field_label(monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    # A second adversarial pass (post-merge) found the body_file special
+    # case keyed on loc alone, not also error type -- so a *blank*
+    # --body-file (Field(min_length=1)'s generic, non-self-describing
+    # message, not the custom field_validator's self-describing one) had
+    # its field label silently stripped too, confirmed by direct
+    # execution to read as an unattributable duplicate when combined with
+    # another blank field's identical message. This must keep the
+    # "body_file: " label since, unlike the not-found message, the
+    # min_length text alone does not say which field failed.
+    monkeypatch.setenv("GH_TOKEN", "tok")
+    monkeypatch.setenv("REPO", "o/r")
+    rc = spp.main(
+        ["--base", "main", "--branch", "chore", "--title", "t",
+         "--body-file", "", "--commit-subject", "s"]
+    )
+    assert rc == 1
+    assert capsys.readouterr().err == "Error: body_file: String should have at least 1 character\n"
+
+
+def test_main_blank_title_and_body_file_both_labeled(monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    # Two fields sharing pydantic's identical generic blank-value message
+    # must not collapse into one unattributable, seemingly-duplicated
+    # line -- each keeps its own "field: " label.
+    monkeypatch.setenv("GH_TOKEN", "tok")
+    monkeypatch.setenv("REPO", "o/r")
+    rc = spp.main(
+        ["--base", "main", "--branch", "chore", "--title", "",
+         "--body-file", "", "--commit-subject", "s"]
+    )
+    assert rc == 1
+    assert capsys.readouterr().err == (
+        "Error: title: String should have at least 1 character; "
+        "body_file: String should have at least 1 character\n"
+    )
+
+
+def test_main_body_file_oserror_reports_as_clean_body_file_error(monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    # A THIRD adversarial pass found _body_file_must_exist's own
+    # Path(value).exists() call can raise OSError directly (e.g.
+    # ENAMETOOLONG for an over-long path component) rather than returning
+    # False -- pydantic only converts a validator's own ValueError/
+    # TypeError/AssertionError into a ValidationError, so an OSError raised
+    # by a stdlib call inside the validator used to propagate straight
+    # through main()'s except ValidationError as a raw traceback. Confirmed
+    # by direct execution with a 5000-character path component.
+    monkeypatch.setenv("GH_TOKEN", "tok")
+    monkeypatch.setenv("REPO", "o/r")
+    over_long = "a" * 5000
+    rc = spp.main(
+        ["--base", "main", "--branch", "chore", "--title", "t",
+         "--body-file", over_long, "--commit-subject", "s"]
+    )
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert err.startswith(f"Error: body file not found: {over_long} (")
+    assert "Traceback" not in err
+
+
 def test_main_runtime_error_from_collect_additions(monkeypatch: pytest.MonkeyPatch, capsys, tmp_path) -> None:
     monkeypatch.setenv("GH_TOKEN", "tok")
     monkeypatch.setenv("REPO", "o/r")
@@ -830,6 +909,20 @@ def test_main_runtime_error_from_collect_additions(monkeypatch: pytest.MonkeyPat
     )
     assert rc == 1
     assert "Error:" in capsys.readouterr().err
+
+
+def test_main_body_file_non_utf8_reports_as_error(monkeypatch: pytest.MonkeyPatch, capsys, tmp_path) -> None:
+    monkeypatch.setenv("GH_TOKEN", "tok")
+    monkeypatch.setenv("REPO", "o/r")
+    body_file = tmp_path / "body.md"
+    body_file.write_bytes(b"\xff\xfe not valid utf-8 \x80")
+    rc = spp.main(
+        ["--base", "main", "--branch", "chore", "--title", "t", "--body-file", str(body_file), "--commit-subject", "s"]
+    )
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert err.startswith("Error: ")
+    assert "Traceback" not in err
 
 
 def test_main_success_up_to_date(monkeypatch: pytest.MonkeyPatch, capsys, tmp_path) -> None:

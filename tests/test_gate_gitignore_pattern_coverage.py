@@ -9,9 +9,8 @@ by tests/test_gitignore_worktrees.py covering only one hardcoded pattern.
 
 from __future__ import annotations
 
-import io
-
 import gate_gitignore_pattern_coverage as gate
+from conftest import FakeStdin as _FakeStdin
 
 
 def _write_test_file(tmp_path, name, content):
@@ -123,9 +122,18 @@ def test_main_no_added_patterns_passes(capsys):
 def test_main_reads_patterns_from_stdin(monkeypatch, tmp_path, capsys):
     _write_test_file(tmp_path, "test_covered.py", 'PATTERN = "covered/path"\n')
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr("sys.stdin", io.StringIO("/covered/path/\n"))
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(b"/covered/path/\n"))
     assert gate.main([]) == 0
     assert "PASS" in capsys.readouterr().out
+
+
+def test_main_reports_error_for_non_utf8_stdin(monkeypatch, tmp_path, capsys):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(b"\xff\xfe bad"))
+    assert gate.main([]) == 1
+    err = capsys.readouterr().err
+    assert "standard input" in err and "could not read" in err
+    assert "Traceback" not in err
 
 
 def test_main_reads_patterns_from_file(monkeypatch, tmp_path, capsys):
@@ -157,4 +165,13 @@ def test_main_reports_error_for_unreadable_added_path(tmp_path, capsys):
     # of OSError crash with an unhandled traceback instead of the intended
     # graceful error message.
     assert gate.main(["--added", str(tmp_path)]) == 1
+    assert "could not read" in capsys.readouterr().err
+
+
+def test_main_reports_error_for_undecodable_added_file(tmp_path, capsys):
+    # Regression: a non-UTF-8 added-lines file raised an unhandled
+    # UnicodeDecodeError instead of the intended graceful error message.
+    added_file = tmp_path / "added.txt"
+    added_file.write_bytes(b"\xff\xfe bad")
+    assert gate.main(["--added", str(added_file)]) == 1
     assert "could not read" in capsys.readouterr().err

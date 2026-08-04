@@ -308,13 +308,14 @@ platform naming.
     step 7's `"draft"` branch above, it keeps reading `"draft"` regardless
     — check `mergeable`, `get_check_runs`, and `get_reviews` directly, on
     the same cadence as before draft conversion. On finding a real
-    blocker, loop back to step 3/7 exactly as if the PR were not draft;
-    resolving it never requires leaving draft first. Where the environment
-    offers no native long-lived subscription, a periodic self-check-in
-    (e.g. a scheduled-wakeup or reminder tool, on a roughly hourly
-    cadence) is one fallback mechanism among others — name whatever the
-    current environment actually provides, the same portable posture
-    step 2 already takes for push-subscription.
+    blocker, loop back to step 3/7 as if the PR were not draft; resolving
+    it never requires leaving draft first. On `merged: true` (while still
+    subscribed), invoke `merge-retrospective` before ending the turn.
+    Where the environment offers no native long-lived subscription, a
+    periodic self-check-in (e.g. a scheduled-wakeup or reminder tool, on a
+    roughly hourly cadence) is one fallback mechanism among others — name
+    whatever the current environment actually provides, the same portable
+    posture step 2 already takes for push-subscription.
 11. **Escalate to the owner** only when blocked by access, secrets, or a
     pending human decision the agent cannot resolve itself — not for
     anything the agent can fix on its own. This is also the only path to
@@ -369,7 +370,6 @@ A PR titled "Add retry to fetch helper," citing its own target issue via a resol
     back to step 3, resolve the conflict without leaving draft, push the
     fix, and post a PR comment documenting the resolution before
     re-confirming and letting step 9 re-confirm the terminal state.
-
 ## Stop boundaries
 
 - Never proceed past step 1's issue-legitimacy re-check when a

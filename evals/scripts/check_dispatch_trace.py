@@ -165,7 +165,7 @@ def iter_tool_use_blocks(transcript_path: Path) -> Iterator[dict[str, Any]]:
     ``.get()``-ing arbitrary fields off it (e.g. ``count_dispatches`` below)
     sees exactly the same object it always did.
     """
-    with transcript_path.open(encoding="utf-8") as handle:
+    with transcript_path.open(encoding="utf-8") as handle:  # exception-handler-gap: WAIVED: this generator's only caller, check_transcript() (same file), is invoked at both call sites in main() inside except (ValueError, OSError); UnicodeDecodeError is a ValueError subclass, and verified by execution (including mid-iteration, after several well-formed lines already yielded) that a non-UTF-8 transcript propagates cleanly through the for-loop consumer in count_dispatches() and is caught there, no traceback
         for lineno, raw in enumerate(handle, start=1):
             raw = raw.strip()
             if not raw:
@@ -557,7 +557,11 @@ def main(argv: list[str] | None = None) -> int:
     if not prompt_file.is_file():
         print(f"error: prompt file not found: {prompt_file}", file=sys.stderr)
         return 2
-    prompt = prompt_file.read_text(encoding="utf-8")
+    try:
+        prompt = prompt_file.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        print(f"error: could not read prompt file: {prompt_file}: {exc}", file=sys.stderr)
+        return 2
     transcript_out = Path(args.transcript_out)
 
     allowed_tools = args.allowed_tools

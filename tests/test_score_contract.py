@@ -4,6 +4,7 @@ import json
 
 import pytest
 import score_contract
+from conftest import FakeStdin as _FakeStdin
 
 
 def test_all_contains_present_scores_one():
@@ -336,10 +337,30 @@ def test_main_scores_assertions_json_and_output_file(tmp_path, capsys):
 def test_main_reads_output_from_stdin(tmp_path, capsys, monkeypatch):
     apath = tmp_path / "assertions.json"
     apath.write_text(json.dumps({"output_contains": ["Facts", "Missing"]}), encoding="utf-8")
-    monkeypatch.setattr("sys.stdin", __import__("io").StringIO("only Facts"))
+    monkeypatch.setattr(score_contract.sys, "stdin", _FakeStdin(b"only Facts"))
     rc = score_contract.main(["--assertions", str(apath)])
     assert rc == 0
     assert capsys.readouterr().out.strip() == "0.500000"
+
+
+def test_main_reports_error_for_non_utf8_output_stdin(tmp_path, capsys, monkeypatch):
+    apath = tmp_path / "assertions.json"
+    apath.write_text(json.dumps({"output_contains": ["Facts"]}), encoding="utf-8")
+    monkeypatch.setattr(score_contract.sys, "stdin", _FakeStdin(b"\xff\xfe bad"))
+    rc = score_contract.main(["--assertions", str(apath)])
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "could not decode standard input" in err
+    assert "Traceback" not in err
+
+
+def test_main_reports_error_for_non_utf8_scores_stdin(capsys, monkeypatch):
+    monkeypatch.setattr(score_contract.sys, "stdin", _FakeStdin(b"\xff\xfe bad"))
+    rc = score_contract.main(["--compare-to", "0.5"])
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "codec can't decode" in err
+    assert "Traceback" not in err
 
 
 def test_main_pruning_gate_keeps_matched_correctness_with_lower_cost(
@@ -724,3 +745,23 @@ def test_main_missing_output_file_fails_closed(tmp_path, capsys):
     )
     assert rc == 1
     assert "output file not found" in capsys.readouterr().err
+
+
+def test_main_undecodable_assertions_file_fails_closed(tmp_path, capsys):
+    apath = tmp_path / "assertions.json"
+    apath.write_bytes(b"\xff\xfe bad")
+    rc = score_contract.main(["--assertions", str(apath)])
+    assert rc == 1
+    assert "could not decode assertions file" in capsys.readouterr().err
+
+
+def test_main_undecodable_output_file_fails_closed(tmp_path, capsys):
+    apath = tmp_path / "assertions.json"
+    apath.write_text(json.dumps({"output_contains": ["Facts"]}), encoding="utf-8")
+    opath = tmp_path / "output.txt"
+    opath.write_bytes(b"\xff\xfe bad")
+    rc = score_contract.main(
+        ["--assertions", str(apath), "--output", str(opath)]
+    )
+    assert rc == 1
+    assert "could not decode output file" in capsys.readouterr().err

@@ -177,7 +177,50 @@ such taxonomy applies only `retrospective`, unchanged from before.
    human reviewer or a CI run.
 3. **Classify each repair** using the taxonomy above. State the
    classification explicitly; do not leave it implicit in prose.
-4. **File the retrospective issue** via `mcp__github__issue_write`.
+4. **File (or update) the retrospective issue** via
+   `mcp__github__issue_write`, method `create` or `update` per the dedup
+   check below.
+   - **Dedup against an existing CI-opened stub first.** Some
+     repositories run an automated, deterministic opener (a CI script
+     triggered on PR merge, comparable to this repository's own
+     `.github/scripts/post_merge_retro.py`) that files a bare stub
+     retrospective issue with no repair content before this skill ever
+     runs, specifically so a PR merged with no interactive session
+     watching still gets a placeholder to enrich later. Running this
+     step against a PR that already has such a stub without checking
+     for it first produces a duplicate issue -- the stub and this
+     skill's own filing, both matching `label:retrospective` but never
+     reconciled. Before creating anything, search using the same
+     title/label identity predicate the opener itself uses at creation
+     time -- where the calling repository has its own established
+     title convention (a single source-of-truth function like this
+     repository's own `_retro_title`/`dedup_query` in
+     `post_merge_retro.py`, producing
+     `chore(retrospective): merge retrospective for PR #N`), search that
+     exact phrase plus `label:retrospective`; a repository with neither
+     an opener nor its own convention has nothing to dedup against here,
+     so this check is a no-op and filing proceeds as normal.
+     - **Match found, body still carries the opener's own stub marker
+       text** (this repository's marker: `"Automated stub opened by the
+       post-merge-auto-retro gate"`, from `post_merge_retro.py`'s own
+       issue body -- unenriched, i.e. no session has replaced it yet) ->
+       this is the stub to fill, not a reason to open a second issue.
+       Call `issue_write` method `update` on that issue number instead
+       of `create`, replacing the stub body with the full Repairs
+       content Step 4's remaining bullets below describe, and add the
+       repository's own secondary lifecycle label (if any) alongside the
+       `retrospective` label the stub already carries. Cross-linking
+       (Step 5) and verification (Step 6) both still apply, just against
+       the updated existing issue number rather than a newly created one.
+     - **Match found, body no longer carries the marker** -> a prior run
+       (this skill, on an earlier pass, or a human) already enriched this
+       exact PR's retrospective; there is nothing left for this cycle to
+       file. Do not overwrite real content with this cycle's own
+       analysis, and do not create a duplicate -- treat the PR as already
+       retrospected and stop here.
+     - **No match** -> nothing to dedup against; proceed to `create` per
+       the bullets below, same as a repository with no stub-opening CI
+       script at all.
    - **Template and title take precedence over this skill's own
      defaults.** If the repo has an issue template (for example
      `.github/ISSUE_TEMPLATE/`, a root `ISSUE_TEMPLATE.md`, or a

@@ -117,7 +117,11 @@ def find_drift(inventory_path: pathlib.Path = INVENTORY_PATH) -> list[str]:
     if not inventory_path.exists():
         return [f"{inventory_path}: file does not exist"]
 
-    text = inventory_path.read_text()
+    try:
+        text = inventory_path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as error:
+        return [f"{inventory_path}: is not valid UTF-8: {error}"]
+
     section = _extract_section(text)
     if section is None:
         return [f"{inventory_path}: missing section heading {SECTION_HEADING!r}"]

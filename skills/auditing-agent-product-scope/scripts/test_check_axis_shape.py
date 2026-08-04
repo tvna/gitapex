@@ -127,6 +127,14 @@ def test_cli_missing_file(capsys):
     assert "error" in capsys.readouterr().err
 
 
+def test_cli_undecodable_file_fails_closed(tmp_path, capsys):
+    doc = tmp_path / "scope.md"
+    doc.write_bytes(b"\xff\xfe bad")
+    exit_code = cas.main([str(doc)])
+    assert exit_code == 1
+    assert "error" in capsys.readouterr().err
+
+
 def test_unexpected_axis_label_flagged_even_when_fields_complete():
     forged = _COMPLETE_AXIS.replace(
         "## Axis A: Plugin-distribution target",

@@ -51,6 +51,20 @@ destined for a public sink.
       line plus a `Closes #N`/`Refs #N` issue pointer, nothing more) --
       do not add a PR-body trailer to a commit message just because it
       is disclosed there.
+   5. A calling repository may have already ratified a concrete
+      instance of item 2 -- recorded in its own contributor-facing docs
+      (a `CONTRIBUTING.md`, governance doc, or equivalent), naming a
+      specific trailer shape, its ratification date, and a narrow
+      scope so the ratification cannot silently widen into a blanket
+      exemption. Check there before re-deriving the judgment call from
+      scratch; do not assume such a record exists just because this
+      note does. A ratification narrows *what item 2 already permits*,
+      never *what this scan reports*: `scripts/scan_provenance.py`
+      still flags every matching hit, by design, whether or not a
+      ratification exists -- confirming a given hit is the ratified
+      instance and not a lookalike remains a per-hit judgment call, not
+      something to suppress with an ignore pattern, allowlist, or
+      `--exclude` flag.
 2. **Post-creation re-check.** A pre-submission scan of the drafted text
    is not enough: `create_pull_request` and `update_pull_request` can
    inject a session-URL trailer downstream of the submitted `body`,

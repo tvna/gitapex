@@ -135,6 +135,23 @@ def test_main_missing_corpus_exits_two(tmp_path):
                    "--skill", str(tmp_path / "nope2.md")]) == 2
 
 
+def test_main_non_utf8_rubric_exits_two_not_uncaught(tmp_path):
+    # load_corpus()'s own read_text() calls carry no try/except of their
+    # own; single-skill mode's caller (~line 1080) must catch
+    # UnicodeDecodeError alongside OSError, or a non-UTF-8 rubric.md would
+    # escape as an uncaught traceback instead of this script's own exit-2
+    # error message.
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    _write_task(tasks, {"output_contains": ["Blind spot pass"]})
+    rubric = tmp_path / "rubric.md"
+    rubric.write_bytes(b"# Rubric \xff\xfe bad\n")
+    skill = tmp_path / "SKILL.md"
+    skill.write_text("# skill\n", encoding="utf-8")
+    assert L.main(["--tasks-glob", str(tasks / "*.yaml"),
+                   "--rubric", str(rubric), "--skill", str(skill)]) == 2
+
+
 def test_main_no_tasks_exits_two(tmp_path):
     rubric, skill = _corpus_files(tmp_path)
     assert L.main(["--tasks-glob", str(tmp_path / "none" / "*.yaml"),
@@ -707,6 +724,29 @@ def test_main_discovery_mode_exits_two_with_no_skills(tmp_path, monkeypatch):
     assert L.main([]) == 2
 
 
+def test_main_discovery_mode_non_utf8_skill_md_exits_two_not_uncaught(tmp_path, monkeypatch):
+    # Discovery mode's load_corpus() call (lint_all_skills, ~line 993) and
+    # _skill_claim_text()'s own reads (~lines 969/971) share main()'s outer
+    # except clause (~line 1098), which must catch UnicodeDecodeError
+    # alongside OSError/yaml.YAMLError/ValidationError -- a non-UTF-8
+    # SKILL.md must exit 2 with this script's own error message, not an
+    # uncaught traceback.
+    _write_skill_and_tasks(tmp_path, "alpha")
+    (tmp_path / "skills" / "alpha" / "SKILL.md").write_bytes(b"# skill \xff\xfe bad\n")
+    monkeypatch.chdir(tmp_path)
+    assert L.main([]) == 2
+
+
+def test_main_discovery_mode_non_utf8_eval_status_exits_two_not_uncaught(tmp_path, monkeypatch):
+    # Same as above, but the non-UTF-8 byte is in eval-status.md, exercised
+    # via _skill_claim_text()'s second read (line 971) rather than its
+    # first (line 969) or load_corpus() (line 461).
+    _write_skill_and_tasks(tmp_path, "alpha")
+    (tmp_path / "evals" / "alpha" / "eval-status.md").write_bytes(b"# status \xff\xfe bad\n")
+    monkeypatch.chdir(tmp_path)
+    assert L.main([]) == 2
+
+
 # ---- format_report (issue #516 follow-up) ----
 
 def test_format_report_clean_run_says_well_formed():
@@ -935,6 +975,71 @@ def test_lint_skill_tasks_isolates_a_malformed_fixture_from_its_siblings(tmp_pat
     assert [w for w in warnings if w.rule == "fixture-shape"]
     assert bad not in task_data
     assert (tasks / "good.yaml") in task_data
+
+
+def test_lint_skill_tasks_isolates_a_yaml_syntax_error_from_its_siblings(tmp_path):
+    # A second adversarial pass (post-merge) found the isolation fix above
+    # only caught pydantic.ValidationError -- a genuine YAML *syntax* error
+    # (not just the wrong shape) raised out of yaml.safe_load itself,
+    # outside that try/except, reopening the exact whole-run-abort gap the
+    # first fix closed. Confirmed by direct execution: an unterminated
+    # quoted scalar colliding with the next block key.
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    bad = tasks / "bad.yaml"
+    bad.write_text(
+        'id: broken\nname: "unterminated quote causes scanner error\n'
+        'inputs:\n  prompt: "hello"\n', encoding="utf-8")
+    (tasks / "good.yaml").write_text(
+        'id: g\nname: G\ninputs:\n  prompt: |\n    p\nexpected:\n'
+        '  output_contains:\n    - "Blind spot pass"\n'
+        '  output_not_contains:\n    - "LGTM"\n', encoding="utf-8")
+    rubric, skill = _corpus_files(tmp_path)
+    warnings, task_data = L.lint_skill_tasks(
+        [bad, tasks / "good.yaml"], L.load_corpus(rubric, skill))
+    assert [w for w in warnings if w.rule == "fixture-shape" and str(bad) in w.detail]
+    assert bad not in task_data
+    assert (tasks / "good.yaml") in task_data
+
+
+def test_lint_skill_tasks_isolates_a_non_utf8_fixture_from_its_siblings(tmp_path):
+    # A THIRD adversarial pass (still post-merge) found the widened guard
+    # above still didn't cover a non-UTF-8 fixture: path.read_text(
+    # encoding="utf-8") itself raises UnicodeDecodeError before
+    # yaml.safe_load ever runs, which the (yaml.YAMLError, ValidationError)
+    # catch from the second round did not include. Confirmed by direct
+    # execution with a raw invalid byte sequence.
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    bad = tasks / "bad.yaml"
+    bad.write_bytes(b"id: t1\nname: \xff\xfe bad utf8\n")
+    (tasks / "good.yaml").write_text(
+        'id: g\nname: G\ninputs:\n  prompt: |\n    p\nexpected:\n'
+        '  output_contains:\n    - "Blind spot pass"\n'
+        '  output_not_contains:\n    - "LGTM"\n', encoding="utf-8")
+    rubric, skill = _corpus_files(tmp_path)
+    warnings, task_data = L.lint_skill_tasks(
+        [bad, tasks / "good.yaml"], L.load_corpus(rubric, skill))
+    assert [w for w in warnings if w.rule == "fixture-shape" and str(bad) in w.detail]
+    assert bad not in task_data
+    assert (tasks / "good.yaml") in task_data
+
+
+def test_load_fixture_dict_falls_back_to_empty_dict_on_non_utf8_content(tmp_path):
+    path = tmp_path / "bad.yaml"
+    path.write_bytes(b"id: t1\nname: \xff\xfe bad utf8\n")
+    assert L._load_fixture_dict(path) == {}
+
+
+def test_load_fixture_dict_falls_back_to_empty_dict_on_yaml_syntax_error(tmp_path):
+    # Same YAML-syntax-error gap as above, in _load_fixture_dict's own
+    # separate call sites (check_adversarial_coverage/
+    # check_dispatch_declaration_coverage's task_data-is-None fallback).
+    # There is no parsed value to fall back to on a genuine parse error,
+    # unlike the wrong-shape case, so this returns {} rather than raising.
+    path = tmp_path / "bad.yaml"
+    path.write_text('name: "unterminated\ninputs:\n  prompt: x\n', encoding="utf-8")
+    assert L._load_fixture_dict(path) == {}
 
 
 def test_main_reports_malformed_fixture_as_a_blocking_warning_exit_1(tmp_path):

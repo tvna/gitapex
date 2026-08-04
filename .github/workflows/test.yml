@@ -108,7 +108,8 @@ jobs:
             skills/battle-testing-a-skill/scripts \
             skills/scorer-gated-skill-edits/scripts \
             skills/evaluating-skill-quality/scripts \
-            skills/auditing-agent-product-scope/scripts
+            skills/auditing-agent-product-scope/scripts \
+            skills/evaluating-deterministic-gate-quality/scripts
 
       - name: mypy (skills/executing-a-branch-plan/scripts)
         run: uv run --frozen mypy --config-file pyproject.toml skills/executing-a-branch-plan/scripts

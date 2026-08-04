@@ -333,10 +333,17 @@ First version of a new skill category, declared `experimental` in
 `metadata/gitapex.yaml`'s `spec.lifecycle.experimental.reason`
 (maintainer-facing, not auto-loaded), not restated here.
 
-Deferred, named explicitly: an independently-verified compatibility
-matrix; a bundled shape-checker script; a committed `evals/` regression
-corpus; a fixture for the description's second use case (only the first
-of three has one; the third is disclosed out of scope in
+A follow-on build (see `metadata/gitapex.yaml` for the citation) delivered
+two of `metadata/gitapex.yaml`'s originally-deferred-at-initial-ship items:
+a bundled shape-checker script (`scripts/check_gate_shape.py`,
+Domain-2-scoped -- see its own module docstring) and a grown,
+Blind-Spot-Pass-reviewed adversarial `evals/` regression corpus. Still
+deferred, named explicitly: an independently-verified cross-tool
+compatibility matrix (no other agent tool was available to run this
+skill under at that build's own implementation time; tracked as its own
+follow-up, see `metadata/gitapex.yaml`); a fixture for the description's
+second use case
+(only the first of three has one; the third is disclosed out of scope in
 `gitapex-worked-examples.md`, the second wasn't until now); the
 Security-level axis's "no established ceiling documentation" branch,
 unsmoke-tested against a target that actually lacks one; a harness

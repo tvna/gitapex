@@ -114,12 +114,16 @@ def main(argv: list[str] | None = None) -> int:
             with Path(args.added).open(encoding="utf-8") as handle:
                 text = handle.read()
         else:
-            text = sys.stdin.read()
-    except OSError as exc:
+            text = sys.stdin.buffer.read().decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
         # OSError (not just FileNotFoundError) -- a directory path
         # (IsADirectoryError) or a permission-denied file (PermissionError)
-        # must also fail with this message, not an unhandled traceback.
-        print(f"error: could not read added-lines file {args.added!r}: {exc}", file=sys.stderr)
+        # -- and UnicodeDecodeError (a non-UTF-8 added-lines file, or non-
+        # UTF-8 stdin) must also fail with this message, not an unhandled
+        # traceback or (for stdin under a surrogateescape locale) silently
+        # corrupted text.
+        source = args.added if args.added else "standard input"
+        print(f"error: could not read {source!r}: {exc}", file=sys.stderr)
         return 1
 
     added_patterns = parse_patterns(text)

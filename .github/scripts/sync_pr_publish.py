@@ -190,6 +190,8 @@ def _get_ref_sha(*, repo: str, ref: str, token: str, apply_call: Callable[..., t
     if not (200 <= code < 300):
         raise RuntimeError(f"Get ref {ref} failed: HTTP {code}: {body[:200]}")
     data = json.loads(body)
+    if not isinstance(data, dict):
+        raise RuntimeError(f"Expected object from get ref {ref}, got: {body[:200]}")
     sha = data.get("object", {}).get("sha")
     if not isinstance(sha, str) or not sha:
         raise RuntimeError(f"Get ref {ref} response missing object.sha: {body[:200]}")
@@ -207,6 +209,8 @@ def _get_branch_head_oid(
     if not (200 <= code < 300):
         raise RuntimeError(f"Get branch ref {branch} failed: HTTP {code}: {body[:200]}")
     data = json.loads(body)
+    if not isinstance(data, dict):
+        raise RuntimeError(f"Expected object from get branch ref {branch}, got: {body[:200]}")
     sha = data.get("object", {}).get("sha")
     if not isinstance(sha, str) or not sha:
         raise RuntimeError(f"Get branch ref {branch} response missing object.sha: {body[:200]}")
@@ -244,6 +248,8 @@ def _get_file_bytes(
     if not (200 <= code < 300):
         raise RuntimeError(f"Get contents {path}@{ref} failed: HTTP {code}: {body[:200]}")
     data = json.loads(body)
+    if not isinstance(data, dict):
+        raise RuntimeError(f"Expected object from get contents {path}@{ref}, got: {body[:200]}")
     encoding = data.get("encoding")
     content = data.get("content")
     if encoding != "base64" or not isinstance(content, str):
@@ -479,7 +485,20 @@ class _CliArgs(BaseModel):
     @field_validator("body_file")
     @classmethod
     def _body_file_must_exist(cls, value: str) -> str:
-        if not Path(value).exists():
+        # Path.exists() itself can raise OSError (e.g. ENAMETOOLONG for an
+        # over-long path component) rather than returning False -- found by
+        # adversarial review to propagate straight through pydantic
+        # uncaught, since pydantic only converts a validator's own
+        # ValueError/TypeError/AssertionError into a ValidationError, not
+        # an arbitrary OSError raised by a stdlib call inside it. Folding
+        # it into the same self-describing "body file not found" message
+        # keeps it on the one code path main()'s except ValidationError
+        # (and its body_file-message special case) already handles.
+        try:
+            exists = Path(value).exists()
+        except OSError as exc:
+            raise ValueError(f"body file not found: {value} ({exc})") from exc
+        if not exists:
             raise ValueError(f"body file not found: {value}")
         return value
 
@@ -511,15 +530,23 @@ def main(argv: list[str] | None = None) -> int:
             commit_subject=args.commit_subject, commit_body=args.commit_body, add=args.add,
         )
     except ValidationError as exc:
-        # body_file's own message already fully describes the problem (it
-        # is this script's pre-existing hand-check text, see _CliArgs'
-        # docstring) -- prefixing it with "body_file: " would drift the
-        # message CI logs and operators already expect. Every other field
-        # is a brand-new check with no prior text to preserve, so it keeps
-        # the generic "field: message" form.
+        # body_file's *custom field_validator* message (type "value_error",
+        # from _CliArgs._body_file_must_exist's own raise ValueError) is
+        # this script's pre-existing hand-check text, self-describing
+        # enough that a "body_file: " prefix would only drift the message
+        # CI logs and operators already expect -- see _CliArgs' docstring.
+        # A blank body_file instead trips Field(min_length=1), producing
+        # pydantic's own generic, non-self-describing "String should have
+        # at least 1 character" -- keying this special case on loc alone
+        # (not also type) wrongly stripped the field label from that
+        # message too (an adversarial review confirmed it, by direct
+        # execution, reads as an unattributable duplicate of another
+        # field's identical blank-value message when both are blank at
+        # once). Every other field, and every other body_file error type,
+        # keeps the generic "field: message" form.
         detail = "; ".join(
             e["msg"].removeprefix("Value error, ")
-            if e["loc"] == ("body_file",)
+            if e["loc"] == ("body_file",) and e["type"] == "value_error"
             else f"{e['loc'][0] if e['loc'] else 'args'}: {e['msg'].removeprefix('Value error, ')}"
             for e in exc.errors()
         )
@@ -540,7 +567,7 @@ def main(argv: list[str] | None = None) -> int:
             commit_body=cli_args.commit_body,
             token=token,
         )
-    except RuntimeError as exc:
+    except (RuntimeError, UnicodeDecodeError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
 

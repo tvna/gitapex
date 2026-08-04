@@ -411,6 +411,48 @@
       "tracking_issue": 650,
       "status": "active",
       "supersedes": null
+    },
+    {
+      "id": "exception-handler-gap",
+      "kind": "script",
+      "script": [
+        ".github/scripts/gate_exception_handler_gaps.py",
+        ".github/workflows/exception-handler-gap-gate.yml"
+      ],
+      "rule": "A decoded read (read_text, or open in a text read mode), or a .get() on a json.loads result, added by a PR diff to .github/scripts/*.py, hooks/*.py, evals/scripts/*.py or skills/*/scripts/*.py must handle what it can actually raise: an enclosing try covering UnicodeDecodeError or an ancestor for the read, an isinstance() against a mapping type for the .get(). Scope is the diff, not the repository. An inline exception-handler-gap WAIVED comment carrying a reason discloses a read whose caller owns the handling, and every honoured waiver is printed. Exits 2 rather than pass silently on input it cannot grade. See the script docstring for the measurement behind the scoping decision and for the known misses and over-reports.",
+      "planes": ["ci"],
+      "trigger": ".github/workflows/exception-handler-gap-gate.yml on pull_request, plus tests/test_gate_exception_handler_gaps.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "test-integrity",
+      "tracking_issue": 682,
+      "status": "active",
+      "supersedes": null
+    },
+    {
+      "id": "hidden-characters",
+      "kind": "script",
+      "script": ".github/scripts/gate_hidden_characters.py",
+      "rule": "No repository-tracked file may carry a literal hidden/invisible Unicode character -- U+FEFF, the zero-width family (U+200B-U+200D), the bidi control characters (U+200E/U+200F, U+202A-U+202E, U+2066-U+2069), or word joiner (U+2060). The escape-sequence spelling of any of these (e.g. \\ufeff) is never graded -- that is the fix this gate steers authors toward. Discovery reads git-tracked files, so every ignored path is out of scope by construction. Diagnostic output never reproduces the offending character itself, naming the codepoint, its Unicode name, and line/column instead. Exits 2, never a silent pass, when no tracked file is discovered or a file cannot be read/decoded as UTF-8.",
+      "planes": ["ci"],
+      "trigger": ".github/workflows/hidden-characters-gate.yml on pull_request, plus tests/test_gate_hidden_characters.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "repo-hygiene",
+      "tracking_issue": 702,
+      "status": "active",
+      "supersedes": null
+    },
+    {
+      "id": "stale-retro-stub-autoclose",
+      "kind": "script",
+      "script": ".github/scripts/stale_retro_stub_autoclose.py",
+      "rule": "Closes open retrospective-labelled issues whose body still carries post_merge_retro.py's own unenriched-stub marker text and whose created_at is older than 48 hours, posting an explanatory comment on every close; never touches an already-enriched issue.",
+      "planes": ["ci"],
+      "trigger": ".github/workflows/stale-retro-stub-autoclose.yml, daily cron 08:00 UTC + workflow_dispatch",
+      "policy_refs": [],
+      "cluster": "self-governance",
+      "tracking_issue": 694,
+      "status": "active",
+      "supersedes": null
     }
   ],
   "clusters": {
@@ -419,9 +461,9 @@
     "plan-integrity": "Pre-work planning artifacts (Acceptance Criteria Maps) required before an issue is considered ready.",
     "skill-lifecycle": "SKILL.md authoring, rename, audit-disclosure, and fixture-coverage discipline.",
     "repo-hygiene": "Repository-file-level conventions such as .gitignore pattern test coverage.",
-    "self-governance": "The repo's own doc-integrity and self-referential-claim checks (OWASP mappings, retro-title/routine-scope citation, retro backlog cap).",
+    "self-governance": "The repo's own doc-integrity and self-referential-claim checks (OWASP mappings, retro-title/routine-scope citation, retro backlog cap, stale-stub auto-close).",
     "supply-chain": "Toolchain and dependency provisioning, and manifest-identity drift.",
-    "test-integrity": "Test-suite coverage floors backing the other clusters' own gates.",
+    "test-integrity": "Quality floors on the artifacts backing the other clusters' own gates: test-suite coverage, static type checking, and static analysis of the gate scripts' own error paths.",
     "registry-integrity": "Self-validation of this registry file itself against its schema and against the repo's real files."
   }
 }
