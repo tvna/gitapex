@@ -104,7 +104,9 @@ at runtime, download + SHA256-verify + extract + install four binaries, run
 `apm install`), and that axis has its own, separate verification history,
 real rather than merely planned:
 
-- 70 unit/integration tests in `scripts/test_provision_class_b.py`
+- 79 tests in `scripts/test_provision_class_b.py` (70 original
+  unit/integration + 8 for the apm-install idempotency fix + 1 for the
+  exception-handler-gap fix)
   (`uv run --frozen pytest skills/setup-gitapex-toolchain/scripts`, all
   passing), built test-first across the skill's incremental commits --
   several with their own RED-phase or deliberate-bug-injection confirmation
