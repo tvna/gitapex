@@ -47,3 +47,21 @@ binaries without running `apm install` afterward. Add `--tool NAME`
   code if anything failed. Failures never crash the calling SessionStart
   hook (`session-start.sh` always exits 0 itself) -- check this script's
   own exit code and stderr directly to confirm success.
+
+## Known behavior: `.claude/settings.json` carries only this skill's own hook
+
+The committed `.claude/settings.json` lists exactly one `SessionStart`
+entry: this skill's own (`.claude/hooks/session-start.sh`). It does not
+commit the apm-managed dependency hooks (superpowers, clairvoyance, and
+any future ones) or their `UserPromptSubmit`/`PreToolUse` entries, even
+though a working tree that has already run `apm install` shows those
+entries merged into the same file. `apm install` -- which this skill's
+own `session-start.sh` triggers automatically -- re-adds them into
+`.claude/settings.json` at runtime, tagging what it owns via
+`_apm_source` in the sibling, gitignored `.claude/apm-hooks.json`
+manifest; a hand-authored entry outside that tagging (this skill's own)
+is never touched by apm's regeneration. This keeps the committed
+baseline internally consistent -- a fresh `git clone` only references
+files that already exist in that same commit -- and keeps
+`.claude/settings.json` from showing as modified every session merely
+because apm reordered entries it manages.
