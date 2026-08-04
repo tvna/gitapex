@@ -695,6 +695,47 @@ def test_provision_tool_reinstalls_wrapper_dir_kind_when_shim_is_tampered(tmp_pa
     assert shim_path.read_text() == pcb._expected_bin_shim_content(real_bin)
 
 
+def test_provision_tool_reinstalls_wrapper_dir_kind_when_shim_is_non_utf8(tmp_path: Path) -> None:
+    """exception-handler-gaps gate finding: the shim-tamper check above
+    reads bin_path as UTF-8 text (it is normally a small shell script).
+    A shim corrupted to non-UTF-8 bytes -- not just replaced with
+    different-but-valid text -- must be treated the same way as any other
+    shim mismatch (force a reinstall), not left to raise an uncaught
+    UnicodeDecodeError out of _is_already_installed. provision_all's own
+    best-effort-per-tool except Exception would technically catch it too,
+    but that reports a bare FAIL for the tool instead of the self-healing
+    reinstall this check exists to provide."""
+    spec = _real_apm_spec()
+    data = _make_tar_gz_bytes(
+        {"apm-linux-x86_64/apm": b"#!/bin/sh\necho fake-apm\n", "apm-linux-x86_64/_internal/x": b"y"}
+    )
+    pin = pcb.ClassBSystemPin(asset="apm.tar.gz", sha256_sri=pcb.sha256_sri(data), bin_in_archive="apm")
+    fake_spec = pcb.ClassBToolSpec(
+        pname="apm", version="0.25.0", kind="wrapperDir", owner=spec.owner, repo=spec.repo, tag=spec.tag,
+        systems={"x86_64-linux": pin},
+    )
+
+    result1 = pcb.provision_tool(
+        fake_spec, "x86_64-linux", tmp_path, opener=lambda r: _FakeResponse(200, data), sleeper=lambda _s: None,
+        runner=_fake_runner_success,
+    )
+    assert result1.status == "installed"
+
+    real_bin = tmp_path / "libexec" / "apm" / "apm"
+    real_bin_bytes_before = real_bin.read_bytes()
+    shim_path = tmp_path / "bin" / "apm"
+    shim_path.write_bytes(b"\xff\xfe\x00\x01not-valid-utf8-at-all")
+
+    result2 = pcb.provision_tool(
+        fake_spec, "x86_64-linux", tmp_path, opener=lambda r: _FakeResponse(200, data), sleeper=lambda _s: None,
+        runner=_fake_runner_success,
+    )
+
+    assert result2.status == "installed"  # not an uncaught UnicodeDecodeError, not "skipped"
+    assert real_bin.read_bytes() == real_bin_bytes_before
+    assert shim_path.read_text() == pcb._expected_bin_shim_content(real_bin)
+
+
 def test_provision_tool_sanitizes_stderr_in_verify_error_message(tmp_path: Path) -> None:
     """Important #2, first of two raise sites: VerifyError's message
     embedded raw proc.stderr directly, later printed to the terminal

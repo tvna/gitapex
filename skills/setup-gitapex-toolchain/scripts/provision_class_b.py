@@ -187,7 +187,7 @@ def parse_flake_class_b_pins(flake_text: str) -> dict[str, ClassBToolSpec]:
 
 
 def load_flake_class_b_pins(flake_path: Path) -> dict[str, ClassBToolSpec]:
-    return parse_flake_class_b_pins(flake_path.read_text(encoding="utf-8"))
+    return parse_flake_class_b_pins(flake_path.read_text(encoding="utf-8"))  # exception-handler-gap: WAIVED: main()'s own try/except around this call already catches UnicodeDecodeError alongside (FlakePinParseError, OSError) -- this function itself deliberately propagates, matching parse_flake_class_b_pins's own let-it-propagate design
 
 
 _UNAME_SYSTEM_MAP: dict[tuple[str, str], str] = {
@@ -318,7 +318,7 @@ def extract_binary(data: bytes, asset_name: str, bin_in_archive: str, dest: Path
             raise ExtractionError(f"{asset_name}: not a valid zip archive: {error}") from error
     else:
         try:
-            with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tf:
+            with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tf:  # exception-handler-gap: WAIVED: binary mode ("r:gz") reads archive bytes, never decodes text -- UnicodeDecodeError cannot occur here
                 # tf.extractfile raises KeyError when bin_in_archive names no
                 # member at all (verified against real tarfile semantics --
                 # this differs from the None-return path below); it returns
@@ -439,7 +439,7 @@ def extract_wrapper_dir(data: bytes, asset_name: str, bin_in_archive: str, libex
             raise ExtractionError(f"{asset_name}: not a valid zip archive: {error}") from error
     else:
         try:
-            with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tf:
+            with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tf:  # exception-handler-gap: WAIVED: binary mode ("r:gz") reads archive bytes, never decodes text -- UnicodeDecodeError cannot occur here
                 top_dir_name = _validate_top_level_dir(tf.getnames(), asset_name, libexec_dir)
                 # No noqa needed: ruff recognizes filter="data" itself as
                 # resolving S202 for tarfile (confirmed empirically -- adding
@@ -506,8 +506,12 @@ def _read_receipt(cache_root: Path, pname: str) -> InstallReceipt | None:
     # KeyError also covers an old receipt written before installed_sha256
     # existed: treated as "no receipt" (same as any other malformed
     # receipt), which forces exactly one reinstall to backfill the new
-    # field -- no separate migration code needed.
-    except (FileNotFoundError, json.JSONDecodeError, KeyError, TypeError):
+    # field -- no separate migration code needed. UnicodeDecodeError
+    # (a receipt corrupted to non-UTF-8 bytes) is not an OSError/
+    # JSONDecodeError/KeyError/TypeError subclass and must be listed
+    # explicitly -- same "no receipt" treatment, same fail-closed forced
+    # reinstall.
+    except (FileNotFoundError, json.JSONDecodeError, KeyError, TypeError, UnicodeDecodeError):
         return None
 
 
@@ -597,9 +601,17 @@ def _is_already_installed(cache_root: Path, spec: ClassBToolSpec, system: str) -
     # stored value. binary-kind tools have no separate shim -- their entry
     # point IS bin_path, already covered by the hash check above -- so
     # this only applies to, and only runs for, wrapperDir.
-    return not (
-        spec.kind == "wrapperDir" and bin_path.read_text(encoding="utf-8") != _expected_bin_shim_content(entry_point)
-    )
+    if spec.kind != "wrapperDir":
+        return True
+    try:
+        shim_is_expected = bin_path.read_text(encoding="utf-8") == _expected_bin_shim_content(entry_point)
+    # A shim tampered with non-UTF-8 bytes is not "content differs from
+    # expected" (a plain string mismatch) but a decode failure -- treated
+    # the same way, forcing a reinstall, not left to propagate as an
+    # uncaught exception out of this best-effort-per-tool check.
+    except UnicodeDecodeError:
+        return False
+    return shim_is_expected
 
 
 class VerifyError(RuntimeError):
@@ -814,8 +826,10 @@ def _read_apm_install_receipt(cache_root: Path) -> ApmInstallReceipt | None:
     # Same try/except-on-read-errors-means-None convention as _read_receipt
     # above: a missing, malformed, or partial receipt is indistinguishable
     # from "no receipt" -- both force a reinstall (fail closed), never a
-    # crash.
-    except (FileNotFoundError, json.JSONDecodeError, KeyError, TypeError):
+    # crash. UnicodeDecodeError listed explicitly for the same reason as
+    # _read_receipt's own copy of this tuple: it is not a subclass of any
+    # of the other four.
+    except (FileNotFoundError, json.JSONDecodeError, KeyError, TypeError, UnicodeDecodeError):
         return None
 
 
@@ -868,7 +882,7 @@ def write_env_file(env_file: Path | None, cache_root: Path) -> None:
     if env_file is None:
         return
     export_line = f'export PATH="{cache_root / "bin"}:$PATH"\n'
-    existing = env_file.read_text(encoding="utf-8") if env_file.exists() else ""
+    existing = env_file.read_text(encoding="utf-8") if env_file.exists() else ""  # exception-handler-gap: WAIVED: main()'s own try/except around this call already catches (OSError, UnicodeDecodeError) -- this function itself deliberately propagates
     if export_line in existing:
         return
     with env_file.open("a", encoding="utf-8") as handle:
@@ -955,7 +969,11 @@ def main(argv: list[str] | None = None) -> int:
     # FileNotFoundError subclass) for the directory case, which the
     # narrower except left as an uncaught traceback. FileNotFoundError
     # remains covered since it is itself an OSError subclass.
-    except (FlakePinParseError, OSError) as error:
+    # UnicodeDecodeError is NOT an OSError subclass (it is a ValueError
+    # subclass) -- a flake.nix with non-UTF-8 bytes would otherwise crash
+    # main() with a raw traceback instead of this same clean FAIL: line;
+    # caught explicitly rather than assumed covered by OSError.
+    except (FlakePinParseError, OSError, UnicodeDecodeError) as error:
         print(f"FAIL: could not load Class B pins from {flake_path}: {error}", file=sys.stderr)
         return 1
 
@@ -998,7 +1016,12 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         write_env_file(args.env_file, cache_root)
-    except OSError as error:
+    # UnicodeDecodeError alongside OSError: write_env_file's own read of an
+    # existing env file is not OSError's subclass (it is ValueError's) --
+    # a $CLAUDE_ENV_FILE some other process wrote non-UTF-8 bytes into
+    # would otherwise crash main() here instead of this same clean FAIL:
+    # line.
+    except (OSError, UnicodeDecodeError) as error:
         # Deliberately does not `return` or otherwise skip the apm-install
         # step below: a PATH export failure is independent of whether apm
         # install should still be attempted.
