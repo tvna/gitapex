@@ -363,7 +363,7 @@ def main(argv: list[str] | None = None) -> int:
     dimensions_file = Path(validated_args.dimensions_file) if validated_args.dimensions_file else None
     try:
         report = compute_coverage(skill_dir, validated_args.tasks_glob, dimensions_file)
-    except (OSError, UnicodeDecodeError, yaml.YAMLError, AttributeError, TypeError) as exc:
+    except (OSError, yaml.YAMLError, AttributeError, TypeError) as exc:
         print(f"error: could not compute coverage: {exc}", file=sys.stderr)
         return 2
 

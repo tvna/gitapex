@@ -11,18 +11,11 @@ concern per test module.
 
 from __future__ import annotations
 
-import io
 import pathlib
 
 import check_skill_audit_disclosure_or_waiver as checker
 import pytest
-
-
-class _FakeStdin:
-    """Just the surface `main` uses: `sys.stdin.buffer.read()`."""
-
-    def __init__(self, data: bytes) -> None:
-        self.buffer = io.BytesIO(data)
+from conftest import FakeStdin as _FakeStdin
 
 
 def test_main_reports_error_for_non_utf8_body_file(

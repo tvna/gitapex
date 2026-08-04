@@ -8,16 +8,8 @@ reason without an owner-disclosure marker in the same diff.
 
 from __future__ import annotations
 
-import io
-
 import gate_provenance_disclosure as gate
-
-
-class _FakeStdin:
-    """Just the surface `main` uses: `sys.stdin.buffer.read()`."""
-
-    def __init__(self, data: bytes) -> None:
-        self.buffer = io.BytesIO(data)
+from conftest import FakeStdin as _FakeStdin
 
 _UNDISCLOSED_NOTE = (
     "The reviewing context had already read the full rubric, so this evaluation "

@@ -13,17 +13,8 @@ check_pr_issue_acm_disclosure -- as a plain top-level module.
 
 from __future__ import annotations
 
-import io
-
 import check_acm_present_or_waiver as checker
-
-
-class _FakeStdin:
-    """Just the surface `main` uses: `sys.stdin.buffer.read()`."""
-
-    def __init__(self, data: bytes) -> None:
-        self.buffer = io.BytesIO(data)
-
+from conftest import FakeStdin as _FakeStdin
 
 _VALID_ACM_TABLE = (
     "| Criterion | Interpretation | Planned ops | Proof method | Residual risk |\n"

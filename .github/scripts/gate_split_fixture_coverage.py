@@ -367,7 +367,7 @@ def check_exercises_declaration_coverage(
     try:
         skill_text = skill_md_path.read_text(encoding="utf-8")
     except UnicodeDecodeError as error:
-        return f"{split_md_path}: could not decode {skill_md_path} as UTF-8 ({error})"
+        return f"{split_md_path}: could not decode sibling {skill_md_path} as UTF-8 ({error})"
     section_labels = parse_section_labels(skill_text)
     if not section_labels:
         return None

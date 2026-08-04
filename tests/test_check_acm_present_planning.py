@@ -15,10 +15,10 @@ own _load_module already uses for this exact pair of files.
 from __future__ import annotations
 
 import importlib.util
-import io
 import pathlib
 
 import pytest
+from conftest import FakeStdin as _FakeStdin
 
 _SCRIPT_PATH = (
     pathlib.Path(__file__).resolve().parents[1]
@@ -34,13 +34,6 @@ _spec = importlib.util.spec_from_file_location(
 assert _spec is not None and _spec.loader is not None
 checker = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(checker)
-
-
-class _FakeStdin:
-    """Just the surface `main` uses: `sys.stdin.buffer.read()`."""
-
-    def __init__(self, data: bytes) -> None:
-        self.buffer = io.BytesIO(data)
 
 
 def test_main_reports_error_for_non_utf8_body_file(

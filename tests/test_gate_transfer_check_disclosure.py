@@ -10,17 +10,8 @@ header line is new in this diff.
 
 from __future__ import annotations
 
-import io
-
 import gate_transfer_check_disclosure as gate
-
-
-class _FakeStdin:
-    """Just the surface `main` uses: `sys.stdin.buffer.read()`."""
-
-    def __init__(self, data: bytes) -> None:
-        self.buffer = io.BytesIO(data)
-
+from conftest import FakeStdin as _FakeStdin
 
 _ENTRY_WITH_TRANSFER_CHECK = """\
 ## Kept-edit log

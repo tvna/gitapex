@@ -11,17 +11,8 @@ rationale.
 
 from __future__ import annotations
 
-import io
-
 import gate_skill_branch_fixture_coverage as gate
-
-
-class _FakeStdin:
-    """Just the surface `main` uses: `sys.stdin.buffer.read()`."""
-
-    def __init__(self, data: bytes) -> None:
-        self.buffer = io.BytesIO(data)
-
+from conftest import FakeStdin as _FakeStdin
 
 _STOP_BOUNDARY_SKILL = """\
 ---

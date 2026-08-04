@@ -10,17 +10,8 @@ markdown horizontal rule), leaking unrelated body prose into the scan.
 
 from __future__ import annotations
 
-import io
-
 import skill_security_relevance as mod
-
-
-class _FakeStdin:
-    """Just the surface `main` uses: `sys.stdin.buffer.read()`."""
-
-    def __init__(self, data: bytes) -> None:
-        self.buffer = io.BytesIO(data)
-
+from conftest import FakeStdin as _FakeStdin
 
 _WELL_FORMED = """\
 ---

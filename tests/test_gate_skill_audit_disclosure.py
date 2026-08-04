@@ -15,18 +15,9 @@ eval-coverage-disclosure waiver.
 
 from __future__ import annotations
 
-import io
-
 import gate_skill_audit_disclosure as gate
 import pytest
-
-
-class _FakeStdin:
-    """Just the surface `main` uses: `sys.stdin.buffer.read()`."""
-
-    def __init__(self, data: bytes) -> None:
-        self.buffer = io.BytesIO(data)
-
+from conftest import FakeStdin as _FakeStdin
 
 _VALID_SECTION = """\
 ## Skill audit evidence

@@ -405,7 +405,7 @@ def main(argv: list[str] | None = None) -> int:
             raw = (
                 Path(args.scores).read_text(encoding="utf-8")
                 if args.scores
-                else sys.stdin.read()
+                else sys.stdin.buffer.read().decode("utf-8")
             )
             scores = [float(line) for line in raw.splitlines() if line.strip()]
             mean = split_mean(scores)
@@ -456,7 +456,11 @@ def main(argv: list[str] | None = None) -> int:
             print(f"error: could not decode output file {args.output}: {exc}", file=sys.stderr)
             return 1
     else:
-        output_text = sys.stdin.read()
+        try:
+            output_text = sys.stdin.buffer.read().decode("utf-8")
+        except UnicodeDecodeError as exc:
+            print(f"error: could not decode standard input: {exc}", file=sys.stderr)
+            return 1
     line = f"{score(output_text, assertions):.6f}"
     if args.dispatch_trace_verdict is not None:
         line += " DISPATCH_TRACE_" + args.dispatch_trace_verdict.upper()

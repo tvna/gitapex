@@ -16,10 +16,10 @@ scoped to scan_provenance.py's own main() only.
 from __future__ import annotations
 
 import importlib.util
-import io
 import pathlib
 
 import pytest
+from conftest import FakeStdin as _FakeStdin
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 _SCRIPT_PATH = REPO_ROOT / "skills" / "outward-artifact-preflight" / "scripts" / "scan_provenance.py"
@@ -28,13 +28,6 @@ _spec = importlib.util.spec_from_file_location("_outward_artifact_preflight_scan
 assert _spec is not None and _spec.loader is not None
 scan_provenance = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(scan_provenance)
-
-
-class _FakeStdin:
-    """Just the surface `main` uses: `sys.stdin.buffer.read()`."""
-
-    def __init__(self, data: bytes) -> None:
-        self.buffer = io.BytesIO(data)
 
 
 def test_main_reports_error_for_non_utf8_file(
