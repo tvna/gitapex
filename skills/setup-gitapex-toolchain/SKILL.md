@@ -182,13 +182,12 @@ This is a pure, optional latency optimization for whoever configures it.
 It does not remove or gate the automatic `SessionStart`-hook path, which
 keeps working exactly as it does today -- with or without a setup script
 configured -- and remains what makes a brand-new, never-configured
-environment provision automatically with zero manual steps, per this
-skill's original goal (`https://github.com/tvna/gitapex/issues/57`,
-`https://github.com/tvna/gitapex/issues/690`). A setup script cannot be
-committed to this repository -- per the primary source it is configured
-only through the environment dialog above, not a repository file -- so
-this section is documentation for a reader who wants to opt in, not a
-mechanism this repository wires up on its own.
+environment provision automatically with zero manual steps, this skill's
+founding goal (see `metadata/gitapex.yaml`'s `spec.references`). A setup
+script cannot be committed to this repository -- per the primary source
+it is configured only through the environment dialog above, not a
+repository file -- so this section is documentation for a reader who
+wants to opt in, not a mechanism this repository wires up on its own.
 
 ## Notes
 
@@ -196,9 +195,8 @@ mechanism this repository wires up on its own.
   (`flake.nix` Class B pins, `session-start.sh`, `apm.yml`,
   `.claude/settings.json`, four gitapex-specific tool names) have no
   portable core separable from this repository. Full decision citation,
-  plus an open taxonomy-gap deferral
-  (`https://github.com/tvna/gitapex/issues/730`), are recorded in this
-  skill's `metadata/gitapex.yaml` under `spec.references`.
+  plus an open taxonomy-gap deferral, are recorded in this skill's
+  `metadata/gitapex.yaml` under `spec.references`.
 - **Model invocation.** This skill is left invocable by both the model
   and the user (not `disable-model-invocation: true`) because the
   automatic SessionStart hook already performs identical provisioning
