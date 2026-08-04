@@ -183,7 +183,8 @@ It does not remove or gate the automatic `SessionStart`-hook path, which
 keeps working exactly as it does today -- with or without a setup script
 configured -- and remains what makes a brand-new, never-configured
 environment provision automatically with zero manual steps, per this
-skill's original goal (issues #57, #690). A setup script cannot be
+skill's original goal (`https://github.com/tvna/gitapex/issues/57`,
+`https://github.com/tvna/gitapex/issues/690`). A setup script cannot be
 committed to this repository -- per the primary source it is configured
 only through the environment dialog above, not a repository file -- so
 this section is documentation for a reader who wants to opt in, not a
