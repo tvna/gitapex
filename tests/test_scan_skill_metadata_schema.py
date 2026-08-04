@@ -459,7 +459,7 @@ def test_find_drift_end_to_end_clean(tmp_path: pathlib.Path) -> None:
     skill_dir = skills_dir / "example-skill"
     (skills_dir / "battle-testing-a-skill").mkdir(parents=True)
     _write_sidecar(skill_dir, _VALID_INSTANCE)
-    assert scanner.find_drift(skills_dir, scanner.SCHEMA_PATH) == []
+    assert scanner.find_drift(skills_dir, scanner.SCHEMA_PATH, min_expected_skill_dirs=1) == []
 
 
 def test_find_drift_end_to_end_reports_prefixed_findings(tmp_path: pathlib.Path) -> None:
@@ -468,7 +468,7 @@ def test_find_drift_end_to_end_reports_prefixed_findings(tmp_path: pathlib.Path)
     bad_instance = _copy_instance()
     bad_instance["spec"]["portability"] = "Sortof"
     _write_sidecar(skill_dir, bad_instance)
-    findings = scanner.find_drift(skills_dir, scanner.SCHEMA_PATH)
+    findings = scanner.find_drift(skills_dir, scanner.SCHEMA_PATH, min_expected_skill_dirs=1)
     assert any(f.startswith("example-skill: schema:") for f in findings)
 
 
@@ -477,7 +477,7 @@ def test_find_drift_end_to_end_missing_sidecar_is_flagged(tmp_path: pathlib.Path
     skill_dir = skills_dir / "example-skill"
     skill_dir.mkdir(parents=True)
     (skill_dir / "SKILL.md").write_text("---\nname: x\n---\nbody\n", encoding="utf-8")
-    findings = scanner.find_drift(skills_dir, scanner.SCHEMA_PATH)
+    findings = scanner.find_drift(skills_dir, scanner.SCHEMA_PATH, min_expected_skill_dirs=1)
     assert any("metadata-file-present" in f for f in findings)
 
 
@@ -495,8 +495,46 @@ def test_find_drift_end_to_end_detects_requires_cycle(tmp_path: pathlib.Path) ->
     del b["spec"]["lifecycle"]
     _write_sidecar(skills_dir / "skill-a", a)
     _write_sidecar(skills_dir / "skill-b", b)
-    findings = scanner.find_drift(skills_dir, scanner.SCHEMA_PATH)
+    findings = scanner.find_drift(skills_dir, scanner.SCHEMA_PATH, min_expected_skill_dirs=2)
     assert any("requires-acyclicity" in f for f in findings)
+
+
+# ---- find_drift's discovery floor (dimension 15: fail-closed on incomplete
+# input) -- a regression pin for a real bug this new gate shipped with: a
+# wrong or missing skills_dir used to make discover_skill_dirs silently
+# return [], and find_drift then reported "no drift" -- a vacuous pass, the
+# exact failure class issue #651's retrospective named ("an empty match set
+# is an error, never a silent pass"). Constructed directly, per
+# evaluating-deterministic-gate-quality's dimension 15 (a bundled test's own
+# happy-path fixtures do not by themselves satisfy this dimension).
+
+
+def test_find_drift_floor_catches_a_missing_skills_directory(tmp_path: pathlib.Path) -> None:
+    findings = scanner.find_drift(tmp_path / "does-not-exist", scanner.SCHEMA_PATH)
+    assert any("skill-discovery-floor" in f for f in findings)
+
+
+def test_find_drift_floor_catches_an_empty_skills_directory(tmp_path: pathlib.Path) -> None:
+    (tmp_path / "skills").mkdir()
+    findings = scanner.find_drift(tmp_path / "skills", scanner.SCHEMA_PATH)
+    assert any("skill-discovery-floor" in f for f in findings)
+
+
+def test_find_drift_floor_uses_the_real_repository_default(tmp_path: pathlib.Path) -> None:
+    # Same missing-directory input as above, but exercising the DEFAULT
+    # min_expected_skill_dirs (no override) -- proves the production
+    # entry point (main() calls find_drift() with no arguments) is
+    # actually protected, not just the parameterized escape hatch tests
+    # use for their own deliberately small fixtures.
+    findings = scanner.find_drift(tmp_path / "does-not-exist")
+    assert any("skill-discovery-floor" in f for f in findings)
+
+
+def test_find_drift_floor_does_not_fire_on_the_real_repository() -> None:
+    # The real repository has 24 skills, comfortably above the default
+    # floor -- this must not itself become a false positive.
+    assert not any(
+        "skill-discovery-floor" in f for f in scanner.find_drift())
 
 
 # ---- main() ----

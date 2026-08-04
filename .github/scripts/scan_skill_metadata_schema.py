@@ -62,6 +62,15 @@ SCHEMA_PATH = REPO_ROOT / ".gitapex" / "skill-metadata.schema.json"
 # (``python3 .github/scripts/scan_skill_metadata_schema.py``) without relying
 # on skills/evaluating-skill-quality/scripts being on sys.path.
 SIDECAR_RELATIVE_PATH = "metadata/gitapex.yaml"
+# Guards against discover_skill_dirs silently finding nothing (a wrong or
+# missing skills_dir, an empty/misconfigured checkout) and find_drift then
+# vacuously reporting "no drift" -- mirroring
+# tests/test_skill_metadata_sidecar.py's own MIN_EXPECTED_SKILLS floor and
+# its stated reasoning verbatim. There are 24 skills in this repository
+# today; this floor is set close to that real count with headroom, not at 1,
+# so a partial discovery failure (most, not all, skills silently dropped)
+# is caught too, not only a total-zero one.
+MIN_EXPECTED_SKILL_DIRS = 15
 
 
 class SidecarReadError(Exception):
@@ -258,13 +267,36 @@ def find_requires_cycle(graph: dict[str, list[str]]) -> list[str] | None:
 def find_drift(
     skills_dir: pathlib.Path = SKILLS_DIR,
     schema_path: pathlib.Path = SCHEMA_PATH,
+    min_expected_skill_dirs: int = MIN_EXPECTED_SKILL_DIRS,
 ) -> list[str]:
     """Return every drift finding across every discovered skill's sidecar:
     schema violations, the two per-skill dangling-reference checks, and the
     one repo-wide requires-acyclicity check. Empty list means every sidecar
-    is clean."""
+    is clean.
+
+    ``min_expected_skill_dirs`` is a fail-closed floor on discovery itself,
+    checked before any of the above: fewer than this many real skill
+    directories is treated as a drift finding, not silently reported as
+    "no drift" (dimension 15, evaluating-deterministic-gate-quality --
+    without this, a wrong or missing ``skills_dir`` argument, or a
+    checkout that lost most of skills/, would pass this gate vacuously,
+    exactly the "an empty match set is an error, never a silent pass"
+    failure class issue #651's retrospective named). A caller exercising a
+    deliberately small fixture directory (this module's own tests) must
+    pass a lower value explicitly; every other caller, including
+    ``main()``, keeps the real-repository-sized default.
+    """
     schema = _load_schema(schema_path)
     skill_dirs = discover_skill_dirs(skills_dir)
+
+    if len(skill_dirs) < min_expected_skill_dirs:
+        return [
+            f"skill-discovery-floor: found only {len(skill_dirs)} skill "
+            f"director{'y' if len(skill_dirs) == 1 else 'ies'} with a "
+            f"SKILL.md under {skills_dir} (expected at least "
+            f"{min_expected_skill_dirs}) -- this usually means skills_dir "
+            "is wrong or missing, not that skills were actually removed"
+        ]
 
     findings: list[str] = []
     for skill_dir in skill_dirs:
