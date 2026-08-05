@@ -40,15 +40,20 @@ given cloud environment (not scoped to one repository):
    selector (the cloud icon above the message box) to add a new cloud
    environment, or edit an existing one (e.g. "Default").
 2. Configure what the environment needs:
-   - **Environment variables** (`.env`-style `KEY=value` pairs) -- every
-     session that selects this environment gets these.
+   - **Environment variables** -- `.env`-style, one `KEY=value` per line,
+     applied to every session that selects this environment:
+     ```
+     KEY=value
+     ```
    - **Setup script** (Bash) -- runs once when the environment is
      created, then its result is cached for future sessions.
    - **Network access level** -- which domains sessions in this
      environment can reach.
 3. Select that environment for a session: via the web/mobile/Desktop
-   environment dropdown, or from the CLI with `/remote-env` to set your
-   default.
+   environment dropdown, or from the CLI, set your default with:
+   ```
+   /remote-env
+   ```
 4. For an organization (Team/Enterprise only), an admin can instead
    create an **organization-shared environment** at
    [claude.ai/admin-settings/claude-code](https://claude.ai/admin-settings/claude-code),
