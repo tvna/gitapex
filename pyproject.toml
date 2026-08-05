@@ -222,6 +222,7 @@ module = [
     "test_gitapex_gate_split_fixture_coverage",
     "test_gitapex_gate_transfer_check_disclosure",
     "test_gitapex_lint_fixture_assertions",
+    "test_gitapex_merge_retrospective_autofill",
     "test_gitapex_merge_retrospective_record_format",
     "test_gitapex_middleware_table_shape",
     "test_gitapex_post_merge_retro",
