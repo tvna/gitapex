@@ -912,6 +912,61 @@ def test_anchor_check_runs_per_reference_file(tmp_path):
     assert "#nope" in bad_result.evidence
 
 
+def _mksibling(tmp_path, name):
+    """Create tmp_path/name as a real sibling skill directory: a bare
+    ``mkdir()`` alone no longer resolves for this file's four
+    dangling-reference resolve checks now that they also require a real
+    ``SKILL.md`` (see ``_resolves_to_sibling_skill``, issue #757)."""
+    sibling = tmp_path / name
+    sibling.mkdir()
+    (sibling / "SKILL.md").write_text("stub\n", encoding="utf-8")
+    return sibling
+
+
+# ---- _resolves_to_sibling_skill guard, backported from
+# gitapex_scan_skill_metadata_schema.py's _resolves_to_sibling_skill
+# (issue #757): adversarial fixtures run directly against the shared
+# helper every one of this file's four dangling-reference resolve checks
+# (related-skill-references-resolve, portable-no-unhedged-skill-fact-claim,
+# skill-dependencies-resolve, lifecycle-deprecated-replacement-resolves)
+# now goes through.
+
+
+def test_resolves_to_sibling_skill_accepts_real_sibling(tmp_path):
+    _mksibling(tmp_path, "sibling-skill")
+    assert css._resolves_to_sibling_skill("sibling-skill", tmp_path) is True
+
+
+def test_resolves_to_sibling_skill_rejects_dangling_name(tmp_path):
+    assert css._resolves_to_sibling_skill("ghost-skill", tmp_path) is False
+
+
+def test_resolves_to_sibling_skill_rejects_directory_without_skill_md(tmp_path):
+    # A non-skill directory (a docs folder, a work-in-progress directory, a
+    # stray build artifact) must not read as a resolved reference merely
+    # because it exists -- it must also contain a real SKILL.md.
+    (tmp_path / "not-a-skill").mkdir()
+    assert css._resolves_to_sibling_skill("not-a-skill", tmp_path) is False
+
+
+def test_resolves_to_sibling_skill_rejects_absolute_path(tmp_path):
+    # pathlib's absolute-operand-replaces-the-left-side behavior means
+    # ``tmp_path / "/etc"`` silently becomes ``Path("/etc")`` -- a real,
+    # existing directory on any POSIX system -- so an unguarded
+    # ``.is_dir()`` would report this dangling reference as resolving.
+    assert css._resolves_to_sibling_skill("/etc", tmp_path) is False
+
+
+def test_resolves_to_sibling_skill_rejects_parent_traversal(tmp_path):
+    assert css._resolves_to_sibling_skill("../../../../../../etc", tmp_path) is False
+
+
+def test_resolves_to_sibling_skill_rejects_empty_dot_and_dotdot(tmp_path):
+    assert css._resolves_to_sibling_skill("", tmp_path) is False
+    assert css._resolves_to_sibling_skill(".", tmp_path) is False
+    assert css._resolves_to_sibling_skill("..", tmp_path) is False
+
+
 # ---- related-skill-references-resolve ----
 
 
@@ -925,7 +980,7 @@ def test_related_skill_reference_absent_passes(tmp_path):
 
 
 def test_related_skill_reference_resolves_passes(tmp_path):
-    (tmp_path / "sibling-skill").mkdir()
+    _mksibling(tmp_path, "sibling-skill")
     d = _write_raw(
         tmp_path,
         "---\nname: s\ndescription: d. Use when x.\n---\n\n"
@@ -948,9 +1003,25 @@ def test_related_skill_reference_dangling_fails(tmp_path):
     assert css.main([str(d)]) == 1
 
 
+def test_related_skill_reference_directory_without_skill_md_fails(tmp_path):
+    # issue #757: a sibling directory that exists but has no SKILL.md (a
+    # docs folder, a work-in-progress directory, a stray build artifact)
+    # must not read as a resolved reference.
+    (tmp_path / "not-a-skill").mkdir()
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "## Related skills\n\n"
+        "- **vs. `not-a-skill`:** exists on disk but isn't a real skill.\n",
+    )
+    result = _result(css.check_shape(d), "related-skill-references-resolve")
+    assert not result.passed
+    assert "not-a-skill" in result.evidence
+
+
 def test_related_skill_reference_dual_name_bullet_both_resolve(tmp_path):
-    (tmp_path / "sibling-a").mkdir()
-    (tmp_path / "sibling-b").mkdir()
+    _mksibling(tmp_path, "sibling-a")
+    _mksibling(tmp_path, "sibling-b")
     d = _write_raw(
         tmp_path,
         "---\nname: s\ndescription: d. Use when x.\n---\n\n"
@@ -961,7 +1032,7 @@ def test_related_skill_reference_dual_name_bullet_both_resolve(tmp_path):
 
 
 def test_related_skill_reference_dual_name_bullet_one_dangling_fails(tmp_path):
-    (tmp_path / "sibling-a").mkdir()
+    _mksibling(tmp_path, "sibling-a")
     d = _write_raw(
         tmp_path,
         "---\nname: s\ndescription: d. Use when x.\n---\n\n"
@@ -998,8 +1069,8 @@ def test_related_skill_reference_bullet_stops_at_next_bullet(tmp_path):
     # Regression: extending the match to cover body prose must not bleed
     # into the NEXT bullet's own header/body -- each bullet's names are
     # independent.
-    (tmp_path / "sibling-a").mkdir()
-    (tmp_path / "sibling-b").mkdir()
+    _mksibling(tmp_path, "sibling-a")
+    _mksibling(tmp_path, "sibling-b")
     d = _write_raw(
         tmp_path,
         "---\nname: s\ndescription: d. Use when x.\n---\n\n"
@@ -1501,7 +1572,7 @@ def test_legitimate_deeper_nesting_passes_manifest_parsable(tmp_path):
     # spec.references' own mapping-shaped-item case is a distinct scenario,
     # covered by test_references_mapping_shaped_item_fails_well_formed
     # below (that field is no longer ungated as of Sub-project C).
-    (tmp_path / "other-skill").mkdir()
+    _mksibling(tmp_path, "other-skill")
     d = _write_skill(tmp_path)
     (d / "metadata/gitapex.yaml").write_text(
         "apiVersion: gitapex.io/v1alpha1\n"
@@ -2373,7 +2444,7 @@ def test_double_backtick_code_span_citation_still_flagged(tmp_path):
 
 
 def test_unhedged_sibling_skill_citation_fails(tmp_path):
-    (tmp_path / "scorer-gated-skill-edits").mkdir()
+    _mksibling(tmp_path, "scorer-gated-skill-edits")
     d = _write_raw(
         tmp_path,
         _portable_body(
@@ -2388,7 +2459,7 @@ def test_unhedged_sibling_skill_citation_fails(tmp_path):
 
 
 def test_hedged_sibling_skill_citation_passes(tmp_path):
-    (tmp_path / "scorer-gated-skill-edits").mkdir()
+    _mksibling(tmp_path, "scorer-gated-skill-edits")
     d = _write_raw(
         tmp_path,
         _portable_body(
@@ -2411,11 +2482,21 @@ def test_nonresolving_backtick_token_never_flagged(tmp_path):
     assert result.passed is True
 
 
+def test_non_skill_directory_without_skill_md_never_flagged(tmp_path):
+    # issue #757: a same-named directory that exists but has no SKILL.md
+    # is not a real sibling skill, so an unhedged claim about it must not
+    # be flagged as a sibling-skill fact-claim either.
+    (tmp_path / "not-a-skill").mkdir()
+    d = _write_raw(tmp_path, _portable_body("`not-a-skill`'s own fixture discovery already handles this case."))
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-skill-fact-claim"]
+    assert result.passed is True
+
+
 def test_possessive_citation_without_already_never_flagged(tmp_path):
     # The possessive shape alone is this repository's own common, benign
     # way to cite a sibling skill -- only "already" in the same clause
     # turns it into the narrower flagged shape.
-    (tmp_path / "scorer-gated-skill-edits").mkdir()
+    _mksibling(tmp_path, "scorer-gated-skill-edits")
     d = _write_raw(
         tmp_path,
         _portable_body("See `scorer-gated-skill-edits`' own fixture-authoring guidance for the established format."),
@@ -2429,14 +2510,14 @@ def test_non_possessive_citation_never_flagged(tmp_path):
     # the flagged shape -- this is the "assumes the item is already
     # accepted work"-style Related-skills scoping language this
     # repository's own corpus uses routinely and legitimately.
-    (tmp_path / "scorer-gated-skill-edits").mkdir()
+    _mksibling(tmp_path, "scorer-gated-skill-edits")
     d = _write_raw(tmp_path, _portable_body("`scorer-gated-skill-edits` assumes the fixture is already valid."))
     result = _by_name(css.check_shape(d))["portable-no-unhedged-skill-fact-claim"]
     assert result.passed is True
 
 
 def test_non_portable_skill_skips_skill_fact_claim_scan(tmp_path):
-    (tmp_path / "scorer-gated-skill-edits").mkdir()
+    _mksibling(tmp_path, "scorer-gated-skill-edits")
     d = _write_raw(
         tmp_path,
         _portable_body(
@@ -2449,7 +2530,7 @@ def test_non_portable_skill_skips_skill_fact_claim_scan(tmp_path):
 
 
 def test_sibling_skill_citation_in_reference_file_fails(tmp_path):
-    (tmp_path / "scorer-gated-skill-edits").mkdir()
+    _mksibling(tmp_path, "scorer-gated-skill-edits")
     d = _write_raw(
         tmp_path,
         _portable_body("Clean body."),
@@ -2465,7 +2546,7 @@ def test_citation_followed_by_punctuation_still_flagged(tmp_path):
     # whitespace immediately after the possessive ("(?=\\s)"), so a
     # citation immediately followed by punctuation (e.g. a comma before
     # further prose) never matched at all.
-    (tmp_path / "scorer-gated-skill-edits").mkdir()
+    _mksibling(tmp_path, "scorer-gated-skill-edits")
     d = _write_raw(
         tmp_path,
         _portable_body("`scorer-gated-skill-edits`', already noted, names a format for a pure substring scorer."),
@@ -2483,7 +2564,7 @@ def test_hedge_two_sentences_back_does_not_count(tmp_path):
     # "the citation's own sentence, or the ONE sentence immediately
     # before it" -- not an unbounded lookback, and not the whole
     # paragraph either.
-    (tmp_path / "scorer-gated-skill-edits").mkdir()
+    _mksibling(tmp_path, "scorer-gated-skill-edits")
     d = _write_raw(
         tmp_path,
         _portable_body(
@@ -2504,7 +2585,7 @@ def test_hedge_in_sentence_immediately_before_does_count(tmp_path):
     # explicit topical connector -- matching _inline_citation_offenders'
     # own documented "one leading hedge... a list of several different
     # citations" allowance.
-    (tmp_path / "scorer-gated-skill-edits").mkdir()
+    _mksibling(tmp_path, "scorer-gated-skill-edits")
     d = _write_raw(
         tmp_path,
         _portable_body(
@@ -2522,7 +2603,7 @@ def test_hedge_word_inside_unrelated_inline_code_does_not_count(tmp_path):
     # no inline-code blanking, so an unrelated inline-code token
     # containing "gitapex" (one of HEDGE_PHRASES) elsewhere in the same
     # paragraph incorrectly satisfied the hedge search.
-    (tmp_path / "scorer-gated-skill-edits").mkdir()
+    _mksibling(tmp_path, "scorer-gated-skill-edits")
     d = _write_raw(
         tmp_path,
         _portable_body(
@@ -2540,7 +2621,7 @@ def test_hedge_in_prior_paragraph_does_not_count(tmp_path):
     # line into a PRIOR paragraph's own hedge, the same boundary
     # _inline_citation_offenders already enforces for the other two
     # Portable citation checks.
-    (tmp_path / "scorer-gated-skill-edits").mkdir()
+    _mksibling(tmp_path, "scorer-gated-skill-edits")
     d = _write_raw(
         tmp_path,
         _portable_body(
@@ -3415,7 +3496,7 @@ def test_skill_dependencies_requires_trailing_comment_still_opens(tmp_path):
     # Same bug, one level deeper: "requires:  # comment" must still be
     # read as blank and open the list, not stored as the literal comment
     # string.
-    (tmp_path / "other-skill").mkdir()
+    _mksibling(tmp_path, "other-skill")
     d = _write_skill_deps_sidecar(
         _write_skill(tmp_path),
         "  skillDependencies:\n    requires:  # inline comment\n      - other-skill\n    relatedTo: []\n",
@@ -3428,7 +3509,7 @@ def test_skill_dependencies_requires_trailing_comment_still_opens(tmp_path):
 
 
 def test_skill_dependencies_valid_resolves_and_is_well_formed(tmp_path):
-    (tmp_path / "other-skill").mkdir()
+    _mksibling(tmp_path, "other-skill")
     d = _write_skill_deps_sidecar(
         _write_skill(tmp_path), "  skillDependencies:\n    requires: []\n    relatedTo:\n      - other-skill\n"
     )
@@ -3603,8 +3684,44 @@ def test_skill_dependencies_dangling_related_to_fails_resolve(tmp_path):
     assert "ghost-skill" in by["skill-dependencies-resolve"].evidence
 
 
+def test_skill_dependencies_absolute_path_fails_resolve(tmp_path):
+    # issue #757: pathlib's absolute-operand-replaces-the-left-side
+    # behavior means an unguarded ``(skill_dir.parent / "/etc").is_dir()``
+    # would report this dangling reference as resolving on any POSIX
+    # system where /etc exists.
+    d = _write_skill_deps_sidecar(
+        _write_skill(tmp_path), "  skillDependencies:\n    requires:\n      - /etc\n    relatedTo: []\n"
+    )
+    by = _by_name(css.check_shape(d))
+    assert by["skill-dependencies-resolve"].passed is False
+    assert "/etc" in by["skill-dependencies-resolve"].evidence
+
+
+def test_skill_dependencies_parent_traversal_fails_resolve(tmp_path):
+    d = _write_skill_deps_sidecar(
+        _write_skill(tmp_path),
+        "  skillDependencies:\n    requires:\n      - ../../../../../../etc\n    relatedTo: []\n",
+    )
+    by = _by_name(css.check_shape(d))
+    assert by["skill-dependencies-resolve"].passed is False
+    assert "../../../../../../etc" in by["skill-dependencies-resolve"].evidence
+
+
+def test_skill_dependencies_directory_without_skill_md_fails_resolve(tmp_path):
+    # A same-named directory that exists but has no SKILL.md (a docs
+    # folder, a work-in-progress directory, a stray build artifact) is not
+    # a real sibling skill.
+    (tmp_path / "not-a-skill").mkdir()
+    d = _write_skill_deps_sidecar(
+        _write_skill(tmp_path), "  skillDependencies:\n    requires:\n      - not-a-skill\n    relatedTo: []\n"
+    )
+    by = _by_name(css.check_shape(d))
+    assert by["skill-dependencies-resolve"].passed is False
+    assert "not-a-skill" in by["skill-dependencies-resolve"].evidence
+
+
 def test_requires_portability_contradiction_fails_on_portable(tmp_path):
-    (tmp_path / "other-skill").mkdir()
+    _mksibling(tmp_path, "other-skill")
     d = _write_skill_deps_sidecar(
         _write_skill(tmp_path),
         "  skillDependencies:\n    requires:\n      - other-skill\n    relatedTo: []\n",
@@ -3618,7 +3735,7 @@ def test_requires_portability_contradiction_fails_on_portable(tmp_path):
 
 
 def test_requires_non_empty_on_mixed_does_not_contradict(tmp_path):
-    (tmp_path / "other-skill").mkdir()
+    _mksibling(tmp_path, "other-skill")
     d = _write_skill_deps_sidecar(
         _write_skill(tmp_path),
         "  skillDependencies:\n    requires:\n      - other-skill\n    relatedTo: []\n",
@@ -3736,7 +3853,7 @@ def test_lifecycle_experimental_only_is_well_formed(tmp_path):
 
 
 def test_lifecycle_deprecated_only_is_well_formed_and_resolves(tmp_path):
-    (tmp_path / "other-skill").mkdir()
+    _mksibling(tmp_path, "other-skill")
     d = _write_lifecycle_sidecar(
         _write_skill(tmp_path),
         "  lifecycle:\n"
@@ -3758,7 +3875,7 @@ def test_lifecycle_both_blocks_present_is_valid(tmp_path):
     # deprecated -- both present simultaneously is unusual but not an error
     # (unlike experimental+stable, which IS gated -- see
     # test_lifecycle_experimental_and_stable_fails_compatible below).
-    (tmp_path / "other-skill").mkdir()
+    _mksibling(tmp_path, "other-skill")
     d = _write_lifecycle_sidecar(
         _write_skill(tmp_path),
         "  lifecycle:\n"
@@ -3888,6 +4005,44 @@ def test_lifecycle_dangling_replacement_fails_resolve(tmp_path):
     assert by["lifecycle-deprecated-replacement-resolves"].passed is False
     assert "ghost-skill" in by["lifecycle-deprecated-replacement-resolves"].evidence
     assert css.main([str(d)]) == 1
+
+
+def test_lifecycle_replacement_absolute_path_fails_resolve(tmp_path):
+    # issue #757: pathlib's absolute-operand-replaces-the-left-side
+    # behavior means an unguarded ``(skill_dir.parent / "/etc").is_dir()``
+    # would report this dangling reference as resolving on any POSIX
+    # system where /etc exists.
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n    deprecated:\n      reason: superseded\n      replacement: /etc\n",
+    )
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-deprecated-replacement-resolves"].passed is False
+    assert "/etc" in by["lifecycle-deprecated-replacement-resolves"].evidence
+
+
+def test_lifecycle_replacement_parent_traversal_fails_resolve(tmp_path):
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n    deprecated:\n      reason: superseded\n      replacement: ../../../../../../etc\n",
+    )
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-deprecated-replacement-resolves"].passed is False
+    assert "../../../../../../etc" in by["lifecycle-deprecated-replacement-resolves"].evidence
+
+
+def test_lifecycle_replacement_directory_without_skill_md_fails_resolve(tmp_path):
+    # A same-named directory that exists but has no SKILL.md (a docs
+    # folder, a work-in-progress directory, a stray build artifact) is not
+    # a real sibling skill.
+    (tmp_path / "not-a-skill").mkdir()
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n    deprecated:\n      reason: superseded\n      replacement: not-a-skill\n",
+    )
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-deprecated-replacement-resolves"].passed is False
+    assert "not-a-skill" in by["lifecycle-deprecated-replacement-resolves"].evidence
 
 
 def test_lifecycle_wrong_shape_date_fails_well_formed(tmp_path):
@@ -4152,7 +4307,7 @@ def test_lifecycle_stable_and_deprecated_coexist(tmp_path):
     # A graduated skill later superseded by another is a normal lifecycle
     # progression -- only experimental+stable is gated, not
     # deprecated+stable.
-    (tmp_path / "other-skill").mkdir()
+    _mksibling(tmp_path, "other-skill")
     d = _write_lifecycle_sidecar(
         _write_skill(tmp_path),
         "  lifecycle:\n"
