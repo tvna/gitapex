@@ -30,6 +30,8 @@ import yaml
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "skill-audit-gate.yml"
 
+pytestmark = pytest.mark.slow
+
 
 @pytest.fixture(scope="module")
 def diff_step_script(tmp_path_factory):

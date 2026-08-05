@@ -37,6 +37,8 @@ CHECKER = Path(__file__).parent / "gitapex_check_pr_issue_acm_disclosure.py"
 ACM_CHECKER = Path(__file__).parent / "gitapex_check_acm_present_or_waiver.py"
 REPO_ROOT = Path(__file__).parent.parent
 
+pytestmark = pytest.mark.slow
+
 
 def run(
     *,
