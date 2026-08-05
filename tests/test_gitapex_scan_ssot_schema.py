@@ -280,6 +280,20 @@ def test_as_list_normalizes_none_string_and_list():
     assert drift._as_list(["a.sh", "b.sh"]) == ["a.sh", "b.sh"]
 
 
+def test_format_checker_rejects_out_of_range_date():
+    # Refs #755: the format-checker backport. .gitapex/ssot.schema.json has
+    # no date-typed field today (confirmed: no live effect on the real
+    # registry yet), so this is a constructed schema+instance pair rather
+    # than a .gitapex/ssot.json fixture -- it proves find_schema_violations
+    # now rejects an out-of-range calendar date the same way
+    # gitapex_scan_skill_metadata_schema.py's own scanner already does,
+    # via the shared _gitapex_schema_validation.build_validator, so the
+    # fix is already live the moment such a field is ever added.
+    schema = {"type": "object", "properties": {"since": {"type": "string", "format": "date"}}}
+    findings = drift.find_schema_violations({"since": "2026-02-30"}, schema)
+    assert any("since" in f for f in findings)
+
+
 def test_repository_ssot_is_schema_valid_and_drift_free():
     """The gate: the real .gitapex/ssot.json must validate against the real
     .gitapex/ssot.schema.json and carry no script/policy-ref/cluster drift."""

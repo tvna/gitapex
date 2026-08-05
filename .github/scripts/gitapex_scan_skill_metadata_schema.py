@@ -36,7 +36,12 @@ Layered validation, mirroring .gitapex/ssot.schema.json's own scanner
    spec.lifecycle's since/removeAfter dates are checked as real calendar
    dates, not just YYYY-MM-DD shape) checks each sidecar instance against
    the schema and reports every violation with a JSON-pointer-shaped
-   location.
+   location. The load-or-raise and validator-build/iter-errors logic this
+   relies on is shared with gitapex_scan_ssot_schema.py via
+   _gitapex_schema_validation.py (issue #755) rather than each script
+   carrying its own near-verbatim copy -- see that module's own docstring
+   for why, including the format-checker drift this extraction backports a
+   fix for into gitapex_scan_ssot_schema.py.
 2. Three cross-FILE checks the schema cannot express on its own, since a
    single JSON Schema instance never sees a second file:
    - ``metadata-name-matches-dir``: metadata.name equals the sidecar's own
@@ -59,12 +64,11 @@ gate in tests/test_gitapex_scan_skill_metadata_schema.py.
 
 from __future__ import annotations
 
-import json
 import pathlib
 import sys
 from typing import Any
 
-import jsonschema
+import _gitapex_schema_validation
 import yaml
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -148,37 +152,8 @@ def load_sidecar(path: pathlib.Path) -> Any:
 
 
 def _load_schema(schema_path: pathlib.Path) -> dict[str, Any]:
-    try:
-        text = schema_path.read_text(encoding="utf-8")
-    except OSError as error:
-        raise SidecarReadError(f"{schema_path}: cannot be read: {error}") from error
-    except UnicodeDecodeError as error:
-        raise SidecarReadError(f"{schema_path}: is not valid UTF-8: {error}") from error
-    try:
-        parsed: dict[str, Any] = json.loads(text)
-    except json.JSONDecodeError as error:
-        raise SidecarReadError(f"{schema_path}: is not valid JSON: {error}") from error
+    parsed: dict[str, Any] = _gitapex_schema_validation.load_json_or_raise(schema_path, SidecarReadError)
     return parsed
-
-
-def _build_validator(schema: dict[str, Any]) -> jsonschema.Draft202012Validator:
-    """A Draft202012Validator for ``schema`` with format assertion enabled
-    -- the JSON Schema spec itself permits a consumer to ignore format
-    assertions, and the plain jsonschema.Draft202012Validator(schema)
-    constructor does exactly that, which would silently accept an
-    out-of-range calendar date like "2026-02-30" that only fails the
-    schema's "format": "date" keyword, not its "pattern" keyword."""
-    return jsonschema.Draft202012Validator(schema, format_checker=jsonschema.FormatChecker())
-
-
-def _violations_from_validator(instance: Any, validator: jsonschema.Draft202012Validator) -> list[str]:
-    """One message per validation error ``validator`` finds against
-    ``instance``. Empty list means the instance is valid."""
-    findings: list[str] = []
-    for error in validator.iter_errors(instance):
-        location = "/".join(str(p) for p in error.path) or "<root>"
-        findings.append(f"schema: {location}: {error.message}")
-    return findings
 
 
 def find_schema_violations(instance: Any, schema: dict[str, Any]) -> list[str]:
@@ -186,12 +161,12 @@ def find_schema_violations(instance: Any, schema: dict[str, Any]) -> list[str]:
     against ``schema``. Convenience wrapper that builds a fresh validator on
     every call -- fine for the occasional direct caller (this module's own
     tests), but find_drift builds one validator per run instead and reuses
-    it across every discovered skill via _violations_from_validator, rather
-    than re-compiling the same 13-$defs schema once per skill (adversarial
-    review of this file: jsonschema's validator construction performs
-    $ref resolution/registry setup, real, avoidable repeated work at the
-    repository's current 24-skill scale)."""
-    return _violations_from_validator(instance, _build_validator(schema))
+    it across every discovered skill via _gitapex_schema_validation.schema_violations,
+    rather than re-compiling the same 13-$defs schema once per skill
+    (adversarial review of this file: jsonschema's validator construction
+    performs $ref resolution/registry setup, real, avoidable repeated work
+    at the repository's current 24-skill scale)."""
+    return _gitapex_schema_validation.schema_violations(instance, _gitapex_schema_validation.build_validator(schema))
 
 
 def _spec_of(instance: Any) -> dict[str, Any]:
@@ -373,7 +348,7 @@ def find_drift(
     every skill has been read, not inside the per-skill loop.
     """
     schema = _load_schema(schema_path)
-    validator = _build_validator(schema)
+    validator = _gitapex_schema_validation.build_validator(schema)
     skill_dirs = discover_skill_dirs(skills_dir)
 
     if len(skill_dirs) < min_expected_skill_dirs:
@@ -405,7 +380,7 @@ def find_drift(
             # participates in the acyclicity check as a childless node.
             graph[prefix] = []
             continue
-        findings.extend(f"{prefix}: {f}" for f in _violations_from_validator(instance, validator))
+        findings.extend(f"{prefix}: {f}" for f in _gitapex_schema_validation.schema_violations(instance, validator))
         findings.extend(f"{prefix}: {f}" for f in find_name_mismatch(instance, skill_dir))
         findings.extend(f"{prefix}: {f}" for f in find_skill_dependency_drift(instance, skills_dir))
         findings.extend(f"{prefix}: {f}" for f in find_deprecated_replacement_drift(instance, skills_dir))

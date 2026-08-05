@@ -53,18 +53,23 @@ at all (under-registration, a "shadow gate") is a known, accepted gap; see
 the PR that introduced this scanner for why that was left as a follow-up
 rather than folded in here.
 
+Issue #755: the JSON-load-or-raise and validator-build/iter-errors logic
+below is shared with ``gitapex_scan_skill_metadata_schema.py`` via
+``_gitapex_schema_validation.py`` rather than each script carrying its own
+near-verbatim copy -- see that module's own docstring for why, including
+the format-checker drift this extraction backports a fix for.
+
 Run standalone (exit 1 on drift) or via the pytest gate in
 ``tests/test_gitapex_scan_ssot_schema.py``.
 """
 
 from __future__ import annotations
 
-import json
 import pathlib
 import sys
 from typing import Any, Literal
 
-import jsonschema
+import _gitapex_schema_validation
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -138,27 +143,6 @@ class SsotRegistry(BaseModel):
     clusters: dict[str, str]
 
 
-def _load_json(path: pathlib.Path) -> Any:
-    """Read and JSON-parse `path`. Raises RegistryReadError -- naming
-    `path` -- rather than letting a non-UTF-8 file or invalid JSON syntax
-    surface as an uncaught UnicodeDecodeError/JSONDecodeError traceback.
-    Does not itself check the parsed value's shape (dict vs. list/str/
-    etc.) -- callers that need a dict guard that separately, since a
-    schema-invalid-but-parseable instance (e.g. a JSON array at the top
-    level) is find_schema_violations's finding to report, not a load
-    failure."""
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError as error:
-        raise RegistryReadError(f"{path}: cannot be read: {error}") from error
-    except UnicodeDecodeError as error:
-        raise RegistryReadError(f"{path}: is not valid UTF-8: {error}") from error
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError as error:
-        raise RegistryReadError(f"{path}: is not valid JSON: {error}") from error
-
-
 def _get_list(d: Any, key: str) -> list[Any]:
     """d.get(key, []), but also defaults when `d` isn't a dict at all (not
     just when the key's own value is an explicit JSON null) -- dict.get's
@@ -221,12 +205,8 @@ def _parse_registry(instance: Any) -> SsotRegistry | None:
 def find_schema_violations(instance: Any, schema: dict[str, Any]) -> list[str]:
     """Return one message per JSON-Schema (draft 2020-12) validation error
     against the given schema. Empty list means the instance is valid."""
-    validator = jsonschema.Draft202012Validator(schema)
-    findings: list[str] = []
-    for error in validator.iter_errors(instance):
-        location = "/".join(str(p) for p in error.path) or "<root>"
-        findings.append(f"schema: {location}: {error.message}")
-    return findings
+    validator = _gitapex_schema_validation.build_validator(schema)
+    return _gitapex_schema_validation.schema_violations(instance, validator)
 
 
 def find_script_drift(registry: SsotRegistry | None, repo_root: pathlib.Path = REPO_ROOT) -> list[str]:
@@ -317,8 +297,8 @@ def find_drift(
 ) -> list[str]:
     """Return every drift finding across schema validation and the three
     repo-grounded reference checks. Empty list means the registry is clean."""
-    instance = _load_json(instance_path)
-    schema = _load_json(schema_path)
+    instance = _gitapex_schema_validation.load_json_or_raise(instance_path, RegistryReadError)
+    schema = _gitapex_schema_validation.load_json_or_raise(schema_path, RegistryReadError)
     registry = _parse_registry(instance)
 
     findings: list[str] = []
