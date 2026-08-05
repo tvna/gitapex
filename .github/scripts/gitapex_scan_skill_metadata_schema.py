@@ -46,8 +46,8 @@ Layered validation, mirroring .gitapex/ssot.schema.json's own scanner
      spec.lifecycle.deprecated.replacement, if present, names an existing
      sibling skills/<name>/ directory.
    - A repo-wide ``requires`` acyclicity check across every sidecar's
-     spec.skillDependencies.requires graph (mirrors
-     tests/test_gitapex_skill_metadata_sidecar.py's own ``_find_requires_cycle``).
+     spec.skillDependencies.requires graph (exercised directly, not
+     duplicated, by tests/test_gitapex_skill_metadata_sidecar.py).
      The graph itself is accumulated inside the same per-skill loop that
      runs every other check below (one sidecar read each, not two), but
      detecting a cycle genuinely needs the WHOLE graph, so that detection
@@ -307,8 +307,8 @@ def find_deprecated_replacement_drift(instance: Any, skills_dir: pathlib.Path = 
 
 def find_requires_cycle(graph: dict[str, list[str]]) -> list[str] | None:
     """Return one cycle (as a path of skill names) if ``graph`` contains
-    one, else None. Standard white/gray/black DFS, mirroring
-    tests/test_gitapex_skill_metadata_sidecar.py's own _find_requires_cycle -- a
+    one, else None. Standard white/gray/black DFS. tests/test_gitapex_skill_
+    metadata_sidecar.py imports and exercises this function directly -- a
     `requires` cycle is a real error (two skills each unable to function
     without the other is not a coherent state); a `relatedTo` cycle is not
     checked here at all and is expected to be fine."""
