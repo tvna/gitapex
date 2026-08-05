@@ -15,10 +15,13 @@ sibling test file pins as narrowly as this one does.
 from __future__ import annotations
 
 import pathlib
+import re
 from typing import Any
 
 import _gitapex_schema_validation
 import pytest
+
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
 class _FakeReadError(Exception):
@@ -82,3 +85,59 @@ def test_schema_violations_empty_for_valid_instance() -> None:
     schema: dict[str, Any] = {"type": "object", "required": ["kind"]}
     validator = _gitapex_schema_validation.build_validator(schema)
     assert _gitapex_schema_validation.schema_violations({"kind": "x"}, validator) == []
+
+
+def test_validate_is_schema_violations_of_build_validator() -> None:
+    schema: dict[str, Any] = {"type": "object", "required": ["kind"]}
+    assert _gitapex_schema_validation.validate({"kind": "x"}, schema) == []
+    assert _gitapex_schema_validation.validate({}, schema) != []
+
+
+def test_validate_enables_format_checker() -> None:
+    schema: dict[str, Any] = {"type": "object", "properties": {"since": {"type": "string", "format": "date"}}}
+    findings = _gitapex_schema_validation.validate({"since": "2026-02-30"}, schema)
+    assert any("since" in f for f in findings)
+
+
+# ---------------------------------------------------------------------------
+# Drift gate (issue #755 finding: "ship the drift gate in the same change,
+# not a follow-up" -- CLAUDE.md). Neither scanner script may reconstruct its
+# own jsonschema validator or reimplement load-or-raise locally: that is
+# exactly the duplication-then-drift (#734/#736) this module exists to
+# close. Nothing else in this test file, or in
+# tests/test_gitapex_scan_ssot_schema.py/test_gitapex_scan_skill_metadata_schema.py,
+# would catch a future edit that pasted the old per-script copies back in --
+# every one of those tests exercises behavior, not source text.
+# ---------------------------------------------------------------------------
+
+_SCANNER_SCRIPTS = (
+    REPO_ROOT / ".github" / "scripts" / "gitapex_scan_ssot_schema.py",
+    REPO_ROOT / ".github" / "scripts" / "gitapex_scan_skill_metadata_schema.py",
+)
+
+# Matches a real `import jsonschema` / `from jsonschema import ...`
+# statement, not the many prose mentions of "jsonschema"/"Draft202012Validator"
+# in each script's own docstring -- anchored to line-start with optional
+# leading whitespace, the same way source-import detection needs to be to
+# avoid false positives on documentation text.
+_JSONSCHEMA_IMPORT_RE = re.compile(r"^\s*(import jsonschema\b|from jsonschema\b)", re.MULTILINE)
+_DIRECT_VALIDATOR_CONSTRUCTION_RE = re.compile(r"\bDraft202012Validator\s*\(")
+
+
+def test_scanner_scripts_do_not_import_jsonschema_directly() -> None:
+    offenders = [p for p in _SCANNER_SCRIPTS if _JSONSCHEMA_IMPORT_RE.search(p.read_text(encoding="utf-8"))]
+    assert not offenders, (
+        "these scanner scripts import jsonschema directly instead of going "
+        f"through _gitapex_schema_validation.py: {[str(p.relative_to(REPO_ROOT)) for p in offenders]}. "
+        "This reopens the exact duplication-then-drift issue #755 closed -- "
+        "route schema loading/validation through _gitapex_schema_validation.py instead."
+    )
+
+
+def test_scanner_scripts_do_not_construct_a_validator_directly() -> None:
+    offenders = [p for p in _SCANNER_SCRIPTS if _DIRECT_VALIDATOR_CONSTRUCTION_RE.search(p.read_text(encoding="utf-8"))]
+    assert not offenders, (
+        "these scanner scripts construct a jsonschema.Draft202012Validator "
+        f"directly instead of calling _gitapex_schema_validation.build_validator: "
+        f"{[str(p.relative_to(REPO_ROOT)) for p in offenders]}."
+    )

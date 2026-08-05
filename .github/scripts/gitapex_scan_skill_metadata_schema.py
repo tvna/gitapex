@@ -166,7 +166,7 @@ def find_schema_violations(instance: Any, schema: dict[str, Any]) -> list[str]:
     (adversarial review of this file: jsonschema's validator construction
     performs $ref resolution/registry setup, real, avoidable repeated work
     at the repository's current 24-skill scale)."""
-    return _gitapex_schema_validation.schema_violations(instance, _gitapex_schema_validation.build_validator(schema))
+    return _gitapex_schema_validation.validate(instance, schema)
 
 
 def _spec_of(instance: Any) -> dict[str, Any]:

@@ -205,8 +205,7 @@ def _parse_registry(instance: Any) -> SsotRegistry | None:
 def find_schema_violations(instance: Any, schema: dict[str, Any]) -> list[str]:
     """Return one message per JSON-Schema (draft 2020-12) validation error
     against the given schema. Empty list means the instance is valid."""
-    validator = _gitapex_schema_validation.build_validator(schema)
-    return _gitapex_schema_validation.schema_violations(instance, validator)
+    return _gitapex_schema_validation.validate(instance, schema)
 
 
 def find_script_drift(registry: SsotRegistry | None, repo_root: pathlib.Path = REPO_ROOT) -> list[str]:
