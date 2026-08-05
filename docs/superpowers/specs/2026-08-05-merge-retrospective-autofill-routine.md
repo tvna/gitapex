@@ -218,27 +218,43 @@ pull-request-write-capable tool.
 `2026-07-28-ranking-the-open-queue-github-actions-routine.md` recorded for
 its own workflow: the mechanism is shipped, but this session cannot
 produce a live, end-to-end proof that it correctly enriches a real stub,
-for two independent reasons, both stated here rather than left implicit:
+for three independent reasons, all confirmed directly rather than
+assumed:
 
-1. **No real trigger event occurred during this session.** This
-   workflow's own `issues: opened`/`labeled` trigger requires a real PR to
-   merge and `gitapex_post_merge_retro.py` to open a fresh stub, or an operator
-   to `workflow_dispatch` it against an existing one -- neither happened
-   during this session's work.
-2. **`ANTHROPIC_API_KEY` may still be blocked.** Per the Facts section
-   above, every `ranking-the-open-queue-weekly.yml` run through
-   2026-08-03 failed in the same shape as the previously-diagnosed
-   Anthropic Console billing block. If that block is still in effect, this
-   workflow's first live dispatch will fail identically, for a reason
-   external to this change (see CONTRIBUTING.md's existing key-provisioning
-   section for the remediation path: add credit at
-   console.anthropic.com). This is a pre-existing condition this PR does
-   not introduce and cannot itself resolve.
+1. **`workflow_dispatch` cannot target a workflow that only exists on a
+   feature branch -- confirmed live, not assumed.** This session
+   attempted `mcp__github__actions_run_trigger` (`run_workflow`,
+   `workflow_id: merge-retrospective-autofill.yml`,
+   `ref: claude/gitapex-pr-769-es3w3n`, `inputs: {issue_number: "751"}`,
+   targeting real open bare-stub issue #751) before this PR merged. It
+   failed with `404 Not Found` on the dispatch POST itself -- GitHub's
+   documented behavior is that `workflow_dispatch` only recognizes a
+   workflow file once it exists on the repository's default branch,
+   regardless of which `ref` the dispatch later targets. So neither the
+   manual-recovery path nor a pre-merge verification run is reachable
+   until this workflow file lands on `main`.
+2. **No real `issues: opened`/`labeled` trigger event occurred during this
+   session either**, for the same underlying reason: the workflow is not
+   yet registered against any branch GitHub treats as authoritative for
+   trigger registration.
+3. **`ANTHROPIC_API_KEY` may still be blocked**, independent of the two
+   points above. Per the Facts section, every
+   `ranking-the-open-queue-weekly.yml` run through 2026-08-03 failed in
+   the same shape as the previously-diagnosed Anthropic Console billing
+   block. If that block is still in effect, this workflow's first live
+   dispatch will fail identically once (1) and (2) above are no longer
+   blocking, for a reason external to this change (see CONTRIBUTING.md's
+   existing key-provisioning section for the remediation path: add credit
+   at console.anthropic.com). This is a pre-existing condition this PR
+   does not introduce and cannot itself resolve.
 
-Recommended verification once both are clear: trigger
-`workflow_dispatch` against a real (or deliberately-created test) bare
-stub issue, confirm the job succeeds, and confirm the issue's body no
-longer carries the marker string and instead carries a real Repairs (or
-zero-repair fast-close) section per `skills/merge-retrospective/SKILL.md`'s
-own record format. Issue #769 stays open until that proof is observed, per
-this repository's own live-proof-over-plan-time-intent standard.
+Recommended verification once this PR merges: either wait for the next
+real PR merge to exercise the `issues: opened` trigger naturally, or
+`workflow_dispatch` this workflow from `main` against a real open bare
+stub (for example, issue #751, #740, #698, or #692 -- all confirmed open
+with the stub marker still present as of 2026-08-05) and confirm the job
+succeeds and the issue's body no longer carries the marker string but
+instead carries a real Repairs (or zero-repair fast-close) section per
+`skills/merge-retrospective/SKILL.md`'s own record format. Issue #769
+stays open until that proof is observed, per this repository's own
+live-proof-over-plan-time-intent standard.
