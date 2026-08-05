@@ -49,6 +49,18 @@ def http_error(code: int, body: str = "") -> urllib.error.HTTPError:
 
 
 NOW = datetime(2026, 8, 3, 12, 0, 0, tzinfo=UTC)
+
+
+class _FrozenDatetime(datetime):
+    """Stand-in for the `datetime` class main() imports as `sra.datetime`,
+    freezing `.now()` at NOW so main()-driven freshness assertions don't
+    silently flip as real wall-clock time advances past NOW (refs #765)."""
+
+    @classmethod
+    def now(cls, tz=None):
+        return NOW
+
+
 STUB_BODY = (
     "Retrospective for PR #314.\n\nRefs #314\n\n"
     "Automated stub opened by the post-merge-auto-retro gate "
@@ -438,7 +450,12 @@ def test_main_closes_stale_issues_and_reports(monkeypatch, capsys):
 
 
 def test_main_skips_fresh_or_enriched_issues(monkeypatch, capsys):
+    """Issue #1 is fixtured as 1 hour old relative to NOW, well under the
+    48-hour default threshold. main() must compare against that same NOW --
+    not the real wall clock -- or this "should stay fresh" assumption
+    silently flips to stale as real time advances past NOW (refs #765)."""
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    monkeypatch.setattr(sra, "datetime", _FrozenDatetime)
     monkeypatch.setattr(
         sra,
         "list_open_retro_issues",
