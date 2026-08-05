@@ -2380,6 +2380,40 @@ def _broken_anchor_targets(
     return _dedup(offenders)
 
 
+def _is_bare_skill_name(entry: str) -> bool:
+    """Whether ``entry`` is shaped like a real skill directory name -- a
+    bare path component (no separator, not ".", not "..") -- rather than a
+    path that could escape the skills root when joined with "/".
+    ``(skill_dir.parent / entry).is_dir()`` does not itself guard against
+    pathlib's absolute-operand-replaces-the-left-side behavior
+    (``Path("/repo/skills") / "/etc" == Path("/etc")``) or a "../"
+    traversal segment, so an entry that is not a bare name must never be
+    treated as potentially resolving. Mirrors
+    ``.github/scripts/gitapex_scan_skill_metadata_schema.py``'s own
+    ``_is_bare_skill_name``; kept as an independent copy rather than a
+    shared import because this file is stdlib-only by design (see the
+    module docstring) and that module is not (issue #757)."""
+    return entry not in ("", ".", "..") and "/" not in entry and "\\" not in entry
+
+
+def _resolves_to_sibling_skill(name: str, siblings_dir: Path) -> bool:
+    """Whether ``name`` names an existing sibling skill directory: a bare
+    name (see ``_is_bare_skill_name``) whose ``siblings_dir / name`` also
+    contains a real ``SKILL.md`` -- not merely ``.is_dir()``. Without the
+    ``SKILL.md`` check, any non-skill directory under ``siblings_dir`` (a
+    docs folder, a work-in-progress directory with no ``SKILL.md`` yet, a
+    stray build artifact) would incorrectly read as a resolved reference.
+    Shared by this file's four dangling-reference resolve checks
+    (related-skill-references-resolve, portable-no-unhedged-skill-fact-claim,
+    skill-dependencies-resolve, lifecycle-deprecated-replacement-resolves)
+    so the one safety-critical "does this reference resolve" predicate has
+    exactly one implementation in this file, not four copies that could
+    silently diverge. Backports the identical gap fixed in
+    ``gitapex_scan_skill_metadata_schema.py``'s own
+    ``_resolves_to_sibling_skill`` (issue #757)."""
+    return _is_bare_skill_name(name) and (siblings_dir / name / "SKILL.md").is_file()
+
+
 def _stale_related_skill_references(body_text: str, skill_dir: Path) -> list[str]:
     """Return each skill name referenced anywhere inside a "**vs. `name`:**"
     Related-skills bullet (its header AND its own explanatory prose) in
@@ -2395,7 +2429,7 @@ def _stale_related_skill_references(body_text: str, skill_dir: Path) -> list[str
     offenders: list[str] = []
     for bullet_match in RELATED_SKILL_BULLET_RE.finditer(body_text):
         for name in BACKTICK_SKILL_NAME_RE.findall(bullet_match.group(0)):
-            if not (skill_dir.parent / name).is_dir():
+            if not _resolves_to_sibling_skill(name, skill_dir.parent):
                 offenders.append(name)
     return offenders
 
@@ -3972,7 +4006,7 @@ def _portable_skill_fact_claim_offenders(defenced_text: str, skill_dir: Path) ->
         clause = m.group("clause")
         if "already" not in clause.lower():
             continue
-        if not (skill_dir.parent / name).is_dir():
+        if not _resolves_to_sibling_skill(name, skill_dir.parent):
             continue
         para_start = 0
         for brk in para_breaks:
@@ -4187,7 +4221,7 @@ def _skill_dependency_checks(
     related = deps.get("relatedTo")
     related = related if _valid_skill_dependency_list(related) else []
     named = list(dict.fromkeys(requires + related))
-    dangling = [n for n in named if not (skill_dir.parent / n).is_dir()]
+    dangling = [n for n in named if not _resolves_to_sibling_skill(n, skill_dir.parent)]
     results.append(
         CheckResult(
             "skill-dependencies-resolve",
@@ -4393,7 +4427,7 @@ def _lifecycle_checks(
     deprecated = sub_blocks.get("deprecated")
     replacement = deprecated.get("replacement") if deprecated else None
     if isinstance(replacement, str) and replacement.strip():
-        exists = (skill_dir.parent / replacement).is_dir()
+        exists = _resolves_to_sibling_skill(replacement, skill_dir.parent)
         results.append(
             CheckResult(
                 "lifecycle-deprecated-replacement-resolves",
