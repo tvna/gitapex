@@ -16,6 +16,7 @@ import pathlib
 import re
 
 import gitapex_check_skill_shape as css
+import gitapex_scan_skill_metadata_schema as scanner
 import pytest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -113,58 +114,26 @@ def test_migrated_provenance_stays_populated(skill_name):
 # the other is not a coherent state.
 
 
-def _find_requires_cycle(graph: dict[str, list[str]]) -> list[str] | None:
-    """Return one cycle (as a path of skill names) if ``graph`` -- a
-    skill-name -> its `requires` list mapping -- contains one, else None.
-
-    Standard white/gray/black DFS. A name that appears as a dependency but
-    is not itself a key in ``graph`` (a dangling reference) is treated as a
-    dead end, not an error -- that is gate 2's (skill-dependencies-resolve)
-    job, not this one's.
-    """
-    WHITE, GRAY, BLACK = 0, 1, 2
-    color = {name: WHITE for name in graph}
-    path: list[str] = []
-
-    def visit(name: str) -> list[str] | None:
-        color[name] = GRAY
-        path.append(name)
-        for dep in graph.get(name, []):
-            if dep not in color:
-                continue
-            if color[dep] == GRAY:
-                return [*path[path.index(dep) :], dep]
-            if color[dep] == WHITE:
-                found = visit(dep)
-                if found:
-                    return found
-        path.pop()
-        color[name] = BLACK
-        return None
-
-    for name in graph:
-        if color[name] == WHITE:
-            found = visit(name)
-            if found:
-                return found
-    return None
+# find_requires_cycle itself lives in scanner (gitapex_scan_skill_metadata_schema.py)
+# -- these tests exercise that real, production implementation directly rather
+# than keeping a private duplicate here (issue #754).
 
 
 def test_find_requires_cycle_returns_none_for_acyclic_graph():
     graph = {"a": ["b"], "b": ["c"], "c": []}
-    assert _find_requires_cycle(graph) is None
+    assert scanner.find_requires_cycle(graph) is None
 
 
 def test_find_requires_cycle_detects_a_two_cycle():
     graph = {"a": ["b"], "b": ["a"]}
-    cycle = _find_requires_cycle(graph)
+    cycle = scanner.find_requires_cycle(graph)
     assert cycle is not None
     assert set(cycle) == {"a", "b"}
 
 
 def test_find_requires_cycle_detects_a_longer_cycle():
     graph = {"a": ["b"], "b": ["c"], "c": ["a"]}
-    cycle = _find_requires_cycle(graph)
+    cycle = scanner.find_requires_cycle(graph)
     assert cycle is not None
     assert set(cycle) == {"a", "b", "c"}
 
@@ -174,7 +143,7 @@ def test_find_requires_cycle_ignores_dangling_dependencies():
     # this helper, not a crash and not a cycle -- dangling detection is
     # skill-dependencies-resolve's job.
     graph = {"a": ["ghost-skill"]}
-    assert _find_requires_cycle(graph) is None
+    assert scanner.find_requires_cycle(graph) is None
 
 
 def test_find_requires_cycle_handles_relatedto_style_mutual_edges_if_misused():
@@ -186,7 +155,7 @@ def test_find_requires_cycle_handles_relatedto_style_mutual_edges_if_misused():
         "ranking-the-open-queue": ["responding-to-a-fresh-arrival"],
         "responding-to-a-fresh-arrival": ["ranking-the-open-queue"],
     }
-    assert _find_requires_cycle(graph) is not None
+    assert scanner.find_requires_cycle(graph) is not None
 
 
 def _real_requires_graph(
@@ -220,7 +189,7 @@ def test_real_requires_graph_does_not_crash_on_malformed_spec_scalar(tmp_path):
 
 
 def test_no_requires_cycle_among_real_skills():
-    cycle = _find_requires_cycle(_real_requires_graph())
+    cycle = scanner.find_requires_cycle(_real_requires_graph())
     assert cycle is None, (
         f"requires cycle found: {' -> '.join(cycle)} -- a requires cycle is "
         "an error per #188's scope item 4 (see the module docstring above): "
