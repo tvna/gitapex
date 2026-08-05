@@ -46,14 +46,20 @@ recombination step -- `pytest-cov` already merges per-worker coverage data
 automatically when `pytest-xdist` is active, verified empirically (Context
 above).
 
-Rejected: a GitHub Actions `matrix` split by marker (e.g. `pytest-split` or
-a hand-rolled `-m slow` / `-m "not slow"` job pair). At this suite's size
-the fixed per-job overhead (checkout, `uv` install/sync) would eat into or
-exceed the wall-clock saved versus xdist alone, and it would require
-teaching `.github/scripts/gitapex_gate_evals_scripts_coverage.py` and the
-Codecov upload step to combine coverage across jobs instead of reading one
-`coverage.json`. Revisit only if the suite grows enough that xdist alone
-stops being sufficient.
+Rejected (for now): actually turning on a GitHub Actions `matrix` split by
+marker (e.g. `pytest-split` or a hand-rolled `-m slow` / `-m "not slow"` job
+pair). At this suite's size the fixed per-job overhead (checkout, `uv`
+install/sync) would eat into or exceed the wall-clock saved versus xdist
+alone, and it would require teaching
+`.github/scripts/gitapex_gate_evals_scripts_coverage.py` and the Codecov
+upload step to combine coverage across jobs instead of reading one
+`coverage.json`.
+
+Groundwork only, laid now per the requester's follow-up: `pytest-split`
+itself is added as a dev dependency and a committed `.test_durations` file
+records real per-test timings, so a future PR that *does* turn on a matrix
+split has balanced groups to split on without a first throwaway
+data-collection run. See Decision 5.
 
 ### 2. `-n auto`, not a pinned worker count
 
@@ -96,6 +102,35 @@ verbatim. Both changes (Decision 1 and 3) live entirely in
 picks up parallelization automatically and continues running the full,
 unfiltered suite. No new step, no new job, no new permissions.
 
+### 5. `pytest-split` groundwork: dependency + committed durations file, CI still unchanged
+
+Add `pytest-split` to `[dependency-groups].dev` and commit a `.test_durations`
+file (pytest-split's own default path, JSON mapping each test's nodeid to
+its last-recorded wall-clock duration) at the repo root, generated via
+`uv run --frozen pytest --store-durations`. Verified empirically that
+`--store-durations` still records every one of the 2677 tests' individual
+durations correctly with `-n auto` active (Decision 1) -- no `-p no:xdist`
+workaround needed.
+
+This is groundwork only: `.test_durations` is not read by anything today.
+`.github/workflows/test.yml` gains no matrix, no `--splits`/`--group`
+flags, no coverage-combine step -- Decision 1's rejection of turning on a
+matrix split *now* still stands. What changes is that the day this suite
+does grow enough to justify a matrix, that follow-up PR starts from real
+timing data instead of first needing its own throwaway
+`--store-durations` run, and `pytest-split`'s own default balancing
+(largest-first bin-packing across `--splits N`) can produce genuinely
+even groups rather than a naive file-count split.
+
+`.test_durations` is committed, not gitignored -- it is meant to be read
+by a future workflow change, and a stale-but-present file still balances
+groups far better than no data at all (pytest-split falls back to
+splitting untimed tests evenly across groups). It will drift as the suite
+changes; refreshing it is `uv run --frozen pytest --store-durations`,
+documented as a comment at its own point of use once a matrix actually
+consumes it -- adding a scheduled refresh workflow now would be scope
+beyond "groundwork," per this decision's own request.
+
 ## Mechanism
 
 ### `pyproject.toml`
@@ -114,6 +149,11 @@ Add `pytestmark = pytest.mark.slow` near the top of each of the three files
 named in Decision 3 (alongside existing imports, matching this repo's
 existing module-level `pytestmark` usage pattern where present).
 
+### `.test_durations`
+
+Generated once via `uv run --frozen pytest --store-durations` (Decision 5)
+and committed as-is; no code reads it yet.
+
 ### Verification
 
 - `uv lock` then `uv run --frozen pytest` (full suite, matching CI's own
@@ -124,13 +164,19 @@ existing module-level `pytestmark` usage pattern where present).
 - `uv run --frozen python3 .github/scripts/gitapex_gate_evals_scripts_coverage.py --coverage-json coverage.json`
   and the xenon complexity step still pass unchanged against the xdist-
   produced `coverage.json`.
+- `.test_durations` contains exactly 2677 entries, one per collected test
+  nodeid, each a positive float.
 
 ## Non-goals
 
-- Does not split CI into multiple jobs or a matrix (Decision 1).
+- Does not split CI into multiple jobs or a matrix (Decision 1) -- Decision
+  5 lays groundwork for that future change, it does not turn it on.
 - Does not change `.github/workflows/test.yml` (Decision 4).
 - Does not mark every test whose duration crosses some threshold -- only
   the subprocess-spawning modules named in Decision 3 (further `slow`
   candidates can be added later by the same mechanism-based rule).
 - Does not reduce the job's `timeout-minutes: 10` -- the measured win is
   well within existing headroom and isn't this change's goal.
+- Does not add a scheduled workflow to keep `.test_durations` fresh
+  (Decision 5) -- out of scope for groundwork; add one alongside whatever
+  PR first makes a workflow actually depend on the file.

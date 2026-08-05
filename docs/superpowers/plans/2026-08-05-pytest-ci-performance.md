@@ -209,8 +209,59 @@ EOF
 
 ---
 
+### Task 3: `pytest-split` groundwork (added post-review, Decision 5)
+
+Requested as a follow-up after Tasks 1-2 shipped in PR #772: lay groundwork
+for a future CI matrix split without turning one on now.
+
+**Files:**
+- Modify: `pyproject.toml` — `[dependency-groups].dev`
+- Modify: `uv.lock` (regenerated)
+- Create: `.test_durations` (repo root, committed)
+
+- [x] **Step 1: Add `pytest-split` to dev dependencies**
+
+```toml
+    "pytest-xdist>=3.6",
+    "pytest-split>=0.10",
+```
+
+- [x] **Step 2: Regenerate the lockfile**
+
+Run: `uv lock` — resolved `pytest-split` 0.11.0, no unrelated package changes.
+
+- [x] **Step 3: Generate and verify `.test_durations`**
+
+Run: `uv run --frozen pytest --no-cov --store-durations`
+Expected: `2677 passed`; `.test_durations` written at repo root.
+Verified: `json.load(open(".test_durations"))` has exactly 2677 entries, all
+positive floats — one per collected test nodeid.
+
+- [x] **Step 4: Confirm nothing else regressed**
+
+Run: `uv run --frozen pytest --collect-only -q` → `2677 tests collected`.
+Run: `uv run --frozen ruff check pyproject.toml` → `All checks passed!`.
+Run: `uv run --frozen python3 .github/scripts/gitapex_gate_evals_scripts_coverage.py --coverage-json coverage.json` → exit 0.
+
+- [x] **Step 5: Commit**
+
+```bash
+git add pyproject.toml uv.lock .test_durations docs/superpowers/specs/2026-08-05-pytest-ci-performance-design.md
+git commit -m "$(cat <<'EOF'
+build(pytest): add pytest-split groundwork for a future CI matrix
+
+Refs #770. Commits pytest-split as a dev dependency and a real
+.test_durations baseline so a later PR that turns on a matrix split
+starts from balanced groups instead of a throwaway timing run. CI
+itself is still unchanged -- no matrix, no --splits/--group flags.
+EOF
+)"
+```
+
+---
+
 ## Self-review notes
 
-- **Spec coverage:** Decision 1 (xdist, no CI matrix) → Task 1. Decision 2 (`-n auto`) → Task 1 Step 3. Decision 3 (`slow` marker by mechanism, not duration) → Task 2. Decision 4 (workflow file untouched) → no task modifies `.github/workflows/test.yml`, confirmed by omission. Non-goals (no CI split, no timeout change) → nothing in either task touches those.
+- **Spec coverage:** Decision 1 (xdist, no CI matrix) → Task 1. Decision 2 (`-n auto`) → Task 1 Step 3. Decision 3 (`slow` marker by mechanism, not duration) → Task 2. Decision 4 (workflow file untouched) → no task modifies `.github/workflows/test.yml`, confirmed by omission. Decision 5 (`pytest-split` groundwork, no matrix yet) → Task 3. Non-goals (no CI split, no timeout change, no scheduled durations-refresh workflow) → nothing in any task touches those.
 - **Placeholder scan:** no TBD/TODO; every step shows literal code/commands.
-- **Type/name consistency:** `slow` marker name and `-m "not slow"` spelling match between the design doc, Task 2 Step 1's `markers` registration, and Steps 3-6's usage.
+- **Type/name consistency:** `slow` marker name and `-m "not slow"` spelling match between the design doc, Task 2 Step 1's `markers` registration, and Steps 3-6's usage. `.test_durations` path matches Decision 5's own naming (pytest-split's default) throughout.
