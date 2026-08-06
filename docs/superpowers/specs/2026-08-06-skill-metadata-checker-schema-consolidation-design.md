@@ -314,7 +314,7 @@ out as explicit steps below (7, 8) rather than left as an unstated risk.
   validation error messages will not read identically to the hand-rolled
   reader's evidence strings. Tests asserting exact evidence text (as
   opposed to check name + pass/fail) will need updating; this is scoped
-  work item 6 in 4.4, not an unplanned surprise.
+  work item 9 in 4.4, not an unplanned surprise.
 - **`skill-dependencies-well-formed` gains a real, disclosed strengthening:**
   confirmed live in 4.7, the schema's `uniqueItems: true` on
   `skillDependencies.requires`/`relatedTo` and
