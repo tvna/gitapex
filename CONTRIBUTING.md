@@ -20,6 +20,51 @@ CI (`.github/workflows/test.yml`, `.github/workflows/lint.yml`) still runs
 the same ruff/mypy checks independently as the actual merge gate -- the
 local hook is a fast first pass, not a replacement for it.
 
+## Claude Code Remote cloud-environment configuration
+
+`.claude/hooks/session-start.sh` and
+`skills/setup-gitapex-toolchain/scripts/gitapex_provision_class_b.py` provision
+gitapex's own toolchain automatically for a Claude Code web (ephemeral)
+session -- but that is a *session-level, repo-local* mechanism (committed
+to this repository, only takes effect when working directly in a gitapex
+checkout). It is a different thing entirely from Claude Code Remote's own
+*cloud-environment* configuration (environment variables, a setup script,
+and a network access level), which lives outside this repository, in the
+platform's own environment editor. Do not conflate the two: this section
+covers the platform-level mechanism only.
+
+To configure settings that apply across every session that selects a
+given cloud environment (not scoped to one repository):
+
+1. Open [claude.ai/code](https://claude.ai/code) and use the environment
+   selector (the cloud icon above the message box) to add a new cloud
+   environment, or edit an existing one (e.g. "Default").
+2. Configure what the environment needs:
+   - **Environment variables** -- `.env`-style, one `KEY=value` per line,
+     applied to every session that selects this environment:
+     ```
+     KEY=value
+     ```
+   - **Setup script** (Bash) -- runs once when the environment is
+     created, then its result is cached for future sessions.
+   - **Network access level** -- which domains sessions in this
+     environment can reach.
+3. Select that environment for a session: via the web/mobile/Desktop
+   environment dropdown, or from the CLI, set your default with:
+   ```
+   /remote-env
+   ```
+4. For an organization (Team/Enterprise only), an admin can instead
+   create an **organization-shared environment** at
+   [claude.ai/admin-settings/claude-code](https://claude.ai/admin-settings/claude-code),
+   applied across every team member's sessions.
+
+See [code.claude.com/docs/en/cloud-environments](https://code.claude.com/docs/en/cloud-environments)
+and [code.claude.com/docs/en/claude-code-on-the-web](https://code.claude.com/docs/en/claude-code-on-the-web)
+for the current, authoritative version of this flow -- it is platform UI
+this repository does not control, so re-verify against those docs if this
+section appears stale.
+
 ## Issue citation convention
 
 If a PR's changes fully satisfy an issue's acceptance criteria, cite it
