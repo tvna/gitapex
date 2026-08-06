@@ -48,7 +48,7 @@ self-referential marketplace declared in `.claude/settings.json` (issue
 `#737` / commit `3a0e783`) -- separate from `apm install`, which only ever
 deploys `apm.yml`'s two devDependencies (`obra/superpowers`,
 `tvna/clairvoyance`), never gitapex itself. See "Known behavior: self-plugin
-registration is best-effort and unverified" below for this block's own
+registration takes effect one session late" below for this block's own
 limits.
 
 ## Preconditions
@@ -145,20 +145,27 @@ afterward is this expected, not-to-be-committed drift -- not a bug. The
 same file can also drift for a second, independent reason: see the next
 section.
 
-## Known behavior: self-plugin registration is best-effort and unverified
+## Known behavior: self-plugin registration takes effect one session late
 
 The `claude plugin marketplace add` / `claude plugin install gitapex@gitapex`
-block this hook runs (issue `#773`) is a best-effort mitigation, not a proven
-fix. Per Claude Code's own docs (code.claude.com/docs/en/plugin-marketplaces),
-a directory-sourced marketplace's registration is normally gated behind an
-interactive per-user trust prompt and its state (`~/.claude/plugins/`) lives
-per-user, not in this repo clone or in the session's cached environment
-snapshot -- so a brand-new session's fresh VM is very likely to hit that gate
-every time regardless of this hook. Whether a genuinely fresh session
-actually shows gitapex's own skills afterward is tracked, unresolved, on
-issue `#773` -- do not treat this hook running without a stderr message as
-proof the mitigation worked; only a fresh session's own available-skills
-list is proof of that.
+block this hook runs (issue `#773`) has been directly observed, across
+separate live sessions, to succeed non-interactively -- no stderr failure,
+no interactive trust-prompt block. Confirmed live: the session where this
+block first registers/installs the plugin does not itself show gitapex's
+own skills in its own available-skills list, but the *next* `SessionStart`
+(a resume in the same container, or a later session against the same
+environment) does. This is a hook-timing limitation, not a broken or gated
+mechanism -- the skill list a session advertises is fixed before its own
+SessionStart hooks run, so no hook can make its own session reflect a
+plugin it just installed.
+
+Whether a genuinely brand-new session's own very first available-skills
+listing can ever show gitapex's own skills remains open on issue `#773`:
+that specific case is structurally unreachable via a SessionStart hook, by
+the same timing argument above, regardless of whether the underlying
+`claude plugin install` call itself succeeds. Do not read "no stderr
+message" as proof beyond that narrower claim -- it confirms the install
+succeeded, not that the *current* session's own skill list reflects it.
 
 Directly observed, reproduced across two separate sessions while building
 this mitigation: `claude plugin marketplace add` itself rewrites the
