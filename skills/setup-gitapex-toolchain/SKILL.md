@@ -44,8 +44,8 @@ third, unrelated best-effort attempt: non-interactively registering
 gitapex's own plugin marketplace and installing its own plugin (`claude
 plugin marketplace add`, `claude plugin install gitapex@gitapex`), so
 gitapex's own `skills/*` become invocable via the self-referential
-marketplace declared in `.claude/settings.json` (commit `3a0e783`) --
-separate from `apm install`, which only ever
+marketplace declared in `.claude/settings.json` -- separate from
+`apm install`, which only ever
 deploys `apm.yml`'s two devDependencies (`obra/superpowers`,
 `tvna/clairvoyance`), never gitapex itself. See "Known behavior: self-plugin
 registration takes effect one session late" below for this block's own
