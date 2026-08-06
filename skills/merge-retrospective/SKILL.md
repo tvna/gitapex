@@ -22,11 +22,12 @@ file, point proposed gates and instruction fixes at that file (whatever
 it is called) and follow its existing conventions (posting style,
 issue/PR templates, etc.) -- this skill does not impose its own.
 
-**Prerequisite:** Step 0, Step 1, and Step 4 below assume a connected
-GitHub MCP server (`mcp__github__*` tools). Where the environment lacks
-one, fall back to the repo's own approved read-only REST API wrapper for
-Step 0's issue search and Step 1's history reconstruction, and to
-whatever write path the repo already uses for filing issues in Step 4.
+**Prerequisite:** Step 0, Step 1, Step 2, and Step 5 below assume a
+connected GitHub MCP server (`mcp__github__*` tools). Where the
+environment lacks one, fall back to the repo's own approved read-only
+REST API wrapper for Step 0's dedup search, Step 1's issue search, and
+Step 2's history reconstruction, and to whatever write path the repo
+already uses for filing issues in Step 5.
 
 ## Classification taxonomy (fixed -- never invent a fourth category)
 
@@ -56,7 +57,7 @@ which in turn outranks "external decision."
 Every repair entry in the Repairs section uses this fixed structure --
 not a free paragraph -- so a future drift-check script can extract
 classification and gate status without an LLM. Carried-forward gate
-entries (Step 0) use a related but distinct schema, defined further down
+entries (Step 1) use a related but distinct schema, defined further down
 this section:
 
 ```
@@ -79,10 +80,10 @@ N. [one-line label] <what happened and how it was fixed, in prose>
   `Classification` line above, which existing readers and this skill's
   own worked example already rely on.
 - `Proposed gate` is present only for a `missing-deterministic-gate`
-  repair (Step 4 already limits gate proposals to that category); omit
+  repair (Step 5 already limits gate proposals to that category); omit
   the line entirely for the other two categories rather than writing
   "N/A".
-- A **Carried-forward gate** entry (Step 0) uses a narrower two-field
+- A **Carried-forward gate** entry (Step 1) uses a narrower two-field
   schema, not the three-category shape above -- it is re-reporting a
   prior issue's still-unimplemented gate, not classifying a new repair
   against this cycle's taxonomy:
@@ -115,7 +116,7 @@ categories, just with no `Proposed gate` line (the same omission rule as
 repair models this category in full.
 
 Labels: every filed issue keeps the `retrospective` label exactly --
-Step 4 already never renames or drops it, since it is this skill's own
+Step 5 already never renames or drops it, since it is this skill's own
 retro-identity anchor. If the calling repository has already established
 its own secondary label taxonomy for a retro issue's lifecycle status
 (for example, distinguishing a freshly-filed, not-yet-triaged issue from
@@ -127,59 +128,9 @@ such taxonomy applies only `retrospective`, unchanged from before.
 
 ## Procedure
 
-0. **Carry-forward check.** Before enumerating this cycle's repairs,
-   check whether gates proposed by *prior* retrospective issues actually
-   got implemented, so a proposed gate cannot silently rot across cycles
-   unnoticed.
-   - **Find prior retrospective issues:** `mcp__github__search_issues`
-     for `label:retrospective` -- deliberately unfiltered by state.
-     Closing an issue is not proof its proposed gate was implemented
-     (a retrospective can be closed as stale, deduplicated, or superseded
-     while its gate is still unbuilt), so an open-only search would
-     silently drop exactly the issues this check exists to catch. This
-     is the reliable, non-text-matching anchor Step 4 below now creates.
-     Issues filed before the label existed carry no label; for those,
-     fall back to `"Merge retrospective:" in:title` (or the repo's own
-     retrospective title convention, if it has one), also unfiltered by
-     state.
-   - **For each hit, check whether its proposed gate was implemented:**
-     `mcp__github__search_commits` (or `search_issues` scoped to merged
-     PRs) for a merged PR or commit whose message cites that
-     retrospective issue's number -- any of `Refs #N`, `Closes #N`,
-     `Fixes #N`, or a bare `#N` counts (where the calling repository
-     already has its own "cite the issue number in every commit"
-     convention, that convention is what creates the citation trail this
-     step reads back; a repository with no such convention may simply
-     have no citation to find, which this step cannot distinguish from a
-     gate that was never implemented). No such citation found means the
-     gate is still unimplemented.
-   - **Report, don't implement:** for each unimplemented gate found, hand
-     it to Step 4 below as a **"Carried-forward gate"** entry, kept in
-     its own subsection separate from this cycle's own Repairs (do not
-     merge the two lists -- a carried-forward gate was not a repair in
-     *this* cycle). Never post it as a comment on the old issue, which
-     would fragment visibility instead of concentrating it.
-1. **Enumerate every repair** between PR open and merge. Use
-   `mcp__github__pull_request_read` (`get_commits`, `get_reviews`,
-   `get_review_comments`, `get_check_runs`) to reconstruct the history.
-   A repair is any of:
-   - a CI run that failed and was fixed by a subsequent push
-   - a review comment that led to a follow-up commit
-   - a force-push made to correct a mistake (not just to rebase cleanly)
-     -- these subcalls only reflect the PR's current commit set, not
-     history that was rewritten away, so a force-push repair is only
-     enumerable if you observed it directly (it happened during this
-     session, or any session-observed merge event reported it). Do not
-     claim a force-push repair occurred, or that none did, beyond what
-     the available data actually shows.
-2. **For each repair**, identify the earliest point in the pipeline a
-   deterministic gate could have caught it -- before it ever reached a
-   human reviewer or a CI run.
-3. **Classify each repair** using the taxonomy above. State the
-   classification explicitly; do not leave it implicit in prose.
-4. **File (or update) the retrospective issue** via
-   `mcp__github__issue_write`, method `create` or `update` per the dedup
-   check below.
+0. **Dedup check.** Before doing any of the (expensive) work in Steps
+   1-4 below, search for an existing retrospective issue for this PR, so
+   a prior run's completed work is never redone or duplicated.
    - **Dedup against an existing CI-opened stub first.** Some
      repositories run an automated, deterministic opener (a CI script
      triggered on PR merge, comparable to this repository's own
@@ -205,22 +156,78 @@ such taxonomy applies only `retrospective`, unchanged from before.
        post-merge-auto-retro gate"`, from `gitapex_post_merge_retro.py`'s own
        issue body -- unenriched, i.e. no session has replaced it yet) ->
        this is the stub to fill, not a reason to open a second issue.
-       Call `issue_write` method `update` on that issue number instead
-       of `create`, replacing the stub body with the full Repairs
-       content Step 4's remaining bullets below describe, and add the
-       repository's own secondary lifecycle label (if any) alongside the
-       `retrospective` label the stub already carries. Cross-linking
-       (Step 5) and verification (Step 6) both still apply, just against
-       the updated existing issue number rather than a newly created one.
+       Continue into Step 1 below; when Step 5 files, call `issue_write`
+       method `update` on that issue number instead of `create`,
+       replacing the stub body with the full Repairs content Step 5's
+       remaining bullets below describe, and add the repository's own
+       secondary lifecycle label (if any) alongside the `retrospective`
+       label the stub already carries. Cross-linking (Step 6) and
+       verification (Step 7) both still apply, just against the updated
+       existing issue number rather than a newly created one.
      - **Match found, body no longer carries the marker** -> a prior run
        (this skill, on an earlier pass, or a human) already enriched this
        exact PR's retrospective; there is nothing left for this cycle to
        file. Do not overwrite real content with this cycle's own
        analysis, and do not create a duplicate -- treat the PR as already
-       retrospected and stop here.
-     - **No match** -> nothing to dedup against; proceed to `create` per
-       the bullets below, same as a repository with no stub-opening CI
+       retrospected and stop here, before Step 1's carry-forward check or
+       Step 2's repair enumeration ever runs.
+     - **No match** -> nothing to dedup against; continue into Step 1
+       below, and when Step 5 files, proceed to `create` per its
+       remaining bullets, same as a repository with no stub-opening CI
        script at all.
+1. **Carry-forward check.** Before enumerating this cycle's repairs,
+   check whether gates proposed by *prior* retrospective issues actually
+   got implemented, so a proposed gate cannot silently rot across cycles
+   unnoticed.
+   - **Find prior retrospective issues:** `mcp__github__search_issues`
+     for `label:retrospective` -- deliberately unfiltered by state.
+     Closing an issue is not proof its proposed gate was implemented
+     (a retrospective can be closed as stale, deduplicated, or superseded
+     while its gate is still unbuilt), so an open-only search would
+     silently drop exactly the issues this check exists to catch. This
+     is the reliable, non-text-matching anchor Step 5 below now creates.
+     Issues filed before the label existed carry no label; for those,
+     fall back to `"Merge retrospective:" in:title` (or the repo's own
+     retrospective title convention, if it has one), also unfiltered by
+     state.
+   - **For each hit, check whether its proposed gate was implemented:**
+     `mcp__github__search_commits` (or `search_issues` scoped to merged
+     PRs) for a merged PR or commit whose message cites that
+     retrospective issue's number -- any of `Refs #N`, `Closes #N`,
+     `Fixes #N`, or a bare `#N` counts (where the calling repository
+     already has its own "cite the issue number in every commit"
+     convention, that convention is what creates the citation trail this
+     step reads back; a repository with no such convention may simply
+     have no citation to find, which this step cannot distinguish from a
+     gate that was never implemented). No such citation found means the
+     gate is still unimplemented.
+   - **Report, don't implement:** for each unimplemented gate found, hand
+     it to Step 5 below as a **"Carried-forward gate"** entry, kept in
+     its own subsection separate from this cycle's own Repairs (do not
+     merge the two lists -- a carried-forward gate was not a repair in
+     *this* cycle). Never post it as a comment on the old issue, which
+     would fragment visibility instead of concentrating it.
+2. **Enumerate every repair** between PR open and merge. Use
+   `mcp__github__pull_request_read` (`get_commits`, `get_reviews`,
+   `get_review_comments`, `get_check_runs`) to reconstruct the history.
+   A repair is any of:
+   - a CI run that failed and was fixed by a subsequent push
+   - a review comment that led to a follow-up commit
+   - a force-push made to correct a mistake (not just to rebase cleanly)
+     -- these subcalls only reflect the PR's current commit set, not
+     history that was rewritten away, so a force-push repair is only
+     enumerable if you observed it directly (it happened during this
+     session, or any session-observed merge event reported it). Do not
+     claim a force-push repair occurred, or that none did, beyond what
+     the available data actually shows.
+3. **For each repair**, identify the earliest point in the pipeline a
+   deterministic gate could have caught it -- before it ever reached a
+   human reviewer or a CI run.
+4. **Classify each repair** using the taxonomy above. State the
+   classification explicitly; do not leave it implicit in prose.
+5. **File (or update) the retrospective issue** via
+   `mcp__github__issue_write`, using the create-vs-update decision Step 0
+   above already made.
    - **Template and title take precedence over this skill's own
      defaults.** If the repo has an issue template (for example
      `.github/ISSUE_TEMPLATE/`, a root `ISSUE_TEMPLATE.md`, or a
@@ -239,7 +246,7 @@ such taxonomy applies only `retrospective`, unchanged from before.
      not yet exist), plus the repository's own secondary lifecycle label
      if one exists, per the Repair record format section above. This is
      additive bookkeeping only -- it does not change what the issue
-     says -- and exists so a future cycle's Step 0 can find this issue by
+     says -- and exists so a future cycle's Step 1 can find this issue by
      label instead of relying on title-text matching.
    - Content requirements below apply regardless of which shape the
      body ends up in: record every repair using the Repair record format
@@ -251,13 +258,13 @@ such taxonomy applies only `retrospective`, unchanged from before.
      the `Classification` line's own rationale clause is the required
      one-line rationale; noting what instruction would have helped is
      useful context but not a required deliverable the way the gate
-     proposal is. If Step 0 found any unimplemented prior gates, include
+     proposal is. If Step 1 found any unimplemented prior gates, include
      them here as their own **"Carried-forward gate"** subsection, in
      the same record format (`Status` set to `carried-forward`), distinct
      from this cycle's Repairs section -- omit the subsection entirely
-     when Step 0 found nothing to carry forward.
-   - **Zero-repair fast-close.** When Step 1 finds no repairs at all
-     **and** Step 0 found nothing to carry forward, file a single-line
+     when Step 1 found nothing to carry forward.
+   - **Zero-repair fast-close.** When Step 2 finds no repairs at all
+     **and** Step 1 found nothing to carry forward, file a single-line
      issue body instead of the full Repairs shape above -- state the PR
      number, that zero repairs occurred, and that this is being recorded
      as evidence the process worked this cycle. Confirm the zero-repair
@@ -266,7 +273,7 @@ such taxonomy applies only `retrospective`, unchanged from before.
      session), preview the exact drafted body and the zero-repair
      conclusion it rests on, and wait for an explicit go-ahead before
      calling close -- this is exactly the checkpoint that catches a
-     wrong call from, for example, the force-push blind spot Step 1
+     wrong call from, for example, the force-push blind spot Step 2
      already names (a rewritten history is not always observable). When
      running fully unattended with no operator able to respond (for
      instance, an automated CI-triggered flow with no interactive
@@ -288,15 +295,15 @@ such taxonomy applies only `retrospective`, unchanged from before.
      Carried-forward gate subsection (only the empty Repairs section
      collapses to one line) and stays open, exactly like any other cycle
      with content to track.
-5. **Cross-link**: reference the merged PR number in the retrospective
+6. **Cross-link**: reference the merged PR number in the retrospective
    issue body (e.g. "Refs #<merged PR number>").
-6. **Verify the filed issue.** After `issue_write` returns, confirm the
+7. **Verify the filed issue.** After `issue_write` returns, confirm the
    issue actually exists (re-fetch it), that its title passed any
    title-policy gate the repo enforces (no rejection or auto-edit), and
-   that the PR cross-link from Step 5 resolves to the correct PR. A
+   that the PR cross-link from Step 6 resolves to the correct PR. A
    silent write failure or a title-policy rejection is not "filed." When
    the zero-repair fast-close path applied and a close call was actually
-   issued (an operator confirmed it, per Step 4 above -- not the
+   issued (an operator confirmed it, per Step 5 above -- not the
    unattended case, which intentionally leaves the issue open with no
    close call to verify), also confirm the close call itself actually
    took effect (re-fetch the issue's state, not just its existence) -- a
@@ -313,7 +320,7 @@ such taxonomy applies only `retrospective`, unchanged from before.
 - **Never skip filing the retrospective because the merge looked
   clean.** A zero-repair cycle is itself worth recording -- it is
   evidence the current process was sufficient for that cycle. File the
-  one-line issue immediately, then close it once confirmed (Step 4's
+  one-line issue immediately, then close it once confirmed (Step 5's
   zero-repair fast-close path, including its confirm-or-leave-open rule)
   rather than skipping the filing: this is a deliberate, visible close,
   not a silent skip -- a merge with nothing to repair is exactly the
@@ -330,7 +337,7 @@ such taxonomy applies only `retrospective`, unchanged from before.
 - Do not collapse multiple repairs into one vague summary line -- each
   repair gets its own entry and its own classification, even if several
   share the same root cause.
-- The rule above binds Step 0 too: a carried-forward gate gets reported,
+- The rule above binds Step 1 too: a carried-forward gate gets reported,
   never implemented, in the cycle that surfaces it.
 
 ## Worked example
@@ -423,7 +430,7 @@ pursued -- this issue only records the repairs and proposes it, per
 merge-retrospective's Stop boundary.
 ```
 
-For a zero-repair cycle, Step 4's fast-close path files a single-line
+For a zero-repair cycle, Step 5's fast-close path files a single-line
 issue body instead of the full shape above, then closes it in the same
 step -- for example:
 
