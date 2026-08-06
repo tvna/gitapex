@@ -185,7 +185,7 @@ trigger if it arrived as this skill's own input.
   SKILL.md alone. This is the least stable dimension in re-measurement (see
   provenance-and-caveats.md, "Variance re-measurement"): a lone FAIL with no
   identifiable consumer earns a second independent dispatch (Procedure step
-  5) before it stands, not a raised bar for failure.
+  6) before it stands, not a raised bar for failure.
 
 ## 12. Supply-chain / installation-time provenance trust
 
