@@ -47,9 +47,9 @@ gitapex@gitapex`), so gitapex's own `skills/*` become invocable via the
 self-referential marketplace declared in `.claude/settings.json` (issue
 `#737` / commit `3a0e783`) -- separate from `apm install`, which only ever
 deploys `apm.yml`'s two devDependencies (`obra/superpowers`,
-`tvna/clairvoyance`), never gitapex itself. See "Optional: seed gitapex's
-own plugin for faster/more-reliable self-invocation" below for why this
-block alone is not expected to be sufficient for a brand-new session.
+`tvna/clairvoyance`), never gitapex itself. See "Known behavior: self-plugin
+registration is best-effort and unverified" below for this block's own
+limits.
 
 ## Preconditions
 
@@ -223,60 +223,6 @@ script cannot be committed to this repository -- per the primary source
 it is configured only through the environment dialog above, not a
 repository file -- so this section is documentation for a reader who
 wants to opt in, not a mechanism this repository wires up on its own.
-
-## Optional: seed gitapex's own plugin for faster/more-reliable self-invocation
-
-`.claude/settings.json` declares gitapex as its own self-referential
-plugin marketplace (`extraKnownMarketplaces.gitapex`, a `directory` source
-at path `.`, plus `enabledPlugins["gitapex@gitapex"]`; issue `#737` / commit
-`3a0e783`), so gitapex's own `skills/*` are invocable within gitapex's own
-sessions without touching `.claude/skills/` (reserved for `apm install`'s
-two devDependencies). Per Claude Code's own docs
-(code.claude.com/docs/en/plugin-marketplaces), a `directory`-sourced
-marketplace's registration is normally gated behind an interactive
-per-user trust prompt, and its state lives in `~/.claude/plugins/` --
-per-user, not part of this repo clone and not covered by this skill's own
-Class B/`apm install` provisioning above. The same docs name the exact
-failure mode this hits: "Automatic registration doesn't cover every
-machine... Non-interactive environments that run before the machine's
-first interactive launch" -- precisely what a fresh cloud-session VM is.
-`.claude/hooks/session-start.sh`'s own best-effort `claude plugin
-marketplace add` / `claude plugin install gitapex@gitapex` attempt (issue
-`#773`) mitigates this for a *resumed* session in the same VM at most; it is
-not expected to help a brand-new session by itself.
-
-The mechanism the same docs document for exactly this class of problem
-(containers, CI, and by extension a fresh cloud VM) is
-`CLAUDE_CODE_PLUGIN_SEED_DIR`: pre-populate `~/.claude/plugins` once, then
-point that variable at the resulting directory so Claude Code reads from
-it at startup "in both interactive mode and non-interactive mode." Whoever
-configures an environment at claude.ai/code can optionally paste the
-following into that environment's "Setup script" field:
-
-```bash
-#!/bin/bash
-export CLAUDE_CODE_PLUGIN_CACHE_DIR=/opt/gitapex-plugin-seed
-claude plugin marketplace add "$(pwd)" --scope project || true
-claude plugin install gitapex@gitapex || true
-```
-
-and add a matching line to that same environment's "Environment variables"
-field so every later session (which does not re-run the setup script; see
-environment caching above) picks the seed up at startup:
-
-```text
-CLAUDE_CODE_PLUGIN_SEED_DIR=/opt/gitapex-plugin-seed
-```
-
-Same caveats as the Class B setup-script recipe above: `|| true` so a
-transient failure here doesn't fail session start, and this cannot be
-committed to this repository -- it is documentation for a reader who wants
-to opt in, not a mechanism this repository wires up on its own. Unlike the
-Class B recipe, this one is **unverified** end-to-end (issue `#773`): whether
-a genuinely fresh session against an environment configured this way
-actually shows gitapex's own skills in its available-skills list has not
-been confirmed by a live session. Do not report this as fixed without that
-confirmation.
 
 ## Notes
 
