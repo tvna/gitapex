@@ -83,6 +83,79 @@ constraint.
   script, could produce a false positive this scan cannot distinguish from
   a real one.
 
+**The converse direction (issue #797): orphaned workflow flags.**
+``find_unwired_rows`` above only checks registry -> workflow. It does not
+catch the opposite drift shape: a workflow's ``run:`` step still passes a
+``--flag``-shaped token to a registry-bearing script that no longer defines
+it at all (a renamed or removed registry row, or a typo). ``find_orphaned_flags``
+adds that direction.
+
+*Why this is worth adding, measured rather than assumed.* A reconstruction
+(a registry row removed, the stale flag left in the invoking workflow) shows
+two different failure modes depending on how the workflow reaches the
+invocation. On an **unconditional** path, ``argparse.parse_args()`` already
+fails loudly and immediately: ``error: unrecognized arguments: --beta-items
+b``, exit 2, on the very next CI run -- this scan adds earlier feedback
+(caught in review, on this diff's own CI, rather than whenever that code
+path next executes) but not a new failure class. On a **conditional /
+branch-gated** path -- exactly the shape this repository's own
+``skill-audit-gate.yml`` uses (``if:
+steps.diff.outputs.applicable == 'true'``) for its one real registry today
+-- the reconstruction's ordinary-path run exits 0 with no output difference
+at all; the stale flag only surfaces the day that branch condition is
+finally true. That is genuinely silent drift, not merely delayed feedback,
+and it is not hypothetical: the one real registry-bearing script in this
+repository is invoked exactly that way.
+
+*The exclusion rule.* A script's CLI surface is not exclusively
+registry-derived -- ``gitapex_gate_skill_audit_disclosure.py`` also defines
+``--body``, ``--description-changed-skills``, ``--needs-eval-coverage-skills``,
+and ``--skill-md-changed`` via its own explicit ``parser.add_argument("--foo",
+...)`` calls, none of them registry rows. ``_iter_hardcoded_flags`` finds
+these the same structural way ``find_registry_rows`` finds registry rows:
+walk the script's AST for any ``*.add_argument(...)`` call whose first
+positional argument is a string literal starting with ``-``. A
+registry-driven call (``parser.add_argument(check.cli_flag, ...)``) passes
+an attribute expression there, not a string literal, so it is naturally
+excluded from this set -- already counted via the registry rows instead.
+``-h``/``--help`` (always available, argparse's own default) is excluded
+unconditionally. A token is only reported when it matches none of: the
+script's live registry ``cli_flag`` values, its own hardcoded flags, or
+``--help``.
+
+*Scoping to avoid cross-script false positives.* Unlike ``find_unwired_rows``,
+which only needs to know a flag appears *somewhere* in a workflow file that
+mentions the script, this direction must not misattribute a flag that
+belongs to a *different* step's invocation of an unrelated script in the
+same workflow file. ``_iter_run_blocks`` extracts each ``run:`` step's own
+text via YAML block-scalar indentation (still plain text/regex, not real
+YAML parsing -- same stdlib-only constraint as the rest of this module):
+a single-line ``run: <command>`` is that line's remainder; a block form
+(``run: |``/``run: >``) collects every following line more indented than
+the ``run:`` key itself, stopping at the first line that dedents back to it
+or below. Flag-shaped tokens are then extracted only from run blocks that
+themselves mention the script's filename as a whole token.
+
+**Known blind spots for this direction, disclosed rather than solved:**
+
+- A flag-shaped token (``--foo``) inside a comment line within a matching
+  run block, or inside a quoted *value* string rather than an actual
+  argument position, is indistinguishable from a real invocation argument
+  to this plain-text scan and would be flagged the same way. Not yet
+  observed in this repository's one real invocation, measured at the point
+  this direction was added.
+- Only long-form ``--flag`` tokens are considered candidates; a short-form
+  single-dash flag (``-x``) is never extracted, matching this repository's
+  own convention of registering only long-form flags today.
+- The exclusion rule is tied to today's one real ``*.add_argument("--foo",
+  ...)`` shape; a script that builds its non-registry flags a structurally
+  different way (e.g. via a helper function rather than a direct
+  ``add_argument`` call) would not have those flags recognized as
+  hardcoded, and every one of its own ordinary arguments would false-positive.
+  Re-measure this rule's zero-finding claim whenever a new registry-bearing
+  script lands, the same discipline the wiring direction's own docstring
+  already asks for.
+
 **Re-verified, not inherited** (issue #682's own first Acceptance Criteria
 Map row): ``tests/test_gitapex_gate_registry_wiring.py`` carries a fixture
 pair reconstructing defect J's shape -- a registry row whose ``cli_flag`` is
@@ -116,6 +189,18 @@ WORKFLOWS_DIR = REPO_ROOT / ".github" / "workflows"
 # filename (gate_x.py) -- used by _contains_token to require a real token
 # boundary on both sides of a match, not a bare substring test.
 _ADJACENT_CHAR_RE = r"[A-Za-z0-9_.-]"
+
+# A long-form CLI flag token (--foo, --foo-bar), bounded the same way
+# _contains_token bounds a single known token -- see find_orphaned_flags.
+_FLAG_TOKEN_RE = re.compile(rf"(?<!{_ADJACENT_CHAR_RE})--[A-Za-z][A-Za-z0-9-]*(?!{_ADJACENT_CHAR_RE})")
+
+# A GitHub Actions step's `run:` key, capturing its own indentation and
+# whatever follows on the same line -- see _iter_run_blocks.
+_RUN_KEY_RE = re.compile(r"^([ \t]*)run:(.*)$")
+
+# argparse always registers these regardless of what a script's own code
+# adds -- never a genuinely orphaned flag.
+_ALWAYS_AVAILABLE_FLAGS = frozenset({"-h", "--help"})
 
 
 class RegistryReadError(Exception):
@@ -211,6 +296,22 @@ def _iter_workflow_files(workflows_dir: Path) -> list[Path]:
     return sorted(list(workflows_dir.glob("*.yml")) + list(workflows_dir.glob("*.yaml")))
 
 
+def _parse_script_or_raise(script: Path, source: str) -> ast.Module:
+    """Parse `source` (already read from `script`) as Python, raising
+    RegistryReadError with the script's own path on a SyntaxError. Shared by
+    find_registry_rows and find_orphaned_flags -- both need an AST for the
+    same script, and sharing this one parse-with-error-handling path keeps
+    the failure mode covered by a single fixture
+    (test_find_registry_rows_raises_on_unparseable_python) instead of a
+    second, structurally-unreachable-in-practice copy (a script that parsed
+    successfully once cannot fail to parse again on the same unchanged
+    source)."""
+    try:
+        return ast.parse(source, filename=str(script))
+    except SyntaxError as error:
+        raise RegistryReadError(f"{script}: cannot be parsed as Python: {error}") from error
+
+
 def find_registry_rows(scripts_dir: Path = SCRIPTS_DIR) -> list[RegistryRow]:
     """Discover every cli_flag-bearing registry row across scripts_dir's own
     *.py files (not recursive -- .github/scripts/ has no subdirectories of
@@ -218,12 +319,125 @@ def find_registry_rows(scripts_dir: Path = SCRIPTS_DIR) -> list[RegistryRow]:
     rows: list[RegistryRow] = []
     for script in _iter_script_files(scripts_dir):
         source = _read_text_or_raise(script)
-        try:
-            tree = ast.parse(source, filename=str(script))
-        except SyntaxError as error:
-            raise RegistryReadError(f"{script}: cannot be parsed as Python: {error}") from error
+        tree = _parse_script_or_raise(script, source)
         rows.extend(_iter_cli_flag_rows(tree, script))
     return sorted(rows, key=lambda row: (str(row.script), row.registry_name, row.cli_flag))
+
+
+def _iter_hardcoded_flags(tree: ast.Module) -> set[str]:
+    """Every flag string passed as a positional, string-literal argument to
+    a `*.add_argument(...)` call -- a script's own explicitly authored,
+    non-registry CLI surface (e.g. --body, --skill-md-changed in
+    gitapex_gate_skill_audit_disclosure.py). A registry-driven call such as
+    `parser.add_argument(check.cli_flag, ...)` passes an attribute
+    expression there, not a string literal, so it is naturally excluded --
+    already counted via find_registry_rows instead. See the module
+    docstring's "converse direction" section for why this exclusion is
+    needed at all."""
+    flags: set[str] = set()
+    for node in ast.walk(tree):
+        if not (
+            isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "add_argument"
+        ):
+            continue
+        for arg in node.args:
+            if isinstance(arg, ast.Constant) and isinstance(arg.value, str) and arg.value.startswith("-"):
+                flags.add(arg.value)
+    return flags
+
+
+def _iter_run_blocks(text: str) -> list[str]:
+    """Extract each GitHub Actions step's own `run:` text from a workflow
+    file's raw text -- a single-line `run: <command>` is that line's
+    remainder; a block form (`run: |`/`run: >`, with any chomping
+    indicator) collects every following line more indented than the `run:`
+    key itself, stopping at the first line that dedents back to it (or
+    below) or at end of file. Plain indentation-based text scanning, not
+    real YAML parsing -- see the module docstring for why this module stays
+    stdlib-only. Used by find_orphaned_flags to scope flag-token extraction
+    to the specific step invoking a registry-bearing script, so a flag
+    belonging to a different step's invocation of an unrelated script in
+    the same file is never misattributed to this one."""
+    lines = text.splitlines()
+    blocks: list[str] = []
+    index = 0
+    while index < len(lines):
+        match = _RUN_KEY_RE.match(lines[index])
+        if match is None:
+            index += 1
+            continue
+        indent = len(match.group(1))
+        rest = match.group(2).strip()
+        if rest and rest not in ("|", ">", "|-", "|+", ">-", ">+"):
+            blocks.append(rest)
+            index += 1
+            continue
+        block_lines: list[str] = []
+        index += 1
+        while index < len(lines):
+            line = lines[index]
+            if line.strip() == "":
+                block_lines.append(line)
+                index += 1
+                continue
+            if len(line) - len(line.lstrip(" \t")) <= indent:
+                break
+            block_lines.append(line)
+            index += 1
+        blocks.append("\n".join(block_lines))
+    return blocks
+
+
+def _iter_flag_tokens(text: str) -> set[str]:
+    """Every long-form `--flag`-shaped token in `text`, bounded the same
+    way `_contains_token` bounds a single known token. Only long-form flags
+    are considered -- see the module docstring's disclosed blind spot for
+    why short-form single-dash flags are out of scope."""
+    return set(_FLAG_TOKEN_RE.findall(text))
+
+
+def find_orphaned_flags(scripts_dir: Path = SCRIPTS_DIR, workflows_dir: Path = WORKFLOWS_DIR) -> list[str]:
+    """Return one finding per (workflow, flag) pair where a workflow's own
+    run: step invokes a registry-bearing script with a `--flag`-shaped
+    token that matches none of: the script's live registry `cli_flag`
+    values, its own hardcoded (non-registry) `add_argument` flags, or
+    `--help` -- the converse of find_unwired_rows (issue #797). See the
+    module docstring's "converse direction" section for the exclusion rule
+    and its disclosed blind spots."""
+    rows_by_script: dict[Path, list[RegistryRow]] = {}
+    for row in find_registry_rows(scripts_dir):
+        rows_by_script.setdefault(row.script, []).append(row)
+
+    # workflows_dir is validated unconditionally, even when rows_by_script
+    # is empty and the loop below never runs -- same fail-open shape
+    # find_unwired_rows's own equivalent comment already documents:
+    # short-circuiting here before ever touching workflows_dir would
+    # silently return a false-clean [] when workflows_dir is itself
+    # misconfigured, for exactly the case where scripts_dir happens to have
+    # no qualifying registry (e.g. mid-refactor).
+    workflow_texts = _workflow_texts(workflows_dir)
+    findings: list[str] = []
+    for script in sorted(rows_by_script, key=str):
+        registry_flags = {row.cli_flag for row in rows_by_script[script]}
+        source = _read_text_or_raise(script)
+        tree = _parse_script_or_raise(script, source)
+        known_flags = registry_flags | _iter_hardcoded_flags(tree) | _ALWAYS_AVAILABLE_FLAGS
+
+        for workflow in sorted(workflow_texts, key=str):
+            text = workflow_texts[workflow]
+            if not _contains_token(text, script.name):
+                continue
+            orphaned: set[str] = set()
+            for block in _iter_run_blocks(text):
+                if not _contains_token(block, script.name):
+                    continue
+                orphaned.update(_iter_flag_tokens(block) - known_flags)
+            for flag in sorted(orphaned):
+                findings.append(
+                    f"{workflow.name}: passes {flag!r} to {script.name} but it defines no such "
+                    f"argument (known: {', '.join(sorted(known_flags))})"
+                )
+    return sorted(findings)
 
 
 def _workflow_texts(workflows_dir: Path) -> dict[Path, str]:
@@ -285,7 +499,7 @@ def main() -> int:
     # monkeypatching SCRIPTS_DIR/WORKFLOWS_DIR after import would silently
     # have no effect on them.
     try:
-        findings = find_unwired_rows(SCRIPTS_DIR, WORKFLOWS_DIR)
+        findings = find_unwired_rows(SCRIPTS_DIR, WORKFLOWS_DIR) + find_orphaned_flags(SCRIPTS_DIR, WORKFLOWS_DIR)
     except RegistryReadError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
@@ -294,7 +508,7 @@ def main() -> int:
         for finding in findings:
             print(f"  {finding}")
         return 1
-    print("OK: no unwired cli_flag registry rows found.")
+    print("OK: no unwired cli_flag registry rows or orphaned workflow flags found.")
     return 0
 
 
