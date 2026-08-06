@@ -171,8 +171,8 @@ for `apm install`. The rewritten absolute path is specific to one
 container/session and would be wrong (and misleading) in any other
 checkout.
 
-Unlike the `apm install` drift above, this hook (issue `#782`) now
-restores `.claude/settings.json` to its committed content immediately
+Unlike the `apm install` drift above, this hook now restores
+`.claude/settings.json` to its committed content immediately
 after the `claude plugin marketplace add`/`install` calls, since the
 registration state those calls actually need lives in
 `~/.claude/plugins/` (per-user), not in this repo-tracked file. A
