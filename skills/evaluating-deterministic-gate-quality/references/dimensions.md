@@ -144,7 +144,16 @@ differentiation from dimensions 1 and 15 below.
     live evidence gathered in the gate's real execution context, rather
     than a plausible-sounding but unverified assertion? This dimension's
     failure or gap blocks a well-formed verdict on that claim -- see
-    `SKILL.md`'s Procedure step 6 and Stop boundaries.
+    `SKILL.md`'s Procedure step 6 and Stop boundaries. Where the gated
+    actor is itself an LLM agent, its own natural-language claim of task
+    success, or the guarded tool's own lack of an error, is not such
+    evidence either -- a call can execute cleanly and be narrated as
+    successful while the state transition it produced still violates the
+    policy the gate exists to enforce; check the resulting state
+    directly. "Reason Less, Verify More" (arXiv:2607.07405) names this
+    class of failure explicitly and measured it as the majority (78%) of
+    observed failures on an ungated baseline, reproducible across
+    disjoint seeds.
     *Domains:* generalizes directly.
 11. **Deployment-mode / enforcement-mode portability, disclosed.** Does
     the gate's own documentation state which deployment or enforcement
