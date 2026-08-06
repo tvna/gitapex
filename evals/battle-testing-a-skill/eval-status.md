@@ -44,7 +44,7 @@ Named gap specific to this skill's
 subagent-dispatch procedure: the committed eval tasks assert on final
 output content (`output_contains`/`output_not_contains` substrings), not on
 tool-call or dispatch traces, so they cannot confirm a fresh subagent
-dispatch actually occurred for Procedure steps 1-3 or step 5's re-run --
+dispatch actually occurred for Procedure steps 2-4 or step 6's re-run --
 that mechanism was exercised by one manual live run during the change that
 introduced it, not by the committed suite.
 
@@ -196,7 +196,7 @@ Closes the gap this file's own top section named: "the committed eval
 tasks assert on final output content (`output_contains`/
 `output_not_contains` substrings), not on tool-call or dispatch traces, so
 they cannot confirm a fresh subagent dispatch actually occurred for
-Procedure steps 1-3 or step 5's re-run." `evaluating-skill-quality/
+Procedure steps 2-4 or step 6's re-run." `evaluating-skill-quality/
 eval-status.md` disclosed the near-identical gap independently -- see that
 file's own new entry, same issue, for the full mechanism design and the
 Track A/B feasibility-spike detail (not repeated here in full).
@@ -256,3 +256,17 @@ in `results/2026-07-30-issue-584-dispatch-trace/manifest.json` (23
 committed fixtures, not 24/22). All fixed, all with new tests. Full
 pytest (1434 passed) and the four live-proof transcripts were reconfirmed
 against the fixed script with identical results.
+
+**Issue #783 (pre-dispatch existence check):** a new main-thread
+precondition step (path exists/readable stat check, no content read) was
+inserted before the former Procedure step 1, short-circuiting a
+missing/empty/unreadable target to an overall `INDETERMINATE` before any
+of the `requested_trials` dispatches launch. Later steps shifted down by
+one (see `metadata/gitapex.yaml` for the full renumbering record). New
+fixture `tasks/missing-target-precondition.yaml` covers it: a target path
+that does not exist must yield `INDETERMINATE` and never surface any of
+the Quick-reference dimension names (evidence that no per-dimension walk
+happened). An `evaluating-skill-quality` self-audit of this change flagged
+this as the specific gap blocking a Mature verdict before the fixture was
+added; adding it is the direct response to that finding, not a
+speculative addition. Refs #783.

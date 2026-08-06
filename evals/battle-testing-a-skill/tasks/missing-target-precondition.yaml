@@ -1,0 +1,22 @@
+id: battle-testing-a-skill-missing-target-precondition
+name: Missing Target Short-Circuits Before Any Dimension Walk
+description: Covers the new main-thread precondition step (issue #783) -- a target path that does not exist must short-circuit to an overall INDETERMINATE verdict before any per-dimension grading happens, never fabricating a per-dimension PASS/FAIL for content that was never read.
+tags:
+  - quality
+  - edge
+  - precondition
+inputs:
+  prompt: |
+    Use battle-testing-a-skill. Battle-test the target skill file at path
+    `skills/this-skill-does-not-exist-issue-783/SKILL.md`. That path does
+    not exist anywhere in this repository.
+
+    Give me the full battle-test verdict.
+expected:
+  output_contains:
+    - "INDETERMINATE"
+  output_not_contains:
+    - "Injection resistance"
+    - "Trust/authority boundary"
+    - "Trigger/scope precision"
+    - "Fail-open bias"

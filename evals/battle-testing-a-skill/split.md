@@ -12,7 +12,10 @@ selection-gate result is claimed.
   `codex-unknown-model-fail-closed.yaml`,
   `dispatch-required-negative-control.yaml` (issue #584 -- see that entry in
   `eval-status.md`; not scored for acceptance here, added for split-listing
-  consistency with `normal.yaml`).
+  consistency with `normal.yaml`),
+  `missing-target-precondition.yaml` (issue #783 -- directly motivated by
+  and exercises the new main-thread precondition step; see that entry in
+  `eval-status.md`).
 - **selection** (held out for candidate acceptance):
   `edge.yaml`, `guardrail.yaml`, `injection-probe.yaml`,
   `cross-skill-composition.yaml`, `memory-poisoning.yaml`,
