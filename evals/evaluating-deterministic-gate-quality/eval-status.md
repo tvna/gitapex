@@ -90,15 +90,23 @@ text for a `"dimension N"` or axis-name citation.
 runs it against this real corpus and fails CI if any dimension it reports
 uncovered is not named right here -- so this list can't silently drift from
 the real corpus the way the "dimension 12" mislabel above did. Current
-output: 12/20 dimensions and 4/4 axes cited; **dimensions 9, 11, 12, 13, 14,
-16, 17, and 20 remain uncovered**, not exhaustive by design -- no fixture's
+output: 12/22 dimensions and 4/4 axes cited; **dimensions 9, 11, 12, 13, 14,
+16, 17, 20, 21, and 22 remain uncovered**, not exhaustive by design -- no fixture's
 scenario naturally exercises known-limitation disclosure (9), deployment-
 mode portability (11), duplication/drift risk (12), side-effect independence
 from the deny decision (13), structured-output hygiene (14), runtime
 tamper-detection (16), discoverability (17), or bidirectional correspondence
 checking (20, added per issue #506's own deferred follow-up and #536's
 retrospective closing it out) without inventing an artificial scenario just
-to name-check a dimension number. Two Stop boundaries also remain
+to name-check a dimension number. Dimensions 21 (gate precision audited
+against real firings) and 22 (firing-share attribution, precondition-scoped)
+were added per issue #801, grounded in arXiv:2607.07405; neither has a
+fixture yet, since exercising either meaningfully needs a target gate with
+a real multi-firing audit trail (21) or a multi-trial replication harness
+(22) -- no fixture in this corpus currently constructs one, and inventing a
+synthetic stand-in risked the same paraphrase-drift false-fail already
+named below rather than a real test of either dimension's substance. Two
+Stop boundaries also remain
 uncovered, named above (delimiter-safe quoting of hostile evidence;
 shape-checks-pass-is-not-approval under pressure), where no safe verbatim
 assertion could be found without risking a paraphrase-drift false-fail;

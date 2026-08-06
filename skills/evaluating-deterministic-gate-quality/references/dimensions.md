@@ -13,7 +13,7 @@ Two lanes, mirroring `evaluating-skill-quality`'s own split:
   `SKILL.md`'s Lifecycle note); apply the checks below to those domains,
   and to whatever a Domain-2 target's own manual judgment still requires,
   by direct inspection.
-- **Probabilistic-maturity dimensions** (7-20) -- need judgment; walk all
+- **Probabilistic-maturity dimensions** (7-22) -- need judgment; walk all
   of them, quoting the specific evidence that earns each verdict.
 
 Every dimension is tagged with its own **domain-generalization scope**,
@@ -28,6 +28,17 @@ established for this build rather than left implicit:
   mechanism that only exists in one domain, or does not exist by
   construction in another; graded there only, named explicitly rather
   than silently skipped.
+
+A small number of dimensions carry a second, independent scoping tag
+alongside domain-generalization: **precondition-scoped applicability**.
+Domain-generalization asks *which of the four domains*; precondition
+scoping asks whether the target's own operational capability -- something
+that can be present or absent regardless of domain -- supports the
+dimension at all. Where the precondition is absent, the dimension is
+graded not-applicable, the same explicit-rather-than-silent treatment
+domain-inapplicability already gets (see dimension 8). The two axes
+compose independently: a dimension can carry both a domain-generalization
+tag and a precondition-scope note at once.
 
 ## Contents
 
@@ -285,3 +296,54 @@ differentiation from dimensions 1 and 15 below.
     occur in a git hook script, a CI job step, an agent-harness hook, or
     an MCP server subprocess; the question is about the assertion's own
     set-difference completeness, not which domain runs it.
+21. **Gate precision, audited against real firings, not only synthetic
+    correctness.** For a gate already deployed or exercised against real
+    traffic (not merely a freshly authored one), are its actual firing
+    instances audited against a ground-truth or best-available
+    correctness signal (a ground-truth trajectory, a human-reviewed
+    sample, a replay corpus) to compute a true-block vs. false-block
+    rate, rather than crediting the gate as effective merely because it
+    fires and denies? A gate can be dimension-1-through-6 clean --
+    correctly wired, fail-closed, self-revalidating -- while its own
+    policy predicate is wrong most of the time it actually fires,
+    silently over-blocking legitimate actions. "Reason Less, Verify
+    More" (arXiv:2607.07405) audited this directly and found a wide
+    spread across its own four-gate suite: 100% precision for one gate
+    versus 5% precision for another, concluding explicitly that gate
+    precision must itself be audited, not assumed from correct wiring
+    alone. Where no real-firing audit trail or correctness signal exists
+    yet, mark this dimension indeterminate rather than silently
+    crediting the gate, per dimension 10's own Stop-boundary discipline.
+    *Domains:* generalizes directly -- the audit itself (comparing real
+    firings against a correctness signal) does not depend on which of
+    the four domains realizes the gate, only on whether a real-firing
+    trail and a correctness signal both exist for it.
+22. **Aggregate-outcome attribution via firing/non-firing stratification
+    -- precondition-scoped.** Applies only where the target supports
+    repeated/multi-trial measurement (a benchmark harness, an A/B
+    rollout, a replay corpus run at volume); where that precondition is
+    absent, this dimension is not-applicable, not silently skipped, the
+    same explicit treatment a domain-inapplicable dimension already gets.
+    Where the precondition holds: is a claimed aggregate outcome
+    improvement (a pass-rate lift, an incident-rate drop) stratified by
+    whether the gate actually fired on each trial, with the non-firing
+    stratum's own movement checked for consistency with noise (e.g. a
+    confidence interval including zero), before the improvement is
+    attributed to the gate? An aggregate lift that includes similar
+    movement in a non-firing stratum is evidence the improvement is not
+    actually caused by the gate. "Reason Less, Verify More"
+    (arXiv:2607.07405) names this decomposition explicitly and applied it
+    live: its own firing stratum moved with a confidence interval
+    excluding zero, while its own non-firing stratum moved with a
+    confidence interval including zero -- the paper's aggregate lift is
+    attributable to the gate only because this stratification was run
+    and reported, not assumed from the aggregate number alone.
+    *Precondition:* generalizes directly wherever repeated-trial
+    measurement exists, regardless of domain; not-applicable, stated
+    explicitly, for a single-shot production gate with no comparable
+    trial volume. This is gitapex's own typical case -- a CI gate, a
+    pre-commit hook, or an MCP server check usually runs once per real
+    event, not across a multi-trial replication set -- so expect this
+    dimension to read not-applicable for most real reviews this skill
+    performs; that is an honest scope limit, not a defect in the
+    dimension.

@@ -26,6 +26,8 @@ copied from the report's own text.
 5. [Worked example: Security-level / Zero-Trust maturity classification axis](#worked-example-security-level--zero-trust-maturity-classification-axis-this-repositorys-own-established-ceiling)
 6. [Worked example: dimension 19 (runtime-cost optimization) applied to the same Domain-2 gate pair](#worked-example-dimension-19-runtime-cost-optimization-applied-to-the-same-domain-2-gate-pair)
 7. [Audit history: Security-level axis hardening round](#audit-history-security-level-axis-hardening-round)
+8. [Worked example: dimension 21 (gate precision audit), cited from the source paper](#worked-example-dimension-21-gate-precision-audit-cited-from-the-source-paper)
+9. [Worked example: dimension 22 (firing-share attribution), cited from the source paper](#worked-example-dimension-22-firing-share-attribution-cited-from-the-source-paper)
 
 ## Worked example: Reproducibility / Domain-coverage axis (argued, multi-domain coverage)
 
@@ -416,3 +418,94 @@ added; both found real gaps, now all fixed across `SKILL.md`'s Stop
 boundaries, `references/grading-procedure.md`, `references/security-level.md`,
 and `references/dimensions.md`. Round-by-round detail:
 `metadata/gitapex.yaml`'s `spec.references`.
+
+## Worked example: dimension 21 (gate precision audit), cited from the source paper
+
+Unlike every other worked example in this file, this one is not drawn from
+a gitapex-native artifact -- no gate in this repository yet has a real,
+multi-firing audit trail comparable to what dimension 21 asks for. It
+instead applies dimension 21 to the source paper's own reported audit,
+disclosed as cited evidence rather than a freshly-run local measurement
+(the same disclosure dimension 21's own text requires of a target that
+lacks a real-firing audit trail).
+
+"Reason Less, Verify More" (arXiv:2607.07405) Table 6 audits its own
+five-gate candidate set (four promoted into the paper's headline suite,
+one held back) by comparing every rejected call to the ground-truth
+trajectory -- a **true block** is a rejected write the ground truth also
+avoids; a **false block** is a rejected write the ground truth actually
+performs:
+
+| Gate | Fires | True blocks | False blocks | Precision | Removal Δ |
+|---|---|---|---|---|---|
+| `cancellation_eligibility` | 161 | 161 | 0 | 100% | -2 |
+| `must_read_before_write` | 90 | 70 | 20 | 78% | +3 |
+| `baggage_allowance` | 42 | 2 | 40 | 5% | +3 |
+| `basic_economy` | 18 | 15 | 3 | 83% | +6 |
+| `passenger_count` | 9 | 9 | 0 | 100% | +4 |
+
+Applying dimension 21's own question: `cancellation_eligibility` is the
+only gate whose removal *lowers* the paper's own pass1 metric (Removal
+Δ = -2) -- it is both the highest-precision gate (100%) and the only
+load-bearing one on this task distribution. `baggage_allowance` fires
+almost as often (42 times) but is 5% precision -- 40 of its 42 rejections
+block a write the ground truth actually performs, and removing it *raises*
+pass1 by 3pp. A review that stopped at "the gate fires and denies
+correctly per its own deterministic-shape checks" (dimensions 1-6) would
+credit both gates equally; only the real-firing precision audit this
+dimension requires distinguishes a gate that is helping the target policy
+from one that is silently over-blocking legitimate actions while looking,
+by every shape check, identical.
+
+**Verdict, applying dimension 21 to the paper's own suite:**
+`cancellation_eligibility` and `passenger_count` (both 100% precision)
+clear this dimension; `must_read_before_write` and `basic_economy`
+(78%/83%) are mixed -- real value, non-trivial false-block rate, named as
+such rather than rounded up to "fine"; `baggage_allowance` (5%) fails this
+dimension outright and is exactly the case the paper's own conclusion
+names: "not that every hand-written gate helps... gate precision must
+itself be audited."
+
+## Worked example: dimension 22 (firing-share attribution), cited from the source paper
+
+Same disclosure as the dimension 21 example above: cited from the source
+paper's own reported numbers, not independently re-run against a
+gitapex-native artifact or multi-trial harness.
+
+Section 3.4 of "Reason Less, Verify More" (arXiv:2607.07405) states the
+precondition this dimension requires explicitly satisfied in the paper's
+own setup: the airline benchmark is run at 5 trials per task (250 trials),
+with a disjoint 15-seed replication (750 trials) -- repeated-trial
+measurement, not a single-shot run. The paper decomposes its own aggregate
+lift as `Δ_aggregate ≈ p_fire × Δ_fire` and reports the stratified budget-
+model result directly:
+
+| Stratum | Tasks | Vanilla | Verified | Δ |
+|---|---|---|---|---|
+| Gate fires | 26 | 18/130 (13.8%) | 43/130 (33.1%) | +19.2pp, 95% CI [+6.9, +33.1], P=0.0006 |
+| Gate never fires | 24 | 56/120 (46.7%) | 62/120 (51.7%) | +5.0pp, 95% CI [-5.0, +14.2], P=0.18 |
+
+Applying dimension 22: the firing stratum's 95% CI excludes zero
+(+6.9 to +33.1) -- a real, statistically supported improvement where the
+gate actually fired. The non-firing stratum's own 95% CI *includes* zero
+(-5.0 to +14.2) -- its movement is consistent with noise, not a real
+effect. The paper's own text draws exactly the conclusion this dimension
+requires before crediting an aggregate number: "we therefore do not claim
+that gates improve non-firing tasks... aggregate lift is concentrated
+where the intervention is exercised." Separately, the paper reports the
+same decomposition numerically (132 rejections across 83/250 trials; of
+the aggregate +31 successful trials, +25 occur in the firing stratum) --
+two independent presentations of the same stratified-attribution finding,
+not merely the confidence-interval table alone.
+
+**Verdict, applying dimension 22 to the paper's own result:** PASS -- the
+paper's own aggregate lift claim is attributable to the gate specifically
+because this stratification was run and both strata's confidence
+intervals are reported, not merely asserted from the unstratified
+aggregate number. Contrast with gitapex's own real gates (the
+ACM-disclosure hook pair graded in the dimension-19 worked example above,
+for instance): none of them run under repeated/multi-trial measurement in
+production, so dimension 22 reads not-applicable for them today -- exactly
+the precondition-scoped outcome this dimension's own text names as the
+expected case for gitapex's real review targets, not a gap in the
+dimension itself.

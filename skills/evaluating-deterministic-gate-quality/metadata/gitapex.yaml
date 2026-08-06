@@ -239,6 +239,17 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/799"
       summary: "Added one sentence to dimension 10 naming agent self-report / no-tool-error as an insufficient evidence class, grounded in the corroboration above. references/dimensions.md only -- SKILL.md, dimension count (20), and axis count (4) unchanged; no new eval fixture, since dimension 10 already has fixture coverage and the skill-audit-disclosure required check does not fire for a references/-only diff."
+    - kind: corroboration
+      anchor: "https://arxiv.org/abs/2607.07405"
+      summary: "Table 6 (per-gate precision audit, true/false blocks, removal-delta) and Table 3 plus Section 3.4's Δ_aggregate ≈ p_fire × Δ_fire decomposition, the specific figures dimensions 21 and 22 cite. Read from the operator-supplied PDF, same session as the issue-799 verification above."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/801"
+      summary: "Added dimension 21 (gate precision audited against real firings, true/false-block rate) and dimension 22 (aggregate-outcome attribution via firing/non-firing stratification, this skill's first precondition-scoped rather than domain-scoped dimension), plus a new precondition-scoped-applicability paragraph in dimensions.md's intro. Both cite arXiv:2607.07405 by title; full URL and specific-figures citation recorded in the corroboration entry above."
+      outcome:
+        lines: "dimensions.md 287->349, gitapex-worked-examples.md 418->511"
+    - kind: caveat
+      anchor: "references/gitapex-worked-examples.md"
+      summary: "Both dimension-21 and dimension-22 worked examples cite the source paper's own reported numbers (Table 6; Table 3 and Section 3.4) rather than a freshly-run gitapex-native measurement -- no gate in this repository yet has a real multi-firing audit trail or multi-trial replication set to reuse instead, disclosed in each worked example's own opening line."
   skillDependencies:
     requires:
       - evaluating-skill-quality
