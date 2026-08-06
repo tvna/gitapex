@@ -84,6 +84,9 @@ spec:
     - kind: elision
       anchor: "skills/battle-testing-a-skill/SKILL.md"
       summary: "Issue 605's redundant-restatement trim condensed Procedure step 1's Blind Spot Pass citation to a pointer, dropping the source from SKILL.md's body: Thariq Shihipar, \"A Field Guide to Fable: Finding Your Unknowns\", https://claude.com/blog/a-field-guide-to-claude-fable-finding-your-unknowns (already recorded in full in references/provenance-and-caveats.md). Recorded here too since a sidecar entry carries no runtime instruction weight, unlike the body prose the trim was reducing."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/783"
+      summary: "A main-thread precondition step (path exists/readable stat check, no content read) was inserted before the former step 1, short-circuiting a missing/empty/unreadable target to INDETERMINATE before any dispatch launches. Later steps shifted down by one (old step 1 is now 2, old step 2 is now 3, kept as a defense-in-depth fallback). provenance-and-caveats.md's live step-number pointers were updated to match; this file's own earlier entries were left as originally written."
   skillDependencies:
     requires:
       - evaluating-skill-quality

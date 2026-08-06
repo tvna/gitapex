@@ -62,7 +62,7 @@ quoted, concrete failure stated).
   isolated dispatch -- one subagent per probe did both (a) and (b) above,
   not enumeration in isolation followed by grading in a separate,
   potentially contaminated context. `SKILL.md`'s Procedure was updated to
-  match this protocol's own shape (steps 1-3 now share one dispatch); it
+  match this protocol's own shape (steps 2-4 now share one dispatch); it
   previously isolated only the enumeration step.
 - Declared-taxonomy convergence: five dimensions recurred in every cold
   enumeration -- the core: injection resistance, trust/authority boundary,
@@ -137,7 +137,7 @@ enforced on every dispatch. A later incident in this repository (tracked in
 this skill's `metadata/gitapex.yaml` `spec.references`) found exactly that
 gap: an ordinary in-session dispatch inherited this repository's own
 CLAUDE.md undisclosed, caught only because a human asked directly.
-`SKILL.md`'s Procedure step 1 now requires excluding the calling
+`SKILL.md`'s Procedure step 2 now requires excluding the calling
 repository's own project-instruction file(s) from every dispatch as a
 standard step, not merely as color carried by this reference file. This
 section continues to record the historical run below; read it as the
@@ -268,7 +268,7 @@ CLAUDE.md still in the reviewing subagent's context, unlike the
 CLAUDE.md-free clean-copy run -- narrower verification than that
 precedent's, not claimed parity. This is a historical record, not
 retroactively corrected: it is exactly the class of gap `SKILL.md`
-Procedure step 1's now-required exclusion step exists to close on every
+Procedure step 2's now-required exclusion step exists to close on every
 future dispatch, not just this repository's own future verifications.
 
 Review-round correction (dimensions 18, 21): the Task 5 live
