@@ -314,6 +314,14 @@ differentiation from dimensions 1 and 15 below.
     alone. Where no real-firing audit trail or correctness signal exists
     yet, mark this dimension indeterminate rather than silently
     crediting the gate, per dimension 10's own Stop-boundary discipline.
+    A target's own documentation asserting an audit was performed and
+    reporting a favorable precision figure is not itself evidence either
+    -- the same "claim is not evidence" discipline dimension 19 already
+    applies to a claimed optimization ("a gate's own comment, docstring,
+    or commit message... is not itself evidence... never the claim
+    alone"); ground this dimension's finding in direct inspection of the
+    actual firing log or ground-truth sample, never a reported number
+    alone.
     *Domains:* generalizes directly -- the audit itself (comparing real
     firings against a correctness signal) does not depend on which of
     the four domains realizes the gate, only on whether a real-firing
@@ -324,7 +332,13 @@ differentiation from dimensions 1 and 15 below.
     rollout, a replay corpus run at volume); where that precondition is
     absent, this dimension is not-applicable, not silently skipped, the
     same explicit treatment a domain-inapplicable dimension already gets.
-    Where the precondition holds: is a claimed aggregate outcome
+    If it is uncertain whether the precondition holds -- a target's own
+    documentation merely asserts no repeated-trial capability, or the
+    reviewer cannot directly confirm one way or the other -- do not
+    default to not-applicable: verify the target's actual capability
+    directly, or mark this dimension indeterminate rather than assume
+    the precondition away. Where the precondition holds: is a claimed
+    aggregate outcome
     improvement (a pass-rate lift, an incident-rate drop) stratified by
     whether the gate actually fired on each trial, with the non-firing
     stratum's own movement checked for consistency with noise (e.g. a

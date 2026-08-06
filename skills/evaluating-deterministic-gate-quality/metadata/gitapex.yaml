@@ -250,6 +250,15 @@ spec:
     - kind: caveat
       anchor: "references/gitapex-worked-examples.md"
       summary: "Both dimension-21 and dimension-22 worked examples cite the source paper's own reported numbers (Table 6; Table 3 and Section 3.4) rather than a freshly-run gitapex-native measurement -- no gate in this repository yet has a real multi-firing audit trail or multi-trial replication set to reuse instead, disclosed in each worked example's own opening line."
+    - kind: audit
+      anchor: "method:battle-testing-a-skill"
+      summary: "A fresh, isolated dispatch on the dimension-21/22 diff returned FAIL with 2 findings: dimension 22's not-applicable precondition had no burden-of-proof/uncertainty-escalation clause (an ambiguous or self-serving target claim could default to N/A unchallenged); dimension 21 didn't extend the 'claim is not evidence' discipline (already applied by dimension 19 to a claimed optimization) to a target's own asserted-but-unverified precision figure."
+      outcome:
+        verdict: FAIL
+        found: 2
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/801"
+      summary: "Fixed both findings above in dimensions.md: dimension 22 now states that an uncertain precondition must be verified directly or marked indeterminate, never defaulted to not-applicable; dimension 21 now states a target's own claimed precision figure is not itself evidence, mirroring dimension 19's own claim-is-not-evidence clause verbatim in spirit."
   skillDependencies:
     requires:
       - evaluating-skill-quality
