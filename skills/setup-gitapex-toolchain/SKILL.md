@@ -40,12 +40,12 @@ this repository, so it cannot ship as part of the checkout the way this
 skill's hook does.
 
 After Class B provisioning and the prek install, the same hook makes a
-third, unrelated best-effort attempt (issue `#773`): non-interactively
-registering gitapex's own plugin marketplace and installing its own
-plugin (`claude plugin marketplace add`, `claude plugin install
-gitapex@gitapex`), so gitapex's own `skills/*` become invocable via the
-self-referential marketplace declared in `.claude/settings.json` (issue
-`#737` / commit `3a0e783`) -- separate from `apm install`, which only ever
+third, unrelated best-effort attempt: non-interactively registering
+gitapex's own plugin marketplace and installing its own plugin (`claude
+plugin marketplace add`, `claude plugin install gitapex@gitapex`), so
+gitapex's own `skills/*` become invocable via the self-referential
+marketplace declared in `.claude/settings.json` (commit `3a0e783`) --
+separate from `apm install`, which only ever
 deploys `apm.yml`'s two devDependencies (`obra/superpowers`,
 `tvna/clairvoyance`), never gitapex itself. See "Known behavior: self-plugin
 registration takes effect one session late" below for this block's own
@@ -148,8 +148,8 @@ section.
 ## Known behavior: self-plugin registration takes effect one session late
 
 The `claude plugin marketplace add` / `claude plugin install gitapex@gitapex`
-block this hook runs (issue `#773`) has been directly observed, across
-separate live sessions, to succeed non-interactively -- no stderr failure,
+block this hook runs has been directly observed, across separate live
+sessions, to succeed non-interactively -- no stderr failure,
 no interactive trust-prompt block. Confirmed live: the session where this
 block first registers/installs the plugin does not itself show gitapex's
 own skills in its own available-skills list, but the *next* `SessionStart`
@@ -160,8 +160,8 @@ SessionStart hooks run, so no hook can make its own session reflect a
 plugin it just installed.
 
 Whether a genuinely brand-new session's own very first available-skills
-listing can ever show gitapex's own skills remains open on issue `#773`:
-that specific case is structurally unreachable via a SessionStart hook, by
+listing can ever show gitapex's own skills remains an open question: that
+specific case is structurally unreachable via a SessionStart hook, by
 the same timing argument above, regardless of whether the underlying
 `claude plugin install` call itself succeeds. Do not read "no stderr
 message" as proof beyond that narrower claim -- it confirms the install
