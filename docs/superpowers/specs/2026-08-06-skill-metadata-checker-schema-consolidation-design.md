@@ -210,14 +210,19 @@ only the mechanism behind 10 of the 15 names changes.
 Out of scope, confirmed unaffected by this migration (non-manifest checks,
 listed for completeness so no reader mistakes silence for an oversight):
 `skill-md-readable`, `description-present`, `description-no-xml`,
-`description-length`, `name-pattern`, `name-no-xml`, `name-length`,
-`name-not-reserved`, `invocation-mode-well-formed`, `body-length`,
-`references-flat`, `toc:*`, `links-inside-skill`,
-`anchor-targets-resolve`, `related-skill-references-resolve`,
-`cross-skill-citation-resolves`, `mechanism-fit-subsections-cite-sources`,
-`no-bare-issue-citation`, `no-illustrative-model-identifier`,
-`no-raw-angle-bracket-placeholder`, `no-step-location-contradiction`, and
-the four `portable-no-*` checks.
+`description-length`, `description-yaml-safe`, `name-pattern`,
+`name-no-xml`, `name-length`, `name-not-reserved`,
+`invocation-mode-well-formed`, `body-length`, `references-flat`, `toc:*`,
+`links-inside-skill`, `anchor-targets-resolve`,
+`related-skill-references-resolve`, `cross-skill-citation-resolves`,
+`mechanism-fit-subsections-cite-sources`, `no-bare-issue-citation`,
+`no-illustrative-model-identifier`, `no-raw-angle-bracket-placeholder`,
+`no-step-location-contradiction`, and the five `portable-no-*` checks
+(`portable-no-repo-path-citation`,
+`portable-no-unhedged-inline-path-citation`,
+`portable-no-unhedged-inline-issue-citation`,
+`portable-no-unhedged-skill-fact-claim`,
+`portable-no-out-of-skill-scripts-citation`).
 
 ### 4.4 Decision: migration sequencing -- single PR
 
