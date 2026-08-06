@@ -39,6 +39,18 @@ configured in that per-environment dialog and cannot be committed to
 this repository, so it cannot ship as part of the checkout the way this
 skill's hook does.
 
+After Class B provisioning and the prek install, the same hook makes a
+third, unrelated best-effort attempt (issue `#773`): non-interactively
+registering gitapex's own plugin marketplace and installing its own
+plugin (`claude plugin marketplace add`, `claude plugin install
+gitapex@gitapex`), so gitapex's own `skills/*` become invocable via the
+self-referential marketplace declared in `.claude/settings.json` (issue
+`#737` / commit `3a0e783`) -- separate from `apm install`, which only ever
+deploys `apm.yml`'s two devDependencies (`obra/superpowers`,
+`tvna/clairvoyance`), never gitapex itself. See "Optional: seed gitapex's
+own plugin for faster/more-reliable self-invocation" below for why this
+block alone is not expected to be sufficient for a brand-new session.
+
 ## Preconditions
 
 - `python3 >= 3.12` (`extract_wrapper_dir`'s tar extraction path relies
@@ -129,7 +141,35 @@ sessions where it actually re-runs -- now the exception rather than every
 session, since a matching lockfile and installed `apm` binary make it a
 fast `UNCHANGED: apm install` no-op instead (see Output above). On those
 sessions, a working tree showing `.claude/settings.json` as modified
-afterward is this expected, not-to-be-committed drift -- not a bug.
+afterward is this expected, not-to-be-committed drift -- not a bug. The
+same file can also drift for a second, independent reason: see the next
+section.
+
+## Known behavior: self-plugin registration is best-effort and unverified
+
+The `claude plugin marketplace add` / `claude plugin install gitapex@gitapex`
+block this hook runs (issue `#773`) is a best-effort mitigation, not a proven
+fix. Per Claude Code's own docs (code.claude.com/docs/en/plugin-marketplaces),
+a directory-sourced marketplace's registration is normally gated behind an
+interactive per-user trust prompt and its state (`~/.claude/plugins/`) lives
+per-user, not in this repo clone or in the session's cached environment
+snapshot -- so a brand-new session's fresh VM is very likely to hit that gate
+every time regardless of this hook. Whether a genuinely fresh session
+actually shows gitapex's own skills afterward is tracked, unresolved, on
+issue `#773` -- do not treat this hook running without a stderr message as
+proof the mitigation worked; only a fresh session's own available-skills
+list is proof of that.
+
+Directly observed, reproduced across two separate sessions while building
+this mitigation: `claude plugin marketplace add` itself rewrites the
+committed `.claude/settings.json` in place -- `extraKnownMarketplaces.
+gitapex.source.path` gets resolved from the committed relative `"."` to
+this session's own container-specific absolute path, and top-level keys
+get reordered -- a second, independent cause of the same
+not-to-be-committed-drift shape the previous section already documents
+for `apm install`. Never commit this drift: the rewritten absolute path
+is specific to one container/session and would be wrong (and misleading)
+in any other checkout.
 
 ## Optional: faster Class B provisioning via a setup script
 
@@ -183,6 +223,60 @@ script cannot be committed to this repository -- per the primary source
 it is configured only through the environment dialog above, not a
 repository file -- so this section is documentation for a reader who
 wants to opt in, not a mechanism this repository wires up on its own.
+
+## Optional: seed gitapex's own plugin for faster/more-reliable self-invocation
+
+`.claude/settings.json` declares gitapex as its own self-referential
+plugin marketplace (`extraKnownMarketplaces.gitapex`, a `directory` source
+at path `.`, plus `enabledPlugins["gitapex@gitapex"]`; issue `#737` / commit
+`3a0e783`), so gitapex's own `skills/*` are invocable within gitapex's own
+sessions without touching `.claude/skills/` (reserved for `apm install`'s
+two devDependencies). Per Claude Code's own docs
+(code.claude.com/docs/en/plugin-marketplaces), a `directory`-sourced
+marketplace's registration is normally gated behind an interactive
+per-user trust prompt, and its state lives in `~/.claude/plugins/` --
+per-user, not part of this repo clone and not covered by this skill's own
+Class B/`apm install` provisioning above. The same docs name the exact
+failure mode this hits: "Automatic registration doesn't cover every
+machine... Non-interactive environments that run before the machine's
+first interactive launch" -- precisely what a fresh cloud-session VM is.
+`.claude/hooks/session-start.sh`'s own best-effort `claude plugin
+marketplace add` / `claude plugin install gitapex@gitapex` attempt (issue
+`#773`) mitigates this for a *resumed* session in the same VM at most; it is
+not expected to help a brand-new session by itself.
+
+The mechanism the same docs document for exactly this class of problem
+(containers, CI, and by extension a fresh cloud VM) is
+`CLAUDE_CODE_PLUGIN_SEED_DIR`: pre-populate `~/.claude/plugins` once, then
+point that variable at the resulting directory so Claude Code reads from
+it at startup "in both interactive mode and non-interactive mode." Whoever
+configures an environment at claude.ai/code can optionally paste the
+following into that environment's "Setup script" field:
+
+```bash
+#!/bin/bash
+export CLAUDE_CODE_PLUGIN_CACHE_DIR=/opt/gitapex-plugin-seed
+claude plugin marketplace add "$(pwd)" --scope project || true
+claude plugin install gitapex@gitapex || true
+```
+
+and add a matching line to that same environment's "Environment variables"
+field so every later session (which does not re-run the setup script; see
+environment caching above) picks the seed up at startup:
+
+```text
+CLAUDE_CODE_PLUGIN_SEED_DIR=/opt/gitapex-plugin-seed
+```
+
+Same caveats as the Class B setup-script recipe above: `|| true` so a
+transient failure here doesn't fail session start, and this cannot be
+committed to this repository -- it is documentation for a reader who wants
+to opt in, not a mechanism this repository wires up on its own. Unlike the
+Class B recipe, this one is **unverified** end-to-end (issue `#773`): whether
+a genuinely fresh session against an environment configured this way
+actually shows gitapex's own skills in its available-skills list has not
+been confirmed by a live session. Do not report this as fixed without that
+confirmation.
 
 ## Notes
 
