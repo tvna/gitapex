@@ -230,9 +230,12 @@ spec:
     - kind: corroboration
       anchor: "https://arxiv.org/abs/2607.07405"
       summary: "\"Reason Less, Verify More: Deterministic Gates Recover a Silent Policy-Violation Failure Mode in Tool-Using LLM Agents\" (Reddy, Challaram, Basu; 2026-07), cited by dimension 10 as external grounding for treating an LLM agent's own self-report or a tool's own lack of an error as insufficient evidence a gated policy held."
+    - kind: correction
+      anchor: "https://arxiv.org/abs/2607.07405"
+      summary: "Corrects the caveat above: the operator supplied the paper's own PDF directly and its full text was read, confirming the cited figures accurate (78% silent-failure share; four-gate suite; pass1 29.6%->42.0%, +12.4pp; disjoint 15-seed replication +12.3pp)."
     - kind: caveat
       anchor: "https://arxiv.org/abs/2607.07405"
-      summary: "This citation was read via search-indexed abstract quotes only -- arxiv.org, ar5iv.labs.arxiv.org, and a reader-proxy fetch all returned HTTP 403 in the session that added it; the paper's full text, including its own limitations/threats-to-validity section, was not independently verified."
+      summary: "The paper's own Section 7 names 9 limitations not reflected in dimension 10's text: single positive domain, unreplicated frontier evidence, uneven per-gate precision, no post-rejection recovery guarantee, non-leaderboard-comparability, state-decidability requirement, untested prompting/reflection baselines, task-overfitting risk, and rejection-message confound."
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/799"
       summary: "Added one sentence to dimension 10 naming agent self-report / no-tool-error as an insufficient evidence class, grounded in the corroboration above. references/dimensions.md only -- SKILL.md, dimension count (20), and axis count (4) unchanged; no new eval fixture, since dimension 10 already has fixture coverage and the skill-audit-disclosure required check does not fire for a references/-only diff."
