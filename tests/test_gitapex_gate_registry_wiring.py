@@ -13,6 +13,7 @@ gate itself, against this repository's real .github/scripts and
 
 from __future__ import annotations
 
+import ast
 import pathlib
 
 import gitapex_gate_registry_wiring as wiring
@@ -374,6 +375,237 @@ def test_main_passes_cleanly_when_nothing_is_registered(
     assert "OK:" in capsys.readouterr().out
 
 
+# --- The converse direction (issue #797): orphaned workflow flags ---------
+
+
+def test_iter_hardcoded_flags_finds_literal_add_argument_calls() -> None:
+    """A script's own directly-authored `add_argument("--foo", ...)` calls
+    are found by string-literal first argument; a call passing a variable
+    (the registry-driven shape) is not -- see find_registry_rows for that
+    half instead."""
+    tree = ast.parse(
+        """
+import argparse
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--body")
+    parser.add_argument("--skill-md-changed", action="store_true")
+    parser.add_argument(some_variable)
+"""
+    )
+
+    assert wiring._iter_hardcoded_flags(tree) == {"--body", "--skill-md-changed"}
+
+
+def test_iter_run_blocks_extracts_single_line_and_block_scalar_forms() -> None:
+    text = (
+        "steps:\n"
+        "  - name: step one\n"
+        "    run: echo one\n"
+        "  - name: step two\n"
+        "    run: |\n"
+        "      echo two\n"
+        "      echo three\n"
+        "  - name: step three\n"
+        "    run: echo four\n"
+    )
+
+    blocks = wiring._iter_run_blocks(text)
+
+    assert blocks[0] == "echo one"
+    assert "echo two" in blocks[1]
+    assert "echo three" in blocks[1]
+    assert blocks[2] == "echo four"
+
+
+def test_find_orphaned_flags_flags_a_stale_flag_removed_from_the_registry(tmp_path: pathlib.Path) -> None:
+    """Reconstructs issue #797's own motivating shape: a registry row is
+    removed or renamed but the invoking workflow's command line was never
+    updated to match."""
+    scripts_dir, workflows_dir = _make_dirs(tmp_path)
+    (scripts_dir / "gate_example.py").write_text(
+        """
+import collections
+
+_Check = collections.namedtuple("_Check", ["name", "cli_flag"])
+
+_CHECKS = (
+    _Check(name="alpha-check", cli_flag="--alpha-items"),
+)
+""",
+        encoding="utf-8",
+    )
+    (workflows_dir / "ci.yml").write_text(
+        # --beta-items was removed from the registry; the workflow was
+        # never updated to drop it.
+        'run: python .github/scripts/gate_example.py --alpha-items "$A" --beta-items "$B"',
+        encoding="utf-8",
+    )
+
+    findings = wiring.find_orphaned_flags(scripts_dir, workflows_dir)
+
+    assert len(findings) == 1
+    assert "ci.yml" in findings[0]
+    assert "gate_example.py" in findings[0]
+    assert "--beta-items" in findings[0]
+
+
+def test_find_orphaned_flags_excludes_a_scripts_own_hardcoded_flags(tmp_path: pathlib.Path) -> None:
+    """Reconstructs the false-positive risk PR #796's own body disclosed:
+    a script's ordinary non-registry flags (--body, --skill-md-changed in
+    the real gitapex_gate_skill_audit_disclosure.py) must never be flagged
+    as orphaned."""
+    scripts_dir, workflows_dir = _make_dirs(tmp_path)
+    (scripts_dir / "gate_example.py").write_text(
+        """
+import argparse
+import collections
+
+_Check = collections.namedtuple("_Check", ["name", "cli_flag", "cli_dest"])
+
+_CHECKS = (
+    _Check(name="alpha-check", cli_flag="--alpha-items", cli_dest="alpha_items"),
+)
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--body", default="")
+    parser.add_argument("--skill-md-changed", action="store_true")
+    for check in _CHECKS:
+        parser.add_argument(check.cli_flag, dest=check.cli_dest, default="")
+    return parser.parse_args(argv)
+""",
+        encoding="utf-8",
+    )
+    (workflows_dir / "ci.yml").write_text(
+        'run: python .github/scripts/gate_example.py --alpha-items "$A" --body "$B" --skill-md-changed',
+        encoding="utf-8",
+    )
+
+    assert wiring.find_orphaned_flags(scripts_dir, workflows_dir) == []
+
+
+def test_find_orphaned_flags_excludes_help(tmp_path: pathlib.Path) -> None:
+    scripts_dir, workflows_dir = _make_dirs(tmp_path)
+    (scripts_dir / "gate_example.py").write_text(_REGISTRY_SOURCE, encoding="utf-8")
+    (workflows_dir / "ci.yml").write_text("run: python .github/scripts/gate_example.py --help", encoding="utf-8")
+
+    assert wiring.find_orphaned_flags(scripts_dir, workflows_dir) == []
+
+
+def test_find_orphaned_flags_scans_a_multiline_backslash_continued_run_block(tmp_path: pathlib.Path) -> None:
+    """Real workflows split a long invocation across multiple `\\`-continued
+    lines inside a `run: |` block (see .github/workflows/skill-audit-gate.yml) --
+    the orphaned flag here is on its own continuation line, not the line
+    that names the script."""
+    scripts_dir, workflows_dir = _make_dirs(tmp_path)
+    (scripts_dir / "gate_example.py").write_text(_REGISTRY_SOURCE, encoding="utf-8")
+    (workflows_dir / "ci.yml").write_text(
+        "steps:\n"
+        "  - name: run gate\n"
+        "    run: |\n"
+        "      python .github/scripts/gate_example.py \\\n"
+        '        --alpha-items "$A" \\\n'
+        '        --beta-items "$B" \\\n'
+        '        --gamma-items "$C"\n',
+        encoding="utf-8",
+    )
+
+    findings = wiring.find_orphaned_flags(scripts_dir, workflows_dir)
+
+    assert len(findings) == 1
+    assert "--gamma-items" in findings[0]
+
+
+def test_find_orphaned_flags_does_not_leak_flags_across_steps_for_different_scripts(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Proves the per-run-block scoping in _iter_run_blocks is load-bearing:
+    an unscoped, whole-file scan would misattribute
+    --totally-unrelated-flag (passed to a different script in a different
+    step) to gate_example.py and flag it as orphaned."""
+    scripts_dir, workflows_dir = _make_dirs(tmp_path)
+    (scripts_dir / "gate_example.py").write_text(_REGISTRY_SOURCE, encoding="utf-8")
+    (workflows_dir / "ci.yml").write_text(
+        "steps:\n"
+        "  - name: run gate\n"
+        "    run: |\n"
+        '      python .github/scripts/gate_example.py --alpha-items "$A" --beta-items "$B"\n'
+        "  - name: run unrelated\n"
+        "    run: |\n"
+        '      python .github/scripts/other_script.py --totally-unrelated-flag "$X"\n',
+        encoding="utf-8",
+    )
+
+    assert wiring.find_orphaned_flags(scripts_dir, workflows_dir) == []
+
+
+def test_find_orphaned_flags_is_clean_when_every_passed_flag_is_known(tmp_path: pathlib.Path) -> None:
+    scripts_dir, workflows_dir = _make_dirs(tmp_path)
+    (scripts_dir / "gate_example.py").write_text(_REGISTRY_SOURCE, encoding="utf-8")
+    (workflows_dir / "ci.yml").write_text(
+        'run: python .github/scripts/gate_example.py --alpha-items "$A" --beta-items "$B"',
+        encoding="utf-8",
+    )
+
+    assert wiring.find_orphaned_flags(scripts_dir, workflows_dir) == []
+
+
+def test_find_orphaned_flags_returns_empty_when_nothing_is_registered(tmp_path: pathlib.Path) -> None:
+    scripts_dir, workflows_dir = _make_dirs(tmp_path)
+    (scripts_dir / "not_a_registry.py").write_text("X = 1\n", encoding="utf-8")
+
+    assert wiring.find_orphaned_flags(scripts_dir, workflows_dir) == []
+
+
+def test_find_orphaned_flags_validates_workflows_dir_even_with_no_registries(tmp_path: pathlib.Path) -> None:
+    """Mirrors test_find_unwired_rows_validates_workflows_dir_even_with_no_registries:
+    a missing/misconfigured workflows_dir must fail closed even when
+    scripts_dir has no qualifying cli_flag registry at all -- an earlier
+    revision of find_orphaned_flags short-circuited before ever touching
+    workflows_dir in this case, silently returning [] (a false-clean
+    result) instead of raising."""
+    scripts_dir, _ = _make_dirs(tmp_path)
+    (scripts_dir / "not_a_registry.py").write_text("X = 1\n", encoding="utf-8")
+
+    with pytest.raises(wiring.RegistryReadError, match="not a directory"):
+        wiring.find_orphaned_flags(scripts_dir, tmp_path / "does-not-exist")
+
+
+def test_main_reports_orphaned_flag_drift_and_exits_nonzero(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    scripts_dir, workflows_dir = _make_dirs(tmp_path)
+    (scripts_dir / "gate_example.py").write_text(
+        """
+import collections
+
+_Check = collections.namedtuple("_Check", ["cli_flag"])
+
+_CHECKS = (
+    _Check(cli_flag="--alpha-items"),
+)
+""",
+        encoding="utf-8",
+    )
+    (workflows_dir / "ci.yml").write_text(
+        'run: python .github/scripts/gate_example.py --alpha-items "$A" --stale-items "$B"',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(wiring, "SCRIPTS_DIR", scripts_dir)
+    monkeypatch.setattr(wiring, "WORKFLOWS_DIR", workflows_dir)
+
+    exit_code = wiring.main()
+
+    assert exit_code == 1
+    captured = capsys.readouterr()
+    assert "registry-wiring drift" in captured.out
+    assert "--stale-items" in captured.out
+
+
 # --- The gate itself, against the real repository -------------------------
 
 
@@ -390,6 +622,10 @@ def test_real_repo_registry_rows_include_the_known_process_disclosure_checks() -
 
 def test_real_repo_has_no_unwired_registry_rows() -> None:
     assert wiring.find_unwired_rows() == []
+
+
+def test_real_repo_has_no_orphaned_workflow_flags() -> None:
+    assert wiring.find_orphaned_flags() == []
 
 
 def test_main_passes_cleanly_against_the_real_repo(capsys: pytest.CaptureFixture[str]) -> None:
