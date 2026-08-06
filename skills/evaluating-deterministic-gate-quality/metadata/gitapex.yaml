@@ -259,6 +259,15 @@ spec:
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/801"
       summary: "Fixed both findings above in dimensions.md: dimension 22 now states that an uncertain precondition must be verified directly or marked indeterminate, never defaulted to not-applicable; dimension 21 now states a target's own claimed precision figure is not itself evidence, mirroring dimension 19's own claim-is-not-evidence clause verbatim in spirit."
+    - kind: audit
+      anchor: "method:evaluating-skill-quality"
+      summary: "A fresh, isolated dispatch on the dimension-21/22 diff (post battle-testing-a-skill fix) returned WELL-FORMED-NOT-MATURE, shape 55/55. Two findings: eval-status.md's closing sentence still said 'one of these eight' after 21/22 grew the uncovered list to ten; dimensions.md's new intro paragraph overstated 'a small number of dimensions' carrying the precondition-scoped tag when only dimension 22 does."
+      outcome:
+        verdict: WELL-FORMED-NOT-MATURE
+        found: 2
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/801"
+      summary: "Fixed both findings above: eval-status.md's 'eight' corrected to 'ten'; dimensions.md's intro paragraph now states one dimension (22) currently carries the precondition-scoped tag, not 'a small number.'"
   skillDependencies:
     requires:
       - evaluating-skill-quality

@@ -29,8 +29,9 @@ established for this build rather than left implicit:
   construction in another; graded there only, named explicitly rather
   than silently skipped.
 
-A small number of dimensions carry a second, independent scoping tag
-alongside domain-generalization: **precondition-scoped applicability**.
+One dimension currently carries a second, independent scoping tag
+alongside domain-generalization -- **precondition-scoped applicability**
+(dimension 22 below; more may gain it as the skill grows).
 Domain-generalization asks *which of the four domains*; precondition
 scoping asks whether the target's own operational capability -- something
 that can be present or absent regardless of domain -- supports the

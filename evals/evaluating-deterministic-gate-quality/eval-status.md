@@ -113,7 +113,7 @@ assertion could be found without risking a paraphrase-drift false-fail;
 see the fixtures' own `description` fields for what each one actually
 pins down. The tool is citation-based, not semantic
 (its own module docstring names this explicitly), so a future fixture could
-exercise one of these eight substantively without literally writing its
+exercise one of these ten substantively without literally writing its
 number -- rerun the script before trusting this list stale.
 
 No no-skill baseline and no model tier have been run against this corpus:
