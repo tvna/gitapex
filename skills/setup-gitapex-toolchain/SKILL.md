@@ -141,7 +141,9 @@ sessions where it actually re-runs -- now the exception rather than every
 session, since a matching lockfile and installed `apm` binary make it a
 fast `UNCHANGED: apm install` no-op instead (see Output above). On those
 sessions, a working tree showing `.claude/settings.json` as modified
-afterward is this expected, not-to-be-committed drift -- not a bug.
+afterward is this expected, not-to-be-committed drift -- not a bug. The
+same file can also drift for a second, independent reason: see the next
+section.
 
 ## Known behavior: self-plugin registration is best-effort and unverified
 
@@ -157,6 +159,17 @@ actually shows gitapex's own skills afterward is tracked, unresolved, on
 issue `#773` -- do not treat this hook running without a stderr message as
 proof the mitigation worked; only a fresh session's own available-skills
 list is proof of that.
+
+Directly observed, reproduced across two separate sessions while building
+this mitigation: `claude plugin marketplace add` itself rewrites the
+committed `.claude/settings.json` in place -- `extraKnownMarketplaces.
+gitapex.source.path` gets resolved from the committed relative `"."` to
+this session's own container-specific absolute path, and top-level keys
+get reordered -- a second, independent cause of the same
+not-to-be-committed-drift shape the previous section already documents
+for `apm install`. Never commit this drift: the rewritten absolute path
+is specific to one container/session and would be wrong (and misleading)
+in any other checkout.
 
 ## Optional: faster Class B provisioning via a setup script
 

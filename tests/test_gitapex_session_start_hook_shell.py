@@ -80,6 +80,47 @@ def test_skips_prek_install_without_apm_yml_even_with_a_real_git_repo(tmp_path: 
     assert not (other_repo / ".git" / "hooks" / "pre-commit").exists()
 
 
+def test_skips_self_plugin_registration_without_apm_yml_even_with_a_real_git_repo(
+    tmp_path: Path,
+) -> None:
+    # Issue #773's own apm.yml guard, same rationale as issue #749's
+    # pre-existing prek-install guard just above it in the script:
+    # registering a marketplace named "gitapex" only makes sense inside an
+    # actual gitapex checkout.
+    other_repo = tmp_path / "some-other-checkout"
+    other_repo.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=str(other_repo), check=True)
+    result = _run({"CLAUDE_CODE_REMOTE": "true", "CLAUDE_PROJECT_DIR": str(other_repo)})
+    assert result.returncode == 0
+    assert "skipping gitapex's own plugin registration (not a gitapex checkout)" in result.stderr
+
+
+def test_exits_zero_and_warns_when_claude_cli_not_on_path() -> None:
+    # Issue #773: a session-start environment with no `claude` binary on
+    # PATH (e.g. a bare CI runner, unlike this repository's own Claude
+    # Code sessions where `claude` is always present) must still exit 0
+    # and explain why self-plugin registration was skipped, not crash --
+    # same shape as test_exits_zero_and_warns_when_uv_not_on_path above,
+    # for the sibling `command -v claude` guard.
+    required = ("bash", "python3", "sh", "test", "echo", "git")
+    dirs = []
+    for tool in required:
+        found = shutil.which(tool)
+        assert found is not None, f"{tool} must be resolvable for this test to be meaningful"
+        tool_dir = str(Path(found).parent)
+        if tool_dir not in dirs:
+            dirs.append(tool_dir)
+    result = _run(
+        {
+            "CLAUDE_CODE_REMOTE": "true",
+            "CLAUDE_PROJECT_DIR": str(REPO_ROOT),
+            "PATH": os.pathsep.join(dirs),
+        }
+    )
+    assert result.returncode == 0
+    assert "claude CLI not found on PATH; skipping gitapex's own plugin registration" in result.stderr
+
+
 def test_exits_zero_and_warns_when_uv_not_on_path() -> None:
     # Simulate a session-start environment with no `uv` on PATH (e.g. a
     # container image that skipped it) -- the hook must still exit 0 and

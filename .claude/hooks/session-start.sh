@@ -62,10 +62,27 @@ fi
 # *resumed* session in the same VM where a prior attempt already ran.
 # Fails soft like every other block in this script -- never blocks session
 # start, never affects this script's own exit code.
-if command -v claude >/dev/null 2>&1; then
-  claude plugin marketplace add "${CLAUDE_PROJECT_DIR:-.}" --scope project >/dev/null 2>&1 \
+#
+# apm.yml guard, same rationale as the prek-install block just above:
+# registering a marketplace named "gitapex" only makes sense inside an
+# actual gitapex checkout.
+#
+# </dev/null on both `claude` invocations: this block's own comment above
+# concedes the underlying command is documented as normally gated behind
+# an interactive trust prompt: closing stdin explicitly, rather than
+# inheriting whatever this hook's own stdin happens to be, keeps a stalled
+# read from turning into a silent hang that would contradict this block's
+# "never blocks session start" claim. Real stdout/stderr is left
+# unredirected -- matching the two blocks above, which also let the
+# wrapped command's own output flow through rather than suppressing it --
+# so a failure is still visible, not just the synthesized fail-soft
+# message layered on top.
+if [ ! -f "${CLAUDE_PROJECT_DIR:-.}/apm.yml" ]; then
+  echo "gitapex: ${CLAUDE_PROJECT_DIR:-.}/apm.yml not found; skipping gitapex's own plugin registration (not a gitapex checkout)." >&2
+elif command -v claude >/dev/null 2>&1; then
+  claude plugin marketplace add "${CLAUDE_PROJECT_DIR:-.}" --scope project </dev/null \
     || echo "gitapex: could not register gitapex's own plugin marketplace this session (non-fatal; see skills/setup-gitapex-toolchain/SKILL.md)." >&2
-  claude plugin install "gitapex@gitapex" >/dev/null 2>&1 \
+  claude plugin install "gitapex@gitapex" </dev/null \
     || echo "gitapex: could not install gitapex's own plugin this session (non-fatal; see skills/setup-gitapex-toolchain/SKILL.md)." >&2
 else
   echo "gitapex: claude CLI not found on PATH; skipping gitapex's own plugin registration this session." >&2
