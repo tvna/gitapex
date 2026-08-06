@@ -348,50 +348,56 @@ section and the design doc it cites.
 
 ## Procedure
 
-Steps 1-4 are this review's precondition, step 6 its postcondition --
-see `references/rubric.md`'s Contract discipline section. Steps 1, 2, 4,
-5, and 6 execute inside the fresh subagent dispatch described in
-Subagent dispatch above; only step 3 runs directly in the main thread,
-before the dispatch. The main thread's remaining job is to relay the
-dispatch's report verbatim, per Subagent dispatch above.
+Steps 1-4 are this review's precondition, step 6 its postcondition -- see
+`references/rubric.md`'s Contract discipline section. Steps 1, 2, 4, 5, and 6 execute
+inside the fresh subagent dispatch described in Subagent dispatch above; only step 3
+runs directly in the main thread, before the dispatch. The main thread's remaining job
+is to relay the dispatch's report verbatim, per Subagent dispatch above. The numbers
+below are identity, not run order: step 3 actually runs 1st (main thread), then the
+dispatch runs 1, 2, 4, 5, 6 in that numbered order, annotated per step below. Neither a
+step-2 whole-artifact finding nor a step-3 shape FAIL short-circuits: steps 4-6,
+including the full step-5 walk, always still run, since the nine dimensions grade
+prose/structural maturity independently of mechanism-fit and shape -- unlike
+`evaluating-deterministic-gate-quality`, whose later steps are conditioned on its own
+binary gate-warranted question.
 
-1. Review only a caller-created immutable/read-only snapshot beneath the
-   approved root. Reject traversal, symlinks, special files, unreadable or
-   malformed content; never execute target code. Read `SKILL.md` and every
-   file in `references/` (an unlinked file is a dimension-5 finding). Apply
-   [input validation](references/adversarial-self-audit.md); an unread target
-   draws an Indeterminate verdict, never a fabricated one.
-2. Check mechanism fit per the section above. A whole-artifact
-   wrong-mechanism finding (the skill should have been a hook, subagent,
-   or CLAUDE.md content) or a whole-artifact low-cohesion finding (the
-   skill should be split into several) is the headline finding of the
-   review -- report it even if the rest of the review still completes.
-   The four step-level Mechanism fit findings above are the exception:
-   report them for triage, not as the headline. Also run the Blind spot pass
-   per the Unknowns framework section above -- name a rubric gap if the
-   target's domain exposes one, or state explicitly that none was found.
-3. Run the deterministic shape checker per the Two lanes section above (or
-   apply its checks by hand where Python is unavailable); cite the exact
-   violation.
-4. Read the skill's `metadata/gitapex.yaml` sidecar and establish both its
-   portability level and its capability assumption per the sections above.
-   Check the declared capability assumption against any model/effort pin
-   step 2 already found (a `Frontier` declaration paired with a
-   weak-tier pin is a contradiction) -- this is the declaration-vs-pin
-   check's one owner.
-   When the target has no sidecar (e.g. vendored
-   from a repository that has not adopted this convention), establish
-   both by reading the target's content instead -- the same way an
-   undeclared level is read today -- and note the sidecar's absence as
-   context, not as a finding. Run Compatibility and Confidentiality
-   awareness from their baselines, keeping both separate from the verdict.
-5. Walk all nine dimensions in `references/rubric.md`, in order (including
-   8-9), quoting the specific text that earns each verdict; assume steps
-   1-4 hold rather than re-deriving them. No cited evidence means no
-   review happened.
-6. Issue a verdict per `references/rubric.md`'s Verdicts section, inside
-   the same dispatch as steps 1, 2, 4, and 5, relayed verbatim by the
-   main thread per Subagent dispatch above.
+1. *(runs 2nd)* Review only a caller-created immutable/read-only snapshot beneath the
+   approved root. Reject traversal, symlinks, special files, unreadable or malformed
+   content; never execute target code. Read `SKILL.md` and every file in
+   `references/` (an unlinked file is a dimension-5 finding). Apply
+   [input validation](references/adversarial-self-audit.md); an unread target draws an
+   Indeterminate verdict, never a fabricated one.
+2. *(runs 3rd)* Check mechanism fit per the section above. A whole-artifact
+   wrong-mechanism finding (the skill should have been a hook, subagent, or CLAUDE.md
+   content) or a whole-artifact low-cohesion finding (the skill should be split into
+   several) is the headline finding of the review -- report it even if the rest of
+   the review still completes (see this section's preamble above). The four
+   step-level Mechanism fit findings above are the exception: report them for triage,
+   not as the headline. Also run the Blind spot pass per the Unknowns framework
+   section above -- name a rubric gap if the target's domain exposes one, or state
+   explicitly that none was found.
+3. *(runs 1st, main thread, before dispatch)* Run the deterministic shape checker per
+   the Two lanes section above (or apply its checks by hand where Python is
+   unavailable); cite the exact violation. A FAIL does not shorten the review either
+   (see this section's preamble above); carry it into the dispatch as an established
+   fact (Subagent dispatch's "never both" handoff), reported alongside the dimension
+   verdicts, not in place of them.
+4. *(runs 4th)* Read the skill's `metadata/gitapex.yaml` sidecar and establish both its
+   portability level and its capability assumption per the sections above. Check the
+   declared capability assumption against any model/effort pin step 2 already found
+   (a `Frontier` declaration paired with a weak-tier pin is a contradiction) -- this
+   is the declaration-vs-pin check's one owner. When the target has no sidecar (e.g.
+   vendored from a repository that has not adopted this convention), establish both
+   by reading the target's content instead -- the same way an undeclared level is
+   read today -- and note the sidecar's absence as context, not as a finding. Run
+   Compatibility and Confidentiality awareness from their baselines, keeping both
+   separate from the verdict.
+5. *(runs 5th)* Walk all nine dimensions in `references/rubric.md`, in order (including
+   8-9), quoting the specific text that earns each verdict; assume steps 1-4 hold
+   rather than re-deriving them. No cited evidence means no review happened.
+6. *(runs 6th, last)* Issue a verdict per `references/rubric.md`'s Verdicts section,
+   inside the same dispatch as steps 1, 2, 4, and 5, relayed verbatim by the main
+   thread per Subagent dispatch above.
 
 Worked example of steps 2-6, applied to a real merged skill:
 [references/worked-example-explaining-the-work.md](references/worked-example-explaining-the-work.md).
