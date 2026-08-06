@@ -6,8 +6,12 @@ import stat
 import subprocess
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = REPO_ROOT / ".claude" / "hooks" / "session-start.sh"
+
+pytestmark = pytest.mark.slow
 
 
 def _run(env_overrides: dict[str, str]) -> subprocess.CompletedProcess[str]:

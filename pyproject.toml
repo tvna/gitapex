@@ -9,6 +9,8 @@ dependencies = []
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
+    "pytest-xdist>=3.6",
+    "pytest-split>=0.10",
     "pyyaml>=6.0",
     "prek>=0.4.11",
     "jsonschema>=4.23",
@@ -304,7 +306,10 @@ ignore = ["E501", "SIM108", "RET504"]
 [tool.pytest.ini_options]
 testpaths = ["tests", "skills/battle-testing-a-skill/scripts", "skills/evaluating-skill-quality/scripts", "skills/executing-a-branch-plan/scripts", "skills/auditing-agent-product-scope/scripts", "skills/setup-gitapex-toolchain/scripts", "skills/evaluating-deterministic-gate-quality/scripts", "hooks"]
 pythonpath = [".github/scripts", "skills/battle-testing-a-skill/scripts", "skills/scorer-gated-skill-edits/scripts", "skills/evaluating-skill-quality/scripts", "skills/auditing-agent-product-scope/scripts", "skills/evaluating-deterministic-gate-quality/scripts", "evals/scripts", "hooks"]
-addopts = "--cov=.github/scripts --cov=skills/battle-testing-a-skill/scripts --cov=skills/scorer-gated-skill-edits/scripts --cov=skills/evaluating-skill-quality/scripts --cov=skills/auditing-agent-product-scope/scripts --cov=skills/setup-gitapex-toolchain/scripts --cov=skills/evaluating-deterministic-gate-quality/scripts --cov=evals/scripts --cov=hooks --cov-report=term-missing"
+addopts = "--cov=.github/scripts --cov=skills/battle-testing-a-skill/scripts --cov=skills/scorer-gated-skill-edits/scripts --cov=skills/evaluating-skill-quality/scripts --cov=skills/auditing-agent-product-scope/scripts --cov=skills/setup-gitapex-toolchain/scripts --cov=skills/evaluating-deterministic-gate-quality/scripts --cov=evals/scripts --cov=hooks --cov-report=term-missing -n auto --strict-markers"
+markers = [
+    "slow: spawns a real subprocess (git/uv/shell); skip locally with -m \"not slow\" for a fast dev loop",
+]
 
 # Deliberately NOT adding "hooks" here (issue #657): gitapex_gate_evals_scripts_coverage.py
 # reads this list, not addopts, as the authoritative scope for its 90%-per-file
