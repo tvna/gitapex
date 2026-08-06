@@ -167,9 +167,18 @@ gitapex.source.path` gets resolved from the committed relative `"."` to
 this session's own container-specific absolute path, and top-level keys
 get reordered -- a second, independent cause of the same
 not-to-be-committed-drift shape the previous section already documents
-for `apm install`. Never commit this drift: the rewritten absolute path
-is specific to one container/session and would be wrong (and misleading)
-in any other checkout.
+for `apm install`. The rewritten absolute path is specific to one
+container/session and would be wrong (and misleading) in any other
+checkout.
+
+Unlike the `apm install` drift above, this hook (issue `#782`) now
+restores `.claude/settings.json` to its committed content immediately
+after the `claude plugin marketplace add`/`install` calls, since the
+registration state those calls actually need lives in
+`~/.claude/plugins/` (per-user), not in this repo-tracked file. A
+session's working tree should therefore never show this particular
+drift after the hook completes; if it does, that is a bug, not expected
+behavior -- unlike the `apm install` case in the previous section.
 
 ## Optional: faster Class B provisioning via a setup script
 

@@ -84,6 +84,18 @@ elif command -v claude >/dev/null 2>&1; then
     || echo "gitapex: could not register gitapex's own plugin marketplace this session (non-fatal; see skills/setup-gitapex-toolchain/SKILL.md)." >&2
   claude plugin install "gitapex@gitapex" </dev/null \
     || echo "gitapex: could not install gitapex's own plugin this session (non-fatal; see skills/setup-gitapex-toolchain/SKILL.md)." >&2
+
+  # Issue #782: the two calls above rewrite the committed
+  # .claude/settings.json in place (extraKnownMarketplaces.gitapex.source.path
+  # resolved to this container's absolute path, plus key reordering) --
+  # documented, not-to-be-committed drift per SKILL.md's "self-plugin
+  # registration" section. Left in place, it fails the generic
+  # stop-hook-git-check.sh with a false "uncommitted changes" error every
+  # session. The actual registration state the plugin needs lives in
+  # ~/.claude/plugins/ (per-user), not in this repo-tracked file, so
+  # discarding the rewrite here is safe and restores a clean working tree.
+  git -C "${CLAUDE_PROJECT_DIR:-.}" checkout -- .claude/settings.json 2>/dev/null \
+    || echo "gitapex: could not restore .claude/settings.json after plugin registration; the working tree may show drift this session." >&2
 else
   echo "gitapex: claude CLI not found on PATH; skipping gitapex's own plugin registration this session." >&2
 fi
