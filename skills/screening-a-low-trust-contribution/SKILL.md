@@ -10,21 +10,18 @@ This skill's checks are general categories. The specific paths named below
 gitapex's own illustrative examples of each category -- substitute the
 calling repository's actual equivalents.
 
-Inspects a PR or issue's diff and metadata for contribution-level
-threats from an unknown or low-trust author -- distinct from
-`untrusted-input-triage`, which triages a single piece of
-externally-authored *text*, not a diff.
-
 ## Procedure
 
 Run every check below against the incoming diff and its metadata (file
-list, author, dependency lockfiles); a low-trust contribution earns all
-of them, not a sampled subset. When a check's subject matter is already
-enumerated in detail by a sibling skill (as checks 2 and 8 do for
-`auditing-git-hosting-surface` and `untrusted-input-triage` respectively),
-delegate to that skill by name instead of re-deriving or copying its
-list here -- a copy drifts out of sync when the original is extended; a
-delegation inherits the extension automatically.
+list, author, dependency lockfiles) -- diff and metadata, not the
+externally-authored text `untrusted-input-triage` triages; a low-trust
+contribution earns all of them, not a sampled subset. When a check's
+subject matter is already enumerated in detail by a sibling skill (as
+checks 2 and 8 do for `auditing-git-hosting-surface` and
+`untrusted-input-triage` respectively), delegate to that skill by name
+instead of re-deriving or copying its list here -- a copy drifts out of
+sync when the original is extended; a delegation inherits the extension
+automatically.
 
 1. **Diff completeness and provenance.** Screen the literal diff --
    fetched via a platform-integrated tool call or this repository's
@@ -207,6 +204,14 @@ about to change.
   `battle-testing-a-skill` (evaluates a SKILL.md file's own robustness,
   not an inbound contribution), and `auditing-git-hosting-surface` (audits
   standing repo configuration, not an incoming diff).
+- "Hard flag" (checks 2, 3, 6) means the check escalates
+  unconditionally whenever its trigger condition is met -- no sampling,
+  no judgment call about whether the surrounding contribution "looks
+  fine." "Flag" (checks 5, 7, 8) means the check still always runs and
+  always reports what it finds, but the underlying condition itself
+  (e.g. "is this content instruction-bearing") already requires
+  judgment, so the check does not add a second, harder escalation rule
+  on top of its own verdict.
 - Read-only: this skill screens and reports; it does not itself decide
   to merge, close, or reject -- that stays a human/operator decision.
   Never hand a human a decision that is not decision-ready (this skill
