@@ -15,6 +15,20 @@ spec:
     - kind: deferral
       anchor: "https://github.com/tvna/gitapex/issues/730"
       summary: "Mixed presupposes a portable core split from repo-specific detail via a reference file; this skill has no separable portable core at all, so neither Mixed nor Repository-scoped fits cleanly -- flagged as a taxonomy gap rather than resolved unilaterally"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/814"
+      summary: "Declared spec.executionRequirements.tools (W3 first slice, https://github.com/tvna/gitapex/issues/307): gitapex_provision_class_b.py reads flake.nix and project files, writes downloaded/extracted binaries and shims under its cache root, and calls subprocess.run to verify an installed binary. It also performs live network I/O (urllib.request) to download release assets -- undeclared here since the schema has no network category yet (W1 non-goal); disclosed as a known gap, not silently omitted."
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/814"
+      summary: "This skill's real network requirement (urllib.request downloads in gitapex_provision_class_b.py) cannot be declared under the current spec.executionRequirements schema -- no network category exists yet. Tracked under parent issue https://github.com/tvna/gitapex/issues/307's W1 non-goals, which defers that category's mode-enum-plus-list shape to its own design pass."
   skillDependencies:
     requires: []
     relatedTo: []
+  executionRequirements:
+    tools:
+      read:
+        - files
+      write:
+        - files
+      shell:
+        - subprocess
