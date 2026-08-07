@@ -142,34 +142,55 @@ code that already executes where both packages are installed and already
 exercised on every CI run via the scanner's own tests.
 
 **Conflict this repository's own design-doc-adversarial-review disclosure
-surfaced (not present in the original decision prompt) and its resolution,
-both owner-confirmed on 2026-08-06:** the risk analysis above covers only
-this repository's own CI/pytest invocation path. `gitapex_check_skill_shape.py`
-is itself declared `spec.portability: Portable` in its own
+surfaced (not present in the original decision prompt), and its resolution
+history:** the risk analysis above covers only this repository's own
+CI/pytest invocation path. `gitapex_check_skill_shape.py` is itself
+declared `spec.portability: Portable` in its own
 `skills/evaluating-skill-quality/metadata/gitapex.yaml`, and
 `skills/evaluating-skill-quality/SKILL.md` documents a bare
 `python3 skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py
 --allowed-root <root> <skill-dir>` invocation, parenthesized
 `(stdlib-only, read-only)`, as its supported usage when this skill is
 vendored into a foreign repository. Making `import yaml`/`import
-jsonschema` unconditional module-level imports breaks that documented
-standalone path for any vendored copy that hasn't separately installed both
-packages.
+jsonschema` unconditional module-level imports means a vendored copy needs
+both packages installed, a real new runtime requirement that must be
+disclosed somewhere.
 
-**Recorded resolution:** downgrade `gitapex_check_skill_shape.py`'s own
-`spec.portability` declaration away from `Portable` (to `Repository-scoped`
-or `Mixed`, whichever this schema's existing enum best fits once the
-implementation PR is scoped) and update its `SKILL.md` usage line to state
-the new `pyyaml`/`jsonschema` runtime requirement explicitly (e.g. `uv run
-python3 ...`, or `pip install pyyaml jsonschema` first). This accepts the
-portability regression as a disclosed, deliberate trade-off of full
-migration rather than silently breaking vendored consumers -- the
-repository owner selected this resolution explicitly (over a
-conditional-import-with-fallback alternative that would have reopened the
-dual-source-of-truth risk for exactly the consumers least likely to notice
-drift, and over reopening 4.1's target-end-state decision entirely). It
-stays inside 4.1's single-PR scope: 4.4 step 6 below adds it as an explicit
-step, not a second decision.
+An earlier version of this section resolved the conflict by downgrading
+`spec.portability` away from `Portable`, reasoning that the new runtime
+dependency made the skill no longer "vendorable as-is." A follow-up
+re-review of that resolution found it misapplied the field: `portability`'s
+own schema description (`.gitapex/skill-metadata.schema.json`, verified
+live) measures whether a skill's *instructions* resolve inside its own
+directory versus depending on this repository's own paths/conventions -- a
+domain-knowledge/path-locality axis -- not whether its implementation
+script has non-stdlib runtime dependencies. No other sidecar among the
+repository's 25 uses `portability` for a dependency-footprint reason
+either (verified live via `grep` across every `skills/*/metadata/gitapex.yaml`).
+This was filed as issue
+[#804](https://github.com/tvna/gitapex/issues/804) and has since been
+implemented and merged (PR #805,
+[41ea081](https://github.com/tvna/gitapex/commit/41ea081d95e1be45351bbaeda59817eab2bc7f4b)/[cd65cf5](https://github.com/tvna/gitapex/commit/cd65cf555d8d71cf7dfd82a634a92beca4d8203f)):
+`.gitapex/skill-metadata.schema.json` now defines
+`spec.executionRequirements.packages`, a free-form-ecosystem-keyed field
+(e.g. `pip`, `npm`, `cargo`) for exactly this purpose, explicitly
+independent of `spec.portability`.
+
+**Recorded resolution (superseding the earlier downgrade plan):**
+`gitapex_check_skill_shape.py`'s own sidecar declares
+`spec.executionRequirements.packages.pip: [pyyaml, jsonschema]`, and its
+`spec.portability` stays `Portable`, unchanged -- its own instructions
+still resolve entirely inside its own directory; only its runtime package
+footprint changed, and that is now disclosed through the field built for
+it rather than through an unrelated one. `SKILL.md`'s usage line is still
+updated to state the new `pyyaml`/`jsonschema` runtime requirement
+explicitly (e.g. `uv run python3 ...`, or `pip install pyyaml jsonschema`
+first) -- that part of the original resolution stands; only the
+metadata-field choice changes. This declaration cannot land before this
+migration's own step 2 below replaces `execution-requirements-well-formed`
+with schema-backed validation: today's hand-rolled checker recognizes only
+`tools` under `spec.executionRequirements` and would reject an unrecognized
+`packages` key, so 4.4 step 6 is now sequenced after step 2, not free-standing.
 
 **Follow-on cleanup implied, not separately decided here:** once the
 hand-rolled parser the Tier C mypy override exists for is deleted (for the
@@ -266,11 +287,17 @@ out as explicit steps below (7, 8) rather than left as an unstated risk.
    checks.
 5. Narrow or remove `pyproject.toml`'s `[tool.mypy.overrides]` Tier C
    carve-out for this module once the code it was written for is gone.
-6. Downgrade `gitapex_check_skill_shape.py`'s own declared
-   `spec.portability` in `skills/evaluating-skill-quality/metadata/gitapex.yaml`
-   away from `Portable`, and update its `SKILL.md` usage line to state the
-   new `pyyaml`/`jsonschema` runtime requirement (4.2's recorded resolution
-   to the vendoring conflict). Re-run `gitapex_check_skill_shape.py` against
+6. Declare `spec.executionRequirements.packages.pip: [pyyaml, jsonschema]`
+   in `gitapex_check_skill_shape.py`'s own
+   `skills/evaluating-skill-quality/metadata/gitapex.yaml` (issue #804's
+   field, merged ahead of this migration); leave its `spec.portability`
+   at `Portable`, unchanged (4.2's recorded resolution to the vendoring
+   conflict). This step must run after step 2 above: today's hand-rolled
+   `execution-requirements-well-formed` only recognizes `tools` under
+   `spec.executionRequirements` and would reject the new `packages` key
+   until that check is schema-backed. Also update `SKILL.md`'s usage line
+   to state the new `pyyaml`/`jsonschema` runtime requirement explicitly.
+   Re-run `gitapex_check_skill_shape.py` against
    `skills/evaluating-skill-quality/` itself afterward -- it is one of the
    25 real sidecars this migration must not regress.
 7. `manifest-envelope` merges two independent schema constraints
@@ -450,7 +477,7 @@ issue-first rule, that cites this document as its plan.
 |---|---|---|
 | Target end state | Full migration (10 checks migrate to the schema, 5 retained for file-existence/cross-file reasons) | Repository owner, explicit 3-option decision prompt, 2026-08-06 |
 | Dependency reversal | Adopt `pyyaml`/`jsonschema` in `gitapex_check_skill_shape.py` (already dev dependencies for this repository's own CI/pytest path) | Repository owner, same decision prompt |
-| Vendoring/portability conflict (surfaced by this document's own design-doc-adversarial-review disclosure, not in the original decision prompt) | Downgrade `gitapex_check_skill_shape.py`'s own `spec.portability` away from `Portable`; disclose the new runtime dependency in its `SKILL.md` usage line (4.2, 4.4 step 6) | Repository owner, follow-up decision prompt, 2026-08-06, after the adversarial review found the conflict |
+| Vendoring/portability conflict (surfaced by this document's own design-doc-adversarial-review disclosure, not in the original decision prompt) | Superseded 2026-08-07: a re-review found the original "downgrade `spec.portability`" resolution misapplied a path-locality field to a dependency-footprint concern; filed as issue [#804](https://github.com/tvna/gitapex/issues/804), implemented and merged (PR #805) as `spec.executionRequirements.packages`. Current resolution: declare `spec.executionRequirements.packages.pip: [pyyaml, jsonschema]`; `spec.portability` stays `Portable`, unchanged; disclose the runtime dependency in `SKILL.md`'s usage line too (4.2, 4.4 step 6) | Repository owner, follow-up decision prompt, 2026-08-06 (original); repository owner, rebase-and-reconsider request, 2026-08-07 (supersession) |
 | Check-name contract | 10 MIGRATE / 5 RETAIN, enumerated in 4.3, zero renames | This document, derived from direct source read of `gitapex_check_skill_shape.py` and `.gitapex/skill-metadata.schema.json` |
 | Migration sequencing | Single PR, not staged | Repository owner, same decision prompt |
 | Dependency-reversal merit, verified rather than assumed | Confirmed: schema is strictly stronger via `uniqueItems` (4.7 finding 5); one unverified merit claim (calendar-invalid dates) was found wrong and retracted (4.7 finding 4); both edge cases the adversarial review flagged as risky are empirically tractable (4.7 findings 2-3) | This document, live spike against the real checker/schema on this branch, requested explicitly by the repository owner before finalizing, 2026-08-06 |
