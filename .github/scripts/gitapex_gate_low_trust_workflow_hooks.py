@@ -1,0 +1,101 @@
+#!/usr/bin/env python3
+"""CI gate: a diff touching `.github/workflows/**` or `hooks/**` from a
+low-trust PR author must be explicitly maintainer-reviewed.
+
+Issue #136 (Mechanism-fit finding from #128's evaluating-skill-quality
+pass): `screening-a-low-trust-contribution/SKILL.md`'s checks 2 and 4
+call every such edit a "hard flag, not a sampled subset", but that
+guarantee depended entirely on an agent choosing to invoke the skill --
+no CI path-filter or CODEOWNERS gate backed it. This script is that
+backstop: the calling workflow
+(`.github/workflows/low-trust-workflow-hooks-gate.yml`) supplies the PR's
+`author_association` and current label list from the `pull_request` event
+payload; this script only grades them, matching this repository's
+existing `.github/scripts/gitapex_gate_*.py` convention of a workflow
+that computes inputs and a script that only grades them.
+
+Trust boundary: OWNER/MEMBER/COLLABORATOR pass unconditionally. Any other
+association (CONTRIBUTOR, FIRST_TIME_CONTRIBUTOR, FIRST_TIMER, NONE)
+passes only if the `workflow-hooks-reviewed` label is present --
+applying a label requires triage/write access on this repository, so the
+label itself carries the same trust signal a CODEOWNERS-gated approval
+would, without requiring a branch-protection setting change this script
+cannot make itself. No CODEOWNERS file exists in this repository and none
+is added here (see the design doc cited below for why).
+
+Deliberately stdlib-only, matching `gitapex_gate_gitignore_pattern_coverage.py`'s
+shape. No network calls -- the workflow supplies both inputs as CLI args.
+
+Design: docs/superpowers/specs/2026-08-06-screening-low-trust-contribution-gaps-design.md
+
+Usage::
+
+    python3 .github/scripts/gitapex_gate_low_trust_workflow_hooks.py \\
+        --author-association CONTRIBUTOR --labels bug,workflow-hooks-reviewed
+
+Exit codes:
+    0  Trusted author, or an untrusted author with the review label present.
+    1  Untrusted author, review label absent.
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+
+TRUSTED_ASSOCIATIONS = frozenset({"OWNER", "MEMBER", "COLLABORATOR"})
+REVIEW_LABEL = "workflow-hooks-reviewed"
+
+
+def is_trusted(author_association: str) -> bool:
+    return author_association.strip().upper() in TRUSTED_ASSOCIATIONS
+
+
+def has_review_label(labels: list[str]) -> bool:
+    return REVIEW_LABEL in {label.strip() for label in labels}
+
+
+def check(author_association: str, labels: list[str]) -> tuple[bool, str]:
+    """Return (passed, message) for the given author_association and the
+    PR's current label list."""
+    if is_trusted(author_association):
+        return True, f"PASS: author_association={author_association!r} is trusted"
+    if has_review_label(labels):
+        return True, (
+            f"PASS: author_association={author_association!r} is untrusted, but the {REVIEW_LABEL!r} label is present"
+        )
+    return False, (
+        f"author_association={author_association!r} is not OWNER/MEMBER/COLLABORATOR, "
+        f"and no {REVIEW_LABEL!r} label is present on this PR. A maintainer must review "
+        "this diff's .github/workflows/** or hooks/** changes and apply the "
+        f"{REVIEW_LABEL!r} label before this check can pass."
+    )
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Gate .github/workflows/** or hooks/** edits from a low-trust PR author."
+    )
+    parser.add_argument(
+        "--author-association",
+        required=True,
+        help="The pull_request event payload's author_association field.",
+    )
+    parser.add_argument(
+        "--labels",
+        default="",
+        help="Comma-separated list of the PR's current labels (empty string for none).",
+    )
+    args = parser.parse_args(argv)
+
+    labels = [label for label in args.labels.split(",") if label.strip()]
+    passed, message = check(args.author_association, labels)
+    if passed:
+        print(message)
+        return 0
+    print(f"::error::{message}", file=sys.stderr)
+    return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
