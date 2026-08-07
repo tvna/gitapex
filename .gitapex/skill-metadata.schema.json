@@ -204,9 +204,10 @@
     "executionRequirements": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Only one recognized subkey so far (tools); further categories (filesystem/network/mcp/credentials/browser/externalServices/context) are deferred -- until they land, any key other than tools here is a real unknown key, not reserved space, matching gitapex_check_skill_shape.py's own current behavior.",
+      "description": "Two recognized subkeys so far (tools, pythonPackages); further categories (filesystem/network/mcp/credentials/browser/externalServices/context) are deferred -- until they land, any key other than these here is a real unknown key, not reserved space, matching gitapex_check_skill_shape.py's own current behavior for tools (pythonPackages is schema-only for now -- issue #804 -- and is not yet recognized by that hand-rolled parser).",
       "properties": {
-        "tools": { "$ref": "#/$defs/executionRequirementsTools" }
+        "tools": { "$ref": "#/$defs/executionRequirementsTools" },
+        "pythonPackages": { "$ref": "#/$defs/pythonPackageList" }
       }
     },
     "executionRequirementsTools": {
@@ -229,6 +230,12 @@
       "uniqueItems": true,
       "items": { "type": "string", "minLength": 1 },
       "description": "An explicit empty list is a deliberate 'zero tools of this kind needed' statement, distinct from the key being absent entirely (not yet declared)."
+    },
+    "pythonPackageList": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "spec.executionRequirements.pythonPackages (issue #804): non-stdlib Python runtime package names a skill's own implementation script(s) require to run (e.g. [\"pyyaml\", \"jsonschema\"]), independent of spec.portability -- portability measures whether a skill's own instructions resolve inside its own directory (a domain-knowledge/path-locality axis), never a runtime package-dependency-footprint axis; this field exists so a runtime dependency is never disclosed by misusing portability instead. Same shape as toolTagList (free-form strings, no closed vocabulary, an explicit empty list is a deliberate 'no non-stdlib packages needed' statement distinct from the key being absent) but kept as its own $defs entry rather than reused, since the two lists mean different things despite the identical shape."
     }
   }
 }
