@@ -9,3 +9,13 @@ spec:
     requires: []
     relatedTo:
       - explaining-the-work
+  executionRequirements:
+    tools:
+      read:
+        - files
+      write: []
+      shell: []
+  references:
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/818"
+      summary: "Declared spec.executionRequirements.tools (W3 second slice, https://github.com/tvna/gitapex/issues/307): gitapex_scan_provenance.py takes a target path and only reads it; no writes, no subprocess/shell calls."

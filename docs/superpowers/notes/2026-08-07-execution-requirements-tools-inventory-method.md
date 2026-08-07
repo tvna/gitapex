@@ -64,7 +64,7 @@ For each skill, in order:
   (a `deferral` entry) and in this issue/PR, not declared under `tools`
   and not silently omitted.
 
-## Batch declared in this issue's PR
+## Batch 1 (issue #814 / PR #816)
 
 | Skill | `read` | `write` | `shell` | Notable gap |
 |---|---|---|---|---|
@@ -73,9 +73,36 @@ For each skill, in order:
 | `evaluating-deterministic-gate-quality` | `[files]` | `[]` | `[]` | none -- own docstring and code agree: static `ast`-based analysis, never executes the target |
 | `setup-gitapex-toolchain` | `[files]` | `[files]` | `[subprocess]` | real `network` (urllib.request) usage undeclared -- no schema category exists yet (see worked example above) |
 
-## Explicitly out of scope for this batch
+## Batch 2 (issue #818): the 9 remaining scripted skills, one shared pattern
 
-Per issue #814's own Non-goals: the remaining 20 skill sidecars, the
+All 9 remaining bundled-script skills share one identical, live-verified
+pattern: a stdlib-only checker script that reads a target path/`--flag`
+file or stdin, writes nothing, and never shells out. Declared identically
+rather than traced individually, since the method above (steps 1-3) was
+applied to each and produced the same result across all 9 -- see issue
+#818's own Facts section for the per-script verification detail.
+
+| Skill | `read` | `write` | `shell` | Notable gap |
+|---|---|---|---|---|
+| `auditing-agent-product-scope` | `[files]` | `[]` | `[]` | none |
+| `auditing-git-hosting-surface` | `[files]` | `[]` | `[]` | none |
+| `battle-testing-a-skill` | `[files]` | `[]` | `[]` | none |
+| `drafting-an-acm-issue` | `[files]` | `[]` | `[]` | none |
+| `evaluating-skill-quality` | `[files]` | `[]` | `[]` | none |
+| `executing-a-branch-plan` | `[files]` | `[]` | `[]` | none |
+| `outward-artifact-preflight` | `[files]` | `[]` | `[]` | none |
+| `planning-a-branch-from-an-issue` | `[files]` | `[]` | `[]` | none |
+| `scorer-gated-skill-edits` | `[files]` | `[]` | `[]` | none |
+
+## Explicitly out of scope so far
+
+Per issues #814/#818's own Non-goals: the 11 remaining non-scripted
+skills (`drafting-a-pr-to-merge`, `establishing-ubiquitous-language`,
+`evaluating-context-channel-maturity`, `explaining-the-work`,
+`fixing-a-reported-issue`, `grounding-in-primary-sources`,
+`merge-retrospective`, `ranking-the-open-queue`,
+`responding-to-a-fresh-arrival`, `screening-a-low-trust-contribution`,
+`untrusted-input-triage`, `vetting-attack-surface`), the
 `packages`/`filesystem`/`network`/`mcp`/`credentials`/`browser`/
 `externalServices`/`context` categories, a fixed `tools` tag vocabulary
 (W2), and adapter/enforcement work (W4) or review-guidance/drift-gate

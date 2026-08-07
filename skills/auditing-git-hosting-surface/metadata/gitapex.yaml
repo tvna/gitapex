@@ -10,3 +10,13 @@ spec:
   skillDependencies:
     requires: []
     relatedTo: []
+  executionRequirements:
+    tools:
+      read:
+        - files
+      write: []
+      shell: []
+  references:
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/818"
+      summary: "Declared spec.executionRequirements.tools (W3 second slice, https://github.com/tvna/gitapex/issues/307): gitapex_scan_unpinned_actions.py takes an optional workflows_dir positional (defaulting to .github/workflows/) and only reads it; no writes, no subprocess/shell calls."

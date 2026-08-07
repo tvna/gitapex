@@ -12,8 +12,17 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/621"
       summary: "Added a Stop-boundary bullet: never report an isolated-dispatch selection score as this skill's Gate-step evidence when the scorer is itself a Skill-tool invocation, unless the isolated copy's plugin/marketplace registration was independently confirmed (points at evaluating-skill-quality's own Isolation-verification registry as the single source of truth, no recipe duplicated here). No procedure or gate mechanics changed; capabilityAssumption stays Broad."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/818"
+      summary: "Declared spec.executionRequirements.tools (W3 second slice, https://github.com/tvna/gitapex/issues/307): gitapex_score_contract.py reads --assertions/--output/--scores file paths or stdin when omitted; no writes, no subprocess/shell calls."
   skillDependencies:
     requires: []
     relatedTo:
       - battle-testing-a-skill
       - evaluating-skill-quality
+  executionRequirements:
+    tools:
+      read:
+        - files
+      write: []
+      shell: []
