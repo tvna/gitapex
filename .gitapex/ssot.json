@@ -492,6 +492,19 @@
       "tracking_issue": 136,
       "status": "active",
       "supersedes": null
+    },
+    {
+      "id": "registry-wiring-scan",
+      "kind": "script",
+      "script": ".github/scripts/gitapex_gate_registry_wiring.py",
+      "rule": "Every module-level tuple/list registry row under .github/scripts/*.py carrying a string-literal cli_flag keyword argument must have that flag's text appear in every .github/workflows/*.yml or *.yaml file whose own text mentions the registry's owning script by filename. Generalizes the single hand-written skill-audit-gate wiring test (issue #673/#674) into a self-discovering, stdlib-only scan: a second cli_flag registry landing anywhere under .github/scripts/ is protected with no new test to author. A script with a qualifying registry that no workflow mentions by name at all is out of scope by design (it may be invoked only from a PreToolUse hook), and a cli_flag value that is not a string literal cannot be extracted and is silently skipped -- both documented blind spots, not defects. Issue #797 adds the converse direction: a workflow run: step that passes a --flag-shaped token to a registry-bearing script matching neither a live registry cli_flag nor the script's own hardcoded add_argument flags is flagged as orphaned, scoped per run: block so an unrelated step's flags are never misattributed.",
+      "planes": ["ci"],
+      "trigger": "tests/test_gitapex_gate_registry_wiring.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "self-governance",
+      "tracking_issue": 682,
+      "status": "active",
+      "supersedes": null
     }
   ],
   "clusters": {
