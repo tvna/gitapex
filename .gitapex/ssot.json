@@ -479,6 +479,19 @@
       "tracking_issue": 694,
       "status": "active",
       "supersedes": null
+    },
+    {
+      "id": "low-trust-workflow-hooks-review",
+      "kind": "script",
+      "script": ".github/scripts/gitapex_gate_low_trust_workflow_hooks.py",
+      "rule": "A PR diff touching .github/workflows/** or hooks/** from an author whose GitHub author_association is not OWNER/MEMBER/COLLABORATOR fails CI unless the workflow-hooks-reviewed label is present on the PR.",
+      "planes": ["ci"],
+      "trigger": ".github/workflows/low-trust-workflow-hooks-gate.yml on pull_request",
+      "policy_refs": [],
+      "cluster": "repo-hygiene",
+      "tracking_issue": 136,
+      "status": "active",
+      "supersedes": null
     }
   ],
   "clusters": {
