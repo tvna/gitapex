@@ -87,9 +87,18 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/783"
       summary: "A main-thread precondition step (path exists/readable stat check, no content read) was inserted before the former step 1, short-circuiting a missing/empty/unreadable target to INDETERMINATE before any dispatch launches. Later steps shifted down by one (old step 1 is now 2, old step 2 is now 3, kept as a defense-in-depth fallback). provenance-and-caveats.md's live step-number pointers were updated to match; this file's own earlier entries were left as originally written."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/818"
+      summary: "Declared spec.executionRequirements.tools (W3 second slice, https://github.com/tvna/gitapex/issues/307): gitapex_route_test_model.py reads an optional --fixed-routes JSON file when given; no writes, no subprocess/shell calls."
   skillDependencies:
     requires:
       - evaluating-skill-quality
     relatedTo:
       - scorer-gated-skill-edits
       - untrusted-input-triage
+  executionRequirements:
+    tools:
+      read:
+        - files
+      write: []
+      shell: []

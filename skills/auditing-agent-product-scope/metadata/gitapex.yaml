@@ -12,8 +12,17 @@ spec:
     - kind: decision
       anchor: "docs/superpowers/specs/2026-07-21-portability-authorship-decision-table-design.md"
       summary: "Portability is Mixed, not Repository-scoped -- that doc reserves Repository-scoped for a downstream fork hardcoding its own conventions, not an origin-authored skill; the repository owner chose Mixed directly when this conflict was surfaced"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/818"
+      summary: "Declared spec.executionRequirements.tools (W3 second slice, https://github.com/tvna/gitapex/issues/307): gitapex_check_axis_shape.py and gitapex_check_middleware_table_shape.py each take a positional doc path and only read it; neither writes nor shells out."
   skillDependencies:
     requires: []
     relatedTo:
       - auditing-git-hosting-surface
       - evaluating-skill-quality
+  executionRequirements:
+    tools:
+      read:
+        - files
+      write: []
+      shell: []

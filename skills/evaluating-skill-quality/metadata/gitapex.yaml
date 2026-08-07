@@ -275,9 +275,18 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/652"
       summary: "Split the same gap across both lanes rather than prose alone: the semantic mode-vs-trigger contradiction stays model-judged in rubric.md, while gitapex_check_skill_shape.py's new invocation-mode-well-formed gates only what a script can decide -- a value outside Claude Code's documented boolean literals, and the disable-model-invocation + user-invocable: false combination that leaves a skill invocable by nobody. capabilityAssumption stays Broad."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/818"
+      summary: "Declared spec.executionRequirements.tools (W3 second slice, https://github.com/tvna/gitapex/issues/307): gitapex_check_skill_shape.py reads a target skill directory or SKILL.md path (per its own module docstring, read-only, no writes/network/mutation); no subprocess/shell calls."
   skillDependencies:
     requires: []
     relatedTo:
       - battle-testing-a-skill
       - scorer-gated-skill-edits
       - outward-artifact-preflight
+  executionRequirements:
+    tools:
+      read:
+        - files
+      write: []
+      shell: []
