@@ -1,0 +1,44 @@
+name: Low-trust workflow/hooks review gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+    paths:
+      - ".github/workflows/**"
+      - "hooks/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  low-trust-workflow-hooks-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      # labeled/unlabeled is in `types:` above so applying the
+      # workflow-hooks-reviewed label re-runs this check on the same PR
+      # without needing a new push.
+      - name: Check author association and review label
+        env:
+          AUTHOR_ASSOCIATION: ${{ github.event.pull_request.author_association }}
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/gitapex_gate_low_trust_workflow_hooks.py \
+            --author-association "$AUTHOR_ASSOCIATION" --labels "$LABELS"
