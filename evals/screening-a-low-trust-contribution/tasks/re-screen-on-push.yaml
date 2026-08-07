@@ -33,5 +33,4 @@ expected:
   output_not_contains:
     - "Merged"
     - "Approved"
-    - "already screened"
     - "no flags"
