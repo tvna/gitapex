@@ -9,3 +9,14 @@ spec:
     requires: []
     relatedTo:
       - explaining-the-work
+  executionRequirements:
+    tools:
+      read:
+        - files
+      write:
+        - files
+      shell: []
+  references:
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/814"
+      summary: "Declared spec.executionRequirements.tools (W3 first slice, https://github.com/tvna/gitapex/issues/307): reads existing docs/adr/ records and source material, writes the finished ADR under docs/adr/; the bundled gitapex_check_adr_shape.py only reads a draft body via --body/stdin and never writes or shells out."

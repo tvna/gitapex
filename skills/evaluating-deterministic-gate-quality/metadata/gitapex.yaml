@@ -268,11 +268,20 @@ spec:
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/801"
       summary: "Fixed both findings above: eval-status.md's 'eight' corrected to 'ten'; dimensions.md's intro paragraph now states one dimension (22) currently carries the precondition-scoped tag, not 'a small number.'"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/814"
+      summary: "Declared spec.executionRequirements.tools (W3 first slice, https://github.com/tvna/gitapex/issues/307): gitapex_check_gate_shape.py reads a target hook script and optional --hooks-json by file path; its own docstring states it performs no writes, no network, and no subprocess execution of the target -- it statically parses the target's source via Python's ast module rather than running it."
   skillDependencies:
     requires:
       - evaluating-skill-quality
     relatedTo:
       - screening-a-low-trust-contribution
+  executionRequirements:
+    tools:
+      read:
+        - files
+      write: []
+      shell: []
   lifecycle:
     experimental:
       reason: "Experimental: first version of a new skill category. Its evaluation model and four cross-cutting axes have been through multiple independent audit rounds (see spec.references). A bundled deterministic shape-checker (Domain-2-scoped) and a committed, Blind-Spot-Pass-reviewed adversarial regression corpus now exist (see spec.references); independent cross-tool compatibility verification still does not -- which non-Claude-Code tool to verify under is an open Human Decision (see spec.references)."
