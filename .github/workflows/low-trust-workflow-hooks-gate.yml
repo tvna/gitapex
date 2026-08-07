@@ -32,9 +32,10 @@ jobs:
       # introducing PR merges (verified while fixing this workflow --
       # the pin briefly landed here and made this gate fail
       # file-not-found on its own introducing PR). The default PR-merge
-      # ref is what every other pull_request-triggered gate in this
-      # repository uses too (e.g. exception-handler-gap-gate.yml checks
-      # out head.sha; none pin to base). Residual limitation, left as a
+      # ref is what nearly every other pull_request-triggered gate in
+      # this repository uses too (e.g. provenance-disclosure-gate.yml);
+      # the one exception, exception-handler-gap-gate.yml, pins to
+      # head.sha, not base -- none pin to base. Residual limitation, left as a
       # known gap rather than assumed away: a PR editing this workflow
       # or its script can still tamper with its own grader within a
       # single run; the only backstop today is requiring this job's
