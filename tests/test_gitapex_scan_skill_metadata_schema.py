@@ -344,6 +344,63 @@ def test_execution_requirements_tools_empty_string_item_is_flagged() -> None:
     assert _violations(_mutated(executionRequirements=exec_req)) != []
 
 
+def test_execution_requirements_packages_is_valid_and_distinct_from_portability() -> None:
+    # issue #804: a Portable skill (every instruction resolves inside its
+    # own directory) may still declare a non-stdlib runtime package
+    # dependency -- packages is independent of spec.portability, and this
+    # must validate cleanly without downgrading portability at all.
+    instance = _mutated(
+        portability="Portable",
+        executionRequirements={"packages": {"pip": ["pyyaml", "jsonschema"]}},
+    )
+    assert _violations(instance) == []
+
+
+def test_execution_requirements_packages_empty_object_is_valid() -> None:
+    exec_req: dict[str, Any] = {"packages": {}}
+    assert _violations(_mutated(executionRequirements=exec_req)) == []
+
+
+def test_execution_requirements_packages_empty_list_is_valid() -> None:
+    exec_req: dict[str, Any] = {"packages": {"pip": []}}
+    assert _violations(_mutated(executionRequirements=exec_req)) == []
+
+
+def test_execution_requirements_packages_empty_string_item_is_flagged() -> None:
+    exec_req: dict[str, Any] = {"packages": {"pip": [""]}}
+    assert _violations(_mutated(executionRequirements=exec_req)) != []
+
+
+def test_execution_requirements_packages_duplicate_item_is_flagged() -> None:
+    exec_req: dict[str, Any] = {"packages": {"pip": ["pyyaml", "pyyaml"]}}
+    assert _violations(_mutated(executionRequirements=exec_req)) != []
+
+
+def test_execution_requirements_packages_multiple_ecosystems_coexist() -> None:
+    # Generic across languages (issue #804's own broadening): pip and npm
+    # keys side by side, neither hardcoded into the schema's own key set.
+    exec_req: dict[str, Any] = {"packages": {"pip": ["pyyaml"], "npm": ["eslint"]}}
+    assert _violations(_mutated(executionRequirements=exec_req)) == []
+
+
+def test_execution_requirements_packages_uppercase_ecosystem_key_is_flagged() -> None:
+    exec_req: dict[str, Any] = {"packages": {"PyPI": ["pyyaml"]}}
+    assert _violations(_mutated(executionRequirements=exec_req)) != []
+
+
+def test_execution_requirements_packages_ecosystem_key_with_underscore_is_flagged() -> None:
+    exec_req: dict[str, Any] = {"packages": {"py_pi": ["pyyaml"]}}
+    assert _violations(_mutated(executionRequirements=exec_req)) != []
+
+
+def test_execution_requirements_tools_and_packages_coexist() -> None:
+    exec_req: dict[str, Any] = {
+        "tools": {"read": ["repo-files"], "write": [], "shell": []},
+        "packages": {"pip": ["pyyaml"]},
+    }
+    assert _violations(_mutated(executionRequirements=exec_req)) == []
+
+
 def _make_skill_dir(base: pathlib.Path, name: str) -> pathlib.Path:
     """A real skill directory fixture: base/name/SKILL.md exists, matching
     the definition _resolves_to_sibling_skill/discover_skill_dirs both use

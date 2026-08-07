@@ -204,9 +204,10 @@
     "executionRequirements": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Only one recognized subkey so far (tools); further categories (filesystem/network/mcp/credentials/browser/externalServices/context) are deferred -- until they land, any key other than tools here is a real unknown key, not reserved space, matching gitapex_check_skill_shape.py's own current behavior.",
+      "description": "Two recognized subkeys so far (tools, packages); further categories (filesystem/network/mcp/credentials/browser/externalServices/context) are deferred -- until they land, any key other than these here is a real unknown key, not reserved space, matching gitapex_check_skill_shape.py's own current behavior for tools (packages is schema-only for now -- issue #804 -- and is not yet recognized by that hand-rolled parser).",
       "properties": {
-        "tools": { "$ref": "#/$defs/executionRequirementsTools" }
+        "tools": { "$ref": "#/$defs/executionRequirementsTools" },
+        "packages": { "$ref": "#/$defs/executionRequirementsPackages" }
       }
     },
     "executionRequirementsTools": {
@@ -229,6 +230,18 @@
       "uniqueItems": true,
       "items": { "type": "string", "minLength": 1 },
       "description": "An explicit empty list is a deliberate 'zero tools of this kind needed' statement, distinct from the key being absent entirely (not yet declared)."
+    },
+    "executionRequirementsPackages": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z][a-z0-9-]*$" },
+      "additionalProperties": { "$ref": "#/$defs/packageList" },
+      "description": "spec.executionRequirements.packages (issue #804): non-stdlib runtime package dependencies a skill's own implementation script(s) require to run, keyed by a free-form ecosystem identifier (e.g. \"pip\", \"npm\", \"cargo\", \"gem\") -- no closed enum of supported ecosystems; any key matching propertyNames' kebab-case-like pattern is schema-valid, so a future ecosystem needs no schema change to become usable. Independent of spec.portability -- portability measures whether a skill's own instructions resolve inside its own directory (a domain-knowledge/path-locality axis), never a runtime package-dependency-footprint axis; this field exists so a runtime dependency is never disclosed by misusing portability instead. Each ecosystem's value is a $defs.packageList."
+    },
+    "packageList": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "One ecosystem's list of non-stdlib runtime package names (e.g. [\"pyyaml\", \"jsonschema\"] under the \"pip\" key). Same shape as toolTagList (free-form strings, no closed vocabulary, an explicit empty list is a deliberate 'no packages needed for this ecosystem' statement distinct from the key being absent) but kept as its own $defs entry rather than reused, since the two lists mean different things despite the identical shape."
     }
   }
 }
