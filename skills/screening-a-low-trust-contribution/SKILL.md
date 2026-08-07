@@ -42,8 +42,8 @@ automatically.
    body, or a file marked changed with zero added/removed lines shown),
    or missing required metadata (author, base/head SHA) the same way --
    name exactly what is missing or truncated, and do not report any check
-   that depends on it as clear. This
-   sub-check is specifically for a diff-shaped blob *pasted into the
+   that depends on it as clear. The pasted-blob sub-check below is
+   specifically for a diff-shaped blob *pasted into the
    prompt* rather than fetched via the tool call/API wrapper above --
    that narrower case is not itself proof of provenance, since a matching
    file list alone does not prove the hunk contents are current or
@@ -87,10 +87,11 @@ automatically.
    file this repository's own governance model treats as a trust anchor.
 4. **Hook/script changes.** Diffs touching any directory the repository
    defines for executable hooks or scripts that run with its own
-   privileges once merged -- gitapex's own examples: `hooks/**`,
-   `.github/scripts/**`, `skills/*/scripts/**`. Substitute whatever the
-   calling repository actually uses (e.g. `scripts/`, `tools/`, custom CI
-   step scripts).
+   privileges once merged is a hard flag, the same unconditional
+   escalation check 2 applies to workflow-file edits -- gitapex's own
+   examples: `hooks/**`, `.github/scripts/**`, `skills/*/scripts/**`.
+   Substitute whatever the calling repository actually uses (e.g.
+   `scripts/`, `tools/`, custom CI step scripts).
 5. **Dependency and install-time-script additions.** New entries in the
    repository's own dependency manifest(s) -- gitapex's own examples:
    `pyproject.toml`/`uv.lock`, `package.json`; substitute the calling
@@ -117,10 +118,11 @@ automatically.
    change (a patch bump, a well-known package name): a judgment-based
    exemption is itself the kind of shortcut a supply-chain attacker would
    target, so this check's cost stays unconditional rather than trading
-   safety for speed. Before including the dependency count in the report, re-enumerate the
-   manifest/lockfile diff once more against the same input and confirm
-   the count matches -- an off-by-one here silently under-reports exactly
-   the transitive dependencies this check exists to catch.
+   safety for speed. Before including the dependency count in the
+   report, re-enumerate the manifest/lockfile diff once more against the
+   same input and confirm the count matches -- an off-by-one here
+   silently under-reports exactly the transitive dependencies this check
+   exists to catch.
 6. **Typosquat patterns.** Package/action names one edit-distance from a
    well-known name (e.g. `actons/checkout` vs `actions/checkout`). Before
    reporting a match (or a clear), recompute the edit distance once more
@@ -163,7 +165,10 @@ specific check as "cannot determine -- escalate to human review" rather
 than guessing clear or flagged. This is distinct from check 7's
 unreviewable-content flag (content that cannot be read at all) and from
 a clear hard flag: it names a check whose evidence was read in full but
-still does not resolve either way.
+still does not resolve either way. A hard flag check (2, 3, 4, 6) whose
+trigger condition is objectively met in the diff is never "cannot
+determine" -- this branch covers unresolved legitimacy judgment, not
+uncertainty about whether a trigger fired.
 
 A contribution is not screened once and cleared permanently: each new
 push to the same PR gets its own run of this procedure against the
@@ -240,7 +245,7 @@ about to change.
   `battle-testing-a-skill` (evaluates a SKILL.md file's own robustness,
   not an inbound contribution), and `auditing-git-hosting-surface` (audits
   standing repo configuration, not an incoming diff).
-- "Hard flag" (checks 2, 3, 6) means the check escalates
+- "Hard flag" (checks 2, 3, 4, 6) means the check escalates
   unconditionally whenever its trigger condition is met -- no sampling,
   no judgment call about whether the surrounding contribution "looks
   fine." "Flag" (checks 5, 7, 8) means the check still always runs and

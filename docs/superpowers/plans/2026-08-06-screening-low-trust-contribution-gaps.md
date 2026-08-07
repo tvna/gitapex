@@ -30,7 +30,7 @@ OWNER/MEMBER/COLLABORATOR, unless a maintainer has applied the
   `screening-a-low-trust-contribution/SKILL.md`'s own Global constraints
   restate it).
 - Typosquat/homoglyph legitimacy grounding (issue #133) is explicitly out
-  of scope — do not touch check 6's typosquat detection logic beyond the
+  of scope -- do not touch check 6's typosquat detection logic beyond the
   verify-before-report sentence in Task 2.
 - Cite issue #136 in every commit message.
 - Design doc:
@@ -39,7 +39,7 @@ OWNER/MEMBER/COLLABORATOR, unless a maintainer has applied the
 
 ---
 
-## Task 1: SKILL.md — define hard-flag/flag terminology, remove the third conciseness repeat
+## Task 1: SKILL.md -- define hard-flag/flag terminology, remove the third conciseness repeat
 
 **Files:**
 - Modify: `skills/screening-a-low-trust-contribution/SKILL.md:12-16` (delete repeat paragraph, fold into Procedure intro at lines 20-27) and `:204-209` (Global constraints, add terminology bullet)
@@ -132,13 +132,13 @@ EOF
 
 ---
 
-## Task 2: SKILL.md — verify-before-report for checks 5/6, check 8 scope + quoting guidance
+## Task 2: SKILL.md -- verify-before-report for checks 5/6, check 8 scope + quoting guidance
 
 **Files:**
 - Modify: `skills/screening-a-low-trust-contribution/SKILL.md` (checks 5, 6, 8; worked example's check 8 line)
 
 **Interfaces:**
-- Consumes: the "flag" terminology from Task 1 (check 8's new sentence references it by name — Task 1 must land first).
+- Consumes: the "flag" terminology from Task 1 (check 8's new sentence references it by name -- Task 1 must land first).
 - Produces: check 8's new scope ("any new file, or a diff hunk that appends/modifies content in an existing tracked file") that Task 4's eval fixture exercises.
 
 - [ ] **Step 1: Add verify-before-report to check 5 (dependency/install-time-script additions)**
@@ -267,7 +267,7 @@ EOF
 
 ---
 
-## Task 3: SKILL.md — cannot-determine branch, empty/truncated-diff handling, re-screen-on-push guidance
+## Task 3: SKILL.md -- cannot-determine branch, empty/truncated-diff handling, re-screen-on-push guidance
 
 **Files:**
 - Modify: `skills/screening-a-low-trust-contribution/SKILL.md` (check 1; new paragraphs after the numbered Procedure list, before `## Worked example`)
@@ -349,13 +349,13 @@ EOF
 
 ---
 
-## Task 4: Eval fixture — instruction-bearing content in an existing tracked file
+## Task 4: Eval fixture -- instruction-bearing content in an existing tracked file
 
 **Files:**
 - Create: `evals/screening-a-low-trust-contribution/tasks/existing-file-instruction-append.yaml`
 
 **Interfaces:**
-- Consumes: check 8's widened scope from Task 2 (must land first — this fixture exercises that exact behavior).
+- Consumes: check 8's widened scope from Task 2 (must land first -- this fixture exercises that exact behavior).
 - Produces: nothing consumed by later tasks.
 
 - [ ] **Step 1: Write the fixture**
@@ -401,7 +401,7 @@ expected:
 - [ ] **Step 2: Lint the new fixture against the repo's assertion linter**
 
 Run: `uv run --frozen python3 evals/scripts/gitapex_lint_fixture_assertions.py 2>&1 | grep -c "existing-file-instruction-append"`
-Expected: `0` (no warnings mention the new file by name — compare against the pre-existing baseline warning count from other files, which is expected and out of scope)
+Expected: `0` (no warnings mention the new file by name -- compare against the pre-existing baseline warning count from other files, which is expected and out of scope)
 
 - [ ] **Step 3: Commit**
 
@@ -417,7 +417,7 @@ EOF
 
 ---
 
-## Task 5: Eval fixture — re-screen-on-push
+## Task 5: Eval fixture -- re-screen-on-push
 
 **Files:**
 - Create: `evals/screening-a-low-trust-contribution/tasks/re-screen-on-push.yaml`
@@ -489,7 +489,7 @@ EOF
 
 ---
 
-## Task 6: Gate script + unit tests — `gitapex_gate_low_trust_workflow_hooks.py`
+## Task 6: Gate script + unit tests -- `gitapex_gate_low_trust_workflow_hooks.py`
 
 **Files:**
 - Create: `.github/scripts/gitapex_gate_low_trust_workflow_hooks.py`
@@ -570,7 +570,7 @@ def test_main_empty_labels_argument_defaults_to_no_labels():
 - [ ] **Step 2: Run tests to verify they fail on import**
 
 Run: `uv run --frozen pytest tests/test_gitapex_gate_low_trust_workflow_hooks.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'gitapex_gate_low_trust_workflow_hooks'`
+Expected: FAIL -- `ModuleNotFoundError: No module named 'gitapex_gate_low_trust_workflow_hooks'`
 
 - [ ] **Step 3: Write the implementation**
 
@@ -794,7 +794,7 @@ EOF
 - Modify: `.gitapex/ssot.json:471-483` (append a new entry to the `gates` array)
 
 **Interfaces:**
-- Consumes: the `id`, `script` path (Task 6), and `trigger` workflow filename (Task 7) — both prior tasks must land first.
+- Consumes: the `id`, `script` path (Task 6), and `trigger` workflow filename (Task 7) -- both prior tasks must land first.
 - Produces: nothing consumed by later tasks.
 
 - [ ] **Step 1: Append the new gate entry**
@@ -888,7 +888,7 @@ Run:
 ```bash
 uv run --frozen python3 evals/scripts/gitapex_lint_fixture_assertions.py 2>&1 | grep -E "existing-file-instruction-append|re-screen-on-push" || echo "no new-fixture warnings"
 ```
-Expected: `no new-fixture warnings` (the script's overall exit code is already non-zero on this repo's pre-existing corpus, unrelated to this PR — only the two new files must add nothing)
+Expected: `no new-fixture warnings` (the script's overall exit code is already non-zero on this repo's pre-existing corpus, unrelated to this PR -- only the two new files must add nothing)
 
 - [ ] **Step 3: Confirm mypy and ruff (if configured) still pass on the new script**
 
@@ -905,17 +905,17 @@ Expected: branch pushed, upstream set
 
 - [ ] **Step 5: Open the PR**
 
-Use the GitHub MCP `create_pull_request` tool (never a hand-invoked `gh` CLI, per this repo's own convention) targeting `tvna/gitapex` `main` from `claude/issue-136-lowtrust-gaps-k79guh`. Check for a PR template first (`.github/PULL_REQUEST_TEMPLATE.md` — confirmed present at repo root path `.github/PULL_REQUEST_TEMPLATE.md`) and populate it from the diff. Title: `fix(screening-a-low-trust-contribution): close terminology/feedback-loop gaps, back checks 2/4 with a CI gate`. Body cites issue #136 (`Closes #136`) and summarizes: terminology definition, conciseness fix, verify-before-report for checks 5/6, check 8 widened to existing files + quoting guidance, cannot-determine branch, empty/truncated-diff handling, re-screen-on-push guidance, two new eval fixtures, and the new `low-trust-workflow-hooks-gate.yml` CI gate. Explicitly note typosquat/homoglyph grounding (#133) is out of scope.
+Use the GitHub MCP `create_pull_request` tool (never a hand-invoked `gh` CLI, per this repo's own convention) targeting `tvna/gitapex` `main` from `claude/issue-136-lowtrust-gaps-k79guh`. Check for a PR template first (`.github/PULL_REQUEST_TEMPLATE.md` -- confirmed present at repo root path `.github/PULL_REQUEST_TEMPLATE.md`) and populate it from the diff. Title: `fix(screening-a-low-trust-contribution): close terminology/feedback-loop gaps, back checks 2/4 with a CI gate`. Body cites issue #136 (`Closes #136`) and summarizes: terminology definition, conciseness fix, verify-before-report for checks 5/6, check 8 widened to existing files + quoting guidance, cannot-determine branch, empty/truncated-diff handling, re-screen-on-push guidance, two new eval fixtures, and the new `low-trust-workflow-hooks-gate.yml` CI gate. Explicitly note typosquat/homoglyph grounding (#133) is out of scope.
 
 - [ ] **Step 6: Auto-subscribe and drive to a terminal state**
 
-Call `subscribe_pr_activity` for the new PR immediately after creation (this repo's own CLAUDE.md section 3 requires this without asking permission). Then invoke the `gitapex:drafting-a-pr-to-merge` skill to drive CI green, resolve any review threads, and get an independent review verdict — leaving the PR in GitHub's DRAFT-ready state for a human to merge (this skill never merges).
+Call `subscribe_pr_activity` for the new PR immediately after creation (this repo's own CLAUDE.md section 3 requires this without asking permission). Then invoke the `gitapex:drafting-a-pr-to-merge` skill to drive CI green, resolve any review threads, and get an independent review verdict -- leaving the PR in GitHub's DRAFT-ready state for a human to merge (this skill never merges).
 
 ---
 
 ## Self-Review Notes
 
-- **Spec coverage:** all nine issue #136 gaps map to a task — terminology
+- **Spec coverage:** all nine issue #136 gaps map to a task -- terminology
   (Task 1), conciseness (Task 1), verify-before-report checks 5/6 (Task
   2), check 8 scope (Task 2 + Task 4's fixture), cannot-determine branch
   (Task 3), empty/truncated diff (Task 3), re-screen-on-push (Task 3 +

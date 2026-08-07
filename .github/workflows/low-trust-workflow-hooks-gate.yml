@@ -26,14 +26,33 @@ jobs:
         with:
           egress-policy: audit
 
+      # Pinned to the PR's base SHA, not the default PR-merge ref: this
+      # gate's whole purpose is grading a low-trust author's edit to
+      # .github/workflows/**, so checking out (and running) that same
+      # author's version of this gate's own script would let the PR
+      # neuter its own grader. The script needs no repository content --
+      # both inputs below come from the event payload -- so pinning costs
+      # nothing.
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
+          ref: ${{ github.event.pull_request.base.sha }}
           persist-credentials: false
 
       # labeled/unlabeled is in `types:` above so applying the
       # workflow-hooks-reviewed label re-runs this check on the same PR
       # without needing a new push.
+      #
+      # paths: below intentionally matches only the two categories issue
+      # #136 scoped this gate to (.github/workflows/**, hooks/**), not
+      # every path check 4 in screening-a-low-trust-contribution/SKILL.md
+      # also names (.github/scripts/**, skills/*/scripts/**) -- extending
+      # coverage to those is tracked as follow-up work, not done here.
+      # The paths: filter also means this check cannot yet be promoted to
+      # a required status check (it never reports on a non-matching PR);
+      # that would need the diff-computed-in-job pattern
+      # gitignore-pattern-coverage-gate.yml already uses, also left as
+      # follow-up.
       - name: Check author association and review label
         env:
           AUTHOR_ASSOCIATION: ${{ github.event.pull_request.author_association }}
