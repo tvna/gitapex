@@ -51,15 +51,16 @@ scenarios, most native capabilities fail part 1, part 2, or both.
 ### License constraints on the libre side too
 
 Part 2 binds the libre CLI as well, not only native capabilities. Two
-standing consequences, both from the roster research recorded in #843:
+standing consequences:
 
 - A tool whose *engine* is libre but whose *ruleset* ships under a
   separate, field-of-use-restricted license is not a free path, and the
-  restriction is named rather than assumed away.
+  restriction is named rather than assumed away. `[#843]`, which rejects
+  one roster candidate on exactly this ground.
 - AGPL-licensed tools are allowed by this policy, but are never the
-  first-choice candidate for a domain. When one is chosen anyway, the
-  mitigation is SHA-pinning plus a license re-check on every version
-  bump -- not a one-time check at adoption.
+  first-choice candidate for a domain `[#843]`. When one is chosen
+  anyway, the mitigation is SHA-pinning plus a license re-check on every
+  version bump -- not a one-time check at adoption `[#844]`.
 
 ## Platform detection: cited, not reimplemented
 
@@ -152,7 +153,7 @@ cannot promote a paid capability to "free" in a real run.
 
 ## Refs
 
-The two short source tags used throughout the evidence table, in full:
+The two short source tags used throughout this document, in full:
 
 - `[#844]` -- https://github.com/tvna/gitapex/issues/844 (this document's
   own scope and Acceptance Criteria Map; its Facts section carries the
