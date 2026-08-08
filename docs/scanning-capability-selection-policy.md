@@ -55,8 +55,8 @@ standing consequences:
 
 - A tool whose *engine* is libre but whose *ruleset* ships under a
   separate, field-of-use-restricted license is not a free path, and the
-  restriction is named rather than assumed away. `[#843]`, which rejects
-  one roster candidate on exactly this ground.
+  restriction is named rather than assumed away -- `[#843]` rejects one
+  roster candidate on exactly this ground.
 - AGPL-licensed tools are allowed by this policy, but are never the
   first-choice candidate for a domain `[#843]`. When one is chosen
   anyway, the mitigation is SHA-pinning plus a license re-check on every
