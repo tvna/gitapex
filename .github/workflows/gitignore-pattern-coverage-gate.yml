@@ -20,16 +20,10 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Harden runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
+      - name: Harden runner + checkout
+        uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
         with:
-          egress-policy: audit
-
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-        with:
-          persist-credentials: false
-          fetch-depth: 0
+          fetch-depth: '0'
 
       # git merge-base (not base.sha directly), same reasoning as
       # skill-rename-lifecycle-gate.yml: a .gitignore change that landed on

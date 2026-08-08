@@ -21,11 +21,6 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Harden runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
-        with:
-          egress-policy: audit
-
       # Deliberately NOT pinned to the PR's base SHA: this gate's own
       # script is new on every branch that introduces or changes it, so
       # a base-SHA checkout would not find the script until after the
@@ -41,10 +36,8 @@ jobs:
       # single run; the only backstop today is requiring this job's
       # name as a required status check plus human review, not the
       # checkout ref.
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-        with:
-          persist-credentials: false
+      - name: Harden runner + checkout
+        uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
 
       # labeled/unlabeled is in `types:` above so applying the
       # workflow-hooks-reviewed label re-runs this check on the same PR
