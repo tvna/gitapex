@@ -20,7 +20,10 @@ skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py's own
 manifest-parsing checks: it validates metadata/gitapex.yaml's *structural*
 shape (types, enums, required fields, patterns, and the one cross-FIELD rule
 this format has -- requires-portability-compatible) via a real JSON Schema
-(.gitapex/skill-metadata.schema.json) and a real YAML parser (PyYAML), rather
+(skills/evaluating-skill-quality/references/skill-metadata.schema.json,
+moved out of .gitapex/ so it travels with the evaluating-skill-quality
+skill when this repository is installed as a plugin elsewhere) and a real
+YAML parser (PyYAML), rather
 than gitapex_check_skill_shape.py's own hand-rolled, stdlib-only, indentation-aware
 reader. It does NOT replace gitapex_check_skill_shape.py: that checker also covers
 SKILL.md/references/*.md prose (bare-issue-citation scanning, Markdown
@@ -73,7 +76,7 @@ import yaml
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 SKILLS_DIR = REPO_ROOT / "skills"
-SCHEMA_PATH = REPO_ROOT / ".gitapex" / "skill-metadata.schema.json"
+SCHEMA_PATH = SKILLS_DIR / "evaluating-skill-quality" / "references" / "skill-metadata.schema.json"
 # Mirrors gitapex_check_skill_shape.py's own SIDECAR_RELATIVE_PATH constant --
 # duplicated as a literal here rather than imported, the same way every
 # other .github/scripts/*.py script that actually reads the sidecar

@@ -1,0 +1,85 @@
+{
+  "meta": {
+    "schema_version": "1.0.0",
+    "tracking_issue": 828,
+    "status": "draft",
+    "phase": "phase-1"
+  },
+  "runtimes": {
+    "claude-code": {
+      "displayName": "Claude Code",
+      "dimensions": {
+        "fieldParsing": {
+          "classification": "Exact",
+          "primarySource": "https://code.claude.com/docs/en/skills",
+          "observedVersion": "2.1.225",
+          "snapshotDate": "2026-08-08",
+          "notes": "Full frontmatter table documented: name, description, when_to_use, argument-hint, arguments, disable-model-invocation, user-invocable, allowed-tools, disallowed-tools, model, effort, context, agent, background, hooks, paths, shell, metadata, license, compatibility. Boolean fields accept yes/no/on/off/1/0 since v2.1.218 (true/false only before). Unexpected keys reject only via claude.ai/Skills-API upload paths, not Claude Code itself."
+        },
+        "discoveryLocations": {
+          "classification": "Exact",
+          "primarySource": "https://code.claude.com/docs/en/skills",
+          "observedVersion": "2.1.225",
+          "snapshotDate": "2026-08-08",
+          "notes": "Personal ~/.claude/skills/, project .claude/skills/ (root + parent dirs up to repo root), nested subdirectory skills load lazily on first file touch, --add-dir grants auto-loaded skills, plugin skills namespaced plugin:skill. Precedence: enterprise > personal > project > bundled. Live change detection picks up edits without restart; new top-level dirs need a restart."
+        },
+        "invocationBehavior": {
+          "classification": "Exact",
+          "primarySource": "https://code.claude.com/docs/en/skills",
+          "observedVersion": "2.1.225",
+          "snapshotDate": "2026-08-08",
+          "notes": "disable-model-invocation (default false) blocks auto-invoke, subagent preload, and (v2.1.196+) scheduled-task firing. user-invocable (default true) controls /-menu visibility only. The two are independent, not mutually exclusive when combined to fully lock a skill. /name always works regardless of disable-model-invocation."
+        },
+        "contextLoading": {
+          "classification": "Exact",
+          "primarySource": "https://code.claude.com/docs/en/skills",
+          "observedVersion": "2.1.225",
+          "snapshotDate": "2026-08-08",
+          "notes": "Description always resident; full body loads only on invocation (progressive disclosure). context: fork runs the skill in a forked subagent (agent: picks type, background: default true). Re-invocation with identical rendered content adds a short note instead of duplicating full content (v2.1.202+); dynamic context injection reruns the command each time."
+        },
+        "toolSemantics": {
+          "classification": "Conservative",
+          "primarySource": "https://code.claude.com/docs/en/skills",
+          "observedVersion": "2.1.225",
+          "snapshotDate": "2026-08-08",
+          "notes": "allowed-tools pre-approves tools for the invoking turn only (grant clears on next message) -- an approval grant, not a persistent restriction. disallowed-tools removes tools from the pool while active, also turn-scoped. Neither field durably enforces a sidecar's declared-non-empty tools list as an exclusive, session-wide allowlist without additional permissions.deny configuration."
+        },
+        "pathControls": {
+          "classification": "Conservative",
+          "primarySource": "https://code.claude.com/docs/en/sandboxing",
+          "observedVersion": "2.1.225",
+          "snapshotDate": "2026-08-08",
+          "notes": "Two parallel, differently-syntaxed mechanisms: permission rules (Read()/Edit() allow/deny, //abs vs /project-relative) are prompt-gated, not OS-enforced; sandbox.filesystem.allowRead/denyRead/allowWrite/denyWrite (/, ~/, ./ prefixes) are OS-enforced but only inside the opt-in Bash sandbox. An adapter must configure both paths separately -- neither alone restricts all file access vectors."
+        },
+        "sandboxControls": {
+          "classification": "Conservative",
+          "primarySource": "https://code.claude.com/docs/en/sandboxing",
+          "observedVersion": "2.1.225",
+          "snapshotDate": "2026-08-08",
+          "notes": "Real OS-level sandbox (macOS Seatbelt; Linux/WSL2 bubblewrap+socat, optional seccomp). Off by default (sandbox.enabled). Escape hatch: a command that fails sandboxed may retry via dangerouslyDisableSandbox, falling to the regular permission flow rather than hard-failing, unless allowUnsandboxedCommands:false (Strict sandbox mode) is explicitly set. sandbox.failIfUnavailable hard-fails on missing dependencies instead of silently running unsandboxed."
+        },
+        "networkControls": {
+          "classification": "Lossy",
+          "primarySource": "https://code.claude.com/docs/en/sandboxing",
+          "observedVersion": "2.1.225",
+          "snapshotDate": "2026-08-08",
+          "notes": "Bash-sandbox network isolation (network.allowedDomains/deniedDomains, strictAllowlist, allowManagedDomainsOnly) is a separate mechanism from WebFetch's own permission-rule domain approval -- explicitly documented as sandboxed-commands-only; in-process tools like WebFetch follow permission rules instead. A single 'block network' requirement needs both configured; configuring only one leaves the other tool category uncovered."
+        },
+        "mcpLifecycle": {
+          "classification": "Conservative",
+          "primarySource": "https://code.claude.com/docs/en/mcp",
+          "observedVersion": "2.1.225",
+          "snapshotDate": "2026-08-08",
+          "notes": "disabledMcpServers/enabledMcpServers control whether a server connects at all, distinct from a permission-rule deny on one mcp__server__tool -- disabling a tool is not the same as preventing its server from loading. Remote servers may show a cached tool list from a prior session and connect lazily on first tool call (v2.1.221+, MCP_DISCOVERY_CACHE=0 forces eager connect); list_changed notifications refresh capabilities without reconnect."
+        },
+        "pluginSubagentLimitations": {
+          "classification": "Lossy",
+          "primarySource": "https://code.claude.com/docs/en/sub-agents",
+          "observedVersion": "2.1.225",
+          "snapshotDate": "2026-08-08",
+          "notes": "A subagent's tools: field is narrowed by two hidden filters beyond what's declared: a fixed list removed from every subagent, and a further reduction for background-mode subagents (the default) that strips most built-ins except a named allowlist. The same tools: declaration therefore resolves to a different effective set in foreground vs. background -- reading tools: alone understates the restriction."
+        }
+      }
+    }
+  }
+}

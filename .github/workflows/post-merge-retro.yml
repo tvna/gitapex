@@ -59,22 +59,16 @@ jobs:
       contents: read
       issues: write
     steps:
-      - name: Harden runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
-        with:
-          egress-policy: audit
-
       # Pinned to main explicitly: pull_request_target's default checkout
       # context is already the base ref (not the PR head), but this repo's
       # own retrospective-gate-drift.yml pins `ref: main` explicitly rather
       # than relying on that default implicitly, so this workflow matches
       # that same paranoid convention -- only this repo's own trusted
       # gitapex_post_merge_retro.py ever executes, never PR-head-controlled code.
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - name: Harden runner + checkout
+        uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
         with:
           ref: main
-          persist-credentials: false
 
       # Issue #314 (sub-issue of #140): minimal post-merge-auto-retro slice
       # -- open + dedup only, GITHUB_TOKEN-only, no new secret. The

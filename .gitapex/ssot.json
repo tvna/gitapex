@@ -28,13 +28,19 @@
       "id": "skill-metadata-sidecar",
       "path": "skills/*/metadata/gitapex.yaml",
       "format": "yaml",
-      "authority": "per-skill capabilityAssumption (read by routine-scope-enforcement), spec.lifecycle.renamedFrom (read by skill-rename-lifecycle), and the full document shape (read by skill-metadata-schema-drift against .gitapex/skill-metadata.schema.json); one entry stands in for the glob since every sidecar shares one schema"
+      "authority": "per-skill capabilityAssumption (read by routine-scope-enforcement), spec.lifecycle.renamedFrom (read by skill-rename-lifecycle), and the full document shape (read by skill-metadata-schema-drift against skills/evaluating-skill-quality/references/skill-metadata.schema.json); one entry stands in for the glob since every sidecar shares one schema"
     },
     {
       "id": "pyproject-mypy-config",
       "path": "pyproject.toml",
       "format": "toml",
       "authority": "[tool.mypy] strict-by-default config plus the named Tier A/B/C per-module override allowlist (each override citing issue #684 or a dedicated follow-up tracking reference) -- authoritative scope/strictness for mypy-type-check"
+    },
+    {
+      "id": "runtime-compatibility-matrix",
+      "path": ".gitapex/runtime-compatibility-matrix.json",
+      "format": "json",
+      "authority": "Versioned, testable record of how faithfully each target agent-tool runtime can enforce the ten W2 execution-requirement dimensions (parent issue #307); authoritative source for a future W4 enforcement adapter, not yet consumed by any gate"
     }
   ],
   "gates": [
@@ -244,7 +250,7 @@
       "id": "skill-metadata-schema-drift",
       "kind": "script",
       "script": ".github/scripts/gitapex_scan_skill_metadata_schema.py",
-      "rule": "Every skills/*/metadata/gitapex.yaml sidecar must validate against .gitapex/skill-metadata.schema.json (JSON Schema draft 2020-12) and resolve its cross-file references: metadata.name matches its own skill directory name, spec.skillDependencies/spec.lifecycle.deprecated.replacement each resolve to a real sibling skill directory (one with its own SKILL.md), and the repo-wide spec.skillDependencies.requires graph is acyclic.",
+      "rule": "Every skills/*/metadata/gitapex.yaml sidecar must validate against skills/evaluating-skill-quality/references/skill-metadata.schema.json (JSON Schema draft 2020-12) and resolve its cross-file references: metadata.name matches its own skill directory name, spec.skillDependencies/spec.lifecycle.deprecated.replacement each resolve to a real sibling skill directory (one with its own SKILL.md), and the repo-wide spec.skillDependencies.requires graph is acyclic.",
       "planes": ["ci"],
       "trigger": "tests/test_gitapex_scan_skill_metadata_schema.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": ["skill-metadata-sidecar"],
@@ -505,6 +511,32 @@
       "tracking_issue": 682,
       "status": "active",
       "supersedes": null
+    },
+    {
+      "id": "harden-checkout-pin-drift",
+      "kind": "script",
+      "script": ".github/scripts/gitapex_scan_harden_checkout_pin_drift.py",
+      "rule": "Every .github/workflows/*.yml/.yaml `uses: tvna/gitapex/.github/actions/harden-checkout@<sha>` reference must match .github/actions/harden-checkout/action.yml's own current (most-recent-commit) SHA, computed live via git log rather than a fixed literal.",
+      "planes": ["ci"],
+      "trigger": "tests/test_gitapex_scan_harden_checkout_pin_drift.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "supply-chain",
+      "tracking_issue": 813,
+      "status": "active",
+      "supersedes": null
+    },
+    {
+      "id": "runtime-compatibility-matrix-schema-drift",
+      "kind": "script",
+      "script": ".github/scripts/gitapex_scan_runtime_compatibility_matrix.py",
+      "rule": "Validates .gitapex/runtime-compatibility-matrix.json against .gitapex/runtime-compatibility-matrix.schema.json (JSON Schema draft 2020-12).",
+      "planes": ["ci"],
+      "trigger": "tests/test_gitapex_scan_runtime_compatibility_matrix.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": ["runtime-compatibility-matrix"],
+      "cluster": "runtime-compatibility",
+      "tracking_issue": 828,
+      "status": "active",
+      "supersedes": null
     }
   ],
   "clusters": {
@@ -516,6 +548,7 @@
     "self-governance": "The repo's own doc-integrity and self-referential-claim checks (OWASP mappings, retro-title/routine-scope citation, retro backlog cap, stale-stub auto-close).",
     "supply-chain": "Toolchain and dependency provisioning, and manifest-identity drift.",
     "test-integrity": "Quality floors on the artifacts backing the other clusters' own gates: test-suite coverage, static type checking, and static analysis of the gate scripts' own error paths.",
-    "registry-integrity": "Self-validation of this registry file itself against its schema and against the repo's real files."
+    "registry-integrity": "Self-validation of this registry file itself against its schema and against the repo's real files.",
+    "runtime-compatibility": "Cross-runtime execution-requirement compatibility matrix (parent issue #307's W2): schema validation now, real-runtime research-data drift checks once populated."
   }
 }

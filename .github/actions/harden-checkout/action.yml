@@ -1,0 +1,28 @@
+name: Harden runner + checkout
+description: >-
+  Harden runner (audit mode) + repository checkout, shared by every gate
+  workflow in this repository (issue #813) so this security-relevant config
+  lives in one place instead of being duplicated 28 times across 25 files.
+inputs:
+  ref:
+    description: Passed through to actions/checkout's `ref` input.
+    required: false
+    default: ''
+  fetch-depth:
+    description: Passed through to actions/checkout's `fetch-depth` input.
+    required: false
+    default: '1'
+runs:
+  using: composite
+  steps:
+    - name: Harden runner
+      uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
+      with:
+        egress-policy: audit
+
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        persist-credentials: false
+        ref: ${{ inputs.ref }}
+        fetch-depth: ${{ inputs.fetch-depth }}

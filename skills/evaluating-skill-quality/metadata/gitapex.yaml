@@ -278,9 +278,30 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/818"
       summary: "Declared spec.executionRequirements.tools (W3 second slice, https://github.com/tvna/gitapex/issues/307): gitapex_check_skill_shape.py reads a target skill directory or SKILL.md path (per its own module docstring, read-only, no writes/network/mutation); no subprocess/shell calls."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/834"
+      summary: "Moved .gitapex/skill-metadata.schema.json (a CI-only path) to this skill's own references/skill-metadata.schema.json so the sidecar contract's formal schema travels with the skill when redistributed; updated its $id and every path reference. Added a Dependency file portability check to rubric.md's Portability level section, grading whether a bundled schema/script/config/fixture resolves inside a skill's own directory, at dimension-6 strictness."
     - kind: correction
-      anchor: "https://github.com/tvna/gitapex/issues/829"
-      summary: "Fixed a false-fail found while auditing a sibling skill's own change: the toc: check's TOC_RE match is a Markdown-heading pattern, applied unconditionally to every references/ file over TOC_MIN_LINES regardless of format. Scoped to .md files only, with a new regression test (test_long_non_markdown_reference_skips_toc_check) covering a long non-Markdown reference file."
+      anchor: "https://github.com/tvna/gitapex/issues/834"
+      summary: "The move surfaced a real bug: gitapex_check_skill_shape.py's references/ TOC check iterated every file regardless of extension, so a non-Markdown reference file over 100 lines failed the Markdown-only TOC-heading rule. Scoped that check (and the sibling links-inside-skill/anchor-targets-resolve pair) to .md files only, added regression tests."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/834"
+      summary: "checker-script-adversarial-review caught a defense-in-depth gap in the first fix: scoping the shared _citation_sources prose-citation scan to .md-only would exempt every non-Markdown references/ file from bare-issue-citation/raw-placeholder/repo-path checks entirely -- a bypass by file extension alone. Reverted; _citation_sources scans every references/ file again, and skill-metadata.schema.json's own prose was rewritten to comply."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/834"
+      summary: "A fresh isolated self-review (WELL-FORMED-NOT-MATURE) found one more dimension-6 gap the deterministic checker cannot see (REPO_PATH_CITATION_RE only matches evals/docs prefixes): skill-metadata.schema.json's requires description cited tests/test_gitapex_skill_metadata_sidecar.py unconditionally, a path outside the skill. Reworded to state the invariant without the unconditional external-file citation."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/834"
+      summary: "Pre-merge dogfood, evaluating-skill-quality self-review: disclosed this repository's own CLAUDE.md was present in the dispatch's context (a known Agent-tool isolation gap, not a target defect), verdict marked provisional on that basis. WELL-FORMED-NOT-MATURE: one dimension-6 gap found and fixed same PR (see prior correction entry); named two non-blocking gaps -- no paired scorer-gated-skill-edits entry yet, and the schema's own $id stays origin-repo-scoped, uncovered by any existing check."
+      outcome:
+        verdict: WELL-FORMED-NOT-MATURE
+        found: 1
+        fixed: 1
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/834"
+      summary: "Pre-merge dogfood, battle-testing-a-skill: same contaminated-dispatch disclosure as the self-review (this repository's CLAUDE.md present in context, verdict marked provisional on that basis). PASS -- no FAIL findings on the four requested adversarial focus points (new rubric prose's own self-referential portability, live 59/59 shape-check confirmation, completeness of the .md-only exemption fix, cleanliness of the rewritten schema prose)."
+      outcome:
+        verdict: PASS
   skillDependencies:
     requires: []
     relatedTo:

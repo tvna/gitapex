@@ -381,6 +381,12 @@ spec:
       summary: "Added dimension-23-review-scope-not-per-artifact.yaml: a two-gate review prompt asserting the response recognizes dimension 23 is evaluated once for the whole review, not once per gate. A companion evaluating-skill-quality dispatch on the same fix returned WELL-FORMED-AND-MATURE, shape 57/57, confirming dimensions.md/SKILL.md/output-schema.json agree."
       outcome:
         fixtures: "28->29"
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "Merging origin/main to resolve PR https://github.com/tvna/gitapex/pull/832's dirty mergeable_state found issue https://github.com/tvna/gitapex/issues/834 (merged via https://github.com/tvna/gitapex/pull/839) had already fixed the identical gitapex_check_skill_shape.py TOC false-fail bug in the shared evaluating-skill-quality script, more thoroughly."
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "It also scoped links-inside-skill/anchor-targets-resolve, and separately preserved _citation_sources coverage for non-.md files -- a bypass this session's own narrower .md-suffix-only fix never considered. Deferred to that version; this skill's own now-superseded correction entry was dropped during conflict resolution."
   skillDependencies:
     requires:
       - evaluating-skill-quality

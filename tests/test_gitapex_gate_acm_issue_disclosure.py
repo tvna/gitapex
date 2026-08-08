@@ -18,6 +18,7 @@ from __future__ import annotations
 import http.client
 import json
 import pathlib
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -491,13 +492,17 @@ def test_workflow_triggers_on_issues_opened_and_edited():
 
 
 def test_workflow_uses_harden_runner_and_pinned_checkout():
+    # Issue #813: the Harden runner + checkout step pair moved into the
+    # shared .github/actions/harden-checkout composite action -- this
+    # workflow now calls it rather than referencing step-security/harden-runner
+    # or actions/checkout directly. What this test actually guards (hardened
+    # runner + a checkout pinned by commit SHA, not a mutable tag) is
+    # unchanged; it just checks it one level of indirection later.
     text = WORKFLOW_PATH.read_text(encoding="utf-8")
-    assert "step-security/harden-runner@" in text
-    assert "actions/checkout@" in text
+    assert "tvna/gitapex/.github/actions/harden-checkout@" in text
     # Pinned by commit SHA, not a mutable tag: a `@vN` or `@main` ref right
-    # after either action name would fail this.
-    assert "step-security/harden-runner@v" not in text
-    assert "actions/checkout@v" not in text
+    # after the action path would fail this.
+    assert re.search(r"tvna/gitapex/\.github/actions/harden-checkout@[0-9a-f]{40}\b", text)
 
 
 def test_workflow_scopes_permissions_to_issues_write_only():
