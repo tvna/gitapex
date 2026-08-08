@@ -122,20 +122,42 @@ def _commit(repo: Path, message: str = "change") -> None:
     _git(repo, "commit", "-qm", message)
 
 
+def _hook_env(**overrides: str) -> dict[str, str]:
+    """Environment for a hook invocation, with the Claude Code path
+    variables stripped.
+
+    Applied at *every* call site rather than only in `_run`. Today this
+    hook resolves its sibling script from `BASH_SOURCE[0]` and its repo
+    root from `git rev-parse --show-toplevel`, so it reads neither
+    variable and stripping them changes nothing -- verified by grep over
+    its whole call chain. Three sibling hooks
+    (check-bash-safety.sh, check-issue-acm-disclosure.sh,
+    check-pr-issue-acm-disclosure.sh) *do* read them, which is where this
+    suite inherited the pattern. Keeping it uniform here means a future
+    `CLAUDE_PROJECT_DIR` fallback in this hook -- matching what its
+    siblings already do -- cannot silently let a test resolve the real
+    checkout instead of the scratch repository and pass for the wrong
+    reason. That failure mode already bit this file once, via a fixture
+    missing `refs/remotes/origin/HEAD`.
+    """
+    env = dict(os.environ)
+    env.pop("CLAUDE_PROJECT_DIR", None)
+    env.pop("CLAUDE_PLUGIN_ROOT", None)
+    env.update(overrides)
+    return env
+
+
 def _run(
     repo: Path, body: str, tool_name: str = "mcp__github__create_pull_request"
 ) -> subprocess.CompletedProcess[str]:
     payload = json.dumps({"tool_name": tool_name, "tool_input": {"base": "main", "body": body}})
-    env = dict(os.environ)
-    env.pop("CLAUDE_PROJECT_DIR", None)
-    env.pop("CLAUDE_PLUGIN_ROOT", None)
     return subprocess.run(
         ["bash", str(repo / "hooks" / "check-pr-skill-audit-disclosure.sh")],
         input=payload,
         capture_output=True,
         text=True,
         timeout=60,
-        env=env,
+        env=_hook_env(),
         cwd=str(repo),
     )
 
@@ -238,6 +260,7 @@ def test_tier1_is_skipped_when_no_explicit_base_was_supplied(repo: Path) -> None
         capture_output=True,
         text=True,
         timeout=60,
+        env=_hook_env(),
         cwd=str(repo),
     )
     assert result.returncode == 0, result.stderr
@@ -306,6 +329,7 @@ def test_an_update_call_with_no_body_is_ignored(repo: Path) -> None:
         capture_output=True,
         text=True,
         timeout=60,
+        env=_hook_env(),
         cwd=str(repo),
     )
     assert result.returncode == 0
@@ -319,15 +343,13 @@ def test_outside_a_git_work_tree_the_hook_stays_out_of_the_way(tmp_path: Path) -
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text((REPO_ROOT / relative).read_text(encoding="utf-8"), encoding="utf-8")
     payload = json.dumps({"tool_name": "mcp__github__create_pull_request", "tool_input": {"body": ""}})
-    env = dict(os.environ)
-    env["GIT_CEILING_DIRECTORIES"] = str(tmp_path)
     result = subprocess.run(
         ["bash", str(tmp_path / "hooks" / "check-pr-skill-audit-disclosure.sh")],
         input=payload,
         capture_output=True,
         text=True,
         timeout=60,
-        env=env,
+        env=_hook_env(GIT_CEILING_DIRECTORIES=str(tmp_path)),
         cwd=str(tmp_path),
     )
     assert result.returncode == 0

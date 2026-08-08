@@ -144,9 +144,19 @@ def test_no_published_output_key_is_consumed_by_nothing():
     the workflow keeps publishing it, the grader reads nothing, and every
     forward assertion stays green.
 
-    The two applicability keys are named exclusions rather than a wildcard:
-    they gate the base two-audit check and the whole job respectively, so
-    neither has (or should have) a `_PROCESS_DISCLOSURE_CHECKS` row.
+    All four exclusions are named rather than wildcarded, and each is
+    excluded for its own reason -- an unexplained exclusion in a
+    reverse-direction drift gate is the exact failure mode it guards
+    against. `applicable` gates whether the job's check step runs at all
+    and `skill-md-changed` gates the base two-audit check, so neither is a
+    process-disclosure check. `description-changed-skills` and
+    `needs-eval-coverage-skills` *are* consumed by the grader, but through
+    their own hand-declared argparse arguments rather than a
+    `_PROCESS_DISCLOSURE_CHECKS` row, because their rules (rejecting a
+    WAIVED verdict, requiring a waiver with no PASS/FAIL form) do not fit
+    that table's uniform verdict-vocabulary shape. So none of the four has,
+    or should have, a row -- and any *fifth* unconsumed key is the drift
+    this asserts against.
     """
     consumed = {check.cli_flag.lstrip("-") for check in gate._PROCESS_DISCLOSURE_CHECKS}
     consumed |= {"applicable", "skill-md-changed"}
