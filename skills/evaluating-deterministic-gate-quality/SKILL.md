@@ -211,7 +211,14 @@ project-instruction file) this skill defers to rather than re-deriving.
    completed review. A well-formed verdict resting on a runtime-behavior
    claim (deny/allow/fail-open/fail-closed, not the gate's own source text
    alone) requires that claim live-tested per dimension 10 and the
-   live-testing Stop boundary below, not read-only-inferred.
+   live-testing Stop boundary below, not read-only-inferred. When this
+   review's own output needs to be machine-consumed rather than only
+   read, structure it per
+   [references/output-schema.json](references/output-schema.json) --
+   this skill still performs no write or persistence of its own; that
+   schema's own `persistenceRecommendation` field only names candidate
+   storage channels for a caller to choose from, never an action this
+   skill takes itself.
 
 ## Stop boundaries
 
@@ -359,11 +366,13 @@ the guiding principle, the two-lane structure, the mechanism-fit test
 (full detail in [mechanism-fit.md](references/mechanism-fit.md)), the
 four axes (three in
 [cross-cutting-axes.md](references/cross-cutting-axes.md), the fourth in
-[security-level.md](references/security-level.md)), and the three-way
+[security-level.md](references/security-level.md)), the three-way
 division of responsibility (full detail, together with Procedure step
 5's coverage-attestation elaboration and the review-quality-only subset
 of grading-specific Stop boundaries, in
-[grading-procedure.md](references/grading-procedure.md)) -- names no
+[grading-procedure.md](references/grading-procedure.md)), and the
+structured-output DSL
+([output-schema.json](references/output-schema.json)) -- names no
 path or issue number specific to this skill's own authoring repository.
 This skill's own authoring repository's worked examples and provenance
 live separately, explicitly repository-scoped, in

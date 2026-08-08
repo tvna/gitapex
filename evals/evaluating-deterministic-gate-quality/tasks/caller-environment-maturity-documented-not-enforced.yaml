@@ -1,0 +1,42 @@
+id: evaluating-deterministic-gate-quality-caller-environment-maturity-documented-not-enforced
+name: A freshly-onboarded plugin consumer's own CONTRIBUTING.md promises required CI gates it has not yet configured
+description: Dimension 23 (caller/installing-environment maturity) must be
+  applied to the repository that installed this skill, not to any single
+  gate under review, and must not be conflated with the Three-way division
+  of responsibility / coverage-attestation check (which is scoped to the
+  target's own declared invariants, not general infrastructure). The
+  target's CONTRIBUTING.md states an intent to require CI checks and branch
+  protection "once this repo leaves beta" but neither is configured today --
+  Documented, not enforced is the correct honesty tag for that specific
+  sub-question, distinct from Enforced today or Not achievable.
+tags:
+  - quality
+  - caller-environment-maturity
+inputs:
+  prompt: |
+    Use evaluating-deterministic-gate-quality on this consuming repository,
+    which just installed you as a plugin.
+
+    Apply dimension 23 (caller/installing-environment maturity) to THIS
+    repository itself, not to any single gate.
+
+    Facts you can directly confirm:
+    - This repository's own CONTRIBUTING.md states: "Once this repository
+      leaves beta, all PRs will require a passing CI check and branch
+      protection on main." Neither is configured today: the one existing
+      CI workflow runs on every push but is not wired as a required status
+      check in the repository's branch-protection settings, and branch
+      protection itself does not exist on the default branch yet.
+    - This repository has no cross-domain enforcement mechanism (no
+      SSOT-style gate registry, no company-wide policy engine) of any
+      kind.
+    - The only realization domain with any footing at all is a single git
+      pre-commit hook running a linter -- one domain, not several.
+
+    Give me dimension 23's classification for the CI-required-check
+    sub-question specifically, and confirm this is dimension 23's own job
+    rather than the coverage-attestation step.
+expected:
+  output_contains:
+    - "dimension 23"
+    - "Documented, not enforced"

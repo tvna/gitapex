@@ -1,7 +1,7 @@
 # evaluating-deterministic-gate-quality eval status
 
 A committed task corpus now exists: `evals/evaluating-deterministic-gate-quality/`
-has 26 task fixtures under `tasks/` plus `eval.yaml`, covering the skill's
+has 27 task fixtures under `tasks/` plus `eval.yaml`, covering the skill's
 five-way verdict taxonomy (well-formed and well-placed / well-formed but
 misplaced / not well-formed / no-gate-warranted / indeterminate), its
 mechanism-fit short-circuit and decomposition rule, its coverage-attestation
@@ -90,7 +90,7 @@ text for a `"dimension N"` or axis-name citation.
 runs it against this real corpus and fails CI if any dimension it reports
 uncovered is not named right here -- so this list can't silently drift from
 the real corpus the way the "dimension 12" mislabel above did. Current
-output: 12/22 dimensions and 4/4 axes cited; **dimensions 9, 11, 12, 13, 14,
+output: 13/23 dimensions and 4/4 axes cited; **dimensions 9, 11, 12, 13, 14,
 16, 17, 20, 21, and 22 remain uncovered**, not exhaustive by design -- no fixture's
 scenario naturally exercises known-limitation disclosure (9), deployment-
 mode portability (11), duplication/drift risk (12), side-effect independence
@@ -105,7 +105,19 @@ fixture yet, since exercising either meaningfully needs a target gate with
 a real multi-firing audit trail (21) or a multi-trial replication harness
 (22) -- no fixture in this corpus currently constructs one, and inventing a
 synthetic stand-in risked the same paraphrase-drift false-fail already
-named below rather than a real test of either dimension's substance. Two
+named below rather than a real test of either dimension's substance.
+Dimension 23 (caller/installing-environment maturity, distinct from any
+single gate's own quality -- issue #829) was added to close a gap
+identified in a session-level review: no prior dimension measured the
+maturity of the repository that installed or invoked this skill itself,
+as opposed to any single gate under review. Unlike dimensions 21/22, this
+one is directly testable with a synthetic fixture (a target repository's
+own stated infrastructure, not a real production firing trail), so it
+ships with one from the start:
+`caller-environment-maturity-documented-not-enforced.yaml`, exercising the
+Honesty-vocabulary "Documented, not enforced" classification for a
+freshly-onboarded plugin consumer whose own CONTRIBUTING.md promises
+required CI checks and branch protection it has not yet configured. Two
 Stop boundaries also remain
 uncovered, named above (delimiter-safe quoting of hostile evidence;
 shape-checks-pass-is-not-approval under pressure), where no safe verbatim

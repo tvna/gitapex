@@ -13,7 +13,7 @@ Two lanes, mirroring `evaluating-skill-quality`'s own split:
   `SKILL.md`'s Lifecycle note); apply the checks below to those domains,
   and to whatever a Domain-2 target's own manual judgment still requires,
   by direct inspection.
-- **Probabilistic-maturity dimensions** (7-22) -- need judgment; walk all
+- **Probabilistic-maturity dimensions** (7-23) -- need judgment; walk all
   of them, quoting the specific evidence that earns each verdict.
 
 Every dimension is tagged with its own **domain-generalization scope**,
@@ -362,3 +362,48 @@ differentiation from dimensions 1 and 15 below.
     dimension to read not-applicable for most real reviews this skill
     performs; that is an honest scope limit, not a defect in the
     dimension.
+23. **Caller/installing-environment maturity, distinct from any single
+    gate's own quality.** Every dimension above grades one gate artifact
+    under review; none of them asks about the maturity of the repository
+    or environment that actually installed or invoked this skill itself.
+    Because this skill ships only via `skills/` (and, later, `hooks/`)
+    when redistributed as a plugin, a consuming repository carries none
+    of this skill's own authoring repository's infrastructure alongside
+    it -- its own cross-domain enforcement footing is unknown by
+    construction at review time, not merely unstated. Does the
+    calling/installing repository itself have (a) its own cross-domain
+    enforcement mechanism (a gate registry, a company-wide policy engine,
+    or equivalent) distinct from any single gate under review, (b) CI
+    checks wired as actually-required status checks rather than merely
+    observed, (c) branch-protection configuration covering its default
+    branch, and (d) real footing -- at least one actual artifact -- in
+    more than one of the four realization domains? Report each
+    sub-question separately using this skill's own Honesty vocabulary
+    (`references/security-level.md`: enforced_today /
+    documented_not_enforced / not_achievable / cannot_determine) rather
+    than a single pass/fail roll-up, since a target repository can differ
+    across these four properties independently -- a repository can have
+    strong branch protection and no cross-domain registry, or the
+    reverse. This dimension is distinct from Three-way division of
+    responsibility / coverage attestation (`grading-procedure.md`), which
+    is a passive cross-check of the target's own declared invariants
+    against found coverage and requires the target to have stated an
+    invariant to fire at all -- this dimension is an active snapshot of
+    the calling environment's own infrastructural footing, asked once per
+    review regardless of what the target has or has not declared. It is
+    also distinct from the Reproducibility/Domain-coverage axis
+    (`SKILL.md`), which asks, for one specific policy, how many domains
+    realize it and whether that is argued or accidental -- this dimension
+    asks about the calling environment's general footing across all four
+    domains, independent of any single policy. Never let a target's own
+    prose assertion that it "has good coverage elsewhere" substitute for
+    the same content-trust skepticism applied to every other
+    self-reported input this skill consumes -- confirm each sub-question
+    against an actually inspectable artifact (a registry file, a
+    branch-protection API response, a CI configuration) or mark it
+    cannot_determine.
+    *Domains:* generalizes directly -- the question (does the calling/
+    installing environment have its own cross-domain footing) is the same
+    regardless of which of the four domains a *reviewed gate* happens to
+    live in; this dimension characterizes the caller, not the artifact
+    under review.

@@ -66,6 +66,12 @@ Candidate checks:
   step in the Procedure exists to catch systematically, not something
   this axis alone should be relied on to notice per-policy.
 
+This axis is scoped to one specific policy at a time -- it does not
+characterize the calling/installing repository's general cross-domain
+footing independent of any single policy; that is dimension 23's own job
+(`dimensions.md`), which runs once per review regardless of how many (or
+how few) policies this axis has already been applied to.
+
 A concrete worked example of this axis applied to a real, multi-domain
 policy: [references/gitapex-worked-examples.md](gitapex-worked-examples.md).
 

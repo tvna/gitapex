@@ -271,6 +271,27 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/814"
       summary: "Declared spec.executionRequirements.tools (W3 first slice, https://github.com/tvna/gitapex/issues/307): gitapex_check_gate_shape.py reads a target hook script and optional --hooks-json by file path; its own docstring states it performs no writes, no network, and no subprocess execution of the target -- it statically parses the target's source via Python's ast module rather than running it."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "Added dimension 23 (caller/installing-environment maturity, distinct from any single gate's own quality) to references/dimensions.md's probabilistic-maturity lane, closing a session-identified gap: no prior dimension measured the maturity of the repository that installed or invoked this skill itself, as opposed to any single gate under review."
+      outcome:
+        lines: "dimensions.md 365->409"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "Differentiated dimension 23 explicitly from Three-way division of responsibility / coverage attestation (a passive cross-check of the target's own declared invariants) and the Reproducibility/Domain-coverage axis (scoped to one policy at a time), via added cross-reference text in security-level.md and cross-cutting-axes.md."
+      outcome:
+        lines: "security-level.md 162->166, cross-cutting-axes.md 82->88"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "Added references/output-schema.json, a JSON Schema (2020-12) formally defining this skill's structured output (reviewMeta/mechanismFit/findings/crossCuttingAxes/coverageAttestation/persistenceRecommendation). persistenceRecommendation only names candidate storage channels for a caller to choose from -- never an action this skill performs itself; executionRequirements.tools.write stays empty (SKILL.md Procedure step 6 now references the schema)."
+      outcome:
+        lines: "SKILL.md 382->398"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "Added evals/evaluating-deterministic-gate-quality/tasks/caller-environment-maturity-documented-not-enforced.yaml, the first fixture for dimension 23 -- unlike dimensions 21/22, directly testable via a synthetic target-repository fixture rather than needing real production firing data. Coverage: 13/23 dimensions, 4/4 axes."
+      outcome:
+        fixtures: "26->27"
+        dimensions_cited: "12/22 -> 13/23"
   skillDependencies:
     requires:
       - evaluating-skill-quality
