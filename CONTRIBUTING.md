@@ -29,10 +29,10 @@ used to be discovered one red check at a time on an already-open PR.
 The same `uv run prek install` above now also installs a **pre-push** hook
 (`default_install_hook_types` in `.pre-commit-config.yaml`), which runs
 every gate that has a working-tree-only form in one pass before the push
-leaves your machine. It takes about 6 seconds warm for all 16 wired gates.
-Run it by hand any time with:
+leaves your machine. A warm run of all 16 wired gates measures 4-6 seconds
+end to end. Run it by hand any time with:
 
-```
+```console
 python3 .github/scripts/gitapex_gate_local_preflight.py
 ```
 
@@ -43,10 +43,10 @@ without running it.
 If a clone predates this hook, re-run `uv run prek install` once to pick it
 up. `git push --no-verify` skips it, as with any pre-push hook.
 
-The runner itself needs no dependencies, but almost every wired gate runs
-through `uv` (the same `uv run` pins CI uses). Without `uv` on PATH every
-gate reports `FAIL ... failed to run` -- that is one missing tool, not
-fifteen broken gates.
+The runner itself needs no dependencies, but all 16 wired gates run through
+`uv` (the same `uv run` pins CI uses). Without `uv` on PATH every one of
+them reports `FAIL ... failed to run` -- that is one missing tool, not
+sixteen broken gates.
 
 The wired set is not a list inside that script: it is every gate in
 `.gitapex/ssot.json` whose `planes` array contains `"local"`, run with the

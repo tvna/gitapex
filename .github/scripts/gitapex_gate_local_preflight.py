@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """One consolidated local pre-push / pre-PR-open gate runner (issue #876).
 
-This repository enforces 36 registered deterministic gates. Before this
+This repository enforces 37 registered deterministic gates. Before this
 script existed, roughly half of them had a perfectly good working-tree-only
 invocation and yet ran *only* as separate CI jobs, so an agent preparing a
 PR discovered gaps one CI job at a time on an already-open PR -- push, wait,
@@ -77,10 +77,11 @@ reasons.
   the pre-commit and pre-push shims, which closes the "configured here but
   never actually installed" half; it cannot close the ``--no-verify`` half.
   CI remains the authoritative merge gate.
-- **Every wired gate but one runs through ``uv``.** CONTRIBUTING.md invokes
-  this file with plain ``python3`` (it needs no dependencies itself), and so
-  does the pre-push hook, but 15 of the 16 wired argvs begin with ``uv``.
-  Without ``uv`` on PATH all 16 report ``FAIL ... failed to run``, which
+- **Every wired gate runs through ``uv``.** CONTRIBUTING.md invokes this
+  file with plain ``python3``, and so does the pre-push hook, because the
+  runner itself needs no dependencies -- but all 16 wired argvs begin with
+  ``uv``, since each gate carries its own pinned invocation. Without ``uv``
+  on PATH every one of the 16 reports ``FAIL ... failed to run``, which
   reads as sixteen broken gates rather than one missing tool. ``uv`` is
   already a documented prerequisite for this repository; it is named here so
   the failure mode is legible.
@@ -127,6 +128,8 @@ import sys
 from dataclasses import dataclass
 from typing import TextIO
 
+import _gitapex_argv_safety
+
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 SSOT_PATH = REPO_ROOT / ".gitapex" / "ssot.json"
 
@@ -139,10 +142,10 @@ SSOT_PATH = REPO_ROOT / ".gitapex" / "ssot.json"
 # own _GROUP_TIMEOUT_SECONDS = 600 -- so that one gate's own theoretical
 # worst case is ~4800 s, not 600 s. A ceiling matching that would be useless
 # as a hang guard (80 minutes of a silent pre-push), so this is a judgment
-# call in the other direction: 1800 s is ~7x the measured warm wall clock
-# for all fifteen wired gates combined (~4 s), and comfortably clears a cold
-# mypy cache, while still failing loudly rather than blocking a push
-# indefinitely. The residual risk is named rather than hidden: a genuinely
+# call in the other direction. For scale: a warm run of all 16 wired gates
+# combined measured 4-6 s end to end, so 1800 s is a hang guard rather than
+# a budget, and it comfortably clears a cold mypy cache while still failing
+# loudly rather than blocking a push indefinitely. The residual risk is named rather than hidden: a genuinely
 # cold cache on a slow machine can exceed this and report a timeout FAIL on
 # a gate CI would pass. `--timeout-seconds` raises it for that case.
 DEFAULT_TIMEOUT_SECONDS = 1800
@@ -183,6 +186,7 @@ class CheckResult:
 
     @property
     def status(self) -> str:
+        """The verdict word used in both the progress stream and the report."""
         return "PASS" if self.passed else "FAIL"
 
 
@@ -199,6 +203,30 @@ def _argv_or_raise(gate_id: str, field: str, value: object) -> tuple[str, ...]:
         if not isinstance(element, str) or not element:
             raise PreflightRegistryError(f"{gate_id}: {field} must contain only non-empty strings, got {element!r}")
     return tuple(value)
+
+
+def _refuse_unsafe_argv(check: LocalCheck) -> None:
+    """Refuse the whole run if a discovered argv would execute a shell, or
+    hand inline code to an interpreter, rather than invoke a tracked script.
+
+    Raised during discovery, before the first subprocess starts, and
+    deliberately not deferred to ``ssot-schema-drift``'s own equivalent
+    check. That gate is one of the wired gates, so it runs in gate-id order
+    -- 15th of 16 today, with 14 gates executing first -- and it reads its
+    own module-level ``SSOT_PATH`` rather than whichever registry this
+    runner was pointed at. Both properties were reconstructed against the
+    real registry during review of PR #888: a shell payload placed on
+    ``apm-manifest-drift`` (which sorts first) executed, wrote its file, and
+    the run still reported ``exit 0``. A guard that only fires after the
+    payload has run is not a guard, so this one fires first and refuses the
+    entire run rather than failing that one gate -- an argv this shape means
+    the registry is not trustworthy, not that one check is broken."""
+    for field, argv in (("local_invocation", check.argv), ("local_stdin", check.stdin_argv)):
+        if argv is None:
+            continue
+        violations = _gitapex_argv_safety.find_argv_safety_violations(argv)
+        if violations:
+            raise PreflightRegistryError(f"{check.gate_id}: refusing to run -- {field} {violations[0]}")
 
 
 def load_local_checks(ssot_path: pathlib.Path = SSOT_PATH) -> list[LocalCheck]:
@@ -230,13 +258,13 @@ def load_local_checks(ssot_path: pathlib.Path = SSOT_PATH) -> list[LocalCheck]:
         if not isinstance(gate_id, str) or not gate_id:
             raise PreflightRegistryError(f"{ssot_path}: a local-plane gate has no usable 'id': {gate!r}")
         stdin_raw = gate.get("local_stdin")
-        checks.append(
-            LocalCheck(
-                gate_id=gate_id,
-                argv=_argv_or_raise(gate_id, "local_invocation", gate.get("local_invocation")),
-                stdin_argv=None if stdin_raw is None else _argv_or_raise(gate_id, "local_stdin", stdin_raw),
-            )
+        check = LocalCheck(
+            gate_id=gate_id,
+            argv=_argv_or_raise(gate_id, "local_invocation", gate.get("local_invocation")),
+            stdin_argv=None if stdin_raw is None else _argv_or_raise(gate_id, "local_stdin", stdin_raw),
         )
+        _refuse_unsafe_argv(check)
+        checks.append(check)
     return sorted(checks, key=lambda check: check.gate_id)
 
 
@@ -364,6 +392,10 @@ def format_report(results: list[CheckResult]) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """CLI entry point: discover the wired set, run it, print the aggregate
+    verdict, and return 0 only when every wired gate passed. A registry that
+    cannot be read, or that carries an unsafe argv, exits 1 without running
+    anything."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
         "--ssot-path",

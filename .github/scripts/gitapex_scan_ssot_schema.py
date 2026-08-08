@@ -78,6 +78,7 @@ import pathlib
 import sys
 from typing import Any, Literal
 
+import _gitapex_argv_safety
 import _gitapex_schema_validation
 from pydantic import BaseModel, ConfigDict, ValidationError
 
@@ -236,27 +237,6 @@ def find_script_drift(registry: SsotRegistry | None, repo_root: pathlib.Path = R
     return findings
 
 
-# argv0 values that turn an argv list back into a shell command line, so
-# `.gitapex/ssot.json` -- a data file, reviewed as data -- cannot smuggle
-# arbitrary code onto a contributor's machine through the pre-push runner.
-# See find_local_shell_argv.
-_SHELL_ARGV0 = frozenset({"sh", "bash", "dash", "zsh", "ksh", "csh", "tcsh", "fish", "env", "eval", "exec", "xargs"})
-
-# Options that hand a *string* to an interpreter to parse and execute,
-# rather than naming a file to run. `python3 -c ...` is as much a shell as
-# `sh -c ...` for this purpose -- but only *after* an interpreter token:
-# `git -c core.quotePath=false` (a real local_stdin value in this registry
-# today) uses the same spelling for an unrelated config override, so
-# scanning argv for these flags without anchoring them to an interpreter
-# false-flags it. See find_local_shell_argv.
-_INLINE_CODE_FLAGS = frozenset({"-c", "--command", "-e", "--eval"})
-
-# Interpreters that will execute an _INLINE_CODE_FLAGS string. Matched on
-# basename anywhere in the argv, not just argv0, because every Python gate
-# here is invoked indirectly (`uv run --frozen python3 <script>`) and an
-# argv0-only check would miss `uv run --frozen python3 -c '<payload>'`.
-_INTERPRETERS = frozenset({"python", "python3", "perl", "ruby", "node", "deno", "bun", "php", "Rscript"})
-
 # Suffixes that make a token unambiguously a path to a tracked file rather
 # than an ordinary argument -- see _looks_like_repo_path.
 _PATH_SUFFIXES = (".py", ".sh", ".yml", ".yaml", ".json", ".toml")
@@ -370,7 +350,18 @@ def find_local_shell_argv(registry: SsotRegistry | None) -> list[str]:
     executable-surface conventions (see
     ``skills/screening-a-low-trust-contribution``) currently point. Widening
     those conventions and CODEOWNERS to cover ``.gitapex/**`` is the
-    complementary half, tracked separately rather than assumed here."""
+    complementary half, tracked separately rather than assumed here.
+
+    **This is the review-time half of a two-layer guard, not the whole
+    guard.** A review of PR #888 observed that the gate running this scanner
+    (``ssot-schema-drift``) is itself one of the wired gates, so it executes
+    in gate-id order -- 15th of 16, with 14 gates running first -- and a
+    hostile argv on any of those has already run by the time this function
+    is reached. ``gitapex_gate_local_preflight.py`` therefore applies the
+    same predicates itself, before starting any subprocess, via the shared
+    ``_gitapex_argv_safety`` module. This one stays because it reports the
+    problem as reviewable registry drift on the diff that introduces it,
+    which a hard refusal to run does not."""
     if registry is None:
         return []
     findings: list[str] = []
@@ -378,24 +369,10 @@ def find_local_shell_argv(registry: SsotRegistry | None) -> list[str]:
         for field, argv in (("local_invocation", gate.local_invocation), ("local_stdin", gate.local_stdin)):
             if not argv:
                 continue
-            basenames = [pathlib.PurePosixPath(token).name for token in argv]
-            shells = sorted({token for token, base in zip(argv, basenames, strict=True) if base in _SHELL_ARGV0})
-            if shells:
-                findings.append(
-                    f"local-shell-argv: {gate.id}: {field} invokes a shell/wrapper: "
-                    f"{', '.join(repr(shell) for shell in shells)}"
-                )
-            # Anchored to an interpreter's own position: only a flag that
-            # comes *after* one is that interpreter's inline-code flag.
-            first_interpreter = next(
-                (index for index, base in enumerate(basenames) if base in _INTERPRETERS), len(argv)
+            findings.extend(
+                f"local-shell-argv: {gate.id}: {field} {violation}"
+                for violation in _gitapex_argv_safety.find_argv_safety_violations(argv)
             )
-            inline = sorted({flag for flag in argv[first_interpreter + 1 :] if flag in _INLINE_CODE_FLAGS})
-            if inline:
-                findings.append(
-                    f"local-shell-argv: {gate.id}: {field} passes inline code to "
-                    f"{argv[first_interpreter]!r} via {', '.join(repr(flag) for flag in inline)}"
-                )
     return findings
 
 
@@ -424,8 +401,8 @@ def find_local_invocation_identity_drift(registry: SsotRegistry | None) -> list[
     a workflow file the local runner cannot execute. They are exempted by a
     property of their own registry entry, checked here, not by an id
     allowlist that would silently grow. Measured at the commit that added
-    this check: exactly those two of the fifteen wired gates take the
-    exemption, and the other thirteen satisfy the rule unmodified. A gate
+    this check: exactly those two of the sixteen wired gates take the
+    exemption, and the other fourteen satisfy the rule unmodified. A gate
     with a mixed ``.yml``-and-script list (``mypy-type-check``,
     ``exception-handler-gap``) is *not* exempt and must name its script."""
     if registry is None:

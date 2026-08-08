@@ -204,6 +204,92 @@ def test_bad_local_stdin_shape_raises(tmp_path: pathlib.Path) -> None:
 
 
 # --------------------------------------------------------------------------
+# load_local_checks: the pre-execution argv guard
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["sh", "-c", "echo pwned"],
+        ["/bin/bash", "payload.sh"],
+        ["env", "python3", "x.py"],
+        ["uv", "run", "python3", "-c", "print('pwned')"],
+    ],
+)
+def test_an_unsafe_argv_refuses_the_whole_run(tmp_path: pathlib.Path, argv: list[str]) -> None:
+    """The guard must fire during discovery, not as one gate's failure: an
+    argv this shape means the registry is untrustworthy, not that a single
+    check is broken."""
+    ssot = _write_ssot(tmp_path, [_gate("x", planes=["local"], local_invocation=argv)])
+    with pytest.raises(gitapex_gate_local_preflight.PreflightRegistryError, match="refusing to run"):
+        gitapex_gate_local_preflight.load_local_checks(ssot)
+
+
+def test_an_unsafe_local_stdin_refuses_the_whole_run(tmp_path: pathlib.Path) -> None:
+    ssot = _write_ssot(
+        tmp_path,
+        [_gate("x", planes=["local"], local_invocation=["true"], local_stdin=["sh", "-c", "echo x"])],
+    )
+    with pytest.raises(gitapex_gate_local_preflight.PreflightRegistryError, match="local_stdin"):
+        gitapex_gate_local_preflight.load_local_checks(ssot)
+
+
+@pytest.mark.slow
+def test_an_unsafe_argv_runs_nothing_at_all(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """The defect this closes, reconstructed: `ssot-schema-drift` carries the
+    same predicates but is itself a wired gate running 15th of 16, so a
+    payload on an earlier-sorting gate executed *before* the guard evaluated
+    it -- and the run still reported exit 0, because that scanner reads its
+    own module-level SSOT_PATH rather than the registry the runner was given.
+    Here the earlier-sorting gate writes a marker file; the guard must stop
+    the run before it ever exists."""
+    marker = tmp_path / "PWNED.txt"
+    ssot = _write_ssot(
+        tmp_path,
+        [
+            _gate("aaa-first", planes=["local"], local_invocation=["sh", "-c", f"touch {marker}"]),
+            _gate("zzz-guard", planes=["local"], local_invocation=["true"]),
+        ],
+    )
+    exit_code = gitapex_gate_local_preflight.main(["--ssot-path", str(ssot), "--repo-root", str(tmp_path)])
+    assert exit_code == 1
+    assert not marker.exists(), "the payload ran despite the pre-execution guard"
+    assert "refusing to run" in capsys.readouterr().err
+
+
+def test_the_guard_reuses_the_scanner_predicates_rather_than_re_deriving_them() -> None:
+    """Two copies of this judgment would drift, and the copy in the weaker
+    position would be the one that silently stopped matching. Both the
+    runner and gitapex_scan_ssot_schema.py must resolve to the same module."""
+    assert gitapex_gate_local_preflight._gitapex_argv_safety is gitapex_scan_ssot_schema._gitapex_argv_safety
+
+
+def test_an_ordinary_pinned_invocation_is_not_refused(tmp_path: pathlib.Path) -> None:
+    """The real registry's own shapes must survive the guard: a `uv run`
+    pin, and git's `-c` config flag which is spelled like an inline-code
+    flag but precedes no interpreter."""
+    ssot = _write_ssot(
+        tmp_path,
+        [
+            _gate(
+                "real",
+                planes=["local"],
+                local_invocation=["uv", "run", "--frozen", "python3", ".github/scripts/x.py"],
+                local_stdin=["git", "-c", "core.quotePath=false", "diff", "--merge-base", "origin/main", "HEAD"],
+            )
+        ],
+    )
+    assert [check.gate_id for check in gitapex_gate_local_preflight.load_local_checks(ssot)] == ["real"]
+
+
+def test_the_live_registry_passes_its_own_guard() -> None:
+    """Every wired gate in the real .gitapex/ssot.json must survive the
+    guard -- otherwise the pre-push hook refuses every push."""
+    assert gitapex_gate_local_preflight.load_local_checks()
+
+
+# --------------------------------------------------------------------------
 # run_check: one gate's verdict, including every not-a-real-exit-code path
 # --------------------------------------------------------------------------
 
@@ -419,6 +505,11 @@ def test_every_broken_gate_is_reported_in_one_run(tmp_path: pathlib.Path, capsys
     failing = _write_script(tmp_path, "fails.py", "import sys\nprint('broke')\nsys.exit(1)\n")
     reads = _write_script(tmp_path, "reads.py", "import sys\nsys.stdin.read()\nsys.exit(1)\n")
     passing = _write_script(tmp_path, "ok.py", "print('ok')\n")
+    # A real script file, not `python3 -c '...'`: the pre-execution argv
+    # guard refuses inline interpreter code, so a fixture using it would be
+    # rejected during discovery rather than exercising the aggregation this
+    # test is about.
+    producer = _write_script(tmp_path, "producer.py", "print('diff')\n")
     ssot = _write_ssot(
         tmp_path,
         [
@@ -428,7 +519,7 @@ def test_every_broken_gate_is_reported_in_one_run(tmp_path: pathlib.Path, capsys
                 "broken-stdin",
                 planes=["local"],
                 local_invocation=[sys.executable, str(reads)],
-                local_stdin=[sys.executable, "-c", "print('diff')"],
+                local_stdin=[sys.executable, str(producer)],
             ),
             _gate("broken-missing", planes=["local"], local_invocation=["gitapex-no-such-binary-876"]),
             _gate("healthy", planes=["local"], local_invocation=[sys.executable, str(passing)]),
