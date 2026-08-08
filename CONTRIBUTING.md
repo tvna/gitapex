@@ -20,6 +20,36 @@ CI (`.github/workflows/test.yml`, `.github/workflows/lint.yml`) still runs
 the same ruff/mypy checks independently as the actual merge gate -- the
 local hook is a fast first pass, not a replacement for it.
 
+## Local pre-push preflight
+
+The pre-commit hook above covers ruff and mypy only. Most of this
+repository's other deterministic gates run as separate CI jobs, so a gap
+used to be discovered one red check at a time on an already-open PR. Before
+pushing, run every gate that has a working-tree-only form in one pass:
+
+```
+python3 .github/scripts/gitapex_local_preflight.py
+```
+
+It prints a pass/fail line per gate, the captured output of each failing
+one, and exits non-zero if any failed. `--list` prints the wired set
+without running it.
+
+The wired set is not a list inside that script: it is every gate in
+`.gitapex/ssot.json` whose `planes` array contains `"local"`, run with the
+argv its own `local_invocation` field declares. Wiring a new gate in means
+adding those two fields to its registry entry and nothing else.
+
+A gate that has *no* working-tree-only form (it needs a PR body, GitHub API
+state, a diff-derived argument, or a toolchain outside the local surface)
+must instead carry a `local_exclusion` string saying which. The schema makes
+exactly one of the two required, so a new gate cannot land unwired *and*
+undocumented -- read the exclusions in `.gitapex/ssot.json` before assuming
+a gate is missing here by oversight.
+
+CI remains the authoritative merge gate; this is a fast first pass, the same
+relationship the prek hook has to `lint.yml`.
+
 ## Issue citation convention
 
 If a PR's changes fully satisfy an issue's acceptance criteria, cite it

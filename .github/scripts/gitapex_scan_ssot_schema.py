@@ -20,7 +20,10 @@ This scanner is the drift gate shipped alongside that registry. It fails if:
   key; or
 - any ``gates[].id`` or ``policy_sources[].id`` is used more than once (an
   unnoticed duplicate would silently make one entry invisible to every
-  cross-reference this scanner performs).
+  cross-reference this scanner performs); or
+- any ``gates[].local_invocation``/``local_stdin`` argv token that is
+  unambiguously a repository path does not exist as a real file (issue
+  #876 -- see ``find_local_invocation_drift``).
 
 Validation is layered. ``jsonschema.Draft202012Validator`` first checks the
 raw instance against ``.gitapex/ssot.schema.json`` and reports every
@@ -110,7 +113,10 @@ class Gate(BaseModel):
     script: str | list[str] | None = None
     native_rule: str | None = None
     rule: str
-    planes: list[Literal["pretooluse", "posttooluse", "ci"]]
+    planes: list[Literal["pretooluse", "posttooluse", "ci", "local"]]
+    local_invocation: list[str] | None = None
+    local_stdin: list[str] | None = None
+    local_exclusion: str | None = None
     trigger: str
     policy_refs: list[str]
     cluster: str | list[str]
@@ -224,6 +230,55 @@ def find_script_drift(registry: SsotRegistry | None, repo_root: pathlib.Path = R
     return findings
 
 
+def _looks_like_repo_path(token: str) -> bool:
+    """True for an argv token that is unambiguously a repo-root-relative
+    path to a tracked file, so ``find_local_invocation_drift`` can check it
+    exists without misreading a token that merely *contains* a slash or a
+    suffix. Deliberately conservative in three ways, each closing a real
+    token shape present in ``.gitapex/ssot.json``'s own local_invocation /
+    local_stdin values today:
+
+    - a leading ``-`` is an option, never a path (``--merge-base``);
+    - a ``*`` marks a pathspec or glob resolved by the invoked tool itself,
+      not a file this scanner can stat (``*.py`` as git's own pathspec);
+    - a ``,`` marks a delimited *list* value, not one path (xenon's
+      ``--exclude apm_modules/*,skills/.../gitapex_check_skill_shape.py``).
+
+    A token with no ``/`` (``pyproject.toml``, ``ruff``) and a token with no
+    recognized suffix (``origin/main`` -- a git revision, not a file) are
+    both skipped for the same reason: neither is distinguishable from a
+    non-path argument by inspection alone, and stat-ing them would report
+    drift for arguments that are working exactly as intended."""
+    if not token or token.startswith("-") or "*" in token or "," in token or "/" not in token:
+        return False
+    return token.endswith((".py", ".sh", ".yml", ".yaml", ".json", ".toml"))
+
+
+def find_local_invocation_drift(registry: SsotRegistry | None, repo_root: pathlib.Path = REPO_ROOT) -> list[str]:
+    """Return one message per ``local_invocation``/``local_stdin`` argv token
+    that names a repository file which does not exist (issue #876).
+
+    The schema's own if/then/else already enforces the structural half of
+    the local plane -- ``local`` in ``planes`` requires ``local_invocation``
+    and forbids ``local_exclusion``, and its absence requires the converse --
+    so this adds only the half JSON Schema cannot express: that the argv
+    actually points at something real. It is the same drift shape
+    ``find_script_drift`` closes for ``gates[].script``, one field over: a
+    renamed or deleted gate script would otherwise leave
+    ``gitapex_local_preflight.py`` reporting that gate as a *failure* on
+    every contributor's machine (exit 127, "No such file or directory")
+    rather than as registry drift caught here on the diff that caused it."""
+    if registry is None:
+        return []
+    findings: list[str] = []
+    for gate in registry.gates:
+        for field, argv in (("local_invocation", gate.local_invocation), ("local_stdin", gate.local_stdin)):
+            for token in argv or []:
+                if _looks_like_repo_path(token) and not (repo_root / token).is_file():
+                    findings.append(f"local-invocation-drift: {gate.id}: {field} references missing file: {token}")
+    return findings
+
+
 def find_policy_ref_drift(registry: SsotRegistry | None) -> list[str]:
     """Return one message per gates[].policy_refs[] value that doesn't resolve
     to a real policy_sources[].id."""
@@ -303,6 +358,7 @@ def find_drift(
     findings: list[str] = []
     findings.extend(find_schema_violations(instance, schema))
     findings.extend(find_script_drift(registry, repo_root))
+    findings.extend(find_local_invocation_drift(registry, repo_root))
     findings.extend(find_policy_ref_drift(registry))
     findings.extend(find_cluster_drift(registry))
     findings.extend(find_duplicate_ids(instance))

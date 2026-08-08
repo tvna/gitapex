@@ -112,7 +112,25 @@
         "planes": {
           "type": "array",
           "minItems": 1,
-          "items": { "enum": ["pretooluse", "posttooluse", "ci"] }
+          "items": { "enum": ["pretooluse", "posttooluse", "ci", "local"] },
+          "description": "Where this gate actually runs. 'local' means it has a working-tree-only invocation a contributor can run before pushing -- the discovery signal .github/scripts/gitapex_local_preflight.py selects on (issue #876). A gate carrying 'local' must also carry local_invocation; one that does not must carry local_exclusion saying why, so an unwired gate is a recorded decision rather than an invisible coverage gap."
+        },
+        "local_invocation": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 },
+          "description": "argv (no shell) that runs this gate against the working tree from the repository root, for gitapex_local_preflight.py. Only valid when planes contains 'local'."
+        },
+        "local_stdin": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 },
+          "description": "argv (no shell) whose standard output is piped into local_invocation's standard input -- the one input provider this runner offers, for gates that read a unified diff on stdin. Absent for gates that need no piped input."
+        },
+        "local_exclusion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Why this gate has no working-tree-only invocation (needs a PR/issue body, GitHub API state, a diff-derived argument, or a toolchain outside the local surface). Required exactly when planes does not contain 'local'."
         },
         "trigger": {
           "type": "string",
@@ -157,6 +175,24 @@
             "properties": { "kind": { "const": "native" } }
           },
           "then": { "required": ["native_rule"] }
+        },
+        {
+          "if": {
+            "required": ["planes"],
+            "properties": { "planes": { "contains": { "const": "local" } } }
+          },
+          "then": {
+            "required": ["local_invocation"],
+            "not": { "required": ["local_exclusion"] }
+          },
+          "else": {
+            "required": ["local_exclusion"],
+            "not": { "anyOf": [{ "required": ["local_invocation"] }, { "required": ["local_stdin"] }] }
+          }
+        },
+        {
+          "if": { "required": ["local_stdin"] },
+          "then": { "required": ["local_invocation"] }
         }
       ]
     }

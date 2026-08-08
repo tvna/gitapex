@@ -8,6 +8,7 @@ against the real schema file (there is only one schema to test against).
 
 from __future__ import annotations
 
+import copy
 import json
 import pathlib
 
@@ -38,6 +39,7 @@ _VALID_INSTANCE = {
             "script": "hooks/check-bash-safety.sh",
             "rule": "test fixture rule",
             "planes": ["ci"],
+            "local_exclusion": "test fixture: no working-tree-only form",
             "trigger": "test fixture trigger",
             "policy_refs": ["example-policy"],
             "cluster": "example-cluster",
@@ -292,6 +294,107 @@ def test_format_checker_rejects_out_of_range_date():
     schema = {"type": "object", "properties": {"since": {"type": "string", "format": "date"}}}
     findings = drift.find_schema_violations({"since": "2026-02-30"}, schema)
     assert any("since" in f for f in findings)
+
+
+def _local_gate(**overrides):
+    """_VALID_INSTANCE with its one gate rewritten onto the local plane --
+    the shape .github/scripts/gitapex_local_preflight.py discovers (issue
+    #876)."""
+    instance = copy.deepcopy(_VALID_INSTANCE)
+    gate = instance["gates"][0]
+    gate.pop("local_exclusion")
+    gate["planes"] = ["ci", "local"]
+    gate["local_invocation"] = ["python3", "hooks/check-bash-safety.sh"]
+    gate.update(overrides)
+    return instance
+
+
+def test_local_plane_gate_with_a_real_invocation_has_no_drift(tmp_path):
+    instance_path = _write_instance(tmp_path, _local_gate())
+    assert drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT) == []
+
+
+def test_local_invocation_referencing_a_missing_file_is_flagged(tmp_path):
+    instance = _local_gate(local_invocation=["python3", ".github/scripts/gitapex_gone.py"])
+    instance_path = _write_instance(tmp_path, instance)
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
+    assert any("local-invocation-drift" in f and "gitapex_gone.py" in f for f in findings)
+
+
+def test_local_stdin_referencing_a_missing_file_is_flagged(tmp_path):
+    instance = _local_gate(local_stdin=["python3", ".github/scripts/gitapex_gone.py"])
+    instance_path = _write_instance(tmp_path, instance)
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
+    assert any("local-invocation-drift" in f and "local_stdin" in f for f in findings)
+
+
+def test_local_plane_without_an_invocation_is_schema_invalid(tmp_path):
+    instance = _local_gate()
+    del instance["gates"][0]["local_invocation"]
+    instance_path = _write_instance(tmp_path, instance)
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
+    assert any("local_invocation" in f and "required" in f for f in findings)
+
+
+def test_local_plane_may_not_also_carry_an_exclusion(tmp_path):
+    instance = _local_gate(local_exclusion="contradicts the local plane")
+    instance_path = _write_instance(tmp_path, instance)
+    assert drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT) != []
+
+
+def test_non_local_gate_without_an_exclusion_is_schema_invalid(tmp_path):
+    """The drift-test branch of issue #876's third acceptance criterion: a
+    new gate cannot land unwired *and* undocumented."""
+    instance = copy.deepcopy(_VALID_INSTANCE)
+    del instance["gates"][0]["local_exclusion"]
+    instance_path = _write_instance(tmp_path, instance)
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
+    assert any("local_exclusion" in f and "required" in f for f in findings)
+
+
+def test_non_local_gate_may_not_carry_a_local_invocation(tmp_path):
+    instance = copy.deepcopy(_VALID_INSTANCE)
+    instance["gates"][0]["local_invocation"] = ["true"]
+    instance_path = _write_instance(tmp_path, instance)
+    assert drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT) != []
+
+
+def test_local_stdin_requires_a_local_invocation(tmp_path):
+    instance = _local_gate()
+    del instance["gates"][0]["local_invocation"]
+    instance["gates"][0]["planes"] = ["ci"]
+    instance["gates"][0]["local_exclusion"] = "no working-tree form"
+    instance["gates"][0]["local_stdin"] = ["git", "diff"]
+    instance_path = _write_instance(tmp_path, instance)
+    assert drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT) != []
+
+
+@pytest.mark.parametrize(
+    "token",
+    [
+        "--merge-base",  # an option, not a path
+        "*.py",  # git's own pathspec, resolved by git
+        "apm_modules/*,skills/x/y.py",  # a delimited list value (xenon --exclude)
+        "origin/main",  # a git revision with no file suffix
+        "pyproject.toml",  # no directory separator: indistinguishable from an argument
+        "ruff",
+        "",
+    ],
+)
+def test_non_path_argv_tokens_are_never_stat_checked(token):
+    assert drift._looks_like_repo_path(token) is False
+
+
+@pytest.mark.parametrize(
+    "token",
+    [".github/scripts/gitapex_scan_ssot_schema.py", "hooks/check-bash-safety.sh", ".github/workflows/test.yml"],
+)
+def test_repo_relative_paths_are_recognized(token):
+    assert drift._looks_like_repo_path(token) is True
+
+
+def test_local_invocation_drift_returns_empty_without_a_parsed_registry():
+    assert drift.find_local_invocation_drift(None, REPO_ROOT) == []
 
 
 def test_repository_ssot_is_schema_valid_and_drift_free():
