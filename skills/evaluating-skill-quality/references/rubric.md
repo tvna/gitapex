@@ -1638,18 +1638,18 @@ are also not reliable on their own: METR's randomized controlled trial
 completion with AI assistance while a real measurement showed them about
 19% *slower*. Where repeated trials are cheap enough for the harness,
 also record reproducibility -- variance across repeated runs of the same
-task -- naming the metric to match the property: pass@k ([passk]) scores
-at-least-one-success-in-k and rises with k, while pass^k ([passhatk])
-scores all-k-trials-succeed and is the bar a guardrail-case fixture has
-to clear, since a skill that passes once and fails on retry is weaker
-evidence than a stable pass, even at an identical mean. And a passing
-functional score does not clear a run that left an unintended diff, an
-unresolved destructive operation, or scope creep beyond the task; record
-that alongside the score, not folded into it. None of this is a new
-rubric dimension -- it is what this dimension, and a target repository's
-own eval-status bookkeeping, should record when the harness can record
-it; where it cannot, name the gap the same way a missing baseline or
-cross-model run is named above.
+task -- since a skill that passes once and fails on retry is weaker
+evidence than a stable pass, even at an identical mean. Name the metric
+to match: pass@k ([passk]) scores at-least-one-success-in-k and can only
+rise as k grows, while pass^k ([passhatk]) scores all-k-trials-succeed,
+the reading that fits the guardrail case this dimension already asks a
+fixture to cover. And a passing functional score does not clear a run
+that left an unintended diff, an unresolved destructive operation, or
+scope creep beyond the task; record that alongside the score, not folded
+into it. None of this is a new rubric dimension -- it is what this
+dimension, and a target repository's own eval-status bookkeeping, should
+record when the harness can record it; where it cannot, name the gap the
+same way a missing baseline or cross-model run is named above.
 
 **Reference-load precision, where a trace exists.** Dimension 5 grades
 whether `SKILL.md` *places* a reference link at the right branch point --
