@@ -4757,6 +4757,39 @@ def test_execution_requirements_network_invalid_mode_fails(tmp_path):
     assert css.main([str(d)]) == 1
 
 
+def test_execution_requirements_network_domains_inline_scalar_fails(tmp_path):
+    # domains is list-only; an inline scalar (no list block at all) must
+    # fail the same wrong-type way tools' own list-only subkeys do.
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:\n    network:\n      mode: allowlist\n      domains: github.com\n",
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "network.domains is not a list of non-empty strings" in result.evidence
+    assert "github.com" in result.evidence
+    assert css.main([str(d)]) == 1
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.root["spec"]["executionRequirements"]["network"]["domains"] == "github.com"
+
+
+def test_execution_requirements_network_unmatched_key_line_fails_closed(tmp_path):
+    # Regression guard mirroring tools' own
+    # test_execution_requirements_unmatched_key_line_fails_closed: a line
+    # KEY_LINE_RE_6 cannot parse (whitespace before a quoted key's colon)
+    # must still fail closed via the unknown-key fallback, not be silently
+    # skipped.
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path), '  executionRequirements:\n    network:\n      "mode" : disabled\n'
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "unknown network key" in result.evidence
+    assert css.main([str(d)]) == 1
+
+
 def test_execution_requirements_network_missing_mode_fails(tmp_path):
     # mode is required once network is declared at all -- unlike tools'
     # own read/write/shell, which are each independently optional.
@@ -4844,6 +4877,23 @@ def test_execution_requirements_network_non_string_scalar_domains_item_fails(tmp
     assert css.main([str(d)]) == 1
     parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
     assert parsed.malformed_execution_requirement_network_items == ["- null"]
+
+
+def test_execution_requirements_network_dedent_to_sibling_key_falls_through(tmp_path):
+    # Regression guard: dedenting out of network mid-file (not just at EOF)
+    # must finalize network and still let the next line -- here a sibling
+    # spec.skillDependencies block -- parse normally, not get swallowed.
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:\n    network:\n      mode: disabled\n  skillDependencies:\n    requires: []\n    relatedTo: []\n",
+    )
+    by = _by_name(css.check_shape(d))
+    assert by["execution-requirements-well-formed"].passed is True
+    assert by["skill-dependencies-well-formed"].passed is True
+    assert css.main([str(d)]) == 0
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.root["spec"]["executionRequirements"]["network"] == {"mode": "disabled"}
+    assert parsed.root["spec"]["skillDependencies"] == {"requires": [], "relatedTo": []}
 
 
 def test_execution_requirements_tools_and_network_both_declared_is_well_formed(tmp_path):
