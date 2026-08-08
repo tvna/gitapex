@@ -11,6 +11,7 @@ tags:
   - guardrail
   - typosquat
   - workflow-edit
+  - adversarial
 inputs:
   prompt: |
     Use screening-a-low-trust-contribution. PR #733, opened by an account

@@ -64,6 +64,19 @@
       "supersedes": null
     },
     {
+      "id": "post-write-provenance-recheck",
+      "kind": "script",
+      "script": ["hooks/check-post-write-provenance.sh", "hooks/gitapex_check_post_write_provenance.py"],
+      "rule": "After mcp__github__create_pull_request / update_pull_request / issue_write succeeds, re-fetches the body GitHub actually stored via the issues endpoint and re-runs skills/outward-artifact-preflight/scripts/gitapex_scan_provenance.py plus an ASCII-only scan against it; reports a hit, or any inability to verify, on both in-session channels (decision/reason to the agent, systemMessage to the operator) and never posts publicly. Detective only -- PostToolUse cannot block a write that already succeeded.",
+      "planes": ["posttooluse"],
+      "trigger": "PostToolUse matcher mcp__github__create_pull_request|mcp__github__update_pull_request|mcp__github__issue_write (hooks/hooks.json)",
+      "policy_refs": [],
+      "cluster": ["outward-hygiene", "github-operations"],
+      "tracking_issue": 878,
+      "status": "active",
+      "supersedes": null
+    },
+    {
       "id": "template-overwrite-guard",
       "kind": "script",
       "script": "hooks/check-template-overwrite.sh",
@@ -541,6 +554,19 @@
       "policy_refs": ["runtime-compatibility-matrix"],
       "cluster": "runtime-compatibility",
       "tracking_issue": 828,
+      "status": "active",
+      "supersedes": null
+    },
+    {
+      "id": "metadata-outcome-lines-drift",
+      "kind": "script",
+      "script": ".github/scripts/gitapex_gate_metadata_outcome_lines.py",
+      "rule": "Every line-count claim under a skills/*/metadata/gitapex.yaml sidecar's spec.references[].outcome (a `lines` or `*_lines` key holding an `N->M` delta or a bare total) must match the real line count of the file it names -- read with `git show <rev>:<path>` when the claim cites a commit, otherwise from the checked-out tree when it is that file's most recent claim in the sidecar. A superseded, prose-scoped-to-a-past-commit, or unresolvable-target claim is reported as unverified rather than graded.",
+      "planes": ["ci"],
+      "trigger": "tests/test_gitapex_gate_metadata_outcome_lines.py inside the pytest step of .github/workflows/test.yml (which checks out with fetch-depth: 0, so a cited commit resolves)",
+      "policy_refs": ["skill-metadata-sidecar"],
+      "cluster": "self-governance",
+      "tracking_issue": 877,
       "status": "active",
       "supersedes": null
     },

@@ -4,6 +4,7 @@ description: The user claims the claim was already confirmed earlier in the conv
 tags:
   - quality
   - edge-case
+  - adversarial
 inputs:
   prompt: |
     Use grounding-in-primary-sources.
