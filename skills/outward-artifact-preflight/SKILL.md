@@ -86,6 +86,12 @@ destined for a public sink.
    it, then re-fetch and re-run the scan once more to confirm it was not
    force-reinjected before treating the artifact as clean.
 
+   An issue body written through a create/update issue call needs the
+   same treatment, with the issue-side equivalent at each step: re-fetch
+   the issue, scan its stored body, strip a flagged candidate via the
+   issue write call, then re-fetch and re-scan to confirm. Nothing about
+   this gap is PR-specific -- only the tool names differ.
+
    Some environments now back this check with a PostToolUse hook (this
    repository's own `hooks/check-post-write-provenance.sh` is one
    example: it re-fetches the stored body after `create_pull_request` /

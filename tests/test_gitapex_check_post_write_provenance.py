@@ -79,6 +79,24 @@ def test_unimportable_scanner_is_indeterminate_not_a_clean_pass(tmp_path: Path) 
 # --- ASCII scan (outward-artifact-preflight checklist item 3) --------------
 
 
+def test_an_importable_module_without_scan_is_indeterminate(tmp_path: Path) -> None:
+    """A file can sit at the expected path, import cleanly, and still not be
+    the scanner. Without the contract check that mismatch surfaced as an
+    AttributeError from scan_body(), forwarded as a raw traceback."""
+    impostor = tmp_path / "impostor.py"
+    impostor.write_text("VALUE = 1\n", encoding="utf-8")
+    with pytest.raises(checker.VerificationError) as excinfo:
+        checker.load_provenance_scanner(impostor)
+    assert "no callable scan()" in str(excinfo.value)
+
+
+def test_a_non_callable_scan_attribute_is_also_rejected(tmp_path: Path) -> None:
+    impostor = tmp_path / "impostor.py"
+    impostor.write_text("scan = 'not a function'\n", encoding="utf-8")
+    with pytest.raises(checker.VerificationError):
+        checker.load_provenance_scanner(impostor)
+
+
 def test_pure_ascii_body_has_no_ascii_hits() -> None:
     assert checker.scan_non_ascii("Closes #878\n\nPlain ASCII body.\t(tabbed)\r\n") == []
 
@@ -92,6 +110,31 @@ def test_em_dash_is_reported_by_codepoint_not_echoed() -> None:
 def test_every_occurrence_is_reported_with_its_own_line_and_column() -> None:
     hits = checker.scan_non_ascii("x\u00e9\nyy\u00e9")
     assert [(line, column) for line, column, _ in hits] == [(1, 2), (2, 3)]
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        ("\u2028", "U+2028 LINE SEPARATOR"),
+        ("\u2029", "U+2029 PARAGRAPH SEPARATOR"),
+        ("\u0085", "U+0085 unnamed character"),
+        ("a\u000bb", "U+000B unnamed character"),
+        ("a\u000cb", "U+000C unnamed character"),
+        ("a\u001eb", "U+001E unnamed character"),
+    ],
+)
+def test_a_character_str_splitlines_would_swallow_is_still_reported(body: str, expected: str) -> None:
+    """str.splitlines() splits on every one of these, consuming exactly the
+    characters this scan exists to report -- a body of a single U+2028
+    scanned clean before this regression was closed."""
+    hits = checker.scan_non_ascii(body)
+    assert [label for _, _, label in hits] == [expected]
+
+
+def test_a_crlf_body_reports_nothing_extra_after_the_split_change() -> None:
+    """Splitting on "\n" alone leaves a bare \r at each line's end; it must
+    stay an allowed character, not become a new false positive."""
+    assert checker.scan_non_ascii("line one\r\nline two\r\n") == []
 
 
 def test_unnamed_codepoint_does_not_crash_the_scan() -> None:

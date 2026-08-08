@@ -203,6 +203,13 @@ def load_provenance_scanner(scanner_path: Path | None = None) -> ModuleType:
     # path rather than escape as a traceback that reads as a crash.
     except Exception as error:
         raise VerificationError(f"the provenance scanner at {path} failed to import: {error}") from error
+    # A file can exist at the expected path, import cleanly, and still not be
+    # the scanner -- a rename, a truncated bundle, or a shadowing file. Without
+    # this contract check the mismatch surfaces as an AttributeError raised
+    # from scan_body(), which the wrapper then forwards as a raw traceback in
+    # its report rather than the documented INDETERMINATE line.
+    if not callable(getattr(module, "scan", None)):
+        raise VerificationError(f"the module at {path} imported but exposes no callable scan() -- not the scanner")
     return module
 
 
@@ -218,7 +225,15 @@ def scan_non_ascii(text: str) -> list[tuple[int, int, str]]:
     has to stay ASCII regardless.
     """
     hits: list[tuple[int, int, str]] = []
-    for line_no, line in enumerate(text.splitlines(), start=1):
+    # `split("\n")`, deliberately not `splitlines()`: the latter also splits on
+    # vertical tab, form feed, the file/group/record separators, NEL (U+0085),
+    # and the Unicode line/paragraph separators (U+2028/U+2029) -- consuming
+    # exactly the characters this scan exists to report. A body consisting of
+    # a single U+2028 splits to [''] under `splitlines()` and scans clean, a
+    # false negative found by an adversarial review of this file's own v1.
+    # `\r` survives the `\n` split and is skipped as an allowed character, so
+    # a CRLF body still reports nothing extra.
+    for line_no, line in enumerate(text.split("\n"), start=1):
         for column, character in enumerate(line, start=1):
             if character in _ALLOWED_CONTROL_CHARACTERS:
                 continue
