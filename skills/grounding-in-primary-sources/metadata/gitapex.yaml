@@ -18,6 +18,8 @@ spec:
       write: []
       shell:
         - commands
+    network:
+      mode: unrestricted
   references:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/823"
@@ -25,3 +27,6 @@ spec:
     - kind: deferral
       anchor: "https://github.com/tvna/gitapex/issues/823"
       summary: "This skill's primary verification path -- fetching an external tool's own docs/changelog -- performs real network I/O with no network category in the current spec.executionRequirements schema to declare it under, the same gap issue 814's setup-gitapex-toolchain entry already disclosed. Tracked under parent issue https://github.com/tvna/gitapex/issues/307's W1 non-goals."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/845"
+      summary: "Supersedes the deferral above (append-only, not deleted): spec.executionRequirements.network now exists. Declared mode: unrestricted, not allowlist -- this skill fetches whichever external tool's own docs a claim needs, an arbitrary set no fixed domain list could honestly state. Argued against the parent issue's invariants 6/9: tools.write is already [] and Stop boundaries require fetched content stay untrusted, so unrestricted fetch has no effective local write path to exploit."

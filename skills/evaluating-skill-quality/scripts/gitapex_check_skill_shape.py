@@ -104,10 +104,10 @@ Checks (the canonical list -- the manual fallback is to apply these):
     exists. No skill's runtime procedure may read or branch on any part
     of spec.lifecycle (the sidecar's behavior-neutrality invariant).
     spec.executionRequirements, if present, is a mapping with only the
-    tools key so far (further categories -- filesystem/network/mcp/
+    tools and network keys so far (further categories -- filesystem/mcp/
     credentials/browser/externalServices/context -- are deferred; until
-    they land, any key other than tools here is an unknown key, not
-    reserved space);
+    they land, any key other than tools/network here is an unknown key,
+    not reserved space);
     tools, if present, is itself a mapping -- like spec.executionRequirements
     itself, never real YAML null -- with only the keys
     read/write/shell, each -- if present -- a list of non-empty scalar
@@ -120,6 +120,15 @@ Checks (the canonical list -- the manual fallback is to apply these):
     mean "not yet declared"; an explicit empty list (e.g. read: [])
     means "declared, zero tools of that kind needed" -- a deliberate
     statement, not the same as absence.
+    network (issue #845), if present, is itself a mapping -- never real
+    YAML null, same rule -- with only the keys mode/domains: mode is a
+    scalar enum (disabled/allowlist/unrestricted); domains is a list of
+    non-empty scalar strings, with the same per-item shape rules as
+    tools' own read/write/shell, required non-empty when mode is
+    allowlist and required empty-or-absent otherwise. This is the one
+    sidecar sub-block mixing a scalar field with a list field in the same
+    block -- see EXEC_REQ_NETWORK_SUBKEYS' own comment above for why the
+    parser treats that as no different from tools' all-list shape.
 
     Three-way absent/null/empty-mapping distinction, shared by every gated *mapping*-valued block above
     (spec.skillDependencies, spec.lifecycle and each of its
@@ -692,17 +701,44 @@ KEY_LINE_RE_8 = re.compile(r'^[ ]{8}(?:"([^"]*)"|\'([^\']*)\'|([^\s"\'#][^:]*?))
 # consumed a variable amount of the line before this text was isolated.
 INLINE_KEY_VALUE_RE = re.compile(r'^(?:"([^"]*)"|\'([^\']*)\'|([^\s"\'#][^:]*?)):[ \t]*(.*)$')
 
-# spec.executionRequirements' one recognized subkey so far: "tools", at
-# 4-space indent -- same depth as spec.skillDependencies' requires/
-# relatedTo and spec.lifecycle's experimental/deprecated/stable.
-# Recognized via the same shared KEY_LINE_RE_4 matcher those two fields
-# use, not a field-specific regex -- for consistency across all three
-# gated blocks.
+# spec.executionRequirements' two recognized subkeys so far: "tools" and
+# "network" (issue #845), each at 4-space indent -- same depth as
+# spec.skillDependencies' requires/relatedTo and spec.lifecycle's
+# experimental/deprecated/stable. Recognized via the same shared
+# KEY_LINE_RE_4 matcher those two fields use, not a field-specific regex --
+# for consistency across all three gated blocks.
 EXEC_REQ_TOOLS_SUBKEYS = ("read", "write", "shell")
 # List items accept 6 or more spaces -- the same indent-drift tolerance
 # REFERENCES_LIST_ITEM_RE/SKILL_DEP_LIST_ITEM_RE already give their own
-# lists (an item at their own subkey's depth, or deeper).
+# lists (an item at their own subkey's depth, or deeper). Reused verbatim
+# by spec.executionRequirements.network's own domains list below --
+# domains sits at the identical 6-space depth tools' own read/write/shell
+# lists do, so a second, byte-identical regex would add nothing.
 EXEC_REQ_TOOLS_LIST_ITEM_RE = re.compile(r"^[ ]{6,}-\s*(.*)$")
+
+# spec.executionRequirements.network's two recognized subkeys (issue #845,
+# resolving the mixed scalar-plus-list shape issue #349 deferred): "mode"
+# (a scalar enum) and "domains" (a list), in the SAME sub-block -- unlike
+# tools, whose read/write/shell are all list-valued. The parser layer below
+# does not judge which subkey should hold a scalar vs. a list; each subkey
+# is captured exactly as written (an inline value is stored as a raw
+# scalar, a blank value opens a list), the same per-subkey mechanism
+# tools' own read/write/shell already use -- type validity (mode must be a
+# recognized enum string; domains must be a list) is entirely a
+# checker-layer question (_execution_requirements_checks), never a
+# parser-layer one. This slice hand-duplicates tools' own state machine
+# (in_exec_tools/exec_tools/... -> in_exec_network/exec_network/...) rather
+# than extracting a shared generic-subblock helper both could call -- the
+# existing tools state machine is threaded through this loop via several
+# mutually exclusive `nonlocal` flags, and a real extraction touching that
+# already-proven path was judged higher regression risk than the size of
+# this slice's own scope justifies. A future mixed-shape category (mcp,
+# per issue #349's own deferral) can copy this block's shape directly, but
+# still cannot literally reuse it as a function without that extraction --
+# stated explicitly here per this issue's own disclosure requirement,
+# rather than silently claiming a generalization that was not attempted.
+EXEC_REQ_NETWORK_SUBKEYS = ("mode", "domains")
+EXEC_REQ_NETWORK_MODES = ("disabled", "allowlist", "unrestricted")
 
 TAG_RE = re.compile(r"</?[A-Za-z][^>]*>")
 # A YAML plain (unquoted) scalar cannot safely contain ": " (colon followed
@@ -1227,15 +1263,24 @@ class ManifestParse:
     ``unknown_execution_requirement_keys``, ``unknown_execution_requirement_tools_keys``,
     and ``malformed_execution_requirement_tools_items`` are
     spec.executionRequirements' equivalents: the first holds each key found directly under
-    spec.executionRequirements that is not ``tools`` (only one recognized
-    key exists so far -- further categories are deferred to sibling child
-    issues, and any other key here is unknown, not reserved space); the
-    second holds each key found directly under ``tools`` that is not
-    ``read``, ``write``, or ``shell``; the third holds each
+    spec.executionRequirements that is not ``tools`` or ``network`` (only
+    two recognized keys exist so far -- further categories are deferred to
+    sibling child issues, and any other key here is unknown, not reserved
+    space); the second holds each key found directly under ``tools`` that
+    is not ``read``, ``write``, or ``shell``; the third holds each
     read/write/shell list item that is mapping-shaped or inconsistently
     indented, the same rule ``malformed_reference_items``/
     ``malformed_skill_dependency_items`` use one nesting level shallower.
     All three empty when the field is absent or parsed cleanly.
+
+    ``unknown_execution_requirement_network_keys`` and
+    ``malformed_execution_requirement_network_items`` are ``network``'s own
+    equivalents to ``unknown_execution_requirement_tools_keys``/
+    ``malformed_execution_requirement_tools_items``: the first holds each
+    key found directly under ``network`` that is not ``mode`` or
+    ``domains``; the second holds each ``domains`` list item that is
+    mapping-shaped or inconsistently indented. Both empty when the field
+    is absent or parsed cleanly.
     """
 
     root: dict[str, object]
@@ -1249,6 +1294,8 @@ class ManifestParse:
     unknown_execution_requirement_keys: list[str]
     unknown_execution_requirement_tools_keys: list[str]
     malformed_execution_requirement_tools_items: list[str]
+    unknown_execution_requirement_network_keys: list[str]
+    malformed_execution_requirement_network_items: list[str]
 
 
 def _parse_manifest(text: str) -> ManifestParse:
@@ -1357,6 +1404,25 @@ def _parse_manifest(text: str) -> ManifestParse:
       or inconsistently indented) list item under any of the three tools
       subkeys is collected into
       ``ManifestParse.malformed_execution_requirement_tools_items``.
+    - spec.executionRequirements' second recognized block sub-key (issue
+      #845): ``network``, structurally parallel to ``tools`` above -- also
+      an empty value opening a nested block at 6-space indent, also
+      finalizing to real YAML null when its own header sees zero child
+      key lines. Its own two subkeys, ``mode``/``domains``, are each
+      captured the identical way tools' own read/write/shell are: an
+      inline non-blank value is stored as a raw scalar (``mode``'s normal,
+      valid case: ``mode: disabled``); a blank value opens a list of
+      "- <value>" items at 6-or-more-space indent, reusing
+      ``EXEC_REQ_TOOLS_LIST_ITEM_RE`` verbatim (``domains``'s normal, valid
+      case). The parser draws no distinction between the two subkeys --
+      whether a stored value is the "right" shape for its own key (mode as
+      a scalar, domains as a list) is left entirely to
+      ``_execution_requirements_checks``, exactly as it already is for
+      tools' own three list-only subkeys. A key inside ``network`` other
+      than ``mode``/``domains`` is collected into
+      ``ManifestParse.unknown_execution_requirement_network_keys``; a
+      malformed ``domains`` list item is collected into
+      ``ManifestParse.malformed_execution_requirement_network_items``.
 
     Every other nested map or list (e.g. spec.evalStatus) is still
     deliberately skipped, exactly as before: skipping keeps this
@@ -1416,7 +1482,8 @@ def _parse_manifest(text: str) -> ManifestParse:
 
     Every gated *mapping*-valued block (spec.skillDependencies,
     spec.lifecycle and its experimental/deprecated/stable sub-blocks,
-    spec.executionRequirements, spec.executionRequirements.tools) stores
+    spec.executionRequirements, spec.executionRequirements.tools,
+    spec.executionRequirements.network) stores
     ``None`` -- real YAML null -- rather than ``{}`` when its own block
     header was seen with zero child key lines ever following it at the
     next indent level (issue #356, ACM row 2): a bare block header
@@ -1430,8 +1497,8 @@ def _parse_manifest(text: str) -> ManifestParse:
     "not declared" (the pre-existing, unaffected "absent" state); only a
     key that DOES appear, with nothing under it, newly resolves to
     ``None`` instead of ``{}``. List-valued keys under these same blocks
-    (requires/relatedTo, tools.read/write/shell) are NOT affected by this
-    change -- a blank list header still parses to ``[]``, per each
+    (requires/relatedTo, tools.read/write/shell, network.domains) are NOT
+    affected by this change -- a blank list header still parses to ``[]``, per each
     field's own pre-existing "explicit empty list" semantics.
     """
     text = text.lstrip("\ufeff")  # strip a leading UTF-8 BOM, as _parse_frontmatter does
@@ -1499,6 +1566,17 @@ def _parse_manifest(text: str) -> ManifestParse:
     malformed_exec_tools_items: list[str] = []
     unknown_exec_req_keys: list[str] = []
     unknown_exec_tools_keys: list[str] = []
+    # network's own state, structurally parallel to exec_tools' above (see
+    # EXEC_REQ_NETWORK_SUBKEYS' own comment for why this is a hand-
+    # duplicated analog rather than a shared helper).
+    in_exec_network = False
+    exec_network: dict[str, object] = {}
+    exec_network_has_content = False
+    collecting_exec_network_list: list[str] | None = None
+    collecting_exec_network_key: str | None = None
+    exec_network_list_indent: int | None = None
+    malformed_exec_network_items: list[str] = []
+    unknown_exec_network_keys: list[str] = []
 
     def _finalize_ref_outcome() -> None:
         nonlocal current_ref_outcome
@@ -1580,9 +1658,27 @@ def _parse_manifest(text: str) -> ManifestParse:
         exec_tools = {}
         exec_tools_has_content = False
 
+    def _finalize_exec_network_list() -> None:
+        nonlocal collecting_exec_network_list, collecting_exec_network_key, exec_network_list_indent
+        if collecting_exec_network_list is not None and collecting_exec_network_key is not None:
+            exec_network[collecting_exec_network_key] = collecting_exec_network_list
+        collecting_exec_network_list = None
+        collecting_exec_network_key = None
+        exec_network_list_indent = None
+
+    def _finalize_exec_network() -> None:
+        nonlocal in_exec_network, exec_network, exec_network_has_content
+        _finalize_exec_network_list()
+        if in_exec_network:
+            execution_requirements["network"] = exec_network if exec_network_has_content else None
+        in_exec_network = False
+        exec_network = {}
+        exec_network_has_content = False
+
     def _finalize_execution_requirements() -> None:
         nonlocal in_execution_requirements, execution_requirements, exec_req_has_content
         _finalize_exec_tools()
+        _finalize_exec_network()
         if in_execution_requirements and current is not None:
             current["executionRequirements"] = execution_requirements if exec_req_has_content else None
         in_execution_requirements = False
@@ -1881,6 +1977,69 @@ def _parse_manifest(text: str) -> ManifestParse:
             # Finalize it and fall through to process this line normally
             # below.
             _finalize_exec_tools()
+        if collecting_exec_network_list is not None:
+            item = EXEC_REQ_TOOLS_LIST_ITEM_RE.match(line)
+            if item:
+                item_indent = len(line) - len(line.lstrip(" "))
+                if exec_network_list_indent is None:
+                    exec_network_list_indent = item_indent
+                if item_indent != exec_network_list_indent:
+                    # Same list, different indent than its own first item --
+                    # real YAML would reject this outright.
+                    malformed_exec_network_items.append(line.strip())
+                    continue
+                raw_text = item.group(1).strip()
+                is_quoted = len(raw_text) >= 2 and raw_text[0] == raw_text[-1] and raw_text[0] in "\"'"
+                if (not is_quoted and REFERENCES_MAPPING_LIKE_RE.match(raw_text)) or (
+                    not is_quoted and _is_non_string_plain_scalar(raw_text)
+                ):
+                    malformed_exec_network_items.append(line.strip())
+                else:
+                    collecting_exec_network_list.append(_unquote(raw_text))
+                continue
+            # Not a list item: this domains list ends here.
+            _finalize_exec_network_list()
+        if in_exec_network:
+            matched = _match_key_line(KEY_LINE_RE_6, line)
+            if matched:
+                exec_network_has_content = True
+                key, value = matched
+                # Same comment-only-value fix as tools' equivalent branch
+                # above (e.g. "domains:  # comment").
+                value = _strip_bare_comment(value)
+                if key not in EXEC_REQ_NETWORK_SUBKEYS:
+                    unknown_exec_network_keys.append(line.strip())
+                elif value == "[]":
+                    exec_network[key] = []
+                elif not value:
+                    # Blank value: opens a list for "domains" (its normal,
+                    # valid case) or, for "mode", wrongly opens a list
+                    # where a scalar is expected -- the parser stores
+                    # either the same way and leaves that judgment to
+                    # _execution_requirements_checks, per this block's own
+                    # module-docstring note above.
+                    collecting_exec_network_list = []
+                    collecting_exec_network_key = key
+                    exec_network_list_indent = None
+                else:
+                    # Not an empty list and not "[]" -- store the raw
+                    # scalar. This is "mode"'s own normal, valid case
+                    # (e.g. "mode: disabled"); for "domains", an inline
+                    # scalar here is the wrong type, caught downstream the
+                    # same way tools' own list-only subkeys already are.
+                    exec_network[key] = value
+                continue
+            indent = len(line) - len(line.lstrip(" "))
+            if line[:1] in (" ", "\t") and indent >= 6:
+                # Same fail-closed reasoning as tools'/spec.skillDependencies'/
+                # spec.lifecycle's equivalent branches.
+                exec_network_has_content = True
+                unknown_exec_network_keys.append(line.strip())
+                continue
+            # Dedented below network's own indent: the block ends here.
+            # Finalize it and fall through to process this line normally
+            # below.
+            _finalize_exec_network()
         if in_execution_requirements:
             matched = _match_key_line(KEY_LINE_RE_4, line)
             if matched:
@@ -1889,7 +2048,7 @@ def _parse_manifest(text: str) -> ManifestParse:
                 # Same comment-only-value fix as spec.skillDependencies'
                 # equivalent branch above (e.g. "tools:  # comment").
                 value = _strip_bare_comment(value)
-                if key != "tools":
+                if key not in ("tools", "network"):
                     unknown_exec_req_keys.append(line.strip())
                 elif value:
                     # Not opening a block -- a bare scalar written where a
@@ -1897,9 +2056,12 @@ def _parse_manifest(text: str) -> ManifestParse:
                     # raw scalar so the checker layer reports it as the
                     # wrong type rather than silently dropping it.
                     execution_requirements[key] = value
-                else:
+                elif key == "tools":
                     in_exec_tools = True
                     exec_tools = {}
+                else:
+                    in_exec_network = True
+                    exec_network = {}
                 continue
             indent = len(line) - len(line.lstrip(" "))
             if line[:1] in (" ", "\t") and indent >= 4:
@@ -1977,6 +2139,8 @@ def _parse_manifest(text: str) -> ManifestParse:
         unknown_execution_requirement_keys=unknown_exec_req_keys,
         unknown_execution_requirement_tools_keys=unknown_exec_tools_keys,
         malformed_execution_requirement_tools_items=malformed_exec_tools_items,
+        unknown_execution_requirement_network_keys=unknown_exec_network_keys,
+        malformed_execution_requirement_network_items=malformed_exec_network_items,
     )
 
 
@@ -3085,6 +3249,8 @@ def check_shape(target: Path) -> list[CheckResult]:
             unknown_execution_requirement_keys = parsed.unknown_execution_requirement_keys
             unknown_execution_requirement_tools_keys = parsed.unknown_execution_requirement_tools_keys
             malformed_execution_requirement_tools_items = parsed.malformed_execution_requirement_tools_items
+            unknown_execution_requirement_network_keys = parsed.unknown_execution_requirement_network_keys
+            malformed_execution_requirement_network_items = parsed.malformed_execution_requirement_network_items
             read_error: str | None = None
         except (OSError, UnicodeDecodeError) as exc:
             manifest = None
@@ -3098,6 +3264,8 @@ def check_shape(target: Path) -> list[CheckResult]:
             unknown_execution_requirement_keys = []
             unknown_execution_requirement_tools_keys = []
             malformed_execution_requirement_tools_items = []
+            unknown_execution_requirement_network_keys = []
+            malformed_execution_requirement_network_items = []
             read_error = type(exc).__name__
 
         if manifest is None:
@@ -3212,9 +3380,13 @@ def check_shape(target: Path) -> list[CheckResult]:
                     "execution-requirements-well-formed",
                     False,
                     "spec.executionRequirements, if present, is a mapping with "
-                    "only the tools key; tools, if present, is a mapping with "
-                    "only read/write/shell keys, each -- if present -- a list "
-                    "of non-empty strings",
+                    "only the tools/network keys; tools, if present, is a "
+                    "mapping with only read/write/shell keys, each -- if "
+                    "present -- a list of non-empty strings; network, if "
+                    "present, is a mapping with only mode (a "
+                    "disabled/allowlist/unrestricted enum) and domains (a "
+                    "list of non-empty strings, non-empty only when mode is "
+                    "allowlist)",
                     evidence,
                 )
             )
@@ -3414,6 +3586,8 @@ def check_shape(target: Path) -> list[CheckResult]:
                     unknown_execution_requirement_keys,
                     unknown_execution_requirement_tools_keys,
                     malformed_execution_requirement_tools_items,
+                    unknown_execution_requirement_network_keys,
+                    malformed_execution_requirement_network_items,
                 )
             )
             if portability in PORTABILITY_LEVELS:
@@ -4501,6 +4675,8 @@ def _execution_requirements_checks(
     unknown_keys: list[str],
     unknown_tools_keys: list[str],
     malformed_tools_items: list[str],
+    unknown_network_keys: list[str],
+    malformed_network_items: list[str],
 ) -> list[CheckResult]:
     """The one spec.executionRequirements check landed so far:
     ``execution-requirements-well-formed``.
@@ -4508,23 +4684,34 @@ def _execution_requirements_checks(
     Mirrors ``_skill_dependency_checks``'s early-return ladder (spec not a
     mapping / not declared / not a mapping) before real validation, and its
     problem-accumulation-then-single-CheckResult pattern. Unlike
-    spec.skillDependencies or spec.lifecycle, this field has only one
-    recognized top-level subkey so far, ``tools`` -- the remaining
-    categories (filesystem, network, mcp, credentials, browser,
-    externalServices, context) are deferred; any key here other than
-    ``tools`` fails closed via ``unknown_keys``
-    rather than being silently accepted as reserved space. There is no dangling-reference or cross-field
-    check the way spec.skillDependencies/spec.lifecycle have one each --
-    tools' read/write/shell entries are free-form capability tags, not
-    names that resolve against sibling skill directories, and no rule
-    ties this field to portability/capabilityAssumption/lifecycle.
+    spec.skillDependencies or spec.lifecycle, this field has only two
+    recognized top-level subkeys so far, ``tools`` and ``network`` (issue
+    #845) -- the remaining categories (filesystem, mcp, credentials,
+    browser, externalServices, context) are deferred; any key here other
+    than ``tools``/``network`` fails closed via ``unknown_keys`` rather
+    than being silently accepted as reserved space. There is no
+    dangling-reference or cross-field check the way
+    spec.skillDependencies/spec.lifecycle have one each -- tools'
+    read/write/shell entries are free-form capability tags, not names that
+    resolve against sibling skill directories, and no rule ties this field
+    to portability/capabilityAssumption/lifecycle. network.mode/domains
+    DO carry one cross-field rule of their own (domains non-empty iff mode
+    is allowlist), checked below the same way requires-portability-
+    compatible is checked elsewhere in this file, just folded into this
+    same well-formed check rather than earning its own separate
+    CheckResult -- tools has no analogous cross-subkey rule to justify the
+    same split.
     """
     well_formed_rule = (
         "spec.executionRequirements, if present, is a "
-        "mapping with only the tools key; tools, if "
-        "present, is a mapping with only read/write/shell "
+        "mapping with only the tools/network keys; tools, "
+        "if present, is a mapping with only read/write/shell "
         "keys, each -- if present -- a list of non-empty "
-        "strings"
+        "strings; network, if present, is a mapping with "
+        "only mode (a disabled/allowlist/unrestricted enum, "
+        "required when network is declared) and domains (a "
+        "list of non-empty strings, non-empty iff mode is "
+        "allowlist)"
     )
 
     if not spec_is_mapping:
@@ -4574,10 +4761,44 @@ def _execution_requirements_checks(
             if key in tools and not _valid_execution_requirements_tools_list(tools[key]):
                 problems.append(f"tools.{key} is not a list of non-empty strings: {tools[key]!r}")
 
+    network_present = "network" in execution_requirements
+    network = execution_requirements.get("network")
+    # Same present-but-null-vs-absent distinction tools' own branch above
+    # already draws.
+    if network_present and not isinstance(network, dict):
+        problems.append(f"network is not a mapping: {network!r}")
+    elif isinstance(network, dict):
+        if unknown_network_keys:
+            count = len(unknown_network_keys)
+            problems.append(f"{count} unknown network key{'' if count == 1 else 's'}: {unknown_network_keys[0]!r}")
+        if malformed_network_items:
+            count = len(malformed_network_items)
+            problems.append(
+                f"{count} malformed network entr{'y' if count == 1 else 'ies'}: {malformed_network_items[0]!r}"
+            )
+        mode_present = "mode" in network
+        mode = network.get("mode")
+        if not mode_present:
+            problems.append("network.mode is required when network is declared")
+        elif not (isinstance(mode, str) and mode in EXEC_REQ_NETWORK_MODES):
+            problems.append(f"network.mode is not one of {EXEC_REQ_NETWORK_MODES}: {mode!r}")
+        domains_present = "domains" in network
+        domains = network.get("domains")
+        # Reuses _valid_execution_requirements_tools_list: the same "list
+        # of non-empty strings" shape tools.read/write/shell already
+        # validate, generic despite its tools-scoped name.
+        if domains_present and not _valid_execution_requirements_tools_list(domains):
+            problems.append(f"network.domains is not a list of non-empty strings: {domains!r}")
+        elif mode == "allowlist" and not (isinstance(domains, list) and domains):
+            problems.append("network.domains must be a non-empty list when network.mode is allowlist")
+        elif mode in ("disabled", "unrestricted") and isinstance(domains, list) and domains:
+            problems.append(f"network.domains must be empty when network.mode is {mode!r}")
+
     if problems:
         return [CheckResult("execution-requirements-well-formed", False, well_formed_rule, "; ".join(problems))]
 
     declared = [f"tools.{k}" for k in EXEC_REQ_TOOLS_SUBKEYS if k in tools] if isinstance(tools, dict) else []
+    declared += [f"network.{k}" for k in EXEC_REQ_NETWORK_SUBKEYS if k in network] if isinstance(network, dict) else []
     evidence = ", ".join(declared) + " declared" if declared else "no keys declared"
     return [CheckResult("execution-requirements-well-formed", True, well_formed_rule, evidence)]
 

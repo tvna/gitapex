@@ -21,6 +21,9 @@ spec:
     - kind: deferral
       anchor: "https://github.com/tvna/gitapex/issues/814"
       summary: "This skill's real network requirement (urllib.request downloads in gitapex_provision_class_b.py) cannot be declared under the current spec.executionRequirements schema -- no network category exists yet. Tracked under parent issue https://github.com/tvna/gitapex/issues/307's W1 non-goals, which defers that category's mode-enum-plus-list shape to its own design pass."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/845"
+      summary: "Supersedes the deferral entry above (not deleted, append-only discipline): spec.executionRequirements.network now exists, per the mixed mode-enum-plus-list shape this issue resolves. Declared mode: allowlist, domains: [github.com] -- gitapex_provision_class_b.py's own release-asset downloads (urllib.request) always target https://github.com/{owner}/{repo}/releases/download/..., a URL built only from flake.nix's own pinned owner/repo/tag/asset, never attacker input."
   skillDependencies:
     requires: []
     relatedTo: []
@@ -32,3 +35,7 @@ spec:
         - files
       shell:
         - subprocess
+    network:
+      mode: allowlist
+      domains:
+        - github.com

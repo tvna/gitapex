@@ -204,10 +204,11 @@
     "executionRequirements": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Two recognized subkeys so far (tools, packages); further categories (filesystem/network/mcp/credentials/browser/externalServices/context) are deferred -- until they land, any key other than these here is a real unknown key, not reserved space, matching this skill's own bundled shape checker's current behavior for tools (packages is schema-only for now -- https://github.com/tvna/gitapex/issues/804 -- and is not yet recognized by that hand-rolled parser).",
+      "description": "Three recognized subkeys so far (tools, packages, network); further categories (filesystem/mcp/credentials/browser/externalServices/context) are deferred -- until they land, any key other than these here is a real unknown key, not reserved space, matching this skill's own bundled shape checker's current behavior for tools and network (packages is schema-only for now -- https://github.com/tvna/gitapex/issues/804 -- and is not yet recognized by that hand-rolled parser).",
       "properties": {
         "tools": { "$ref": "#/$defs/executionRequirementsTools" },
-        "packages": { "$ref": "#/$defs/executionRequirementsPackages" }
+        "packages": { "$ref": "#/$defs/executionRequirementsPackages" },
+        "network": { "$ref": "#/$defs/executionRequirementsNetwork" }
       }
     },
     "executionRequirementsTools": {
@@ -242,6 +243,41 @@
       "uniqueItems": true,
       "items": { "type": "string", "minLength": 1 },
       "description": "One ecosystem's list of non-stdlib runtime package names (e.g. [\"pyyaml\", \"jsonschema\"] under the \"pip\" key). Same shape as toolTagList (free-form strings, no closed vocabulary, an explicit empty list is a deliberate 'no packages needed for this ecosystem' statement distinct from the key being absent) but kept as its own $defs entry rather than reused, since the two lists mean different things despite the identical shape."
+    },
+    "executionRequirementsNetwork": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode"],
+      "description": "spec.executionRequirements.network (https://github.com/tvna/gitapex/issues/845), resolving the mixed scalar-plus-list shape https://github.com/tvna/gitapex/issues/349 deferred: every other gated sub-block so far is either all-list (skillDependencies, tools) or all-scalar-leaves (lifecycle's sub-blocks) -- network mixes a scalar (mode) with a list (domains) in the SAME sub-block. domains matching semantics: exact-host match (a domain string must equal the request's host exactly; no suffix or wildcard expansion) -- the conservative default this issue's own Proposed solution recommends, avoiding the ambiguity a suffix or wildcard rule would introduce before a runtime compatibility matrix (https://github.com/tvna/gitapex/issues/307 W2) exists to validate enforceability against any real adapter.",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["disabled", "allowlist", "unrestricted"],
+          "description": "disabled: no network access -- a deliberate 'declared, network prohibited' statement, distinct from an absent network block ('not yet declared'). allowlist: only the exact hosts in domains are reachable; requires a non-empty domains list. unrestricted: no network restriction from this declaration; defensible only with an explicit argument, in the declaring PR's own description, against https://github.com/tvna/gitapex/issues/307's security invariant 6 (no effective write path through network/external services) and invariant 9 (network isolation is a distinct axis) -- schema-permitted, never silently assumed safe by this schema alone."
+        },
+        "domains": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Exact-host strings (e.g. \"github.com\"). Non-empty only when mode is allowlist; empty or absent for disabled/unrestricted -- the same 'explicit empty vs. absent' precedent toolTagList already establishes, applied to the one mode where a list is meaningful."
+        }
+      },
+      "allOf": [
+        {
+          "$comment": "network-domains-mode-compatible: domains must be non-empty exactly when mode is allowlist. A non-allowlist mode with a non-empty domains list is a contradiction (disabled already means zero reachable hosts; unrestricted means every host is reachable, making an allowlist meaningless); allowlist with an empty/absent domains list grants nothing, which is what disabled already means -- so allowlist requires at least one entry.",
+          "if": {
+            "properties": { "mode": { "const": "allowlist" } },
+            "required": ["mode"]
+          },
+          "then": {
+            "required": ["domains"],
+            "properties": { "domains": { "type": "array", "minItems": 1 } }
+          },
+          "else": {
+            "properties": { "domains": { "type": "array", "maxItems": 0 } }
+          }
+        }
+      ]
     }
   }
 }
