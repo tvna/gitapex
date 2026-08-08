@@ -1638,10 +1638,11 @@ are also not reliable on their own: METR's randomized controlled trial
 completion with AI assistance while a real measurement showed them about
 19% *slower*. Where repeated trials are cheap enough for the harness,
 also record reproducibility -- variance across repeated runs of the same
-task, the discipline pass@k ([passk]) formalizes for code generation --
-since a skill that passes once and fails on retry is weaker evidence than
-a stable pass, even at an identical mean. And a passing functional score
-does not clear a run that left an unintended diff, an unresolved
+task, the all-k-trials-succeed reliability pass^k ([passhatk])
+formalizes, not the at-least-one-success-in-k of pass@k ([passk]) --
+since a skill that passes once and fails on retry is weaker evidence
+than a stable pass, even at an identical mean. And a passing functional
+score does not clear a run that left an unintended diff, an unresolved
 destructive operation, or scope creep beyond the task; record that
 alongside the score, not folded into it. None of this is a new rubric
 dimension -- it is what this dimension, and a target repository's own
@@ -1961,6 +1962,10 @@ Every inline `[label]` citation above resolves to the source below.
 - **[passk]** Chen et al. -- Evaluating Large Language Models Trained on
   Code, OpenAI, 2021 (arXiv:2107.03374).
   <https://arxiv.org/abs/2107.03374>
+- **[passhatk]** Yao, Shinn, Razavi, Narasimhan -- tau-bench: A
+  Benchmark for Tool-Agent-User Interaction in Real-World Domains, 2024
+  (arXiv:2406.12045).
+  <https://arxiv.org/abs/2406.12045>
 - **[metrrct]** Becker, Rush, Barnes, Rein -- Measuring the Impact of
   Early-2025 AI on Experienced Open-Source Developer Productivity, METR,
   2025 (arXiv:2507.09089).
@@ -1975,6 +1980,7 @@ Every inline `[label]` citation above resolves to the source below.
 [skillopt]: https://arxiv.org/abs/2605.23904 "Yang et al., SkillOpt: Executive Strategy for Self-Evolving Agent Skills, Microsoft, 2026 (arXiv:2605.23904)"
 [kapoor]: https://arxiv.org/abs/2407.01502 "Kapoor, Stroebl, Siegel, Nadgir, Narayanan -- AI Agents That Matter, 2024 (arXiv:2407.01502)"
 [passk]: https://arxiv.org/abs/2107.03374 "Chen et al. -- Evaluating Large Language Models Trained on Code, OpenAI, 2021 (arXiv:2107.03374)"
+[passhatk]: https://arxiv.org/abs/2406.12045 "Yao, Shinn, Razavi, Narasimhan -- tau-bench: A Benchmark for Tool-Agent-User Interaction in Real-World Domains, 2024 (arXiv:2406.12045)"
 [metrrct]: https://arxiv.org/abs/2507.09089 "Becker, Rush, Barnes, Rein -- Measuring the Impact of Early-2025 AI on Experienced Open-Source Developer Productivity, METR, 2025 (arXiv:2507.09089)"
 [dbc]: https://se.inf.ethz.ch/~meyer/publications/computer/contract.pdf "Bertrand Meyer, Applying \"Design by Contract\", IEEE Computer 25(10):40-51, October 1992"
 [sd]: https://dl.acm.org/doi/10.5555/1241515.1241533 "W. P. Stevens, G. J. Myers, and L. L. Constantine, Structured Design, IBM Systems Journal 13(2):115-139, 1974"
