@@ -446,6 +446,27 @@ def test_long_reference_with_toc_passes(tmp_path):
     assert _by_name(css.check_shape(d))["toc:big.md"].passed is True
 
 
+def test_long_non_markdown_reference_skips_markdown_checks(tmp_path):
+    # A bundled JSON schema (or any non-.md dependency file) has no
+    # Markdown headings or links to hold TOC/link/anchor checks to --
+    # those must not even appear for it, unlike a genuine toc: FAIL.
+    filler = "\n".join(f'  "key{i}": {i},' for i in range(css.TOC_MIN_LINES + 5))
+    body = "{\n" + filler + '\n  "last": true\n}\n'
+    d = _write_skill(tmp_path, references={"big.json": body})
+    names = _by_name(css.check_shape(d))
+    assert "toc:big.json" not in names
+    assert "links-inside-skill:big.json" not in names
+    assert "anchor-targets-resolve:big.json" not in names
+
+
+def test_short_non_markdown_reference_is_unaffected(tmp_path):
+    d = _write_skill(tmp_path, references={"small.json": '{"a": 1}\n'})
+    names = _by_name(css.check_shape(d))
+    assert "toc:small.json" not in names
+    assert "links-inside-skill:small.json" not in names
+    assert "anchor-targets-resolve:small.json" not in names
+
+
 def test_missing_argument_exits_2(tmp_path):
     # argparse exits (raises SystemExit) with code 2 when the required
     # target is absent or extra positionals are given.
@@ -1809,6 +1830,26 @@ def test_portable_qualified_issue_citation_fails(tmp_path):
     res = _by_name(css.check_shape(d))
     assert res["no-bare-issue-citation"].passed is False
     assert "owner/repo#149" in res["no-bare-issue-citation"].evidence
+
+
+def test_non_markdown_reference_still_scanned_for_prose_citations(tmp_path):
+    # A bundled non-Markdown dependency file (e.g. a JSON schema) still
+    # carries author-written English in its own description strings --
+    # exempting it by extension would let a bare issue citation or a raw
+    # placeholder hide from every citation/placeholder check just by
+    # living in a .json file instead of a .md one. _citation_sources must
+    # keep scanning it (only the Markdown-syntax-specific TOC/link/anchor
+    # checks are .md-only -- see test_long_non_markdown_reference_skips_
+    # markdown_checks below).
+    d = _write_raw(
+        tmp_path,
+        _portable_body(),
+        references={"schema.json": '{\n  "description": "See issue #149, a <name> placeholder"\n}\n'},
+    )
+    res = _by_name(css.check_shape(d))
+    assert res["no-bare-issue-citation"].passed is False
+    assert "references/schema.json:#149" in res["no-bare-issue-citation"].evidence
+    assert res["no-raw-angle-bracket-placeholder"].passed is False
 
 
 def test_portable_unhedged_repo_path_citation_fails(tmp_path):

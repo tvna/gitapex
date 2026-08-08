@@ -215,6 +215,9 @@ just to classify it.
 - **Mixed**: a portable core plus repo-specific detail should split the
   two into a clearly named reference file, not blend them.
 
+**Dependency file portability** applies that question to a bundled FILE
+(schema/script/config/fixture), not a sentence: `references/rubric.md`'s Portability level section.
+
 A bare GitHub issue/PR-number citation (`#149`, `owner/repo#149`) is barred
 from `SKILL.md`/`references/*.md` at every level, Mixed and
 Repository-scoped included -- unlike repo-specific paths and other
