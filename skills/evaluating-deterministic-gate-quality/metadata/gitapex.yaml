@@ -271,6 +271,128 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/814"
       summary: "Declared spec.executionRequirements.tools (W3 first slice, https://github.com/tvna/gitapex/issues/307): gitapex_check_gate_shape.py reads a target hook script and optional --hooks-json by file path; its own docstring states it performs no writes, no network, and no subprocess execution of the target -- it statically parses the target's source via Python's ast module rather than running it."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "Added dimension 23 (caller/installing-environment maturity, distinct from any single gate's own quality) to references/dimensions.md's probabilistic-maturity lane, closing a session-identified gap: no prior dimension measured the maturity of the repository that installed or invoked this skill itself, as opposed to any single gate under review."
+      outcome:
+        lines: "dimensions.md before->after total count, not a location citation: 364->418"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "Differentiated dimension 23 explicitly from Three-way division of responsibility / coverage attestation (a passive cross-check of the target's own declared invariants) and the Reproducibility/Domain-coverage axis (scoped to one policy at a time). New text lives at security-level.md:157-163 and cross-cutting-axes.md:69-73 specifically."
+      outcome:
+        lines: "security-level.md before->after total count: 161->166, cross-cutting-axes.md before->after total count: 82->88"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "Added references/output-schema.json, a JSON Schema (2020-12) formally defining this skill's structured output (reviewMeta/mechanismFit/findings/crossCuttingAxes/coverageAttestation/persistenceRecommendation). persistenceRecommendation only names candidate storage channels for a caller to choose from -- never an action this skill performs itself; executionRequirements.tools.write stays empty (SKILL.md Procedure step 6 now references the schema)."
+      outcome:
+        lines: "SKILL.md before->after total count at time of this commit: 382->400, output-schema.json: 246 lines at time of this commit"
+    - kind: audit
+      anchor: "method:evaluating-skill-quality"
+      summary: "An isolated dispatch on the dimension-23/output-schema.json diff returned NOT-WELL-FORMED: the deterministic shape checker (gitapex_check_skill_shape.py) failed output-schema.json (243 lines, no TOC) under its Markdown-only TOC rule applied blindly to a JSON reference file."
+      outcome:
+        verdict: NOT-WELL-FORMED
+        found: 3
+    - kind: audit
+      anchor: "method:evaluating-skill-quality"
+      summary: "The same evaluating-skill-quality dispatch found the Honesty-vocabulary tokens dimensions.md/output-schema.json cited as reused verbatim from security-level.md were actually re-cased (snake_case vs. security-level.md's own Title-Case prose), plus two metadata line-citation inaccuracies."
+    - kind: audit
+      anchor: "method:battle-testing-a-skill"
+      summary: "An isolated battle-testing-a-skill dispatch on the same diff returned FAIL with 4 findings: dimension 23's evidence-artifact list let a CI workflow file alone satisfy the actually-required sub-question, contradicting dimension 1's own stricter branch-protection-only rule."
+      outcome:
+        verdict: FAIL
+        found: 4
+    - kind: audit
+      anchor: "method:battle-testing-a-skill"
+      summary: "The same dispatch found output-schema.json's persistenceRecommendation.rationale/preconditions fields had no anti-injection constraint; the shipped fixture never put dimension 23's own content-trust skepticism clause under adversarial pressure; and its output_contains assertions were too shallow to tie the classification to its specific sub-question."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "Fixed the shape/vocabulary findings above: scoped gitapex_check_skill_shape.py's TOC rule to .md files only (a JSON reference file cannot carry a Markdown heading), with a new regression test; changed output-schema.json's honestyClassification enum to security-level.md's exact prose strings; corrected the metadata line citations."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "Fixed the battle-test findings above: split dimension 23's evidence-artifact guidance per sub-question, requiring branch-protection/required-status-check confirmation specifically for sub-question (b); added anti-injection description text to persistenceRecommendation's freeform fields; required actual schema validation, not just structuring, in SKILL.md step 6."
+      outcome:
+        findings_fixed: 7
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "Added evals/evaluating-deterministic-gate-quality/tasks/caller-environment-maturity-documented-not-enforced.yaml and adversarial-caller-environment-maturity-claim-vs-reality-mismatch.yaml, unlike dimensions 21/22 directly testable via synthetic target-repository fixtures rather than real production firing data."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "The second fixture was added per the battle-testing-a-skill finding above, putting dimension 23's skepticism clause under a claim-vs-reality pressure test. Coverage: 13/23 dimensions, 4/4 axes."
+      outcome:
+        fixtures: "26->28"
+        dimensions_cited: "12/22 -> 13/23"
+    - kind: audit
+      anchor: "method:evaluating-skill-quality"
+      summary: "A final, re-isolated evaluating-skill-quality dispatch on the current diff returned WELL-FORMED-NOT-MATURE, shape 57/57. One real dimension-5 gap: capabilityAssumption: Adaptive is declared, but Procedure steps 2-3 force reading dimensions.md/mechanism-fit.md every review regardless of model tier -- the shape the sibling evaluating-skill-quality's own metadata explicitly rejected Adaptive for. Pre-existing, not introduced by this PR; filed as its own follow-up rather than fixed here."
+      outcome:
+        verdict: WELL-FORMED-NOT-MATURE
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/829 -> https://github.com/tvna/gitapex/issues/831"
+      summary: "The capabilityAssumption: Adaptive-vs-forced-reference-read gap above was out of scope for issue 829 (a pre-existing classification question, not introduced by this diff) and filed as its own follow-up."
+    - kind: audit
+      anchor: "method:battle-testing-a-skill"
+      summary: "A final, re-isolated battle-testing-a-skill dispatch returned PASS: both previously-fixed symptoms (evidence-artifact conflation, missing anti-injection text) do not reproduce under direct adversarial pressure using the same scenario class. Named one new, real gap: output-schema.json had no artifactRef field, so a review covering more than one artifact had no schema-conformant way to keep verdicts distinct."
+      outcome:
+        verdict: PASS
+        found: 1
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "Fixed the multi-artifact gap above: added reviewMeta.artifactRef and a one-artifact-per-instance convention to output-schema.json's own top-level description (SKILL.md step 6 now states it too) -- a review covering several artifacts emits one instance per artifact, only the last carrying coverageAttestation. Re-validated: schema still valid, worked example with artifactRef passes, shape checker still 0 FAIL."
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "Deferred, named rather than silently dropped: no deterministic check validates output-schema.json's own JSON-Schema syntactic validity (a future hand-edit typo would go undetected until a caller's runtime validation call fails) -- named by the final battle-testing-a-skill dispatch, tracked as its own follow-up rather than built into this already-large change."
+    - kind: audit
+      anchor: "method:pr-832-convention-adherence-review"
+      summary: "This branch's own inner-layer adversarial review (https://github.com/tvna/gitapex/pull/832) found this sidecar own before/after line-count claims (dimensions.md/security-level.md/SKILL.md/output-schema.json entries above) did not reconcile against a direct wc -l check at the branch own start and end commits -- two off-by-one baselines, two counts left stale after a later commit edited the same file without updating the earlier entry."
+      outcome:
+        verdict: CONFIRMED
+        found: 4
+    - kind: audit
+      anchor: "method:pr-832-convention-adherence-review"
+      summary: "Ironic given this skill own dimension 21 discipline (claim is not evidence, ground finding in direct inspection), applied reflexively to this sidecar own provenance text -- named as its own finding rather than silently fixed without disclosure."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "Fixed all 4 line-count inaccuracies: dimensions.md baseline corrected 365->364; security-level.md baseline corrected 162->161; SKILL.md/output-schema.json entries now scoped at time of this commit rather than implying a final total, since both files were edited again later."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "Accurate PR-wide totals (9e63553->HEAD, re-verified via git show <sha>:<path> | wc -l for all four commits, not re-asserted from memory): dimensions.md 364->418, security-level.md 161->166, cross-cutting-axes.md 82->88 (already correct), SKILL.md 389->403, output-schema.json 250 lines final."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "Fixed a self-contradiction the operator caught: dimension 23 own prose said evaluated once per review, but SKILL.md Procedure step 3 walked it inside the per-artifact loop like dimensions 1-22, and output-schema.json placed its finding in the same per-artifact findings array with no distinguishing rule."
+      outcome:
+        lines: "dimensions.md 418->439, SKILL.md 403->416, output-schema.json 250->254"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "Added a review-scope, not artifact-scope tag to dimensions.md (mirroring the existing precondition-scope pattern for dimension 22), excluded dimension 23 from Procedure step 3, moved its evaluation to step 5 alongside coverage attestation, and added reviewScoped plus a placement rule to output-schema.json."
+    - kind: caveat
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "An independent fable-model dispatch adversarially reviewing a separate, larger overhaul proposal for this skill (not merged, filed for the operator's own consideration) surfaced the same class of gap from a different angle -- mechanism-fit lacking an infrastructure-owned-control triage branch, and scope-selection risking silent coverage-attestation blind spots."
+    - kind: audit
+      anchor: "method:battle-testing-a-skill"
+      summary: "A battle-testing-a-skill dispatch on the review-scope fix returned FAIL with 3 findings: dimensions.md own lane-summary line (7-23, walk all of them) was left unqualified and still contradicted the new dimension-23 carve-out; the schema same-instance placement rule was prose-only despite being schema-enforceable; no fixture regression-tested the fix itself."
+      outcome:
+        verdict: FAIL
+        found: 3
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "Fixed all 3: dimensions.md lane-summary line now names the dimension-23 exception explicitly; output-schema.json gained a top-level if/then (findings contains dimensionId 23 -> coverageAttestation required), verified to reject a violating instance and accept both a compliant one and an ordinary per-artifact instance."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "Added dimension-23-review-scope-not-per-artifact.yaml: a two-gate review prompt asserting the response recognizes dimension 23 is evaluated once for the whole review, not once per gate. A companion evaluating-skill-quality dispatch on the same fix returned WELL-FORMED-AND-MATURE, shape 57/57, confirming dimensions.md/SKILL.md/output-schema.json agree."
+      outcome:
+        fixtures: "28->29"
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "Merging origin/main to resolve PR https://github.com/tvna/gitapex/pull/832's dirty mergeable_state found issue https://github.com/tvna/gitapex/issues/834 (merged via https://github.com/tvna/gitapex/pull/839) had already fixed the identical gitapex_check_skill_shape.py TOC false-fail bug in the shared evaluating-skill-quality script, more thoroughly."
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "It also scoped links-inside-skill/anchor-targets-resolve, and separately preserved _citation_sources coverage for non-.md files -- a bypass this session's own narrower .md-suffix-only fix never considered. Deferred to that version; this skill's own now-superseded correction entry was dropped during conflict resolution."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "Follow-up to the origin/main merge: git's line-based auto-merge of gitapex_check_skill_shape.py combined https://github.com/tvna/gitapex/issues/834's early ref.suffix != '.md' continue guard with this session's own earlier, narrower and ref.suffix == '.md' condition on the same TOC check, leaving a redundant, dead condition and a stale comment -- neither conflicted, so nothing flagged it."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "Removed the redundant condition and its comment; the file is now byte-identical to origin/main's version, confirmed via diff. pytest (2793 passed), shape checker (59/59), and mypy all re-verified clean on skills/evaluating-skill-quality."
   skillDependencies:
     requires:
       - evaluating-skill-quality

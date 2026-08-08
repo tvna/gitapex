@@ -154,8 +154,13 @@ the Blast-radius/trust classification axis's own job (`SKILL.md`). It does
 not decide whether a gate's own behavior differs across agent-tool
 runtimes or dependent middleware -- that is the Compatibility awareness
 axis's own job (`SKILL.md`), orthogonal to this axis's tier
-classification. This axis's own, distinct question is narrower than all
-five: given that a gate exists, is correctly placed, and its own
+classification. It does not decide whether the calling/installing
+repository itself has cross-domain enforcement infrastructure, required
+CI checks, or branch protection -- that is dimension 23's own job
+(`dimensions.md`), which characterizes the caller rather than the
+control under review and does not roll up into this axis's own
+per-property tier labels. This axis's own, distinct question is narrower
+than all six: given that a gate exists, is correctly placed, and its own
 mechanics are already graded, where does its actual control strength
 honestly sit on an external maturity ladder, and is that placement
 honestly claimed.

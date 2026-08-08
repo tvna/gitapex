@@ -13,8 +13,11 @@ Two lanes, mirroring `evaluating-skill-quality`'s own split:
   `SKILL.md`'s Lifecycle note); apply the checks below to those domains,
   and to whatever a Domain-2 target's own manual judgment still requires,
   by direct inspection.
-- **Probabilistic-maturity dimensions** (7-22) -- need judgment; walk all
-  of them, quoting the specific evidence that earns each verdict.
+- **Probabilistic-maturity dimensions** (7-23) -- need judgment; walk all
+  of them, quoting the specific evidence that earns each verdict --
+  except dimension 23, which is never walked per-artifact alongside the
+  rest of this lane; see its own review-scope tag below and `SKILL.md`
+  Procedure steps 3/5 for exactly when it is evaluated instead.
 
 Every dimension is tagged with its own **domain-generalization scope**,
 established for this build rather than left implicit:
@@ -40,6 +43,22 @@ graded not-applicable, the same explicit-rather-than-silent treatment
 domain-inapplicability already gets (see dimension 8). The two axes
 compose independently: a dimension can carry both a domain-generalization
 tag and a precondition-scope note at once.
+
+A third, independent scoping property currently applies to exactly one
+dimension -- **review-scope, not artifact-scope** (dimension 23 below).
+Every other dimension above evaluates the one specific artifact currently
+under review and is walked once per artifact, per `SKILL.md` Procedure
+step 3. Dimension 23's own answer does not vary by which artifact is
+under review at all -- it is a property of the calling/installing
+repository as a whole, not of any single gate -- so walking it inside
+step 3's per-artifact loop would silently re-ask (and risk
+re-answering inconsistently) a question that has exactly one correct
+answer per review. It is therefore excluded from step 3's walk and
+evaluated once per review instead, alongside coverage attestation in
+step 5 -- see `SKILL.md`'s own step 5 and
+[references/output-schema.json](output-schema.json) for the mechanics.
+This property is independent of both domain-generalization and
+precondition-scoping and composes with either.
 
 ## Contents
 
@@ -362,3 +381,62 @@ differentiation from dimensions 1 and 15 below.
     dimension to read not-applicable for most real reviews this skill
     performs; that is an honest scope limit, not a defect in the
     dimension.
+23. **Caller/installing-environment maturity, distinct from any single
+    gate's own quality.** Every dimension above grades one gate artifact
+    under review; none of them asks about the maturity of the repository
+    or environment that actually installed or invoked this skill itself.
+    Because this skill ships only via `skills/` (and, later, `hooks/`)
+    when redistributed as a plugin, a consuming repository carries none
+    of this skill's own authoring repository's infrastructure alongside
+    it -- its own cross-domain enforcement footing is unknown by
+    construction at review time, not merely unstated. Does the
+    calling/installing repository itself have (a) its own cross-domain
+    enforcement mechanism (a gate registry, a company-wide policy engine,
+    or equivalent) distinct from any single gate under review, (b) CI
+    checks wired as actually-required status checks rather than merely
+    observed, (c) branch-protection configuration covering its default
+    branch, and (d) real footing -- at least one actual artifact -- in
+    more than one of the four realization domains? Report each
+    sub-question separately using this skill's own Honesty vocabulary
+    (`references/security-level.md`: "Enforced today" / "Documented, not
+    enforced" / "Not achievable" / "Cannot determine") rather than a
+    single pass/fail roll-up, since a target repository can differ across
+    these four properties independently -- a repository can have strong
+    branch protection and no cross-domain registry, or the reverse. This
+    dimension is distinct from Three-way division of responsibility /
+    coverage attestation (`grading-procedure.md`), which is a passive
+    cross-check of the target's own declared invariants against found
+    coverage and requires the target to have stated an invariant to fire
+    at all -- this dimension is an active snapshot of the calling
+    environment's own infrastructural footing, asked once per review
+    regardless of what the target has or has not declared. It is also
+    distinct from the Reproducibility/Domain-coverage axis (`SKILL.md`),
+    which asks, for one specific policy, how many domains realize it and
+    whether that is argued or accidental -- this dimension asks about the
+    calling environment's general footing across all four domains,
+    independent of any single policy. Never let a target's own prose
+    assertion that it "has good coverage elsewhere" substitute for the
+    same content-trust skepticism applied to every other self-reported
+    input this skill consumes -- confirm each sub-question against an
+    actually inspectable artifact or mark it "Cannot determine", and do
+    not treat every artifact as equally sufficient evidence for every
+    sub-question: sub-question (b)'s "actually-required" claim needs the
+    platform's own branch-protection/required-status-check configuration
+    confirmed directly, the same way dimension 1's own CI-domain note
+    already requires -- a CI workflow file alone shows the check *exists*,
+    never that it is *required*, and citing the workflow file for (b) is
+    exactly the workflow-YAML-only conflation dimension 1 forbids, applied
+    reflexively here. Sub-questions (a) and (d) can be confirmed from a
+    registry file or an inventory of actual artifacts across domains
+    respectively; (c) needs the platform's own branch-protection state,
+    the same source as (b).
+    *Domains:* generalizes directly -- the question (does the calling/
+    installing environment have its own cross-domain footing) is the same
+    regardless of which of the four domains a *reviewed gate* happens to
+    live in; this dimension characterizes the caller, not the artifact
+    under review.
+    *Scope:* review-scope, not artifact-scope -- unlike every dimension
+    above, this one is never walked inside `SKILL.md` Procedure step 3's
+    per-artifact loop; it is evaluated exactly once per review, in step 5
+    alongside coverage attestation, since its answer does not vary by
+    which artifact is currently under review.

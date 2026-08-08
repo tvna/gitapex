@@ -182,13 +182,16 @@ project-instruction file) this skill defers to rather than re-deriving.
    elsewhere) rather than assuming every dimension applies unchanged to
    every domain. Quote the specific evidence that earns each verdict; a
    dimension that cannot be assessed from available evidence is reported
-   as such, not silently skipped or guessed.
+   as such, not silently skipped or guessed. Dimension 23 is excluded
+   from this per-artifact walk -- its own review-scope tag in
+   dimensions.md means it is evaluated once per review, in step 5, not
+   repeated for every artifact discovered.
 4. **Cross-cutting axes.** Apply Compatibility awareness, Reproducibility
    / Domain-coverage, Blast-radius / trust classification, and
    Security-level / Zero-Trust maturity classification, per the sections
    above, to each artifact and to the target's overall gate landscape.
-5. **Coverage attestation.** Enumerate the target repository's own stated
-   invariants, filter to the ones
+5. **Coverage attestation, plus dimension 23.** Enumerate the target
+   repository's own stated invariants, filter to the ones
    [references/mechanism-fit.md](references/mechanism-fit.md)'s Gate vs.
    no gate test would even suggest deterministic backing for, then
    cross-check the filtered set against what steps 1-4 actually found
@@ -197,10 +200,20 @@ project-instruction file) this skill defers to rather than re-deriving.
    live-testing requirement for what counts as "covered," and the
    standing-coverage-drift-gate recommendation:
    [references/grading-procedure.md](references/grading-procedure.md#coverage-attestation-procedure-step-5).
+   In this same once-per-review pass, separately evaluate dimension 23
+   (caller/installing-environment maturity) from
+   [references/dimensions.md](references/dimensions.md) -- a distinct
+   check from coverage attestation above (that asks whether the target's
+   own declared invariants have gate coverage; dimension 23 asks whether
+   the calling/installing repository itself has cross-domain enforcement
+   infrastructure), co-located here only because both share the same
+   once-per-review, not-per-artifact, evaluation timing.
 6. **Issue a verdict** per artifact or policy reviewed (well-formed and
    well-placed / well-formed but misplaced / not well-formed /
    no-gate-warranted / indeterminate, with the specific reason), plus an
-   overall coverage-attestation summary for the target repository. An
+   overall coverage-attestation summary and a single dimension-23 finding
+   for the target repository -- both once per review, never repeated per
+   artifact. An
    artifact matching more than one of these at once (e.g. wrong-domain
    and also failing a deterministic-shape check) gets both reported
    together, not resolved by picking one -- a wrong-domain finding never
@@ -211,7 +224,19 @@ project-instruction file) this skill defers to rather than re-deriving.
    completed review. A well-formed verdict resting on a runtime-behavior
    claim (deny/allow/fail-open/fail-closed, not the gate's own source text
    alone) requires that claim live-tested per dimension 10 and the
-   live-testing Stop boundary below, not read-only-inferred.
+   live-testing Stop boundary below, not read-only-inferred. When this
+   review's own output needs to be machine-consumed rather than only
+   read, structure it per
+   [references/output-schema.json](references/output-schema.json) and
+   validate the produced JSON against that schema before treating it as
+   conformant -- naming the schema is not itself the enforcement, the
+   validation step is. Emit one schema-conformant instance per artifact
+   reviewed, not one instance merging several artifacts' findings
+   together -- the schema's own top-level description states this
+   convention. This skill still performs no write or persistence
+   of its own; that schema's own `persistenceRecommendation` field only
+   names candidate storage channels for a caller to choose from, never an
+   action this skill takes itself.
 
 ## Stop boundaries
 
@@ -359,11 +384,13 @@ the guiding principle, the two-lane structure, the mechanism-fit test
 (full detail in [mechanism-fit.md](references/mechanism-fit.md)), the
 four axes (three in
 [cross-cutting-axes.md](references/cross-cutting-axes.md), the fourth in
-[security-level.md](references/security-level.md)), and the three-way
+[security-level.md](references/security-level.md)), the three-way
 division of responsibility (full detail, together with Procedure step
 5's coverage-attestation elaboration and the review-quality-only subset
 of grading-specific Stop boundaries, in
-[grading-procedure.md](references/grading-procedure.md)) -- names no
+[grading-procedure.md](references/grading-procedure.md)), and the
+structured-output DSL
+([output-schema.json](references/output-schema.json)) -- names no
 path or issue number specific to this skill's own authoring repository.
 This skill's own authoring repository's worked examples and provenance
 live separately, explicitly repository-scoped, in
