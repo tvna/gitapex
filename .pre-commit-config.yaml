@@ -16,8 +16,17 @@
 # Issue #890 installs a pre-push shim as well as a pre-commit one. Without
 # this, the ruff/mypy hooks below -- which declare no `stages` -- would start
 # running on every push too, since an unset `stages` means "every installed
-# stage". Their scope is unchanged from before #890: pre-commit only. The one
+# stage". Their scope is unchanged from before #890: pre-commit only. Each
 # hook that wants the pre-push stage names it explicitly.
+#
+# Issue #876 originally set `default_install_hook_types: [pre-commit,
+# pre-push]` here instead, so a bare `prek install` would write both shims.
+# Dropped on merge with #890: that issue names both shims explicitly at
+# every install site (CONTRIBUTING.md, flake.nix's devShell) *and* verifies
+# afterwards that each shim actually resolves, which covers the same gap far
+# more thoroughly. Keeping both would leave two mechanisms for one outcome,
+# and would make CONTRIBUTING.md's own "prek install with no -t installs the
+# pre-commit shim only" explanation false.
 default_stages: [pre-commit]
 
 repos:
@@ -91,3 +100,37 @@ repos:
         language: system
         pass_filenames: false
         require_serial: true
+
+      # Issue #876. The three hooks above are pre-commit-stage and cover
+      # ruff/mypy only; every other gate with a working-tree-only form ran
+      # exclusively in CI, so a gap surfaced one red check at a time on an
+      # already-open PR. This runs all of them in one pass at pre-push --
+      # the last local moment before a gap becomes a CI round-trip, and
+      # deliberately not pre-commit: it grades committed state (HEAD vs
+      # origin/main), not a staged index, and at 4-6 s warm end to end for
+      # all 16 wired gates it is too slow to sit on every single commit.
+      #
+      # The wired set is not listed here: the runner discovers it from
+      # .gitapex/ssot.json's `local` plane, so a newly wired gate needs no
+      # edit to this file. tests/test_gitapex_gate_local_preflight.py's
+      # test_the_preflight_is_wired_as_a_pre_push_hook asserts this entry
+      # keeps existing, so the wiring cannot silently regress.
+      #
+      # Blast radius, stated rather than implied: a pre-push hook is
+      # bypassable with `git push --no-verify`, and it only exists in a
+      # clone where `prek install` has actually run. CI remains the
+      # authoritative merge gate; this makes the local pass real
+      # enforcement for the ordinary path, not a command a contributor has
+      # to remember to type.
+      #
+      # `python3`, not `uv run`: the runner itself is stdlib-only, and each
+      # gate's own local_invocation carries whatever `uv run` pin it needs.
+      - id: local-preflight
+        name: local preflight (every working-tree-runnable gate)
+        entry: python3 .github/scripts/gitapex_gate_local_preflight.py
+        language: system
+        stages: [pre-push]
+        pass_filenames: false
+        always_run: true
+        require_serial: true
+        verbose: true
