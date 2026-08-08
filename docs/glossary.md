@@ -55,17 +55,24 @@ Output contract already named this concept "Branch Plan" first, so that
 term wins; bare "plan" retires as an ambiguous synonym in any new skill
 text rather than being introduced as a second name for the same thing.
 
-## `Evaluating-*` vs. `Auditing-*` vs. `Vetting-*` (skill-naming verb families)
+## `Evaluating-*` vs. `Auditing-*` vs. `Vetting-*` vs. `Scanning-*` (skill-naming verb families)
 
-Three gerund-verb families this repository's skill names split into, each
-with a distinct meaning -- not interchangeable, despite all three English
-words casually meaning "review." They split along two independent axes:
+Four gerund-verb families this repository's skill names split into --
+three carried by shipped skills today, the fourth reserved ahead of its
+own first skill (see the `Scanning-*` provenance paragraph below) -- each
+with a distinct meaning, not interchangeable, despite all four English
+words casually meaning "review." They split along three independent axes:
 what the skill's *target* is (a repository-internal artifact vs. an
-external-facing surface or this repository's own scope), and what its
+external-facing surface or this repository's own scope), what its
 *verdict style* is (a fixed-dimension rubric vs. a checklist/axis map vs.
-concrete per-item pass/fail tests). The two axes do not always co-vary --
-`Vetting-*` exists because one real skill combined an `Evaluating-*`-style
-target with neither other family's verdict style.
+concrete per-item pass/fail tests vs. a wrapped tool's own finding
+format), and who *owns the judgment* (the skill itself, reasoning against
+a rubric or checklist, vs. an external tool whose findings the skill
+reports unmodified). The axes do not always co-vary -- `Vetting-*` exists
+because one real skill combined an `Evaluating-*`-style target with
+neither other family's verdict style, and the judgment-ownership axis is
+what separates `Scanning-*` from all three families above it -- something
+the first two axes alone could not do.
 
 - **`Evaluating-*`**: grades a repository-internal artifact (a `SKILL.md`,
   a deterministic gate) against a fixed-dimension quality rubric, producing
@@ -83,6 +90,21 @@ target with neither other family's verdict style.
   external-facing surface. Verdict vocabulary is bespoke per skill (e.g.
   `exposure-minimal`/`exposure-excess`), always reported per item, never
   as one aggregate verdict.
+- **`Scanning-*`**: delegates the judgment entirely to one external,
+  pinned diagnostic CLI tool and reports that tool's own findings
+  unmodified -- the first family in the "delegates judgment" category,
+  where the three families above all perform the judgment themselves
+  (a rubric, a checklist/axis map, or per-item tests) against human or
+  LLM reasoning. Target is whatever the wrapped tool takes as input
+  (CI workflow files, a dependency graph, tracked file content); verdict
+  style is the wrapped tool's own finding format, never a gitapex-minted
+  verdict vocabulary layered on top. Knowledge of what is vulnerable or
+  misconfigured lives in the wrapped tool, never in the skill's own
+  `references/`, and every `scanning-*` skill declares `write: []`.
+  No shipped example yet -- the `scanning-*` roster is tracked at #843.
+  Which capability a `scanning-*` skill is allowed to reach for (the
+  libre CLI it wraps vs. a platform-native equivalent) is decided by
+  `scanning-capability-selection-policy.md`, not per skill.
 
 Surfaced as a Detect-step conflict (#462) while renaming
 `git-hosting-surface-audit` -> `auditing-git-hosting-surface` (#459) to
@@ -109,3 +131,26 @@ existing definition to cover a shape it wasn't written for.
 rename candidate on PR #463 itself, not changed here. That rename executed
 in gitapex#466 via `git mv` + `spec.lifecycle.renamedFrom`, once this entry
 itself had merged.
+
+`Scanning-*` (#844) was added ahead of any skill that carries the name,
+deliberately reusing the #464 -> gitapex#466 ordering above: the family
+entry merges first, the rename and the first roster skill that depend on
+the name follow. The family itself -- thin orchestrator skills, one
+pinned diagnostic CLI tool each, `write: []` always -- comes from the
+roster design recorded in tracking issue #843, and is this repository's
+own Three-way-division pattern applied to skill naming
+(`skills/evaluating-deterministic-gate-quality/references/grading-procedure.md`:
+an external engine is noted as existing and taken as input to the
+skill's own pass, never built, required, or substituted for).
+
+The third axis is #844's own contribution, not #843's. Without it the
+first two axes place this family closest to `Auditing-*` -- an
+external-facing target, a `Covered`/`Partial`/`Gap`-shaped report -- and
+neither axis as it then stood captured the actual difference, that the
+verdict is not the skill's own. A family that does not produce its own
+verdict cannot share a definition with one that does, so the axis was
+added rather than an existing definition stretched -- the same
+resolution `Vetting-*` got above. The two consumers blocked on this
+entry, the `vetting-attack-surface` -> `scanning-attack-surfaces` rename
+and the first roster skill (`scanning-ci-workflows`), are tracked
+separately under #843.
