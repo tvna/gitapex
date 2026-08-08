@@ -12,28 +12,25 @@ judgment of its own about what makes a workflow unsafe or malformed --
 that knowledge lives in the two tools, is maintained upstream, and is
 never restated, summarized, or second-guessed here.
 
-That delegation is the whole point of the naming family this skill
-belongs to, defined in `docs/glossary.md` (a document specific to this
-skill's own authoring repository). Every other family in that section
-performs its own judgment against a rubric, a checklist, or per-item
-tests. This one does not.
+That delegation is the whole point of the `scanning-*` naming family
+this skill belongs to. Sibling families perform their own judgment
+against a rubric, a checklist, or per-item tests. This one does not.
 
 ## Capability selection: cited, not re-derived
 
 Which capability this skill may reach for -- the libre CLIs it wraps
 versus a hosting-platform-native equivalent such as a code-scanning
-product -- is settled by
-`docs/scanning-capability-selection-policy.md`, another document
-specific to this skill's own authoring repository. Read it there rather
-than re-deriving the rule here. Two consequences bind this skill
-directly:
+product -- is settled by the calling repository's own capability-selection
+policy, read there rather than re-derived here. (This skill's authoring
+repository has one; Notes cites it.) Two consequences bind this skill
+directly, whichever policy applies:
 
 - The wrapped CLIs are the guaranteed path. This skill runs them
   unconditionally and never makes running them conditional on a platform
   check.
 - This skill performs no platform detection at all, and reports no
-  platform-native capability as available. That policy's own v1 scope
-  ships no detection code, and this skill does not introduce any.
+  platform-native capability as available: it ships no detection code
+  and introduces none.
 
 ## Applicability gate
 
@@ -272,15 +269,18 @@ with both tools' real captured output:
 
 ## Notes
 
-Portability: **Mixed**. The Procedure, the Applicability gate, the
-division of labor, the reporting contract, and the Stop boundaries are
-portable -- they name only the two tools and their documented interfaces.
-Two sections cite documents belonging to this skill's own authoring
-repository, named as repository-specific inline where they appear:
-`docs/glossary.md` for the naming family, and
-`docs/scanning-capability-selection-policy.md` for capability selection.
-Substituting a vendoring repository's own equivalents, or dropping those
-two citations, leaves the Procedure intact.
+Portability: **Mixed**. The body above -- the Procedure, the
+Applicability gate, the division of labor, the reporting contract, and
+the Stop boundaries -- names no path outside this skill's own directory:
+it cites only the two tools, their documented interfaces, and
+`references/`, all of which travel with `SKILL.md` when it is copied or
+vendored. The two documents belonging to this skill's own authoring
+repository are cited here instead of inline, so a consumer can identify
+and drop them in one place: `docs/glossary.md` defines the `scanning-*`
+naming family, and `docs/scanning-capability-selection-policy.md` is the
+capability-selection policy the section of that name defers to.
+Substituting a vendoring repository's own equivalents, or dropping both
+citations, leaves the Procedure intact.
 [references/worked-examples.md](references/worked-examples.md) is
 explicitly repository-scoped: it records one real run against one real
 repository, and its findings are evidence that the Procedure executes,
