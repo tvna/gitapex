@@ -32,12 +32,6 @@ inputs:
 
     Run the retrospective now that PR #240 has merged.
 expected:
-  classification:
-    - missing-deterministic-gate
-    - unclear-agent-instruction
-    - external-human-decision
-  repair_count: 3
-  retro_stub_expected: false
   output_contains:
     - "missing deterministic gate"
     - "unclear agent instruction"

@@ -21,10 +21,6 @@ inputs:
 
     Run the retrospective now that PR #71 has merged.
 expected:
-  classification:
-    - missing-deterministic-gate
-  repair_count: 1
-  retro_stub_expected: false
   output_contains:
     - "missing deterministic gate"
     - "earliest point in the pipeline"

@@ -28,11 +28,6 @@ inputs:
 
     Run the retrospective now that PR #268 has merged.
 expected:
-  classification:
-    - missing-deterministic-gate
-    - missing-deterministic-gate
-  repair_count: 2
-  retro_stub_expected: false
   output_contains:
     - "missing deterministic gate"
     - "force-push"

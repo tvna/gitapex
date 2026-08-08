@@ -194,9 +194,11 @@ pydantic model of the actual YAML shape found across every
 `.get(...)` + `isinstance(...)` narrowing this file used to do at each of
 its own `expected`/`inputs`/`tags`-reading sites with one validated parse
 per file. Fields this linter does not itself read (`expected.exercises`,
-`expected.classification`, etc. -- consumed by sibling scripts sharing the
-same fixture files) are preserved, not rejected, via `extra="allow"` on
-`ExpectedBlock`. `expected.requires_fresh_dispatch` is deliberately typed
+`output_not_contains_near`, etc.) are preserved, not rejected, via
+`extra="allow"` on `ExpectedBlock` -- this does not assume every such
+field has a live consumer elsewhere; issue #860 found three that did not
+and removed them (see `ExpectedBlock`'s own docstring).
+`expected.requires_fresh_dispatch` is deliberately typed
 as an open `object`, not a nested model: whether a given value is a
 *well-formed* declaration is `_is_real_dispatch_declaration`'s own,
 separately tested judgment (issue #584), not a shape this model should
@@ -398,12 +400,15 @@ class NearAssertion(BaseModel):
 
 class ExpectedBlock(BaseModel):
     """The ``expected:`` block of one task fixture. Only the fields this
-    linter itself reads are named here; everything else
-    (``expected.classification``, ``expected.repair_count``,
-    ``expected.retro_stub_expected``, ``output_not_contains_near``, ...)
-    belongs to a sibling script sharing the same fixture files
-    (``merge-retrospective``'s own scoring, ``gitapex_run_ablation.py``) and is
-    preserved, not rejected, via ``extra="allow"``.
+    linter itself reads are named here; any other key a fixture happens to
+    carry (``output_not_contains_near``, a future scorer-specific field,
+    ...) is preserved, not rejected, via ``extra="allow"`` -- this model
+    does not assume every such key has a live consumer elsewhere (issue
+    #860 found ``expected.classification``, ``expected.repair_count``, and
+    ``expected.retro_stub_expected`` carried by 18 ``merge-retrospective``
+    fixtures with no consumer at all; they were removed rather than wired,
+    since ``output_contains``/``output_not_contains`` already covered the
+    same ground).
 
     ``requires_fresh_dispatch`` is deliberately typed ``object | None``,
     not a nested model: whether a given value is a *well-formed*

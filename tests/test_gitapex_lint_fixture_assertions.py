@@ -965,21 +965,24 @@ def test_task_fixture_accepts_missing_description_and_tags():
 
 
 def test_expected_block_preserves_fields_this_linter_does_not_itself_read():
-    # merge-retrospective's own scoring reads expected.classification /
-    # expected.repair_count; this linter never does, but must not drop
-    # them -- extra="allow" round-trips them through model_dump().
+    # A fixture may carry expected.* keys this linter itself never reads
+    # (issue #860: 18 merge-retrospective fixtures once carried three such
+    # keys with no consumer anywhere -- they were removed rather than kept
+    # as dead weight). Whatever unread key does turn up must still survive
+    # -- extra="allow" round-trips it through model_dump() rather than
+    # silently dropping it.
     fixture = L.TaskFixture.model_validate(
         _well_formed_fixture(
             expected={
                 "output_contains": ["x"],
-                "classification": ["missing-deterministic-gate"],
-                "repair_count": 2,
+                "some_future_scorer_field": ["missing-deterministic-gate"],
+                "another_unread_field": 2,
             }
         )
     )
     dumped = fixture.model_dump()
-    assert dumped["expected"]["classification"] == ["missing-deterministic-gate"]
-    assert dumped["expected"]["repair_count"] == 2
+    assert dumped["expected"]["some_future_scorer_field"] == ["missing-deterministic-gate"]
+    assert dumped["expected"]["another_unread_field"] == 2
 
 
 def test_near_assertion_rejects_missing_all():
