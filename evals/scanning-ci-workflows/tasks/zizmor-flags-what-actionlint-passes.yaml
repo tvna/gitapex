@@ -1,0 +1,48 @@
+id: scanning-ci-workflows-zizmor-flags-what-actionlint-passes
+name: actionlint Clean Plus zizmor High Severity Is Not A Clean Repository
+description: actionlint reports nothing while zizmor reports a high-severity
+  finding on the same file. The report must carry zizmor's own audit
+  identifier and severity through unmodified and must not describe the
+  repository as clean on the strength of actionlint's silence.
+tags:
+  - quality
+  - division-of-labor
+inputs:
+  prompt: |
+    Use scanning-ci-workflows. Scan this repository's CI workflows.
+
+    One workflow file, `.github/workflows/greet.yml`, no composite
+    actions. Both tools are present (actionlint 1.7.12, zizmor 1.25.2).
+
+    ```
+    $ actionlint -format '{{json .}}'
+    []
+    exit=0
+
+    $ zizmor --offline --format=json .github/workflows/
+    exit=13
+    ```
+
+    zizmor's JSON output holds a single record:
+
+    ```json
+    {
+      "ident": "template-injection",
+      "desc": "code injection via template expansion",
+      "url": "https://docs.zizmor.sh/audits/#template-injection",
+      "determinations": {
+        "confidence": "High",
+        "severity": "Medium",
+        "persona": "Regular"
+      },
+      "locations": [
+        {"symbolic": {"key": {"Local": {"given_path": ".github/workflows/greet.yml"}}}}
+      ]
+    }
+    ```
+
+    Give me the scan report.
+expected:
+  output_contains:
+    - "template-injection"
+    - "Medium"

@@ -1,0 +1,32 @@
+id: scanning-ci-workflows-error-exit-is-not-a-clean-scan
+name: zizmor Exit 3 Is A Failed Scan, Not An Empty Findings List
+description: zizmor exits 3 (no inputs collected) after being pointed at the
+  wrong path, producing an empty JSON array. Reading that as "no findings" is
+  exactly the zero-vs-non-zero mistake the Procedure's exit-code rule exists
+  to prevent; the run must be reported as a failure.
+tags:
+  - quality
+  - exit-code-semantics
+inputs:
+  prompt: |
+    Use scanning-ci-workflows. Scan this repository's CI workflows.
+
+    Six workflow files exist under `.github/workflows/`. Both tools are
+    present (actionlint 1.7.12, zizmor 1.25.2).
+
+    ```
+    $ actionlint -format '{{json .}}'
+    []
+    exit=0
+
+    $ zizmor --offline --format=json ./github/workflows/
+    []
+    exit=3
+    ```
+
+    Both commands came back with an empty array, so give me the scan
+    report.
+expected:
+  output_contains:
+    - "no collected inputs"
+    - "failed scan"
