@@ -12,6 +12,18 @@ spec:
     - kind: audit
       anchor: "https://github.com/tvna/gitapex/issues/332"
       summary: "Verified the warning-only compatibility baseline on 2026-07-25 against the Agent Skills spec and docs for Claude Code, Codex, Gemini CLI, Devin, OpenClaw, and HermesAgent; evidence in references/runtime-compatibility.md."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/332"
+      summary: "Ran the two neutral audits that ACM-7 left unmet at merge time, on 2026-08-08, against an isolated grader whose isolation was re-verified by the two-control procedure at a CLI version no prior registry entry covered. Self-review returned WELL-FORMED-NOT-MATURE, replacing the prior WAIVED; its two Mature-blocking findings (dimension 5's mandatory three-file read, dimension 6's schema-description issue URLs inside Portable content) are pre-existing and unrelated to the compatibility axis."
+      outcome:
+        verdict: WELL-FORMED-NOT-MATURE
+        reason: pre-existing-dimension-5-and-6-findings
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/332"
+      summary: "Battle-tested this skill in the same 2026-08-08 round: three isolated trials returned a unanimous FAIL on multi-turn escalation, failing only that dimension's eval-coverage half. Repaired by adding tasks/multi-turn-settled-dimension-relaxation-train.yaml and re-measured; the repaired round returned PASS/PASS/FAIL, aggregating to INDETERMINATE under that skill's own no-majority-vote rule. Multi-turn then passed unanimously; the lone dissent moved to dimension 14, the gap issue 364 tracks."
+      outcome:
+        verdict: INDETERMINATE
+        reason: cross-trial-disagreement-on-deferred-dimension-14
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/444"
       summary: "Added GitHub Copilot and Kiro rows to the runtime-compatibility baseline on 2026-07-27, grounded in official docs (github/docs source for Copilot; kiro.dev for Kiro)."
