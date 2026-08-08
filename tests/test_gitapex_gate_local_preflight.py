@@ -5,7 +5,7 @@ Two layers, kept apart on purpose:
 - **Fixture-registry tests** build their own tiny ``ssot.json`` pointing at
   purpose-built pass/fail scripts, so the runner's own aggregation,
   discovery, error handling and exit-code logic are exercised in under a
-  second with no dependence on this repository's real 15 wired gates. Issue
+  second with no dependence on this repository's real 16 wired gates. Issue
   #876's first acceptance criterion asks for an integration test running
   the consolidated command "with one deliberately-broken instance of each
   wired check, asserting all are reported in one run" --
@@ -30,6 +30,7 @@ import sys
 import gitapex_gate_local_preflight
 import gitapex_scan_ssot_schema
 import pytest
+import yaml
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 
@@ -543,6 +544,53 @@ def test_every_wired_gate_is_registered_with_the_local_plane() -> None:
     registry = json.loads((REPO_ROOT / ".gitapex" / "ssot.json").read_text(encoding="utf-8"))
     expected = sorted(gate["id"] for gate in registry["gates"] if "local" in gate["planes"])
     assert [check.gate_id for check in gitapex_gate_local_preflight.load_local_checks()] == expected
+
+
+def test_the_preflight_is_wired_as_a_pre_push_hook() -> None:
+    """The runner is only enforcement if something actually invokes it.
+    Before this wiring existed its sole trigger was a contributor typing the
+    command, which an isolated gate-quality audit reported as the headline
+    finding against it (realized in no enforcement domain). This asserts the
+    `pre-push` wiring keeps existing, so deleting the hook -- or quietly
+    moving it to another stage, where it would grade a staged index it was
+    never designed for -- fails here rather than silently returning the
+    repository to a state where a green local run means nothing."""
+    config = yaml.safe_load((REPO_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8"))
+    hooks = [hook for repo in config["repos"] for hook in repo["hooks"]]
+    matching = [hook for hook in hooks if "gitapex_gate_local_preflight.py" in hook["entry"]]
+    assert len(matching) == 1, f"expected exactly one hook invoking the preflight, found {len(matching)}"
+    hook = matching[0]
+    assert hook["stages"] == ["pre-push"], f"preflight must stay a pre-push hook, got {hook.get('stages')}"
+    # always_run + pass_filenames: false -- the preflight grades the whole
+    # repository, so a push whose file list happens not to match any filter
+    # must not skip it, and it takes no filenames.
+    assert hook["always_run"] is True
+    assert hook["pass_filenames"] is False
+
+
+def test_prek_install_wires_the_pre_push_shim_without_a_flag() -> None:
+    """`default_install_hook_types` is what makes a bare `prek install`
+    write .git/hooks/pre-push, not just pre-commit. Without it the hook
+    above would sit in the config doing nothing on every existing clone --
+    the same "configured but never installed" gap that left
+    .git/hooks/pre-commit a .sample file before issue #725."""
+    config = yaml.safe_load((REPO_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8"))
+    assert "pre-push" in config.get("default_install_hook_types", [])
+
+
+def test_the_pre_commit_stage_hooks_do_not_also_run_at_pre_push() -> None:
+    """ruff/mypy are the fast pre-commit pass; the preflight already covers
+    both again at pre-push through the registry's `python-lint` and
+    `mypy-type-check` entries. Leaving their `stages` unset would make
+    pre-commit's own default (every stage) run mypy twice on every push."""
+    config = yaml.safe_load((REPO_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8"))
+    hooks = [hook for repo in config["repos"] for hook in repo["hooks"]]
+    for hook in hooks:
+        if "gitapex_gate_local_preflight.py" in hook["entry"]:
+            continue
+        assert hook.get("stages") == ["pre-commit"], (
+            f"hook {hook['id']!r} would also run at pre-push, duplicating the preflight's own coverage"
+        )
 
 
 def test_every_unwired_gate_records_why() -> None:

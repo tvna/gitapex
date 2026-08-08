@@ -11,6 +11,19 @@
 #
 # Setup: `uv run prek install` (documented in CONTRIBUTING.md; also wired
 # into flake.nix's devShell so `nix develop` installs it automatically).
+
+# Issue #876: without this, a bare `prek install` writes only
+# .git/hooks/pre-commit, and the pre-push hook below would sit in this file
+# doing nothing on every existing clone -- the "configured but never
+# actually installed" gap that made .git/hooks/pre-commit a .sample file
+# before issue #725. Verified against prek 0.4.11 directly (a scratch repo
+# carrying this key, then `prek install` with no -t flag) rather than
+# assumed from pre-commit's own documented behavior: it reports
+# "prek installed at `.git/hooks/pre-commit`" and
+# "prek installed at `.git/hooks/pre-push`", and both shims exist
+# afterwards.
+default_install_hook_types: [pre-commit, pre-push]
+
 repos:
   - repo: local
     hooks:
@@ -18,6 +31,7 @@ repos:
         name: ruff check
         entry: uv run --frozen ruff check --force-exclude
         language: system
+        stages: [pre-commit]
         types_or: [python, pyi]
         require_serial: true
 
@@ -25,6 +39,7 @@ repos:
         name: ruff format --check
         entry: uv run --frozen ruff format --check --force-exclude
         language: system
+        stages: [pre-commit]
         types_or: [python, pyi]
         require_serial: true
 
@@ -43,6 +58,41 @@ repos:
         # rather than left silently unscoped.
         entry: uv run --frozen python3 .github/scripts/gitapex_run_precommit_mypy.py
         language: system
+        stages: [pre-commit]
         types_or: [python, pyi]
         pass_filenames: false
         require_serial: true
+
+      # Issue #876. The three hooks above are pre-commit-stage and cover
+      # ruff/mypy only; every other gate with a working-tree-only form ran
+      # exclusively in CI, so a gap surfaced one red check at a time on an
+      # already-open PR. This runs all of them in one pass at pre-push --
+      # the last local moment before a gap becomes a CI round-trip, and
+      # deliberately not pre-commit: it grades committed state (HEAD vs
+      # origin/main), not a staged index, and at ~6 s warm for all 16 wired
+      # gates it is too slow to sit on every single commit.
+      #
+      # The wired set is not listed here: the runner discovers it from
+      # .gitapex/ssot.json's `local` plane, so a newly wired gate needs no
+      # edit to this file. tests/test_gitapex_gate_local_preflight.py's
+      # test_the_preflight_is_wired_as_a_pre_push_hook asserts this entry
+      # keeps existing, so the wiring cannot silently regress.
+      #
+      # Blast radius, stated rather than implied: a pre-push hook is
+      # bypassable with `git push --no-verify`, and it only exists in a
+      # clone where `prek install` has actually run. CI remains the
+      # authoritative merge gate; this makes the local pass real
+      # enforcement for the ordinary path, not a command a contributor has
+      # to remember to type.
+      #
+      # `python3`, not `uv run`: the runner itself is stdlib-only, and each
+      # gate's own local_invocation carries whatever `uv run` pin it needs.
+      - id: local-preflight
+        name: local preflight (every working-tree-runnable gate)
+        entry: python3 .github/scripts/gitapex_gate_local_preflight.py
+        language: system
+        stages: [pre-push]
+        pass_filenames: false
+        always_run: true
+        require_serial: true
+        verbose: true

@@ -68,20 +68,22 @@ reasons.
   an empty diff); the missing-producer path is not, and no cheap
   registry-level rule closes it without a hardcoded per-gate list, which is
   exactly the hand-maintained wiring this design exists to avoid.
-- **The runner itself is realized in no enforcement domain.** Nothing
-  invokes it: not CI, not ``hooks/hooks.json``, and not
-  ``.pre-commit-config.yaml`` (which wires only pre-commit-stage hooks; a
-  ``pre-push`` stage is available under ``prek`` and unused). Its only
-  trigger is a contributor typing the command. That is deliberate for a
-  first cut -- CI remains the authoritative merge gate -- but it means this
-  file guarantees nothing on its own, and a green run here is evidence, not
-  enforcement.
+- **A pre-push hook is bypassable, and only exists where ``prek install``
+  has run.** ``.pre-commit-config.yaml`` wires this module as a ``pre-push``
+  stage hook, so the ordinary path is real enforcement rather than a command
+  a contributor has to remember to type -- but ``git push --no-verify``
+  skips it, and a clone that never ran ``prek install`` has no shim at all.
+  ``default_install_hook_types`` makes a bare ``prek install`` write both
+  the pre-commit and pre-push shims, which closes the "configured here but
+  never actually installed" half; it cannot close the ``--no-verify`` half.
+  CI remains the authoritative merge gate.
 - **Every wired gate but one runs through ``uv``.** CONTRIBUTING.md invokes
-  this file with plain ``python3`` (it needs no dependencies itself), but 14
-  of the 15 wired argvs begin with ``uv``. Without ``uv`` on PATH all 15
-  report ``FAIL ... failed to run``, which reads as fifteen broken gates
-  rather than one missing tool. ``uv`` is already a documented prerequisite
-  for this repository; it is named here so the failure mode is legible.
+  this file with plain ``python3`` (it needs no dependencies itself), and so
+  does the pre-push hook, but 15 of the 16 wired argvs begin with ``uv``.
+  Without ``uv`` on PATH all 16 report ``FAIL ... failed to run``, which
+  reads as sixteen broken gates rather than one missing tool. ``uv`` is
+  already a documented prerequisite for this repository; it is named here so
+  the failure mode is legible.
 - Gates run **sequentially**, in registry-id order, for legible output on a
   terminal. ``mypy-type-check`` and ``cyclomatic-complexity-floor`` dominate
   the wall clock; parallelism was not added because interleaved failure
@@ -94,13 +96,15 @@ reasons.
   ``origin/main`` widens the diff rather than narrowing it, so it errs
   toward grading more than the branch changed, never less.
 - This grades **committed** state (``HEAD`` and the working tree as it is on
-  disk), not a staged index. It is a pre-push runner, not a second
-  pre-commit hook -- ``.pre-commit-config.yaml`` already owns that plane.
+  disk), not a staged index -- which is exactly why it is wired at
+  ``pre-push`` and not ``pre-commit``. The three ruff/mypy hooks in
+  ``.pre-commit-config.yaml`` are pinned to ``stages: [pre-commit]`` so they
+  do not run a second time here inside ``python-lint``/``mypy-type-check``.
 
-**Why this file is named ``gitapex_gate_*``.** It is a runner, not a gate,
-and it is deliberately absent from ``.gitapex/ssot.json`` (a registry entry
-carrying the ``local`` plane would make it discover and re-invoke itself).
-The prefix is load-bearing anyway:
+**Why this file is named ``gitapex_gate_*``.** It is a runner of gates
+rather than a gate in its own right, and it is deliberately absent from
+``.gitapex/ssot.json``: a registry entry carrying the ``local`` plane would
+make it discover and re-invoke itself. The prefix is load-bearing anyway:
 ``gitapex_detect_changed_gate_scripts.py`` selects deterministic-gate paths
 by the ``.github/scripts/gitapex_(gate|scan)_*.py`` convention, so under any
 other name every future edit to a module that executes registry-declared

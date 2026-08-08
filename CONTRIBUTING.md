@@ -22,10 +22,15 @@ local hook is a fast first pass, not a replacement for it.
 
 ## Local pre-push preflight
 
-The pre-commit hook above covers ruff and mypy only. Most of this
+The pre-commit hooks above cover ruff and mypy only. Most of this
 repository's other deterministic gates run as separate CI jobs, so a gap
-used to be discovered one red check at a time on an already-open PR. Before
-pushing, run every gate that has a working-tree-only form in one pass:
+used to be discovered one red check at a time on an already-open PR.
+
+The same `uv run prek install` above now also installs a **pre-push** hook
+(`default_install_hook_types` in `.pre-commit-config.yaml`), which runs
+every gate that has a working-tree-only form in one pass before the push
+leaves your machine. It takes about 6 seconds warm for all 16 wired gates.
+Run it by hand any time with:
 
 ```
 python3 .github/scripts/gitapex_gate_local_preflight.py
@@ -34,6 +39,9 @@ python3 .github/scripts/gitapex_gate_local_preflight.py
 It prints a pass/fail line per gate, the captured output of each failing
 one, and exits non-zero if any failed. `--list` prints the wired set
 without running it.
+
+If a clone predates this hook, re-run `uv run prek install` once to pick it
+up. `git push --no-verify` skips it, as with any pre-push hook.
 
 The runner itself needs no dependencies, but almost every wired gate runs
 through `uv` (the same `uv run` pins CI uses). Without `uv` on PATH every
