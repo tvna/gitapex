@@ -169,6 +169,69 @@ def test_suite_with_no_task_files_fails_closed(tmp_path: pathlib.Path) -> None:
     assert findings[0].startswith("empty-corpus: no */tasks/*.yaml")
 
 
+# --- declared-task coverage -------------------------------------------------
+
+
+def test_real_repository_declared_tasks_are_all_discovered() -> None:
+    assert drift.find_declared_task_coverage() == []
+
+
+def test_yml_spelled_task_file_is_discovered_and_graded(tmp_path: pathlib.Path) -> None:
+    """.yml is as legal a YAML extension as .yaml; discovering only one
+    would leave the other running under waza but ungraded here."""
+    evals_dir = _write_suite(tmp_path, evaluation={**_MINIMAL_EVAL, "tasks": ["tasks/*.yaml", "tasks/*.yml"]})
+    bad = {**_MINIMAL_TASK, "expected": {"output_contains": ["x"], "output_contains_nea": []}}
+    (evals_dir / "fixture-suite" / "tasks" / "t2.yml").write_text(yaml.safe_dump(bad))
+    eval_path, task_path = _copy_schemas(tmp_path)
+    assert drift.find_declared_task_coverage(evals_dir) == []
+    findings = drift.find_suite_violations(evals_dir, eval_path, task_path)
+    assert len(findings) == 1
+    assert "t2.yml" in findings[0]
+
+
+def test_task_glob_outside_the_discovered_layout_is_reported(tmp_path: pathlib.Path) -> None:
+    """A suite declaring `cases/*.yaml` would pass the schema check while
+    none of its task files was ever graded."""
+    evals_dir = _write_suite(tmp_path, evaluation={**_MINIMAL_EVAL, "tasks": ["cases/*.yaml"]})
+    cases = evals_dir / "fixture-suite" / "cases"
+    cases.mkdir()
+    (cases / "c.yaml").write_text(yaml.safe_dump(_MINIMAL_TASK))
+    findings = drift.find_declared_task_coverage(evals_dir)
+    assert len(findings) == 1
+    assert "cases/c.yaml" in findings[0]
+    assert "does not discover" in findings[0]
+
+
+def test_task_glob_matching_nothing_is_reported(tmp_path: pathlib.Path) -> None:
+    evals_dir = _write_suite(tmp_path, evaluation={**_MINIMAL_EVAL, "tasks": ["tasks/*.yaml", "nowhere/*.yaml"]})
+    findings = drift.find_declared_task_coverage(evals_dir)
+    assert findings == [
+        "undiscovered-tasks: evals/fixture-suite/eval.yaml: declared tasks glob 'nowhere/*.yaml' matches no file"
+    ]
+
+
+def test_tasks_from_reference_is_reported_as_ungraded(tmp_path: pathlib.Path) -> None:
+    evals_dir = _write_suite(tmp_path, evaluation={**_MINIMAL_EVAL, "tasks_from": "../shared/tasks.yaml"})
+    findings = drift.find_declared_task_coverage(evals_dir)
+    assert len(findings) == 1
+    assert "declares tasks_from" in findings[0]
+
+
+def test_declared_task_coverage_tolerates_a_non_mapping_eval_document(tmp_path: pathlib.Path) -> None:
+    """A schema-invalid eval.yaml is find_suite_violations' finding to
+    report, not a crash here."""
+    evals_dir = _write_suite(tmp_path)
+    (evals_dir / "fixture-suite" / "eval.yaml").write_text("- not a mapping\n")
+    assert drift.find_declared_task_coverage(evals_dir) == []
+
+
+def test_declared_task_coverage_skips_a_non_list_and_non_string_tasks_value(tmp_path: pathlib.Path) -> None:
+    non_list = _write_suite(tmp_path / "a", evaluation={**_MINIMAL_EVAL, "tasks": "tasks/*.yaml"})
+    assert drift.find_declared_task_coverage(non_list) == []
+    non_string = _write_suite(tmp_path / "b", evaluation={**_MINIMAL_EVAL, "tasks": [7]})
+    assert drift.find_declared_task_coverage(non_string) == []
+
+
 def test_unparseable_yaml_raises_read_error(tmp_path: pathlib.Path) -> None:
     evals_dir = _write_suite(tmp_path)
     (evals_dir / "fixture-suite" / "tasks" / "t.yaml").write_text("id: [unterminated\n")

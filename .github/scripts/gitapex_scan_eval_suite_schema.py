@@ -103,8 +103,15 @@ skills/evaluating-deterministic-gate-quality/references/dimensions.md):
   "pins no recognizable waza release tag" rather than silently passing --
   fail-closed, but it would need this pattern updated.
 - A suite directory holding an eval.yaml but no tasks/ files is not
-  itself reported; only a wholly empty evals/ tree is. Per-suite task
-  coverage is skill-branch-fixture-coverage's job, not this gate's.
+  itself reported by the empty-corpus check; only a wholly empty evals/
+  tree is. Such a suite is still caught from the other direction, by
+  ``find_declared_task_coverage`` -- its own ``tasks`` glob would resolve
+  to nothing. What stays out of scope is whether a suite has *enough*
+  tasks, which is skill-branch-fixture-coverage's job, not this gate's.
+- ``find_declared_task_coverage`` reconciles each suite's declared
+  ``tasks`` globs against ``_TASK_GLOBS``, but cannot follow a
+  ``tasks_from`` reference into another file; it reports the reference
+  as ungraded rather than pretending to have graded it.
 - Enforcement mode verified: the pytest gate of .github/workflows/test.yml
   (the same mode ssot-schema-drift and skill-metadata-schema-drift run in).
   Whether that job is a *required* status check on the protected branch is
@@ -295,14 +302,73 @@ def _violations(instance: Any, validator: Any, label: str) -> list[str]:
     return findings
 
 
+# The task-file layout this gate discovers. Both YAML spellings, because
+# waza's own `tasks` field takes arbitrary glob patterns and .yml is as
+# legal a YAML extension as .yaml -- discovering only one of them would
+# leave the other silently ungraded. Whatever a suite actually declares is
+# separately reconciled against this set by find_declared_task_coverage.
+_TASK_GLOBS = ("*/tasks/*.yaml", "*/tasks/*.yml")
+
+
 def iter_suite_files(evals_dir: pathlib.Path = EVALS_DIR) -> tuple[list[pathlib.Path], list[pathlib.Path]]:
-    """Every committed (eval.yaml, tasks/*.yaml) pair under `evals_dir`, each
-    list sorted so findings are reported in a stable order. A suite
+    """Every committed (eval.yaml, tasks/*.yaml|yml) pair under `evals_dir`,
+    each list sorted so findings are reported in a stable order. A suite
     directory with no eval.yaml simply contributes none -- evals/scripts/ is
     such a directory and is not a suite."""
     eval_files = sorted(evals_dir.glob("*/eval.yaml"))
-    task_files = sorted(evals_dir.glob("*/tasks/*.yaml"))
+    task_files = sorted({path for pattern in _TASK_GLOBS for path in evals_dir.glob(pattern)})
     return eval_files, task_files
+
+
+def find_declared_task_coverage(evals_dir: pathlib.Path = EVALS_DIR) -> list[str]:
+    """Reconcile what each suite *declares* against what this gate actually
+    discovers, and report the difference.
+
+    `iter_suite_files` scans a fixed layout, but waza's own eval schema lets
+    `tasks` carry any glob (``cases/*.yaml``) and `tasks_from` pull task
+    definitions in from another file entirely. A suite using either shape
+    would run under waza while every one of its task files sat outside this
+    gate's discovery -- passing not because it was clean but because nothing
+    graded it. That is the same fail-open dimension 15 of
+    skills/evaluating-deterministic-gate-quality/references/dimensions.md
+    names, and the same one find_suite_violations' empty-corpus check
+    closes for the whole-tree case; this closes it per suite.
+
+    Reported, not silently absorbed: a declared glob resolving to a file
+    outside the discovered set, a declared glob resolving to nothing at all,
+    and a `tasks_from` reference (whose pulled-in tasks this gate cannot
+    follow). Widening `_TASK_GLOBS`, or teaching the gate the new shape, is
+    the fix in each case -- never dropping the declaration."""
+    discovered = set(iter_suite_files(evals_dir)[1])
+    findings: list[str] = []
+    for eval_path in sorted(evals_dir.glob("*/eval.yaml")):
+        suite = eval_path.parent
+        label = eval_path.relative_to(evals_dir.parent).as_posix()
+        document = _load_yaml_or_raise(eval_path)
+        if not isinstance(document, dict):
+            continue
+        if document.get("tasks_from") is not None:
+            findings.append(
+                f"undiscovered-tasks: {label}: declares tasks_from, whose task definitions this gate does not follow"
+            )
+        declared = document.get("tasks")
+        if not isinstance(declared, list):
+            continue
+        for pattern in declared:
+            if not isinstance(pattern, str):
+                continue
+            matched = sorted(suite.glob(pattern))
+            if not matched:
+                findings.append(f"undiscovered-tasks: {label}: declared tasks glob {pattern!r} matches no file")
+                continue
+            for path in matched:
+                if path not in discovered:
+                    relative = path.relative_to(evals_dir.parent).as_posix()
+                    findings.append(
+                        f"undiscovered-tasks: {label}: declared tasks glob {pattern!r} matches {relative}, "
+                        f"which this gate does not discover -- it would run under waza ungraded here"
+                    )
+    return findings
 
 
 def find_suite_violations(
@@ -323,7 +389,7 @@ def find_suite_violations(
     if not eval_files:
         return [f"empty-corpus: no */eval.yaml found under {evals_dir} -- nothing was graded"]
     if not task_files:
-        return [f"empty-corpus: no */tasks/*.yaml found under {evals_dir} -- nothing was graded"]
+        return [f"empty-corpus: no {' or '.join(_TASK_GLOBS)} found under {evals_dir} -- nothing was graded"]
 
     eval_schema = extend_schema(_gitapex_schema_validation.load_json_or_raise(eval_schema_path, SuiteReadError))
     task_schema = extend_schema(_gitapex_schema_validation.load_json_or_raise(task_schema_path, SuiteReadError))
@@ -400,11 +466,10 @@ def find_pin_drift(flake_path: pathlib.Path = FLAKE_PATH) -> list[str]:
 def find_vendor_digest_drift(
     eval_schema_path: pathlib.Path = EVAL_SCHEMA_PATH,
     task_schema_path: pathlib.Path = TASK_SCHEMA_PATH,
-    digests: dict[str, str] | None = None,
 ) -> list[str]:
     """Return one message per vendored schema whose bytes no longer hash to
     the digest recorded in VENDORED_DIGESTS."""
-    expected = VENDORED_DIGESTS if digests is None else digests
+    expected = VENDORED_DIGESTS
     findings: list[str] = []
     for name, path in (("eval.schema.json", eval_schema_path), ("task.schema.json", task_schema_path)):
         try:
@@ -475,6 +540,7 @@ def find_drift(
     findings.extend(find_vendor_digest_drift(eval_schema_path, task_schema_path))
     findings.extend(find_allowlist_drift(EXTENSION_KEYS, task_schema_path, repo_root))
     findings.extend(find_suite_violations(evals_dir, eval_schema_path, task_schema_path))
+    findings.extend(find_declared_task_coverage(evals_dir))
     return findings
 
 
