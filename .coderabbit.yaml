@@ -1,0 +1,151 @@
+# yaml-language-server: $schema=https://storage.googleapis.com/coderabbit_public_assets/schema.v2.json
+#
+# CodeRabbit configuration -- issue #889.
+#
+# CodeRabbit was already running on this repository with no configuration
+# at all ("Configuration used: defaults", observed on PR #884). Every
+# behavior below was previously an unrecorded default. This file records
+# the ones someone actually chose.
+#
+# Scope rule: a key is present here because its value is a decision, not
+# to restate a default. CodeRabbit's defaults can change server-side, so a
+# choice that must not silently flip is written even where it currently
+# matches the default -- the `pre_merge_checks` modes are the one such
+# case, and they say so at their own comment.
+#
+# Precedence is YAML > repository UI > organization UI, and the file is
+# read from the head branch of the PR under review, so a change here takes
+# effect on its own PR before it merges.
+
+language: en-US
+
+reviews:
+  # .test_durations is 367 KB / 2677 entries of pytest timing data,
+  # rewritten on every test run: no review value and no security value.
+  # The lockfiles (uv.lock, flake.lock, apm.lock.yaml) are deliberately
+  # NOT excluded -- a dependency diff is exactly what a reviewer should
+  # see, and path_filters exclusions are also applied as a sparse-checkout
+  # when CodeRabbit clones, so an excluded file cannot be read at all.
+  path_filters:
+    - "!.test_durations"
+
+  auto_review:
+    enabled: true
+    # This repository deliberately leaves PRs in GitHub's own DRAFT state
+    # for a human to merge (skills/drafting-a-pr-to-merge), so a draft PR
+    # is the normal case here rather than an unfinished one. At the default
+    # (false), review would be skipped on nearly every PR.
+    drafts: true
+    # Issue #889's primary driver. Re-reviewing on every push was
+    # exhausting the per-hour review quota: PR #884 reported "Review limit
+    # reached / Next review available in: 21 minutes". The first review of
+    # a PR still runs automatically; later commits are reviewed on an
+    # explicit `@coderabbitai review`.
+    auto_incremental_review: false
+
+  # All four checks stay at `warning` on purpose. The deterministic gates
+  # under .github/workflows/ are this repository's real merge gate, and an
+  # LLM judgement must not be able to block a merge. These values equal
+  # CodeRabbit's current defaults; they are written because
+  # "never merge-blocking" is the decision, not because the default is.
+  pre_merge_checks:
+    title:
+      mode: warning
+    description:
+      mode: warning
+    issue_assessment:
+      mode: warning
+    docstrings:
+      mode: warning
+
+  # Finishing Touches let CodeRabbit push commits to the branch -- PR #884
+  # offered "Commit on current branch" and "Create stacked PR" checkboxes.
+  # CLAUDE.md section 4 requires confirmation for outward-facing
+  # operations, and commits here go through this repository's own hook and
+  # gate chain, so the app authors no commits. Its suggestions still
+  # arrive as ordinary review comments; only the write path is closed.
+  finishing_touches:
+    autofix:
+      enabled: false
+    docstrings:
+      enabled: false
+    fix_ci:
+      enabled: false
+    resolve_merge_conflict:
+      enabled: false
+    simplify:
+      enabled: false
+    unit_tests:
+      enabled: false
+
+  tools:
+    # Disabled because they are genuinely duplicated by this repository's
+    # own pinned gates, where a version difference would surface findings
+    # the local gate does not:
+    #   ruff       -- pyproject.toml pins `ruff>=0.15,<0.16`, run by
+    #                 .pre-commit-config.yaml and lint.yml. CodeRabbit
+    #                 bundles ruff 0.16.1, outside that range, which is
+    #                 exactly the two-different-ruffs split issue #678
+    #                 exists to prevent.
+    #   actionlint -- pinned in flake.nix and run in lint.yml via a
+    #                 digest-pinned image.
+    ruff:
+      enabled: false
+    actionlint:
+      enabled: false
+    # Disabled on policy rather than duplication. Semgrep is recorded as
+    # an evidence-rejected candidate in
+    # docs/scanning-capability-selection-policy.md (#843): its ruleset
+    # ships under the field-of-use-restricted "Semgrep Rules License"
+    # rather than the engine's own LGPL-2.1. Opengrep -- the
+    # policy-approved multi-language SAST fallback in that same
+    # document -- stays enabled.
+    semgrep:
+      enabled: false
+    # Deliberately left at their enabled defaults, and therefore not
+    # written above: shellcheck, gitleaks, zizmor, opengrep, skillspector.
+    # Each still covers something this repository's own gates do not:
+    #   shellcheck        -- invoked nowhere here; its one occurrence under
+    #                        .github/workflows/ is a `# shellcheck disable`
+    #                        directive, not a run.
+    #   zizmor, opengrep  -- named as the guaranteed libre path in
+    #                        docs/scanning-capability-selection-policy.md
+    #                        with no implementation behind them yet.
+    #   gitleaks          -- overlaps betterleaks, which #890 wired into the
+    #                        pre-commit and pre-push hooks, so this is no
+    #                        longer an unconsumed-capability gap. It stays
+    #                        enabled for a different and narrower reason:
+    #                        both of those hooks are bypassable with
+    #                        `--no-verify` and no CI workflow runs
+    #                        betterleaks yet, so CodeRabbit's own pass is
+    #                        currently the only secret scan on the
+    #                        merge path. Revisit this line if a CI job ever
+    #                        runs betterleaks -- at that point it becomes
+    #                        real duplication.
+    #   skillspector      -- no local equivalent at all.
+
+chat:
+  # Public repository, so at the default (true) anyone who can leave a
+  # comment can instruct the bot -- an untrusted-input surface under
+  # CLAUDE.md section 2. Caveat, per CodeRabbit's own schema text: this
+  # setting restricts interaction to organization members "on GitHub
+  # organization repositories", and tvna/gitapex is user-owned
+  # (owner.type: "User"), so it very likely has no effect today. It is set
+  # anyway so the intent is recorded and already correct if this
+  # repository is ever transferred to an organization. It is not load
+  # bearing; do not treat it as the control that closes this surface.
+  allow_non_org_members: false
+  # Keeps bot replies free of generated ASCII and emoji art, in line with
+  # the ASCII-only rule for GitHub posts in CLAUDE.md section 3.
+  art: false
+
+issue_enrichment:
+  # skills/planning-a-branch-from-an-issue already owns turning an issue
+  # into a plan in this repository, and with 247 open issues automatic
+  # planning would post competing plans at scale. auto_planning is nested
+  # under planning, so both are pinned off rather than relying on the
+  # parent to imply the child.
+  planning:
+    enabled: false
+    auto_planning:
+      enabled: false
