@@ -16,6 +16,7 @@ text tells a bumper to do.
 
 from __future__ import annotations
 
+import http.client
 import json
 import pathlib
 import urllib.error
@@ -338,6 +339,19 @@ def test_upstream_drift_reported_when_bytes_differ(tmp_path: pathlib.Path) -> No
     findings = drift.find_upstream_drift(eval_path, task_path, lambda url: b"{}")
     assert len(findings) == 2
     assert all("upstream-drift" in f for f in findings)
+
+
+def test_truncated_response_is_a_finding_not_a_traceback(tmp_path: pathlib.Path) -> None:
+    """http.client.HTTPException is not an OSError subclass, so catching
+    OSError alone would let a truncated response escape as a traceback."""
+    eval_path, task_path = _copy_schemas(tmp_path)
+
+    def _truncated(url: str) -> bytes:
+        raise http.client.IncompleteRead(b"partial")
+
+    findings = drift.find_upstream_drift(eval_path, task_path, _truncated)
+    assert len(findings) == 2
+    assert all("cannot fetch" in f for f in findings)
 
 
 def test_upstream_fetch_failure_is_a_finding_not_a_silent_pass(tmp_path: pathlib.Path) -> None:

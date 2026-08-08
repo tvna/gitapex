@@ -120,10 +120,10 @@ from __future__ import annotations
 import argparse
 import copy
 import hashlib
+import http.client
 import pathlib
 import re
 import sys
-import urllib.error
 import urllib.request
 from typing import Any, NamedTuple
 
@@ -375,8 +375,8 @@ def find_allowlist_drift(
             continue
         if entry.key not in _read_text_or_raise(consumer):
             findings.append(
-                f"allowlist-drift: {entry.key}: consumer {entry.consumer} no longer mentions this key -- "
-                f"remove the allowlist row or restore the consumer"
+                f"allowlist-drift: {entry.key}: consumer {entry.consumer} no longer mentions this key "
+                f"(row claims it {entry.reads}) -- remove the allowlist row or restore the consumer"
             )
     return findings
 
@@ -443,7 +443,10 @@ def find_upstream_drift(
         url = _UPSTREAM_RAW.format(tag=VENDORED_WAZA_TAG, name=name)
         try:
             published = opener(url)
-        except (urllib.error.URLError, OSError) as error:
+        # http.client.HTTPException (IncompleteRead, BadStatusLine, ...) is
+        # NOT an OSError subclass, so OSError alone would let a truncated or
+        # malformed response surface as a traceback instead of a finding.
+        except (OSError, http.client.HTTPException) as error:
             findings.append(f"upstream-drift: {name}: cannot fetch {url}: {error}")
             continue
         try:
@@ -476,7 +479,13 @@ def find_drift(
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=(
+            "Validate every committed evals/ suite against waza's own vendored schemas plus this "
+            "repository's reviewed extension-key allowlist, and check the vendored copies against "
+            "the release tag flake.nix pins."
+        )
+    )
     parser.add_argument(
         "--verify-upstream",
         action="store_true",
