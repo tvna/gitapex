@@ -145,8 +145,13 @@ It does not decide whether a gate's own mechanics actually realize
 non-bypassability or a fail-closed default at all -- that is dimensions 1
 and 15's own job (`dimensions.md`), consumed here as an input rather than
 re-derived. It does not decide which of the four realization domains
-should own a policy -- that is mechanism-fit's own job
-(`mechanism-fit.md`). It does not decide how many domains realize a
+should own a policy, nor whether an infrastructure control the target
+already depends on should own it instead of a repository-authored gate --
+both are mechanism-fit's own job (`mechanism-fit.md`), and that second
+question borrowing the impossible-vs-tedious test above as its decision
+procedure does not make it this axis: it names an owner and stops, while
+this axis assigns a tier and judges the honesty of that assignment. It
+does not decide how many domains realize a
 policy, or whether that multiplicity is argued or accidental -- that is
 the Reproducibility/Domain-coverage axis's own job (`SKILL.md`). And it
 does not decide what happens if the gate is bypassed or absent -- that is

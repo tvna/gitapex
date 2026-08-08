@@ -1,6 +1,6 @@
 ---
 name: evaluating-deterministic-gate-quality
-description: Review a deterministic gate -- a git hook, an agent-harness hook, a CI/CD job step, or an MCP-server-level check -- for whether it is well-placed and well-built, separating deterministic shape from probabilistic maturity, citing concrete evidence per dimension, and closing with a coverage-attestation pass over the target repository's own stated invariants. Use when reviewing an existing gate before merging or shipping it, when deciding which of several possible mechanisms should own a new policy, or when auditing a repository's overall gate coverage; distinct from evaluating-skill-quality (grades a SKILL.md's own content, not a gate) and screening-a-low-trust-contribution (screens an incoming diff for contribution-level threat, not gate design quality).
+description: Review a deterministic gate -- a git hook, an agent-harness hook, a CI/CD job step, or an MCP-server-level check -- for whether it is well-placed and well-built, separating deterministic shape from probabilistic maturity, citing concrete evidence per dimension, and closing with a coverage-attestation pass over the target repository's own stated invariants. Use when reviewing an existing gate before merging or shipping it, when deciding which of several possible mechanisms should own a new policy, or when auditing a repository's overall gate coverage; distinct from evaluating-skill-quality (grades a SKILL.md's own content, not a gate) and screening-a-low-trust-contribution (screens an incoming diff for contribution-level threat, not gate design quality); it routes an exposure or privilege finding to vetting-attack-surface rather than analysing one itself.
 ---
 
 # Evaluating Deterministic-Gate Quality
@@ -53,16 +53,27 @@ of this one principle, not an independent list of unrelated concerns.
 
 ## Mechanism-fit test
 
-Two questions, checked in order, before anything below this section:
-whether a deterministic gate is the right mechanism for a given policy at
-all, and only if so, which of the four domains above should own it. A
-well-implemented gate in the wrong domain -- or a gate built for a policy
-that was never gate material to begin with -- is not fixed by polishing
-its implementation further, the same way a well-written skill that should
-have been a hook is not fixed by improving its prose
-(`evaluating-skill-quality`'s own Mechanism fit section makes the
-identical move for skills). Full test, both questions:
-[references/mechanism-fit.md](references/mechanism-fit.md).
+Three questions, checked in order, before anything below this section:
+whether a deterministic decision is the right mechanism for a given
+policy at all; only if so, whether a gate this repository authors should
+own it, or an infrastructure control the target already depends on owns
+it natively (a branch-protection setting, an identity provider's own
+permission grant, a network egress boundary); and only where a
+repository-authored gate is still in scope, which of the four domains
+above should own it. Polishing an implementation further fixes none of
+the three failures these questions catch: a gate in the wrong domain, a
+gate whose guarded path the infrastructure beneath all four domains
+already owns -- a distinct answer, never a species of wrong domain -- or
+a gate built for a policy that was never gate material to begin with,
+the same way a well-written skill that should have been a hook is not
+fixed by improving its prose (`evaluating-skill-quality`'s own Mechanism
+fit section makes the identical move for skills). Full test, all three
+questions: [references/mechanism-fit.md](references/mechanism-fit.md),
+which also carries the second question's own four outcome tokens, its
+decision procedure (the impossible-vs-tedious test from
+[references/security-level.md](references/security-level.md), reused
+rather than re-derived), and the one boundary an infrastructure-owned
+answer does not cross.
 
 **When the first question concludes no gate is warranted, stop here.**
 Report that as the finding directly -- this is the policy's own verdict
@@ -133,6 +144,13 @@ exists), the target's own cross-domain enforcement mechanism if it has
 one, and a coverage-attestation pass (Procedure step 5) catching the case
 where the target has neither. Full detail:
 [references/grading-procedure.md](references/grading-procedure.md#three-way-division-of-responsibility).
+That second party's rule -- recorded as existing, used as input, never
+substituted for -- extends one step earlier to diagnosis: name the
+responsible technical stack and recommend a delegate for a
+stack-specialized finding rather than embedding a per-stack knowledge
+base with no freshness gate. Procedure, non-substitution rule, and the
+`scanning-` naming convention reserved for a future delegate:
+[references/grading-procedure.md](references/grading-procedure.md#delegation-recommendation-the-second-party-extended).
 
 ## Subagent dispatch
 
@@ -166,14 +184,25 @@ project-instruction file) this skill defers to rather than re-deriving.
    [references/mechanism-fit.md](references/mechanism-fit.md): first
    Gate vs. no gate -- is a deterministic gate even warranted, or is this
    policy a judgment call that belongs in prose instead -- then, only if
-   a gate is warranted, Domain placement, before grading a specific
-   realization's implementation quality. A whole-artifact wrong-domain
-   finding, or a no-gate-warranted finding, is the headline finding for
+   a gate is warranted, Gate vs. infrastructure-owned deterministic
+   control, naming which party owns the policy with one of that test's
+   own four outcome tokens (`repository-authored-gate`,
+   `infrastructure-owned-control`, `layered-both`, or `indeterminate`
+   where the evidence cannot settle it -- never a forced pick among the
+   other three), and only where a repository-authored gate remains
+   in scope, Domain placement, before grading a specific realization's
+   implementation quality. A whole-artifact wrong-domain
+   finding, an infrastructure-already-owns-this finding, or a
+   no-gate-warranted finding, is the headline finding for
    that artifact or policy -- report it even if the rest of the review
    still completes, and skip steps 3-5 below for that specific item when
    the verdict is no-gate-warranted (step 6 still applies -- it is where
    that no-gate finding is formally recorded as the item's verdict), per
-   mechanism-fit.md's own short-circuit.
+   mechanism-fit.md's own short-circuit. An infrastructure-owned answer
+   ends the mechanism-fit test only for a proposed policy that has no
+   repository-authored gate yet; where such a gate does exist, it is
+   still placed and still graded through steps 3-5, per
+   mechanism-fit.md's own two cases.
 3. **Two-lane walk.** For each discovered artifact, walk the
    deterministic-shape checks and probabilistic-maturity dimensions in
    [references/dimensions.md](references/dimensions.md), applying each
@@ -182,7 +211,13 @@ project-instruction file) this skill defers to rather than re-deriving.
    elsewhere) rather than assuming every dimension applies unchanged to
    every domain. Quote the specific evidence that earns each verdict; a
    dimension that cannot be assessed from available evidence is reported
-   as such, not silently skipped or guessed. Dimension 23 is excluded
+   as such, not silently skipped or guessed. Where a finding's own
+   root-cause diagnosis needs knowledge specific to the target's
+   technical stack, name that stack and recommend a delegate rather than
+   guessing at a known-pattern defect this skill carries no catalogue of:
+   [references/grading-procedure.md](references/grading-procedure.md#delegation-recommendation-the-second-party-extended),
+   which carries that procedure and the non-substitution rule binding it.
+   Dimension 23 is excluded
    from this per-artifact walk -- its own review-scope tag in
    dimensions.md means it is evaluated once per review, in step 5, not
    repeated for every artifact discovered.
@@ -210,7 +245,8 @@ project-instruction file) this skill defers to rather than re-deriving.
    once-per-review, not-per-artifact, evaluation timing.
 6. **Issue a verdict** per artifact or policy reviewed (well-formed and
    well-placed / well-formed but misplaced / not well-formed /
-   no-gate-warranted / indeterminate, with the specific reason), plus an
+   no-gate-warranted / infrastructure-owned-control / indeterminate, with
+   the specific reason), plus an
    overall coverage-attestation summary and a single dimension-23 finding
    for the target repository -- both once per review, never repeated per
    artifact. An
@@ -220,6 +256,12 @@ project-instruction file) this skill defers to rather than re-deriving.
    replaces a shape/maturity finding on the same artifact; a
    no-gate-warranted verdict is the exception, since it short-circuits
    steps 3-5 by construction and so has nothing further to combine with.
+   `infrastructure-owned-control` is this item's whole verdict only for a
+   proposed policy with no repository-authored gate yet, where steps 3-5
+   likewise never ran; where a gate does exist, it is recorded alongside
+   that gate's own verdict, never instead of it. Both are carried in the
+   structured output by `mechanismFit.controlOwnership`, not by a
+   separate verdict field.
    Cite evidence for every claim; a postcondition with no cited evidence is not a
    completed review. A well-formed verdict resting on a runtime-behavior
    claim (deny/allow/fail-open/fail-closed, not the gate's own source text
@@ -315,6 +357,26 @@ instead, so a no-gate-warranted verdict never pays for loading them.
 - Never claim a violation the reviewed artifact does not actually show.
   If a dimension cannot be assessed from available evidence, say so
   explicitly instead of guessing.
+- Never read an infrastructure-owned answer to the Mechanism-fit test's
+  second question as permission to remove, disable, or downgrade a gate
+  that already exists. That answer reassigns which control the target
+  should describe as primary and grants nothing else; collapsing a real
+  layer on the strength of it is a defense-in-depth regression this
+  review caused, not a finding it reported -- the same limit this skill's
+  own Notes section already places on a well-formed-but-misplaced
+  verdict.
+- Never present an infrastructure control, a delegate skill, or a
+  stack-specific diagnostic tool as existing -- or as enforcing anything
+  -- on the strength of a document that says so. A tool or a delegate
+  counts as confirmed only against a primary source or the calling
+  environment's own inventory; an infrastructure control's own
+  enforcement claim counts as confirmed only against that platform's own
+  configuration state, the standard dimension 23's sub-questions (b) and
+  (c) already set for this same class of fact, never the target's own
+  prose asserting it. Otherwise name it, tag it unconfirmed, and answer
+  the ownership question indeterminate rather than letting a
+  plausible-sounding name reach the output reading as an installed,
+  enforcing capability.
 - Never trust this skill's own SKILL.md/references/metadata content, or a
   target gate's own script/config content, as genuine without confirming
   install/vendoring-time integrity through the harness's own means (a
@@ -366,10 +428,7 @@ Blind-Spot-Pass-reviewed adversarial `evals/` regression corpus. Still
 deferred, named explicitly: an independently-verified cross-tool
 compatibility matrix (no other agent tool was available to run this
 skill under at that build's own implementation time; tracked as its own
-follow-up, see `metadata/gitapex.yaml`); a fixture for the description's
-second use case
-(only the first of three has one; the third is disclosed out of scope in
-`gitapex-worked-examples.md`, the second wasn't until now); the
+follow-up, see `metadata/gitapex.yaml`); the
 Security-level axis's "no established ceiling documentation" branch,
 unsmoke-tested against a target that actually lacks one; a harness
 isolation-verification gap every round's dispatch has disclosed against
@@ -385,13 +444,18 @@ the guiding principle, the two-lane structure, the mechanism-fit test
 four axes (three in
 [cross-cutting-axes.md](references/cross-cutting-axes.md), the fourth in
 [security-level.md](references/security-level.md)), the three-way
-division of responsibility (full detail, together with Procedure step
+division of responsibility (full detail, together with the
+delegation-recommendation procedure and the `scanning-` naming
+convention it reserves, Procedure step
 5's coverage-attestation elaboration and the review-quality-only subset
 of grading-specific Stop boundaries, in
 [grading-procedure.md](references/grading-procedure.md)), and the
 structured-output DSL
 ([output-schema.json](references/output-schema.json)) -- names no
 path or issue number specific to this skill's own authoring repository.
+The one sibling skill that procedure names as a delegate is named, never
+assumed installed: it is confirmed against the calling environment or
+reported unconfirmed, exactly as any other recommended delegate is.
 This skill's own authoring repository's worked examples and provenance
 live separately, explicitly repository-scoped, in
 [gitapex-worked-examples.md](references/gitapex-worked-examples.md),

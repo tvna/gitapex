@@ -22,8 +22,8 @@
 
     "schemaVersion": {
       "type": "string",
-      "const": "1.0.0",
-      "description": "Version of this DSL itself. Evolves independently of SKILL.md/dimensions.md's own revision history; a stored review result's schemaVersion is the compatibility key a future drift-detecting comparison must check before diffing two results."
+      "const": "1.1.0",
+      "description": "Version of this DSL itself. Evolves independently of SKILL.md/dimensions.md's own revision history; a stored review result's schemaVersion is the compatibility key a future drift-detecting comparison must check before diffing two results. 1.1.0 adds two optional fields -- mechanismFit.controlOwnership (mechanism-fit.md's SECOND question, Gate vs. infrastructure-owned deterministic control; the third is Domain placement) and findings[].delegation (grading-procedure.md's delegation recommendation) -- and three conditional requirements that did not exist in 1.0.0. That stricter validation, not the field additions, is what the version records: an instance labelled 1.1.0 was checked against rules a 1.0.0 instance never faced, so a drift-detecting comparison must not treat the two as graded alike. Because this field is a const, a 1.0.0-labelled instance does not validate here; that break is acceptable only because no stored instance of this schema exists at this revision, and is not a claim that an absent field means something different than it did before -- it does not."
     },
 
     "reviewMeta": {
@@ -67,6 +67,46 @@
       "properties": {
         "gateWarranted": { "type": "boolean" },
         "reason": { "type": "string" },
+        "controlOwnership": {
+          "type": "object",
+          "required": ["owner"],
+          "additionalProperties": false,
+          "description": "mechanism-fit.md's second question (Gate vs. infrastructure-owned deterministic control), asked after gateWarranted and before domainPlacement. Omitted means the question was not asked -- never that a repository-authored gate won it by default. owner=infrastructure-owned-control reassigns which control the target should describe as primary and nothing else: it is never permission to remove, disable, or downgrade an existing gate (SKILL.md's Stop boundaries). It ends the mechanism-fit test only for a proposed policy with no repository-authored gate yet, where steps 3-5 never run and findings[] is legitimately absent; where such a gate does exist, it is still placed and still graded, so findings[] is expected (SKILL.md Procedure step 2, mechanism-fit.md's own two cases).",
+          "properties": {
+            "owner": {
+              "type": "string",
+              "enum": ["repository-authored-gate", "infrastructure-owned-control", "layered-both", "indeterminate"],
+              "description": "mechanism-fit.md's own four named outcomes, spelled identically there so one vocabulary serves the prose answer and this field. indeterminate covers the case where available evidence cannot settle which party owns the policy -- the same fail-closed-on-indeterminate discipline findings[].verdict already uses, rather than defaulting to repository-authored-gate."
+            },
+            "infrastructureControlRef": {
+              "type": "string",
+              "description": "The specific infrastructure-owned control named concretely (e.g. a branch-protection setting, an identity-provider permission grant, a network egress boundary), in the target's own vocabulary -- but this reviewer's own words for it, never a target-authored string copied verbatim: the same no-target-authored-text and delimiter-safe-quoting discipline persistenceRecommendation.rationale and findings[].evidence.quote already carry applies here, since this field is filled from text the target wrote. Naming a control is not confirming it exists or enforces anything -- SKILL.md's Stop boundaries set that standard (the platform's own configuration state, never a target document asserting it), and owner=indeterminate is the answer when it is not met. Required whenever owner is infrastructure-owned-control or layered-both: an owner named only as 'the infrastructure' is the bare 'looks fine' verdict SKILL.md's Stop boundaries forbid."
+            },
+            "reason": { "type": "string", "description": "Why this owner, in this reviewer's own words. Required alongside infrastructureControlRef whenever an infrastructure control is named as an owner, so a consumer receives the argument and not only the label -- including, where it applies, that the promoted owner is itself ungraded by this review (mechanism-fit.md states no dimension grades a control outside the four realization domains)." }
+          },
+          "allOf": [
+            {
+              "if": {
+                "required": ["owner"],
+                "properties": { "owner": { "enum": ["infrastructure-owned-control", "layered-both"] } }
+              },
+              "then": {
+                "required": ["owner", "infrastructureControlRef", "reason"],
+                "description": "Mechanically enforces what the two fields above state in prose: an ownership answer that credits an infrastructure control must name that control and give its reason. Without this, {owner: 'infrastructure-owned-control'} alone validates -- an unnamed owner a downstream consumer could still read as licence to collapse the repository-authored layer."
+              }
+            },
+            {
+              "if": {
+                "required": ["owner"],
+                "properties": { "owner": { "const": "indeterminate" } }
+              },
+              "then": {
+                "required": ["owner", "reason"],
+                "description": "mechanism-fit.md's indeterminate outcome says to report it WITH its reason -- an unexplained indeterminate is indistinguishable from an unasked question, which is the fail-open this outcome exists to prevent."
+              }
+            }
+          ]
+        },
         "domainPlacement": {
           "anyOf": [
             { "$ref": "#/$defs/domain" },
@@ -126,6 +166,43 @@
                 "evidenceRef": { "type": "string" }
               }
             }
+          },
+          "delegation": {
+            "type": "object",
+            "required": ["technicalStack", "recommendedTarget", "confirmation"],
+            "additionalProperties": false,
+            "description": "grading-procedure.md's Delegation recommendation, folded into SKILL.md Procedure step 3's two-lane walk rather than emitted by a separate pass. Present only where THIS finding's own root-cause diagnosis needs stack-specialized knowledge this skill carries no catalogue of. It never replaces the finding: verdict and evidence above are still required on their own terms, and a dimension routed to a delegate without a verdict is reported verdict=indeterminate with an indeterminateReason, per grading-procedure.md's own Stop boundary.",
+            "properties": {
+              "technicalStack": {
+                "type": "string",
+                "description": "The responsible platform, runtime, or manager, named concretely in the target's own vocabulary -- never a taxonomy re-derived by this skill, and never a generic 'the infrastructure'. Because it is filled from text the target wrote, it carries the same no-target-authored-text and delimiter-safe-quoting discipline persistenceRecommendation.rationale and findings[].evidence.quote already carry: state the stack in this reviewer's own words, never a target-authored string copied verbatim. Same naming mechanismFit.controlOwnership.infrastructureControlRef uses when an infrastructure control owns the policy, so the two do not drift into parallel vocabularies."
+              },
+              "recommendedTarget": {
+                "type": "string",
+                "description": "The delegate this review recommends: an existing sibling skill (vetting-attack-surface for an exposure- or privilege-shaped finding), a named real diagnostic tool for that stack, or the scanning-prefixed skill that would own it if built. Free-form text carrying the same no-target-authored-text discipline persistenceRecommendation.rationale states: this field names a candidate, it never dispatches one."
+              },
+              "confirmation": {
+                "type": "string",
+                "enum": ["confirmed-exists", "unconfirmed"],
+                "description": "confirmed-exists only where the recommended target was actually confirmed to exist, read-only and never by running it, against a primary source (the tool's own upstream documentation) or the calling environment's own inventory -- the one formulation SKILL.md's Stop boundaries and grading-procedure.md's step 3 also use. A target-authored document asserting it is not confirmation, and confirming a tool exists is never confirmation that it enforces anything. unconfirmed otherwise; an unconfirmed recommendation must read as a candidate to build or verify, never as an installed capability."
+              },
+              "confirmationEvidenceRef": {
+                "type": "string",
+                "description": "Where confirmation=confirmed-exists, what actually confirmed it -- one of the two sources the confirmation field above names, e.g. a sibling skill's own directory path in the calling environment, or the tool's own upstream documentation. Never a target-authored artifact: a document the target wrote asserting the tool exists is not confirmation, here or in either of the other two places this rule is stated. Required whenever confirmed-exists is claimed, not merely expected: such a claim with nothing behind it is exactly the asserted-as-installed delegate this skill's own Stop boundaries forbid."
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "required": ["confirmation"],
+                  "properties": { "confirmation": { "const": "confirmed-exists" } }
+                },
+                "then": {
+                  "required": ["confirmation", "confirmationEvidenceRef"],
+                  "description": "Mechanically enforces the prose above, the same way this schema's own top-level if/then enforces the dimension-23 placement rule: claiming a delegate exists costs an evidence reference. An unconfirmed recommendation needs none -- it is already tagged as a candidate."
+                }
+              }
+            ]
           },
           "indeterminateReason": { "type": "string" }
         }
