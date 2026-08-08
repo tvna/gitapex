@@ -1,7 +1,7 @@
 apiVersion: gitapex.io/v1alpha1
 kind: SkillMetadata
 metadata:
-  name: vetting-attack-surface
+  name: scanning-attack-surfaces
 spec:
   portability: Mixed
   capabilityAssumption: Adaptive
@@ -90,7 +90,7 @@ spec:
       anchor: "https://github.com/tvna/gitapex/pull/442"
       summary: "Scoped this skill deliberately smaller than evaluating-deterministic-gate-quality's four-axis/eighteen-dimension build (two checks, one worked example at launch), the same way that skill itself grew a fourth axis later in a separate PR rather than all at once."
     - kind: decision
-      anchor: "method:vetting-attack-surface"
+      anchor: "method:scanning-attack-surfaces"
       summary: "Confirmed no dedicated pre-written research report was required before building this skill category (issue 461's gap analysis was conducted directly during the build instead), since other 'first of category' skills (screening-a-low-trust-contribution, battle-testing-a-skill, scorer-gated-skill-edits, auditing-agent-product-scope) shipped with no lifecycle field at all."
     - kind: deferral
       anchor: "https://github.com/tvna/gitapex/issues/461"
@@ -104,6 +104,12 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/823"
       summary: "Declared spec.executionRequirements.tools (W3 third slice, https://github.com/tvna/gitapex/issues/307): Procedure step 1 performs static reading of the target artifact's own code/config (read); this skill's own Stop boundaries explicitly rule out both writing (\"Never take a write action\") and executing (\"Never execute the reviewed artifact\")."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/464 -> https://github.com/tvna/gitapex/issues/466"
+      summary: "Preserves the prior rename lineage this entry's overwrite of spec.lifecycle.renamedFrom would otherwise drop: this skill shipped as evaluating-attack-surface, was renamed to vetting-attack-surface once the Vetting-* glossary family landed, and renamedFrom now records only the immediately-prior name per its own single-value shape."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/846"
+      summary: "Renamed vetting-attack-surface to scanning-attack-surfaces, tracked under the scanning-* skill family roster, mechanical: git mv, renamedFrom updated, two pre-existing stale git-hosting-surface-audit mentions in SKILL.md fixed. Zero change to the two checks; the scanning-* family fit is aspirational pending a later, separately-tracked CLI-tool absorption."
   skillDependencies:
     requires:
       - evaluating-skill-quality
@@ -118,7 +124,7 @@ spec:
       write: []
       shell: []
   lifecycle:
-    renamedFrom: evaluating-attack-surface
+    renamedFrom: vetting-attack-surface
     experimental:
       reason: "First version of this skill category, deliberately scoped smaller than evaluating-deterministic-gate-quality's four-axis build and hardened by five audit rounds (self-review, two battle-testing-a-skill passes, an external Codex review, and an isolated confirmation run) before shipping; dimension 14 (no evals/ regression corpus) is the one open, accepted, disclosed launch gap. Full decision and audit history is in spec.references above."
       trackingIssue: "https://github.com/tvna/gitapex/issues/461"

@@ -66,7 +66,7 @@ Scoped automatically to skills that both have a `split.md` and use this
 `###` sub-heading convention -- not an enumerated allowlist like issue
 #584's `DISPATCH_MANDATE_SKILLS`, since the two skills in this repository
 that use `###` headings for an unrelated purpose (`evaluating-deterministic-
-gate-quality`'s evaluation axes, `vetting-attack-surface`'s check
+gate-quality`'s evaluation axes, `scanning-attack-surfaces`'s check
 categories) have no `split.md` at all today, so this check never reaches
 them; a future skill combining both conventions in an unrelated way would
 need this scoping revisited, the same class of residual heuristic-scope

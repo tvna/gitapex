@@ -1,9 +1,9 @@
 ---
-name: vetting-attack-surface
-description: Review any artifact -- a deterministic gate, CI workflow, MCP server, subagent definition, or cloud service integration -- for two things -- whether its outbound interface to a dependent middleware or cloud service (an API response, a log line, a webhook payload, an error message) exposes more information than that dependency's actual function requires, and whether its own credential, token, or permission scope is the minimum its function requires rather than a broader default. Use when reviewing an artifact's own steady-state exposure and privilege design before merging or shipping it. Distinct from evaluating-deterministic-gate-quality (grades a gate's placement, mechanics, and bypass/tier consequences, not its exposure or privilege scope), screening-a-low-trust-contribution (screens a single incoming diff for supply-chain threat, not an artifact's own steady-state design), and git-hosting-surface-audit (audits standing hosting-platform configuration, not an individual artifact).
+name: scanning-attack-surfaces
+description: Review any artifact -- a deterministic gate, CI workflow, MCP server, subagent definition, or cloud service integration -- for two things -- whether its outbound interface to a dependent middleware or cloud service (an API response, a log line, a webhook payload, an error message) exposes more information than that dependency's actual function requires, and whether its own credential, token, or permission scope is the minimum its function requires rather than a broader default. Use when reviewing an artifact's own steady-state exposure and privilege design before merging or shipping it. Distinct from evaluating-deterministic-gate-quality (grades a gate's placement, mechanics, and bypass/tier consequences, not its exposure or privilege scope), screening-a-low-trust-contribution (screens a single incoming diff for supply-chain threat, not an artifact's own steady-state design), and auditing-git-hosting-surface (audits standing hosting-platform configuration, not an individual artifact).
 ---
 
-# Vetting Attack Surface
+# Scanning Attack Surfaces
 
 An artifact can be correctly placed, correctly built, and working exactly
 as designed, and still carry unnecessary risk: it can hand a dependent
@@ -142,7 +142,7 @@ is the pattern this skill reuses rather than re-deriving.
    action in the artifact's own code/config that scope corresponds to (or
    the absence of one).
 4. **Issue a verdict**, per item -- never one aggregate "attack surface:
-   OK" (the same per-item discipline `git-hosting-surface-audit` already
+   OK" (the same per-item discipline `auditing-git-hosting-surface` already
    applies to its own checklist, reused here rather than re-derived):
    exposure-minimal / exposure-excess (naming the specific over-exposed
    field) for each dependency relationship, and privilege-minimal /
@@ -163,11 +163,16 @@ is the pattern this skill reuses rather than re-deriving.
   gate, both skills may apply -- this skill grades exposure/privilege,
   that skill grades placement/mechanics/tier; neither substitutes for the
   other, and this skill does not re-derive either of that skill's axes.
+  `evaluating-deterministic-gate-quality`'s own delegation-recommendation
+  step also names this skill as the delegate for an exposure- or
+  privilege-shaped finding it surfaces, rather than re-deriving that
+  analysis inline -- confirmed against the calling environment's own
+  inventory at delegation time, not hardcoded to one name.
 - **`screening-a-low-trust-contribution`** (`relatedTo`) -- screens a
   single incoming diff for supply-chain/injection threat at contribution
   time. This skill grades an artifact's own steady-state design, already
   merged or about to be. Neither substitutes for the other.
-- **`git-hosting-surface-audit`** (`relatedTo`) -- audits a repository's
+- **`auditing-git-hosting-surface`** (`relatedTo`) -- audits a repository's
   standing hosting-platform configuration (branch protection, token
   scopes, webhook inventory at the platform level). This skill grades one
   artifact's own declared/observed scope. A finding here about one
@@ -184,6 +189,18 @@ is the pattern this skill reuses rather than re-deriving.
   produces findings, never enforcement. A privilege-excess finding here
   may inform where such enforcement would eventually be valuable, but
   this skill does not fulfill, build, or substitute for that axis.
+- **The `scanning-*` naming family** (`docs/glossary.md`) -- this skill's
+  name was moved into that family ahead of its own function. The family
+  itself delegates judgment entirely to one external, pinned diagnostic
+  CLI tool and reports that tool's own findings unmodified, but this
+  skill still performs its own judgment against the two checks above,
+  with `write: []` and `shell: []` unchanged. A later absorption of
+  `auditing-git-hosting-surface`'s own capability into this skill --
+  tracking-issue number elided here per the no-bare-citation rule below
+  and recorded instead in `metadata/gitapex.yaml` -- is what will make
+  the name and the function match; until then, this skill is
+  `scanning-*`-named but `vetting-*`-shaped by the same repository's own
+  naming-family definitions.
 
 ## Stop boundaries
 
