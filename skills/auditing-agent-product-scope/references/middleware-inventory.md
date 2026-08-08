@@ -25,14 +25,15 @@ inventory does not conflate the two.
 ## Nix toolchain (`flake.nix`)
 
 Stated purpose, verbatim from the file's own `description`: "gitapex
-external toolchain (SSoT for uv/gh/actionlint/python/bun/lychee +
+external toolchain (SSoT for uv/gh/actionlint/zizmor/python/bun/lychee +
 waza/apm/rtk/betterleaks)."
 
 | Tool | Class | Why needed | Scope of responsibility | Supply-chain coverage |
 |---|---|---|---|---|
 | `uv` | A (nixpkgs) | Python dependency/environment manager for this repository's own scripts and dev tooling | Manages only the `dev` dependency group (`pytest`, `pytest-cov`, `pyyaml`, `prek`); `pyproject.toml` declares no runtime `dependencies` and `[tool.uv] package = false` | Dependabot `nix` ecosystem (bumps the `nixpkgs` input) |
 | `gh` | A (nixpkgs) | Read-only repository/PR/issue interaction from a shell | Present in the dev shell; its *write* subcommands are blocked by `hooks/check-bash-safety.sh`, not by the toolchain itself | Dependabot `nix` ecosystem |
-| `actionlint` | A (nixpkgs) | Lints GitHub Actions workflow YAML | An active CI gate, wired into `.github/workflows/lint.yml` | Dependabot `nix` ecosystem |
+| `actionlint` | A (nixpkgs) | Lints GitHub Actions workflow YAML | An active CI gate, wired into `.github/workflows/lint.yml`; also one of the two tools `skills/scanning-ci-workflows` orchestrates | Dependabot `nix` ecosystem |
+| `zizmor` | A (nixpkgs) | Static security analysis of GitHub Actions workflows and composite actions (template injection, permissions, triggers, credential persistence, unpinned uses) | Consumed by `skills/scanning-ci-workflows`, which invokes it with `--offline` and never with `--fix`; deliberately not a CI gate in this repository today, and unlike `betterleaks` it was wired into a consumer in the same change that pinned it | Dependabot `nix` ecosystem |
 | `python312` | A (nixpkgs) | Runtime for every Python script and test in this repository | Base interpreter only; `uv` manages the actual dependency versions on top of it | Dependabot `nix` ecosystem |
 | `bun` | A (nixpkgs) | A JS/TS runtime and package manager, per the toolchain's own stated scope | Provisioned in the dev shell; no `package.json` or JS/TS source exists in this repository, and no script or workflow invokes it beyond `toolchain-nix.yml`'s own build-and-version smoke test | Dependabot `nix` ecosystem |
 | `lychee` | A (nixpkgs) | A link checker, per its own project purpose | Same as `bun` -- provisioned and version-smoke-tested only; no link-checking workflow runs it against this repository's docs today | Dependabot `nix` ecosystem |
