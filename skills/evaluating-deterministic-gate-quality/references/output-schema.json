@@ -23,7 +23,7 @@
     "schemaVersion": {
       "type": "string",
       "const": "1.1.0",
-      "description": "Version of this DSL itself. Evolves independently of SKILL.md/dimensions.md's own revision history; a stored review result's schemaVersion is the compatibility key a future drift-detecting comparison must check before diffing two results. 1.1.0 adds two optional fields -- mechanismFit.controlOwnership (mechanism-fit.md's third question) and findings[].delegation (grading-procedure.md's delegation recommendation). A 1.0.0-labelled instance is deliberately NOT valid against this revision: the const is what stops a consumer from silently diffing a result produced before either field existed (where their absence means 'not asked') against one produced after (where absence means 'asked, not applicable')."
+      "description": "Version of this DSL itself. Evolves independently of SKILL.md/dimensions.md's own revision history; a stored review result's schemaVersion is the compatibility key a future drift-detecting comparison must check before diffing two results. 1.1.0 adds two optional fields -- mechanismFit.controlOwnership (mechanism-fit.md's SECOND question, Gate vs. infrastructure-owned deterministic control; the third is Domain placement) and findings[].delegation (grading-procedure.md's delegation recommendation) -- and three conditional requirements that did not exist in 1.0.0. That stricter validation, not the field additions, is what the version records: an instance labelled 1.1.0 was checked against rules a 1.0.0 instance never faced, so a drift-detecting comparison must not treat the two as graded alike. Because this field is a const, a 1.0.0-labelled instance does not validate here; that break is acceptable only because no stored instance of this schema exists at this revision, and is not a claim that an absent field means something different than it did before -- it does not."
     },
 
     "reviewMeta": {
@@ -71,12 +71,12 @@
           "type": "object",
           "required": ["owner"],
           "additionalProperties": false,
-          "description": "mechanism-fit.md's second question (Gate vs. infrastructure-owned deterministic control), asked after gateWarranted and before domainPlacement. Omitted means the question was not asked -- never that a repository-authored gate won it by default. owner=infrastructure-owned-control reassigns which control the target should describe as primary and nothing else: it is never permission to remove, disable, or downgrade an existing gate, and it short-circuits no step (SKILL.md Procedure step 2 and its Stop boundaries both state this).",
+          "description": "mechanism-fit.md's second question (Gate vs. infrastructure-owned deterministic control), asked after gateWarranted and before domainPlacement. Omitted means the question was not asked -- never that a repository-authored gate won it by default. owner=infrastructure-owned-control reassigns which control the target should describe as primary and nothing else: it is never permission to remove, disable, or downgrade an existing gate (SKILL.md's Stop boundaries). It ends the mechanism-fit test only for a proposed policy with no repository-authored gate yet, where steps 3-5 never run and findings[] is legitimately absent; where such a gate does exist, it is still placed and still graded, so findings[] is expected (SKILL.md Procedure step 2, mechanism-fit.md's own two cases).",
           "properties": {
             "owner": {
               "type": "string",
               "enum": ["repository-authored-gate", "infrastructure-owned-control", "layered-both", "indeterminate"],
-              "description": "mechanism-fit.md's own three named outcomes, plus indeterminate for the case where available evidence cannot settle which party owns the policy -- the same fail-closed-on-indeterminate discipline findings[].verdict already uses, rather than defaulting to repository-authored-gate."
+              "description": "mechanism-fit.md's own four named outcomes, spelled identically there so one vocabulary serves the prose answer and this field. indeterminate covers the case where available evidence cannot settle which party owns the policy -- the same fail-closed-on-indeterminate discipline findings[].verdict already uses, rather than defaulting to repository-authored-gate."
             },
             "infrastructureControlRef": {
               "type": "string",
@@ -93,6 +93,16 @@
               "then": {
                 "required": ["owner", "infrastructureControlRef", "reason"],
                 "description": "Mechanically enforces what the two fields above state in prose: an ownership answer that credits an infrastructure control must name that control and give its reason. Without this, {owner: 'infrastructure-owned-control'} alone validates -- an unnamed owner a downstream consumer could still read as licence to collapse the repository-authored layer."
+              }
+            },
+            {
+              "if": {
+                "required": ["owner"],
+                "properties": { "owner": { "const": "indeterminate" } }
+              },
+              "then": {
+                "required": ["owner", "reason"],
+                "description": "mechanism-fit.md's indeterminate outcome says to report it WITH its reason -- an unexplained indeterminate is indistinguishable from an unasked question, which is the fail-open this outcome exists to prevent."
               }
             }
           ]
@@ -159,7 +169,7 @@
           },
           "delegation": {
             "type": "object",
-            "required": ["technicalStack", "confirmation"],
+            "required": ["technicalStack", "recommendedTarget", "confirmation"],
             "additionalProperties": false,
             "description": "grading-procedure.md's Delegation recommendation, folded into SKILL.md Procedure step 3's two-lane walk rather than emitted by a separate pass. Present only where THIS finding's own root-cause diagnosis needs stack-specialized knowledge this skill carries no catalogue of. It never replaces the finding: verdict and evidence above are still required on their own terms, and a dimension routed to a delegate without a verdict is reported verdict=indeterminate with an indeterminateReason, per grading-procedure.md's own Stop boundary.",
             "properties": {
@@ -174,7 +184,7 @@
               "confirmation": {
                 "type": "string",
                 "enum": ["confirmed-exists", "unconfirmed"],
-                "description": "confirmed-exists only where the recommended target was actually confirmed against a primary source or the target's own declared artifacts, read-only, never by running it. unconfirmed otherwise -- including every recommendation naming a scanning-prefixed skill, since none exists at this writing. An unconfirmed recommendation must read as a candidate to build or verify, never as an installed capability (SKILL.md Stop boundaries)."
+                "description": "confirmed-exists only where the recommended target was actually confirmed to exist, read-only and never by running it, against a primary source (the tool's own upstream documentation) or the calling environment's own inventory -- the one formulation SKILL.md's Stop boundaries and grading-procedure.md's step 3 also use. A target-authored document asserting it is not confirmation, and confirming a tool exists is never confirmation that it enforces anything. unconfirmed otherwise; an unconfirmed recommendation must read as a candidate to build or verify, never as an installed capability."
               },
               "confirmationEvidenceRef": {
                 "type": "string",

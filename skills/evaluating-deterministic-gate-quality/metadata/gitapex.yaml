@@ -398,14 +398,14 @@ spec:
       summary: "Triage of a fable-model adversarial review's findings F1-F6 against a proposed architectural overhaul of this skill. F1 became a third mechanism-fit branch; F2 a delegation-recommending orchestrator; F3 an integration into the existing two-lane structure instead of a new Layer 1 / Layer 2 dichotomy; F4 an outright rejection of user-selectable review scope; F5 additive extension instead of a rebuild; F6 judged resolved by the F2/F4 decisions with no separate work item."
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/842"
-      summary: "F1: added Gate vs. infrastructure-owned deterministic control as mechanism-fit.md's own second question, between Gate vs. no gate and Domain placement. It reuses security-level.md's impossible-vs-tedious test as its decision procedure rather than re-deriving a second discriminator, answers with three named outcomes (repository-authored-gate / infrastructure-owned-control / layered-both), and changes neither the four realization domains nor the six domain-placement criteria."
+      summary: "F1: added Gate vs. infrastructure-owned deterministic control as mechanism-fit.md's own second question, between Gate vs. no gate and Domain placement. It reuses security-level.md's impossible-vs-tedious test as its decision procedure rather than re-deriving a second discriminator, answers with four named outcomes (repository-authored-gate / infrastructure-owned-control / layered-both / indeterminate), and changes neither the four realization domains nor the six domain-placement criteria."
       outcome:
-        lines: "mechanism-fit.md 163->248, security-level.md 166->171"
+        lines: "at this commit; see the branch-final totals entry below for the shipped numbers"
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/842"
       summary: "F2: known-pattern diagnosis is not embedded as a knowledge base. grading-procedure.md gained a Delegation recommendation section extending the Three-way division's own second party -- name the responsible technical stack, route an exposure- or privilege-shaped finding to vetting-attack-surface, existence-check any other named tool against a primary source and tag it unconfirmed otherwise. executionRequirements.tools is unchanged: a delegate is recommended, never run."
       outcome:
-        lines: "grading-procedure.md 143->227"
+        lines: "at this commit; see the branch-final totals entry below"
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/842"
       summary: "F2 scope confirmation: the scanning- prefix reserved for a future stack-diagnostic delegate skill is recorded here as a naming convention only. No scanning-* skill is created, renamed, or scaffolded, so every recommendation naming one is unconfirmed by construction and reads as a candidate to build. The sibling delegate that does exist is likewise never assumed installed in a consuming repository -- dimension 23's own premise applied reflexively."
@@ -413,12 +413,12 @@ spec:
       anchor: "https://github.com/tvna/gitapex/issues/842"
       summary: "F3: both additions were folded into the existing two-lane walk rather than added as a new up-front pass. dimensions.md now states explicitly that neither lane gains a member and no third lane exists; SKILL.md Procedure step 3 carries the delegation clause inline, and step 2 states that an infrastructure-owned answer short-circuits nothing -- an existing gate is still graded through steps 3-5."
       outcome:
-        lines: "dimensions.md 442->451, SKILL.md 416->470"
+        lines: "at this commit; see the branch-final totals entry below"
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/842"
       summary: "output-schema.json gained mechanismFit.controlOwnership (owner / infrastructureControlRef / reason) and findings[].delegation (technicalStack / recommendedTarget / confirmation / confirmationEvidenceRef). schemaVersion's const bumped 1.0.0 -> 1.1.0 so a consumer cannot silently diff a pre-delegation result against a post-delegation one, where an absent field means 'not asked' in the first and 'asked, not applicable' in the second."
       outcome:
-        lines: "output-schema.json 271->314"
+        lines: "at this commit; see the branch-final totals entry below"
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/842"
       summary: "Two Stop boundaries went to SKILL.md's own always-loaded body rather than a reference file, since both bind from the Mechanism-fit check onward: an infrastructure-owned answer is never permission to remove, disable, or downgrade an existing gate; and no infrastructure control, delegate skill, or tool is presented as existing without confirmation. A third, review-quality-only boundary (a recommendation never stands in for a verdict) went to grading-procedure.md, binding from step 3."
@@ -470,7 +470,7 @@ spec:
       summary: "Added two schema conditionals, using the same if/then shape the file already used for the dimension-23 placement rule: infrastructureControlRef and reason are required whenever owner is infrastructure-owned-control or layered-both, and confirmationEvidenceRef is required whenever confirmation is confirmed-exists. Both were prose-only and both were demonstrated to validate without them. Verified by re-validating eight instances, four expected valid and four expected rejected."
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/842"
-      summary: "Fixed the remaining textual findings: technicalStack and infrastructureControlRef gained the no-target-authored-text discipline their siblings carried; non-substitution now covers an axis and the ownership answer, not dimensions alone; step 6 gained an infrastructure-owned verdict token; the body's short-circuit rule was reconciled with the reference's two cases; wrong-domain and infrastructure-owned were decoupled; two rules restated at five sites each became one statement plus pointers."
+      summary: "Fixed the remaining textual findings: technicalStack and infrastructureControlRef gained the no-target-authored-text discipline their siblings carried; non-substitution now covers an axis and the ownership answer, not dimensions alone; step 6 gained an infrastructure-owned verdict token; the body's short-circuit rule was reconciled with the reference's two cases; wrong-domain and infrastructure-owned were decoupled; and the two most-restated rules were cut from five sites each to three and two."
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/842"
       summary: "Replaced an undated absolute ('no scanning-* skill exists at this writing') in portable-core content with a check against the calling environment's own inventory -- the shape the same section already used for the sibling delegate, and correct in a consuming repository that does have one. Also closed a Lifecycle-note deferral this diff falsified, and added the missing vetting-attack-surface boundary to the frontmatter description now that the two skills are operationally coupled."
@@ -480,6 +480,41 @@ spec:
     - kind: deferral
       anchor: "https://github.com/tvna/gitapex/issues/842"
       summary: "Named rather than silently dropped, all pre-existing and out of this issue's scope: output-schema.json has no artifact-level verdict field and a near-vacuous instance still validates; the bundled shape checker is never invoked by the Procedure's own steps; its test suite has no real-CLI integration coverage; eval-status.md names the missing external ablation tooling without naming the in-repo runner; and the frontmatter declares no compatibility field despite a Domain-2-specific bundled checker."
+    - kind: audit
+      anchor: "method:pr-850-inner-layer-review"
+      summary: "Three parallel adversarial review passes (internal correctness, regression and blast radius, convention adherence) ran against the pushed branch as drafting-a-pr-to-merge's inner layer, returning 11, 5 and 9 findings. All three independently converged on the same highest-severity defect, and each verified it by executing this repository's own scorer rather than by reading."
+      outcome:
+        verdict: FAIL
+        found: 25
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/842"
+      summary: "Fixed the convergent finding, a false NEGATIVE inverse of the earlier construct-validity defect: the two mechanism-fit fixtures pinned infrastructure-owned-control, a token then present only in output-schema.json, while the prose a reviewer reads said Infrastructure-owned or infrastructure-owned. A fully correct answer scored 0.750, under the 0.8 threshold. The four outcomes now carry the schema's enum tokens everywhere, both prompts enumerate them, and the assertion pins the shared prefix."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/842"
+      summary: "Fixed the second-round fixture findings: the exposure fixture passed a 'not a case for vetting-attack-surface / Delegate: nobody' answer and the delegate fixture passed one relaying the injected installed-claim in full. Both now bind the delegate name to the delegation act with output_contains_near rather than accepting it anywhere in the text. Re-scored across 13 cases: correct answers 1.000 in both spellings, every hostile output 0.000-0.750."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/842"
+      summary: "Fixed a partition gap the reviewers found by walking the two questions as a 2x2: the four outcomes covered only two cells, leaving 'neither control removes the path' (an alert-only platform scan beside a skippable hook) and 'both remove the same path' with no branch to take. Both are now named under repository-authored-gate and layered-both respectively, with the no-floor-class-owner case called out as a finding in its own right."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/842"
+      summary: "Fixed five contradictions inside output-schema.json, each quoted against the source it misstated: controlOwnership claimed the answer short-circuits no step (the opposite of SKILL.md's two cases); confirmation kept the undated 'none exists at this writing' absolute a prior correction claimed to have removed; the enum said three outcomes; schemaVersion called it the third question with a rationale its own sibling field denies; and the confirmation-source wording differed across three files."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/842"
+      summary: "Two more schema gaps closed with conditionals rather than prose: delegation could claim confirmed-exists while naming no recommendedTarget, and owner=indeterminate validated with no reason despite mechanism-fit.md requiring one. Re-verified by validating 15 instances (9 expected valid, 6 expected rejected) against the edited schema, no mismatches."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/842"
+      summary: "Fixed a Stop-boundary layering error and an unsatisfiable instruction it carried: the non-substitution rule covered the mechanism-fit ownership answer (a step-2 decision) from the grading-specific set that binds only from step 3 and is not always-loaded, and told the reader to write an axis-level recommendation into a free-text field two of the four axes do not have and additionalProperties: false rejects. Split by binding time; the axis case is now a disclosed representation limit."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/842"
+      summary: "Removed an inline restatement of this repository's skill-naming verb families from portable-core content. One gloss contradicted docs/glossary.md, the repository's own SSOT for that taxonomy, and establishing-ubiquitous-language binds it. The text now defers to whatever naming document a target keeps and states that registering a new family there is that repository's own governed decision."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/842"
+      summary: "Bookkeeping the reviewers caught as stale or false: eval.yaml's graded metric description and eval-status.md still declared a five-way verdict taxonomy after step 6 grew to six; five of six outcome.lines claims in this sidecar were measured at the branch's first commit and never refreshed; and one correction entry overclaimed that two rules had been cut to 'one statement plus pointers' when three and two sites remain, each with a distinct reader."
+      outcome:
+        lines: "branch-final, re-measured against origin/main at HEAD: SKILL.md 416->480, mechanism-fit.md 163->324, grading-procedure.md 143->248, dimensions.md 442->449, security-level.md 166->171, output-schema.json 271->348, fixtures 29->33"
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/842"
+      summary: "Named rather than papered over, both surfaced by the inner-layer round: registering the scanning- prefix in docs/glossary.md is an owner decision this issue's own scope (this skill only) does not cover, so the convention is recorded here and unregistered there; and no fixture assertion discriminates an answer that works the exposure analysis out inline while still naming the delegate, since a substring scorer cannot see an ignored 'do not work that analysis out here'."
   skillDependencies:
     requires:
       - evaluating-skill-quality

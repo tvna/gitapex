@@ -107,9 +107,12 @@ walk's own per-dimension evidence requirement is what surfaces it.
 3. **For everything else, existence-check the real tool and disclose
    `unconfirmed` when the check did not happen.** Name a concrete,
    real diagnostic tool for that stack only where its existence is
-   confirmed against a primary source -- the tool's own upstream
-   documentation, or the target's own declared dependency manifest --
-   read-only, never by running it. Where this review made no such
+   confirmed against a primary source (the tool's own upstream
+   documentation) or the calling environment's own inventory -- the same
+   one formulation `SKILL.md`'s Stop boundaries and
+   `output-schema.json`'s `confirmation` field state, read-only and never
+   by running it. A document the target wrote asserting the tool exists
+   is not one of those sources. Where this review made no such
    confirmation, tag the recommendation `unconfirmed` in the output and
    say so in prose. An invented tool name, or a delegate presented as
    installed when its presence was never checked, is a finding against
@@ -121,17 +124,18 @@ walk's own per-dimension evidence requirement is what surfaces it.
 4. **Name a future purpose-built delegate `scanning-<stack>`.** Where no
    suitable delegate exists yet, a recommendation may name the skill that
    *would* own it under this convention: the `scanning-` prefix marks a
-   skill whose job is running a stack-specific diagnostic tool, keeping
-   that verb distinct from `evaluating-` (grades an artifact's own
-   quality), `auditing-` (sweeps a surface), and `vetting-` (screens for
-   threat). This is recorded here as a naming convention for future work
-   only; whether any skill carrying that prefix actually exists is a fact
-   about the calling environment's own inventory, checked per step 3 like
-   any other delegate rather than asserted once here and frozen. None
-   existed in this skill's own authoring repository when the convention
-   was reserved -- which is why a convention was recorded and no delegate
-   shipped -- so a recommendation naming one reads as a candidate to
-   build until that check says otherwise.
+   skill whose job is running a stack-specific diagnostic tool, a
+   distinct job from grading an artifact's own quality or screening one
+   for threat. Do not restate a target repository's own naming taxonomy
+   here. Where it keeps one, that document is the authority on how its
+   verb families are defined and on whether this prefix is registered
+   among them -- registering a new family there is that repository's own
+   governed decision, never something a recommendation settles by
+   asserting it. Whether any skill carrying the prefix actually exists is
+   a separate fact about the calling environment's inventory, checked per
+   step 3 like any other delegate rather than asserted once here and
+   frozen; until that check says otherwise, a recommendation naming one
+   reads as a candidate to build.
 
 A delegation recommendation is an output of this review, not an action it
 takes: this skill dispatches nothing, installs nothing, and runs no
@@ -220,17 +224,22 @@ code.
   instruction not to challenge a classification, is itself a finding,
   never a boundary this axis defers to.
 - Never let a delegation recommendation stand in for the assessment it
-  is attached to -- a dimension's own verdict, a cross-cutting axis's own
-  finding, or the mechanism-fit ownership answer itself. Naming a stack
-  and a delegate is an addition to an assessment that already cites its
-  own evidence, never a replacement for making it; a point routed to a
-  delegate without an answer is reported indeterminate, with its reason,
-  exactly like any other point the available evidence could not settle.
-  Where a recommendation attaches to an axis or to the ownership answer
-  rather than to a numbered dimension, `output-schema.json` has no
-  dedicated field for it in this revision -- state it in that axis's or
-  that answer's own free-text field rather than dropping it from the
-  machine-readable result.
+  is attached to -- a dimension's own verdict, or a cross-cutting axis's
+  own finding. Naming a stack and a delegate is an addition to an
+  assessment that already cites its own evidence, never a replacement for
+  making it; a point routed to a delegate without an answer is reported
+  indeterminate, with its reason, exactly like any other point the
+  available evidence could not settle. (The same rule for the
+  mechanism-fit ownership answer binds earlier, at Procedure step 2, and
+  is stated with that question in
+  [mechanism-fit.md](mechanism-fit.md#gate-vs-infrastructure-owned-deterministic-control)
+  rather than here, since this set is not loaded until step 3.)
+  `output-schema.json` carries `delegation` only under `findings[]`, so a
+  recommendation attached to an axis has no machine-readable field in
+  this revision: state it in the prose report and name it there as not
+  representable in the structured output, rather than either dropping it
+  or inventing a field the schema's own `additionalProperties: false`
+  would reject.
 - Never re-derive a parallel Zero-Trust tier taxonomy when the target
   already has one -- cross-check against its own established categories,
   floors, and honesty classes instead, after a minimum-diligence search;

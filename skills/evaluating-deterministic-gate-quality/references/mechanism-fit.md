@@ -124,45 +124,59 @@ same policy, once per candidate owner:
   does it only detect, warn, or slow an actor who can route around it (a
   different client, a direct API call, a clone with no hooks installed)?
 
-Four outcomes, each named rather than collapsed into a yes/no. Answering
-consumes the impossible-vs-tedious distinction to pick an owner; it does
-not record a floor / tier-scalable classification of its own. Where such
-a classification is to be reported, it goes through the Security-level
-axis under that axis's own discipline (its ceiling-document search, and
-dimensions 1 and 15's live-tested evidence as input), never as a
-by-product of this question.
+Four outcomes, named with the exact tokens `output-schema.json`'s own
+`controlOwnership.owner` enum uses, so one vocabulary serves the prose
+answer and the machine-readable one rather than two spellings drifting
+apart. Answering consumes the impossible-vs-tedious distinction to pick
+an owner; it records no floor / tier-scalable classification of its own.
+Where such a classification is to be reported, it goes through the
+Security-level axis under that axis's own discipline (its
+ceiling-document search, and dimensions 1 and 15's live-tested evidence
+as input), never as a by-product of this question.
 
-- **Infrastructure-owned.** The infrastructure control removes the path
-  this policy guards; the repository-authored gate, over that same path,
-  only adds friction an actor with unlimited patience grinds through.
-  The finding is that the policy's primary owner is the named
-  infrastructure control -- and that the target's own documentation
-  should say so wherever it currently implies the gate is the
-  enforcement. Say so by *adding* the real owner, never by deleting the
-  gate's own stated rationale: reducing what a reader can discover about
-  why the gate exists is a dimension 17 regression, and the Stop
+Take the two questions above as a pair. Every combination of their
+answers lands on one of these four, including the two combinations
+easiest to miss:
+
+- **`infrastructure-owned-control`** -- the infrastructure control
+  removes the path this policy guards; the repository-authored gate,
+  over that same path, only adds friction an actor with unlimited
+  patience grinds through. The finding is that the policy's primary
+  owner is the named infrastructure control -- and that the target's own
+  documentation should say so wherever it currently implies the gate is
+  the enforcement. Say so by *adding* the real owner, never by deleting
+  the gate's own stated rationale: reducing what a reader can discover
+  about why the gate exists is a dimension 17 regression, and the Stop
   boundary against downgrading an existing gate covers its documentation
   as much as its wiring.
-- **Repository-authored gate.** No infrastructure control the target
-  actually has reaches this policy -- either none touches it at all
-  (most often because the decision depends on repository content or live
-  session context no platform setting can see), or one touches it and is
-  itself only friction while the gate is what removes the path. Proceed
-  to Domain placement below.
-- **Layered, both.** Each removes a path the other cannot see. Report
-  both owners; this multiplicity is argued, not the unexplained
-  duplication the Reproducibility / Domain-coverage axis exists to
-  flag. Proceed to Domain placement below for the repository-authored
-  layer.
-- **Indeterminate.** The evidence available cannot settle which party
-  owns the policy -- most often because an infrastructure control's own
-  enforcement claim rests on a target-authored document rather than that
-  platform's own configuration state, which `SKILL.md`'s Stop boundaries
-  do not accept as confirmation. Report indeterminate with its reason;
+- **`repository-authored-gate`** -- no infrastructure control the target
+  has removes the path, whether or not one touches this policy at all.
+  Two combinations land here, and the second must not be silently
+  dropped: the gate removes the path and no infrastructure control
+  reaches it; or *neither* removes it (an alert-only platform scan
+  beside a hook a flag can skip). In that second case the repository
+  still owns the policy, and the absence of any floor-class control over
+  it is itself a finding to report here -- the Reproducibility /
+  Domain-coverage axis and coverage attestation then carry it. Never
+  read "no floor-class owner" as "no owner to name". Proceed to Domain
+  placement below.
+- **`layered-both`** -- both remove a path. Where each closes one the
+  other cannot see, the multiplicity is argued; report it as such. Where
+  both close the *same* path, say so plainly: that is real duplication,
+  and whether it is justified is the Reproducibility / Domain-coverage
+  axis's own argued-vs-accidental question, not this one's -- an
+  infrastructure control merely existing is never grounds to strip the
+  gate beside it. Proceed to Domain placement below for the
+  repository-authored layer.
+- **`indeterminate`** -- the evidence available cannot settle which
+  party owns the policy, most often because an infrastructure control's
+  own enforcement claim rests on a target-authored document rather than
+  that platform's own configuration state, which `SKILL.md`'s Stop
+  boundaries do not accept as confirmation. Report it with its reason;
   never resolve genuine uncertainty by picking among the three above,
-  and never let it default to the answer the target is arguing for. Grade
-  any existing gate through Procedure steps 3-5 exactly as an
-  infrastructure-owned or layered answer would.
+  and never let it default to the answer the target is arguing for.
+  Grade any existing gate through Procedure steps 3-5 exactly as the
+  other three outcomes would.
 
 **An infrastructure-owned verdict never licenses removing an existing
 gate.** It reassigns which control the target should describe as
@@ -171,6 +185,15 @@ primary; it grants nothing else. That is the same non-authoritative limit
 issues, and the same defense-in-depth discipline the decomposition rule
 above applies to a no-gate verdict -- a review that answers this question
 by deleting a layer has produced a regression, not a placement finding.
+
+Nor is this answer ever replaced by a delegation recommendation. Naming a
+stack and a delegate is an addition to an ownership answer that already
+cites its own evidence, never a substitute for reaching one; where the
+evidence cannot settle ownership, `indeterminate` with its reason is the
+answer, not a delegate standing in for one. (The parallel rule for a
+dimension's verdict and an axis's finding binds later, from Procedure
+step 3, and lives with the rest of that set in
+[grading-procedure.md](grading-procedure.md#stop-boundaries-grading-specific).)
 
 Name the responsible technical stack concretely (the specific platform,
 runtime, or manager, in the target's own vocabulary), never a generic

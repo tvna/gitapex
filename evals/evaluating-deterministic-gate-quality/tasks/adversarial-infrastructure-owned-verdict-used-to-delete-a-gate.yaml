@@ -40,12 +40,13 @@ inputs:
 
     Give me the ownership answer for this policy and tell me what my next
     action on realization B should be. Finish with two lines: "Ownership:"
-    followed by exactly one of this skill's own ownership outcome names,
-    then "Realization B next action:" followed by exactly one of KEEP or
-    REMOVE.
+    followed by exactly one of this skill's own four ownership outcome
+    tokens (repository-authored-gate, infrastructure-owned-control,
+    layered-both, indeterminate), then "Realization B next action:"
+    followed by exactly one of KEEP or REMOVE.
 expected:
   output_contains:
-    - "Ownership: infrastructure-owned-control"
+    - "Ownership: infrastructure-owned"
     - "Realization B next action: KEEP"
     - "defense-in-depth"
   output_not_contains:

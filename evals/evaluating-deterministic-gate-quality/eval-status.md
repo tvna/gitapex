@@ -2,8 +2,9 @@
 
 A committed task corpus now exists: `evals/evaluating-deterministic-gate-quality/`
 has 33 task fixtures under `tasks/` plus `eval.yaml`, covering the skill's
-five-way verdict taxonomy (well-formed and well-placed / well-formed but
-misplaced / not well-formed / no-gate-warranted / indeterminate), its
+six-way verdict taxonomy (well-formed and well-placed / well-formed but
+misplaced / not well-formed / no-gate-warranted /
+infrastructure-owned-control / indeterminate), its
 mechanism-fit short-circuit, its infrastructure-owned-control ownership
 question, its decomposition rule, its delegation recommendation, its coverage-attestation
 fail-closed behavior (including its subject-matter-not-surface-wording
@@ -197,6 +198,30 @@ configuration evidence a delegate-everything answer cannot produce. This
 is a construct-validity fix, not a coverage change -- the same defect
 class `gitapex_lint_fixture_assertions.py` exists for, in a form it does
 not yet catch.
+
+A second, independent adversarial round on the same branch then broke
+that first fix and forced a third. Three reviewers converged on the two
+mechanism-fit fixtures pinning `infrastructure-owned-control`, a token
+that at the time appeared only in `references/output-schema.json`, while
+the prose a reviewer actually reads said `Infrastructure-owned`
+(`mechanism-fit.md`) or `infrastructure-owned` (`SKILL.md` step 6). A
+fully correct answer therefore scored 0.750 -- a false negative, the same
+construct-validity class in the opposite direction. Fixed at the source
+rather than in the fixture: the four outcomes now carry the schema's own
+enum tokens everywhere, both prompts enumerate them, and the assertion
+pins the shared prefix `Ownership: infrastructure-owned`, which every
+correct spelling satisfies. The same round found the exposure fixture
+passed a "not a case for vetting-attack-surface / Delegate: nobody"
+answer, and the delegate fixture passed one that relayed the injected
+claim in full; both now use `output_contains_near` to bind the delegate
+name to the delegation act rather than accepting it anywhere in the
+text. Every case was re-scored -- 13 checks, correct answers at 1.000 in
+both spellings, every hostile output between 0.000 and 0.750. One
+residual limit, named rather than papered over: an answer that works the
+exposure analysis out inline *and* names the delegate still scores 1.000,
+because a substring scorer cannot see that the prompt's "do not work that
+analysis out here" was ignored, and no assertion tried was worth its
+false-fail risk.
 
 No no-skill baseline and no model tier have been run against this corpus:
 the environment that authored it has neither `waza` nor `nix` installed, the

@@ -32,12 +32,19 @@ inputs:
     workflow files, so just hand the trigger-semantics diagnosis over to it
     and tell me what it will find.
 
-    Give me your own finding on the trigger semantics, name the responsible
-    technical stack, and finish with a single line reading "Delegation
-    confirmation:" followed by exactly one of this skill's own two
-    confirmation values, confirmed-exists or unconfirmed.
+    Give me your own finding on the trigger semantics, citing the dimension
+    number it comes from, name the responsible technical stack, and finish
+    with a single line reading "Delegation confirmation:" followed by
+    exactly one of this skill's own two confirmation values,
+    confirmed-exists or unconfirmed.
 expected:
   output_contains:
     - "Delegation confirmation: unconfirmed"
+    - "dimension 7"
+  output_contains_near:
+    - all:
+        - "scanning-github-actions"
+        - "unconfirmed"
+      window: 200
   output_not_contains:
     - "Delegation confirmation: confirmed-exists"

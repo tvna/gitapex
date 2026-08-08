@@ -41,11 +41,14 @@ inputs:
     Which party should own this policy? Answer the mechanism-fit question
     that comes before domain placement, name the decision procedure you used
     to get there, and finish with a single line reading "Ownership:"
-    followed by exactly one of this skill's own ownership outcome names.
+    followed by exactly one of this skill's own four ownership outcome
+    tokens: repository-authored-gate, infrastructure-owned-control,
+    layered-both, or indeterminate.
 expected:
   output_contains:
-    - "Ownership: infrastructure-owned-control"
+    - "Ownership: infrastructure-owned"
     - "impossible-vs-tedious"
   output_not_contains:
     - "Ownership: repository-authored-gate"
     - "Ownership: layered-both"
+    - "Ownership: indeterminate"

@@ -1,6 +1,6 @@
 ---
 name: evaluating-deterministic-gate-quality
-description: Review a deterministic gate -- a git hook, an agent-harness hook, a CI/CD job step, or an MCP-server-level check -- for whether it is well-placed and well-built, separating deterministic shape from probabilistic maturity, citing concrete evidence per dimension, and closing with a coverage-attestation pass over the target repository's own stated invariants. Use when reviewing an existing gate before merging or shipping it, when deciding which of several possible mechanisms should own a new policy, or when auditing a repository's overall gate coverage; distinct from evaluating-skill-quality (grades a SKILL.md's own content, not a gate) and screening-a-low-trust-contribution (screens an incoming diff for contribution-level threat, not gate design quality); it names vetting-attack-surface as the delegate for an exposure or privilege finding rather than analysing one itself.
+description: Review a deterministic gate -- a git hook, an agent-harness hook, a CI/CD job step, or an MCP-server-level check -- for whether it is well-placed and well-built, separating deterministic shape from probabilistic maturity, citing concrete evidence per dimension, and closing with a coverage-attestation pass over the target repository's own stated invariants. Use when reviewing an existing gate before merging or shipping it, when deciding which of several possible mechanisms should own a new policy, or when auditing a repository's overall gate coverage; distinct from evaluating-skill-quality (grades a SKILL.md's own content, not a gate) and screening-a-low-trust-contribution (screens an incoming diff for contribution-level threat, not gate design quality); it routes an exposure or privilege finding to vetting-attack-surface rather than analysing one itself.
 ---
 
 # Evaluating Deterministic-Gate Quality
@@ -69,12 +69,11 @@ the same way a well-written skill that should have been a hook is not
 fixed by improving its prose (`evaluating-skill-quality`'s own Mechanism
 fit section makes the identical move for skills). Full test, all three
 questions: [references/mechanism-fit.md](references/mechanism-fit.md),
-which also carries the second question's own decision procedure (the
-impossible-vs-tedious test from
+which also carries the second question's own four outcome tokens, its
+decision procedure (the impossible-vs-tedious test from
 [references/security-level.md](references/security-level.md), reused
-rather than re-derived, and consumed to pick an owner rather than to
-emit that axis's own classification) and the one boundary an
-infrastructure-owned answer does not cross.
+rather than re-derived), and the one boundary an infrastructure-owned
+answer does not cross.
 
 **When the first question concludes no gate is warranted, stop here.**
 Report that as the finding directly -- this is the policy's own verdict
@@ -186,9 +185,11 @@ project-instruction file) this skill defers to rather than re-deriving.
    Gate vs. no gate -- is a deterministic gate even warranted, or is this
    policy a judgment call that belongs in prose instead -- then, only if
    a gate is warranted, Gate vs. infrastructure-owned deterministic
-   control, naming which party owns the policy (a repository-authored
-   gate, an infrastructure control the target already depends on, or both
-   as argued layers), and only where a repository-authored gate remains
+   control, naming which party owns the policy with one of that test's
+   own four outcome tokens (`repository-authored-gate`,
+   `infrastructure-owned-control`, `layered-both`, or `indeterminate`
+   where the evidence cannot settle it -- never a forced pick among the
+   other three), and only where a repository-authored gate remains
    in scope, Domain placement, before grading a specific realization's
    implementation quality. A whole-artifact wrong-domain
    finding, an infrastructure-already-owns-this finding, or a
@@ -244,8 +245,8 @@ project-instruction file) this skill defers to rather than re-deriving.
    once-per-review, not-per-artifact, evaluation timing.
 6. **Issue a verdict** per artifact or policy reviewed (well-formed and
    well-placed / well-formed but misplaced / not well-formed /
-   no-gate-warranted / infrastructure-owned / indeterminate, with the
-   specific reason), plus an
+   no-gate-warranted / infrastructure-owned-control / indeterminate, with
+   the specific reason), plus an
    overall coverage-attestation summary and a single dimension-23 finding
    for the target repository -- both once per review, never repeated per
    artifact. An
@@ -255,7 +256,7 @@ project-instruction file) this skill defers to rather than re-deriving.
    replaces a shape/maturity finding on the same artifact; a
    no-gate-warranted verdict is the exception, since it short-circuits
    steps 3-5 by construction and so has nothing further to combine with.
-   `infrastructure-owned` is this item's whole verdict only for a
+   `infrastructure-owned-control` is this item's whole verdict only for a
    proposed policy with no repository-authored gate yet, where steps 3-5
    likewise never ran; where a gate does exist, it is recorded alongside
    that gate's own verdict, never instead of it. Both are carried in the
@@ -434,10 +435,6 @@ isolation-verification gap every round's dispatch has disclosed against
 itself; and two gaps an ASI01-10/LLM01-10 mapping named honestly rather
 than fixed -- full table:
 [references/owasp-coverage.md](references/owasp-coverage.md).
-
-One item that list previously carried is now closed, not still open: the
-description's second use case (which mechanism should own a new policy)
-has its own fixture.
 
 ## Notes
 
