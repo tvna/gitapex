@@ -250,5 +250,22 @@
         }
       }
     }
+  },
+  "if": {
+    "required": ["findings"],
+    "properties": {
+      "findings": {
+        "type": "array",
+        "contains": {
+          "type": "object",
+          "required": ["dimensionId"],
+          "properties": { "dimensionId": { "const": 23 } }
+        }
+      }
+    }
+  },
+  "then": {
+    "required": ["coverageAttestation"],
+    "description": "Mechanically enforces the same-instance half of the reviewScoped placement rule (findings/top-level description above): an instance whose findings[] includes the dimension-23 entry must also carry coverageAttestation on that same instance. The cross-instance half (this must be the LAST such instance across a whole multi-instance review) is genuinely outside what a single-object JSON Schema can constrain and stays prose-only, same as before."
   }
 }

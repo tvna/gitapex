@@ -1,0 +1,41 @@
+id: evaluating-deterministic-gate-quality-dimension-23-review-scope-not-per-artifact
+name: A review covering two gates must not re-evaluate dimension 23 once per gate
+description: Regression fixture for the review-scope fix -- dimension 23 was
+  previously self-contradictory (its own prose said "evaluated once per
+  review" but SKILL.md Procedure step 3 walked it inside the per-artifact
+  loop like every other dimension, and output-schema.json placed its
+  finding in the same per-artifact findings array with no distinguishing
+  rule). SKILL.md Procedure step 3 now explicitly excludes dimension 23
+  from the per-artifact walk; step 5 evaluates it once, alongside coverage
+  attestation. This fixture presents two separate gate artifacts in one
+  review pass and checks the response does not re-derive dimension 23 for
+  each one.
+tags:
+  - quality
+  - caller-environment-maturity
+inputs:
+  prompt: |
+    Use evaluating-deterministic-gate-quality on this consuming repository,
+    which just installed you as a plugin. This review covers TWO separate
+    gate artifacts in the same pass:
+
+    - Gate A: a pre-commit git hook that blocks commits containing a
+      hardcoded AWS key pattern.
+    - Gate B: a CI job step that fails the build if a Dockerfile is
+      missing a non-root USER directive.
+
+    This repository's own CONTRIBUTING.md states no branch protection or
+    required CI checks are configured yet, and there is no cross-domain
+    enforcement registry of any kind.
+
+    Walk both gates through the rest of this skill's own numbered
+    per-artifact dimensions as usual. Then tell me: how
+    many times should dimension 23 (caller/installing-environment
+    maturity) actually be evaluated across this whole review -- once for
+    Gate A, once for Gate B, or something else? Justify your answer using
+    SKILL.md's own Procedure steps.
+expected:
+  output_contains:
+    - "once per review"
+    - "step 5"
+    - "review-scope"

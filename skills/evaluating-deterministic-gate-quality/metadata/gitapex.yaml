@@ -367,6 +367,20 @@ spec:
     - kind: caveat
       anchor: "https://github.com/tvna/gitapex/issues/829"
       summary: "An independent fable-model dispatch adversarially reviewing a separate, larger overhaul proposal for this skill (not merged, filed for the operator's own consideration) surfaced the same class of gap from a different angle -- mechanism-fit lacking an infrastructure-owned-control triage branch, and scope-selection risking silent coverage-attestation blind spots."
+    - kind: audit
+      anchor: "method:battle-testing-a-skill"
+      summary: "A battle-testing-a-skill dispatch on the review-scope fix returned FAIL with 3 findings: dimensions.md own lane-summary line (7-23, walk all of them) was left unqualified and still contradicted the new dimension-23 carve-out; the schema same-instance placement rule was prose-only despite being schema-enforceable; no fixture regression-tested the fix itself."
+      outcome:
+        verdict: FAIL
+        found: 3
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "Fixed all 3: dimensions.md lane-summary line now names the dimension-23 exception explicitly; output-schema.json gained a top-level if/then (findings contains dimensionId 23 -> coverageAttestation required), verified to reject a violating instance and accept both a compliant one and an ordinary per-artifact instance."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "Added dimension-23-review-scope-not-per-artifact.yaml: a two-gate review prompt asserting the response recognizes dimension 23 is evaluated once for the whole review, not once per gate. A companion evaluating-skill-quality dispatch on the same fix returned WELL-FORMED-AND-MATURE, shape 57/57, confirming dimensions.md/SKILL.md/output-schema.json agree."
+      outcome:
+        fixtures: "28->29"
   skillDependencies:
     requires:
       - evaluating-skill-quality

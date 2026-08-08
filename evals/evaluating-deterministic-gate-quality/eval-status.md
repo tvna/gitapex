@@ -1,7 +1,7 @@
 # evaluating-deterministic-gate-quality eval status
 
 A committed task corpus now exists: `evals/evaluating-deterministic-gate-quality/`
-has 28 task fixtures under `tasks/` plus `eval.yaml`, covering the skill's
+has 29 task fixtures under `tasks/` plus `eval.yaml`, covering the skill's
 five-way verdict taxonomy (well-formed and well-placed / well-formed but
 misplaced / not well-formed / no-gate-warranted / indeterminate), its
 mechanism-fit short-circuit and decomposition rule, its coverage-attestation
@@ -125,8 +125,19 @@ sits beside a contradicting inspectable artifact
 (`required_status_checks: null`), and a reviewer that trusts the
 self-report over the artifact reaches the wrong classification. A
 `battle-testing-a-skill` pass on the first fixture found this pressure
-case was missing (issue #829); the second fixture closes it. Two Stop
-boundaries also remain
+case was missing (issue #829); the second fixture closes it. A separate
+operator-caught defect -- dimension 23's own prose originally claimed
+"evaluated once per review" while `SKILL.md` Procedure step 3 and
+`references/output-schema.json` both still walked it per-artifact like
+every other dimension -- was fixed by adding a review-scope tag and
+excluding dimension 23 from the per-artifact loop (moved to step 5,
+alongside coverage attestation); a third fixture,
+`dimension-23-review-scope-not-per-artifact.yaml`, regression-tests the
+fix itself with a two-gate review prompt, asserting the response
+recognizes dimension 23 is evaluated once for the whole review rather
+than once per gate -- a `battle-testing-a-skill` pass on the placement
+fix found no fixture exercised this specific behavior; this one closes
+that gap. Two Stop boundaries also remain
 uncovered, named above (delimiter-safe quoting of hostile evidence;
 shape-checks-pass-is-not-approval under pressure), where no safe verbatim
 assertion could be found without risking a paraphrase-drift false-fail;

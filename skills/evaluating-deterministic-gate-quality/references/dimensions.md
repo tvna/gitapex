@@ -14,7 +14,10 @@ Two lanes, mirroring `evaluating-skill-quality`'s own split:
   and to whatever a Domain-2 target's own manual judgment still requires,
   by direct inspection.
 - **Probabilistic-maturity dimensions** (7-23) -- need judgment; walk all
-  of them, quoting the specific evidence that earns each verdict.
+  of them, quoting the specific evidence that earns each verdict --
+  except dimension 23, which is never walked per-artifact alongside the
+  rest of this lane; see its own review-scope tag below and `SKILL.md`
+  Procedure steps 3/5 for exactly when it is evaluated instead.
 
 Every dimension is tagged with its own **domain-generalization scope**,
 established for this build rather than left implicit:
