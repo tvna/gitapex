@@ -51,10 +51,35 @@ def test_stale_pin_is_drift(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPa
 def test_local_relative_path_reference_is_not_matched(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # A `./`-relative uses: (not this gate's concern -- and not even valid
     # for this action, which must be self-referenced by full remote form)
-    # must not trip the 40-hex-char regex.
+    # must not match ACTION_REF at all.
     _stub_current_sha(monkeypatch, CURRENT_SHA)
     _write(tmp_path, "gate.yml", "      - uses: ./.github/actions/harden-checkout\n")
     assert drift.find_drift(tmp_path) == []
+
+
+def test_short_sha_pin_is_drift_not_silently_unmatched(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Regression: an earlier version of _USES_RE anchored on `[0-9a-f]{40}`,
+    # so a short SHA (or any non-full-SHA ref) simply failed to match and
+    # was never reported at all -- a fail-open gap on the exact malformed
+    # pin this gate exists to prevent (its own convention requires a full
+    # commit SHA). It must now be flagged as drift.
+    _stub_current_sha(monkeypatch, CURRENT_SHA)
+    _write(tmp_path, "gate.yml", _pin_line(CURRENT_SHA[:7]))
+    findings = drift.find_drift(tmp_path)
+    assert len(findings) == 1
+    assert findings[0][0].endswith("gate.yml")
+
+
+def test_missing_workflows_dir_raises_instead_of_reading_as_clean(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Regression: Path.glob on a nonexistent directory silently yields no
+    # matches, so find_drift used to return [] -- indistinguishable from a
+    # real clean scan. A missing/misconfigured workflows_dir must fail
+    # loudly instead.
+    _stub_current_sha(monkeypatch, CURRENT_SHA)
+    with pytest.raises(RuntimeError, match="workflows directory not found"):
+        drift.find_drift(tmp_path / "does-not-exist")
 
 
 def test_mixed_clean_and_stale_workflows(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -88,6 +113,16 @@ def test_current_action_sha_raises_when_path_has_no_history(tmp_path: pathlib.Pa
     subprocess.run(["git", "add", "unrelated.txt"], cwd=tmp_path, check=True)
     subprocess.run(["git", "commit", "-q", "-m", "unrelated"], cwd=tmp_path, check=True)
     with pytest.raises(RuntimeError, match="no commit history found"):
+        drift.current_action_sha(tmp_path)
+
+
+def test_current_action_sha_wraps_git_failure_outside_a_repo(tmp_path: pathlib.Path) -> None:
+    # Regression: `git log` outside any git repository exits non-zero, and
+    # check=True previously let subprocess.CalledProcessError escape
+    # uncaught -- bypassing main()'s intended clean "could not run" message
+    # path (though the process still exited non-zero either way). It must
+    # now surface as this module's own RuntimeError.
+    with pytest.raises(RuntimeError, match="git log"):
         drift.current_action_sha(tmp_path)
 
 
