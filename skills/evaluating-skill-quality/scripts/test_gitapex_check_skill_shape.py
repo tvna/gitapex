@@ -4849,6 +4849,42 @@ def test_execution_requirements_unknown_network_key_fails(tmp_path):
     assert css.main([str(d)]) == 1
 
 
+def test_execution_requirements_network_domains_then_mode_finalizes_list_mid_loop(tmp_path):
+    # Regression guard: when domains is NOT the last key under network (mode
+    # follows it), the domains list must be finalized mid-loop -- when the
+    # next line ("mode: ...") is seen and is not itself a list item -- not
+    # only via the end-of-file cleanup path a domains-last fixture would
+    # exercise instead.
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:\n    network:\n      domains:\n        - github.com\n      mode: allowlist\n",
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is True
+    assert result.evidence == "network.mode, network.domains declared"
+    assert css.main([str(d)]) == 0
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.root["spec"]["executionRequirements"]["network"] == {
+        "domains": ["github.com"],
+        "mode": "allowlist",
+    }
+
+
+def test_execution_requirements_network_domains_inconsistent_indent_item_fails(tmp_path):
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        '  executionRequirements:\n    network:\n      mode: allowlist\n      domains:\n        - "a.com"\n      - "b.com"\n',
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert css.main([str(d)]) == 1
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.root["spec"]["executionRequirements"]["network"]["domains"] == ["a.com"]
+    assert parsed.malformed_execution_requirement_network_items == ['- "b.com"']
+
+
 def test_execution_requirements_network_mapping_shaped_domains_item_fails(tmp_path):
     d = _write_exec_req_sidecar(
         _write_skill(tmp_path),
