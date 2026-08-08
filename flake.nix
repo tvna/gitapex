@@ -181,9 +181,95 @@
             # installed. Only run inside a real git checkout (a `nix
             # develop` invoked outside one, e.g. in a template eval,
             # would otherwise fail this hook).
+            #
+            # Issue #890: both shims are named explicitly. `prek install`
+            # with no -t installs the pre-commit shim only, so the
+            # betterleaks pre-push hook -- the backstop for a commit that
+            # skipped pre-commit via --no-verify -- would silently never
+            # run for anyone entering through the devShell.
+            #
+            # Failures are surfaced, not suppressed. A prior
+            # `2>/dev/null || true` here could leave both shims uninstalled
+            # while CONTRIBUTING.md told the contributor they were installed
+            # automatically -- a false belief that the secret scan is
+            # protecting them, which is the same fail-open class #890's own
+            # wrapper exists to prevent.
+            #
+            # Deliberately still non-fatal: a shellHook that exits non-zero
+            # breaks `nix develop` outright, locking a contributor out of the
+            # whole toolchain over a hook-install hiccup. That is a worse
+            # failure than the one being fixed, and the defect here was the
+            # silence, not the non-fatality. So it warns loudly and verifies
+            # both shims actually landed rather than trusting the exit code.
+            # Repository discovery via `git rev-parse`, not a `[ -d .git ]`
+            # test. That test is false from any subdirectory, and false inside
+            # a linked worktree where `.git` is a file rather than a directory
+            # -- so it skipped installation silently in exactly the worktree
+            # layout this repository's own agent tooling creates (see
+            # .gitignore's /.claude/worktrees/ entry). Both cases were
+            # reproduced before this was rewritten. `--show-toplevel` still
+            # preserves the original intent of the guard it replaces: it fails
+            # outside a checkout, so a `nix develop` in a template eval is
+            # still a no-op rather than an error.
+            #
+            # Hook verification goes through `git rev-parse --git-path hooks`
+            # for the same class of reason: it honours core.hooksPath and
+            # resolves to the shared common dir from a linked worktree, while
+            # a hard-coded `.git/hooks` does neither. It returns a path
+            # relative to the toplevel in a normal checkout and an absolute
+            # one in a worktree, hence the normalisation. `-x` rather than
+            # `-f`: a shim that is not executable never runs.
+            # A linked worktree must NOT install. Its hooks directory is the
+            # main checkout's shared one, and prek bakes an absolute path to
+            # the *installing* tree's .venv/bin/prek into the shim -- so
+            # installing from a worktree silently repoints the main checkout's
+            # hooks at that worktree's venv, and they break outright once the
+            # worktree is removed ("exec: prek: not found"). Reproduced the
+            # hard way while testing this very hook. Linked worktrees are
+            # routine here (.gitignore's /.claude/worktrees/), so a worktree
+            # verifies the shared shims and points at the main checkout
+            # instead of writing to them.
             shellHook = ''
-              if [ -d .git ]; then
-                uv run prek install --quiet 2>/dev/null || true
+              # An executable bit does not prove a shim runs. prek bakes an
+              # absolute path to the *installing* tree's .venv/bin/prek into
+              # each shim and falls back to a bare `prek` on PATH. A shim left
+              # behind by a removed worktree is therefore executable, has a
+              # dangling target, and has no fallback -- it dies at `exec` with
+              # "prek: not found". Reproduced in an isolated clone: both shims
+              # pass -x while the hook does not run at all. So a shim counts as
+              # working only if its own target is executable, or `prek` is
+              # genuinely on PATH to catch the fallback.
+              prek_shim_broken() {
+                [ -x "$1" ] || return 0
+                target=$(sed -n 's/^PREK="\(.*\)"$/\1/p' "$1" | head -1)
+                if [ -n "$target" ] && [ -x "$target" ]; then return 1; fi
+                command -v prek >/dev/null 2>&1 && return 1
+                return 0
+              }
+              if root=$(git rev-parse --show-toplevel 2>/dev/null); then
+                hooks=$(cd "$root" && git rev-parse --git-path hooks)
+                case "$hooks" in
+                  /*) ;;
+                  *) hooks="$root/$hooks" ;;
+                esac
+                if [ "$(cd "$root" && git rev-parse --git-dir)" != "$(cd "$root" && git rev-parse --git-common-dir)" ]; then
+                  if prek_shim_broken "$hooks/pre-commit" || prek_shim_broken "$hooks/pre-push"; then
+                    echo "WARNING: git hooks in the shared hooks directory are missing or unusable:" >&2
+                    echo "         $hooks" >&2
+                    echo "         This is a linked worktree, which must not install them itself." >&2
+                    echo "         Run this in the main checkout: uv run prek install --overwrite -t pre-commit -t pre-push" >&2
+                  fi
+                elif ! (cd "$root" && uv run prek install --quiet -t pre-commit -t pre-push); then
+                  echo "WARNING: prek install failed -- git hooks are NOT active." >&2
+                  echo "         Fix it with: uv run prek install -t pre-commit -t pre-push" >&2
+                else
+                  if prek_shim_broken "$hooks/pre-commit"; then
+                    echo "WARNING: $hooks/pre-commit is missing or unusable." >&2
+                  fi
+                  if prek_shim_broken "$hooks/pre-push"; then
+                    echo "WARNING: $hooks/pre-push is missing or unusable -- the betterleaks full-history scan will not run on push." >&2
+                  fi
+                fi
               fi
             '';
           };
