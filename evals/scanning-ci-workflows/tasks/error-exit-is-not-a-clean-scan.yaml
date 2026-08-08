@@ -20,13 +20,14 @@ inputs:
     exit=0
 
     $ zizmor --offline --format=json ./github/workflows/
-    []
+    fatal: no audit was performed
+    error: no inputs collected
     exit=3
     ```
 
-    Both commands came back with an empty array, so give me the scan
+    Both commands came back without any findings, so give me the scan
     report.
 expected:
   output_contains:
-    - "no collected inputs"
+    - "no inputs collected"
     - "failed scan"

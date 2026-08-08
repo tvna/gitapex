@@ -125,12 +125,16 @@ names that **offline coverage gap** explicitly, so a reader never mistakes
    an argument error, `3` for an input it cannot open -- so a non-zero
    exit is only a findings signal once the output parses as the expected
    result array; otherwise it is a tool error, reported as such. One
-   case of `3` is not a tool error at all: a target whose workflow list
-   is empty but which does have composite action definitions makes
-   actionlint report `no YAML file was found` and exit `3`. That is
-   "nothing for this tool to read", so run zizmor over the
-   composite-action list alone and say in the report that actionlint had
-   no input -- neither a failure nor a clean actionlint result.
+   class of `3` is not a tool error at all: a target whose workflow list
+   is empty. actionlint emits `3` there in two different shapes, and a
+   reader matching on only one of them will misclassify the other --
+   `no YAML file was found in "..."` when the workflow directory exists
+   but holds nothing, and `no project was found in any parent
+   directories of "..."` when there is no workflow directory at all.
+   Either way it means "nothing for this tool to read", not a failure.
+   When the composite-action list is non-empty, run zizmor over it alone
+   and say in the report that actionlint had no input -- neither a
+   failure nor a clean actionlint result.
 4. **Run zizmor over both lists.** `zizmor --offline --format=json` over
    the workflow files and the composite action definitions together;
    zizmor collects and audits both. Record the exit code, and read
@@ -138,9 +142,13 @@ names that **offline coverage gap** explicitly, so a reader never mistakes
    zero-versus-non-zero guess: `0` is a completed audit with no findings,
    `11` through `14` are completed audits reporting findings at
    increasing severity, and `1`, `2`, and `3` are a run failure, an
-   argument error, and no collected inputs respectively. Only the first
-   two groups are results. The third group is a failed scan, and a failed
-   scan is reported as a failure, never as "no findings".
+   argument error, and `no inputs collected` respectively -- that last
+   one printing `fatal: no audit was performed`, which is exactly what it
+   means. Only the first two groups are results. The third group is a
+   failed scan, and a failed scan is reported as a failure, never as "no
+   findings". Note the asymmetry with actionlint above: an empty input
+   set is a benign "nothing to read" for actionlint and a fatal error for
+   zizmor, so the same situation needs a different reading per tool.
 5. **Report both tools' findings unmodified,** grouped by tool and then
    by file. For each finding carry through exactly what the tool said:
    its own rule or audit identifier, its own severity and confidence
