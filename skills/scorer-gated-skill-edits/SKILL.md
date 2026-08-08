@@ -139,6 +139,17 @@ just measures the wrong thing.
   `gitapex_check_skill_shape.py`): it catches the casing, negation-trap, and
   paraphrase-drift cases mechanically, leaving only the discrimination rule
   to human judgment.
+- **Casing is not cosmetic here.** `gitapex_score_contract.py` matches
+  `output_contains`/`output_not_contains` case-sensitively by design;
+  waza's own built-in `expected.output_contains` grading (used by
+  `.github/workflows/waza-eval-gate.yml`) is case-insensitive, pinned
+  upstream behavior this repository does not control. An exact-case match
+  always also satisfies waza's case-insensitive one, so quoting the
+  rubric's own casing exactly (the rule above) is what keeps a fixture's
+  verdict identical under both scorers -- there is no separate
+  case-insensitive convention to opt into for these two keys (that's what
+  `output_icontains`/`output_not_icontains` are for, see
+  `scripts/gitapex_score_contract.py`'s module docstring).
 
 ## Output
 

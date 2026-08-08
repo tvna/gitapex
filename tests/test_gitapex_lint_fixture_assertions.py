@@ -50,6 +50,25 @@ def test_case_passes_phrase_absent_from_anchors():
     assert L.check_case("duplicate query results", ANCHORS) is None
 
 
+def test_case_passes_when_exact_match_exists_after_a_looser_anchor():
+    # Issue #858: the same phrase appears twice in this corpus, once as a
+    # capitalized heading (an earlier anchor) and once in its exact
+    # asserted casing inside a later quoted phrase -- the exact match must
+    # win regardless of extraction order.
+    corpus = '## Blind Spot Pass\n\nThe step is documented as "blind spot pass" in the field-value table.\n'
+    anchors = L.extract_anchors(corpus)
+    assert anchors == ["Blind Spot Pass", "blind spot pass"]
+    assert L.check_case("blind spot pass", anchors) is None
+
+
+def test_case_still_flags_when_no_anchor_has_the_exact_case():
+    # Same corpus, but the assertion casing does not match ANY anchor --
+    # still a real mismatch, not silenced by the fix above.
+    corpus = '## Blind Spot Pass\n\nThe step is documented as "blind spot pass" in the field-value table.\n'
+    anchors = L.extract_anchors(corpus)
+    assert L.check_case("Blind spot pass", anchors) == "Blind Spot Pass"
+
+
 # ---- check_negation (issue #170 check 2) ----
 
 
@@ -183,6 +202,34 @@ def test_repository_fixtures_are_clean():
         ]
     )
     assert rc == 0
+
+
+def test_repository_case_sensitivity_findings_match_the_known_reviewed_residual():
+    # Issue #858 acceptance criterion 1: enumerate every output_contains /
+    # output_not_contains case-sensitivity finding across the linter's real
+    # default (whole-corpus) discovery scope -- broader than the single-skill
+    # test above, and the scope that actually matters for the waza-divergence
+    # risk this finding is a proxy for (gitapex_score_contract.py is
+    # case-sensitive by design; waza's own expected.output_contains is
+    # case-insensitive -- see gitapex_score_contract.py's module docstring).
+    #
+    # After fixing check_case's anchor-order bug (this issue), exactly one
+    # finding remains:
+    # scorer-gated-skill-edits/ship-without-transfer-check.yaml's "transfer
+    # check" has no exact-case anchor because its correct source
+    # (scorer-gated-skill-edits/SKILL.md's own Stop-boundaries prose, "has
+    # not passed a transfer check") is plain sentence text, outside
+    # extract_anchors's heading/bold/quoted scope -- confirmed by hand
+    # against that SKILL.md, not a real fixture bug or waza-divergence risk.
+    # Pinning the exact expected set (not just "count <= 1") means a NEW
+    # case-sensitivity finding anywhere in the corpus fails this test loudly
+    # rather than hiding behind the known exception.
+    evals_root = REPO_ROOT / "evals"
+    skills_root = REPO_ROOT / "skills"
+    names = L.discover_skills(evals_root, skills_root)
+    warnings = L.lint_all_skills(evals_root, skills_root, skill_names=names)
+    case_findings = {(w.task, w.value) for w in warnings if w.rule == "case-sensitivity"}
+    assert case_findings == {("scorer-gated-skill-edits/ship-without-transfer-check.yaml", "transfer check")}
 
 
 # ---- check_short_word_collision (issue #516, #218) ----

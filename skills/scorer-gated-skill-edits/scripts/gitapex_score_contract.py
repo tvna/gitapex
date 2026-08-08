@@ -30,6 +30,30 @@ matching per Python's own docs, with the disclosed edge case that it can
 over-normalize beyond ASCII (e.g. German "straße" -> "strasse") -- irrelevant
 to this repository's ASCII-dominated assertion corpus.
 
+Issue #858: this repository's own committed ``evals/*/tasks/*.yaml``
+fixtures are scored by two different consumers of the *same*
+``expected.output_contains``/``output_not_contains`` keys -- this scorer
+(case-sensitive, per the paragraph above), and waza 0.38.0's own built-in
+``expected.*`` grading (the path ``.github/workflows/waza-eval-gate.yml``
+runs), which is case-**insensitive** -- confirmed live against the
+flake-pinned ``waza`` binary (``executor: mock``): an
+``output_contains: ["MOCK RESPONSE FOR"]`` assertion scored 1.0 against mock
+output text ``Mock response for: ...``. waza 0.38.0 stays pinned; this is
+upstream behavior, not something this repository controls. The two
+scorers cannot silently disagree, though: an exact-case match
+(``s in text``) always implies a case-folded match
+(``s.casefold() in text.casefold()``), so any fixture that satisfies this
+scorer's case-sensitive contract is *guaranteed* to also satisfy waza's
+case-insensitive one. Case-sensitive is therefore kept as the single
+canonical semantics for ``output_contains``/``output_not_contains`` (no
+waza config change, no fixture migration to a native grader) --
+``evals/scripts/gitapex_lint_fixture_assertions.py``'s case-sensitivity
+check (its "check 1") is what enforces a fixture actually meets that
+contract against its own skill's stable wording; see that module's own
+docstring and ``scorer-gated-skill-edits/SKILL.md``'s "Authoring fixtures
+for a substring scorer" section for the same statement from the
+fixture-authoring side.
+
 ``output_contains``/``output_not_contains`` check presence/absence anywhere
 in the text, independently of each other -- they cannot verify that two
 substrings are actually *bound together* (e.g. a repair's own description
