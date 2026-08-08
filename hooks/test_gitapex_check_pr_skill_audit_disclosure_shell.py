@@ -150,6 +150,19 @@ def test_tier1_denies_a_conditional_extension_tier2_would_miss(repo: Path) -> No
     assert "deterministic-gate-quality" in result.stderr
 
 
+def test_tier1_denial_tells_the_caller_how_to_re_check_locally(repo: Path) -> None:
+    """dimensions.md dimension 17: a deny that does not say how to
+    reproduce the verdict sends the caller back to pushing and reading a
+    failed check, which is the loop issue #874 exists to end."""
+    _with_tier1(repo)
+    _write(repo, ".github/scripts/gitapex_gate_new.py")
+    _commit(repo, "new gate")
+    result = _run(repo, _BASE_EVIDENCE)
+    assert result.returncode == 2
+    assert "--check-diff" in result.stderr
+    assert "--body-file" in result.stderr
+
+
 def test_tier1_allows_the_same_diff_once_disclosed(repo: Path) -> None:
     _with_tier1(repo)
     _write(repo, ".github/scripts/gitapex_gate_new.py")
