@@ -217,7 +217,10 @@ project-instruction file) this skill defers to rather than re-deriving.
    [references/output-schema.json](references/output-schema.json) and
    validate the produced JSON against that schema before treating it as
    conformant -- naming the schema is not itself the enforcement, the
-   validation step is. This skill still performs no write or persistence
+   validation step is. Emit one schema-conformant instance per artifact
+   reviewed, not one instance merging several artifacts' findings
+   together -- the schema's own top-level description states this
+   convention. This skill still performs no write or persistence
    of its own; that schema's own `persistenceRecommendation` field only
    names candidate storage channels for a caller to choose from, never an
    action this skill takes itself.

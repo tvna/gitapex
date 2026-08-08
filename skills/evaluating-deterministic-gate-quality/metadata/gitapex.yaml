@@ -321,6 +321,26 @@ spec:
       outcome:
         fixtures: "26->28"
         dimensions_cited: "12/22 -> 13/23"
+    - kind: audit
+      anchor: "method:evaluating-skill-quality"
+      summary: "A final, re-isolated evaluating-skill-quality dispatch on the current diff returned WELL-FORMED-NOT-MATURE, shape 57/57. One real dimension-5 gap: capabilityAssumption: Adaptive is declared, but Procedure steps 2-3 force reading dimensions.md/mechanism-fit.md every review regardless of model tier -- the shape the sibling evaluating-skill-quality's own metadata explicitly rejected Adaptive for. Pre-existing, not introduced by this PR; filed as its own follow-up rather than fixed here."
+      outcome:
+        verdict: WELL-FORMED-NOT-MATURE
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/829 -> https://github.com/tvna/gitapex/issues/831"
+      summary: "The capabilityAssumption: Adaptive-vs-forced-reference-read gap above was out of scope for issue 829 (a pre-existing classification question, not introduced by this diff) and filed as its own follow-up."
+    - kind: audit
+      anchor: "method:battle-testing-a-skill"
+      summary: "A final, re-isolated battle-testing-a-skill dispatch returned PASS: both previously-fixed symptoms (evidence-artifact conflation, missing anti-injection text) do not reproduce under direct adversarial pressure using the same scenario class. Named one new, real gap: output-schema.json had no artifactRef field, so a review covering more than one artifact had no schema-conformant way to keep verdicts distinct."
+      outcome:
+        verdict: PASS
+        found: 1
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "Fixed the multi-artifact gap above: added reviewMeta.artifactRef and a one-artifact-per-instance convention to output-schema.json's own top-level description (SKILL.md step 6 now states it too) -- a review covering several artifacts emits one instance per artifact, only the last carrying coverageAttestation. Re-validated: schema still valid, worked example with artifactRef passes, shape checker still 0 FAIL."
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "Deferred, named rather than silently dropped: no deterministic check validates output-schema.json's own JSON-Schema syntactic validity (a future hand-edit typo would go undetected until a caller's runtime validation call fails) -- named by the final battle-testing-a-skill dispatch, tracked as its own follow-up rather than built into this already-large change."
   skillDependencies:
     requires:
       - evaluating-skill-quality
