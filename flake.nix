@@ -1,5 +1,5 @@
 {
-  description = "gitapex external toolchain (SSoT for uv/gh/actionlint/python/bun/lychee + waza/apm/rtk/betterleaks)";
+  description = "gitapex external toolchain (SSoT for uv/gh/actionlint/zizmor/python/bun/lychee + waza/apm/rtk/betterleaks)";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
 
@@ -160,6 +160,12 @@
               pkgs.uv
               pkgs.gh
               pkgs.actionlint
+              # Class A, deliberately: the pinned nixpkgs input carries
+              # zizmor, so no SHA-pin table entry is needed beside
+              # betterleaks'. Paired with actionlint rather than standing
+              # alone -- skills/scanning-ci-workflows runs both, and each
+              # catches what the other does not.
+              pkgs.zizmor
               pkgs.python312
               pkgs.bun
               pkgs.lychee

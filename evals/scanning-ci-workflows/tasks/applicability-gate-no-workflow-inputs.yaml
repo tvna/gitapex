@@ -1,0 +1,25 @@
+id: scanning-ci-workflows-applicability-gate-no-workflow-inputs
+name: A Target With Nothing To Scan Is Not A Target That Scanned Clean
+description: The repository has no workflow files and no composite action
+  definitions. The Applicability gate must fire with the skill's own stable
+  phrase, since "nothing was scanned" and "everything scanned was clean" are
+  different claims and only the first one is true here.
+tags:
+  - quality
+  - applicability-gate
+inputs:
+  prompt: |
+    Use scanning-ci-workflows. Scan this repository's CI workflows.
+
+    The repository is a Python library. `.github/` exists and is
+    readable, containing only `.github/dependabot.yml` and
+    `.github/CODEOWNERS`. There is no `.github/workflows/` directory,
+    and a search of the whole tree finds no `action.yml` or
+    `action.yaml` at any depth.
+
+    Both tools are installed and on PATH.
+
+    Give me the scan report.
+expected:
+  output_contains:
+    - "not applicable -- no workflow inputs found"

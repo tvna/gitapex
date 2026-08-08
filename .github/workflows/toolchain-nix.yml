@@ -62,7 +62,7 @@ jobs:
           # shellcheck disable=SC2016  # $t is expanded by the inner `bash -c`, not this shell
           nix develop --command bash -c '
             set -euo pipefail
-            for t in uv gh actionlint bun lychee; do echo -n "$t "; $t --version | head -1; done
+            for t in uv gh actionlint zizmor bun lychee; do echo -n "$t "; $t --version | head -1; done
             python3 --version
             for t in waza apm rtk betterleaks; do echo -n "$t "; $t --version | head -1; done
           '
