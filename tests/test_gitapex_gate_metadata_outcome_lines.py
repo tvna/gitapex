@@ -143,6 +143,25 @@ def test_multi_file_claim_binds_each_pair_to_its_own_file(tmp_path: pathlib.Path
     assert "has 6" in findings[0].message
 
 
+def test_the_same_file_named_twice_yields_two_claims(tmp_path: pathlib.Path) -> None:
+    """Regression, found by an independent review on PR #882: consumption
+    keyed on the resolved path let the first delta take the file, so the
+    second -- the current-state one -- bound nothing and was skipped
+    unverified. Per-occurrence tracking checks the later delta instead."""
+    _write_skill(
+        tmp_path,
+        "alpha",
+        reference_files={"one.md": 5},
+        references=_entry("t", 'lines: "one.md 1->5, one.md 5->99"\n'),
+    )
+    findings, notes = _scan(tmp_path)
+    assert [finding.message for finding in findings] == [
+        "claim '5->99' asserts skills/alpha/references/one.md is 99 lines; the checked-out tree has 5"
+    ]
+    assert not [note for note in notes if "binds to no file" in note.message]
+    assert any("superseded by a later claim" in note.message for note in notes)
+
+
 def test_reference_path_with_directory_component_resolves(tmp_path: pathlib.Path) -> None:
     _write_skill(
         tmp_path,

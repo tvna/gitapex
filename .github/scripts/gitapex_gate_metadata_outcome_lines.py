@@ -44,8 +44,11 @@ kept only when they resolve to a real file inside the owning skill's own
 directory (either ``<skill>/<token>`` or ``<skill>/references/<token>``),
 which is what makes ``0.75`` and ``origin/main`` non-targets. Each claim
 binds to the nearest such token *before* it that no earlier claim in the
-same value already bound. That last condition is load-bearing rather than
-decorative: the real branch-final entry ends
+same value already consumed -- consumed per token *occurrence*, not per
+resolved path, so ``"one.md 1->5, one.md 5->99"`` yields two claims about
+``one.md`` rather than one claim and one silent skip (see ``_bind_target``).
+That no-earlier-claim condition is load-bearing rather than decorative: the
+real branch-final entry ends
 ``... output-schema.json 271->348, fixtures 29->33``, and a plain
 nearest-preceding rule would bind ``29->33`` to ``output-schema.json`` and
 report a mismatch against a claim about eval fixtures. A claim that binds
@@ -298,12 +301,22 @@ def _resolve_in_skill(token: str, skill_dir: pathlib.Path) -> str | None:
     return None
 
 
-def _bind_target(targets: list[tuple[int, str]], claim_start: int, already_bound: set[str]) -> str | None:
+def _bind_target(targets: list[tuple[int, str]], claim_start: int, consumed: set[int]) -> tuple[int, str] | None:
     """The nearest target token ending at or before `claim_start` that no
-    earlier claim in the same value already took."""
-    for end, path in reversed(targets):
-        if end <= claim_start and path not in already_bound:
-            return path
+    earlier claim in the same value already took, as (token index, path).
+
+    Consumption is tracked per token *occurrence*, not per resolved path. An
+    independent review caught the difference with `"one.md 1->5, one.md 5->99"`:
+    keying on the path alone let the first delta consume the file, so the
+    second delta -- the current-state one -- bound nothing and was skipped
+    unverified instead of being checked. Two occurrences of one filename are
+    two separate claims about it, and the supersession pass downstream is what
+    decides which of them still describes the file today.
+    """
+    for index in range(len(targets) - 1, -1, -1):
+        end, path = targets[index]
+        if end <= claim_start and index not in consumed:
+            return index, path
     return None
 
 
@@ -364,11 +377,15 @@ def _claims_in_value(
 
     claims: list[Claim] = []
     notes: list[Note] = []
+    consumed: set[int] = set()
     for match in _ARROW_CLAIM_RE.finditer(text):
-        target = _bind_target(targets, match.start(), {claim.target for claim in claims})
-        if target is None and key == _BARE_KEY and not targets:
+        bound = _bind_target(targets, match.start(), consumed)
+        if bound is not None:
+            consumed.add(bound[0])
+            target = bound[1]
+        elif key == _BARE_KEY and not targets:
             target = _skill_relative(skill_dir, _SKILL_MD)
-        if target is None:
+        else:
             notes.append(
                 Note(location, f"outcome.{key}: claim {match.group()!r} binds to no file in this skill; not verified")
             )
