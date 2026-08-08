@@ -282,9 +282,12 @@ repository: [references/worked-examples.md](references/worked-examples.md).
 ## Notes
 
 Portability: **Mixed**. The portable core above -- the two checks, the
-Applicability gate, the Procedure, the Relationship-to-other-skills
-disambiguation, and the Stop boundaries -- names no path or issue number
-specific to this skill's own authoring repository.
+Applicability gate, the Procedure, and the Stop boundaries -- names no
+path or issue number specific to this skill's own authoring repository.
+The Relationship-to-other-skills section's disambiguation from sibling
+skills is itself portable, but two of its bullets additionally cite this
+repository's own `docs/agent-product-scope.md` and `docs/glossary.md`,
+named as repository-specific inline where they appear.
 [references/worked-examples.md](references/worked-examples.md) is
 explicitly repository-scoped: substitute the target repository's own
 equivalent artifact when applying this skill elsewhere.
