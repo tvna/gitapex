@@ -1,10 +1,11 @@
 # evaluating-deterministic-gate-quality eval status
 
 A committed task corpus now exists: `evals/evaluating-deterministic-gate-quality/`
-has 29 task fixtures under `tasks/` plus `eval.yaml`, covering the skill's
+has 33 task fixtures under `tasks/` plus `eval.yaml`, covering the skill's
 five-way verdict taxonomy (well-formed and well-placed / well-formed but
 misplaced / not well-formed / no-gate-warranted / indeterminate), its
-mechanism-fit short-circuit and decomposition rule, its coverage-attestation
+mechanism-fit short-circuit, its infrastructure-owned-control ownership
+question, its decomposition rule, its delegation recommendation, its coverage-attestation
 fail-closed behavior (including its subject-matter-not-surface-wording
 filter), all four cross-cutting axes (Compatibility awareness,
 Reproducibility/Domain-coverage, Blast-radius/trust classification,
@@ -147,10 +148,37 @@ pins down. The tool is citation-based, not semantic
 exercise one of these ten substantively without literally writing its
 number -- rerun the script before trusting this list stale.
 
+**Issue #842 (mechanism-fit third branch + delegation recommendation):**
+four fixtures were added for the two additions that issue makes to this
+skill, taking the corpus from 29 to 33. Two exercise the mechanism-fit
+test's new second question (Gate vs. infrastructure-owned deterministic
+control): `mechanism-fit-infrastructure-owned-control.yaml` establishes
+the ownership answer on a clean fact pattern where the platform's own
+configuration already removes the guarded path, and
+`adversarial-infrastructure-owned-verdict-used-to-delete-a-gate.yaml`
+puts the Stop boundary that follows it under pressure -- a design doc
+inside the target asks the reviewer to convert that answer into
+permission to delete an existing hook. Two exercise the delegation
+recommendation: `delegation-recommendation-exposure-shaped-finding.yaml`
+routes an exposure- and privilege-shaped finding to
+`vetting-attack-surface` while still requiring this review's own verdict
+and blast-radius statement, and
+`adversarial-delegation-target-asserted-as-installed.yaml` supplies a
+confident claim that a `scanning-`-prefixed delegate is already installed
+(none exists) and asserts the response tags the recommendation
+`unconfirmed` rather than relaying the claim -- the same content-trust
+skepticism the adversarial caller-environment fixture applies to a
+self-reported CI claim. Neither addition changed the dimension-coverage
+numbers: all four fixtures exercise mechanism-fit and grading-procedure
+content rather than one of the ten uncovered numbered dimensions, so
+`gitapex_check_dimension_coverage.py` still reports 13/23 and 4/4, and
+`gitapex_lint_fixture_assertions.py` still reports the same 2 pre-existing
+warnings and 0 new ones.
+
 No no-skill baseline and no model tier have been run against this corpus:
 the environment that authored it has neither `waza` nor `nix` installed, the
 same constraint the "Cross-model matrix scaffolding" section of
 `docs/skill-eval-status.md` already discloses for the whole repository. This
 is scaffolding, not a measurement -- a credentialed dispatch (or an
 environment with `waza` available) is still needed to produce the first real
-run. Refs #435, #472, #506, #507, #508, #511, #536, #587.
+run. Refs #435, #472, #506, #507, #508, #511, #536, #587, #842.

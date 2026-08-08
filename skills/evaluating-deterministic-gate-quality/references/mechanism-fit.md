@@ -3,19 +3,24 @@
 ## Contents
 
 1. [Gate vs. no gate](#gate-vs-no-gate)
-2. [Domain placement](#domain-placement)
-3. [What this framework does not cover](#what-this-framework-does-not-cover)
+2. [Gate vs. infrastructure-owned deterministic control](#gate-vs-infrastructure-owned-deterministic-control)
+3. [Domain placement](#domain-placement)
+4. [What this framework does not cover](#what-this-framework-does-not-cover)
 
-Two questions, in order. The first asks whether a deterministic gate is
-the right mechanism at all; the second -- meaningful only once the first
-says yes -- asks which of the four domains named in `SKILL.md`'s Scope
+Three questions, in order. The first asks whether a deterministic
+decision is the right mechanism at all; the second -- meaningful only
+once the first says yes -- asks whether a gate the target repository
+itself authors should own that decision, or whether an infrastructure
+control the target already depends on owns it natively; the third --
+meaningful only once the second leaves a repository-authored gate in
+scope -- asks which of the four domains named in `SKILL.md`'s Scope
 section (git hook subprocess, agent-harness hook subprocess, CI job step,
 MCP server subprocess) should own it. Skipping straight to domain
-placement without asking the first question is the same mistake
+placement without asking the first two is the same mistake
 `evaluating-skill-quality`'s own Mechanism fit section exists to prevent
-for skills: a well-implemented control in the wrong mechanism, or in no
-mechanism that needed building at all, is not fixed by polishing its
-implementation further.
+for skills: a well-implemented control in the wrong mechanism, in a layer
+that never needed to own it, or in no mechanism that needed building at
+all, is not fixed by polishing its implementation further.
 
 ## Gate vs. no gate
 
@@ -75,13 +80,79 @@ principle.
 that as the finding directly -- the policy should be (or remain) a skill,
 CLAUDE.md content, or a human review step, not a deterministic gate; this
 finding is itself the item's verdict (`SKILL.md` Procedure step 6) -- and
-do not proceed to Domain placement below, the axes, the three-way
-division of responsibility, or Procedure steps 3-5 for that policy.
+do not proceed to either question below, the axes, the three-way division
+of responsibility, or Procedure steps 3-5 for that policy.
+
+## Gate vs. infrastructure-owned deterministic control
+
+Applies only once Gate vs. no gate above has concluded a deterministic
+decision is warranted, and before Domain placement below asks which
+domain should realize one. A deterministic decision does not have to be
+realized by a gate the target repository itself authors and runs: the
+platform, the runtime, or the declarative environment the target already
+depends on may own the same decision natively -- a branch-protection or
+required-signature setting, an identity provider's own permission grant,
+a declarative dependency manifest and its lockfile, a network egress
+boundary, a container runtime's own read-only mount. Naming that owner is
+a different question from naming a realization domain: the four domains
+classify *where a gate this repository writes actually runs*; this
+question asks *whether this repository should be writing one at all*,
+given a control that may already sit one layer beneath all four.
+
+Decision procedure: reuse the impossible-vs-tedious test
+([security-level.md](security-level.md#the-impossible-vs-tedious-test)),
+rather than re-deriving a second discriminator here. Ask it twice of the
+same policy, once per candidate owner:
+
+- Does the infrastructure-owned control remove the guarded path entirely
+  -- a permission never granted, a setting whose bypass list is empty, a
+  resolution step that cannot reach an unpinned version -- or does it
+  only add friction an actor with unlimited patience grinds through?
+- Does the repository-authored gate remove that same path entirely, or
+  does it only detect, warn, or slow an actor who can route around it (a
+  different client, a direct API call, a clone with no hooks installed)?
+
+Three outcomes, each named rather than collapsed into a yes/no:
+
+- **Infrastructure-owned.** The infrastructure control is floor-class
+  for this policy and the repository-authored gate is, at best,
+  tier-scalable friction over the same path. The finding is that the
+  policy's primary owner is the named infrastructure control -- and that
+  the target's own documentation should say so wherever it currently
+  implies the gate is the enforcement.
+- **Repository-authored gate.** No infrastructure control the target
+  actually has reaches this policy at all, most often because the
+  decision depends on repository content or live session context no
+  platform setting can see. Proceed to Domain placement below.
+- **Layered, both.** Each removes a path the other cannot see. Report
+  both owners; this multiplicity is argued, not the unexplained
+  duplication the Reproducibility / Domain-coverage axis exists to
+  flag.
+
+**An infrastructure-owned verdict never licenses removing an existing
+gate.** It reassigns which control the target should describe as
+primary; it grants nothing else. That is the same non-authoritative limit
+`SKILL.md`'s own Notes section already places on every verdict this skill
+issues, and the same defense-in-depth discipline the decomposition rule
+above applies to a no-gate verdict -- a review that answers this question
+by deleting a layer has produced a regression, not a placement finding.
+
+Name the responsible technical stack concretely (the specific platform,
+runtime, or manager, in the target's own vocabulary), never a generic
+"the infrastructure" -- an unnamed owner is the bare "looks fine" verdict
+`SKILL.md`'s Stop boundaries already forbid. Where naming that stack's
+own known-pattern defects would need specialized knowledge this skill
+does not carry, recommend delegation instead of guessing, per
+[grading-procedure.md](grading-procedure.md#delegation-recommendation-the-second-party-extended).
 
 ## Domain placement
 
 Applies only once Gate vs. no gate above has already concluded a
-deterministic gate is warranted. A deterministic gate can, in principle,
+deterministic gate is warranted, and Gate vs. infrastructure-owned
+deterministic control above has left a repository-authored gate in scope
+(a `repository-authored-gate` or `layered-both` outcome); an
+infrastructure-owned outcome leaves no repository-authored realization to
+place. A deterministic gate can, in principle,
 be realized in any of the four domains named in `SKILL.md`'s Scope
 section. Before grading a specific realization's own quality, check that
 its domain placement is actually the right one -- a well-implemented gate
@@ -161,3 +232,17 @@ the [Security-level / Zero-Trust maturity classification
 axis](../SKILL.md#axis-security-level--zero-trust-maturity-classification)'s
 job, not this test's own, even though criteria 1 and 3 above already
 reason in the same impossible-vs-tedious terms that axis names explicitly.
+
+Gate vs. infrastructure-owned deterministic control borrows that same
+test outright as its decision procedure, and still does not become that
+axis: it consumes the floor-vs-tier-scalable answer to decide *which
+party owns a policy*, and stops there. It emits no
+Foundation/Enterprise/Advanced label, makes no honesty claim about a
+target's own ceiling documentation, and grades no control's mechanics --
+a control it names as the owner is still ungraded until dimensions 1 and
+15 (`dimensions.md`) actually grade it. Nor does it characterize the
+calling/installing repository's general infrastructural footing across
+the four domains: that is dimension 23's own once-per-review question,
+asked regardless of any single policy, where this one is asked per
+policy and is answered by naming one concrete control, not by scoring an
+environment.

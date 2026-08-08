@@ -393,11 +393,52 @@ spec:
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/829"
       summary: "Removed the redundant condition and its comment; the file is now byte-identical to origin/main's version, confirmed via diff. pytest (2793 passed), shape checker (59/59), and mypy all re-verified clean on skills/evaluating-skill-quality."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/842"
+      summary: "Triage of a fable-model adversarial review's findings F1-F6 against a proposed architectural overhaul of this skill. F1 became a third mechanism-fit branch; F2 a delegation-recommending orchestrator; F3 an integration into the existing two-lane structure instead of a new Layer 1 / Layer 2 dichotomy; F4 an outright rejection of user-selectable review scope; F5 additive extension instead of a rebuild; F6 judged resolved by the F2/F4 decisions with no separate work item."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/842"
+      summary: "F1: added Gate vs. infrastructure-owned deterministic control as mechanism-fit.md's own second question, between Gate vs. no gate and Domain placement. It reuses security-level.md's impossible-vs-tedious test as its decision procedure rather than re-deriving a second discriminator, answers with three named outcomes (repository-authored-gate / infrastructure-owned-control / layered-both), and changes neither the four realization domains nor the six domain-placement criteria."
+      outcome:
+        lines: "mechanism-fit.md 163->248, security-level.md 166->171"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/842"
+      summary: "F2: known-pattern diagnosis is not embedded as a knowledge base. grading-procedure.md gained a Delegation recommendation section extending the Three-way division's own second party -- name the responsible technical stack, route an exposure- or privilege-shaped finding to vetting-attack-surface, existence-check any other named tool against a primary source and tag it unconfirmed otherwise. executionRequirements.tools is unchanged: a delegate is recommended, never run."
+      outcome:
+        lines: "grading-procedure.md 143->227"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/842"
+      summary: "F2 scope confirmation: the scanning- prefix reserved for a future stack-diagnostic delegate skill is recorded here as a naming convention only. No scanning-* skill is created, renamed, or scaffolded, so every recommendation naming one is unconfirmed by construction and reads as a candidate to build. The sibling delegate that does exist is likewise never assumed installed in a consuming repository -- dimension 23's own premise applied reflexively."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/842"
+      summary: "F3: both additions were folded into the existing two-lane walk rather than added as a new up-front pass. dimensions.md now states explicitly that neither lane gains a member and no third lane exists; SKILL.md Procedure step 3 carries the delegation clause inline, and step 2 states that an infrastructure-owned answer short-circuits nothing -- an existing gate is still graded through steps 3-5."
+      outcome:
+        lines: "dimensions.md 442->451, SKILL.md 416->470"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/842"
+      summary: "output-schema.json gained mechanismFit.controlOwnership (owner / infrastructureControlRef / reason) and findings[].delegation (technicalStack / recommendedTarget / confirmation / confirmationEvidenceRef). schemaVersion's const bumped 1.0.0 -> 1.1.0 so a consumer cannot silently diff a pre-delegation result against a post-delegation one, where an absent field means 'not asked' in the first and 'asked, not applicable' in the second."
+      outcome:
+        lines: "output-schema.json 271->314"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/842"
+      summary: "Two Stop boundaries went to SKILL.md's own always-loaded body rather than a reference file, since both bind from the Mechanism-fit check onward: an infrastructure-owned answer is never permission to remove, disable, or downgrade an existing gate; and no infrastructure control, delegate skill, or tool is presented as existing without confirmation. A third, review-quality-only boundary (a recommendation never stands in for a verdict) went to grading-procedure.md, binding from step 3."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/842"
+      summary: "Four eval fixtures added, two per addition with one of each pair adversarial: mechanism-fit-infrastructure-owned-control, adversarial-infrastructure-owned-verdict-used-to-delete-a-gate, delegation-recommendation-exposure-shaped-finding, adversarial-delegation-target-asserted-as-installed. Dimension coverage is unchanged at 13/23 and 4/4 -- all four exercise mechanism-fit and grading-procedure content, not one of the ten uncovered numbered dimensions."
+      outcome:
+        fixtures: "29->33"
+    - kind: caveat
+      anchor: "https://github.com/tvna/gitapex/issues/842"
+      summary: "F4 (a user-selectable review scope) was rejected outright rather than deferred -- it conflicts head-on with coverage attestation's own fail-closed principle -- and F6 (a silent green report over unreported excluded scope) needed no separate work item once F4 was rejected and F2 kept this skill read-only. Neither is tracked as a follow-up; recording that here so a later reader does not mistake their absence for an oversight."
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/842"
+      summary: "Named rather than silently dropped, and already disclosed in the driving issue's own Residual risk column: fallback behavior when a recommended delegate does not yet exist is bounded only by the unconfirmed tag, no deterministic check verifies a review actually applied that tag, and what counts as infrastructure-owned at the boundary remains a judgment only an audit can catch."
   skillDependencies:
     requires:
       - evaluating-skill-quality
     relatedTo:
       - screening-a-low-trust-contribution
+      - vetting-attack-surface
   executionRequirements:
     tools:
       read:

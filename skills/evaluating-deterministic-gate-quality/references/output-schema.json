@@ -22,8 +22,8 @@
 
     "schemaVersion": {
       "type": "string",
-      "const": "1.0.0",
-      "description": "Version of this DSL itself. Evolves independently of SKILL.md/dimensions.md's own revision history; a stored review result's schemaVersion is the compatibility key a future drift-detecting comparison must check before diffing two results."
+      "const": "1.1.0",
+      "description": "Version of this DSL itself. Evolves independently of SKILL.md/dimensions.md's own revision history; a stored review result's schemaVersion is the compatibility key a future drift-detecting comparison must check before diffing two results. 1.1.0 adds two optional fields -- mechanismFit.controlOwnership (mechanism-fit.md's third question) and findings[].delegation (grading-procedure.md's delegation recommendation). A 1.0.0-labelled instance is deliberately NOT valid against this revision: the const is what stops a consumer from silently diffing a result produced before either field existed (where their absence means 'not asked') against one produced after (where absence means 'asked, not applicable')."
     },
 
     "reviewMeta": {
@@ -67,6 +67,24 @@
       "properties": {
         "gateWarranted": { "type": "boolean" },
         "reason": { "type": "string" },
+        "controlOwnership": {
+          "type": "object",
+          "required": ["owner"],
+          "additionalProperties": false,
+          "description": "mechanism-fit.md's second question (Gate vs. infrastructure-owned deterministic control), asked after gateWarranted and before domainPlacement. Omitted means the question was not asked -- never that a repository-authored gate won it by default. owner=infrastructure-owned-control reassigns which control the target should describe as primary and nothing else: it is never permission to remove, disable, or downgrade an existing gate, and it short-circuits no step (SKILL.md Procedure step 2 and its Stop boundaries both state this).",
+          "properties": {
+            "owner": {
+              "type": "string",
+              "enum": ["repository-authored-gate", "infrastructure-owned-control", "layered-both", "indeterminate"],
+              "description": "mechanism-fit.md's own three named outcomes, plus indeterminate for the case where available evidence cannot settle which party owns the policy -- the same fail-closed-on-indeterminate discipline findings[].verdict already uses, rather than defaulting to repository-authored-gate."
+            },
+            "infrastructureControlRef": {
+              "type": "string",
+              "description": "The specific infrastructure-owned control named concretely (e.g. a branch-protection setting, an identity-provider permission grant, a declarative dependency manifest), in the target's own vocabulary. Expected in substance whenever owner is infrastructure-owned-control or layered-both: an owner named only as 'the infrastructure' is the bare 'looks fine' verdict SKILL.md's Stop boundaries forbid. Naming it is not confirming it exists -- see findings[].delegation.confirmation for that discipline."
+            },
+            "reason": { "type": "string" }
+          }
+        },
         "domainPlacement": {
           "anyOf": [
             { "$ref": "#/$defs/domain" },
@@ -124,6 +142,31 @@
                 "property": { "type": "string" },
                 "classification": { "$ref": "#/$defs/honestyClassification" },
                 "evidenceRef": { "type": "string" }
+              }
+            }
+          },
+          "delegation": {
+            "type": "object",
+            "required": ["technicalStack", "confirmation"],
+            "additionalProperties": false,
+            "description": "grading-procedure.md's Delegation recommendation, folded into SKILL.md Procedure step 3's two-lane walk rather than emitted by a separate pass. Present only where THIS finding's own root-cause diagnosis needs stack-specialized knowledge this skill carries no catalogue of. It never replaces the finding: verdict and evidence above are still required on their own terms, and a dimension routed to a delegate without a verdict is reported verdict=indeterminate with an indeterminateReason, per grading-procedure.md's own Stop boundary.",
+            "properties": {
+              "technicalStack": {
+                "type": "string",
+                "description": "The responsible platform, runtime, or manager, named concretely in the target's own vocabulary -- never a taxonomy re-derived by this skill, and never a generic 'the infrastructure'. Same naming mechanismFit.controlOwnership.infrastructureControlRef uses when an infrastructure control owns the policy, so the two do not drift into parallel vocabularies."
+              },
+              "recommendedTarget": {
+                "type": "string",
+                "description": "The delegate this review recommends: an existing sibling skill (vetting-attack-surface for an exposure- or privilege-shaped finding), a named real diagnostic tool for that stack, or the scanning-prefixed skill that would own it if built. Free-form text carrying the same no-target-authored-text discipline persistenceRecommendation.rationale states: this field names a candidate, it never dispatches one."
+              },
+              "confirmation": {
+                "type": "string",
+                "enum": ["confirmed-exists", "unconfirmed"],
+                "description": "confirmed-exists only where the recommended target was actually confirmed against a primary source or the target's own declared artifacts, read-only, never by running it. unconfirmed otherwise -- including every recommendation naming a scanning-prefixed skill, since none exists at this writing. An unconfirmed recommendation must read as a candidate to build or verify, never as an installed capability (SKILL.md Stop boundaries)."
+              },
+              "confirmationEvidenceRef": {
+                "type": "string",
+                "description": "Where confirmation=confirmed-exists, what actually confirmed it (e.g. a sibling skill's own directory path, or a line in the target's declared dependency manifest). Absent here while confirmation claims confirmed-exists is itself a finding against the review, not a formatting lapse."
               }
             }
           },

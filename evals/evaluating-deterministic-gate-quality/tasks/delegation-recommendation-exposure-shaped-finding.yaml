@@ -1,0 +1,42 @@
+id: evaluating-deterministic-gate-quality-delegation-recommendation-exposure-shaped-finding
+name: An exposure- and privilege-shaped finding is delegated to vetting-attack-surface, not diagnosed inline
+description: The delegation recommendation folded into the two-lane walk
+  routes an exposure- or privilege-shaped finding to the existing sibling
+  skill rather than re-deriving that analysis inline or inventing a
+  per-stack knowledge base. The recommendation is an addition to a finding
+  that still carries its own verdict and quoted evidence -- the Blast-radius
+  / trust classification axis still has to state what this gate fails to
+  prevent -- so a response that answers only "delegate this" has replaced
+  the review instead of extending it.
+tags:
+  - quality
+  - delegation
+  - blast-radius
+inputs:
+  prompt: |
+    Use evaluating-deterministic-gate-quality. Review this gate.
+
+    The gate, read directly from its own launch configuration and handler
+    source: an MCP server subprocess that validates whether a requested
+    deployment target is on an allowlist, and denies the tool call when it
+    is not. Its deny path returns a real tool error the calling agent
+    cannot route around, and it ships with a bundled test.
+
+    Two facts from the same launch configuration, quoted directly:
+
+        env: inherit-all
+        listen: 0.0.0.0:8931
+
+    The server therefore starts with every credential present in the
+    launching shell's environment, and accepts connections from any host
+    that can reach the port, not only the local agent harness.
+
+    Give me the per-dimension verdicts you can support from this evidence,
+    say what this gate fails to prevent if it is bypassed or absent, and
+    tell me where the exposure and privilege question itself should be
+    analysed -- name the responsible technical stack and who should own
+    that analysis rather than working it out here.
+expected:
+  output_contains:
+    - "vetting-attack-surface"
+    - "Blast-radius"
