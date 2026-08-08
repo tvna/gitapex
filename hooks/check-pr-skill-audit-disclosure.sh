@@ -147,7 +147,14 @@ if [ -n "$repo_root" ] && [ -f "$full_gate" ] && [ -f "$flag_module" ]; then
   fi
 
   if printf '%s' "$full_output" | grep -q '^FAIL:'; then
-    deny "Blocked by hooks/check-pr-skill-audit-disclosure.sh: this PR's diff requires skill-audit disclosure evidence its body does not carry. This is the same verdict .github/workflows/skill-audit-gate.yml will report, computed locally before the push. Fix the '## Skill audit evidence' section and retry.
+    # The exact command is in the message on purpose (dimension 17): the
+    # whole point of issue #874 is that an agent can now iterate on the
+    # disclosure locally instead of pushing and reading a failed check, and
+    # a deny that does not say how to re-run the verdict leaves it doing
+    # the latter anyway.
+    deny "Blocked by hooks/check-pr-skill-audit-disclosure.sh: this PR's diff requires skill-audit disclosure evidence its body does not carry. This is the same verdict .github/workflows/skill-audit-gate.yml will report, computed locally before the push. Fix the '## Skill audit evidence' section, then re-check with:
+
+  python3 .github/scripts/gitapex_gate_skill_audit_disclosure.py --check-diff ${merge_base} HEAD --body-file <path>
 
 $full_output"
   fi

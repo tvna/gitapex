@@ -134,6 +134,32 @@ def test_the_diff_step_publishes_its_keys_through_the_single_serializer():
     assert not hand_written, f"the diff step hand-writes output keys instead of delegating: {hand_written}"
 
 
+def test_no_published_output_key_is_consumed_by_nothing():
+    """The reverse set difference of the per-check test above.
+
+    `dimensions.md` dimension 20: a correspondence gate asserting only the
+    direction its driving spec happened to enumerate first still passes
+    while the other direction rots. Here the reverse case is a key left in
+    `OUTPUT_KEYS` after the check that read it was removed or renamed --
+    the workflow keeps publishing it, the grader reads nothing, and every
+    forward assertion stays green.
+
+    The two applicability keys are named exclusions rather than a wildcard:
+    they gate the base two-audit check and the whole job respectively, so
+    neither has (or should have) a `_PROCESS_DISCLOSURE_CHECKS` row.
+    """
+    consumed = {check.cli_flag.lstrip("-") for check in gate._PROCESS_DISCLOSURE_CHECKS}
+    consumed |= {"applicable", "skill-md-changed"}
+    consumed |= {"description-changed-skills", "needs-eval-coverage-skills"}
+    orphaned = sorted(set(flags_module.OUTPUT_KEYS) - consumed)
+    assert not orphaned, (
+        f"gitapex_compute_skill_audit_flags publishes these keys that no "
+        f"check reads: {orphaned}. Either wire them to a check or stop "
+        "publishing them -- a key nothing consumes reads as coverage that "
+        "is not there."
+    )
+
+
 def test_as_output_pairs_covers_exactly_the_declared_output_keys():
     """`OUTPUT_KEYS` is the contract the two tests above read; a serializer
     that drifted from it would make both of them assert about a list
