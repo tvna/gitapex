@@ -192,36 +192,70 @@ def test_every_registered_check_is_filled_by_the_local_check_diff_mode(check):
     )
 
 
+def _imported_module_names(source):
+    """Every top-level module name `source` imports, by either spelling.
+
+    `ast.ImportFrom` is handled alongside `ast.Import` deliberately: an
+    earlier revision walked only the latter, so wiring in a helper as
+    `from gitapex_helper import thing` -- the same import, spelled the
+    other way -- silently escaped the registration gate below and left
+    that helper outside `deterministic-gate-quality`'s registry scope.
+    `node.level` filters relative imports, which cannot name a sibling
+    module in this flat, package-less directory.
+
+    Takes source text rather than a path so the spelling coverage can be
+    asserted directly, instead of only through whichever forms this
+    repository's own files happen to use today.
+    """
+    names = set()
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Import):
+            names.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and not node.level and node.module:
+            names.add(node.module)
+    return names
+
+
+def _imported_sibling_scripts(relative):
+    """The `.github/scripts` siblings `relative` imports."""
+    scripts_dir = REPO_ROOT / ".github" / "scripts"
+    source = (REPO_ROOT / relative).read_text(encoding="utf-8")
+    return {
+        f".github/scripts/{name}.py"
+        for name in _imported_module_names(source)
+        if (scripts_dir / f"{name}.py").is_file()
+    }
+
+
 def _reachable_helper_scripts():
     """Every .github/scripts file this gate's CI half actually executes.
 
-    Two hops, because issue #874 made it two hops: the workflow shells out
-    to `gitapex_compute_skill_audit_flags.py`, which in turn *imports* the
-    three helpers the workflow used to invoke directly. Scanning only the
-    workflow text would quietly stop covering them the moment they moved
-    behind that import, which is the drift this function exists to
-    prevent -- an unregistered helper is outside the
+    More than one hop, because issue #874 made it more than one: the
+    workflow shells out to `gitapex_compute_skill_audit_flags.py`, which in
+    turn *imports* the three helpers the workflow used to invoke directly.
+    Scanning only the workflow text would quietly stop covering them the
+    moment they moved behind that import, which is the drift this function
+    exists to prevent -- an unregistered helper is outside the
     deterministic-gate-quality check's own registry-based scope, so
     changing it would require no disclosure.
 
-    Both hops are derived, never a hardcoded list of known helper names: a
-    list goes stale exactly when it matters, when someone wires in another
-    helper and forgets to register it.
+    Followed to a fixed point rather than exactly two hops. A helper that
+    itself imports a fourth script is just as much part of what this gate
+    executes, and a depth-limited walk would stop covering it with no
+    failure anywhere -- the same silent-narrowing class as the
+    `ImportFrom` gap above. Every hop is derived, never a hardcoded list
+    of known helper names: a list goes stale exactly when it matters.
     """
     run = "\n".join(step.get("run", "") for step in _job_steps())
-    invoked = set(re.findall(r"\.github/scripts/[A-Za-z0-9_.-]+\.py", run))
-    assert invoked, "the workflow invokes no .github/scripts helper at all"
+    reachable = set(re.findall(r"\.github/scripts/[A-Za-z0-9_.-]+\.py", run))
+    assert reachable, "the workflow invokes no .github/scripts helper at all"
 
-    scripts_dir = REPO_ROOT / ".github" / "scripts"
-    for relative in sorted(invoked):
-        source = (REPO_ROOT / relative).read_text(encoding="utf-8")
-        for node in ast.walk(ast.parse(source)):
-            if not isinstance(node, ast.Import):
-                continue
-            for alias in node.names:
-                if (scripts_dir / f"{alias.name}.py").is_file():
-                    invoked.add(f".github/scripts/{alias.name}.py")
-    return invoked
+    pending = sorted(reachable)
+    while pending:
+        discovered = _imported_sibling_scripts(pending.pop()) - reachable
+        reachable |= discovered
+        pending.extend(sorted(discovered))
+    return reachable
 
 
 def test_helper_scripts_the_workflow_invokes_are_registered_in_ssot():
@@ -237,6 +271,22 @@ def test_helper_scripts_the_workflow_invokes_are_registered_in_ssot():
         "this gate's CI half executes these scripts but .gitapex/ssot.json's "
         f"skill-audit-disclosure entry does not register them: {missing}"
     )
+
+
+def test_the_import_scan_covers_both_import_spellings():
+    """Regression: the scan walked only `import x`, so a helper wired in as
+    `from x import y` escaped the registration gate below with nothing
+    failing -- the same silent-narrowing class the gate itself exists to
+    catch. Relative imports stay excluded: they cannot name a sibling in
+    this flat, package-less directory."""
+    source = (
+        "import gitapex_plain\n"
+        "import gitapex_aliased as short\n"
+        "from gitapex_fromform import thing\n"
+        "from . import gitapex_relative\n"
+        "from .gitapex_relative_mod import other\n"
+    )
+    assert _imported_module_names(source) == {"gitapex_plain", "gitapex_aliased", "gitapex_fromform"}
 
 
 def test_the_transitive_helper_hop_actually_resolves():

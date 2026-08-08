@@ -101,7 +101,9 @@ if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
 fi
 
 base_branch=$(printf '%s' "$input" | jq -r '.tool_input.base // empty')
+base_is_explicit=yes
 if [ -z "$base_branch" ]; then
+  base_is_explicit=no
   base_branch=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed -E 's#^origin/##') || true
   # tool_input.base is absent on most update_pull_request calls (it's
   # only sent when the base is itself being changed), so falling back to
@@ -131,7 +133,24 @@ repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || repo_root=""
 full_gate="${repo_root}/.github/scripts/gitapex_gate_skill_audit_disclosure.py"
 flag_module="${repo_root}/.github/scripts/gitapex_compute_skill_audit_flags.py"
 
-if [ -n "$repo_root" ] && [ -f "$full_gate" ] && [ -f "$flag_module" ]; then
+# Tier 1 requires an *explicitly supplied* base, deliberately, and this is
+# a narrowing rather than caution for its own sake. The default-branch
+# fallback above is already documented as computing against the wrong
+# ancestor for a stacked PR (one whose real base is another feature
+# branch). Tier 2 has lived with that since it only ever scoped
+# skills/*/SKILL.md; tier 1 scopes design docs, checker scripts and every
+# registered gate, so on a stacked PR the fallback drags the *parent
+# branch's* changes into scope and denies a body update for disclosure the
+# PR does not owe. That is a false deny on an outward-facing operation,
+# caused entirely by the widened scope. create_pull_request always sends
+# `base`, so the path that matters most keeps full coverage; an
+# update_pull_request that also sends it keeps coverage too. Everything
+# else falls through to tier 2's narrower, pre-existing exposure.
+if [ "$base_is_explicit" = "no" ]; then
+  echo "Notice: hooks/check-pr-skill-audit-disclosure.sh is skipping the full local pre-check because this call supplied no explicit base branch; a stacked PR would otherwise be graded against the wrong ancestor. Falling back to the bundled base two-audit check (CI's skill-audit-gate.yml uses the PR's real base regardless)." >&2
+fi
+
+if [ "$base_is_explicit" = "yes" ] && [ -n "$repo_root" ] && [ -f "$full_gate" ] && [ -f "$flag_module" ]; then
   body_file=$(mktemp)
   printf '%s' "$body" >"$body_file"
   if full_output=$(cd "$repo_root" && python3 "$full_gate" \
@@ -146,7 +165,15 @@ if [ -n "$repo_root" ] && [ -f "$full_gate" ] && [ -f "$flag_module" ]; then
     exit 0
   fi
 
-  if printf '%s' "$full_output" | grep -q '^FAIL:'; then
+  # `grep -q` closes stdin on first match, which can SIGPIPE a still-writing
+  # upstream; under `set -o pipefail` (set above) that upstream's nonzero
+  # status outranks grep's own zero exit and turns a real match into a false
+  # "not found" -- i.e. a genuine deny silently downgraded to the warning
+  # fall-through below. This repository banned the pattern in
+  # https://github.com/tvna/gitapex/pull/428#discussion_r3654041066 and
+  # skill-audit-gate.yml's own history records the same fix; `-q` is dropped
+  # and the output redirected instead, so grep always reads to completion.
+  if printf '%s' "$full_output" | grep '^FAIL:' >/dev/null; then
     # The exact command is in the message on purpose (dimension 17): the
     # whole point of issue #874 is that an agent can now iterate on the
     # disclosure locally instead of pushing and reading a failed check, and
@@ -190,7 +217,7 @@ if [ "$check_exit" -eq 0 ]; then
   exit 0
 fi
 
-if printf '%s' "$check_output" | grep -q '^FAIL:'; then
+if printf '%s' "$check_output" | grep '^FAIL:' >/dev/null; then
   deny "Blocked by hooks/check-pr-skill-audit-disclosure.sh: this PR's diff adds/modifies a skills/*/SKILL.md but its body does not disclose both battle-testing-a-skill and evaluating-skill-quality audit evidence (a verdict or waiver for each). Add a '## Skill audit evidence' section -- see .github/scripts/gitapex_gate_skill_audit_disclosure.py for the exact format CI enforces."
 fi
 

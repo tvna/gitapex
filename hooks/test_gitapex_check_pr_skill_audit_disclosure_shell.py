@@ -94,9 +94,13 @@ def repo(tmp_path: Path) -> Path:
     _git(tmp_path, "add", "-A")
     _git(tmp_path, "commit", "-qm", "base")
     # A local `origin` remote so `git merge-base origin/main HEAD` resolves
-    # without any network access.
+    # without any network access. `set-head` is not decoration: without
+    # refs/remotes/origin/HEAD the hook's default-branch fallback resolves
+    # to nothing and it exits early, so every no-explicit-base test would
+    # pass for the wrong reason -- never reaching the code it is aimed at.
     _git(tmp_path, "remote", "add", "origin", str(tmp_path))
     _git(tmp_path, "fetch", "-q", "origin")
+    _git(tmp_path, "remote", "set-head", "origin", "main")
     _git(tmp_path, "checkout", "-q", "-b", "feature")
     return tmp_path
 
@@ -191,6 +195,65 @@ def test_tier1_falls_back_when_its_own_computation_cannot_complete(repo: Path) -
     result = _run(repo, "no evidence section at all")
     assert result.returncode == 0
     assert "falling back to the bundled base two-audit check" in result.stderr
+
+
+def test_tier1_denies_even_when_the_failure_output_is_large(repo: Path) -> None:
+    """Regression: the FAIL-detection grep must read its input to
+    completion.
+
+    `grep -q` closes stdin on first match, which can SIGPIPE a
+    still-writing upstream; under `set -o pipefail` that upstream's
+    nonzero status outranks grep's own zero exit, turning a real match
+    into a false "not found" -- here, a genuine deny silently downgraded
+    to the warning fall-through, which then exits 0 for any diff with no
+    SKILL.md. This repository banned the pattern in PR #428; this pins
+    that the ban holds on a deny whose output is large enough to matter.
+    """
+    _with_tier1(repo)
+    for index in range(60):
+        _write(repo, f".github/scripts/gitapex_gate_bulk_{index}.py")
+    _commit(repo, "many new gates")
+    result = _run(repo, _BASE_EVIDENCE)
+    assert result.returncode == 2, result.stderr
+    assert "deterministic-gate-quality" in result.stderr
+
+
+def test_tier1_is_skipped_when_no_explicit_base_was_supplied(repo: Path) -> None:
+    """The stacked-PR false deny.
+
+    An update_pull_request call carries no `tool_input.base`, so the base
+    falls back to the default branch. For a PR actually based on another
+    feature branch that drags the parent's gate and checker-script
+    changes into tier 1's much wider scope and denies a body update for
+    disclosure the PR does not owe. Tier 2's narrower SKILL.md-only scope
+    has always lived with the same fallback; tier 1 must not widen it.
+    """
+    _with_tier1(repo)
+    _write(repo, ".github/scripts/gitapex_gate_new.py")
+    _commit(repo, "new gate")
+    payload = json.dumps({"tool_name": "mcp__github__update_pull_request", "tool_input": {"body": _BASE_EVIDENCE}})
+    result = subprocess.run(
+        ["bash", str(repo / "hooks" / "check-pr-skill-audit-disclosure.sh")],
+        input=payload,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        cwd=str(repo),
+    )
+    assert result.returncode == 0, result.stderr
+    assert "skipping the full local pre-check" in result.stderr
+
+
+def test_tier1_still_runs_on_an_update_that_does_supply_a_base(repo: Path) -> None:
+    """Guards the narrowing above: it must key on whether the base was
+    explicit, not on the tool name, or an update_pull_request that does
+    send `base` would lose coverage it can correctly have."""
+    _with_tier1(repo)
+    _write(repo, ".github/scripts/gitapex_gate_new.py")
+    _commit(repo, "new gate")
+    result = _run(repo, _BASE_EVIDENCE, tool_name="mcp__github__update_pull_request")
+    assert result.returncode == 2
+    assert "deterministic-gate-quality" in result.stderr
 
 
 # --- tier 2: the bundled, plugin-bundle-safe base check ---

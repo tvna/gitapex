@@ -287,6 +287,56 @@ def test_reading_a_head_file_that_does_not_exist_is_an_error(
         _flags(repo)
 
 
+# --- regressions from the independent review of PR #885 ---
+
+
+@pytest.mark.parametrize(
+    ("base", "head"),
+    [("", "HEAD"), ("   ", "HEAD"), ("HEAD~1", ""), ("", "")],
+    ids=["blank-base", "whitespace-base", "blank-head", "both-blank"],
+)
+def test_a_blank_ref_is_rejected_by_the_api_not_only_the_cli(repo: pathlib.Path, base: str, head: str) -> None:
+    """`git diff "...HEAD"` is a *valid* empty diff, so a blank ref silently
+    resolved to "nothing changed" and the caller reported no disclosure
+    requirement for a diff that owed several. The guard has to live in
+    `compute_flags`, because `--check-diff` calls it without going through
+    this module's own CLI, where the only guard used to be.
+    """
+    _write(repo, ".github/scripts/gitapex_gate_new.py")
+    _commit(repo)
+    with pytest.raises(flags_module.FlagComputationError, match="blank"):
+        flags_module.compute_flags(base, head, repo)
+
+
+def test_a_non_utf8_skill_md_fails_closed(repo: pathlib.Path) -> None:
+    """The bash this module replaces exited 1 on a SKILL.md carrying
+    non-UTF-8 bytes, because the security-relevance script's own strict
+    decode failed inside a `pipefail` pipeline. An `errors="replace"`
+    decode here turned that into a computed answer instead -- and worse,
+    every invalid byte collapsing to U+FFFD can make two genuinely
+    different descriptions compare equal, emptying
+    `description-changed-skills` and silencing the eval-coverage and
+    battle-testing-WAIVED-rejection extensions.
+    """
+    path = repo / "skills" / "sample" / "SKILL.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"---\nname: s\ndescription: caf\xe9\n---\n\nbody\n")
+    _commit(repo)
+    with pytest.raises(flags_module.FlagComputationError, match="not valid UTF-8"):
+        _flags(repo)
+
+
+def test_a_missing_object_is_still_absorbed_as_absent(repo: pathlib.Path) -> None:
+    """Guards the fix above: the strict decode must not also turn a
+    legitimately-absent base revision into an error. A newly added
+    SKILL.md has no content at the merge base and must still be graded as
+    a description change, not a failure."""
+    _write(repo, "skills/sample/SKILL.md", SKILL_MD)
+    _commit(repo)
+    assert _flags(repo).description_changed_skills == ("sample",)
+    assert flags_module._git_show(repo, "HEAD", "skills/nope/SKILL.md") is None
+
+
 # --- the CLI ---
 
 
@@ -339,6 +389,9 @@ def test_cli_rejects_a_repo_root_that_is_not_a_directory(
 
 @pytest.mark.parametrize("blank", ["", "   "], ids=["empty", "whitespace"])
 def test_cli_rejects_a_blank_ref(repo: pathlib.Path, capsys: pytest.CaptureFixture[str], blank: str) -> None:
+    """Still rejected at the CLI, but now by `compute_flags`' own guard
+    rather than a CLI-only one -- which is the point of the fix: the
+    other caller (`--check-diff`) never passes through here."""
     code, _, err = _run_cli(["--base-ref", blank, "--head-ref", "HEAD", "--repo-root", str(repo)], capsys)
     assert code == 1
-    assert "must both be non-empty" in err
+    assert "blank --base-ref" in err

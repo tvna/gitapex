@@ -173,6 +173,39 @@ def _bool_text(value: bool) -> str:
     return "true" if value else "false"
 
 
+class _GitObjectMissing(FlagComputationError):
+    """`git` exited non-zero because the object does not exist at that rev.
+
+    A subclass, not a sibling: an uncaught one still fails the computation
+    closed. It exists only so `_git_show` can absorb *this* specific
+    failure (a newly added file has no content at the merge base) without
+    also absorbing a decode failure, which must never degrade to "the file
+    is absent".
+    """
+
+
+def _decode_git_output(raw: bytes, args: tuple[str, ...]) -> str:
+    """Decode git output as strict UTF-8, or fail the whole computation.
+
+    Deliberately strict, and this is load-bearing rather than a style
+    choice. An earlier revision passed `errors="replace"`, which was a
+    silent fail-open regression against the bash this module replaces: a
+    SKILL.md carrying non-UTF-8 bytes made
+    `gitapex_skill_security_relevance.py` exit 1 inside a `pipefail`
+    pipeline, so the whole step exited 1 -- reproduced live against
+    `origin/main`'s own step. Under `errors="replace"` every invalid byte
+    collapses to U+FFFD instead, so two genuinely different descriptions
+    can compare equal and `description-changed-skills` comes back empty:
+    the eval-coverage and battle-testing-WAIVED-rejection extensions then
+    never fire, on exactly the malformed input dimension 15 says must fail
+    closed.
+    """
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise FlagComputationError(f"git {' '.join(args)} produced output that is not valid UTF-8: {error}") from error
+
+
 def _run_git(repo_root: pathlib.Path, *args: str) -> str:
     """Run `git` in `repo_root` and return stdout, raising on any failure.
 
@@ -180,21 +213,23 @@ def _run_git(repo_root: pathlib.Path, *args: str) -> str:
     absolute path -- the same three environments
     `gitapex_skill_description_diff.py` names (GitHub runner, the nix
     devShell, a contributor's machine) install it in three places.
+
+    Captured as bytes and decoded explicitly, rather than via
+    `text=True`, so the decode failure is a distinct, reportable outcome
+    instead of something the subprocess layer silently papers over.
     """
     try:
         # S603/S607 waived: a fixed argv list with no shell.
         result = subprocess.run(  # noqa: S603
             ["git", "-C", str(repo_root), *args],  # noqa: S607
             capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
         )
     except OSError as error:
         raise FlagComputationError(f"git {' '.join(args)} could not be run: {error}") from error
     if result.returncode != 0:
-        raise FlagComputationError(f"git {' '.join(args)} failed: {result.stderr.strip()}")
-    return result.stdout
+        stderr = result.stderr.decode("utf-8", errors="replace").strip()
+        raise _GitObjectMissing(f"git {' '.join(args)} failed: {stderr}")
+    return _decode_git_output(result.stdout, args)
 
 
 def _git_show(repo_root: pathlib.Path, rev: str, path: str) -> str | None:
@@ -203,10 +238,13 @@ def _git_show(repo_root: pathlib.Path, rev: str, path: str) -> str | None:
     None is a legitimate answer, not an error: a newly added SKILL.md has
     no content at the merge base, and `description_changed` fails closed on
     it (treating an unreadable description as *changed*, never unchanged).
+
+    Only `_GitObjectMissing` is absorbed. A file that exists but does not
+    decode raises through -- see `_decode_git_output`.
     """
     try:
         return _run_git(repo_root, "show", f"{rev}:{path}")
-    except FlagComputationError:
+    except _GitObjectMissing:
         return None
 
 
@@ -358,7 +396,24 @@ def compute_flags(
 
     Raises `FlagComputationError` for anything that would otherwise make
     the answer a guess.
+
+    The blank-ref check lives here, not only in `main()`, because the ref
+    pair reaches this function from two callers and only one of them is
+    that CLI. `gitapex_gate_skill_audit_disclosure.py --check-diff` calls
+    straight in, so a CLI-only guard left `--check-diff "" HEAD` resolving
+    to `git diff "...HEAD"` -- which git reads as `HEAD...HEAD`, an empty
+    diff -- and the wrapper printed "this diff triggers no skill-audit
+    disclosure requirement" and exited 0 for a diff that in fact owed two
+    disclosures. Reproduced live before this guard existed. That path is
+    reachable from the hook's own suggested command whenever the base
+    variable is unset but quoted, so it is a fail-open in the mode built
+    to close one.
     """
+    blank = [name for name, value in (("--base-ref", base_ref), ("--head-ref", head_ref)) if not value.strip()]
+    if blank:
+        raise FlagComputationError(
+            "blank " + " and ".join(blank) + "; refusing to compute a flag set from an unresolved ref"
+        )
     skill_md_lines = _added_or_modified(
         _diff_name_status(repo_root, base_ref, head_ref, _SKILL_MD_PATHSPECS),
     )
@@ -436,10 +491,9 @@ def main(argv: list[str] | None = None) -> int:
     if not args.repo_root.is_dir():
         print(f"{args.repo_root}: --repo-root must be an existing directory", file=sys.stderr)
         return 1
-    if not args.base_ref.strip() or not args.head_ref.strip():
-        print("error: --base-ref and --head-ref must both be non-empty", file=sys.stderr)
-        return 1
 
+    # Blank refs are rejected by `compute_flags` itself, so every caller
+    # gets the guard rather than only this one; see its docstring.
     try:
         flags = compute_flags(args.base_ref, args.head_ref, args.repo_root)
     except FlagComputationError as error:
