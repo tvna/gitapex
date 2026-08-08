@@ -248,6 +248,43 @@ mechanism, not only the ones already recorded below.
     corrected run is the negative control recorded above. Recorded here so
     a future caller hand-rolling this recipe outside that script does not
     repeat the same mistake.
+- **Reconfirmed 2026-08-08, at a newer CLI version, with a second
+  methodology pitfall found.** Same identifying signals as above
+  (`CLAUDE_CODE_REMOTE=true`, `CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=
+  cloud_default`), except `claude --version` now reports `2.1.226 (Claude
+  Code)` rather than the `2.1.220` every entry above was pinned to -- so
+  this is a fresh run of the Verification procedure at a version none of
+  those entries covered, not a restatement of them. Positive control, run
+  from this repository's own root with the real `$HOME`, quoted a real,
+  distinctive CLAUDE.md sentence. Negative control, run from an isolated
+  cwd with the isolated `$HOME` copy, reported none loaded. The verified
+  alternative still holds at this version.
+  - **Second methodology pitfall, distinct from the `PWD` one above:** the
+    harness's own permission sandbox confines a dispatched `claude -p` to
+    reads *inside its working directory*. A dispatch launched from an empty
+    isolated cwd but pointed at an absolute target path elsewhere never
+    reads the target at all -- it halts and returns a bare request for a
+    read grant, which lands in the output file looking superficially like a
+    short report. This is the same silently-truncated-output failure shape
+    the `--permission-mode`/`--allowedTools` note in the marketplace entry
+    below records for a *Bash* approval prompt, reached here through `Read`
+    instead, and it is easy to misread as a model refusal rather than a
+    harness denial.
+  - **Fix, and its consequence for the controls:** make the isolated cwd
+    *be* the caller-created read-only snapshot of the review target, and
+    give the dispatch paths relative to it. Because the two controls are
+    only evidence about the location they were actually run from, the
+    negative control must then be re-run from that exact snapshot cwd --
+    confirming both that its own full ancestry carries no
+    `CLAUDE.md`/`AGENTS.md` and that the dispatched agent's self-report
+    still says none loaded. Both were re-run and both held for the
+    2026-08-08 run above.
+  - **Caveat on "read-only" when the dispatch runs as uid 0:** a `chmod -R
+    a-w` snapshot is advisory only for a root process, which bypasses the
+    mode bits. Under that condition "read-only snapshot" means
+    caller-created and not written by the dispatch, not an OS-enforced
+    guarantee; state which of the two a given run actually had rather than
+    implying the stronger one.
 
 #### `claude -p --plugin-dir` combined with cwd/HOME isolation
 

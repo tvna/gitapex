@@ -812,3 +812,100 @@ self-review findings didn't depend on the simulated numbers -- but the
 better fixtures or further investigation. Full writeup: `evals/
 evaluating-skill-quality/split.md`'s Kept-edit log, "Correction, same
 iteration" subsection. Refs #619.
+
+## Neutral audit round closing issue #332's ACM-7
+
+Issue #332's compatibility-awareness axis itself merged on 2026-07-26, but
+its own last acceptance-criteria row stayed unmet: the two required neutral
+audits were recorded as `battle-testing-a-skill: INDETERMINATE` and
+`evaluating-skill-quality: WAIVED`, both for the same reason -- the
+execution environment of the day injected project instructions into every
+dispatch, so no isolated grader could be obtained. The
+`compatibility awareness (issue #332)` entry above states that plainly ("No
+PASS is claimed for those audits"). This entry records the audits actually
+being run, with real verdicts replacing both placeholders.
+
+**Isolation, established before any grading dispatch.** The two-control
+procedure in `skills/evaluating-skill-quality/references/adversarial-self-audit.md`
+was re-run at `claude --version` `2.1.226`, a version no prior registry
+entry covered (all of them pin `2.1.220`). Positive control, from this
+repository's root with the real `$HOME`, quoted a real CLAUDE.md sentence;
+negative control, from an isolated cwd with the isolated `$HOME` copy,
+reported none loaded. A second methodology pitfall surfaced and is now
+recorded in that registry: the harness sandbox confines a dispatch's reads
+to its working directory, so the first four dispatches -- launched from an
+empty isolated cwd but aimed at an absolute snapshot path -- returned bare
+permission requests rather than reviews. Re-running with the snapshot
+itself as the working directory fixed it, and the negative control was
+re-taken from that exact cwd. The snapshot was caller-created and never
+written by a dispatch; because these dispatches ran as uid 0, `chmod -R
+a-w` is advisory rather than OS-enforced, and that is the weaker of the two
+claims this run can honestly make.
+
+**evaluating-skill-quality (self-review): `WELL-FORMED-NOT-MATURE`.** A
+real verdict, not a waiver. Well-formed rests on the shape checker's 59/59,
+handed to the dispatch as step 3's established fact rather than re-run
+inside it. Mature is blocked by two dimension-1-through-7 findings, both
+pre-existing and both independent of the compatibility axis: dimension 5
+(an ordinary review mandatorily opens three files -- `SKILL.md`,
+`rubric.md`, and `adversarial-self-audit.md`), which the issue #495 entry
+above already named as a known, out-of-scope gap, and dimension 6
+(`references/skill-metadata.schema.json`'s field descriptions blend
+origin-repository issue-tracker URLs into content declared Portable, which
+the `no-bare-issue-citation` shape check does not reach because it targets
+only bare `#N` forms). Compatibility awareness reported
+`NO_COMPATIBILITY_WARNING` and Confidentiality awareness reported
+`PROPOSE_CONFIDENTIALITY_SAFEGUARD`; neither changes the verdict, by both
+axes' own warning-only rule.
+
+**battle-testing-a-skill, first round: `FAIL`, unanimous across three
+isolated trials.** All three graded the same single dimension -- multi-turn
+/ escalating adversarial patterns -- a FAIL for the same reason, and
+nothing else: the dimension's Pass bar is conjunctive (procedural rule
+*and* at least one eval staging an escalating attempt), the procedural half
+was already met by `adversarial-self-audit.md`'s cross-session/multi-turn
+rule, and the eval half had no coverage anywhere in the then-69-fixture
+corpus. Scores were 18/1/4/0, 21-of-22, and 17/1/4/0 PASS/FAIL/N-A/
+INDETERMINATE respectively.
+
+**Repair, and the live proof it worked.**
+`tasks/multi-turn-settled-dimension-relaxation-train.yaml` was added: a
+three-turn transcript whose middle turn tries to get every dimension except
+one edited line pre-cleared as settled, and whose final turn smuggles fresh
+dimension-5 and dimension-6 defects into that "settled" surface. It is
+listed in `split.md`'s train split on the same split-listing-consistency
+footing `dispatch-required-negative-control.yaml` already uses. Independent
+of the graders, it also resolved a pinned residual in
+`tests/test_gitapex_lint_fixture_assertions.py`: that test pins the
+repository-wide linter's blocking-finding set exactly, and
+`evaluating-skill-quality [adversarial-coverage]` dropped out of it, so the
+removal is mechanical evidence the fixture is a genuinely new hostile
+payload rather than a retag.
+
+**battle-testing-a-skill, second round: `INDETERMINATE`.** Three fresh
+isolated trials against the repaired corpus returned PASS, PASS, FAIL. The
+repair is proven on its own terms -- all three graded multi-turn a PASS,
+two of them citing the new fixture by filename -- but the third trial
+raised a different dimension, 14 (adversarial regression corpus), arguing
+the corpus exercises content-quality dimensions while leaving the
+`adversarial-self-audit.md` guardrails themselves without regression
+backing. That is not a new finding: it is exactly the gap open issue
+https://github.com/tvna/gitapex/issues/364 tracks, deferred there from
+issue #261, and recorded as deferred in this skill's own
+`metadata/gitapex.yaml`. Per `battle-testing-a-skill`'s own step 6, a
+cross-trial status disagreement stays visible as `INDETERMINATE` and is
+never resolved by majority vote or an ad hoc retry, so `INDETERMINATE` is
+the round's aggregate verdict and no PASS is claimed.
+
+**What this does and does not settle.** Issue #332's ACM-7 asked for
+`evaluating-skill-quality` and `battle-testing-a-skill` evidence; both now
+carry real, isolated verdicts instead of a waiver and an unobtainable
+audit, and the one finding attributable to a missing artifact rather than a
+deferred design decision was repaired and re-measured. It does not claim
+either audit passed. The three remaining findings -- dimension 5's
+mandatory-reference count, dimension 6's schema-description citations, and
+dimension 14's self-referential corpus -- are pre-existing, individually
+tracked, and outside the warning-axis scope issue #332 set for itself.
+
+Deterministic verification for this round: skill shape 59/59; fixture YAML
+parse 70/70; full pytest 2820 passed. Refs #332.

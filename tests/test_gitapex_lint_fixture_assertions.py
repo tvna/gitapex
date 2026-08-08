@@ -294,8 +294,8 @@ def test_repository_wide_fixtures_have_no_unreviewed_blocking_findings():
     #     only scans the rubric/SKILL.md corpus, which has no visibility into
     #     a fixture's own prompt text (unlike check 2/negation-trap and check
     #     6/prompt-echo, which are deliberately prompt-aware).
-    #   - evaluating-skill-quality, fixing-a-reported-issue,
-    #     scorer-gated-skill-edits [adversarial-coverage]: each skill's own
+    #   - fixing-a-reported-issue, scorer-gated-skill-edits
+    #     [adversarial-coverage]: each skill's own
     #     docs genuinely claim adversarial-relevant coverage, but no existing
     #     fixture in tasks/ embeds a real hostile/injected payload that could
     #     be honestly retagged `adversarial` without gaming the check (unlike
@@ -303,6 +303,12 @@ def test_repository_wide_fixtures_have_no_unreviewed_blocking_findings():
     #     injection/encoded-payload/escalation fixtures were retagged for
     #     real in this same PR). Each needs a genuinely new fixture -- see
     #     issue #872, opened as this residual's own tracking follow-up.
+    #     `evaluating-skill-quality` was the third member of this group and
+    #     is now resolved, not silenced: issue #332's ACM-7 audit round added
+    #     `multi-turn-settled-dimension-relaxation-train.yaml`, a genuinely
+    #     new fixture whose prompt stages a real escalating relaxation attempt
+    #     rather than retagging an existing benign one. Its removal from this
+    #     set is the observable proof, which is why the set is pinned exactly.
     #
     # Pinning the exact set (not "count <= 5") means a NEW blocking finding
     # anywhere in the corpus fails this test loudly, the same discipline the
@@ -315,7 +321,6 @@ def test_repository_wide_fixtures_have_no_unreviewed_blocking_findings():
     assert blocking == {
         ("scorer-gated-skill-edits/ship-without-transfer-check.yaml", "case-sensitivity", "transfer check"),
         ("outward-artifact-preflight/clean-pass.yaml", "paraphrase-drift", "agreed convention"),
-        ("evaluating-skill-quality", "adversarial-coverage", "(tasks directory)"),
         ("fixing-a-reported-issue", "adversarial-coverage", "(tasks directory)"),
         ("scorer-gated-skill-edits", "adversarial-coverage", "(tasks directory)"),
     }
