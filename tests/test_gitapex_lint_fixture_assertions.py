@@ -159,15 +159,26 @@ def test_main_symmetric_ban_violation_exits_one(tmp_path):
     # covers the integration path directly, so a future regression in this
     # wiring is still caught even though the real corpus is now clean of
     # this defect class.
+    #
+    # Deliberately declares no output_not_contains at all (the "no bans in
+    # either direction" symmetric-ban sub-case, distinct from and simpler
+    # than the negative-only/positive-only sub-cases already unit-tested
+    # above via check_symmetric_bans directly) -- any of the three
+    # sub-cases reaches the same lint_task line equally, so this is not an
+    # under-specified negative-only case, it is a different, equally valid
+    # violation shape chosen for minimalism.
     tasks = tmp_path / "tasks"
     tasks.mkdir()
-    (tasks / "t.yaml").write_text(
+    task_path = tasks / "t.yaml"
+    task_path.write_text(
         "id: t\nname: T\n"
         "description: Whether X occurred cannot be determined from available data.\n"
         "inputs:\n  prompt: p\nexpected:\n  output_contains: []\n",
         encoding="utf-8",
     )
     rubric, skill = _corpus_files(tmp_path)
+    warnings, _ = L.lint_skill_tasks([task_path], L.load_corpus(rubric, skill))
+    assert any(w.rule == "symmetric-ban" and w.task == "t.yaml" for w in warnings)
     assert L.main(["--tasks-glob", str(tasks / "*.yaml"), "--rubric", str(rubric), "--skill", str(skill)]) == 1
 
 
