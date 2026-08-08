@@ -275,17 +275,17 @@ spec:
       anchor: "https://github.com/tvna/gitapex/issues/829"
       summary: "Added dimension 23 (caller/installing-environment maturity, distinct from any single gate's own quality) to references/dimensions.md's probabilistic-maturity lane, closing a session-identified gap: no prior dimension measured the maturity of the repository that installed or invoked this skill itself, as opposed to any single gate under review."
       outcome:
-        lines: "dimensions.md before->after total count, not a location citation: 365->418"
+        lines: "dimensions.md before->after total count, not a location citation: 364->418"
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/829"
       summary: "Differentiated dimension 23 explicitly from Three-way division of responsibility / coverage attestation (a passive cross-check of the target's own declared invariants) and the Reproducibility/Domain-coverage axis (scoped to one policy at a time). New text lives at security-level.md:157-163 and cross-cutting-axes.md:69-73 specifically."
       outcome:
-        lines: "security-level.md before->after total count: 162->166, cross-cutting-axes.md before->after total count: 82->88"
+        lines: "security-level.md before->after total count: 161->166, cross-cutting-axes.md before->after total count: 82->88"
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/829"
       summary: "Added references/output-schema.json, a JSON Schema (2020-12) formally defining this skill's structured output (reviewMeta/mechanismFit/findings/crossCuttingAxes/coverageAttestation/persistenceRecommendation). persistenceRecommendation only names candidate storage channels for a caller to choose from -- never an action this skill performs itself; executionRequirements.tools.write stays empty (SKILL.md Procedure step 6 now references the schema)."
       outcome:
-        lines: "SKILL.md before->after total count: 382->400, output-schema.json: 246 new lines"
+        lines: "SKILL.md before->after total count at time of this commit: 382->400, output-schema.json: 246 lines at time of this commit"
     - kind: audit
       anchor: "method:evaluating-skill-quality"
       summary: "An isolated dispatch on the dimension-23/output-schema.json diff returned NOT-WELL-FORMED: the deterministic shape checker (gitapex_check_skill_shape.py) failed output-schema.json (243 lines, no TOC) under its Markdown-only TOC rule applied blindly to a JSON reference file."
@@ -341,6 +341,21 @@ spec:
     - kind: deferral
       anchor: "https://github.com/tvna/gitapex/issues/829"
       summary: "Deferred, named rather than silently dropped: no deterministic check validates output-schema.json's own JSON-Schema syntactic validity (a future hand-edit typo would go undetected until a caller's runtime validation call fails) -- named by the final battle-testing-a-skill dispatch, tracked as its own follow-up rather than built into this already-large change."
+    - kind: audit
+      anchor: "method:pr-832-convention-adherence-review"
+      summary: "This branch's own inner-layer adversarial review (https://github.com/tvna/gitapex/pull/832) found this sidecar own before/after line-count claims (dimensions.md/security-level.md/SKILL.md/output-schema.json entries above) did not reconcile against a direct wc -l check at the branch own start and end commits -- two off-by-one baselines, two counts left stale after a later commit edited the same file without updating the earlier entry."
+      outcome:
+        verdict: CONFIRMED
+        found: 4
+    - kind: audit
+      anchor: "method:pr-832-convention-adherence-review"
+      summary: "Ironic given this skill own dimension 21 discipline (claim is not evidence, ground finding in direct inspection), applied reflexively to this sidecar own provenance text -- named as its own finding rather than silently fixed without disclosure."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "Fixed all 4 line-count inaccuracies: dimensions.md baseline corrected 365->364; security-level.md baseline corrected 162->161; SKILL.md/output-schema.json entries now scoped at time of this commit rather than implying a final total, since both files were edited again later."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "Accurate PR-wide totals (9e63553->HEAD, re-verified via git show <sha>:<path> | wc -l for all four commits, not re-asserted from memory): dimensions.md 364->418, security-level.md 161->166, cross-cutting-axes.md 82->88 (already correct), SKILL.md 389->403, output-schema.json 250 lines final."
   skillDependencies:
     requires:
       - evaluating-skill-quality
