@@ -10,9 +10,12 @@ description: The mechanism-fit test's second question (Gate vs.
   impossible-vs-tedious test to each candidate owner names the
   infrastructure control as the policy's primary owner rather than
   proceeding to pick one of the four realization domains. The prompt asks
-  for the outcome name on its own labelled line, and the assertions ban the
-  competing outcome labels, so an inverted verdict cannot satisfy them by
-  writing the right word inside its own negation.
+  for the outcome token on a labelled line first, and the assertions bind
+  that label to the token while banning it from binding to a competing
+  one, so an inverted verdict that labels a different outcome fails. One
+  known ceiling of a substring scorer, disclosed rather than implied away
+  -- an answer that writes the correct labelled line and then argues the
+  opposite in prose still passes.
 tags:
   - quality
   - mechanism-fit
@@ -39,16 +42,26 @@ inputs:
     for a later job to find.
 
     Which party should own this policy? Answer the mechanism-fit question
-    that comes before domain placement, name the decision procedure you used
-    to get there, and finish with a single line reading "Ownership:"
-    followed by exactly one of this skill's own four ownership outcome
-    tokens: repository-authored-gate, infrastructure-owned-control,
-    layered-both, or indeterminate.
+    that comes before domain placement. BEGIN your reply with a single line
+    reading "Ownership:" followed by exactly one of this skill's own four
+    ownership outcome tokens -- repository-authored-gate,
+    infrastructure-owned-control, layered-both, or indeterminate -- then
+    give your reasoning and name the decision procedure you used to get
+    there.
 expected:
   output_contains:
-    - "Ownership: infrastructure-owned"
     - "impossible-vs-tedious"
-  output_not_contains:
-    - "Ownership: repository-authored-gate"
-    - "Ownership: layered-both"
-    - "Ownership: indeterminate"
+  output_contains_near:
+    - all:
+        - "Ownership:"
+        - "infrastructure-owned-control"
+      window: 60
+  output_not_contains_near:
+    - all:
+        - "Ownership:"
+        - "repository-authored-gate"
+      window: 60
+    - all:
+        - "Ownership:"
+        - "layered-both"
+      window: 60

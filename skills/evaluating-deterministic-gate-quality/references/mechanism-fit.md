@@ -160,8 +160,12 @@ easiest to miss:
   Domain-coverage axis and coverage attestation then carry it. Never
   read "no floor-class owner" as "no owner to name". Proceed to Domain
   placement below.
-- **`layered-both`** -- both remove a path. Where each closes one the
-  other cannot see, the multiplicity is argued; report it as such. Where
+- **`layered-both`** -- both remove a path. Read the two questions as
+  scoped to the one path this policy guards; a control that removes some
+  *other* path is not an answer to either, and does not make an
+  otherwise infrastructure-owned policy layered. Where each closes a
+  distinct part of the guarded path the other cannot reach, the
+  multiplicity is argued; report it as such. Where
   both close the *same* path, say so plainly: that is real duplication,
   and whether it is justified is the Reproducibility / Domain-coverage
   axis's own argued-vs-accidental question, not this one's -- an

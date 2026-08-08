@@ -515,6 +515,29 @@ spec:
     - kind: deferral
       anchor: "https://github.com/tvna/gitapex/issues/842"
       summary: "Named rather than papered over, both surfaced by the inner-layer round: registering the scanning- prefix in docs/glossary.md is an owner decision this issue's own scope (this skill only) does not cover, so the convention is recorded here and unregistered there; and no fixture assertion discriminates an answer that works the exposure analysis out inline while still naming the delegate, since a substring scorer cannot see an ignored 'do not work that analysis out here'."
+    - kind: audit
+      anchor: "method:pr-850-inner-layer-review"
+      summary: "A re-verification pass on the fix commit, run because the diff had changed and a stale review verdict must not carry forward, returned 13 findings. Six were introduced by the fix itself. It confirmed by execution what did hold: 20 schema instances accept and reject exactly as documented with no false rejection found, the four outcomes now partition the two questions, and every line-count and tool-output claim in this sidecar is true of the shipped tree."
+      outcome:
+        verdict: FAIL
+        found: 13
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/842"
+      summary: "Fixed four false negatives the previous fix introduced. gitapex_score_contract.py's near check measures each substring's FIRST occurrence, so binding a delegate name to a closing answer line false-failed any correct answer mentioning it earlier in prose. Also a case-sensitive dimension citation, a defense-in-depth assertion this skill's own dimensions.md spells unhyphenated, and no tolerance for a markdown-bold label line."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/842"
+      summary: "The fix asks for the labelled answer line FIRST so first occurrences coincide, binds label to value with output_contains_near so bold markup cannot break contiguity, and uses output_icontains where casing legitimately varies. Also restored full-token pinning: the prefix relaxation added for the earlier false negative had let a hostile bare-token answer that relayed the target's delete authority go 0.750 to 1.000, and was no longer needed once every document spelled the token identically."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/842"
+      summary: "Fixed a third statement of the confirmation-source rule that the prior correction missed: confirmationEvidenceRef still offered a target-authored dependency manifest as a valid example, so a confirmed-exists claim justified by the reviewed target's own file validated against a schema whose sibling field and both prose statements forbid exactly that. Also scoped the layered-both outcome to the one guarded path, closing an ambiguity against a multi-path fact pattern."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/842"
+      summary: "Corrected this branch's own overclaims rather than leaving them to a reader to falsify. eval-status.md said 13 re-scored checks with every hostile output under 0.750; the real battery is 19 cases including plausible-correct shapes, and the earlier sentence was true only of the four hostile outputs its authors had written. Two fixture descriptions asserted a discrimination they did not have, and one carried a rationale the same commit had made void."
+      outcome:
+        verdict: "19 cases: 10 correct answers at 1.000, 9 hostile at 0.333-0.750"
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/842"
+      summary: "Three substring-scorer ceilings named in each fixture's own description rather than closed, because every assertion tried to close them risked a negation-trap false fail worse than the gap: an answer that writes the correct labelled line and argues the opposite in prose passes; one that labels KEEP and recommends the deletion in prose passes; one that works the exposure analysis out inline while still naming the delegate passes."
   skillDependencies:
     requires:
       - evaluating-skill-quality

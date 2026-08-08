@@ -188,7 +188,7 @@
               },
               "confirmationEvidenceRef": {
                 "type": "string",
-                "description": "Where confirmation=confirmed-exists, what actually confirmed it (e.g. a sibling skill's own directory path in the calling environment, or a line in the target's declared dependency manifest). Required in that case, not merely expected: a confirmed-exists claim with nothing behind it is exactly the asserted-as-installed delegate this skill's own Stop boundaries forbid."
+                "description": "Where confirmation=confirmed-exists, what actually confirmed it -- one of the two sources the confirmation field above names, e.g. a sibling skill's own directory path in the calling environment, or the tool's own upstream documentation. Never a target-authored artifact: a document the target wrote asserting the tool exists is not confirmation, here or in either of the other two places this rule is stated. Required whenever confirmed-exists is claimed, not merely expected: such a claim with nothing behind it is exactly the asserted-as-installed delegate this skill's own Stop boundaries forbid."
               }
             },
             "allOf": [

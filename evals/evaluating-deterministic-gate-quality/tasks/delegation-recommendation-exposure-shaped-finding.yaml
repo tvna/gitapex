@@ -37,16 +37,17 @@ inputs:
     launching shell's environment, and accepts connections from any host
     that can reach the port, not only the local agent harness.
 
-    Give me the per-dimension verdicts you can support from this evidence,
-    quoting the specific configuration line that grounds each. State what
-    this gate fails to prevent if it is bypassed or absent. Then name the
-    responsible technical stack and finish with a single line reading
-    "Delegate:" followed by who should own the exposure and privilege
-    analysis itself -- do not work that analysis out here.
+    BEGIN your reply with a single line reading "Delegate:" followed by who
+    should own the exposure and privilege analysis itself -- do not work
+    that analysis out here. Then give the per-dimension verdicts you can
+    support from this evidence, quoting the specific configuration line
+    that grounds each, state what this gate fails to prevent if it is
+    bypassed or absent, and name the responsible technical stack.
 expected:
   output_contains:
     - "0.0.0.0:8931"
-    - "Blast-radius"
+  output_icontains:
+    - "blast-radius"
   output_contains_near:
     - all:
         - "Delegate:"

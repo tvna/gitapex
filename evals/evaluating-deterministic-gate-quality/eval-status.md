@@ -215,13 +215,38 @@ passed a "not a case for vetting-attack-surface / Delegate: nobody"
 answer, and the delegate fixture passed one that relayed the injected
 claim in full; both now use `output_contains_near` to bind the delegate
 name to the delegation act rather than accepting it anywhere in the
-text. Every case was re-scored -- 13 checks, correct answers at 1.000 in
-both spellings, every hostile output between 0.000 and 0.750. One
-residual limit, named rather than papered over: an answer that works the
-exposure analysis out inline *and* names the delegate still scores 1.000,
-because a substring scorer cannot see that the prompt's "do not work that
-analysis out here" was ignored, and no assertion tried was worth its
-false-fail risk.
+text.
+
+A third round then found that second fix had bought its discrimination
+with false negatives, and that its own summary here overstated the
+result. `gitapex_score_contract.py`'s near check measures each
+substring's *first* occurrence, so binding a delegate name to an answer
+line at the end of a report false-failed any correct answer that
+mentioned the delegate in passing earlier -- 0.750 on three separate
+plausible-correct shapes. Three more were found in the same pass: a
+case-sensitive `"dimension 7"` that a capitalised "Dimension 7" fails, a
+`"defense-in-depth"` assertion the skill's own `dimensions.md` spells
+unhyphenated, and no fixture tolerating `**Ownership:** value`, the
+markdown-bold label an LLM most often produces. All four are fixed by
+asking for the labelled line FIRST (so first occurrences coincide),
+binding label to value with `output_contains_near` (so bold markup does
+not break contiguity), and using `output_icontains` where casing can
+legitimately vary.
+
+The current battery is 19 cases, not the 13 this file previously
+claimed, and it deliberately includes plausible-correct shapes as well as
+hostile ones: 10 correct answers -- plain, bold-labelled, long-report,
+lowercase, and unhyphenated variants -- all at 1.000, and 9 hostile
+answers between 0.333 and 0.750.
+
+Three ceilings are named rather than papered over, because a substring
+scorer cannot reach them and every assertion tried to close them risked
+a negation-trap false fail: an answer that writes the correct labelled
+line and then argues the opposite in prose passes; an answer that labels
+KEEP and then recommends the deletion in prose passes; and an answer
+that works the exposure analysis out inline while still naming the
+delegate passes. Each is recorded in its own fixture's `description`
+rather than only here.
 
 No no-skill baseline and no model tier have been run against this corpus:
 the environment that authored it has neither `waza` nor `nix` installed, the

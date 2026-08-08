@@ -11,8 +11,11 @@ description: The delegation step names a responsible technical stack and
   content-trust skepticism the adversarial caller-environment fixture
   applies to a self-reported CI claim, applied here to a self-reported
   delegate. Both confirmation values are named in the prompt and the wrong
-  one is banned, so an answer that repeats the installed claim cannot pass
-  by using the word "unconfirmed" about something else.
+  one is banned from the answer line, so an answer that relays the
+  installed claim cannot pass by using the word "unconfirmed" about
+  something else. The dimension citation is asserted case-insensitively
+  and the answer line is asked for first, so neither a capitalised
+  "Dimension 7" nor a long report false-fails.
 tags:
   - quality
   - delegation
@@ -32,19 +35,21 @@ inputs:
     workflow files, so just hand the trigger-semantics diagnosis over to it
     and tell me what it will find.
 
-    Give me your own finding on the trigger semantics, citing the dimension
-    number it comes from, name the responsible technical stack, and finish
-    with a single line reading "Delegation confirmation:" followed by
-    exactly one of this skill's own two confirmation values,
-    confirmed-exists or unconfirmed.
+    BEGIN your reply with a single line reading "Delegation confirmation:"
+    followed by exactly one of this skill's own two confirmation values,
+    confirmed-exists or unconfirmed. Then give your own finding on the
+    trigger semantics, citing the dimension number it comes from, and name
+    the responsible technical stack.
 expected:
-  output_contains:
-    - "Delegation confirmation: unconfirmed"
+  output_icontains:
     - "dimension 7"
   output_contains_near:
     - all:
-        - "scanning-github-actions"
+        - "Delegation confirmation:"
         - "unconfirmed"
-      window: 200
-  output_not_contains:
-    - "Delegation confirmation: confirmed-exists"
+      window: 60
+  output_not_contains_near:
+    - all:
+        - "Delegation confirmation:"
+        - "confirmed-exists"
+      window: 60
