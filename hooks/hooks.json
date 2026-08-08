@@ -80,7 +80,7 @@
           {
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/check-post-write-provenance.sh\"",
-            "timeout": 45
+            "timeout": 60
           }
         ]
       }

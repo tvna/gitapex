@@ -341,6 +341,54 @@ def test_an_api_failure_is_indeterminate_not_a_clean_pass() -> None:
     assert "503" in message
 
 
+def test_a_non_github_api_error_is_indeterminate_not_a_traceback() -> None:
+    """The shared fetch path parses its response with a bare json.loads, so
+    a 2xx carrying a proxy interstitial raises JSONDecodeError -- a
+    ValueError, not a GitHubApiError. Before this was caught it escaped
+    every handler and surfaced through the wrapper as a raw traceback in
+    the report's own reason field."""
+
+    def decoding_fetcher(owner: str, repo: str, number: int, token: str) -> dict[str, str]:
+        raise json.JSONDecodeError("Expecting value", "<html>not json</html>", 0)
+
+    verdict, message = checker.evaluate(payload(tool_response={"number": 5}), "tok", fetcher=decoding_fetcher)
+    assert verdict == "INDETERMINATE"
+    assert "JSONDecodeError" in message
+    assert "Traceback" not in message
+
+
+def test_an_unexpected_error_class_is_also_indeterminate() -> None:
+    def exploding_fetcher(owner: str, repo: str, number: int, token: str) -> dict[str, str]:
+        raise RuntimeError("something nobody anticipated")
+
+    verdict, message = checker.evaluate(payload(tool_response={"number": 5}), "tok", fetcher=exploding_fetcher)
+    assert verdict == "INDETERMINATE"
+    assert "RuntimeError" in message
+
+
+@pytest.mark.parametrize("degenerate", [{}, {"body": ""}, {"body": "clean", "state": ""}, {"state": None}])
+def test_a_response_that_is_not_an_issue_is_indeterminate_not_a_clean_pass(degenerate: dict[str, Any]) -> None:
+    """A 2xx with an empty response body normalizes to {} in the shared
+    fetch path. Scanning that as an empty string reported PASS -- the one
+    place an inability to verify rendered as 'clean'."""
+
+    def degenerate_fetcher(owner: str, repo: str, number: int, token: str) -> dict[str, Any]:
+        return degenerate
+
+    verdict, message = checker.evaluate(payload(tool_response={"number": 5}), "tok", fetcher=degenerate_fetcher)
+    assert verdict == "INDETERMINATE"
+    assert "no issue state" in message
+
+
+def test_a_real_looking_response_still_passes() -> None:
+    """The guard above must not turn every clean artifact into
+    INDETERMINATE: a response carrying a real state scans normally."""
+    verdict, _ = checker.evaluate(
+        payload(tool_response={"number": 5}), "tok", fetcher=fetcher_returning("clean ASCII body")
+    )
+    assert verdict == "PASS"
+
+
 def test_an_unresolvable_number_is_indeterminate_not_a_clean_pass() -> None:
     verdict, message = checker.evaluate(payload(tool_response={}), "tok", fetcher=fetcher_returning(""))
     assert verdict == "INDETERMINATE"

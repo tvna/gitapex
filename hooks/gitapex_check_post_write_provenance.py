@@ -102,6 +102,19 @@ deny (the write already happened), so dimension 15's fail-closed default
 takes its escalate form here: an unverifiable artifact is reported as
 unverified, not assumed clean.
 
+**Timeout budget, and the one fail-open this module cannot close from
+inside itself.** The reused fetch path's own worst case is 45s of network
+wait (`_HTTP_TIMEOUT_SECONDS = 20` x `_MAX_ATTEMPTS = 2`, plus one 5s
+backoff between them), against a measured 0.1s of fixed local overhead.
+`hooks/hooks.json` therefore budgets 60s, not 45: an adversarial review
+of this file's own v1 found the earlier 45s budget was exactly the
+network worst case with no headroom, so a fully stalled fetch raced its
+own deadline. Residual risk, stated the way the sibling
+`gitapex_check_pr_issue_acm_disclosure.py` already states it for itself:
+a hard hook-runner timeout that kills this process before it emits its
+report would functionally fail *open*, and no amount of headroom removes
+that class -- it only makes it rarer.
+
 Standard library only.
 
 Usage (matches the JSON the .sh wrapper pipes in)::
@@ -412,10 +425,32 @@ def evaluate(
     fetch = fetcher if fetcher is not None else _default_fetcher
     try:
         fetched = fetch(owner, repo, number, token)
-    except pr_issue_checker.GitHubApiError as error:
+    # Deliberately broader than GitHubApiError. The shared fetch path parses
+    # its response with a bare `json.loads`, so a 2xx carrying a proxy
+    # interstitial or a WAF page raises JSONDecodeError -- a ValueError, not
+    # a GitHubApiError. An adversarial review of this file's own v1
+    # confirmed in-process that it escaped every handler here and surfaced
+    # through the wrapper as a raw traceback in the report's `reason` field,
+    # contradicting this module's own documented "never a raw traceback"
+    # contract. The direction was still fail-loud; the contract was not.
+    except Exception as error:
         return "INDETERMINATE", (
-            f"cannot re-fetch {owner}/{repo}#{number}'s stored body ({error}), "
+            f"cannot re-fetch {owner}/{repo}#{number}'s stored body "
+            f"({type(error).__name__}: {error}), "
             "so the artifact this call just published is unverified"
+        )
+
+    # A 2xx whose payload is not an issue at all -- an empty object, which
+    # the shared fetch path returns for an empty response body -- would
+    # otherwise scan as an empty string and report PASS. That was the one
+    # path where "could not verify" rendered as "clean", contradicting this
+    # module's own fail-loud rule. Every real issue or pull request carries
+    # a non-empty `state`, so its absence means the response cannot be
+    # confirmed to be the artifact just written.
+    if not fetched.get("state"):
+        return "INDETERMINATE", (
+            f"the API response for {owner}/{repo}#{number} carries no issue state, so it cannot be "
+            "confirmed to be the artifact just written; the artifact this call just published is unverified"
         )
 
     body = fetched.get("body") or ""
