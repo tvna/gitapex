@@ -108,6 +108,17 @@ comment for why "NOT-RUN" is not an acceptable answer for this one.
   that correspondence, so a gate registered at an unreachable path fails
   rather than silently skipping the job.
 
+Issue #874: the same applicability facts can now be computed locally,
+before a push, via `--check-diff BASE_REF HEAD_REF --body-file PATH`. That
+mode calls `gitapex_compute_skill_audit_flags.py` -- the module the CI
+workflow's own diff step calls -- rather than re-deriving the flags a
+second time, so there is no parallel copy to drift. Without it the only
+local mirror was `hooks/gitapex_check_skill_audit_disclosure_or_waiver.py`,
+which by its own docstring checks the base two-audit disclosure and defers
+every conditional extension to CI; an agent therefore learned it owed an
+`eval-coverage-disclosure` or `deterministic-gate-quality` line only after
+a required check failed on an already-open PR.
+
 The calling workflow decides applicability. It is invoked when the PR's
 diff touches a skills/*/SKILL.md file, a docs/superpowers/specs/*.md
 design doc, a deterministic checker script, or a deterministic gate --
@@ -497,6 +508,96 @@ def _parse_comma_list(raw: str | None) -> list[str]:
     return sorted({item.strip() for item in (raw or "").split(",") if item.strip()})
 
 
+# Every list-valued applicability flag, by argparse dest. Issue #874's
+# --check-diff mode fills these from
+# `gitapex_compute_skill_audit_flags.SkillAuditFlags`, whose field names
+# match these dests exactly; `_apply_check_diff` asserts that
+# correspondence rather than assuming it, so renaming a field on one side
+# fails loudly instead of silently leaving a check un-fired -- the same
+# fail-open class `tests/test_gitapex_skill_audit_gate_workflow_wiring.py`
+# guards for the workflow half of the wiring.
+_LIST_FLAG_DESTS = (
+    "description_changed_skills",
+    "needs_eval_coverage_skills",
+    *(check.cli_dest for check in _PROCESS_DISCLOSURE_CHECKS),
+)
+
+
+def _apply_check_diff(args: argparse.Namespace) -> int | None:
+    """Fill `args`' applicability flags from a locally computed diff.
+
+    Returns an exit code when grading should stop here -- 0 when the diff
+    triggers no disclosure requirement at all, 1 when the flags could not
+    be trusted -- or None to continue into normal grading.
+
+    The two wiring guards come first, before any user-input check: a dest
+    that is not wired on both sides is a defect in this file, and reporting
+    it as though the operator had passed a bad argument would send them
+    looking in the wrong place. Both are the same fail-open class the
+    workflow-wiring drift gate exists for -- a check that silently never
+    fires -- so neither degrades to a warning.
+    """
+    unwired = [dest for dest in _LIST_FLAG_DESTS if not hasattr(args, dest)]
+    if unwired:
+        print(
+            "error: this CLI registers no flag for: "
+            + ", ".join(unwired)
+            + ". Those checks could never fire, under --check-diff or otherwise.",
+            file=sys.stderr,
+        )
+        return 1
+
+    # Imported here rather than at module scope: the base grading path must
+    # keep working when this file is loaded standalone (the hook-sync test
+    # loads it by file path), and only this mode needs git access.
+    try:
+        import gitapex_compute_skill_audit_flags as compute
+    except ImportError as error:
+        print(
+            "error: --check-diff needs .github/scripts/gitapex_compute_skill_audit_flags.py "
+            f"on the import path: {error}",
+            file=sys.stderr,
+        )
+        return 1
+
+    probe = compute.SkillAuditFlags(applicable=False)
+    unpublished = [dest for dest in _LIST_FLAG_DESTS if not hasattr(probe, dest)]
+    if unpublished:
+        print(
+            "error: gitapex_compute_skill_audit_flags publishes no flag for: "
+            + ", ".join(f"'{dest}'" for dest in unpublished)
+            + ". Those checks could never fire under --check-diff.",
+            file=sys.stderr,
+        )
+        return 1
+
+    if args.skill_md_changed or any(getattr(args, dest) for dest in _LIST_FLAG_DESTS):
+        print(
+            "error: --check-diff computes the applicability flags itself; "
+            "passing them explicitly as well would silently pick one of two "
+            "disagreeing answers. Drop the explicit flags, or drop "
+            "--check-diff.",
+            file=sys.stderr,
+        )
+        return 1
+
+    base_ref, head_ref = args.check_diff
+    try:
+        flags = compute.compute_flags(base_ref, head_ref, args.repo_root or compute.REPO_ROOT)
+    except compute.FlagComputationError as error:
+        print(f"error: could not compute this diff's applicability flags: {error}", file=sys.stderr)
+        return 1
+
+    if not flags.applicable:
+        print("PASS: this diff triggers no skill-audit disclosure requirement")
+        return 0
+
+    args.skill_md_changed = flags.skill_md_changed
+    for dest in _LIST_FLAG_DESTS:
+        setattr(args, dest, ",".join(getattr(flags, dest)))
+    return None
+
+
 def main(argv: list[str] | None = None) -> int:
     """CLI: exit 0 iff the given PR body discloses every applicable check --
     the two #248 audits when a SKILL.md changed, the two #427
@@ -511,7 +612,27 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--body",
-        help="Path to the PR body text; reads standard input when omitted.",
+        "--body-file",
+        dest="body",
+        help="Path to the PR body text; reads standard input when omitted. "
+        "`--body-file` is an accepted alias (issue #874 documents the local "
+        "pre-push command under that spelling).",
+    )
+    parser.add_argument(
+        "--check-diff",
+        nargs=2,
+        metavar=("BASE_REF", "HEAD_REF"),
+        help="Issue #874: compute this diff's applicability flags locally, "
+        "via the same gitapex_compute_skill_audit_flags.py module the CI "
+        "workflow's own diff step calls, instead of taking them from the "
+        "flags below. Use this before pushing to learn the full verdict, "
+        "conditional extensions included.",
+    )
+    parser.add_argument(
+        "--repo-root",
+        type=Path,
+        default=None,
+        help="Repository root for --check-diff (defaults to this checkout).",
     )
     parser.add_argument(
         "--description-changed-skills",
@@ -551,6 +672,11 @@ def main(argv: list[str] | None = None) -> int:
         source = args.body if args.body else "standard input"
         print(f"error: {source} is not valid UTF-8: {error}", file=sys.stderr)
         return 1
+
+    if args.check_diff:
+        early_exit = _apply_check_diff(args)
+        if early_exit is not None:
+            return early_exit
 
     # Normalize and extract once, then grade all seven checks against the
     # result. Each `find_missing_*` wrapper re-derives this from the raw

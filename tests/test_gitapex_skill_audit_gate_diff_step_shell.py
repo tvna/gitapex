@@ -13,6 +13,16 @@ the real `run:` block from the YAML and execute it against a scratch git
 repository, so the thing under test is the shipped text rather than a
 paraphrase of it.
 
+Issue #874 moved that step's ~150 lines of bash into
+`.github/scripts/gitapex_compute_skill_audit_flags.py`, so the `run:` block
+these tests execute is now a one-line call into it. Every assertion below
+is deliberately left as-is rather than retargeted at the module's Python
+API: they were written against the *behaviour* of the shipped step, which
+is exactly the contract the extraction had to preserve, and running them
+unmodified against the extracted implementation is the proof that it did.
+Keep them at this level -- a unit test of `compute_flags` cannot catch a
+workflow step that stops calling it, or calls it with the wrong refs.
+
 The `scan_*.py` half of the gate scope is exercised here specifically: it
 appears only in the workflow and the detector, never in the grader's own
 fixtures, so without this file half the declared scope was untested.
@@ -74,6 +84,7 @@ def repo(tmp_path):
     _git(tmp_path, "config", "user.name", "t")
     for relative in (
         ".gitapex/ssot.json",
+        ".github/scripts/gitapex_compute_skill_audit_flags.py",
         ".github/scripts/gitapex_detect_changed_gate_scripts.py",
         ".github/scripts/gitapex_skill_description_diff.py",
         ".github/scripts/gitapex_skill_security_relevance.py",
