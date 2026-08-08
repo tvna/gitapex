@@ -20,10 +20,56 @@ def _completed(returncode: int) -> subprocess.CompletedProcess[bytes]:
     return subprocess.CompletedProcess(args=["betterleaks"], returncode=returncode)
 
 
-@pytest.fixture(autouse=True)
-def _stub_repo_root(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Keep every test off `git rev-parse`, which depends on the caller's cwd."""
+@pytest.fixture
+def stub_repo_root(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep a test off `git rev-parse`, which depends on the caller's cwd.
+
+    Deliberately not `autouse`: a blanket stub left `repo_root`'s own body
+    unexecuted by every test at once, which dropped this file under the 90%
+    per-file floor `.github/scripts/gitapex_gate_evals_scripts_coverage.py`
+    enforces. Requested per test instead, so the real function stays covered by
+    the slow test below.
+    """
     monkeypatch.setattr(runner, "repo_root", lambda: Path("/repo"))
+
+
+@pytest.mark.slow
+def test_repo_root_resolves_the_real_git_toplevel() -> None:
+    # Spawns real git, hence `slow` per this repository's own marker
+    # definition. Asserted against git's own answer rather than a hard-coded
+    # path so it holds in any checkout location.
+    expected = subprocess.run(
+        ("git", "rev-parse", "--show-toplevel"),
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    resolved = runner.repo_root()
+    assert resolved == Path(expected)
+    # The scan's cwd must be a real checkout, or betterleaks would not find
+    # .betterleaks.toml there.
+    assert (resolved / ".git").exists()
+
+
+def test_an_unresolvable_git_toplevel_fails_the_hook(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(runner.shutil, "which", lambda _name: "/usr/bin/betterleaks")
+
+    def raise_called_process_error() -> Path:
+        raise subprocess.CalledProcessError(returncode=128, cmd=["git", "rev-parse"])
+
+    monkeypatch.setattr(runner, "repo_root", raise_called_process_error)
+
+    def fail_if_called(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("no scan should run once the repo root is unresolvable")
+
+    monkeypatch.setattr(runner.subprocess, "run", fail_if_called)
+
+    # Fails closed: an unresolvable root means the config -- and so the
+    # allowlist -- cannot be located, which must never pass as a clean scan.
+    assert runner.main(["--mode", "history"]) == 1
+    assert "could not resolve the git top-level directory" in capsys.readouterr().err
 
 
 def test_staged_mode_matches_the_upstream_published_hook_entry() -> None:
@@ -68,6 +114,7 @@ def test_missing_binary_fails_instead_of_skipping(
     assert "setup-gitapex-toolchain" in stderr
 
 
+@pytest.mark.usefixtures("stub_repo_root")
 def test_a_timed_out_scan_fails_rather_than_passing_an_unfinished_scan(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -82,6 +129,7 @@ def test_a_timed_out_scan_fails_rather_than_passing_an_unfinished_scan(
     assert "exceeded" in capsys.readouterr().err
 
 
+@pytest.mark.usefixtures("stub_repo_root")
 def test_a_timeout_is_actually_passed_to_subprocess(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, object] = {}
     monkeypatch.setattr(runner.shutil, "which", lambda _name: "/usr/bin/betterleaks")
@@ -99,6 +147,7 @@ def test_a_timeout_is_actually_passed_to_subprocess(monkeypatch: pytest.MonkeyPa
 
 
 @pytest.mark.parametrize("scanner_exit", [0, 1, 9])
+@pytest.mark.usefixtures("stub_repo_root")
 def test_the_scanner_exit_code_is_propagated_verbatim(monkeypatch: pytest.MonkeyPatch, scanner_exit: int) -> None:
     monkeypatch.setattr(runner.shutil, "which", lambda _name: "/usr/bin/betterleaks")
     monkeypatch.setattr(runner.subprocess, "run", lambda *_a, **_k: _completed(scanner_exit))

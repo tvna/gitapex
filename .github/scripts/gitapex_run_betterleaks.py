@@ -143,7 +143,13 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 1
-    except subprocess.CalledProcessError as exc:  # pragma: no cover - repo_root only
+    # Raised by repo_root()'s own `check=True`, which is evaluated as the `cwd`
+    # argument above and therefore inside this try. Deliberately not marked
+    # `# pragma: no cover`: pyproject.toml's [tool.coverage.report] sets
+    # exclude_lines explicitly, which REPLACES coverage.py's default list rather
+    # than extending it, so `# pragma: no cover` is inert in this repository and
+    # would read as an exclusion that is not actually happening.
+    except subprocess.CalledProcessError as exc:
         print(f"could not resolve the git top-level directory: {exc}", file=sys.stderr)
         return 1
 
