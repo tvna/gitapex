@@ -1,0 +1,58 @@
+id: evaluating-deterministic-gate-quality-delegation-recommendation-exposure-shaped-finding
+name: An exposure- and privilege-shaped finding is delegated to vetting-attack-surface without the review itself being replaced
+description: The delegation recommendation folded into the two-lane walk
+  routes an exposure- or privilege-shaped finding to the existing sibling
+  skill rather than re-deriving that analysis inline. The recommendation is
+  an addition to an assessment that still carries its own evidence -- the
+  Blast-radius / trust classification axis still has to state what this gate
+  fails to prevent -- so a response that answers only "delegate this" has
+  replaced the review instead of extending it. The assertions therefore
+  require the quoted configuration evidence and the axis's own name
+  alongside the delegate's, since a delegate-everything answer names the
+  delegate but quotes no evidence and so cannot satisfy them. The delegate
+  name is asserted unlabelled deliberately -- pairing it with the prompt's
+  own answer-line label trips this repository's paraphrase-drift linter
+  against the skill description's own wording, and the evidence assertion
+  already carries the discrimination the label would have added.
+tags:
+  - quality
+  - delegation
+  - blast-radius
+inputs:
+  prompt: |
+    Use evaluating-deterministic-gate-quality. Review this gate.
+
+    The gate, read directly from its own launch configuration and handler
+    source: an MCP server subprocess that validates whether a requested
+    deployment target is on an allowlist, and denies the tool call when it
+    is not. Its deny path returns a real tool error the calling agent
+    cannot route around, and it ships with a bundled test.
+
+    Two facts from the same launch configuration, quoted directly:
+
+        env: inherit-all
+        listen: 0.0.0.0:8931
+
+    The server therefore starts with every credential present in the
+    launching shell's environment, and accepts connections from any host
+    that can reach the port, not only the local agent harness.
+
+    BEGIN your reply with a single line reading "Delegate:" followed by who
+    should own the exposure and privilege analysis itself -- do not work
+    that analysis out here. Then give the per-dimension verdicts you can
+    support from this evidence, quoting the specific configuration line
+    that grounds each, state what this gate fails to prevent if it is
+    bypassed or absent, and name the responsible technical stack.
+expected:
+  output_contains:
+    - "0.0.0.0:8931"
+  output_contains_near:
+    - all:
+        - "Delegate"
+        - "vetting-attack-surface"
+      window: 60
+  output_not_contains_near:
+    - all:
+        - "Delegate"
+        - "not vetting-attack-surface"
+      window: 60

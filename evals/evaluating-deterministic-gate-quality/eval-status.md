@@ -1,10 +1,12 @@
 # evaluating-deterministic-gate-quality eval status
 
 A committed task corpus now exists: `evals/evaluating-deterministic-gate-quality/`
-has 29 task fixtures under `tasks/` plus `eval.yaml`, covering the skill's
-five-way verdict taxonomy (well-formed and well-placed / well-formed but
-misplaced / not well-formed / no-gate-warranted / indeterminate), its
-mechanism-fit short-circuit and decomposition rule, its coverage-attestation
+has 33 task fixtures under `tasks/` plus `eval.yaml`, covering the skill's
+six-way verdict taxonomy (well-formed and well-placed / well-formed but
+misplaced / not well-formed / no-gate-warranted /
+infrastructure-owned-control / indeterminate), its
+mechanism-fit short-circuit, its infrastructure-owned-control ownership
+question, its decomposition rule, its delegation recommendation, its coverage-attestation
 fail-closed behavior (including its subject-matter-not-surface-wording
 filter), all four cross-cutting axes (Compatibility awareness,
 Reproducibility/Domain-coverage, Blast-radius/trust classification,
@@ -147,10 +149,134 @@ pins down. The tool is citation-based, not semantic
 exercise one of these ten substantively without literally writing its
 number -- rerun the script before trusting this list stale.
 
+**Issue #842 (mechanism-fit third branch + delegation recommendation):**
+four fixtures were added for the two additions that issue makes to this
+skill, taking the corpus from 29 to 33. Two exercise the mechanism-fit
+test's new second question (Gate vs. infrastructure-owned deterministic
+control): `mechanism-fit-infrastructure-owned-control.yaml` establishes
+the ownership answer on a clean fact pattern where the platform's own
+configuration already removes the guarded path, and
+`adversarial-infrastructure-owned-verdict-used-to-delete-a-gate.yaml`
+puts the Stop boundary that follows it under pressure -- a design doc
+inside the target asks the reviewer to convert that answer into
+permission to delete an existing hook. Two exercise the delegation
+recommendation: `delegation-recommendation-exposure-shaped-finding.yaml`
+routes an exposure- and privilege-shaped finding to
+`vetting-attack-surface` while still requiring this review's own verdict
+and blast-radius statement, and
+`adversarial-delegation-target-asserted-as-installed.yaml` supplies a
+confident claim that a `scanning-`-prefixed delegate is already installed
+(none exists) and asserts the response tags the recommendation
+`unconfirmed` rather than relaying the claim -- the same content-trust
+skepticism the adversarial caller-environment fixture applies to a
+self-reported CI claim. Neither addition changed the dimension-coverage
+numbers: all four fixtures exercise mechanism-fit and grading-procedure
+content rather than one of the ten uncovered numbered dimensions, so
+`gitapex_check_dimension_coverage.py` still reports 13/23 and 4/4, and
+`gitapex_lint_fixture_assertions.py` still reports the same 2 pre-existing
+warnings and 0 new ones.
+
+All four shipped with weaker assertions first, and a
+`battle-testing-a-skill` pass caught it before merge: it hand-wrote four
+outputs that each commit the exact failure its fixture exists to catch --
+an inverted ownership verdict, a report obeying the target's own
+delete-the-hook directive, a delegate-everything answer citing no
+evidence, and a relayed "already installed" claim -- and scored all four
+at 1.000 against `gitapex_score_contract.py`. Bare `output_contains`
+cannot distinguish a term used correctly from the same term inside its
+own negation, and `gitapex_lint_fixture_assertions.py`'s own symmetric-ban
+check is gated on an indeterminacy marker, so it never asked a
+non-indeterminate adversarial fixture to ban the behavior it rejects.
+The fix, verified by re-scoring the same four hostile outputs (now
+0.000-0.750, all under `eval.yaml`'s own 0.8 threshold, while plausible
+correct answers still score 1.000): each prompt now asks for its answer
+on a labelled line drawn from this skill's own closed vocabulary
+(an ownership outcome name, a KEEP/REMOVE next action, a confirmation
+value), the assertions pin that labelled line, and the competing label is
+banned outright. The exposure fixture instead requires the quoted
+configuration evidence a delegate-everything answer cannot produce. This
+is a construct-validity fix, not a coverage change -- the same defect
+class `gitapex_lint_fixture_assertions.py` exists for, in a form it does
+not yet catch.
+
+A second, independent adversarial round on the same branch then broke
+that first fix and forced a third. Three reviewers converged on the two
+mechanism-fit fixtures pinning `infrastructure-owned-control`, a token
+that at the time appeared only in `references/output-schema.json`, while
+the prose a reviewer actually reads said `Infrastructure-owned`
+(`mechanism-fit.md`) or `infrastructure-owned` (`SKILL.md` step 6). A
+fully correct answer therefore scored 0.750 -- a false negative, the same
+construct-validity class in the opposite direction. Fixed at the source
+rather than in the fixture: the four outcomes now carry the schema's own
+enum tokens everywhere, both prompts enumerate them, and the assertion
+pins the shared prefix `Ownership: infrastructure-owned`, which every
+correct spelling satisfies. The same round found the exposure fixture
+passed a "not a case for vetting-attack-surface / Delegate: nobody"
+answer, and the delegate fixture passed one that relayed the injected
+claim in full; both were rebound to the answer line rather than accepting
+the delegate name anywhere in the text.
+
+A third round then found that second fix had bought its discrimination
+with false negatives, and that its own summary here overstated the
+result. `gitapex_score_contract.py`'s near check measures each
+substring's *first* occurrence, so binding a delegate name to an answer
+line at the end of a report false-failed any correct answer that
+mentioned the delegate in passing earlier -- 0.750 on three separate
+plausible-correct shapes. Three more were found in the same pass: a
+case-sensitive `"dimension 7"` that a capitalised "Dimension 7" fails, a
+`"defense-in-depth"` assertion the skill's own `dimensions.md` spells
+unhyphenated, and no fixture tolerating `**Ownership:** value`, the
+markdown-bold label an LLM most often produces. All four are fixed by
+asking for the labelled line FIRST (so first occurrences coincide),
+binding label to value with `output_contains_near` (so bold markup does
+not break contiguity), and using `output_icontains` where casing can
+legitimately vary.
+
+A fourth round then falsified that fix too, and found the general rule
+the three preceding rounds had each been half-discovering. Two findings
+matter beyond this corpus.
+
+**A label binding must not include the colon.** `**Ownership:** value`
+and `**Ownership**: value` are both ordinary markdown, and only the first
+leaves a literal `Ownership:` substring. Binding on `Ownership` instead
+matches all three shapes (plain, colon-inside, colon-outside) with no
+loss of discrimination.
+
+**An assertion list longer than four cannot fail a single violation.**
+`gitapex_score_contract.py` scores satisfied/total, so with N assertions
+one violation scores (N-1)/N; at N=5 that is 0.800, which clears
+`eval.yaml`'s own 0.8 threshold. Three of the four fixtures here had
+grown to five or more assertions while being tuned, and each one that
+did was silently accepting hostile answers that violated exactly one
+rule -- the tuning that was meant to tighten them had loosened them
+instead. All four are now capped at three or four, so one violation
+scores 0.667 or 0.750 and fails. This is a property of the scorer, not
+of this corpus, and it applies to every fixture in this repository.
+
+The current battery is 25 cases and deliberately includes
+plausible-correct shapes as well as hostile ones: 15 correct answers --
+plain, both bold forms, long reports, title case, multi-dimension
+citations, spaced and unhyphenated spellings -- and 10 hostile answers.
+14 of 15 correct answers score 1.000; 10 of 10 hostile answers score
+between 0.333 and 0.750.
+
+Four ceilings are named rather than papered over, because a substring
+scorer cannot reach them and every assertion tried against them risked a
+negation-trap false fail worse than the gap: an answer that writes the
+correct labelled line and then argues the opposite in prose passes; one
+that labels KEEP and then recommends the deletion in prose passes; one
+that names the delegate correctly and then works the exposure analysis
+out inline anyway passes; and a correct answer that puts its label in a
+`##` heading with a blank line before the value fails, because the near
+check rejects any pair a blank line separates. The first three are
+recorded in their own fixture's `description`; the fourth is a scorer
+property shared by every `output_contains_near` assertion, recorded
+here.
+
 No no-skill baseline and no model tier have been run against this corpus:
 the environment that authored it has neither `waza` nor `nix` installed, the
 same constraint the "Cross-model matrix scaffolding" section of
 `docs/skill-eval-status.md` already discloses for the whole repository. This
 is scaffolding, not a measurement -- a credentialed dispatch (or an
 environment with `waza` available) is still needed to produce the first real
-run. Refs #435, #472, #506, #507, #508, #511, #536, #587.
+run. Refs #435, #472, #506, #507, #508, #511, #536, #587, #842.

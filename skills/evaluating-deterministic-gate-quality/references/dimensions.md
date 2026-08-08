@@ -19,6 +19,13 @@ Two lanes, mirroring `evaluating-skill-quality`'s own split:
   rest of this lane; see its own review-scope tag below and `SKILL.md`
   Procedure steps 3/5 for exactly when it is evaluated instead.
 
+Neither lane gains a member, and no third lane exists, for the
+delegation-recommendation step `SKILL.md` Procedure step 3 folds into
+this same walk: naming a stack and recommending a delegate is an
+attribute a finding in *either* lane can carry, never a dimension, a
+lane, or a pass of its own. Full procedure:
+[references/grading-procedure.md](grading-procedure.md#delegation-recommendation-the-second-party-extended).
+
 Every dimension is tagged with its own **domain-generalization scope**,
 established for this build rather than left implicit:
 

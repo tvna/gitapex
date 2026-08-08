@@ -3,19 +3,24 @@
 ## Contents
 
 1. [Gate vs. no gate](#gate-vs-no-gate)
-2. [Domain placement](#domain-placement)
-3. [What this framework does not cover](#what-this-framework-does-not-cover)
+2. [Gate vs. infrastructure-owned deterministic control](#gate-vs-infrastructure-owned-deterministic-control)
+3. [Domain placement](#domain-placement)
+4. [What this framework does not cover](#what-this-framework-does-not-cover)
 
-Two questions, in order. The first asks whether a deterministic gate is
-the right mechanism at all; the second -- meaningful only once the first
-says yes -- asks which of the four domains named in `SKILL.md`'s Scope
+Three questions, in order. The first asks whether a deterministic
+decision is the right mechanism at all; the second -- meaningful only
+once the first says yes -- asks whether a gate the target repository
+itself authors should own that decision, or whether an infrastructure
+control the target already depends on owns it natively; the third --
+meaningful only once the second leaves a repository-authored gate in
+scope -- asks which of the four domains named in `SKILL.md`'s Scope
 section (git hook subprocess, agent-harness hook subprocess, CI job step,
 MCP server subprocess) should own it. Skipping straight to domain
-placement without asking the first question is the same mistake
+placement without asking the first two is the same mistake
 `evaluating-skill-quality`'s own Mechanism fit section exists to prevent
-for skills: a well-implemented control in the wrong mechanism, or in no
-mechanism that needed building at all, is not fixed by polishing its
-implementation further.
+for skills: a well-implemented control in the wrong mechanism, in a layer
+that never needed to own it, or in no mechanism that needed building at
+all, is not fixed by polishing its implementation further.
 
 ## Gate vs. no gate
 
@@ -75,13 +80,146 @@ principle.
 that as the finding directly -- the policy should be (or remain) a skill,
 CLAUDE.md content, or a human review step, not a deterministic gate; this
 finding is itself the item's verdict (`SKILL.md` Procedure step 6) -- and
-do not proceed to Domain placement below, the axes, the three-way
-division of responsibility, or Procedure steps 3-5 for that policy.
+do not proceed to either question below, the axes, the three-way division
+of responsibility, or Procedure steps 3-5 for that policy.
+
+## Gate vs. infrastructure-owned deterministic control
+
+Applies only once Gate vs. no gate above has concluded a deterministic
+decision is warranted, and before Domain placement below asks which
+domain should realize one. A deterministic decision does not have to be
+realized by a gate the target repository itself authors and runs: the
+platform, the runtime, or the hosting environment the target already
+depends on may own the same decision natively -- a branch-protection or
+required-signature setting, an identity provider's own permission grant,
+a network egress boundary, a container runtime's own read-only mount, a
+package registry that refuses to serve an unapproved artifact. Naming
+that owner is a different question from naming a realization domain: the
+four domains classify *where a gate this repository writes actually
+runs*; this question asks *whether this repository should be writing one
+at all*, given a control that already sits one layer beneath all four.
+
+That "beneath all four" is the category's own boundary, and it excludes
+more than it first appears to. Repository content the same change under
+review could edit -- a lockfile, a config file, a policy document, a
+declarative manifest committed to the repository -- is never an
+infrastructure-owned control here, however declarative it looks: it sits
+*inside* the surface a gate exists to check, not beneath it, and an
+actor who can change the content can change the control. Neither is a
+setting the target itself can silently flip while claiming the guarantee
+holds. Boundary cases short of those two exclusions stay a judgment this
+test cannot settle mechanically -- disclose that in the finding rather
+than presenting a three-way answer as if it were determinate.
+
+Decision procedure: reuse the impossible-vs-tedious test
+([security-level.md](security-level.md#the-impossible-vs-tedious-test)),
+rather than re-deriving a second discriminator here. Ask it twice of the
+same policy, once per candidate owner:
+
+- Does the infrastructure-owned control remove the guarded path entirely
+  -- a permission never granted, a setting whose bypass list is empty, a
+  resolution step that cannot reach an unpinned version -- or does it
+  only add friction an actor with unlimited patience grinds through?
+- Does the repository-authored gate remove that same path entirely, or
+  does it only detect, warn, or slow an actor who can route around it (a
+  different client, a direct API call, a clone with no hooks installed)?
+
+Four outcomes, named with the exact tokens `output-schema.json`'s own
+`controlOwnership.owner` enum uses, so one vocabulary serves the prose
+answer and the machine-readable one rather than two spellings drifting
+apart. Answering consumes the impossible-vs-tedious distinction to pick
+an owner; it records no floor / tier-scalable classification of its own.
+Where such a classification is to be reported, it goes through the
+Security-level axis under that axis's own discipline (its
+ceiling-document search, and dimensions 1 and 15's live-tested evidence
+as input), never as a by-product of this question.
+
+Take the two questions above as a pair. Every combination of their
+answers lands on one of these four, including the two combinations
+easiest to miss:
+
+- **`infrastructure-owned-control`** -- the infrastructure control
+  removes the path this policy guards; the repository-authored gate,
+  over that same path, only adds friction an actor with unlimited
+  patience grinds through. The finding is that the policy's primary
+  owner is the named infrastructure control -- and that the target's own
+  documentation should say so wherever it currently implies the gate is
+  the enforcement. Say so by *adding* the real owner, never by deleting
+  the gate's own stated rationale: reducing what a reader can discover
+  about why the gate exists is a dimension 17 regression, and the Stop
+  boundary against downgrading an existing gate covers its documentation
+  as much as its wiring.
+- **`repository-authored-gate`** -- no infrastructure control the target
+  has removes the path, whether or not one touches this policy at all.
+  Two combinations land here, and the second must not be silently
+  dropped: the gate removes the path and no infrastructure control
+  reaches it; or *neither* removes it (an alert-only platform scan
+  beside a hook a flag can skip). In that second case the repository
+  still owns the policy, and the absence of any floor-class control over
+  it is itself a finding to report here -- the Reproducibility /
+  Domain-coverage axis and coverage attestation then carry it. Never
+  read "no floor-class owner" as "no owner to name". Proceed to Domain
+  placement below.
+- **`layered-both`** -- both remove a path. Read the two questions as
+  scoped to the one path this policy guards; a control that removes some
+  *other* path is not an answer to either, and does not make an
+  otherwise infrastructure-owned policy layered. Where each closes a
+  distinct part of the guarded path the other cannot reach, the
+  multiplicity is argued; report it as such. Where
+  both close the *same* path, say so plainly: that is real duplication,
+  and whether it is justified is the Reproducibility / Domain-coverage
+  axis's own argued-vs-accidental question, not this one's -- an
+  infrastructure control merely existing is never grounds to strip the
+  gate beside it. Proceed to Domain placement below for the
+  repository-authored layer.
+- **`indeterminate`** -- the evidence available cannot settle which
+  party owns the policy, most often because an infrastructure control's
+  own enforcement claim rests on a target-authored document rather than
+  that platform's own configuration state, which `SKILL.md`'s Stop
+  boundaries do not accept as confirmation. Report it with its reason;
+  never resolve genuine uncertainty by picking among the three above,
+  and never let it default to the answer the target is arguing for.
+  Grade any existing gate through Procedure steps 3-5 exactly as the
+  other three outcomes would.
+
+**An infrastructure-owned verdict never licenses removing an existing
+gate.** It reassigns which control the target should describe as
+primary; it grants nothing else. That is the same non-authoritative limit
+`SKILL.md`'s own Notes section already places on every verdict this skill
+issues, and the same defense-in-depth discipline the decomposition rule
+above applies to a no-gate verdict -- a review that answers this question
+by deleting a layer has produced a regression, not a placement finding.
+
+Nor is this answer ever replaced by a delegation recommendation. Naming a
+stack and a delegate is an addition to an ownership answer that already
+cites its own evidence, never a substitute for reaching one; where the
+evidence cannot settle ownership, `indeterminate` with its reason is the
+answer, not a delegate standing in for one. (The parallel rule for a
+dimension's verdict and an axis's finding binds later, from Procedure
+step 3, and lives with the rest of that set in
+[grading-procedure.md](grading-procedure.md#stop-boundaries-grading-specific).)
+
+Name the responsible technical stack concretely (the specific platform,
+runtime, or manager, in the target's own vocabulary), never a generic
+"the infrastructure" -- an unnamed owner is the bare "looks fine" verdict
+`SKILL.md`'s Stop boundaries already forbid. Where naming that stack's
+own known-pattern defects would need specialized knowledge this skill
+does not carry, recommend delegation instead of guessing, per
+[grading-procedure.md](grading-procedure.md#delegation-recommendation-the-second-party-extended).
 
 ## Domain placement
 
 Applies only once Gate vs. no gate above has already concluded a
-deterministic gate is warranted. A deterministic gate can, in principle,
+deterministic gate is warranted, and Gate vs. infrastructure-owned
+deterministic control above has left a repository-authored realization in
+scope. For a policy with no repository-authored gate yet -- the
+proposed-policy case -- an infrastructure-owned outcome ends the
+mechanism-fit test there: there is nothing to place. For a policy whose
+repository-authored gate already exists -- the reviewing-an-artifact case
+-- that outcome never ends anything: the existing gate is still placed
+here and still graded through Procedure steps 3-5, because reassigning
+which control is primary neither removes that gate nor excuses grading
+it. A deterministic gate can, in principle,
 be realized in any of the four domains named in `SKILL.md`'s Scope
 section. Before grading a specific realization's own quality, check that
 its domain placement is actually the right one -- a well-implemented gate
@@ -161,3 +299,30 @@ the [Security-level / Zero-Trust maturity classification
 axis](../SKILL.md#axis-security-level--zero-trust-maturity-classification)'s
 job, not this test's own, even though criteria 1 and 3 above already
 reason in the same impossible-vs-tedious terms that axis names explicitly.
+
+Gate vs. infrastructure-owned deterministic control borrows that same
+test outright as its decision procedure, and still does not become that
+axis: it consumes the impossible-vs-tedious distinction to decide *which
+party owns a policy*, and stops there. It emits no
+Foundation/Enterprise/Advanced label, no floor / tier-scalable
+classification, and no honesty claim about a target's own ceiling
+documentation.
+
+It also grades no control's mechanics, and -- unlike a wrong-domain
+finding, which at least names a domain this skill does grade -- an
+infrastructure control is by construction not one of the four
+realization domains, so `SKILL.md` Procedure step 1's discovery never
+reaches it and no dimension in `dimensions.md` is ever applied to it.
+Nothing downstream closes that gap. A finding that promotes such a
+control to primary owner therefore states plainly that the promoted
+owner is itself ungraded by this review, rather than leaving a reader to
+assume some later step graded it. Grading it at all means a separate
+review, on whatever framework actually covers that platform -- a
+delegation recommendation, per
+[grading-procedure.md](grading-procedure.md#delegation-recommendation-the-second-party-extended),
+not a step of this test. Nor does it characterize the
+calling/installing repository's general infrastructural footing across
+the four domains: that is dimension 23's own once-per-review question,
+asked regardless of any single policy, where this one is asked per
+policy and is answered by naming one concrete control, not by scoring an
+environment.

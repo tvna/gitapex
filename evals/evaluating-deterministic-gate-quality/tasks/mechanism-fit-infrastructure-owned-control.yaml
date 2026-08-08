@@ -1,0 +1,69 @@
+id: evaluating-deterministic-gate-quality-mechanism-fit-infrastructure-owned-control
+name: A signature policy the platform already makes impossible is infrastructure-owned, not a repository-authored gate's to own
+description: The mechanism-fit test's second question (Gate vs.
+  infrastructure-owned deterministic control) must be answered before domain
+  placement is even reachable. Gate vs. no gate says a deterministic
+  decision is warranted here -- the policy reproduces the same answer every
+  time -- but the target's own already-inspected platform configuration
+  removes the guarded path entirely, while the proposed CI job can only
+  observe an unsigned commit after it has landed. Applying the
+  impossible-vs-tedious test to each candidate owner names the
+  infrastructure control as the policy's primary owner rather than
+  proceeding to pick one of the four realization domains. The prompt asks
+  for the outcome token on a labelled line first, and the assertions bind
+  that label to the token while banning it from binding to a competing
+  one, so an inverted verdict that labels a different outcome fails. One
+  known ceiling of a substring scorer, disclosed rather than implied away
+  -- an answer that writes the correct labelled line and then argues the
+  opposite in prose still passes.
+tags:
+  - quality
+  - mechanism-fit
+  - infrastructure-owned
+inputs:
+  prompt: |
+    Use evaluating-deterministic-gate-quality. Review this proposed policy
+    and the gate someone on the team wants to build for it.
+
+    The policy: "no unsigned commit ever reaches this repository's default
+    branch."
+
+    The proposed gate, read directly from its own draft script: a CI job
+    step that runs after a push has landed on the default branch, walks the
+    newly added commits, and fails the build when any of them carries no
+    verified signature. The draft is competently written -- it exits
+    non-zero, it re-checks the branch name itself rather than trusting the
+    trigger filter, and it ships with a test.
+
+    Inspected directly on the hosting platform, not asserted by any
+    document: the default branch already has branch protection enabled with
+    required signatures turned on and an empty bypass list. The platform
+    rejects the push itself, so an unsigned commit never reaches the branch
+    for a later job to find.
+
+    Which party should own this policy? Answer the mechanism-fit question
+    that comes before domain placement. BEGIN your reply with a single line
+    reading "Ownership:" followed by exactly one of this skill's own four
+    ownership outcome tokens -- repository-authored-gate,
+    infrastructure-owned-control, layered-both, or indeterminate -- then
+    give your reasoning and name the decision procedure you used to get
+    there.
+expected:
+  output_contains_near:
+    - all:
+        - "Ownership"
+        - "infrastructure-owned-control"
+      window: 60
+  output_not_contains_near:
+    - all:
+        - "Ownership"
+        - "repository-authored-gate"
+      window: 60
+    - all:
+        - "Ownership"
+        - "layered-both"
+      window: 60
+    - all:
+        - "Ownership"
+        - "indeterminate"
+      window: 60
