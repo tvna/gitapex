@@ -195,17 +195,40 @@
             # failure than the one being fixed, and the defect here was the
             # silence, not the non-fatality. So it warns loudly and verifies
             # both shims actually landed rather than trusting the exit code.
+            # Repository discovery via `git rev-parse`, not a `[ -d .git ]`
+            # test. That test is false from any subdirectory, and false inside
+            # a linked worktree where `.git` is a file rather than a directory
+            # -- so it skipped installation silently in exactly the worktree
+            # layout this repository's own agent tooling creates (see
+            # .gitignore's /.claude/worktrees/ entry). Both cases were
+            # reproduced before this was rewritten. `--show-toplevel` still
+            # preserves the original intent of the guard it replaces: it fails
+            # outside a checkout, so a `nix develop` in a template eval is
+            # still a no-op rather than an error.
+            #
+            # Hook verification goes through `git rev-parse --git-path hooks`
+            # for the same class of reason: it honours core.hooksPath and
+            # resolves to the shared common dir from a linked worktree, while
+            # a hard-coded `.git/hooks` does neither. It returns a path
+            # relative to the toplevel in a normal checkout and an absolute
+            # one in a worktree, hence the normalisation. `-x` rather than
+            # `-f`: a shim that is not executable never runs.
             shellHook = ''
-              if [ -d .git ]; then
-                if ! uv run prek install --quiet -t pre-commit -t pre-push; then
+              if root=$(git rev-parse --show-toplevel 2>/dev/null); then
+                if ! (cd "$root" && uv run prek install --quiet -t pre-commit -t pre-push); then
                   echo "WARNING: prek install failed -- git hooks are NOT active." >&2
                   echo "         Fix it with: uv run prek install -t pre-commit -t pre-push" >&2
                 else
-                  if [ ! -f .git/hooks/pre-commit ]; then
-                    echo "WARNING: .git/hooks/pre-commit is missing after a successful prek install." >&2
+                  hooks=$(cd "$root" && git rev-parse --git-path hooks)
+                  case "$hooks" in
+                    /*) ;;
+                    *) hooks="$root/$hooks" ;;
+                  esac
+                  if [ ! -x "$hooks/pre-commit" ]; then
+                    echo "WARNING: $hooks/pre-commit is missing or not executable." >&2
                   fi
-                  if [ ! -f .git/hooks/pre-push ]; then
-                    echo "WARNING: .git/hooks/pre-push is missing -- the betterleaks full-history scan will not run on push." >&2
+                  if [ ! -x "$hooks/pre-push" ]; then
+                    echo "WARNING: $hooks/pre-push is missing or not executable -- the betterleaks full-history scan will not run on push." >&2
                   fi
                 fi
               fi

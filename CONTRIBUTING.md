@@ -29,8 +29,13 @@ over a hook-install problem -- so read the warnings on entry rather than
 assuming the hooks are live. To confirm at any time:
 
 ```sh
-ls .git/hooks/pre-commit .git/hooks/pre-push
+hooks=$(git rev-parse --git-path hooks); ls -l "$hooks/pre-commit" "$hooks/pre-push"
 ```
+
+`git rev-parse --git-path hooks` rather than a literal `.git/hooks`: the
+literal path is wrong from a subdirectory and inside a linked worktree (where
+`.git` is a file), and it ignores `core.hooksPath`. Worktrees matter here --
+this repository's own agent tooling creates them.
 
 CI (`.github/workflows/test.yml`, `.github/workflows/lint.yml`) still runs
 the same ruff/mypy checks independently as the actual merge gate -- the
