@@ -15,6 +15,10 @@ eval-coverage-disclosure waiver.
 
 from __future__ import annotations
 
+import builtins
+import pathlib
+import subprocess
+
 import gitapex_gate_skill_audit_disclosure as gate
 import pytest
 from conftest import FakeStdin as _FakeStdin
@@ -922,3 +926,228 @@ def test_regression_pr_651_main_fails_without_waiver(monkeypatch, capsys):
     err = capsys.readouterr().err
     assert "deterministic-gate-quality" in err
     assert _GATE_SCRIPT in err
+
+
+# --- issue #874: the local --check-diff mode ---
+#
+# Exercised by direct import rather than only through the subprocess suite
+# in tests/test_gitapex_skill_audit_local_wrapper_parity.py: pytest-cov
+# cannot see into a subprocess, so the end-to-end suite alone would leave
+# this whole branch measured at 0% and silently below the per-file
+# coverage floor .github/workflows/test.yml enforces.
+
+_BODY_WITH_GATE_DISCLOSURE = (
+    _VALID_SECTION + "- checker-script-adversarial-review: RAN\n- deterministic-gate-quality: RAN\n"
+)
+
+
+def _init_repo(tmp_path):
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    for args in (
+        ("config", "user.email", "t@e"),
+        ("config", "user.name", "t"),
+    ):
+        subprocess.run(["git", "-C", str(tmp_path), *args], check=True)
+    (tmp_path / ".gitapex").mkdir(parents=True, exist_ok=True)
+    (tmp_path / ".gitapex" / "ssot.json").write_text(
+        (pathlib.Path(__file__).resolve().parents[1] / ".gitapex" / "ssot.json").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    _commit_all(tmp_path, "base")
+    return tmp_path
+
+
+def _commit_all(repo, message):
+    subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-qm", message], check=True)
+
+
+def _add_gate_script(repo):
+    target = repo / ".github" / "scripts" / "gitapex_gate_new.py"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("x\n", encoding="utf-8")
+    _commit_all(repo, "new gate")
+
+
+def _body_file(tmp_path, text):
+    path = tmp_path / "body.md"
+    path.write_text(text, encoding="utf-8")
+    return str(path)
+
+
+def test_check_diff_passes_when_the_diff_triggers_nothing(tmp_path, capsys):
+    repo = _init_repo(tmp_path / "repo")
+    (repo / "README.md").write_text("hi\n", encoding="utf-8")
+    _commit_all(repo, "unrelated")
+    code = gate.main(
+        ["--check-diff", "HEAD~1", "HEAD", "--repo-root", str(repo), "--body-file", _body_file(tmp_path, "nothing")]
+    )
+    assert code == 0
+    assert "triggers no skill-audit disclosure requirement" in capsys.readouterr().out
+
+
+def test_check_diff_fails_on_an_undisclosed_gate_change(tmp_path, capsys):
+    repo = _init_repo(tmp_path / "repo")
+    _add_gate_script(repo)
+    code = gate.main(
+        [
+            "--check-diff",
+            "HEAD~1",
+            "HEAD",
+            "--repo-root",
+            str(repo),
+            "--body-file",
+            _body_file(tmp_path, _VALID_SECTION),
+        ]
+    )
+    assert code == 1
+    assert "deterministic-gate-quality" in capsys.readouterr().err
+
+
+def test_check_diff_passes_once_the_gate_change_is_disclosed(tmp_path, capsys):
+    repo = _init_repo(tmp_path / "repo")
+    _add_gate_script(repo)
+    code = gate.main(
+        [
+            "--check-diff",
+            "HEAD~1",
+            "HEAD",
+            "--repo-root",
+            str(repo),
+            "--body-file",
+            _body_file(tmp_path, _BODY_WITH_GATE_DISCLOSURE),
+        ]
+    )
+    assert code == 0, capsys.readouterr().err
+
+
+def test_check_diff_refuses_explicit_flags_alongside_it(tmp_path, capsys):
+    repo = _init_repo(tmp_path / "repo")
+    _add_gate_script(repo)
+    code = gate.main(
+        [
+            "--check-diff",
+            "HEAD~1",
+            "HEAD",
+            "--repo-root",
+            str(repo),
+            "--body-file",
+            _body_file(tmp_path, _VALID_SECTION),
+            "--security-relevant-skills",
+            "made-up",
+        ]
+    )
+    assert code == 1
+    assert "computes the applicability flags itself" in capsys.readouterr().err
+
+
+def test_check_diff_refuses_an_explicit_skill_md_changed_flag(tmp_path, capsys):
+    repo = _init_repo(tmp_path / "repo")
+    _add_gate_script(repo)
+    code = gate.main(
+        [
+            "--check-diff",
+            "HEAD~1",
+            "HEAD",
+            "--repo-root",
+            str(repo),
+            "--body-file",
+            _body_file(tmp_path, _VALID_SECTION),
+            "--skill-md-changed",
+        ]
+    )
+    assert code == 1
+    assert "computes the applicability flags itself" in capsys.readouterr().err
+
+
+def test_check_diff_fails_closed_when_the_flags_cannot_be_computed(tmp_path, capsys):
+    """An uncomputable flag set must never read as 'nothing to disclose'."""
+    repo = _init_repo(tmp_path / "repo")
+    code = gate.main(
+        [
+            "--check-diff",
+            "no-such-ref",
+            "HEAD",
+            "--repo-root",
+            str(repo),
+            "--body-file",
+            _body_file(tmp_path, _VALID_SECTION),
+        ]
+    )
+    assert code == 1
+    assert "could not compute this diff's applicability flags" in capsys.readouterr().err
+
+
+def test_check_diff_reports_a_missing_flag_module(tmp_path, capsys, monkeypatch):
+    """The mode is only available inside this repository's own checkout; a
+    plugin bundle carries hooks/ but no .github/, and must be told so
+    plainly rather than crashing."""
+    real_import = builtins.__import__
+
+    def _fake_import(name, *args, **kwargs):
+        if name == "gitapex_compute_skill_audit_flags":
+            raise ImportError("no module named gitapex_compute_skill_audit_flags")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", _fake_import)
+    code = gate.main(
+        ["--check-diff", "A", "B", "--body-file", _body_file(tmp_path, _VALID_SECTION)],
+    )
+    assert code == 1
+    assert "gitapex_compute_skill_audit_flags.py" in capsys.readouterr().err
+
+
+def test_check_diff_reports_a_dest_with_no_cli_flag(tmp_path, capsys, monkeypatch):
+    """Wiring guard one: a dest listed with no argparse flag behind it.
+
+    Reported as a defect in this file, not as a bad operator argument --
+    and never as an AttributeError traceback, which is what the earlier
+    revision of this guard produced when the conflict check reached the
+    unwired dest first.
+    """
+    repo = _init_repo(tmp_path / "repo")
+    _add_gate_script(repo)
+    monkeypatch.setattr(gate, "_LIST_FLAG_DESTS", (*gate._LIST_FLAG_DESTS, "invented_flag"))
+    code = gate.main(
+        [
+            "--check-diff",
+            "HEAD~1",
+            "HEAD",
+            "--repo-root",
+            str(repo),
+            "--body-file",
+            _body_file(tmp_path, _BODY_WITH_GATE_DISCLOSURE),
+        ]
+    )
+    assert code == 1
+    assert "registers no flag for: invented_flag" in capsys.readouterr().err
+
+
+def test_check_diff_reports_a_flag_the_computation_does_not_publish(tmp_path, capsys, monkeypatch):
+    """Wiring guard two: a dest this CLI does register but the flag
+    computation does not publish, which would leave that check reading
+    argparse's own empty default and silently never firing."""
+    repo = _init_repo(tmp_path / "repo")
+    _add_gate_script(repo)
+    # `body` is a real dest on this CLI and deliberately not a
+    # SkillAuditFlags field, so it isolates this guard from the one above.
+    monkeypatch.setattr(gate, "_LIST_FLAG_DESTS", (*gate._LIST_FLAG_DESTS, "body"))
+    code = gate.main(
+        [
+            "--check-diff",
+            "HEAD~1",
+            "HEAD",
+            "--repo-root",
+            str(repo),
+            "--body-file",
+            _body_file(tmp_path, _BODY_WITH_GATE_DISCLOSURE),
+        ]
+    )
+    assert code == 1
+    assert "publishes no flag for: 'body'" in capsys.readouterr().err
+
+
+def test_body_file_is_an_accepted_alias_for_body(tmp_path, capsys):
+    """The spelling issue #874 documents the pre-push command under."""
+    code = gate.main(["--body-file", _body_file(tmp_path, _VALID_SECTION), "--skill-md-changed"])
+    assert code == 0, capsys.readouterr().err
