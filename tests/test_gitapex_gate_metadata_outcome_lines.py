@@ -434,6 +434,38 @@ def test_malformed_shapes_are_findings(tmp_path: pathlib.Path, body: str, expect
     assert expected in findings[0].message
 
 
+def test_non_scalar_lines_value_is_a_finding(tmp_path: pathlib.Path) -> None:
+    """str() on a mapping yields text no claim regex matches -- a fail-open
+    skip if it is not caught explicitly."""
+    sidecar = _write_skill(tmp_path, "alpha")
+    sidecar.write_text(
+        "spec:\n  references:\n    - outcome:\n        lines:\n          nested: 4->9\n",
+        encoding="utf-8",
+    )
+    findings, _ = _scan(tmp_path)
+    assert len(findings) == 1
+    assert "is not a scalar" in findings[0].message
+
+
+def test_unrecognized_lines_value_is_reported_as_a_note(tmp_path: pathlib.Path) -> None:
+    _write_skill(tmp_path, "alpha", references=_entry("t", 'lines: "unchanged this round"\n'))
+    findings, notes = _scan(tmp_path)
+    assert findings == []
+    assert any("no line-count claim recognized" in note.message for note in notes)
+
+
+def test_a_broken_git_root_raises_instead_of_reporting_unverifiable(tmp_path: pathlib.Path) -> None:
+    """tmp_path is not a git repository at all, so an anchored claim must not
+    read as a benign shallow-clone note."""
+    _write_skill(
+        tmp_path,
+        "alpha",
+        references=_entry("t", 'lines: "1->9"\ncommit: "deadbee"\n'),
+    )
+    with pytest.raises(RuntimeError, match="not a usable git repository"):
+        _scan(tmp_path)
+
+
 def test_git_binary_missing_raises_rather_than_reporting_clean(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

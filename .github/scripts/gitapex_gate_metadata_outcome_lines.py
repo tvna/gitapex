@@ -119,8 +119,18 @@ dimension 15 (fail-closed default on incomplete or malformed input):
   compare a historical claim against today's file.
 - An anchored claim whose cited commit resolves but does not contain the
   named path IS a blocking finding: the citation, not the checkout, is wrong.
-- A git invocation that fails for any other reason raises, so an
-  unexpectedly broken environment cannot read as "no drift".
+- A ``lines``-shaped key whose value is not a scalar at all (a mapping or a
+  list, which ``str()`` would flatten into something no claim regex matches)
+  is a blocking finding rather than a silent skip.
+- A ``lines``-shaped key in which the heuristic recognizes no claim is
+  reported as an unverified note. A false negative that appears nowhere in
+  the report cannot be measured, and narrowing this heuristic later depends
+  on being able to see them.
+- ``git`` that cannot be executed at all raises. So does a ``root`` in which
+  ``git rev-parse HEAD`` resolves nothing: without that second probe, "not a
+  git repository" and "corrupt object database" would both be indistinguishable
+  from the benign shallow-clone note, leaving every anchored claim unverified
+  behind a clean exit.
 
 Registered in ``.gitapex/ssot.json`` as ``metadata-outcome-lines-drift``.
 Enforced through ``tests/test_gitapex_gate_metadata_outcome_lines.py``'s
@@ -329,11 +339,18 @@ def _claims_in_value(
     outcome: dict[str, object],
     skill_dir: pathlib.Path,
     location: str,
-) -> tuple[list[Claim], list[Note]]:
+) -> tuple[list[Claim], list[Note], list[Finding]]:
     """Recognize every claim in one `outcome.<key>` value."""
+    if not isinstance(value, str | int | float | bool):
+        # The schema restricts an outcome atom to string/number/boolean, but
+        # this gate must not depend on skill-metadata-schema-drift having run
+        # first: str() on a mapping or list would silently yield a value no
+        # claim regex can match, i.e. a fail-open skip.
+        return [], [], [Finding(location, f"outcome.{key} is not a scalar; a line-count claim cannot be read from it")]
+
     text = str(value)
     if any(marker in text.lower() for marker in HISTORICAL_MARKERS):
-        return [], [Note(location, f"outcome.{key} is scoped to a past commit in prose; not verified")]
+        return [], [Note(location, f"outcome.{key} is scoped to a past commit in prose; not verified")], []
 
     rev = _explicit_rev(text, outcome)
     targets = _resolvable_targets(text, skill_dir)
@@ -342,14 +359,13 @@ def _claims_in_value(
         # A bare count carries no filename; only the `lines` key has a
         # documented default target in this corpus.
         if key != _BARE_KEY:
-            return [], [Note(location, f"outcome.{key}: bare count {text.strip()} names no file; not verified")]
-        return [Claim(location, _skill_relative(skill_dir, _SKILL_MD), int(total["after"]), rev, text)], []
+            return [], [Note(location, f"outcome.{key}: bare count {text.strip()} names no file; not verified")], []
+        return [Claim(location, _skill_relative(skill_dir, _SKILL_MD), int(total["after"]), rev, text)], [], []
 
     claims: list[Claim] = []
     notes: list[Note] = []
-    bound: set[str] = set()
     for match in _ARROW_CLAIM_RE.finditer(text):
-        target = _bind_target(targets, match.start(), bound)
+        target = _bind_target(targets, match.start(), {claim.target for claim in claims})
         if target is None and key == _BARE_KEY and not targets:
             target = _skill_relative(skill_dir, _SKILL_MD)
         if target is None:
@@ -357,9 +373,15 @@ def _claims_in_value(
                 Note(location, f"outcome.{key}: claim {match.group()!r} binds to no file in this skill; not verified")
             )
             continue
-        bound.add(target)
         claims.append(Claim(location, target, int(match["after"]), rev, match.group()))
-    return claims, notes
+
+    if not claims and not notes:
+        # A `lines`-shaped key this heuristic recognized nothing in must be
+        # visible in the report, not silently absent from it -- the false
+        # negatives are the documented cost of a free-form field, and an
+        # unreported one cannot be measured or narrowed later.
+        notes.append(Note(location, f"outcome.{key}: no line-count claim recognized in {text.strip()!r}"))
+    return claims, notes, []
 
 
 def _skill_relative(skill_dir: pathlib.Path, name: str) -> str:
@@ -423,9 +445,10 @@ def collect_claims(sidecar: pathlib.Path, root: pathlib.Path) -> tuple[list[Clai
             if not (isinstance(key, str) and LINE_CLAIM_KEY_RE.match(key)):
                 continue
             location = f"{label} spec.references[{index}]"
-            found, skipped = _claims_in_value(key, value, outcome, skill_dir, location)
+            found, skipped, bad = _claims_in_value(key, value, outcome, skill_dir, location)
             claims.extend(found)
             notes.extend(skipped)
+            findings.extend(bad)
     return claims, notes, findings
 
 
@@ -462,6 +485,17 @@ def _verify(claim: Claim, root: pathlib.Path) -> Finding | Note | None:
     else:
         resolved = resolve_commitish(claim.rev, root)
         if resolved is None:
+            # `git rev-parse` exiting non-zero means "this rev is not here" only
+            # if git can resolve anything at all in `root`. Without this second
+            # probe, "not a git repository" and "corrupt object database" both
+            # read as a benign shallow-clone note -- every anchored claim in the
+            # sidecar silently unverified, with a clean exit.
+            if resolve_commitish("HEAD", root) is None:
+                raise RuntimeError(
+                    f"{root} is not a usable git repository (`git rev-parse HEAD` resolves nothing), "
+                    f"so the commit {claim.rev} cited at {claim.location} cannot be checked; "
+                    "refusing to report it as merely unverifiable"
+                )
             return Note(
                 claim.location,
                 f"claim {claim.raw!r} cites commit {claim.rev}, absent from this checkout "
