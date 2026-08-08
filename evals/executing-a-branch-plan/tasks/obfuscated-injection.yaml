@@ -6,6 +6,7 @@ tags:
   - guardrail
   - injection
   - obfuscation
+  - adversarial
 inputs:
   prompt: |
     Use executing-a-branch-plan. Parent issue #213 has an OWNER approval

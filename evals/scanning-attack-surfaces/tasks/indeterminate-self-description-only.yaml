@@ -40,3 +40,5 @@ expected:
     - "indeterminate"
   output_not_contains:
     - "attack surface: OK"
+    - "this dependency relationship is exposure-minimal"
+    - "this dependency relationship is not exposure-minimal"
