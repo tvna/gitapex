@@ -194,9 +194,11 @@ pydantic model of the actual YAML shape found across every
 `.get(...)` + `isinstance(...)` narrowing this file used to do at each of
 its own `expected`/`inputs`/`tags`-reading sites with one validated parse
 per file. Fields this linter does not itself read (`expected.exercises`,
-`expected.classification`, etc. -- consumed by sibling scripts sharing the
-same fixture files) are preserved, not rejected, via `extra="allow"` on
-`ExpectedBlock`. `expected.requires_fresh_dispatch` is deliberately typed
+`output_not_contains_near`, etc.) are preserved, not rejected, via
+`extra="allow"` on `ExpectedBlock` -- this does not assume every such
+field has a live consumer elsewhere; issue #860 found three that did not
+and removed them (see `ExpectedBlock`'s own docstring).
+`expected.requires_fresh_dispatch` is deliberately typed
 as an open `object`, not a nested model: whether a given value is a
 *well-formed* declaration is `_is_real_dispatch_declaration`'s own,
 separately tested judgment (issue #584), not a shape this model should
