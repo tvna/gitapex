@@ -441,9 +441,17 @@ class TaskFixture(BaseModel):
 
     Extra top-level keys are rejected (``extra="forbid"``): unlike
     ``expected:``'s own sub-keys, no fixture in this repository's corpus
-    ever uses one, so an unexpected top-level key is far more likely a
-    typo (e.g. ``expcted:``) than a legitimate field this model has not
-    yet learned about.
+    ever uses one not named here, so an unexpected top-level key is far
+    more likely a typo (e.g. ``expcted:``) than a legitimate field this
+    model has not yet learned about.
+
+    ``graders`` (issue #859) is waza's own native task-level mechanism
+    (``graders: [{type: text, config: {contains/not_contains/...}}]``,
+    schema-validated by ``waza check`` itself) -- this linter does not
+    read its contents, so it is typed as opaque ``list[Any]`` purely to
+    keep such fixtures from falling into ``_load_fixture_dict``'s
+    ValidationError fallback path, which would silently exclude them from
+    every other check in this file.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -454,6 +462,7 @@ class TaskFixture(BaseModel):
     tags: str | list[str] | None = None
     inputs: InputsBlock
     expected: ExpectedBlock
+    graders: list[Any] | None = None
 
 
 def _load_fixture_dict(path: Path) -> dict[str, Any]:
