@@ -124,9 +124,11 @@ walk's own per-dimension evidence requirement is what surfaces it.
 4. **Name a future purpose-built delegate `scanning-<stack>`.** Where no
    suitable delegate exists yet, a recommendation may name the skill that
    *would* own it under this convention: the `scanning-` prefix marks a
-   skill whose job is running a stack-specific diagnostic tool, a
-   distinct job from grading an artifact's own quality or screening one
-   for threat. Do not restate a target repository's own naming taxonomy
+   thin orchestrator over one pinned external diagnostic tool, which
+   reports that tool's own findings rather than forming a verdict of its
+   own -- the judgment belongs to the tool, which is exactly why this
+   skill recommends such a delegate instead of carrying the diagnosis
+   itself. Do not restate a target repository's own naming taxonomy
    here. Where it keeps one, that document is the authority on how its
    verb families are defined and on whether this prefix is registered
    among them -- registering a new family there is that repository's own

@@ -514,7 +514,7 @@ spec:
         lines: "branch-final, re-measured against origin/main at HEAD: SKILL.md 416->480, mechanism-fit.md 163->328, grading-procedure.md 143->248, dimensions.md 442->449, security-level.md 166->171, output-schema.json 271->348, fixtures 29->33"
     - kind: deferral
       anchor: "https://github.com/tvna/gitapex/issues/842"
-      summary: "Named rather than papered over, both surfaced by the inner-layer round: registering the scanning- prefix in docs/glossary.md is an owner decision this issue's own scope (this skill only) does not cover, so the convention is recorded here and unregistered there; and no fixture assertion discriminates an answer that works the exposure analysis out inline while still naming the delegate, since a substring scorer cannot see an ignored 'do not work that analysis out here'."
+      summary: "Named rather than papered over: no fixture assertion discriminates an answer that works the exposure analysis out inline while still naming the delegate, since a substring scorer cannot see an ignored 'do not work that analysis out here'. The companion gap -- the scanning- prefix being unregistered in this repository's own naming glossary -- was closed independently while this branch was open, by the issue-844 entry merged in https://github.com/tvna/gitapex/pull/851 and taken into this branch."
     - kind: audit
       anchor: "method:pr-850-inner-layer-review"
       summary: "A re-verification pass on the fix commit, run because the diff had changed and a stale review verdict must not carry forward, returned 13 findings. Six were introduced by the fix itself. It confirmed by execution what did hold: 20 schema instances accept and reject exactly as documented with no false rejection found, the four outcomes now partition the two questions, and every tool-output claim in this sidecar reproduces. It also caught one line count this branch had already let go stale again."
@@ -553,6 +553,12 @@ spec:
     - kind: deferral
       anchor: "https://github.com/tvna/gitapex/issues/842"
       summary: "A fourth ceiling joins the three already named: a correct answer that puts its label in a heading with a blank line before the value fails, because the near check rejects any pair a blank line separates. That is a scorer property shared by every output_contains_near assertion in this repository, not a defect in these fixtures, and it is recorded in eval-status.md rather than in a single fixture's description."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/pull/851"
+      summary: "Merged origin/main while this branch was open. Issue 844 had registered the Scanning-* verb family in this repository's naming glossary and cited this skill's own Three-way division as the pattern the family applies to skill naming. The convention paragraph here was realigned to that now-authoritative definition -- a thin orchestrator over one pinned external tool, reporting that tool's findings rather than forming its own verdict -- and its comparative glosses of the other families were dropped rather than restated."
+    - kind: caveat
+      anchor: "https://github.com/tvna/gitapex/issues/843"
+      summary: "The sibling this skill names as the delegate for an exposure- or privilege-shaped finding, vetting-attack-surface, has a rename to scanning-attack-surfaces tracked under that issue. No prose change is needed when it lands: the delegation step already confirms a delegate against the calling environment's own inventory rather than trusting a name, so a renamed sibling surfaces as unconfirmed instead of as a silently wrong recommendation."
   skillDependencies:
     requires:
       - evaluating-skill-quality
