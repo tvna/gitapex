@@ -511,7 +511,7 @@ spec:
       anchor: "https://github.com/tvna/gitapex/issues/842"
       summary: "Bookkeeping the reviewers caught as stale or false: eval.yaml's graded metric description and eval-status.md still declared a five-way verdict taxonomy after step 6 grew to six; five of six outcome.lines claims in this sidecar were measured at the branch's first commit and never refreshed; and one correction entry overclaimed that two rules had been cut to 'one statement plus pointers' when three and two sites remain, each with a distinct reader."
       outcome:
-        lines: "branch-final, re-measured against origin/main at HEAD: SKILL.md 416->480, mechanism-fit.md 163->328, grading-procedure.md 143->248, dimensions.md 442->449, security-level.md 166->171, output-schema.json 271->348, fixtures 29->33"
+        lines: "branch-final, re-measured against origin/main at HEAD: SKILL.md 416->480, mechanism-fit.md 163->328, grading-procedure.md 143->250, dimensions.md 442->449, security-level.md 166->171, output-schema.json 271->348, fixtures 29->33"
     - kind: deferral
       anchor: "https://github.com/tvna/gitapex/issues/842"
       summary: "Named rather than papered over: no fixture assertion discriminates an answer that works the exposure analysis out inline while still naming the delegate, since a substring scorer cannot see an ignored 'do not work that analysis out here'. The companion gap -- the scanning- prefix being unregistered in this repository's own naming glossary -- was closed independently while this branch was open, by the issue-844 entry merged in https://github.com/tvna/gitapex/pull/851 and taken into this branch."
@@ -562,6 +562,11 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/846"
       summary: "The caveat above still holds: SKILL.md, grading-procedure.md, and output-schema.json keep naming vetting-attack-surface unchanged. Only skillDependencies.relatedTo below was updated, mechanically, to the sibling's real new directory name -- required by the skill-dependencies-resolve dangling-reference gate, not a prose change."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/877"
+      summary: "The branch-final totals entry above claimed grading-procedure.md 143->250 as 143->248. Corrected: 248 was true at 6a0fdf0, where the claim was written, and commit 09f1480 later in the same branch grew the file to 250 without refreshing it. The third recurrence of this exact staleness in this one sidecar, and the first one a deterministic gate caught instead of a reviewer -- issue 877's new metadata-outcome-lines-drift gate found it on main."
+      outcome:
+        fixed: 1
   skillDependencies:
     requires:
       - evaluating-skill-quality
