@@ -387,6 +387,12 @@ spec:
     - kind: deferral
       anchor: "https://github.com/tvna/gitapex/issues/829"
       summary: "It also scoped links-inside-skill/anchor-targets-resolve, and separately preserved _citation_sources coverage for non-.md files -- a bypass this session's own narrower .md-suffix-only fix never considered. Deferred to that version; this skill's own now-superseded correction entry was dropped during conflict resolution."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "Follow-up to the origin/main merge: git's line-based auto-merge of gitapex_check_skill_shape.py combined issue #834's early ref.suffix != '.md' continue guard with this session's own earlier, narrower and ref.suffix == '.md' condition on the same TOC check, leaving a redundant, dead condition and a stale comment -- neither conflicted, so nothing flagged it."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "Removed the redundant condition and its comment; the file is now byte-identical to origin/main's version, confirmed via diff. pytest (2793 passed), shape checker (59/59), and mypy all re-verified clean on skills/evaluating-skill-quality."
   skillDependencies:
     requires:
       - evaluating-skill-quality
