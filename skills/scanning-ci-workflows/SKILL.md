@@ -214,13 +214,24 @@ nothing" for "zizmor checked everything."
   running both tools now.
 - Never let this skill's own resource use scale without bound against an
   adversarially large, deeply nested, or self-referential input set.
-  State the collection budget before step 1 walks anything, and report
-  exceeding it as a finding rather than silently expanding effort. This
-  skill deliberately fixes no universal numeric ceiling on depth, file
-  count, or bytes: it runs against targets from a three-file repository
-  to a monorepo, and a number invented here would be wrong for most of
-  them. The operator's own budget for the run is the ceiling, and it is
-  recorded in the report alongside whether it was reached.
+  This skill deliberately fixes no universal numeric ceiling: it runs
+  against targets from a three-file repository to a monorepo, and a
+  number invented here would be wrong for most of them. What is fixed is
+  everything except the numbers:
+  - **The budget is stated before step 1 walks anything**, and it names
+    a value on at least three dimensions -- a maximum count of collected
+    input files, a maximum total bytes read, and a maximum directory
+    traversal depth. A budget missing any of the three is not a budget;
+    ask the operator for the missing dimension rather than proceeding
+    with an open-ended one.
+  - **Collection stops the moment a dimension is exceeded, before either
+    tool is invoked.** Not after; a scan whose input set already blew the
+    budget must not be handed to a tool at all.
+  - **The exceeded budget is reported as a finding**, naming which
+    dimension was exceeded and at what point collection stopped, so the
+    partial input set is never mistaken for the whole target. The budget
+    and whether it was reached are recorded in every report, reached or
+    not.
 - Never collect an input from outside the target repository's own working
   tree. A symlink under the workflow or action directory that resolves
   outside it is not followed and not scanned -- it is reported as a

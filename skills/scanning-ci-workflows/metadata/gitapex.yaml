@@ -53,6 +53,9 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/pull/881"
       summary: "Rejected the review's request to fix numeric collection ceilings (max depth, file count, bytes) in SKILL.md: this skill runs against targets from a three-file repository to a monorepo, so any universal number invented here would be wrong for most of them, and the repository's own minimum-code rule bars speculative configurability. Accepted the concrete half instead -- a workspace-containment boundary barring any input reached through a symlink that resolves outside the target's own tree."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/pull/881"
+      summary: "The decision above over-extended: it also declined a budget-exceeded fixture, reasoning that one would hardcode the number just rejected. The reviewer's second round showed that is false -- a fixture can state a run-specific budget in its own prompt and hardcode nothing. Fixture added. SKILL.md's budget boundary also gained the two things needing no invented numbers: the three dimensions a budget must carry, and a stop before either tool is invoked rather than after."
     - kind: caveat
       anchor: "references/worked-examples.md"
       summary: "The review flagged the worked example's two indented code blocks as a Markdown style violation (MD046). Kept deliberately, with the reason now stated in the file: they quote a tool's rendering of scanned-file content, and this skill's own Stop boundaries require a form a backtick run inside the quoted text cannot close early. Language identifiers were added to the fenced blocks (MD040), which had no such tension. This repository runs no markdownlint gate, so neither rule is enforced here."

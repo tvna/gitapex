@@ -7,7 +7,7 @@ follow-up the way `scanning-attack-surfaces` and
 
 ## Corpus composition
 
-Eleven tasks in `tasks/`, chosen so that every branch the Procedure can
+Twelve tasks in `tasks/`, chosen so that every branch the Procedure can
 actually take has a fixture, and so that each of the four failure modes a
 thin tool-wrapper is most likely to exhibit has one:
 
@@ -24,10 +24,11 @@ thin tool-wrapper is most likely to exhibit has one:
 | `native-capability-claim-is-refused.yaml` | A platform-native scanner is not reported as available on an operator's say-so; the skill runs no detection and holds no live tier data |
 | `composite-action-is-not-an-actionlint-input.yaml` | actionlint's two `"jobs"/"on" section is missing` errors on a composite action definition are artifacts of the wrong input, not findings about a broken repository |
 | `unreadable-workflow-directory.yaml` | A workflow directory that exists but cannot be read is neither the Applicability gate nor a clean scan over the one file that did read |
+| `collection-budget-exceeded-stops-the-scan.yaml` | An operator-stated budget that a target blows during collection stops the scan before either tool is invoked; a partial input set is not scanned and presented as the target |
 
-Two rows are regression fixtures rather than designed ones, each pinning
-a real defect a pre-merge review round found in this skill's own first
-draft.
+Three rows are regression fixtures rather than designed ones, each
+pinning a real defect a pre-merge review round found in this skill's own
+first draft.
 
 `composite-action-is-not-an-actionlint-input.yaml` came from the
 in-session adversarial round:
@@ -44,6 +45,21 @@ round on this skill's own PR, which observed that `SKILL.md` defines a
 distinct unreadable-input outcome that no fixture exercised -- a
 documented branch with no coverage. Accepted and closed rather than
 argued with.
+
+`collection-budget-exceeded-stops-the-scan.yaml` came from the second
+round of the same external review, and is the one worth recording in
+detail because the first answer to it was wrong. The reviewer asked for
+numeric collection ceilings in `SKILL.md`; that was declined, correctly,
+since this skill runs against targets of wildly different sizes and a
+universal number would be wrong for most. But the reply also declined
+the fixture, on the reasoning that a fixture would have to hardcode the
+same number. The reviewer pointed out that it would not: a fixture can
+state a run-specific budget in its own prompt and check the behavior,
+which hardcodes nothing. That was right, and the fixture exists because
+the objection was dropped rather than defended. `SKILL.md`'s budget
+boundary gained the two other things the same round asked for and that
+needed no invented numbers -- the dimensions a budget must carry, and
+the requirement that collection stop before either tool is invoked.
 
 Two fixtures are deliberately adversarial rather than merely negative:
 `adversarial-workflow-impersonates-tool-output.yaml` (impersonated tool
