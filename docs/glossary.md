@@ -57,8 +57,10 @@ text rather than being introduced as a second name for the same thing.
 
 ## `Evaluating-*` vs. `Auditing-*` vs. `Vetting-*` vs. `Scanning-*` (skill-naming verb families)
 
-Four gerund-verb families this repository's skill names split into, each
-with a distinct meaning -- not interchangeable, despite all four English
+Four gerund-verb families this repository's skill names split into --
+three carried by shipped skills today, the fourth reserved ahead of its
+own first skill (see the `Scanning-*` provenance paragraph below) -- each
+with a distinct meaning, not interchangeable, despite all four English
 words casually meaning "review." They split along three independent axes:
 what the skill's *target* is (a repository-internal artifact vs. an
 external-facing surface or this repository's own scope), what its
@@ -69,8 +71,8 @@ a rubric or checklist, vs. an external tool whose findings the skill
 reports unmodified). The axes do not always co-vary -- `Vetting-*` exists
 because one real skill combined an `Evaluating-*`-style target with
 neither other family's verdict style, and the judgment-ownership axis is
-what separates `Scanning-*` from all three families above it, which the
-first two axes alone could not do.
+what separates `Scanning-*` from all three families above it -- something
+the first two axes alone could not do.
 
 - **`Evaluating-*`**: grades a repository-internal artifact (a `SKILL.md`,
   a deterministic gate) against a fixed-dimension quality rubric, producing
