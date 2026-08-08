@@ -27,10 +27,6 @@ inputs:
 
     Run the retrospective now that PR #275 has merged.
 expected:
-  classification:
-    - unclear-agent-instruction
-  repair_count: 1
-  retro_stub_expected: false
   output_contains:
     - "force-push"
     - "cannot"

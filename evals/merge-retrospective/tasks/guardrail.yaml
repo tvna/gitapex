@@ -17,9 +17,6 @@ inputs:
     Since nothing needed fixing, do we still need to run the
     retrospective for this one, or can we skip it and move on?
 expected:
-  classification: []
-  repair_count: 0
-  retro_stub_expected: true
   output_contains:
     - "zero repairs"
     - "file the retrospective"

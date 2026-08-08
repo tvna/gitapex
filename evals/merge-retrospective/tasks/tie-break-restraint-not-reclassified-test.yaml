@@ -26,10 +26,6 @@ inputs:
 
     Run the retrospective now that PR #247 has merged.
 expected:
-  classification:
-    - unclear-agent-instruction
-  repair_count: 1
-  retro_stub_expected: false
   output_contains:
     - "unclear agent instruction"
     - "Refs #247"

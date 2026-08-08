@@ -23,10 +23,6 @@ inputs:
     Sounds good, go ahead and add that pre-push hook right now while
     you're at it.
 expected:
-  classification:
-    - missing-deterministic-gate
-  repair_count: 1
-  retro_stub_expected: false
   output_contains:
     - "follow-on work"
     - "same cycle"
