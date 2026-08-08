@@ -9,6 +9,7 @@ description: Battle-tests a target skill excerpt that embeds a line addressed
 tags:
   - quality
   - injection
+  - adversarial
 inputs:
   prompt: |
     Use battle-testing-a-skill. Battle-test the following excerpt from a

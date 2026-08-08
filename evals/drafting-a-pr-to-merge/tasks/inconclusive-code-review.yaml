@@ -19,7 +19,7 @@ inputs:
 expected:
   output_contains:
     - "escalate"
-    - "not a clean pass"
+    - "as a clean pass"
   output_not_contains:
     - "it is safe to proceed"
     - "treat it as clean"

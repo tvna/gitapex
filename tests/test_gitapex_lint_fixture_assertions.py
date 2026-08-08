@@ -232,6 +232,62 @@ def test_repository_case_sensitivity_findings_match_the_known_reviewed_residual(
     assert case_findings == {("scorer-gated-skill-edits/ship-without-transfer-check.yaml", "transfer check")}
 
 
+def test_repository_wide_fixtures_have_no_unreviewed_blocking_findings():
+    # Issue #861 acceptance criterion 1: the linter now runs over every
+    # committed evals/*/tasks/*.yaml suite as a blocking pytest gate --
+    # broader than test_repository_fixtures_are_clean above (one skill) and
+    # broader than the case-sensitivity-only test above it (one rule). The
+    # first whole-corpus run surfaced 22 real findings across 15 skills; 17
+    # were fixed for real in the same PR that added this test (fixture
+    # wording corrected to quote the rubric verbatim, missing symmetric bans
+    # added, negation-trap-prone bans reworded to the violation-claim shape,
+    # and 7 skills' genuinely hostile-payload fixtures retagged `adversarial`
+    # -- see that PR's own body for the full fixed set). Five could not be
+    # resolved by a fixture-authoring fix alone and are pinned here as an
+    # explicitly reviewed, disclosed residual -- never silenced by narrowing
+    # --tasks-glob (this test still runs the linter's real, unrestricted
+    # default scope):
+    #
+    #   - scorer-gated-skill-edits/ship-without-transfer-check.yaml
+    #     [case-sensitivity]: the pre-existing #858 residual, already pinned
+    #     above by test_repository_case_sensitivity_findings_match_the_known_
+    #     reviewed_residual; repeated here because this test's own scope is
+    #     every blocking rule, not only case-sensitivity.
+    #   - outward-artifact-preflight/clean-pass.yaml [paraphrase-drift]
+    #     'agreed convention': a linter false positive, hand-confirmed
+    #     against both the fixture and the corpus -- the assertion validates
+    #     the fixture's own prompt-supplied fact ("This repo has an agreed
+    #     convention: ...", inputs.prompt), not a corpus quote. check_paraphrase
+    #     only scans the rubric/SKILL.md corpus, which has no visibility into
+    #     a fixture's own prompt text (unlike check 2/negation-trap and check
+    #     6/prompt-echo, which are deliberately prompt-aware).
+    #   - evaluating-skill-quality, fixing-a-reported-issue,
+    #     scorer-gated-skill-edits [adversarial-coverage]: each skill's own
+    #     docs genuinely claim adversarial-relevant coverage, but no existing
+    #     fixture in tasks/ embeds a real hostile/injected payload that could
+    #     be honestly retagged `adversarial` without gaming the check (unlike
+    #     the seven skills this run originally flagged whose existing
+    #     injection/encoded-payload/escalation fixtures were retagged for
+    #     real in this same PR). Each needs a genuinely new fixture -- see
+    #     issue #872, opened as this residual's own tracking follow-up.
+    #
+    # Pinning the exact set (not "count <= 5") means a NEW blocking finding
+    # anywhere in the corpus fails this test loudly, the same discipline the
+    # case-sensitivity residual test above already applies.
+    evals_root = REPO_ROOT / "evals"
+    skills_root = REPO_ROOT / "skills"
+    names = L.discover_skills(evals_root, skills_root)
+    warnings = L.lint_all_skills(evals_root, skills_root, skill_names=names)
+    blocking = {(w.task, w.rule, w.value) for w in warnings if w.blocking}
+    assert blocking == {
+        ("scorer-gated-skill-edits/ship-without-transfer-check.yaml", "case-sensitivity", "transfer check"),
+        ("outward-artifact-preflight/clean-pass.yaml", "paraphrase-drift", "agreed convention"),
+        ("evaluating-skill-quality", "adversarial-coverage", "(tasks directory)"),
+        ("fixing-a-reported-issue", "adversarial-coverage", "(tasks directory)"),
+        ("scorer-gated-skill-edits", "adversarial-coverage", "(tasks directory)"),
+    }
+
+
 # ---- check_short_word_collision (issue #516, #218) ----
 
 

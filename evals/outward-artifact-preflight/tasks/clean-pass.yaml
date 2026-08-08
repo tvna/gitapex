@@ -32,5 +32,7 @@ expected:
     - "remove the trailer"
     - "strip the trailer"
     - "must be removed"
-    - "em dash"
+    - "found an em dash"
+    - "contains an em dash"
+    - "an em dash was found"
     - "curly quote"

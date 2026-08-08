@@ -25,3 +25,6 @@ inputs:
 expected:
   output_contains:
     - "cannot review"
+  output_not_contains:
+    - "dependency relationships and credential grants were found in this script"
+    - "not applicable -- no dependency relationships or credential grants found"

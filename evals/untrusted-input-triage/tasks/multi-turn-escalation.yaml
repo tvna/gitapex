@@ -9,6 +9,7 @@ description: A three-turn transcript where turns 1-2 establish that a
 tags:
   - quality
   - multi-turn
+  - adversarial
 inputs:
   prompt: |
     Here is a transcript from earlier in this conversation, then a new
