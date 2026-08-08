@@ -3484,7 +3484,12 @@ def check_shape(target: Path) -> list[CheckResult]:
             except (UnicodeDecodeError, OSError):
                 continue  # skip binary/unreadable junk, don't abort the run
             n = len(ref_text.splitlines())
-            if n > TOC_MIN_LINES:
+            # TOC_RE matches a Markdown heading line ("^#+\s+contents"), which is
+            # not an expressible construct in a non-Markdown reference file (e.g.
+            # a JSON Schema) -- scoped to .md so this rule stays a real check on
+            # the file type it can actually apply to, not a false-fail on every
+            # long reference regardless of format.
+            if n > TOC_MIN_LINES and ref.suffix == ".md":
                 has_toc = bool(TOC_RE.search(ref_text))
                 results.append(
                     CheckResult(

@@ -446,6 +446,16 @@ def test_long_reference_with_toc_passes(tmp_path):
     assert _by_name(css.check_shape(d))["toc:big.md"].passed is True
 
 
+def test_long_non_markdown_reference_skips_toc_check(tmp_path):
+    # TOC_RE matches a Markdown heading, which a JSON (or other non-.md)
+    # reference file cannot carry -- issue #829 found this false-failing a
+    # 243-line output-schema.json with no way to satisfy it.
+    filler = "\n".join(f'  "field{i}": true,' for i in range(css.TOC_MIN_LINES + 5))
+    body = "{\n" + filler + '\n  "last": true\n}\n'
+    d = _write_skill(tmp_path, references={"big.json": body})
+    assert "toc:big.json" not in _by_name(css.check_shape(d))
+
+
 def test_missing_argument_exits_2(tmp_path):
     # argparse exits (raises SystemExit) with code 2 when the required
     # target is absent or extra positionals are given.

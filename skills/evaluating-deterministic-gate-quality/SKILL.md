@@ -214,11 +214,13 @@ project-instruction file) this skill defers to rather than re-deriving.
    live-testing Stop boundary below, not read-only-inferred. When this
    review's own output needs to be machine-consumed rather than only
    read, structure it per
-   [references/output-schema.json](references/output-schema.json) --
-   this skill still performs no write or persistence of its own; that
-   schema's own `persistenceRecommendation` field only names candidate
-   storage channels for a caller to choose from, never an action this
-   skill takes itself.
+   [references/output-schema.json](references/output-schema.json) and
+   validate the produced JSON against that schema before treating it as
+   conformant -- naming the schema is not itself the enforcement, the
+   validation step is. This skill still performs no write or persistence
+   of its own; that schema's own `persistenceRecommendation` field only
+   names candidate storage channels for a caller to choose from, never an
+   action this skill takes itself.
 
 ## Stop boundaries
 

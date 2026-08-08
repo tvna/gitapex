@@ -278,6 +278,9 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/818"
       summary: "Declared spec.executionRequirements.tools (W3 second slice, https://github.com/tvna/gitapex/issues/307): gitapex_check_skill_shape.py reads a target skill directory or SKILL.md path (per its own module docstring, read-only, no writes/network/mutation); no subprocess/shell calls."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "Fixed a false-fail found while auditing a sibling skill's own change: the toc: check's TOC_RE match is a Markdown-heading pattern, applied unconditionally to every references/ file over TOC_MIN_LINES regardless of format. Scoped to .md files only, with a new regression test (test_long_non_markdown_reference_skips_toc_check) covering a long non-Markdown reference file."
   skillDependencies:
     requires: []
     relatedTo:

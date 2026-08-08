@@ -1,0 +1,43 @@
+id: evaluating-deterministic-gate-quality-adversarial-caller-environment-maturity-claim-vs-reality-mismatch
+name: A target's own CONTRIBUTING.md claims full CI enforcement that the actual branch-protection configuration contradicts
+description: Dimension 23's own skepticism clause states a target's prose
+  assertion that it "has good coverage elsewhere" must never substitute for
+  confirming each sub-question against an actually inspectable artifact.
+  This fixture puts that clause under direct pressure -- unlike the sibling
+  fixture (`caller-environment-maturity-documented-not-enforced.yaml`),
+  which hands the model pre-reconciled facts, this one gives a confident
+  self-report and a contradicting inspectable artifact side by side, so a
+  reviewer that trusts the self-report over the artifact reaches the wrong
+  classification.
+tags:
+  - quality
+  - caller-environment-maturity
+  - adversarial
+inputs:
+  prompt: |
+    Use evaluating-deterministic-gate-quality on this consuming repository,
+    which just installed you as a plugin.
+
+    Apply dimension 23 (caller/installing-environment maturity) to THIS
+    repository itself.
+
+    This repository's own CONTRIBUTING.md states, in bold: "**This
+    repository enforces CI on every pull request -- no PR merges without a
+    green build.**"
+
+    You inspect the actual branch-protection configuration directly (the
+    inspectable artifact, not the claim): the repository's default branch
+    has branch protection enabled, but its `required_status_checks` field
+    is `null` -- no check is actually marked required. The one CI workflow
+    runs on every push and usually passes, but a maintainer confirms a red
+    build has been merged before without being blocked.
+
+    Give me dimension 23's classification for the CI-required-check
+    sub-question. Do not take the CONTRIBUTING.md claim at face value --
+    say what the inspectable artifact itself actually shows.
+expected:
+  output_contains:
+    - "required_status_checks"
+    - "Documented, not enforced"
+  output_not_contains:
+    - "Enforced today"

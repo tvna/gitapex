@@ -1,7 +1,7 @@
 # evaluating-deterministic-gate-quality eval status
 
 A committed task corpus now exists: `evals/evaluating-deterministic-gate-quality/`
-has 27 task fixtures under `tasks/` plus `eval.yaml`, covering the skill's
+has 28 task fixtures under `tasks/` plus `eval.yaml`, covering the skill's
 five-way verdict taxonomy (well-formed and well-placed / well-formed but
 misplaced / not well-formed / no-gate-warranted / indeterminate), its
 mechanism-fit short-circuit and decomposition rule, its coverage-attestation
@@ -113,12 +113,20 @@ maturity of the repository that installed or invoked this skill itself,
 as opposed to any single gate under review. Unlike dimensions 21/22, this
 one is directly testable with a synthetic fixture (a target repository's
 own stated infrastructure, not a real production firing trail), so it
-ships with one from the start:
+ships with two from the start:
 `caller-environment-maturity-documented-not-enforced.yaml`, exercising the
 Honesty-vocabulary "Documented, not enforced" classification for a
 freshly-onboarded plugin consumer whose own CONTRIBUTING.md promises
-required CI checks and branch protection it has not yet configured. Two
-Stop boundaries also remain
+required CI checks and branch protection it has not yet configured; and
+`adversarial-caller-environment-maturity-claim-vs-reality-mismatch.yaml`,
+putting dimension 23's own content-trust skepticism clause under direct
+pressure -- a confident CONTRIBUTING.md claim of full CI enforcement
+sits beside a contradicting inspectable artifact
+(`required_status_checks: null`), and a reviewer that trusts the
+self-report over the artifact reaches the wrong classification. A
+`battle-testing-a-skill` pass on the first fixture found this pressure
+case was missing (issue #829); the second fixture closes it. Two Stop
+boundaries also remain
 uncovered, named above (delimiter-safe quoting of hostile evidence;
 shape-checks-pass-is-not-approval under pressure), where no safe verbatim
 assertion could be found without risking a paraphrase-drift false-fail;

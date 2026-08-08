@@ -275,22 +275,51 @@ spec:
       anchor: "https://github.com/tvna/gitapex/issues/829"
       summary: "Added dimension 23 (caller/installing-environment maturity, distinct from any single gate's own quality) to references/dimensions.md's probabilistic-maturity lane, closing a session-identified gap: no prior dimension measured the maturity of the repository that installed or invoked this skill itself, as opposed to any single gate under review."
       outcome:
-        lines: "dimensions.md 365->409"
+        lines: "dimensions.md before->after total count, not a location citation: 365->418"
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/829"
-      summary: "Differentiated dimension 23 explicitly from Three-way division of responsibility / coverage attestation (a passive cross-check of the target's own declared invariants) and the Reproducibility/Domain-coverage axis (scoped to one policy at a time), via added cross-reference text in security-level.md and cross-cutting-axes.md."
+      summary: "Differentiated dimension 23 explicitly from Three-way division of responsibility / coverage attestation (a passive cross-check of the target's own declared invariants) and the Reproducibility/Domain-coverage axis (scoped to one policy at a time). New text lives at security-level.md:157-163 and cross-cutting-axes.md:69-73 specifically."
       outcome:
-        lines: "security-level.md 162->166, cross-cutting-axes.md 82->88"
+        lines: "security-level.md before->after total count: 162->166, cross-cutting-axes.md before->after total count: 82->88"
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/829"
       summary: "Added references/output-schema.json, a JSON Schema (2020-12) formally defining this skill's structured output (reviewMeta/mechanismFit/findings/crossCuttingAxes/coverageAttestation/persistenceRecommendation). persistenceRecommendation only names candidate storage channels for a caller to choose from -- never an action this skill performs itself; executionRequirements.tools.write stays empty (SKILL.md Procedure step 6 now references the schema)."
       outcome:
-        lines: "SKILL.md 382->398"
+        lines: "SKILL.md before->after total count: 382->400, output-schema.json: 246 new lines"
+    - kind: audit
+      anchor: "method:evaluating-skill-quality"
+      summary: "An isolated dispatch on the dimension-23/output-schema.json diff returned NOT-WELL-FORMED: the deterministic shape checker (gitapex_check_skill_shape.py) failed output-schema.json (243 lines, no TOC) under its Markdown-only TOC rule applied blindly to a JSON reference file."
+      outcome:
+        verdict: NOT-WELL-FORMED
+        found: 3
+    - kind: audit
+      anchor: "method:evaluating-skill-quality"
+      summary: "The same evaluating-skill-quality dispatch found the Honesty-vocabulary tokens dimensions.md/output-schema.json cited as reused verbatim from security-level.md were actually re-cased (snake_case vs. security-level.md's own Title-Case prose), plus two metadata line-citation inaccuracies."
+    - kind: audit
+      anchor: "method:battle-testing-a-skill"
+      summary: "An isolated battle-testing-a-skill dispatch on the same diff returned FAIL with 4 findings: dimension 23's evidence-artifact list let a CI workflow file alone satisfy the actually-required sub-question, contradicting dimension 1's own stricter branch-protection-only rule."
+      outcome:
+        verdict: FAIL
+        found: 4
+    - kind: audit
+      anchor: "method:battle-testing-a-skill"
+      summary: "The same dispatch found output-schema.json's persistenceRecommendation.rationale/preconditions fields had no anti-injection constraint; the shipped fixture never put dimension 23's own content-trust skepticism clause under adversarial pressure; and its output_contains assertions were too shallow to tie the classification to its specific sub-question."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "Fixed the shape/vocabulary findings above: scoped gitapex_check_skill_shape.py's TOC rule to .md files only (a JSON reference file cannot carry a Markdown heading), with a new regression test; changed output-schema.json's honestyClassification enum to security-level.md's exact prose strings; corrected the metadata line citations."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "Fixed the battle-test findings above: split dimension 23's evidence-artifact guidance per sub-question, requiring branch-protection/required-status-check confirmation specifically for sub-question (b); added anti-injection description text to persistenceRecommendation's freeform fields; required actual schema validation, not just structuring, in SKILL.md step 6."
+      outcome:
+        findings_fixed: 7
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/829"
-      summary: "Added evals/evaluating-deterministic-gate-quality/tasks/caller-environment-maturity-documented-not-enforced.yaml, the first fixture for dimension 23 -- unlike dimensions 21/22, directly testable via a synthetic target-repository fixture rather than needing real production firing data. Coverage: 13/23 dimensions, 4/4 axes."
+      summary: "Added evals/evaluating-deterministic-gate-quality/tasks/caller-environment-maturity-documented-not-enforced.yaml and adversarial-caller-environment-maturity-claim-vs-reality-mismatch.yaml, unlike dimensions 21/22 directly testable via synthetic target-repository fixtures rather than real production firing data."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "The second fixture was added per the battle-testing-a-skill finding above, putting dimension 23's skepticism clause under a claim-vs-reality pressure test. Coverage: 13/23 dimensions, 4/4 axes."
       outcome:
-        fixtures: "26->27"
+        fixtures: "26->28"
         dimensions_cited: "12/22 -> 13/23"
   skillDependencies:
     requires:

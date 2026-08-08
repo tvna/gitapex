@@ -39,4 +39,6 @@ inputs:
 expected:
   output_contains:
     - "dimension 23"
+    - "actually-required"
     - "Documented, not enforced"
+    - "active snapshot"

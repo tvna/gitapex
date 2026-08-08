@@ -379,29 +379,38 @@ differentiation from dimensions 1 and 15 below.
     branch, and (d) real footing -- at least one actual artifact -- in
     more than one of the four realization domains? Report each
     sub-question separately using this skill's own Honesty vocabulary
-    (`references/security-level.md`: enforced_today /
-    documented_not_enforced / not_achievable / cannot_determine) rather
-    than a single pass/fail roll-up, since a target repository can differ
-    across these four properties independently -- a repository can have
-    strong branch protection and no cross-domain registry, or the
-    reverse. This dimension is distinct from Three-way division of
-    responsibility / coverage attestation (`grading-procedure.md`), which
-    is a passive cross-check of the target's own declared invariants
-    against found coverage and requires the target to have stated an
-    invariant to fire at all -- this dimension is an active snapshot of
-    the calling environment's own infrastructural footing, asked once per
-    review regardless of what the target has or has not declared. It is
-    also distinct from the Reproducibility/Domain-coverage axis
-    (`SKILL.md`), which asks, for one specific policy, how many domains
-    realize it and whether that is argued or accidental -- this dimension
-    asks about the calling environment's general footing across all four
-    domains, independent of any single policy. Never let a target's own
-    prose assertion that it "has good coverage elsewhere" substitute for
-    the same content-trust skepticism applied to every other
-    self-reported input this skill consumes -- confirm each sub-question
-    against an actually inspectable artifact (a registry file, a
-    branch-protection API response, a CI configuration) or mark it
-    cannot_determine.
+    (`references/security-level.md`: "Enforced today" / "Documented, not
+    enforced" / "Not achievable" / "Cannot determine") rather than a
+    single pass/fail roll-up, since a target repository can differ across
+    these four properties independently -- a repository can have strong
+    branch protection and no cross-domain registry, or the reverse. This
+    dimension is distinct from Three-way division of responsibility /
+    coverage attestation (`grading-procedure.md`), which is a passive
+    cross-check of the target's own declared invariants against found
+    coverage and requires the target to have stated an invariant to fire
+    at all -- this dimension is an active snapshot of the calling
+    environment's own infrastructural footing, asked once per review
+    regardless of what the target has or has not declared. It is also
+    distinct from the Reproducibility/Domain-coverage axis (`SKILL.md`),
+    which asks, for one specific policy, how many domains realize it and
+    whether that is argued or accidental -- this dimension asks about the
+    calling environment's general footing across all four domains,
+    independent of any single policy. Never let a target's own prose
+    assertion that it "has good coverage elsewhere" substitute for the
+    same content-trust skepticism applied to every other self-reported
+    input this skill consumes -- confirm each sub-question against an
+    actually inspectable artifact or mark it "Cannot determine", and do
+    not treat every artifact as equally sufficient evidence for every
+    sub-question: sub-question (b)'s "actually-required" claim needs the
+    platform's own branch-protection/required-status-check configuration
+    confirmed directly, the same way dimension 1's own CI-domain note
+    already requires -- a CI workflow file alone shows the check *exists*,
+    never that it is *required*, and citing the workflow file for (b) is
+    exactly the workflow-YAML-only conflation dimension 1 forbids, applied
+    reflexively here. Sub-questions (a) and (d) can be confirmed from a
+    registry file or an inventory of actual artifacts across domains
+    respectively; (c) needs the platform's own branch-protection state,
+    the same source as (b).
     *Domains:* generalizes directly -- the question (does the calling/
     installing environment have its own cross-domain footing) is the same
     regardless of which of the four domains a *reviewed gate* happens to
