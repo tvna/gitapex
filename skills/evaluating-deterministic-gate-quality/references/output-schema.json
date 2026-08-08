@@ -80,10 +80,22 @@
             },
             "infrastructureControlRef": {
               "type": "string",
-              "description": "The specific infrastructure-owned control named concretely (e.g. a branch-protection setting, an identity-provider permission grant, a declarative dependency manifest), in the target's own vocabulary. Expected in substance whenever owner is infrastructure-owned-control or layered-both: an owner named only as 'the infrastructure' is the bare 'looks fine' verdict SKILL.md's Stop boundaries forbid. Naming it is not confirming it exists -- see findings[].delegation.confirmation for that discipline."
+              "description": "The specific infrastructure-owned control named concretely (e.g. a branch-protection setting, an identity-provider permission grant, a network egress boundary), in the target's own vocabulary -- but this reviewer's own words for it, never a target-authored string copied verbatim: the same no-target-authored-text and delimiter-safe-quoting discipline persistenceRecommendation.rationale and findings[].evidence.quote already carry applies here, since this field is filled from text the target wrote. Naming a control is not confirming it exists or enforces anything -- SKILL.md's Stop boundaries set that standard (the platform's own configuration state, never a target document asserting it), and owner=indeterminate is the answer when it is not met. Required whenever owner is infrastructure-owned-control or layered-both: an owner named only as 'the infrastructure' is the bare 'looks fine' verdict SKILL.md's Stop boundaries forbid."
             },
-            "reason": { "type": "string" }
-          }
+            "reason": { "type": "string", "description": "Why this owner, in this reviewer's own words. Required alongside infrastructureControlRef whenever an infrastructure control is named as an owner, so a consumer receives the argument and not only the label -- including, where it applies, that the promoted owner is itself ungraded by this review (mechanism-fit.md states no dimension grades a control outside the four realization domains)." }
+          },
+          "allOf": [
+            {
+              "if": {
+                "required": ["owner"],
+                "properties": { "owner": { "enum": ["infrastructure-owned-control", "layered-both"] } }
+              },
+              "then": {
+                "required": ["owner", "infrastructureControlRef", "reason"],
+                "description": "Mechanically enforces what the two fields above state in prose: an ownership answer that credits an infrastructure control must name that control and give its reason. Without this, {owner: 'infrastructure-owned-control'} alone validates -- an unnamed owner a downstream consumer could still read as licence to collapse the repository-authored layer."
+              }
+            }
+          ]
         },
         "domainPlacement": {
           "anyOf": [
@@ -153,7 +165,7 @@
             "properties": {
               "technicalStack": {
                 "type": "string",
-                "description": "The responsible platform, runtime, or manager, named concretely in the target's own vocabulary -- never a taxonomy re-derived by this skill, and never a generic 'the infrastructure'. Same naming mechanismFit.controlOwnership.infrastructureControlRef uses when an infrastructure control owns the policy, so the two do not drift into parallel vocabularies."
+                "description": "The responsible platform, runtime, or manager, named concretely in the target's own vocabulary -- never a taxonomy re-derived by this skill, and never a generic 'the infrastructure'. Because it is filled from text the target wrote, it carries the same no-target-authored-text and delimiter-safe-quoting discipline persistenceRecommendation.rationale and findings[].evidence.quote already carry: state the stack in this reviewer's own words, never a target-authored string copied verbatim. Same naming mechanismFit.controlOwnership.infrastructureControlRef uses when an infrastructure control owns the policy, so the two do not drift into parallel vocabularies."
               },
               "recommendedTarget": {
                 "type": "string",
@@ -166,9 +178,21 @@
               },
               "confirmationEvidenceRef": {
                 "type": "string",
-                "description": "Where confirmation=confirmed-exists, what actually confirmed it (e.g. a sibling skill's own directory path, or a line in the target's declared dependency manifest). Absent here while confirmation claims confirmed-exists is itself a finding against the review, not a formatting lapse."
+                "description": "Where confirmation=confirmed-exists, what actually confirmed it (e.g. a sibling skill's own directory path in the calling environment, or a line in the target's declared dependency manifest). Required in that case, not merely expected: a confirmed-exists claim with nothing behind it is exactly the asserted-as-installed delegate this skill's own Stop boundaries forbid."
               }
-            }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "required": ["confirmation"],
+                  "properties": { "confirmation": { "const": "confirmed-exists" } }
+                },
+                "then": {
+                  "required": ["confirmation", "confirmationEvidenceRef"],
+                  "description": "Mechanically enforces the prose above, the same way this schema's own top-level if/then enforces the dimension-23 placement rule: claiming a delegate exists costs an evidence reference. An unconfirmed recommendation needs none -- it is already tagged as a candidate."
+                }
+              }
+            ]
           },
           "indeterminateReason": { "type": "string" }
         }

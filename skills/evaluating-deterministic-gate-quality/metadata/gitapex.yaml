@@ -433,6 +433,53 @@ spec:
     - kind: deferral
       anchor: "https://github.com/tvna/gitapex/issues/842"
       summary: "Named rather than silently dropped, and already disclosed in the driving issue's own Residual risk column: fallback behavior when a recommended delegate does not yet exist is bounded only by the unconfirmed tag, no deterministic check verifies a review actually applied that tag, and what counts as infrastructure-owned at the boundary remains a judgment only an audit can catch."
+    - kind: audit
+      anchor: "method:battle-testing-a-skill"
+      summary: "An adversarial dispatch on the issue-842 diff returned FAIL with 15 findings. The highest-severity one was empirical: it hand-wrote four outputs each committing the exact failure its own new fixture exists to catch, and scored all four at 1.000 against gitapex_score_contract.py. Bare output_contains cannot tell a term used correctly from the same term inside its own negation, and the fixture linter's symmetric-ban check is gated on an indeterminacy marker, so it never asked for the ban."
+      outcome:
+        verdict: FAIL
+        found: 15
+    - kind: audit
+      anchor: "method:evaluating-skill-quality"
+      summary: "A grading dispatch on the same diff returned WELL-FORMED-NOT-MATURE, shape 55/55. Real findings: the new ownership answer had no slot in Procedure step 6's closed verdict vocabulary; SKILL.md's body kept an unconditional short-circuit rule the reference had since split into two cases; one sentence collapsed wrong-domain and infrastructure-owned into a single class; two rules were restated in full at five sites each; and the Lifecycle note still listed a deferral this diff closed."
+      outcome:
+        verdict: WELL-FORMED-NOT-MATURE
+        found: 15
+    - kind: caveat
+      anchor: "method:battle-testing-a-skill"
+      summary: "Both dispatches disclosed the same procedural limit rather than claiming clean isolation: neither could run the two-control isolation verification (no subagent-dispatch tool inside a dispatch), and the calling repository's CLAUDE.md was present in both contexts. Their favourable findings are therefore provisional; their adverse findings rest on quoted lines or executed script output. This is the same harness isolation gap SKILL.md's own Lifecycle note already discloses against itself."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/842"
+      summary: "Fixed the fixture construct-validity finding. Each of the four prompts now asks for its answer on a labelled line drawn from this skill's own closed vocabulary (an ownership outcome name, a KEEP/REMOVE next action, a confirmation value); the assertions pin that line and ban the competing label. Re-scored against the same four hostile outputs: 0.000-0.750, all under eval.yaml's 0.8 threshold, while plausible correct answers still score 1.000."
+      outcome:
+        findings_fixed: 1
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/842"
+      summary: "Fixed the evidentiary-standard finding: the new Stop boundary accepted 'the target's own declared artifacts' as confirmation, letting target prose confirm the strongest claim this skill can make, against dimension 23's platform-configuration requirement for the same fact. Split by claim type -- a tool or delegate confirms against a primary source or the calling environment's inventory; an infrastructure control's enforcement claim only against that platform's own configuration state."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/842"
+      summary: "Fixed the ungraded-owner finding: mechanism-fit.md had promised a promoted infrastructure control was 'still ungraded until dimensions 1 and 15 grade it', a follow-up the Procedure never reaches, since step 1's discovery is scoped to the four realization domains and an infrastructure control sits beneath all four. The text now states plainly that no dimension grades it and that the finding must disclose the promoted owner as ungraded."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/842"
+      summary: "Fixed the category-boundary finding: 'a declarative dependency manifest and its lockfile' was listed as an infrastructure-owned control while the category is defined as sitting beneath all four domains. Repository content the same change could edit is now excluded explicitly -- it sits inside the surface a gate checks, not beneath it -- and the boundary is disclosed at the point of use as a judgment this test cannot settle mechanically."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/842"
+      summary: "Fixed the missing-indeterminate finding: the prose named three outcomes while output-schema.json's enum offered four, so a reviewer working from the procedure was forced to pick under genuine uncertainty. Indeterminate is now the named fourth outcome, tied to the confirmation standard above. Also reworded the outcome so the question consumes the impossible-vs-tedious distinction to pick an owner without emitting the Security-level axis's own floor / tier-scalable classification."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/842"
+      summary: "Added two schema conditionals, using the same if/then shape the file already used for the dimension-23 placement rule: infrastructureControlRef and reason are required whenever owner is infrastructure-owned-control or layered-both, and confirmationEvidenceRef is required whenever confirmation is confirmed-exists. Both were prose-only and both were demonstrated to validate without them. Verified by re-validating eight instances, four expected valid and four expected rejected."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/842"
+      summary: "Fixed the remaining textual findings: technicalStack and infrastructureControlRef gained the no-target-authored-text discipline their siblings carried; non-substitution now covers an axis and the ownership answer, not dimensions alone; step 6 gained an infrastructure-owned verdict token; the body's short-circuit rule was reconciled with the reference's two cases; wrong-domain and infrastructure-owned were decoupled; two rules restated at five sites each became one statement plus pointers."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/842"
+      summary: "Replaced an undated absolute ('no scanning-* skill exists at this writing') in portable-core content with a check against the calling environment's own inventory -- the shape the same section already used for the sibling delegate, and correct in a consuming repository that does have one. Also closed a Lifecycle-note deferral this diff falsified, and added the missing vetting-attack-surface boundary to the frontmatter description now that the two skills are operationally coupled."
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/842 -> https://github.com/tvna/gitapex/issues/831"
+      summary: "Named, not fixed: capabilityAssumption Adaptive still forces five reference reads on the common case, and this diff grew SKILL.md's body from 416 to 483 of its 500-line cap, moving that pre-existing tension closer to the ceiling rather than away from it. Already tracked as its own follow-up; deliberately not reopened inside an additive change."
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/842"
+      summary: "Named rather than silently dropped, all pre-existing and out of this issue's scope: output-schema.json has no artifact-level verdict field and a near-vacuous instance still validates; the bundled shape checker is never invoked by the Procedure's own steps; its test suite has no real-CLI integration coverage; eval-status.md names the missing external ablation tooling without naming the in-repo runner; and the frontmatter declares no compatibility field despite a Domain-2-specific bundled checker."
   skillDependencies:
     requires:
       - evaluating-skill-quality

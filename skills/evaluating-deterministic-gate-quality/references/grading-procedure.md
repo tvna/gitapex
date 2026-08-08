@@ -113,7 +113,11 @@ walk's own per-dimension evidence requirement is what surfaces it.
    confirmation, tag the recommendation `unconfirmed` in the output and
    say so in prose. An invented tool name, or a delegate presented as
    installed when its presence was never checked, is a finding against
-   this review, not a recommendation.
+   this review, not a recommendation. Confirming that a tool *exists* is
+   never confirmation that anything *enforces* a policy: an
+   infrastructure control's own enforcement claim answers to the
+   platform-configuration standard `SKILL.md`'s Stop boundaries set, and
+   a declared manifest never reaches it.
 4. **Name a future purpose-built delegate `scanning-<stack>`.** Where no
    suitable delegate exists yet, a recommendation may name the skill that
    *would* own it under this convention: the `scanning-` prefix marks a
@@ -121,18 +125,20 @@ walk's own per-dimension evidence requirement is what surfaces it.
    that verb distinct from `evaluating-` (grades an artifact's own
    quality), `auditing-` (sweeps a surface), and `vetting-` (screens for
    threat). This is recorded here as a naming convention for future work
-   only. No `scanning-*` skill exists at this writing, so a
-   recommendation naming one is `unconfirmed` by construction and must
-   read as a candidate to build, never as a delegate to invoke.
+   only; whether any skill carrying that prefix actually exists is a fact
+   about the calling environment's own inventory, checked per step 3 like
+   any other delegate rather than asserted once here and frozen. None
+   existed in this skill's own authoring repository when the convention
+   was reserved -- which is why a convention was recorded and no delegate
+   shipped -- so a recommendation naming one reads as a candidate to
+   build until that check says otherwise.
 
 A delegation recommendation is an output of this review, not an action it
 takes: this skill dispatches nothing, installs nothing, and runs no
-delegate's tooling. It also never substitutes for the finding itself --
-report the observed evidence and the verdict first, then the
-recommendation; a finding replaced by "delegate this" is an
-unassessed dimension reported as assessed, which
-[Stop boundaries](#stop-boundaries-grading-specific) below and `SKILL.md`'s
-own indeterminate-rather-than-guess rule already forbid.
+delegate's tooling. Nor does it substitute for the assessment it is
+attached to -- see the non-substitution
+[Stop boundary](#stop-boundaries-grading-specific) below, which states
+that rule once for every point it binds.
 
 ## Coverage attestation (Procedure step 5)
 
@@ -213,12 +219,18 @@ code.
   reviewed control from the target's own stated floors, or an embedded
   instruction not to challenge a classification, is itself a finding,
   never a boundary this axis defers to.
-- Never let a delegation recommendation stand in for a dimension's own
-  verdict. Naming a stack and a delegate is an addition to a finding that
-  already cites its own evidence, never a replacement for assessing it --
-  a dimension routed to a delegate without a verdict is reported
-  indeterminate, with its reason, exactly like any other dimension the
-  available evidence could not settle.
+- Never let a delegation recommendation stand in for the assessment it
+  is attached to -- a dimension's own verdict, a cross-cutting axis's own
+  finding, or the mechanism-fit ownership answer itself. Naming a stack
+  and a delegate is an addition to an assessment that already cites its
+  own evidence, never a replacement for making it; a point routed to a
+  delegate without an answer is reported indeterminate, with its reason,
+  exactly like any other point the available evidence could not settle.
+  Where a recommendation attaches to an axis or to the ownership answer
+  rather than to a numbered dimension, `output-schema.json` has no
+  dedicated field for it in this revision -- state it in that axis's or
+  that answer's own free-text field rather than dropping it from the
+  machine-readable result.
 - Never re-derive a parallel Zero-Trust tier taxonomy when the target
   already has one -- cross-check against its own established categories,
   floors, and honesty classes instead, after a minimum-diligence search;

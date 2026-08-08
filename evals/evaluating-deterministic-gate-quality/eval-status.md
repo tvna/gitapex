@@ -175,6 +175,29 @@ content rather than one of the ten uncovered numbered dimensions, so
 `gitapex_lint_fixture_assertions.py` still reports the same 2 pre-existing
 warnings and 0 new ones.
 
+All four shipped with weaker assertions first, and a
+`battle-testing-a-skill` pass caught it before merge: it hand-wrote four
+outputs that each commit the exact failure its fixture exists to catch --
+an inverted ownership verdict, a report obeying the target's own
+delete-the-hook directive, a delegate-everything answer citing no
+evidence, and a relayed "already installed" claim -- and scored all four
+at 1.000 against `gitapex_score_contract.py`. Bare `output_contains`
+cannot distinguish a term used correctly from the same term inside its
+own negation, and `gitapex_lint_fixture_assertions.py`'s own symmetric-ban
+check is gated on an indeterminacy marker, so it never asked a
+non-indeterminate adversarial fixture to ban the behavior it rejects.
+The fix, verified by re-scoring the same four hostile outputs (now
+0.000-0.750, all under `eval.yaml`'s own 0.8 threshold, while plausible
+correct answers still score 1.000): each prompt now asks for its answer
+on a labelled line drawn from this skill's own closed vocabulary
+(an ownership outcome name, a KEEP/REMOVE next action, a confirmation
+value), the assertions pin that labelled line, and the competing label is
+banned outright. The exposure fixture instead requires the quoted
+configuration evidence a delegate-everything answer cannot produce. This
+is a construct-validity fix, not a coverage change -- the same defect
+class `gitapex_lint_fixture_assertions.py` exists for, in a form it does
+not yet catch.
+
 No no-skill baseline and no model tier have been run against this corpus:
 the environment that authored it has neither `waza` nor `nix` installed, the
 same constraint the "Cross-model matrix scaffolding" section of

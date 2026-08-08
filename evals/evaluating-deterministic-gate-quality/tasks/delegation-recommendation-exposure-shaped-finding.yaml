@@ -1,13 +1,19 @@
 id: evaluating-deterministic-gate-quality-delegation-recommendation-exposure-shaped-finding
-name: An exposure- and privilege-shaped finding is delegated to vetting-attack-surface, not diagnosed inline
+name: An exposure- and privilege-shaped finding is delegated to vetting-attack-surface without the review itself being replaced
 description: The delegation recommendation folded into the two-lane walk
   routes an exposure- or privilege-shaped finding to the existing sibling
-  skill rather than re-deriving that analysis inline or inventing a
-  per-stack knowledge base. The recommendation is an addition to a finding
-  that still carries its own verdict and quoted evidence -- the Blast-radius
-  / trust classification axis still has to state what this gate fails to
-  prevent -- so a response that answers only "delegate this" has replaced
-  the review instead of extending it.
+  skill rather than re-deriving that analysis inline. The recommendation is
+  an addition to an assessment that still carries its own evidence -- the
+  Blast-radius / trust classification axis still has to state what this gate
+  fails to prevent -- so a response that answers only "delegate this" has
+  replaced the review instead of extending it. The assertions therefore
+  require the quoted configuration evidence and the axis's own name
+  alongside the delegate's, since a delegate-everything answer names the
+  delegate but quotes no evidence and so cannot satisfy them. The delegate
+  name is asserted unlabelled deliberately -- pairing it with the prompt's
+  own answer-line label trips this repository's paraphrase-drift linter
+  against the skill description's own wording, and the evidence assertion
+  already carries the discrimination the label would have added.
 tags:
   - quality
   - delegation
@@ -32,11 +38,13 @@ inputs:
     that can reach the port, not only the local agent harness.
 
     Give me the per-dimension verdicts you can support from this evidence,
-    say what this gate fails to prevent if it is bypassed or absent, and
-    tell me where the exposure and privilege question itself should be
-    analysed -- name the responsible technical stack and who should own
-    that analysis rather than working it out here.
+    quoting the specific configuration line that grounds each. State what
+    this gate fails to prevent if it is bypassed or absent. Then name the
+    responsible technical stack and finish with a single line reading
+    "Delegate:" followed by who should own the exposure and privilege
+    analysis itself -- do not work that analysis out here.
 expected:
   output_contains:
+    - "0.0.0.0:8931"
     - "vetting-attack-surface"
     - "Blast-radius"

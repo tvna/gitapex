@@ -7,11 +7,12 @@ description: The mechanism-fit test's second question (Gate vs.
   time -- but the target's own already-inspected platform configuration
   removes the guarded path entirely, while the proposed CI job can only
   observe an unsigned commit after it has landed. Applying the
-  impossible-vs-tedious test to each candidate owner puts the infrastructure
-  control at floor class and the repository-authored job at tier-scalable
-  friction, so the answer names the infrastructure control as the policy's
-  primary owner rather than proceeding to pick one of the four realization
-  domains.
+  impossible-vs-tedious test to each candidate owner names the
+  infrastructure control as the policy's primary owner rather than
+  proceeding to pick one of the four realization domains. The prompt asks
+  for the outcome name on its own labelled line, and the assertions ban the
+  competing outcome labels, so an inverted verdict cannot satisfy them by
+  writing the right word inside its own negation.
 tags:
   - quality
   - mechanism-fit
@@ -38,9 +39,13 @@ inputs:
     for a later job to find.
 
     Which party should own this policy? Answer the mechanism-fit question
-    that comes before domain placement, and name the decision procedure you
-    used to get there.
+    that comes before domain placement, name the decision procedure you used
+    to get there, and finish with a single line reading "Ownership:"
+    followed by exactly one of this skill's own ownership outcome names.
 expected:
   output_contains:
-    - "infrastructure-owned"
+    - "Ownership: infrastructure-owned-control"
     - "impossible-vs-tedious"
+  output_not_contains:
+    - "Ownership: repository-authored-gate"
+    - "Ownership: layered-both"
