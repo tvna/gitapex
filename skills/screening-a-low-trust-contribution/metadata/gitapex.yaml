@@ -12,3 +12,13 @@ spec:
       - responding-to-a-fresh-arrival
       - untrusted-input-triage
       - auditing-git-hosting-surface
+  executionRequirements:
+    tools:
+      read: []
+      write: []
+      shell:
+        - registry-lookup
+  references:
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/823"
+      summary: "Declared spec.executionRequirements.tools (W3 third slice, https://github.com/tvna/gitapex/issues/307): check 1 forbids a hand-invoked git/gh CLI for the diff fetch (a platform tool call or API wrapper only, not a local read); check 5 names a registry lookup (e.g. npm view <pkg> scripts) for a new/version-bumped dependency (shell) -- local-CLI-vs-hosted-API is flagged as residual risk in issue 823, not resolved here."

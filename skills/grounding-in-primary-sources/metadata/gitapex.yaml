@@ -11,3 +11,17 @@ spec:
       - untrusted-input-triage
       - battle-testing-a-skill
       - responding-to-a-fresh-arrival
+  executionRequirements:
+    tools:
+      read:
+        - files
+      write: []
+      shell:
+        - commands
+  references:
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/823"
+      summary: "Declared spec.executionRequirements.tools (W3 third slice, https://github.com/tvna/gitapex/issues/307): reads local/observed state directly per its own \"When to use\" section (read); its own worked example names a concrete shell verification command (pip show anthropic) as part of grounding a claim (shell)."
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/823"
+      summary: "This skill's primary verification path -- fetching an external tool's own docs/changelog -- performs real network I/O with no network category in the current spec.executionRequirements schema to declare it under, the same gap issue 814's setup-gitapex-toolchain entry already disclosed. Tracked under parent issue https://github.com/tvna/gitapex/issues/307's W1 non-goals."

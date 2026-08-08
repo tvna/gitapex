@@ -8,6 +8,11 @@ spec:
   skillDependencies:
     requires: []
     relatedTo: []
+  executionRequirements:
+    tools:
+      read: []
+      write: []
+      shell: []
   references:
     - kind: audit
       anchor: "https://github.com/tvna/gitapex/issues/645"
@@ -51,3 +56,6 @@ spec:
       outcome:
         verdict: pass
         scope: claude-opus-5
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/823"
+      summary: "Declared spec.executionRequirements.tools (W3 third slice, https://github.com/tvna/gitapex/issues/307): all three categories empty -- this skill triages text already supplied in context and names no file/shell action of its own."

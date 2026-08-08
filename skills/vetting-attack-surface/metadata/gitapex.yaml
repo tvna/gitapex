@@ -101,6 +101,9 @@ spec:
       outcome:
         verdict: WAIVED
         open: 1
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/823"
+      summary: "Declared spec.executionRequirements.tools (W3 third slice, https://github.com/tvna/gitapex/issues/307): Procedure step 1 performs static reading of the target artifact's own code/config (read); this skill's own Stop boundaries explicitly rule out both writing (\"Never take a write action\") and executing (\"Never execute the reviewed artifact\")."
   skillDependencies:
     requires:
       - evaluating-skill-quality
@@ -108,6 +111,12 @@ spec:
       - evaluating-deterministic-gate-quality
       - screening-a-low-trust-contribution
       - auditing-git-hosting-surface
+  executionRequirements:
+    tools:
+      read:
+        - files
+      write: []
+      shell: []
   lifecycle:
     renamedFrom: evaluating-attack-surface
     experimental:

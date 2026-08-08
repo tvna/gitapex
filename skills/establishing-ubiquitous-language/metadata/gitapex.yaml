@@ -9,6 +9,16 @@ spec:
     - kind: caveat
       anchor: "https://github.com/tvna/gitapex/pull/2"
       summary: "worked example (owner vs. author vs. contributor) traces to docs/motivation.md, draft commit 241f4392, rename commit ef222b81"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/823"
+      summary: "Declared spec.executionRequirements.tools (W3 third slice, https://github.com/tvna/gitapex/issues/307): Step 1 elicits terms from existing code/docs/issues (read); Step 4 writes the resolved term into the calling repository's own glossary doc (write); no shell/subprocess calls."
   skillDependencies:
     requires: []
     relatedTo: []
+  executionRequirements:
+    tools:
+      read:
+        - files
+      write:
+        - files
+      shell: []
