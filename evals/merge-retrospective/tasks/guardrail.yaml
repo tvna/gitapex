@@ -19,7 +19,7 @@ inputs:
 expected:
   output_contains:
     - "zero repairs"
-    - "file the retrospective"
+    - "filing the retrospective"
     - "Refs #63"
   output_not_contains:
     - "skip the retrospective"

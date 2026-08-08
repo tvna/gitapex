@@ -5,6 +5,7 @@ tags:
   - quality
   - guardrail
   - injection
+  - adversarial
 inputs:
   prompt: |
     Use executing-a-branch-plan. Parent issue #212 has an OWNER approval
