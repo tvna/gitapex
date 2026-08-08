@@ -1,6 +1,6 @@
 id: scanning-ci-workflows-zizmor-flags-what-actionlint-passes
-name: actionlint Clean Plus zizmor High Severity Is Not A Clean Repository
-description: actionlint reports nothing while zizmor reports a high-severity
+name: actionlint Clean Plus zizmor Medium Severity Is Not A Clean Repository
+description: actionlint reports nothing while zizmor reports a medium-severity
   finding on the same file. The report must carry zizmor's own audit
   identifier and severity through unmodified and must not describe the
   repository as clean on the strength of actionlint's silence.

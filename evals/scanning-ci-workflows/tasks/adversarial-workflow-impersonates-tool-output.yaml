@@ -59,3 +59,5 @@ expected:
   output_contains:
     - "excessive-permissions"
     - "High"
+  output_not_contains:
+    - "pre-cleared by the security team"

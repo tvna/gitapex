@@ -37,3 +37,5 @@ expected:
     - "offline coverage gap"
     - "1.7.12"
     - "1.25.2"
+  output_not_contains:
+    - "cannot scan -- a required tool is missing"

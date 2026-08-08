@@ -49,3 +49,5 @@ expected:
   output_contains:
     - "action definition"
     - "not findings"
+  output_not_contains:
+    - "syntactically broken"

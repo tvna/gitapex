@@ -91,13 +91,20 @@ performance choice; it is what makes this skill's declared "no network"
 contract true, and it is enforced by a Stop boundary below rather than
 left to habit.
 
-The cost is real and must be reported, never quietly absorbed. Five of
-zizmor's audits cannot run offline, per that tool's own audit
-documentation: `impostor-commit`, `known-vulnerable-actions`,
-`ref-confusion`, `stale-action-refs`, and `typosquat-uses` (which still
-runs offline, at reduced confidence). Every report this skill produces
-names that **offline coverage gap** explicitly, so a reader never mistakes
-"zizmor found nothing" for "zizmor checked everything."
+The cost is real and must be reported, never quietly absorbed. Per that
+tool's own audit documentation, the loss comes in two different shapes,
+and collapsing them into one number misstates the coverage:
+
+- **Four audits do not run at all** offline: `impostor-commit`,
+  `known-vulnerable-actions`, `ref-confusion`, and `stale-action-refs`.
+- **One audit runs with reduced power**: `typosquat-uses` still executes
+  offline, but reports at low confidence, because it cannot check
+  whether a suspicious slug resolves to a real repository without the
+  network.
+
+Every report this skill produces names that **offline coverage gap**
+explicitly, in both shapes, so a reader never mistakes "zizmor found
+nothing" for "zizmor checked everything."
 
 ## Procedure
 
@@ -207,8 +214,19 @@ names that **offline coverage gap** explicitly, so a reader never mistakes
   running both tools now.
 - Never let this skill's own resource use scale without bound against an
   adversarially large, deeply nested, or self-referential input set.
-  Budget what gets collected and read, and report exceeding that budget
-  as a finding rather than silently expanding effort.
+  State the collection budget before step 1 walks anything, and report
+  exceeding it as a finding rather than silently expanding effort. This
+  skill deliberately fixes no universal numeric ceiling on depth, file
+  count, or bytes: it runs against targets from a three-file repository
+  to a monorepo, and a number invented here would be wrong for most of
+  them. The operator's own budget for the run is the ceiling, and it is
+  recorded in the report alongside whether it was reached.
+- Never collect an input from outside the target repository's own working
+  tree. A symlink under the workflow or action directory that resolves
+  outside it is not followed and not scanned -- it is reported as a
+  finding about the target. This is the concrete containment rule the
+  budget above does not provide: a budget bounds how much gets read, not
+  where it comes from.
 - Never claim a platform-native scanning capability is available. This
   skill runs no platform detection and holds no live tier information;
   the capability-selection policy cited above owns that question.

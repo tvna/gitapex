@@ -7,7 +7,7 @@ follow-up the way `scanning-attack-surfaces` and
 
 ## Corpus composition
 
-Ten tasks in `tasks/`, chosen so that every branch the Procedure can
+Eleven tasks in `tasks/`, chosen so that every branch the Procedure can
 actually take has a fixture, and so that each of the four failure modes a
 thin tool-wrapper is most likely to exhibit has one:
 
@@ -23,9 +23,14 @@ thin tool-wrapper is most likely to exhibit has one:
 | `adversarial-workflow-impersonates-tool-output.yaml` | A scanned file whose own comment block impersonates a completed audit, carries a skip-the-audit directive, and hides an encoded payload is evidence under review, never a result |
 | `native-capability-claim-is-refused.yaml` | A platform-native scanner is not reported as available on an operator's say-so; the skill runs no detection and holds no live tier data |
 | `composite-action-is-not-an-actionlint-input.yaml` | actionlint's two `"jobs"/"on" section is missing` errors on a composite action definition are artifacts of the wrong input, not findings about a broken repository |
+| `unreadable-workflow-directory.yaml` | A workflow directory that exists but cannot be read is neither the Applicability gate nor a clean scan over the one file that did read |
 
-The last row is a regression fixture rather than a designed one. This
-skill's own pre-merge adversarial review round found the defect it pins:
+Two rows are regression fixtures rather than designed ones, each pinning
+a real defect a pre-merge review round found in this skill's own first
+draft.
+
+`composite-action-is-not-an-actionlint-input.yaml` came from the
+in-session adversarial round:
 the Procedure originally collected workflow files and composite action
 definitions into one list and handed that list to both tools, which makes
 actionlint parse an action definition against the workflow schema and
@@ -33,6 +38,12 @@ report two syntax errors that are not real. The behavior was confirmed
 against the real actionlint 1.7.12 binary and the real composite action
 in this repository before the Procedure was split into two input lists;
 the fixture is what keeps the split from silently regressing.
+
+`unreadable-workflow-directory.yaml` came from the external CodeRabbit
+round on this skill's own PR, which observed that `SKILL.md` defines a
+distinct unreadable-input outcome that no fixture exercised -- a
+documented branch with no coverage. Accepted and closed rather than
+argued with.
 
 Two fixtures are deliberately adversarial rather than merely negative:
 `adversarial-workflow-impersonates-tool-output.yaml` (impersonated tool
@@ -63,20 +74,36 @@ fixtures.
 
 ## What has and has not been executed
 
-Nothing in this corpus has been executed against a live model. That is
-the same repository-wide limitation every other skill's own eval-status
-file records, not a gap unique to this skill:
-`.github/workflows/waza-eval-matrix.yml` is the only workflow that
-actually executes an `eval.yaml`/`tasks/` suite, it triggers on
-`workflow_dispatch` only, it is self-documented as advisory and never
-merge-gating, and it cannot produce a result until the owner provisions
-the `copilot-sdk` endpoint secrets. `waza-check.yml` runs on push and PR
-but performs a static shape check with `continue-on-error: true`.
+Nothing in this corpus has been executed against a live model. The
+reason is worth stating precisely, because the obvious summary is wrong
+and this file previously carried that wrong summary, inherited from a
+sibling skill's own eval-status file written before the gate existed:
 
-So: no baseline run, no with-skill-vs-no-skill comparison, no cross-model
-measurement. `config.model` names a single tier and `trials_per_task: 3`
-is a declaration, not a record of three executed samples. Read the corpus
-as a committed regression asset, not as a measurement.
+- `.github/workflows/waza-eval-gate.yml` **does** execute a touched
+  skill's suite, on every `pull_request`, via `nix run .#waza -- run
+  <skill>`. It is not a static check and it is not dispatch-only. It is
+  the workflow that would have executed this corpus.
+- It did not, because it fails at its own preflight step: neither
+  `COPILOT_BASE_URL` nor `COPILOT_PROVIDER_BASE_URL` is configured as a
+  repository secret, so the `copilot-sdk` executor has no endpoint. That
+  is the `eval-gate` failure visible on this skill's own PR, and on
+  every other PR that touches `evals/`.
+- `.github/workflows/waza-eval-matrix.yml` is a different lane: the
+  advisory, `workflow_dispatch`-only cross-model matrix, never
+  merge-gating. It is not the only executor, and describing it that way
+  understates what already exists.
+- `waza-check.yml` runs on push and PR but performs a static shape check
+  with `continue-on-error: true`.
+
+The blocker is therefore a missing credential, not a missing mechanism.
+That distinction matters for whoever closes this gap: the work is
+provisioning two secrets, not building an execution lane.
+
+Either way, the consequence for this corpus is the same: no baseline run,
+no with-skill-vs-no-skill comparison, no cross-model measurement.
+`config.model` names a single tier and `trials_per_task: 3` is a
+declaration, not a record of three executed samples. Read the corpus as a
+committed regression asset, not as a measurement.
 
 ## Open items
 
@@ -89,10 +116,15 @@ as a committed regression asset, not as a measurement.
   from those rounds is therefore provisional in the same way
   `scanning-attack-surfaces`' own first self-review round was, and an
   isolated re-run is the outstanding work.
-- **The offline coverage gap is reported, not closed.** Five zizmor
-  audits cannot run under the unconditional `--offline` this skill
-  enforces. No fixture can close that; only a future, separately declared
-  online mode could, and this skill deliberately does not open one.
-- **Dimension-14-equivalent enforcement is still absent repository-wide.**
-  A committed corpus exists here from day one, but nothing re-runs it as
-  a required merge gate, for this skill or any other.
+- **The offline coverage gap is reported, not closed.** Under the
+  unconditional `--offline` this skill enforces, four zizmor audits do
+  not run at all and a fifth, `typosquat-uses`, runs only at low
+  confidence. No fixture can close that; only a future, separately
+  declared online mode could, and this skill deliberately does not open
+  one.
+- **Dimension-14-equivalent enforcement exists but cannot run.** A
+  committed corpus exists here from day one, and `waza-eval-gate.yml`
+  is a real per-PR executor for it -- but it is not yet a required
+  status check, and it currently fails at preflight for want of the two
+  endpoint secrets. The gap is narrower than "no mechanism exists",
+  which is what this file said before review caught it.

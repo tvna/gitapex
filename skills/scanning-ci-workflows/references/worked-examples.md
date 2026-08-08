@@ -23,7 +23,7 @@ analogy applies to this file specifically.
 
 ## Step 2 -- tool versions
 
-```
+```console
 $ actionlint --version
 1.7.12
 
@@ -47,7 +47,7 @@ Two lists, kept apart as the Procedure requires:
 
 ## Step 3 -- actionlint
 
-```
+```console
 $ actionlint -format '{{json .}}'
 []
 exit=0
@@ -60,7 +60,7 @@ non-zero case Procedure step 3 warns about.
 The split matters, and this target is where it shows. Passing the one
 composite action definition to actionlint anyway produces:
 
-```
+```console
 $ actionlint .github/actions/harden-checkout/action.yml
 .github/actions/harden-checkout/action.yml:1:1: "jobs" section is missing in workflow [syntax-check]
 .github/actions/harden-checkout/action.yml:1:1: "on" section is missing in workflow [syntax-check]
@@ -74,7 +74,7 @@ repository. It is not broken.
 
 ## Step 4 -- zizmor
 
-```
+```console
 $ zizmor --offline --no-progress --format=json .github/workflows/ .github/actions/
 exit=14
 ```
@@ -95,7 +95,7 @@ this same tool are run failures.
 
 The same run in `--format=plain` closes with:
 
-```
+```text
 67 findings (56 suppressed, 8 unsafe fixes): 7 informational, 0 low, 0 medium, 4 high
 ```
 
@@ -112,6 +112,14 @@ Findings by audit identifier, from the JSON output:
 | `dangerous-triggers` | 1 | High |
 | `unpinned-uses` | 1 | High |
 | `github-app` | 1 | High |
+
+The two quotations below are indented code blocks rather than fenced
+ones, deliberately and against the usual house style. They reproduce a
+tool's own rendering of content that came out of a scanned file, and
+this skill's own Stop boundaries require exactly that form for such
+material: an indented block cannot be closed early by a backtick run
+inside the quoted text, while a fixed-length fence can. The style
+inconsistency is the point, not an oversight.
 
 One finding, quoted with its own structure intact:
 

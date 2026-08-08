@@ -41,3 +41,5 @@ expected:
     - "actionlint"
     - "release.yml"
     - "expression"
+  output_not_contains:
+    - "workflows: OK"

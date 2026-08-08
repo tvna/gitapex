@@ -20,7 +20,7 @@ spec:
       summary: "Verified zizmor's real invocation contract directly against its own usage documentation rather than from memory: --format (plain/json/json-v1/sarif/github), --offline, --no-online-audits, --persona, --min-severity, --min-confidence, --fix, and exit codes 0 (clean), 1 (error), 2 (bad args), 3 (no inputs), 11-14 (findings by severity). The issue's own ACM flagged this contract as unverified Speculation."
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/847"
-      summary: "Corrects that issue's own Facts claim that both wrapped tools are purely local static analyzers needing no network. Per https://docs.zizmor.sh/audits/, five zizmor audits cannot run offline: impostor-commit, known-vulnerable-actions, ref-confusion, stale-action-refs, typosquat-uses. The claim was adopted as intent, not as fact."
+      summary: "Corrects that issue's own Facts claim that both wrapped tools are purely local static analyzers needing no network. Per https://docs.zizmor.sh/audits/, four zizmor audits do not run offline at all (impostor-commit, known-vulnerable-actions, ref-confusion, stale-action-refs) and a fifth, typosquat-uses, runs offline only at low confidence. The claim was adopted as intent, not as fact."
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/845"
       summary: "Declares executionRequirements.network mode disabled rather than omitting the block, which the issue's ACM had specified. An absent block means 'not yet declared' per the metadata schema; disabled means 'declared, network prohibited'. Only the latter states the real contract for a skill wrapping a network-capable tool. Enforced by an unconditional --offline in the Procedure plus a Stop boundary against supplying a token."
@@ -42,6 +42,20 @@ spec:
     - kind: corroboration
       anchor: "references/worked-examples.md"
       summary: "zizmor does collect and audit composite action definitions, verified from its own verbose log ('registering action input as with key file://.github/actions/harden-checkout/action.yml', then scheduling artipacked, unsound-contains, excessive-permissions, dangerous-triggers against it). It found nothing there in the recorded run, which is a fact about that target, not a reason to omit the composite-action list."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/pull/881"
+      summary: "An external CodeRabbit review round on this PR raised 7 findings; 5 were accepted after independent verification, 2 were partially accepted with the rejected half reasoned out. The most valuable was a factual error in this skill's own evals/ eval-status.md, inherited by copy from a sibling skill written before waza-eval-gate.yml existed: it claimed waza-eval-matrix.yml was the only workflow that executes a suite. The gate really does run one per pull request."
+      outcome:
+        verdict: FAIL
+        found: 7
+        fixed: 5
+        partial: 2
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/pull/881"
+      summary: "Rejected the review's request to fix numeric collection ceilings (max depth, file count, bytes) in SKILL.md: this skill runs against targets from a three-file repository to a monorepo, so any universal number invented here would be wrong for most of them, and the repository's own minimum-code rule bars speculative configurability. Accepted the concrete half instead -- a workspace-containment boundary barring any input reached through a symlink that resolves outside the target's own tree."
+    - kind: caveat
+      anchor: "references/worked-examples.md"
+      summary: "The review flagged the worked example's two indented code blocks as a Markdown style violation (MD046). Kept deliberately, with the reason now stated in the file: they quote a tool's rendering of scanned-file content, and this skill's own Stop boundaries require a form a backtick run inside the quoted text cannot close early. Language identifiers were added to the fenced blocks (MD040), which had no such tension. This repository runs no markdownlint gate, so neither rule is enforced here."
     - kind: audit
       anchor: "method:evaluating-skill-quality"
       summary: "Nine-dimension quality review of this SKILL.md and its references/, run in the authoring session's own thread rather than as an isolated subagent dispatch -- the session's harness directives ruled out self-initiated dispatch. That isolation limitation is disclosed rather than papered over, matching scanning-attack-surfaces' own in-context self-review precedent."
@@ -76,5 +90,5 @@ spec:
       mode: disabled
   lifecycle:
     experimental:
-      reason: "First version of the first scanning-* skill that genuinely delegates judgment to a wrapped tool, so the family definition is being validated against a real implementation for the first time. Two known limits ship with it: both audit rounds ran in-context rather than as isolated dispatches, and the offline-only coverage gap (five zizmor audits) is reported rather than solved."
+      reason: "First version of the first scanning-* skill that genuinely delegates judgment to a wrapped tool, so the family definition is being validated against a real implementation for the first time. Two known limits ship with it: both audit rounds ran in-context rather than as isolated dispatches, and the offline coverage gap (four zizmor audits skipped, one degraded to low confidence) is reported rather than solved."
       trackingIssue: "https://github.com/tvna/gitapex/issues/847"

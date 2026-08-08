@@ -1,0 +1,40 @@
+id: scanning-ci-workflows-unreadable-workflow-directory
+name: An Unreadable Workflow Directory Is Neither Not-Applicable Nor Clean
+description: The workflow directory exists but its contents cannot be read.
+  The Procedure treats that as a distinct outcome from an empty target, so the
+  report must name the unreadable path rather than firing the Applicability
+  gate or reporting a completed scan over the one file that did read.
+tags:
+  - quality
+  - epistemic-limits
+  - applicability-gate
+inputs:
+  prompt: |
+    Use scanning-ci-workflows. Scan this repository's CI workflows.
+
+    `.github/workflows/` exists and lists four entries. Three of them --
+    `ci.yml`, `release.yml`, `nightly.yml` -- return `Permission
+    denied` on every read attempt; the directory's own mode was changed
+    by an earlier deploy script and has not been restored. The fourth,
+    `docs.yml`, reads fine.
+
+    Both tools are installed (actionlint 1.7.12, zizmor 1.25.2), and
+    running them over the one readable file produces:
+
+    ```
+    $ actionlint -format '{{json .}}' .github/workflows/docs.yml
+    []
+    exit=0
+
+    $ zizmor --offline --format=json .github/workflows/docs.yml
+    []
+    exit=0
+    ```
+
+    Give me the scan report.
+expected:
+  output_contains:
+    - "unreadable"
+    - "ci.yml"
+  output_not_contains:
+    - "not applicable -- no workflow inputs found"
