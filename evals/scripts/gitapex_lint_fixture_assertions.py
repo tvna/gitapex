@@ -20,9 +20,37 @@ It reads a skill's own stable text (its `rubric.md`, if it has one, and its
 
   1. Case-sensitivity -- the assertion's lowercased form appears inside a
      distinctive rubric anchor (a heading, a bolded span, or a quoted
-     phrase) but with different casing than the anchor. The anchor's own
-     casing is the stable one to quote. (Historical: `output_contains:
-     ["blind spot"]` vs. the `## Blind spot pass` heading.)
+     phrase) but with different casing than every anchor it matches. The
+     anchor's own casing is the stable one to quote. (Historical:
+     `output_contains: ["blind spot"]` vs. the `## Blind spot pass`
+     heading.) This is also, doubly, the mechanical proxy for issue #858's
+     waza-vs-`gitapex_score_contract.py` case-divergence risk: waza's own
+     built-in `expected.output_contains` grading is case-insensitive, this
+     repository's `gitapex_score_contract.py` is deliberately
+     case-sensitive (see that module's own docstring), and an exact-case
+     match always implies a case-folded one -- so a fixture whose assertion
+     casing matches its skill's own stable wording is guaranteed to satisfy
+     both scorers, and this check is what verifies that. `check_case`
+     scans every matching anchor before deciding, not just the first: the
+     same taxonomy phrase legitimately appears both in a capitalized
+     heading/bold span and in a separately documented, deliberately
+     lowercase, machine-readable quoted form within one rubric (e.g.
+     `merge-retrospective/SKILL.md`'s `Classification:` field), and an
+     exact match on any anchor must clear the assertion even when an
+     earlier, differently-cased anchor for the same phrase also exists.
+     Returning on the first loose hit regardless of a later exact one
+     produced 18 false positives across the committed corpus at issue
+     #858's time, confirmed by checking each flagged assertion by hand
+     against its own skill's `SKILL.md`. One further, genuine residual
+     remains after that fix: `scorer-gated-skill-edits/ship-without-
+     transfer-check.yaml`'s `output_contains: ["transfer check"]` has no
+     exact-case anchor because its correct source (that skill's own
+     Stop-boundaries prose, "has not passed a transfer check") is plain
+     sentence text, outside this check's heading/bold/quoted extraction
+     scope -- also hand-confirmed correct, not a fixture bug, and pinned by
+     `tests/test_gitapex_lint_fixture_assertions.py::
+     test_repository_case_sensitivity_findings_match_the_known_reviewed_residual`
+     so a genuinely new case-sensitivity finding still fails loudly.
   2. Negation trap -- an `output_not_contains` phrase that the corpus
      itself, OR the fixture's own prompt (#487 -- an ad hoc ban invented
      for one fixture will not be in the skill's stable rubric text, so
@@ -532,15 +560,36 @@ def _as_tag_list(value: object) -> list[str]:
 
 def check_case(value: str, anchors: list[str]) -> str | None:
     """Warn when a multi-word assertion matches a rubric anchor
-    case-insensitively but with different casing than the anchor."""
+    case-insensitively but with different casing than every anchor it
+    matches.
+
+    Scans the whole anchor list before deciding, rather than returning on
+    the first loose hit: an exact-case match on ANY anchor clears the
+    assertion even when an earlier, differently-cased anchor for the same
+    phrase also exists (issue #858). The same taxonomy phrase can
+    legitimately appear both in a capitalized heading/bold span (a category
+    name) and in a separately documented, deliberately lowercase,
+    machine-readable quoted form (a literal field value) within the same
+    rubric -- `merge-retrospective/SKILL.md`'s own `Classification:` field
+    is exactly this shape. Returning on the first anchor in
+    `extract_anchors`'s heading/bold/quoted concatenation order, without
+    checking whether a later anchor has the exact case the assertion
+    already uses, produced 18 false positives across the committed corpus
+    at issue time -- confirmed by checking each flagged assertion string
+    against its own skill's SKILL.md by hand."""
     if len(value.split()) < 2:
         return None
     low = value.lower()
+    first_mismatch: str | None = None
     for anchor in anchors:
         idx = anchor.lower().find(low)
-        if idx >= 0 and anchor[idx : idx + len(value)] != value:
-            return anchor
-    return None
+        if idx < 0:
+            continue
+        if anchor[idx : idx + len(value)] == value:
+            return None
+        if first_mismatch is None:
+            first_mismatch = anchor
+    return first_mismatch
 
 
 def check_negation(value: str, corpus_flat: str) -> str | None:

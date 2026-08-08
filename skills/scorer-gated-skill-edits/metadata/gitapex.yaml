@@ -15,6 +15,9 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/818"
       summary: "Declared spec.executionRequirements.tools (W3 second slice, https://github.com/tvna/gitapex/issues/307): gitapex_score_contract.py reads --assertions/--output/--scores file paths or stdin when omitted; no writes, no subprocess/shell calls."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/858"
+      summary: "Reconciled output_contains/output_not_contains case semantics between waza's built-in expected.* grading (case-insensitive, pinned) and gitapex_score_contract.py's own case-sensitive contract (unchanged). Added a SKILL.md bullet stating the convention. Fixed gitapex_lint_fixture_assertions.py's check_case to prefer any exact-case anchor over an earlier differently-cased one, removing 18 false positives it had produced across the corpus."
   skillDependencies:
     requires: []
     relatedTo:
