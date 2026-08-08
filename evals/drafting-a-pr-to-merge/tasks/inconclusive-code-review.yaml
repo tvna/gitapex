@@ -25,3 +25,5 @@ expected:
     - "treat it as clean"
     - "everything else checking out is enough"
     - "the outer layer being unavailable is fine, so this is fine too"
+    - "is a clean pass"
+    - "can be treated as a clean pass"
