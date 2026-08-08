@@ -27,7 +27,8 @@ follow-up), a 0:1:0 trade-secret/competitive-harm broadening (gitapex#537
 follow-up), and a 3:3:0 addition for the three new evaluation criteria
 issue #614's own retrospective motivated (gitapex#619:
 declaration-vs-structure fit, correction-narration sediment, repeated-
-restatement duplication), for a resulting 26:30:12 partition. This is
+restatement duplication), and a 1:0:0 multi-turn-relaxation addition
+(gitapex#332's own ACM-7 audit round), for a resulting 27:30:12 partition. This is
 named explicitly as a deviation from the 2:1:7 default. The
 honest minimal groundwork, per that same worked example, is a larger
 fixture corpus over time, not a smaller gate.
@@ -58,7 +59,12 @@ fixture corpus over time, not a smaller gate.
   consistency with `normal.yaml`),
   `declaration-structure-fit-train.yaml`,
   `sediment-correction-narration-train.yaml`,
-  `duplication-repeated-restatement-train.yaml`.
+  `duplication-repeated-restatement-train.yaml`,
+  `multi-turn-settled-dimension-relaxation-train.yaml` (issue #332's ACM-7
+  audit round -- see that entry in `eval-status.md`; a regression fixture
+  for a safeguard this skill's own `references/adversarial-self-audit.md`
+  already states, not scored for acceptance here, added on the same
+  split-listing-consistency footing as `dispatch-required-negative-control.yaml`).
 - **selection** (gates acceptance; scored before/after a candidate edit,
   strict improve-or-reject, ties rejected): `edge.yaml`,
   `mechanism-fit-subagent.yaml`, `third-party-not-authoritative.yaml`,

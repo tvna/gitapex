@@ -1,0 +1,73 @@
+# betterleaks configuration -- issue #890.
+#
+# betterleaks 1.6.1 is SHA256-pinned in flake.nix. Until #890 nothing
+# consumed it, so this file exists only to make the two hooks in
+# .pre-commit-config.yaml adoptable: a full-history scan of main reports 50
+# findings, all of them deliberately planted fake credentials in eval
+# fixtures. Without the allowlist below the gate would be red on day one.
+#
+# Mechanism note, because the tool's own docs do not settle it: neither the
+# betterleaks README nor docs/config.md specifies the allowlist shape, and
+# docs/config.md says legacy allowlists were "replaced by Expr filters"
+# without giving syntax. Both candidates were therefore run against the
+# pinned binary before this file was written:
+#
+#   [extend] + [allowlist] paths  ->  config check OK (325 rules), 50 -> 35
+#   [extend] + top-level `filter`  ->  config check OK (325 rules), 50 -> 50
+#
+# So the legacy [allowlist] block is the mechanism that actually suppresses
+# on 1.6.1, and the Expr form silently does not. flake.nix pins the version,
+# so this cannot drift without a deliberate bump -- but a bump MUST re-run
+# both rows above rather than assuming the legacy block still works.
+#
+# .betterleaksignore fingerprints were rejected as the mechanism: the
+# observed fingerprint format is `commit:file:rule:line`, so suppressing
+# these would take all 50 entries and would break on any rebase or new
+# commit that touches a fixture.
+
+[extend]
+# Inherit the full built-in ruleset (325 rules as of 1.6.1). This file adds
+# suppression only; it defines no rules of its own and must never become a
+# replacement for the default set.
+useDefault = true
+
+[allowlist]
+description = """
+Eval fixtures carrying deliberately planted fake credentials, used to test
+whether skills redact secrets before quoting them. Verified as fixtures, not
+real leaks: the scan reports github-pat, generic-api-key and
+stripe-access-token hits in files whose own names state the purpose
+(secret-redaction, secret-redaction-in-quoted-evidence,
+adversarial-legible-credential-redaction, encoded-payload).
+
+Scoped to these exact paths rather than to `evals/` or to `evals/**/tasks/`,
+so that a real credential pasted into any other eval file still fails the
+gate. Adding a fixture therefore requires an explicit edit here, which is the
+reviewable decision it should be -- do not widen these patterns to avoid that
+edit.
+
+Because these are paths and the pre-push hook scans all history, a renamed
+fixture needs BOTH names. The last two entries are one fixture: the skill was
+renamed vetting-attack-surface -> scanning-attack-surfaces in ac8b220, and
+each path is load-bearing for a different scan, measured rather than assumed:
+
+  - dropping the old path lets 10 history findings back in, even though no
+    file lives there at HEAD;
+  - dropping the new path makes the full-history scan still pass, but any
+    staged edit that re-adds the token line at the current path is blocked
+    (measured: `leaks found: 1`, wrapper exit 1), because the staged scan
+    reads added lines at the path they are added to.
+
+So do not delete an entry merely because `git ls-files` shows no file at it.
+Rename a fixture and you add a name here; you do not replace one.
+"""
+paths = [
+  '''^evals/drafting-an-acm-issue/tasks/secret-redaction\.yaml$''',
+  '''^evals/evaluating-context-channel-maturity/tasks/secret-redaction\.yaml$''',
+  '''^evals/evaluating-deterministic-gate-quality/tasks/secret-redaction-in-quoted-evidence\.yaml$''',
+  '''^evals/untrusted-input-triage/tasks/encoded-payload\.yaml$''',
+  '''^evals/untrusted-input-triage/results/2026-08-01-issue-645-behavioral-eval/untrusted-input-triage-encoded-payload\.md$''',
+  '''^evals/untrusted-input-triage/results/2026-08-01-issue-646-behavioral-gate2/untrusted-input-triage-encoded-payload\.md$''',
+  '''^evals/vetting-attack-surface/tasks/adversarial-legible-credential-redaction\.yaml$''',
+  '''^evals/scanning-attack-surfaces/tasks/adversarial-legible-credential-redaction\.yaml$''',
+]

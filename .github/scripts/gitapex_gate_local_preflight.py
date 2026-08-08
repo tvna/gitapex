@@ -73,10 +73,11 @@ reasons.
   stage hook, so the ordinary path is real enforcement rather than a command
   a contributor has to remember to type -- but ``git push --no-verify``
   skips it, and a clone that never ran ``prek install`` has no shim at all.
-  ``default_install_hook_types`` makes a bare ``prek install`` write both
-  the pre-commit and pre-push shims, which closes the "configured here but
-  never actually installed" half; it cannot close the ``--no-verify`` half.
-  CI remains the authoritative merge gate.
+  ``CONTRIBUTING.md`` and ``flake.nix``'s devShell both install with
+  ``-t pre-commit -t pre-push`` and then verify each shim actually resolves
+  (issue #890), which closes the "configured here but never actually
+  installed" half; nothing closes the ``--no-verify`` half. CI remains the
+  authoritative merge gate.
 - **Every wired gate runs through ``uv``.** CONTRIBUTING.md invokes this
   file with plain ``python3``, and so does the pre-push hook, because the
   runner itself needs no dependencies -- but all 16 wired argvs begin with
@@ -98,9 +99,10 @@ reasons.
   toward grading more than the branch changed, never less.
 - This grades **committed** state (``HEAD`` and the working tree as it is on
   disk), not a staged index -- which is exactly why it is wired at
-  ``pre-push`` and not ``pre-commit``. The three ruff/mypy hooks in
-  ``.pre-commit-config.yaml`` are pinned to ``stages: [pre-commit]`` so they
-  do not run a second time here inside ``python-lint``/``mypy-type-check``.
+  ``pre-push`` and not ``pre-commit``. ``.pre-commit-config.yaml``'s
+  ``default_stages: [pre-commit]`` keeps the ruff/mypy hooks off the push
+  path, so they do not run a second time here inside
+  ``python-lint``/``mypy-type-check``.
 
 **Why this file is named ``gitapex_gate_*``.** It is a runner of gates
 rather than a gate in its own right, and it is deliberately absent from

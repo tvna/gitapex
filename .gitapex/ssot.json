@@ -41,6 +41,12 @@
       "path": ".gitapex/runtime-compatibility-matrix.json",
       "format": "json",
       "authority": "Versioned, testable record of how faithfully each target agent-tool runtime can enforce the ten W2 execution-requirement dimensions (parent issue #307); authoritative source for a future W4 enforcement adapter, not yet consumed by any gate"
+    },
+    {
+      "id": "waza-suite-schemas",
+      "path": ".gitapex/waza-eval.schema.json",
+      "format": "json",
+      "authority": "waza's own eval/task JSON Schemas (draft-07, as upstream declares them), vendored verbatim at the release tag flake.nix pins -- authoritative shape for every committed evals/ suite, read by eval-suite-schema-drift. One entry stands in for the pair: .gitapex/waza-task.schema.json is vendored from the same tag by the same gate and carries the same authority"
     }
   ],
   "gates": [
@@ -125,13 +131,14 @@
         "hooks/check-pr-skill-audit-disclosure.sh",
         "hooks/gitapex_check_skill_audit_disclosure_or_waiver.py",
         ".github/scripts/gitapex_gate_skill_audit_disclosure.py",
+        ".github/scripts/gitapex_compute_skill_audit_flags.py",
         ".github/scripts/gitapex_skill_description_diff.py",
         ".github/scripts/gitapex_skill_security_relevance.py",
         ".github/scripts/gitapex_detect_changed_gate_scripts.py",
         ".github/workflows/skill-audit-gate.yml",
         "hooks/hooks.json"
       ],
-      "rule": "Requires a PR touching skills/*/SKILL.md to disclose battle-testing-a-skill / evaluating-skill-quality verdicts or waivers under a '## Skill audit evidence' heading; the CI twin additionally requires disclosure for description changes, security-relevant skills, changed design docs, changed checker scripts, and changed deterministic gates. Gate membership is the union of the .github/scripts/gate_*.py / scan_*.py naming convention, every gates[].script path registered in this file, and this file itself; deletions and renames count, and the disclosure must be 'deterministic-gate-quality: RAN' or an explicit waiver with a reason, never 'NOT-RUN'.",
+      "rule": "Requires a PR touching skills/*/SKILL.md to disclose battle-testing-a-skill / evaluating-skill-quality verdicts or waivers under a '## Skill audit evidence' heading; the CI twin additionally requires disclosure for description changes, security-relevant skills, changed design docs, changed checker scripts, and changed deterministic gates. Gate membership is the union of the .github/scripts/gate_*.py / scan_*.py naming convention, every gates[].script path registered in this file, and this file itself; deletions and renames count, and the disclosure must be 'deterministic-gate-quality: RAN' or an explicit waiver with a reason, never 'NOT-RUN'. The applicability computation lives in one place (gitapex_compute_skill_audit_flags.py), which the CI diff step and the local pre-push wrapper (gitapex_gate_skill_audit_disclosure.py --check-diff BASE HEAD --body-file PATH, invoked by the PreToolUse hook when .github/ is present) both call, so the full verdict including every conditional extension is reachable before a push.",
       "planes": ["pretooluse", "ci"],
       "local_exclusion": "Grades a PR body against the changed-skill list; the body does not exist until the PR is opened.",
       "trigger": "PreToolUse matcher mcp__github__create_pull_request and mcp__github__update_pull_request (hooks/hooks.json); .github/workflows/skill-audit-gate.yml on pull_request",
@@ -600,6 +607,20 @@
       "policy_refs": ["skill-metadata-sidecar"],
       "cluster": "self-governance",
       "tracking_issue": 877,
+      "status": "active",
+      "supersedes": null
+    },
+    {
+      "id": "eval-suite-schema-drift",
+      "kind": "script",
+      "script": ".github/scripts/gitapex_scan_eval_suite_schema.py",
+      "rule": "Every evals/*/eval.yaml and evals/*/tasks/*.yaml must validate against waza's own schemas vendored at the flake.nix-pinned release tag (.gitapex/waza-eval.schema.json, .gitapex/waza-task.schema.json), extended only by the reviewed EXTENSION_KEYS allowlist -- so an approved repository-local key passes and a misspelling of it fails, where waza itself only warns and the local pydantic extra=\"allow\" consumers silently see nothing. Each allowlist row must name a consumer file that exists and still mentions the key, and must not shadow a property waza has since adopted natively. flake.nix must still pin VENDORED_WAZA_TAG, and each vendored file's sha256 must match its recorded digest; the opt-in --verify-upstream flag additionally compares both vendored files byte-for-byte against what microsoft/waza published at that tag.",
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_scan_eval_suite_schema.py"],
+      "trigger": "tests/test_gitapex_scan_eval_suite_schema.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": ["waza-suite-schemas"],
+      "cluster": "test-integrity",
+      "tracking_issue": 862,
       "status": "active",
       "supersedes": null
     }

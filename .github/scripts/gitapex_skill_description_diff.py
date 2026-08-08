@@ -39,13 +39,13 @@ _BLOCK_SCALAR_INDICATORS = frozenset({">", ">-", ">+", "|", "|-", "|+"})
 _DESCRIPTION_KEY_RE = re.compile(r"^description:[ \t]*(.*)$")
 
 
-def _unquote(value):
+def _unquote(value: str) -> str:
     if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
         return value[1:-1]
     return value
 
 
-def extract_description(text):
+def extract_description(text: str | None) -> str | None:
     """Return the frontmatter `description` field's parsed value, or None
     if there is no parseable `---`-delimited frontmatter or no
     `description:` key inside it."""
@@ -75,7 +75,7 @@ def extract_description(text):
     return None
 
 
-def description_changed(base_text, head_text):
+def description_changed(base_text: str | None, head_text: str | None) -> bool:
     """True if the parsed description differs between the two revisions'
     file content -- also True (fail closed) if the file is missing at
     either revision, or its frontmatter is present but unparseable at

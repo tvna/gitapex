@@ -678,29 +678,30 @@ def test_the_preflight_is_wired_as_a_pre_push_hook() -> None:
     assert hook["pass_filenames"] is False
 
 
-def test_prek_install_wires_the_pre_push_shim_without_a_flag() -> None:
-    """`default_install_hook_types` is what makes a bare `prek install`
-    write .git/hooks/pre-push, not just pre-commit. Without it the hook
-    above would sit in the config doing nothing on every existing clone --
-    the same "configured but never installed" gap that left
-    .git/hooks/pre-commit a .sample file before issue #725."""
+def test_the_default_stage_keeps_a_new_hook_off_the_push_path() -> None:
+    """Issue #890 set `default_stages: [pre-commit]` so the ruff/mypy hooks,
+    which declare no `stages` of their own, do not start running on every
+    push once a pre-push shim exists. The preflight already covers ruff and
+    mypy at pre-push through the registry's `python-lint`/`mypy-type-check`
+    entries, so losing this key would run both twice per push.
+
+    Issue #876 originally used `default_install_hook_types` here to make a
+    bare `prek install` write both shims; that was dropped when this branch
+    merged #890, which names both shims explicitly at every install site and
+    verifies each one resolves afterwards. See the config's own comment."""
     config = yaml.safe_load((REPO_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8"))
-    assert "pre-push" in config.get("default_install_hook_types", [])
+    assert config.get("default_stages") == ["pre-commit"]
 
 
-def test_the_pre_commit_stage_hooks_do_not_also_run_at_pre_push() -> None:
-    """ruff/mypy are the fast pre-commit pass; the preflight already covers
-    both again at pre-push through the registry's `python-lint` and
-    `mypy-type-check` entries. Leaving their `stages` unset would make
-    pre-commit's own default (every stage) run mypy twice on every push."""
+def test_only_deliberately_named_hooks_reach_the_push_path() -> None:
+    """A hook reaches pre-push only by naming that stage explicitly. This
+    pins the set, so a hook silently acquiring `stages: [pre-push]` -- or
+    the preflight silently losing it -- fails here rather than changing what
+    every contributor's push runs."""
     config = yaml.safe_load((REPO_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8"))
     hooks = [hook for repo in config["repos"] for hook in repo["hooks"]]
-    for hook in hooks:
-        if "gitapex_gate_local_preflight.py" in hook["entry"]:
-            continue
-        assert hook.get("stages") == ["pre-commit"], (
-            f"hook {hook['id']!r} would also run at pre-push, duplicating the preflight's own coverage"
-        )
+    pre_push = sorted(hook["id"] for hook in hooks if "pre-push" in hook.get("stages", []))
+    assert pre_push == ["betterleaks-history", "local-preflight"], f"the pre-push hook set changed: {pre_push}"
 
 
 def test_every_unwired_gate_records_why() -> None:

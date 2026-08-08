@@ -9,20 +9,25 @@
 # pyproject.toml/uv.lock, rather than declaring a second copy of
 # select/ignore/strict settings here -- see issue #725's own "Constraints".
 #
-# Setup: `uv run prek install` (documented in CONTRIBUTING.md; also wired
-# into flake.nix's devShell so `nix develop` installs it automatically).
+# Setup: `uv run prek install -t pre-commit -t pre-push` (documented in
+# CONTRIBUTING.md; also wired into flake.nix's devShell so `nix develop`
+# installs it automatically).
 
-# Issue #876: without this, a bare `prek install` writes only
-# .git/hooks/pre-commit, and the pre-push hook below would sit in this file
-# doing nothing on every existing clone -- the "configured but never
-# actually installed" gap that made .git/hooks/pre-commit a .sample file
-# before issue #725. Verified against prek 0.4.11 directly (a scratch repo
-# carrying this key, then `prek install` with no -t flag) rather than
-# assumed from pre-commit's own documented behavior: it reports
-# "prek installed at `.git/hooks/pre-commit`" and
-# "prek installed at `.git/hooks/pre-push`", and both shims exist
-# afterwards.
-default_install_hook_types: [pre-commit, pre-push]
+# Issue #890 installs a pre-push shim as well as a pre-commit one. Without
+# this, the ruff/mypy hooks below -- which declare no `stages` -- would start
+# running on every push too, since an unset `stages` means "every installed
+# stage". Their scope is unchanged from before #890: pre-commit only. Each
+# hook that wants the pre-push stage names it explicitly.
+#
+# Issue #876 originally set `default_install_hook_types: [pre-commit,
+# pre-push]` here instead, so a bare `prek install` would write both shims.
+# Dropped on merge with #890: that issue names both shims explicitly at
+# every install site (CONTRIBUTING.md, flake.nix's devShell) *and* verifies
+# afterwards that each shim actually resolves, which covers the same gap far
+# more thoroughly. Keeping both would leave two mechanisms for one outcome,
+# and would make CONTRIBUTING.md's own "prek install with no -t installs the
+# pre-commit shim only" explanation false.
+default_stages: [pre-commit]
 
 repos:
   - repo: local
@@ -31,7 +36,6 @@ repos:
         name: ruff check
         entry: uv run --frozen ruff check --force-exclude
         language: system
-        stages: [pre-commit]
         types_or: [python, pyi]
         require_serial: true
 
@@ -39,7 +43,6 @@ repos:
         name: ruff format --check
         entry: uv run --frozen ruff format --check --force-exclude
         language: system
-        stages: [pre-commit]
         types_or: [python, pyi]
         require_serial: true
 
@@ -58,8 +61,43 @@ repos:
         # rather than left silently unscoped.
         entry: uv run --frozen python3 .github/scripts/gitapex_run_precommit_mypy.py
         language: system
-        stages: [pre-commit]
         types_or: [python, pyi]
+        pass_filenames: false
+        require_serial: true
+
+      # Issue #890: betterleaks was SHA256-pinned in flake.nix with nothing
+      # consuming it, so this repository had an approved, pinned
+      # secret-detection capability and no secret detection actually running.
+      # Both hooks shell out to the flake-pinned binary through
+      # .github/scripts/gitapex_run_betterleaks.py rather than declaring
+      # betterleaks' own published pre-commit repo with a `rev`, which would be
+      # a second version source alongside flake.nix -- the same
+      # two-different-versions split issue #678 exists to prevent, and the same
+      # reason the hooks above route ruff and mypy through `uv run --frozen`.
+      #
+      # `pass_filenames: false` on both: betterleaks resolves its own scan
+      # target from the git index (staged) or the commit graph (history), so a
+      # filename list would be ignored at best and would narrow the scan at
+      # worst. Both scopes are suppressed by .betterleaks.toml's allowlist,
+      # which the eval fixtures under evals/ require -- see that file for why
+      # the legacy [allowlist] block is used rather than an Expr filter.
+      - id: betterleaks-staged
+        name: betterleaks (staged secrets)
+        entry: uv run --frozen python3 .github/scripts/gitapex_run_betterleaks.py --mode staged
+        language: system
+        pass_filenames: false
+        require_serial: true
+
+      # Full history rather than only the range being pushed, at a measured
+      # 1.34s over 30.24MB. This is the backstop for a commit that never saw
+      # the staged hook -- `git commit --no-verify`, an amend, or a history
+      # rewrite -- so scoping it to the push range would leave exactly the gap
+      # it exists to cover.
+      - id: betterleaks-history
+        name: betterleaks (full history secrets)
+        stages: [pre-push]
+        entry: uv run --frozen python3 .github/scripts/gitapex_run_betterleaks.py --mode history
+        language: system
         pass_filenames: false
         require_serial: true
 
