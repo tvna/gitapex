@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/tvna/gitapex/blob/main/skills/evaluating-skill-quality/references/skill-metadata.schema.json",
   "title": "gitapex skill metadata sidecar (SkillMetadata gitapex.io/v1alpha1)",
-  "description": "Schema for every skills/<name>/metadata/gitapex.yaml sidecar. Kubernetes-CRD-shaped by deliberate convention (apiVersion/kind/metadata/spec envelope) -- never applied to a real cluster; the envelope buys schema versioning (apiVersion), a self-describing kind, and a clean metadata (identity) vs. spec (declared content) split. Structural/type/enum/pattern rules and the single cross-FIELD rule this format has (spec.skillDependencies.requires vs. spec.portability; spec.lifecycle.experimental vs. spec.lifecycle.stable) are expressed here. What this schema deliberately CANNOT express -- and therefore still needs a companion drift scanner, mirroring .gitapex/ssot.schema.json + .github/scripts/gitapex_scan_ssot_schema.py's own split between jsonschema.Draft202012Validator (this file) and repo-grounded reference-drift checks (the scanner) -- is anything that requires reading a SECOND file: metadata.name equalling the real skill directory name; spec.skillDependencies.requires/relatedTo and spec.lifecycle.deprecated.replacement each resolving to an existing sibling skills/<name>/ directory; and the repo-wide acyclicity of the spec.skillDependencies.requires graph across all sidecars (a single instance has no view of the graph). Also out of scope, permanently, by kind rather than by gap: every check in skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py that inspects SKILL.md/references/*.md prose (bare-issue-number citation scanning, Markdown link/anchor resolution, cross-skill citation resolution, illustrative-model-identifier/placeholder scanning, step-location-contradiction detection, and more) -- those checks are not about this sidecar file's shape at all, and no JSON Schema for metadata/gitapex.yaml can ever cover them.",
+  "description": "Schema for every skills/*/metadata/gitapex.yaml sidecar. Kubernetes-CRD-shaped by deliberate convention (apiVersion/kind/metadata/spec envelope) -- never applied to a real cluster; the envelope buys schema versioning (apiVersion), a self-describing kind, and a clean metadata (identity) vs. spec (declared content) split. Structural/type/enum/pattern rules and the single cross-FIELD rule this format has (spec.skillDependencies.requires vs. spec.portability; spec.lifecycle.experimental vs. spec.lifecycle.stable) are expressed here. What this schema deliberately CANNOT express -- and therefore still needs a companion drift scanner, mirroring this repository's own layered-validation split between a JSON Schema validator (this file) and a repo-grounded reference-drift scanner for cross-file checks -- is anything that requires reading a SECOND file: metadata.name equalling the real skill directory name; spec.skillDependencies.requires/relatedTo and spec.lifecycle.deprecated.replacement each resolving to an existing sibling skills/*/ directory; and the repo-wide acyclicity of the spec.skillDependencies.requires graph across all sidecars (a single instance has no view of the graph). Also out of scope, permanently, by kind rather than by gap: every check in this skill's own bundled shape checker that inspects SKILL.md/references/*.md prose (bare-issue-number citation scanning, Markdown link/anchor resolution, cross-skill citation resolution, illustrative-model-identifier/placeholder scanning, step-location-contradiction detection, and more) -- those checks are not about this sidecar file's shape at all, and no JSON Schema for metadata/gitapex.yaml can ever cover them.",
   "type": "object",
   "required": ["apiVersion", "kind", "metadata", "spec"],
   "additionalProperties": false,
@@ -28,7 +28,7 @@
         "name": {
           "type": "string",
           "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
-          "description": "Must equal the skill's own directory name (skills/<name>/) -- the metadata-name-matches-dir check. That equality is a cross-file fact this schema cannot verify on its own (it never sees the directory a given instance was read from); the companion scanner re-derives it the same way gitapex_check_skill_shape.py does, from the instance's own file path. The kebab-case pattern here matches this repository's real, already-observed directory-naming convention (NAME_RE in gitapex_check_skill_shape.py), not a separately gated rule of its own."
+          "description": "Must equal the skill's own directory name (skills/*/) -- the metadata-name-matches-dir check. That equality is a cross-file fact this schema cannot verify on its own (it never sees the directory a given instance was read from); the companion scanner re-derives it the same way gitapex_check_skill_shape.py does, from the instance's own file path. The kebab-case pattern here matches this repository's real, already-observed directory-naming convention (NAME_RE in gitapex_check_skill_shape.py), not a separately gated rule of its own."
         }
       }
     },
@@ -82,7 +82,7 @@
       "type": "object",
       "required": ["kind", "anchor", "summary"],
       "additionalProperties": false,
-      "description": "One maintainer-facing provenance event (a decision, an audit round, a correction, ...) -- REFERENCES_ITEM_SUBKEYS. Deliberately one event per item, not several fused together (issue #488): an over-budget summary is a decomposition problem, not a length-limit problem.",
+      "description": "One maintainer-facing provenance event (a decision, an audit round, a correction, ...) -- REFERENCES_ITEM_SUBKEYS. Deliberately one event per item, not several fused together (https://github.com/tvna/gitapex/issues/488): an over-budget summary is a decomposition problem, not a length-limit problem.",
       "properties": {
         "kind": {
           "type": "string",
@@ -92,7 +92,7 @@
         "anchor": {
           "type": "string",
           "minLength": 1,
-          "description": "The provenance source: a full https://github.com/tvna/gitapex/issues/<N> (or /pull/<N>) URL, another absolute URL, a repo-relative path, or method:<skill-name> for an audit with no dedicated issue. Free-form beyond minLength -- no-bare-issue-citation (a prose scan across the whole sidecar for a bare #N/owner/repo#N token, run by gitapex_check_skill_shape.py) is deliberately NOT reproduced as a schema pattern here: that scan's real implementation excludes inline code, fenced blocks, and Markdown-link spans with its own multi-hundred-line rule set, and a partial regex reimplementation here would silently diverge from it rather than genuinely cover it. This remains the companion scanner's (or gitapex_check_skill_shape.py's) job, not this schema's."
+          "description": "The provenance source: a full github.com/OWNER/REPO/issues/NUMBER (or /pull/NUMBER) URL, another absolute URL, a repo-relative path, or method:SKILL-NAME for an audit with no dedicated issue. Free-form beyond minLength -- no-bare-issue-citation (a prose scan across the whole sidecar for a bare hash-number or owner/repo-plus-hash-number token, run by this skill's own bundled shape checker) is deliberately NOT reproduced as a schema pattern here: that scan's real implementation excludes inline code, fenced blocks, and Markdown-link spans with its own multi-hundred-line rule set, and a partial regex reimplementation here would silently diverge from it rather than genuinely cover it. This remains the companion scanner's (or that shape checker's) job, not this schema's."
         },
         "summary": {
           "type": "string",
@@ -116,7 +116,7 @@
           "type": "array",
           "uniqueItems": true,
           "items": { "$ref": "#/$defs/skillNameRef" },
-          "description": "Hard: the procedure cannot function without it. An empty list is a valid, deliberate 'no hard dependencies' statement, unlike spec.references. Every name must resolve to an existing skills/<name>/ directory (skill-dependencies-resolve) -- cross-file, checked by the companion scanner, not this schema. The full requires-graph across all sidecars must also be acyclic (a repo-wide invariant enforced by tests/test_gitapex_skill_metadata_sidecar.py, entirely outside any single instance's own schema)."
+          "description": "Hard: the procedure cannot function without it. An empty list is a valid, deliberate 'no hard dependencies' statement, unlike spec.references. Every name must resolve to an existing skills/*/ directory (skill-dependencies-resolve) -- cross-file, checked by the companion scanner, not this schema. The full requires-graph across all sidecars must also be acyclic (a repo-wide invariant enforced by tests/test_gitapex_skill_metadata_sidecar.py, entirely outside any single instance's own schema)."
         },
         "relatedTo": {
           "type": "array",
@@ -154,7 +154,7 @@
         "trackingIssue": {
           "type": "string",
           "pattern": "^https://github\\.com/tvna/gitapex/(?:issues|pull)/\\d+$",
-          "description": "A full GitHub issue/PR URL, anchoring the whole string -- deliberately not a bare #123/owner/repo#123 shape (that loses its meaning once this sidecar travels with its skill directory to another repository via vendoring). Shape-only: never resolved against a live GitHub API call, matching gitapex_check_skill_shape.py's own offline/read-only design."
+          "description": "A full GitHub issue/PR URL, anchoring the whole string -- deliberately not a short hash-number or owner/repo-plus-hash-number shape (that loses its meaning once this sidecar travels with its skill directory to another repository via vendoring). Shape-only: never resolved against a live GitHub API call, matching this skill's own bundled shape checker's offline/read-only design."
         },
         "since": { "$ref": "#/$defs/lifecycleDate" }
       }
@@ -167,7 +167,7 @@
         "reason": { "$ref": "#/$defs/lifecycleReason" },
         "replacement": {
           "$ref": "#/$defs/skillNameRef",
-          "description": "Must resolve to an existing sibling skills/<name>/ directory (lifecycle-deprecated-replacement-resolves) -- cross-file, checked by the companion scanner, not this schema."
+          "description": "Must resolve to an existing sibling skills/*/ directory (lifecycle-deprecated-replacement-resolves) -- cross-file, checked by the companion scanner, not this schema."
         },
         "since": { "$ref": "#/$defs/lifecycleDate" },
         "removeAfter": {
@@ -204,7 +204,7 @@
     "executionRequirements": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Two recognized subkeys so far (tools, packages); further categories (filesystem/network/mcp/credentials/browser/externalServices/context) are deferred -- until they land, any key other than these here is a real unknown key, not reserved space, matching gitapex_check_skill_shape.py's own current behavior for tools (packages is schema-only for now -- issue #804 -- and is not yet recognized by that hand-rolled parser).",
+      "description": "Two recognized subkeys so far (tools, packages); further categories (filesystem/network/mcp/credentials/browser/externalServices/context) are deferred -- until they land, any key other than these here is a real unknown key, not reserved space, matching this skill's own bundled shape checker's current behavior for tools (packages is schema-only for now -- https://github.com/tvna/gitapex/issues/804 -- and is not yet recognized by that hand-rolled parser).",
       "properties": {
         "tools": { "$ref": "#/$defs/executionRequirementsTools" },
         "packages": { "$ref": "#/$defs/executionRequirementsPackages" }
@@ -235,7 +235,7 @@
       "type": "object",
       "propertyNames": { "pattern": "^[a-z][a-z0-9-]*$" },
       "additionalProperties": { "$ref": "#/$defs/packageList" },
-      "description": "spec.executionRequirements.packages (issue #804): non-stdlib runtime package dependencies a skill's own implementation script(s) require to run, keyed by a free-form ecosystem identifier (e.g. \"pip\", \"npm\", \"cargo\", \"gem\") -- no closed enum of supported ecosystems; any key matching propertyNames' kebab-case-like pattern is schema-valid, so a future ecosystem needs no schema change to become usable. Independent of spec.portability -- portability measures whether a skill's own instructions resolve inside its own directory (a domain-knowledge/path-locality axis), never a runtime package-dependency-footprint axis; this field exists so a runtime dependency is never disclosed by misusing portability instead. Each ecosystem's value is a $defs.packageList."
+      "description": "spec.executionRequirements.packages (https://github.com/tvna/gitapex/issues/804): non-stdlib runtime package dependencies a skill's own implementation script(s) require to run, keyed by a free-form ecosystem identifier (e.g. \"pip\", \"npm\", \"cargo\", \"gem\") -- no closed enum of supported ecosystems; any key matching propertyNames' kebab-case-like pattern is schema-valid, so a future ecosystem needs no schema change to become usable. Independent of spec.portability -- portability measures whether a skill's own instructions resolve inside its own directory (a domain-knowledge/path-locality axis), never a runtime package-dependency-footprint axis; this field exists so a runtime dependency is never disclosed by misusing portability instead. Each ecosystem's value is a $defs.packageList."
     },
     "packageList": {
       "type": "array",

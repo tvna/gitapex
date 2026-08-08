@@ -1832,26 +1832,24 @@ def test_portable_qualified_issue_citation_fails(tmp_path):
     assert "owner/repo#149" in res["no-bare-issue-citation"].evidence
 
 
-def test_non_markdown_reference_exempt_from_prose_citation_checks(tmp_path):
-    # A bundled non-Markdown dependency file (e.g. a JSON schema) is not
-    # prose: its own machine-authored description strings can legitimately
-    # contain "issue #149"-shaped provenance notes, "<name>"-shaped path
-    # patterns, or a "scripts/other-skill/x.py" mention without those being
-    # SKILL.md/references/*.md authoring mistakes. _citation_sources must
-    # not surface it as an offending source at all.
+def test_non_markdown_reference_still_scanned_for_prose_citations(tmp_path):
+    # A bundled non-Markdown dependency file (e.g. a JSON schema) still
+    # carries author-written English in its own description strings --
+    # exempting it by extension would let a bare issue citation or a raw
+    # placeholder hide from every citation/placeholder check just by
+    # living in a .json file instead of a .md one. _citation_sources must
+    # keep scanning it (only the Markdown-syntax-specific TOC/link/anchor
+    # checks are .md-only -- see test_long_non_markdown_reference_skips_
+    # markdown_checks below).
     d = _write_raw(
         tmp_path,
         _portable_body(),
-        references={
-            "schema.json": (
-                '{\n  "description": "See issue #149 and owner/repo#149, a '
-                '<name> placeholder, and scripts/other-skill/x.py"\n}\n'
-            )
-        },
+        references={"schema.json": '{\n  "description": "See issue #149, a <name> placeholder"\n}\n'},
     )
     res = _by_name(css.check_shape(d))
-    assert res["no-bare-issue-citation"].passed is True
-    assert res["no-raw-angle-bracket-placeholder"].passed is True
+    assert res["no-bare-issue-citation"].passed is False
+    assert "references/schema.json:#149" in res["no-bare-issue-citation"].evidence
+    assert res["no-raw-angle-bracket-placeholder"].passed is False
 
 
 def test_portable_unhedged_repo_path_citation_fails(tmp_path):

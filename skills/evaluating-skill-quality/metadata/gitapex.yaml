@@ -283,7 +283,10 @@ spec:
       summary: "Moved .gitapex/skill-metadata.schema.json (a CI-only path) to this skill's own references/skill-metadata.schema.json so the sidecar contract's formal schema travels with the skill when redistributed; updated its $id and every path reference. Added a Dependency file portability check to rubric.md's Portability level section, grading whether a bundled schema/script/config/fixture resolves inside a skill's own directory, at dimension-6 strictness."
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/834"
-      summary: "The move surfaced a real bug: gitapex_check_skill_shape.py's references/ TOC check and its shared _citation_sources prose-citation scan iterated every file regardless of extension, so a non-Markdown reference file failed the Markdown-only TOC rule and false-positived on bare-issue/placeholder patterns inside its own JSON description strings. Scoped both to .md files only, added regression tests; full pytest (2774), ruff, and mypy stay clean."
+      summary: "The move surfaced a real bug: gitapex_check_skill_shape.py's references/ TOC check iterated every file regardless of extension, so a non-Markdown reference file over 100 lines failed the Markdown-only TOC-heading rule. Scoped that check (and the sibling links-inside-skill/anchor-targets-resolve pair) to .md files only, added regression tests."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/834"
+      summary: "checker-script-adversarial-review caught a defense-in-depth gap in the first fix: scoping the shared _citation_sources prose-citation scan to .md-only would exempt every non-Markdown references/ file from bare-issue-citation/raw-placeholder/repo-path checks entirely -- a bypass by file extension alone. Reverted; _citation_sources scans every references/ file again, and skill-metadata.schema.json's own prose was rewritten to comply."
   skillDependencies:
     requires: []
     relatedTo:

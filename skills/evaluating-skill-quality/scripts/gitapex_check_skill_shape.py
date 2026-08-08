@@ -3543,23 +3543,28 @@ def check_shape(target: Path) -> list[CheckResult]:
 
 
 def _citation_sources(skill_md: Path, skill_dir: Path, body: list[str]) -> list[tuple[str, str]]:
-    """Return (label, body-text) for SKILL.md and every references/*.md
-    file -- the shared source set every prose citation/placeholder/
-    mechanism-fit check built on this function scans. A non-Markdown
-    reference file (e.g. a bundled JSON schema) is deliberately excluded:
-    these checks scan Markdown PROSE conventions (a bare "#149", a
-    "<name>" placeholder, a "scripts/..." mention meant to read as running
-    text), and a schema's own machine-authored description strings are not
-    prose written under those conventions -- scanning them would flag
-    legitimate schema content (e.g. a real "issue #488" provenance note or
-    a "skills/<name>/" path pattern in a $ref description) as if it were a
-    SKILL.md/references/*.md authoring mistake.
+    """Return (label, body-text) for SKILL.md and every references/ file,
+    Markdown or not -- the shared source set every prose citation/
+    placeholder/mechanism-fit check built on this function scans.
+    Deliberately NOT limited to references/*.md: a bundled non-Markdown
+    dependency file (e.g. a JSON schema) still carries author-written
+    English in its own description strings, and exempting it by extension
+    would let a bare issue citation, an illustrative model identifier, an
+    unhedged repo-path citation, or a raw placeholder hide from every one
+    of these checks just by living in a `.json`/`.yaml`/`.txt` file instead
+    of a `.md` one -- a real bypass a corpus-wide adversarial pass found
+    when this exemption was first tried (issue #834 follow-up). The
+    Markdown-syntax-specific checks (TOC-heading presence,
+    links-inside-skill, anchor-targets-resolve) stay .md-only, in the
+    separate references/ loop below this function -- those really are
+    Markdown conventions a non-Markdown file has no notion of; the prose
+    checks built on this function are not.
     """
     sources: list[tuple[str, str]] = [(skill_md.name, "\n".join(body))]
     refs_dir = skill_dir / "references"
     if refs_dir.is_dir():
         for ref in sorted(refs_dir.iterdir()):
-            if not ref.is_file() or _is_ignorable(ref) or ref.suffix.lower() != ".md":
+            if not ref.is_file() or _is_ignorable(ref):
                 continue
             try:
                 ref_text = ref.read_text(encoding="utf-8")
