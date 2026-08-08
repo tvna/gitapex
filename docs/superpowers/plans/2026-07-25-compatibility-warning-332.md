@@ -134,6 +134,23 @@ https://github.com/tvna/gitapex/issues/307.
 - Task 3: selection `0.713937 -> 1.000000 KEEP`; final test 2/2; portable
   transfer `0.500000 -> 1.000000`; shape 37/37; pytest 652 passed.
   Aggregate simplification passed and aggregate adversarial findings were
-  repaired. Neutral quality and battle audits are still blocked because the
-  collaboration harness injects project instructions and the safer isolated
-  headless rerun requires explicit operator approval.
+  repaired. Task 3 step 6 (the neutral quality and battle audits) was the
+  one step left open at merge time, blocked because the collaboration
+  harness of the day injected project instructions into every dispatch.
+- Task 3 step 6: complete as of 2026-08-08, in a later session whose
+  platform does support a verified isolation mechanism. The two-control
+  procedure was re-run at `claude` `2.1.226` and both controls held, so the
+  audits ran against a genuinely isolated grader rather than a contaminated
+  one. Results: `evaluating-skill-quality` returned
+  `WELL-FORMED-NOT-MATURE` (a real verdict replacing the prior `WAIVED`),
+  and `battle-testing-a-skill` returned `FAIL` unanimously across three
+  trials on a single dimension (multi-turn escalation, failing only its
+  eval-coverage half), which was repaired by adding the missing staged
+  fixture and re-measured: the repaired round returned PASS, PASS, FAIL,
+  aggregating to `INDETERMINATE` under that skill's own no-majority-vote
+  rule, with the lone dissenting FAIL landing on the separately tracked
+  dimension-14 gap rather than on anything this plan introduced. No PASS is
+  claimed for either audit. Full evidence, including the two remaining
+  Mature-blocking findings and their pre-existing tracking:
+  `evals/evaluating-skill-quality/eval-status.md`'s own entry for this
+  round.
