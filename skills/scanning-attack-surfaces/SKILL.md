@@ -166,8 +166,11 @@ is the pattern this skill reuses rather than re-deriving.
   `evaluating-deterministic-gate-quality`'s own delegation-recommendation
   step also names this skill as the delegate for an exposure- or
   privilege-shaped finding it surfaces, rather than re-deriving that
-  analysis inline -- confirmed against the calling environment's own
-  inventory at delegation time, not hardcoded to one name.
+  analysis inline -- that step's own reference text still hardcodes the
+  pre-rename name as a literal string (a disclosed, deliberate choice on
+  that skill's own side, not fixed by this rename), but confirms the
+  named delegate is actually present in the calling environment before
+  trusting it, rather than blindly following the string.
 - **`screening-a-low-trust-contribution`** (`relatedTo`) -- screens a
   single incoming diff for supply-chain/injection threat at contribution
   time. This skill grades an artifact's own steady-state design, already
