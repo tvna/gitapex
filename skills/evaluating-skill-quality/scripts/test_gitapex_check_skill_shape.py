@@ -446,6 +446,27 @@ def test_long_reference_with_toc_passes(tmp_path):
     assert _by_name(css.check_shape(d))["toc:big.md"].passed is True
 
 
+def test_long_non_markdown_reference_skips_markdown_checks(tmp_path):
+    # A bundled JSON schema (or any non-.md dependency file) has no
+    # Markdown headings or links to hold TOC/link/anchor checks to --
+    # those must not even appear for it, unlike a genuine toc: FAIL.
+    filler = "\n".join(f'  "key{i}": {i},' for i in range(css.TOC_MIN_LINES + 5))
+    body = "{\n" + filler + '\n  "last": true\n}\n'
+    d = _write_skill(tmp_path, references={"big.json": body})
+    names = _by_name(css.check_shape(d))
+    assert "toc:big.json" not in names
+    assert "links-inside-skill:big.json" not in names
+    assert "anchor-targets-resolve:big.json" not in names
+
+
+def test_short_non_markdown_reference_is_unaffected(tmp_path):
+    d = _write_skill(tmp_path, references={"small.json": '{"a": 1}\n'})
+    names = _by_name(css.check_shape(d))
+    assert "toc:small.json" not in names
+    assert "links-inside-skill:small.json" not in names
+    assert "anchor-targets-resolve:small.json" not in names
+
+
 def test_missing_argument_exits_2(tmp_path):
     # argparse exits (raises SystemExit) with code 2 when the required
     # target is absent or extra positionals are given.
@@ -1809,6 +1830,28 @@ def test_portable_qualified_issue_citation_fails(tmp_path):
     res = _by_name(css.check_shape(d))
     assert res["no-bare-issue-citation"].passed is False
     assert "owner/repo#149" in res["no-bare-issue-citation"].evidence
+
+
+def test_non_markdown_reference_exempt_from_prose_citation_checks(tmp_path):
+    # A bundled non-Markdown dependency file (e.g. a JSON schema) is not
+    # prose: its own machine-authored description strings can legitimately
+    # contain "issue #149"-shaped provenance notes, "<name>"-shaped path
+    # patterns, or a "scripts/other-skill/x.py" mention without those being
+    # SKILL.md/references/*.md authoring mistakes. _citation_sources must
+    # not surface it as an offending source at all.
+    d = _write_raw(
+        tmp_path,
+        _portable_body(),
+        references={
+            "schema.json": (
+                '{\n  "description": "See issue #149 and owner/repo#149, a '
+                '<name> placeholder, and scripts/other-skill/x.py"\n}\n'
+            )
+        },
+    )
+    res = _by_name(css.check_shape(d))
+    assert res["no-bare-issue-citation"].passed is True
+    assert res["no-raw-angle-bracket-placeholder"].passed is True
 
 
 def test_portable_unhedged_repo_path_citation_fails(tmp_path):

@@ -34,6 +34,7 @@ skill's own folder.
   - [Subagent delegation scope](#subagent-delegation-scope)
   - [Invocation-mode fit](#invocation-mode-fit)
 - [Portability level](#portability-level)
+  - [Dependency file portability](#dependency-file-portability)
 - [Compatibility awareness](#compatibility-awareness)
 - [Confidentiality awareness](#confidentiality-awareness)
 - [Capability assumption](#capability-assumption)
@@ -700,6 +701,43 @@ grading below.
   belongs in a clearly named reference file (e.g.
   `references/this-repo-only.md`) a consumer can identify and drop, not
   blended into the portable core.
+
+### Dependency file portability
+
+The litmus test above asks whether a *sentence* would survive being
+copied elsewhere; this asks the same question of a bundled dependency
+*file*'s actual location. A skill's procedure can depend on more than
+prose -- a bundled script, a schema, a config template, or a data
+fixture it reads, validates against, or otherwise treats as
+authoritative. For each such file, check where it actually lives: inside
+the skill's own directory (`scripts/` or `references/`), where it
+travels together with `SKILL.md` when the skill is copied or installed
+as a plugin elsewhere -- or at a path outside the skill (a CI-only
+location, a repository-governance directory, another skill's own
+folder) that a plugin install or a vendoring copy will not carry along.
+
+- **Portable** -- every dependency file the procedure treats as
+  authoritative must resolve inside the skill's own directory. One that
+  instead resolves outside it is the same dimension-6 (durability)
+  defect as a prose path-read failing the sentence-level litmus test
+  above, not a lesser one: the skill silently breaks the moment it is
+  copied elsewhere and the outside file does not come with it.
+- **Repository-scoped / Mixed** -- a dependency file legitimately living
+  outside the skill's own directory is fine under these two levels, the
+  same way an operational prose path-read is; the declared scope is what
+  licenses it. Still worth naming in the footer `## Notes` rationale
+  alongside any prose citations, so a reader sees the full dependency
+  surface in one place rather than only the sentences that mention it.
+
+A worked example already in this repository: this skill's own grading of
+a target's `metadata/gitapex.yaml` sidecar -- the contract this section,
+the Capability assumption section, the Lifecycle section, and the
+Execution requirements section all document in prose -- has a formal
+JSON Schema specification of that same contract bundled inside this
+skill's own directory, at
+[skill-metadata.schema.json](skill-metadata.schema.json), rather than
+cited from a path outside it, so the specification travels with this
+skill wherever it is copied.
 
 **Bare issue/PR-number citations are barred at every level, not just
 Portable.** A bare GitHub issue/PR-number citation (`#149` or

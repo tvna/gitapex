@@ -149,11 +149,16 @@ Checks (the canonical list -- the manual fallback is to apply these):
     children) is dropped entirely, not gated/checked here or anywhere --
     only nested maps and list items under them are skipped by the parser,
     and indented lines are never flagged as malformed regardless of shape.
-  - references/ files: exactly one level deep
-  - any references/ file over 100 lines: contains a table of contents
+  - references/ files: exactly one level deep, any extension (a bundled
+    JSON schema is as legitimate a dependency file as a Markdown doc).
+  - any references/*.md file over 100 lines: contains a table of contents
     (a Markdown heading matching "Table of contents" or "Contents",
     case-insensitive). Junk files (dotfiles, __pycache__, non-UTF-8) under
-    references/ are ignored, not flagged.
+    references/ are ignored, not flagged; a non-Markdown reference file
+    (any extension other than .md) is exempt from this check and the two
+    that follow (links-inside-skill, anchor-targets-resolve) -- those are
+    Markdown-navigation concepts that do not apply to it -- but still
+    counts toward references-flat above.
   - SKILL.md body and every references/*.md file (links-inside-skill):
     every Markdown link target -- inline ([text](path))
     or reference-style ([text][label] resolved via a [label]: path
@@ -3479,6 +3484,14 @@ def check_shape(target: Path) -> list[CheckResult]:
         for ref in sorted(refs_dir.iterdir()):
             if not ref.is_file() or _is_ignorable(ref):
                 continue
+            if ref.suffix.lower() != ".md":
+                # A non-Markdown dependency file (e.g. a bundled JSON
+                # schema) still gets references-flat and the junk filter
+                # above, but TOC/link/anchor are Markdown-navigation
+                # concepts that do not apply to it -- skip rather than
+                # fail it against a heading convention it was never
+                # written to have.
+                continue
             try:
                 ref_text = ref.read_text(encoding="utf-8")
             except (UnicodeDecodeError, OSError):
@@ -3531,13 +3544,22 @@ def check_shape(target: Path) -> list[CheckResult]:
 
 def _citation_sources(skill_md: Path, skill_dir: Path, body: list[str]) -> list[tuple[str, str]]:
     """Return (label, body-text) for SKILL.md and every references/*.md
-    file -- the shared source set both citation-check functions below scan.
+    file -- the shared source set every prose citation/placeholder/
+    mechanism-fit check built on this function scans. A non-Markdown
+    reference file (e.g. a bundled JSON schema) is deliberately excluded:
+    these checks scan Markdown PROSE conventions (a bare "#149", a
+    "<name>" placeholder, a "scripts/..." mention meant to read as running
+    text), and a schema's own machine-authored description strings are not
+    prose written under those conventions -- scanning them would flag
+    legitimate schema content (e.g. a real "issue #488" provenance note or
+    a "skills/<name>/" path pattern in a $ref description) as if it were a
+    SKILL.md/references/*.md authoring mistake.
     """
     sources: list[tuple[str, str]] = [(skill_md.name, "\n".join(body))]
     refs_dir = skill_dir / "references"
     if refs_dir.is_dir():
         for ref in sorted(refs_dir.iterdir()):
-            if not ref.is_file() or _is_ignorable(ref):
+            if not ref.is_file() or _is_ignorable(ref) or ref.suffix.lower() != ".md":
                 continue
             try:
                 ref_text = ref.read_text(encoding="utf-8")

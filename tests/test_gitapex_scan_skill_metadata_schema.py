@@ -1,5 +1,6 @@
 """Tests for the draft skill-metadata schema drift scanner
-(.github/scripts/gitapex_scan_skill_metadata_schema.py + .gitapex/skill-metadata.schema.json).
+(.github/scripts/gitapex_scan_skill_metadata_schema.py +
+skills/evaluating-skill-quality/references/skill-metadata.schema.json).
 
 The final tests are the gate itself: every real skills/<name>/metadata/
 gitapex.yaml in this repository must validate against the schema with no
