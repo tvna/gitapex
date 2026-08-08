@@ -36,6 +36,12 @@ spec:
     - kind: corroboration
       anchor: "references/worked-examples.md"
       summary: "The division-of-labor claim is measured, not asserted: run against this repository's own .github/workflows/ at the pinned versions (actionlint 1.7.12, zizmor 1.25.2), actionlint reported 0 findings on exactly the inputs where zizmor reported 67 (7 informational, 4 high, 56 suppressed). The recorded run is the worked example."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/pull/881"
+      summary: "The pre-merge adversarial review round found a real defect in the first draft: Procedure step 1 collected workflow files and composite action definitions into one list and fed it to both tools. Confirmed against the real actionlint 1.7.12 binary that a composite action.yml then yields two spurious syntax-check errors ('jobs'/'on' section is missing) and exit 1. Step 1 now keeps two lists; actionlint reads workflows only."
+    - kind: corroboration
+      anchor: "references/worked-examples.md"
+      summary: "zizmor does collect and audit composite action definitions, verified from its own verbose log ('registering action input as with key file://.github/actions/harden-checkout/action.yml', then scheduling artipacked, unsound-contains, excessive-permissions, dangerous-triggers against it). It found nothing there in the recorded run, which is a fact about that target, not a reason to omit the composite-action list."
     - kind: audit
       anchor: "method:evaluating-skill-quality"
       summary: "Nine-dimension quality review of this SKILL.md and its references/, run in the authoring session's own thread rather than as an isolated subagent dispatch -- the session's harness directives ruled out self-initiated dispatch. That isolation limitation is disclosed rather than papered over, matching scanning-attack-surfaces' own in-context self-review precedent."

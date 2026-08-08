@@ -59,6 +59,17 @@ also pipes each `run:` block through `shellcheck`, and Python `run:`
 blocks through `pyflakes`, when those are present. It ships no
 security-posture audit.
 
+The two also read different input sets, which is easy to miss and
+produces a confident false failure when missed. actionlint reads workflow
+files only. zizmor additionally collects and audits composite action
+definitions (`action.yml` / `action.yaml`). Handing a composite action
+definition to actionlint does not simply return nothing -- it reports
+`"jobs" section is missing in workflow` and `"on" section is missing in
+workflow` as syntax errors and exits non-zero, because it is parsing an
+action definition against the workflow schema. Those are artifacts of
+the wrong input, not findings, and the Procedure below routes inputs so
+they never arise.
+
 **zizmor** grades whether a workflow is *safe*. Its audits cover
 template injection through expression expansion, over-broad or absent
 `permissions:` blocks, dangerous trigger configurations, credential
@@ -90,28 +101,39 @@ names that **offline coverage gap** explicitly, so a reader never mistakes
 
 ## Procedure
 
-1. **Collect the inputs.** Find the target's workflow files
-   (`.github/workflows/` `*.yml` and `*.yaml`) and any composite action
-   definitions (`action.yml` / `action.yaml`). Record the exact list. If
-   the list is empty, apply the Applicability gate above and stop. If the
-   directory exists but cannot be read, that is a distinct outcome from an
-   empty one -- report it as unreadable, naming what could and could not
-   be read, rather than reporting "not applicable".
+1. **Collect the inputs, as two lists.** Find the target's workflow files
+   (`.github/workflows/` `*.yml` and `*.yaml`), and separately any
+   composite action definitions (`action.yml` / `action.yaml`). Keep them
+   apart: the workflow list goes to both tools, the composite-action list
+   goes to zizmor only, for the reason stated above. Record both lists
+   exactly. If both are empty, apply the Applicability gate above and
+   stop. If a directory exists but cannot be read, that is a distinct
+   outcome from an empty one -- report it as unreadable, naming what could
+   and could not be read, rather than reporting "not applicable".
 2. **Confirm both tools and record their versions.** Run
    `actionlint --version` and `zizmor --version`, and quote both in the
    report. If either binary is absent or fails to report a version, stop
    and say **cannot scan -- a required tool is missing**, naming which
    one. A missing tool is never a clean result, and this skill never
    substitutes its own reasoning for the tool that did not run.
-3. **Run actionlint.** From the target's root:
-   `actionlint -format '{{json .}}'`, or with the collected paths passed
-   explicitly. Record the exit code alongside the output. actionlint
-   exits non-zero both when it finds problems and when it fails to run,
-   so a non-zero exit is only a findings signal once the output parses as
-   the expected result array; otherwise it is a tool error, reported as
-   such.
-4. **Run zizmor.** `zizmor --offline --format=json` over the same
-   collected inputs. Record the exit code alongside the output, and read
+3. **Run actionlint over the workflow list only.** From the target's
+   root: `actionlint -format '{{json .}}'`, which finds the nearest
+   workflow directory itself, or with the workflow paths passed
+   explicitly. Never pass a composite action definition. Record the exit
+   code alongside the output. actionlint exits non-zero both when it
+   finds problems and when it fails to run -- `1` for findings, `2` for
+   an argument error, `3` for an input it cannot open -- so a non-zero
+   exit is only a findings signal once the output parses as the expected
+   result array; otherwise it is a tool error, reported as such. One
+   case of `3` is not a tool error at all: a target whose workflow list
+   is empty but which does have composite action definitions makes
+   actionlint report `no YAML file was found` and exit `3`. That is
+   "nothing for this tool to read", so run zizmor over the
+   composite-action list alone and say in the report that actionlint had
+   no input -- neither a failure nor a clean actionlint result.
+4. **Run zizmor over both lists.** `zizmor --offline --format=json` over
+   the workflow files and the composite action definitions together;
+   zizmor collects and audits both. Record the exit code, and read
    it against that tool's documented meaning rather than a
    zero-versus-non-zero guess: `0` is a completed audit with no findings,
    `11` through `14` are completed audits reporting findings at
@@ -123,8 +145,10 @@ names that **offline coverage gap** explicitly, so a reader never mistakes
    by file. For each finding carry through exactly what the tool said:
    its own rule or audit identifier, its own severity and confidence
    labels, the file and line it points at, and its message. Add the
-   version of each tool, each tool's exit code, the input list from
-   step 1, and the offline coverage gap named above. Do not translate a
+   version of each tool, each tool's exit code, both input lists from
+   step 1, and the offline coverage gap named above. State explicitly
+   that any composite action definitions were audited by zizmor alone --
+   a reader must not assume actionlint covered them. Do not translate a
    tool's labels into a different vocabulary, do not merge the two tools'
    findings into one ranked list, and do not add a summary verdict of
    your own on top.

@@ -38,9 +38,12 @@ toolchain actually provisions rather than whatever happened to be on
 
 ## Step 1 -- collected inputs
 
-25 workflow files under `.github/workflows/` (`*.yml`; no `*.yaml`
-present), plus one composite action definition at
-`.github/actions/harden-checkout/action.yml`.
+Two lists, kept apart as the Procedure requires:
+
+- **Workflow files:** 25 under `.github/workflows/` (`*.yml`; no `*.yaml`
+  present). Both tools read these.
+- **Composite action definitions:** one, at
+  `.github/actions/harden-checkout/action.yml`. zizmor only.
 
 ## Step 3 -- actionlint
 
@@ -54,12 +57,36 @@ Zero findings. Exit `0`, and the output parses as the expected result
 array, so this is a completed run reporting nothing -- not the ambiguous
 non-zero case Procedure step 3 warns about.
 
+The split matters, and this target is where it shows. Passing the one
+composite action definition to actionlint anyway produces:
+
+```
+$ actionlint .github/actions/harden-checkout/action.yml
+.github/actions/harden-checkout/action.yml:1:1: "jobs" section is missing in workflow [syntax-check]
+.github/actions/harden-checkout/action.yml:1:1: "on" section is missing in workflow [syntax-check]
+exit=1
+```
+
+Two findings that are not findings -- actionlint parsed an action
+definition against the workflow schema. A run that fed it the whole
+collected input set would have reported a syntactically broken
+repository. It is not broken.
+
 ## Step 4 -- zizmor
 
 ```
-$ zizmor --offline --no-progress --format=json .github/workflows/
+$ zizmor --offline --no-progress --format=json .github/workflows/ .github/actions/
 exit=14
 ```
+
+zizmor did collect the composite action -- its own verbose log shows
+`registering action input as with key
+file://.github/actions/harden-checkout/action.yml`, then scheduling
+`artipacked`, `unsound-contains`, `excessive-permissions`, and
+`dangerous-triggers` against it. It produced no finding there, so the
+totals below are identical to a workflows-only run. That is a result
+about this target, not a reason to omit the composite-action list next
+time.
 
 Exit `14` is a *completed* audit reporting findings at high severity, not
 an error. Reading it as a failure, or reading any non-zero as "findings",
@@ -117,7 +144,8 @@ them into a gitapex verdict vocabulary.
 ## Step 5 -- what the run demonstrates
 
 Same repository, same 25 workflow files, same moment: **actionlint
-reported 0 findings where zizmor reported 67.** That is the division of
+reported 0 findings on the workflow list where zizmor reported 67 across
+the workflow list and the composite action.** That is the division of
 labor measured rather than asserted. actionlint's audits are about
 validity -- schema conformance, expression typing, runner labels,
 embedded shell -- and this repository's workflows are valid. zizmor's
