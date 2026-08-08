@@ -37,6 +37,21 @@ literal path is wrong from a subdirectory and inside a linked worktree (where
 `.git` is a file), and it ignores `core.hooksPath`. Worktrees matter here --
 this repository's own agent tooling creates them.
 
+**Never run `prek install` from inside a linked worktree.** A worktree shares
+the main checkout's hooks directory, and prek writes an absolute path to the
+*installing* tree's `.venv/bin/prek` into each shim. Installing from a worktree
+therefore repoints the main checkout's hooks at that worktree's venv, and they
+fail outright once the worktree is removed:
+
+```
+.git/hooks/pre-push: exec: prek: not found
+```
+
+Recovery is `uv run prek install --overwrite -t pre-commit -t pre-push` from the
+main checkout. The devShell already refuses to install from a worktree for this
+reason -- it verifies the shared shims and tells you to install from the main
+checkout instead.
+
 CI (`.github/workflows/test.yml`, `.github/workflows/lint.yml`) still runs
 the same ruff/mypy checks independently as the actual merge gate -- the
 local hook is a fast first pass, not a replacement for it.

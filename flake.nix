@@ -213,17 +213,34 @@
             # relative to the toplevel in a normal checkout and an absolute
             # one in a worktree, hence the normalisation. `-x` rather than
             # `-f`: a shim that is not executable never runs.
+            # A linked worktree must NOT install. Its hooks directory is the
+            # main checkout's shared one, and prek bakes an absolute path to
+            # the *installing* tree's .venv/bin/prek into the shim -- so
+            # installing from a worktree silently repoints the main checkout's
+            # hooks at that worktree's venv, and they break outright once the
+            # worktree is removed ("exec: prek: not found"). Reproduced the
+            # hard way while testing this very hook. Linked worktrees are
+            # routine here (.gitignore's /.claude/worktrees/), so a worktree
+            # verifies the shared shims and points at the main checkout
+            # instead of writing to them.
             shellHook = ''
               if root=$(git rev-parse --show-toplevel 2>/dev/null); then
-                if ! (cd "$root" && uv run prek install --quiet -t pre-commit -t pre-push); then
+                hooks=$(cd "$root" && git rev-parse --git-path hooks)
+                case "$hooks" in
+                  /*) ;;
+                  *) hooks="$root/$hooks" ;;
+                esac
+                if [ "$(cd "$root" && git rev-parse --git-dir)" != "$(cd "$root" && git rev-parse --git-common-dir)" ]; then
+                  if [ ! -x "$hooks/pre-commit" ] || [ ! -x "$hooks/pre-push" ]; then
+                    echo "WARNING: git hooks are not installed in the shared hooks directory:" >&2
+                    echo "         $hooks" >&2
+                    echo "         This is a linked worktree, which must not install them itself." >&2
+                    echo "         Run this in the main checkout: uv run prek install -t pre-commit -t pre-push" >&2
+                  fi
+                elif ! (cd "$root" && uv run prek install --quiet -t pre-commit -t pre-push); then
                   echo "WARNING: prek install failed -- git hooks are NOT active." >&2
                   echo "         Fix it with: uv run prek install -t pre-commit -t pre-push" >&2
                 else
-                  hooks=$(cd "$root" && git rev-parse --git-path hooks)
-                  case "$hooks" in
-                    /*) ;;
-                    *) hooks="$root/$hooks" ;;
-                  esac
                   if [ ! -x "$hooks/pre-commit" ]; then
                     echo "WARNING: $hooks/pre-commit is missing or not executable." >&2
                   fi
