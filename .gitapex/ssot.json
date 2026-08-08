@@ -58,6 +58,19 @@
       "supersedes": null
     },
     {
+      "id": "post-write-provenance-recheck",
+      "kind": "script",
+      "script": ["hooks/check-post-write-provenance.sh", "hooks/gitapex_check_post_write_provenance.py"],
+      "rule": "After mcp__github__create_pull_request / update_pull_request / issue_write succeeds, re-fetches the body GitHub actually stored via the issues endpoint and re-runs skills/outward-artifact-preflight/scripts/gitapex_scan_provenance.py plus an ASCII-only scan against it; reports a hit, or any inability to verify, on both in-session channels (decision/reason to the agent, systemMessage to the operator) and never posts publicly. Detective only -- PostToolUse cannot block a write that already succeeded.",
+      "planes": ["posttooluse"],
+      "trigger": "PostToolUse matcher mcp__github__create_pull_request|mcp__github__update_pull_request|mcp__github__issue_write (hooks/hooks.json)",
+      "policy_refs": [],
+      "cluster": ["outward-hygiene", "github-operations"],
+      "tracking_issue": 878,
+      "status": "active",
+      "supersedes": null
+    },
+    {
       "id": "template-overwrite-guard",
       "kind": "script",
       "script": "hooks/check-template-overwrite.sh",
