@@ -94,18 +94,41 @@ applied to each and produced the same result across all 9 -- see issue
 | `planning-a-branch-from-an-issue` | `[files]` | `[]` | `[]` | none |
 | `scorer-gated-skill-edits` | `[files]` | `[]` | `[]` | none |
 
-## Explicitly out of scope so far
+## Batch 3 (issue #823): the 12 remaining non-scripted skills, seven patterns
 
-Per issues #814/#818's own Non-goals: the 11 remaining non-scripted
-skills (`drafting-a-pr-to-merge`, `establishing-ubiquitous-language`,
-`evaluating-context-channel-maturity`, `explaining-the-work`,
-`fixing-a-reported-issue`, `grounding-in-primary-sources`,
-`merge-retrospective`, `ranking-the-open-queue`,
-`responding-to-a-fresh-arrival`, `screening-a-low-trust-contribution`,
-`untrusted-input-triage`, `vetting-attack-surface`), the
+Unlike Batch 2, these 12 skills carry no bundled `scripts/` directory, so
+each declaration traces to concrete text in that skill's own `SKILL.md`
+Procedure/Steps/Stop-boundaries -- never a generic "the invoking agent
+might use tools" assumption. Three entries (marked `*` below) rest on a
+named assumption about which underlying mechanism (local shell vs. a
+hosted API) a described action uses, disclosed in issue #823's own
+Assumptions section rather than silently picked -- re-verify against the
+actual runtime this skill executes under before treating those three as
+settled. This batch completes the `tools`-category inventory for every
+skill in `skills/`.
+
+| Skill | `read` | `write` | `shell` | Notable gap |
+|---|---|---|---|---|
+| `merge-retrospective` | `[]` | `[]` | `[]` | none -- GitHub-MCP-only |
+| `ranking-the-open-queue` | `[]` | `[]` | `[]` | none -- GitHub-MCP-only, explicitly read-only by its own Stop boundaries |
+| `explaining-the-work` | `[]` | `[]` | `[]` | none -- purely advisory, routes to other artifacts/skills, no tool action of its own |
+| `untrusted-input-triage` | `[]` | `[]` | `[]` | none -- triages text already supplied in context |
+| `responding-to-a-fresh-arrival` | `[files]` | `[]` | `[]` | none |
+| `vetting-attack-surface` | `[files]` | `[]` | `[]` | none -- own Stop boundaries explicitly rule out writing and executing |
+| `establishing-ubiquitous-language` | `[files]` | `[files]` | `[]` | none |
+| `drafting-a-pr-to-merge` | `[files]` | `[files]` | `[git]` * | push mechanism assumed local `git push`; could be API-based in another environment |
+| `fixing-a-reported-issue` | `[files]` | `[files]` | `[tests]` | none |
+| `evaluating-context-channel-maturity` | `[files]` | `[]` | `[git]` * | commit-history check assumed local `git log`; could be API-based |
+| `grounding-in-primary-sources` | `[files]` | `[]` | `[commands]` | real `network` (external docs/changelog fetches) undeclared -- no schema category exists yet, same gap as `setup-gitapex-toolchain` |
+| `screening-a-low-trust-contribution` | `[]` | `[]` | `[registry-lookup]` * | registry-lookup mechanism assumed local CLI (`npm view`); could be a hosted registry API call |
+
+## Explicitly out of scope
+
+Per issues #814/#818/#823's own Non-goals: the
 `packages`/`filesystem`/`network`/`mcp`/`credentials`/`browser`/
 `externalServices`/`context` categories, a fixed `tools` tag vocabulary
 (W2), and adapter/enforcement work (W4) or review-guidance/drift-gate
-updates (W6/W7). Follow-up child issues under
-https://github.com/tvna/gitapex/issues/307, batched the same small-group
-way, cover the rest.
+updates (W6/W7). Follow-up work under
+https://github.com/tvna/gitapex/issues/307 covers those, once W2's
+compatibility matrix and a real tag vocabulary exist to ground them
+against.

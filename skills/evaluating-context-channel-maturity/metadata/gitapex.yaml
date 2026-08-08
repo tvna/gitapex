@@ -41,11 +41,21 @@ spec:
       summary: "All 8 findings fixed: worked example quote replaced with verified CLAUDE.md text and its commit-count claim corrected; criterion 5 added to the harness-config-lookup allowance; a branch-protection-vs-merge-shape hedge added; AGENTS.md added to Scope/Precondition as a separate channel instance; Subagent dispatch gained the isolation-verification requirement; an Auto-memory representation-confirmation step added; Scope wording tightened."
       outcome:
         fixed: 8
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/823"
+      summary: "Declared spec.executionRequirements.tools (W3 third slice, https://github.com/tvna/gitapex/issues/307): reads the target channel's own content plus a hooks manifest/CODEOWNERS file when checking criteria 1/4/5 (read); commit-history inspection is declared shell: [git] since this skill's own text names no GitHub-API alternative -- an assumption flagged as residual risk in issue 823, not a resolved cross-runtime fact."
   skillDependencies:
     relatedTo:
       - evaluating-skill-quality
       - evaluating-deterministic-gate-quality
       - grounding-in-primary-sources
+  executionRequirements:
+    tools:
+      read:
+        - files
+      write: []
+      shell:
+        - git
   lifecycle:
     renamedFrom: evaluating-decision-state-discipline
     experimental:

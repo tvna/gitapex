@@ -11,3 +11,13 @@ spec:
       - planning-a-branch-from-an-issue
       - ranking-the-open-queue
       - screening-a-low-trust-contribution
+  executionRequirements:
+    tools:
+      read:
+        - files
+      write: []
+      shell: []
+  references:
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/823"
+      summary: "Declared spec.executionRequirements.tools (W3 third slice, https://github.com/tvna/gitapex/issues/307): Step 3 reads .github/ISSUE_TEMPLATE/*.yml when present (read); everything else is GitHub-MCP (search_issues, add_issue_comment, not modeled by this tools category); no write or shell action of its own."

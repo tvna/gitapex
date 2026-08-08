@@ -11,3 +11,12 @@ spec:
       - planning-a-branch-from-an-issue
       - responding-to-a-fresh-arrival
       - screening-a-low-trust-contribution
+  executionRequirements:
+    tools:
+      read: []
+      write: []
+      shell: []
+  references:
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/823"
+      summary: "Declared spec.executionRequirements.tools (W3 third slice, https://github.com/tvna/gitapex/issues/307): all three categories empty -- this skill is entirely GitHub-MCP-based (list_issues/search_issues) and its own Stop boundaries explicitly ban shelling out to a command-line GitHub tool and ban mutating any issue or PR."

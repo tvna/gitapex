@@ -9,3 +9,12 @@ spec:
     requires: []
     relatedTo:
       - drafting-an-adr
+  executionRequirements:
+    tools:
+      read: []
+      write: []
+      shell: []
+  references:
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/823"
+      summary: "Declared spec.executionRequirements.tools (W3 third slice, https://github.com/tvna/gitapex/issues/307): all three categories empty -- this skill routes explanation responsibility to other artifacts/skills (e.g. drafting-an-adr) but never itself reads or writes a file or invokes a shell command."

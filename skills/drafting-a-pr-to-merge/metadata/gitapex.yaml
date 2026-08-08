@@ -14,3 +14,15 @@ spec:
       - untrusted-input-triage
       - outward-artifact-preflight
       - planning-a-branch-from-an-issue
+  executionRequirements:
+    tools:
+      read:
+        - files
+      write:
+        - files
+      shell:
+        - git
+  references:
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/823"
+      summary: "Declared spec.executionRequirements.tools (W3 third slice, https://github.com/tvna/gitapex/issues/307): Step 3 fixes the underlying issue (write) and Step 4 pushes the fix (shell git push), beyond this skill's GitHub-MCP calls (not modeled by this tools category)."
