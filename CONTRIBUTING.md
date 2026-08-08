@@ -8,7 +8,7 @@ dependency and `.pre-commit-config.yaml` wires it to this repo's own
 `betterleaks` secret scan below -- but a dependency alone installs no git
 hook. Run once per clone:
 
-```
+```sh
 uv run prek install -t pre-commit -t pre-push
 ```
 
@@ -18,9 +18,19 @@ never run.
 
 This makes `git commit` reject a commit that fails ruff, mypy, or the
 secret scan locally, before it exists, rather than only after a push reaches
-CI. `nix develop` also runs this automatically (see `flake.nix`'s devShell),
-so an agent or contributor using the Nix devShell gets it without a manual
-step.
+CI.
+
+`nix develop` attempts the same install on shell entry (see `flake.nix`'s
+devShell), so the Nix path usually needs no manual step. It is an attempt,
+not a guarantee: if the install fails, or either shim is missing afterwards,
+the devShell prints a `WARNING:` naming the command to run. It deliberately
+does not abort the shell -- that would lock you out of the whole toolchain
+over a hook-install problem -- so read the warnings on entry rather than
+assuming the hooks are live. To confirm at any time:
+
+```sh
+ls .git/hooks/pre-commit .git/hooks/pre-push
+```
 
 CI (`.github/workflows/test.yml`, `.github/workflows/lint.yml`) still runs
 the same ruff/mypy checks independently as the actual merge gate -- the

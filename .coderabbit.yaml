@@ -104,14 +104,25 @@ reviews:
       enabled: false
     # Deliberately left at their enabled defaults, and therefore not
     # written above: shellcheck, gitleaks, zizmor, opengrep, skillspector.
-    # Each covers a capability this repository has approved but never
-    # wired up, so they are gap coverage rather than duplication --
-    # shellcheck is invoked nowhere (its one occurrence in
-    # .github/workflows/ is a `# shellcheck disable` directive),
-    # betterleaks is SHA256-pinned in flake.nix with no consuming script,
-    # hook, or workflow, and zizmor and opengrep are named as the
-    # guaranteed libre path in docs/scanning-capability-selection-policy.md
-    # with no implementation behind them yet.
+    # Each still covers something this repository's own gates do not:
+    #   shellcheck        -- invoked nowhere here; its one occurrence under
+    #                        .github/workflows/ is a `# shellcheck disable`
+    #                        directive, not a run.
+    #   zizmor, opengrep  -- named as the guaranteed libre path in
+    #                        docs/scanning-capability-selection-policy.md
+    #                        with no implementation behind them yet.
+    #   gitleaks          -- overlaps betterleaks, which #890 wired into the
+    #                        pre-commit and pre-push hooks, so this is no
+    #                        longer an unconsumed-capability gap. It stays
+    #                        enabled for a different and narrower reason:
+    #                        both of those hooks are bypassable with
+    #                        `--no-verify` and no CI workflow runs
+    #                        betterleaks yet, so CodeRabbit's own pass is
+    #                        currently the only secret scan on the
+    #                        merge path. Revisit this line if a CI job ever
+    #                        runs betterleaks -- at that point it becomes
+    #                        real duplication.
+    #   skillspector      -- no local equivalent at all.
 
 chat:
   # Public repository, so at the default (true) anyone who can leave a

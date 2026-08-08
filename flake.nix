@@ -181,9 +181,33 @@
             # betterleaks pre-push hook -- the backstop for a commit that
             # skipped pre-commit via --no-verify -- would silently never
             # run for anyone entering through the devShell.
+            #
+            # Failures are surfaced, not suppressed. A prior
+            # `2>/dev/null || true` here could leave both shims uninstalled
+            # while CONTRIBUTING.md told the contributor they were installed
+            # automatically -- a false belief that the secret scan is
+            # protecting them, which is the same fail-open class #890's own
+            # wrapper exists to prevent.
+            #
+            # Deliberately still non-fatal: a shellHook that exits non-zero
+            # breaks `nix develop` outright, locking a contributor out of the
+            # whole toolchain over a hook-install hiccup. That is a worse
+            # failure than the one being fixed, and the defect here was the
+            # silence, not the non-fatality. So it warns loudly and verifies
+            # both shims actually landed rather than trusting the exit code.
             shellHook = ''
               if [ -d .git ]; then
-                uv run prek install --quiet -t pre-commit -t pre-push 2>/dev/null || true
+                if ! uv run prek install --quiet -t pre-commit -t pre-push; then
+                  echo "WARNING: prek install failed -- git hooks are NOT active." >&2
+                  echo "         Fix it with: uv run prek install -t pre-commit -t pre-push" >&2
+                else
+                  if [ ! -f .git/hooks/pre-commit ]; then
+                    echo "WARNING: .git/hooks/pre-commit is missing after a successful prek install." >&2
+                  fi
+                  if [ ! -f .git/hooks/pre-push ]; then
+                    echo "WARNING: .git/hooks/pre-push is missing -- the betterleaks full-history scan will not run on push." >&2
+                  fi
+                fi
               fi
             '';
           };
