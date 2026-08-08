@@ -35,6 +35,12 @@
       "path": "pyproject.toml",
       "format": "toml",
       "authority": "[tool.mypy] strict-by-default config plus the named Tier A/B/C per-module override allowlist (each override citing issue #684 or a dedicated follow-up tracking reference) -- authoritative scope/strictness for mypy-type-check"
+    },
+    {
+      "id": "runtime-compatibility-matrix",
+      "path": ".gitapex/runtime-compatibility-matrix.json",
+      "format": "json",
+      "authority": "Versioned, testable record of how faithfully each target agent-tool runtime can enforce the ten W2 execution-requirement dimensions (parent issue #307); authoritative source for a future W4 enforcement adapter, not yet consumed by any gate"
     }
   ],
   "gates": [
@@ -518,6 +524,19 @@
       "tracking_issue": 813,
       "status": "active",
       "supersedes": null
+    },
+    {
+      "id": "runtime-compatibility-matrix-schema-drift",
+      "kind": "script",
+      "script": ".github/scripts/gitapex_scan_runtime_compatibility_matrix.py",
+      "rule": "Validates .gitapex/runtime-compatibility-matrix.json against .gitapex/runtime-compatibility-matrix.schema.json (JSON Schema draft 2020-12).",
+      "planes": ["ci"],
+      "trigger": "tests/test_gitapex_scan_runtime_compatibility_matrix.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": ["runtime-compatibility-matrix"],
+      "cluster": "runtime-compatibility",
+      "tracking_issue": 828,
+      "status": "active",
+      "supersedes": null
     }
   ],
   "clusters": {
@@ -529,6 +548,7 @@
     "self-governance": "The repo's own doc-integrity and self-referential-claim checks (OWASP mappings, retro-title/routine-scope citation, retro backlog cap, stale-stub auto-close).",
     "supply-chain": "Toolchain and dependency provisioning, and manifest-identity drift.",
     "test-integrity": "Quality floors on the artifacts backing the other clusters' own gates: test-suite coverage, static type checking, and static analysis of the gate scripts' own error paths.",
-    "registry-integrity": "Self-validation of this registry file itself against its schema and against the repo's real files."
+    "registry-integrity": "Self-validation of this registry file itself against its schema and against the repo's real files.",
+    "runtime-compatibility": "Cross-runtime execution-requirement compatibility matrix (parent issue #307's W2): schema validation now, real-runtime research-data drift checks once populated."
   }
 }
