@@ -135,16 +135,22 @@ itself had merged.
 `Scanning-*` (#844) was added ahead of any skill that carries the name,
 deliberately reusing the #464 -> gitapex#466 ordering above: the family
 entry merges first, the rename and the first roster skill that depend on
-the name follow. The family and its third axis come from the roster
-design recorded in tracking issue #843 -- thin orchestrator skills, one
-pinned diagnostic CLI tool each, `write: []` always -- which is this
-repository's own Three-way-division pattern applied to skill naming
+the name follow. The family itself -- thin orchestrator skills, one
+pinned diagnostic CLI tool each, `write: []` always -- comes from the
+roster design recorded in tracking issue #843, and is this repository's
+own Three-way-division pattern applied to skill naming
 (`skills/evaluating-deterministic-gate-quality/references/grading-procedure.md`:
 an external engine is noted as existing and taken as input to the
-skill's own pass, never built, required, or substituted for). The two
-consumers blocked on this entry, the
-`vetting-attack-surface` -> `scanning-attack-surfaces` rename and the
-first roster skill (`scanning-ci-workflows`), are tracked separately
-under #843, as is the reason this family needed its own name at all
-rather than joining `Auditing-*`: a family whose verdict is not its own
-cannot share a definition with one whose verdict is.
+skill's own pass, never built, required, or substituted for).
+
+The third axis is #844's own contribution, not #843's. Without it the
+first two axes place this family closest to `Auditing-*` -- an
+external-facing target, a `Covered`/`Partial`/`Gap`-shaped report -- and
+neither axis as it then stood captured the actual difference, that the
+verdict is not the skill's own. A family that does not produce its own
+verdict cannot share a definition with one that does, so the axis was
+added rather than an existing definition stretched -- the same
+resolution `Vetting-*` got above. The two consumers blocked on this
+entry, the `vetting-attack-surface` -> `scanning-attack-surfaces` rename
+and the first roster skill (`scanning-ci-workflows`), are tracked
+separately under #843.
