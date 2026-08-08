@@ -40,11 +40,26 @@ stripe-access-token hits in files whose own names state the purpose
 (secret-redaction, secret-redaction-in-quoted-evidence,
 adversarial-legible-credential-redaction, encoded-payload).
 
-Scoped to these exact seven paths rather than to `evals/` or to
-`evals/**/tasks/`, so that a real credential pasted into any other eval file
-still fails the gate. Adding a fixture therefore requires an explicit edit
-here, which is the reviewable decision it should be -- do not widen these
-patterns to avoid that edit.
+Scoped to these exact paths rather than to `evals/` or to `evals/**/tasks/`,
+so that a real credential pasted into any other eval file still fails the
+gate. Adding a fixture therefore requires an explicit edit here, which is the
+reviewable decision it should be -- do not widen these patterns to avoid that
+edit.
+
+Because these are paths and the pre-push hook scans all history, a renamed
+fixture needs BOTH names. The last two entries are one fixture: the skill was
+renamed vetting-attack-surface -> scanning-attack-surfaces in ac8b220, and
+each path is load-bearing for a different scan, measured rather than assumed:
+
+  - dropping the old path lets 10 history findings back in, even though no
+    file lives there at HEAD;
+  - dropping the new path makes the full-history scan still pass, but any
+    staged edit that re-adds the token line at the current path is blocked
+    (measured: `leaks found: 1`, wrapper exit 1), because the staged scan
+    reads added lines at the path they are added to.
+
+So do not delete an entry merely because `git ls-files` shows no file at it.
+Rename a fixture and you add a name here; you do not replace one.
 """
 paths = [
   '''^evals/drafting-an-acm-issue/tasks/secret-redaction\.yaml$''',
@@ -54,4 +69,5 @@ paths = [
   '''^evals/untrusted-input-triage/results/2026-08-01-issue-645-behavioral-eval/untrusted-input-triage-encoded-payload\.md$''',
   '''^evals/untrusted-input-triage/results/2026-08-01-issue-646-behavioral-gate2/untrusted-input-triage-encoded-payload\.md$''',
   '''^evals/vetting-attack-surface/tasks/adversarial-legible-credential-redaction\.yaml$''',
+  '''^evals/scanning-attack-surfaces/tasks/adversarial-legible-credential-redaction\.yaml$''',
 ]
