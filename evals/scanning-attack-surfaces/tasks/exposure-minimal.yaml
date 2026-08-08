@@ -1,4 +1,4 @@
-id: vetting-attack-surface-exposure-minimal
+id: scanning-attack-surfaces-exposure-minimal
 name: Status-page webhook sends exactly what the provider renders
 description: The reviewed script's outbound POST body contains only the two
   fields the status-page provider's own documented contract renders; the
@@ -9,7 +9,7 @@ tags:
   - exposure-minimization
 inputs:
   prompt: |
-    Use vetting-attack-surface. Review this artifact's outbound interface.
+    Use scanning-attack-surfaces. Review this artifact's outbound interface.
 
     `scripts/report_deploy_status.py` runs after every deploy and POSTs to
     a third-party status-page provider's

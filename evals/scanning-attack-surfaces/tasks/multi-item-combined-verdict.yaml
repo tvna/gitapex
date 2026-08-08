@@ -1,4 +1,4 @@
-id: vetting-attack-surface-multi-item-combined-verdict
+id: scanning-attack-surfaces-multi-item-combined-verdict
 name: One Artifact With Both An Exposure Issue And A Privilege Issue Needs Two Distinct Verdicts
 description: The reviewed script both over-sends telemetry beyond what the
   monitoring endpoint's documented contract renders and authenticates with a
@@ -12,7 +12,7 @@ tags:
   - least-privilege
 inputs:
   prompt: |
-    Use vetting-attack-surface. Review this artifact's outbound interface
+    Use scanning-attack-surfaces. Review this artifact's outbound interface
     and credential/permission grant.
 
     `scripts/deploy_notify.py` runs after each deploy, inside a CI job.

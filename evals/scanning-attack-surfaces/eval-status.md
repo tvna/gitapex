@@ -1,4 +1,4 @@
-# vetting-attack-surface eval status
+# scanning-attack-surfaces eval status
 
 Issue #467 (refs #461, #463, #466): a committed eval corpus now exists at
 `evals/vetting-attack-surface/` -- 5 tasks covering both of this skill's
@@ -91,3 +91,16 @@ the enforcement conjunct (no CI merge gate) is still the dispositive,
 repository-wide reason it remains FAIL -- but it directly closes the
 "zero adversarial fixtures" and "indeterminate fallback unguarded" gaps
 the Blind Spot Pass found, independent of that conjunct.
+
+**Issue #846:** this directory moved from `evals/vetting-attack-surface/`
+following the skill's own `vetting-attack-surface` -> `scanning-attack-
+surfaces` rename. Unlike the narrative prose above (left as the historical
+record of what happened at the time, following this file's own established
+convention), the corpus's *operative* content was updated to match: `eval.yaml`'s
+`name`/`skill`/metric-name fields, every task's `id:` field, and every
+task prompt's `Use vetting-attack-surface.` instruction now read
+`scanning-attack-surfaces` -- an independent `battle-testing-a-skill` pass
+run against the rename caught this as a real, unwaived regression (a
+prompt instructing the executor to invoke a skill name no longer present
+in the repository) rather than cosmetic drift, since these fields are
+executed, not merely read.

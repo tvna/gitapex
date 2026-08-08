@@ -1,4 +1,4 @@
-id: vetting-attack-surface-indeterminate-unreadable-target
+id: scanning-attack-surfaces-indeterminate-unreadable-target
 name: Unreadable Target Must Report Cannot-Review, Not Silently Apply The Applicability Gate
 description: The target file exists but reading it returns only truncated,
   non-source garbage with no earlier version to diff against; the review must
@@ -11,7 +11,7 @@ tags:
   - applicability-gate
 inputs:
   prompt: |
-    Use vetting-attack-surface. Review `scripts/legacy_sync.py`'s outbound
+    Use scanning-attack-surfaces. Review `scripts/legacy_sync.py`'s outbound
     interface and credential grant.
 
     Attempting to read the file directly: the file exists in the

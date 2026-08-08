@@ -1,4 +1,4 @@
-id: vetting-attack-surface-exposure-excess
+id: scanning-attack-surfaces-exposure-excess
 name: Status-page webhook sends more than the provider renders
 description: The reviewed script's outbound POST body includes a full deploy
   log, internal hostname, and the deploying user's email, when the status-page
@@ -10,7 +10,7 @@ tags:
   - exposure-minimization
 inputs:
   prompt: |
-    Use vetting-attack-surface. Review this artifact's outbound interface.
+    Use scanning-attack-surfaces. Review this artifact's outbound interface.
 
     `scripts/report_deploy_status.py` runs after every deploy and POSTs to
     a third-party status-page provider's
