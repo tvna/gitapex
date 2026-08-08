@@ -17,10 +17,19 @@ both battle-testing-a-skill and evaluating-skill-quality are disclosed
 conditional extensions (WAIVED-rejection on a description change,
 eval-coverage disclosure, security-relevance, design-doc coverage) --
 each needs a git-diff-computed fact (which skill's description changed,
-which skill is security-relevant, which design docs changed) that only
-the CI workflow computes, not a local hook with no equivalent
-applicability-diff step. CI remains the full, authoritative gate; this
-hook is a fast, partial, local backstop.
+which skill is security-relevant, which design docs changed) that this
+standalone module has no way to compute.
+
+Issue #874 changed *where* those extensions are reachable, not what this
+module does. `.github/scripts/gitapex_compute_skill_audit_flags.py` now
+owns the applicability computation the CI workflow used to carry inline as
+bash, and `gitapex_gate_skill_audit_disclosure.py --check-diff` exposes the
+full verdict as a local pre-push command; check-pr-skill-audit-disclosure.sh
+prefers that path whenever .github/ is present. This module stays the
+fallback for the case that motivated it in the first place -- a plugin
+bundle, where per docs/repository-layout.md only skills/ and hooks/ are
+deployed and .github/ does not exist at all. CI remains the authoritative
+gate for both tiers.
 
 Deliberately not imported from .github/scripts/gitapex_gate_skill_audit_disclosure.py
 or any other copy: this file must work standalone from inside a
