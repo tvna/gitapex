@@ -18,16 +18,39 @@
 # git state -- CI's skill-audit-gate.yml remains the deterministic
 # backstop regardless of what this hook can determine locally.
 #
-# Only checks the base two-audit disclosure via the self-contained
-# gitapex_check_skill_audit_disclosure_or_waiver.py sibling bundled beside this
-# hook (not .github/scripts/gitapex_gate_skill_audit_disclosure.py -- per
-# docs/repository-layout.md, only skills/ and hooks/ are deployed with
-# the plugin, .github/ never is; see that sibling script's own docstring,
-# and hooks/check-issue-acm-disclosure.sh's docstring for the same
-# pattern). Does not attempt the conditional extensions (WAIVED-rejection
-# on description change, eval-coverage, security-relevance, design-doc
-# coverage) -- those need git-diff-computed facts this hook does not
-# compute; CI covers them.
+# Two tiers, in this order (issue #874):
+#
+# 1. **Full**, when .github/scripts/gitapex_gate_skill_audit_disclosure.py
+#    and .github/scripts/gitapex_compute_skill_audit_flags.py are both
+#    present -- i.e. when running inside this repository's own checkout.
+#    `--check-diff` reproduces the *whole* CI verdict locally, conditional
+#    extensions included (WAIVED-rejection on a description change,
+#    eval-coverage, security-relevance, design-doc coverage, changed
+#    checker scripts, changed deterministic gates), by calling the same
+#    gitapex_compute_skill_audit_flags.py module skill-audit-gate.yml's own
+#    diff step calls. No second, independently-drifting copy of those
+#    rules exists. This is the tier that closes the gap 14 merge
+#    retrospectives kept re-raising: before this, an agent discovered it
+#    owed an eval-coverage or deterministic-gate-quality line only after a
+#    required check failed on an already-open PR.
+#
+# 2. **Partial**, otherwise -- the self-contained
+#    gitapex_check_skill_audit_disclosure_or_waiver.py sibling bundled
+#    beside this hook, which checks the base two-audit disclosure only.
+#    Per docs/repository-layout.md, only skills/ and hooks/ are deployed
+#    when this repository is installed as a plugin; .github/ never is, so
+#    tier 1 is simply absent there and this tier is what a consumer
+#    repository gets (see that sibling script's own docstring, and
+#    hooks/check-issue-acm-disclosure.sh's docstring for the same
+#    pattern).
+#
+# Tier 1 also owns its own applicability test, so it runs before the
+# SKILL.md-only applicability check below: CI's scope includes design-doc,
+# checker-script and gate changes that touch no SKILL.md at all. A tier-1
+# run that cannot complete (missing script, unreadable registry, git state
+# it cannot resolve) falls through to tier 2 with a warning rather than
+# denying -- the same fail-open-on-inconclusive-local-state posture as the
+# base-branch and git-diff resolution above. CI remains authoritative.
 #
 # Denies via the PreToolUse hookSpecificOutput JSON on stdout AND exit 2 /
 # stderr (both conventions, for defense in depth -- see plugin-dev's
@@ -103,6 +126,40 @@ if ! merge_base=$(git merge-base "origin/${base_branch}" HEAD 2>/dev/null); then
   exit 0
 fi
 
+# --- tier 1: the full CI verdict, reproduced locally ---
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || repo_root=""
+full_gate="${repo_root}/.github/scripts/gitapex_gate_skill_audit_disclosure.py"
+flag_module="${repo_root}/.github/scripts/gitapex_compute_skill_audit_flags.py"
+
+if [ -n "$repo_root" ] && [ -f "$full_gate" ] && [ -f "$flag_module" ]; then
+  body_file=$(mktemp)
+  printf '%s' "$body" >"$body_file"
+  if full_output=$(cd "$repo_root" && python3 "$full_gate" \
+      --check-diff "$merge_base" HEAD --body-file "$body_file" 2>&1); then
+    full_exit=0
+  else
+    full_exit=$?
+  fi
+  rm -f "$body_file"
+
+  if [ "$full_exit" -eq 0 ]; then
+    exit 0
+  fi
+
+  if printf '%s' "$full_output" | grep -q '^FAIL:'; then
+    deny "Blocked by hooks/check-pr-skill-audit-disclosure.sh: this PR's diff requires skill-audit disclosure evidence its body does not carry. This is the same verdict .github/workflows/skill-audit-gate.yml will report, computed locally before the push. Fix the '## Skill audit evidence' section and retry.
+
+$full_output"
+  fi
+
+  # Not a verdict on the body: the local flag computation itself could not
+  # complete (unreadable gate registry, a ref this checkout cannot resolve,
+  # a bug in the wrapper). Fall through to the bundled partial check rather
+  # than denying on an answer that was never computed.
+  echo "Warning: hooks/check-pr-skill-audit-disclosure.sh could not complete the full local pre-check (exit $full_exit); falling back to the bundled base two-audit check (CI's skill-audit-gate.yml remains authoritative). Output: $full_output" >&2
+fi
+
+# --- tier 2: the bundled, SKILL.md-only base check ---
 diff_error=$(mktemp)
 if ! diff_output=$(git diff --name-status "${merge_base}...HEAD" -- 'skills/*/SKILL.md' 2>"$diff_error"); then
   echo "Warning: hooks/check-pr-skill-audit-disclosure.sh's local git diff failed; skipping the local pre-check (CI's skill-audit-gate.yml will still catch this). $(cat "$diff_error")" >&2

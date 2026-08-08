@@ -15,10 +15,15 @@ absent -- the same fail-open class the `deterministic-gate-quality` check
 exists to catch, one layer up in the machinery that implements it.
 
 That is what this file gates. It is deliberately a structural check on the
-workflow text rather than a behavioural one: the wiring is four separate
-edits in two steps (the `$GITHUB_OUTPUT` write on the applicable path, the
-one on the early-exit path, the `env:` entry, and the CLI argument), and
-missing any single one of them produces a different silent failure.
+wiring rather than a behavioural one: missing any single edit produces a
+different silent failure.
+
+Issue #874 moved the applicability computation out of the workflow's bash
+and into `.github/scripts/gitapex_compute_skill_audit_flags.py`, so the
+wiring is now three edits -- the module's own output key, the `env:`
+entry, and the CLI argument -- plus a fourth plane the same fail-open
+reaches: `--check-diff`, the local pre-push wrapper, which fills the same
+flags from that module and can drop a check just as silently.
 
 The `.gitapex/ssot.json` registration is checked here too, for the same
 reason: `gitapex_scan_ssot_schema.py` verifies every registered script path exists,
@@ -27,6 +32,7 @@ but nothing verified the converse for this gate's own helper scripts.
 
 from __future__ import annotations
 
+import ast
 import json
 import pathlib
 import re
@@ -40,6 +46,7 @@ WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "skill-audit-gate.yml"
 SSOT_PATH = REPO_ROOT / ".gitapex" / "ssot.json"
 
 sys.path.insert(0, str(REPO_ROOT / ".github" / "scripts"))
+import gitapex_compute_skill_audit_flags as flags_module  # noqa: E402
 import gitapex_gate_skill_audit_disclosure as gate  # noqa: E402
 
 
@@ -93,44 +100,127 @@ def test_every_registered_check_reads_a_step_output_through_env(check, check_ste
 
 
 @pytest.mark.parametrize("check", gate._PROCESS_DISCLOSURE_CHECKS, ids=lambda c: c.name)
-def test_every_registered_check_has_an_output_on_both_paths(check, diff_step):
-    """The diff step writes $GITHUB_OUTPUT twice -- once on the early-exit
-    (applicable=false) path and once on the applicable path. A key present
-    on only one of them leaves the check step reading an empty string on
-    the other, which is a silent skip rather than an error."""
-    run = diff_step["run"]
-    # Derive the output key from the CLI flag, which is the workflow's own
-    # naming convention (--changed-gate-scripts -> changed-gate-scripts).
+def test_every_registered_check_has_a_published_output_key(check):
+    """The diff step must publish an output key for every registered check.
+
+    Issue #874 changed how this can fail, not whether it can. The bash used
+    to write the `$GITHUB_OUTPUT` block twice -- once on the early-exit
+    (`applicable=false`) path and once on the applicable path -- so this
+    test counted both occurrences: a key present on only one of them left
+    the check step reading an empty string on the other, a silent skip
+    rather than an error. There is now one serializer
+    (`SkillAuditFlags.as_output_pairs`), which makes that particular
+    divergence unrepresentable; what remains possible is a check whose key
+    is never published at all, which is the same silent skip. That is what
+    this asserts.
+    """
     key = check.cli_flag.lstrip("-")
-    assert run.count(f"{key}=") >= 2, (
-        f"'{key}=' is written {run.count(f'{key}=')} time(s) in the diff step; "
-        "it must appear on both the early-exit and the applicable path"
+    assert key in flags_module.OUTPUT_KEYS, (
+        f"'{key}' is registered in _PROCESS_DISCLOSURE_CHECKS but "
+        "gitapex_compute_skill_audit_flags publishes no such output key, so "
+        "the check step would read an empty string and never fire"
     )
 
 
-def test_helper_scripts_the_workflow_invokes_are_registered_in_ssot():
-    """Every .github/scripts helper this workflow shells out to is part of
-    this gate's implementation, so the registry must say so -- otherwise
-    the deterministic-gate-quality check's own registry-based scope rule
-    silently excludes the scripts that compute it.
+def test_the_diff_step_publishes_its_keys_through_the_single_serializer():
+    """Guards the test above: it is only a real gate while the workflow gets
+    its `$GITHUB_OUTPUT` content from `as_output_pairs`. A step that went
+    back to hand-writing keys in bash would satisfy every assertion here
+    while re-opening the two-paths divergence."""
+    run = _step_with("run", "$GITHUB_OUTPUT")["run"]
+    assert "gitapex_compute_skill_audit_flags.py" in run
+    assert "--format github-output" in run
+    hand_written = [key for key in flags_module.OUTPUT_KEYS if f"{key}=" in run]
+    assert not hand_written, f"the diff step hand-writes output keys instead of delegating: {hand_written}"
 
-    Extracted from the workflow text by pattern, deliberately not compared
-    against a hardcoded list of known helper names: a list would go stale
-    exactly when it matters, when someone wires in a fifth helper and
-    forgets to register it, which is the case this test exists to catch.
+
+def test_as_output_pairs_covers_exactly_the_declared_output_keys():
+    """`OUTPUT_KEYS` is the contract the two tests above read; a serializer
+    that drifted from it would make both of them assert about a list
+    nothing publishes."""
+    emitted = [key for key, _ in flags_module.SkillAuditFlags(applicable=False).as_output_pairs()]
+    assert tuple(emitted) == flags_module.OUTPUT_KEYS
+
+
+@pytest.mark.parametrize("check", gate._PROCESS_DISCLOSURE_CHECKS, ids=lambda c: c.name)
+def test_every_registered_check_is_filled_by_the_local_check_diff_mode(check):
+    """Issue #874's local pre-push wrapper needs the same drift gate as the
+    workflow above, for the same reason.
+
+    `--check-diff` fills the grader's list flags from a
+    `SkillAuditFlags` field of the same name. A row added to
+    `_PROCESS_DISCLOSURE_CHECKS` without a matching field would leave that
+    flag at argparse's `default=""` -- the check silently never fires
+    locally while every unit test calling its `find_missing_*` wrapper
+    directly still passes, which is precisely the fail-open this file
+    exists to catch, one plane over.
+    """
+    assert check.cli_dest in gate._LIST_FLAG_DESTS, (
+        f"{check.name} is registered in _PROCESS_DISCLOSURE_CHECKS but "
+        f"{check.cli_dest} is not in _LIST_FLAG_DESTS, so --check-diff would "
+        "never fill it"
+    )
+    assert hasattr(flags_module.SkillAuditFlags(applicable=False), check.cli_dest), (
+        f"gitapex_compute_skill_audit_flags.SkillAuditFlags publishes no "
+        f"'{check.cli_dest}' field, so --check-diff cannot fill {check.name}"
+    )
+
+
+def _reachable_helper_scripts():
+    """Every .github/scripts file this gate's CI half actually executes.
+
+    Two hops, because issue #874 made it two hops: the workflow shells out
+    to `gitapex_compute_skill_audit_flags.py`, which in turn *imports* the
+    three helpers the workflow used to invoke directly. Scanning only the
+    workflow text would quietly stop covering them the moment they moved
+    behind that import, which is the drift this function exists to
+    prevent -- an unregistered helper is outside the
+    deterministic-gate-quality check's own registry-based scope, so
+    changing it would require no disclosure.
+
+    Both hops are derived, never a hardcoded list of known helper names: a
+    list goes stale exactly when it matters, when someone wires in another
+    helper and forgets to register it.
     """
     run = "\n".join(step.get("run", "") for step in _job_steps())
     invoked = set(re.findall(r"\.github/scripts/[A-Za-z0-9_.-]+\.py", run))
     assert invoked, "the workflow invokes no .github/scripts helper at all"
 
+    scripts_dir = REPO_ROOT / ".github" / "scripts"
+    for relative in sorted(invoked):
+        source = (REPO_ROOT / relative).read_text(encoding="utf-8")
+        for node in ast.walk(ast.parse(source)):
+            if not isinstance(node, ast.Import):
+                continue
+            for alias in node.names:
+                if (scripts_dir / f"{alias.name}.py").is_file():
+                    invoked.add(f".github/scripts/{alias.name}.py")
+    return invoked
+
+
+def test_helper_scripts_the_workflow_invokes_are_registered_in_ssot():
+    """Every .github/scripts helper this gate's CI half executes -- directly
+    from the workflow or transitively through the module it calls -- is
+    part of this gate's implementation, so the registry must say so."""
+    invoked = _reachable_helper_scripts()
     registry = json.loads(SSOT_PATH.read_text(encoding="utf-8"))
     entry = next(g for g in registry["gates"] if g["id"] == "skill-audit-disclosure")
     registered = set(entry["script"])
     missing = sorted(invoked - registered)
     assert not missing, (
-        "the workflow invokes these scripts but .gitapex/ssot.json's "
+        "this gate's CI half executes these scripts but .gitapex/ssot.json's "
         f"skill-audit-disclosure entry does not register them: {missing}"
     )
+
+
+def test_the_transitive_helper_hop_actually_resolves():
+    """Guards `_reachable_helper_scripts`: if the import scan silently found
+    nothing, the registration test above would shrink back to the workflow
+    text alone and pass vacuously while the three helpers went unregistered."""
+    reachable = _reachable_helper_scripts()
+    assert ".github/scripts/gitapex_detect_changed_gate_scripts.py" in reachable
+    assert ".github/scripts/gitapex_skill_description_diff.py" in reachable
+    assert ".github/scripts/gitapex_skill_security_relevance.py" in reachable
 
 
 def test_gate_detection_helper_is_itself_in_scope_of_the_check_it_computes():

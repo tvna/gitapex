@@ -54,7 +54,7 @@ def extract_frontmatter(text):
     return "\n".join(lines[: end + 1])
 
 
-def is_security_relevant(text):
+def is_security_relevant(text: str | None) -> bool:
     """True iff `text`'s frontmatter block (not its full body) matches a
     security-relevant keyword."""
     frontmatter = extract_frontmatter(text)
