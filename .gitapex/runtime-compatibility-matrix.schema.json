@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/tvna/gitapex/blob/main/.gitapex/runtime-compatibility-matrix.schema.json",
+  "title": "gitapex runtime compatibility matrix (W2, parent issue #307)",
+  "description": "Schema for .gitapex/runtime-compatibility-matrix.json -- issue #828's versioned, testable record of how faithfully each target agent-tool runtime can enforce the ten execution-requirement dimensions #307's own W2 names (field parsing, discovery locations, invocation behavior, context loading, tool semantics, path controls, sandbox controls, network controls, MCP lifecycle, plugin/subagent limitations). Mirrors .gitapex/ssot.schema.json's own envelope convention (a `meta` block with schema_version/tracking_issue/status/phase) rather than the per-skill metadata/gitapex.yaml CRD envelope, since this is repo-wide singleton data, not a per-skill sidecar. Distinct from skills/evaluating-skill-quality/references/runtime-compatibility.md, which grades a narrower SKILL.md-frontmatter-standard-compliance axis as prose across a differently-scoped runtime list; this file's ten dimensions (sandbox/network controls, MCP lifecycle, path controls) exist to ground a future W4 enforcement adapter, not a skill-quality warning. `runtimes` is an open, pattern-validated map (no closed enum) since this repository's own evidence already shows the real-world runtime list growing past #307's original six; `dimensions` within one runtime entry is closed to the ten fixed keys W2 names, fail-closed on an unrecognized key like every other gated block in skill-metadata.schema.json. Ships with zero populated runtimes in this first slice -- population is real primary-source research, deferred to follow-up batches.",
+  "type": "object",
+  "required": ["meta", "runtimes"],
+  "additionalProperties": false,
+  "properties": {
+    "meta": {
+      "type": "object",
+      "required": ["schema_version", "tracking_issue", "status", "phase"],
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$",
+          "description": "Semver of this schema file itself. Bump on any required/additionalProperties change."
+        },
+        "tracking_issue": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The GitHub issue that specs this file's own schema (its first-slice child issue under parent #307)."
+        },
+        "status": {
+          "enum": ["draft", "active", "deprecated"],
+          "description": "Lifecycle of this matrix as a whole, distinct from any single dimension entry's own classification."
+        },
+        "phase": {
+          "type": "string",
+          "pattern": "^phase-\\d+$",
+          "description": "Population progress, not a numbered engineering phase in the ssot.json sense. phase-0 = schema only, zero runtimes populated. Increment as later batches land real runtime rows."
+        }
+      }
+    },
+    "runtimes": {
+      "type": "object",
+      "description": "runtime id (kebab-case, e.g. claude-code) -> its own compatibility entry. Open map, no closed enum -- see this file's own top-level description for why. Empty object is valid (phase-0's own shipped state).",
+      "propertyNames": {
+        "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/runtimeEntry"
+      }
+    }
+  },
+  "$defs": {
+    "runtimeEntry": {
+      "type": "object",
+      "required": ["displayName", "dimensions"],
+      "additionalProperties": false,
+      "properties": {
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable product name, e.g. \"Claude Code\" for the claude-code key."
+        },
+        "dimensions": {
+          "$ref": "#/$defs/dimensions"
+        }
+      }
+    },
+    "dimensions": {
+      "type": "object",
+      "description": "Closed to the ten dimension keys #307's own W2 text names. Each is individually optional -- population lands dimension-by-dimension across follow-up batches -- but at least one must be present for a runtime entry to exist at all (an entry with zero populated dimensions has nothing to say and should not exist yet).",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "fieldParsing": { "$ref": "#/$defs/dimensionEntry" },
+        "discoveryLocations": { "$ref": "#/$defs/dimensionEntry" },
+        "invocationBehavior": { "$ref": "#/$defs/dimensionEntry" },
+        "contextLoading": { "$ref": "#/$defs/dimensionEntry" },
+        "toolSemantics": { "$ref": "#/$defs/dimensionEntry" },
+        "pathControls": { "$ref": "#/$defs/dimensionEntry" },
+        "sandboxControls": { "$ref": "#/$defs/dimensionEntry" },
+        "networkControls": { "$ref": "#/$defs/dimensionEntry" },
+        "mcpLifecycle": { "$ref": "#/$defs/dimensionEntry" },
+        "pluginSubagentLimitations": { "$ref": "#/$defs/dimensionEntry" }
+      }
+    },
+    "dimensionEntry": {
+      "type": "object",
+      "required": ["classification", "primarySource", "snapshotDate"],
+      "additionalProperties": false,
+      "properties": {
+        "classification": {
+          "enum": ["Exact", "Conservative", "Lossy", "Unsupported"],
+          "description": "How faithfully this runtime maps this dimension against the sidecar-declared requirement it would need to enforce, per #307's own W2 text (its prose uses lowercase; this schema uses PascalCase to match every other enum in this repository's own metadata conventions, e.g. spec.portability's Portable/Repository-scoped/Mixed)."
+        },
+        "primarySource": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://[^\\s<>]+\\.[a-zA-Z]{2,}(/[^\\s<>]*)?$",
+          "description": "Full https:// URL to the vendor's own current documentation this classification is grounded in -- never a memory-based claim, per this repository's own grounding-in-primary-sources discipline. `format: uri` is declared for schema self-documentation but is NOT actively enforced in this repository's own environment (neither rfc3987 nor rfc3986-validator, the two optional providers jsonschema's FormatChecker needs to activate that keyword, is an installed dependency here -- confirmed live, refs #828's own adversarial review); the `pattern` above is this field's real, always-enforced guarantee -- a host-shaped authority (non-whitespace, a literal dot, a 2+ letter TLD) followed by an optional path, not merely a string starting with the literal text \"https://\"."
+        },
+        "observedVersion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Free-form: the runtime version/release this classification was observed against. No shared pattern -- vendor versioning schemes differ too much (semver, date-based, rolling release with no discrete version)."
+        },
+        "snapshotDate": {
+          "type": "string",
+          "format": "date",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "description": "YYYY-MM-DD the primary source was actually read. Refresh before asserting current behavior, matching runtime-compatibility.md's own established convention."
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Free-text elaboration, capped the same way spec.references[].summary is elsewhere in this repository's own metadata conventions."
+        }
+      }
+    }
+  }
+}
