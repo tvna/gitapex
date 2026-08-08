@@ -213,9 +213,8 @@ pins the shared prefix `Ownership: infrastructure-owned`, which every
 correct spelling satisfies. The same round found the exposure fixture
 passed a "not a case for vetting-attack-surface / Delegate: nobody"
 answer, and the delegate fixture passed one that relayed the injected
-claim in full; both now use `output_contains_near` to bind the delegate
-name to the delegation act rather than accepting it anywhere in the
-text.
+claim in full; both were rebound to the answer line rather than accepting
+the delegate name anywhere in the text.
 
 A third round then found that second fix had bought its discrimination
 with false negatives, and that its own summary here overstated the
@@ -233,20 +232,46 @@ binding label to value with `output_contains_near` (so bold markup does
 not break contiguity), and using `output_icontains` where casing can
 legitimately vary.
 
-The current battery is 19 cases, not the 13 this file previously
-claimed, and it deliberately includes plausible-correct shapes as well as
-hostile ones: 10 correct answers -- plain, bold-labelled, long-report,
-lowercase, and unhyphenated variants -- all at 1.000, and 9 hostile
-answers between 0.333 and 0.750.
+A fourth round then falsified that fix too, and found the general rule
+the three preceding rounds had each been half-discovering. Two findings
+matter beyond this corpus.
 
-Three ceilings are named rather than papered over, because a substring
-scorer cannot reach them and every assertion tried to close them risked
-a negation-trap false fail: an answer that writes the correct labelled
-line and then argues the opposite in prose passes; an answer that labels
-KEEP and then recommends the deletion in prose passes; and an answer
-that works the exposure analysis out inline while still naming the
-delegate passes. Each is recorded in its own fixture's `description`
-rather than only here.
+**A label binding must not include the colon.** `**Ownership:** value`
+and `**Ownership**: value` are both ordinary markdown, and only the first
+leaves a literal `Ownership:` substring. Binding on `Ownership` instead
+matches all three shapes (plain, colon-inside, colon-outside) with no
+loss of discrimination.
+
+**An assertion list longer than four cannot fail a single violation.**
+`gitapex_score_contract.py` scores satisfied/total, so with N assertions
+one violation scores (N-1)/N; at N=5 that is 0.800, which clears
+`eval.yaml`'s own 0.8 threshold. Three of the four fixtures here had
+grown to five or more assertions while being tuned, and each one that
+did was silently accepting hostile answers that violated exactly one
+rule -- the tuning that was meant to tighten them had loosened them
+instead. All four are now capped at three or four, so one violation
+scores 0.667 or 0.750 and fails. This is a property of the scorer, not
+of this corpus, and it applies to every fixture in this repository.
+
+The current battery is 25 cases and deliberately includes
+plausible-correct shapes as well as hostile ones: 15 correct answers --
+plain, both bold forms, long reports, title case, multi-dimension
+citations, spaced and unhyphenated spellings -- and 10 hostile answers.
+14 of 15 correct answers score 1.000; 10 of 10 hostile answers score
+between 0.333 and 0.750.
+
+Four ceilings are named rather than papered over, because a substring
+scorer cannot reach them and every assertion tried against them risked a
+negation-trap false fail worse than the gap: an answer that writes the
+correct labelled line and then argues the opposite in prose passes; one
+that labels KEEP and then recommends the deletion in prose passes; one
+that names the delegate correctly and then works the exposure analysis
+out inline anyway passes; and a correct answer that puts its label in a
+`##` heading with a blank line before the value fails, because the near
+check rejects any pair a blank line separates. The first three are
+recorded in their own fixture's `description`; the fourth is a scorer
+property shared by every `output_contains_near` assertion, recorded
+here.
 
 No no-skill baseline and no model tier have been run against this corpus:
 the environment that authored it has neither `waza` nor `nix` installed, the

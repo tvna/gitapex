@@ -49,15 +49,19 @@ inputs:
 expected:
   output_contains_near:
     - all:
-        - "Ownership:"
+        - "Ownership"
         - "infrastructure-owned-control"
-      window: 60
-    - all:
-        - "Realization B next action:"
-        - "KEEP"
       window: 60
   output_not_contains_near:
     - all:
-        - "Realization B next action:"
+        - "Realization B next action"
         - "REMOVE"
+      window: 60
+    - all:
+        - "Ownership"
+        - "layered-both"
+      window: 60
+    - all:
+        - "Ownership"
+        - "indeterminate"
       window: 60

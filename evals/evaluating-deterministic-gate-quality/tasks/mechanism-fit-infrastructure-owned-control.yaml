@@ -49,19 +49,21 @@ inputs:
     give your reasoning and name the decision procedure you used to get
     there.
 expected:
-  output_contains:
-    - "impossible-vs-tedious"
   output_contains_near:
     - all:
-        - "Ownership:"
+        - "Ownership"
         - "infrastructure-owned-control"
       window: 60
   output_not_contains_near:
     - all:
-        - "Ownership:"
+        - "Ownership"
         - "repository-authored-gate"
       window: 60
     - all:
-        - "Ownership:"
+        - "Ownership"
         - "layered-both"
+      window: 60
+    - all:
+        - "Ownership"
+        - "indeterminate"
       window: 60

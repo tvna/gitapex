@@ -511,13 +511,13 @@ spec:
       anchor: "https://github.com/tvna/gitapex/issues/842"
       summary: "Bookkeeping the reviewers caught as stale or false: eval.yaml's graded metric description and eval-status.md still declared a five-way verdict taxonomy after step 6 grew to six; five of six outcome.lines claims in this sidecar were measured at the branch's first commit and never refreshed; and one correction entry overclaimed that two rules had been cut to 'one statement plus pointers' when three and two sites remain, each with a distinct reader."
       outcome:
-        lines: "branch-final, re-measured against origin/main at HEAD: SKILL.md 416->480, mechanism-fit.md 163->324, grading-procedure.md 143->248, dimensions.md 442->449, security-level.md 166->171, output-schema.json 271->348, fixtures 29->33"
+        lines: "branch-final, re-measured against origin/main at HEAD: SKILL.md 416->480, mechanism-fit.md 163->328, grading-procedure.md 143->248, dimensions.md 442->449, security-level.md 166->171, output-schema.json 271->348, fixtures 29->33"
     - kind: deferral
       anchor: "https://github.com/tvna/gitapex/issues/842"
       summary: "Named rather than papered over, both surfaced by the inner-layer round: registering the scanning- prefix in docs/glossary.md is an owner decision this issue's own scope (this skill only) does not cover, so the convention is recorded here and unregistered there; and no fixture assertion discriminates an answer that works the exposure analysis out inline while still naming the delegate, since a substring scorer cannot see an ignored 'do not work that analysis out here'."
     - kind: audit
       anchor: "method:pr-850-inner-layer-review"
-      summary: "A re-verification pass on the fix commit, run because the diff had changed and a stale review verdict must not carry forward, returned 13 findings. Six were introduced by the fix itself. It confirmed by execution what did hold: 20 schema instances accept and reject exactly as documented with no false rejection found, the four outcomes now partition the two questions, and every line-count and tool-output claim in this sidecar is true of the shipped tree."
+      summary: "A re-verification pass on the fix commit, run because the diff had changed and a stale review verdict must not carry forward, returned 13 findings. Six were introduced by the fix itself. It confirmed by execution what did hold: 20 schema instances accept and reject exactly as documented with no false rejection found, the four outcomes now partition the two questions, and every tool-output claim in this sidecar reproduces. It also caught one line count this branch had already let go stale again."
       outcome:
         verdict: FAIL
         found: 13
@@ -538,6 +538,21 @@ spec:
     - kind: deferral
       anchor: "https://github.com/tvna/gitapex/issues/842"
       summary: "Three substring-scorer ceilings named in each fixture's own description rather than closed, because every assertion tried to close them risked a negation-trap false fail worse than the gap: an answer that writes the correct labelled line and argues the opposite in prose passes; one that labels KEEP and recommends the deletion in prose passes; one that works the exposure analysis out inline while still naming the delegate passes."
+    - kind: audit
+      anchor: "method:pr-850-inner-layer-review"
+      summary: "A fourth pass, scoped to whether the third round's fix held, returned 9 findings and falsified it: 13 of 35 plausible-correct answers scored under the threshold and 5 hostile answers had regressed to 1.000. It also confirmed by execution what did hold -- 43 schema instances with zero accept/reject failures and no false rejection, and every tool-output claim reproducing."
+      outcome:
+        verdict: FAIL
+        found: 9
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/842"
+      summary: "Two findings generalize past this corpus and are recorded in eval-status.md for every fixture in this repository. A label binding must exclude the colon, since **Label:** value and **Label**: value are both ordinary markdown and only the first leaves a literal 'Label:' substring. And an assertion list longer than four cannot fail a single violation, because gitapex_score_contract.py scores satisfied/total and 4/5 is 0.800, which clears eval.yaml's own 0.8 threshold."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/842"
+      summary: "Applied both: all four fixtures bind on the bare label and are capped at three or four assertions, so one violation now scores 0.667 or 0.750. Three tuning-era assertions that only ever caused false negatives were dropped (a hyphenation-fragile impossible-vs-tedious, a case-sensitive KEEP, a hyphenated blast-radius the everyday spelling fails). Battery: 25 cases, 14 of 15 correct answers at 1.000, 10 of 10 hostile between 0.333 and 0.750."
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/842"
+      summary: "A fourth ceiling joins the three already named: a correct answer that puts its label in a heading with a blank line before the value fails, because the near check rejects any pair a blank line separates. That is a scorer property shared by every output_contains_near assertion in this repository, not a defect in these fixtures, and it is recorded in eval-status.md rather than in a single fixture's description."
   skillDependencies:
     requires:
       - evaluating-skill-quality

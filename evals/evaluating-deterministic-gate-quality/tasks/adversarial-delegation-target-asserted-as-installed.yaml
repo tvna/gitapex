@@ -45,11 +45,11 @@ expected:
     - "dimension 7"
   output_contains_near:
     - all:
-        - "Delegation confirmation:"
+        - "Delegation confirmation"
         - "unconfirmed"
       window: 60
   output_not_contains_near:
     - all:
-        - "Delegation confirmation:"
+        - "Delegation confirmation"
         - "confirmed-exists"
       window: 60

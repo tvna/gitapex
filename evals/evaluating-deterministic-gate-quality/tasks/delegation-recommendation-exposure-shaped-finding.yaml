@@ -46,15 +46,13 @@ inputs:
 expected:
   output_contains:
     - "0.0.0.0:8931"
-  output_icontains:
-    - "blast-radius"
   output_contains_near:
     - all:
-        - "Delegate:"
+        - "Delegate"
         - "vetting-attack-surface"
       window: 60
   output_not_contains_near:
     - all:
-        - "Delegate:"
-        - "nobody"
+        - "Delegate"
+        - "not vetting-attack-surface"
       window: 60
