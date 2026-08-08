@@ -4,21 +4,61 @@
 
 `pyproject.toml` pins `prek` (https://github.com/j178/prek) as a dev
 dependency and `.pre-commit-config.yaml` wires it to this repo's own
-`ruff check`, `ruff format --check`, and `mypy` config -- but a
-dependency alone installs no git hook. Run once per clone:
+`ruff check`, `ruff format --check`, and `mypy` config, plus the
+`betterleaks` secret scan below -- but a dependency alone installs no git
+hook. Run once per clone:
 
 ```
-uv run prek install
+uv run prek install -t pre-commit -t pre-push
 ```
 
-This makes `git commit` reject a commit that fails ruff or mypy locally,
-before it exists, rather than only after a push reaches CI. `nix develop`
-also runs this automatically (see `flake.nix`'s devShell), so an agent or
-contributor using the Nix devShell gets it without a manual step.
+Both stages matter, so both shims are named: `prek install` with no `-t`
+installs the pre-commit shim only, and the pre-push secret scan would then
+never run.
+
+This makes `git commit` reject a commit that fails ruff, mypy, or the
+secret scan locally, before it exists, rather than only after a push reaches
+CI. `nix develop` also runs this automatically (see `flake.nix`'s devShell),
+so an agent or contributor using the Nix devShell gets it without a manual
+step.
 
 CI (`.github/workflows/test.yml`, `.github/workflows/lint.yml`) still runs
 the same ruff/mypy checks independently as the actual merge gate -- the
 local hook is a fast first pass, not a replacement for it.
+
+## Secret scanning (betterleaks)
+
+Issue #890 wires the `betterleaks` build SHA256-pinned in `flake.nix` into
+two hook stages, via `.github/scripts/gitapex_run_betterleaks.py`:
+
+| Stage | Hook id | Scope |
+|---|---|---|
+| pre-commit | `betterleaks-staged` | the git index |
+| pre-push | `betterleaks-history` | every commit, not just the push range |
+
+The pre-push hook scans the whole history (measured at 1.34 s over
+30.24 MB) precisely because it is the backstop for commits that never saw
+the pre-commit hook -- a `--no-verify` commit, an amend, or a history
+rewrite. Scoping it to the push range would leave the gap it exists to
+cover.
+
+If `betterleaks` is not on `PATH`, both hooks **fail** rather than skip. A
+secret gate that passes when its scanner is absent would report success on
+a commit it never inspected. Provision the pinned binary with `nix develop`,
+or with `/gitapex:setup-gitapex-toolchain` in an ephemeral session.
+
+`.betterleaks.toml` holds the config. It inherits the full built-in ruleset
+and adds one allowlist, covering the seven eval fixtures under `evals/`
+that carry deliberately planted fake credentials for redaction tests. Those
+paths are listed exactly, not as an `evals/` wildcard, so a real credential
+pasted into any other eval file still fails the gate -- adding a fixture
+means editing that allowlist on purpose. That file also records which
+suppression mechanism was verified to work on the pinned version, and which
+silently does not; re-run both checks if the pin is ever bumped.
+
+Neither hook is a merge gate: `git commit --no-verify` and
+`git push --no-verify` both bypass them, and no CI workflow runs betterleaks
+yet (named as a non-goal in #890).
 
 ## Issue citation convention
 

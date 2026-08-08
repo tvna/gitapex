@@ -175,9 +175,15 @@
             # installed. Only run inside a real git checkout (a `nix
             # develop` invoked outside one, e.g. in a template eval,
             # would otherwise fail this hook).
+            #
+            # Issue #890: both shims are named explicitly. `prek install`
+            # with no -t installs the pre-commit shim only, so the
+            # betterleaks pre-push hook -- the backstop for a commit that
+            # skipped pre-commit via --no-verify -- would silently never
+            # run for anyone entering through the devShell.
             shellHook = ''
               if [ -d .git ]; then
-                uv run prek install --quiet 2>/dev/null || true
+                uv run prek install --quiet -t pre-commit -t pre-push 2>/dev/null || true
               fi
             '';
           };
