@@ -149,6 +149,28 @@ def test_main_buggy_task_exits_one(tmp_path):
     assert L.main(["--tasks-glob", str(tasks / "*.yaml"), "--rubric", str(rubric), "--skill", str(skill)]) == 1
 
 
+def test_main_symmetric_ban_violation_exits_one(tmp_path):
+    # Issue #861's own coverage floor: before that issue's fixes, lint_task's
+    # own symmetric-ban Warning_ emission (not just check_symmetric_bans in
+    # isolation, already unit-tested above) was exercised only incidentally
+    # by four real corpus fixtures that had this exact authoring defect.
+    # Fixing those defects for real (see this issue's own PR) removed the
+    # only real-corpus case reaching that line -- a synthetic fixture here
+    # covers the integration path directly, so a future regression in this
+    # wiring is still caught even though the real corpus is now clean of
+    # this defect class.
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    (tasks / "t.yaml").write_text(
+        "id: t\nname: T\n"
+        "description: Whether X occurred cannot be determined from available data.\n"
+        "inputs:\n  prompt: p\nexpected:\n  output_contains: []\n",
+        encoding="utf-8",
+    )
+    rubric, skill = _corpus_files(tmp_path)
+    assert L.main(["--tasks-glob", str(tasks / "*.yaml"), "--rubric", str(rubric), "--skill", str(skill)]) == 1
+
+
 def test_main_missing_corpus_exits_two(tmp_path):
     assert (
         L.main(
