@@ -85,6 +85,23 @@ destined for a public sink.
    If the re-scan flags a candidate, call `update_pull_request` to strip
    it, then re-fetch and re-run the scan once more to confirm it was not
    force-reinjected before treating the artifact as clean.
+
+   An issue body written through a create/update issue call needs the
+   same treatment, with the issue-side equivalent at each step: re-fetch
+   the issue, scan its stored body, strip a flagged candidate via the
+   issue write call, then re-fetch and re-scan to confirm. Nothing about
+   this gap is PR-specific -- only the tool names differ.
+
+   Some environments now back this check with a PostToolUse hook (this
+   repository's own `hooks/check-post-write-provenance.sh` is one
+   example: it re-fetches the stored body after `create_pull_request` /
+   `update_pull_request` / `issue_write` returns and re-runs this
+   checklist's check 1 and check 3 against it). Where that hook is
+   installed it reports the finding but cannot undo the write -- the
+   remediation above is still yours to perform -- and it covers only the
+   tool calls it matches, so a body edited afterwards through any other
+   path is still yours to re-check. Run this step by hand wherever no
+   such hook exists.
 3. **ASCII-only.** Default to no em dashes, en dashes, curly quotes,
    full-width punctuation, or any other non-ASCII character -- gitapex's
    own convention. If the calling repository documents a different
@@ -121,11 +138,15 @@ LC_ALL=C grep -nP '[^ -~\t]' /tmp/flagged-commit-msg.txt
 
 Applying the checklist:
 
-- Check 2 fires: `grep` prints line 1 (exit status 0) -- the `\xe2\x80\x94`
-  bytes (an em dash) are non-ASCII.
 - Check 1 fires: `claude-example-model` and the session URL are a bare
   model identifier and a session URL -- neither is an agreed disclosure
   convention, so both must be removed to pass.
+- Check 3 fires: `grep` prints line 1 (exit status 0) -- the `\xe2\x80\x94`
+  bytes (an em dash) are non-ASCII.
+
+This example exercises checks 1 and 3 only. Check 2 has nothing to fire
+on here: there is no posted artifact to re-fetch yet. See the second
+worked example below for that one.
 
 Fixed:
 
@@ -201,11 +222,12 @@ substitutes for the other.
   this checklist's judgment call to each hit before the push is actually
   safe to make, whether or not such a hook exists.
 - Check 1's pre-submission scan is not sufficient on its own for
-  `create_pull_request`/`update_pull_request`: no hook re-checks what the
-  platform actually stores. Item 2's post-creation re-check is mandatory
-  after every such call, not optional follow-up -- treat the PR as
-  unverified until the re-fetched, actually-stored body has been scanned
-  clean.
+  `create_pull_request`/`update_pull_request`. Check 2's post-creation
+  re-check is mandatory after every such call, not optional follow-up --
+  treat the PR as unverified until the re-fetched, actually-stored body
+  has been scanned clean. Where a PostToolUse hook backs it, check 2's
+  own note states what that hook does and does not cover; that note is
+  the single place this file states it.
 - This skill only applies the checklist; it does not authorize skipping
   it, and it does not replace the deterministic gate this repository has
   not built yet.
