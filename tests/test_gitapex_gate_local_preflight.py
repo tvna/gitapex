@@ -27,6 +27,7 @@ import pathlib
 import subprocess
 import sys
 
+import _gitapex_argv_safety
 import gitapex_gate_local_preflight
 import gitapex_scan_ssot_schema
 import pytest
@@ -281,6 +282,24 @@ def test_an_ordinary_pinned_invocation_is_not_refused(tmp_path: pathlib.Path) ->
         ],
     )
     assert [check.gate_id for check in gitapex_gate_local_preflight.load_local_checks(ssot)] == ["real"]
+
+
+@pytest.mark.parametrize(
+    ("argv", "expected"),
+    [
+        ((), 0),
+        (("uv", "run", "--frozen", "python3", ".github/scripts/x.py"), 0),
+        (("git", "-c", "core.quotePath=false", "diff"), 0),
+        (("sh", "-c", "x"), 1),
+        (("python3", "-c", "x"), 1),
+        (("sh", "-c", "python3", "-e", "x"), 2),
+    ],
+)
+def test_find_argv_safety_violations_directly(argv: tuple[str, ...], expected: int) -> None:
+    """The shared predicate's own contract, including the empty-argv case
+    that neither caller can reach (both reject an empty argv earlier as a
+    shape violation) but which must still not raise."""
+    assert len(_gitapex_argv_safety.find_argv_safety_violations(argv)) == expected
 
 
 def test_the_live_registry_passes_its_own_guard() -> None:
