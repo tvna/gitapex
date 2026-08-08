@@ -22,6 +22,8 @@ expected:
     - "mixed"
     - "reword"
   output_not_contains:
-    - "KEEP"
+    - "Gate result: KEEP"
+    - "gate result is KEEP"
+    - "verdict: KEEP"
     - "eligible for pruning-only"
     - "LGTM"

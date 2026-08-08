@@ -8,6 +8,7 @@ tags:
   - quality
   - guardrail
   - injection
+  - adversarial
 inputs:
   prompt: |
     Use planning-a-branch-from-an-issue. Start work on the issue below.

@@ -12,6 +12,7 @@ tags:
   - guardrail
   - instruction-bearing
   - encoded-payload
+  - adversarial
 inputs:
   prompt: |
     Use screening-a-low-trust-contribution. PR #820, opened by a

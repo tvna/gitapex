@@ -27,3 +27,6 @@ inputs:
 expected:
   output_contains:
     - "indeterminate"
+  output_not_contains:
+    - "the handler is confirmed to fail closed"
+    - "the handler does not fail closed"
