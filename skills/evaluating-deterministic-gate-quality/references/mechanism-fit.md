@@ -121,13 +121,16 @@ Three outcomes, each named rather than collapsed into a yes/no:
   the target's own documentation should say so wherever it currently
   implies the gate is the enforcement.
 - **Repository-authored gate.** No infrastructure control the target
-  actually has reaches this policy at all, most often because the
-  decision depends on repository content or live session context no
-  platform setting can see. Proceed to Domain placement below.
+  actually has reaches this policy -- either none touches it at all
+  (most often because the decision depends on repository content or live
+  session context no platform setting can see), or one touches it and is
+  itself only friction while the gate is what removes the path. Proceed
+  to Domain placement below.
 - **Layered, both.** Each removes a path the other cannot see. Report
   both owners; this multiplicity is argued, not the unexplained
   duplication the Reproducibility / Domain-coverage axis exists to
-  flag.
+  flag. Proceed to Domain placement below for the repository-authored
+  layer.
 
 **An infrastructure-owned verdict never licenses removing an existing
 gate.** It reassigns which control the target should describe as
@@ -149,10 +152,15 @@ does not carry, recommend delegation instead of guessing, per
 
 Applies only once Gate vs. no gate above has already concluded a
 deterministic gate is warranted, and Gate vs. infrastructure-owned
-deterministic control above has left a repository-authored gate in scope
-(a `repository-authored-gate` or `layered-both` outcome); an
-infrastructure-owned outcome leaves no repository-authored realization to
-place. A deterministic gate can, in principle,
+deterministic control above has left a repository-authored realization in
+scope. For a policy with no repository-authored gate yet -- the
+proposed-policy case -- an infrastructure-owned outcome ends the
+mechanism-fit test there: there is nothing to place. For a policy whose
+repository-authored gate already exists -- the reviewing-an-artifact case
+-- that outcome never ends anything: the existing gate is still placed
+here and still graded through Procedure steps 3-5, because reassigning
+which control is primary neither removes that gate nor excuses grading
+it. A deterministic gate can, in principle,
 be realized in any of the four domains named in `SKILL.md`'s Scope
 section. Before grading a specific realization's own quality, check that
 its domain placement is actually the right one -- a well-implemented gate
