@@ -28,12 +28,17 @@ used to be discovered one red check at a time on an already-open PR. Before
 pushing, run every gate that has a working-tree-only form in one pass:
 
 ```
-python3 .github/scripts/gitapex_local_preflight.py
+python3 .github/scripts/gitapex_gate_local_preflight.py
 ```
 
 It prints a pass/fail line per gate, the captured output of each failing
 one, and exits non-zero if any failed. `--list` prints the wired set
 without running it.
+
+The runner itself needs no dependencies, but almost every wired gate runs
+through `uv` (the same `uv run` pins CI uses). Without `uv` on PATH every
+gate reports `FAIL ... failed to run` -- that is one missing tool, not
+fifteen broken gates.
 
 The wired set is not a list inside that script: it is every gate in
 `.gitapex/ssot.json` whose `planes` array contains `"local"`, run with the

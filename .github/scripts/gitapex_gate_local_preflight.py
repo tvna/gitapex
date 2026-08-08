@@ -9,7 +9,7 @@ read one red check, fix, push again. Issue #876 records that same proposal
 being independently re-raised and left unresolved across #707, #622, #616
 (twice) and #670.
 
-``python3 .github/scripts/gitapex_local_preflight.py`` runs every such gate
+``python3 .github/scripts/gitapex_gate_local_preflight.py`` runs every such gate
 in one pass and prints one aggregate verdict.
 
 **The wired set is discovered, never hardcoded here.** ``.gitapex/ssot.json``
@@ -57,6 +57,31 @@ reasons.
 
 **Known limits, disclosed rather than solved:**
 
+- **A gate that needs piped input, whose ``local_stdin`` is deleted, still
+  reports PASS.** ``gitapex_scan_ssot_schema.py`` can check that a declared
+  producer's argv is sane and that ``local_invocation`` names the gate's own
+  script, but nothing in the registry expresses "this gate *requires* stdin"
+  -- so removing ``local_stdin`` from ``exception-handler-gap`` leaves a
+  schema-valid entry whose gate reads a zero-byte diff and reports clean.
+  Verified by reconstruction, not assumed. The producer-*failure* path is
+  guarded (a non-zero producer fails the gate loudly rather than feeding it
+  an empty diff); the missing-producer path is not, and no cheap
+  registry-level rule closes it without a hardcoded per-gate list, which is
+  exactly the hand-maintained wiring this design exists to avoid.
+- **The runner itself is realized in no enforcement domain.** Nothing
+  invokes it: not CI, not ``hooks/hooks.json``, and not
+  ``.pre-commit-config.yaml`` (which wires only pre-commit-stage hooks; a
+  ``pre-push`` stage is available under ``prek`` and unused). Its only
+  trigger is a contributor typing the command. That is deliberate for a
+  first cut -- CI remains the authoritative merge gate -- but it means this
+  file guarantees nothing on its own, and a green run here is evidence, not
+  enforcement.
+- **Every wired gate but one runs through ``uv``.** CONTRIBUTING.md invokes
+  this file with plain ``python3`` (it needs no dependencies itself), but 14
+  of the 15 wired argvs begin with ``uv``. Without ``uv`` on PATH all 15
+  report ``FAIL ... failed to run``, which reads as fifteen broken gates
+  rather than one missing tool. ``uv`` is already a documented prerequisite
+  for this repository; it is named here so the failure mode is legible.
 - Gates run **sequentially**, in registry-id order, for legible output on a
   terminal. ``mypy-type-check`` and ``cyclomatic-complexity-floor`` dominate
   the wall clock; parallelism was not added because interleaved failure
@@ -65,15 +90,27 @@ reasons.
 - ``local_stdin`` producers that reference ``origin/main`` (today:
   ``exception-handler-gap``) need that ref to exist locally. In a checkout
   without it the producer fails and that one gate reports FAIL with git's
-  own message; the other gates still run and still report.
+  own message; the other gates still run and still report. A *stale*
+  ``origin/main`` widens the diff rather than narrowing it, so it errs
+  toward grading more than the branch changed, never less.
 - This grades **committed** state (``HEAD`` and the working tree as it is on
   disk), not a staged index. It is a pre-push runner, not a second
   pre-commit hook -- ``.pre-commit-config.yaml`` already owns that plane.
 
-Run standalone: ``python3 .github/scripts/gitapex_local_preflight.py``
+**Why this file is named ``gitapex_gate_*``.** It is a runner, not a gate,
+and it is deliberately absent from ``.gitapex/ssot.json`` (a registry entry
+carrying the ``local`` plane would make it discover and re-invoke itself).
+The prefix is load-bearing anyway:
+``gitapex_detect_changed_gate_scripts.py`` selects deterministic-gate paths
+by the ``.github/scripts/gitapex_(gate|scan)_*.py`` convention, so under any
+other name every future edit to a module that executes registry-declared
+argv on contributor machines would escape this repository's own
+gate-quality disclosure requirement.
+
+Run standalone: ``python3 .github/scripts/gitapex_gate_local_preflight.py``
 (exit 1 if any wired gate fails, exit 0 when all pass), ``--list`` to print
 the wired set without running anything, or via the pytest gate in
-``tests/test_gitapex_local_preflight.py``.
+``tests/test_gitapex_gate_local_preflight.py``.
 """
 
 from __future__ import annotations
@@ -89,13 +126,22 @@ from typing import TextIO
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 SSOT_PATH = REPO_ROOT / ".gitapex" / "ssot.json"
 
-# Ceiling for one gate's own subprocess. Sized against the slowest wired
-# gate rather than picked as a round number: mypy-type-check shells out to
-# .github/workflows/test.yml's own eight per-directory mypy groups, whose CI
-# job carries `timeout-minutes: 10`, and gitapex_run_precommit_mypy.py
-# already applies that same 600 s ceiling per group. A gate hung past this
-# fails loudly instead of blocking a contributor's push indefinitely.
-DEFAULT_TIMEOUT_SECONDS = 900
+# Ceiling for one gate's own subprocess, deliberately *tighter* than the
+# slowest wired gate's own worst case rather than an upper bound on it.
+# Stated precisely, because an earlier revision of this comment got the
+# arithmetic backwards and would have justified the wrong number:
+# mypy-type-check runs gitapex_run_precommit_mypy.py, which invokes mypy
+# once per entry in its own MYPY_GROUPS -- eight groups today, each with its
+# own _GROUP_TIMEOUT_SECONDS = 600 -- so that one gate's own theoretical
+# worst case is ~4800 s, not 600 s. A ceiling matching that would be useless
+# as a hang guard (80 minutes of a silent pre-push), so this is a judgment
+# call in the other direction: 1800 s is ~7x the measured warm wall clock
+# for all fifteen wired gates combined (~4 s), and comfortably clears a cold
+# mypy cache, while still failing loudly rather than blocking a push
+# indefinitely. The residual risk is named rather than hidden: a genuinely
+# cold cache on a slow machine can exceed this and report a timeout FAIL on
+# a gate CI would pass. `--timeout-seconds` raises it for that case.
+DEFAULT_TIMEOUT_SECONDS = 1800
 
 # Registry plane that marks a gate as having a working-tree-only form -- see
 # .gitapex/ssot.schema.json's `planes` description.
@@ -198,15 +244,41 @@ def _run(
     waives it: a list argv, never a shell string, and the executable is
     intentionally resolved from PATH because `uv`/`git` live in different
     absolute locations across the three environments this has to work in (a
-    contributor's machine, the nix devShell, and a GitHub runner)."""
+    contributor's machine, the nix devShell, and a GitHub runner).
+
+    ``errors="replace"``, not ``text=True``'s own strict default. A gate --
+    or a ``local_stdin`` producer -- may emit a byte sequence that is not
+    valid UTF-8, and strict decoding raises ``UnicodeDecodeError`` from
+    inside :func:`subprocess.run` itself. That is a ``ValueError``, not an
+    ``OSError`` or a ``SubprocessError``, so it escaped run_check's handlers
+    entirely and aborted the whole aggregate pass with a traceback: every
+    later gate went unrun *and* unreported, and no verdict was printed at
+    all -- the exact "silently drops a check it could not start" failure
+    this module's own docstring promises never to have, in its worst form.
+    This is not hypothetical for the one live producer either: it runs
+    ``git diff`` under ``-c core.quotePath=false``, which deliberately
+    *disables* git's octal escaping of non-ASCII path bytes.
+    ``gitapex_detect_changed_gate_scripts.py`` already names a non-UTF-8
+    diff as a case to handle rather than crash on; this matches it.
+    ``run_check`` additionally catches ``ValueError`` so a decode failure
+    from any other layer still degrades to one FAIL, not a lost run."""
     return subprocess.run(  # noqa: S603
         list(argv),
         cwd=repo_root,
         capture_output=True,
         text=True,
+        errors="replace",
         check=False,
         timeout=timeout,
         input=stdin_text,
+        # A gate with no local_stdin producer must not inherit this
+        # process's own stdin: a gate that reads stdin (every diff-fed one
+        # does) would then block on a terminal until the per-gate timeout
+        # expired -- a 30-minute silent hang on a contributor's pre-push,
+        # reported afterwards as a timeout FAIL that looks like a hung gate
+        # rather than a missing local_stdin declaration. DEVNULL makes that
+        # case an immediate EOF instead.
+        stdin=None if stdin_text is not None else subprocess.DEVNULL,
     )
 
 
@@ -222,7 +294,7 @@ def run_check(
     if check.stdin_argv is not None:
         try:
             producer = _run(check.stdin_argv, repo_root, timeout, None)
-        except (OSError, subprocess.SubprocessError) as error:
+        except (OSError, ValueError, subprocess.SubprocessError) as error:
             return CheckResult(check.gate_id, False, None, f"local_stdin producer failed to run: {error}")
         if producer.returncode != 0:
             return CheckResult(
@@ -238,7 +310,7 @@ def run_check(
         completed = _run(check.argv, repo_root, timeout, stdin_text)
     except subprocess.TimeoutExpired:
         return CheckResult(check.gate_id, False, None, f"timed out after {timeout}s")
-    except (OSError, subprocess.SubprocessError) as error:
+    except (OSError, ValueError, subprocess.SubprocessError) as error:
         return CheckResult(check.gate_id, False, None, f"failed to run: {error}")
     output = f"{completed.stdout}{completed.stderr}".strip()
     return CheckResult(check.gate_id, completed.returncode == 0, completed.returncode, output)
@@ -320,21 +392,24 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {error}", file=sys.stderr)
         return 1
 
+    # Checked before --list is handled, not after. An empty wired set means
+    # the registry lost its local plane entirely (a bad edit, or the wrong
+    # --ssot-path), and exiting 0 here would report "nothing to check" as
+    # "everything is fine" -- exactly the false-clean shape this
+    # repository's gates are written to avoid. --list is precisely the
+    # command a contributor reaches for to inspect the wiring after a
+    # suspicious edit, so it must not be the one path that answers that
+    # question with silence and exit 0.
+    if not checks:
+        print(f"error: no gate in {args.ssot_path} carries the {LOCAL_PLANE!r} plane", file=sys.stderr)
+        return 1
+
     if args.list:
         for check in checks:
             print(f"{check.gate_id}: {' '.join(check.argv)}")
             if check.stdin_argv is not None:
                 print(f"{check.gate_id}: stdin < {' '.join(check.stdin_argv)}")
         return 0
-
-    if not checks:
-        # Not a pass. An empty wired set means the registry lost its local
-        # plane entirely (a bad edit, or the wrong --ssot-path), and exiting
-        # 0 here would report "nothing to check" as "everything is fine" --
-        # exactly the false-clean shape this repository's gates are written
-        # to avoid.
-        print(f"error: no gate in {args.ssot_path} carries the {LOCAL_PLANE!r} plane", file=sys.stderr)
-        return 1
 
     print(f"local preflight: running {len(checks)} wired gate(s)...")
     results = run_checks(checks, args.repo_root, args.timeout_seconds, progress=sys.stderr)

@@ -151,7 +151,7 @@
       "script": ".github/scripts/gitapex_gate_gitignore_pattern_coverage.py",
       "rule": "Every .gitignore line added in a PR diff must have its de-negated/de-slashed core text referenced, as a whole token, by some file under tests/.",
       "planes": ["ci"],
-      "local_exclusion": "--added takes the diff's added .gitignore lines. Wiring it needs a diff-derived argument provider, which this runner deliberately does not have yet: local_stdin is its only input provider (see gitapex_local_preflight.py's module docstring).",
+      "local_exclusion": "--added takes the diff's added .gitignore lines. Wiring it needs a diff-derived argument provider, which this runner deliberately does not have yet: local_stdin is its only input provider (see gitapex_gate_local_preflight.py's module docstring).",
       "trigger": ".github/workflows/gitignore-pattern-coverage-gate.yml on pull_request",
       "policy_refs": [],
       "cluster": "repo-hygiene",

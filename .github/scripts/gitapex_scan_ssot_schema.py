@@ -22,8 +22,14 @@ This scanner is the drift gate shipped alongside that registry. It fails if:
   unnoticed duplicate would silently make one entry invisible to every
   cross-reference this scanner performs); or
 - any ``gates[].local_invocation``/``local_stdin`` argv token that is
-  unambiguously a repository path does not exist as a real file (issue
-  #876 -- see ``find_local_invocation_drift``).
+  unambiguously a repository path does not exist as a real file, or escapes
+  the repository root (issue #876 -- see ``find_local_invocation_drift``);
+- any such argv re-introduces a shell or hands inline code to an
+  interpreter, which would make this registry a carrier of arbitrary
+  commands rather than of references (``find_local_shell_argv``); or
+- a local-plane gate's ``local_invocation`` names none of that gate's own
+  ``script`` paths, so the preflight would report PASS for a gate that
+  never ran (``find_local_invocation_identity_drift``).
 
 Validation is layered. ``jsonschema.Draft202012Validator`` first checks the
 raw instance against ``.gitapex/ssot.schema.json`` and reports every
@@ -230,33 +236,77 @@ def find_script_drift(registry: SsotRegistry | None, repo_root: pathlib.Path = R
     return findings
 
 
+# argv0 values that turn an argv list back into a shell command line, so
+# `.gitapex/ssot.json` -- a data file, reviewed as data -- cannot smuggle
+# arbitrary code onto a contributor's machine through the pre-push runner.
+# See find_local_shell_argv.
+_SHELL_ARGV0 = frozenset({"sh", "bash", "dash", "zsh", "ksh", "csh", "tcsh", "fish", "env", "eval", "exec", "xargs"})
+
+# Options that hand a *string* to an interpreter to parse and execute,
+# rather than naming a file to run. `python3 -c ...` is as much a shell as
+# `sh -c ...` for this purpose -- but only *after* an interpreter token:
+# `git -c core.quotePath=false` (a real local_stdin value in this registry
+# today) uses the same spelling for an unrelated config override, so
+# scanning argv for these flags without anchoring them to an interpreter
+# false-flags it. See find_local_shell_argv.
+_INLINE_CODE_FLAGS = frozenset({"-c", "--command", "-e", "--eval"})
+
+# Interpreters that will execute an _INLINE_CODE_FLAGS string. Matched on
+# basename anywhere in the argv, not just argv0, because every Python gate
+# here is invoked indirectly (`uv run --frozen python3 <script>`) and an
+# argv0-only check would miss `uv run --frozen python3 -c '<payload>'`.
+_INTERPRETERS = frozenset({"python", "python3", "perl", "ruby", "node", "deno", "bun", "php", "Rscript"})
+
+# Suffixes that make a token unambiguously a path to a tracked file rather
+# than an ordinary argument -- see _looks_like_repo_path.
+_PATH_SUFFIXES = (".py", ".sh", ".yml", ".yaml", ".json", ".toml")
+
+
 def _looks_like_repo_path(token: str) -> bool:
     """True for an argv token that is unambiguously a repo-root-relative
     path to a tracked file, so ``find_local_invocation_drift`` can check it
     exists without misreading a token that merely *contains* a slash or a
-    suffix. Deliberately conservative in three ways, each closing a real
-    token shape present in ``.gitapex/ssot.json``'s own local_invocation /
-    local_stdin values today:
+    suffix. Deliberately conservative, each rule closing a real token shape
+    present in ``.gitapex/ssot.json``'s own local_invocation / local_stdin
+    values today:
 
     - a leading ``-`` is an option, never a path (``--merge-base``);
     - a ``*`` marks a pathspec or glob resolved by the invoked tool itself,
-      not a file this scanner can stat (``*.py`` as git's own pathspec);
-    - a ``,`` marks a delimited *list* value, not one path (xenon's
-      ``--exclude apm_modules/*,skills/.../gitapex_check_skill_shape.py``).
+      not a file this scanner can stat (``*.py`` as git's own pathspec).
 
     A token with no ``/`` (``pyproject.toml``, ``ruff``) and a token with no
     recognized suffix (``origin/main`` -- a git revision, not a file) are
     both skipped for the same reason: neither is distinguishable from a
     non-path argument by inspection alone, and stat-ing them would report
-    drift for arguments that are working exactly as intended."""
-    if not token or token.startswith("-") or "*" in token or "," in token or "/" not in token:
+    drift for arguments that are working exactly as intended.
+
+    Note what this deliberately does *not* skip any more: a comma. An
+    earlier revision treated any ``,``-bearing token as a delimited list and
+    skipped it whole, which silently exempted a real path -- xenon's
+    ``--exclude apm_modules/*,skills/.../gitapex_check_skill_shape.py``
+    carries a genuine, stat-able repository path in its second element, and
+    renaming that file would have made the exclusion silently ineffective
+    with this scanner reporting clean. ``_iter_path_tokens`` splits on
+    commas first and applies this predicate per element instead, so the
+    glob element is skipped on its own merits and the path element is
+    checked on its own."""
+    if not token or token.startswith("-") or "*" in token or "/" not in token:
         return False
-    return token.endswith((".py", ".sh", ".yml", ".yaml", ".json", ".toml"))
+    return token.endswith(_PATH_SUFFIXES)
+
+
+def _iter_path_tokens(token: str) -> list[str]:
+    """Every comma-delimited element of one argv token that
+    _looks_like_repo_path accepts. A token with no comma yields at most
+    itself; see that predicate's own docstring for why commas are split
+    rather than used to skip the whole token."""
+    return [element for element in token.split(",") if _looks_like_repo_path(element)]
 
 
 def find_local_invocation_drift(registry: SsotRegistry | None, repo_root: pathlib.Path = REPO_ROOT) -> list[str]:
     """Return one message per ``local_invocation``/``local_stdin`` argv token
-    that names a repository file which does not exist (issue #876).
+    that names a repository file which does not exist, or that escapes the
+    repository root entirely (issue #876).
 
     The schema's own if/then/else already enforces the structural half of
     the local plane -- ``local`` in ``planes`` requires ``local_invocation``
@@ -265,17 +315,134 @@ def find_local_invocation_drift(registry: SsotRegistry | None, repo_root: pathli
     actually points at something real. It is the same drift shape
     ``find_script_drift`` closes for ``gates[].script``, one field over: a
     renamed or deleted gate script would otherwise leave
-    ``gitapex_local_preflight.py`` reporting that gate as a *failure* on
+    ``gitapex_gate_local_preflight.py`` reporting that gate as a *failure* on
     every contributor's machine (exit 127, "No such file or directory")
-    rather than as registry drift caught here on the diff that caused it."""
+    rather than as registry drift caught here on the diff that caused it.
+
+    An absolute token, or one containing ``..``, is a finding in its own
+    right rather than something to stat. ``pathlib``'s ``/`` operator
+    *discards* its left operand when the right side is absolute, so
+    ``repo_root / "/etc/passwd"`` is simply ``/etc/passwd``: an absolute
+    ``local_invocation`` token that happens to exist on its author's machine
+    would validate there and fail on a CI runner, making this gate's own
+    verdict machine-dependent -- the one property a drift gate cannot have.
+    """
     if registry is None:
         return []
     findings: list[str] = []
     for gate in registry.gates:
         for field, argv in (("local_invocation", gate.local_invocation), ("local_stdin", gate.local_stdin)):
             for token in argv or []:
-                if _looks_like_repo_path(token) and not (repo_root / token).is_file():
-                    findings.append(f"local-invocation-drift: {gate.id}: {field} references missing file: {token}")
+                for path_token in _iter_path_tokens(token):
+                    if pathlib.PurePosixPath(path_token).is_absolute() or ".." in path_token.split("/"):
+                        findings.append(
+                            f"local-invocation-drift: {gate.id}: {field} must stay inside the "
+                            f"repository root, got: {path_token}"
+                        )
+                    elif not (repo_root / path_token).is_file():
+                        findings.append(
+                            f"local-invocation-drift: {gate.id}: {field} references missing file: {path_token}"
+                        )
+    return findings
+
+
+def find_local_shell_argv(registry: SsotRegistry | None) -> list[str]:
+    """Return one message per ``local_invocation``/``local_stdin`` argv that
+    would re-introduce a shell, or hand inline code to an interpreter
+    (issue #876).
+
+    ``gitapex_gate_local_preflight.py`` runs every argv through
+    :func:`subprocess.run` in exec form with no ``shell=True``, which stops
+    *the runner* from introducing a shell. It does not stop the argv from
+    *being* one: ``["sh", "-c", "<anything>"]`` is a perfectly valid argv
+    list. That matters because this change makes ``.gitapex/ssot.json`` --
+    until now a pure reference/routing manifest, reviewed as data -- into a
+    carrier of commands that CONTRIBUTING.md tells contributors to execute
+    before every push. A maintainer running the preflight while reviewing a
+    fork's branch would execute whatever that branch's registry declared.
+
+    This closes the shape rather than the intent: an argv naming a real
+    interpreter and a real script file is still arbitrary code by
+    construction, and this scanner cannot and does not try to adjudicate
+    what that script does. What it removes is the ability to hide the
+    payload *inside the registry entry itself*, where no reviewer expects
+    executable content and where none of this repository's
+    executable-surface conventions (see
+    ``skills/screening-a-low-trust-contribution``) currently point. Widening
+    those conventions and CODEOWNERS to cover ``.gitapex/**`` is the
+    complementary half, tracked separately rather than assumed here."""
+    if registry is None:
+        return []
+    findings: list[str] = []
+    for gate in registry.gates:
+        for field, argv in (("local_invocation", gate.local_invocation), ("local_stdin", gate.local_stdin)):
+            if not argv:
+                continue
+            basenames = [pathlib.PurePosixPath(token).name for token in argv]
+            shells = sorted({token for token, base in zip(argv, basenames, strict=True) if base in _SHELL_ARGV0})
+            if shells:
+                findings.append(
+                    f"local-shell-argv: {gate.id}: {field} invokes a shell/wrapper: "
+                    f"{', '.join(repr(shell) for shell in shells)}"
+                )
+            # Anchored to an interpreter's own position: only a flag that
+            # comes *after* one is that interpreter's inline-code flag.
+            first_interpreter = next(
+                (index for index, base in enumerate(basenames) if base in _INTERPRETERS), len(argv)
+            )
+            inline = sorted({flag for flag in argv[first_interpreter + 1 :] if flag in _INLINE_CODE_FLAGS})
+            if inline:
+                findings.append(
+                    f"local-shell-argv: {gate.id}: {field} passes inline code to "
+                    f"{argv[first_interpreter]!r} via {', '.join(repr(flag) for flag in inline)}"
+                )
+    return findings
+
+
+def find_local_invocation_identity_drift(registry: SsotRegistry | None) -> list[str]:
+    """Return one message per local-plane gate whose ``local_invocation``
+    never names one of that gate's own ``gates[].script`` paths (issue
+    #876).
+
+    ``find_local_invocation_drift`` above only asks whether an argv's path
+    tokens *exist*. That leaves the wiring's whole point unguarded: pointing
+    ``hidden-characters``'s ``local_invocation`` at ``["true"]`` -- or at a
+    *different* gate's real script -- is schema-valid, passes the existence
+    check, and makes the preflight report ``PASS  hidden-characters`` for a
+    gate that never ran. That is a false-clean verdict on a green pre-push
+    run, which is the exact outcome the whole local plane exists to prevent.
+
+    The rule: a ``kind: "script"`` gate on the local plane must carry, as one
+    of its argv tokens, at least one of its own registered ``script`` paths.
+
+    **The one exemption, and why it is not a loophole.** A gate whose every
+    registered ``script`` is a workflow file (``.yml``/``.yaml``) has its
+    enforcement logic inline in that workflow, with no separate script file
+    to name -- ``python-lint`` (``uv run --locked ruff check .``) and
+    ``cyclomatic-complexity-floor`` (``uv run --frozen xenon ...``) are both
+    that shape, and no argv could satisfy this rule for them without naming
+    a workflow file the local runner cannot execute. They are exempted by a
+    property of their own registry entry, checked here, not by an id
+    allowlist that would silently grow. Measured at the commit that added
+    this check: exactly those two of the fifteen wired gates take the
+    exemption, and the other thirteen satisfy the rule unmodified. A gate
+    with a mixed ``.yml``-and-script list (``mypy-type-check``,
+    ``exception-handler-gap``) is *not* exempt and must name its script."""
+    if registry is None:
+        return []
+    findings: list[str] = []
+    for gate in registry.gates:
+        if gate.kind != "script" or not gate.local_invocation:
+            continue
+        script_paths = _as_list(gate.script)
+        if not script_paths or all(path.endswith((".yml", ".yaml")) for path in script_paths):
+            continue
+        argv_tokens = {element for token in gate.local_invocation for element in token.split(",")}
+        if not argv_tokens.intersection(script_paths):
+            findings.append(
+                f"local-invocation-identity-drift: {gate.id}: local_invocation names none of "
+                f"this gate's own script paths ({', '.join(script_paths)})"
+            )
     return findings
 
 
@@ -359,6 +526,8 @@ def find_drift(
     findings.extend(find_schema_violations(instance, schema))
     findings.extend(find_script_drift(registry, repo_root))
     findings.extend(find_local_invocation_drift(registry, repo_root))
+    findings.extend(find_local_shell_argv(registry))
+    findings.extend(find_local_invocation_identity_drift(registry))
     findings.extend(find_policy_ref_drift(registry))
     findings.extend(find_cluster_drift(registry))
     findings.extend(find_duplicate_ids(instance))
