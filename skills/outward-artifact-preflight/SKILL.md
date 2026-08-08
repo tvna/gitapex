@@ -85,6 +85,21 @@ destined for a public sink.
    If the re-scan flags a candidate, call `update_pull_request` to strip
    it, then re-fetch and re-run the scan once more to confirm it was not
    force-reinjected before treating the artifact as clean.
+
+   An issue body written through a create/update issue call needs the
+   same treatment, with the issue-side equivalent at each step: re-fetch
+   the issue, scan its stored body, strip a flagged candidate via the
+   issue write call, then re-fetch and re-scan to confirm. Nothing about
+   this gap is PR-specific -- only the tool names differ.
+
+   Some environments now back this check with a PostToolUse hook (this
+   repository's own `hooks/check-post-write-provenance.sh` is one
+   example: it re-fetches the stored body after `create_pull_request` /
+   `update_pull_request` / `issue_write` returns and re-runs this
+   checklist's check 1 and check 3 against it). Where that hook is
+   installed it reports the finding but cannot undo the write -- the
+   remediation above is still yours to perform. Run this step by hand
+   wherever no such hook exists.
 3. **ASCII-only.** Default to no em dashes, en dashes, curly quotes,
    full-width punctuation, or any other non-ASCII character -- gitapex's
    own convention. If the calling repository documents a different
@@ -201,11 +216,14 @@ substitutes for the other.
   this checklist's judgment call to each hit before the push is actually
   safe to make, whether or not such a hook exists.
 - Check 1's pre-submission scan is not sufficient on its own for
-  `create_pull_request`/`update_pull_request`: no hook re-checks what the
-  platform actually stores. Item 2's post-creation re-check is mandatory
-  after every such call, not optional follow-up -- treat the PR as
-  unverified until the re-fetched, actually-stored body has been scanned
-  clean.
+  `create_pull_request`/`update_pull_request`. Item 2's post-creation
+  re-check is mandatory after every such call, not optional follow-up --
+  treat the PR as unverified until the re-fetched, actually-stored body
+  has been scanned clean. Where a PostToolUse hook backs item 2 (this
+  repository's own `hooks/check-post-write-provenance.sh` is one
+  example), it surfaces the finding but cannot undo the write, and it
+  covers only the three tool calls it matches -- a body edited
+  afterwards through any other path is still yours to re-check by hand.
 - This skill only applies the checklist; it does not authorize skipping
   it, and it does not replace the deterministic gate this repository has
   not built yet.
