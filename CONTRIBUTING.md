@@ -29,8 +29,24 @@ over a hook-install problem -- so read the warnings on entry rather than
 assuming the hooks are live. To confirm at any time:
 
 ```sh
-hooks=$(git rev-parse --git-path hooks); ls -l "$hooks/pre-commit" "$hooks/pre-push"
+hooks=$(git rev-parse --git-path hooks)
+for h in pre-commit pre-push; do
+  p="$hooks/$h"
+  t=$(sed -n 's/^PREK="\(.*\)"$/\1/p' "$p" 2>/dev/null | head -1)
+  if [ -x "$p" ] && { [ -x "$t" ] || command -v prek >/dev/null 2>&1; }; then
+    echo "$h: active"
+  else
+    echo "$h: NOT ACTIVE"
+  fi
+done
 ```
+
+This is deliberately not `ls`. A shim can be present and executable while still
+being dead: prek writes the *installing* tree's `.venv/bin/prek` into it as an
+absolute path and falls back to a bare `prek` on `PATH`, so a shim left behind
+by a removed worktree passes an executable-bit test and then dies at `exec`
+with `prek: not found`. The check above is the same one the devShell applies --
+the shim's own target must resolve, or `prek` must really be on `PATH`.
 
 `git rev-parse --git-path hooks` rather than a literal `.git/hooks`: the
 literal path is wrong from a subdirectory and inside a linked worktree (where
