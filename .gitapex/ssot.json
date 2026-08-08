@@ -505,6 +505,19 @@
       "tracking_issue": 682,
       "status": "active",
       "supersedes": null
+    },
+    {
+      "id": "harden-checkout-pin-drift",
+      "kind": "script",
+      "script": ".github/scripts/gitapex_scan_harden_checkout_pin_drift.py",
+      "rule": "Every .github/workflows/*.yml/.yaml `uses: tvna/gitapex/.github/actions/harden-checkout@<sha>` reference must match .github/actions/harden-checkout/action.yml's own current (most-recent-commit) SHA, computed live via git log rather than a fixed literal.",
+      "planes": ["ci"],
+      "trigger": "tests/test_gitapex_scan_harden_checkout_pin_drift.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "supply-chain",
+      "tracking_issue": 813,
+      "status": "active",
+      "supersedes": null
     }
   ],
   "clusters": {

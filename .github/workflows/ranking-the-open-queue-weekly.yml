@@ -24,22 +24,16 @@ jobs:
       issues: read
       pull-requests: read
     steps:
-      - name: Harden runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
-        with:
-          egress-policy: audit
-
       # Pinned to main explicitly: workflow_dispatch checks out whatever
       # ref the operator selected in the UI, which defaults to the
       # currently-viewed branch, not necessarily main. This job only
       # reads skills/ranking-the-open-queue from the repository, but
       # pinning keeps its behavior identical to the scheduled run
       # regardless of which branch a manual dispatch is launched from.
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - name: Harden runner + checkout
+        uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
         with:
           ref: main
-          persist-credentials: false
 
       # #315 (sub-task of #310, T1): wires skills/ranking-the-open-queue
       # (manual-invocation-only) to a scheduled read-only digest run.

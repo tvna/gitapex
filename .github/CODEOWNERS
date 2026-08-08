@@ -1,0 +1,9 @@
+# .github/actions/harden-checkout carries the Harden runner + checkout
+# security config (egress-policy, persist-credentials) for all 25 gate
+# workflows in this repository (issue #813). A change here affects every
+# gate at once, so it requires the repo owner's review.
+#
+# Note: this file alone does not enforce review -- it only takes effect once
+# branch protection's "Require review from Code Owners" is enabled, which is
+# a GitHub Settings change outside this repo's tracked files.
+/.github/actions/harden-checkout/ @tvna
