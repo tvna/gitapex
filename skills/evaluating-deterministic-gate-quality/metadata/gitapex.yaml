@@ -356,6 +356,17 @@ spec:
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/829"
       summary: "Accurate PR-wide totals (9e63553->HEAD, re-verified via git show <sha>:<path> | wc -l for all four commits, not re-asserted from memory): dimensions.md 364->418, security-level.md 161->166, cross-cutting-axes.md 82->88 (already correct), SKILL.md 389->403, output-schema.json 250 lines final."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "Fixed a self-contradiction the operator caught: dimension 23 own prose said evaluated once per review, but SKILL.md Procedure step 3 walked it inside the per-artifact loop like dimensions 1-22, and output-schema.json placed its finding in the same per-artifact findings array with no distinguishing rule."
+      outcome:
+        lines: "dimensions.md 418->439, SKILL.md 403->416, output-schema.json 250->254"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "Added a review-scope, not artifact-scope tag to dimensions.md (mirroring the existing precondition-scope pattern for dimension 22), excluded dimension 23 from Procedure step 3, moved its evaluation to step 5 alongside coverage attestation, and added reviewScoped plus a placement rule to output-schema.json."
+    - kind: caveat
+      anchor: "https://github.com/tvna/gitapex/issues/829"
+      summary: "An independent fable-model dispatch adversarially reviewing a separate, larger overhaul proposal for this skill (not merged, filed for the operator's own consideration) surfaced the same class of gap from a different angle -- mechanism-fit lacking an infrastructure-owned-control triage branch, and scope-selection risking silent coverage-attestation blind spots."
   skillDependencies:
     requires:
       - evaluating-skill-quality

@@ -41,6 +41,22 @@ domain-inapplicability already gets (see dimension 8). The two axes
 compose independently: a dimension can carry both a domain-generalization
 tag and a precondition-scope note at once.
 
+A third, independent scoping property currently applies to exactly one
+dimension -- **review-scope, not artifact-scope** (dimension 23 below).
+Every other dimension above evaluates the one specific artifact currently
+under review and is walked once per artifact, per `SKILL.md` Procedure
+step 3. Dimension 23's own answer does not vary by which artifact is
+under review at all -- it is a property of the calling/installing
+repository as a whole, not of any single gate -- so walking it inside
+step 3's per-artifact loop would silently re-ask (and risk
+re-answering inconsistently) a question that has exactly one correct
+answer per review. It is therefore excluded from step 3's walk and
+evaluated once per review instead, alongside coverage attestation in
+step 5 -- see `SKILL.md`'s own step 5 and
+[references/output-schema.json](output-schema.json) for the mechanics.
+This property is independent of both domain-generalization and
+precondition-scoping and composes with either.
+
 ## Contents
 
 1. [Deterministic-shape checks](#deterministic-shape-checks)
@@ -416,3 +432,8 @@ differentiation from dimensions 1 and 15 below.
     regardless of which of the four domains a *reviewed gate* happens to
     live in; this dimension characterizes the caller, not the artifact
     under review.
+    *Scope:* review-scope, not artifact-scope -- unlike every dimension
+    above, this one is never walked inside `SKILL.md` Procedure step 3's
+    per-artifact loop; it is evaluated exactly once per review, in step 5
+    alongside coverage attestation, since its answer does not vary by
+    which artifact is currently under review.

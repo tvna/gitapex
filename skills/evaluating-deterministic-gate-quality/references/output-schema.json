@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://gitapex.io/schemas/evaluating-deterministic-gate-quality/output-schema.json",
   "title": "GateQualityReviewResult",
-  "description": "Structured output contract for evaluating-deterministic-gate-quality. This skill produces this object only -- it performs no write, no persistence, and no side-effecting action on the target repository (see grading-procedure.md's Three-way division of responsibility, point 1: 'This skill only ever reads and reports; it never builds or installs enforcement on the target's behalf'). Neutrality note: persistenceRecommendation carries candidate storage channels and rationale only; selecting and executing a channel is always the calling agent's or operator's decision, never an action this schema's producer takes. One-artifact-per-instance convention: SKILL.md Procedure step 6 issues a verdict per artifact or policy reviewed, plus one repo-wide coverage-attestation summary -- so a review covering more than one artifact emits one instance of this object per artifact (each with its own reviewMeta.artifactRef, mechanismFit, and findings), and only the LAST instance in that set carries a non-null coverageAttestation, since that field is repo-wide, not per-artifact. Do not merge multiple artifacts' mechanismFit/findings into a single instance's arrays -- that loses which finding belongs to which artifact.",
+  "description": "Structured output contract for evaluating-deterministic-gate-quality. This skill produces this object only -- it performs no write, no persistence, and no side-effecting action on the target repository (see grading-procedure.md's Three-way division of responsibility, point 1: 'This skill only ever reads and reports; it never builds or installs enforcement on the target's behalf'). Neutrality note: persistenceRecommendation carries candidate storage channels and rationale only; selecting and executing a channel is always the calling agent's or operator's decision, never an action this schema's producer takes. One-artifact-per-instance convention: SKILL.md Procedure step 6 issues a verdict per artifact or policy reviewed, plus one repo-wide coverage-attestation summary and one dimension-23 finding -- so a review covering more than one artifact emits one instance of this object per artifact (each with its own reviewMeta.artifactRef, mechanismFit, and per-artifact findings), and only the LAST instance in that set carries a non-null coverageAttestation plus the dimension-23 (reviewScoped) finding, since both are repo-wide, not per-artifact -- see dimensions.md's own review-scope tag for why dimension 23 is never walked inside the per-artifact loop that produces every other findings[] entry. Do not merge multiple artifacts' mechanismFit/findings into a single instance's arrays -- that loses which finding belongs to which artifact.",
   "type": "object",
   "required": ["schemaVersion", "reviewMeta", "mechanismFit", "persistenceRecommendation"],
   "additionalProperties": false,
@@ -79,7 +79,7 @@
 
     "findings": {
       "type": "array",
-      "description": "One entry per dimension (references/dimensions.md, 1-23) actually assessed. A dimension not assessable from available evidence is reported with verdict=indeterminate and an indeterminateReason, never silently omitted (SKILL.md Stop boundaries).",
+      "description": "One entry per dimension (references/dimensions.md, 1-23) actually assessed, for THIS instance's own artifactRef. A dimension not assessable from available evidence is reported with verdict=indeterminate and an indeterminateReason, never silently omitted (SKILL.md Stop boundaries). Exception: dimension 23 (reviewScoped=true) never varies by artifact and so must appear at most once across the whole review's set of instances -- on the same instance that carries the non-null coverageAttestation (SKILL.md Procedure step 5), never repeated on every per-artifact instance and never present on an instance that has no coverageAttestation.",
       "items": {
         "type": "object",
         "required": ["dimensionId", "lane", "verdict"],
@@ -94,6 +94,10 @@
           "preconditionScoped": {
             "type": "boolean",
             "description": "true only for a dimension (currently dimension 22) whose own applicability depends on the target's operational capability rather than domain alone."
+          },
+          "reviewScoped": {
+            "type": "boolean",
+            "description": "true only for dimension 23, whose own answer characterizes the calling/installing repository as a whole rather than the specific artifact in mechanismFit/artifactRef -- see this findings array's own top-level description for the resulting once-per-review placement rule."
           },
           "verdict": { "type": "string", "enum": ["pass", "fail", "not_applicable", "indeterminate"] },
           "evidence": {

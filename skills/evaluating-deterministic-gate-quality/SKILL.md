@@ -182,13 +182,16 @@ project-instruction file) this skill defers to rather than re-deriving.
    elsewhere) rather than assuming every dimension applies unchanged to
    every domain. Quote the specific evidence that earns each verdict; a
    dimension that cannot be assessed from available evidence is reported
-   as such, not silently skipped or guessed.
+   as such, not silently skipped or guessed. Dimension 23 is excluded
+   from this per-artifact walk -- its own review-scope tag in
+   dimensions.md means it is evaluated once per review, in step 5, not
+   repeated for every artifact discovered.
 4. **Cross-cutting axes.** Apply Compatibility awareness, Reproducibility
    / Domain-coverage, Blast-radius / trust classification, and
    Security-level / Zero-Trust maturity classification, per the sections
    above, to each artifact and to the target's overall gate landscape.
-5. **Coverage attestation.** Enumerate the target repository's own stated
-   invariants, filter to the ones
+5. **Coverage attestation, plus dimension 23.** Enumerate the target
+   repository's own stated invariants, filter to the ones
    [references/mechanism-fit.md](references/mechanism-fit.md)'s Gate vs.
    no gate test would even suggest deterministic backing for, then
    cross-check the filtered set against what steps 1-4 actually found
@@ -197,10 +200,20 @@ project-instruction file) this skill defers to rather than re-deriving.
    live-testing requirement for what counts as "covered," and the
    standing-coverage-drift-gate recommendation:
    [references/grading-procedure.md](references/grading-procedure.md#coverage-attestation-procedure-step-5).
+   In this same once-per-review pass, separately evaluate dimension 23
+   (caller/installing-environment maturity) from
+   [references/dimensions.md](references/dimensions.md) -- a distinct
+   check from coverage attestation above (that asks whether the target's
+   own declared invariants have gate coverage; dimension 23 asks whether
+   the calling/installing repository itself has cross-domain enforcement
+   infrastructure), co-located here only because both share the same
+   once-per-review, not-per-artifact, evaluation timing.
 6. **Issue a verdict** per artifact or policy reviewed (well-formed and
    well-placed / well-formed but misplaced / not well-formed /
    no-gate-warranted / indeterminate, with the specific reason), plus an
-   overall coverage-attestation summary for the target repository. An
+   overall coverage-attestation summary and a single dimension-23 finding
+   for the target repository -- both once per review, never repeated per
+   artifact. An
    artifact matching more than one of these at once (e.g. wrong-domain
    and also failing a deterministic-shape check) gets both reported
    together, not resolved by picking one -- a wrong-domain finding never
