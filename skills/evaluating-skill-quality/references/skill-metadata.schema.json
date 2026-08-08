@@ -116,7 +116,7 @@
           "type": "array",
           "uniqueItems": true,
           "items": { "$ref": "#/$defs/skillNameRef" },
-          "description": "Hard: the procedure cannot function without it. An empty list is a valid, deliberate 'no hard dependencies' statement, unlike spec.references. Every name must resolve to an existing skills/*/ directory (skill-dependencies-resolve) -- cross-file, checked by the companion scanner, not this schema. The full requires-graph across all sidecars must also be acyclic (a repo-wide invariant enforced by tests/test_gitapex_skill_metadata_sidecar.py, entirely outside any single instance's own schema)."
+          "description": "Hard: the procedure cannot function without it. An empty list is a valid, deliberate 'no hard dependencies' statement, unlike spec.references. Every name must resolve to an existing skills/*/ directory (skill-dependencies-resolve) -- cross-file, checked by the companion scanner, not this schema. The full requires-graph across all sidecars is also expected to be acyclic -- a repo-wide invariant no single instance's own schema can see; a consuming repository's own test suite, if any, is where a check for it would live, entirely outside this schema."
         },
         "relatedTo": {
           "type": "array",

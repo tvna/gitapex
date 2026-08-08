@@ -287,6 +287,21 @@ spec:
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/834"
       summary: "checker-script-adversarial-review caught a defense-in-depth gap in the first fix: scoping the shared _citation_sources prose-citation scan to .md-only would exempt every non-Markdown references/ file from bare-issue-citation/raw-placeholder/repo-path checks entirely -- a bypass by file extension alone. Reverted; _citation_sources scans every references/ file again, and skill-metadata.schema.json's own prose was rewritten to comply."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/834"
+      summary: "A fresh isolated self-review (WELL-FORMED-NOT-MATURE) found one more dimension-6 gap the deterministic checker cannot see (REPO_PATH_CITATION_RE only matches evals/docs prefixes): skill-metadata.schema.json's requires description cited tests/test_gitapex_skill_metadata_sidecar.py unconditionally, a path outside the skill. Reworded to state the invariant without the unconditional external-file citation."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/834"
+      summary: "Pre-merge dogfood, evaluating-skill-quality self-review: disclosed this repository's own CLAUDE.md was present in the dispatch's context (a known Agent-tool isolation gap, not a target defect), verdict marked provisional on that basis. WELL-FORMED-NOT-MATURE: one dimension-6 gap found and fixed same PR (see prior correction entry); named two non-blocking gaps -- no paired scorer-gated-skill-edits entry yet, and the schema's own $id stays origin-repo-scoped, uncovered by any existing check."
+      outcome:
+        verdict: WELL-FORMED-NOT-MATURE
+        found: 1
+        fixed: 1
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/834"
+      summary: "Pre-merge dogfood, battle-testing-a-skill: same contaminated-dispatch disclosure as the self-review (this repository's CLAUDE.md present in context, verdict marked provisional on that basis). PASS -- no FAIL findings on the four requested adversarial focus points (new rubric prose's own self-referential portability, live 59/59 shape-check confirmation, completeness of the .md-only exemption fix, cleanliness of the rewritten schema prose)."
+      outcome:
+        verdict: PASS
   skillDependencies:
     requires: []
     relatedTo:
