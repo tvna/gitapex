@@ -210,6 +210,16 @@ def test_task_glob_matching_nothing_is_reported(tmp_path: pathlib.Path) -> None:
     ]
 
 
+@pytest.mark.parametrize("pattern", ["/etc/*.yaml", ""])
+def test_unusable_task_glob_is_a_finding_not_a_traceback(tmp_path: pathlib.Path, pattern: str) -> None:
+    """pathlib raises NotImplementedError on an absolute pattern and
+    ValueError on an empty one. Both must surface as findings."""
+    evals_dir = _write_suite(tmp_path, evaluation={**_MINIMAL_EVAL, "tasks": [pattern]})
+    findings = drift.find_declared_task_coverage(evals_dir)
+    assert len(findings) == 1
+    assert "is not a usable relative pattern" in findings[0]
+
+
 def test_tasks_from_reference_is_reported_as_ungraded(tmp_path: pathlib.Path) -> None:
     evals_dir = _write_suite(tmp_path, evaluation={**_MINIMAL_EVAL, "tasks_from": "../shared/tasks.yaml"})
     findings = drift.find_declared_task_coverage(evals_dir)

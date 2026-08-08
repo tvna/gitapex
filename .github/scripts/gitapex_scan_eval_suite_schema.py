@@ -357,7 +357,21 @@ def find_declared_task_coverage(evals_dir: pathlib.Path = EVALS_DIR) -> list[str
         for pattern in declared:
             if not isinstance(pattern, str):
                 continue
-            matched = sorted(suite.glob(pattern))
+            # pathlib rejects some patterns outright -- an absolute one
+            # ("/etc/*.yaml") raises NotImplementedError, an empty one
+            # raises ValueError. Both are reachable: this function runs on
+            # every eval.yaml, including one whose own `tasks` entries
+            # find_suite_violations separately reports as schema-invalid.
+            # Reported as a finding, never a traceback, per this module's
+            # own read-or-report contract.
+            try:
+                matched = sorted(suite.glob(pattern))
+            except (NotImplementedError, ValueError) as error:
+                findings.append(
+                    f"undiscovered-tasks: {label}: declared tasks glob {pattern!r} is not a usable "
+                    f"relative pattern: {error}"
+                )
+                continue
             if not matched:
                 findings.append(f"undiscovered-tasks: {label}: declared tasks glob {pattern!r} matches no file")
                 continue
