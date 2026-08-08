@@ -1164,16 +1164,33 @@ Three independent, optional sub-blocks plus one plain scalar under
 ## Execution requirements
 
 Like Lifecycle, this field has no per-dimension grading effect. It is
-structured bookkeeping (`spec.executionRequirements.tools`:
-`read`/`write`/`shell` capability-tag lists so far), gated by the same
+structured bookkeeping -- `spec.executionRequirements.tools`
+(`read`/`write`/`shell` capability-tag lists) and
+`spec.executionRequirements.network` (`mode`, a
+`disabled`/`allowlist`/`unrestricted` enum, plus `domains`, an exact-host
+list non-empty iff `mode: allowlist`) so far -- gated by the same
 shape-check rigor and unknown-key fail-closed treatment as every other
 sidecar field, and behavior-neutral like the rest of this sidecar. Once
-declared, each subkey is a complete, closed allowlist for that category:
-non-empty means required/exclusively-permitted, an explicit empty list
-means prohibited, and an absent subkey means not yet declared (not the
-same as either). This repository has also recorded the full schema,
-semantics, and rationale at
-`docs/superpowers/specs/2026-07-25-skill-execution-requirements-envelope-design.md`.
+declared, `tools`' own subkeys are each a complete, closed allowlist for
+that category: non-empty means required/exclusively-permitted, an
+explicit empty list means prohibited, and an absent subkey means not yet
+declared (not the same as either). `network` carries its own,
+different rule instead: it is a single declaration (`mode` required once
+`network` is present at all), not a per-subkey allowlist -- `disabled`
+means no network access, `allowlist` means only the listed exact hosts,
+and `unrestricted` means no restriction from this declaration, schema-
+permitted but requiring the declaring PR's own explicit argument against
+this repository's security invariants 6 and 9 before first real use. Two
+skills declare `network` today:
+`setup-gitapex-toolchain` (`allowlist`, `domains: [github.com]`, its own
+release-download target) and `grounding-in-primary-sources`
+(`unrestricted`, since its own primary-source-fetching procedure targets
+whichever external tool's docs a claim needs, not a fixed domain set).
+This repository has also recorded the full schema, semantics, and
+rationale for `tools` at
+`docs/superpowers/specs/2026-07-25-skill-execution-requirements-envelope-design.md`
+and for `network` at
+`docs/superpowers/specs/2026-08-08-skill-execution-requirements-network-category-design.md`.
 
 ## 1. Discovery -- name and description
 

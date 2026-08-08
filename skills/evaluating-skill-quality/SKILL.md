@@ -337,17 +337,16 @@ section.
 
 ## Execution requirements
 
-Optional. `spec.executionRequirements.tools` in the skill's
+Optional. `spec.executionRequirements` in the skill's
 `metadata/gitapex.yaml` sidecar records what a skill's own procedure
-touches at runtime (`read`/`write`/`shell` capability-tag lists); the
-`execution-requirements-well-formed` shape check enforces its shape and
-fails closed on any unrecognized key. No behavior change: no skill in
-this repository declares it yet, and no skill's own runtime procedure
-may read or branch on it, same as Portability level, Capability
-assumption, and Lifecycle. Full schema, the required/optional/prohibited
-semantics each subkey carries, and rationale:
-[references/rubric.md](references/rubric.md)'s Execution requirements
-section and the design doc it cites.
+touches at runtime: `tools` (`read`/`write`/`shell` capability-tag lists)
+and `network` (a `mode` enum plus an exact-host `domains` list, non-empty
+iff `mode: allowlist`); the `execution-requirements-well-formed` shape
+check enforces both and fails closed on any unrecognized key. No behavior
+change: no skill's own runtime procedure may read or branch on it, same as
+Portability level, Capability assumption, and Lifecycle. Full schema,
+semantics, and rationale: [references/rubric.md](references/rubric.md)'s
+Execution requirements section and the design docs it cites.
 
 ## Procedure
 

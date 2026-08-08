@@ -4551,18 +4551,19 @@ def test_execution_requirements_not_a_mapping_fails(tmp_path):
 
 def test_execution_requirements_unknown_top_level_key_fails(tmp_path):
     # #307's security invariant 4: unknown capabilities fail closed. Only
-    # "tools" is recognized so far -- "network" is a real #307 W1
-    # category, but deferred to a sibling child issue, so it must be
-    # rejected here, not silently accepted as reserved space.
+    # "tools" and "network" (issue #845) are recognized so far -- "mcp" is
+    # a real #307 W1 category, but deferred to a sibling child issue (per
+    # #349's own deferral, which #845's own Non-goals reaffirm), so it
+    # must be rejected here, not silently accepted as reserved space.
     d = _write_exec_req_sidecar(
         _write_skill(tmp_path),
-        "  executionRequirements:\n    network:\n      mode: disabled\n    tools:\n      read: []\n",
+        "  executionRequirements:\n    mcp:\n      mode: disabled\n    tools:\n      read: []\n",
     )
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
     assert result.passed is False
     assert "unknown key" in result.evidence
-    assert "network" in result.evidence
+    assert "mcp" in result.evidence
     assert css.main([str(d)]) == 1
 
 
@@ -4580,11 +4581,14 @@ def test_execution_requirements_unknown_tools_key_fails(tmp_path):
 
 def test_execution_requirements_quoted_unknown_top_level_key_fails(tmp_path):
     # Regression guard (issue #356, blocking finding on this PR's own
-    # review): a quoted unknown key ("network": {}) must not bypass
-    # detection -- the exact shape the review cited as unmet before the
-    # shared KEY_LINE_RE_4/_match_key_line fix landed.
+    # review): a quoted unknown key ("mcp": {}) must not bypass detection
+    # -- the exact shape the review cited as unmet before the shared
+    # KEY_LINE_RE_4/_match_key_line fix landed. Uses "mcp" rather than the
+    # original "network" fixture (issue #845 made network a recognized
+    # key) -- mcp remains a real, deferred #307 W1 category per #349's own
+    # deferral, so it is still a genuine unknown key here.
     d = _write_exec_req_sidecar(
-        _write_skill(tmp_path), '  executionRequirements:\n    "network": {}\n    tools:\n      read: []\n'
+        _write_skill(tmp_path), '  executionRequirements:\n    "mcp": {}\n    tools:\n      read: []\n'
     )
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
@@ -4592,7 +4596,7 @@ def test_execution_requirements_quoted_unknown_top_level_key_fails(tmp_path):
     assert "unknown key" in result.evidence
     assert css.main([str(d)]) == 1
     parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.unknown_execution_requirement_keys == ['"network": {}']
+    assert parsed.unknown_execution_requirement_keys == ['"mcp": {}']
 
 
 def test_execution_requirements_unmatched_key_line_fails_closed(tmp_path):
@@ -4653,6 +4657,308 @@ def test_execution_requirements_inconsistent_indent_item_fails(tmp_path):
     parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
     assert parsed.root["spec"]["executionRequirements"]["tools"]["read"] == ["a"]
     assert parsed.malformed_execution_requirement_tools_items == ['- "b"']
+
+
+# ---- execution-requirements-well-formed: network category (issue #845,
+# resolving the mixed scalar-plus-list shape issue #349 deferred) ----
+
+
+def test_execution_requirements_network_allowlist_with_domains_is_well_formed(tmp_path):
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:\n    network:\n      mode: allowlist\n      domains:\n        - github.com\n",
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is True
+    assert result.evidence == "network.mode, network.domains declared"
+    assert css.main([str(d)]) == 0
+
+
+def test_execution_requirements_network_disabled_is_well_formed(tmp_path):
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path), "  executionRequirements:\n    network:\n      mode: disabled\n"
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is True
+    assert result.evidence == "network.mode declared"
+    assert css.main([str(d)]) == 0
+
+
+def test_execution_requirements_network_unrestricted_is_well_formed(tmp_path):
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path), "  executionRequirements:\n    network:\n      mode: unrestricted\n"
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is True
+    assert result.evidence == "network.mode declared"
+    assert css.main([str(d)]) == 0
+
+
+def test_execution_requirements_network_allowlist_without_domains_fails(tmp_path):
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path), "  executionRequirements:\n    network:\n      mode: allowlist\n"
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "network.domains must be a non-empty list when network.mode is allowlist" in result.evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_execution_requirements_network_allowlist_empty_domains_fails(tmp_path):
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path), "  executionRequirements:\n    network:\n      mode: allowlist\n      domains: []\n"
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "network.domains must be a non-empty list when network.mode is allowlist" in result.evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_execution_requirements_network_disabled_with_domains_fails(tmp_path):
+    # #307's security invariant 6/9 line: a mode that grants zero (or
+    # unlimited) network access with a stale/misleading domains list is a
+    # real defect, not harmless clutter -- the declaration must be
+    # internally consistent, not just individually shape-valid.
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:\n    network:\n      mode: disabled\n      domains:\n        - x.com\n",
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "network.domains must be empty when network.mode is 'disabled'" in result.evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_execution_requirements_network_unrestricted_with_domains_fails(tmp_path):
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:\n    network:\n      mode: unrestricted\n      domains:\n        - x.com\n",
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "network.domains must be empty when network.mode is 'unrestricted'" in result.evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_execution_requirements_network_invalid_mode_fails(tmp_path):
+    d = _write_exec_req_sidecar(_write_skill(tmp_path), "  executionRequirements:\n    network:\n      mode: bogus\n")
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "network.mode is not one of" in result.evidence
+    assert "bogus" in result.evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_execution_requirements_network_domains_inline_scalar_fails(tmp_path):
+    # domains is list-only; an inline scalar (no list block at all) must
+    # fail the same wrong-type way tools' own list-only subkeys do.
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:\n    network:\n      mode: allowlist\n      domains: github.com\n",
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "network.domains is not a list of non-empty strings" in result.evidence
+    assert "github.com" in result.evidence
+    assert css.main([str(d)]) == 1
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.root["spec"]["executionRequirements"]["network"]["domains"] == "github.com"
+
+
+def test_execution_requirements_network_unmatched_key_line_fails_closed(tmp_path):
+    # Regression guard mirroring tools' own
+    # test_execution_requirements_unmatched_key_line_fails_closed: a line
+    # KEY_LINE_RE_6 cannot parse (whitespace before a quoted key's colon)
+    # must still fail closed via the unknown-key fallback, not be silently
+    # skipped.
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path), '  executionRequirements:\n    network:\n      "mode" : disabled\n'
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "unknown network key" in result.evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_execution_requirements_network_missing_mode_fails(tmp_path):
+    # mode is required once network is declared at all -- unlike tools'
+    # own read/write/shell, which are each independently optional.
+    d = _write_exec_req_sidecar(_write_skill(tmp_path), "  executionRequirements:\n    network:\n      domains: []\n")
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "network.mode is required when network is declared" in result.evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_execution_requirements_network_mode_written_as_list_fails(tmp_path):
+    # mode is a scalar-only subkey; a block-shaped value (the mistake the
+    # mixed shape makes possible for the first time in this sidecar) must
+    # fail as the wrong type, not be silently read as some accepted value.
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path), "  executionRequirements:\n    network:\n      mode:\n        - oops\n"
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "network.mode is not one of" in result.evidence
+    assert css.main([str(d)]) == 1
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.root["spec"]["executionRequirements"]["network"]["mode"] == ["oops"]
+
+
+def test_execution_requirements_network_blank_is_null_fails_well_formed(tmp_path):
+    # Same null-vs-empty-mapping rule tools' own blank-header test covers,
+    # applied to network.
+    d = _write_exec_req_sidecar(_write_skill(tmp_path), "  executionRequirements:\n    network:\n")
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "network is not a mapping: None" in result.evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_execution_requirements_network_not_a_mapping_fails(tmp_path):
+    d = _write_exec_req_sidecar(_write_skill(tmp_path), "  executionRequirements:\n    network: not-a-mapping-scalar\n")
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "network is not a mapping" in result.evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_execution_requirements_unknown_network_key_fails(tmp_path):
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path), "  executionRequirements:\n    network:\n      mode: disabled\n      bogus: 1\n"
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "unknown network key" in result.evidence
+    assert "bogus" in result.evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_execution_requirements_network_domains_then_mode_finalizes_list_mid_loop(tmp_path):
+    # Regression guard: when domains is NOT the last key under network (mode
+    # follows it), the domains list must be finalized mid-loop -- when the
+    # next line ("mode: ...") is seen and is not itself a list item -- not
+    # only via the end-of-file cleanup path a domains-last fixture would
+    # exercise instead.
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:\n    network:\n      domains:\n        - github.com\n      mode: allowlist\n",
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is True
+    assert result.evidence == "network.mode, network.domains declared"
+    assert css.main([str(d)]) == 0
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.root["spec"]["executionRequirements"]["network"] == {
+        "domains": ["github.com"],
+        "mode": "allowlist",
+    }
+
+
+def test_execution_requirements_network_domains_inconsistent_indent_item_fails(tmp_path):
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        '  executionRequirements:\n    network:\n      mode: allowlist\n      domains:\n        - "a.com"\n      - "b.com"\n',
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert css.main([str(d)]) == 1
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.root["spec"]["executionRequirements"]["network"]["domains"] == ["a.com"]
+    assert parsed.malformed_execution_requirement_network_items == ['- "b.com"']
+
+
+def test_execution_requirements_network_mapping_shaped_domains_item_fails(tmp_path):
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:\n    network:\n      mode: allowlist\n      domains:\n        - path: sneaky\n",
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "malformed network entry" in result.evidence
+    assert "path: sneaky" in result.evidence
+    assert css.main([str(d)]) == 1
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.malformed_execution_requirement_network_items == ["- path: sneaky"]
+    assert parsed.root["spec"]["executionRequirements"]["network"]["domains"] == []
+
+
+def test_execution_requirements_network_non_string_scalar_domains_item_fails(tmp_path):
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:\n    network:\n      mode: allowlist\n      domains:\n        - null\n",
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "malformed network entry" in result.evidence
+    assert css.main([str(d)]) == 1
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.malformed_execution_requirement_network_items == ["- null"]
+
+
+def test_execution_requirements_network_dedent_to_sibling_key_falls_through(tmp_path):
+    # Regression guard: dedenting out of network mid-file (not just at EOF)
+    # must finalize network and still let the next line -- here a sibling
+    # spec.skillDependencies block -- parse normally, not get swallowed.
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:\n    network:\n      mode: disabled\n  skillDependencies:\n    requires: []\n    relatedTo: []\n",
+    )
+    by = _by_name(css.check_shape(d))
+    assert by["execution-requirements-well-formed"].passed is True
+    assert by["skill-dependencies-well-formed"].passed is True
+    assert css.main([str(d)]) == 0
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.root["spec"]["executionRequirements"]["network"] == {"mode": "disabled"}
+    assert parsed.root["spec"]["skillDependencies"] == {"requires": [], "relatedTo": []}
+
+
+def test_execution_requirements_tools_and_network_both_declared_is_well_formed(tmp_path):
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:\n    tools:\n      read:\n        - files\n    network:\n      mode: disabled\n",
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is True
+    assert result.evidence == "tools.read, network.mode declared"
+    assert css.main([str(d)]) == 0
+
+
+def test_docstring_execution_requirement_network_subkeys_match_constant():
+    docstring = css._parse_manifest.__doc__
+    m = re.search(r"own two subkeys, ``(\w+)``/``(\w+)``", docstring)
+    assert m is not None, (
+        "_parse_manifest's docstring no longer states "
+        "spec.executionRequirements.network's recognized subkeys in the "
+        "expected '``X``/``Y``' shape -- update this test's extraction "
+        "logic."
+    )
+    assert m.groups() == css.EXEC_REQ_NETWORK_SUBKEYS, (
+        f"_parse_manifest's docstring lists network subkeys as "
+        f"{m.groups()}, but EXEC_REQ_NETWORK_SUBKEYS is "
+        f"{css.EXEC_REQ_NETWORK_SUBKEYS} -- a field was added/renamed in "
+        "one but not the other."
+    )
 
 
 def test_execution_requirements_checks_fail_when_sidecar_unreadable(tmp_path):
