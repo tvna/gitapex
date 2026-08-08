@@ -41,6 +41,12 @@
       "path": ".gitapex/runtime-compatibility-matrix.json",
       "format": "json",
       "authority": "Versioned, testable record of how faithfully each target agent-tool runtime can enforce the ten W2 execution-requirement dimensions (parent issue #307); authoritative source for a future W4 enforcement adapter, not yet consumed by any gate"
+    },
+    {
+      "id": "waza-suite-schemas",
+      "path": ".gitapex/waza-eval.schema.json",
+      "format": "json",
+      "authority": "waza's own eval/task JSON Schemas (draft-07, as upstream declares them), vendored verbatim at the release tag flake.nix pins -- authoritative shape for every committed evals/ suite, read by eval-suite-schema-drift. One entry stands in for the pair: .gitapex/waza-task.schema.json is vendored from the same tag by the same gate and carries the same authority"
     }
   ],
   "gates": [
@@ -535,6 +541,19 @@
       "policy_refs": ["runtime-compatibility-matrix"],
       "cluster": "runtime-compatibility",
       "tracking_issue": 828,
+      "status": "active",
+      "supersedes": null
+    },
+    {
+      "id": "eval-suite-schema-drift",
+      "kind": "script",
+      "script": ".github/scripts/gitapex_scan_eval_suite_schema.py",
+      "rule": "Every evals/*/eval.yaml and evals/*/tasks/*.yaml must validate against waza's own schemas vendored at the flake.nix-pinned release tag (.gitapex/waza-eval.schema.json, .gitapex/waza-task.schema.json), extended only by the reviewed EXTENSION_KEYS allowlist -- so an approved repository-local key passes and a misspelling of it fails, where waza itself only warns and the local pydantic extra=\"allow\" consumers silently see nothing. Each allowlist row must name a consumer file that exists and still mentions the key, and must not shadow a property waza has since adopted natively. flake.nix must still pin VENDORED_WAZA_TAG, and each vendored file's sha256 must match its recorded digest; the opt-in --verify-upstream flag additionally compares both vendored files byte-for-byte against what microsoft/waza published at that tag.",
+      "planes": ["ci"],
+      "trigger": "tests/test_gitapex_scan_eval_suite_schema.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": ["waza-suite-schemas"],
+      "cluster": "test-integrity",
+      "tracking_issue": 862,
       "status": "active",
       "supersedes": null
     }
