@@ -47,7 +47,6 @@ def run(
     payload: Any = None,
     raw_payload: str | None = None,
     script: Path = SCRIPT,
-    extra_env: dict[str, str] | None = None,
     path_override: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
     if raw_payload is None:
@@ -69,8 +68,6 @@ def run(
     env.pop("GITHUB_TOKEN", None)
     if path_override is not None:
         env["PATH"] = path_override
-    if extra_env:
-        env.update(extra_env)
     return subprocess.run(
         ["bash", str(script)],
         input=raw_payload,

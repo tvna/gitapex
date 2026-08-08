@@ -77,6 +77,23 @@ request"), and that endpoint returns the pull request's own `body` for a
 PR number. One endpoint, one already-tested fetch helper, no `pulls`
 special case.
 
+**Expect a hit on every PR body carrying a ratified trailer, and do not
+suppress it.** A calling repository may have ratified a specific
+attribution-trailer shape as a disclosed convention (this one has: see
+`CONTRIBUTING.md`'s "outward-artifact-preflight: PR-body trailer
+disclosure" section, and `outward-artifact-preflight/SKILL.md` check 1
+items 2 and 5). `gitapex_scan_provenance.py` still flags such a trailer
+on every hit **by design** -- that is CONTRIBUTING.md's own stated rule,
+which explicitly bars adding "an ignore pattern, allowlist, or
+`--exclude` flag" to silence it. So this gate reports FLAGGED on a
+routine PR whose only hit is that trailer, and the operator's job is the
+per-hit judgment call: is this the ratified instance, or a lookalike?
+Verified live against this gate's own PR, whose submitted body was clean
+and whose stored body had the trailer appended downstream. Reading a
+FLAGGED verdict as automatically meaning "undisclosed leak" is the
+misreading to avoid; the verdict means "a candidate needs your
+judgment", exactly as the underlying scanner's own docstring says.
+
 **Fail-loud on inability to verify.** A missing token, an unreachable
 API, a body that cannot be resolved to an owner/repo/number, a payload
 that is not a JSON object, or a missing provenance scanner all report
@@ -392,9 +409,12 @@ def evaluate(
         return "PASS", f"{owner}/{repo}#{number}'s stored body re-scanned clean -- {message}"
     return "FLAGGED", (
         f"{owner}/{repo}#{number}'s STORED body (not the draft that was submitted) carries {message}. "
-        "The content is already public: per skills/outward-artifact-preflight/SKILL.md check 2, strip it via "
-        "mcp__github__update_pull_request / mcp__github__issue_write, then re-fetch and re-scan to confirm it "
-        "was not force-reinjected."
+        "This surfaces candidates; it does not decide. Per skills/outward-artifact-preflight/SKILL.md check 1 "
+        "items 2 and 5, first check whether each hit is a disclosure trailer this repository has already "
+        "ratified in its own contributor-facing docs -- if so, it is agreed, not a leak, and must not be "
+        "suppressed with an ignore pattern or allowlist. Otherwise the content is already public: per that "
+        "skill's check 2, strip it via mcp__github__update_pull_request / mcp__github__issue_write, then "
+        "re-fetch and re-scan to confirm it was not force-reinjected."
     )
 
 
