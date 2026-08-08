@@ -64,8 +64,14 @@ shape to write into rather than improvising one per runtime.
   `Portable`/`Repository-scoped`/`Mixed`,
   `Broad`/`Frontier`/`Adaptive`, `Alpha`/`Beta`/`GA` -- rather than #307's
   own lowercase prose wording), `primarySource` (a full `https://` URL,
-  format- and pattern-validated), `snapshotDate` (`YYYY-MM-DD`, format-
-  and pattern-validated, matching `spec.lifecycle`'s date convention),
+  host-shaped-pattern-validated -- the schema also declares `format:
+  uri` for self-documentation, but that keyword is a live no-op in this
+  repository's own environment absent an installed `rfc3987`/
+  `rfc3986-validator` provider package, confirmed by this slice's own
+  adversarial review; the pattern is the field's real, always-enforced
+  guarantee), `snapshotDate` (`YYYY-MM-DD`, format- and pattern-
+  validated -- `date` format IS stdlib-backed and does activate,
+  matching `spec.lifecycle`'s date convention),
   required; `observedVersion` (free-form string -- vendor versioning
   schemes differ too much for a shared pattern) and `notes` (<=500 chars,
   matching `spec.references[].summary`'s own cap) optional.

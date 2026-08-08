@@ -90,8 +90,8 @@
         "primarySource": {
           "type": "string",
           "format": "uri",
-          "pattern": "^https://",
-          "description": "Full https:// URL to the vendor's own current documentation this classification is grounded in -- never a memory-based claim, per this repository's own grounding-in-primary-sources discipline."
+          "pattern": "^https://[^\\s<>]+\\.[a-zA-Z]{2,}(/[^\\s<>]*)?$",
+          "description": "Full https:// URL to the vendor's own current documentation this classification is grounded in -- never a memory-based claim, per this repository's own grounding-in-primary-sources discipline. `format: uri` is declared for schema self-documentation but is NOT actively enforced in this repository's own environment (neither rfc3987 nor rfc3986-validator, the two optional providers jsonschema's FormatChecker needs to activate that keyword, is an installed dependency here -- confirmed live, refs #828's own adversarial review); the `pattern` above is this field's real, always-enforced guarantee -- a host-shaped authority (non-whitespace, a literal dot, a 2+ letter TLD) followed by an optional path, not merely a string starting with the literal text \"https://\"."
         },
         "observedVersion": {
           "type": "string",

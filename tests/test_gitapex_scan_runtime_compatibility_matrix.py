@@ -108,6 +108,21 @@ def test_non_https_primary_source_is_flagged(tmp_path: pathlib.Path) -> None:
     assert any("schema:" in f and "primarySource" in f for f in findings)
 
 
+def test_garbage_after_https_prefix_is_flagged(tmp_path: pathlib.Path) -> None:
+    # Refs #828's own adversarial review: jsonschema's "uri" format checker
+    # never activates in this repository's own environment (no rfc3987/
+    # rfc3986-validator dependency installed), so a bare "^https://" prefix
+    # pattern with no anchored authority shape would let whitespace-laden
+    # garbage through. The pattern must reject this on its own.
+    bad = json.loads(json.dumps(_VALID_INSTANCE))
+    bad["runtimes"]["claude-code"]["dimensions"]["fieldParsing"]["primarySource"] = (
+        "https://   not a url at all !! <<>> \n\t garbage"
+    )
+    instance_path = _write_instance(tmp_path, bad)
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH)
+    assert any("schema:" in f and "primarySource" in f for f in findings)
+
+
 def test_out_of_range_snapshot_date_is_flagged(tmp_path: pathlib.Path) -> None:
     bad = json.loads(json.dumps(_VALID_INSTANCE))
     bad["runtimes"]["claude-code"]["dimensions"]["fieldParsing"]["snapshotDate"] = "2026-02-30"
