@@ -1,4 +1,4 @@
-id: vetting-attack-surface-privilege-minimal
+id: scanning-attack-surfaces-privilege-minimal
 name: Release-notes script holds exactly the scope its one API call needs
 description: The reviewed script's token is scoped to exactly the permission
   GitHub's own documented API reference requires for the single endpoint the
@@ -9,7 +9,7 @@ tags:
   - least-privilege
 inputs:
   prompt: |
-    Use vetting-attack-surface. Review this artifact's credential/permission
+    Use scanning-attack-surfaces. Review this artifact's credential/permission
     grant.
 
     `scripts/post_release_notes.py` runs once per release. Reading the

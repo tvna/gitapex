@@ -1,4 +1,4 @@
-id: vetting-attack-surface-applicability-gate-no-dependencies
+id: scanning-attack-surfaces-applicability-gate-no-dependencies
 name: Pure local computation has zero dependencies and zero credentials
 description: The reviewed script makes no network call, holds no credential,
   and never invokes a subprocess or external command; the review must
@@ -10,7 +10,7 @@ tags:
   - applicability-gate
 inputs:
   prompt: |
-    Use vetting-attack-surface. Review this artifact.
+    Use scanning-attack-surfaces. Review this artifact.
 
     `scripts/normalize_line_endings.py` reads a filename from
     `sys.argv[1]`, reads its bytes from local disk, replaces every

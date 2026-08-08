@@ -1,6 +1,6 @@
-name: vetting-attack-surface-eval
-description: Quality suite for the gitapex vetting-attack-surface review skill.
-skill: vetting-attack-surface
+name: scanning-attack-surfaces-eval
+description: Quality suite for the gitapex scanning-attack-surfaces review skill.
+skill: scanning-attack-surfaces
 version: "0.1.0"
 config:
   trials_per_task: 3
@@ -9,7 +9,7 @@ config:
   executor: copilot-sdk
   model: claude-sonnet-4.6
 metrics:
-  - name: vetting_attack_surface_quality
+  - name: scanning_attack_surfaces_quality
     weight: 1.0
     threshold: 0.8
     description: 'Issues a per-item exposure-minimal/exposure-excess verdict for

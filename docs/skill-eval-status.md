@@ -101,9 +101,9 @@ suites still assert on final text only).
 | `planning-a-branch-from-an-issue` | [evals/planning-a-branch-from-an-issue/eval-status.md](../evals/planning-a-branch-from-an-issue/eval-status.md) |
 | `ranking-the-open-queue` | [evals/ranking-the-open-queue/eval-status.md](../evals/ranking-the-open-queue/eval-status.md) |
 | `responding-to-a-fresh-arrival` | [evals/responding-to-a-fresh-arrival/eval-status.md](../evals/responding-to-a-fresh-arrival/eval-status.md) |
+| `scanning-attack-surfaces` | [evals/scanning-attack-surfaces/eval-status.md](../evals/scanning-attack-surfaces/eval-status.md) |
 | `scorer-gated-skill-edits` | [evals/scorer-gated-skill-edits/eval-status.md](../evals/scorer-gated-skill-edits/eval-status.md) |
 | `screening-a-low-trust-contribution` | [evals/screening-a-low-trust-contribution/eval-status.md](../evals/screening-a-low-trust-contribution/eval-status.md) |
 | `setup-gitapex-toolchain` | [evals/setup-gitapex-toolchain/eval-status.md](../evals/setup-gitapex-toolchain/eval-status.md) |
 | `stop-and-replan` | [evals/stop-and-replan/eval-status.md](../evals/stop-and-replan/eval-status.md) |
 | `untrusted-input-triage` | [evals/untrusted-input-triage/eval-status.md](../evals/untrusted-input-triage/eval-status.md) |
-| `vetting-attack-surface` | [evals/vetting-attack-surface/eval-status.md](../evals/vetting-attack-surface/eval-status.md) |

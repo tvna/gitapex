@@ -559,12 +559,15 @@ spec:
     - kind: caveat
       anchor: "https://github.com/tvna/gitapex/issues/843"
       summary: "The sibling this skill names as the delegate for an exposure- or privilege-shaped finding, vetting-attack-surface, has a rename to scanning-attack-surfaces tracked under that issue. No prose change is needed when it lands: the delegation step already confirms a delegate against the calling environment's own inventory rather than trusting a name, so a renamed sibling surfaces as unconfirmed instead of as a silently wrong recommendation."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/846"
+      summary: "The caveat above still holds: SKILL.md, grading-procedure.md, and output-schema.json keep naming vetting-attack-surface unchanged. Only skillDependencies.relatedTo below was updated, mechanically, to the sibling's real new directory name -- required by the skill-dependencies-resolve dangling-reference gate, not a prose change."
   skillDependencies:
     requires:
       - evaluating-skill-quality
     relatedTo:
       - screening-a-low-trust-contribution
-      - vetting-attack-surface
+      - scanning-attack-surfaces
   executionRequirements:
     tools:
       read:

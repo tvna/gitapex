@@ -1,4 +1,4 @@
-id: vetting-attack-surface-privilege-excess
+id: scanning-attack-surfaces-privilege-excess
 name: Read-only stale-issue workflow holds write-all permissions
 description: The reviewed workflow's own steps only read open issues and print
   their numbers to the job log, but its permissions block grants write-all;
@@ -9,7 +9,7 @@ tags:
   - least-privilege
 inputs:
   prompt: |
-    Use vetting-attack-surface. Review this artifact's credential/permission
+    Use scanning-attack-surfaces. Review this artifact's credential/permission
     grant.
 
     `.github/workflows/label-stale-issues.yml` runs on a daily schedule.

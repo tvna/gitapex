@@ -1,4 +1,4 @@
-id: vetting-attack-surface-indeterminate-self-description-only
+id: scanning-attack-surfaces-indeterminate-self-description-only
 name: Self-Description-Only Baseline Must Grade Indeterminate, Not Clear On The Artifact's Word
 description: The only available account of what the dependency's endpoint
   requires is the reviewed artifact's own header comment -- no independently
@@ -12,7 +12,7 @@ tags:
   - exposure-minimization
 inputs:
   prompt: |
-    Use vetting-attack-surface. Review this artifact's outbound interface.
+    Use scanning-attack-surfaces. Review this artifact's outbound interface.
 
     `scripts/sync_inventory.py` POSTs a payload to a partner integration
     endpoint, `https://partner.example.net/api/v2/sync`. This partner
