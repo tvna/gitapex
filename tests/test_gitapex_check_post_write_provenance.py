@@ -224,6 +224,120 @@ def test_a_non_object_tool_response_normalizes_to_empty(bad_response: Any) -> No
     assert checker.response_payload(bad_response) == ({} if not isinstance(bad_response, dict) else bad_response)
 
 
+# --- target resolution from the response URL (issue #908) -----------------
+#
+# The two constants below are the *observed* create-call responses recorded
+# in issue #908's fact 1, copied verbatim rather than constructed here --
+# that issue's own root cause (fact 7) is an extractor written against
+# hypothesised envelopes that were never checked against a real one, so a
+# regression suite built on invented fixtures would repeat it. Both were
+# read off the live tool result in the session that filed #905: note that
+# `id` is a string there, and that no `number` field exists at all.
+
+_OBSERVED_CREATE_PR_RESPONSE = {"id": "4235739033", "url": "https://github.com/tvna/gitapex/pull/884"}
+_OBSERVED_CREATE_ISSUE_RESPONSE = {"id": "5100051513", "url": "https://github.com/tvna/gitapex/issues/905"}
+
+
+def test_number_comes_from_the_response_url_when_create_pull_request_carries_no_number_field() -> None:
+    resolved = checker.resolve_target(payload(tool_response=_OBSERVED_CREATE_PR_RESPONSE))
+    assert resolved == ("tvna", "gitapex", 884)
+
+
+def test_number_comes_from_the_response_url_when_issue_write_create_carries_no_number_field() -> None:
+    resolved = checker.resolve_target(
+        payload(tool_name="mcp__github__issue_write", tool_response=_OBSERVED_CREATE_ISSUE_RESPONSE)
+    )
+    assert resolved == ("tvna", "gitapex", 905)
+
+
+def test_the_internal_database_id_is_never_read_as_the_issue_number() -> None:
+    """`id` and the artifact number are different values (5100051513 versus
+    905, issue #908 fact 4); only the latter addresses the REST endpoint, so
+    reading `id` would re-scan an unrelated artifact or 404."""
+    for identifier in ("5100051513", 5100051513):
+        resolved = checker.resolve_target(
+            payload(tool_response={"id": identifier, "url": "https://github.com/tvna/gitapex/issues/905"})
+        )
+        assert resolved == ("tvna", "gitapex", 905)
+
+
+def test_an_id_without_a_url_is_still_indeterminate() -> None:
+    """The guard on the row above: `id` must not have been added to the
+    number fields as a shortcut, which this payload would otherwise pass."""
+    with pytest.raises(checker.VerificationError):
+        checker.resolve_target(payload(tool_response={"id": "5100051513"}))
+
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        ("https://github.com/tvna/gitapex/pull/884", 884),
+        ("https://github.com/tvna/gitapex/issues/905", 905),
+        # The REST spelling, in case a server version returns the API URL.
+        ("https://api.github.com/repos/tvna/gitapex/pulls/884", 884),
+        # Trailing path, query, and fragment must not swallow the number.
+        ("https://github.com/tvna/gitapex/pull/884/files", 884),
+        ("https://github.com/tvna/gitapex/issues/905#issuecomment-1", 905),
+        ("https://github.com/tvna/gitapex/issues/905?foo=bar", 905),
+        # A repository literally named "issues" must not shadow the tail.
+        ("https://github.com/tvna/issues/issues/12", 12),
+    ],
+)
+def test_a_url_tail_resolves_to_its_artifact_number(url: str, expected: int) -> None:
+    assert checker.resolve_target(payload(tool_response={"url": url})) == ("tvna", "gitapex", expected)
+
+
+def test_the_html_url_spelling_is_tolerated() -> None:
+    """Same tolerance rationale as the alternate number-field spellings: a
+    server-side rename should degrade to a still-working lookup."""
+    resolved = checker.resolve_target(payload(tool_response={"html_url": "https://github.com/tvna/gitapex/issues/905"}))
+    assert resolved == ("tvna", "gitapex", 905)
+
+
+def test_a_url_number_is_read_through_the_mcp_content_envelope() -> None:
+    resolved = checker.resolve_target(payload(tool_response={"content": json.dumps(_OBSERVED_CREATE_ISSUE_RESPONSE)}))
+    assert resolved == ("tvna", "gitapex", 905)
+
+
+def test_a_number_field_still_wins_over_the_url_tail() -> None:
+    """The update paths resolve from tool_input today and must keep doing
+    so: the submitted argument is the request's own target, and the URL
+    fallback exists only for the create calls that carry no such field."""
+    resolved = checker.resolve_target(
+        payload(
+            tool_name="mcp__github__update_pull_request",
+            tool_input={"owner": "tvna", "repo": "gitapex", "pullNumber": 42},
+            tool_response={"url": "https://github.com/tvna/gitapex/pull/884"},
+        )
+    )
+    assert resolved == ("tvna", "gitapex", 42)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://github.com/tvna/gitapex",
+        "https://github.com/tvna/gitapex/issues/0",
+        "https://github.com/tvna/gitapex/issues/latest",
+        "https://github.com/tvna/gitapex/commit/9aed5ef",
+        "not a url at all",
+        "",
+    ],
+)
+def test_an_unparseable_url_still_reports_indeterminate(url: str) -> None:
+    """Issue #908's third criterion: the property that made this defect
+    visible has to survive the fix -- a broader extractor must not become a
+    guessier one."""
+    with pytest.raises(checker.VerificationError):
+        checker.resolve_target(payload(tool_response={"url": url}))
+
+
+@pytest.mark.parametrize("bad_url", [1, None, [], {"nested": "x"}, True])
+def test_a_non_string_url_does_not_raise(bad_url: Any) -> None:
+    with pytest.raises(checker.VerificationError):
+        checker.resolve_target(payload(tool_response={"url": bad_url}))
+
+
 # --- evaluate() verdicts --------------------------------------------------
 
 

@@ -77,6 +77,25 @@ request"), and that endpoint returns the pull request's own `body` for a
 PR number. One endpoint, one already-tested fetch helper, no `pulls`
 special case.
 
+**How the target number is resolved, and why the create path needed a
+second route.** The update calls submit their own target
+(`pullNumber`, `issue_number`) in `tool_input`. The create calls submit
+none, and their real response carries none either -- issue #908 records
+both observed verbatim: `{"id": "4235739033", "url":
+"https://github.com/tvna/gitapex/pull/884"}` and `{"id": "5100051513",
+"url": "https://github.com/tvna/gitapex/issues/905"}`. Until #908 this
+module read only number *fields*, so every create firing reported
+INDETERMINATE and never re-scanned -- on exactly the path #878's own
+motivating defect lives on. The number is therefore parsed from the URL
+tail when no field matched; `id` is the internal database identifier, not
+the artifact number, and is never read. That first version was written
+tolerant across three *hypothesised* envelopes without observing the real
+one (evaluating-deterministic-gate-quality dimension 10, empirical
+verification over assumed behavior); the URL shape is likewise the MCP
+server's contract, not this repository's, so a future server change can
+break resolution again -- the INDETERMINATE path below is what keeps that
+loud rather than silent.
+
 **Expect a hit on every PR body carrying a ratified trailer, and do not
 suppress it.** A calling repository may have ratified a specific
 attribution-trailer shape as a disclosed convention (this one has: see
@@ -138,6 +157,7 @@ import argparse
 import importlib.util
 import json
 import os
+import re
 import sys
 import unicodedata
 from pathlib import Path
@@ -173,6 +193,26 @@ _COVERED_TOOLS = frozenset(
 # tolerated spellings so a server-side rename degrades to a still-working
 # lookup rather than a silent INDETERMINATE.
 _NUMBER_FIELDS = ("pullNumber", "pull_number", "issue_number", "issueNumber", "number")
+
+# tool_response field names carrying the created artifact's own URL. The
+# create calls submit no number and their real response carries no number
+# field either -- observed verbatim, twice (issue #908 fact 1):
+# create_pull_request returned {"id": "4235739033", "url":
+# "https://github.com/tvna/gitapex/pull/884"} and issue_write method create
+# returned {"id": "5100051513", "url":
+# "https://github.com/tvna/gitapex/issues/905"}. The number exists only in
+# the URL tail. `html_url` is the tolerated alternate spelling, for the same
+# reason _NUMBER_FIELDS tolerates several.
+_URL_FIELDS = ("url", "html_url")
+
+# The artifact-number tail of a GitHub issue/PR URL. Anchored on the
+# `/issues/` or `/pull/` path segment (plus `/pulls/`, the REST spelling)
+# rather than on "the last number in the string", so a digit anywhere else
+# in the URL -- a repository named after a number, a commit-range fragment
+# -- cannot be read as the artifact number. The tail is bounded by a path
+# separator, a query, a fragment, or end-of-string so `/pull/884/files` and
+# `/issues/905#issuecomment-1` still resolve.
+_URL_NUMBER_RE = re.compile(r"/(?:issues|pulls?)/(\d+)(?:[/?#]|$)")
 
 # Reported hits are capped so a pathological body cannot produce a
 # multi-megabyte systemMessage. The count is always reported in full; only
@@ -323,14 +363,52 @@ def _first_number(*sources: dict[str, Any]) -> int | None:
     return None
 
 
+def _number_from_url(*sources: dict[str, Any]) -> int | None:
+    """Return the issue/PR number parsed from an artifact URL's tail.
+
+    The fallback for the create calls, which carry no number field
+    anywhere in the payload: not in `tool_input` (there is nothing to
+    submit yet) and, as issue #908 records from direct observation, not in
+    the real response either. Without this the gate reported INDETERMINATE
+    on every create -- the exact path it was built for, since #878's own
+    motivating defect is a trailer appended between the submitted draft
+    and the stored body.
+
+    `id` is deliberately never consulted, and must not be added to
+    _NUMBER_FIELDS as a shortcut: it is GitHub's internal database
+    identifier, not the artifact number (5100051513 versus 905 in the same
+    observed response), so reading it would re-scan an unrelated artifact
+    or 404 -- a trap rather than a usable fallback.
+    """
+    for source in sources:
+        for field in _URL_FIELDS:
+            value = source.get(field)
+            if not isinstance(value, str):
+                continue
+            match = _URL_NUMBER_RE.search(value)
+            if match is None:
+                continue
+            number = int(match.group(1))
+            if number > 0:
+                return number
+    return None
+
+
 def resolve_target(payload: dict[str, Any]) -> tuple[str, str, int]:
     """Return ``(owner, repo, number)`` for the artifact just written.
 
     owner/repo come from `tool_input` first (every covered tool takes both
     as required arguments) and from the normalized response only as a
-    fallback. The number comes from `tool_input` for the update paths and
-    from the response for `create_pull_request`, which has no number to
-    submit. Raises VerificationError when any of the three cannot be
+    fallback. They are deliberately not cross-checked against the response
+    URL, which carries them too: on the owner's explicit decision for issue
+    #908, since a legitimate rename or redirect would then mismatch and
+    report a real write as unverifiable, for a threat that has not been
+    observed.
+
+    The number comes from a number field for the update paths (`tool_input`
+    carries the submitted `pullNumber`/`issue_number`) and, for the create
+    paths, from the tail of the response URL -- the only place it appears
+    at all. Raises VerificationError when any of the three cannot be
     resolved.
     """
     tool_input = _coerce_mapping(payload.get("tool_input"))
@@ -345,9 +423,12 @@ def resolve_target(payload: dict[str, Any]) -> tuple[str, str, int]:
 
     number = _first_number(tool_input, response)
     if number is None:
+        number = _number_from_url(response)
+    if number is None:
         raise VerificationError(
             f"could not resolve the {owner}/{repo} issue/PR number from the tool call payload "
-            "(neither tool_input nor tool_response carried one), so the stored body was never re-scanned"
+            "(no number field in tool_input or tool_response, and no parseable issue/PR URL in the "
+            "response), so the stored body was never re-scanned"
         )
 
     return owner, repo, number
