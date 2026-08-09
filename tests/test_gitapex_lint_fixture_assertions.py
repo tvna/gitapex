@@ -276,8 +276,11 @@ def test_repository_wide_fixtures_have_no_unreviewed_blocking_findings():
     # added, negation-trap-prone bans reworded to the violation-claim shape,
     # and 7 skills' genuinely hostile-payload fixtures retagged `adversarial`
     # -- see that PR's own body for the full fixed set). Five could not be
-    # resolved by a fixture-authoring fix alone and are pinned here as an
-    # explicitly reviewed, disclosed residual -- never silenced by narrowing
+    # resolved by a fixture-authoring fix alone and were pinned here as an
+    # explicitly reviewed, disclosed residual; four remain, after the
+    # evaluating-skill-quality entry the last bullet below describes was
+    # resolved. The count sentence and the assertion move together: whenever a
+    # residual is resolved, update both -- never silenced by narrowing
     # --tasks-glob (this test still runs the linter's real, unrestricted
     # default scope):
     #
@@ -319,7 +322,7 @@ def test_repository_wide_fixtures_have_no_unreviewed_blocking_findings():
     #     and assertions -- not something this removal can establish. The set
     #     is pinned exactly for the reason stated below, not as that proof.
     #
-    # Pinning the exact set (not "count <= 5") means a NEW blocking finding
+    # Pinning the exact set (never a "count <= N" bound) means a NEW blocking finding
     # anywhere in the corpus fails this test loudly, the same discipline the
     # case-sensitivity residual test above already applies.
     evals_root = REPO_ROOT / "evals"
