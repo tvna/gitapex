@@ -96,21 +96,42 @@ INLINE_CODE_FLAGS: dict[str, frozenset[str]] = {
 }
 
 
+_INLINE_CODE_FLAGS_BY_LOWER_NAME = {name.lower(): flags for name, flags in INLINE_CODE_FLAGS.items()}
+
+
 def _inline_code_flags(basename: str) -> frozenset[str] | None:
     """The inline-code flags ``basename`` accepts, or None if it is not an
     interpreter this module knows.
 
-    A trailing version suffix is stripped before the lookup, so
-    ``python3``, ``python3.13`` and ``php8.2`` resolve to the same entry as
-    their unversioned names. Found while adversarially re-reading this
-    module for issue #904 rather than reported by the issue: the previous
-    membership test was a literal set that listed ``python``/``python3`` and
-    nothing else, so ``["uv", "run", "--frozen", "python3.12", "-c",
-    "<payload>"]`` -- a real binary name on any machine with more than one
-    CPython -- was unguarded in *both* the old spelled-out form and the new
-    concatenated one.
+    The name is normalized before the lookup, because the same interpreter
+    ships under several basenames and the previous membership test was a
+    literal set naming ``python``/``python3`` and nothing else:
+
+    - **Case.** Matched case-insensitively, so ``PYTHON3`` is ``python3``.
+    - **A ``.exe`` suffix**, so a Windows checkout's ``python3.exe`` is
+      guarded.
+    - **A version suffix**, so ``python3.12`` and ``php8.2`` -- real binary
+      names on any machine carrying more than one runtime -- resolve to
+      their unversioned entry.
+    - **CPython's free-threaded ``t`` marker**, so ``python3.13t`` and
+      ``python3.13t.exe`` resolve there too. Those are the documented names
+      for the free-threaded build (Python 3.13 "What's New" and the
+      free-threading HOWTO), not a guess. The ``t`` is only stripped when
+      doing so *produces a known interpreter*, so an unrelated basename is
+      never coerced into one -- ``pytest3`` normalizes to ``pytest``, then
+      to ``pytes``, and matches neither.
+
+    Every one of these was unguarded in the spelled-out ``-c <payload>``
+    form as well as the concatenated one, so this closes both.
     """
-    return INLINE_CODE_FLAGS.get(basename.rstrip("0123456789."))
+    name = basename.lower()
+    if name.endswith(".exe"):
+        name = name[: -len(".exe")]
+    name = name.rstrip("0123456789.")
+    flags = _INLINE_CODE_FLAGS_BY_LOWER_NAME.get(name)
+    if flags is None and name.endswith("t"):
+        flags = _INLINE_CODE_FLAGS_BY_LOWER_NAME.get(name[:-1].rstrip("0123456789."))
+    return flags
 
 
 def _matches_inline_flag(element: str, flags: frozenset[str]) -> bool:
@@ -150,18 +171,35 @@ def _matches_inline_flag(element: str, flags: frozenset[str]) -> bool:
     return any(flag[1] in letters for flag in flags if len(flag) == 2 and not flag.startswith("--"))
 
 
+# File extensions that make a token the *script* an interpreter runs, rather
+# than one of that interpreter's own option values. See
+# `_interpreter_option_span` for why the span ends on this and not on "the
+# first token that looks like a path".
+SCRIPT_SUFFIXES = (".py", ".pyw", ".js", ".mjs", ".cjs", ".ts", ".rb", ".pl", ".pm", ".php", ".r")
+
+
 def _interpreter_option_span(argv: tuple[str, ...] | list[str], interpreter_index: int) -> range:
     """Indices of the tokens ``argv[interpreter_index]`` consumes as its own
     options: everything up to the script it is being asked to run.
 
-    The end of the span is the interpreter's script argument -- the first
-    following token that is neither an option nor a bare option *value*.
-    "Bare option value" is why this is not simply "the first token not
-    starting with ``-``": ``python3 -X utf8 -cprint(1)`` really does execute
-    its payload, and stopping at ``utf8`` would walk straight past the flag
-    that does it. A token is taken as the script argument once it looks like
-    a path (it carries a ``/`` or a ``.``), which every gate script in this
-    registry does.
+    The span ends at the interpreter's script argument, and a token is that
+    argument only when it is not an option *and* carries a script file
+    extension. Both halves matter, and the second one is narrower than it
+    first looks:
+
+    - Not simply "the first token not starting with ``-``". ``python3 -X
+      utf8 -cprint(1)`` really does execute its payload, and stopping at
+      ``utf8`` would walk straight past the flag that does it.
+    - Not "the first token that looks like a path" either -- that was this
+      function's first revision, and CodeRabbit's review of PR #910 found
+      it bypassable. An option *value* can carry a dot: ``python3 -X
+      pycache_prefix=cache.dir -cprint(99)`` and ``python3 -W
+      ignore::Dep:mypkg.mod -cprint(98)`` both print, verified by running
+      them, while a dot-or-slash heuristic ended the span on the value and
+      never saw the ``-c``. Requiring a script extension keeps those values
+      inside the span. It also generalizes past the single ``-X`` case the
+      review named, without this module having to enumerate which options
+      of which interpreter take a separate value.
 
     Anchoring the span here is what keeps the mirror-image false positive
     out: in ``uv run --frozen python3 script.py -c conf.json`` the ``-c``
@@ -171,16 +209,16 @@ def _interpreter_option_span(argv: tuple[str, ...] | list[str], interpreter_inde
     ``git`` is not an interpreter.
 
     The residual, stated rather than left to be discovered: an argv that
-    names no path-like script argument at all keeps the span open to the
+    names no extension-bearing script at all keeps the span open to the
     end, so ``python3 -m pytest -c pytest.ini`` would be refused even
-    though its ``-c`` is pytest's. No wired argv uses ``-m`` today -- every
-    one of them names a ``.github/scripts/*.py`` path -- and the failure is
-    a loud refusal naming the argv, not a silent pass.
+    though its ``-c`` is pytest's, as would an extensionless executable
+    script. Every wired argv names a ``.github/scripts/*.py`` path, and the
+    failure is a loud refusal naming the argv, not a silent pass.
     """
     start = interpreter_index + 1
     for index in range(start, len(argv)):
         token = argv[index]
-        if not token.startswith("-") and ("/" in token or "." in token):
+        if not token.startswith("-") and token.lower().endswith(SCRIPT_SUFFIXES):
             return range(start, index)
     return range(start, len(argv))
 

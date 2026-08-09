@@ -332,10 +332,26 @@ def test_an_ordinary_pinned_invocation_is_not_refused(tmp_path: pathlib.Path) ->
         (("uv", "run", "--frozen", "python3.12", "-c", "x"), 1),
         (("uv", "run", "--frozen", "python3.12", "-cprint(1)"), 1),
         (("php8.2", "-recho 1;"), 1),
-        # ... and the stripping must not invent interpreters that are not
-        # there: `pytest3` is not `python`, and a bare version-suffix strip
-        # of an unrelated basename must still miss.
+        # CodeRabbit's review of PR #910: CPython's free-threaded build and
+        # a Windows `.exe` are the same interpreter under other names, and
+        # both were unguarded in the spelled-out form too.
+        (("python3.13t", "-cprint(1)"), 1),
+        (("python3.13t.exe", "-cprint(1)"), 1),
+        (("python3.exe", "-c", "print(1)"), 1),
+        (("PYTHON3", "-c", "print(1)"), 1),
+        # ... and the normalization must not invent interpreters that are
+        # not there: `pytest3` strips to `pytest`, then the free-threaded
+        # `t` rule would try `pytes`, and neither is an interpreter.
         (("uv", "run", "--frozen", "pytest3", "-c", "x"), 0),
+        # Same review, second finding: an option *value* can carry a dot,
+        # so a dot-or-slash script heuristic ended the span early and never
+        # reached the payload. Both of these print when run.
+        (("python3", "-X", "pycache_prefix=cache.dir", "-cprint(99)", "script.py"), 1),
+        (("python3", "-W", "ignore::Dep:mypkg.mod", "-cprint(98)", "script.py"), 1),
+        # The span must still end on a real script argument, in either
+        # spelling of the path.
+        (("uv", "run", "--frozen", "python3", ".github/scripts/x.py", "-c", "conf.json"), 0),
+        (("Rscript", "analysis.R", "-e", "conf"), 0),
     ],
 )
 def test_find_argv_safety_violations_directly(argv: tuple[str, ...], expected: int) -> None:
@@ -376,6 +392,26 @@ def test_a_concatenated_inline_code_flag_is_refused_by_every_layer(tmp_path: pat
     assert gitapex_scan_ssot_schema.find_local_shell_argv(registry)
 
     ssot = _write_ssot(tmp_path, [_gate("hidden-characters", planes=["local"], local_invocation=argv)])
+    with pytest.raises(gitapex_gate_local_preflight.PreflightRegistryError, match="refusing to run"):
+        gitapex_gate_local_preflight.load_local_checks(ssot)
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["uv", "run", "--frozen", "python3", "-X", "pycache_prefix=cache.dir", "-cprint('OWNED')", "x.py"],
+        ["uv", "run", "--frozen", "python3", "-W", "ignore::Dep:mypkg.mod", "-cprint('OWNED')", "x.py"],
+        ["uv", "run", "--frozen", "python3.13t", "-cprint('OWNED')", "x.py"],
+    ],
+)
+def test_a_payload_behind_a_dotted_option_value_is_refused_at_the_runner(
+    tmp_path: pathlib.Path, argv: list[str]
+) -> None:
+    """CodeRabbit's review of PR #910, end to end rather than at the
+    predicate alone. Each argv was run before being asserted: CPython
+    consumes the dotted value as an option value and still executes the
+    payload, and `python3.13t` is a real free-threaded binary name."""
+    ssot = _write_ssot(tmp_path, [_gate("payload", planes=["local"], local_invocation=argv)])
     with pytest.raises(gitapex_gate_local_preflight.PreflightRegistryError, match="refusing to run"):
         gitapex_gate_local_preflight.load_local_checks(ssot)
 
