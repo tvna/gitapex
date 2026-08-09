@@ -32,18 +32,14 @@ import fnmatch
 import json
 import pathlib
 import sys
-from typing import Any
+from typing import Annotated, Any, Literal
 
 import yaml
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 DEFAULT_RULESET = REPO_ROOT / ".github" / "rulesets" / "main.json"
 DEFAULT_WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
-
-#: Exactly the keys GitHub's own ruleset POST/PUT request body accepts. A
-#: committed file carrying anything else either sends a field the API ignores
-#: (silently doing nothing) or is missing one the API needs.
-EXPECTED_KEYS = {"name", "target", "enforcement", "conditions", "bypass_actors", "rules"}
 
 #: Rules whose absence would leave `main` deletable or rewritable even with a
 #: pull request requirement in place.
@@ -75,6 +71,150 @@ class RulesetGateError(RuntimeError):
     """Raised when the ruleset file or the workflow directory cannot be read."""
 
 
+# --------------------------------------------------------------------------
+# Schema layer: what a committed ruleset file is allowed to *look like*.
+#
+# These models describe `.github/rulesets/*.json` only -- a document this
+# repository authors, whose full key set is knowable, so `extra="forbid"` is
+# both safe and the entire point. They must never be pointed at a live API
+# response: GitHub stamps `id`, `created_at`, `_links`, per-check
+# `integration_id` and its own rule-parameter defaults onto everything it
+# returns, so a strict model would reject every real response. The live side
+# stays a subset comparison in `_gitapex_rulesets.py`, and keeping the strict
+# models in this file rather than the shared one is what keeps that boundary
+# visible.
+#
+# The measured reason this layer exists: with only the hand-rolled key-set and
+# flag checks, a committed ruleset carrying `require_code_owner_reviews` (the
+# plural typo GitHub silently ignores), `required_approving_review_count:
+# "zero"` (which the API rejects with a 422 at apply time, discovered only
+# after a dispatch), an invented parameter, and a rule with an unknown `type`
+# all passed together with exit 0 and "shape is valid". Every one of those is a
+# ValidationError now.
+# --------------------------------------------------------------------------
+
+
+class RefNameCondition(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    include: list[str]
+    exclude: list[str]
+
+
+class RulesetConditions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ref_name: RefNameCondition
+
+
+class DeletionRule(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["deletion"]
+
+
+class NonFastForwardRule(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["non_fast_forward"]
+
+
+class PullRequestParameters(BaseModel):
+    """Every field GitHub's `pull_request` rule accepts, all required here.
+
+    Required rather than defaulted on purpose: these are security-relevant
+    settings, and a file that omits one is silently accepting whatever GitHub's
+    default happens to be today. Making them explicit means the committed file
+    states the whole policy, and a future API default change cannot quietly
+    move this repository's protection.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    required_approving_review_count: int = Field(ge=0)
+    dismiss_stale_reviews_on_push: bool
+    require_code_owner_review: bool
+    require_last_push_approval: bool
+    required_review_thread_resolution: bool
+    allowed_merge_methods: list[Literal["merge", "squash", "rebase"]] = Field(min_length=1)
+
+
+class PullRequestRule(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["pull_request"]
+    parameters: PullRequestParameters
+
+
+class StatusCheck(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    context: str = Field(min_length=1)
+    #: GitHub's own optional pin of which app must report the context. Not set
+    #: by this repository, but modelled so adding it later is a one-line change
+    #: rather than a validation failure.
+    integration_id: int | None = None
+
+
+class RequiredStatusChecksParameters(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    strict_required_status_checks_policy: bool
+    required_status_checks: list[StatusCheck]
+
+
+class RequiredStatusChecksRule(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["required_status_checks"]
+    parameters: RequiredStatusChecksParameters
+
+
+#: Discriminated on `type`, so an unknown rule type is a validation error naming
+#: the offending value rather than a silently-ignored entry. Extending this
+#: union is the deliberate cost of adopting a new rule type: the same change
+#: must then also update `.gitapex/ssot.json` and the runbook, which is the
+#: coupling that keeps those two documents true.
+CommittedRule = Annotated[
+    DeletionRule | NonFastForwardRule | PullRequestRule | RequiredStatusChecksRule,
+    Field(discriminator="type"),
+]
+
+
+class CommittedRuleset(BaseModel):
+    """Exactly the key set GitHub's ruleset POST/PUT request body accepts.
+
+    `enforcement` and `target` admit GitHub's full enums rather than pinning the
+    values this repository uses: `evaluate` and `disabled` are the documented
+    rollback lever in `docs/runbooks/rulesets.md`, so a file setting one must
+    stay *valid* and be reported by the policy layer instead. Schema says what
+    is expressible; policy says what this repository has chosen.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1)
+    target: Literal["branch", "tag", "push"]
+    enforcement: Literal["active", "evaluate", "disabled"]
+    conditions: RulesetConditions
+    bypass_actors: list[dict[str, Any]]
+    rules: list[CommittedRule]
+
+
+def find_schema_violations(ruleset: dict[str, Any]) -> list[str]:
+    """Validation errors against `CommittedRuleset`, one finding per error.
+
+    Rendered by dotted location rather than re-raising, so a file with three
+    problems reports all three in one run instead of one per fix-and-re-run
+    cycle.
+    """
+    try:
+        CommittedRuleset.model_validate(ruleset)
+    except ValidationError as error:
+        return [f"{'.'.join(str(part) for part in item['loc']) or '<root>'}: {item['msg']}" for item in error.errors()]
+    return []
+
+
 def load_json(path: pathlib.Path) -> dict[str, Any]:
     try:
         document = json.loads(path.read_text(encoding="utf-8"))
@@ -98,14 +238,17 @@ def rule_of_type(ruleset: dict[str, Any], rule_type: str) -> dict[str, Any] | No
 
 
 def find_shape_violations(ruleset: dict[str, Any]) -> list[str]:
-    """Structural findings about the committed ruleset itself."""
+    """Findings about the committed ruleset itself: schema first, then policy.
+
+    Schema errors short-circuit. A document that failed validation has an
+    unknown shape, so every policy check below it would be reading fields that
+    may not be the type it assumes -- and the operator would get one real error
+    buried in a pile of consequences of it.
+    """
+    schema_findings = find_schema_violations(ruleset)
+    if schema_findings:
+        return schema_findings
     findings: list[str] = []
-    unexpected = sorted(set(ruleset) - EXPECTED_KEYS)
-    missing = sorted(EXPECTED_KEYS - set(ruleset))
-    if unexpected:
-        findings.append(f"carries key(s) GitHub's ruleset request body does not accept: {', '.join(unexpected)}")
-    if missing:
-        findings.append(f"is missing required key(s): {', '.join(missing)}")
     if ruleset.get("enforcement") != "active":
         findings.append(f"enforcement is {ruleset.get('enforcement')!r}, not 'active' -- it would not block anything")
     if ruleset.get("bypass_actors"):
@@ -130,20 +273,20 @@ def _find_condition_violations(ruleset: dict[str, Any]) -> list[str]:
     sync gate and the daily drift scan all stay green. `.gitapex/ssot.json`
     already claims this gate enforces `target ~DEFAULT_BRANCH`; until this
     check existed, that claim was false.
+
+    Runs only after `find_schema_violations` passed, so `conditions.ref_name`
+    is known to be an object with two string lists; what is left is purely the
+    policy question of which ref those lists name.
     """
-    if ruleset.get("target") != "branch":
-        return [f"target is {ruleset.get('target')!r}, not 'branch'"]
-    conditions = ruleset.get("conditions")
-    raw_ref_name = conditions.get("ref_name") if isinstance(conditions, dict) else None
-    ref_name: dict[str, Any] = raw_ref_name if isinstance(raw_ref_name, dict) else {}
-    include = ref_name.get("include")
-    if not isinstance(include, list) or DEFAULT_BRANCH_REF not in include:
+    if ruleset["target"] != "branch":
+        return [f"target is {ruleset['target']!r}, not 'branch'"]
+    ref_name = ruleset["conditions"]["ref_name"]
+    if DEFAULT_BRANCH_REF not in ref_name["include"]:
         return [
-            f"conditions.ref_name.include is {include!r}; it must contain {DEFAULT_BRANCH_REF!r} "
+            f"conditions.ref_name.include is {ref_name['include']!r}; it must contain {DEFAULT_BRANCH_REF!r} "
             "or the ruleset protects some other ref and every rule below is decorative"
         ]
-    excluded = ref_name.get("exclude")
-    if isinstance(excluded, list) and DEFAULT_BRANCH_REF in excluded:
+    if DEFAULT_BRANCH_REF in ref_name["exclude"]:
         return [f"conditions.ref_name.exclude also contains {DEFAULT_BRANCH_REF!r}, cancelling the include"]
     return []
 
@@ -156,22 +299,23 @@ def _find_pull_request_violations(ruleset: dict[str, Any]) -> list[str]:
     Each flag below is named in `.gitapex/ssot.json`'s own entry for this gate
     and in `docs/runbooks/rulesets.md`; checking them here is what makes those
     two documents true rather than aspirational.
+
+    Runs only after `find_schema_violations` passed, so if the rule is present
+    its `parameters` is known to carry all six fields at their declared types.
+    What is left is the policy question of which *values* this repository
+    accepts -- a schema can say "boolean", never "true".
     """
     rule = rule_of_type(ruleset, "pull_request")
     if rule is None:
         return []  # already reported as a missing rule
-    parameters = rule.get("parameters")
-    if not isinstance(parameters, dict):
-        return ["the 'pull_request' rule carries no parameters object"]
+    parameters = rule["parameters"]
     findings = [
-        f"pull_request.{flag} is {parameters.get(flag)!r}, not true"
+        f"pull_request.{flag} is {parameters[flag]!r}, not true"
         for flag in REQUIRED_PULL_REQUEST_FLAGS
-        if parameters.get(flag) is not True
+        if parameters[flag] is not True
     ]
-    methods = parameters.get("allowed_merge_methods")
-    if not isinstance(methods, list) or not methods:
-        findings.append(f"pull_request.allowed_merge_methods is {methods!r}; it must name at least one method")
-    elif not set(methods) & _MERGE_METHODS_PRODUCING_A_REVIEWED_COMMIT:
+    methods = parameters["allowed_merge_methods"]
+    if not set(methods) & _MERGE_METHODS_PRODUCING_A_REVIEWED_COMMIT:
         findings.append(
             f"pull_request.allowed_merge_methods is {methods!r}; none of "
             f"{sorted(_MERGE_METHODS_PRODUCING_A_REVIEWED_COMMIT)} is allowed, so no reviewed merge path remains"

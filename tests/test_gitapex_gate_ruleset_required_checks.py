@@ -35,12 +35,16 @@ VALID: dict[str, Any] = {
                 "require_code_owner_review": True,
                 "required_review_thread_resolution": True,
                 "dismiss_stale_reviews_on_push": True,
+                "require_last_push_approval": False,
                 "allowed_merge_methods": ["merge", "squash"],
             },
         },
         {
             "type": "required_status_checks",
-            "parameters": {"required_status_checks": [{"context": "always-runs"}]},
+            "parameters": {
+                "strict_required_status_checks_policy": False,
+                "required_status_checks": [{"context": "always-runs"}],
+            },
         },
     ],
 }
@@ -122,8 +126,8 @@ def test_a_job_level_name_overrides_the_job_id(tmp_path: pathlib.Path) -> None:
     [
         (lambda r: r.update({"enforcement": "disabled"}), "not 'active'"),
         (lambda r: r.update({"bypass_actors": [{"actor_id": 1}]}), "grants bypass actors"),
-        (lambda r: r.update({"extra": 1}), "does not accept"),
-        (lambda r: r.pop("conditions"), "missing required key"),
+        (lambda r: r.update({"extra": 1}), "Extra inputs are not permitted"),
+        (lambda r: r.pop("conditions"), "Field required"),
         (lambda r: r["rules"].pop(0), "has no 'deletion' rule"),
     ],
 )
@@ -352,11 +356,12 @@ def test_a_non_branch_target_is_a_finding(tmp_path: pathlib.Path) -> None:
 
 @pytest.mark.parametrize("flag", list(gate.REQUIRED_PULL_REQUEST_FLAGS))
 def test_each_required_pull_request_flag_must_be_true(flag: str, tmp_path: pathlib.Path) -> None:
+    # Flipped on the complete fixture rather than rebuilt from scratch: a
+    # partial parameters dict is a schema error now, which would mask the policy
+    # finding this test exists to pin. A schema says "boolean"; only a policy
+    # says "true".
     ruleset = json.loads(json.dumps(VALID))
-    parameters: dict[str, Any] = dict.fromkeys(gate.REQUIRED_PULL_REQUEST_FLAGS, True)
-    parameters["allowed_merge_methods"] = ["merge"]
-    parameters[flag] = False
-    ruleset["rules"][2]["parameters"] = parameters
+    ruleset["rules"][2]["parameters"][flag] = False
     findings = gate.find_violations(write_ruleset(tmp_path, ruleset), write_workflows(tmp_path, a=UNFILTERED_WORKFLOW))
     assert any(flag in finding for finding in findings), findings
 
@@ -364,10 +369,11 @@ def test_each_required_pull_request_flag_must_be_true(flag: str, tmp_path: pathl
 def test_a_rebase_only_merge_policy_is_a_finding(tmp_path: pathlib.Path) -> None:
     # rebase replays branch commits without a merge commit, so no path carries
     # the pull request's own review with it.
+    # Schema-valid -- rebase is a real GitHub merge method -- so this can only
+    # ever be a policy finding.
     ruleset = json.loads(json.dumps(VALID))
-    parameters: dict[str, Any] = dict.fromkeys(gate.REQUIRED_PULL_REQUEST_FLAGS, True)
-    parameters["allowed_merge_methods"] = ["rebase"]
-    ruleset["rules"][2]["parameters"] = parameters
+    ruleset["rules"][2]["parameters"]["allowed_merge_methods"] = ["rebase"]
+    assert gate.find_schema_violations(ruleset) == []
     findings = gate.find_violations(write_ruleset(tmp_path, ruleset), write_workflows(tmp_path, a=UNFILTERED_WORKFLOW))
     assert any("no reviewed merge path remains" in finding for finding in findings), findings
 
@@ -432,23 +438,23 @@ def test_a_missing_pull_request_rule_is_reported_once_not_twice(tmp_path: pathli
 def test_a_pull_request_rule_without_a_parameters_object_is_a_finding(parameters: Any, tmp_path: pathlib.Path) -> None:
     # GitHub's API accepts a bare `{"type": "pull_request"}`, which enforces
     # none of the review settings this repository claims. A presence-only check
-    # would pass it.
+    # would pass it; the schema layer rejects the shape outright.
     ruleset = json.loads(json.dumps(VALID))
     ruleset["rules"][2]["parameters"] = parameters
     findings = gate.find_violations(write_ruleset(tmp_path, ruleset), write_workflows(tmp_path, a=UNFILTERED_WORKFLOW))
-    assert any("carries no parameters object" in finding for finding in findings), findings
+    assert any("parameters" in finding for finding in findings), findings
 
 
-@pytest.mark.parametrize("methods", [None, [], "merge", {"merge": True}])
+@pytest.mark.parametrize("methods", [None, [], "merge", {"merge": True}, ["fast_forward"]])
 def test_an_unusable_allowed_merge_methods_value_is_a_finding(methods: Any, tmp_path: pathlib.Path) -> None:
     # An empty list is the dangerous one: it type-checks as a list and reads as
-    # "no restriction" to a skim, but names no permitted merge path at all.
+    # "no restriction" to a skim while naming no permitted merge path at all.
+    # `min_length=1` on the model is what catches it; the invented method is
+    # caught by the Literal.
     ruleset = json.loads(json.dumps(VALID))
-    parameters: dict[str, Any] = dict.fromkeys(gate.REQUIRED_PULL_REQUEST_FLAGS, True)
-    parameters["allowed_merge_methods"] = methods
-    ruleset["rules"][2]["parameters"] = parameters
+    ruleset["rules"][2]["parameters"]["allowed_merge_methods"] = methods
     findings = gate.find_violations(write_ruleset(tmp_path, ruleset), write_workflows(tmp_path, a=UNFILTERED_WORKFLOW))
-    assert any("must name at least one method" in finding for finding in findings), findings
+    assert any("allowed_merge_methods" in finding for finding in findings), findings
 
 
 def test_a_non_mapping_job_body_still_resolves_to_its_job_id(tmp_path: pathlib.Path) -> None:
@@ -480,3 +486,62 @@ def test_a_non_mapping_jobs_key_reaches_the_gates_own_exit_path(tmp_path: pathli
     workflows = write_workflows(tmp_path, broken="name: B\non:\n  pull_request: {}\njobs: 'text'\n")
     code = gate.main(["--ruleset", str(write_ruleset(tmp_path, ruleset)), "--workflow-dir", str(workflows)])
     assert code == 1
+
+
+@pytest.mark.parametrize(
+    ("mutate", "expected"),
+    [
+        # Every one of these passed with exit 0 and "shape is valid" before the
+        # schema layer existed; the key-set check only looked at the top level.
+        (
+            lambda r: r["rules"][2]["parameters"].update({"require_code_owner_reviews": True}),
+            "require_code_owner_reviews: Extra inputs are not permitted",
+        ),
+        (
+            lambda r: r["rules"][2]["parameters"].update({"required_approving_review_count": "zero"}),
+            "required_approving_review_count: Input should be a valid integer",
+        ),
+        (lambda r: r["rules"].append({"type": "invented"}), "does not match any of the expected tags"),
+        (lambda r: r["rules"][2]["parameters"].update({"allowed_merge_methods": ["fast_forward"]}), "allowed_merge"),
+        (lambda r: r["rules"][2]["parameters"].pop("require_last_push_approval"), "Field required"),
+        (lambda r: r["conditions"]["ref_name"].update({"typo": []}), "Extra inputs are not permitted"),
+        (lambda r: r.update({"enforcement": "on"}), "enforcement"),
+        (lambda r: r.update({"target": "everything"}), "target"),
+        (lambda r: r.update({"name": ""}), "name"),
+        (lambda r: r["rules"][3]["parameters"]["required_status_checks"].append({"ctx": "x"}), "Extra inputs"),
+    ],
+)
+def test_the_schema_layer_rejects_what_the_key_set_check_could_not_see(
+    mutate: Any, expected: str, tmp_path: pathlib.Path
+) -> None:
+    ruleset = json.loads(json.dumps(VALID))
+    mutate(ruleset)
+    findings = gate.find_schema_violations(ruleset)
+    assert any(expected in finding for finding in findings), findings
+
+
+def test_the_committed_ruleset_validates_against_the_schema() -> None:
+    # The live pass that matters: the model is only worth anything if this
+    # repository's own source of truth satisfies it.
+    assert gate.find_schema_violations(gate.load_json(REPO_ROOT / ".github" / "rulesets" / "main.json")) == []
+
+
+def test_schema_errors_short_circuit_the_policy_checks(tmp_path: pathlib.Path) -> None:
+    # A document of unknown shape makes every policy check below it read fields
+    # that may not be the type it assumes, so the operator would get one real
+    # error buried under a pile of consequences of it.
+    ruleset = json.loads(json.dumps(VALID))
+    ruleset["rules"] = "not a list"
+    findings = gate.find_shape_violations(ruleset)
+    assert all("rules" in finding for finding in findings), findings
+
+
+def test_the_schema_accepts_the_documented_rollback_enforcement_values() -> None:
+    # `evaluate` and `disabled` are the runbook's rollback lever, so they must
+    # stay *valid* and be reported by the policy layer instead -- schema says
+    # what is expressible, policy says what this repository has chosen.
+    for value in ("evaluate", "disabled"):
+        ruleset = json.loads(json.dumps(VALID))
+        ruleset["enforcement"] = value
+        assert gate.find_schema_violations(ruleset) == []
+        assert any("not 'active'" in finding for finding in gate.find_shape_violations(ruleset))

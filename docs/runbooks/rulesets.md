@@ -84,6 +84,18 @@ them rejected by the gate:
   `job (value)` once per leg, and a reusable-workflow call (`uses:`) reports its
   inner jobs as `caller / inner`.
 
+Separately from the reachability question, the same gate validates the committed
+file against a pydantic model of GitHub's own request body -- `extra="forbid"`
+at every level, a `type`-discriminated rule union, and every `pull_request`
+parameter required rather than defaulted. That layer exists because the earlier
+key-set check only looked at the top level: a file carrying
+`require_code_owner_reviews` (the plural typo GitHub silently ignores),
+`required_approving_review_count: "zero"` (a 422 discovered only after a live
+dispatch), an invented parameter and a rule with an unknown `type` passed all
+four together with "shape is valid". Adopting a new GitHub rule type therefore
+means extending that union -- deliberately, since the same change has to update
+this runbook and `.gitapex/ssot.json` too.
+
 Two further exclusions, both for cause:
 
 * `eval-gate` runs unconditionally but has failed on every evals-touching pull
