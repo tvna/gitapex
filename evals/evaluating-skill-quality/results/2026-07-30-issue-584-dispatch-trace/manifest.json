@@ -14,6 +14,9 @@
   "artifacts": [
     "dispatch-trace-check.json"
   ],
+  "checker_reports": [
+    "dispatch-trace-check.json"
+  ],
   "known_gaps": [
     "The positive control used an explicit 'dispatch via the Agent tool' instruction (Track B, matching this repository's own issue #500 precedent for a session with no registered Skill tool), not normal.yaml's literal 'Use evaluating-skill-quality.' wording -- a separate probe (see eval-status.md's issue #584 entry) confirmed that wording DOES auto-trigger the real Skill via --plugin-dir and does NOT leak CLAUDE.md, but the real Skill's own procedure then correctly shells out to a nested claude -p subprocess per its own Isolation-verification registry (Agent tool confirmed-contaminated on this platform), which is real, correct behavior but too slow (>3 minutes, background polling) to fully execute as a proof run here. The literal fixture's own end-to-end organic-trigger run remains open follow-up work.",
     "Only the negative-control fixture (dispatch-required-negative-control.yaml) was scored against a real committed fixture's own output_contains/output_not_contains assertions in this run (1.0, DISPATCH_TRACE_NOT_CONFIRMED). The positive-control transcript's substantive review content was not scored against normal.yaml's own assertions, since the adapted prompt's wording differs from normal.yaml's literal prompt (see prior gap) -- only its dispatch trace (DISPATCH_COUNT=1, confirmed) was checked.",

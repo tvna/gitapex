@@ -92,7 +92,10 @@ What this scanner does NOT check, disclosed rather than solved
 - The root-contents rule enforces the *extension* (`.json`) and not the
   `<full-model-id>` naming convention `results/README.md` states, because
   this scanner owns no notion of a valid model id. An arbitrarily named
-  `.json` file in a run root passes, as long as `artifacts[]` lists it.
+  `.json` file in a run root passes as a score file as long as its own
+  content validates against `eval-scores.schema.json` -- `find_checker_report_drift`
+  only steps in for a root `.json` file that does *not* validate as a score
+  file, requiring it to be declared in `checker_reports[]` instead.
 - `commit` is checked for hex shape, not for resolving on any remote. It
   deliberately does not shell out to git: a shallow clone (this
   repository's own CI checkout) cannot resolve a historical object name,
@@ -424,6 +427,65 @@ def find_root_content_drift(run_dir: pathlib.Path) -> list[str]:
     return findings
 
 
+def find_checker_report_drift(
+    instance: Any,
+    run_dir: pathlib.Path,
+    scores_validator: jsonschema.Draft202012Validator,
+) -> list[str]:
+    """`checker-report-declared`: a root `*.json` file that does not validate
+    as a per-model score file must be explicitly declared in
+    `checker_reports[]`.
+
+    `results/README.md` names a "checker report" as a third permitted
+    root-level class (`dispatch-trace-check.json` is the one committed
+    instance) alongside per-model score files, but until this rule existed
+    that classification was documentation only: the scanner accepted *any*
+    root `.json` file once `artifacts[]` listed it, whatever its content --
+    an adversarial review round on this file found the gap. This closes it by
+    content, not by requiring every legitimate score file to also be
+    re-declared: a root JSON file that already validates against
+    `eval-scores.schema.json` needs no further declaration (that is what a
+    per-model score file's own committed shape already proves); a root JSON
+    file that does not -- `dispatch-trace-check.json`'s own `{model_id,
+    n_runs, runs}` shape does not carry `n_fixtures`/`mean_score`/`scores` --
+    must appear in `checker_reports[]` or the finding fires.
+
+    `checker_reports` is a layer-1-only key -- neither schema mentions it,
+    since a checker report is by definition not scored and has no shape
+    either schema could usefully pin. It is optional: most records have no
+    checker report and need not declare an empty list."""
+    if not isinstance(instance, dict):
+        return []
+    declared_raw = instance.get("checker_reports")
+    if declared_raw is None:
+        declared_raw = []
+    findings: list[str] = []
+    if not isinstance(declared_raw, list):
+        return ["checker-report-declared: checker_reports must be an array of paths relative to this manifest"]
+    declared: set[str] = set()
+    for entry in declared_raw:
+        if not isinstance(entry, str) or not entry:
+            findings.append(f"checker-report-declared: checker_reports entry is not a non-empty string: {entry!r}")
+            continue
+        if _escapes_run_dir(entry) or "/" in entry:
+            findings.append(
+                f"checker-report-declared: checker_reports entry {entry!r} must be a bare filename in the run root"
+            )
+            continue
+        declared.add(entry)
+        if not (run_dir / entry).is_file():
+            findings.append(f"checker-report-declared: checker_reports lists {entry!r}, which does not exist")
+    for path in sorted(run_dir.glob("*.json")):
+        if path.name == MANIFEST_NAME or path.name in declared:
+            continue
+        if not scores_validator.is_valid(_load_json(path)):
+            findings.append(
+                f"checker-report-declared: {path.name!r} does not validate as a per-model score file "
+                "and is not declared in checker_reports[] -- a non-score root JSON file must be one or the other"
+            )
+    return findings
+
+
 def find_artifact_drift(instance: Any, run_dir: pathlib.Path) -> list[str]:
     """`artifacts-agree`: `artifacts[]` and the filesystem must agree in
     **both** directions -- a listed file that does not exist is a dangling
@@ -734,6 +796,7 @@ def find_drift(
             f"{prefix}: {f}" for f in find_record_contract_drift(instance, prefix, legacy_pre_contract_runs)
         )
         findings.extend(f"{prefix}: {f}" for f in find_artifact_drift(instance, run_dir))
+        findings.extend(f"{prefix}: {f}" for f in find_checker_report_drift(instance, run_dir, scores_validator))
         findings.extend(
             f"{prefix}: {f}" for f in find_gate_run_schema_drift(instance, run_dir, run_validator, scores_validator)
         )

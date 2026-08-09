@@ -56,6 +56,9 @@
   "artifacts": [
     "claude-sonnet-5.json"
   ],
+  "checker_reports": [
+    "claude-sonnet-5.json"
+  ],
   "known_gaps": [
     "trials_per_fixture=1 for every iteration -- no repeat-run variance data; a single sample generalizing correctly is not proof a weaker tier or a different sample would.",
     "model tier not independently confirmed from the transcripts (see the 'models' field above, spelled 'model' when this run was recorded and migrated by issue #926).",

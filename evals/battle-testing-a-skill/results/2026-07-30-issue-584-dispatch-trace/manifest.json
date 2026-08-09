@@ -14,6 +14,9 @@
   "artifacts": [
     "dispatch-trace-check.json"
   ],
+  "checker_reports": [
+    "dispatch-trace-check.json"
+  ],
   "known_gaps": [
     "The positive control used an explicit 'dispatch via the Agent tool' instruction rather than normal.yaml's literal 'Use battle-testing-a-skill.' wording, for the same reason disclosed in the companion evaluating-skill-quality manifest (organic Skill auto-triggering via --plugin-dir was confirmed to work and not leak CLAUDE.md, but the real Procedure then correctly shells out to a nested claude -p per the Isolation-verification registry, which is real but too slow to fully execute as a proof run here).",
     "Only the negative-control fixture was scored against a real committed fixture's own output_contains/output_not_contains assertions in this run (1.0, DISPATCH_TRACE_NOT_CONFIRMED). The positive-control transcript's substantive verdict content was not scored against normal.yaml's own assertions.",

@@ -51,12 +51,14 @@ results/
   (`dispatch-trace-check.json` is the one committed instance, from
   `evals/scripts/gitapex_check_dispatch_trace.py`). A checker report is not a
   score file, is not validated against `eval-scores.schema.json`, and must
-  not be pointed at by `score_files[]`; like every other file it must appear
-  in `artifacts[]`. Named as a permitted class here because it exists and
-  belongs at the root -- it is machine-readable JSON, not a raw capture -- so
-  the layout should say so rather than leave it as an unclassified file the
-  scanner happens to tolerate. The scanner enforces the `.json` extension
-  and the `artifacts[]` reachability, not the naming distinction.
+  not be pointed at by `score_files[]`. Declare it in the manifest's own
+  `checker_reports` array (a bare filename, e.g. `["dispatch-trace-check.json"]`)
+  in addition to listing it in `artifacts[]` like every other file.
+  Enforced by content, not by name: the scanner validates every
+  undeclared root `.json` file against `eval-scores.schema.json`, and a file
+  that does not pass that -- `dispatch-trace-check.json`'s own `{model_id,
+  n_runs, runs}` shape does not -- must be in `checker_reports` or the scan
+  fails. A real per-model score file needs no such declaration.
 
 ## `manifest.json` is authoritative for every machine-readable fact
 
