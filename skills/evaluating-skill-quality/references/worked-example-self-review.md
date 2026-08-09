@@ -355,6 +355,38 @@ than tested. The portability audit above (this dimension's newest
 addition) is the substantive check here, and it found and fixed two real
 issues rather than passing by default.
 
+**State-management sub-check: applicable, and it does not clear.** The
+bullets above grade text durability; `state-management-quality.md` grades
+whether the *procedure* survives a context reset, and this skill's own
+procedure fires its trigger. `SKILL.md`'s Subagent dispatch step sends every
+review to consult the Isolation verification registry in
+`adversarial-self-audit.md` "for the current platform's verified mechanism,
+running its Verification procedure and recording a new entry if none exists
+yet" -- a record this procedure writes at review time and a later review
+reads back to decide how to dispatch. Trigger clauses (b) and (d) both fire.
+
+Named gaps, graded against that file's axes:
+
+- **Axis 9 (the record as a trust boundary), leading.** Registry entries are
+  written in fact-shaped prose (`Result: fails isolation`, `Verified
+  alternative:`) and are the sole basis a later dispatch uses to pick its
+  isolation mechanism -- functioning as directives while nothing states a
+  trust class for them. The registry is also both governance-gated and
+  runtime-written, so an entry a dispatch just appended has passed no review
+  even though the file it sits in did; the skill states nothing about that
+  split, so a false `Result: passes isolation` entry would be trusted by
+  every later dispatch.
+- **Axis 3 (freshness).** The registry's own re-verification hedge fires only
+  "if this entry looks stale" -- discretionary, where the step it guards
+  (whether a dispatch is isolated at all) cannot afford discretion.
+- **Axis 2 (identity binding).** Entries are keyed by platform signal, not by
+  who wrote them or when they were last confirmed against a live control, so
+  a stale entry and a fresh one are indistinguishable on read.
+
+This dimension therefore does not clear. Fixing it is a change to the
+registry's own contract, not to this worked example, and belongs to its own
+issue rather than to the change that added the sub-check.
+
 ### 7. Bundled scripts
 
 Applicable, not N/A -- this skill ships `scripts/gitapex_check_skill_shape.py`
@@ -639,11 +671,13 @@ once vendored somewhere with no such hook. Development history of how
 this boundary's wording reached this state, in this repository's own
 bookkeeping: `docs/skill-eval-status.md`.
 
-**Well-formed**, and now **mature** -- diverging here from the
-`explaining-the-work` verdict (which stayed *not yet mature*), because
-this skill's dimension 1-7 gaps were each fixed during this same review
-rather than left standing. Dimensions 1 (after the description fix), 3,
-4, 5, 6 (after the two portability fixes), and 7 (applicable -- this
+**Well-formed, not yet mature.** This verdict was *mature* until the
+state-management sub-check was added to dimension 6; that sub-check fires on
+this skill's own isolation-verification registry and names three gaps, one
+leading, so dimension 6 no longer clears. Recording the downgrade rather than
+leaving the older verdict standing is the point: a rubric addition that
+cannot demote its own author's skill is not being applied. Dimensions 1
+(after the description fix), 3, 4, 5, and 7 (applicable -- this
 skill ships `gitapex_check_skill_shape.py`; clears cleanly after the
 constant-comment fix) all clear cleanly with cited evidence; dimensions 8
 and 9 are explicitly named as unmeasured rather than silently assumed,
@@ -662,12 +696,14 @@ distinction is load-bearing here: dimension 2's subsection reaches the
 explicit conclusion "not a current violation," so under the rubric's
 binary it clears, and the "Mixed"/"not a clean pass" language reports the
 two-sided observation (tight body, grown reference) plus a note to
-re-check, not a present, mature-blocking gap. This "mature" is the bounded kind rubric.md defines: it
-clears everything this repository's tooling can check today, not a claim
-of proven behaviour -- precisely because dimensions 8 and 9 remain
-named-unmeasured rather than passed. (This verdict follows directly from
-the clear-1-7-plus-named-8-9 conditions above, correcting a
-contradictory earlier "not yet mature" draft.)
+re-check, not a present, mature-blocking gap. Dimension 2 is therefore not
+what holds this verdict below mature; dimension 6's state-management gaps
+are, and they are named above rather than folded into dimension 2's
+watch-point. Nothing here is a claim of proven behaviour either way:
+dimension 8 stays named-unmeasured, and dimension 9 is measured only on the
+weak-tier "enough guidance?" question -- its model-differential run and
+transfer testing stay unmeasured. The Broad re-grade below states that split
+in full; this sentence must not flatten it back into a blanket.
 
 **Update (capability-assumption axis re-grade, Broad):** this skill's
 `Broad` declaration has since been re-walked against dimensions 2, 3, 5,
@@ -682,12 +718,14 @@ filed under "unmeasured," while the model-differential run and transfer
 testing stay honestly unmeasured -- so the "8 and 9 unmeasured" allowance
 the verdict rests on still holds for dimension 9's measured-transfer facet
 specifically, now stated more precisely than the earlier blanket did.
-Separately from the Broad walk, the headline verdict above was reconciled
-with rubric.md's Verdicts definition (dimensions 1-7 clear with no named
-gap, plus 8-9 named-unmeasured) and corrected from an earlier "not yet
-mature" to **mature**: the Broad re-grade does not itself drive that
-correction, but it confirms none of its four dimensions introduces a
-blocking 1-7 gap that would hold the verdict below mature.
+Separately from the Broad walk, the headline verdict above was at one point
+reconciled with rubric.md's Verdicts definition (dimensions 1-7 clear with no
+named gap, plus 8-9 named-unmeasured) and read **mature**. It no longer does,
+and the headline above governs: adding dimension 6's state-management
+sub-check produced named gaps in that dimension, which the Verdicts definition
+treats as blocking. What the Broad re-grade still establishes is narrower and
+unchanged -- none of its four dimensions (2, 3, 5, 9) introduces a blocking
+1-7 gap of its own.
 
 The honest summary: this review found and fixed two real portability
 defects in the artifact it was reviewing (itself), which is a materially

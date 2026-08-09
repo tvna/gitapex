@@ -114,7 +114,7 @@ used to be discovered one red check at a time on an already-open PR.
 
 The same `uv run prek install -t pre-commit -t pre-push` above also installs
 a **pre-push** hook that runs every gate with a working-tree-only form in
-one pass, before the push leaves your machine. A warm run of all 16 wired
+one pass, before the push leaves your machine. A warm run of all 19 wired
 gates measures 4-6 seconds end to end. Run it by hand any time with:
 
 ```console
@@ -129,10 +129,10 @@ If a clone predates this hook, re-run the install command above once to pick
 it up, then confirm both shims with the check in the previous section.
 `git push --no-verify` skips it, as with any pre-push hook.
 
-The runner itself needs no dependencies, but all 16 wired gates run through
+The runner itself needs no dependencies, but all 19 wired gates run through
 `uv` (the same `uv run` pins CI uses). Without `uv` on PATH every one of
-them reports `FAIL ... failed to run` -- that is one missing tool, not
-sixteen broken gates.
+them reports `FAIL ... failed to run` -- that is one missing tool, not a
+whole broken wired set.
 
 The wired set is not a list inside that script: it is every gate in
 `.gitapex/ssot.json` whose `planes` array contains `"local"`, run with the

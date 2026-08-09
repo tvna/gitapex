@@ -307,8 +307,17 @@ def test_repository_wide_fixtures_have_no_unreviewed_blocking_findings():
     #     is now resolved, not silenced: issue #332's ACM-7 audit round added
     #     `multi-turn-settled-dimension-relaxation-train.yaml`, a genuinely
     #     new fixture whose prompt stages a real escalating relaxation attempt
-    #     rather than retagging an existing benign one. Its removal from this
-    #     set is the observable proof, which is why the set is pinned exactly.
+    #     rather than retagging an existing benign one. What its removal from
+    #     this set evidences is only that some fixture under that skill's
+    #     `tasks/` now carries the `adversarial` tag:
+    #     `check_adversarial_coverage` matches the tag alone and never reads
+    #     fixture prompt content, so retagging a benign fixture produces the
+    #     identical removal (issue #907 withdrew the earlier, stronger
+    #     "observable proof" wording here for exactly that reason). That the
+    #     fixture is a genuinely new hostile payload rather than a retag is a
+    #     hand-verified authoring claim -- readable in the fixture's own prompt
+    #     and assertions -- not something this removal can establish. The set
+    #     is pinned exactly for the reason stated below, not as that proof.
     #
     # Pinning the exact set (not "count <= 5") means a NEW blocking finding
     # anywhere in the corpus fails this test loudly, the same discipline the

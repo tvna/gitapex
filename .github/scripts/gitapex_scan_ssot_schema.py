@@ -355,8 +355,8 @@ def find_local_shell_argv(registry: SsotRegistry | None) -> list[str]:
     **This is the review-time half of a two-layer guard, not the whole
     guard.** A review of PR #888 observed that the gate running this scanner
     (``ssot-schema-drift``) is itself one of the wired gates, so it executes
-    in gate-id order -- 15th of 16, with 14 gates running first -- and a
-    hostile argv on any of those has already run by the time this function
+    in gate-id order and is not the first id in that order, and a
+    hostile argv on any gate sorting before it has already run by the time this function
     is reached. ``gitapex_gate_local_preflight.py`` therefore applies the
     same predicates itself, before starting any subprocess, via the shared
     ``_gitapex_argv_safety`` module. This one stays because it reports the
@@ -401,8 +401,10 @@ def find_local_invocation_identity_drift(registry: SsotRegistry | None) -> list[
     a workflow file the local runner cannot execute. They are exempted by a
     property of their own registry entry, checked here, not by an id
     allowlist that would silently grow. Measured at the commit that added
-    this check: exactly those two of the sixteen wired gates take the
-    exemption, and the other fourteen satisfy the rule unmodified. A gate
+    this check, and re-checked since: those two wired gates are the only
+    ones taking the exemption, and every other wired gate satisfies the
+    rule unmodified. Stated as the property rather than as a pair of
+    counts, for the reason issue #904's third finding gives. A gate
     with a mixed ``.yml``-and-script list (``mypy-type-check``,
     ``exception-handler-gap``) is *not* exempt and must name its script."""
     if registry is None:

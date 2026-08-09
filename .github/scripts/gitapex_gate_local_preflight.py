@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """One consolidated local pre-push / pre-PR-open gate runner (issue #876).
 
-This repository enforces 37 registered deterministic gates. Before this
+This repository enforces 40 registered deterministic gates. Before this
 script existed, roughly half of them had a perfectly good working-tree-only
 invocation and yet ran *only* as separate CI jobs, so an agent preparing a
 PR discovered gaps one CI job at a time on an already-open PR -- push, wait,
@@ -29,7 +29,7 @@ required exactly when ``planes`` contains ``"local"``, and ``local_exclusion``
 it does not. A new gate therefore cannot land in the registry without one or
 the other, and ``gitapex_scan_ssot_schema.py`` (itself one of the gates this
 runner runs) fails the build if it does. That is the drift-test branch issue
-#876's third criterion explicitly allows, and it is what keeps the 21
+#876's third criterion explicitly allows, and it is what keeps the 22
 currently-excluded gates readable as deliberate exclusions rather than as
 coverage this runner silently lost.
 
@@ -80,10 +80,10 @@ reasons.
   authoritative merge gate.
 - **Every wired gate runs through ``uv``.** CONTRIBUTING.md invokes this
   file with plain ``python3``, and so does the pre-push hook, because the
-  runner itself needs no dependencies -- but all 16 wired argvs begin with
+  runner itself needs no dependencies -- but all 19 wired argvs begin with
   ``uv``, since each gate carries its own pinned invocation. Without ``uv``
-  on PATH every one of the 16 reports ``FAIL ... failed to run``, which
-  reads as sixteen broken gates rather than one missing tool. ``uv`` is
+  on PATH every one of them reports ``FAIL ... failed to run``, which
+  reads as a whole broken wired set rather than one missing tool. ``uv`` is
   already a documented prerequisite for this repository; it is named here so
   the failure mode is legible.
 - Gates run **sequentially**, in registry-id order, for legible output on a
@@ -144,7 +144,7 @@ SSOT_PATH = REPO_ROOT / ".gitapex" / "ssot.json"
 # own _GROUP_TIMEOUT_SECONDS = 600 -- so that one gate's own theoretical
 # worst case is ~4800 s, not 600 s. A ceiling matching that would be useless
 # as a hang guard (80 minutes of a silent pre-push), so this is a judgment
-# call in the other direction. For scale: a warm run of all 16 wired gates
+# call in the other direction. For scale: a warm run of all 19 wired gates
 # combined measured 4-6 s end to end, so 1800 s is a hang guard rather than
 # a budget, and it comfortably clears a cold mypy cache while still failing
 # loudly rather than blocking a push indefinitely. The residual risk is named rather than hidden: a genuinely
@@ -214,7 +214,8 @@ def _refuse_unsafe_argv(check: LocalCheck) -> None:
     Raised during discovery, before the first subprocess starts, and
     deliberately not deferred to ``ssot-schema-drift``'s own equivalent
     check. That gate is one of the wired gates, so it runs in gate-id order
-    -- 15th of 16 today, with 14 gates executing first -- and it reads its
+    and is not the first id in that order -- every gate sorting before it
+    has already executed by the time it looks -- and it reads its
     own module-level ``SSOT_PATH`` rather than whichever registry this
     runner was pointed at. Both properties were reconstructed against the
     real registry during review of PR #888: a shell payload placed on

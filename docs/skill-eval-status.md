@@ -52,6 +52,36 @@ results. Do not read the scaffolding as a run. `evaluating-skill-quality`
 point via such an alternative mechanism -- see its own
 `evals/evaluating-skill-quality/eval-status.md`.
 
+## A declaration is not a run record (issue #925)
+
+Issue #925 measured 23 of the 24 committed `evals/*/eval.yaml` declaring
+`config.model: claude-sonnet-4.6`, a model confirmed retired on 2026-06-15,
+and rewrote all of them to `claude-sonnet-5`. **That rewrite changed intent,
+not history.** No suite was re-run, no result file was added, and no
+`eval-status.md` claim about which model a skill was evaluated on became
+truer or falser because of it.
+
+The rule this makes explicit, and which
+`.github/scripts/gitapex_gate_eval_declared_model.py` restates in its own
+docstring next to the check that enforces the allowlist:
+
+- `eval.yaml`'s `config.model` states which model a suite *asks* to be run
+  against. It is a declaration, and it is demonstrably not a record of what
+  ran: `evals/untrusted-input-triage/results/2026-08-01-issue-645-behavioral-eval/`
+  documents a run that silently substituted a different model because the
+  declared one was retired.
+- The only trustworthy source for "this skill was evaluated on model X" is
+  a run record, `evals/<skill>/results/*/manifest.json`.
+
+So the per-skill lines quoted in the previous section still describe the
+*executed* provenance and still hold verbatim, even though the file they
+sit beside now declares a different model. Reading `config.model` as
+evidence of an executed run is the mistake; the gate grades that field as a
+declaration only and never reports it as provenance. Reconciling the prose
+in each `evals/<skill>/eval-status.md` against its own run records is
+deliberately out of scope for issue #925 (its own Non-goals) and is tracked
+separately.
+
 ## Dispatch-trace verification scaffolding (issue #584)
 
 A mechanism now exists to confirm, from a live transcript's own tool-call
