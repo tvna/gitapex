@@ -129,7 +129,13 @@ resolved:
 - **Scope exit by rewording.** A declaration this regex does not recognize
   (`"a resulting 2:2 partition"`, `"2:2:1:9 partition"`, `"9:9:9 fixture
   partition"`) removes its file from Check D entirely, and a removal looks
-  exactly like a pass. Matching every possible phrasing is not achievable
+  exactly like a pass. Bare, bolded, and backticked triples are all
+  recognized, so the residual is narrower than it first was -- but a
+  malformed or reworded one still exits, and a second review round showed
+  that exiting is the *good* outcome for a malformed triple: before the
+  colon-run guards, `"2:2:1:9 partition"` did not exit, it parsed as
+  `(2, 1, 9)` and graded the file against figures it never declared.
+  Matching every possible phrasing is not achievable
   by prose regex, so the defence is elsewhere:
   `tests/test_gitapex_gate_split_fixture_coverage.py::
   test_real_split_md_partition_declarations_are_pinned_exactly` pins the
@@ -215,19 +221,28 @@ _NEXT_HEADING_RE = re.compile(r"^##\s+\S", re.MULTILINE)
 # files share (verified directly against all four before writing this
 # regex), even though the surrounding prose differs.
 #
-# Terminated by a blank line as well as by the next bullet or the section
-# end (issue #907, adversarial review): every real bullet in this
-# repository's five split.md files is a single paragraph with indented
+# Terminated by a *dedented* blank line as well as by the next bullet or
+# the section end (issue #907, adversarial review): every real bullet in
+# this repository's five split.md files is a single paragraph with indented
 # continuation lines, but `## Assignment` sections also carry trailing
 # explanatory paragraphs that name fixtures -- `evals/merge-retrospective/
 # split.md`'s "The five pre-existing fixtures (`normal.yaml`, ...)" note
-# sits directly after the `test` bullet. Without the blank-line boundary
-# the LAST bullet absorbs that prose and reports 8 test fixtures where the
-# bullet itself lists 3. Checks A and C only ever read `selection`, which
-# is never last in this repository, so the over-match was latent until
-# Check D began reading all three splits.
+# sits directly after the `test` bullet. Without that boundary the LAST
+# bullet absorbs the prose and reports 8 test fixtures where the bullet
+# itself lists 3. Checks A and C only ever read `selection`, which is never
+# last in this repository, so the over-match was latent until Check D began
+# reading all three splits.
+#
+# The `(?![ \t])` is load-bearing, not decoration (second review round): a
+# bare `\n[ \t]*\n` terminator truncates a bullet at its own *internal*
+# paragraph break too, which silently shrank `selection` and made Check A
+# pass a gate table that omitted a declared fixture -- a regression in the
+# check this file already had, introduced while fixing Check D. Markdown's
+# own list-continuation rule is the discriminator: a paragraph that stays
+# inside the item is indented, one that leaves the list is not.
 _SPLIT_BULLET_RE = re.compile(
-    r"-\s+\*\*(train|selection|test)\*\*(.*?)(?=\n-\s+\*\*(?:train|selection|test)\*\*|\n[ \t]*\n|\Z)",
+    r"-\s+\*\*(train|selection|test)\*\*(.*?)"
+    r"(?=\n-\s+\*\*(?:train|selection|test)\*\*|\n[ \t]*\n(?![ \t])|\Z)",
     re.IGNORECASE | re.DOTALL,
 )
 
@@ -265,11 +280,25 @@ _SECTION_HEADING_RE = re.compile(r"^###[ \t]+(.+?)[ \t]*$", re.MULTILINE)
 # `evals/merge-retrospective/split.md`'s "This split uses a flatter
 # **9:6:3** partition (train:selection:test) instead" -- an equally
 # unambiguous declaration in the same Corpus-size position, fail-open by
-# regex accident (adversarial review of this check). `\*{0,2}` absorbs a
-# bolded triple. A bare ratio not qualifying "partition" (this
-# repository's "SkillOpt's default split ratio is 2:1:7") is correctly not
-# a declaration.
-_DECLARED_PARTITION_RE = re.compile(r"(\d+):(\d+):(\d+)\*{0,2}\s+partition", re.IGNORECASE)
+# regex accident (adversarial review of this check). A bare ratio not
+# qualifying "partition" (this repository's "SkillOpt's default split ratio
+# is 2:1:7") is correctly not a declaration.
+#
+# Two second-review-round corrections, both demonstrated:
+#
+# - The colon-run guards (`(?<![\d:])` / `(?![\d:])`) stop a *longer* run
+#   from yielding a triple the file never declared. Unanchored, "a resulting
+#   2:2:1:9 partition" parsed as `(2, 1, 9)` and "1:2:3:4:5 partition" as
+#   `(3, 4, 5)`, so the file was graded against invented figures -- worse
+#   than the out-of-scope outcome this module's own Known-limitations bullet
+#   claimed for that phrasing.
+# - The emphasis class accepts backticks, not only asterisks. This
+#   repository's prose routinely backticks these figures, so `` `9:6:3`
+#   partition `` would otherwise be silently out of scope with no signal.
+_DECLARED_PARTITION_RE = re.compile(
+    r"(?<![\d:])[`*]{0,2}(\d+):(\d+):(\d+)(?![\d:])[`*]{0,2}\s+partition",
+    re.IGNORECASE,
+)
 
 # The machine-readable exclusion line Check D requires alongside a declared
 # partition. Deliberately a fixed prefix rather than another prose scan:
@@ -287,11 +316,25 @@ _SPLIT_NAMES = ("train", "selection", "test")
 
 def _section(text: str, heading_re: re.Pattern[str]) -> str:
     """Text from `heading_re`'s heading (exclusive) to the next `##`
-    heading, or end of file. Empty string if the heading is absent."""
-    match = heading_re.search(text)
+    heading, or end of file. Empty string if the heading is absent.
+
+    Fenced code blocks are stripped first (issue #907, second review
+    round), so a heading inside a fence -- an illustration of this
+    repository's own `split.md` conventions, which its prose now carries --
+    is never mistaken for the real section boundary. Without this, a fenced
+    `## Assignment` above the real one made this function return the fence's
+    own (bullet-free) body, and every caller then read an empty listing:
+    `check_partition_arithmetic` reported "lists no fixture at all" against
+    a file that lists plenty, and Checks A and C would read the same empty
+    section. `parse_section_labels` already stripped fences for the
+    `###`-level equivalent (issue #631); this is the same rule applied one
+    level up, where it was missing.
+    """
+    stripped = _strip_fenced_code_blocks(text)
+    match = heading_re.search(stripped)
     if not match:
         return ""
-    rest = text[match.end() :]
+    rest = stripped[match.end() :]
     next_heading = _NEXT_HEADING_RE.search(rest)
     return rest[: next_heading.start()] if next_heading else rest
 
@@ -537,9 +580,15 @@ def _declaration_region(text: str) -> str:
     fenced `Split-arithmetic exclusions: none` otherwise satisfied the
     must-carry-a-line requirement while declaring nothing.
     """
-    match = _ASSIGNMENT_HEADING_RE.search(text)
-    header = text[: match.start()] if match else text
-    return _strip_fenced_code_blocks(header)
+    # Strip fences BEFORE locating the heading, not after (second review
+    # round). Locating it in raw text let a fenced `## Assignment`
+    # illustration truncate the region: a real declaration sitting below
+    # that fence fell outside it, `count_declared_partitions` dropped to 0,
+    # and a 9:9:9 declaration against a 2/1/1 listing passed clean -- the
+    # exact silent-skip fail-open the fence stripping exists to prevent.
+    stripped = _strip_fenced_code_blocks(text)
+    match = _ASSIGNMENT_HEADING_RE.search(stripped)
+    return stripped[: match.start()] if match else stripped
 
 
 def parse_declared_partition(text: str) -> tuple[int, int, int] | None:
@@ -625,7 +674,12 @@ def check_partition_arithmetic(path: Path, text: str) -> str | None:
     # superseded (adversarial review of this check). Rejected outright
     # rather than arbitrated by position: the same reasoning the
     # disagreeing-declaration branch above applies.
-    assignment_headings = len(_ASSIGNMENT_HEADING_RE.findall(text))
+    #
+    # Counted over fence-stripped text (second review round): counting raw
+    # lines failed a valid, fully reconciling file that merely illustrated
+    # the convention in a fenced block -- the mirror-image false positive of
+    # the fail-open `_declaration_region` had for the same root cause.
+    assignment_headings = len(_ASSIGNMENT_HEADING_RE.findall(_strip_fenced_code_blocks(text)))
     if assignment_headings > 1:
         return (
             f"{path}: carries {assignment_headings} '## Assignment' headings; exactly one is allowed, "
