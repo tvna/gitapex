@@ -878,10 +878,18 @@ def test_real_repository_checker_reports_are_all_declared() -> None:
     # here. A future regression (the declaration silently dropped from a
     # manifest) fails the real-tree gate test above; this test names which
     # records the rule is actually protecting.
+    # Guarded on manifest presence, not just discovery: discover_run_dirs()
+    # includes a directory by position alone, even one with no manifest at
+    # all (the one this repository actually committed that way). Reading
+    # unconditionally would turn a future manifest-less run directory into
+    # an uncaught FileNotFoundError here instead of leaving it to the
+    # dedicated manifest-present rule -- a CodeRabbit review round found
+    # this test and its sibling below were not guarded either.
     declaring = {
         f"{p.parent.parent.name}/{p.name}"
         for p in scanner.discover_run_dirs()
-        if isinstance(
+        if (p / scanner.MANIFEST_NAME).is_file()
+        and isinstance(
             (m := json.loads((p / scanner.MANIFEST_NAME).read_text(encoding="utf-8"))).get("checker_reports"), list
         )
         and m["checker_reports"]
@@ -896,7 +904,8 @@ def test_real_repository_nonstandard_score_files_are_all_declared() -> None:
     declaring = {
         f"{p.parent.parent.name}/{p.name}"
         for p in scanner.discover_run_dirs()
-        if isinstance(
+        if (p / scanner.MANIFEST_NAME).is_file()
+        and isinstance(
             (m := json.loads((p / scanner.MANIFEST_NAME).read_text(encoding="utf-8"))).get("nonstandard_score_files"),
             list,
         )
