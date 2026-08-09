@@ -343,6 +343,26 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/933"
       summary: "Paid for the new step against the 500-line body ceiling in-file rather than by moving content to references/: eight duplication/narration trims in SKILL.md (the filesystem-only-check restatement and the main-thread relay restatement are the two duplications; the rest are narrower narration cuts). Net body 499 -> 498 lines; the mandatory common-case read set is unchanged at three files, so dimension 5's tracked reading burden does not deepen."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/933"
+      summary: "Pre-merge dogfood, evaluating-skill-quality self-review, diff-scoped, under isolation the caller established live (claude -p from the snapshot cwd with an isolated HOME; both controls re-run at CLI 2.1.226, which the registry's existing entry already covers, so no new registry entry was written). WELL-FORMED-NOT-MATURE. Two gaps found, both fixed in this PR: dimension 4's undisclosed Contract-discipline sync, and dimension 8's missing audit-pairing entry (this entry and the next close it)."
+      outcome:
+        verdict: WELL-FORMED-NOT-MATURE
+        found: 2
+        fixed: 2
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/933"
+      summary: "Pre-merge dogfood, battle-testing-a-skill, same diff and isolation. FAIL on dimension 18: the worked example's own byte-exact demonstration claimed a quoted span crossed a four-line wrap when it crosses three -- an unverified ancillary claim beside a correctly verified quotation, in the paragraph added to demonstrate the new rule. Re-derived from the files and corrected. Its dimension-14 INDETERMINATE was a snapshot artifact: the isolated copy carried skills/ only, no evals/."
+      outcome:
+        verdict: FAIL
+        found: 1
+        fixed: 1
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/933"
+      summary: "The battle-test finding is the strongest available evidence for the rule this PR adds: the first real application of a byte-exact citation step still shipped a wrong claim about its own citation, caught only by an independent adversarial pass. Recorded here rather than narrated in the worked example, per the issue/489 precedent for keeping change-history out of worked-example prose. Post-fix re-audit of the corrected paragraph is disclosed in the PR body as not run."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/933"
+      summary: "Synced references/rubric.md's Contract discipline enumeration in the same change, as its own Keep-this-enumeration-in-sync bullet requires: the Postcondition now names byte-exact verification of every quoted span, and the Invariant names the fabricated-citation Stop boundary as binding at whichever step a quotation was authored. The bundled test_gitapex_contract_precondition_sync.py gate covers steps 1-4 only, so this sync was manual and is disclosed as such."
   skillDependencies:
     requires: []
     relatedTo:

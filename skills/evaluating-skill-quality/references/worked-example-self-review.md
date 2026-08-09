@@ -403,11 +403,14 @@ and freshness contract, out of scope for the change that closed axis 9.
 
 Byte-exact check on this subsection's own quotations, per `SKILL.md`'s
 Procedure step 5: each span above was substring-matched against the file it
-cites, with that file's line wraps normalized to single spaces. The
-`SKILL.md` span "for the current platform's verified mechanism, running its
-Verification procedure and recording a new entry if none exists yet" matches
-across its own four-line wrap; the step-4 span matches
-`adversarial-self-audit.md`'s Verification procedure across two.
+cites, with that file's line wraps normalized to single spaces. Both cross a
+wrap, which is why the normalization is part of the rule rather than an aside
+-- the `SKILL.md` span "for the current platform's verified mechanism,
+running its Verification procedure and recording a new entry if none exists
+yet" spans three physical lines, and the step-4 span two. Both counts were
+derived from the files, not stated alongside the quotation from recall: an
+ancillary claim *about* a verified match is still an unverified claim until
+it is matched too.
 
 ### 7. Bundled scripts
 
