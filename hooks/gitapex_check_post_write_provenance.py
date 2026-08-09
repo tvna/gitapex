@@ -313,17 +313,29 @@ def response_payload(tool_response: Any) -> dict[str, Any]:
     """Best-effort normalization of a PostToolUse `tool_response` into the
     object the tool actually returned.
 
-    Deliberately tolerant across three observed/documented shapes, because
-    the exact envelope is the MCP server's own contract rather than
-    something this repository controls: the object itself, an MCP
-    ``{"content": "<json>"}`` string, and an MCP
-    ``{"content": [{"type": "text", "text": "<json>"}, ...]}`` block list.
-    Anything else normalizes to ``{}`` and the caller falls through to
-    INDETERMINATE -- an unrecognized envelope must not read as "no number
-    found, therefore nothing to scan".
+    Four shapes are accepted. The first is the one the harness actually
+    delivers, captured from a live PostToolUse firing of
+    `mcp__github__update_pull_request` in this repository (issue #908);
+    the other three were hypothesised by this function's first version and
+    are kept because the envelope is the MCP server's own contract rather
+    than something this repository controls:
+
+    - a bare MCP text-block list at the top level --
+      ``[{"type": "text", "text": "<json>"}]`` -- **the observed one**;
+    - the returned object itself;
+    - an MCP ``{"content": "<json>"}`` string;
+    - an MCP ``{"content": [{"type": "text", "text": "<json>"}, ...]}``
+      block list.
+
+    The bare list was the gap #908's own fix first missed: `_coerce_mapping`
+    normalizes a list to ``{}``, so the response's `url` was unreachable no
+    matter how well the number was parsed out of it, and the create path
+    stayed INDETERMINATE. Anything else still normalizes to ``{}`` and the
+    caller falls through to INDETERMINATE -- an unrecognized envelope must
+    not read as "no number found, therefore nothing to scan".
     """
     payload = _coerce_mapping(tool_response)
-    content = payload.get("content")
+    content = tool_response if isinstance(tool_response, list) else payload.get("content")
 
     candidates: list[str] = []
     if isinstance(content, str):
@@ -344,6 +356,30 @@ def response_payload(tool_response: Any) -> dict[str, Any]:
     return payload
 
 
+def _positive_int(text: str) -> int | None:
+    """Return `text` as a positive int, or None when it is not one.
+
+    The one conversion guard both number sources share. `int()` raises
+    ValueError on a decimal string longer than `sys.int_max_str_digits`
+    (4300 by default since CPython 3.11), and this module's runtime floor
+    is 3.12, so a 5000-digit `issue_number` field or URL path segment
+    escaped every handler in `evaluate()` -- which catches
+    VerificationError around resolution -- and surfaced as a raw traceback,
+    contradicting this module's own documented "never a raw traceback"
+    contract. An oversized value is not a plausible artifact number
+    anyway, so it reads as "no number here" and the caller falls through
+    to INDETERMINATE. Found by an automated review of this change's own
+    first push.
+    """
+    if not text.isdigit():
+        return None
+    try:
+        number = int(text)
+    except ValueError:
+        return None
+    return number if number > 0 else None
+
+
 def _first_number(*sources: dict[str, Any]) -> int | None:
     """Return the first plausible issue/PR number found across `sources`.
 
@@ -358,8 +394,10 @@ def _first_number(*sources: dict[str, Any]) -> int | None:
                 continue
             if isinstance(value, int) and value > 0:
                 return value
-            if isinstance(value, str) and value.isdigit() and int(value) > 0:
-                return int(value)
+            if isinstance(value, str):
+                number = _positive_int(value)
+                if number is not None:
+                    return number
     return None
 
 
@@ -388,8 +426,8 @@ def _number_from_url(*sources: dict[str, Any]) -> int | None:
             match = _URL_NUMBER_RE.search(value)
             if match is None:
                 continue
-            number = int(match.group(1))
-            if number > 0:
+            number = _positive_int(match.group(1))
+            if number is not None:
                 return number
     return None
 

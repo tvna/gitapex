@@ -226,16 +226,55 @@ def test_a_non_object_tool_response_normalizes_to_empty(bad_response: Any) -> No
 
 # --- target resolution from the response URL (issue #908) -----------------
 #
-# The two constants below are the *observed* create-call responses recorded
-# in issue #908's fact 1, copied verbatim rather than constructed here --
-# that issue's own root cause (fact 7) is an extractor written against
-# hypothesised envelopes that were never checked against a real one, so a
-# regression suite built on invented fixtures would repeat it. Both were
-# read off the live tool result in the session that filed #905: note that
-# `id` is a string there, and that no `number` field exists at all.
+# Every fixture below is an *observed* payload, copied verbatim rather than
+# constructed here -- issue #908's own root cause (fact 7) is an extractor
+# written against hypothesised envelopes that were never checked against a
+# real one, so a regression suite built on invented fixtures would repeat
+# it. Two observation points, both live:
+#
+# - The two objects below are the create-call responses issue #908's fact 1
+#   records, read off the tool result in the session that filed #905. Note
+#   that `id` is a string there, and that no `number` field exists at all.
+# - _OBSERVED_POSTTOOLUSE_TOOL_RESPONSE is the whole `tool_response` value
+#   as the hook harness actually delivers it, captured from a live
+#   PostToolUse firing of mcp__github__update_pull_request on PR #909. It
+#   is a *bare* MCP text-block list, not an object and not the
+#   {"content": [...]} envelope this module's first version hypothesised --
+#   which is why #908's first fix still reported INDETERMINATE on the
+#   create path even with URL parsing in place: _coerce_mapping normalizes
+#   a list to {}, so the `url` was unreachable.
 
 _OBSERVED_CREATE_PR_RESPONSE = {"id": "4235739033", "url": "https://github.com/tvna/gitapex/pull/884"}
 _OBSERVED_CREATE_ISSUE_RESPONSE = {"id": "5100051513", "url": "https://github.com/tvna/gitapex/issues/905"}
+_OBSERVED_POSTTOOLUSE_TOOL_RESPONSE = [
+    {"type": "text", "text": '{"id":"4236847118","url":"https://github.com/tvna/gitapex/pull/909"}'}
+]
+
+
+def test_the_observed_posttooluse_envelope_is_a_bare_text_block_list() -> None:
+    """The captured payload's own shape, asserted so a future edit cannot
+    quietly redefine what "observed" means here."""
+    assert isinstance(_OBSERVED_POSTTOOLUSE_TOOL_RESPONSE, list)
+    assert checker.response_payload(_OBSERVED_POSTTOOLUSE_TOOL_RESPONSE) == {
+        "id": "4236847118",
+        "url": "https://github.com/tvna/gitapex/pull/909",
+    }
+
+
+def test_the_observed_posttooluse_envelope_resolves_on_the_create_path() -> None:
+    """The create path carries no number in tool_input, so this payload is
+    the whole resolution chain: bare list -> text block -> JSON -> url ->
+    number. It raised VerificationError before both halves of #908's fix."""
+    resolved = checker.resolve_target(
+        payload(tool_response=_OBSERVED_POSTTOOLUSE_TOOL_RESPONSE),
+    )
+    assert resolved == ("tvna", "gitapex", 909)
+
+
+def test_a_bare_text_block_list_carrying_no_json_still_normalizes_to_empty() -> None:
+    assert checker.response_payload([{"type": "text", "text": "not json"}]) == {}
+    assert checker.response_payload([]) == {}
+    assert checker.response_payload(["plain string", 7]) == {}
 
 
 def test_number_comes_from_the_response_url_when_create_pull_request_carries_no_number_field() -> None:
@@ -336,6 +375,61 @@ def test_an_unparseable_url_still_reports_indeterminate(url: str) -> None:
 def test_a_non_string_url_does_not_raise(bad_url: Any) -> None:
     with pytest.raises(checker.VerificationError):
         checker.resolve_target(payload(tool_response={"url": bad_url}))
+
+
+# An oversized decimal string: int() raises ValueError past
+# sys.int_max_str_digits (4300 by default since CPython 3.11), and this
+# repository's requires-python floor is >=3.12, so the limit always
+# applies here.
+_OVERSIZED_DIGITS = "7" * 5000
+
+
+def test_an_oversized_url_number_is_indeterminate_not_a_traceback() -> None:
+    """Reproduced before the guard: the conversion raised ValueError, which
+    evaluate() does not catch (it catches VerificationError around
+    resolution), so it escaped as a raw traceback -- contradicting this
+    module's own "never a raw traceback" contract."""
+    with pytest.raises(checker.VerificationError):
+        checker.resolve_target(
+            payload(tool_response={"url": f"https://github.com/tvna/gitapex/issues/{_OVERSIZED_DIGITS}"})
+        )
+
+
+def test_an_oversized_number_field_is_indeterminate_not_a_traceback() -> None:
+    """The same conversion, on the pre-existing number-field path: both
+    sources now share one guard rather than each converting on their own."""
+    with pytest.raises(checker.VerificationError):
+        checker.resolve_target(
+            payload(tool_input={"owner": "tvna", "repo": "gitapex", "issue_number": _OVERSIZED_DIGITS})
+        )
+
+
+def test_an_oversized_first_url_field_falls_through_to_the_next() -> None:
+    """An unusable value must not abort the search: `html_url` still
+    resolves after `url` yields nothing."""
+    resolved = checker.resolve_target(
+        payload(
+            tool_response={
+                "url": f"https://github.com/tvna/gitapex/issues/{_OVERSIZED_DIGITS}",
+                "html_url": "https://github.com/tvna/gitapex/issues/905",
+            }
+        )
+    )
+    assert resolved == ("tvna", "gitapex", 905)
+
+
+def test_the_cli_reports_an_oversized_number_without_a_traceback(tmp_path: Path, capsys: Any) -> None:
+    """End to end, through main(): the documented INDETERMINATE line, exit
+    1, and no 'Traceback' anywhere in the output."""
+    payload_file = tmp_path / "payload.json"
+    payload_file.write_text(
+        json.dumps(payload(tool_response={"url": f"https://github.com/tvna/gitapex/issues/{_OVERSIZED_DIGITS}"})),
+        encoding="utf-8",
+    )
+    assert checker.main(["--payload", str(payload_file)]) == 1
+    captured = capsys.readouterr()
+    assert "INDETERMINATE" in captured.err
+    assert "Traceback" not in captured.err + captured.out
 
 
 # --- evaluate() verdicts --------------------------------------------------
