@@ -12,11 +12,15 @@ metrics:
   - name: scanning_attack_surfaces_quality
     weight: 1.0
     threshold: 0.8
-    description: 'Issues a per-item exposure-minimal/exposure-excess verdict for
-      each dependency relationship and a per-item privilege-minimal/privilege-excess
-      verdict for each credential grant, citing the specific over-exposed field or
-      over-broad scope; applies the Applicability gate ("not applicable") rather
-      than silently passing an artifact with zero dependency relationships and
-      zero credentials; never issues an aggregate "attack surface: OK" verdict.'
+    description: 'In Mode A, issues a per-item exposure-minimal/exposure-excess
+      verdict for each dependency relationship and a per-item
+      privilege-minimal/privilege-excess verdict for each credential grant,
+      citing the specific over-exposed field or over-broad scope, and applies
+      the Applicability gate ("not applicable") rather than silently passing an
+      artifact with zero dependency relationships and zero credentials. In Mode
+      B, detects the platform, loads exactly one platform checklist, and reports
+      every checklist item''s real coverage level (Covered/Partial/Gap) with Gap
+      items cross-linked to #82, never upgrading a Gap to Covered. In both modes,
+      never issues an aggregate "attack surface: OK" or "audit passed" verdict.'
 tasks:
   - "tasks/*.yaml"

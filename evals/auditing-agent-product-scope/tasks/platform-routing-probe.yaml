@@ -1,5 +1,5 @@
 id: auditing-agent-product-scope-platform-routing-probe
-name: Platform Candidate Must Route to auditing-git-hosting-surface, Not Get Audited Here
+name: Platform Candidate Must Route to scanning-attack-surfaces, Not Get Audited Here
 description: A git-hosting platform candidate (Axis E) is presented for research; the skill must hand off to the dedicated platform-auditing skill rather than researching or writing a platform finding as part of its own Procedure.
 tags:
   - quality
@@ -14,7 +14,7 @@ inputs:
 expected:
   output_contains:
     - "platform-auditing skill"
-    - "auditing-git-hosting-surface"
+    - "scanning-attack-surfaces"
   output_not_contains:
     - "I audited Gitea's branch protection settings directly"
     - "no need to hand off"
