@@ -21,17 +21,30 @@ position the one that silently stopped matching. This module is stdlib-only
 definition, following the same ``_gitapex_*`` private-helper convention as
 ``_gitapex_schema_validation.py`` and ``_gitapex_github_http.py``.
 
+That convention put this file outside
+``gitapex_detect_changed_gate_scripts.py``'s ``gitapex_(gate|scan)_*``
+naming rule, so weakening these predicates required no
+``deterministic-gate-quality`` disclosure (issue #904, finding 4). It is
+now listed in ``.gitapex/ssot.json`` as one of ``ssot-schema-drift``'s
+``script`` paths, which brings it into that selection through the registry
+rule instead -- keeping the private-helper name the paragraph above
+justifies, while making an edit here as visible as an edit to either
+caller.
+
 **Why the runner must check this itself, rather than relying on the
 scanner's gate.** ``ssot-schema-drift`` -- the gate that runs this scanner
 -- is one of the wired gates, so it executes in gate-id order like any
-other: 15th of 16 today, with 14 gates running before it. A hostile argv on
-any of those 14 has already executed by the time the guard evaluates it.
-Reconstructed rather than argued: putting ``["sh", "-c", "echo owned >
-FILE; echo clean"]`` on ``apm-manifest-drift`` (which sorts first) wrote the
-file *and* the run reported ``exit 0``, because the scanner reads its own
-module-level ``SSOT_PATH`` and so never even saw the registry the runner was
-executing. Checking here, before the first subprocess starts, is what makes
-the guard order-independent.
+other, and it is not the first id in that order. Every gate sorting before
+it has therefore already executed by the time the guard evaluates the
+registry. The property, not the position, is what matters here: issue #904
+found this paragraph asserting a stale ordinal, so it now states the
+invariant the argument actually rests on. Reconstructed rather than argued:
+putting ``["sh", "-c", "echo owned > FILE; echo clean"]`` on
+``apm-manifest-drift`` (which sorts first) wrote the file *and* the run
+reported ``exit 0``, because the scanner reads its own module-level
+``SSOT_PATH`` and so never even saw the registry the runner was executing.
+Checking here, before the first subprocess starts, is what makes the guard
+order-independent.
 """
 
 from __future__ import annotations
@@ -45,17 +58,131 @@ import pathlib
 SHELL_COMMANDS = frozenset({"sh", "bash", "dash", "zsh", "ksh", "csh", "tcsh", "fish", "env", "eval", "exec", "xargs"})
 
 # Options that hand a *string* to an interpreter to parse and execute rather
-# than naming a file to run -- but only when they follow an interpreter.
-# `git -c core.quotePath=false` is a real `local_stdin` value in this
-# registry today and uses the same spelling for an unrelated config
-# override, so an unanchored scan for these flags false-flags it.
-INLINE_CODE_FLAGS = frozenset({"-c", "--command", "-e", "--eval"})
+# than naming a file to run, keyed by the interpreter that accepts them.
+# Matched on basename anywhere in the argv, not just argv0, because every
+# Python gate is invoked indirectly (`uv run --frozen python3 <script>`) and
+# an argv0-only check would miss `uv run --frozen python3 -c '<payload>'`.
+#
+# **Why per interpreter rather than one flat set.** The matching below looks
+# for a short flag's letter *inside* a combined option cluster, and a flat
+# set makes that catastrophically over-broad: `python3
+# -Wignore::DeprecationWarning` contains both the `e` that `perl -e` needs
+# and the `r` that `php -r` needs, so a flat set would refuse it -- and
+# `_refuse_unsafe_argv` refuses the whole run, aborting every push. That is
+# issue #904's second finding, and keeping each interpreter's letters to its
+# own entry is what closes it.
+#
+# **Why these spellings.** Each concatenated form below was run before being
+# listed, not recalled: `python3 -cprint(1)`, `python3 -Bcprint(1)`,
+# `python3 -X utf8 -cprint(1)`, `perl -eprint"x"`, `perl -le 'print "x"'`,
+# `ruby -eputs(1)` and `php -recho "x";` all execute their payload, so the
+# exact-token match this replaces (issue #904's first finding) caught none
+# of them. `node`/`bun` reject the concatenated form and need the flag as
+# its own token, which the same rule covers anyway. `deno` and `Rscript`
+# were not reproducible on the machine this was written on; their entries
+# come from those tools' own documented `--eval`/`-e` and are stated as such
+# rather than as observed. Over-listing is the safe direction: a spelling an
+# interpreter does not actually accept can never be a legitimate flag
+# either, while a missing one is a bypass.
+INLINE_CODE_FLAGS: dict[str, frozenset[str]] = {
+    "python": frozenset({"-c"}),
+    "perl": frozenset({"-e", "-E"}),
+    "ruby": frozenset({"-e"}),
+    "node": frozenset({"-e", "--eval", "-p", "--print"}),
+    "deno": frozenset({"-e", "--eval"}),
+    "bun": frozenset({"-e", "--eval"}),
+    "php": frozenset({"-r", "-R"}),
+    "Rscript": frozenset({"-e"}),
+}
 
-# Interpreters that will execute an INLINE_CODE_FLAGS string. Matched on
-# basename anywhere in the argv, not just argv0, because every Python gate
-# is invoked indirectly (`uv run --frozen python3 <script>`) and an
-# argv0-only check would miss `uv run --frozen python3 -c '<payload>'`.
-INTERPRETERS = frozenset({"python", "python3", "perl", "ruby", "node", "deno", "bun", "php", "Rscript"})
+
+def _inline_code_flags(basename: str) -> frozenset[str] | None:
+    """The inline-code flags ``basename`` accepts, or None if it is not an
+    interpreter this module knows.
+
+    A trailing version suffix is stripped before the lookup, so
+    ``python3``, ``python3.13`` and ``php8.2`` resolve to the same entry as
+    their unversioned names. Found while adversarially re-reading this
+    module for issue #904 rather than reported by the issue: the previous
+    membership test was a literal set that listed ``python``/``python3`` and
+    nothing else, so ``["uv", "run", "--frozen", "python3.12", "-c",
+    "<payload>"]`` -- a real binary name on any machine with more than one
+    CPython -- was unguarded in *both* the old spelled-out form and the new
+    concatenated one.
+    """
+    return INLINE_CODE_FLAGS.get(basename.rstrip("0123456789."))
+
+
+def _matches_inline_flag(element: str, flags: frozenset[str]) -> bool:
+    """Whether ``element`` is one of ``flags``, in any spelling the shell
+    hands through as a single argv element.
+
+    Named ``element`` rather than ``token`` only because ruff's ``S105``
+    reads ``token == "-"`` as a hardcoded credential; the rest of this
+    module calls the same thing a token.
+
+    Three spellings, not one exact-token comparison:
+
+    - ``--eval`` and ``--eval=<payload>`` for the long forms.
+    - ``-c`` on its own for the short forms.
+    - ``-cprint(1)`` and ``-Bcprint(1)`` -- the payload concatenated onto the
+      flag, optionally behind other short options in the same cluster. This
+      is the shape issue #904 was filed for.
+
+    The cluster scan stops at the first non-letter character so a payload's
+    own text cannot contribute a match: only the leading run of ASCII
+    letters is option syntax, everything after it is the payload. That still
+    leaves one accepted false positive, named rather than hidden -- a real
+    option whose *letters* include an inline-code flag of the same
+    interpreter, such as CPython's ``-Xpycache_prefix=...`` against ``-c``.
+    No wired argv uses one today, and the failure is loud (a refused push
+    naming the argv) rather than silent.
+    """
+    if element.startswith("--"):
+        return any(element == flag or element.startswith(f"{flag}=") for flag in flags if flag.startswith("--"))
+    if not element.startswith("-") or element == "-":
+        return False
+    letters = ""
+    for character in element[1:]:
+        if not (character.isascii() and character.isalpha()):
+            break
+        letters += character
+    return any(flag[1] in letters for flag in flags if len(flag) == 2 and not flag.startswith("--"))
+
+
+def _interpreter_option_span(argv: tuple[str, ...] | list[str], interpreter_index: int) -> range:
+    """Indices of the tokens ``argv[interpreter_index]`` consumes as its own
+    options: everything up to the script it is being asked to run.
+
+    The end of the span is the interpreter's script argument -- the first
+    following token that is neither an option nor a bare option *value*.
+    "Bare option value" is why this is not simply "the first token not
+    starting with ``-``": ``python3 -X utf8 -cprint(1)`` really does execute
+    its payload, and stopping at ``utf8`` would walk straight past the flag
+    that does it. A token is taken as the script argument once it looks like
+    a path (it carries a ``/`` or a ``.``), which every gate script in this
+    registry does.
+
+    Anchoring the span here is what keeps the mirror-image false positive
+    out: in ``uv run --frozen python3 script.py -c conf.json`` the ``-c``
+    belongs to ``script.py``, sits past the span, and is not this
+    interpreter's flag at all. ``git -c core.quotePath=false`` -- a real
+    ``local_stdin`` value in this registry -- never enters a span, since
+    ``git`` is not an interpreter.
+
+    The residual, stated rather than left to be discovered: an argv that
+    names no path-like script argument at all keeps the span open to the
+    end, so ``python3 -m pytest -c pytest.ini`` would be refused even
+    though its ``-c`` is pytest's. No wired argv uses ``-m`` today -- every
+    one of them names a ``.github/scripts/*.py`` path -- and the failure is
+    a loud refusal naming the argv, not a silent pass.
+    """
+    start = interpreter_index + 1
+    for index in range(start, len(argv)):
+        token = argv[index]
+        if not token.startswith("-") and ("/" in token or "." in token):
+            return range(start, index)
+    return range(start, len(argv))
 
 
 def find_argv_safety_violations(argv: tuple[str, ...] | list[str]) -> list[str]:
@@ -82,12 +209,20 @@ def find_argv_safety_violations(argv: tuple[str, ...] | list[str]) -> list[str]:
     if shells:
         violations.append(f"invokes a shell/wrapper: {', '.join(repr(shell) for shell in shells)}")
 
-    # Anchored to an interpreter's own position: only a flag that comes
-    # *after* one is that interpreter's inline-code flag.
-    first_interpreter = next((index for index, base in enumerate(basenames) if base in INTERPRETERS), len(argv))
-    inline = sorted({flag for flag in argv[first_interpreter + 1 :] if flag in INLINE_CODE_FLAGS})
-    if inline:
-        violations.append(
-            f"passes inline code to {argv[first_interpreter]!r} via {', '.join(repr(flag) for flag in inline)}"
+    # Every interpreter occurrence, not just the first: an argv naming one
+    # interpreter with a real script and a second one with a payload would
+    # otherwise report clean on the strength of the first.
+    for index, base in enumerate(basenames):
+        flags = _inline_code_flags(base)
+        if flags is None:
+            continue
+        inline = sorted(
+            {
+                argv[offset]
+                for offset in _interpreter_option_span(argv, index)
+                if _matches_inline_flag(argv[offset], flags)
+            }
         )
+        if inline:
+            violations.append(f"passes inline code to {argv[index]!r} via {', '.join(repr(flag) for flag in inline)}")
     return violations

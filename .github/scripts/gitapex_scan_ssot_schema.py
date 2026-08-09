@@ -355,8 +355,8 @@ def find_local_shell_argv(registry: SsotRegistry | None) -> list[str]:
     **This is the review-time half of a two-layer guard, not the whole
     guard.** A review of PR #888 observed that the gate running this scanner
     (``ssot-schema-drift``) is itself one of the wired gates, so it executes
-    in gate-id order -- 15th of 16, with 14 gates running first -- and a
-    hostile argv on any of those has already run by the time this function
+    in gate-id order and is not the first id in that order, and a
+    hostile argv on any gate sorting before it has already run by the time this function
     is reached. ``gitapex_gate_local_preflight.py`` therefore applies the
     same predicates itself, before starting any subprocess, via the shared
     ``_gitapex_argv_safety`` module. This one stays because it reports the

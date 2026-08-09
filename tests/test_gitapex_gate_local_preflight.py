@@ -5,7 +5,7 @@ Two layers, kept apart on purpose:
 - **Fixture-registry tests** build their own tiny ``ssot.json`` pointing at
   purpose-built pass/fail scripts, so the runner's own aggregation,
   discovery, error handling and exit-code logic are exercised in under a
-  second with no dependence on this repository's real 16 wired gates. Issue
+  second with no dependence on this repository's real 17 wired gates. Issue
   #876's first acceptance criterion asks for an integration test running
   the consolidated command "with one deliberately-broken instance of each
   wired check, asserting all are reported in one run" --
@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+import re
 import subprocess
 import sys
 
@@ -239,9 +240,9 @@ def test_an_unsafe_local_stdin_refuses_the_whole_run(tmp_path: pathlib.Path) -> 
 @pytest.mark.slow
 def test_an_unsafe_argv_runs_nothing_at_all(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
     """The defect this closes, reconstructed: `ssot-schema-drift` carries the
-    same predicates but is itself a wired gate running 15th of 16, so a
-    payload on an earlier-sorting gate executed *before* the guard evaluated
-    it -- and the run still reported exit 0, because that scanner reads its
+    same predicates but is itself a wired gate, and not the first one in
+    gate-id order, so a payload on an earlier-sorting gate executed *before*
+    the guard evaluated it -- and the run still reported exit 0, because that scanner reads its
     own module-level SSOT_PATH rather than the registry the runner was given.
     Here the earlier-sorting gate writes a marker file; the guard must stop
     the run before it ever exists."""
@@ -290,9 +291,51 @@ def test_an_ordinary_pinned_invocation_is_not_refused(tmp_path: pathlib.Path) ->
         ((), 0),
         (("uv", "run", "--frozen", "python3", ".github/scripts/x.py"), 0),
         (("git", "-c", "core.quotePath=false", "diff"), 0),
+        # Issue #904 finding 2, the mirror-image false positive: a `-c` that
+        # belongs to the *gate script*, not to the interpreter, comes after
+        # the interpreter's script argument and must still run. Refusing it
+        # would abort every push, since the runner refuses the whole run.
+        (("uv", "run", "--frozen", "python3", "script.py", "-c", "conf.json"), 0),
+        # Real CPython options whose own letters overlap another
+        # interpreter's inline-code flag. Matching a short flag inside a
+        # combined cluster is what catches `-Bcprint(1)` below, so these
+        # pin the other side of that rule.
+        (("python3", "-Wignore::DeprecationWarning", "x.py"), 0),
+        (("python3", "-Xfrozen_modules=off", "x.py"), 0),
         (("sh", "-c", "x"), 1),
         (("python3", "-c", "x"), 1),
-        (("sh", "-c", "python3", "-e", "x"), 2),
+        # Issue #904 finding 1, the three spellings an exact-token match
+        # misses. Each was run before being asserted: CPython executes the
+        # payload in all three.
+        (("python3", "-cprint(1)"), 1),
+        (("python3", "-Bcprint(1)"), 1),
+        (("python3", "-X", "utf8", "-cprint(1)"), 1),
+        # Same shape on the other interpreters, also run first: `perl`,
+        # `ruby` and `php` all accept the concatenated form.
+        (("perl", "-eprint('x')"), 1),
+        (("perl", "-le", "print 'x'"), 1),
+        (("ruby", "-eputs(1)"), 1),
+        (("php", "-recho 1;"), 1),
+        # `node` rejects the concatenated form and needs the flag as its own
+        # token; `-p`/`--eval` were absent from the flag set entirely.
+        (("node", "-p", "1"), 1),
+        (("node", "--eval=1"), 1),
+        # CPython has no `-e`, and adding one to its flag set would
+        # false-flag every `-Wignore::...` above. The shell violation still
+        # refuses this argv on its own.
+        (("sh", "-c", "python3", "-e", "x"), 1),
+        (("sh", "-c", "python3", "-cx"), 2),
+        # A versioned interpreter binary is the same interpreter. Found by
+        # re-reading the module adversarially for #904, not by the issue:
+        # the old membership set listed `python`/`python3` literally, so
+        # this was unguarded in the spelled-out form too.
+        (("uv", "run", "--frozen", "python3.12", "-c", "x"), 1),
+        (("uv", "run", "--frozen", "python3.12", "-cprint(1)"), 1),
+        (("php8.2", "-recho 1;"), 1),
+        # ... and the stripping must not invent interpreters that are not
+        # there: `pytest3` is not `python`, and a bare version-suffix strip
+        # of an unrelated basename must still miss.
+        (("uv", "run", "--frozen", "pytest3", "-c", "x"), 0),
     ],
 )
 def test_find_argv_safety_violations_directly(argv: tuple[str, ...], expected: int) -> None:
@@ -300,6 +343,58 @@ def test_find_argv_safety_violations_directly(argv: tuple[str, ...], expected: i
     that neither caller can reach (both reject an empty argv earlier as a
     shape violation) but which must still not raise."""
     assert len(_gitapex_argv_safety.find_argv_safety_violations(argv)) == expected
+
+
+def test_a_concatenated_inline_code_flag_is_refused_by_every_layer(tmp_path: pathlib.Path) -> None:
+    """Issue #904 finding 1, reproduced end to end rather than only at the
+    predicate. The registry entry below passed all three layers on merged
+    `main`: the guard returned no violation, `ssot-schema-drift` reported no
+    drift, and the runner accepted it -- because the gate's own real script
+    path is still present, so the existence and identity-drift checks see
+    nothing wrong. The payload then ran on every `git push`."""
+    argv = [
+        "uv",
+        "run",
+        "--frozen",
+        "python3",
+        "-cprint('OWNED')",
+        ".github/scripts/gitapex_gate_hidden_characters.py",
+    ]
+    assert _gitapex_argv_safety.find_argv_safety_violations(argv)
+
+    # Against the real registry with that one field swapped, exactly as the
+    # issue reproduced it -- a hand-built instance would not prove the
+    # existence and identity-drift checks still see nothing wrong.
+    instance = json.loads((REPO_ROOT / ".gitapex" / "ssot.json").read_text(encoding="utf-8"))
+    for gate in instance["gates"]:
+        if gate["id"] == "hidden-characters":
+            gate["local_invocation"] = argv
+    registry = gitapex_scan_ssot_schema._parse_registry(instance)
+    assert registry is not None
+    assert gitapex_scan_ssot_schema.find_local_invocation_drift(registry) == []
+    assert gitapex_scan_ssot_schema.find_local_invocation_identity_drift(registry) == []
+    assert gitapex_scan_ssot_schema.find_local_shell_argv(registry)
+
+    ssot = _write_ssot(tmp_path, [_gate("hidden-characters", planes=["local"], local_invocation=argv)])
+    with pytest.raises(gitapex_gate_local_preflight.PreflightRegistryError, match="refusing to run"):
+        gitapex_gate_local_preflight.load_local_checks(ssot)
+
+
+def test_a_gate_scripts_own_short_option_still_runs(tmp_path: pathlib.Path) -> None:
+    """Issue #904 finding 2 at the runner: the check is anchored to the
+    interpreter's own option span, so a `-c` the gate script itself takes
+    does not refuse all wired gates and every push with them."""
+    ssot = _write_ssot(
+        tmp_path,
+        [
+            _gate(
+                "takes-a-short-option",
+                planes=["local"],
+                local_invocation=["uv", "run", "--frozen", "python3", "script.py", "-c", "conf.json"],
+            )
+        ],
+    )
+    assert [check.gate_id for check in gitapex_gate_local_preflight.load_local_checks(ssot)] == ["takes-a-short-option"]
 
 
 def test_the_live_registry_passes_its_own_guard() -> None:
@@ -706,7 +801,7 @@ def test_only_deliberately_named_hooks_reach_the_push_path() -> None:
 
 def test_every_unwired_gate_records_why() -> None:
     """The drift-test branch of issue #876's third criterion: a gate with no
-    working-tree form must say so in prose, so the 21 exclusions stay
+    working-tree form must say so in prose, so the 22 exclusions stay
     readable as decisions rather than as coverage silently lost. The schema
     enforces the same invariant; this asserts it against the live registry
     so a schema regression cannot pass unnoticed."""
@@ -717,3 +812,62 @@ def test_every_unwired_gate_records_why() -> None:
         if "local" not in gate["planes"] and not gate.get("local_exclusion", "").strip()
     ]
     assert undocumented == [], f"gates with neither a local invocation nor a recorded exclusion: {undocumented}"
+
+
+# Every file that states a wired- or excluded-gate count in prose. Issue
+# #904 finding 3: all six drifted to 16/21 while the registry moved to
+# 17/22, and one of those figures was load-bearing rather than cosmetic.
+# The scope is named here rather than repository-wide on purpose -- the
+# `docs/` plans, `evals/` records and merged retrospectives are dated
+# snapshots that are supposed to keep saying what was true when written.
+# The residual is therefore real and disclosed: a count in a file outside
+# this tuple is not covered.
+_COUNT_BEARING_PATHS = (
+    "CONTRIBUTING.md",
+    ".pre-commit-config.yaml",
+    ".github/scripts/_gitapex_argv_safety.py",
+    ".github/scripts/gitapex_gate_local_preflight.py",
+    ".github/scripts/gitapex_scan_ssot_schema.py",
+    "tests/test_gitapex_gate_local_preflight.py",
+)
+
+# Digits immediately qualifying "wired" / "excluded" / "exclusions".
+#
+# Two deliberate exclusions. Spelled-out numerals ("sixteen broken gates")
+# are not matched -- a regex over English number words is a second thing to
+# keep correct, so those phrasings were removed from these files instead.
+# And `N wired gate(s)` is skipped by the lookahead: that is the runner's
+# own summary line, a count it computes at runtime, asserted here against a
+# two-gate fixture registry. Pinning it to the live registry would be
+# wrong, not merely noisy.
+_COUNT_CLAIM_RE = re.compile(r"(\d+)\s+(wired|excluded|exclusions)\b(?!\s+gate\(s\))")
+
+
+def test_no_prose_count_contradicts_the_registry() -> None:
+    """Issue #904's third acceptance criterion. Each count is checked
+    against the live registry rather than against a constant restated here,
+    so wiring gate 18 in fails on the prose that still says 17.
+
+    Fail-closed on an empty match set, following
+    `gitapex_gate_evals_scripts_coverage.py`'s own rule: finding no count at
+    all means the phrasing moved and this test silently stopped checking
+    anything, which is indistinguishable from passing."""
+    registry = json.loads((REPO_ROOT / ".gitapex" / "ssot.json").read_text(encoding="utf-8"))
+    planes = [gate["planes"] for gate in registry["gates"]]
+    expected = {
+        "wired": sum(1 for plane_list in planes if "local" in plane_list),
+        "excluded": sum(1 for plane_list in planes if "local" not in plane_list),
+    }
+    expected["exclusions"] = expected["excluded"]
+
+    claims = []
+    wrong = []
+    for relative_path in _COUNT_BEARING_PATHS:
+        text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+        for stated, noun in _COUNT_CLAIM_RE.findall(text):
+            claims.append((relative_path, stated, noun))
+            if int(stated) != expected[noun]:
+                wrong.append(f"{relative_path}: says {stated} {noun}, registry has {expected[noun]}")
+
+    assert claims, f"no wired/excluded count found in any of {_COUNT_BEARING_PATHS}; the phrasing moved"
+    assert wrong == [], "prose counts contradicting .gitapex/ssot.json: " + "; ".join(wrong)
