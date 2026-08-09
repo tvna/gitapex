@@ -3081,6 +3081,72 @@ def test_references_grammar_valid_four_field_entry_passes(tmp_path):
     assert css.main([str(d)]) == 0
 
 
+def test_references_outcome_block_ended_by_a_dedent_is_finalized(tmp_path):
+    # An outcome sub-block whose next line dedents out of it -- here to
+    # spec's own skillDependencies key -- must be finalized on that dedent
+    # and the dedented line re-processed normally, not swallowed as more
+    # outcome content. Synthetic on purpose: this path was previously
+    # reached only because a real sidecar in this repository happened to
+    # end its last references item with an outcome block, so appending one
+    # ordinary entry to that file silently took the coverage away. A
+    # branch this file owns must not depend on what some other file's
+    # last line happens to be.
+    d = _write_skill(tmp_path)
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  references:\n"
+        "    - kind: audit\n"
+        "      anchor: method:battle-testing-a-skill\n"
+        "      summary: ran adversarial pass\n"
+        "      outcome:\n"
+        "        verdict: PASS\n"
+        "  skillDependencies:\n"
+        "    requires: []\n",
+        encoding="utf-8",
+    )
+    by = _by_name(css.check_shape(d))
+    assert by["references-well-formed"].passed is True
+    assert by["references-grammar"].passed is True
+    assert by["skill-dependencies-well-formed"].passed is True
+    assert css.main([str(d)]) == 0
+
+
+def test_references_outcome_block_with_an_unmatched_deep_line_invalidates_the_item(tmp_path):
+    # Fail-closed, same reasoning as every other gated block's own
+    # equivalent branch: a line at outcome's own indent that is not a
+    # "key: value" pair invalidates the item rather than being silently
+    # tolerated. The item is then dropped, leaving no usable entry --
+    # which references-well-formed reports, since a declared
+    # spec.references must be a non-empty list.
+    d = _write_skill(tmp_path)
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  references:\n"
+        "    - kind: audit\n"
+        "      anchor: method:battle-testing-a-skill\n"
+        "      summary: ran adversarial pass\n"
+        "      outcome:\n"
+        "        verdict: PASS\n"
+        "        - stray list item, not a key\n",
+        encoding="utf-8",
+    )
+    by = _by_name(css.check_shape(d))
+    assert by["references-well-formed"].passed is False
+    assert css.main([str(d)]) == 1
+
+
 def test_references_grammar_unknown_kind_fails(tmp_path):
     d = _write_references(
         tmp_path, {"kind": "changelog", "anchor": "https://github.com/tvna/gitapex/issues/1", "summary": "did a thing"}
