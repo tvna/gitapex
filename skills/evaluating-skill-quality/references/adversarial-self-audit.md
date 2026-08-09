@@ -102,17 +102,25 @@ here, so there is a single definition rather than three paraphrases of one.
 
 **Canonical forms.** A *block* is a run of source lines broken by a blank
 line, a fenced-code delimiter, a heading, or the start of a new list item or
-table row. Reduce both the source block and the candidate quotation by
-collapsing every run of whitespace -- including the newline and continuation
-indent of a soft wrap -- to one space, and trimming the ends. The quotation
-matches only when its reduced form is a substring of one reduced block's.
+table row.
+
+- **Prose blocks** reduce: collapse every run of whitespace -- including the
+  newline and continuation indent of a soft wrap -- to one space, and trim the
+  ends, on both the source block and the candidate quotation. The quotation
+  matches only when its reduced form is a substring of the reduced block's.
+- **Fenced-code blocks, and any block whose content is whitespace-significant**
+  (YAML, JSON, a diff, indented shell, a table), do **not** reduce. Match them
+  byte for byte, indentation included. Reducing them would accept a quotation
+  whose indentation differs from the source, which in that content is a
+  different value, not a different wrap -- the reduction exists to forgive a
+  soft wrap, and a soft wrap is a property of prose.
 
 List items break a block deliberately. A tight bullet list carries no blank
 lines, so without that rule a whole section of bullets is one block and a
 quotation could splice the tail of one bullet onto the head of the next. In
-practice the `- ` marker survives the reduction and blocks such a splice
-anyway, but resting on that is resting on an accident of the marker rather
-than on the rule.
+practice a list marker and its trailing space survive the reduction and block
+such a splice anyway, but resting on that is resting on an accident of the
+marker rather than on the rule.
 
 **One block, never two.** The reduction is applied per block, so a span can
 cross a soft wrap and still match, and cannot cross a blank line, a fence,
@@ -180,23 +188,32 @@ a mechanism the reading run has not itself controlled for.
 Portable across platforms -- run this to test any candidate dispatch
 mechanism, not only the ones already recorded below.
 
-1. **Positive control.** From a working directory known to sit under the
-   calling repository's own `CLAUDE.md`/`AGENTS.md` ancestry, run the
-   candidate dispatch mechanism with a prompt asking it to report, verbatim,
-   whether it currently has project-level instructions loaded, and to quote
-   one distinctive sentence if so. Confirm it actually quotes real content --
-   this proves the test itself can detect the file when present, rather than
-   reflexively reporting "none" regardless of truth.
-   - **The quote is checked, never published.** Compare it against the file
-     where the run happens and record only the outcome ("positive control
-     passed"). A project-instruction file is not known to be
-     public -- it can carry an internal hostname, a credential, a private
-     process detail -- so its content must not reach a registry entry, a
-     review report, a PR or issue body, a log, or any other sink. When even
-     reading it back into a report is unwanted, pin a fixed non-sensitive
-     sentinel sentence in the file first and confirm that instead; the
-     control's job is to prove detection works, which a sentinel does
-     equally well.
+1. **Positive control.** This step proves the *mechanism* can see a
+   project-instruction file at all, so that a "none loaded" in step 2 means
+   something. It does not need the calling repository's real file, and by
+   default must not use it.
+   - **Default: a synthetic sentinel.** Create a throwaway directory outside
+     any repository, write a `CLAUDE.md` (or `AGENTS.md`) into it whose only
+     content is a fixed, distinctive, non-sensitive sentence, and run the
+     candidate dispatch mechanism from there, asking it to report whether it
+     has project-level instructions loaded and to return that sentence if so.
+     Compare the reply against the sentinel you wrote, record only the
+     outcome, and delete the directory. Nothing that leaves the machine is
+     anything but text you authored for the test.
+   - **Why not the real file.** Asking a dispatch to quote the calling
+     repository's own `CLAUDE.md` sends that content to whatever endpoint
+     backs the mechanism, and into its transcript, before any rule about what
+     to publish can apply. A project-instruction file is not known to be
+     public: it can carry an internal hostname, a credential, a private
+     process detail. Editing a sentinel into the live file instead is not the
+     answer either -- that mutates a governed file for a test.
+   - **If the real file is unavoidable** -- for instance when the mechanism's
+     discovery is suspected to key on this specific repository rather than on
+     cwd ancestry generally -- treat the quote as sensitive throughout:
+     compare it where the run happens, record only the outcome ("positive
+     control passed"), and keep it out of a registry entry, a review report, a
+     PR or issue body, a log, or any other sink. State in the entry that this
+     variant was used and why.
 2. **Negative control.** From (or targeting) a location with no
    `CLAUDE.md`/`AGENTS.md` anywhere in its full directory ancestry, run the
    identical prompt through the identical mechanism. A result of "none

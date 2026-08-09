@@ -407,6 +407,18 @@ spec:
     - kind: deferral
       anchor: "https://github.com/tvna/gitapex/pull/936"
       summary: "Battle-test findings 2 and 3, disclosed not fixed. Finding 2: executionRequirements tool tags are free-form with no path scoping in the schema, so write: [files] cannot express the narrow real need (append one line to one bundled file); inventing a scoped tag would be false precision, and the scope limit is a schema question. Finding 3: no evals/ fixture exercises the new citation, trust-class, or confidentiality rules; the deterministic branch-coverage gate passes at 70 fixtures."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/pull/936"
+      summary: "External review round 2. The Citation fidelity reduction collapsed whitespace in every block, so a quotation from fenced YAML/JSON/diff/shell content matched despite different indentation -- in that content indentation is a different value, not a different wrap. Split the rule: prose blocks reduce, fenced and whitespace-significant blocks match byte for byte. This PR's own four quotations re-verified as prose matches under the split rule."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/pull/936"
+      summary: "Same round, confidentiality escalated correctly: the earlier check-but-never-publish rule applied too late, since asking a dispatch to quote the real CLAUDE.md already sends it to the mechanism's endpoint and transcript. The positive control now defaults to a synthetic sentinel in a throwaway directory outside any repository -- it proves the mechanism can see such a file at all, which is its actual job. The real-file variant survives as a disclosed, justified exception."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/pull/936"
+      summary: "Partially accepted the request that the sync gate reject unregistered requirements. Added mutation coverage proving all three mirrors actually fail when a tracked phrase is removed from either side -- the gate bites rather than merely passing. Declined the other half with a stated reason: deciding which prose sentence is a requirement is not computable here, so a phrase nobody registers stays unguarded. That limit is recorded beside the tests, not implied."
+      outcome:
+        verdict: partially-accepted
+        tests_added: 9
   skillDependencies:
     requires: []
     relatedTo:

@@ -226,3 +226,54 @@ def test_extraction_is_not_vacuous(blocks):
     steps, bullet = blocks
     assert len(steps) > 200, "steps-1-4 block suspiciously short -- extraction may be broken"
     assert len(bullet) > 100, "Precondition bullet suspiciously short -- extraction may be broken"
+
+
+# --- Mutation coverage -------------------------------------------------------
+#
+# An adversarial review of this gate asked for proof that it actually bites,
+# not merely that it passes today. These tests remove a tracked phrase from one
+# side of each mirror and assert the corresponding check fails. They exercise
+# the same predicate the parametrized tests above use, against mutated copies
+# of the extracted text, so they cannot pass vacuously if that predicate is
+# ever weakened.
+#
+# What they deliberately do NOT prove: that a *new* requirement nobody added to
+# a phrase tuple is caught. It is not -- deciding which prose sentence is "a
+# requirement" is not a thing this gate can compute, which is the honest limit
+# already recorded in the module docstring and beside each tuple. Closing that
+# needs a different mechanism, not a stricter regex here.
+
+
+def _mirrors(phrase, left, right):
+    """The predicate both parametrized mirror tests apply."""
+    return phrase in left and phrase in right
+
+
+@pytest.mark.parametrize("phrase", _POSTCONDITION_PHRASES)
+def test_postcondition_mirror_fails_when_either_side_drifts(phrase, contract_blocks):
+    """Removing a tracked phrase from step 5, or from the Postcondition
+    bullet, must break the mirror -- otherwise the gate is decorative."""
+    step_5 = contract_blocks["step_5"]
+    postcondition = contract_blocks["postcondition"]
+    assert _mirrors(phrase, step_5, postcondition), "baseline should hold before mutating"
+    assert not _mirrors(phrase, step_5.replace(phrase, ""), postcondition)
+    assert not _mirrors(phrase, step_5, postcondition.replace(phrase, ""))
+
+
+@pytest.mark.parametrize("phrase", _INVARIANT_PHRASES)
+def test_invariant_mirror_fails_when_either_side_drifts(phrase, contract_blocks):
+    """Same mutation proof for the Stop-boundary/Invariant mirror."""
+    stop_boundaries = contract_blocks["stop_boundaries"]
+    invariant = contract_blocks["invariant"]
+    assert _mirrors(phrase, stop_boundaries, invariant), "baseline should hold before mutating"
+    assert not _mirrors(phrase, stop_boundaries.replace(phrase, ""), invariant)
+    assert not _mirrors(phrase, stop_boundaries, invariant.replace(phrase, ""))
+
+
+@pytest.mark.parametrize("phrase", _CHECKPOINT_PHRASES)
+def test_precondition_mirror_fails_when_either_side_drifts(phrase, blocks):
+    """The original mirror gets the same proof, so all three are covered."""
+    steps, bullet = blocks
+    assert _mirrors(phrase, steps, bullet), "baseline should hold before mutating"
+    assert not _mirrors(phrase, steps.replace(phrase, ""), bullet)
+    assert not _mirrors(phrase, steps, bullet.replace(phrase, ""))

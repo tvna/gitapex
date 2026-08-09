@@ -330,8 +330,8 @@ itself states, applied to the precondition/postcondition split from
 Contract discipline rather than only to dimension content.
 
 **Update (citation-fidelity step added):** Procedure step 5 gained a
-requirement that every quotation the review authors be matched against its
-cited file under `adversarial-self-audit.md`'s Citation fidelity rule.
+requirement that every quotation authored by the review be matched against
+the file it cites, under `adversarial-self-audit.md`'s Citation fidelity rule.
 Re-checked here because a new mandatory step is exactly what this dimension's
 reading burden tracks: it adds no file to the common-case mandatory read set,
 which stays at `SKILL.md`, `rubric.md`, and `adversarial-self-audit.md`. The
@@ -384,7 +384,7 @@ Named gaps, graded against that file's axes:
   isolation mechanism, while nothing stated a trust class for them: the
   registry is both governance-gated and runtime-written, so an entry a
   dispatch just appended had passed no review even though the file it sits in
-  had. `adversarial-self-audit.md` now carries a `Trust class of an entry`
+  had passed one. `adversarial-self-audit.md` now carries a `Trust class of an entry`
   subsection naming both populations, and its Verification procedure step 4
   requires the marker: "Mark it **Same-run, unreviewed** until it merges, per
   Trust class above." Re-graded: the axis clears, with the file's own stated
