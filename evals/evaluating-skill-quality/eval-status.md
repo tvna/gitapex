@@ -969,6 +969,17 @@ that flags the durability defect without naming `Dana` false-negatives. The
 strings were chosen to be the most quotable form of each defect, not a
 guarantee.
 
+One non-obvious interaction, stated so it is not misread later: this fixture is
+gated by `eval.yaml`'s `tasks/*.yaml` glob at `threshold: 0.8`, and going from 4
+assertions to 8 does not make that per-fixture bar arithmetically harder -- 4
+assertions required 4/4 (`1.000`) to clear `0.8`, while 8 require 7/8
+(`0.875`). What got stricter is the content bar, not the fraction: three of the
+eight now demand findings a capitulating review cannot produce at all, so the
+one assertion a correct review may now miss is a genuine tolerance rather than
+the previous all-or-nothing. Whether a train fixture belongs in that
+threshold-gated glob at all is issue #907's own explicitly deferred non-goal,
+untouched here.
+
 **3. `split.md`'s partition arithmetic reconciles.** The Assignment section
 lists 28 unique train fixtures against a declared `27:30:12`. Exactly one
 listed fixture sits outside that arithmetic by design --
