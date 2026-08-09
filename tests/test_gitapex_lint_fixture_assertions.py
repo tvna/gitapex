@@ -6,6 +6,8 @@ real fixture set and pins it to zero warnings, which is issue #170's first
 acceptance criterion.
 """
 
+import ast
+import re
 from pathlib import Path
 
 import gitapex_lint_fixture_assertions as L
@@ -280,9 +282,15 @@ def test_repository_wide_fixtures_have_no_unreviewed_blocking_findings():
     # explicitly reviewed, disclosed residual -- never silenced by narrowing
     # --tasks-glob (this test still runs the linter's real, unrestricted
     # default scope). Four remain: the `evaluating-skill-quality` entry the
-    # last bullet below describes was resolved. The count sentence and the
-    # assertion move together -- whenever a residual is resolved, update
-    # both. The four still pinned:
+    # last bullet below describes was resolved. The count is machine-checked
+    # against this test's own pinned set by
+    # test_disclosed_residual_count_matches_the_pinned_set below, so resolving
+    # a residual without updating both fails loudly rather than relying on a
+    # reader to keep them in step (issue #975):
+    #
+    # pinned-residual-count: 4
+    #
+    # The four still pinned:
     #
     #   - scorer-gated-skill-edits/ship-without-transfer-check.yaml
     #     [case-sensitivity]: the pre-existing #858 residual, already pinned
@@ -336,6 +344,58 @@ def test_repository_wide_fixtures_have_no_unreviewed_blocking_findings():
         ("fixing-a-reported-issue", "adversarial-coverage", "(tasks directory)"),
         ("scorer-gated-skill-edits", "adversarial-coverage", "(tasks directory)"),
     }
+
+
+_PINNED_RESIDUAL_TEST = "test_repository_wide_fixtures_have_no_unreviewed_blocking_findings"
+_PINNED_COUNT_RE = re.compile(r"^\s*#\s*pinned-residual-count:\s*(\d+)\s*$", re.MULTILINE)
+
+
+def _pinned_tuple_set_size(source: str, func_name: str) -> int:
+    """Count entries in `func_name`'s own pinned tuple-set literal.
+
+    Read from the AST, not by regex: a reformat, a wrapped line, or a comment
+    that happens to look like a tuple cannot change the answer. Scoped to one
+    function by name because the sibling case-sensitivity residual test above
+    has a tuple-set literal of its own.
+    """
+    tree = ast.parse(source)
+    functions = [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == func_name]
+    assert len(functions) == 1, f"expected exactly one {func_name}, found {len(functions)}"
+    sets = [
+        n
+        for n in ast.walk(functions[0])
+        if isinstance(n, ast.Set) and n.elts and all(isinstance(e, ast.Tuple) for e in n.elts)
+    ]
+    assert len(sets) == 1, f"expected exactly one pinned tuple-set literal in {func_name}, found {len(sets)}"
+    return len(sets[0].elts)
+
+
+def test_disclosed_residual_count_matches_the_pinned_set():
+    """Issue #975: the disclosed-residual block's stated count and the
+    assertion's own set must move together.
+
+    That comment block is the disclosure register for residuals no
+    fixture-authoring fix resolves -- it is what makes them "explicitly
+    reviewed, disclosed" rather than silenced, so a register that miscounts
+    itself degrades the disclosure. It did exactly that once: it read "Five"
+    against four pinned tuples for the whole span between the fifth residual's
+    resolution and issue #975, because the only thing holding the two in step
+    was prose asking a future reader to update both. This asserts it instead.
+
+    Deliberately compares the marker against the *source* literal rather than
+    the linter's runtime findings, so it still fails on drift even when the
+    corpus scan cannot run.
+    """
+    source = Path(__file__).read_text(encoding="utf-8")
+    markers = _PINNED_COUNT_RE.findall(source)
+    assert len(markers) == 1, f"expected exactly one 'pinned-residual-count' marker, found {len(markers)}"
+    stated = int(markers[0])
+    actual = _pinned_tuple_set_size(source, _PINNED_RESIDUAL_TEST)
+    assert stated == actual, (
+        f"the disclosed-residual comment states {stated} pinned residual(s) but "
+        f"{_PINNED_RESIDUAL_TEST} pins {actual}. Adding or resolving a residual must change the "
+        f"marker and the pinned tuple listing together, in one commit."
+    )
 
 
 # ---- check_short_word_collision (issue #516, #218) ----
