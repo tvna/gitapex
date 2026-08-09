@@ -414,3 +414,48 @@ jobs:
     findings = gate.find_violations(write_ruleset(tmp_path, VALID), write_workflows(tmp_path, r=workflow))
     assert len(findings) == 1
     assert "Pending forever" in findings[0]
+
+
+def test_a_missing_pull_request_rule_is_reported_once_not_twice(tmp_path: pathlib.Path) -> None:
+    # `_find_pull_request_violations` returns early when the rule is absent, so
+    # the operator gets "has no 'pull_request' rule" rather than that plus a
+    # pile of derived "flag is None, not true" noise about a rule that is not
+    # there.
+    ruleset = json.loads(json.dumps(VALID))
+    ruleset["rules"] = [rule for rule in ruleset["rules"] if rule["type"] != "pull_request"]
+    findings = gate.find_violations(write_ruleset(tmp_path, ruleset), write_workflows(tmp_path, a=UNFILTERED_WORKFLOW))
+    assert any("has no 'pull_request' rule" in finding for finding in findings), findings
+    assert not any("not true" in finding for finding in findings), findings
+
+
+@pytest.mark.parametrize("parameters", [None, [], "merge"])
+def test_a_pull_request_rule_without_a_parameters_object_is_a_finding(parameters: Any, tmp_path: pathlib.Path) -> None:
+    # GitHub's API accepts a bare `{"type": "pull_request"}`, which enforces
+    # none of the review settings this repository claims. A presence-only check
+    # would pass it.
+    ruleset = json.loads(json.dumps(VALID))
+    ruleset["rules"][2]["parameters"] = parameters
+    findings = gate.find_violations(write_ruleset(tmp_path, ruleset), write_workflows(tmp_path, a=UNFILTERED_WORKFLOW))
+    assert any("carries no parameters object" in finding for finding in findings), findings
+
+
+@pytest.mark.parametrize("methods", [None, [], "merge", {"merge": True}])
+def test_an_unusable_allowed_merge_methods_value_is_a_finding(methods: Any, tmp_path: pathlib.Path) -> None:
+    # An empty list is the dangerous one: it type-checks as a list and reads as
+    # "no restriction" to a skim, but names no permitted merge path at all.
+    ruleset = json.loads(json.dumps(VALID))
+    parameters: dict[str, Any] = dict.fromkeys(gate.REQUIRED_PULL_REQUEST_FLAGS, True)
+    parameters["allowed_merge_methods"] = methods
+    ruleset["rules"][2]["parameters"] = parameters
+    findings = gate.find_violations(write_ruleset(tmp_path, ruleset), write_workflows(tmp_path, a=UNFILTERED_WORKFLOW))
+    assert any("must name at least one method" in finding for finding in findings), findings
+
+
+def test_a_non_mapping_job_body_still_resolves_to_its_job_id(tmp_path: pathlib.Path) -> None:
+    # A job whose body is not a mapping is malformed YAML that actionlint would
+    # reject, but this gate must not crash on it on the way to saying so: it
+    # falls back to the job id, which is the most conservative reading (the
+    # context is treated as satisfiable rather than silently dropped, and the
+    # empty-workflow-directory guard still refuses a vacuous pass).
+    workflow = "name: Always\non:\n  pull_request: {}\njobs:\n  always-runs: 'not a mapping'\n"
+    assert gate.find_violations(write_ruleset(tmp_path, VALID), write_workflows(tmp_path, a=workflow)) == []
