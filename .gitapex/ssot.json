@@ -626,6 +626,20 @@
       "tracking_issue": 862,
       "status": "active",
       "supersedes": null
+    },
+    {
+      "id": "eval-declared-model-allowlist",
+      "kind": "script",
+      "script": ".github/scripts/gitapex_gate_eval_declared_model.py",
+      "rule": "Every committed model identifier -- each evals/*/eval.yaml's config.model, plus the models dispatch-input default of .github/workflows/waza-eval-matrix.yml -- must appear in the reviewed APPROVED_MODELS allowlist, each row of which carries the evidence a human weighed when approving it. An id RETIRED_MODELS records as undispatchable is rejected with that reason named, and may never also appear in APPROVED_MODELS. A suite whose config.model is missing or non-string raises rather than passing. The allowlist records what a human last approved, not what the copilot-sdk executor currently serves: no offline check can confirm dispatchability while COPILOT_BASE_URL / COPILOT_PROVIDER_BASE_URL are unprovisioned. A non-default matrix dispatch is deliberately not graded, so a live probe of an unapproved id stays possible. config.model is graded as a declaration only -- a skill's evaluated-on provenance comes from evals/<skill>/results/*/manifest.json, never from this field.",
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_eval_declared_model.py"],
+      "trigger": "tests/test_gitapex_gate_eval_declared_model.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "test-integrity",
+      "tracking_issue": 925,
+      "status": "active",
+      "supersedes": null
     }
   ],
   "clusters": {
