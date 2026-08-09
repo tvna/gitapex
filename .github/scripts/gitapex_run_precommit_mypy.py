@@ -54,7 +54,7 @@ MYPY_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ),
     ("skills/executing-a-branch-plan/scripts", ("skills/executing-a-branch-plan/scripts",)),
     ("skills/drafting-an-adr/scripts", ("skills/drafting-an-adr/scripts",)),
-    ("skills/auditing-git-hosting-surface/scripts", ("skills/auditing-git-hosting-surface/scripts",)),
+    ("skills/scanning-attack-surfaces/scripts", ("skills/scanning-attack-surfaces/scripts",)),
     ("skills/outward-artifact-preflight/scripts", ("skills/outward-artifact-preflight/scripts",)),
     ("skills/drafting-an-acm-issue/scripts", ("skills/drafting-an-acm-issue/scripts",)),
     ("skills/planning-a-branch-from-an-issue/scripts", ("skills/planning-a-branch-from-an-issue/scripts",)),

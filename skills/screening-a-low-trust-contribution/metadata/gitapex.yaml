@@ -11,7 +11,7 @@ spec:
       - battle-testing-a-skill
       - responding-to-a-fresh-arrival
       - untrusted-input-triage
-      - auditing-git-hosting-surface
+      - scanning-attack-surfaces
   executionRequirements:
     tools:
       read: []

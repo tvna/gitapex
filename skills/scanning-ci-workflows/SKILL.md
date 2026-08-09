@@ -1,6 +1,6 @@
 ---
 name: scanning-ci-workflows
-description: Scan a repository's GitHub Actions workflow and composite-action files by running two pinned external CLIs over them -- actionlint for workflow validity (schema, expression types, runner labels, embedded shell) and zizmor for workflow security posture (template injection, over-broad permissions, dangerous triggers, credential persistence, unpinned uses) -- and report each tool's own findings unmodified. Use when auditing CI workflow files, checking a workflow before merging it, or answering whether a repository's Actions configuration is safe and well-formed. Report-only, never auto-fixing. Distinct from scanning-attack-surfaces (grades one artifact's exposure and privilege design by its own reasoning, wrapping no tool) and auditing-git-hosting-surface (audits standing hosting-platform configuration such as branch protection and token inventory, not the workflow files themselves).
+description: Scan a repository's GitHub Actions workflow and composite-action files by running two pinned external CLIs over them -- actionlint for workflow validity (schema, expression types, runner labels, embedded shell) and zizmor for workflow security posture (template injection, over-broad permissions, dangerous triggers, credential persistence, unpinned uses) -- and report each tool's own findings unmodified. Use when auditing CI workflow files, checking a workflow before merging it, or answering whether a repository's Actions configuration is safe and well-formed. Report-only, never auto-fixing. Distinct from scanning-attack-surfaces, which grades one artifact's own exposure and privilege design by its own per-item reasoning (reading only a subset of one tool's findings as evidence) and separately audits standing hosting-platform configuration such as branch protection and token inventory, rather than reporting two analyzers' complete findings over a whole workflow set.
 ---
 
 # Scanning CI Workflows
@@ -243,16 +243,20 @@ nothing" for "zizmor checked everything."
 
 - **`scanning-attack-surfaces`** (`relatedTo`) -- shares the naming
   family and the `write: []` rule, but performs its own reasoning against
-  two per-item tests and wraps no tool. Where both could apply to a
+  per-item tests rather than delegating throughout. Two of its surfaces
+  border this skill and neither overlaps it. Where both could apply to a
   workflow file, they answer different questions: that skill asks whether
   one artifact's `permissions:` block and outbound interface exceed what
-  its function needs; this skill asks what two external analyzers report
-  about the workflow set as a whole.
-- **`auditing-git-hosting-surface`** (`relatedTo`) -- audits the standing
-  hosting-platform configuration (branch protection, required checks,
-  webhook and deploy-key inventory, token scopes) against a per-platform
-  checklist. That surface lives in platform settings, not in the
-  repository's files. This skill never reads or reports on it.
+  its function needs -- reading a subset of zizmor's findings as evidence
+  for that one per-item verdict -- while this skill asks what two external
+  analyzers report, in full and unranked, about the workflow set as a
+  whole. Neither substitutes for the other, and a finding withheld from
+  that skill's narrower verdict is still reported in full here. Separately,
+  that skill also audits the standing hosting-platform configuration
+  (branch protection, required checks, webhook and deploy-key inventory,
+  token scopes) against a per-platform checklist; that surface lives in
+  platform settings, not in the repository's files, and this skill never
+  reads or reports on it.
 - **`evaluating-deterministic-gate-quality`** (`relatedTo`) -- grades a
   gate's placement, mechanics, and bypass consequences, including gates
   that happen to be implemented as CI workflow steps. A finding from

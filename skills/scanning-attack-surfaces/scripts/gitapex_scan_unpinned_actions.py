@@ -12,7 +12,14 @@ Scope: GitHub Actions workflow files only; the equivalent GitLab CI
 `include:` check is out of scope (no GitLab MCP server available).
 
 Usage: python3 gitapex_scan_unpinned_actions.py [workflows_dir]
-Exit codes: 0 = all uses: pins are 40-char SHAs, 1 = drift found.
+Exit codes: 0 = all uses: pins are 40-char SHAs, 1 = drift found OR the
+scan could not be performed (missing/unreadable directory, no workflow
+files, a file that will not decode). "Nothing was scanned" and
+"everything scanned was clean" are different claims and only one of them
+is ever true, so the former is reported as a finding rather than sharing
+the latter's exit code -- issue #848, closing the empirically-confirmed
+false-clean this script shipped with (recorded against the pre-absorption
+skill in evals/scanning-attack-surfaces/eval-status.md).
 """
 
 from __future__ import annotations
@@ -55,7 +62,15 @@ def find_unpinned_actions(workflows_dir: pathlib.Path = WORKFLOWS_DIR) -> list[t
     ref instead of a full 40-character commit SHA. Empty list means every
     third-party action reference in the scanned files is SHA-pinned."""
     findings: list[tuple[str, int, str]] = []
-    for workflow in sorted(workflows_dir.glob("*.yml")) + sorted(workflows_dir.glob("*.yaml")):
+    if not workflows_dir.is_dir():
+        # Fail closed for the same reason the decode branch below does: a
+        # directory that is absent, or is a file, or cannot be listed, was
+        # not scanned, and an unscanned target has not been shown clean.
+        return [(str(workflows_dir), 0, "workflow directory not found, cannot verify")]
+    workflows = sorted(workflows_dir.glob("*.yml")) + sorted(workflows_dir.glob("*.yaml"))
+    if not workflows:
+        return [(str(workflows_dir), 0, "no *.yml or *.yaml workflow files found, cannot verify")]
+    for workflow in workflows:
         try:
             content = workflow.read_text()
         except UnicodeDecodeError as exc:
@@ -82,7 +97,7 @@ def main() -> int:
     workflows_dir = pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else WORKFLOWS_DIR
     findings = find_unpinned_actions(workflows_dir)
     if findings:
-        print("Unpinned third-party actions found (pinned to a tag/branch, not a 40-character commit SHA):")
+        print("Unpinned third-party actions, or inputs that could not be verified:")
         for path, lineno, line in findings:
             print(f"  {path}:{lineno}: {line}")
         return 1

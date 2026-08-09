@@ -128,8 +128,8 @@ jobs:
       - name: mypy (skills/drafting-an-adr/scripts)
         run: uv run --frozen mypy --config-file pyproject.toml skills/drafting-an-adr/scripts
 
-      - name: mypy (skills/auditing-git-hosting-surface/scripts)
-        run: uv run --frozen mypy --config-file pyproject.toml skills/auditing-git-hosting-surface/scripts
+      - name: mypy (skills/scanning-attack-surfaces/scripts)
+        run: uv run --frozen mypy --config-file pyproject.toml skills/scanning-attack-surfaces/scripts
 
       - name: mypy (skills/outward-artifact-preflight/scripts)
         run: uv run --frozen mypy --config-file pyproject.toml skills/outward-artifact-preflight/scripts

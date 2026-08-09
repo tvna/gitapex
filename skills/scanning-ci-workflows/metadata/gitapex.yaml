@@ -79,7 +79,6 @@ spec:
     requires: []
     relatedTo:
       - scanning-attack-surfaces
-      - auditing-git-hosting-surface
       - evaluating-deterministic-gate-quality
   executionRequirements:
     tools:

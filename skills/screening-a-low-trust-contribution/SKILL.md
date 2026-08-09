@@ -17,7 +17,7 @@ list, author, dependency lockfiles) -- diff and metadata, not the
 externally-authored text `untrusted-input-triage` triages; a low-trust
 contribution earns all of them, not a sampled subset. When a check's
 subject matter is already enumerated in detail by a sibling skill (as
-checks 2 and 8 do for `auditing-git-hosting-surface` and
+checks 2 and 8 do for `scanning-attack-surfaces`' Mode B and
 `untrusted-input-triage` respectively), delegate to that skill by name
 instead of re-deriving or copying its list here -- a copy drifts out of
 sync when the original is extended; a delegation inherits the extension
@@ -67,7 +67,7 @@ automatically.
    commit SHA are each independently a hard flag on top of the edit
    itself. For the repository's standing (non-diff) configuration
    surface -- existing unpinned actions, branch protection, token scopes
-   -- that is `auditing-git-hosting-surface`'s job, not this skill's; do not
+   -- that is `scanning-attack-surfaces`' Mode B, not this skill's; do not
    re-derive that checklist here.
 3. **Edits to existing governed instruction or governance files.** A
    diff that *modifies* (not just adds) this repository's own instruction
@@ -230,21 +230,25 @@ other handles content/response. Apply both; neither substitutes for the
 other. (Mirrors `outward-artifact-preflight` + `explaining-the-work`'s
 established co-firing pattern.)
 
-`auditing-git-hosting-surface` covers this repository's *standing* hosting-
+`scanning-attack-surfaces` covers this repository's *standing* hosting-
 platform configuration (existing unpinned actions, branch protection,
-token scopes) as a periodic, whole-repo audit. This skill covers a
-*single incoming diff's* changes to that same surface. Neither
-substitutes for the other: a clean run of this skill on one PR says
-nothing about pre-existing drift elsewhere, and a clean
-`auditing-git-hosting-surface` run says nothing about what a new PR is
+token scopes) as a periodic, whole-repo audit -- specifically in its
+Mode B, which is the half of that skill this boundary is drawn against.
+Its Mode A is a third thing again, grading one already-merged artifact's
+own exposure and privilege design, and is no more a substitute for this
+skill than Mode B is. This skill covers a *single incoming diff's*
+changes to that same surface. Neither substitutes for the other: a clean
+run of this skill on one PR says nothing about pre-existing drift
+elsewhere, and a clean Mode B run says nothing about what a new PR is
 about to change.
 
 ## Global constraints
 
 - Distinct from `untrusted-input-triage` (text triage),
   `battle-testing-a-skill` (evaluates a SKILL.md file's own robustness,
-  not an inbound contribution), and `auditing-git-hosting-surface` (audits
-  standing repo configuration, not an incoming diff).
+  not an inbound contribution), and `scanning-attack-surfaces` (audits
+  standing repo configuration and individual artifacts' own steady-state
+  design, neither of which is an incoming diff).
 - "Hard flag" (checks 2, 3, 4, 6) means the check escalates
   unconditionally whenever its trigger condition is met -- no sampling,
   no judgment call about whether the surrounding contribution "looks

@@ -1,6 +1,6 @@
 # GitHub hosting-surface checklist (GitHub runs only)
 
-Read this ONLY when Step 1 detected GitHub. Do not open the GitLab
+Read this ONLY when step B1 detected GitHub. Do not open the GitLab
 reference in the same run.
 
 Coverage verified directly against the `mcp__github__*` tools available in
@@ -13,7 +13,7 @@ round a Gap up because a workaround seems achievable in the moment.
 |---|---|---|---|
 | 1 | Branch protection rules (including required reviews/checks -- the required-checks list is part of the same unexposed branch-protection settings surface, not a separately coverable item) | **Gap.** No `mcp__github__*` tool exposes branch-protection settings (no `get_branch_protection`-shaped tool in this session's tool list). | Cross-link the tracking issue for approved-but-unbuilt tooling. |
 | 2 | Actions/CI permissions (e.g. "Allow all actions" vs restricted) | **Gap.** Repo Actions-permissions settings are not exposed by any tool found. | Cross-link the tracking issue for approved-but-unbuilt tooling. |
-| 3 | Unpinned third-party actions/includes | **Covered.** Read `.github/workflows/*.yml` (via `mcp__github__get_file_contents`, or directly off disk when the repo is checked out locally) and run `scripts/gitapex_scan_unpinned_actions.py <workflows_dir>`. Flags any `uses:` step pinned to a tag/branch instead of a full 40-character commit SHA. | Run the script; report its exact findings, file:line included. |
+| 3 | Unpinned third-party actions/includes | **Covered.** Read `.github/workflows/*.yml` (via `mcp__github__get_file_contents`, or directly off disk when the repo is checked out locally) and run `scripts/gitapex_scan_unpinned_actions.py <workflows_dir>`. Flags any `uses:` step pinned to a tag/branch instead of a full 40-character commit SHA, and fails closed (a finding, not a clean result) when the directory is missing, holds no workflow files, or holds a file that will not decode. | Run the script; report its exact findings, file:line included. A `cannot verify` finding is reported as such, never as coverage. |
 | 4 | Webhook inventory | **Gap.** No `list_repository_webhooks`-shaped tool found. | Cross-link the tracking issue for approved-but-unbuilt tooling. |
 | 5 | Deploy-key inventory | **Gap.** No `list_deploy_keys`-shaped tool found. | Cross-link the tracking issue for approved-but-unbuilt tooling. |
 | 6 | Token scopes (of the connected app/PAT itself) | **Gap.** `mcp__github__get_me` returns user profile, not the connected token's scope list. | Cross-link the tracking issue for approved-but-unbuilt tooling. |
@@ -21,9 +21,9 @@ round a Gap up because a workaround seems achievable in the moment.
 | 8 | Collaborator/permission drift | **Covered.** `mcp__github__list_repository_collaborators` (with an `affiliation` filter) returns exactly this. | Call the tool; report its result. |
 
 Every **Gap** row above cross-links the tracking issue for
-approved-but-unbuilt tooling per SKILL.md Step 3 -- see the Portability
-note there for whose tracking issue that is, and
-`references/gitapex-cross-links.md` (loaded in Step 2, when this is
+approved-but-unbuilt tooling per SKILL.md step B3 -- see the "Generalize
+and substitute" note there for whose tracking issue that is, and
+`references/gitapex-cross-links.md` (loaded in step B2, when this is
 gitapex's own copy) for gitapex's own target and the unpinned-actions
 script's borrowed shape (item 3).
 
@@ -31,4 +31,7 @@ script's borrowed shape (item 3).
 
 Run `python3 scripts/gitapex_scan_unpinned_actions.py <workflows_dir>` for item 3
 before reporting it -- never assert "no unpinned actions found" from
-memory or a partial read.
+memory or a partial read. Read its exit code as the script's own contract
+states: `1` covers both real drift and an input it could not verify, so
+check which of the two the printed findings actually are before calling
+the item Covered.
