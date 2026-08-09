@@ -283,16 +283,22 @@ def test_repository_wide_fixtures_have_no_unreviewed_blocking_findings():
     # resolved by a fixture-authoring fix alone and were pinned here as an
     # explicitly reviewed, disclosed residual -- never silenced by narrowing
     # --tasks-glob (this test still runs the linter's real, unrestricted
-    # default scope). Four remain: the `evaluating-skill-quality` entry the
-    # last bullet below describes was resolved. The count is machine-checked
-    # against this test's own pinned set by
-    # test_disclosed_residual_count_matches_the_pinned_set below, so resolving
-    # a residual without updating both fails loudly rather than relying on a
-    # reader to keep them in step (issue #975):
+    # default scope). The `evaluating-skill-quality` entry the last bullet
+    # below describes has since been resolved.
+    #
+    # How many remain is stated once, in the marker below, and nowhere else --
+    # not in this prose and not as a bullet count. That is deliberate: issue
+    # #975 was this block naming one number while the assertion pinned a
+    # different one, and a number written twice can disagree with itself. A gate
+    # can hold a marker to the assertion (see
+    # test_disclosed_residual_count_matches_the_pinned_set below); it cannot
+    # hold English prose to it, so the prose no longer carries a count to drift.
     #
     # pinned-residual-count: 4
     #
-    # The four still pinned:
+    # Still pinned. One bullet per cause, not per finding -- the last bullet
+    # covers two skills sharing one, so bullet count and residual count are
+    # deliberately not the same number:
     #
     #   - scorer-gated-skill-edits/ship-without-transfer-check.yaml
     #     [case-sensitivity]: the pre-existing #858 residual, already pinned
@@ -376,8 +382,30 @@ def _nodes_in_own_scope(function: ast.FunctionDef) -> list[ast.AST]:
     return found
 
 
-def _pinned_residual_assertion(source: str, func_name: str) -> tuple[ast.FunctionDef, ast.Set]:
-    """Locate `func_name` and the set literal its own residual assertion pins.
+def _pinned_size(operand: ast.expr) -> int | None:
+    """How many residuals a pinned operand names, or None if unrecognized.
+
+    `set()` is the zero case and has to be spelled that way: Python has no
+    empty set literal, so an every-residual-resolved state -- what issue #872
+    is working toward -- parses as a Call. Without this branch the gate would
+    report "no assertion found" for the one state that needs no disclosure at
+    all.
+    """
+    if isinstance(operand, ast.Set):
+        return len(operand.elts) if all(isinstance(e, ast.Tuple) for e in operand.elts) else None
+    if (
+        isinstance(operand, ast.Call)
+        and isinstance(operand.func, ast.Name)
+        and operand.func.id == "set"
+        and not operand.args
+        and not operand.keywords
+    ):
+        return 0
+    return None
+
+
+def _pinned_residual_assertion(source: str, func_name: str) -> tuple[ast.FunctionDef, int]:
+    """Locate `func_name` and count what its own residual assertion pins.
 
     Bound to the `assert <name> == {...}` statement rather than to "the only
     all-tuple set literal in the function": the looser form would silently
@@ -387,11 +415,11 @@ def _pinned_residual_assertion(source: str, func_name: str) -> tuple[ast.Functio
     tree = ast.parse(source)
     functions = [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == func_name]
     assert len(functions) == 1, f"expected exactly one {func_name}, found {len(functions)}"
-    # Collect the pinned set literals directly rather than the enclosing
-    # Assert nodes: narrowing `Assert.test` to `Compare` inside a
-    # comprehension does not survive past it, so gathering the operand here
-    # keeps the type checker's view and the runtime check in agreement.
-    pinned_sets: list[ast.Set] = []
+    # Collect the pinned sizes directly rather than the enclosing Assert
+    # nodes: narrowing `Assert.test` to `Compare` inside a comprehension does
+    # not survive past it, so resolving the operand here keeps the type
+    # checker's view and the runtime check in agreement.
+    pinned_sizes: list[int] = []
     for node in _nodes_in_own_scope(functions[0]):
         if not isinstance(node, ast.Assert):
             continue
@@ -406,17 +434,14 @@ def _pinned_residual_assertion(source: str, func_name: str) -> tuple[ast.Functio
         # while this gate stayed green.
         if len(test.ops) != 1 or not isinstance(test.ops[0], ast.Eq):
             continue
-        operand = test.comparators[0]
-        if isinstance(operand, ast.Set):
-            pinned_sets.append(operand)
-    assert len(pinned_sets) == 1, (
-        f"expected exactly one `assert {_PINNED_RESIDUAL_NAME} == {{...}}` in {func_name}, found {len(pinned_sets)}"
+        size = _pinned_size(test.comparators[0])
+        if size is not None:
+            pinned_sizes.append(size)
+    assert len(pinned_sizes) == 1, (
+        f"expected exactly one `assert {_PINNED_RESIDUAL_NAME} == {{...}}` (or `== set()`) in "
+        f"{func_name}, found {len(pinned_sizes)}"
     )
-    pinned = pinned_sets[0]
-    assert pinned.elts and all(isinstance(e, ast.Tuple) for e in pinned.elts), (
-        f"{func_name}'s pinned literal is no longer a non-empty set of tuples"
-    )
-    return functions[0], pinned
+    return functions[0], pinned_sizes[0]
 
 
 def _marker_counts_in(source: str, first_line: int, last_line: int) -> list[str]:
@@ -455,14 +480,23 @@ def test_disclosed_residual_count_matches_the_pinned_set():
     somewhere else in the file. Compared against the source literal rather
     than the linter's runtime findings, so drift still fails when the corpus
     scan cannot run.
+
+    What this does NOT enforce, stated so the docstring does not overclaim: it
+    holds one machine marker to one assertion. It cannot read English, so it
+    could not have caught issue #975's original defect -- prose reading "Five"
+    beside four pinned tuples -- and it still could not today. That gap is
+    closed by removing the count from the prose rather than by widening this
+    gate: the block above now states the number once, in the marker, so there
+    is no second copy to disagree with it. A reviewer adding a prose count back
+    reopens the defect this gate cannot see.
     """
     source = Path(__file__).read_text(encoding="utf-8")
-    function, pinned = _pinned_residual_assertion(source, _PINNED_RESIDUAL_TEST)
+    function, actual = _pinned_residual_assertion(source, _PINNED_RESIDUAL_TEST)
     markers = _marker_counts_in(source, function.lineno, function.end_lineno or function.lineno)
     assert len(markers) == 1, (
         f"expected exactly one 'pinned-residual-count' comment inside {_PINNED_RESIDUAL_TEST}, found {len(markers)}"
     )
-    stated, actual = int(markers[0]), len(pinned.elts)
+    stated = int(markers[0])
     assert stated == actual, (
         f"the disclosed-residual comment states {stated} pinned residual(s) but "
         f"{_PINNED_RESIDUAL_TEST} pins {actual}. Adding or resolving a residual must change the "
