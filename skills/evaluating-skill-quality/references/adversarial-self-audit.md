@@ -13,12 +13,14 @@ Procedure steps 1-6; it is not one more addition to
 3. [Install/vendoring-time provenance](#installvendoring-time-provenance)
 4. [Cross-session, multi-turn, and encoding risk](#cross-session-multi-turn-and-encoding-risk)
 5. [Structured-output injection](#structured-output-injection)
-6. [Isolation verification](#isolation-verification)
+6. [Citation fidelity](#citation-fidelity)
+7. [Isolation verification](#isolation-verification)
+   - [Trust class of an entry](#trust-class-of-an-entry)
    - [Verification procedure](#verification-procedure)
    - [Known entries](#known-entries)
    - [Unlisted platform](#unlisted-platform)
-7. [Contaminated-dispatch disclosure](#contaminated-dispatch-disclosure)
-8. [Downstream verdict consumption](#downstream-verdict-consumption)
+8. [Contaminated-dispatch disclosure](#contaminated-dispatch-disclosure)
+9. [Downstream verdict consumption](#downstream-verdict-consumption)
 
 ## Injection resistance and trust boundary
 
@@ -92,6 +94,53 @@ dimension 17 names for any skill that emits structured output built from
 reviewed material -- and it applies identically to that skill's own
 quoting instructions, not only to this one's.
 
+## Citation fidelity
+
+The one rule every quotation this dispatch authors is matched under --
+`SKILL.md`'s Procedure step 5 and its paired Stop boundary both resolve
+here, so there is a single definition rather than three paraphrases of one.
+
+**Canonical forms.** A *block* is a run of source lines broken by a blank
+line, a fenced-code delimiter, a heading, or the start of a new list item or
+table row.
+
+- **Prose blocks** reduce: collapse every run of whitespace -- including the
+  newline and continuation indent of a soft wrap -- to one space, and trim the
+  ends, on both the source block and the candidate quotation. The quotation
+  matches only when its reduced form is a substring of the reduced block's.
+- **Fenced-code blocks, and any block whose content is whitespace-significant**
+  (YAML, JSON, a diff, indented shell, a table), do **not** reduce. Match them
+  byte for byte, indentation included. Reducing them would accept a quotation
+  whose indentation differs from the source, which in that content is a
+  different value, not a different wrap -- the reduction exists to forgive a
+  soft wrap, and a soft wrap is a property of prose.
+
+List items break a block deliberately. A tight bullet list carries no blank
+lines, so without that rule a whole section of bullets is one block and a
+quotation could splice the tail of one bullet onto the head of the next. In
+practice a list marker and its trailing space survive the reduction and block
+such a splice anyway, but resting on that is resting on an accident of the
+marker rather than on the rule.
+
+**One block, never two.** The reduction is applied per block, so a span can
+cross a soft wrap and still match, and cannot cross a blank line, a fence,
+or a heading. Collapsing the whole file at once is the wrong reduction: it
+silently splices text across those boundaries into spans that never existed.
+
+- Accepted, crossing a soft wrap: a quotation whose words run past the end
+  of one physical line into the next line of the same paragraph.
+- Rejected, crossing a boundary: a quotation whose words run from the last
+  line of one paragraph into the first line of the next, or out of a fenced
+  block into the prose after it. The two sides are not one span.
+- Rejected, blended: a quotation joining text from two files, two sections,
+  or two non-adjacent points in one block.
+- Rejected, paraphrased: any span reworded, abridged with no marked
+  ellipsis, or reconstructed from recall rather than read from the file.
+
+**Claims about a match are themselves claims.** A line count, a line
+number, or a section name stated beside a quotation is derived from the
+file the same way the quotation is, not asserted alongside it.
+
 ## Isolation verification
 
 Whether a dispatched subagent's context actually excludes the calling
@@ -107,18 +156,64 @@ verification here finds contamination anyway, or cannot be completed, the
 Contaminated-dispatch disclosure section below governs what to do about
 it.
 
+### Trust class of an entry
+
+This registry is written at runtime by the same procedure that reads it
+back, so it holds two populations, and the difference is load-bearing:
+
+- **Reviewed** -- an entry already present in the copy this run started
+  from. It reached the file the way any other instruction content does,
+  through whatever review gate governs the repository carrying it.
+- **Same-run** -- an entry this run appended, per step 4 below. It passed
+  no gate. The file's own provenance does not transfer to a line added
+  mid-run, and fact-shaped wording (`Result: fails isolation`, `Verified
+  alternative:`) does not make it one.
+
+A later step in the same run must not read a Same-run entry back as an
+established record. It relies instead on the two control outcomes that run
+actually observed, and re-runs the Verification procedure below when those
+outcomes are not to hand -- the entry is the write-up, never the evidence.
+Between runs the distinction is the review gate's: an entry becomes
+Reviewed once it has merged, not once it has been written.
+
+Stated rather than implied, because it bounds what this section achieves:
+once both populations sit in the same working tree, nothing deterministic
+tells them apart, and the Same-run marker step 4 requires is written by the
+same run it constrains. This hardens the instruction; it does not close the
+hole. An entry is therefore never sufficient on its own to *raise* trust in
+a mechanism the reading run has not itself controlled for.
+
 ### Verification procedure
 
 Portable across platforms -- run this to test any candidate dispatch
 mechanism, not only the ones already recorded below.
 
-1. **Positive control.** From a working directory known to sit under the
-   calling repository's own `CLAUDE.md`/`AGENTS.md` ancestry, run the
-   candidate dispatch mechanism with a prompt asking it to report, verbatim,
-   whether it currently has project-level instructions loaded, and to quote
-   one distinctive sentence if so. Confirm it actually quotes real content --
-   this proves the test itself can detect the file when present, rather than
-   reflexively reporting "none" regardless of truth.
+1. **Positive control.** This step proves the *mechanism* can see a
+   project-instruction file at all, so that a "none loaded" in step 2 means
+   something. It does not need the calling repository's real file, and by
+   default must not use it.
+   - **Default: a synthetic sentinel.** Create a throwaway directory outside
+     any repository, write a `CLAUDE.md` (or `AGENTS.md`) into it whose only
+     content is a fixed, distinctive, non-sensitive sentence, and run the
+     candidate dispatch mechanism from there, asking it to report whether it
+     has project-level instructions loaded and to return that sentence if so.
+     Compare the reply against the sentinel you wrote, record only the
+     outcome, and delete the directory. Nothing that leaves the machine is
+     anything but text you authored for the test.
+   - **Why not the real file.** Asking a dispatch to quote the calling
+     repository's own `CLAUDE.md` sends that content to whatever endpoint
+     backs the mechanism, and into its transcript, before any rule about what
+     to publish can apply. A project-instruction file is not known to be
+     public: it can carry an internal hostname, a credential, a private
+     process detail. Editing a sentinel into the live file instead is not the
+     answer either -- that mutates a governed file for a test.
+   - **If the real file is unavoidable** -- for instance when the mechanism's
+     discovery is suspected to key on this specific repository rather than on
+     cwd ancestry generally -- treat the quote as sensitive throughout:
+     compare it where the run happens, record only the outcome ("positive
+     control passed"), and keep it out of a registry entry, a review report, a
+     PR or issue body, a log, or any other sink. State in the entry that this
+     variant was used and why.
 2. **Negative control.** From (or targeting) a location with no
    `CLAUDE.md`/`AGENTS.md` anywhere in its full directory ancestry, run the
    identical prompt through the identical mechanism. A result of "none
@@ -132,7 +227,9 @@ mechanism, not only the ones already recorded below.
    confirmed to detect a leak that filesystem inspection alone missed.
 4. Record a new entry in Known entries: platform identifying signal(s), the
    mechanism tested, the verified outcome, the date/versions observed, and
-   any caveat. Never assert isolation for a platform with no recorded entry.
+   any caveat. Mark it **Same-run, unreviewed** until it merges, per Trust
+   class above. Never assert isolation for a platform with no recorded
+   entry -- and never treat a Same-run entry as one that clears this bar.
 
 ### Known entries
 

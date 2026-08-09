@@ -329,6 +329,17 @@ the same "cheapest level that still makes it available" test dimension 5
 itself states, applied to the precondition/postcondition split from
 Contract discipline rather than only to dimension content.
 
+**Update (citation-fidelity step added):** Procedure step 5 gained a
+requirement that every quotation authored by the review be matched against
+the file it cites, under `adversarial-self-audit.md`'s Citation fidelity rule.
+Re-checked here because a new mandatory step is exactly what this dimension's
+reading burden tracks: it adds no file to the common-case mandatory read set,
+which stays at `SKILL.md`, `rubric.md`, and `adversarial-self-audit.md`. The
+rule lives in the third of those, already mandatory for the dispatch, so
+holding one definition in one place costs no fourth read -- and beats the
+alternative of restating it at each of the sites that invoke it, which is how
+three paraphrases drift apart. The Pass above stands.
+
 **Update (capability-assumption axis re-grade, Broad -- no-op, stated
 explicitly):** the capability-assumption axis is applied here for
 completeness, not silently skipped, precisely so the no-op is on the
@@ -367,25 +378,43 @@ reads back to decide how to dispatch. Trigger clauses (b) and (d) both fire.
 
 Named gaps, graded against that file's axes:
 
-- **Axis 9 (the record as a trust boundary), leading.** Registry entries are
-  written in fact-shaped prose (`Result: fails isolation`, `Verified
-  alternative:`) and are the sole basis a later dispatch uses to pick its
-  isolation mechanism -- functioning as directives while nothing states a
-  trust class for them. The registry is also both governance-gated and
-  runtime-written, so an entry a dispatch just appended has passed no review
-  even though the file it sits in did; the skill states nothing about that
-  split, so a false `Result: passes isolation` entry would be trusted by
-  every later dispatch.
+- **Axis 9 (the record as a trust boundary) -- closed since this section was
+  first written.** The gap was that registry entries are written in
+  fact-shaped prose and are the sole basis a later dispatch uses to pick its
+  isolation mechanism, while nothing stated a trust class for them: the
+  registry is both governance-gated and runtime-written, so an entry a
+  dispatch just appended had passed no review even though the file it sits in
+  had passed one. `adversarial-self-audit.md` now carries a `Trust class of an entry`
+  subsection naming both populations, and its Verification procedure step 4
+  requires the marker: "Mark it **Same-run, unreviewed** until it merges, per
+  Trust class above." Re-graded: the axis clears, with the file's own stated
+  limit (nothing deterministic separates the two once both sit in one working
+  tree) recorded rather than papered over.
 - **Axis 3 (freshness).** The registry's own re-verification hedge fires only
   "if this entry looks stale" -- discretionary, where the step it guards
   (whether a dispatch is isolated at all) cannot afford discretion.
 - **Axis 2 (identity binding).** Entries are keyed by platform signal, not by
   who wrote them or when they were last confirmed against a live control, so
-  a stale entry and a fresh one are indistinguishable on read.
+  a stale entry and a fresh one are indistinguishable on read. The Same-run
+  marker above is a partial answer only: it binds *this run's* entry, not
+  authorship or last-confirmation of the entries already there.
 
-This dimension therefore does not clear. Fixing it is a change to the
-registry's own contract, not to this worked example, and belongs to its own
-issue rather than to the change that added the sub-check.
+This dimension therefore still does not clear -- on axes 3 and 2, no longer
+on axis 9. Both remaining axes are changes to the registry's platform-keying
+and freshness contract, out of scope for the change that closed axis 9.
+
+Citation check on this subsection's own quotations, per `SKILL.md`'s Procedure
+step 5 and the Citation fidelity rule it resolves to: each span above was
+matched against the file it cites, both reduced by collapsing whitespace runs
+to single spaces, and each matched *within one block* -- no span crosses a
+blank line, a fence, or a heading, which is the rule's own limit and the
+reason the reduction is per block rather than per file. Both cross a soft
+wrap, the accepted case: the `SKILL.md` span "for the current platform's
+verified mechanism, running its Verification procedure and recording a new
+entry if none exists yet" spans three physical lines, and the step-4 span two.
+Both counts were derived from the files, not stated alongside the quotation
+from recall: an ancillary claim *about* a verified match is still an
+unverified claim until it is matched too.
 
 ### 7. Bundled scripts
 
@@ -673,10 +702,14 @@ bookkeeping: `docs/skill-eval-status.md`.
 
 **Well-formed, not yet mature.** This verdict was *mature* until the
 state-management sub-check was added to dimension 6; that sub-check fires on
-this skill's own isolation-verification registry and names three gaps, one
-leading, so dimension 6 no longer clears. Recording the downgrade rather than
-leaving the older verdict standing is the point: a rubric addition that
-cannot demote its own author's skill is not being applied. Dimensions 1
+this skill's own isolation-verification registry and named three gaps, of
+which the leading one (axis 9, the registry's own trust class) has since been
+closed in the registry file itself. Two remain -- axes 3 and 2, both about how
+entries are keyed and refreshed -- so dimension 6 still does not clear.
+Recording the downgrade rather than leaving the older verdict standing is the
+point: a rubric addition that cannot demote its own author's skill is not
+being applied, and closing one of its three named gaps does not promote the
+verdict while the other two stand. Dimensions 1
 (after the description fix), 3, 4, 5, and 7 (applicable -- this
 skill ships `gitapex_check_skill_shape.py`; clears cleanly after the
 constant-comment fix) all clear cleanly with cited evidence; dimensions 8
