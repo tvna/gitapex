@@ -277,12 +277,12 @@ def test_repository_wide_fixtures_have_no_unreviewed_blocking_findings():
     # and 7 skills' genuinely hostile-payload fixtures retagged `adversarial`
     # -- see that PR's own body for the full fixed set). Five could not be
     # resolved by a fixture-authoring fix alone and were pinned here as an
-    # explicitly reviewed, disclosed residual; four remain, after the
-    # evaluating-skill-quality entry the last bullet below describes was
-    # resolved. The count sentence and the assertion move together: whenever a
-    # residual is resolved, update both -- never silenced by narrowing
+    # explicitly reviewed, disclosed residual -- never silenced by narrowing
     # --tasks-glob (this test still runs the linter's real, unrestricted
-    # default scope):
+    # default scope). Four remain: the `evaluating-skill-quality` entry the
+    # last bullet below describes was resolved. The count sentence and the
+    # assertion move together -- whenever a residual is resolved, update
+    # both. The four still pinned:
     #
     #   - scorer-gated-skill-edits/ship-without-transfer-check.yaml
     #     [case-sensitivity]: the pre-existing #858 residual, already pinned
