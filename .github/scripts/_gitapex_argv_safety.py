@@ -266,7 +266,15 @@ def find_argv_safety_violations(argv: tuple[str, ...] | list[str]) -> list[str]:
     # Every interpreter occurrence, not just the first: an argv naming one
     # interpreter with a real script and a second one with a payload would
     # otherwise report clean on the strength of the first.
-    first_interpreter = next((index for index, base in enumerate(basenames) if _inline_code_flags(base)), None)
+    # `is not None`, matching the loop below rather than testing truthiness:
+    # the two agree only while every INLINE_CODE_FLAGS value is a non-empty
+    # frozenset, and an interpreter registered with an empty set would shift
+    # this anchor to a later token while the loop still visited the earlier
+    # one. Raised as a nitpick in review; taken because the divergence would
+    # be silent and this is the guard's own anchor.
+    first_interpreter = next(
+        (index for index, base in enumerate(basenames) if _inline_code_flags(base) is not None), None
+    )
     for index, base in enumerate(basenames):
         flags = _inline_code_flags(base)
         if flags is None:
