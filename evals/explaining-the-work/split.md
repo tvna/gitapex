@@ -1,4 +1,4 @@
-# Held-out split for scorer-gated-skill-edits
+# explaining-the-work held-out split
 
 Train / selection / test partition for `evals/explaining-the-work/`,
 established so `scorer-gated-skill-edits`' precondition gate (a real
@@ -30,36 +30,36 @@ over time, not a smaller gate.
 
 ## Assignment
 
-- **train** (motivates edits; read for evidence, never scored for
-  acceptance): `guardrail.yaml`, `normal.yaml`,
-  `precedence-repo-noqa-format-train.yaml`.
-- **selection** (gates acceptance; scored before/after the candidate
-  edit, strict improve-or-reject, ties rejected): `commit-includes-terse-why.yaml`
-  (new; the dedicated positive-route check for the changed branch, held
-  out so the changed branch is not covered only in train),
-  `closes-when-fully-satisfied.yaml` (pre-existing; direct regression
-  control on the same Commit-log bullet's untouched Closes/Refs choice).
-- **test** (read once, for a final report only, never to motivate or
-  gate an edit): `edge.yaml`, `no-auto-generated-adr.yaml`,
-  `no-bulk-rewrite.yaml`, `no-redundant-what-comment.yaml`,
-  `no-staleness-only-deletion.yaml`, `refs-when-partial-work.yaml`,
-  `precedence-informal-convention-not-deterministic-selection.yaml`
-  (its filename predates this assignment decision -- kept as-is rather
-  than renamed, since the fixture id is stable and referenced above;
-  assigned to test, not selection, so it does not retroactively expand
-  this iteration's already-recorded selection-split gate table above,
-  which belongs to the unrelated Commit-log-rule edit),
-  `commit-why-keeps-distinct-reasons.yaml` (new, issue #609; assigned to
-  test rather than selection because it did not demonstrate a behavioral
-  improvement -- see the `## Iteration: issue #609` section below),
-  `why-not-issue-and-adr-numbers-stay-distinct.yaml` (new, issue #609
-  continued again; assigned to test, not selection, for the same
+See `split.json` for the definitive train/selection/test fixture
+listing. Rationale for the non-obvious assignments, preserved here since
+it is not data `split.json`'s schema can hold:
+
+- `commit-includes-terse-why.yaml` (selection): new; the dedicated
+  positive-route check for the changed branch, held out so the changed
+  branch is not covered only in train.
+- `closes-when-fully-satisfied.yaml` (selection): pre-existing; direct
+  regression control on the same Commit-log bullet's untouched
+  Closes/Refs choice.
+- `precedence-informal-convention-not-deterministic-selection.yaml`
+  (test): its filename predates this assignment decision -- kept as-is
+  rather than renamed, since the fixture id is stable and referenced in
+  `## Equivalence classes` below; assigned to test, not selection, so it
+  does not retroactively expand the `## Iteration: issue #599` section's
+  already-recorded selection-split gate table, which belongs to the
+  unrelated Commit-log-rule edit.
+- `commit-why-keeps-distinct-reasons.yaml` (test): new, issue #609;
+  assigned to test rather than selection because it did not demonstrate a
+  behavioral improvement -- see the `## Iteration: issue #609` section
+  below.
+- `why-not-issue-and-adr-numbers-stay-distinct.yaml` (test): new, issue
+  #609 continued again; assigned to test, not selection, for the same
   reason -- see the `## Iteration: issue #609 (continued again)` section
-  below).
+  below.
 
 ## Equivalence classes
 
-One class, added incidentally while creating this file (not part of the
+See `split.json` for the definitive train/held-out fixture pairing. One
+class, added incidentally while creating this file (not part of the
 Commit-log-rule iteration below): `SKILL.md`'s pre-existing `##
 Precedence` section ("The calling repository's existing deterministic
 gates ... take precedence over this skill") had zero fixture coverage
@@ -68,10 +68,6 @@ before this file existed at all -- `check_precedence_branch_coverage`
 once a skill has a `split.md`, so this gap was invisible until this
 iteration created one. Same shape as the `merge-retrospective` precedent
 that check's own docstring cites (issue #352/#328).
-
-| # | Class | Train | Held-out |
-|---|---|---|---|
-| 1 | Precedence: a named deterministic repo gate (`Contract:`/`noqa`) overrides the skill's own template | `precedence-repo-noqa-format-train.yaml` | `precedence-informal-convention-not-deterministic-selection.yaml` (test) |
 
 Not scored before/after for this iteration's own gate (below) -- this
 branch is untouched by the Commit-log-rule edit, so there is nothing to
@@ -207,7 +203,7 @@ any score was banked on either side, not after seeing a result, per this
 skill's own Stop boundary against motivating or leaking from a scored
 split.
 
-### KEEP
+### Verdict
 
 Selection-split score strictly increased (0.833333 -> 1.000000), train
 fixtures pass under the new text, all six unaffected-branch test
