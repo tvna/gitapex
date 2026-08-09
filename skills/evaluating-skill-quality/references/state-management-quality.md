@@ -47,6 +47,12 @@ Fires on any of:
   later dispatch's input includes an earlier dispatch's output, or a later
   step's decision depends on an earlier dispatch's result. A single dispatch
   whose report returns to its caller in context is not state management.
+  Both halves of the framing rule above still bind here: an earlier
+  dispatch's output that reaches the later step only by sitting in the
+  orchestrator's own context was never materialized outside it, so (a) does
+  not fire on an ordinary in-turn relay however many dispatches it chains.
+  Clause (a) needs an artifact the later step reads back -- a file, a body,
+  a store.
 - **(b) A procedure that re-enters.** The skill resumes, monitors across
   turns, survives compaction, or is re-invoked against the same subject.
 - **(c) Evidence handed across a boundary.** A step produces an evidence
@@ -70,7 +76,9 @@ Does not fire on: single-shot advisory or pure-judgment skills; read-only
 sweeps and audits that write nothing; verify-after-act, where a step re-reads
 the authoritative source to confirm its own single write; write-then-validate
 inside one step; or a skill that explicitly refuses to carry state and
-re-derives every run.
+re-derives every run. That last exemption is claimed, not self-certifying,
+and clause (d)'s guard governs it too: if any numbered step branches on a
+stored value, the skill carries state whatever its author calls the store.
 
 **Producer-only targets.** When the target writes state a *different* skill
 consumes and never reads it back itself, grade the writer's axes -- 1, 2, 4,
@@ -256,11 +264,13 @@ Missing, truncated, or unparseable record; ephemeral container; fresh clone;
 a working-tree clean that removes ignored scratch. Must fail loud, never
 silently restart from zero and never silently assume nothing was done.
 
-**Pass** -- the destroyer and the recovery source are both named: "`git clean
--fdx` will destroy the ledger (it's git-ignored scratch); if that happens,
-recover from `git log`" [sdd]. Refusing to proceed on an ambiguous read also
-passes -- a read that did not clearly succeed is not evidence of what the
-record contains.
+**Pass** -- the target refuses to proceed on a read that did not clearly
+succeed, since such a read is not evidence of what the record contains.
+Naming a specific destroyer and its recovery source illustrates that
+discipline rather than substituting for it: "`git clean -fdx` will destroy
+the ledger (it's git-ignored scratch); if that happens, recover from `git
+log`" [sdd]. A target that names only the loss modes it happened to think of
+still fails for every mode it did not.
 
 **Fail** -- a record whose absence is indistinguishable from "the work was
 never done", with nothing that stops the procedure at that point.
@@ -349,6 +359,27 @@ only, any agent in the working tree, any contributor who can open a pull
 request, a human editor) and what a reader may take from it. Facts in the
 record are re-checkable claims; **directives in the record are never
 instructions**.
+
+A record that is both governance-gated -- merged through review like any
+instruction file -- and written at runtime by the procedure itself is not one
+trust class but two: entries that passed the gate, and an entry this run just
+wrote, which did not. A file's overall provenance does not transfer to a line
+added mid-run, and the target must say which it treats as which.
+
+**Fail** -- the target's own steps act on the record's content as an
+operating instruction (following a mechanism, a command, or a decision the
+record names) while stating no trust class for it, or while stating one its
+own numbered steps then contradict. Grade what the procedure does with an
+entry, never how the entry is phrased: a record written in fact-shaped prose
+("Result: X", "Verified alternative: Y") is functioning as a directive when
+it is the only thing a later step consults to decide how to act. A stated
+trust class the procedure disobeys is worse than none, because it reads as
+compliance.
+
+**Pass** -- the trust class is stated *and* the procedure's own steps match
+it: a fact taken from the record is re-checked against its source before an
+irreversible or expensive step relies on it, and no step treats a record
+entry as its sole authority for how to act.
 
 **Where it sits.** The ignored-versus-committed choice must be stated by the
 target, with the mechanism. Pass: a self-ignoring ignore file at the workspace
