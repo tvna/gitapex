@@ -22,3 +22,28 @@ does not change the recorded substring mean or verdict. Design spec:
 mechanism documentation on an already-required behavioral branch, not a new
 enforced rule, so no new eval fixture was added -- same precedent as #149
 above. Refs #175, #173, #174, #167.
+
+**Issue #932 (waza ownership and the run-record contract):** this skill
+became the repository's waza-dependent skill. Its sidecar now declares
+`shell: ["waza"]`, Procedure step 1 confirms the runner and records the
+version it reports, and Procedure step 7 writes a run record whose fields
+the step itself enumerates, validated against two schemas that ship inside
+the skill (`references/eval-run.schema.json`,
+`references/eval-scores.schema.json`). Both are real new enforced branches,
+so four fixtures were added -- unlike the #149 and #175 entries above,
+which documented advisory additions. Coverage is a positive route plus a
+non-trigger control per branch, the positive held out in selection; see
+`split.md`. Refs #932, #926.
+
+Two limits ship with that change, neither measured here because the issue
+ruled a suite re-run out of scope:
+
+- The four new fixtures are declared coverage, not scored coverage. No
+  before/after selection score exists for this edit, so the skill's own
+  improve-or-reject gate was not applied to it -- disclosed rather than
+  approximated.
+- Step 1 is a new unconditional first action, and the eleven pre-existing
+  fixtures' prompts predate it. A run of those fixtures now reaches step 1
+  before anything else. It should pass, since waza is by construction
+  present in a waza-executed run, but that expectation is unverified here
+  and is the first thing a future measured run should check.
