@@ -60,7 +60,11 @@ _CHECKPOINT_PHRASES = (
 
 # What Procedure step 5 requires of every quotation, mirrored against the
 # **Postcondition** bullet. Extend in the same change that alters step 5's
-# own postcondition-bearing requirements.
+# own postcondition-bearing requirements. The honest limitation the module
+# docstring records for _CHECKPOINT_PHRASES applies to this tuple and to
+# _INVARIANT_PHRASES below too: both track a few short anchor substrings, not
+# the whole synced prose, so a driftless reword in both files still needs its
+# tuple updated by hand, and a phrase nobody adds here is not guarded at all.
 _POSTCONDITION_PHRASES = (
     "Citation fidelity",
     "cited evidence",
@@ -73,8 +77,16 @@ _INVARIANT_PHRASES = ("fabricated citation",)
 
 def _reduce(text):
     """Collapse whitespace runs to one space, so a phrase split across a soft
-    wrap still matches -- the same reduction references/adversarial-self-audit.md's
-    Citation fidelity rule defines, applied to the gate that guards it."""
+    wrap still matches.
+
+    This is the *whitespace* half of the reduction
+    references/adversarial-self-audit.md's Citation fidelity rule defines, and
+    deliberately not the whole of it: that rule also scopes matching to a single
+    block, while this runs over a whole extracted bullet or step. The difference
+    is safe here because every phrase tracked below is a short span inside one
+    bullet, never a quotation a reader could splice -- but the two are not
+    equivalent, and an earlier version of this docstring claimed they were.
+    """
     return re.sub(r"\s+", " ", text).strip()
 
 
@@ -113,16 +125,20 @@ def _stop_boundaries_text(skill_md_text):
     return section.group(1)
 
 
-def _contract_bullet(rubric_text, name, next_name):
-    """Return the Contract discipline bullet ``name``, up to ``next_name``.
+def _contract_bullet(rubric_text, name):
+    """Return the Contract discipline bullet ``name``, up to the next bullet.
 
-    ``next_name`` is matched without a closing ``**`` so a bullet whose bold
-    run ends in a period (``- **Keep this enumeration in sync.**``) still
-    terminates the span.
+    Terminated by the next ``- **`` bullet or the end of the section, never by
+    a named successor: an adversarial review of this gate confirmed that
+    naming the successor made extraction order-dependent, so reordering the
+    bullets with zero content drift failed CI with a misleading "bullet not
+    found" message on a harmless edit. The generic terminator also drops the
+    closing-``**`` special case a bold run ending in a period needed
+    (``- **Keep this enumeration in sync.**``).
     """
     section = re.search(r"\n## Contract discipline\n(.*?)\n## ", rubric_text, re.S)
     assert section, "rubric.md has no '## Contract discipline' section -- gate cannot run"
-    bullet = re.search(rf"- \*\*{name}\*\*.*?(?=\n- \*\*{next_name})", section.group(1), re.S)
+    bullet = re.search(rf"- \*\*{name}\*\*.*?(?=\n- \*\*|\Z)", section.group(1), re.S)
     assert bullet, f"Contract discipline has no **{name}** bullet in the expected shape"
     return bullet.group(0)
 
@@ -134,8 +150,8 @@ def contract_blocks():
     return {
         "step_5": _reduce(_step_5_text(skill)),
         "stop_boundaries": _reduce(_stop_boundaries_text(skill)),
-        "postcondition": _reduce(_contract_bullet(rubric, "Postcondition", "Invariant")),
-        "invariant": _reduce(_contract_bullet(rubric, "Invariant", "Keep this enumeration in sync")),
+        "postcondition": _reduce(_contract_bullet(rubric, "Postcondition")),
+        "invariant": _reduce(_contract_bullet(rubric, "Invariant")),
     }
 
 

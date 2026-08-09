@@ -342,7 +342,7 @@ spec:
       summary: "Added a byte-exact citation requirement to Procedure step 5 plus a paired Stop boundary: every quotation the review authors is substring-matched against its cited file (source line wraps normalized to single spaces) before entering the report. Grounded in this repository's own history -- a draft reference once shipped roughly ten fabricated quotations of fourteen, and every deterministic check passed on it."
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/933"
-      summary: "Paid for the new step against the 500-line body ceiling in-file rather than by moving content to references/: eight duplication/narration trims in SKILL.md (the filesystem-only-check restatement and the main-thread relay restatement are the two duplications; the rest are narrower narration cuts). Net body 499 -> 498 lines; the mandatory common-case read set is unchanged at three files, so dimension 5's tracked reading burden does not deepen."
+      summary: "Paid for the new step against the 500-line body ceiling in-file rather than by moving content to references/: ten trims in SKILL.md, of which the filesystem-only-check and main-thread-relay restatements are true duplications. The mandatory common-case read set stays at three files, so dimension 5's tracked reading burden does not deepen. Body length as shipped is recorded in the paired audit entry below, not here, so later commits cannot strand a stale number in this one."
     - kind: audit
       anchor: "https://github.com/tvna/gitapex/issues/933"
       summary: "Pre-merge dogfood, evaluating-skill-quality self-review, diff-scoped, under isolation the caller established live (claude -p from the snapshot cwd with an isolated HOME; both controls re-run at CLI 2.1.226, which the registry's existing entry already covers, so no new registry entry was written). WELL-FORMED-NOT-MATURE. Two gaps found, both fixed in this PR: dimension 4's undisclosed Contract-discipline sync, and dimension 8's missing audit-pairing entry (this entry and the next close it)."
@@ -379,6 +379,34 @@ spec:
         verdict: gate-shipped
         found: 1
         fixed: 1
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/pull/936"
+      summary: "Post-fix round, checker-script adversarial review of the extended test_gitapex_contract_precondition_sync.py, isolated. FAIL, one confirmed defect reproduced locally before fixing: _contract_bullet located a bullet by naming its successor, so reordering the Contract discipline bullets with zero content drift broke extraction and failed CI with a misleading message. Now terminated by the next '- **' generically; reordering re-tested and extraction is identical. Two disclosure gaps also closed."
+      outcome:
+        verdict: FAIL
+        found: 3
+        fixed: 3
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/pull/936"
+      summary: "Post-fix round, evaluating-skill-quality self-review, isolated. WELL-FORMED-NOT-MATURE. Two findings inside this change fixed: _reduce's docstring claimed equivalence to the Citation fidelity rule while omitting that rule's per-block scoping, and this sidecar carried a body-line count later commits had stranded. Dimension 6 stays uncleared on the registry's axes 2 and 3, unchanged and out of scope. Body as shipped: 499 lines, 62/62 shape checks."
+      outcome:
+        verdict: WELL-FORMED-NOT-MATURE
+        found: 2
+        fixed: 2
+        body_lines: 499
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/pull/936"
+      summary: "Post-fix round, battle-testing-a-skill, isolated. FAIL, four findings. Finding 1 (a quotation splicing two adjacent bullets of a tight list, which carries no blank line to break the block) was tested directly and did NOT reproduce: the '- ' marker survives the reduction. The block rule now breaks at list items and table rows anyway, so the protection is by design rather than by that accident, and the refutation is recorded rather than the finding silently dropped."
+      outcome:
+        verdict: FAIL
+        found: 4
+        refuted: 1
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/pull/936"
+      summary: "Battle-test finding 4, not fixed here by the parent issue's own instruction: the citation match is prose the dispatch performs, with no bundled callable checker, which its dimension 19 calls a deterministic-computation gap. Issue 933 names the CI citation-verification gate as an explicit non-goal with its own issue, covering the procedural half only. Building it here would take the non-goal, not the goal."
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/pull/936"
+      summary: "Battle-test findings 2 and 3, disclosed not fixed. Finding 2: executionRequirements tool tags are free-form with no path scoping in the schema, so write: [files] cannot express the narrow real need (append one line to one bundled file); inventing a scoped tag would be false precision, and the scope limit is a schema question. Finding 3: no evals/ fixture exercises the new citation, trust-class, or confidentiality rules; the deterministic branch-coverage gate passes at 70 fixtures."
   skillDependencies:
     requires: []
     relatedTo:

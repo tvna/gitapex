@@ -100,12 +100,19 @@ The one rule every quotation this dispatch authors is matched under --
 `SKILL.md`'s Procedure step 5 and its paired Stop boundary both resolve
 here, so there is a single definition rather than three paraphrases of one.
 
-**Canonical forms.** A *block* is a run of source lines with no blank line,
-no fenced-code delimiter, and no heading between them. Reduce both the
-source block and the candidate quotation by collapsing every run of
-whitespace -- including the newline and continuation indent of a soft wrap
--- to one space, and trimming the ends. The quotation matches only when its
-reduced form is a substring of one reduced block's.
+**Canonical forms.** A *block* is a run of source lines broken by a blank
+line, a fenced-code delimiter, a heading, or the start of a new list item or
+table row. Reduce both the source block and the candidate quotation by
+collapsing every run of whitespace -- including the newline and continuation
+indent of a soft wrap -- to one space, and trimming the ends. The quotation
+matches only when its reduced form is a substring of one reduced block's.
+
+List items break a block deliberately. A tight bullet list carries no blank
+lines, so without that rule a whole section of bullets is one block and a
+quotation could splice the tail of one bullet onto the head of the next. In
+practice the `- ` marker survives the reduction and blocks such a splice
+anyway, but resting on that is resting on an accident of the marker rather
+than on the rule.
 
 **One block, never two.** The reduction is applied per block, so a span can
 cross a soft wrap and still match, and cannot cross a blank line, a fence,
