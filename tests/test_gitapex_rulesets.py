@@ -16,7 +16,7 @@ from typing import Any
 import _gitapex_rulesets
 import pytest
 
-SOT = {
+SOT: dict[str, Any] = {
     "name": "main-protection",
     "target": "branch",
     "enforcement": "active",
@@ -173,3 +173,93 @@ def test_required_check_contexts_tolerates_every_shape_with_no_contexts(ruleset:
     # expressible states; this function reports what is there and lets the
     # caller decide whether empty is a problem.
     assert _gitapex_rulesets.required_check_contexts(ruleset) == []
+
+
+def paging_fetcher(pages: list[Any]) -> Any:
+    """Fetcher that serves `pages[n-1]` for `?page=n` on the list endpoint.
+
+    Requests past the end of `pages` get an empty page, which is what the real
+    endpoint returns; a page-parameter-blind fake would let an unpaginated
+    implementation pass by handing it the same body forever.
+    """
+
+    def fetch(url: str) -> Any:
+        page = int(url.rsplit("page=", 1)[1])
+        return pages[page - 1] if page <= len(pages) else []
+
+    return fetch
+
+
+def test_list_live_rulesets_follows_pagination_past_the_first_page() -> None:
+    # The failure this guards: `main-protection` sitting on page two reads as
+    # absent, so apply plans a POST and creates a duplicate.
+    first = [{"id": index, "name": f"filler-{index}"} for index in range(_gitapex_rulesets._PAGE_SIZE)]
+    live = _gitapex_rulesets.list_live_rulesets(
+        "o/r", paging_fetcher([first, [{"id": 999, "name": "main-protection"}]])
+    )
+    assert len(live) == _gitapex_rulesets._PAGE_SIZE + 1
+    assert _gitapex_rulesets.match_by_name(live, "main-protection") == [{"id": 999, "name": "main-protection"}]
+
+
+def test_list_live_rulesets_stops_on_a_short_page() -> None:
+    fetch = paging_fetcher([[{"id": 1, "name": "main-protection"}]])
+    assert _gitapex_rulesets.list_live_rulesets("o/r", fetch) == [{"id": 1, "name": "main-protection"}]
+
+
+def test_list_live_rulesets_refuses_a_possibly_truncated_list() -> None:
+    # Silently truncating would reproduce the exact "looks absent, actually
+    # present" state pagination exists to prevent, so the ceiling must raise.
+    full = [{"id": index, "name": f"filler-{index}"} for index in range(_gitapex_rulesets._PAGE_SIZE)]
+    fetch = paging_fetcher([full] * (_gitapex_rulesets._MAX_PAGES + 1))
+    with pytest.raises(_gitapex_rulesets.RulesetError, match="possibly truncated"):
+        _gitapex_rulesets.list_live_rulesets("o/r", fetch)
+
+
+def test_canonical_projection_sorts_rules_by_type() -> None:
+    # GitHub publishes no ordering guarantee for `rules`; comparing positionally
+    # would make a pure re-ordering read as drift.
+    shuffled = {**SOT, "rules": list(reversed(SOT["rules"]))}
+    assert _gitapex_rulesets.canonical_projection(shuffled) == _gitapex_rulesets.canonical_projection(SOT)
+
+
+def test_canonical_projection_tolerates_a_non_list_rules_value() -> None:
+    assert _gitapex_rulesets.canonical_projection({"rules": None})["rules"] is None
+
+
+def test_find_subset_mismatches_ignores_fields_github_added() -> None:
+    # The whole reason this is subset rather than equality: the response carries
+    # server-stamped defaults the committed file never set.
+    actual = {"name": "main-protection", "id": 99, "created_at": "2026-01-01", "_links": {"self": {}}}
+    assert _gitapex_rulesets.find_subset_mismatches({"name": "main-protection"}, actual) == []
+
+
+def test_find_subset_mismatches_reports_a_changed_scalar_by_path() -> None:
+    expected = {"rules": [{"parameters": {"required_approving_review_count": 0}}]}
+    actual = {"rules": [{"parameters": {"required_approving_review_count": 1}}]}
+    assert _gitapex_rulesets.find_subset_mismatches(expected, actual) == [
+        "rules[0].parameters.required_approving_review_count: is 1, the source of truth specifies 0"
+    ]
+
+
+def test_find_subset_mismatches_reports_a_key_github_dropped() -> None:
+    findings = _gitapex_rulesets.find_subset_mismatches({"enforcement": "active"}, {"name": "x"})
+    assert findings == ["enforcement: missing from what GitHub stored"]
+
+
+def test_find_subset_mismatches_reports_a_dropped_required_check() -> None:
+    # A silently shortened list is the dangerous case: the ruleset exists, the
+    # apply returned 2xx, and one required check simply is not enforced.
+    expected = {"checks": [{"context": "ruff"}, {"context": "pytest"}]}
+    findings = _gitapex_rulesets.find_subset_mismatches(expected, {"checks": [{"context": "ruff"}]})
+    assert findings == ["checks: has 1 entr(ies), the source of truth specifies 2"]
+
+
+@pytest.mark.parametrize(
+    ("expected", "actual", "fragment"),
+    [
+        ({"a": {"b": 1}}, {"a": "scalar"}, "expected an object"),
+        ({"a": [1]}, {"a": 1}, "expected a list"),
+    ],
+)
+def test_find_subset_mismatches_reports_a_type_change(expected: Any, actual: Any, fragment: str) -> None:
+    assert fragment in _gitapex_rulesets.find_subset_mismatches(expected, actual)[0]

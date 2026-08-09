@@ -50,6 +50,7 @@ from _gitapex_rulesets import (  # same bootstrap
     RulesetError,
     canonical_json_lines,
     canonical_projection,
+    find_subset_mismatches,
     load_sot,
     render_projection_diff,
     resolve_live_ruleset,
@@ -136,8 +137,14 @@ def plan_write(repo: str, sot: dict[str, Any], live: dict[str, Any] | None) -> d
     }
 
 
-def render_summary(plan: dict[str, Any], mode: str, diff: str, result_id: Any) -> str:
-    """Markdown for the job summary: what was planned, what changed, what landed."""
+def render_summary(plan: dict[str, Any], mode: str, diff: str, result_id: Any, mismatches: list[str]) -> str:
+    """Markdown for the job summary: what was planned, what changed, what landed.
+
+    Rendered on every path, including a failed post-write verification -- the
+    result id and request body are the operator's only record of a write that
+    already happened, so they must never be withheld as a side effect of
+    reporting the failure. See `verify_applied`.
+    """
     lines = [
         f"## Ruleset {mode}: `{plan['body'].get('name')}`",
         "",
@@ -161,6 +168,16 @@ def render_summary(plan: dict[str, Any], mode: str, diff: str, result_id: Any) -
         ]
     else:
         lines += ["Live ruleset already matches the committed source of truth; the request is a no-op replace.", ""]
+    if mismatches:
+        listed = "\n".join(f"- {mismatch}" for mismatch in mismatches)
+        lines += [
+            "> [!CAUTION]",
+            "> **The write landed, but GitHub stored something the committed source of truth does not specify.**",
+            "> The ruleset id above is real and this run did change live state; reconcile rather than re-dispatch blindly.",
+            "",
+            listed,
+            "",
+        ]
     lines += ["<details><summary>Request body</summary>", "", "```json"]
     lines += [line.rstrip("\n") for line in canonical_json_lines(plan["body"])]
     lines += ["```", "</details>", ""]
@@ -173,28 +190,30 @@ def run(
     mode: str,
     fetch: Callable[[str], Any],
     writer: Writer,
-) -> str:
-    """Execute one plan-or-apply run and return the summary markdown.
+) -> tuple[str, list[str]]:
+    """Execute one plan-or-apply run.
 
-    No exit code in the return value: this function has exactly one failure
-    mode, an exception, and every one of them is a `RulesetError` or
-    `GitHubApiError` that `main` turns into exit 1. An always-zero second
-    element would read like a real status while carrying no information.
+    Returns the summary markdown and any post-write verification findings.
+    Exceptions remain the channel for "the run could not proceed"; the findings
+    list is the separate, softer channel for "the write happened and the result
+    needs reconciling", which must still produce a summary. See
+    `verify_applied` for why those two cannot share the exception path.
     """
     sot = load_sot(sot_path)
     live = resolve_live_ruleset(repo, sot["name"], fetch)
     plan = plan_write(repo, sot, live)
     diff = render_projection_diff(live, sot) if live is not None else ""
     result_id: Any = None
+    mismatches: list[str] = []
     if mode == "apply":
         response = writer(plan["url"], plan["method"], plan["body"])
         result_id = response.get("id")
-        verify_applied(response, sot)
-    return render_summary(plan, mode, diff, result_id)
+        mismatches = verify_applied(response, sot)
+    return render_summary(plan, mode, diff, result_id, mismatches), mismatches
 
 
-def verify_applied(response: dict[str, Any], sot: dict[str, Any]) -> None:
-    """Confirm GitHub actually stored what was sent, before reporting success.
+def verify_applied(response: dict[str, Any], sot: dict[str, Any]) -> list[str]:
+    """What GitHub stored that the committed source of truth does not specify.
 
     Both POST and PUT return the stored ruleset object, so the response is a
     direct read of the resulting state rather than an echo of the request. A
@@ -202,24 +221,25 @@ def verify_applied(response: dict[str, Any], sot: dict[str, Any]) -> None:
     `skills/evaluating-deterministic-gate-quality/references/dimensions.md`
     dimension 10 names exactly this ("a call can execute cleanly and be
     narrated as successful while the state transition it produced still
-    violates the policy") -- so the response is compared against the committed
-    source of truth on the same projection every other comparison here uses.
+    violates the policy").
 
-    Raising, rather than only reporting, is deliberate. The write has already
-    happened by this point and failing does not roll it back; what failing buys
-    is that the operator finds out while they are still watching the run they
-    dispatched, instead of up to a day later from the scheduled drift scan. If
-    the mismatch turns out to be GitHub normalising a field it accepted, the
-    fix is to update `.github/rulesets/main.json` to match what GitHub actually
-    stores -- which is a source-of-truth correction worth making, not noise to
-    suppress.
+    **Returns findings rather than raising, and that ordering is the point.**
+    An earlier revision raised here. Because the raise happened inside `run`,
+    `main` returned 1 before ever printing the summary or appending it to
+    `$GITHUB_STEP_SUMMARY` -- so on the one run that actually mutated live
+    state, the operator got an error and *no record of the resulting ruleset
+    id*, which is precisely what `docs/runbooks/rulesets.md` tells them to read
+    out of the job summary for a future rollback. The write cannot be undone by
+    failing fast; losing its receipt makes the situation strictly worse. The
+    summary is now always rendered, with the findings inside it, and `main`
+    turns a non-empty list into exit 1 afterwards.
+
+    Subset comparison, via `find_subset_mismatches`: GitHub stamps its own
+    defaults onto the stored object, and the source of truth asserts what must
+    hold, not that nothing else may be present. See that function for why
+    equality here would fail on the very first successful apply.
     """
-    drift = render_projection_diff(response, sot)
-    if drift:
-        raise RulesetError(
-            "the write succeeded but GitHub stored something other than the committed source of truth "
-            f"(`live` is what it stored, `sot` is what was sent):\n{drift}"
-        )
+    return find_subset_mismatches(canonical_projection(sot), canonical_projection(response))
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -239,14 +259,21 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
     try:
-        summary = run(args.repo, pathlib.Path(args.sot), args.mode, default_fetch, send_write)
+        summary, mismatches = run(args.repo, pathlib.Path(args.sot), args.mode, default_fetch, send_write)
     except (RulesetError, GitHubApiError) as error:
         print(f"::error::{error}", file=sys.stderr)
         return 1
+    # Summary first, always -- including when the verification below fails. It
+    # carries the resulting ruleset id, which is the operator's only handle on
+    # a write that has already landed.
     print(summary)
     if args.summary_file:
         with pathlib.Path(args.summary_file).open("a", encoding="utf-8") as handle:
             handle.write(f"{summary}\n")
+    if mismatches:
+        for mismatch in mismatches:
+            print(f"::error::GitHub stored something other than the source of truth -- {mismatch}", file=sys.stderr)
+        return 1
     return 0
 
 

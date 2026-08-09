@@ -28,7 +28,16 @@ VALID: dict[str, Any] = {
     "rules": [
         {"type": "deletion"},
         {"type": "non_fast_forward"},
-        {"type": "pull_request", "parameters": {"required_approving_review_count": 0}},
+        {
+            "type": "pull_request",
+            "parameters": {
+                "required_approving_review_count": 0,
+                "require_code_owner_review": True,
+                "required_review_thread_resolution": True,
+                "dismiss_stale_reviews_on_push": True,
+                "allowed_merge_methods": ["merge", "squash"],
+            },
+        },
         {
             "type": "required_status_checks",
             "parameters": {"required_status_checks": [{"context": "always-runs"}]},
@@ -312,3 +321,96 @@ def test_the_default_branch_is_configurable(tmp_path: pathlib.Path) -> None:
     workflows = write_workflows(tmp_path, b=workflow)
     assert gate.find_violations(write_ruleset(tmp_path, VALID), workflows, "release") == []
     assert len(gate.find_violations(write_ruleset(tmp_path, VALID), workflows, "main")) == 1
+
+
+# --- Findings from an independent review round: the gate claimed to enforce
+# --- properties it never inspected, and three classifier shapes failed open.
+
+
+def test_a_ruleset_scoped_to_another_branch_is_a_finding(tmp_path: pathlib.Path) -> None:
+    # Every rule present, protecting a ref that does not exist. Rule-presence
+    # checking alone reported this as green.
+    ruleset = json.loads(json.dumps(VALID))
+    ruleset["conditions"]["ref_name"]["include"] = ["refs/heads/nonexistent"]
+    findings = gate.find_violations(write_ruleset(tmp_path, ruleset), write_workflows(tmp_path, a=UNFILTERED_WORKFLOW))
+    assert any("~DEFAULT_BRANCH" in finding for finding in findings), findings
+
+
+def test_excluding_the_default_branch_cancels_the_include(tmp_path: pathlib.Path) -> None:
+    ruleset = json.loads(json.dumps(VALID))
+    ruleset["conditions"]["ref_name"]["exclude"] = ["~DEFAULT_BRANCH"]
+    findings = gate.find_violations(write_ruleset(tmp_path, ruleset), write_workflows(tmp_path, a=UNFILTERED_WORKFLOW))
+    assert any("cancelling the include" in finding for finding in findings), findings
+
+
+def test_a_non_branch_target_is_a_finding(tmp_path: pathlib.Path) -> None:
+    ruleset = json.loads(json.dumps(VALID))
+    ruleset["target"] = "tag"
+    findings = gate.find_violations(write_ruleset(tmp_path, ruleset), write_workflows(tmp_path, a=UNFILTERED_WORKFLOW))
+    assert any("not 'branch'" in finding for finding in findings), findings
+
+
+@pytest.mark.parametrize("flag", list(gate.REQUIRED_PULL_REQUEST_FLAGS))
+def test_each_required_pull_request_flag_must_be_true(flag: str, tmp_path: pathlib.Path) -> None:
+    ruleset = json.loads(json.dumps(VALID))
+    parameters: dict[str, Any] = dict.fromkeys(gate.REQUIRED_PULL_REQUEST_FLAGS, True)
+    parameters["allowed_merge_methods"] = ["merge"]
+    parameters[flag] = False
+    ruleset["rules"][2]["parameters"] = parameters
+    findings = gate.find_violations(write_ruleset(tmp_path, ruleset), write_workflows(tmp_path, a=UNFILTERED_WORKFLOW))
+    assert any(flag in finding for finding in findings), findings
+
+
+def test_a_rebase_only_merge_policy_is_a_finding(tmp_path: pathlib.Path) -> None:
+    # rebase replays branch commits without a merge commit, so no path carries
+    # the pull request's own review with it.
+    ruleset = json.loads(json.dumps(VALID))
+    parameters: dict[str, Any] = dict.fromkeys(gate.REQUIRED_PULL_REQUEST_FLAGS, True)
+    parameters["allowed_merge_methods"] = ["rebase"]
+    ruleset["rules"][2]["parameters"] = parameters
+    findings = gate.find_violations(write_ruleset(tmp_path, ruleset), write_workflows(tmp_path, a=UNFILTERED_WORKFLOW))
+    assert any("no reviewed merge path remains" in finding for finding in findings), findings
+
+
+def test_a_scalar_branches_ignore_is_honoured(tmp_path: pathlib.Path) -> None:
+    # `branches-ignore: main` and `branches-ignore: [main]` mean the same thing
+    # to GitHub; only the list form was recognised, so the scalar failed open.
+    workflow = UNFILTERED_WORKFLOW.replace("pull_request: {}", "pull_request:\n    branches-ignore: main")
+    assert len(gate.find_violations(write_ruleset(tmp_path, VALID), write_workflows(tmp_path, b=workflow))) == 1
+
+
+def test_a_scalar_types_value_is_honoured(tmp_path: pathlib.Path) -> None:
+    workflow = UNFILTERED_WORKFLOW.replace("pull_request: {}", "pull_request:\n    types: opened")
+    assert len(gate.find_violations(write_ruleset(tmp_path, VALID), write_workflows(tmp_path, t=workflow))) == 1
+
+
+def test_a_scalar_branches_naming_the_default_branch_is_accepted(tmp_path: pathlib.Path) -> None:
+    workflow = UNFILTERED_WORKFLOW.replace("pull_request: {}", "pull_request:\n    branches: main")
+    assert gate.find_violations(write_ruleset(tmp_path, VALID), write_workflows(tmp_path, b=workflow)) == []
+
+
+def test_a_matrix_job_cannot_back_a_required_check(tmp_path: pathlib.Path) -> None:
+    # A matrix job reports as `always-runs (3.11)` etc., never as the bare job
+    # id, so requiring the bare name leaves the check Pending forever.
+    workflow = UNFILTERED_WORKFLOW.replace(
+        "  always-runs:\n", "  always-runs:\n    strategy:\n      matrix:\n        python: ['3.11', '3.12']\n"
+    )
+    findings = gate.find_violations(write_ruleset(tmp_path, VALID), write_workflows(tmp_path, m=workflow))
+    assert len(findings) == 1
+    assert "Pending forever" in findings[0]
+
+
+def test_a_reusable_workflow_call_cannot_back_a_required_check(tmp_path: pathlib.Path) -> None:
+    # A `uses:` job reports its inner jobs as `always-runs / inner`, never as
+    # the bare caller job id, so requiring the bare name leaves it Pending.
+    workflow = """
+name: Always
+on:
+  pull_request: {}
+jobs:
+  always-runs:
+    uses: ./.github/workflows/other.yml
+"""
+    findings = gate.find_violations(write_ruleset(tmp_path, VALID), write_workflows(tmp_path, r=workflow))
+    assert len(findings) == 1
+    assert "Pending forever" in findings[0]

@@ -70,13 +70,13 @@ def fetcher(list_body: Any, detail_body: Any = None) -> Any:
 def test_plan_mode_never_calls_the_writer(tmp_path: pathlib.Path) -> None:
     # The whole dry-run guarantee in apply-rulesets.yml rests on this.
     writer = RecordingWriter()
-    summary = apply_rulesets.run("o/r", write_sot(tmp_path), "plan", fetcher([]), writer)
+    summary, _ = apply_rulesets.run("o/r", write_sot(tmp_path), "plan", fetcher([]), writer)
     assert writer.calls == []
     assert "POST" in summary
 
 
 def test_absent_live_ruleset_plans_a_create(tmp_path: pathlib.Path) -> None:
-    summary = apply_rulesets.run("o/r", write_sot(tmp_path), "plan", fetcher([]), RecordingWriter())
+    summary, _ = apply_rulesets.run("o/r", write_sot(tmp_path), "plan", fetcher([]), RecordingWriter())
     assert "nothing to diff against" in summary
 
 
@@ -94,7 +94,7 @@ def test_apply_mode_sends_the_planned_request(tmp_path: pathlib.Path) -> None:
     # committed file before reporting success.
     writer = RecordingWriter(dict(SOT, id=42))
     live = dict(SOT, id=42, enforcement="disabled")
-    summary = apply_rulesets.run(
+    summary, _ = apply_rulesets.run(
         "o/r", write_sot(tmp_path), "apply", fetcher([{"id": 42, "name": SOT["name"]}], live), writer
     )
     assert len(writer.calls) == 1
@@ -109,7 +109,7 @@ def test_apply_mode_sends_the_planned_request(tmp_path: pathlib.Path) -> None:
 
 def test_summary_shows_a_diff_when_live_differs(tmp_path: pathlib.Path) -> None:
     live = dict(SOT, id=42, enforcement="disabled")
-    summary = apply_rulesets.run(
+    summary, _ = apply_rulesets.run(
         "o/r", write_sot(tmp_path), "plan", fetcher([{"id": 42, "name": SOT["name"]}], live), RecordingWriter()
     )
     assert "```diff" in summary
@@ -118,7 +118,7 @@ def test_summary_shows_a_diff_when_live_differs(tmp_path: pathlib.Path) -> None:
 
 def test_summary_says_no_op_when_live_already_matches(tmp_path: pathlib.Path) -> None:
     live = dict(SOT, id=42)
-    summary = apply_rulesets.run(
+    summary, _ = apply_rulesets.run(
         "o/r", write_sot(tmp_path), "plan", fetcher([{"id": 42, "name": SOT["name"]}], live), RecordingWriter()
     )
     assert "no-op replace" in summary
@@ -178,23 +178,28 @@ def test_send_write_rejects_an_unparseable_success_body(monkeypatch: pytest.Monk
         apply_rulesets.send_write("https://api.github.test/x", "POST", {})
 
 
-def test_apply_raises_when_github_stored_something_other_than_the_source_of_truth(tmp_path: pathlib.Path) -> None:
+def test_apply_reports_when_github_stored_something_other_than_the_source_of_truth(tmp_path: pathlib.Path) -> None:
     # A 2xx is not proof the state transition matched the policy: the response
     # is the stored object, so it is compared rather than trusted.
     stored = dict(SOT, id=42, enforcement="evaluate")
     writer = RecordingWriter(stored)
-    with pytest.raises(apply_rulesets.RulesetError, match="stored something other than"):
-        apply_rulesets.run(
-            "o/r", write_sot(tmp_path), "apply", fetcher([{"id": 42, "name": SOT["name"]}], dict(SOT, id=42)), writer
-        )
-    assert len(writer.calls) == 1, "the write still happened; the raise is about reporting, not rollback"
+    summary, mismatches = apply_rulesets.run(
+        "o/r", write_sot(tmp_path), "apply", fetcher([{"id": 42, "name": SOT["name"]}], dict(SOT, id=42)), writer
+    )
+    assert len(writer.calls) == 1, "the write still happened; the finding is about reporting, not rollback"
+    assert mismatches == ["enforcement: is 'evaluate', the source of truth specifies 'active'"]
+    # The receipt must survive the failure -- the id is the operator's only
+    # handle on a write that already landed, per docs/runbooks/rulesets.md.
+    assert "| 42 |" in summary
+    assert "[!CAUTION]" in summary
+    assert "enforcement" in summary
 
 
 def test_apply_accepts_a_response_carrying_only_api_added_fields(tmp_path: pathlib.Path) -> None:
     # id/created_at/_links are GitHub's, not the committed file's, so they must
     # not read as a mismatch -- otherwise every successful apply would raise.
     stored = dict(SOT, id=42, created_at="2026-08-09", node_id="R_x", _links={})
-    summary = apply_rulesets.run("o/r", write_sot(tmp_path), "apply", fetcher([]), RecordingWriter(stored))
+    summary, _ = apply_rulesets.run("o/r", write_sot(tmp_path), "apply", fetcher([]), RecordingWriter(stored))
     assert "| 42 |" in summary
 
 
@@ -260,3 +265,28 @@ def test_main_reports_a_ruleset_error_as_an_annotated_failure(
     code = apply_rulesets.main(["--repo", "o/r", "--sot", str(tmp_path / "absent.json"), "--mode", "plan"])
     assert code == 1
     assert "::error::" in capsys.readouterr().err
+
+
+def test_main_writes_the_summary_before_failing_on_a_verification_mismatch(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The regression this pins: an earlier revision raised inside run(), so
+    # main() returned 1 before printing or appending anything. On the one run
+    # that actually mutated live state the operator got an error and no record
+    # of the resulting ruleset id -- exactly the receipt the runbook tells them
+    # to read out of the job summary for a rollback.
+    monkeypatch.setattr(apply_rulesets, "default_fetch", lambda url: [])
+    monkeypatch.setattr(
+        apply_rulesets, "send_write", lambda url, method, body: dict(SOT, id=42, enforcement="evaluate")
+    )
+    summary_file = tmp_path / "summary.md"
+    code = apply_rulesets.main(
+        ["--repo", "o/r", "--sot", str(write_sot(tmp_path)), "--mode", "apply", "--summary-file", str(summary_file)]
+    )
+    assert code == 1
+    written = summary_file.read_text(encoding="utf-8")
+    assert "| 42 |" in written
+    assert "[!CAUTION]" in written
+    captured = capsys.readouterr()
+    assert "| 42 |" in captured.out
+    assert "::error::GitHub stored something other than the source of truth" in captured.err

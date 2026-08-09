@@ -51,7 +51,7 @@ essentially everything it covered. Adding it later is a one-file change.
 ## What the ruleset actually says, and what was adapted
 
 `.github/rulesets/main.json` is modelled on `tvna/claude-md`'s own worked
-`.github/rulesets/main.json`, with four deliberate differences. Each one is an
+`.github/rulesets/main.json`, with five deliberate differences. Each one is an
 adaptation to what this repository already does, not a weakening for
 convenience:
 
@@ -61,15 +61,29 @@ convenience:
 | `allowed_merge_methods` | `["merge", "squash"]` | `["squash"]` | Same reason: merge commits are the current convention here. Narrowing to squash later is a one-line change. |
 | `strict_required_status_checks_policy` | `false` | `true` | `true` requires every pull request to be up to date with `main` before merging. With this repository's merge rate that means near-constant "update branch" churn. Accepted trade-off: a semantically-conflicting pair of pull requests can both be green and still break `main`. Revisit if that actually happens. |
 | `required_status_checks` | 8 contexts | 7 different contexts | Contexts are check-run names, which are job ids, confirmed by reading the real check runs on a merged pull request rather than guessed from workflow names. |
+| `required_signatures` | omitted | present | Not a policy preference -- a measured fact about this repository. `main` already contains unsigned commits, and every commit on the branch that introduces this ruleset is unsigned (`git log --format='%H %G?'` reports `N`). Turning the rule on would reject the very merge that applies it, and the merge-commit path documented in the row above produces an unsigned commit by default. Enabling it is a separate change that has to come with a signing story first: see the GitHub App token minting in `.github/workflows/sync-agent-instructions.yml`, whose comment already assumes this rule exists. |
 
 The eight required contexts are `actionlint`, `ruff`, `pytest`, `mypy`,
 `exception-handler-gaps`, `hidden-characters`, `plugin-root-brace-notation`, and
-`provenance-disclosure`. Every one comes from a workflow with **no `paths:`
-filter**, which is the property that matters: GitHub distinguishes a job that
-runs and reports `skipped` (does not block) from a workflow that never fires for
-a given pull request (leaves the required check `Pending` forever). A `paths:`
-filter is the second case, so every gate workflow that carries one is
-deliberately excluded from this list.
+`provenance-disclosure`.
+
+Every one has to be a name that a check run actually reports under, on every
+pull request targeting `main`. That is a stronger property than "the workflow
+exists", and it is what `main-ruleset-required-checks` enforces, because GitHub
+distinguishes a job that runs and reports `skipped` (does not block) from a
+context nothing ever reports (leaves the required check `Pending` forever, with
+no in-repository fix). Four distinct ways to land in the second case, all of
+them rejected by the gate:
+
+* a `paths:` / `paths-ignore:` filter on the `pull_request` trigger -- the
+  workflow simply does not fire for a non-matching pull request, so every gate
+  workflow carrying one is deliberately excluded from this list;
+* a `branches:` / `branches-ignore:` filter that does not admit the default
+  branch;
+* a `types:` filter that omits `opened` or `synchronize`;
+* a job that cannot report under its bare id at all -- a matrix job reports as
+  `job (value)` once per leg, and a reusable-workflow call (`uses:`) reports its
+  inner jobs as `caller / inner`.
 
 Two further exclusions, both for cause:
 
@@ -169,6 +183,27 @@ replacement works.
 
 `dry_run: true` performs `GET` requests only. Nothing about it can change live
 state.
+
+### When a live apply finishes red
+
+`POST` and `PUT` both return the *stored* ruleset, so the apply script reads its
+own result back and compares it against the committed file before reporting
+success -- a 2xx is not proof the state transition matched the policy. If
+GitHub stored something the committed file does not specify, the job fails and
+the summary carries a `[!CAUTION]` block listing each mismatch by dotted path
+(`rules[2].parameters.require_code_owner_review: is False, ...`).
+
+**A red apply job does not mean the write was rejected.** The write already
+landed; only the verification failed. That is why the summary is still printed
+in full, including the resulting ruleset id -- it is the handle the rollback
+section below needs. Reconcile from the listed paths rather than re-dispatching
+blindly, since a second `PUT` onto the same id would overwrite whatever is
+actually there.
+
+The comparison is a subset check, not equality: GitHub stamps its own defaults
+and link fields onto the stored object, and the committed file asserts what must
+hold, not that nothing else may be present. Full equality is the daily drift
+scan's job, where a human reads the report.
 
 ### Authorization for a live apply
 

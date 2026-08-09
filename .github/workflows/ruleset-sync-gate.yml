@@ -50,7 +50,18 @@ jobs:
         run: |
           set -euo pipefail
           sot_file="$RUNNER_TEMP/base_main_ruleset.json"
-          if ! git show "$BASE_SHA:.github/rulesets/main.json" > "$sot_file" 2>/dev/null; then
+          # Distinguish "the base ref has no ruleset file yet" from "git could
+          # not answer". Swallowing every git failure as the former reads a
+          # missing base commit -- routine after a force-push to the base
+          # branch -- as "nothing to check" and passes the gate green. Only a
+          # readable base commit that genuinely lacks the file is a skip.
+          if ! git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null; then
+            echo "::error::base commit $BASE_SHA is not present; cannot establish what the base ref requires."
+            exit 1
+          fi
+          if git cat-file -e "$BASE_SHA:.github/rulesets/main.json" 2>/dev/null; then
+            git show "$BASE_SHA:.github/rulesets/main.json" > "$sot_file"
+          else
             echo "The base ref carries no .github/rulesets/main.json; this pull request introduces it." \
               >> "$GITHUB_STEP_SUMMARY"
             echo "applicable=false" >> "$GITHUB_OUTPUT"

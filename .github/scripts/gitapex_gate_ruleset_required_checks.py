@@ -49,6 +49,27 @@ EXPECTED_KEYS = {"name", "target", "enforcement", "conditions", "bypass_actors",
 #: pull request requirement in place.
 REQUIRED_RULE_TYPES = ("deletion", "non_fast_forward", "pull_request", "required_status_checks")
 
+#: GitHub's own placeholder ref for "whatever the default branch is called".
+#: Pinning the literal name instead would silently stop protecting anything if
+#: the default branch were ever renamed. (Named `..._REF`, not `..._TOKEN`:
+#: ruff's S105 reads a `TOKEN` suffix as a hardcoded credential.)
+DEFAULT_BRANCH_REF = "~DEFAULT_BRANCH"
+
+#: `pull_request` parameters this repository states as required, in
+#: `.gitapex/ssot.json` and `docs/runbooks/rulesets.md`. Each must be exactly
+#: `true`; a rule carrying them as false passes a presence check while allowing
+#: what the rule exists to prevent.
+REQUIRED_PULL_REQUEST_FLAGS = (
+    "require_code_owner_review",
+    "required_review_thread_resolution",
+    "dismiss_stale_reviews_on_push",
+)
+
+#: At least one of these must remain allowed. `rebase` replays branch commits
+#: onto main without producing a merge commit, so a ruleset allowing only
+#: rebase leaves no path that carries the pull request's own review with it.
+_MERGE_METHODS_PRODUCING_A_REVIEWED_COMMIT = frozenset({"merge", "squash"})
+
 
 class RulesetGateError(RuntimeError):
     """Raised when the ruleset file or the workflow directory cannot be read."""
@@ -95,6 +116,66 @@ def find_shape_violations(ruleset: dict[str, Any]) -> list[str]:
     findings.extend(
         f"has no {rule_type!r} rule" for rule_type in REQUIRED_RULE_TYPES if rule_of_type(ruleset, rule_type) is None
     )
+    findings.extend(_find_condition_violations(ruleset))
+    findings.extend(_find_pull_request_violations(ruleset))
+    return findings
+
+
+def _find_condition_violations(ruleset: dict[str, Any]) -> list[str]:
+    """The ruleset must actually point at the default branch.
+
+    Rule *presence* says nothing about what the rules apply to: a ruleset whose
+    `conditions.ref_name.include` names a branch that does not exist carries
+    every rule below and protects nothing, while this gate, the pull-request
+    sync gate and the daily drift scan all stay green. `.gitapex/ssot.json`
+    already claims this gate enforces `target ~DEFAULT_BRANCH`; until this
+    check existed, that claim was false.
+    """
+    if ruleset.get("target") != "branch":
+        return [f"target is {ruleset.get('target')!r}, not 'branch'"]
+    conditions = ruleset.get("conditions")
+    raw_ref_name = conditions.get("ref_name") if isinstance(conditions, dict) else None
+    ref_name: dict[str, Any] = raw_ref_name if isinstance(raw_ref_name, dict) else {}
+    include = ref_name.get("include")
+    if not isinstance(include, list) or DEFAULT_BRANCH_REF not in include:
+        return [
+            f"conditions.ref_name.include is {include!r}; it must contain {DEFAULT_BRANCH_REF!r} "
+            "or the ruleset protects some other ref and every rule below is decorative"
+        ]
+    excluded = ref_name.get("exclude")
+    if isinstance(excluded, list) and DEFAULT_BRANCH_REF in excluded:
+        return [f"conditions.ref_name.exclude also contains {DEFAULT_BRANCH_REF!r}, cancelling the include"]
+    return []
+
+
+def _find_pull_request_violations(ruleset: dict[str, Any]) -> list[str]:
+    """The pull-request rule must carry the review settings this repository claims.
+
+    A `pull_request` rule with review requirements switched off still satisfies
+    a presence check while allowing exactly what the rule exists to prevent.
+    Each flag below is named in `.gitapex/ssot.json`'s own entry for this gate
+    and in `docs/runbooks/rulesets.md`; checking them here is what makes those
+    two documents true rather than aspirational.
+    """
+    rule = rule_of_type(ruleset, "pull_request")
+    if rule is None:
+        return []  # already reported as a missing rule
+    parameters = rule.get("parameters")
+    if not isinstance(parameters, dict):
+        return ["the 'pull_request' rule carries no parameters object"]
+    findings = [
+        f"pull_request.{flag} is {parameters.get(flag)!r}, not true"
+        for flag in REQUIRED_PULL_REQUEST_FLAGS
+        if parameters.get(flag) is not True
+    ]
+    methods = parameters.get("allowed_merge_methods")
+    if not isinstance(methods, list) or not methods:
+        findings.append(f"pull_request.allowed_merge_methods is {methods!r}; it must name at least one method")
+    elif not set(methods) & _MERGE_METHODS_PRODUCING_A_REVIEWED_COMMIT:
+        findings.append(
+            f"pull_request.allowed_merge_methods is {methods!r}; none of "
+            f"{sorted(_MERGE_METHODS_PRODUCING_A_REVIEWED_COMMIT)} is allowed, so no reviewed merge path remains"
+        )
     return findings
 
 
@@ -146,6 +227,23 @@ def _pull_request_filters(document: dict[Any, Any]) -> dict[str, Any] | None:
     return filters if isinstance(filters, dict) else {}
 
 
+def _as_list(value: Any) -> list[Any] | None:
+    """Normalise a YAML filter value that may be scalar or a sequence.
+
+    `branches: main` and `branches: [main]` mean the same thing to GitHub, and
+    so do `types: opened` and `types: [opened]`. An earlier revision tested
+    `isinstance(value, list)` and fell straight through on the scalar spelling
+    -- fail-open in both cases: a workflow scoped away from the default branch,
+    or listening for a single activity type, was reported as backing a required
+    check that would in fact sit `Pending` forever.
+
+    `None` means "no filter given", which is different from an empty list.
+    """
+    if value is None:
+        return None
+    return value if isinstance(value, list) else [value]
+
+
 def _branch_filter_admits(filters: dict[str, Any], default_branch: str) -> bool:
     """Whether the trigger still fires for a pull request targeting `default_branch`.
 
@@ -162,11 +260,11 @@ def _branch_filter_admits(filters: dict[str, Any], default_branch: str) -> bool:
     to recognise as matching is reported as a finding for a human to read, not
     silently accepted.
     """
-    ignore = filters.get("branches-ignore")
-    if isinstance(ignore, list) and any(fnmatch.fnmatch(default_branch, str(p)) for p in ignore):
+    ignore = _as_list(filters.get("branches-ignore"))
+    if ignore is not None and any(fnmatch.fnmatch(default_branch, str(p)) for p in ignore):
         return False
-    include = filters.get("branches")
-    if not isinstance(include, list):
+    include = _as_list(filters.get("branches"))
+    if include is None:
         return True
     admitted = False
     for raw in include:
@@ -222,13 +320,48 @@ def unconditional_pull_request_jobs(workflow_dir: pathlib.Path, default_branch: 
             continue
         if not _branch_filter_admits(filters, default_branch):
             continue
-        types = filters.get("types")
-        if isinstance(types, list) and not _REQUIRED_ACTIVITY_TYPES.issubset({str(t) for t in types}):
+        types = _as_list(filters.get("types"))
+        if types is not None and not _REQUIRED_ACTIVITY_TYPES.issubset({str(entry) for entry in types}):
             continue
         for job_id, job in (document.get("jobs") or {}).items():
-            name = job.get("name") if isinstance(job, dict) else None
-            jobs[name or job_id] = path.name
+            name = _check_run_name(job_id, job)
+            if name is not None:
+                jobs[name] = path.name
     return jobs
+
+
+def _check_run_name(job_id: str, job: Any) -> str | None:
+    """The single check-run name this job produces, or `None` if it produces no
+    predictable single name.
+
+    Two job shapes do not yield `job_id` as their check-run name, and both were
+    silently accepted before:
+
+    * **A matrix job** produces one check run *per combination*, named
+      `job_id (value, value)`. Nothing is ever reported under the bare
+      `job_id`, so requiring that name leaves the check `Pending` forever --
+      the exact deadlock this gate exists to prevent, reachable today by adding
+      a `strategy.matrix` to `test.yml`'s `pytest` job while this gate stayed
+      green.
+    * **A reusable-workflow call** (`uses:` at job level) reports its inner
+      jobs as `job_id / inner_job_id`, again never as the bare `job_id`.
+
+    Returning `None` excludes the job from the available set, so naming it as a
+    required context becomes a finding a human reads rather than a merge that
+    can never complete. Deliberately conservative: expanding the matrix into its
+    real check-run names would mean reimplementing GitHub's own combination and
+    `include`/`exclude` semantics, and getting that subtly wrong would fail open
+    again.
+    """
+    if not isinstance(job, dict):
+        return job_id
+    if job.get("uses"):
+        return None
+    strategy = job.get("strategy")
+    if isinstance(strategy, dict) and strategy.get("matrix"):
+        return None
+    name = job.get("name")
+    return str(name) if name else job_id
 
 
 def find_unreachable_contexts(
