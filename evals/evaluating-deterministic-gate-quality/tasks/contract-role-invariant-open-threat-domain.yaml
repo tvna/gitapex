@@ -12,7 +12,11 @@ description: >-
   enumeration gap instead of narrowing it. The second of the two fixtures
   the axis must not misfire on, from the opposite side of its sibling: a
   reviewer that reads any enumeration as a closed list reports a defect that
-  is not there. Same disclosed substring-scorer ceiling as its siblings.
+  is not there, and now must say so explicitly ("correctly open") rather
+  than merely naming the domain kind, closing the gap a review round found
+  in this fixture's own earlier version, where the domain label alone was
+  enough to pass regardless of whether the closure conclusion drawn from it
+  was right. Same disclosed substring-scorer ceiling as its siblings.
 tags:
   - quality
   - contract-role
@@ -46,12 +50,15 @@ inputs:
     invariant, mixed, or indeterminate.
 
     "Input domain:" followed by exactly one of structural-protocol,
-    threat-classification, both-readings, or indeterminate.
+    threat-classification, both-readings, or indeterminate, then " -- " and
+    exactly one of "correctly closed", "wrongly closed", "correctly open",
+    "wrongly open", or "indeterminate" naming whether this specific gate's
+    own closure choice is right or wrong for that domain kind.
 
     Leave a blank line after those two lines before anything else.
 
-    Then say who a violation of this check attributes fault to, and whether
-    the domain's closure direction is a finding here.
+    Then say who a violation of this check attributes fault to, and why the
+    closure direction you named is right or wrong here.
 expected:
   output_contains_near:
     - all:
@@ -61,6 +68,7 @@ expected:
     - all:
         - "Input domain"
         - "threat-classification"
+        - "correctly open"
       window: 60
   output_not_contains_near:
     - all:
@@ -69,5 +77,5 @@ expected:
       window: 60
     - all:
         - "Input domain"
-        - "structural-protocol"
+        - "wrongly open"
       window: 60

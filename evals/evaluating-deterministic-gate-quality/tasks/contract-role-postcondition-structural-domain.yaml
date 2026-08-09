@@ -11,8 +11,12 @@ description: >-
   values and treating anything else as malformed is the safe direction here,
   not a finding. This is one of the two fixtures the axis must not misfire
   on: a reviewer that reads "closed list" as automatically defective, having
-  learned the threat-classification half first, produces the wrong answer.
-  Same disclosed substring-scorer ceiling as its sibling fixtures.
+  learned the threat-classification half first, produces the wrong answer --
+  and now must say so explicitly ("correctly closed") rather than merely
+  naming the domain kind, closing the gap a review round found in this
+  fixture's own earlier version, where the domain label alone was enough to
+  pass regardless of the closure conclusion drawn from it. Same disclosed
+  substring-scorer ceiling as its sibling fixtures.
 tags:
   - quality
   - contract-role
@@ -42,13 +46,15 @@ inputs:
     invariant, mixed, or indeterminate.
 
     "Input domain:" followed by exactly one of structural-protocol,
-    threat-classification, both-readings, or indeterminate.
+    threat-classification, both-readings, or indeterminate, then " -- " and
+    exactly one of "correctly closed", "wrongly closed", "correctly open",
+    "wrongly open", or "indeterminate" naming whether this specific gate's
+    own closure choice is right or wrong for that domain kind.
 
     Leave a blank line after those two lines before anything else.
 
-    Then say whether the closure direction this gate chose is right or wrong
-    for that domain kind, and who a violation of this check attributes fault
-    to.
+    Then say why the closure direction you named is right or wrong for that
+    domain kind, and who a violation of this check attributes fault to.
 expected:
   output_contains_near:
     - all:
@@ -58,9 +64,10 @@ expected:
     - all:
         - "Input domain"
         - "structural-protocol"
+        - "correctly closed"
       window: 60
   output_not_contains_near:
     - all:
         - "Input domain"
-        - "threat-classification"
+        - "wrongly closed"
       window: 60

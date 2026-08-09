@@ -633,6 +633,39 @@ spec:
       summary: "One audit finding was rejected on the evidence rather than applied: it reported the cited sibling script as non-existent, having searched only this repository. It exists, and was read directly from a clone of tvna/claude-md before the citation was written. The finding did surface a real weakness in a weaker form -- the citation was unverifiable from the portable core -- which the corroboration entry above and the worked-example relocation address."
       outcome:
         lines: "branch-final, measured against the working tree at the final commit: SKILL.md 491->500, cross-cutting-axes.md 88->242, output-schema.json 348->398, security-level.md 171->181, gitapex-worked-examples.md 511->561"
+    - kind: audit
+      anchor: "method:pr-963-review-round"
+      summary: "An automated review (local code-review dispatch plus CodeRabbit) of the pushed branch found four of the six new fixtures asserted only the domain-kind label, never the closure conclusion the axis exists to reach, plus two gate-completeness gaps: check_axis_count graded only the first declaration, and security-level.md's own historically-drifting cross-reference count had no lock at all."
+      outcome:
+        found: 4
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/949"
+      summary: "Fixed the construct-validity gap in the four affected fixtures: the Input domain line now carries the closure verdict inline from a closed vocabulary ('threat-classification -- wrongly closed'), not the domain label alone. A response naming the right domain and the wrong verdict now fails the fixture it previously passed."
+      outcome:
+        fixed: 4
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/949"
+      summary: "Re-verified the fix by execution: 12 new hand-written right-label-wrong-verdict cases across the four fixtures, one per (fixture, wrong-verdict) pair, each scoring at or above eval.yaml's 0.8 threshold before the fix and under it after. The existing 29-case battery and every plausible-correct markdown variant still score 1.000 unchanged."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/949"
+      summary: "check_axis_count now grades every '**N cross-cutting axes**' declaration in SKILL.md via re.findall, not only re.search's first match -- a second declaration sentence could previously drift unchecked."
+      outcome:
+        fixed: 1
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/949"
+      summary: "Added check 12: locks references/security-level.md's own 'narrower than all N' sentence, confirmed via git log -p to have already silently drifted through four->six->seven across three prior axis additions with nothing checking it. Computed as check 4b's own other-axes count plus a fixed three-item offset for that file's non-axis 'does not cover' bullets, so it stays self-maintaining rather than a hand-bumped literal."
+      outcome:
+        fixed: 1
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/949"
+      summary: "output-schema.json's schemaVersion description under-described 1.2.0's own validation changes -- named one conditional where the schema already enforced two plus a base required-both-sub-judgments rule. Reworded to name all three."
+      outcome:
+        fixed: 1
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/949"
+      summary: "Test coverage grew from 35 to 43 cases: SKILL.md's own extract_section absent/duplicate/empty failure paths (previously only cross-cutting-axes.md's side was exercised) plus check 12's pass/stale/malformed-word/missing-phrase/recomputation cases. The gate script itself stays at 100% line coverage."
+      outcome:
+        tests: "gitapex_scan_contract_axis_vocabulary_drift.py test count 35->43"
   skillDependencies:
     requires:
       - evaluating-skill-quality

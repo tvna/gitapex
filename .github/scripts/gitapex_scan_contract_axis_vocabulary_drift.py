@@ -69,6 +69,18 @@ Checks, grouped by the file they read:
        token sets -- the machine-readable half of the same vocabulary, which
        would otherwise drift from the prose independently.
 
+  ``references/security-level.md``
+    12. That file's own "What this axis does not cover" section states, in
+       its closing "narrower than all N" sentence, the same total check 4b
+       already computes (the other-axes count) plus a fixed offset of three
+       non-axis items (dimensions 1/15 lumped as one bullet, mechanism-fit
+       lumped as one bullet, dimension 23) that this module's own change
+       does not touch. Added after that exact phrase was found to have
+       silently drifted through "four" -> "six" -> "seven" across three
+       prior axis additions with nothing checking it -- the same failure
+       mode check 4b closed for SKILL.md's own cross-references, reappearing
+       in a second file check 4b's own scope never reached.
+
 Fail-closed, per the dimension-15 rule this repository already holds its own
 gates to: a missing or unreadable file, a section heading that is present but
 whose section is empty, and malformed JSON each exit 2 rather than degrading
@@ -102,6 +114,7 @@ DEFAULT_SKILL_DIR = REPO_ROOT / "skills" / "evaluating-deterministic-gate-qualit
 SKILL_MD = "SKILL.md"
 AXES_MD = "references/cross-cutting-axes.md"
 SCHEMA_JSON = "references/output-schema.json"
+SECURITY_LEVEL_MD = "references/security-level.md"
 
 AXIS_NAME = "Contract role / input-domain closure"
 SKILL_AXIS_HEADING = f"### Axis: {AXIS_NAME}"
@@ -132,6 +145,20 @@ _AXIS_COUNT_RE = re.compile(r"\*\*([A-Za-z]+) cross-cutting axes\*\*")
 # nothing watching it -- the failure mode this whole module exists to prevent,
 # reappearing one sentence away from its own gate.
 _OTHER_AXES_RE = re.compile(r"\bthe other ([A-Za-z]+) axes\b")
+
+# security-level.md's own closing sentence, spanning a line break in the
+# real file ("...is narrower\nthan all seven:"), hence \s+ rather than a
+# literal space between "all" and the number.
+_NARROWER_THAN_ALL_RE = re.compile(r"narrower\s+than\s+all\s+([A-Za-z]+)\s*:", re.MULTILINE)
+
+# security-level.md's "What this axis does not cover" section lists one
+# bullet per OTHER axis (the same count check_other_axes_counts computes)
+# plus three bullets for concerns that are not axes at all: dimensions
+# 1/15 (lumped as one bullet), mechanism-fit's two questions (lumped as one
+# bullet), and dimension 23. None of those three bullets is added, removed,
+# or renumbered by this module's own change, so the offset is a constant,
+# not something a future axis addition needs to touch.
+_SECURITY_LEVEL_NON_AXIS_BUCKETS = 3
 _NUMBER_WORDS = {
     "one": 1,
     "two": 2,
@@ -250,7 +277,7 @@ def check_other_axes_counts(skill_text: str) -> list[str]:
     optional cross-references, not a required declaration -- so an empty match
     set is silence, not a finding.
     """
-    expected = len(_AXIS_HEADING_RE.findall(skill_text)) - 1
+    expected = _other_axes_count(skill_text)
     problems: list[str] = []
     for word in _OTHER_AXES_RE.findall(skill_text):
         stated = _NUMBER_WORDS.get(word.lower())
@@ -266,24 +293,66 @@ def check_other_axes_counts(skill_text: str) -> list[str]:
     return problems
 
 
+def _other_axes_count(skill_text: str) -> int:
+    """Number of ``### Axis:`` headings in ``skill_text`` minus one -- the
+    "other axes" count shared by check_other_axes_counts and
+    check_security_level_count, computed once so the two never drift apart
+    from each other."""
+    return len(_AXIS_HEADING_RE.findall(skill_text)) - 1
+
+
 def check_axis_count(skill_text: str) -> list[str]:
-    """The declared "**N cross-cutting axes**" count against the real number of
-    ``### Axis:`` headings."""
+    """Every declared "**N cross-cutting axes**" count against the real number
+    of ``### Axis:`` headings -- every occurrence, not only the first.
+
+    A second declaration sentence added later in the file, restating the
+    count, would otherwise drift exactly the way check 4b's own cross-
+    references already have (see that check's module-docstring rationale);
+    grading only ``re.search``'s first match left that same exposure open
+    for this simpler, single-sentence form.
+    """
     headings = _AXIS_HEADING_RE.findall(skill_text)
-    match = _AXIS_COUNT_RE.search(skill_text)
-    if match is None:
+    matches = _AXIS_COUNT_RE.findall(skill_text)
+    if not matches:
         return [
             f"{SKILL_MD}: no '**<number> cross-cutting axes**' declaration found -- "
             f"the axis-count lock cannot run, and {len(headings)} '### Axis:' heading(s) are present"
         ]
-    word = match.group(1).lower()
-    declared = _NUMBER_WORDS.get(word)
-    if declared is None:
-        return [f"{SKILL_MD}: axis count declared as {match.group(1)!r}, which is not a recognized number word"]
-    if declared != len(headings):
+    problems: list[str] = []
+    for word in matches:
+        declared = _NUMBER_WORDS.get(word.lower())
+        if declared is None:
+            problems.append(f"{SKILL_MD}: axis count declared as {word!r}, which is not a recognized number word")
+        elif declared != len(headings):
+            problems.append(
+                f"{SKILL_MD}: declares {declared} cross-cutting axes but carries "
+                f"{len(headings)} '### Axis:' heading(s) -- update the count in the same change as the heading"
+            )
+    return problems
+
+
+def check_security_level_count(skill_dir: Path, other_axes_count: int) -> list[str]:
+    """security-level.md's own "narrower than all N" count against
+    ``other_axes_count`` plus the three fixed non-axis buckets its "What
+    this axis does not cover" section also lists."""
+    text = read_text(skill_dir / SECURITY_LEVEL_MD)
+    match = _NARROWER_THAN_ALL_RE.search(text)
+    if match is None:
         return [
-            f"{SKILL_MD}: declares {declared} cross-cutting axes but carries "
-            f"{len(headings)} '### Axis:' heading(s) -- update the count in the same change as the heading"
+            f"{SECURITY_LEVEL_MD}: no 'narrower than all <number>:' sentence found -- "
+            "the security-level cross-reference lock cannot run"
+        ]
+    word = match.group(1).lower()
+    stated = _NUMBER_WORDS.get(word)
+    if stated is None:
+        return [f"{SECURITY_LEVEL_MD}: count declared as {match.group(1)!r}, which is not a recognized number word"]
+    expected = other_axes_count + _SECURITY_LEVEL_NON_AXIS_BUCKETS
+    if stated != expected:
+        return [
+            f"{SECURITY_LEVEL_MD}: says 'narrower than all {match.group(1)}' but "
+            f'{expected} items are named in its own "What this axis does not cover" list '
+            f"({other_axes_count} other axis/axes + {_SECURITY_LEVEL_NON_AXIS_BUCKETS} non-axis items) -- "
+            "update the count in the same change as the heading"
         ]
     return []
 
@@ -366,6 +435,7 @@ def scan(skill_dir: Path) -> list[str]:
         AXES_MD,
     )
     problems += check_schema_vocabulary(schema_text)
+    problems += check_security_level_count(skill_dir, _other_axes_count(skill_text))
     return problems
 
 

@@ -349,6 +349,60 @@ rather than implied away: these are hand-written outputs, not real model
 runs -- no `waza` runner exists in the environment that authored them, the
 same constraint the paragraph below already discloses for the whole corpus.
 
+**PR #963 review round (construct-validity fix, same class the #842 round
+paid for):** an automated review found four of the six new fixtures'
+assertions bound only the domain-kind label (`threat-classification` /
+`structural-protocol`), never the closure conclusion the axis actually
+exists to reach -- a response that named the correct domain and then
+called a wrongly-closed list "correctly closed" (or a correctly-open
+category "wrongly open") passed all four. Verified by re-scoring 12 new
+hand-written cases across the four affected fixtures
+(`contract-role-precondition-closed-threat-domain.yaml`,
+`contract-role-postcondition-structural-domain.yaml`,
+`contract-role-invariant-open-threat-domain.yaml`,
+`contract-axis-never-both-with-dimension-15.yaml`): every
+right-label-wrong-verdict case did score at or above the 0.8 threshold
+before the fix and below it after. The fix appends the closure verdict
+inline on the same "Input domain:" line, separated by " -- ", from a
+closed vocabulary ("correctly closed" / "wrongly closed" / "correctly
+open" / "wrongly open" / "indeterminate") rather than as prose a substring
+scorer cannot reliably parse for negation; each fixture's positive
+assertion now requires the domain label and the correct verdict word to
+co-occur in one `output_contains_near` entry, and its negative assertion
+bans the specific wrong verdict rather than the wrong domain label (which
+the positive assertion already rules out by construction). Assertion
+counts held at 3-4 per fixture, so no fixture crossed the five-assertion
+threshold-clearing trap the #842 round named. Re-verified against the full
+29-plus-12 case battery: every correct answer and plausible-correct
+markdown variant still scores 1.000, every hostile answer (including the
+12 new right-label-wrong-verdict cases) scores at or under 0.750.
+
+The same review round found `SKILL.md`'s "the other four axes"
+cross-reference lock (check 4b) had no counterpart for
+`references/security-level.md`'s own "narrower than all N" sentence,
+which this branch's own change bumped from six to seven -- confirmed by
+`git log -p` on that file to have already drifted silently through
+"four" -> "six" -> "seven" across three prior axis additions with nothing
+checking it. `gitapex_scan_contract_axis_vocabulary_drift.py` gained
+check 12: the same other-axes count check 4b computes, plus the fixed
+three-item offset security-level.md's own "does not cover" list carries
+for non-axis concerns (dimensions 1/15, mechanism-fit, dimension 23),
+self-maintaining the same way check 4b already is rather than a
+hand-bumped literal. It also found `check_axis_count` graded only the
+first `**N cross-cutting axes**` declaration via `re.search`, not every
+occurrence the way check 4b already grades every cross-reference;
+switched to `re.findall` so a second declaration sentence cannot silently
+escape the lock. Test coverage was extended to match: the SKILL.md side
+of `extract_section`'s own absent/duplicate/empty failure paths, which
+only the cross-cutting-axes.md side had exercised before, plus the new
+check's pass/stale/malformed-word/missing-phrase/recomputation cases.
+43 tests now cover this gate at 100% line coverage (up from 35),
+`references/output-schema.json`'s `schemaVersion` description was
+corrected to name both new conditional requirements it already enforced
+but under-described, and `gitapex_lint_fixture_assertions.py` and
+`gitapex_check_dimension_coverage.py` were re-run clean against the
+strengthened fixtures.
+
 No no-skill baseline and no model tier have been run against this corpus:
 the environment that authored it has neither `waza` nor `nix` installed, the
 same constraint the "Cross-model matrix scaffolding" section of

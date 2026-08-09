@@ -179,7 +179,9 @@ def test_missing_axis_count_declaration_fails(tmp_path: Path) -> None:
 
 def test_axis_count_matches_after_a_sixth_axis_is_declared(tmp_path: Path) -> None:
     """The lock tracks the real heading count, not the literal word "Five" --
-    and both counts have to move together for the scan to come back clean."""
+    and every dependent count (SKILL.md's own cross-reference, and
+    security-level.md's own "narrower than all N") has to move together for
+    the scan to come back clean."""
     skill_dir = _copy_skill(tmp_path)
     _mutate(skill_dir, "SKILL.md", "**Five cross-cutting axes**", "**Six cross-cutting axes**")
     _mutate(skill_dir, "SKILL.md", "the other four axes", "the other five axes")
@@ -189,7 +191,31 @@ def test_axis_count_matches_after_a_sixth_axis_is_declared(tmp_path: Path) -> No
         G.SKILL_AXIS_HEADING,
         f"### Axis: Invented sixth\n\nBody.\n\n{G.SKILL_AXIS_HEADING}",
     )
+    _mutate(skill_dir, "references/security-level.md", "than all seven", "than all eight")
     assert G.scan(skill_dir) == []
+
+
+def test_multiple_axis_count_declarations_are_all_validated(tmp_path: Path) -> None:
+    """check_axis_count grades every '**N cross-cutting axes**' sentence, not
+    only the first ``re.search`` match -- a second declaration added later in
+    the file must not silently escape the lock."""
+    skill_dir = _copy_skill(tmp_path)
+    _mutate(
+        skill_dir,
+        "SKILL.md",
+        "**Five cross-cutting axes**",
+        "**Five cross-cutting axes**\n\nRestated for emphasis: **Five cross-cutting axes**",
+    )
+    assert G.scan(skill_dir) == []
+
+    _mutate(
+        skill_dir,
+        "SKILL.md",
+        "Restated for emphasis: **Five cross-cutting axes**",
+        "Restated for emphasis: **Four cross-cutting axes**",
+    )
+    problems = G.scan(skill_dir)
+    assert any("declares 4 cross-cutting axes but carries 5" in p for p in problems), problems
 
 
 # --- Schema vocabulary lock ---------------------------------------------------
@@ -287,6 +313,41 @@ def test_empty_axis_section_is_a_scan_error(tmp_path: Path) -> None:
         G.scan(skill_dir)
 
 
+def test_absent_skill_md_axis_heading_is_a_scan_error(tmp_path: Path) -> None:
+    """The symmetric failure path for SKILL.md's own level-3 (``###``) heading,
+    mirroring test_absent_axis_heading_is_a_scan_error above for
+    cross-cutting-axes.md's level-2 (``##``) heading -- both go through the
+    same extract_section, but SKILL.md's is extracted first in scan() and a
+    level-detection regression scoped to one heading depth would otherwise
+    only ever be exercised by the level-2 case."""
+    skill_dir = _copy_skill(tmp_path)
+    _mutate(skill_dir, "SKILL.md", G.SKILL_AXIS_HEADING, "### Axis: Renamed")
+    with pytest.raises(G.ScanError, match="heading not found"):
+        G.scan(skill_dir)
+
+
+def test_duplicated_skill_md_axis_heading_is_a_scan_error(tmp_path: Path) -> None:
+    skill_dir = _copy_skill(tmp_path)
+    _mutate(
+        skill_dir,
+        "SKILL.md",
+        G.SKILL_AXIS_HEADING,
+        f"{G.SKILL_AXIS_HEADING}\n\nStub body.\n\n{G.SKILL_AXIS_HEADING}",
+    )
+    with pytest.raises(G.ScanError, match="appears 2 times"):
+        G.scan(skill_dir)
+
+
+def test_empty_skill_md_axis_section_is_a_scan_error(tmp_path: Path) -> None:
+    skill_dir = _copy_skill(tmp_path)
+    path = skill_dir / "SKILL.md"
+    text = path.read_text(encoding="utf-8")
+    head = text[: text.index(G.SKILL_AXIS_HEADING)]
+    path.write_text(f"{head}{G.SKILL_AXIS_HEADING}\n", encoding="utf-8")
+    with pytest.raises(G.ScanError, match="is empty"):
+        G.scan(skill_dir)
+
+
 def test_section_stops_at_the_next_same_level_heading(tmp_path: Path) -> None:
     """A term living *after* the axis section must not count as covering it."""
     skill_dir = _copy_skill(tmp_path)
@@ -342,3 +403,64 @@ def test_absent_other_axes_cross_reference_is_silence_not_a_finding(tmp_path: Pa
     skill_dir = _copy_skill(tmp_path)
     _mutate(skill_dir, "SKILL.md", "the other four axes", "the sibling axes")
     assert G.scan(skill_dir) == []
+
+
+# --- security-level.md "narrower than all N" cross-reference lock -------------
+
+
+def test_stale_security_level_count_fails(tmp_path: Path) -> None:
+    """The exact class of drift a real audit already caught three times in this
+    repository's own history ("than all four" -> "than all six" -> "than all
+    seven"), left unlocked by check 4b's own scope (SKILL.md only) until this
+    check closed it."""
+    skill_dir = _copy_skill(tmp_path)
+    _mutate(skill_dir, "references/security-level.md", "than all seven", "than all six")
+    problems = G.scan(skill_dir)
+    assert any(
+        "says 'narrower than all six' but 7 items" in p and "4 other axis/axes + 3 non-axis items" in p
+        for p in problems
+    ), problems
+
+
+def test_unrecognized_security_level_count_word_fails(tmp_path: Path) -> None:
+    skill_dir = _copy_skill(tmp_path)
+    _mutate(skill_dir, "references/security-level.md", "than all seven", "than all several")
+    assert any(
+        "references/security-level.md: count declared as 'several', which is not a recognized number word" in p
+        for p in G.scan(skill_dir)
+    )
+
+
+def test_missing_security_level_phrase_is_a_finding_not_a_scan_error(tmp_path: Path) -> None:
+    """Unlike a missing axis-section heading (a structural precondition this
+    gate cannot check anything without), a missing 'narrower than all N:'
+    sentence is reported as an ordinary drift finding -- the rest of the
+    scan still has useful work to do and should not abort."""
+    skill_dir = _copy_skill(tmp_path)
+    _mutate(
+        skill_dir,
+        "references/security-level.md",
+        "This axis's own, distinct question is narrower\nthan all seven:",
+        "This axis's own, distinct question is narrower than everything else:",
+    )
+    problems = G.scan(skill_dir)
+    assert any("no 'narrower than all <number>:' sentence found" in p for p in problems), problems
+
+
+def test_security_level_count_recomputes_with_the_other_axes_count(tmp_path: Path) -> None:
+    """A sixth axis growing the "other axes" count from 4 to 5 must also grow
+    security-level.md's own expected total from 7 to 8 -- both keyed off the
+    same _other_axes_count helper, so they cannot silently diverge from each
+    other."""
+    skill_dir = _copy_skill(tmp_path)
+    _mutate(
+        skill_dir,
+        "SKILL.md",
+        G.SKILL_AXIS_HEADING,
+        f"### Axis: Invented sixth\n\nBody.\n\n{G.SKILL_AXIS_HEADING}",
+    )
+    problems = G.scan(skill_dir)
+    assert any(
+        "says 'narrower than all seven' but 8 items" in p and "5 other axis/axes + 3 non-axis items" in p
+        for p in problems
+    ), problems
