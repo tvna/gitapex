@@ -2,14 +2,16 @@
 """Validate every committed eval run record under `evals/*/results/`.
 
 ACTIVE (issue #926): registered in `.gitapex/ssot.json` as
-`eval-results-schema-drift`. Enforced exactly the way its three siblings
-(`gitapex_scan_ssot_schema.py`, `gitapex_scan_skill_metadata_schema.py`,
-`gitapex_scan_eval_suite_schema.py`) already are -- no dedicated workflow
-step and no pre-commit hook, only
+`eval-results-schema-drift`, on two planes. The CI plane has no dedicated
+workflow step of its own: it runs because
 `tests/test_gitapex_scan_eval_results_schema.py`'s own
-`test_real_repository_run_records_have_no_drift`, which calls `find_drift()`
-against the real `evals/` tree inside `.github/workflows/test.yml`'s pytest
-step.
+`test_real_repository_run_records_have_no_drift` calls `find_drift()` against
+the real `evals/` tree inside `.github/workflows/test.yml`'s pytest step. The
+local plane is the `local_invocation` its registry row records, which
+`gitapex_gate_local_preflight.py` discovers and runs before a push -- the
+wording `gitapex_gate_eval_declared_model.py` already uses, rather than the
+older sibling scanners' pre-#876 "no pre-commit hook" phrasing, which is
+false for any gate carrying `planes: ["ci", "local"]`.
 
 Before this scanner existed, `evals/*/results/` was the one committed,
 machine-readable corpus in this repository with no schema and no drift gate.
@@ -65,25 +67,45 @@ So a record declares which contract it is under, and the declaration is
 mandatory -- `record_contract: "gate-run"` (validated in full against
 `eval-run.schema.json`) or `record_contract: "pre-contract"` (layer 1 only,
 plus a `known_gaps` entry disclosing that the exemption is in force). A
-record declaring neither is a finding: the fail-closed direction, so a new
-run cannot slip past layer 2 by simply omitting the key the way the seven
-pre-existing manifests omitted `models` and `commit`.
+record declaring neither is a finding.
+
+Declaring `pre-contract` is not self-service. Blocking omission alone would
+have been a fail-open dressed as a fail-closed: omission is the harder path,
+and *declaring* the exemption is the easier one, so a new run could have
+skipped layer 2 by writing one word plus one disclosure line. The exemption
+is therefore pinned to `LEGACY_PRE_CONTRACT_RUNS`, the frozen set of run
+directories that predate the contract. A run directory outside that set
+declaring `pre-contract` is a finding, so the set can only shrink.
 
 What this scanner does NOT check, disclosed rather than solved
 -------------------------------------------------------------
 
+- **Layer 2 has no coverage on this repository's own corpus today.** All
+  eight committed records are `pre-contract`, so `find_gate_run_schema_drift`
+  returns nothing for every one of them and the real-tree gate test exercises
+  layer 1 alone. Layer 2's own behaviour is covered by fixtures only until a
+  real gate run lands. A transitional state, stated rather than left for a
+  reader to work out from the record set.
 - A schema pins a manifest's shape, not the truthfulness of its values. A
   run recording a model it did not invoke, or an `artifacts[]` entry
   pointing at a real but semantically unrelated file, passes here.
+- The root-contents rule enforces the *extension* (`.json`) and not the
+  `<full-model-id>` naming convention `results/README.md` states, because
+  this scanner owns no notion of a valid model id. An arbitrarily named
+  `.json` file in a run root passes, as long as `artifacts[]` lists it.
 - `commit` is checked for hex shape, not for resolving on any remote. It
   deliberately does not shell out to git: a shallow clone (this
   repository's own CI checkout) cannot resolve a historical object name,
   and a gate that fails on a property of the clone rather than of the
   record would be worse than no gate.
-- Whether the pytest job carrying this scanner is a *required* status check
-  on the protected branch is a GitHub admin setting no in-repo tooling can
-  read -- the same open item `.github/PULL_REQUEST_TEMPLATE.md` already
-  records for every gate here.
+- Whether the pytest job carrying this scanner is *actually* required on the
+  protected branch is GitHub-side state this scanner does not read. It is not
+  unreadable in general, though: `.github/rulesets/main.json` declares
+  `pytest` required with an empty `bypass_actors`, and
+  `.github/scripts/gitapex_scan_ruleset_drift.py --scope required-checks`
+  reads the live ruleset through the API and diffs it against that file on
+  every pull request. So the honest limit here is division of labour, not
+  the blanket "no in-repo tooling can read it" the older gates assert.
 
 Run standalone (exit 0 clean, 1 on drift or a read error) or via the pytest
 gate.
@@ -102,8 +124,10 @@ import jsonschema
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 EVALS_DIR = REPO_ROOT / "evals"
 SCHEMA_DIR = REPO_ROOT / "skills" / "scorer-gated-skill-edits" / "references"
-RUN_SCHEMA_PATH = SCHEMA_DIR / "eval-run.schema.json"
-SCORES_SCHEMA_PATH = SCHEMA_DIR / "eval-scores.schema.json"
+RUN_SCHEMA_NAME = "eval-run.schema.json"
+SCORES_SCHEMA_NAME = "eval-scores.schema.json"
+RUN_SCHEMA_PATH = SCHEMA_DIR / RUN_SCHEMA_NAME
+SCORES_SCHEMA_PATH = SCHEMA_DIR / SCORES_SCHEMA_NAME
 
 MANIFEST_NAME = "manifest.json"
 ARTIFACTS_DIR_NAME = "artifacts"
@@ -142,14 +166,50 @@ GATE_RUN_CONTRACT = "gate-run"
 PRE_CONTRACT = "pre-contract"
 RECORD_CONTRACTS = (GATE_RUN_CONTRACT, PRE_CONTRACT)
 
+# The complete, frozen set of run directories that predate the run-record
+# contract and may therefore claim the layer-2 exemption. Keyed
+# `<skill>/<run>` -- the same label `find_drift` prefixes findings with.
+#
+# Frozen deliberately, and this is the difference between a fail-closed and a
+# fail-open exemption. Without it, `pre-contract` is self-service: any future
+# record skips `eval-run.schema.json` entirely by declaring one word and
+# adding one disclosure line, which is *easier* than the omission the
+# declaration requirement already blocks. The set can shrink (a record
+# genuinely re-derived as a gate run drops off it) and must never grow: a new
+# run has a runner version and a verdict to record, which is exactly what the
+# gate-run contract asks for.
+LEGACY_PRE_CONTRACT_RUNS = frozenset(
+    {
+        "battle-testing-a-skill/2026-07-30-issue-584-dispatch-trace",
+        "evaluating-skill-quality/2026-07-28-issue-500-phase1",
+        "evaluating-skill-quality/2026-07-29-issue-537-confidentiality-gates",
+        "evaluating-skill-quality/2026-07-30-issue-584-dispatch-trace",
+        "untrusted-input-triage/2026-08-01-issue-645-battle-test",
+        "untrusted-input-triage/2026-08-01-issue-645-behavioral-eval",
+        "untrusted-input-triage/2026-08-01-issue-646-behavioral-gate2",
+        "untrusted-input-triage/2026-08-01-issue-646-transfer-check",
+    }
+)
+
 _COMMIT_RE = re.compile(r"^[0-9a-f]{7,40}$")
-_RUN_DIR_RE = re.compile(r"^\d{4}-\d{2}-\d{2}-issue-\d+-[a-z0-9]+(-[a-z0-9]+)*$")
+_RUN_DIR_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})-issue-(\d+)-[a-z0-9]+(?:-[a-z0-9]+)*$")
+
+# Anchored, not a substring test. A bare `"commit" in gap` check is satisfied
+# by any English sentence that happens to contain the word -- "we did not
+# commit to a second model tier" disclosed a null `commit` under the first
+# version of this file, which is the gate's own stated failure mode ("an
+# undisclosed null reads as a satisfied declaration") reappearing one level
+# up, inside the check meant to prevent it. Every one of the eight committed
+# records already opens its disclosure with exactly these words.
+_COMMIT_GAP_RE = re.compile(r"^commit is null:\s*\S")
+_CONTRACT_GAP_RE = re.compile(r"^record_contract is pre-contract:\s*\S")
 
 # Fail-closed floor on discovery itself, the same purpose and shape as
-# `gitapex_scan_skill_metadata_schema.py`'s own MIN_EXPECTED_SKILL_DIRS: set
-# close to the real current count (8) with headroom, not at 1, so a partial
-# discovery failure is caught too, not only a total-zero one.
-MIN_EXPECTED_RUN_DIRS = 6
+# `gitapex_scan_skill_metadata_schema.py`'s own MIN_EXPECTED_SKILL_DIRS. Set
+# at the real current count rather than below it: the corpus only grows, a
+# `>=` floor never fires on an addition, and slack here would let a run
+# directory vanish silently -- which is the failure this floor exists for.
+MIN_EXPECTED_RUN_DIRS = 8
 
 
 class ResultsReadError(Exception):
@@ -176,33 +236,150 @@ def discover_run_dirs(evals_dir: pathlib.Path = EVALS_DIR) -> list[pathlib.Path]
 
 
 def _load_json(path: pathlib.Path) -> Any:
-    return _gitapex_schema_validation.load_json_or_raise(path, ResultsReadError)
+    """`load_json_or_raise`, plus the one malformed-input class it does not
+    convert: `RecursionError`. A pathologically nested JSON document (a
+    manifest of 100000 open braces) raises it from inside `json.loads`, and it
+    is not a `JSONDecodeError` subclass, so it previously escaped `find_drift`
+    as a traceback -- contradicting `ResultsReadError`'s own "exit 1, never a
+    traceback" contract. The same catch `gitapex_scan_skill_metadata_schema.py`'s
+    `load_sidecar` already adds for the YAML equivalent."""
+    try:
+        return _gitapex_schema_validation.load_json_or_raise(path, ResultsReadError)
+    except RecursionError as error:
+        raise ResultsReadError(f"{path}: is too deeply nested to parse: {error}") from error
 
 
-def _load_schema(path: pathlib.Path) -> dict[str, Any]:
-    """Read one of the two skill-owned schemas, raising rather than
-    returning an empty dict when it is absent. Issue #926's own proof method
-    requires this scanner to "fail loudly if either is absent" -- a
-    `{}`-shaped fallback validates every instance successfully, turning the
-    whole of layer 2 into a silent pass the moment the skill is removed or
-    its `references/` directory is renamed."""
+def find_misplaced_results_dirs(evals_dir: pathlib.Path) -> list[str]:
+    """`results-dir-placement`: every `results` directory under `evals/` must
+    sit at exactly `evals/<skill>/results/`.
+
+    `discover_run_dirs` globs one fixed depth, so a `results/` directory
+    anywhere else -- `evals/results/`, `evals/<skill>/<sub>/results/`, or a
+    case variant like `Results/` -- takes its run records out of the gate's
+    sight entirely. The discovery floor does not help: it counts directories,
+    so eight correctly-placed records plus one misplaced drifting record still
+    clears it and reports clean. Without this sweep the gate's own coverage
+    silently depends on a convention nothing checks."""
+    if not evals_dir.is_dir():
+        return []
+    expected = {p for p in evals_dir.glob("*/results") if p.is_dir()}
+    findings: list[str] = []
+    for candidate in sorted(evals_dir.rglob("*")):
+        if not candidate.is_dir() or candidate.name.lower() != "results" or candidate in expected:
+            continue
+        findings.append(
+            f"results-dir-placement: {candidate.relative_to(evals_dir).as_posix()!r} is not at "
+            "evals/<skill>/results/, so any run record inside it is invisible to this gate"
+        )
+    return findings
+
+
+def _load_schema(path: pathlib.Path, expected_id_suffix: str) -> dict[str, Any]:
+    """Read one of the two skill-owned schemas, raising rather than returning
+    something unusable. Issue #926's own proof method requires this scanner to
+    "fail loudly if either is absent" -- but absence is only one of three ways
+    the dependency can go bad, and guarding it alone leaves the other two
+    fail-open, which is the vacuous-pass class this whole gate cites issue
+    #651's retrospective for:
+
+    1. **Absent.** Caught by `is_file()`.
+    2. **Present but not an object** (`[]`, `null`, `"a string"` after a bad
+       merge). Previously escaped `find_drift` as an uncaught `AttributeError`
+       from deep inside `jsonschema`, a traceback rather than the exit 1
+       `ResultsReadError` promises.
+    3. **Present, a technically valid schema, and empty.** The nastiest of the
+       three: `{}` passes `check_schema` because it *is* a legal JSON Schema
+       -- one that validates every instance. A truncated or half-written
+       schema file therefore turned all of layer 2 into a silent pass with
+       every test still green.
+
+    So the guard is four-part: object shape, `check_schema`, a non-empty
+    `required` list, and an `$id` ending in `expected_id_suffix`. The last two
+    are what catch case 3 -- shape validity cannot, since an empty schema is
+    valid.
+
+    `expected_id_suffix` is the caller's own declaration of which schema it
+    means, deliberately not derived from `path.name`. A path-derived check
+    validates that a file's `$id` matches wherever it happens to sit, which
+    passes when the two schemas are swapped for each other -- each still names
+    itself. Comparing against the caller's expectation catches that: loading
+    `eval-scores.schema.json` as the run schema fails.
+    """
     if not path.is_file():
         raise ResultsReadError(
             f"{path}: skill-owned run-record schema is missing -- layer 2 cannot run. "
             "It ships inside skills/scorer-gated-skill-edits/references/ (issue #932); "
             "this scanner reads it and never authors a fallback copy."
         )
-    parsed: dict[str, Any] = _load_json(path)
+    parsed = _load_json(path)
+    if not isinstance(parsed, dict):
+        raise ResultsReadError(f"{path}: skill-owned schema is not a JSON object, got {type(parsed).__name__}")
+    try:
+        jsonschema.Draft202012Validator.check_schema(parsed)
+    except jsonschema.exceptions.SchemaError as error:
+        raise ResultsReadError(f"{path}: skill-owned schema is not a valid JSON Schema: {error.message}") from error
+    if not parsed.get("required"):
+        raise ResultsReadError(
+            f"{path}: skill-owned schema declares no required properties -- layer 2 cannot run. "
+            "An empty or truncated schema is a legal JSON Schema that validates every instance, "
+            "so this is checked separately from check_schema rather than through it."
+        )
+    if not str(parsed.get("$id", "")).endswith(expected_id_suffix):
+        raise ResultsReadError(
+            f"{path}: skill-owned schema's $id ({parsed.get('$id')!r}) does not end in "
+            f"{expected_id_suffix!r} -- refusing to validate against a schema that is not the "
+            "one this check means, which is how the two schemas swapped for each other would pass."
+        )
     return parsed
 
 
+def _escapes_run_dir(entry: str) -> bool:
+    """Whether `entry` is anything other than a relative path that stays
+    inside its run directory.
+
+    `(run_dir / entry).is_file()` does not itself guard this: pathlib's
+    absolute-operand rule replaces the left side outright
+    (`Path("/a/b") / "/etc" == Path("/etc")`), so an absolute path that
+    happens to exist reads as a resolved reference. Shared by
+    `find_artifact_drift` and `find_gate_run_schema_drift` so the one
+    containment predicate has a single implementation -- `score_files[].file`
+    previously had no guard at all, which made an arbitrary JSON file
+    anywhere on the runner readable and, worse, echoed its parsed content
+    into a finding line and from there into a public CI log.
+    """
+    return not entry or entry.startswith("/") or ".." in pathlib.PurePosixPath(entry).parts
+
+
 def _relative_files(run_dir: pathlib.Path) -> list[str]:
-    """Every regular file under `run_dir`, as a POSIX path relative to
-    `run_dir` itself, sorted. Symlinks are excluded by `is_file()` following
-    them only when the target exists, so a broken symlink is reported by
-    `find_artifact_drift` as an unlisted-or-missing path rather than
-    crashing the walk."""
-    return sorted(p.relative_to(run_dir).as_posix() for p in run_dir.rglob("*") if p.is_file())
+    """Every file under `run_dir`, as a POSIX path relative to `run_dir`,
+    sorted.
+
+    `lstat`-based, not `is_file()`-based, so a **broken symlink counts as
+    present**. Under `is_file()` it did not: the walk silently dropped it, and
+    because it was also unlisted nothing ever checked it -- invisible rather
+    than reported, the opposite of what this function's own docstring used to
+    claim. A dangling symlink beside a permanent record is exactly the orphan
+    `artifacts[]` exists to surface.
+    """
+    return sorted(p.relative_to(run_dir).as_posix() for p in run_dir.rglob("*") if p.is_symlink() or p.is_file())
+
+
+def find_symlink_drift(run_dir: pathlib.Path) -> list[str]:
+    """`no-symlinks`: a run record holds real files, never symlinks.
+
+    A run record is a permanent, self-contained artifact. A symlink makes its
+    content depend on something outside itself, and a symlink pointing outside
+    the run directory defeats the containment `_escapes_run_dir` enforces on
+    `artifacts[]` -- an entry can be a well-behaved relative path whose target
+    is anywhere at all. Rejected outright rather than resolved-and-checked:
+    there is no legitimate use for one here, so the narrow rule is also the
+    simpler one.
+    """
+    return [
+        f"no-symlinks: {p.relative_to(run_dir).as_posix()!r} is a symlink; a run record holds real files only"
+        for p in sorted(run_dir.rglob("*"))
+        if p.is_symlink()
+    ]
 
 
 def find_run_dir_name_drift(run_dir: pathlib.Path) -> list[str]:
@@ -234,9 +411,14 @@ def find_root_content_drift(run_dir: pathlib.Path) -> list[str]:
                 )
             continue
         if entry.suffix != ".json":
+            # The message states what is actually enforced -- the extension --
+            # not README's `<full-model-id>.json` convention. This scanner
+            # owns no notion of a valid model id, and a message promising a
+            # check that does not exist is how a reader comes to trust one.
+            # The unenforced half is disclosed in the module docstring.
             findings.append(
                 f"run-root-contents: unexpected file {entry.name!r} -- the root holds "
-                f"{MANIFEST_NAME} and <full-model-id>.json only; raw prompts and model "
+                f"{MANIFEST_NAME} and .json score files only; raw prompts and model "
                 f"outputs belong under {ARTIFACTS_DIR_NAME}/"
             )
     return findings
@@ -264,13 +446,36 @@ def find_artifact_drift(instance: Any, run_dir: pathlib.Path) -> list[str]:
         if not isinstance(entry, str) or not entry:
             findings.append(f"artifacts-agree: artifacts entry is not a non-empty string: {entry!r}")
             continue
-        if entry.startswith("/") or ".." in pathlib.PurePosixPath(entry).parts:
+        if _escapes_run_dir(entry):
             findings.append(
                 f"artifacts-agree: artifacts entry {entry!r} must be a relative path inside the run directory"
             )
             continue
-        listed.add(entry)
-        if not (run_dir / entry).is_file():
+        # Normalized before the set-difference, so `./artifacts/a.md`,
+        # `artifacts//a.md` and `artifacts/./a.md` compare equal to the
+        # `artifacts/a.md` the filesystem walk produces. Unnormalized, each of
+        # those reported the listed file as an unlisted orphan -- still
+        # fail-closed, but a finding that reads as a false positive teaches a
+        # reader to distrust the gate.
+        normalized = pathlib.PurePosixPath(entry).as_posix()
+        if normalized in listed:
+            findings.append(f"artifacts-agree: artifacts lists {entry!r} more than once")
+            continue
+        if normalized == MANIFEST_NAME:
+            findings.append(
+                f"artifacts-agree: artifacts must not list {MANIFEST_NAME} -- it is the record, not an attachment"
+            )
+            continue
+        listed.add(normalized)
+        try:
+            exists = (run_dir / normalized).is_file()
+        except OSError as error:
+            # ENAMETOOLONG and friends: `Path.is_file()` swallows only
+            # ENOENT/ENOTDIR/EBADF/ELOOP, so a 5000-character entry raised
+            # straight out of find_drift as a traceback instead of a finding.
+            findings.append(f"artifacts-agree: artifacts entry {entry!r} cannot be resolved: {error}")
+            continue
+        if not exists:
             findings.append(f"artifacts-agree: artifacts lists {entry!r}, which does not exist")
     present = set(_relative_files(run_dir)) - {MANIFEST_NAME}
     for orphan in sorted(present - listed):
@@ -345,11 +550,12 @@ def find_commit_drift(instance: Any) -> list[str]:
         return []
     commit = instance.get("commit")
     if commit is None:
-        if any("commit" in gap for gap in _known_gaps(instance)):
+        if any(_COMMIT_GAP_RE.match(gap) for gap in _known_gaps(instance)):
             return []
         return [
-            "commit-recorded-or-disclosed: commit is null with no known_gaps entry naming it -- "
-            "an undisclosed null reads as a satisfied declaration"
+            "commit-recorded-or-disclosed: commit is null with no known_gaps entry opening "
+            "'commit is null: <reason>' -- an undisclosed null reads as a satisfied declaration, "
+            "and a substring test for the word would be satisfied by an unrelated sentence"
         ]
     if isinstance(commit, str) and _COMMIT_RE.match(commit):
         return []
@@ -369,7 +575,34 @@ def find_issue_url_drift(instance: Any) -> list[str]:
     return [f"issue-full-url: issue must be a full URL, not a repository-local reference, got {issue!r}"]
 
 
-def find_record_contract_drift(instance: Any) -> list[str]:
+def find_run_dir_agreement_drift(instance: Any, run_dir: pathlib.Path) -> list[str]:
+    """`run-dir-agrees-with-manifest`: the date and issue number in the
+    directory name must match the manifest's own `date` and `issue`.
+
+    Cross-file by nature, so no schema can express it. Without it the
+    directory name -- the only part of a record a reader sees before opening
+    anything -- can say one thing while the record says another, and both pass
+    every other rule here."""
+    match = _RUN_DIR_RE.match(run_dir.name)
+    if match is None or not isinstance(instance, dict):
+        return []
+    dir_date, dir_issue = match.group(1), match.group(2)
+    findings: list[str] = []
+    if instance.get("date") != dir_date:
+        findings.append(
+            f"run-dir-agrees-with-manifest: directory says date {dir_date}, manifest says {instance.get('date')!r}"
+        )
+    issue = instance.get("issue")
+    if not (isinstance(issue, str) and issue.rstrip("/").endswith(f"/{dir_issue}")):
+        findings.append(f"run-dir-agrees-with-manifest: directory says issue {dir_issue}, manifest issue is {issue!r}")
+    return findings
+
+
+def find_record_contract_drift(
+    instance: Any,
+    run_label: str,
+    legacy_pre_contract_runs: frozenset[str] = LEGACY_PRE_CONTRACT_RUNS,
+) -> list[str]:
     """`record-contract-declared`: every manifest declares
     `record_contract` as one of `gate-run` or `pre-contract`, and a
     `pre-contract` record discloses that exemption in `known_gaps`.
@@ -386,11 +619,20 @@ def find_record_contract_drift(instance: Any) -> list[str]:
             f"record-contract-declared: record_contract must be one of {list(RECORD_CONTRACTS)}, got {contract!r} -- "
             "an undeclared record is not exempt from the gate-run schema, it is unvalidatable"
         ]
-    if contract == PRE_CONTRACT and not any("record_contract" in gap for gap in _known_gaps(instance)):
-        return [
-            "record-contract-declared: a pre-contract record must carry a known_gaps entry naming "
-            "record_contract and stating which contract fields were never captured"
-        ]
+    if contract == PRE_CONTRACT:
+        if run_label not in legacy_pre_contract_runs:
+            return [
+                f"record-contract-declared: {run_label} is not one of the "
+                f"{len(legacy_pre_contract_runs)} run directories that predate the run-record "
+                "contract, so it may not claim the pre-contract exemption -- a new run has a "
+                "runner version and a gate verdict to record, and must declare gate-run"
+            ]
+        if not any(_CONTRACT_GAP_RE.match(gap) for gap in _known_gaps(instance)):
+            return [
+                "record-contract-declared: a pre-contract record must carry a known_gaps entry "
+                "opening 'record_contract is pre-contract: <which contract fields were never "
+                "captured>'; a bare mention of the key does not disclose anything"
+            ]
     if contract == GATE_RUN_CONTRACT and "gate" not in instance:
         return ["record-contract-declared: a gate-run record must carry the gate key eval-run.schema.json requires"]
     return []
@@ -422,6 +664,12 @@ def find_gate_run_schema_drift(
         rel = row.get("file")
         if not isinstance(rel, str) or not rel:
             continue
+        if _escapes_run_dir(rel):
+            findings.append(
+                f"score-file-resolves: score_files points at {rel!r}, which must be a relative path "
+                "inside the run directory -- refusing to read outside it"
+            )
+            continue
         target = run_dir / rel
         if not target.is_file():
             findings.append(f"score-file-resolves: score_files points at {rel!r}, which does not exist")
@@ -438,6 +686,7 @@ def find_drift(
     run_schema_path: pathlib.Path = RUN_SCHEMA_PATH,
     scores_schema_path: pathlib.Path = SCORES_SCHEMA_PATH,
     min_expected_run_dirs: int = MIN_EXPECTED_RUN_DIRS,
+    legacy_pre_contract_runs: frozenset[str] = LEGACY_PRE_CONTRACT_RUNS,
 ) -> list[str]:
     """Every finding across every discovered run directory. Empty list means
     the whole corpus is clean.
@@ -451,23 +700,25 @@ def find_drift(
     Both schemas are loaded once and their validators reused across every
     record, rather than rebuilt per record -- `jsonschema` performs `$ref`
     resolution and registry setup on construction."""
-    run_validator = _gitapex_schema_validation.build_validator(_load_schema(run_schema_path))
-    scores_validator = _gitapex_schema_validation.build_validator(_load_schema(scores_schema_path))
+    run_validator = _gitapex_schema_validation.build_validator(_load_schema(run_schema_path, RUN_SCHEMA_NAME))
+    scores_validator = _gitapex_schema_validation.build_validator(_load_schema(scores_schema_path, SCORES_SCHEMA_NAME))
     run_dirs = discover_run_dirs(evals_dir)
+    findings = find_misplaced_results_dirs(evals_dir)
 
     if len(run_dirs) < min_expected_run_dirs:
         return [
+            *findings,
             f"run-discovery-floor: found only {len(run_dirs)} run "
             f"director{'y' if len(run_dirs) == 1 else 'ies'} under {evals_dir}/*/results/ "
             f"(expected at least {min_expected_run_dirs}) -- this usually means evals_dir "
-            "is wrong or missing, not that run records were actually removed"
+            "is wrong or missing, not that run records were actually removed",
         ]
 
-    findings: list[str] = []
     for run_dir in run_dirs:
         prefix = f"{run_dir.parent.parent.name}/{run_dir.name}"
         findings.extend(f"{prefix}: {f}" for f in find_run_dir_name_drift(run_dir))
         findings.extend(f"{prefix}: {f}" for f in find_root_content_drift(run_dir))
+        findings.extend(f"{prefix}: {f}" for f in find_symlink_drift(run_dir))
         manifest = run_dir / MANIFEST_NAME
         if not manifest.is_file():
             findings.append(f"{prefix}: manifest-present: missing {MANIFEST_NAME}")
@@ -478,7 +729,10 @@ def find_drift(
         findings.extend(f"{prefix}: {f}" for f in find_known_gaps_drift(instance))
         findings.extend(f"{prefix}: {f}" for f in find_commit_drift(instance))
         findings.extend(f"{prefix}: {f}" for f in find_issue_url_drift(instance))
-        findings.extend(f"{prefix}: {f}" for f in find_record_contract_drift(instance))
+        findings.extend(f"{prefix}: {f}" for f in find_run_dir_agreement_drift(instance, run_dir))
+        findings.extend(
+            f"{prefix}: {f}" for f in find_record_contract_drift(instance, prefix, legacy_pre_contract_runs)
+        )
         findings.extend(f"{prefix}: {f}" for f in find_artifact_drift(instance, run_dir))
         findings.extend(
             f"{prefix}: {f}" for f in find_gate_run_schema_drift(instance, run_dir, run_validator, scores_validator)
