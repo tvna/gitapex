@@ -53,6 +53,12 @@
       "path": ".github/rulesets/main.json",
       "format": "json",
       "authority": "The GitHub Repository Ruleset this repository intends to enforce on its default branch -- name/target/enforcement/conditions/bypass_actors/rules, i.e. exactly the key set GitHub's own ruleset POST/PUT body accepts. Authoritative for what protection main is supposed to carry (read by both scopes of the ruleset-verify workflow, written to GitHub only by the human-dispatched apply-rulesets workflow, which stays a separate file so the write-capable Environment binding is greppable rather than expression-derived); it is NOT proof that GitHub enforces it, which is why both reading gates exist"
+    },
+    {
+      "id": "eval-run-record-schemas",
+      "path": "skills/scorer-gated-skill-edits/references/eval-run.schema.json",
+      "format": "json",
+      "authority": "Shape of a scorer-gated-skill-edits gate-run record, read by eval-results-schema-drift. Authored inside the owning skill (issue #932) rather than in .gitapex/, so the contract travels with SKILL.md when the skill is installed elsewhere. One entry stands in for the pair: skills/scorer-gated-skill-edits/references/eval-scores.schema.json sits in the same directory, ships with the same skill, and is authoritative the same way for each per-model score file a gate-run record points at"
     }
   ],
   "gates": [
@@ -630,6 +636,20 @@
       "policy_refs": ["waza-suite-schemas"],
       "cluster": "test-integrity",
       "tracking_issue": 862,
+      "status": "active",
+      "supersedes": null
+    },
+    {
+      "id": "eval-results-schema-drift",
+      "kind": "script",
+      "script": ".github/scripts/gitapex_scan_eval_results_schema.py",
+      "rule": "Every evals/*/results/<date>-issue-<N>-<label>/ run record must pass two layers. Layer 1, this repository's own structural rules, applies with no exemption: the directory name matches that pattern; manifest.json exists; the root holds *.json plus an artifacts/ directory only, so raw prompts and model outputs never sit in the root; artifacts[] and the real files agree in BOTH directions over every file except manifest.json itself, so an orphan and a dangling reference each fail; the ten keys evals/evaluating-skill-quality/results/README.md declares are present; a known misspelling of a contract key (model for models, and four siblings) fails, which neither schema can catch since both deliberately permit additional keys; known_gaps is a non-empty array of non-empty strings; issue is a full URL, not a repository-local number; and commit is a 7-40 character hex object name, or an explicit null accompanied by a known_gaps entry naming it, so a missing value is recorded as missing and never reconstructed. Layer 2 validates a record declaring record_contract: gate-run in full against skills/scorer-gated-skill-edits/references/eval-run.schema.json, and each of its score_files[] targets against eval-scores.schema.json; a record declaring record_contract: pre-contract is exempt from layer 2 and must disclose that exemption in known_gaps; a record declaring neither fails, so the exemption cannot be reached by omission. A missing skill-owned schema is a hard error, never a silent pass. Shape only -- a record that misreports which model ran still passes.",
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_scan_eval_results_schema.py"],
+      "trigger": "tests/test_gitapex_scan_eval_results_schema.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": ["eval-run-record-schemas"],
+      "cluster": "test-integrity",
+      "tracking_issue": 926,
       "status": "active",
       "supersedes": null
     },

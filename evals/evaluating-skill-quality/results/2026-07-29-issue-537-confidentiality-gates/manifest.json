@@ -1,6 +1,15 @@
 {
   "date": "2026-07-29",
   "issue": "https://github.com/tvna/gitapex/issues/537",
+  "commit": null,
+  "record_contract": "pre-contract",
+  "fixture_set": "One selection-split fixture per iteration recorded in iterations[], under evals/evaluating-skill-quality/tasks/: confidentiality-awareness-selection.yaml, confidentiality-awareness-payment-data-selection.yaml, confidentiality-awareness-mnpi-selection.yaml, confidentiality-awareness-trade-secret-selection.yaml -- the four fixture ids claude-sonnet-5.json's own scores[] records, each matching that task file's declared id.",
+  "trials_per_fixture": 1,
+  "models": {
+    "default": "inferred claude-sonnet-5 (this session's own account/session default; --model was not explicitly pinned on the claude -p subprocess calls, so the exact tier is not independently confirmed from the transcripts themselves -- disclosed as a known gap, not assumed)"
+  },
+  "dispatch_mechanism": "Isolated claude -p subprocess, per skills/evaluating-skill-quality/references/adversarial-self-audit.md's Isolation-verification registry (this platform/version's Agent-tool dispatch entry is confirmed-contaminated; the claude -p subprocess alternative, from a CLAUDE.md-free working directory with an isolated $HOME copy stripped of tasks/ and conversation-history directories, is the verified mechanism). --permission-mode dontAsk --allowedTools Read (this sandbox's root/sudo context rejects --dangerously-skip-permissions outright). Each dispatch was instructed to read SKILL.md and references/rubric.md off disk and follow the Procedure by hand, since this session has no registered Skill tool for evaluating-skill-quality's own unpublished content -- the same disclosed methodology this skill's split.md Kept-edit log has used since its earliest iterations.",
+  "scorer": "skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py, scoring each fixture's output_contains/output_not_contains assertions deterministically",
   "run_shape": "before/after (edited-rubric vs. pre-edit-rubric), not a cross-model sweep -- deviates from this directory's README schema, which is written for a fixed-rubric/multi-model run; the deviation is intentional and disclosed here rather than force-fit into the 'models' field. Four independent gate iterations, each its own before/after commit pair, one live dispatch per side per iteration, all on the same model.",
   "iterations": [
     {
@@ -44,16 +53,24 @@
       "gate_result": "REJECT (tie at ceiling); kept anyway, disclosed"
     }
   ],
-  "trials_per_fixture": 1,
-  "model": "inferred claude-sonnet-5 (this session's own account/session default; --model was not explicitly pinned on the claude -p subprocess calls, so the exact tier is not independently confirmed from the transcripts themselves -- disclosed as a known gap, not assumed)",
-  "dispatch_mechanism": "Isolated claude -p subprocess, per skills/evaluating-skill-quality/references/adversarial-self-audit.md's Isolation-verification registry (this platform/version's Agent-tool dispatch entry is confirmed-contaminated; the claude -p subprocess alternative, from a CLAUDE.md-free working directory with an isolated $HOME copy stripped of tasks/ and conversation-history directories, is the verified mechanism). --permission-mode dontAsk --allowedTools Read (this sandbox's root/sudo context rejects --dangerously-skip-permissions outright). Each dispatch was instructed to read SKILL.md and references/rubric.md off disk and follow the Procedure by hand, since this session has no registered Skill tool for evaluating-skill-quality's own unpublished content -- the same disclosed methodology this skill's split.md Kept-edit log has used since its earliest iterations.",
-  "scorer": "skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py, scoring each fixture's output_contains/output_not_contains assertions deterministically",
+  "artifacts": [
+    "claude-sonnet-5.json"
+  ],
+  "nonstandard_score_files": [
+    {
+      "file": "claude-sonnet-5.json",
+      "deviation": "Scored by skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py, the same scorer a standard record uses, but before/after per-iteration (condition, before_commit/after_commit) rather than eval-scores.schema.json's flat one-score-per-fixture_id shape -- this run_shape's own before/after design, not a checker's output. Was previously mislabeled in checker_reports[] (issue #926's own first pass); reclassified here after a CodeRabbit review round found that checker_reports[] gave no way to distinguish scorer output in a nonstandard shape from a deterministic checker's verdict."
+    }
+  ],
   "known_gaps": [
     "trials_per_fixture=1 for every iteration -- no repeat-run variance data; a single sample generalizing correctly is not proof a weaker tier or a different sample would.",
-    "model tier not independently confirmed from the transcripts (see 'model' field above).",
+    "model tier not independently confirmed from the transcripts (see the 'models' field above, spelled 'model' when this run was recorded and migrated by issue #926).",
     "substring-scorer only -- confirms each fixture's expected tokens appear or don't, not a full manual reading of the transcript's reasoning quality beyond what is quoted as evidence in split.md's Kept-edit log.",
     "the 23 pre-existing selection fixtures were confirmed unaffected by direct textual inspection for each iteration (assertion-surface disjointness), not re-dispatched -- consistent with this repository's own established precedent (gitapex#406, gitapex#495) for edits confirmed not to touch what those fixtures assert on.",
-    "no weaker-tier (e.g. Haiku) or repeated-trial run has been done for any of the three wording follow-ups; issue #500 Phase 2 (not yet scheduled) is named as the honest next step to actually detect what a single strong-tier trial could not."
+    "no weaker-tier (e.g. Haiku) or repeated-trial run has been done for any of the three wording follow-ups; issue #500 Phase 2 (not yet scheduled) is named as the honest next step to actually detect what a single strong-tier trial could not.",
+    "record_contract is pre-contract: this run was performed and recorded before skills/scorer-gated-skill-edits/references/eval-run.schema.json existed (issue #932), so it is validated against this repository's structural rules only, not against that schema. The two fields that schema requires and this run never captured are runner (the runner binary's own reported name and version -- this run drove claude -p subprocesses, and no version string was recorded) and gate (a KEEP/REJECT verdict with the two means that produced it -- this was a measurement run, not a scorer-gated-skill-edits gate run, so no such verdict was reached). Neither was reconstructed; issue #926 forbids it.",
+    "commit is null: this run is a before/after series, not a single-commit read. It records no one commit and one must not be invented -- the real per-iteration commits are kept verbatim in iterations[]'s before_commit/after_commit fields and in claude-sonnet-5.json's own per-score commit field.",
+    "The manifest key holding this run's model was committed as the singular 'model'; issue #926 migrated it to 'models' with the recorded string preserved verbatim under the 'default' alias, the same alias the two same-corpus dispatch-trace runs use. No model identity was changed or newly asserted."
   ],
   "headline_pattern": "The axis-addition gate showed a genuine strict improvement (0.667 -> 1.0): the axis did not exist before, so the pre-edit dispatch could not cite it. All three subsequent Applicability-wording precision edits (payment data, MNPI, business-information broadening) tied at the scorer's ceiling (1.0 -> 1.0) on every trial: this strong tier reliably generalized a narrow or generic bucket to the correct sensitive-data instance and safeguard proposal without needing the more specific wording. All three were kept anyway on independent, freestanding rationale (distinct regulatory/harm regimes, the rubric's own specificity principle applied reflexively, near-zero cost, no shape-check regression), with the REJECT disclosed rather than reclassified, per the gitapex#406 drift-correction precedent."
 }
