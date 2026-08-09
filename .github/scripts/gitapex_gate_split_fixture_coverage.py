@@ -1,45 +1,64 @@
 #!/usr/bin/env python3
-"""CI gate: split.md fixture-table coverage checks.
+"""CI gate: split.md/split.json fixture coverage checks.
 
 Issue #526 unifies two gate proposals drawn from two retrospective issues
 ("Requested outcome: one check catches both gap classes.") into this one
-script.
+script. Issue #928 rewrites Checks A, B, and D to read the structured
+`evals/<skill>/split.json` (added by that issue's own migration, validated
+against `skills/scorer-gated-skill-edits/references/split.schema.json`)
+instead of regex-parsing `split.md`'s prose `## Assignment` / `##
+Equivalence classes` sections, which the migration removed. Check C already
+compared a fixture's own YAML declaration against `SKILL.md`'s `###`
+headings -- a cross-file fact no schema alone can express -- and stays
+cross-file, now reading its declared-`selection` fixture list from
+`split.json` instead of markdown bullets.
 
 Check A (issue #191, repair 1). A `split.md`'s gate-result table (a
 `| Fixture | Before | After |` Markdown table recording a live before/edit
-scored run) is supposed to cover every fixture the file's own `##
-Assignment` section declares for the `selection` split. PR #190 shipped a
-gate table that silently omitted a declared fixture (`heldout-vague-
-completion.yaml`) -- the reported gate covered 9 of the declared 10, and
-the missing fixture was never actually scored, caught only by external
-review (`chatgpt-codex-connector[bot]`), not by anything mechanical. This
-check parses the *most recent* (last, by file position) gate-result table
-in a `split.md` file and requires its Fixture column to be a superset of
-that file's declared `selection` list -- unless the table is explicitly
-scoped to a single named fixture, this repository's own established
-convention for a narrower recheck ("one fresh dispatch per side against
+scored run) is supposed to cover every fixture `split.json`'s own
+`assignment.selection` array declares. PR #190 shipped a gate table that
+silently omitted a declared fixture (`heldout-vague-completion.yaml`) --
+the reported gate covered 9 of the declared 10, and the missing fixture
+was never actually scored, caught only by external review
+(`chatgpt-codex-connector[bot]`), not by anything mechanical. This check
+parses the *most recent* (last, by file position) gate-result table in a
+`split.md` file and requires its Fixture column to be a superset of that
+skill's declared `selection` list -- unless the table is explicitly scoped
+to a single named fixture, this repository's own established convention
+for a narrower recheck ("one fresh dispatch per side against
 `<fixture>.yaml`", used repeatedly by
-`evals/evaluating-skill-quality/split.md`'s `gitapex#537` follow-up
-entries), which by construction never claims full-corpus coverage and is
-exempt from the superset rule.
+`evals/evaluating-skill-quality/split.md`'s follow-up entries), which by
+construction never claims full-corpus coverage and is exempt from the
+superset rule. The gate-result table itself remains narrative Markdown in
+`split.md` -- only the declared-`selection` list it is graded against now
+comes from `split.json`.
 
 Check B (issue #352, repair 3). A `SKILL.md` documenting a
 precedence/branching rule (an "X takes precedence/priority over Y"
-sentence) needs a train+held-out equivalence-class fixture pair in its own
-`split.md`, per `scorer-gated-skill-edits`' own precondition gate ("every
-actual trigger branch" needs both a positive and a negative/non-trigger
-fixture). PR #328 shipped `skills/merge-retrospective/SKILL.md`'s Step 4
-precedence rule with zero fixture coverage in
-`evals/merge-retrospective/split.md` until external review caught it
-(closed by class 9: `title-convention-precedence-train.yaml` /
+sentence) needs a train+held-out equivalence-class fixture pair declared
+in its own skill's `split.json`, per `scorer-gated-skill-edits`' own
+precondition gate ("every actual trigger branch" needs both a positive and
+a negative/non-trigger fixture). PR #328 shipped
+`skills/merge-retrospective/SKILL.md`'s Step 4 precedence rule with zero
+fixture coverage until external review caught it (closed by class 9:
+`title-convention-precedence-train.yaml` /
 `no-title-convention-fallback-selection.yaml`). This check parses a
 `SKILL.md` for that phrasing and, when the skill already has a
-corresponding `evals/<skill>/split.md` (a skill with no `split.md` at all
-is out of scope for this check -- that gap belongs to
+corresponding `evals/<skill>/split.json` (a skill with no `split.json` at
+all is out of scope for this check -- that gap belongs to
 `scorer-gated-skill-edits`' own precondition gate, not this one), requires
-that `split.md`'s `## Equivalence classes` table to have a row that both
-mentions "precedence"/"priority" and names two fixtures (a train one and a
-held-out one).
+that file's own `equivalence_classes` array to have at least one
+well-formed `{train_fixture, held_out_fixture}` pair. `split.schema.json`'s
+`equivalenceClass` shape deliberately carries no per-pair topic label (see
+its own docstring: that narrative -- which pair covers *which*
+precedence/branching rule -- is "not data split.json's schema can hold"),
+so unlike the markdown table this replaces, this check can no longer
+confirm the specific pair it finds is *about* the precedence rule the
+phrase names, only that some train/held-out pairing exists at all for the
+skill. This is a disclosed narrowing versus the markdown-era check (which
+required the table row itself to mention "precedence"/"priority"), not an
+oversight: the finer label lives in `split.md`'s own narrative prose now,
+which is not machine-checked.
 
 Check C (issue #631, following issue #629's blocker 2 finding). A proposed
 mechanical "out-of-scope" classifier for `scorer-gated-skill-edits`' gate
@@ -49,140 +68,66 @@ to exercise -- would silently read a missing/empty declaration as "declares
 no sections," making an out-of-scope verdict vacuously true for every
 future edit. This check closes that half of the gap on its own (the
 classifier itself is explicitly NOT built here -- see issue #631): for
-every fixture a `split.md`'s `## Assignment` section declares for the
-`selection` split, when the sibling `SKILL.md` has at least one `###`-level
-section heading (this repository's convention for a routing-style
-sub-heading, e.g. `### Commit log -> a terse Why, not the full Why`,
-established by `skills/explaining-the-work/SKILL.md`), that fixture's own
-YAML must declare a well-formed `expected.exercises` (a non-empty list of
-section labels -- not merely truthy, mirroring
-`gitapex_lint_fixture_assertions.py`'s `_is_real_dispatch_declaration` shape-
-validation pattern), and every declared label must casefold-match a real
-current section label (the heading text before ` -> `, when present) in
-that `SKILL.md` -- never resolved by staleness (a fixture whose exercises:
-label no longer matches any heading fails loudly, the same declare+verify
-precedent as Check A/B above, not a stale pointer left unnoticed).
-Scoped automatically to skills that both have a `split.md` and use this
-`###` sub-heading convention -- not an enumerated allowlist like issue
-#584's `DISPATCH_MANDATE_SKILLS`, since the two skills in this repository
-that use `###` headings for an unrelated purpose (`evaluating-deterministic-
-gate-quality`'s evaluation axes, `scanning-attack-surfaces`'s check
-categories) have no `split.md` at all today, so this check never reaches
-them; a future skill combining both conventions in an unrelated way would
-need this scoping revisited, the same class of residual heuristic-scope
-risk Check B's own docstring already discloses for its narrower text scan.
+every fixture `split.json`'s own `assignment.selection` array declares,
+when the sibling `SKILL.md` has at least one `###`-level section heading
+(this repository's convention for a routing-style sub-heading, e.g.
+`### Commit log -> a terse Why, not the full Why`, established by
+`skills/explaining-the-work/SKILL.md`), that fixture must declare a
+well-formed `exercises` list (a non-empty list of section labels -- not
+merely truthy, mirroring `gitapex_lint_fixture_assertions.py`'s
+`_is_real_dispatch_declaration` shape-validation pattern), either inline in
+`split.json` itself (the `fixtureWithExpected` shape `split.schema.json`
+defines for exactly this purpose) or in the fixture's own task YAML's
+`expected.exercises` field (this repository's pre-existing convention,
+still how every real fixture today declares it) -- and every declared
+label must casefold-match a real current section label (the heading text
+before ` -> `, when present) in that `SKILL.md`, never resolved by
+staleness (a fixture whose `exercises:` label no longer matches any
+heading fails loudly, the same declare+verify precedent as Check A/B
+above, not a stale pointer left unnoticed). Scoped automatically to skills
+that both have a `split.json` and use this `###` sub-heading convention --
+not an enumerated allowlist like issue #584's `DISPATCH_MANDATE_SKILLS`,
+since the two skills in this repository that use `###` headings for an
+unrelated purpose (`evaluating-deterministic-gate-quality`'s evaluation
+axes, `scanning-attack-surfaces`'s check categories) have no `split.json`
+at all today, so this check never reaches them; a future skill combining
+both conventions in an unrelated way would need this scoping revisited,
+the same class of residual heuristic-scope risk Check B's own docstring
+already discloses for its narrower text scan.
 
-Check D (issue #907). A `split.md` that declares a `train:selection:test`
-partition in prose (``"for a resulting 27:30:12 partition"``,
-``"a flatter **9:6:3** partition"``) is asserting an arithmetic contract
-against its own `## Assignment` listing, and nothing checked it: PR #886
-shipped 28 listed train fixtures against a declared `27`, with the one
-over-count masked by an entry that simultaneously claimed to be excluded
-from the arithmetic *and* was counted in it. Reviewers caught the
-contradiction only after the merge. This check requires a file that
-declares a partition to also carry a machine-readable exclusion line
-(``Split-arithmetic exclusions: `name.yaml`, ...`` or
-``Split-arithmetic exclusions: none``), then asserts, per split, that the
-unique listed fixture count minus that split's declared exclusions equals
-the declared figure. The exclusion line exists because at least one real
-exclusion is legitimate and must stay visible to a human reader rather
-than being inferred from prose:
-`dispatch-required-negative-control.yaml` is listed in train for
-split-listing consistency with `normal.yaml`, not as a declared category
-addition. A named exclusion that is not actually listed in any split's
-own bullet is itself an offence, and so is a malformed exclusion payload
-(empty, or naming fixtures without backticks), so the line cannot rot into
-a silent blanket waiver -- both of those were live-demonstrated bypasses of
-this claim in the first draft, which is why the claim is now backed by two
-checks rather than one. Two files declare a partition today
-(`evals/evaluating-skill-quality/split.md`,
-`evals/merge-retrospective/split.md`); the other three declare none and
-are out of scope. That membership is pinned by
-`tests/test_gitapex_gate_split_fixture_coverage.py::
-test_real_split_md_partition_declarations_are_pinned_exactly` rather than
-asserted here, because a check that silently skips a file looks
-indistinguishable from a check that passes it -- exactly how the
-`resulting`-keyed first draft of this regex missed merge-retrospective's
-own differently-worded declaration.
-
-Everything Check D reads comes from the *header region* (before the
-`## Assignment` heading, fenced code blocks stripped), and the counted
-names come only from a split bullet's own paragraph. Both bounds are
-fail-closed fixes from an adversarial review of this check's first draft,
-each closing a demonstrated defect rather than tidying: an appended
-edit-log entry quoting a historical ratio could otherwise become the
-declaration; a fenced example illustrating this very convention could
-otherwise satisfy the must-carry-a-line requirement while declaring
-nothing; and a trailing explanatory paragraph naming pre-existing fixtures
-(merge-retrospective has exactly one) could otherwise inflate the last
-split's count, or keep a deleted fixture waivable forever with the leak
-and the exclusion cancelling out to a clean-looking pass. Ambiguity is
-rejected rather than arbitrated by position, for the same reason in each
-case: two disagreeing partition declarations, two exclusion lines, or two
-`## Assignment` headings all fail the file instead of silently picking one.
-A declared partition against an Assignment section listing nothing fails
-too, so `0:0:0` cannot reconcile vacuously.
-
-Known limitations, each demonstrated rather than theorized, none silently
-resolved:
-
-- **Scope exit by rewording.** A declaration this regex does not recognize
-  (`"a resulting 2:2 partition"`, `"2:2:1:9 partition"`, `"9:9:9 fixture
-  partition"`) removes its file from Check D entirely, and a removal looks
-  exactly like a pass. Bare, bolded, and backticked triples are all
-  recognized, so the residual is narrower than it first was -- but a
-  malformed or reworded one still exits, and a second review round showed
-  that exiting is the *good* outcome for a malformed triple: before the
-  colon-run guards, `"2:2:1:9 partition"` did not exit, it parsed as
-  `(2, 1, 9)` and graded the file against figures it never declared.
-  Matching every possible phrasing is not achievable
-  by prose regex, so the defence is elsewhere:
-  `tests/test_gitapex_gate_split_fixture_coverage.py::
-  test_real_split_md_partition_declarations_are_pinned_exactly` pins the
-  parsed declaration of every committed `split.md`, so rewording an
-  existing file's declaration turns its entry to ``None`` and fails that
-  test loudly. Residual, disclosed rather than closed: a *newly added*
-  `split.md` whose declaration uses an unrecognized phrasing is out of
-  scope until that pinned dict is next updated.
-- **The itemized additions are not summed.** `evals/evaluating-
-  skill-quality/split.md` asserts a second arithmetic contract of the same
-  class -- a `17:14:9` base plus nine named additions summing to the
-  declared `27:30:12`. Check D verifies declared-vs-listing only, so an
-  addition that does not sum passes. Not built here deliberately: the
-  header region also carries non-addition triples (`"SkillOpt's default
-  split ratio is 2:1:7"`, twice), and no reliable rule separates an
-  addition triple from a cited ratio in free prose. The additions do sum
-  correctly today, hand-checked; this is an uncovered half of the
-  invariant, not a live breakage.
-- **Detection, not prevention, at the merge boundary.** A Check D failure
-  turns this workflow's check red. Whether that blocks a merge depends on
-  branch protection, which no in-repo tooling can read or confirm -- the
-  same open item `docs/superpowers/specs/2026-07-21-skill-audit-merge-gate-
-  design.md` already records for this repository's other gates. Do not
-  read "gate-enforced" anywhere in this repository's own `split.md` or
-  `eval-status.md` prose as a claim that a merge is mechanically
-  prevented.
-
-All four checks are heuristic text parsing over Markdown prose, not a
-formal grammar -- the issue's own Acceptance Criteria Map names this
-residual risk explicitly ("Parsing split.md's prose-based Assignment
-section and gate tables reliably needs a defined, stable format
-convention" / "Detecting... phrases in free-form SKILL.md prose needs a
-heuristic that could miss some phrasings or over-trigger on unrelated
-conditional language"). Scope is deliberately narrowed to the exact
-conventions this repository's own `split.md` files already use, verified
-directly against all of them (`evals/evaluating-skill-quality/split.md`,
-`evals/scorer-gated-skill-edits/split.md`,
-`evals/battle-testing-a-skill/split.md`,
-`evals/merge-retrospective/split.md`,
-`evals/explaining-the-work/split.md`) before writing this gate (Check C)
--- not a general-purpose Markdown parser.
+Check D (issue #907). A `split.json` that declares a `partition` field
+(a `"train:selection:test"` string, e.g. `"9:6:3"`) is asserting an
+arithmetic contract against its own `assignment` listing, and this check
+verifies it: it requires a file that declares a partition to also carry a
+`split_arithmetic_exclusions` array (per-schema, required together with
+`partition` -- an explicit empty array is a real "nothing is excluded"
+statement, distinct from the key being absent), then asserts, per split,
+that the unique listed fixture count minus that split's declared
+exclusions equals the declared figure. A named exclusion that is not
+actually listed in any split's own array is itself an offence, so the
+field cannot rot into a silent blanket waiver, and the same fixture
+appearing in more than one split is rejected outright (this repository's
+splits are disjoint by construction) rather than silently double-counted
+or resolved by picking one. Moving this data into JSON removes an entire
+class of prose-parsing ambiguity the markdown-era version of this check
+had to defend against by construction (two disagreeing partition
+declarations, a declaration hiding inside a fenced illustration, a
+duplicated `## Assignment` heading, a trailing paragraph inflating a
+split's count): a JSON object has exactly one value per key, so those
+specific failure shapes cannot recur here. `gitapex_scan_split_schema.py`
+(issue #928, T11) is the dedicated schema-shape gate; this check still
+defends its own arithmetic defensively against a `partition` or
+`split_arithmetic_exclusions` value that does not match the schema's own
+shape, in case that gate has not (yet) run over the same file, rather than
+assuming upstream validation always precedes this one.
 
 Mirrors `gitapex_gate_retro_title_convention_citation.py`'s shape: the calling
 workflow computes which `split.md`/`SKILL.md` files this PR actually added
 or modified (pre-existing, already-shipped content is out of scope for a
 gate whose job is to catch a gap before it ships), this script only grades
-those files.
+those files (and, for Checks A/B/C/D, each file's sibling `split.json`,
+resolved by this repository's own `evals/<skill>/split.json` <->
+`evals/<skill>/split.md` <-> `skills/<skill>/SKILL.md` naming convention).
 
 Usage::
 
@@ -190,10 +135,10 @@ Usage::
         --split-md FILE [FILE ...] --skill-md FILE [FILE ...]
 
 Either flag may be omitted (or given zero files) if this PR did not touch
-that file type. Each `--skill-md` file is matched to a sibling `split.md`
-by this repository's own established convention,
-`skills/<slug>/SKILL.md` <-> `evals/<slug>/split.md`, resolved under
-`--repo-root` (default: current directory).
+that file type. Each `--split-md`/`--skill-md` file is matched to its
+skill's `split.json` by this repository's own established convention,
+`evals/<slug>/split.json`, resolved under `--repo-root` (default: current
+directory).
 
 Exit codes:
     0  No offending file.
@@ -203,6 +148,7 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from pathlib import Path
@@ -212,42 +158,9 @@ import yaml
 
 _YAML_NAME_RE = re.compile(r"`([A-Za-z0-9._-]+\.yaml)`")
 
-_ASSIGNMENT_HEADING_RE = re.compile(r"^##\s+Assignment\s*$", re.MULTILINE)
-_EQUIVALENCE_CLASSES_HEADING_RE = re.compile(r"^##\s+Equivalence classes\s*$", re.MULTILINE)
-_NEXT_HEADING_RE = re.compile(r"^##\s+\S", re.MULTILINE)
-
-# "- **train** (...): `a.yaml`, `b.yaml`." style bullets -- the one
-# fixture-assignment convention all four of this repository's split.md
-# files share (verified directly against all four before writing this
-# regex), even though the surrounding prose differs.
-#
-# Terminated by a *dedented* blank line as well as by the next bullet or
-# the section end (issue #907, adversarial review): every real bullet in
-# this repository's five split.md files is a single paragraph with indented
-# continuation lines, but `## Assignment` sections also carry trailing
-# explanatory paragraphs that name fixtures -- `evals/merge-retrospective/
-# split.md`'s "The five pre-existing fixtures (`normal.yaml`, ...)" note
-# sits directly after the `test` bullet. Without that boundary the LAST
-# bullet absorbs the prose and reports 8 test fixtures where the bullet
-# itself lists 3. Checks A and C only ever read `selection`, which is never
-# last in this repository, so the over-match was latent until Check D began
-# reading all three splits.
-#
-# The `(?![ \t])` is load-bearing, not decoration (second review round): a
-# bare `\n[ \t]*\n` terminator truncates a bullet at its own *internal*
-# paragraph break too, which silently shrank `selection` and made Check A
-# pass a gate table that omitted a declared fixture -- a regression in the
-# check this file already had, introduced while fixing Check D. Markdown's
-# own list-continuation rule is the discriminator: a paragraph that stays
-# inside the item is indented, one that leaves the list is not.
-_SPLIT_BULLET_RE = re.compile(
-    r"-\s+\*\*(train|selection|test)\*\*(.*?)"
-    r"(?=\n-\s+\*\*(?:train|selection|test)\*\*|\n[ \t]*\n(?![ \t])|\Z)",
-    re.IGNORECASE | re.DOTALL,
-)
-
 # A gate-result table header: three columns literally named Fixture,
-# Before, After, in that order, with any column widths/alignment.
+# Before, After, in that order, with any column widths/alignment/extra
+# columns between them.
 _GATE_TABLE_HEADER_RE = re.compile(
     r"^\|[^\n]*\bFixture\b[^\n]*\|[^\n]*\bBefore\b[^\n]*\|[^\n]*\bAfter\b[^\n]*\|\s*$",
     re.IGNORECASE | re.MULTILINE,
@@ -262,9 +175,8 @@ _SCOPED_TABLE_RE = re.compile(r"against\s+(?:only\s+)?`([A-Za-z0-9._-]+\.yaml)`"
 # The concrete phrasing named by issue #352 ("template and title take
 # precedence over this skill's own defaults"), generalized to the
 # "priority" synonym. Deliberately narrow (verified against every SKILL.md
-# in this repository before writing this regex: exactly one hit,
-# skills/merge-retrospective/SKILL.md) to avoid over-triggering on
-# unrelated conditional language.
+# in this repository before writing this regex) to avoid over-triggering
+# on unrelated conditional language.
 _PRECEDENCE_RE = re.compile(r"\btakes?\s+(?:precedence|priority)\s+over\b", re.IGNORECASE)
 
 # A `###`-level heading, this repository's routing-style sub-heading
@@ -272,81 +184,77 @@ _PRECEDENCE_RE = re.compile(r"\btakes?\s+(?:precedence|priority)\s+over\b", re.I
 # full Why`.
 _SECTION_HEADING_RE = re.compile(r"^###[ \t]+(.+?)[ \t]*$", re.MULTILINE)
 
-# Check D (issue #907). Any `train:selection:test` triple immediately
-# qualifying the word "partition" -- deliberately NOT keyed to one file's
-# phrasing. An earlier draft required the literal word "resulting", which
-# matched `evals/evaluating-skill-quality/split.md`'s "for a resulting
-# 27:30:12 partition" and silently missed
-# `evals/merge-retrospective/split.md`'s "This split uses a flatter
-# **9:6:3** partition (train:selection:test) instead" -- an equally
-# unambiguous declaration in the same Corpus-size position, fail-open by
-# regex accident (adversarial review of this check). A bare ratio not
-# qualifying "partition" (this repository's "SkillOpt's default split ratio
-# is 2:1:7") is correctly not a declaration.
-#
-# Two second-review-round corrections, both demonstrated:
-#
-# - The colon-run guards (`(?<![\d:])` / `(?![\d:])`) stop a *longer* run
-#   from yielding a triple the file never declared. Unanchored, "a resulting
-#   2:2:1:9 partition" parsed as `(2, 1, 9)` and "1:2:3:4:5 partition" as
-#   `(3, 4, 5)`, so the file was graded against invented figures -- worse
-#   than the out-of-scope outcome this module's own Known-limitations bullet
-#   claimed for that phrasing.
-# - The emphasis class accepts backticks, not only asterisks. This
-#   repository's prose routinely backticks these figures, so `` `9:6:3`
-#   partition `` would otherwise be silently out of scope with no signal.
-_DECLARED_PARTITION_RE = re.compile(
-    r"(?<![\d:])[`*]{0,2}(\d+):(\d+):(\d+)(?![\d:])[`*]{0,2}\s+partition",
-    re.IGNORECASE,
-)
-
-# The machine-readable exclusion line Check D requires alongside a declared
-# partition. Deliberately a fixed prefix rather than another prose scan:
-# the whole point of this check is to stop inferring an arithmetic contract
-# from free-form wording.
-_ARITHMETIC_EXCLUSION_RE = re.compile(r"^Split-arithmetic exclusions:[ \t]*(.*?)[ \t]*$", re.MULTILINE)
-
-# The one payload, other than a backticked fixture list, that an exclusion
-# line may carry. Anything else (an empty payload, an unbackticked name) is
-# a malformed declaration, not a silent "nothing is excluded".
-_EXCLUSION_NONE_RE = re.compile(r"^none\b", re.IGNORECASE)
+# split.json's own `partition` field shape (split.schema.json's own
+# pattern): three non-negative integers, colon-separated, nothing else.
+_PARTITION_RE = re.compile(r"^(\d+):(\d+):(\d+)$")
 
 _SPLIT_NAMES = ("train", "selection", "test")
 
 
-def _section(text: str, heading_re: re.Pattern[str]) -> str:
-    """Text from `heading_re`'s heading (exclusive) to the next `##`
-    heading, or end of file. Empty string if the heading is absent.
+# ---------------------------------------------------------------------------
+# split.json loading and shape helpers
+# ---------------------------------------------------------------------------
 
-    Fenced code blocks are stripped first (issue #907, second review
-    round), so a heading inside a fence -- an illustration of this
-    repository's own `split.md` conventions, which its prose now carries --
-    is never mistaken for the real section boundary. Without this, a fenced
-    `## Assignment` above the real one made this function return the fence's
-    own (bullet-free) body, and every caller then read an empty listing:
-    `check_partition_arithmetic` reported "lists no fixture at all" against
-    a file that lists plenty, and Checks A and C would read the same empty
-    section. `parse_section_labels` already stripped fences for the
-    `###`-level equivalent (issue #631); this is the same rule applied one
-    level up, where it was missing.
+
+def load_split_json(path: Path) -> tuple[dict[str, object] | None, str | None]:
+    """Parse `path` (a skill's `split.json`) into its top-level object.
+
+    Returns `(data, None)` on success, or `(None, <reason>)` when the file
+    is missing, unreadable, undecodable, not valid JSON, or not a JSON
+    object -- every caller below reads `split.json` through this one
+    function, so a malformed file is reported the same way regardless of
+    which check found it first.
     """
-    stripped = _strip_fenced_code_blocks(text)
-    match = heading_re.search(stripped)
-    if not match:
-        return ""
-    rest = stripped[match.end() :]
-    next_heading = _NEXT_HEADING_RE.search(rest)
-    return rest[: next_heading.start()] if next_heading else rest
+    if not path.is_file():
+        return None, f"{path}: not found"
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as error:
+        return None, f"{path}: could not read ({error})"
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as error:
+        return None, f"{path}: could not parse as JSON ({error})"
+    if not isinstance(data, dict):
+        return None, f"{path}: top-level JSON value must be an object"
+    return data, None
 
 
-def parse_assignment_fixtures(text: str) -> dict[str, list[str]]:
-    """Return `{"train": [...], "selection": [...], "test": [...]}` parsed
-    from a `split.md` file's `## Assignment` section."""
-    section = _section(text, _ASSIGNMENT_HEADING_RE)
-    result: dict[str, list[str]] = {"train": [], "selection": [], "test": []}
-    for match in _SPLIT_BULLET_RE.finditer(section):
-        result[match.group(1).lower()] = _YAML_NAME_RE.findall(match.group(2))
+def _fixture_entry_name(item: object) -> str | None:
+    """The bare fixture filename from one `assignment.<split>` array entry
+    -- either a plain filename string, or a `{fixture, expected}` object
+    (`split.schema.json`'s `fixtureItem` `oneOf`). `None` if `item`
+    matches neither shape (schema-shape enforcement is
+    `gitapex_scan_split_schema.py`'s own job, not this gate's)."""
+    if isinstance(item, str):
+        return item
+    if isinstance(item, dict):
+        fixture = item.get("fixture")
+        if isinstance(fixture, str):
+            return fixture
+    return None
+
+
+def assignment_fixtures(data: dict[str, object]) -> dict[str, list[str]]:
+    """`{"train": [...], "selection": [...], "test": [...]}` bare fixture
+    filenames from `split.json`'s own `assignment` object. A split key
+    that is absent, or an entry matching neither `fixtureItem` shape,
+    contributes nothing to that split's list."""
+    result: dict[str, list[str]] = {name: [] for name in _SPLIT_NAMES}
+    assignment = data.get("assignment")
+    if not isinstance(assignment, dict):
+        return result
+    for split_name in _SPLIT_NAMES:
+        items = assignment.get(split_name)
+        if not isinstance(items, list):
+            continue
+        result[split_name] = [name for item in items if (name := _fixture_entry_name(item)) is not None]
     return result
+
+
+# ---------------------------------------------------------------------------
+# Check A (issue #191): gate-result table coverage
+# ---------------------------------------------------------------------------
 
 
 def find_gate_tables(text: str) -> list[tuple[int, list[str]]]:
@@ -392,9 +300,10 @@ def is_single_fixture_scoped(paragraph: str, table_fixtures: list[str]) -> bool:
     return set(table_fixtures) == {match.group(1)}
 
 
-def check_latest_gate_table_coverage(path: Path, text: str) -> str | None:
-    """Return an offender message if `path`'s most recent gate-result table
-    omits a fixture declared in its own `selection` split, else None."""
+def check_latest_gate_table_coverage(path: Path, text: str, declared_selection: list[str]) -> str | None:
+    """Return an offender message if `path`'s (a `split.md`) most recent
+    gate-result table omits a fixture `declared_selection` (that skill's
+    own `split.json` `assignment.selection` list) names, else None."""
     tables = find_gate_tables(text)
     if not tables:
         return None
@@ -402,15 +311,19 @@ def check_latest_gate_table_coverage(path: Path, text: str) -> str | None:
     paragraph = _preceding_paragraph(text, header_start)
     if is_single_fixture_scoped(paragraph, fixtures):
         return None
-    declared_selection = parse_assignment_fixtures(text)["selection"]
     missing = [f for f in declared_selection if f not in fixtures]
     if not missing:
         return None
     return (
         f"{path}: most recent gate-result table covers {len(fixtures)} fixture(s) "
-        f"but the declared 'selection' split has {len(declared_selection)}; "
+        f"but split.json's declared 'selection' split has {len(declared_selection)}; "
         f"missing from the table: {', '.join(missing)}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Check B (issue #352): precedence/branching equivalence-class coverage
+# ---------------------------------------------------------------------------
 
 
 def find_precedence_phrases(text: str) -> list[str]:
@@ -419,44 +332,46 @@ def find_precedence_phrases(text: str) -> list[str]:
     return [m.group(0) for m in _PRECEDENCE_RE.finditer(text)]
 
 
-def has_precedence_equivalence_class_pair(split_text: str) -> bool:
-    """True iff `split_text`'s `## Equivalence classes` table has a row
-    mentioning precedence/priority with two named fixtures (a train one
-    and a held-out one)."""
-    section = _section(split_text, _EQUIVALENCE_CLASSES_HEADING_RE)
-    for line in section.splitlines():
-        stripped = line.strip()
-        if not stripped.startswith("|"):
-            continue
-        lowered = stripped.lower()
-        if "precedence" not in lowered and "priority" not in lowered:
-            continue
-        if len(_YAML_NAME_RE.findall(stripped)) >= 2:
-            return True
-    return False
+def has_equivalence_class_pair(data: dict[str, object]) -> bool:
+    """True iff `split.json`'s own `equivalence_classes` array has at
+    least one well-formed `train_fixture`/`held_out_fixture` pair."""
+    classes = data.get("equivalence_classes")
+    if not isinstance(classes, list):
+        return False
+    return any(
+        isinstance(entry, dict)
+        and isinstance(entry.get("train_fixture"), str)
+        and isinstance(entry.get("held_out_fixture"), str)
+        for entry in classes
+    )
 
 
 def check_precedence_branch_coverage(skill_md_path: Path, skill_text: str, repo_root: Path) -> str | None:
     """Return an offender message if `skill_md_path` documents a
-    precedence/branching rule with no matching train+held-out equivalence
-    class in its skill's own `split.md`, else None. A skill with no
-    `split.md` at all is out of scope -- see module docstring, Check B."""
+    precedence/branching rule with no equivalence-class pair declared in
+    its skill's own `split.json`, else None. A skill with no `split.json`
+    at all is out of scope -- see module docstring, Check B."""
     phrases = find_precedence_phrases(skill_text)
     if not phrases:
         return None
-    split_md_path = repo_root / "evals" / skill_md_path.parent.name / "split.md"
-    if not split_md_path.is_file():
+    split_json_path = repo_root / "evals" / skill_md_path.parent.name / "split.json"
+    if not split_json_path.is_file():
         return None
-    try:
-        split_text = split_md_path.read_text(encoding="utf-8")
-    except UnicodeDecodeError as error:
-        return f"{split_md_path}: could not decode as UTF-8 ({error})"
-    if has_precedence_equivalence_class_pair(split_text):
+    data, error = load_split_json(split_json_path)
+    if error:
+        return f"{skill_md_path}: {error}"
+    assert data is not None  # noqa: S101 -- error is None, so load_split_json guarantees data
+    if has_equivalence_class_pair(data):
         return None
     return (
         f"{skill_md_path}: documents a precedence/branching rule ({phrases[0]!r}) "
-        f"with no matching train+held-out equivalence-class pair in {split_md_path}"
+        f"with no equivalence-class pair declared in {split_json_path}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Check C (issue #631): exercises-declaration coverage
+# ---------------------------------------------------------------------------
 
 
 _FENCE_RE = re.compile(r"^\s*(?:```|~~~)")
@@ -467,10 +382,7 @@ def _strip_fenced_code_blocks(text: str) -> str:
     `###`-prefixed line inside a fence illustrating Markdown syntax is
     never mistaken for a real heading (adversarial review, issue #631) --
     mirrors `gitapex_check_skill_shape.py`'s own `_strip_illustrative_spans`
-    fence-toggle logic. Line count is preserved (blanked, not removed) so
-    this stays a drop-in substitute for callers that care about offsets;
-    `parse_section_labels` below does not, but keeping the shape consistent
-    with that established precedent costs nothing."""
+    fence-toggle logic."""
     out: list[str] = []
     in_fence = False
     for line in text.splitlines():
@@ -499,57 +411,78 @@ def parse_section_labels(skill_text: str) -> set[str]:
 
 
 def _is_real_exercises_declaration(value: object) -> TypeGuard[list[str]]:
-    """True iff `value` (a fixture's `expected.exercises`) is a non-empty
-    list of non-blank strings -- not merely truthy (issue #631, mirroring
-    `gitapex_lint_fixture_assertions.py`'s `_is_real_dispatch_declaration`, which
-    closed the identical bare-truthy-declaration gap for issue #584)."""
+    """True iff `value` (a fixture's `exercises` declaration) is a
+    non-empty list of non-blank strings -- not merely truthy (issue #631,
+    mirroring `gitapex_lint_fixture_assertions.py`'s
+    `_is_real_dispatch_declaration`, which closed the identical
+    bare-truthy-declaration gap for issue #584)."""
     return isinstance(value, list) and len(value) > 0 and all(isinstance(item, str) and item.strip() for item in value)
 
 
-def check_exercises_declaration_coverage(split_md_path: Path, split_text: str, repo_root: Path) -> str | None:
-    """Return an offender message if any fixture `split_md_path`'s
-    `selection` split declares either lacks a well-formed
-    `expected.exercises` declaration, or names a section label matching no
-    real `###`-level section in the sibling SKILL.md, else None (issue
-    #631, closing issue #629's blocker 2: a missing/bare-truthy
-    declaration must fail loudly, never be silently read as "declares no
-    sections"). Out of scope (returns None) when the sibling SKILL.md
-    either does not exist or has no `###`-level section at all -- see the
-    module docstring for why this is a structural scope gate, not an
-    enumerated allowlist.
+def check_exercises_declaration_coverage(split_json_path: Path, data: dict[str, object], repo_root: Path) -> str | None:
+    """Return an offender message if any fixture `split_json_path`'s
+    `assignment.selection` array declares either lacks a well-formed
+    `exercises` declaration, or names a section label matching no real
+    `###`-level section in the sibling SKILL.md, else None (issue #631,
+    closing issue #629's blocker 2: a missing/bare-truthy declaration must
+    fail loudly, never be silently read as "declares no sections"). Out of
+    scope (returns None) when the sibling SKILL.md either does not exist
+    or has no `###`-level section at all -- see the module docstring for
+    why this is a structural scope gate, not an enumerated allowlist.
+
+    Each selection fixture's `exercises` list is read from `split.json`
+    itself when that fixture entry uses the `fixtureWithExpected` object
+    form, else from the fixture's own task YAML's `expected.exercises`
+    field (this repository's pre-existing, still-dominant convention).
     """
-    declared_selection = parse_assignment_fixtures(split_text)["selection"]
-    if not declared_selection:
+    assignment = data.get("assignment")
+    selection_items = assignment.get("selection") if isinstance(assignment, dict) else None
+    if not isinstance(selection_items, list) or not selection_items:
         return None
-    skill_name = split_md_path.parent.name
+    skill_name = split_json_path.parent.name
     skill_md_path = repo_root / "skills" / skill_name / "SKILL.md"
     if not skill_md_path.is_file():
         return None
     try:
         skill_text = skill_md_path.read_text(encoding="utf-8")
     except UnicodeDecodeError as error:
-        return f"{split_md_path}: could not decode sibling {skill_md_path} as UTF-8 ({error})"
+        return f"{split_json_path}: could not decode sibling {skill_md_path} as UTF-8 ({error})"
     section_labels = parse_section_labels(skill_text)
     if not section_labels:
         return None
 
     tasks_dir = repo_root / "evals" / skill_name / "tasks"
     problems: list[str] = []
-    for fixture_name in declared_selection:
-        fixture_path = tasks_dir / fixture_name
-        if not fixture_path.is_file():
-            problems.append(f"{fixture_name}: file not found under {tasks_dir}")
+    for item in selection_items:
+        fixture_name = _fixture_entry_name(item)
+        if fixture_name is None:
+            problems.append(
+                f"{item!r}: not a well-formed fixture entry (string filename or {{fixture, expected}} object)"
+            )
             continue
-        try:
-            data = yaml.safe_load(fixture_path.read_text(encoding="utf-8")) or {}
-        except (yaml.YAMLError, UnicodeDecodeError) as error:
-            problems.append(f"{fixture_name}: could not parse YAML ({error})")
-            continue
-        expected = data.get("expected") if isinstance(data, dict) else None
-        exercises = expected.get("exercises") if isinstance(expected, dict) else None
+
+        exercises: object = None
+        if isinstance(item, dict):
+            expected_inline = item.get("expected")
+            if isinstance(expected_inline, dict):
+                exercises = expected_inline.get("exercises")
+
+        if exercises is None:
+            fixture_path = tasks_dir / fixture_name
+            if not fixture_path.is_file():
+                problems.append(f"{fixture_name}: file not found under {tasks_dir}")
+                continue
+            try:
+                fixture_data = yaml.safe_load(fixture_path.read_text(encoding="utf-8")) or {}
+            except (yaml.YAMLError, UnicodeDecodeError) as error:
+                problems.append(f"{fixture_name}: could not parse YAML ({error})")
+                continue
+            expected = fixture_data.get("expected") if isinstance(fixture_data, dict) else None
+            exercises = expected.get("exercises") if isinstance(expected, dict) else None
+
         if not _is_real_exercises_declaration(exercises):
             problems.append(
-                f"{fixture_name}: no well-formed expected.exercises declaration (a non-empty list of section labels)"
+                f"{fixture_name}: no well-formed exercises declaration (a non-empty list of section labels)"
             )
             continue
         unmatched = [label for label in exercises if label.casefold() not in section_labels]
@@ -559,154 +492,69 @@ def check_exercises_declaration_coverage(split_md_path: Path, split_text: str, r
             )
     if not problems:
         return None
-    return f"{split_md_path}: selection-split fixture(s) with an exercises-declaration gap -- {'; '.join(problems)}"
+    return f"{split_json_path}: selection-split fixture(s) with an exercises-declaration gap -- {'; '.join(problems)}"
 
 
-def _declaration_region(text: str) -> str:
-    """The header region a partition/exclusion declaration may live in:
-    everything before the `## Assignment` heading, with fenced code blocks
-    stripped (issue #907, adversarial review).
-
-    Both bounds are fail-closed fixes, not tidiness. Scoping to the header
-    stops an appended log entry from re-targeting the check -- this
-    repository's `split.md` files carry append-only Kept-edit/Rejected-edit
-    logs that routinely quote historical ratios ("19:20:11", "23:24:12"),
-    and any one of them phrased as a partition would otherwise silently
-    become the declaration under a last-match rule (or shadow the real one
-    under a first-match rule). Stripping fences reuses the reason Check C's
-    own `parse_section_labels` already strips them: this check's own
-    convention is now documented in prose, so a fenced example illustrating
-    it must not read as a live declaration -- which cut both ways, since a
-    fenced `Split-arithmetic exclusions: none` otherwise satisfied the
-    must-carry-a-line requirement while declaring nothing.
-    """
-    # Strip fences BEFORE locating the heading, not after (second review
-    # round). Locating it in raw text let a fenced `## Assignment`
-    # illustration truncate the region: a real declaration sitting below
-    # that fence fell outside it, `count_declared_partitions` dropped to 0,
-    # and a 9:9:9 declaration against a 2/1/1 listing passed clean -- the
-    # exact silent-skip fail-open the fence stripping exists to prevent.
-    stripped = _strip_fenced_code_blocks(text)
-    match = _ASSIGNMENT_HEADING_RE.search(stripped)
-    return stripped[: match.start()] if match else stripped
+# ---------------------------------------------------------------------------
+# Check D (issue #907): declared partition arithmetic
+# ---------------------------------------------------------------------------
 
 
-def parse_declared_partition(text: str) -> tuple[int, int, int] | None:
-    """The `train:selection:test` figures a `split.md` declares in its
-    header region, or ``None`` when it declares no partition at all.
-
-    Two or more *disagreeing* declarations return ``None`` and are reported
-    by `check_partition_arithmetic` as an ambiguity offence rather than
-    resolved by position: neither first-match nor last-match is defensible
-    when the file contradicts itself, and picking one would grade against a
-    figure the file does not actually commit to. Repeated identical
-    declarations are not a contradiction and are accepted.
-    """
-    found = {(int(a), int(b), int(c)) for a, b, c in _DECLARED_PARTITION_RE.findall(_declaration_region(text))}
-    if len(found) != 1:
+def parse_declared_partition(data: dict[str, object]) -> tuple[int, int, int] | None:
+    """The `train:selection:test` figures `split.json`'s own `partition`
+    field declares, or `None` when the key is absent or malformed
+    (schema-shape enforcement is `gitapex_scan_split_schema.py`'s own job,
+    T11; this check still defends its own arithmetic against a malformed
+    value rather than assuming that gate always ran first -- see
+    `check_partition_arithmetic`)."""
+    partition = data.get("partition")
+    if not isinstance(partition, str):
         return None
-    return found.pop()
-
-
-def count_declared_partitions(text: str) -> int:
-    """How many *distinct* partition declarations the header region carries.
-    Lets `check_partition_arithmetic` tell "none declared" (out of scope)
-    apart from "several, disagreeing" (an offence)."""
-    return len({(a, b, c) for a, b, c in _DECLARED_PARTITION_RE.findall(_declaration_region(text))})
-
-
-def parse_arithmetic_exclusions(text: str) -> set[str] | str | None:
-    """Fixture names the file declares as outside its partition arithmetic.
-
-    Three distinct outcomes, none collapsed into another:
-
-    - ``None`` -- no ``Split-arithmetic exclusions:`` line in the header
-      region at all. An offence; absence must never read as a waiver.
-    - a ``str`` -- a malformed line, returned as the reason. An empty or
-      whitespace-only payload, a payload naming fixtures without backticks,
-      or more than one such line (which position alone cannot arbitrate,
-      the same reasoning `parse_declared_partition` applies to a
-      contradictory declaration). Also an offence, rather than being read
-      as an accidental "nothing is excluded".
-    - a ``set`` -- the declared names, empty only for an explicit ``none``.
-    """
-    matches = _ARITHMETIC_EXCLUSION_RE.findall(_declaration_region(text))
-    if not matches:
+    match = _PARTITION_RE.match(partition)
+    if match is None:
         return None
-    if len(matches) > 1:
-        return f'carries {len(matches)} "Split-arithmetic exclusions:" lines; exactly one is allowed'
-    payload = matches[0].strip()
-    if not payload:
-        return 'has an empty "Split-arithmetic exclusions:" payload; name the excluded fixtures or write "none"'
-    if _EXCLUSION_NONE_RE.match(payload):
-        return set()
-    names = set(_YAML_NAME_RE.findall(payload))
-    if not names:
-        return (
-            'has a "Split-arithmetic exclusions:" line naming no backticked '
-            f'`<fixture>.yaml`: {payload!r} -- backtick each name, or write "none"'
-        )
-    return names
+    return (int(match.group(1)), int(match.group(2)), int(match.group(3)))
 
 
-def check_partition_arithmetic(path: Path, text: str) -> str | None:
-    """Check D (issue #907): a declared partition must reconcile with the
-    `## Assignment` listing, under the file's own declared exclusions.
+def check_partition_arithmetic(path: Path, data: dict[str, object]) -> str | None:
+    """Check D (issue #907): a declared `partition` must reconcile with
+    `split.json`'s own `assignment` listing, under its own declared
+    `split_arithmetic_exclusions`.
 
-    Counts *unique* names per split, since a bullet legitimately repeats a
-    name (an entry plus a cross-reference to a fixture in the same split).
-    A name appearing in more than one split's bullet is reported as its own
-    offence rather than silently double-counted: this repository's splits
-    are disjoint by construction, and a cross-split mention is otherwise
-    unfixable -- excluding it to satisfy the referencing split breaks the
-    split that legitimately owns it (adversarial review of this check).
+    Counts *unique* names per split, since a fixture list could legitimately
+    repeat an entry only by author error -- an entry appearing in more than
+    one split is reported as its own offence rather than silently
+    double-counted: this repository's splits are disjoint by construction,
+    and a cross-split mention is otherwise unfixable -- excluding it to
+    satisfy the referencing split breaks the split that legitimately owns
+    it (the same reasoning the markdown-era version of this check applied).
     """
-    declared_count = count_declared_partitions(text)
-    if declared_count == 0:
+    if "partition" not in data:
         return None
-    if declared_count > 1:
-        return (
-            f"{path}: header region declares {declared_count} disagreeing train:selection:test "
-            "partitions; state exactly one so the Assignment section can be checked against it"
-        )
-    # `_section` takes the FIRST `## Assignment` heading, so a second,
-    # appended listing would be invisible while the file reads as
-    # superseded (adversarial review of this check). Rejected outright
-    # rather than arbitrated by position: the same reasoning the
-    # disagreeing-declaration branch above applies.
-    #
-    # Counted over fence-stripped text (second review round): counting raw
-    # lines failed a valid, fully reconciling file that merely illustrated
-    # the convention in a fenced block -- the mirror-image false positive of
-    # the fail-open `_declaration_region` had for the same root cause.
-    assignment_headings = len(_ASSIGNMENT_HEADING_RE.findall(_strip_fenced_code_blocks(text)))
-    if assignment_headings > 1:
-        return (
-            f"{path}: carries {assignment_headings} '## Assignment' headings; exactly one is allowed, "
-            "since only the first is read and a later listing would be silently ignored"
-        )
-    declared = parse_declared_partition(text)
-    assert declared is not None  # noqa: S101 -- declared_count == 1 guarantees this
-    exclusions = parse_arithmetic_exclusions(text)
-    if exclusions is None:
+    declared = parse_declared_partition(data)
+    if declared is None:
+        return f"{path}: 'partition' field {data.get('partition')!r} is not a well-formed \"N:N:N\" string"
+
+    exclusions_raw = data.get("split_arithmetic_exclusions")
+    if exclusions_raw is None:
         return (
             f"{path}: declares a {declared[0]}:{declared[1]}:{declared[2]} partition but carries no "
-            '"Split-arithmetic exclusions:" line in its header region -- add one naming every fixture '
-            'listed but not counted (or "Split-arithmetic exclusions: none")'
+            "'split_arithmetic_exclusions' field -- add one (an empty array if nothing is excluded)"
         )
-    if isinstance(exclusions, str):
-        return f"{path}: {exclusions}"
-    # parse_assignment_fixtures always returns all three keys, so the union
-    # below needs no empty-dict guard.
-    listed = {name: set(values) for name, values in parse_assignment_fixtures(text).items()}
+    if not isinstance(exclusions_raw, list) or not all(isinstance(item, str) for item in exclusions_raw):
+        return f"{path}: 'split_arithmetic_exclusions' must be an array of fixture-filename strings"
+    exclusions = set(exclusions_raw)
+
+    listed = {name: set(values) for name, values in assignment_fixtures(data).items()}
     # A file that declares a partition but lists nothing must not pass
-    # vacuously -- `0:0:0` against an absent Assignment section otherwise
-    # reconciles perfectly (adversarial review of this check).
+    # vacuously -- `0:0:0` against an absent listing otherwise reconciles
+    # perfectly.
     if not set().union(*listed.values()):
         return (
-            f"{path}: declares a {declared[0]}:{declared[1]}:{declared[2]} partition but its "
-            "'## Assignment' section lists no fixture at all; the arithmetic cannot be checked"
+            f"{path}: declares a {declared[0]}:{declared[1]}:{declared[2]} partition but 'assignment' "
+            "lists no fixture at all; the arithmetic cannot be checked"
         )
+
     overlaps = sorted(
         f"{name} (in {' and '.join(s for s in _SPLIT_NAMES if name in listed[s])})"
         for name in set().union(*listed.values())
@@ -714,16 +562,18 @@ def check_partition_arithmetic(path: Path, text: str) -> str | None:
     )
     if overlaps:
         return (
-            f"{path}: Assignment section lists the same fixture in more than one split: "
+            f"{path}: 'assignment' lists the same fixture in more than one split: "
             f"{', '.join(overlaps)} -- each fixture belongs to exactly one split, and a "
-            "cross-split mention inside a bullet cannot be reconciled by an exclusion"
+            "cross-split mention cannot be reconciled by an exclusion"
         )
+
     stale = sorted(exclusions - set().union(*listed.values()))
     if stale:
         return (
-            f"{path}: declares arithmetic exclusion(s) {', '.join(stale)} that the Assignment section "
-            "does not list at all -- a stale exclusion silently widens the waiver"
+            f"{path}: declares arithmetic exclusion(s) {', '.join(stale)} that 'assignment' does not "
+            "list at all -- a stale exclusion silently widens the waiver"
         )
+
     for index, split_name in enumerate(_SPLIT_NAMES):
         counted = listed[split_name] - exclusions
         if len(counted) != declared[index]:
@@ -731,10 +581,14 @@ def check_partition_arithmetic(path: Path, text: str) -> str | None:
             detail = f", excluding {', '.join(excluded_here)}" if excluded_here else ", with no exclusion here"
             return (
                 f"{path}: declared {split_name} figure {declared[index]} does not match the "
-                f"{len(counted)} unique {split_name} fixture(s) the Assignment section lists"
-                f"{detail}"
+                f"{len(counted)} unique {split_name} fixture(s) 'assignment' lists{detail}"
             )
     return None
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
 
 
 def _read(path: Path) -> str | None:
@@ -750,20 +604,21 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--split-md", nargs="*", default=[], help="split.md files this PR added or modified.")
     parser.add_argument("--skill-md", nargs="*", default=[], help="SKILL.md files this PR added or modified.")
     parser.add_argument(
-        "--repo-root", default=".", help="Repository root, for resolving a skill's split.md/SKILL.md/tasks."
+        "--repo-root", default=".", help="Repository root, for resolving a skill's split.json/SKILL.md/tasks."
     )
     args = parser.parse_args(argv)
     repo_root = Path(args.repo_root)
 
     offenders: list[str] = []
-    # Check C (issue #631) is keyed by split.md path, but must fire whether
-    # the *split.md* or its *sibling SKILL.md* is the one that changed --
-    # a SKILL.md-only diff (e.g. renaming a ###-level section, with no
-    # split.md edit in the same PR) is exactly the staleness scenario this
-    # check exists to catch, and the calling workflow populates --split-md/
-    # --skill-md independently from whichever file type actually changed
-    # (see .github/workflows/split-fixture-coverage-gate.yml), so relying
-    # on --split-md alone would silently skip it. Tracked so a PR touching
+    # Check C (issue #631) is keyed by split.json path, but must fire
+    # whether the *split.md* or its *sibling SKILL.md* is the one that
+    # changed -- a SKILL.md-only diff (e.g. renaming a ###-level section,
+    # with no split.md/split.json edit in the same PR) is exactly the
+    # staleness scenario this check exists to catch, and the calling
+    # workflow populates --split-md/--skill-md independently from whichever
+    # file type actually changed (see
+    # .github/workflows/split-fixture-coverage-gate.yml), so relying on
+    # --split-md alone would silently skip it. Tracked so a PR touching
     # both sides of the same pair is not checked (and reported) twice.
     exercises_checked: set[Path] = set()
 
@@ -772,14 +627,24 @@ def main(argv: list[str] | None = None) -> int:
         text = _read(path)
         if text is None:
             return 1
-        offender = check_latest_gate_table_coverage(path, text)
+        split_json_path = path.parent / "split.json"
+        data, error = load_split_json(split_json_path)
+        if error:
+            print(f"error: {error}", file=sys.stderr)
+            return 1
+        assert data is not None  # noqa: S101 -- error is falsy, so load_split_json guarantees data
+
+        declared_selection = assignment_fixtures(data)["selection"]
+        offender = check_latest_gate_table_coverage(path, text, declared_selection)
         if offender:
             offenders.append(offender)
-        exercises_checked.add(path)
-        offender = check_exercises_declaration_coverage(path, text, repo_root)
+
+        exercises_checked.add(split_json_path)
+        offender = check_exercises_declaration_coverage(split_json_path, data, repo_root)
         if offender:
             offenders.append(offender)
-        offender = check_partition_arithmetic(path, text)
+
+        offender = check_partition_arithmetic(split_json_path, data)
         if offender:
             offenders.append(offender)
 
@@ -791,15 +656,16 @@ def main(argv: list[str] | None = None) -> int:
         offender = check_precedence_branch_coverage(path, text, repo_root)
         if offender:
             offenders.append(offender)
-        sibling_split_md = repo_root / "evals" / path.parent.name / "split.md"
-        if sibling_split_md.is_file() and sibling_split_md not in exercises_checked:
-            exercises_checked.add(sibling_split_md)
-            sibling_text = _read(sibling_split_md)
-            if sibling_text is None:
-                return 1
-            offender = check_exercises_declaration_coverage(sibling_split_md, sibling_text, repo_root)
-            if offender:
-                offenders.append(offender)
+        sibling_split_json = repo_root / "evals" / path.parent.name / "split.json"
+        if sibling_split_json.is_file() and sibling_split_json not in exercises_checked:
+            exercises_checked.add(sibling_split_json)
+            sibling_data, sibling_error = load_split_json(sibling_split_json)
+            if sibling_error or sibling_data is None:
+                offenders.append(f"{sibling_split_json}: {sibling_error}")
+            else:
+                offender = check_exercises_declaration_coverage(sibling_split_json, sibling_data, repo_root)
+                if offender:
+                    offenders.append(offender)
 
     if not offenders:
         print("PASS: split.md fixture-table coverage checks satisfied")
