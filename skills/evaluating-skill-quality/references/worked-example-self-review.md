@@ -329,14 +329,16 @@ the same "cheapest level that still makes it available" test dimension 5
 itself states, applied to the precondition/postcondition split from
 Contract discipline rather than only to dimension content.
 
-**Update (byte-exact citation step added):** Procedure step 5 gained a
-requirement that every quotation the review authors be substring-matched
-against its cited file. Re-checked here because a new mandatory step is
-exactly what this dimension's reading burden tracks: it adds no file to the
-common-case mandatory read set, which stays at `SKILL.md`, `rubric.md`, and
-`adversarial-self-audit.md`. The rule is stated inline in the step rather
-than deferred to a reference, precisely so it costs no fourth read. The Pass
-above stands.
+**Update (citation-fidelity step added):** Procedure step 5 gained a
+requirement that every quotation the review authors be matched against its
+cited file under `adversarial-self-audit.md`'s Citation fidelity rule.
+Re-checked here because a new mandatory step is exactly what this dimension's
+reading burden tracks: it adds no file to the common-case mandatory read set,
+which stays at `SKILL.md`, `rubric.md`, and `adversarial-self-audit.md`. The
+rule lives in the third of those, already mandatory for the dispatch, so
+holding one definition in one place costs no fourth read -- and beats the
+alternative of restating it at each of the sites that invoke it, which is how
+three paraphrases drift apart. The Pass above stands.
 
 **Update (capability-assumption axis re-grade, Broad -- no-op, stated
 explicitly):** the capability-assumption axis is applied here for
@@ -401,16 +403,18 @@ This dimension therefore still does not clear -- on axes 3 and 2, no longer
 on axis 9. Both remaining axes are changes to the registry's platform-keying
 and freshness contract, out of scope for the change that closed axis 9.
 
-Byte-exact check on this subsection's own quotations, per `SKILL.md`'s
-Procedure step 5: each span above was substring-matched against the file it
-cites, with that file's line wraps normalized to single spaces. Both cross a
-wrap, which is why the normalization is part of the rule rather than an aside
--- the `SKILL.md` span "for the current platform's verified mechanism,
-running its Verification procedure and recording a new entry if none exists
-yet" spans three physical lines, and the step-4 span two. Both counts were
-derived from the files, not stated alongside the quotation from recall: an
-ancillary claim *about* a verified match is still an unverified claim until
-it is matched too.
+Citation check on this subsection's own quotations, per `SKILL.md`'s Procedure
+step 5 and the Citation fidelity rule it resolves to: each span above was
+matched against the file it cites, both reduced by collapsing whitespace runs
+to single spaces, and each matched *within one block* -- no span crosses a
+blank line, a fence, or a heading, which is the rule's own limit and the
+reason the reduction is per block rather than per file. Both cross a soft
+wrap, the accepted case: the `SKILL.md` span "for the current platform's
+verified mechanism, running its Verification procedure and recording a new
+entry if none exists yet" spans three physical lines, and the step-4 span two.
+Both counts were derived from the files, not stated alongside the quotation
+from recall: an ancillary claim *about* a verified match is still an
+unverified claim until it is matched too.
 
 ### 7. Bundled scripts
 
