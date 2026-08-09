@@ -1463,6 +1463,34 @@ one read.
   portability litmus test in [Portability level](#portability-level)
   above.
 
+**State management quality, when the procedure carries state across a context
+boundary.** The bullets above grade whether the skill *text* still holds as
+time, install surface, tool names, and repository identity shift. A procedure
+whose own steps materialize state outside the agent context and read it back
+across a dispatch, a compaction, a session, or a later invocation against the
+same subject earns its own deeper grading pass -- locus and precedence,
+identity binding, freshness, write discipline, resume reconciliation, loss and
+absence handling, concurrency ownership, evidence-artifact handling, the
+record as a trust boundary in both directions, state-path portability, and
+store fit. Only apply this when the reviewed skill's procedure actually
+carries state across such a boundary; most skills do not, and skipping it is
+not itself a finding. Full detail, including the trigger that decides whether
+it applies: [state-management-quality.md](state-management-quality.md).
+
+**Record the skip explicitly, never silently.** When the trigger does not
+fire, say so inside this dimension's entry and name the absent trigger
+condition -- for example "state-management sub-check: not applicable; no
+dispatch fan-out, no re-entering procedure, and no working record written then
+read back." Word it as *not applicable*, never as `unmeasured` (that carve-out
+belongs to dimensions 8-9 alone, and would wrongly read as an uncleared
+dimension-6 gap here) and never as `Indeterminate` (see
+[Verdicts](#verdicts)). A reader must be able to tell a check that ran from
+one that was skipped. Findings from that pass are reported inside this
+dimension's entry, in this dimension's vocabulary: they are named dimension-6
+gaps, never the review's *headline finding* and never *step-level findings*,
+both of which [Verdicts](#verdicts) and [Mechanism fit](#mechanism-fit)
+reserve with different standing.
+
 ## 7. Bundled scripts (only if the skill ships code)
 
 - **Solve, don't punt** -- scripts handle their own error conditions

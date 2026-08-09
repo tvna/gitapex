@@ -314,6 +314,9 @@ spec:
       summary: "Pre-merge dogfood, battle-testing-a-skill: same contaminated-dispatch disclosure as the self-review (this repository's CLAUDE.md present in context, verdict marked provisional on that basis). PASS -- no FAIL findings on the four requested adversarial focus points (new rubric prose's own self-referential portability, live 59/59 shape-check confirmation, completeness of the .md-only exemption fix, cleanliness of the rewritten schema prose)."
       outcome:
         verdict: PASS
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/913"
+      summary: "Added references/state-management-quality.md, a conditional dimension-6 sub-check mirroring script-test-quality.md's dimension-7 pattern. It fires only when the target's procedure materializes state outside the agent context and reads it back across a dispatch, compaction, session, or later invocation, grading eleven quality axes over one precedence spine (ground truth > durable artifact > harness state > context). Non-firing targets are not-applicable in dimension 6, a rule rubric.md owns."
   skillDependencies:
     requires: []
     relatedTo:
