@@ -29,6 +29,14 @@ every pull request red for a condition no pull request can fix; collapsing it
 into `0` would be exactly the silent default CLAUDE.md section 4 forbids. Both
 workflows surface `2` as a GitHub `::warning::` naming the runbook step that
 clears it, so it is loud without being a merge blocker.
+
+**One asymmetry, deliberate rather than overlooked.** *No* token is exit 2 (the
+documented pre-handoff state), but a token the API *rejects* -- wrong scope,
+expired, revoked -- raises `GitHubApiError` and exits 1, failing the job. The
+two look similar and are not: the first is a handoff that has not started, the
+second is a handoff that is broken and needs someone to fix it. Treating a
+rejected credential as a warning would leave the gate reporting a soft
+"unverified" forever while everyone assumed it was watching.
 """
 
 from __future__ import annotations

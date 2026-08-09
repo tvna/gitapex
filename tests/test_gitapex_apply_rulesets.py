@@ -69,14 +69,13 @@ def fetcher(list_body: Any, detail_body: Any = None) -> Any:
 def test_plan_mode_never_calls_the_writer(tmp_path: pathlib.Path) -> None:
     # The whole dry-run guarantee in apply-rulesets.yml rests on this.
     writer = RecordingWriter()
-    summary, code = apply_rulesets.run("o/r", write_sot(tmp_path), "plan", fetcher([]), writer)
-    assert code == 0
+    summary = apply_rulesets.run("o/r", write_sot(tmp_path), "plan", fetcher([]), writer)
     assert writer.calls == []
     assert "POST" in summary
 
 
 def test_absent_live_ruleset_plans_a_create(tmp_path: pathlib.Path) -> None:
-    summary, _ = apply_rulesets.run("o/r", write_sot(tmp_path), "plan", fetcher([]), RecordingWriter())
+    summary = apply_rulesets.run("o/r", write_sot(tmp_path), "plan", fetcher([]), RecordingWriter())
     assert "nothing to diff against" in summary
 
 
@@ -91,10 +90,9 @@ def test_existing_live_ruleset_plans_a_replace_onto_its_own_id(tmp_path: pathlib
 def test_apply_mode_sends_the_planned_request(tmp_path: pathlib.Path) -> None:
     writer = RecordingWriter({"id": 42})
     live = dict(SOT, id=42, enforcement="disabled")
-    summary, code = apply_rulesets.run(
+    summary = apply_rulesets.run(
         "o/r", write_sot(tmp_path), "apply", fetcher([{"id": 42, "name": SOT["name"]}], live), writer
     )
-    assert code == 0
     assert len(writer.calls) == 1
     url, method, body = writer.calls[0]
     assert (method, url) == ("PUT", "https://api.github.com/repos/o/r/rulesets/42")
@@ -107,7 +105,7 @@ def test_apply_mode_sends_the_planned_request(tmp_path: pathlib.Path) -> None:
 
 def test_summary_shows_a_diff_when_live_differs(tmp_path: pathlib.Path) -> None:
     live = dict(SOT, id=42, enforcement="disabled")
-    summary, _ = apply_rulesets.run(
+    summary = apply_rulesets.run(
         "o/r", write_sot(tmp_path), "plan", fetcher([{"id": 42, "name": SOT["name"]}], live), RecordingWriter()
     )
     assert "```diff" in summary
@@ -116,7 +114,7 @@ def test_summary_shows_a_diff_when_live_differs(tmp_path: pathlib.Path) -> None:
 
 def test_summary_says_no_op_when_live_already_matches(tmp_path: pathlib.Path) -> None:
     live = dict(SOT, id=42)
-    summary, _ = apply_rulesets.run(
+    summary = apply_rulesets.run(
         "o/r", write_sot(tmp_path), "plan", fetcher([{"id": 42, "name": SOT["name"]}], live), RecordingWriter()
     )
     assert "no-op replace" in summary

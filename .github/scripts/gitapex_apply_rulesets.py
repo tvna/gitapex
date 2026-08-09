@@ -161,8 +161,14 @@ def run(
     mode: str,
     fetch: Callable[[str], Any],
     writer: Writer,
-) -> tuple[str, int]:
-    """Execute one plan-or-apply run; returns the summary markdown and exit code."""
+) -> str:
+    """Execute one plan-or-apply run and return the summary markdown.
+
+    No exit code in the return value: this function has exactly one failure
+    mode, an exception, and every one of them is a `RulesetError` or
+    `GitHubApiError` that `main` turns into exit 1. An always-zero second
+    element would read like a real status while carrying no information.
+    """
     sot = load_sot(sot_path)
     live = resolve_live_ruleset(repo, sot["name"], fetch)
     plan = plan_write(repo, sot, live)
@@ -171,7 +177,7 @@ def run(
     if mode == "apply":
         response = writer(plan["url"], plan["method"], plan["body"])
         result_id = response.get("id")
-    return render_summary(plan, mode, diff, result_id), 0
+    return render_summary(plan, mode, diff, result_id)
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -191,7 +197,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
     try:
-        summary, code = run(args.repo, pathlib.Path(args.sot), args.mode, default_fetch, send_write)
+        summary = run(args.repo, pathlib.Path(args.sot), args.mode, default_fetch, send_write)
     except (RulesetError, GitHubApiError) as error:
         print(f"::error::{error}", file=sys.stderr)
         return 1
@@ -199,7 +205,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.summary_file:
         with pathlib.Path(args.summary_file).open("a", encoding="utf-8") as handle:
             handle.write(f"{summary}\n")
-    return code
+    return 0
 
 
 if __name__ == "__main__":
