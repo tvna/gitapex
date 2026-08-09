@@ -353,6 +353,29 @@ _PINNED_RESIDUAL_NAME = "blocking"
 _PINNED_COUNT_RE = re.compile(r"^#\s*pinned-residual-count:\s*(\d+)$")
 
 
+_NESTED_SCOPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)
+
+
+def _nodes_in_own_scope(function: ast.FunctionDef) -> list[ast.AST]:
+    """Yield `function`'s own nodes, refusing to descend into nested scopes.
+
+    `ast.walk` would recurse into a nested def, so a helper defined inside the
+    target test could supply the `assert` this gate binds to while the test
+    itself no longer pins anything. Control flow (`if`, `for`, `with`) is not a
+    scope and is still traversed.
+    """
+    found: list[ast.AST] = []
+    # Filtered at both entry points, not only on descent: a nested def is
+    # itself a direct child of the body, so seeding the stack unfiltered would
+    # push it and then walk its statements anyway.
+    stack: list[ast.AST] = [child for child in function.body if not isinstance(child, _NESTED_SCOPES)]
+    while stack:
+        node = stack.pop()
+        found.append(node)
+        stack.extend(child for child in ast.iter_child_nodes(node) if not isinstance(child, _NESTED_SCOPES))
+    return found
+
+
 def _pinned_residual_assertion(source: str, func_name: str) -> tuple[ast.FunctionDef, ast.Set]:
     """Locate `func_name` and the set literal its own residual assertion pins.
 
@@ -369,13 +392,19 @@ def _pinned_residual_assertion(source: str, func_name: str) -> tuple[ast.Functio
     # comprehension does not survive past it, so gathering the operand here
     # keeps the type checker's view and the runtime check in agreement.
     pinned_sets: list[ast.Set] = []
-    for node in ast.walk(functions[0]):
+    for node in _nodes_in_own_scope(functions[0]):
         if not isinstance(node, ast.Assert):
             continue
         test = node.test
         if not (isinstance(test, ast.Compare) and isinstance(test.left, ast.Name)):
             continue
         if test.left.id != _PINNED_RESIDUAL_NAME or len(test.comparators) != 1:
+            continue
+        # `==` specifically, not any comparison: `assert blocking <= {...}`
+        # would still hold after a residual is resolved, so accepting it would
+        # let the pinned listing outlive the findings it claims to enumerate
+        # while this gate stayed green.
+        if len(test.ops) != 1 or not isinstance(test.ops[0], ast.Eq):
             continue
         operand = test.comparators[0]
         if isinstance(operand, ast.Set):
