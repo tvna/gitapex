@@ -1474,8 +1474,14 @@ absence handling, concurrency ownership, evidence-artifact handling, the
 record as a trust boundary in both directions, state-path portability, and
 store fit. Only apply this when the reviewed skill's procedure actually
 carries state across such a boundary; most skills do not, and skipping it is
-not itself a finding. Full detail, including the trigger that decides whether
-it applies: [state-management-quality.md](state-management-quality.md).
+not itself a finding. The sentence above states that file's primary trigger,
+not its whole contract: it also carries three narrower extensions, each
+labelled there as firing on the principle rather than on a clause, for a
+target that writes state another skill consumes, one that only reads state
+another skill wrote, and one whose control flow needs a carried value it
+never stores. That file's own Trigger section governs, and is the thing to
+read before deciding applicability -- full detail there:
+[state-management-quality.md](state-management-quality.md).
 
 **Record the skip explicitly, never silently.** When the trigger does not
 fire, say so inside this dimension's entry and name the absent trigger

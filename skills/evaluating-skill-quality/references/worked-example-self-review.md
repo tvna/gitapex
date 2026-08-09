@@ -700,7 +700,10 @@ re-check, not a present, mature-blocking gap. Dimension 2 is therefore not
 what holds this verdict below mature; dimension 6's state-management gaps
 are, and they are named above rather than folded into dimension 2's
 watch-point. Nothing here is a claim of proven behaviour either way:
-dimensions 8 and 9 remain named-unmeasured rather than passed.
+dimension 8 stays named-unmeasured, and dimension 9 is measured only on the
+weak-tier "enough guidance?" question -- its model-differential run and
+transfer testing stay unmeasured. The Broad re-grade below states that split
+in full; this sentence must not flatten it back into a blanket.
 
 **Update (capability-assumption axis re-grade, Broad):** this skill's
 `Broad` declaration has since been re-walked against dimensions 2, 3, 5,
@@ -715,12 +718,14 @@ filed under "unmeasured," while the model-differential run and transfer
 testing stay honestly unmeasured -- so the "8 and 9 unmeasured" allowance
 the verdict rests on still holds for dimension 9's measured-transfer facet
 specifically, now stated more precisely than the earlier blanket did.
-Separately from the Broad walk, the headline verdict above was reconciled
-with rubric.md's Verdicts definition (dimensions 1-7 clear with no named
-gap, plus 8-9 named-unmeasured) and corrected from an earlier "not yet
-mature" to **mature**: the Broad re-grade does not itself drive that
-correction, but it confirms none of its four dimensions introduces a
-blocking 1-7 gap that would hold the verdict below mature.
+Separately from the Broad walk, the headline verdict above was at one point
+reconciled with rubric.md's Verdicts definition (dimensions 1-7 clear with no
+named gap, plus 8-9 named-unmeasured) and read **mature**. It no longer does,
+and the headline above governs: adding dimension 6's state-management
+sub-check produced named gaps in that dimension, which the Verdicts definition
+treats as blocking. What the Broad re-grade still establishes is narrower and
+unchanged -- none of its four dimensions (2, 3, 5, 9) introduces a blocking
+1-7 gap of its own.
 
 The honest summary: this review found and fixed two real portability
 defects in the artifact it was reviewing (itself), which is a materially

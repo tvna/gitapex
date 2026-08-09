@@ -594,8 +594,11 @@ Every `[sdd]` and `[sddworkspace]` quotation was verified byte-for-byte
 against the pinned upstream revision the reference definitions below name, not
 against a moving default branch. Every `[agentteams]`, `[subagents]`, and
 `[bestpractices]` quotation was verified against the live page at the URL
-below; product documentation drifts, so re-verify before treating any line as
-verbatim.
+below, on 2026-08-09. Those three sources publish no immutable per-revision
+URL to pin, so a dated live check is the strongest citation available for
+them, and it is deliberately weaker than the two pinned ones: product
+documentation drifts, and a quotation whose date is far behind the reader's
+own is a claim to re-verify, not a settled fact.
 
 Quotations are normalized to ASCII: em dashes in the sources are rendered
 `--` or `-`, and curly quotation marks are rendered straight. No other
