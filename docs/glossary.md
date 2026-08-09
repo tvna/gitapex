@@ -82,8 +82,13 @@ the first two axes alone could not do.
 - **`Auditing-*`**: classifies an external-facing configuration surface, or
   this repository's own scope, against a checklist or axis map, producing a
   coverage/classification report (`Covered`/`Partial`/`Gap`,
-  `Documented`/`Unknown`/`Conflict`, etc.). Examples:
-  `auditing-git-hosting-surface`, `auditing-agent-product-scope`.
+  `Documented`/`Unknown`/`Conflict`, etc.). One example remains:
+  `auditing-agent-product-scope`. The family's other member,
+  `auditing-git-hosting-surface`, was absorbed into
+  `scanning-attack-surfaces` (#848), which kept its `Covered`/`Partial`/
+  `Gap` vocabulary for that half of its work -- the vocabulary outlived
+  the family membership, and the family list is short by one on purpose,
+  not by oversight.
 - **`Vetting-*`**: examines an individual artifact's own design against
   concrete, per-item pass/fail tests specific to that check -- neither a
   fixed-dimension maturity rubric nor a checklist/axis map of an
@@ -105,8 +110,11 @@ the first two axes alone could not do.
   and zizmor over a target's GitHub Actions files and reports both
   tools' findings unmodified. The rest of the `scanning-*` roster is
   tracked at #843. (`scanning-attack-surfaces` carries the family name
-  but still performs its own per-item judgment, per that skill's own
-  disclosure -- it is not an example of the delegating shape.)
+  as a partial member, per that skill's own disclosure: exactly one
+  sub-case -- its least-privilege check on a workflow artifact, backed
+  by zizmor since #848 -- has the delegating shape, while the rest of
+  that skill still performs its own per-item judgment against its own
+  tests and checklists.)
   Which capability a `scanning-*` skill is allowed to reach for (the
   libre CLI it wraps vs. a platform-native equivalent) is decided by
   `scanning-capability-selection-policy.md`, not per skill.
@@ -128,7 +136,9 @@ match.
 target (an individual artifact -- a gate, CI workflow, MCP server, or
 subagent) fit `Evaluating-*`, but its verdict style (concrete per-item
 tests explicitly modeled on `auditing-git-hosting-surface`'s own per-item
-checklist discipline, not a maturity rubric) fit neither family's
+checklist discipline -- that skill was later absorbed into this same one
+by #848, so the discipline now lives there rather than in a sibling --
+not a maturity rubric) fit neither family's
 canonical vocabulary. Resolved by the repository owner directly, per the
 Resolve step: the third family above wins, rather than stretching either
 existing definition to cover a shape it wasn't written for.
