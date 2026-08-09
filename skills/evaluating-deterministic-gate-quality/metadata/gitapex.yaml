@@ -567,6 +567,17 @@ spec:
       summary: "The branch-final totals entry above claimed grading-procedure.md 143->250 as 143->248. Corrected: 248 was true at 6a0fdf0, where the claim was written, and commit 09f1480 later in the same branch grew the file to 250 without refreshing it. The third recurrence of this exact staleness in this one sidecar, and the first one a deterministic gate caught instead of a reviewer -- issue 877's new metadata-outcome-lines-drift gate found it on main."
       outcome:
         fixed: 1
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/919"
+      summary: "The Subagent dispatch section stated the project-instruction exclusion only inside a parenthetical about what evaluating-skill-quality's own section carries, so it never appeared here in normative form, and the 'the same way' clause read as importing that skill's whole dispatch protocol. Rewritten so the exclusion is this skill's own instruction and the deferral's scope is the verification mechanics only -- that skill's unconditional trigger, relay, and second-dispatch rules do not transfer."
+      outcome:
+        lines: 480->491
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/919"
+      summary: "The issue left open, as an owner decision, whether the exclusion should also get a Stop boundary mirroring evaluating-skill-quality's own. The owner chose to add one. It lives in SKILL.md's always-loaded body, not grading-procedure.md, for the reason the Stop-boundaries preamble already gives for the execution-safety boundaries: it binds before the dispatch, earlier than the step-3-onward boundaries that file holds. The preamble's timing sentence was widened to say so."
+    - kind: caveat
+      anchor: "skills/scanning-attack-surfaces/SKILL.md"
+      summary: "scanning-attack-surfaces' own Subagent dispatch section carries the same expression defect this entry fixes here -- it states its isolation requirement as 'the same way evaluating-deterministic-gate-quality's own equivalent dispatch requirement is' with no normative exclusion sentence of its own. Left unedited: issue 919 scoped its change surface to this skill's SKILL.md. That skill's pointer at this section stays factually correct after the rewrite; only its own ambiguity is unfixed."
   skillDependencies:
     requires:
       - evaluating-skill-quality
