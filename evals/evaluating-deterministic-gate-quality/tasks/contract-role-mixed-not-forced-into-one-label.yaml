@@ -1,0 +1,63 @@
+id: evaluating-deterministic-gate-quality-contract-role-mixed-not-forced-into-one-label
+name: A gate that both admits an operation and re-checks what it produced is reported as mixed, with the split named
+description: >-
+  The Contract role axis's residual risk made into a test. A gate
+  carrying two obligations at once -- one asserted before the guarded
+  operation about what its caller supplied, one asserted after it about what
+  the operation actually produced -- has no single correct label, and the
+  axis says to report mixed and name the split rather than pick the louder
+  half. A reviewer that forces one of the three pure roles loses exactly the
+  information the answer exists to give: who each half's denial message must
+  address. The prompt asks for the label line first and the split after a
+  blank line. Three assertions, so one violation scores 0.667 and misses the
+  suite threshold. Binding "mixed" to the label is what rejects a forced
+  single label, including the tempting "precondition" -- that token is
+  deliberately not banned, since a correct answer must use it when naming
+  the pre-push half, and banning it would fail the correct answer instead of
+  the wrong one. Requiring "postcondition" anywhere rejects an answer that
+  labels the gate mixed and then describes only one obligation. Same
+  disclosed substring-scorer ceiling as its sibling fixtures -- a correct
+  labelled line followed by contrary prose still passes.
+tags:
+  - quality
+  - contract-role
+inputs:
+  prompt: |
+    Use evaluating-deterministic-gate-quality. Review this gate.
+
+    A git pre-push hook, read directly from its own script. It does two
+    things in one run, and its own README describes them as one check:
+
+    First, before any object is sent, it rejects the push when the outgoing
+    commit range contains a commit whose message carries no issue reference.
+    Its written reason addresses whoever wrote the commit.
+
+    Second, after the push's own dry-run negotiation with the remote
+    returns, it re-reads the ref the remote reports it would end up at and
+    rejects the push when that ref is not a descendant of the ref the hook
+    computed it should be. Its written reason for that half names the push
+    itself as having produced an unexpected result.
+
+    Both halves exit non-zero with a written reason, both are covered by the
+    bundled test, and neither fails open on a missing dependency.
+
+    Apply the Contract role / input-domain closure axis. BEGIN your reply
+    with a single line reading "Contract role:" followed by exactly one of
+    precondition, postcondition, invariant, mixed, or indeterminate --
+    nothing else on that line.
+
+    Leave a blank line after it. Then name which obligation each half of the
+    check asserts and which party each half's message addresses.
+expected:
+  output_contains_near:
+    - all:
+        - "Contract role"
+        - "mixed"
+      window: 60
+  output_contains:
+    - "postcondition"
+  output_not_contains_near:
+    - all:
+        - "Contract role"
+        - "invariant"
+      window: 60

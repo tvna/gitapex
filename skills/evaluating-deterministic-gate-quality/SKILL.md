@@ -89,10 +89,10 @@ deterministic gate is warranted for the policy under review.
 - **Two-lane split**: deterministic-shape checks (fixed rules) vs.
   probabilistic-maturity dimensions (need judgment). Full list:
   [references/dimensions.md](references/dimensions.md).
-- **Four cross-cutting axes**, each detailed in its own subsection below:
+- **Five cross-cutting axes**, each detailed in its own subsection below:
   Compatibility awareness, Reproducibility / Domain-coverage, Blast-radius /
-  trust classification, and Security-level / Zero-Trust maturity
-  classification.
+  trust classification, Security-level / Zero-Trust maturity
+  classification, and Contract role / input-domain closure.
 
 ### Axis: Compatibility awareness
 
@@ -128,13 +128,23 @@ For a given gate, this axis asks: which Foundation/Enterprise/Advanced
 tier ceiling -- Anthropic's "Zero Trust for AI Agents" three-tier
 capability framework -- can its control honestly claim, and does it
 reach that ceiling, overclaim past it, or sit below it for no stated
-reason? Full differentiation from the other three axes and dimensions
+reason? Full differentiation from the other four axes and dimensions
 1/15, the tier ladder, seven categories, impossible-vs-tedious
 test, and reuse-never-re-derive procedure with content-trust discipline:
 [references/security-level.md](references/security-level.md). A concrete
 worked example applying it against this repository's own established
 ceiling:
 [references/gitapex-worked-examples.md](references/gitapex-worked-examples.md).
+
+### Axis: Contract role / input-domain closure
+
+Warning-only -- never change a verdict solely because of this axis. Two
+sub-judgments about *what the check is*: which Design-by-Contract obligation
+it asserts (precondition / postcondition / invariant, or a named mixed role),
+and whether its input domain should be closed (structural/protocol) or stay
+open and non-exhaustive (threat/safety classification). Full test, prior art,
+and the "never both" rule keeping it off dimension 15's ground:
+[references/cross-cutting-axes.md](references/cross-cutting-axes.md#axis-contract-role--input-domain-closure).
 
 ## Three-way division of responsibility
 
@@ -225,10 +235,10 @@ trigger and payload rule above govern here.
    from this per-artifact walk -- its own review-scope tag in
    dimensions.md means it is evaluated once per review, in step 5, not
    repeated for every artifact discovered.
-4. **Cross-cutting axes.** Apply Compatibility awareness, Reproducibility
-   / Domain-coverage, Blast-radius / trust classification, and
-   Security-level / Zero-Trust maturity classification, per the sections
-   above, to each artifact and to the target's overall gate landscape.
+4. **Cross-cutting axes.** Apply all five axes named above, per their own
+   sections, to each artifact and to the target's overall gate landscape --
+   except Contract role / input-domain closure, defined over a single check
+   only. The two warning-only axes report beside the verdict, not inside it.
 5. **Coverage attestation, plus dimension 23.** Enumerate the target
    repository's own stated invariants, filter to the ones
    [references/mechanism-fit.md](references/mechanism-fit.md)'s Gate vs.
@@ -452,9 +462,8 @@ than fixed -- full table:
 Portability: **Mixed**. The portable core above -- the four-domain scope,
 the guiding principle, the two-lane structure, the mechanism-fit test
 (full detail in [mechanism-fit.md](references/mechanism-fit.md)), the
-four axes (three in
-[cross-cutting-axes.md](references/cross-cutting-axes.md), the fourth in
-[security-level.md](references/security-level.md)), the three-way
+five axes (four in [cross-cutting-axes.md](references/cross-cutting-axes.md),
+Security-level in [security-level.md](references/security-level.md)), the three-way
 division of responsibility (full detail, together with the
 delegation-recommendation procedure and the `scanning-` naming
 convention it reserves, Procedure step

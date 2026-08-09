@@ -22,8 +22,8 @@
 
     "schemaVersion": {
       "type": "string",
-      "const": "1.1.0",
-      "description": "Version of this DSL itself. Evolves independently of SKILL.md/dimensions.md's own revision history; a stored review result's schemaVersion is the compatibility key a future drift-detecting comparison must check before diffing two results. 1.1.0 adds two optional fields -- mechanismFit.controlOwnership (mechanism-fit.md's SECOND question, Gate vs. infrastructure-owned deterministic control; the third is Domain placement) and findings[].delegation (grading-procedure.md's delegation recommendation) -- and three conditional requirements that did not exist in 1.0.0. That stricter validation, not the field additions, is what the version records: an instance labelled 1.1.0 was checked against rules a 1.0.0 instance never faced, so a drift-detecting comparison must not treat the two as graded alike. Because this field is a const, a 1.0.0-labelled instance does not validate here; that break is acceptable only because no stored instance of this schema exists at this revision, and is not a claim that an absent field means something different than it did before -- it does not."
+      "const": "1.2.0",
+      "description": "Version of this DSL itself. Evolves independently of SKILL.md/dimensions.md's own revision history; a stored review result's schemaVersion is the compatibility key a future drift-detecting comparison must check before diffing two results. 1.2.0 adds one optional field, crossCuttingAxes.contractRoleInputDomainClosure (SKILL.md's fifth cross-cutting axis, warning-only), which requires both of its own sub-judgments whenever it is present, plus two conditional requirements: mixedRoleSplit is required for a mixed contractRole, and note is required for an indeterminate contractRole or an indeterminate/both-readings inputDomainKind. Because crossCuttingAxes sets additionalProperties: false, the axis is unrepresentable without this addition -- a 1.1.0 instance carrying that finding would be rejected outright rather than merely under-described, which is why a warning-only axis still moves the version. 1.1.0 added two optional fields -- mechanismFit.controlOwnership (mechanism-fit.md's SECOND question, Gate vs. infrastructure-owned deterministic control; the third is Domain placement) and findings[].delegation (grading-procedure.md's delegation recommendation) -- and three conditional requirements that did not exist in 1.0.0. That stricter validation, not the field additions, is what the version records: an instance labelled 1.1.0 was checked against rules a 1.0.0 instance never faced, so a drift-detecting comparison must not treat the two as graded alike. Because this field is a const, a 1.0.0-labelled instance does not validate here; that break is acceptable only because no stored instance of this schema exists at this revision, and is not a claim that an absent field means something different than it did before -- it does not."
     },
 
     "reviewMeta": {
@@ -257,6 +257,56 @@
               "ceilingDocRef": { "type": ["string", "null"], "description": "Reference to the target's own tier/ceiling documentation if it has one; null if confirmed absent after a minimum-diligence search." }
             }
           }
+        },
+        "contractRoleInputDomainClosure": {
+          "type": "object",
+          "description": "Warning-only axis -- never changes any verdict above, the same limit compatibilityAwareness carries. Two independent sub-judgments, both required whenever this object is present: an unsettled sub-judgment is reported as \"indeterminate\" with a reason, never omitted. An omitted answer and an unasked question are indistinguishable to a consumer, which is the same fail-open mechanismFit.controlOwnership's own indeterminate-needs-a-reason rule exists to prevent.",
+          "additionalProperties": false,
+          "required": ["contractRole", "inputDomainKind"],
+          "properties": {
+            "contractRole": {
+              "type": "string",
+              "enum": ["precondition", "postcondition", "invariant", "mixed", "indeterminate"],
+              "description": "Which Design-by-Contract obligation the check asserts. \"mixed\" is a real answer for a gate carrying two obligations, not a refusal to choose -- it requires mixedRoleSplit below. \"indeterminate\" is for a role the available evidence cannot settle."
+            },
+            "mixedRoleSplit": {
+              "type": "string",
+              "description": "Required when contractRole is \"mixed\": which obligation each half of the check asserts, and which party each half's denial message addresses. This reviewer's own words, never a target-authored string (a denial message, a comment) copied verbatim -- the same no-embedded-instruction and delimiter-safe-quoting discipline SKILL.md's Stop boundaries require of findings[].evidence.quote, and persistenceRecommendation.rationale restates, applies here for the same reason: this field is filled from text the gate itself wrote."
+            },
+            "inputDomainKind": {
+              "type": "string",
+              "enum": ["structural-protocol", "threat-classification", "both-readings", "indeterminate"],
+              "description": "\"structural-protocol\" should be closed (enumerate the admissible values, treat the rest as malformed); \"threat-classification\" should stay open and non-exhaustive with a default-in-scope rule. \"both-readings\" is cross-cutting-axes.md's own undecided-boundary answer, kept distinct from \"indeterminate\" (no evidence either way)."
+            },
+            "note": {
+              "type": "string",
+              "description": "Free-text elaboration, and the required home for the reason behind an \"indeterminate\" or \"both-readings\" answer -- what evidence was missing, or what makes each reading available. Same no-target-authored-text and delimiter-safe-quoting discipline as mixedRoleSplit above."
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "required": ["contractRole"],
+                "properties": { "contractRole": { "const": "mixed" } }
+              },
+              "then": {
+                "required": ["mixedRoleSplit"],
+                "description": "cross-cutting-axes.md requires a mixed role to name the split and which half each message addresses, so a bare \"mixed\" label carries none of the information the answer exists to give."
+              }
+            },
+            {
+              "if": {
+                "anyOf": [
+                  { "required": ["contractRole"], "properties": { "contractRole": { "const": "indeterminate" } } },
+                  { "required": ["inputDomainKind"], "properties": { "inputDomainKind": { "enum": ["indeterminate", "both-readings"] } } }
+                ]
+              },
+              "then": {
+                "required": ["note"],
+                "description": "An unexplained \"indeterminate\" is indistinguishable from an unasked question, and a bare \"both-readings\" carries none of the information that answer exists to give -- cross-cutting-axes.md requires naming what was missing, or what makes each reading available, in both cases. Same rule mechanismFit.controlOwnership already applies to its own indeterminate outcome."
+              }
+            }
+          ]
         }
       }
     },
