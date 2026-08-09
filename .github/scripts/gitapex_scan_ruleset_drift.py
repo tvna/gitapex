@@ -5,19 +5,25 @@ Issue #439. Two scopes, one script, because both answer the same question --
 does GitHub still enforce what `.github/rulesets/main.json` says it enforces?
 -- and differ only in how much of the ruleset they look at and when they run:
 
-* `--scope required-checks` runs on every pull request
-  (`.github/workflows/ruleset-sync-gate.yml`). It asserts only that the live
-  ruleset's required status checks have not *lagged behind* the committed file.
-  The workflow feeds it the source of truth as it exists on the pull request's
-  **base** ref, never the head ref: a pull request that adds a new required
-  check to the committed file has by definition not applied it yet (applying is
-  a separate human dispatch), so grading the head ref would make every such
-  pull request fail itself for doing exactly what it set out to do.
+* `--scope required-checks` runs on every pull request. It asserts only that the
+  live ruleset's required status checks have not *lagged behind* the committed
+  file. The workflow feeds it the source of truth as it exists on the pull
+  request's **base** ref, never the head ref: a pull request that adds a new
+  required check to the committed file has by definition not applied it yet
+  (applying is a separate human dispatch), so grading the head ref would make
+  every such pull request fail itself for doing exactly what it set out to do.
 
-* `--scope full` runs on a schedule (`.github/workflows/ruleset-drift.yml`) and
-  compares the entire projected ruleset -- conditions, bypass actors, and every
-  rule -- so a change made directly in the Settings UI, which no pull request
-  would ever show, surfaces within a day.
+* `--scope full` runs on a schedule and compares the entire projected ruleset --
+  conditions, bypass actors, and every rule -- so a change made directly in the
+  Settings UI, which no pull request would ever show, surfaces within a day.
+
+Both scopes are dispatched from the single `.github/workflows/ruleset-verify.yml`
+workflow, which derives the scope and the source of truth's origin from
+`github.event_name`; this `--scope` flag is where that choice is actually
+implemented, and it lives here rather than in YAML because this layer is
+testable, type-checked, and runnable locally. The mutating counterpart
+(`.github/workflows/apply-rulesets.yml`) stays a separate workflow on purpose --
+see that file's header.
 
 **Exit codes are three-valued on purpose.** `0` in sync, `1` drift, `2` nothing
 was verified. The third state exists because "GitHub enforces something other

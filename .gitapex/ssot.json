@@ -52,7 +52,7 @@
       "id": "main-branch-ruleset",
       "path": ".github/rulesets/main.json",
       "format": "json",
-      "authority": "The GitHub Repository Ruleset this repository intends to enforce on its default branch -- name/target/enforcement/conditions/bypass_actors/rules, i.e. exactly the key set GitHub's own ruleset POST/PUT body accepts. Authoritative for what protection main is supposed to carry (read by ruleset-sync-gate and ruleset-drift-scan, written to GitHub only by the human-dispatched apply-rulesets workflow); it is NOT proof that GitHub enforces it, which is why both reading gates exist"
+      "authority": "The GitHub Repository Ruleset this repository intends to enforce on its default branch -- name/target/enforcement/conditions/bypass_actors/rules, i.e. exactly the key set GitHub's own ruleset POST/PUT body accepts. Authoritative for what protection main is supposed to carry (read by both scopes of the ruleset-verify workflow, written to GitHub only by the human-dispatched apply-rulesets workflow, which stays a separate file so the write-capable Environment binding is greppable rather than expression-derived); it is NOT proof that GitHub enforces it, which is why both reading gates exist"
     }
   ],
   "gates": [
@@ -651,7 +651,7 @@
       "rule": "Every status-check context named in .github/rulesets/main.json as it exists on the pull request's BASE ref must also be required by the live main ruleset. One-directional by design: a context live but absent from the file is the shape of an in-flight removal and is left to the scheduled full scan. Exit 2 (no live ruleset yet, or no readable token) is surfaced as a warning, not a failure, because neither precondition is one a pull request can satisfy.",
       "planes": ["ci"],
       "local_exclusion": "Reads the live GitHub Rulesets API with an Administration-scoped token and needs the pull request's own base SHA; neither exists on a working tree.",
-      "trigger": ".github/workflows/ruleset-sync-gate.yml on pull_request",
+      "trigger": ".github/workflows/ruleset-verify.yml, the ruleset-scan job on pull_request (which resolves --scope required-checks from github.event_name)",
       "policy_refs": ["main-branch-ruleset"],
       "cluster": "self-governance",
       "tracking_issue": 439,
@@ -665,7 +665,7 @@
       "rule": "The live main ruleset's projection (name/target/enforcement/conditions/bypass_actors/rules) must equal .github/rulesets/main.json's. Catches a change made directly in the Settings UI, which no pull request would ever show. Exit 2 (no live ruleset yet, or no readable token) is surfaced as a warning, not a failure, for the same reason as ruleset-sync-gate.",
       "planes": ["ci"],
       "local_exclusion": "Reads the live GitHub Rulesets API with an Administration-scoped token; there is no offline equivalent of what GitHub currently enforces.",
-      "trigger": ".github/workflows/ruleset-drift.yml, daily cron 09:00 UTC + workflow_dispatch",
+      "trigger": ".github/workflows/ruleset-verify.yml, the same ruleset-scan job on daily cron 09:00 UTC + workflow_dispatch (which resolves --scope full from github.event_name)",
       "policy_refs": ["main-branch-ruleset"],
       "cluster": "self-governance",
       "tracking_issue": 439,

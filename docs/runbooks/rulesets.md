@@ -36,8 +36,7 @@ gates below exist to tell the two states apart.
 | `.github/rulesets/main.json` | Source of truth for the `main-protection` ruleset |
 | `.github/workflows/apply-rulesets.yml` | The only mutating path; `workflow_dispatch` only, `dry_run` defaults to true |
 | `.github/scripts/gitapex_apply_rulesets.py` | Plan/apply logic invoked by that workflow, never by an agent session |
-| `.github/workflows/ruleset-sync-gate.yml` | Pull-request-time check that the live ruleset has not lagged behind the base ref's required checks |
-| `.github/workflows/ruleset-drift.yml` | Daily full live-vs-committed comparison |
+| `.github/workflows/ruleset-verify.yml` | Both read-only scans in one job: pull-request-time lag check, and the daily full live-vs-committed comparison |
 | `.github/scripts/gitapex_scan_ruleset_drift.py` | Comparison logic behind both reading gates |
 | `.github/scripts/_gitapex_rulesets.py` | Shared load/fetch/project/diff helpers |
 
@@ -118,7 +117,7 @@ tokens under the same secret name, so a compromise of the read path cannot write
 | Environment | Scope | Consumed by |
 |---|---|---|
 | `ruleset-apply` | Administration: **Read and write** | `apply-rulesets.yml` |
-| `ruleset-verify` | Administration: **Read** | `ruleset-sync-gate.yml`, `ruleset-drift.yml` |
+| `ruleset-verify` | Administration: **Read** | `ruleset-verify.yml` (both scopes) |
 
 ### Issuance (one time, per token)
 
@@ -155,7 +154,7 @@ Without revealing the token value anywhere:
    `dry_run: true`. The "Guard RULESETS_PAT" step passing proves the apply
    secret is readable; the job summary printing a planned `POST`/`PUT` body
    proves the token can read the rulesets endpoint.
-2. Open or re-run any pull request. The `ruleset-sync` job's summary proves the
+2. Open or re-run any pull request. The `ruleset-scan` job's summary proves the
    verify secret: with no token it says the token variable is empty and nothing
    was verified; with one it names the live ruleset.
 
@@ -236,14 +235,28 @@ evaluate, never as a decision already made.
 
 ## Verifying
 
-Two gates read the live state, and they answer different questions:
+Two gates read the live state. They answer different questions, and they run as
+the same `ruleset-scan` job in `.github/workflows/ruleset-verify.yml`, which
+picks the scope from the triggering event:
 
-* **`ruleset-sync`** (every pull request) -- has the live ruleset fallen behind
-  the required status checks the **base ref** already claims? One-directional, so
-  a pull request that adds or removes a required check does not fail itself.
-* **`ruleset-drift`** (daily, 09:00 UTC) -- does the live ruleset still match the
-  committed file in full, including conditions, bypass actors, and every rule?
-  This is the one that catches a change made directly in the Settings UI.
+| Trigger | Scope | Source of truth | Question answered |
+|---|---|---|---|
+| `pull_request` | `required-checks` | the pull request's **base** ref | Has the live ruleset fallen behind the required status checks the base ref already claims? One-directional, so a pull request that adds or removes a required check does not fail itself. |
+| `schedule` (daily 09:00 UTC), `workflow_dispatch` | `full` | `main`'s committed file | Does the live ruleset still match the committed file in full, including conditions, bypass actors, and every rule? This is the one that catches a change made directly in the Settings UI. |
+
+One workflow rather than two because everything security-relevant is already
+identical between them -- the same read-only token, the same `ruleset-verify`
+Environment, the same permissions, the same scanner, the same exit contract --
+so the only thing two files bought was a duplicated exit-code block.
+
+**`apply-rulesets.yml` is deliberately *not* folded in with them.** GitHub lets
+`jobs.<job_id>.environment` be an expression over the `inputs` and `github`
+contexts, so a combined file could select the write-capable `ruleset-apply`
+Environment at run time. Two consequences make that unacceptable: "which job can
+administer rulesets" would stop being answerable by grep, and a
+pull-request-triggered run that resolved to a reviewer-gated Environment would
+sit waiting for approval rather than reporting. The read/write credential keeps
+its own file so both properties hold statically.
 
 Both use the same three-valued exit code from
 `gitapex_scan_ruleset_drift.py`:

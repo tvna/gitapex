@@ -1,0 +1,155 @@
+# Issue #439: the read-only half of ruleset governance -- both the
+# pull-request-time lag check and the scheduled full comparison, in one
+# workflow because they already share everything that matters: the same
+# read-only RULESETS_PAT on the same `ruleset-verify` Environment, the same
+# permissions, the same scanner script, and the same three-valued exit
+# contract. Only the scope and the source of truth's origin differ, and both
+# are derived from `github.event_name` in a single step rather than duplicated
+# across two files.
+#
+#   * pull_request -> `--scope required-checks`, source of truth read from the
+#     pull request's BASE ref. Applying a ruleset is a separate human dispatch,
+#     so a pull request that adds a required check has by construction not
+#     applied it yet; grading the head ref would make every such pull request
+#     fail itself for doing exactly what it set out to do.
+#   * schedule / workflow_dispatch -> `--scope full` against main's committed
+#     file. Broader and bidirectional, so a change made directly in the
+#     Settings UI -- which no pull request would ever show -- surfaces within a
+#     day instead of whenever someone next reads the settings page.
+#
+# `apply-rulesets.yml` deliberately stays a SEPARATE file and is not folded in
+# here. It is the only mutating path and it binds the read/WRITE
+# `ruleset-apply` Environment, whose required reviewers are the human gate on a
+# live apply. GitHub does allow `jobs.<job_id>.environment` to be an expression
+# over the `inputs`/`github` contexts, which is exactly why the write
+# credential must not share a file with these read-only jobs: keeping it apart
+# is what makes "which job can administer rulesets" answerable by grep rather
+# than by evaluating an expression, and it is what guarantees no
+# pull-request-triggered run can ever resolve to a reviewer-gated Environment
+# and hang there waiting for approval. See CLAUDE.md section 4 on preserving
+# defence in depth, and docs/runbooks/rulesets.md.
+name: Ruleset verify
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  schedule:
+    - cron: "0 9 * * *"  # daily 09:00 UTC, offset from the 07:00 and 08:00 scans
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  # Cancel a superseded pull-request run, never a scheduled or dispatched scan.
+  # A full scan killed mid-flight reports nothing at all, and the next one is a
+  # day away; a superseded pull-request run has a newer run right behind it.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  ruleset-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Read-only RULESETS_PAT. The default GITHUB_TOKEN cannot read
+    # /repos/{owner}/{repo}/rulesets at all, so without this Environment the job
+    # could only ever report "unverified". Same secret name as
+    # apply-rulesets.yml, a different Environment: this one holds a read-only
+    # token and needs no reviewers, the apply one holds a read/write token and
+    # does. Written as a literal and never an expression, so no input can move
+    # this job onto the write-capable Environment.
+    environment: ruleset-verify
+    permissions:
+      contents: read
+    steps:
+      # `ref` is pinned rather than left to the default: workflow_dispatch
+      # checks out whichever ref the operator selected in the Actions UI, so
+      # without this a manual run from a feature branch would compare live
+      # GitHub state against that branch's unreviewed JSON while the report
+      # still claims it evaluated main.
+      #
+      # `fetch-depth: 0` unconditionally, not only on pull_request. Only the
+      # pull-request path needs the base commit, but making it conditional
+      # would mean a `&&`/`||` ternary whose true-branch value is the string
+      # '0' -- GitHub's expression truthiness around zero-like strings is not
+      # worth betting a gate on, and a full clone of this repository costs
+      # seconds. `github.ref` is a non-empty string on every trigger here, so
+      # the ternary below has no such hazard.
+      - name: Harden runner + checkout
+        uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.ref || 'main' }}
+          fetch-depth: '0'
+
+      # The one place the two scopes differ. Everything downstream reads these
+      # outputs, so a third caller later means one more branch here rather than
+      # a third workflow file.
+      - name: Resolve scan scope and source of truth
+        id: plan
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            echo "Comparing the live ruleset against main's committed source of truth, in full."
+            {
+              echo "applicable=true"
+              echo "scope=full"
+              echo "sot=.github/rulesets/main.json"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # `git show <base_sha>:<path>` rather than a second checkout: the base
+          # commit is already present thanks to fetch-depth 0, and materialising
+          # exactly one file keeps the head-ref working tree untouched.
+          #
+          # Distinguish "the base ref has no ruleset file yet" from "git could
+          # not answer". Swallowing every git failure as the former reads a
+          # missing base commit -- routine after a force-push to the base
+          # branch -- as "nothing to check" and passes the gate green. Only a
+          # readable base commit that genuinely lacks the file is a skip.
+          if ! git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null; then
+            echo "::error::base commit $BASE_SHA is not present; cannot establish what the base ref requires."
+            exit 1
+          fi
+          if ! git cat-file -e "$BASE_SHA:.github/rulesets/main.json" 2>/dev/null; then
+            echo "The base ref carries no .github/rulesets/main.json; this pull request introduces it." \
+              >> "$GITHUB_STEP_SUMMARY"
+            echo "applicable=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          sot_file="$RUNNER_TEMP/base_main_ruleset.json"
+          git show "$BASE_SHA:.github/rulesets/main.json" > "$sot_file"
+          {
+            echo "applicable=true"
+            echo "scope=required-checks"
+            echo "sot=$sot_file"
+          } >> "$GITHUB_OUTPUT"
+
+      # Exit 2 means the scan never got to look (no live ruleset carries the
+      # name yet, or no readable token) -- a precondition neither a pull request
+      # nor a nightly run can satisfy, so it is a warning rather than a failure;
+      # a job red every day for a condition no commit can clear trains everyone
+      # to ignore it. Exit 1 means GitHub is enforcing something other than what
+      # the source of truth says, which is a real regression.
+      - name: Compare the live ruleset against the source of truth
+        if: steps.plan.outputs.applicable == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.RULESETS_PAT }}
+          TARGET_REPO: ${{ github.repository }}
+          SCOPE: ${{ steps.plan.outputs.scope }}
+          SOT_FILE: ${{ steps.plan.outputs.sot }}
+        run: |
+          set -uo pipefail
+          set +e
+          python3 .github/scripts/gitapex_scan_ruleset_drift.py \
+            --repo "$TARGET_REPO" --sot "$SOT_FILE" --scope "$SCOPE" 2>&1 \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+          code=${PIPESTATUS[0]}
+          set -e
+          case "$code" in
+            0) exit 0 ;;
+            2) echo "::warning::Ruleset scan (${SCOPE}) unverified; see the job summary and docs/runbooks/rulesets.md."; exit 0 ;;
+            *) echo "::error::Ruleset scan (${SCOPE}) failed; see the job summary for what differs, or for which committed file is unusable."; exit 1 ;;
+          esac
