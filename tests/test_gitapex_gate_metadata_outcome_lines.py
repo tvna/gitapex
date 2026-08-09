@@ -52,11 +52,12 @@ def _commit(root: pathlib.Path, message: str) -> str:
 
 SHORT_SHA_LEN = 8
 
-# Enough re-rolls that exhausting them is not a thing that happens: each
-# candidate is citable with probability 1 - (10/16)**8, so 21 consecutive
-# misses has probability ~1e-33. Bounded anyway rather than `while True`, so a
-# future change that makes the condition unsatisfiable fails loudly instead of
-# hanging the suite.
+# Enough re-rolls that exhausting them is not a thing that happens. A single
+# candidate misses with probability (10/16)**8 ~= 0.0233, and the loop below
+# evaluates _MAX_SHA_REROLLS + 1 = 21 of them, so giving up needs 21
+# consecutive misses: (10/16)**(8*21) ~= 5e-35. Bounded anyway rather than
+# `while True`, so a future change that makes the condition unsatisfiable
+# fails loudly instead of hanging the suite.
 _MAX_SHA_REROLLS = 20
 
 
