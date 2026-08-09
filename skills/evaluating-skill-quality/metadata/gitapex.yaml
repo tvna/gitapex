@@ -331,6 +331,18 @@ spec:
         verdict: FAIL
         found: 12
         fixed: 12
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/933"
+      summary: "Supersedes the issue/818 decision entry above (append-only, not deleted). That entry answered what the bundled checker does internally; the field declares what the skill needs granted. Corrected to write: [files] (references/adversarial-self-audit.md's registry step appends an entry) and shell: [python3] (SKILL.md's Procedure step 3 executes gitapex_check_skill_shape.py). A consumer honouring the old declaration would under-grant and fail at the first mandatory step."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/933"
+      summary: "Added a Trust class subsection to the isolation registry: Reviewed entries (present at run start, gate-passed) versus Same-run entries (appended mid-run, gate-passed nothing). A later step in the same run relies on the control outcomes it observed, not on the line it just wrote. The instruction-only limit is stated in the file rather than implied, since nothing deterministic separates the two once both sit in one working tree."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/933"
+      summary: "Added a byte-exact citation requirement to Procedure step 5 plus a paired Stop boundary: every quotation the review authors is substring-matched against its cited file (source line wraps normalized to single spaces) before entering the report. Grounded in this repository's own history -- a draft reference once shipped roughly ten fabricated quotations of fourteen, and every deterministic check passed on it."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/933"
+      summary: "Paid for the new step against the 500-line body ceiling in-file rather than by moving content to references/: eight duplication/narration trims in SKILL.md (the filesystem-only-check restatement and the main-thread relay restatement are the two duplications; the rest are narrower narration cuts). Net body 499 -> 498 lines; the mandatory common-case read set is unchanged at three files, so dimension 5's tracked reading burden does not deepen."
   skillDependencies:
     requires: []
     relatedTo:
@@ -341,5 +353,7 @@ spec:
     tools:
       read:
         - files
-      write: []
-      shell: []
+      write:
+        - files
+      shell:
+        - python3

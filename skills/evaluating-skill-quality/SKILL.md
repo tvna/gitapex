@@ -138,14 +138,12 @@ is still grading from a contaminated context.
   mechanism, running its Verification procedure and recording a new
   entry if none exists yet. The omission must not depend on a human
   asking whether it happened, and requesting the exclusion is not proof
-  it held -- nor is a filesystem-only check (e.g. confirming a scratch
-  copy's own directory ancestry is clean); only that section's own
-  two-part behavioral test (does the dispatched agent's self-report
-  actually change between a positive- and negative-control location)
-  counts as verification -- see that section's Known entries for a
-  documented case where the filesystem-only check would have missed a
-  real leak. If no platform mechanism can be verified this way, stop and
-  escalate rather than dispatching into a contaminated context. Whether
+  it held; only that section's own two-part behavioral test counts as
+  verification, and it records why a filesystem-only check does not. Read
+  what that section's Trust class rule says about an entry the current
+  run wrote before relying on one. If no platform mechanism can be
+  verified this way, stop and escalate rather than dispatching into a
+  contaminated context. Whether
   the exclusion, once verified, carries real deterministic backing (a
   hook, a permission rule) or is enforced by this instruction alone
   still depends on the environment -- check directly, the same self-audit
@@ -172,14 +170,13 @@ is still grading from a contaminated context.
 - The main thread's own job is only step 3 (run the shape checker first,
   before dispatching) and relaying the dispatch's report -- including the
   verdict the dispatch already issued in step 6 -- to the human verbatim,
-  never independently issuing or revising one. Clarifying
-  questions about evidence already returned can be answered directly from
-  that report; a challenge that could change a verdict gets a second,
-  independent fresh dispatch (carrying the challenge and the target's
-  path, not the first dispatch's reasoning) rather than a revision made
-  in place -- the same fault-attribution rule that governs a
-  misclassified precondition (`references/rubric.md`, Contract
-  discipline) applies to a misgraded dimension.
+  never independently issuing or revising one. Clarifying questions about
+  evidence already returned can be answered directly from that report; a
+  challenge that could change a verdict gets a second, independent fresh
+  dispatch (carrying the challenge and the target's path, not the first
+  dispatch's reasoning), never a revision made in place -- the same
+  fault-attribution rule a misclassified precondition gets
+  (`references/rubric.md`, Contract discipline).
 - Optional upgrade, not a requirement: on a harness with a multi-agent
   orchestration mechanism, the single dispatch above may become several
   independent cross-checking dispatches, capped at a small explicit N
@@ -254,14 +251,12 @@ section.
 
 Distinct from Mechanism fit's Model/effort tier fit check: that judges a
 model or effort *pin the skill's own content makes*, which the invoking
-agent acts on at runtime, and fires only when such a pin actually exists
-(most skills correctly have none, and none of this repository's skills
-do today). This declaration pins nothing and never executes -- it
-recalibrates the *reviewer's* grading strictness and has full coverage
-over every skill regardless of whether that skill pins anything. Where a
-declared level contradicts a pin the same skill's own content makes (e.g.
-declaring Frontier while pinning a weak model onto a judgment step),
-Procedure step 4 below is the one place that check runs.
+agent acts on at runtime, and fires only when such a pin exists (most
+skills correctly have none). This declaration pins nothing and never
+executes -- it recalibrates the *reviewer's* grading strictness, over
+every skill regardless. Where a declared level contradicts such a pin
+(e.g. declaring Frontier while pinning a weak model onto a judgment
+step), Procedure step 4 below is the one place that check runs.
 
 - **Broad** -- authored to stay effective down to a weak or economical
   model, or a constrained harness.
@@ -317,16 +312,13 @@ spec:
   `deprecated`, which stays ungated (an experimental skill can
   legitimately be superseded by a different experiment).
 - **`renamedFrom`**: a plain scalar, not a sub-block, naming this same
-  skill's former directory name. Deliberately backward-pointing and
-  **not** resolved against sibling directories, unlike
-  `deprecated.replacement` -- the old name is expected to no longer
-  exist (a `git mv` deletes it), so there is nowhere to host a
-  forward-pointing record on the old side.
+  skill's former directory name. Deliberately backward-pointing and **not**
+  resolved against sibling directories, unlike `deprecated.replacement` --
+  the old name is expected to no longer exist (a `git mv` deletes it).
 - `since`/`removeAfter`, when given, must be real `YYYY-MM-DD` dates.
   `removeAfter` documents an intended removal date only; no automation in
-  this repository deletes a skill once that date passes, and no
-  automation graduates a skill out of `experimental` when its
-  `trackingIssue` closes.
+  this repository deletes a skill once it passes, or graduates a skill out
+  of `experimental` when its `trackingIssue` closes.
 - None of these declarations change how any of the nine dimensions
   grade, and no skill's own runtime procedure may read or branch on any
   of them -- this is metadata only, same as Portability level and
@@ -353,10 +345,10 @@ Execution requirements section and the design docs it cites.
 Steps 1-4 are this review's precondition, step 6 its postcondition -- see
 `references/rubric.md`'s Contract discipline section. Steps 1, 2, 4, 5, and 6 execute
 inside the fresh subagent dispatch described in Subagent dispatch above; only step 3
-runs directly in the main thread, before the dispatch. The main thread's remaining job
-is to relay the dispatch's report verbatim, per Subagent dispatch above. The numbers
-below are identity, not run order: step 3 actually runs 1st (main thread), then the
-dispatch runs 1, 2, 4, 5, 6 in that numbered order, annotated per step below. Neither a
+runs directly in the main thread, before the dispatch; relaying that dispatch's report
+verbatim is the main thread's only other job. The numbers below are identity, not run
+order: step 3 actually runs 1st (main thread), then the dispatch runs 1, 2, 4, 5, 6 in
+that numbered order, annotated per step below. Neither a
 step-2 whole-artifact finding nor a step-3 shape FAIL short-circuits: steps 4-6,
 including the full step-5 walk, always still run, since the nine dimensions grade
 prose/structural maturity independently of mechanism-fit and shape -- unlike
@@ -396,15 +388,18 @@ binary gate-warranted question.
    separate from the verdict.
 5. *(runs 5th)* Walk all nine dimensions in `references/rubric.md`, in order (including
    8-9), quoting the specific text that earns each verdict; assume steps 1-4 hold
-   rather than re-deriving them. No cited evidence means no review happened.
+   rather than re-deriving them. No cited evidence means no review happened. Before
+   any quotation this review authors enters the report, verify it byte-exact against
+   the file it cites -- substring-match it, normalizing the source's own line wraps
+   to single spaces, never reconstructing it from recall; correct or drop a span
+   that does not match rather than reporting it as evidence.
 6. *(runs 6th, last)* Issue a verdict per `references/rubric.md`'s Verdicts section,
    inside the same dispatch as steps 1, 2, 4, and 5, relayed verbatim by the main
    thread per Subagent dispatch above.
 
-Worked example of steps 2-6, applied to a real merged skill:
+Worked example of steps 2-6 on a real merged skill:
 [references/worked-example-explaining-the-work.md](references/worked-example-explaining-the-work.md).
-This skill applied to itself, including the mechanism-fit and
-portability checks:
+This skill applied to itself:
 [references/worked-example-self-review.md](references/worked-example-self-review.md).
 
 ## Scope
@@ -465,6 +460,11 @@ actually specifies.
   sentence as a working trigger on a skill whose own frontmatter disables
   model invocation -- a well-written trigger for a mechanism that is
   switched off is not a passing dimension 1.
+- Never report a quotation this review authored without step 5's
+  byte-exact match against the file it is attributed to. A paraphrase, a
+  span reconstructed from recall, or two sources blended into one quote is
+  a fabricated citation, and every deterministic check in a repository can
+  pass on a report full of them.
 - Never leave the Blind spot pass unaddressed -- an explicit "no gap found"
   and a silently skipped question are not the same thing; the latter is
   not a completed review.
@@ -481,10 +481,9 @@ actually specifies.
 Portability rationale: self-contained -- carries its own rubric and bundled
 read-only `gitapex_check_skill_shape.py`. Its content cites this-repository design
 docs in a few places (e.g. rubric.md's Execution requirements section),
-but always through the approved hedge convention that marks such a
-citation as deliberate, acknowledged provenance rather than an
-operational dependency this skill's own procedure needs to resolve. The
-declared level itself lives in `metadata/gitapex.yaml`.
+always through the approved hedge convention that marks such a citation as
+acknowledged provenance, not an operational dependency this skill's own
+procedure must resolve. The declared level lives in `metadata/gitapex.yaml`.
 
 Downstream verdict consumption, for readers working in this repository
 (gitapex): `.github/scripts/gitapex_gate_skill_audit_disclosure.py`, wired by

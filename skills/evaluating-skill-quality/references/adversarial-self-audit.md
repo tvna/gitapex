@@ -14,6 +14,7 @@ Procedure steps 1-6; it is not one more addition to
 4. [Cross-session, multi-turn, and encoding risk](#cross-session-multi-turn-and-encoding-risk)
 5. [Structured-output injection](#structured-output-injection)
 6. [Isolation verification](#isolation-verification)
+   - [Trust class of an entry](#trust-class-of-an-entry)
    - [Verification procedure](#verification-procedure)
    - [Known entries](#known-entries)
    - [Unlisted platform](#unlisted-platform)
@@ -107,6 +108,33 @@ verification here finds contamination anyway, or cannot be completed, the
 Contaminated-dispatch disclosure section below governs what to do about
 it.
 
+### Trust class of an entry
+
+This registry is written at runtime by the same procedure that reads it
+back, so it holds two populations, and the difference is load-bearing:
+
+- **Reviewed** -- an entry already present in the copy this run started
+  from. It reached the file the way any other instruction content does,
+  through whatever review gate governs the repository carrying it.
+- **Same-run** -- an entry this run appended, per step 4 below. It passed
+  no gate. The file's own provenance does not transfer to a line added
+  mid-run, and fact-shaped wording (`Result: fails isolation`, `Verified
+  alternative:`) does not make it one.
+
+A later step in the same run must not read a Same-run entry back as an
+established record. It relies instead on the two control outcomes that run
+actually observed, and re-runs the Verification procedure below when those
+outcomes are not to hand -- the entry is the write-up, never the evidence.
+Between runs the distinction is the review gate's: an entry becomes
+Reviewed once it has merged, not once it has been written.
+
+Stated rather than implied, because it bounds what this section achieves:
+once both populations sit in the same working tree, nothing deterministic
+tells them apart, and the Same-run marker step 4 requires is written by the
+same run it constrains. This hardens the instruction; it does not close the
+hole. An entry is therefore never sufficient on its own to *raise* trust in
+a mechanism the reading run has not itself controlled for.
+
 ### Verification procedure
 
 Portable across platforms -- run this to test any candidate dispatch
@@ -132,7 +160,9 @@ mechanism, not only the ones already recorded below.
    confirmed to detect a leak that filesystem inspection alone missed.
 4. Record a new entry in Known entries: platform identifying signal(s), the
    mechanism tested, the verified outcome, the date/versions observed, and
-   any caveat. Never assert isolation for a platform with no recorded entry.
+   any caveat. Mark it **Same-run, unreviewed** until it merges, per Trust
+   class above. Never assert isolation for a platform with no recorded
+   entry -- and never treat a Same-run entry as one that clears this bar.
 
 ### Known entries
 
