@@ -72,7 +72,28 @@ them; a future skill combining both conventions in an unrelated way would
 need this scoping revisited, the same class of residual heuristic-scope
 risk Check B's own docstring already discloses for its narrower text scan.
 
-All three checks are heuristic text parsing over Markdown prose, not a
+Check D (issue #907). A `split.md` that declares a resulting partition in
+prose (``"for a resulting 27:30:12 partition"``) is asserting an arithmetic
+contract against its own `## Assignment` listing, and nothing checked it:
+PR #886 shipped 28 listed train fixtures against a declared `27`, with the
+one over-count masked by an entry that simultaneously claimed to be
+excluded from the arithmetic *and* was counted in it. Reviewers caught the
+contradiction only after the merge. This check requires a file that
+declares a partition to also carry a machine-readable exclusion line
+(``Split-arithmetic exclusions: `name.yaml`, ...`` or
+``Split-arithmetic exclusions: none``), then asserts, per split, that the
+unique listed fixture count minus that split's declared exclusions equals
+the declared figure. The exclusion line exists because at least one real
+exclusion is legitimate and must stay visible to a human reader rather
+than being inferred from prose:
+`dispatch-required-negative-control.yaml` is listed in train for
+split-listing consistency with `normal.yaml`, not as a declared category
+addition. A named exclusion that is not actually listed in any split is
+itself an offence, so the line cannot rot into a silent blanket waiver.
+A `split.md` with no partition declaration at all (this repository's
+bookkeeping-only files) is out of scope and passes untouched.
+
+All four checks are heuristic text parsing over Markdown prose, not a
 formal grammar -- the issue's own Acceptance Criteria Map names this
 residual risk explicitly ("Parsing split.md's prose-based Assignment
 section and gate tables reliably needs a defined, stable format
@@ -159,6 +180,20 @@ _PRECEDENCE_RE = re.compile(r"\btakes?\s+(?:precedence|priority)\s+over\b", re.I
 # convention (issue #631), e.g. `### Commit log -> a terse Why, not the
 # full Why`.
 _SECTION_HEADING_RE = re.compile(r"^###[ \t]+(.+?)[ \t]*$", re.MULTILINE)
+
+# Check D (issue #907). The prose form this repository already uses to
+# declare its resulting partition, e.g. "for a resulting 27:30:12
+# partition" in evals/evaluating-skill-quality/split.md's Corpus-size
+# section. Only that file declares one today; the rest are bookkeeping-only
+# and stay out of Check D's scope by construction.
+_DECLARED_PARTITION_RE = re.compile(r"resulting\s+(\d+):(\d+):(\d+)\s+partition", re.IGNORECASE)
+
+# The machine-readable exclusion line Check D requires alongside a declared
+# partition. Deliberately a fixed prefix rather than another prose scan:
+# the whole point of this check is to stop inferring an arithmetic contract
+# from free-form wording.
+_ARITHMETIC_EXCLUSION_RE = re.compile(r"^Split-arithmetic exclusions:[ \t]*(.+?)[ \t]*$", re.MULTILINE)
+_SPLIT_NAMES = ("train", "selection", "test")
 
 
 def _section(text: str, heading_re: re.Pattern[str]) -> str:
@@ -395,6 +430,78 @@ def check_exercises_declaration_coverage(split_md_path: Path, split_text: str, r
     return f"{split_md_path}: selection-split fixture(s) with an exercises-declaration gap -- {'; '.join(problems)}"
 
 
+def parse_declared_partition(text: str) -> tuple[int, int, int] | None:
+    """The `train:selection:test` figures a `split.md` declares in prose, or
+    ``None`` when it declares no partition at all (Check D, issue #907).
+
+    The last declaration wins if a file ever carries more than one: a later
+    entry is this repository's own convention for a superseding record (see
+    `find_gate_tables`' own most-recent-table rule), so reading the first
+    would grade against a stale figure.
+    """
+    matches = list(_DECLARED_PARTITION_RE.finditer(text))
+    if not matches:
+        return None
+    train, selection, test = matches[-1].groups()
+    return int(train), int(selection), int(test)
+
+
+def parse_arithmetic_exclusions(text: str) -> set[str] | None:
+    """Fixture names the file declares as outside its partition arithmetic.
+
+    ``None`` when no ``Split-arithmetic exclusions:`` line is present at all
+    -- distinct from an empty set, which is what an explicit
+    ``Split-arithmetic exclusions: none`` declares. Check D treats the
+    former as an offence and the latter as a valid "nothing is excluded"
+    claim, so a missing line can never read as a blanket waiver.
+    """
+    match = _ARITHMETIC_EXCLUSION_RE.search(text)
+    if not match:
+        return None
+    return set(_YAML_NAME_RE.findall(match.group(1)))
+
+
+def check_partition_arithmetic(path: Path, text: str) -> str | None:
+    """Check D (issue #907): a declared partition must reconcile with the
+    `## Assignment` listing, under the file's own declared exclusions.
+
+    Counts *unique* names per split: this repository's Assignment bullets
+    legitimately mention a fixture more than once (an entry plus a
+    parenthetical cross-reference to another fixture), so a raw count would
+    over-report.
+    """
+    declared = parse_declared_partition(text)
+    if declared is None:
+        return None
+    exclusions = parse_arithmetic_exclusions(text)
+    if exclusions is None:
+        return (
+            f"{path}: declares a {declared[0]}:{declared[1]}:{declared[2]} partition but carries no "
+            '"Split-arithmetic exclusions:" line -- add one naming every fixture listed but not counted '
+            '(or "Split-arithmetic exclusions: none")'
+        )
+    # parse_assignment_fixtures always returns all three keys, so the union
+    # below needs no empty-dict guard.
+    listed = {name: set(values) for name, values in parse_assignment_fixtures(text).items()}
+    stale = sorted(exclusions - set().union(*listed.values()))
+    if stale:
+        return (
+            f"{path}: declares arithmetic exclusion(s) {', '.join(stale)} that the Assignment section "
+            "does not list at all -- a stale exclusion silently widens the waiver"
+        )
+    for index, split_name in enumerate(_SPLIT_NAMES):
+        counted = listed[split_name] - exclusions
+        if len(counted) != declared[index]:
+            excluded_here = sorted(listed[split_name] & exclusions)
+            detail = f", excluding {', '.join(excluded_here)}" if excluded_here else ", with no exclusion here"
+            return (
+                f"{path}: declared {split_name} figure {declared[index]} does not match the "
+                f"{len(counted)} unique {split_name} fixture(s) the Assignment section lists"
+                f"{detail}"
+            )
+    return None
+
+
 def _read(path: Path) -> str | None:
     try:
         return path.read_text(encoding="utf-8")
@@ -435,6 +542,9 @@ def main(argv: list[str] | None = None) -> int:
             offenders.append(offender)
         exercises_checked.add(path)
         offender = check_exercises_declaration_coverage(path, text, repo_root)
+        if offender:
+            offenders.append(offender)
+        offender = check_partition_arithmetic(path, text)
         if offender:
             offenders.append(offender)
 

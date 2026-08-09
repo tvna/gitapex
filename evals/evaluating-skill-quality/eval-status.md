@@ -939,8 +939,8 @@ the first three, all re-verified against the repository before being acted on.
 some fixture under `tasks/` now carries that tag -- retagging a benign fixture
 produces the identical removal. Both editable occurrences of the stronger
 claim (that test's comment, and the issue #332 entry above) now say what the
-removal actually evidences. Two further occurrences cannot be corrected: PR
-#886's own body and commit message `cd09224` are merged history. A reader who
+removal actually evidences. Two further occurrences cannot be corrected:
+PR #886's own body and commit message `cd09224` are merged history. A reader who
 finds those first will still read the withdrawn claim; this entry is the
 correction of record.
 
@@ -992,7 +992,23 @@ the footing claim was not: the multi-turn fixture has its own declared `1:0:0`
 addition in the Corpus-size section and is a standalone new coverage category,
 the same footing every other counted train fixture has. The false footing
 claim was dropped from both `split.md` and this file; the `26 -> 27` bump
-stands. No gate checks this reconciliation, so it stays convention-enforced.
+stands.
+
+The reconciliation is now gate-enforced rather than convention-enforced, which
+is a change from what issue #907's own ACM accepted as a permanent residual. An
+independent review round on PR #911 pointed at `CLAUDE.md`'s standing rule that
+establishing an invariant ships its drift gate in the same change, not a
+follow-up, and that rule governs over an ACM row that merely recorded the gap.
+`.github/scripts/gitapex_gate_split_fixture_coverage.py` gained Check D: a
+`split.md` declaring a resulting partition must also carry a machine-readable
+`Split-arithmetic exclusions:` line, and each split's unique listed count minus
+its declared exclusions must equal the declared figure. An exclusion naming a
+fixture the Assignment section does not list is itself an offence, so the
+waiver cannot silently widen. Files declaring no partition (this repository's
+bookkeeping-only `split.md` files) stay out of scope. Verified by running the
+real gate against every committed `evals/*/split.md`, and by asserting the
+pre-#907 shape (28 listed train against a declared 27 with no exclusion line)
+fails it.
 
 Not touched, per issue #907's own non-goals: `check_adversarial_coverage`
 itself (the correction is to the claim about it, not the check), the pinned

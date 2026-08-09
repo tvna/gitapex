@@ -35,12 +35,23 @@ fixture corpus over time, not a smaller gate.
 
 Exclusion rule for this arithmetic, stated once so the figures above can be
 checked against the Assignment section below (gitapex#907): every listed
-fixture is counted in exactly one of the additions above, except
-`dispatch-required-negative-control.yaml`, which is listed in train for
-split-listing consistency with `normal.yaml` rather than as a declared
-category addition. The Assignment section therefore lists one more train
-fixture than the declared train figure, and exactly one. No gate checks this
-reconciliation; it is convention-enforced.
+fixture, in every split, is counted in exactly one of the additions above,
+except the one named on the declaration line below. Verified per split, not
+only for train: the Assignment section lists 28 unique train fixtures against
+the declared 27 (the single exclusion), and 30 selection and 12 test fixtures
+against the declared 30 and 12 exactly.
+
+Split-arithmetic exclusions: `dispatch-required-negative-control.yaml` -- listed
+in train for split-listing consistency with `normal.yaml` rather than as a
+declared category addition.
+
+That line is machine-readable, not decoration:
+`.github/scripts/gitapex_gate_split_fixture_coverage.py`'s Check D parses the
+declared partition and this exclusion list, then asserts each split's unique
+listed count minus its exclusions equals the declared figure. It also rejects
+an exclusion naming a fixture the Assignment section does not list, so the
+waiver cannot rot into a blanket one. This reconciliation is gate-enforced, not
+convention-enforced.
 
 ## Assignment
 

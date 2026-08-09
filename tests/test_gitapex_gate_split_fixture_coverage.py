@@ -505,6 +505,143 @@ def test_explaining_the_work_skill_md_actually_has_section_headings():
 
 
 # ---------------------------------------------------------------------------
+# parse_declared_partition / parse_arithmetic_exclusions /
+# check_partition_arithmetic (Check D, issue #907)
+# ---------------------------------------------------------------------------
+
+_PARTITION_SPLIT_MD_TEMPLATE = """\
+# Held-out split for widget-polisher
+
+## Corpus size
+
+... combines a 1:2:1 base partition with a 1:0:0 addition, {declaration}.
+
+{exclusion_line}
+
+## Assignment
+
+- **train** (motivates edits): `a-train.yaml`, `b-train.yaml`.
+- **selection** (gates acceptance): `edge.yaml`, `c-selection.yaml`.
+- **test** (read once): `d-test.yaml`.
+"""
+
+
+def _partition_split_md(declaration: str = "for a resulting 2:2:1 partition", exclusion_line: str = "") -> str:
+    return _PARTITION_SPLIT_MD_TEMPLATE.format(declaration=declaration, exclusion_line=exclusion_line)
+
+
+def test_parse_declared_partition_reads_the_prose_figures():
+    assert gate.parse_declared_partition(_partition_split_md()) == (2, 2, 1)
+
+
+def test_parse_declared_partition_none_when_no_declaration():
+    assert gate.parse_declared_partition(_split_md("| `edge.yaml` | 1.0 | 1.0 |\n")) is None
+
+
+def test_parse_declared_partition_last_declaration_wins():
+    text = "for a resulting 1:1:1 partition. Superseded: for a resulting 4:5:6 partition."
+    assert gate.parse_declared_partition(text) == (4, 5, 6)
+
+
+def test_parse_arithmetic_exclusions_none_when_line_absent():
+    assert gate.parse_arithmetic_exclusions(_partition_split_md()) is None
+
+
+def test_parse_arithmetic_exclusions_empty_set_for_explicit_none():
+    text = _partition_split_md(exclusion_line="Split-arithmetic exclusions: none")
+    assert gate.parse_arithmetic_exclusions(text) == set()
+
+
+def test_parse_arithmetic_exclusions_reads_named_fixtures():
+    text = _partition_split_md(exclusion_line="Split-arithmetic exclusions: `a-train.yaml`, `d-test.yaml` -- why")
+    assert gate.parse_arithmetic_exclusions(text) == {"a-train.yaml", "d-test.yaml"}
+
+
+def test_check_partition_arithmetic_passes_when_figures_reconcile():
+    text = _partition_split_md(exclusion_line="Split-arithmetic exclusions: none")
+    assert gate.check_partition_arithmetic(pathlib.Path("split.md"), text) is None
+
+
+def test_check_partition_arithmetic_skips_a_file_declaring_no_partition():
+    text = _split_md("| `edge.yaml` | 1.0 | 1.0 |\n")
+    assert gate.check_partition_arithmetic(pathlib.Path("split.md"), text) is None
+
+
+def test_check_partition_arithmetic_flags_a_missing_exclusion_line():
+    offender = gate.check_partition_arithmetic(pathlib.Path("split.md"), _partition_split_md())
+    assert offender is not None
+    assert "Split-arithmetic exclusions:" in offender
+
+
+def test_check_partition_arithmetic_flags_the_pre_907_shape():
+    # The exact defect this check exists to catch: one more listed fixture
+    # than the declared figure, with no exclusion accounting for it.
+    text = _partition_split_md(
+        declaration="for a resulting 1:2:1 partition",
+        exclusion_line="Split-arithmetic exclusions: none",
+    )
+    offender = gate.check_partition_arithmetic(pathlib.Path("split.md"), text)
+    assert offender is not None
+    assert "declared train figure 1" in offender
+    assert "2 unique train fixture(s)" in offender
+    assert "with no exclusion here" in offender
+
+
+def test_check_partition_arithmetic_accepts_a_declared_exclusion():
+    text = _partition_split_md(
+        declaration="for a resulting 1:2:1 partition",
+        exclusion_line="Split-arithmetic exclusions: `b-train.yaml` -- listing consistency only",
+    )
+    assert gate.check_partition_arithmetic(pathlib.Path("split.md"), text) is None
+
+
+def test_check_partition_arithmetic_names_the_exclusion_in_a_still_failing_split():
+    text = _partition_split_md(
+        declaration="for a resulting 2:2:1 partition",
+        exclusion_line="Split-arithmetic exclusions: `b-train.yaml` -- listing consistency only",
+    )
+    offender = gate.check_partition_arithmetic(pathlib.Path("split.md"), text)
+    assert offender is not None
+    assert "excluding b-train.yaml" in offender
+
+
+def test_check_partition_arithmetic_flags_a_stale_exclusion():
+    text = _partition_split_md(exclusion_line="Split-arithmetic exclusions: `gone.yaml` -- removed long ago")
+    offender = gate.check_partition_arithmetic(pathlib.Path("split.md"), text)
+    assert offender is not None
+    assert "stale exclusion" in offender
+
+
+def test_check_partition_arithmetic_flags_a_selection_mismatch():
+    text = _partition_split_md(
+        declaration="for a resulting 2:5:1 partition",
+        exclusion_line="Split-arithmetic exclusions: none",
+    )
+    offender = gate.check_partition_arithmetic(pathlib.Path("split.md"), text)
+    assert offender is not None
+    assert "declared selection figure 5" in offender
+
+
+def test_check_partition_arithmetic_flags_a_test_mismatch():
+    text = _partition_split_md(
+        declaration="for a resulting 2:2:9 partition",
+        exclusion_line="Split-arithmetic exclusions: none",
+    )
+    offender = gate.check_partition_arithmetic(pathlib.Path("split.md"), text)
+    assert offender is not None
+    assert "declared test figure 9" in offender
+
+
+def test_check_partition_arithmetic_counts_unique_names_not_mentions():
+    # A parenthetical cross-reference repeating a name must not inflate the
+    # count -- this repository's real Assignment bullets do exactly that.
+    text = _partition_split_md(exclusion_line="Split-arithmetic exclusions: none").replace(
+        "`b-train.yaml`.", "`b-train.yaml` (see `a-train.yaml` in eval-status.md)."
+    )
+    assert gate.check_partition_arithmetic(pathlib.Path("split.md"), text) is None
+
+
+# ---------------------------------------------------------------------------
 # main()
 # ---------------------------------------------------------------------------
 
@@ -633,3 +770,37 @@ def test_every_real_split_md_passes_check_c():
     for path in _REAL_SPLIT_MD_FILES:
         offender = gate.check_exercises_declaration_coverage(path, path.read_text(encoding="utf-8"), REPO_ROOT)
         assert offender is None, offender
+
+
+def test_every_real_split_md_passes_check_d():
+    assert _REAL_SPLIT_MD_FILES, "expected at least one real evals/*/split.md file"
+    for path in _REAL_SPLIT_MD_FILES:
+        offender = gate.check_partition_arithmetic(path, path.read_text(encoding="utf-8"))
+        assert offender is None, offender
+
+
+def test_evaluating_skill_quality_split_md_actually_declares_a_partition():
+    # A sanity check that the self-validation test above isn't vacuously
+    # true because no real file ever triggers Check D at all.
+    path = REPO_ROOT / "evals" / "evaluating-skill-quality" / "split.md"
+    text = path.read_text(encoding="utf-8")
+    assert gate.parse_declared_partition(text) == (27, 30, 12)
+    assert gate.parse_arithmetic_exclusions(text) == {"dispatch-required-negative-control.yaml"}
+
+
+def test_main_reports_a_check_d_partition_offender(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]):
+    # Drives Check D through main(), so the offender-collection path there is
+    # exercised and not only check_partition_arithmetic in isolation.
+    split_md = tmp_path / "evals" / "widget-polisher" / "split.md"
+    split_md.parent.mkdir(parents=True)
+    split_md.write_text(
+        _partition_split_md(
+            declaration="for a resulting 1:2:1 partition",
+            exclusion_line="Split-arithmetic exclusions: none",
+        ),
+        encoding="utf-8",
+    )
+    rc = gate.main(["--split-md", str(split_md), "--repo-root", str(tmp_path)])
+    assert rc == 1
+    stderr = capsys.readouterr().err
+    assert "declared train figure 1" in stderr
