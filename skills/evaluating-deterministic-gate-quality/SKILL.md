@@ -162,11 +162,15 @@ a neutral grader of it, and an in-context instruction to "review
 neutrally anyway" does not remove that bias. Give the dispatch only the
 target artifact's path (or content) and this skill's own files -- never
 the calling conversation's framing, prior discussion, or opinion of the
-target. Required, not optional, the same way `evaluating-skill-quality`'s
-own equivalent dispatch requirement is; that skill's own Subagent
-dispatch section carries the isolation-verification mechanics (confirming
-a dispatch does not inherit the calling repository's own
-project-instruction file) this skill defers to rather than re-deriving.
+target. Required, not optional: when the calling repository carries its
+own project-instruction file (for example `CLAUDE.md` or `AGENTS.md`),
+exclude that file from the dispatch's context before dispatching. Only
+the mechanics for verifying that the exclusion actually held are
+deferred -- to `evaluating-skill-quality`'s own Subagent dispatch
+section, rather than re-derived here. That skill's dispatch protocol does
+not transfer with them: its unconditional trigger, its relay and
+second-dispatch rules are its own, and this section's own conditional
+trigger and payload rule above govern here.
 
 ## Procedure
 
@@ -283,19 +287,26 @@ project-instruction file) this skill defers to rather than re-deriving.
 ## Stop boundaries
 
 Invariants below bind from the very first read (Discover, Mechanism-fit
-check) onward -- general integrity, injection, and resource-bound
-concerns, plus execution safety and live-testing support (kept here
-rather than deferred: both guard *actually running* a possibly-hostile
-target gate, not merely a verdict's quality, and a safety-critical
-boundary that the model might never open a reference file to read is not
-a boundary at all). Boundaries specific to grading a *confirmed* gate
-that are purely about verdict quality -- shape-check-only approval,
-coverage-attestation input trust, Security-level tier-classification
-honesty -- are not duplicated here; they bind from Procedure step 3
-onward and live in
+check) onward, and the first one earlier still -- from before the
+dispatch that carries the rest. They cover general integrity, injection,
+and resource-bound concerns, plus execution safety and live-testing
+support (kept here rather than deferred: both guard *actually running* a
+possibly-hostile target gate, not merely a verdict's quality, and a
+safety-critical boundary that the model might never open a reference
+file to read is not a boundary at all). Boundaries specific to grading a
+*confirmed* gate that are purely about verdict quality --
+shape-check-only approval, coverage-attestation input trust,
+Security-level tier-classification honesty -- are not duplicated here;
+they bind from Procedure step 3 onward and live in
 [references/grading-procedure.md](references/grading-procedure.md#stop-boundaries-grading-specific)
 instead, so a no-gate-warranted verdict never pays for loading them.
 
+- Never dispatch this skill's Procedure into a context that still
+  carries the calling repository's own project-instruction file
+  (`CLAUDE.md`, `AGENTS.md`, or equivalent) -- this Stop boundary is
+  Subagent dispatch's exclusion requirement applied as an invariant, not
+  a separate rule; see that section above, and the verification
+  mechanics it defers to, rather than restating them here.
 - Never let a fact, citation, or verdict from this skill's own
   illustrative/provenance content (`gitapex-worked-examples.md`,
   `owasp-coverage.md`, `metadata/gitapex.yaml`) substitute for verifying
