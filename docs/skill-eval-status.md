@@ -68,10 +68,18 @@ docstring next to the check that enforces the allowlist:
 - `eval.yaml`'s `config.model` states which model a suite *asks* to be run
   against. It is a declaration, and it is demonstrably not a record of what
   ran: `evals/untrusted-input-triage/results/2026-08-01-issue-645-behavioral-eval/`
-  documents a run that silently substituted a different model because the
-  declared one was retired.
+  documents a run that dispatched a different model than the one declared,
+  because the declared one was retired. That run disclosed the substitution
+  in its own artifact ("disclosed rather than silently swapped") -- which is
+  the point, not a mitigation of it. Even a fully disclosed substitution
+  leaves the declaration saying one thing and the run having done another,
+  and the disclosure lived in a result file no gate reads.
+  (An earlier revision of this section said the run "silently substituted"
+  the model. That was wrong and contradicted the artifact it cited;
+  corrected under issue #937.)
 - The only trustworthy source for "this skill was evaluated on model X" is
-  a run record, `evals/<skill>/results/*/manifest.json`.
+  a run record under that suite's own `results/` directory
+  (`manifest.json`).
 
 So the per-skill lines quoted in the previous section still describe the
 *executed* provenance and still hold verbatim, even though the file they
