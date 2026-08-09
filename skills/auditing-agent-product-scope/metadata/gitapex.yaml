@@ -18,7 +18,7 @@ spec:
   skillDependencies:
     requires: []
     relatedTo:
-      - auditing-git-hosting-surface
+      - scanning-attack-surfaces
       - evaluating-skill-quality
   executionRequirements:
     tools:

@@ -1,9 +1,9 @@
 # gitapex-specific cross-links
 
-Loaded by Step 2 only when this copy of the skill's own files lives in
-the gitapex repository -- see SKILL.md's Portability note for why that
-is a different condition from "the repository being audited is gitapex,"
-and for what a copy vendored elsewhere does instead (its own hosting
+Loaded by step B2 only when this copy of the skill's own files lives in
+the gitapex repository -- see SKILL.md's "Generalize and substitute"
+note for why that is a different condition from "the repository being
+audited is gitapex," and for what a copy vendored elsewhere does instead (its own hosting
 repository's tracking issue and instruction file where they exist,
 omitted where they don't). A vendored copy never reads this file.
 

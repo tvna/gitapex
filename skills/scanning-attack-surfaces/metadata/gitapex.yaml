@@ -113,19 +113,32 @@ spec:
     - kind: deferral
       anchor: "https://github.com/tvna/gitapex/issues/843"
       summary: "The scanning-* family fit named above (aspirational, pending absorption) is this tracking issue's own item 5: auditing-git-hosting-surface's full capability absorbed into this skill, including shell: [zizmor], sequenced after item 3 (this rename) and item 4 (scanning-ci-workflows) both land. Not yet filed as its own sub-issue at the time of this rename."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/848"
+      summary: "Absorbed auditing-git-hosting-surface's full capability and deleted that standalone skill: platform detection, both platform checklists, scripts/gitapex_scan_unpinned_actions.py and its test, the Covered/Partial/Gap discipline, and its four eval tasks. Recorded here rather than in spec.lifecycle.renamedFrom, a single scalar already holding vetting-attack-surface; the diff adds zero skill directories, so the rename-lifecycle gate's retirement carve-out applies and it does not fire."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/848"
+      summary: "Resolved the merged-verdict-style question the absorbing issue named as its own open design risk: the two vocabularies stay distinct as Mode A (exposure-minimal/excess, privilege-minimal/excess, indeterminate; one artifact) and Mode B (Covered/Partial/Gap; a repository's standing hosting configuration), selected by target kind rather than preference, sharing one discipline (per item, never aggregate; never upgrade an unproven item; read-only). Neither was flattened into the other."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/848"
+      summary: "Declared shell: [zizmor], backing the least-privilege check for GitHub Actions workflow and composite-action artifacts only, invoked as zizmor --offline --no-progress --format=json. Every other artifact type has no zizmor coverage and stays manual static reading; SKILL.md requires the report to name which applied. No network block is declared: --offline is mandatory and enforced by a Stop boundary, matching scanning-ci-workflows' contract."
+    - kind: corroboration
+      anchor: "method:scanning-attack-surfaces"
+      summary: "The zizmor backing is demonstrated, not asserted: a live run against .github/workflows/sync-agent-instructions.yml reported github-app at High confidence ('app token inherits blanket installation permissions', line 91) -- privilege-excess, where a static read of that file's own 'permissions: contents: read' block alone would have said minimal. Transcribed in references/worked-examples.md, which discloses the run used zizmor 1.29.0 from PyPI, not the pinned nixpkgs version."
   skillDependencies:
     requires:
       - evaluating-skill-quality
     relatedTo:
       - evaluating-deterministic-gate-quality
       - screening-a-low-trust-contribution
-      - auditing-git-hosting-surface
+      - scanning-ci-workflows
   executionRequirements:
     tools:
       read:
         - files
       write: []
-      shell: []
+      shell:
+        - zizmor
   lifecycle:
     renamedFrom: vetting-attack-surface
     experimental:

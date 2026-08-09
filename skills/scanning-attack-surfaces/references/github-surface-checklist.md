@@ -1,6 +1,6 @@
 # GitHub hosting-surface checklist (GitHub runs only)
 
-Read this ONLY when Step 1 detected GitHub. Do not open the GitLab
+Read this ONLY when step B1 detected GitHub. Do not open the GitLab
 reference in the same run.
 
 Coverage verified directly against the `mcp__github__*` tools available in
@@ -21,9 +21,9 @@ round a Gap up because a workaround seems achievable in the moment.
 | 8 | Collaborator/permission drift | **Covered.** `mcp__github__list_repository_collaborators` (with an `affiliation` filter) returns exactly this. | Call the tool; report its result. |
 
 Every **Gap** row above cross-links the tracking issue for
-approved-but-unbuilt tooling per SKILL.md Step 3 -- see the Portability
-note there for whose tracking issue that is, and
-`references/gitapex-cross-links.md` (loaded in Step 2, when this is
+approved-but-unbuilt tooling per SKILL.md step B3 -- see the "Generalize
+and substitute" note there for whose tracking issue that is, and
+`references/gitapex-cross-links.md` (loaded in step B2, when this is
 gitapex's own copy) for gitapex's own target and the unpinned-actions
 script's borrowed shape (item 3).
 

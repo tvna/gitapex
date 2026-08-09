@@ -7,6 +7,11 @@ portable checks in `SKILL.md`, not an assumption that a target repository
 being reviewed has the same layout. Substitute the target's actual
 equivalents; do not expect these specific files to exist elsewhere.
 
+## Contents
+
+1. [Worked example: `.github/workflows/post-merge-retro.yml`](#worked-example-githubworkflowspost-merge-retroyml)
+2. [Worked example: a zizmor-backed least-privilege finding](#worked-example-a-zizmor-backed-least-privilege-finding)
+
 ## Worked example: `.github/workflows/post-merge-retro.yml`
 
 **Exposure minimization.** The create-issue call (`open_retro_issue` in
@@ -49,3 +54,58 @@ architectural feature." **Verdict: privilege-minimal** -- the granted
 scope traces exactly to the two actions performed, and the boundary's own
 rationale is already documented in the artifact itself rather than left
 for a reviewer to infer.
+
+## Worked example: a zizmor-backed least-privilege finding
+
+Target: `.github/workflows/sync-agent-instructions.yml`. This example
+exists to show the "Mechanical backing: zizmor" sub-case of the
+least-privilege check producing a finding a static read of the
+`permissions:` block alone would have called clean.
+
+**The run, transcribed.** zizmor `1.29.0`, installed from PyPI in an
+ephemeral session where the Nix-provisioned toolchain was unavailable --
+recorded here because it is *not* the version `flake.nix`'s pinned
+nixpkgs revision provides, and a version difference is exactly the kind
+of thing this file must state rather than let a reader assume:
+
+```console
+$ zizmor --offline --no-progress --format=plain \
+    .github/workflows/sync-agent-instructions.yml
+error[github-app]: dangerous use of GitHub App tokens
+  --> .github/workflows/sync-agent-instructions.yml:91:15
+   |
+91 |         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1  # v3.2.0
+   |               ^^^ app token inherits blanket installation permissions
+   |
+   = note: audit confidence -> High
+   = tip: specify at least one `permission-<name>` input to limit the token's permissions
+exit=14
+```
+
+(Two `template-injection` findings at Informational severity were also
+reported and are not restated here; they belong to the exposure side of
+a full review, not to this one check.)
+
+**Why the manual read alone would have missed it.** The workflow declares
+`permissions: contents: read` at the top level and nothing broader. Read
+on its own, that is a privilege-minimal declaration. But the job does not
+operate under that token: it mints a GitHub App installation token
+(`actions/create-github-app-token`) and hands it to the publish step as
+`GH_TOKEN`. That token's scope is whatever the App installation grants,
+which the workflow file never names and the `permissions:` block does not
+constrain. The `permission-<name>` inputs that would narrow it are absent.
+
+**Verdict: privilege-excess** -- the granted scope is the App
+installation's full permission set, while the observed use is exactly
+three operations (create a branch, create a signed commit via
+`createCommitOnBranch`, open one pull request). The specific over-broad
+grant is the unconstrained installation token at line 91, cited from
+zizmor's own `github-app` audit at High confidence, not from this
+review's own reasoning about what the App can do.
+
+**What this example does not license.** Reporting is still per item: the
+`contents: read` grant on the checkout step remains privilege-minimal and
+is reported as such on its own line. The finding is a report, not an
+authorization to add `permission-<name>` inputs -- narrowing an App
+installation's scope is an operator decision, and this skill takes no
+write action.
