@@ -129,18 +129,28 @@ def test_null_workflow_dispatch_raises_the_typed_error(tmp_path: pathlib.Path) -
 
 
 def test_null_workflow_dispatch_exits_one_through_main(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """The same defect at the boundary that actually matters: `main()` must
-    report and return 1, not propagate. Before the fix this raised."""
-    workflow = REPO_ROOT / "tests" / "does-not-exist-null-dispatch.yml"
+    report and return 1, not propagate. Before the fix this raised.
+
+    Fully isolated under `tmp_path` -- both the suite tree and the workflow --
+    after review on PR #938: an earlier revision monkeypatched only the
+    workflow path, so `main()` still walked the real `evals/` tree first, and
+    asserted only the generic heading. Any `DeclarationReadError` from
+    anywhere would have satisfied it, including one the real tree started
+    raising for an unrelated reason. That is the same assert-something-happened
+    weakness this PR exists to remove; the assertion now names the specific
+    diagnostic. It also no longer writes into `REPO_ROOT/tests`.
+    """
+    evals_dir = _write_suite(tmp_path, "claude-sonnet-5")
+    workflow = _write_workflow(tmp_path, "on:\n  workflow_dispatch:\njobs: {}\n")
+    monkeypatch.setattr(gate, "EVALS_DIR", evals_dir)
     monkeypatch.setattr(gate, "MATRIX_WORKFLOW_PATH", workflow)
-    workflow.write_text("on:\n  workflow_dispatch:\njobs: {}\n", encoding="utf-8")
-    try:
-        assert gate.main([]) == 1
-        assert "declared model allowlist:" in capsys.readouterr().out
-    finally:
-        workflow.unlink()
+    assert gate.main([]) == 1
+    out = capsys.readouterr().out
+    assert "declared model allowlist:" in out
+    assert "has no workflow_dispatch input named 'models'" in out
 
 
 def test_describe_reports_against_the_mappings_it_was_given() -> None:
@@ -229,6 +239,23 @@ def test_hardcoded_env_model_is_graded(tmp_path: pathlib.Path) -> None:
     assert len(findings) == 1
     assert "hardcoded env HF_X_MODEL" in findings[0]
     assert "FIXTURE-RETIREMENT" in findings[0]
+
+
+@pytest.mark.parametrize("literal", ["null", "123", "[a, b]"])
+def test_non_string_hardcoded_env_model_raises(tmp_path: pathlib.Path, literal: str) -> None:
+    """Raised in review on PR #938 and confirmed live against that revision:
+    `HF_X_MODEL: null` and `HF_X_MODEL: 123` were both dropped silently, so a
+    malformed committed declaration produced no finding at all -- while the
+    suite-side walk raises for exactly the same shape. The two halves of this
+    gate must agree on what a non-string model means."""
+    path = _write_workflow(
+        tmp_path,
+        _MINIMAL_WORKFLOW.replace(
+            "jobs: {}", f"jobs:\n  j:\n    steps:\n      - env:\n          HF_X_MODEL: {literal}\n"
+        ),
+    )
+    with pytest.raises(gate.DeclarationReadError, match="hardcoded env HF_X_MODEL is"):
+        gate._hardcoded_env_models(path)
 
 
 def test_unreadable_workflow_raises_from_the_env_walk_too(tmp_path: pathlib.Path) -> None:

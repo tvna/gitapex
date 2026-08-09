@@ -349,6 +349,14 @@ def _hardcoded_env_models(workflow_path: pathlib.Path) -> list[tuple[str, str]]:
     value containing ``${{`` is skipped: that is an expression resolved at
     dispatch time from an input or secret, which is operator-supplied and
     carries the same live-probe exemption the ``models`` input does.
+
+    A ``*_MODEL`` key whose value is not a string at all raises instead of
+    being skipped. Skipping it would have been the same silent-drop shape the
+    suite-side walk already refuses for exactly this input (``_grade_document``
+    raises on a non-string model), so the two halves of this gate would have
+    disagreed about what a malformed committed declaration means -- caught in
+    review on PR #938 and confirmed live: ``HF_X_MODEL: null`` and
+    ``HF_X_MODEL: 123`` both returned no finding at all.
     """
     try:
         document = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
@@ -362,12 +370,13 @@ def _hardcoded_env_models(workflow_path: pathlib.Path) -> list[tuple[str, str]]:
             environment = node.get("env")
             if isinstance(environment, dict):
                 for name, value in environment.items():
-                    if (
-                        isinstance(name, str)
-                        and name.endswith("_MODEL")
-                        and isinstance(value, str)
-                        and "${{" not in value
-                    ):
+                    if not (isinstance(name, str) and name.endswith("_MODEL")):
+                        continue
+                    if not isinstance(value, str):
+                        raise DeclarationReadError(
+                            f"{workflow_path.name}: hardcoded env {name} is {type(value).__name__}, expected a string"
+                        )
+                    if "${{" not in value:
                         found.append((name, value))
             for value in node.values():
                 walk(value)
