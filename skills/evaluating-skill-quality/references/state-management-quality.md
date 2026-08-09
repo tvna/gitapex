@@ -696,10 +696,10 @@ them, and it is deliberately weaker than the two pinned ones: product
 documentation drifts, and a quotation whose date is far behind the reader's
 own is a claim to re-verify, not a settled fact.
 
-The `[tps]` quotation was verified against the live page at the URL below on
-2026-08-09, and carries the same drift caveat as the three above: a corporate
-page can be restructured or reworded, so a reader far past that date should
-re-check it rather than treat it as settled. The `[sgse]` and `[ebp]`
+The `[tps]` quotation carries the same caveat as those three: no immutable
+per-revision URL to pin, so live verification -- at the date the reference
+definition below names -- is the strongest citation available, weaker than a
+pinned one. The `[sgse]` and `[ebp]`
 quotations are this repository's own skills, quoted as marked illustration of
 the minimality lens only -- never as a rule this file imports -- and verified
 against the pinned revision the reference definitions below name.
@@ -748,6 +748,6 @@ Every inline `[label]` citation above resolves to the source below.
 [subagents]: https://code.claude.com/docs/en/sub-agents "Claude Code: Subagents"
 [agentteams]: https://code.claude.com/docs/en/agent-teams "Claude Code: Agent teams"
 [bestpractices]: https://code.claude.com/docs/en/best-practices "Claude Code: Best practices"
-[tps]: https://global.toyota/en/company/vision-and-philosophy/production-system/ "Toyota Motor Corporation: Toyota Production System"
+[tps]: https://global.toyota/en/company/vision-and-philosophy/production-system/ "Toyota Motor Corporation: Toyota Production System, verified live 2026-08-09"
 [sgse]: https://github.com/tvna/gitapex/blob/4c1739157c7fced42501944a61e0c42231d2ed9d/skills/scorer-gated-skill-edits/SKILL.md "gitapex scorer-gated-skill-edits SKILL.md at pinned revision 4c17391"
 [ebp]: https://github.com/tvna/gitapex/blob/4c1739157c7fced42501944a61e0c42231d2ed9d/skills/executing-a-branch-plan/references/domain-events-and-failure-handling.md "gitapex executing-a-branch-plan domain-events reference at pinned revision 4c17391"
