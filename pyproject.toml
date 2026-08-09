@@ -24,7 +24,7 @@ dev = [
     # cleaned against (issue #678) was measured with ruff 0.15.x, so resolving
     # upstream's range here would enforce a different rule set than the one
     # proved clean. Re-measure the finding set when raising this bound.
-    "ruff>=0.15,<0.16",
+    "ruff>=0.16.1,<0.17",
     # Issue #727: pinned one minor series each, same shape as the ruff pin
     # above -- the cyclomatic-complexity-floor CI gate's thresholds
     # (.github/workflows/test.yml) were measured against exactly these
