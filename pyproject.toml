@@ -322,6 +322,15 @@ markers = [
 # directly imported (e.g. hooks/gitapex_check_pr_issue_acm_disclosure.py's own
 # opener-injection unit tests) via --cov-report=term-missing, without gating.
 [tool.coverage.run]
+# Issue #953: branch coverage, not statements alone. Two consecutive merge
+# cycles (PR #931 / retrospective #935, PR #938 / retrospective #945) shipped a
+# defect that was in both cases a branch never taken inside a line reported as
+# fully covered -- statement coverage read 100% on the offending file at merge
+# in both. Set here as a config key rather than as `--cov-branch` in
+# `addopts` above, so a direct `coverage run` invocation (which never reads
+# pytest's addopts) measures branches too and there is no per-invocation flag a
+# contributor can forget.
+branch = true
 source = [".github/scripts", "skills/battle-testing-a-skill/scripts", "skills/scorer-gated-skill-edits/scripts", "skills/evaluating-skill-quality/scripts", "skills/auditing-agent-product-scope/scripts", "skills/setup-gitapex-toolchain/scripts", "skills/evaluating-deterministic-gate-quality/scripts", "evals/scripts"]
 
 [tool.coverage.report]
