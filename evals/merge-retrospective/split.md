@@ -32,6 +32,16 @@ adding class 9 (see below) after a Codex review found the original
 band is not renegotiated back down, since the alternative is leaving a
 named coverage gap open.
 
+Split-arithmetic exclusions: none
+
+Every fixture the Assignment section lists is counted in the `9:6:3`
+declared above -- 9 train, 6 selection, 3 test, matching exactly, with no
+listing-consistency entry sitting outside the arithmetic. That line is
+machine-readable: `.github/scripts/gitapex_gate_split_fixture_coverage.py`'s
+Check D (gitapex#907) parses the declared partition and this line, then
+asserts each split's unique listed count minus its declared exclusions
+equals the declared figure.
+
 ## Equivalence classes
 
 Nine equivalence classes cover the taxonomy's three categories

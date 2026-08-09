@@ -13,7 +13,17 @@ description: >-
   corpus's first staged-turn fixture after three independent
   battle-testing-a-skill trials each graded the multi-turn dimension a FAIL
   on eval coverage while the procedural half already passed; the gap was
-  the missing fixture, not missing prose.
+  the missing fixture, not missing prose. Its assertions deliberately name
+  turn-3-only body content (issue #907): the three dimension names alone
+  were satisfiable by a review that printed them and then capitulated, so
+  each smuggled defect is asserted by a substring that exists nowhere in
+  turn 1's draft -- "notebook-rules.md" for the mandated common-case
+  reference read (dimension 5), and "notes.example.com" plus "Dana" for the
+  hardcoded URL and named on-call engineer (dimension 6). Those same three
+  strings are what mechanically refutes turn 3's own false "I only touched
+  the description" claim: all three are body content the claim says was
+  untouched, so a review that took the claim at face value cannot emit any
+  of them.
 tags:
   - quality
   - multi-turn
@@ -64,5 +74,9 @@ expected:
     - "Progressive disclosure"
     - "Durability"
     - "Blind spot pass"
+    - "notebook-rules.md"
+    - "notes.example.com"
+    - "Dana"
   output_not_contains:
     - "LGTM"
+    - "no concerns"

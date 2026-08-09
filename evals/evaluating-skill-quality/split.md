@@ -33,6 +33,45 @@ named explicitly as a deviation from the 2:1:7 default. The
 honest minimal groundwork, per that same worked example, is a larger
 fixture corpus over time, not a smaller gate.
 
+Exclusion rule for this arithmetic, stated once so the figures above can be
+checked against the Assignment section below (gitapex#907): every listed
+fixture, in every split, is counted in exactly one of the additions above,
+except the one named on the declaration line below. Verified per split, not
+only for train: the Assignment section lists 28 unique train fixtures against
+the declared 27 (the single exclusion), and 30 selection and 12 test fixtures
+against the declared 30 and 12 exactly.
+
+Split-arithmetic exclusions: `dispatch-required-negative-control.yaml` -- listed
+in train for split-listing consistency with `normal.yaml` rather than as a
+declared category addition.
+
+That line is machine-readable, not decoration:
+`.github/scripts/gitapex_gate_split_fixture_coverage.py`'s Check D parses the
+declared partition and this exclusion list, then asserts each split's unique
+listed count minus its exclusions equals the declared figure. It also rejects
+an exclusion naming a fixture no split's bullet lists, a malformed or duplicated
+exclusion line, two disagreeing partition declarations, two `## Assignment`
+headings, and the same fixture appearing in more than one split.
+
+Precisely what that buys, stated rather than overclaimed: the reconciliation is
+now **machine-detected** on every pull request touching this file, where before
+it rested on a reader noticing. It is not proven to be merge-*blocking* --
+whether a red check blocks the merge button depends on branch-protection
+configuration that no in-repo tooling can read, the same open item
+`docs/superpowers/specs/2026-07-21-skill-audit-merge-gate-design.md` already
+records for this repository's other gates. An earlier draft of this paragraph
+said "gate-enforced, not convention-enforced", which an independent gate review
+correctly called an overclaim.
+
+Both declarations above must sit in this header region, before the
+`## Assignment` heading, and outside any fenced code block -- the gate reads
+nothing else. That is why the illustration below is fenced: it shows the
+convention without being read as a second, conflicting declaration.
+
+```markdown
+Split-arithmetic exclusions: `some-fixture.yaml` -- why it is not counted
+```
+
 ## Assignment
 
 - **train** (motivates edits; read for evidence, never scored for
@@ -63,8 +102,11 @@ fixture corpus over time, not a smaller gate.
   `multi-turn-settled-dimension-relaxation-train.yaml` (issue #332's ACM-7
   audit round -- see that entry in `eval-status.md`; a regression fixture
   for a safeguard this skill's own `references/adversarial-self-audit.md`
-  already states, not scored for acceptance here, added on the same
-  split-listing-consistency footing as `dispatch-required-negative-control.yaml`).
+  already states, and, like every other train fixture here, read for
+  evidence rather than scored for acceptance. Counted in the `1:0:0`
+  multi-turn-relaxation addition above, so it does not share
+  `dispatch-required-negative-control.yaml`'s excluded footing -- issue #907
+  dropped an earlier claim here that it did).
 - **selection** (gates acceptance; scored before/after a candidate edit,
   strict improve-or-reject, ties rejected): `edge.yaml`,
   `mechanism-fit-subagent.yaml`, `third-party-not-authoritative.yaml`,
