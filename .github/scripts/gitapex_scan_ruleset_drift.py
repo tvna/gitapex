@@ -79,6 +79,7 @@ from _gitapex_rulesets import (  # same bootstrap
     render_projection_diff,
     required_check_contexts,
     resolve_live_ruleset,
+    unobservable_keys,
 )
 
 EXIT_IN_SYNC = 0
@@ -121,16 +122,38 @@ def render_required_checks_report(missing: list[str], ruleset_name: str) -> str:
     )
 
 
-def render_full_report(diff: str, ruleset_name: str) -> str:
+def render_unobservable_note(unobserved: list[str]) -> str:
+    """Name the fields this credential could not read, on every run.
+
+    Printed whether the scan passed or failed. A scan that quietly narrowed what
+    it compared and still reported "matches" would be asserting more than it
+    checked -- the exact shape CLAUDE.md section 1 rules out. Saying it every
+    time also keeps the compensating control visible: the apply path holds the
+    read/write token and does verify these fields immediately after the write.
+    """
+    if not unobserved:
+        return ""
+    listed = ", ".join(f"`{key}`" for key in unobserved)
+    return (
+        "\n\n> [!NOTE]\n"
+        f"> Not compared: {listed}. GitHub returns `bypass_actors` only to a caller with **write**\n"
+        "> access to the ruleset, and this scan deliberately runs with the read-only `RULESETS_PAT`\n"
+        "> on the `ruleset-verify` Environment. The field is verified post-write by `Apply rulesets`,\n"
+        "> which holds the read/write token -- see docs/runbooks/rulesets.md."
+    )
+
+
+def render_full_report(diff: str, ruleset_name: str, unobserved: list[str] | None = None) -> str:
+    note = render_unobservable_note(unobserved or [])
     if not diff:
-        return f"Live ruleset `{ruleset_name}` matches its committed source of truth."
+        return f"Live ruleset `{ruleset_name}` matches its committed source of truth.{note}"
     return (
         f"Live ruleset `{ruleset_name}` has drifted from its committed source of truth "
         f"(`live` is what GitHub enforces now, `sot` is what git says it should):\n\n"
         f"```diff\n{diff}```\n\n"
         "Reconcile by dispatching `Apply rulesets`, or by opening a pull request that "
         "updates the committed JSON if the live state is the intended one -- "
-        "see docs/runbooks/rulesets.md."
+        f"see docs/runbooks/rulesets.md.{note}"
     )
 
 
@@ -153,8 +176,9 @@ def run(repo: str, sot_path: pathlib.Path, scope: str, fetch: Callable[[str], An
         missing = compare_required_checks(live, sot)
         code = EXIT_DRIFT if missing else EXIT_IN_SYNC
         return render_required_checks_report(missing, sot["name"]), code
-    diff = render_projection_diff(live, sot)
-    return render_full_report(diff, sot["name"]), EXIT_DRIFT if diff else EXIT_IN_SYNC
+    unobserved = unobservable_keys(live)
+    diff = render_projection_diff(live, sot, ignore_keys=unobserved)
+    return render_full_report(diff, sot["name"], unobserved), EXIT_DRIFT if diff else EXIT_IN_SYNC
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:

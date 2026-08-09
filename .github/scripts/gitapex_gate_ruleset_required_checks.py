@@ -323,7 +323,17 @@ def unconditional_pull_request_jobs(workflow_dir: pathlib.Path, default_branch: 
         types = _as_list(filters.get("types"))
         if types is not None and not _REQUIRED_ACTIVITY_TYPES.issubset({str(entry) for entry in types}):
             continue
-        for job_id, job in (document.get("jobs") or {}).items():
+        # `or {}` covered a missing or null `jobs:` but not a present one that
+        # is not a mapping (`jobs: 'text'`, `jobs: [a, b]`). That raised
+        # AttributeError straight past `main`'s `except RulesetGateError`,
+        # giving a raw traceback on the local pre-push run instead of this
+        # gate's own exit-2 path -- for a file actionlint would reject anyway.
+        # Skipping is fail-closed here: dropping a workflow's jobs can only make
+        # a required context look unreachable, which is a finding, never a pass.
+        workflow_jobs = document.get("jobs")
+        if not isinstance(workflow_jobs, dict):
+            continue
+        for job_id, job in workflow_jobs.items():
             name = _check_run_name(job_id, job)
             if name is not None:
                 jobs[name] = path.name

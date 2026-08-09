@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+import urllib.parse
 from typing import Any
 
 import _gitapex_rulesets
@@ -184,7 +185,11 @@ def paging_fetcher(pages: list[Any]) -> Any:
     """
 
     def fetch(url: str) -> Any:
-        page = int(url.rsplit("page=", 1)[1])
+        # Parsed as a query string rather than sliced off the end: the URL grew
+        # an `includes_parents` parameter after `page`, and a positional parse
+        # turned that into a ValueError inside the fake rather than a finding.
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
+        page = int(query["page"][0])
         return pages[page - 1] if page <= len(pages) else []
 
     return fetch
@@ -263,3 +268,106 @@ def test_find_subset_mismatches_reports_a_dropped_required_check() -> None:
 )
 def test_find_subset_mismatches_reports_a_type_change(expected: Any, actual: Any, fragment: str) -> None:
     assert fragment in _gitapex_rulesets.find_subset_mismatches(expected, actual)[0]
+
+
+def test_list_live_rulesets_excludes_parent_org_rulesets() -> None:
+    # GitHub documents `includes_parents` as defaulting to true, so the
+    # unqualified call also returns org/enterprise rulesets. A parent sharing
+    # the committed name makes the resolver refuse permanently; a parent-only
+    # match makes apply plan a PUT onto an id it cannot write.
+    seen: list[str] = []
+
+    def fetch(url: str) -> Any:
+        seen.append(url)
+        return []
+
+    _gitapex_rulesets.list_live_rulesets("o/r", fetch)
+    assert "includes_parents=false" in seen[0]
+
+
+def test_canonical_projection_sorts_required_status_checks() -> None:
+    # Sorting only the outer `rules` array left this list compared positionally,
+    # which is the same bug one level down.
+    def ruleset(contexts: list[str]) -> dict[str, Any]:
+        return {
+            "rules": [
+                {
+                    "type": "required_status_checks",
+                    "parameters": {"required_status_checks": [{"context": c} for c in contexts]},
+                }
+            ]
+        }
+
+    assert _gitapex_rulesets.canonical_projection(
+        ruleset(["ruff", "pytest"])
+    ) == _gitapex_rulesets.canonical_projection(ruleset(["pytest", "ruff"]))
+
+
+def test_canonical_projection_sorts_allowed_merge_methods() -> None:
+    def ruleset(methods: list[str]) -> dict[str, Any]:
+        return {"rules": [{"type": "pull_request", "parameters": {"allowed_merge_methods": methods}}]}
+
+    assert _gitapex_rulesets.canonical_projection(
+        ruleset(["merge", "squash"])
+    ) == _gitapex_rulesets.canonical_projection(ruleset(["squash", "merge"]))
+
+
+def test_canonical_projection_does_not_mutate_its_argument() -> None:
+    # Both callers pass their own live response and committed document; a
+    # comparison helper that rewrote either would make the result depend on
+    # which side was projected first.
+    original = {"rules": [{"type": "pull_request", "parameters": {"allowed_merge_methods": ["squash", "merge"]}}]}
+    snapshot = json.loads(json.dumps(original))
+    _gitapex_rulesets.canonical_projection(original)
+    assert original == snapshot
+
+
+def test_canonical_projection_leaves_unlisted_parameter_lists_in_order() -> None:
+    # The sort is an allowlist, not a blanket deep sort: a list whose order is
+    # meaningful must keep reporting a re-ordering as the difference it is.
+    ordered = {"rules": [{"type": "x", "parameters": {"some_ordered_list": ["b", "a"]}}]}
+    projected = _gitapex_rulesets.canonical_projection(ordered)
+    assert projected["rules"][0]["parameters"]["some_ordered_list"] == ["b", "a"]
+
+
+def test_unobservable_keys_names_bypass_actors_when_the_api_withheld_it() -> None:
+    # GitHub returns bypass_actors only to a caller with write access to the
+    # ruleset, and the verify credential is Administration:Read by design.
+    live = {key: value for key, value in SOT.items() if key != "bypass_actors"}
+    assert _gitapex_rulesets.unobservable_keys(live) == ["bypass_actors"]
+
+
+def test_unobservable_keys_is_empty_when_the_api_returned_the_field() -> None:
+    assert _gitapex_rulesets.unobservable_keys(dict(SOT)) == []
+
+
+def test_a_withheld_bypass_actors_is_not_reported_as_drift_when_excluded() -> None:
+    live = {key: value for key, value in SOT.items() if key != "bypass_actors"}
+    ignored = _gitapex_rulesets.unobservable_keys(live)
+    assert _gitapex_rulesets.render_projection_diff(live, SOT, ignore_keys=ignored) == ""
+    # Without the exclusion it is drift -- this is the regression being pinned,
+    # not an incidental detail: the nightly scan was red every night for it.
+    assert _gitapex_rulesets.render_projection_diff(live, SOT) != ""
+
+
+def test_excluding_a_key_does_not_hide_drift_in_the_keys_that_remain() -> None:
+    live = {key: value for key, value in SOT.items() if key != "bypass_actors"}
+    live["enforcement"] = "disabled"
+    diff = _gitapex_rulesets.render_projection_diff(live, SOT, ignore_keys=["bypass_actors"])
+    assert "disabled" in diff
+
+
+def test_an_absent_rules_key_is_still_drift_not_an_unobservable_field() -> None:
+    # The unobservable set must stay narrow. A read-scoped token can see
+    # `rules`, so its absence means something is genuinely wrong.
+    live = {key: value for key, value in SOT.items() if key != "rules"}
+    assert _gitapex_rulesets.unobservable_keys(live) == []
+    assert _gitapex_rulesets.render_projection_diff(live, SOT) != ""
+
+
+def test_canonical_projection_tolerates_a_non_object_rule_entry() -> None:
+    # A malformed live response can put anything in `rules`; the projection is
+    # a comparison helper, not a validator, so it must pass such an entry
+    # through for the diff to show rather than raising inside the comparison.
+    projected = _gitapex_rulesets.canonical_projection({"rules": ["not a rule", {"type": "deletion"}]})
+    assert projected["rules"] == [{"type": "deletion"}, "not a rule"]

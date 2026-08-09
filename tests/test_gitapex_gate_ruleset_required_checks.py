@@ -459,3 +459,24 @@ def test_a_non_mapping_job_body_still_resolves_to_its_job_id(tmp_path: pathlib.P
     # empty-workflow-directory guard still refuses a vacuous pass).
     workflow = "name: Always\non:\n  pull_request: {}\njobs:\n  always-runs: 'not a mapping'\n"
     assert gate.find_violations(write_ruleset(tmp_path, VALID), write_workflows(tmp_path, a=workflow)) == []
+
+
+@pytest.mark.parametrize("jobs_value", ["not a mapping", "[a, b]", "42"])
+def test_a_non_mapping_jobs_key_does_not_crash_the_gate(jobs_value: str, tmp_path: pathlib.Path) -> None:
+    # `document.get("jobs") or {}` covered a missing or null `jobs:` but not a
+    # present one that is not a mapping, so this raised AttributeError straight
+    # past main()'s `except RulesetGateError` -- a raw traceback on the local
+    # pre-push run for a file actionlint would reject anyway.
+    broken = f"name: Broken\non:\n  pull_request: {{}}\njobs: {jobs_value}\n"
+    workflows = write_workflows(tmp_path, always=UNFILTERED_WORKFLOW, broken=broken)
+    assert gate.find_violations(write_ruleset(tmp_path, VALID), workflows) == []
+
+
+def test_a_non_mapping_jobs_key_reaches_the_gates_own_exit_path(tmp_path: pathlib.Path) -> None:
+    # End to end through the real CLI, because the regression was specifically
+    # that main()'s typed-error path was bypassed.
+    ruleset = json.loads(json.dumps(VALID))
+    ruleset["rules"][3]["parameters"]["required_status_checks"] = [{"context": "absent-job"}]
+    workflows = write_workflows(tmp_path, broken="name: B\non:\n  pull_request: {}\njobs: 'text'\n")
+    code = gate.main(["--ruleset", str(write_ruleset(tmp_path, ruleset)), "--workflow-dir", str(workflows)])
+    assert code == 1

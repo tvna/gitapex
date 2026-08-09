@@ -151,9 +151,10 @@ tokens under the same secret name, so a compromise of the read path cannot write
 Without revealing the token value anywhere:
 
 1. Dispatch **Actions -> Apply rulesets -> Run workflow** on `main` with
-   `dry_run: true`. The "Guard RULESETS_PAT" step passing proves the apply
-   secret is readable; the job summary printing a planned `POST`/`PUT` body
-   proves the token can read the rulesets endpoint.
+   `dry_run: true`, and approve the environment prompt when it appears (it
+   gates the dry run as well -- see "Applying" below). The "Guard RULESETS_PAT"
+   step passing proves the apply secret is readable; the job summary printing a
+   planned `POST`/`PUT` body proves the token can read the rulesets endpoint.
 2. Open or re-run any pull request. The `ruleset-scan` job's summary proves the
    verify secret: with no token it says the token variable is empty and nothing
    was verified; with one it names the live ruleset.
@@ -173,15 +174,33 @@ replacement works.
 
 1. **Actions -> Apply rulesets -> Run workflow**, on `main`. The workflow refuses
    to run against any other ref.
-2. Leave `dry_run` checked. Read the job summary: it prints the method
+2. Leave `dry_run` checked and dispatch. **The run pauses for the
+   `ruleset-apply` Environment's required reviewer before it starts** -- see the
+   note below; approve it. Then read the job summary: it prints the method
    (`POST` for a first apply, `PUT` for a replace), the live id if any, a unified
    diff of live-vs-committed for a replace, and the full request body.
 3. Only if that plan matches the committed JSON, re-dispatch with `dry_run`
-   unchecked. The `ruleset-apply` Environment's required reviewer approves the
-   run; the summary then also carries the resulting ruleset id.
+   unchecked and approve again. The summary then also carries the resulting
+   ruleset id.
 
 `dry_run: true` performs `GET` requests only. Nothing about it can change live
 state.
+
+> [!IMPORTANT]
+> **The approval gate covers the dry run too, not just the live apply.**
+> `environment: ruleset-apply` is set on the *job*, and GitHub is explicit that
+> "a job that references an environment must follow any protection rules for the
+> environment before running or accessing the environment's secrets". So both
+> dispatches wait for a reviewer, and both `RULESETS_PAT` verification steps
+> above wait with them. An earlier revision of this runbook attached the
+> approval only to step 3, which would have left an operator watching a
+> seemingly hung dry run.
+>
+> This is a cost, accepted deliberately. Moving the plan onto the read-only
+> `ruleset-verify` Environment would remove the wait, but the dry run is also
+> what proves the *apply* credential is readable -- that is verification step 1
+> above -- and a plan that exercised a different token would prove nothing about
+> the run that follows it.
 
 ### When a live apply finishes red
 
@@ -280,6 +299,42 @@ Until the first apply lands, expect exit `2` and read it as "not enforced yet",
 not as "fine". Once it is applied, a recurring exit `2` means the `RULESETS_PAT`
 handoff is broken; the reason line in the job summary says which way.
 
+### One field these scans cannot check, and where it is checked instead
+
+`bypass_actors` is **not** compared by either reading gate, and every run says
+so in its own summary rather than leaving it implied. GitHub's REST
+documentation for the rulesets endpoints states: "To prevent leaking sensitive
+information, the bypass_actors property is only returned if the user making the
+API request has write access to the ruleset." The `ruleset-verify` Environment
+holds an Administration:**Read** token by design, so the field is simply absent
+from every response these scans see.
+
+Comparing an absent field against the committed `[]` would report drift every
+single night for a ruleset that is in fact correct -- a check that is red for a
+condition no commit can clear is a check everyone learns to ignore. Widening
+the verify token to read/write would fix the comparison by destroying the
+read/write separation the two Environments exist to create.
+
+So the field is verified at the only point a credential legitimately can see
+it: the post-write check inside `Apply rulesets`, which runs with the read/write
+token and compares the stored ruleset against the committed file. `bypass_actors`
+is therefore proven at the moment it is set, and unproven between applies. A
+bypass actor added through the Settings UI afterwards would not be caught by the
+nightly scan; catching that needs either a write-scoped read (rejected above) or
+a manual look at **Settings -> Rules**, which the smoke-test list below is the
+place to do.
+
+### Parent rulesets are out of scope
+
+Both reading gates and the apply script list rulesets with
+`includes_parents=false`. GitHub's default for that parameter is `true`, which
+also returns rulesets configured at the organisation or enterprise level. Those
+are not this repository's to reconcile: a parent ruleset sharing the committed
+`name` would make the resolver see two matches and refuse permanently, and a
+parent-only match is worse -- the apply script would plan a `PUT` onto an id it
+cannot write, and the drift scan would compare against a ruleset no commit here
+can change.
+
 ### Live behaviour smoke tests, after the first apply
 
 1. `git push origin main` from a clean clone is rejected.
@@ -287,6 +342,8 @@ handoff is broken; the reason line in the job summary says which way.
 3. `git push origin :main` (delete) is rejected.
 4. A pull request with a failing `pytest` cannot be merged.
 5. The merge button offers only "Create a merge commit" and "Squash and merge".
+6. **Settings -> Rules -> main-protection** lists no bypass actors. This one is a
+   manual look rather than a scripted check, for the reason given above.
 
 ## Rolling back
 

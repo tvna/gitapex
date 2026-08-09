@@ -44,7 +44,7 @@ from __future__ import annotations
 import difflib
 import json
 import pathlib
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any
 
 API_ROOT = "https://api.github.com"
@@ -61,6 +61,40 @@ PROJECTION_KEYS = (
     "bypass_actors",
     "rules",
 )
+
+#: Projection keys a read-only credential cannot observe. GitHub's REST
+#: documentation for the rulesets endpoints is explicit: "To prevent leaking
+#: sensitive information, the bypass_actors property is only returned if the
+#: user making the API request has write access to the ruleset." The
+#: `ruleset-verify` Environment deliberately holds an Administration:**Read**
+#: token, so every scheduled full scan sees this key absent. Projecting that
+#: absence as `None` against the committed `[]` reported drift on a ruleset
+#: that was in fact correct -- every night, for a condition no commit could
+#: clear, which is the fastest possible way to train everyone to ignore the
+#: scan.
+#:
+#: Narrow on purpose, and it must stay narrow. Only keys listed here may go
+#: unobserved; an absent `rules` or `conditions` remains a hard mismatch,
+#: because a read-scoped token *can* see those and their absence would mean
+#: something is genuinely wrong. The field is not left unchecked overall: the
+#: apply path runs with the read/write token and does verify it post-write, so
+#: `bypass_actors` is proven at the moment it is set, just not continuously.
+WRITE_ONLY_PROJECTION_KEYS = ("bypass_actors",)
+
+#: Rule-parameter lists GitHub may return in an order other than the one it was
+#: sent, mapped to the sort key that makes them comparable. Both are sets in
+#: everything but JSON type -- a ruleset does not require `ruff` "before"
+#: `pytest`, and does not permit `merge` "before" `squash` -- so comparing them
+#: positionally made a pure API re-ordering read as drift. Measured against this
+#: repository's own `main.json`: reversing just these two lists produced 10
+#: spurious mismatches, enough to fail an otherwise perfect apply.
+#:
+#: Deliberately an allowlist rather than a blanket deep sort: a list whose order
+#: *is* meaningful must keep reporting a re-ordering as the difference it is.
+_ORDER_INSENSITIVE_PARAMETERS: dict[str, Callable[[Any], str]] = {
+    "required_status_checks": lambda item: str(item.get("context")) if isinstance(item, dict) else str(item),
+    "allowed_merge_methods": str,
+}
 
 #: Fetcher signature shared by every caller: takes a full URL, returns the
 #: parsed JSON document. Injected rather than imported so tests can drive the
@@ -126,7 +160,15 @@ def list_live_rulesets(repo: str, fetch: JsonFetcher) -> list[dict[str, Any]]:
     """
     collected: list[dict[str, Any]] = []
     for page in range(1, _MAX_PAGES + 1):
-        url = f"{API_ROOT}/repos/{repo}/rulesets?per_page={_PAGE_SIZE}&page={page}"
+        # `includes_parents=false` is not a default -- GitHub documents this
+        # parameter's default as `true`, so the unqualified call also returns
+        # rulesets configured at the organisation or enterprise level. Those are
+        # not this repository's to reconcile: a parent ruleset sharing the
+        # committed `name` makes `resolve_live_ruleset` see two matches and
+        # refuse permanently, and a parent-only match is worse still -- the
+        # apply script would plan a PUT onto an id it cannot write, and the
+        # drift scan would compare against a ruleset no commit here can change.
+        url = f"{API_ROOT}/repos/{repo}/rulesets?per_page={_PAGE_SIZE}&page={page}&includes_parents=false"
         body = fetch(url)
         if not isinstance(body, list):
             raise RulesetError(f"GET {url} returned {type(body).__name__}, expected a JSON array")
@@ -176,21 +218,58 @@ def resolve_live_ruleset(repo: str, name: str, fetch: JsonFetcher) -> dict[str, 
 def canonical_projection(ruleset: dict[str, Any]) -> dict[str, Any]:
     """Narrow a ruleset (live or committed) to the comparable key set.
 
-    `rules` is additionally sorted by `type`. GitHub's REST documentation
-    publishes no ordering guarantee for that array, and nothing requires the
-    stored order to match the order it was sent in -- so comparing it
-    positionally would make a pure re-ordering read as drift, turning the daily
-    scan permanently red for a live state that is in fact correct. Sorting by
-    `type` is safe because a ruleset cannot carry two rules of the same type.
+    Order is normalised at both levels it can vary. `rules` is sorted by `type`;
+    GitHub's REST documentation publishes no ordering guarantee for that array,
+    and nothing requires the stored order to match the order it was sent in.
+    Sorting by `type` is safe because a ruleset cannot carry two rules of the
+    same type.
+
+    The lists *inside* rule parameters are sorted too, per
+    `_ORDER_INSENSITIVE_PARAMETERS`. Sorting only the outer array left
+    `required_status_checks` and `allowed_merge_methods` compared positionally,
+    which is the same bug one level down: a re-ordering GitHub is free to make
+    reads as drift on the nightly scan and as a post-write mismatch on an apply
+    that in fact stored exactly what was sent.
     """
     projected = {key: ruleset.get(key) for key in PROJECTION_KEYS}
     rules = projected.get("rules")
     if isinstance(rules, list):
         projected["rules"] = sorted(
-            rules,
+            (_normalise_rule(rule) for rule in rules),
             key=lambda rule: str(rule.get("type")) if isinstance(rule, dict) else str(rule),
         )
     return projected
+
+
+def _normalise_rule(rule: Any) -> Any:
+    """Sort the order-insensitive lists inside one rule's parameters.
+
+    Copies rather than mutating: callers pass the caller's own live response and
+    committed document, and a comparison helper that rewrote either of them
+    would make the diff depend on which side was projected first.
+    """
+    if not isinstance(rule, dict):
+        return rule
+    parameters = rule.get("parameters")
+    if not isinstance(parameters, dict):
+        return rule
+    normalised = dict(parameters)
+    for key, sort_key in _ORDER_INSENSITIVE_PARAMETERS.items():
+        value = normalised.get(key)
+        if isinstance(value, list):
+            normalised[key] = sorted(value, key=sort_key)
+    return {**rule, "parameters": normalised}
+
+
+def unobservable_keys(live: dict[str, Any]) -> list[str]:
+    """Projection keys this credential could not see, in `live`'s response.
+
+    See `WRITE_ONLY_PROJECTION_KEYS`. Returns the names so the caller can both
+    exclude them from the comparison and *say so in its report* -- excluding
+    them silently would be the "silent default" CLAUDE.md section 4 forbids,
+    since the whole point of the scan is to state what is and is not proven.
+    """
+    return [key for key in WRITE_ONLY_PROJECTION_KEYS if key not in live]
 
 
 def find_subset_mismatches(expected: Any, actual: Any, path: str = "") -> list[str]:
@@ -253,17 +332,25 @@ def canonical_json_lines(document: Any) -> list[str]:
     return [f"{line}\n" for line in text.splitlines()]
 
 
-def render_projection_diff(live: dict[str, Any], sot: dict[str, Any]) -> str:
+def render_projection_diff(live: dict[str, Any], sot: dict[str, Any], ignore_keys: Sequence[str] = ()) -> str:
     """Unified diff of live-vs-committed, over the projected key set only.
 
     Returns the empty string when the two projections are identical, so every
     caller can use the return value itself as the drift signal rather than
     re-comparing.
+
+    `ignore_keys` drops a key from **both** sides before diffing, for fields the
+    reading credential provably cannot observe -- see `unobservable_keys`. It is
+    the caller's job to report what it passed here; this function only makes the
+    exclusion possible, it does not make it invisible.
     """
+    dropped = set(ignore_keys)
+    live_projection = {key: value for key, value in canonical_projection(live).items() if key not in dropped}
+    sot_projection = {key: value for key, value in canonical_projection(sot).items() if key not in dropped}
     return "".join(
         difflib.unified_diff(
-            canonical_json_lines(canonical_projection(live)),
-            canonical_json_lines(canonical_projection(sot)),
+            canonical_json_lines(live_projection),
+            canonical_json_lines(sot_projection),
             fromfile="live",
             tofile="sot",
         )

@@ -197,3 +197,55 @@ def test_an_unusable_committed_file_still_fails_the_job(
     captured = capsys.readouterr()
     assert "::error::" in captured.err
     assert "not valid JSON" in captured.out
+
+
+def without_bypass_actors() -> dict[str, Any]:
+    """The live shape a read-scoped credential actually sees.
+
+    GitHub returns `bypass_actors` only to a caller with write access to the
+    ruleset, and `ruleset-verify` holds an Administration:Read token by design.
+    """
+    return {key: value for key, value in SOT.items() if key != "bypass_actors"}
+
+
+def test_a_withheld_bypass_actors_is_not_reported_as_nightly_drift(tmp_path: pathlib.Path) -> None:
+    # The regression: projecting the absent key as None against the committed []
+    # made the scheduled scan red every night for a ruleset that is correct.
+    report, code = drift.run("o/r", write_sot(tmp_path), "full", live_fetcher(without_bypass_actors()))
+    assert code == drift.EXIT_IN_SYNC
+    assert "matches its committed source of truth" in report
+
+
+def test_the_report_says_bypass_actors_was_not_compared(tmp_path: pathlib.Path) -> None:
+    # Excluding it silently would assert more than the scan checked. The note is
+    # the difference between a narrowed comparison and a dishonest one.
+    report, _ = drift.run("o/r", write_sot(tmp_path), "full", live_fetcher(without_bypass_actors()))
+    assert "[!NOTE]" in report
+    assert "bypass_actors" in report
+    assert "write" in report
+
+
+def test_the_note_is_absent_when_the_api_did_return_the_field(tmp_path: pathlib.Path) -> None:
+    report, _ = drift.run("o/r", write_sot(tmp_path), "full", live_fetcher(dict(SOT)))
+    assert "[!NOTE]" not in report
+
+
+def test_excluding_bypass_actors_does_not_mask_drift_elsewhere(tmp_path: pathlib.Path) -> None:
+    live = without_bypass_actors()
+    live["enforcement"] = "disabled"
+    report, code = drift.run("o/r", write_sot(tmp_path), "full", live_fetcher(live))
+    assert code == drift.EXIT_DRIFT
+    assert "disabled" in report
+    # The note still rides along on a failing run: the operator reading a red
+    # summary needs to know what was not part of the comparison just as much.
+    assert "[!NOTE]" in report
+
+
+def test_a_reordered_required_status_checks_list_is_not_drift(tmp_path: pathlib.Path) -> None:
+    # GitHub is free to return these in any order; comparing positionally made
+    # a pure re-ordering read as drift.
+    live = json.loads(json.dumps(SOT))
+    checks = live["rules"][1]["parameters"]["required_status_checks"]
+    live["rules"][1]["parameters"]["required_status_checks"] = list(reversed(checks))
+    report, code = drift.run("o/r", write_sot(tmp_path), "full", live_fetcher(live))
+    assert code == drift.EXIT_IN_SYNC, report
