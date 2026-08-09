@@ -177,8 +177,18 @@ _PATH_TOKEN_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]*\.[A-Za-z0-9]+")
 # shape alone, since an ordinary lowercase word can be all-hex. At least one
 # a-f digit is required so a seven-or-more-digit line count (`1234567->89`)
 # is not sent to `git rev-parse` as a candidate revision; an all-numeric
-# short SHA is a theoretical loss, and the alternative is treating every
+# short SHA is the accepted loss, and the alternative is treating every
 # large line count in the corpus as a possible commit citation.
+#
+# Issue #960: that loss was called "theoretical" here until a real commit
+# hit it. An 8-character short SHA is all digits (10/16)**8 ~= 2.3% of the
+# time, so any test minting a real commit and citing `sha[:8]` verbatim
+# fails at that rate -- which is what happened on PR #957, whose diff could
+# not reach this file. The tradeoff stands; only the word was wrong. The
+# behavior is pinned by
+# tests/test_gitapex_gate_metadata_outcome_lines.py::
+# test_an_all_numeric_short_sha_is_not_read_as_a_commit_citation, so
+# narrowing or widening it now requires changing a failing test on purpose.
 _SHA_TOKEN_RE = re.compile(r"\b(?=[0-9a-f]{7,40}\b)[0-9a-f]*[a-f][0-9a-f]*\b")
 
 # Prose the corpus already uses to scope a claim to a past commit rather than
