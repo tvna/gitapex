@@ -1,0 +1,24 @@
+id: setup-gitapex-toolchain-normal
+name: Manual Invocation Reports The Documented Per-Tool And apm-install Tokens
+description: Explains what a manual run of gitapex_provision_class_b.py does and the exact stdout/stderr tokens a fresh install versus an already-current apm install produce.
+tags:
+  - quality
+inputs:
+  prompt: |
+    Use setup-gitapex-toolchain. I'm in a fresh Claude Code web session and
+    waza, apm, rtk, and betterleaks aren't on PATH yet. I want to run the
+    manual invocation myself instead of waiting for the SessionStart hook.
+
+    What command do I run, and what exact stdout output should I expect to
+    see per tool on a fresh install, versus on a second run where every
+    tool and apm.lock.yaml are already current?
+expected:
+  output_contains:
+    - "gitapex_provision_class_b.py"
+    - "--project-dir"
+    - "INSTALLED"
+    - "SKIPPED"
+    - "UNCHANGED: apm install"
+  output_not_contains:
+    - "nix develop"
+    - "pip install"

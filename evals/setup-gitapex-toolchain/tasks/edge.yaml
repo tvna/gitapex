@@ -1,0 +1,34 @@
+id: setup-gitapex-toolchain-edge
+name: SKIPPED Carries Two Different Meanings Across The Two Phases
+description: Distinguishes the per-tool SKIPPED token (a success outcome, already installed and verified current) from the apm-install phase's own SKIPPED-prefixed message (a failure outcome, printed to stderr, when apm itself never provisioned).
+tags:
+  - quality
+  - edge-case
+inputs:
+  prompt: |
+    Use setup-gitapex-toolchain. I ran the provisioning script and got this
+    on the per-tool lines:
+
+    SKIPPED: waza
+    SKIPPED: rtk
+    SKIPPED: betterleaks
+    FAIL: apm: connection reset
+
+    followed by this line on stderr:
+
+    SKIPPED: apm install (apm itself was not successfully provisioned)
+
+    Are all four of these SKIPPED-shaped lines telling me the same thing --
+    that everything is fine and nothing needed to change? What is the exit
+    code here?
+expected:
+  output_contains:
+    - "SKIPPED"
+    - "apm install"
+    - "different meaning"
+    - "failure"
+    - "non-zero"
+  output_not_contains:
+    - "all four mean the same thing"
+    - "everything is fine"
+    - "exit code: zero"
