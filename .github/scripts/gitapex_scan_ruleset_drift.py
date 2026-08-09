@@ -20,23 +20,24 @@ does GitHub still enforce what `.github/rulesets/main.json` says it enforces?
   would ever show, surfaces within a day.
 
 **Exit codes are three-valued on purpose.** `0` in sync, `1` drift, `2` nothing
-was verified. The third state covers the two preconditions a pull request cannot
-satisfy by itself -- no live ruleset carries the committed name yet, and no
-readable API token was supplied -- both of which sit in the owner-gated interval
-between this file landing in git and a human dispatching `apply-rulesets.yml`
-with the `RULESETS_PAT` handoff complete. Collapsing `2` into `1` would make
-every pull request red for a condition no pull request can fix; collapsing it
-into `0` would be exactly the silent default CLAUDE.md section 4 forbids. Both
-workflows surface `2` as a GitHub `::warning::` naming the runbook step that
-clears it, so it is loud without being a merge blocker.
+was verified. The third state exists because "GitHub enforces something other
+than what git says" and "this scan never got to look" are different facts, and
+a pull request can fix only the first. Collapsing `2` into `1` would make every
+pull request red for a condition no pull request can fix; collapsing it into `0`
+would be exactly the silent default CLAUDE.md section 4 forbids. Both workflows
+surface `2` as a GitHub `::warning::` naming the runbook step that clears it, so
+it is loud without being a merge blocker.
 
-**Where the 1/2 line actually falls.** Exit 2 covers every way this scan can
-fail to *read* the live state: no token, a token the API rejects, an outage, a
-truncated response -- all of them surface as `GitHubApiError`. Exit 1 is
-reserved for the two things that are genuinely wrong rather than merely
-unknown: the live ruleset disagrees with the committed file, or the committed
-file itself is unreadable/ambiguous (`RulesetError`, which also covers two live
-rulesets sharing one name).
+**Where the 1/2 line falls.** Exit 2 covers every way this scan can fail to
+*read* the live state, which is a wider set than it first looks: no live ruleset
+carries the committed name yet, no token was supplied, the token is rejected,
+the API is down, the response is truncated. The first two are the owner-gated
+interval between this file landing in git and a human dispatching
+`apply-rulesets.yml` with the `RULESETS_PAT` handoff complete; the rest arrive
+as `GitHubApiError`. Exit 1 is reserved for the two things that are genuinely
+wrong rather than merely unknown: the live ruleset disagrees with the committed
+file, or the committed file itself is unreadable/ambiguous (`RulesetError`,
+which also covers two live rulesets sharing one name).
 
 An earlier revision of this module put a rejected credential on the exit-1
 side, reasoning that a broken handoff should fail loudly rather than warn.
@@ -76,11 +77,12 @@ from _gitapex_rulesets import (  # same bootstrap
 
 EXIT_IN_SYNC = 0
 EXIT_DRIFT = 1
-#: Nothing was verified -- either no live ruleset carries the committed name, or
-#: no API token was supplied. Distinct from `EXIT_DRIFT` so a caller can tell
-#: "GitHub enforces something other than what git says" from "this scan never
-#: got to look"; see the module docstring for why that distinction is load-
-#: bearing rather than cosmetic.
+#: Nothing was verified -- no live ruleset carries the committed name yet, no
+#: token was supplied, or the API could not be read (rejected credential,
+#: outage, unparseable response). Distinct from `EXIT_DRIFT` so a caller can
+#: tell "GitHub enforces something other than what git says" from "this scan
+#: never got to look"; see the module docstring for why that distinction is
+#: load-bearing rather than cosmetic.
 EXIT_UNVERIFIED = 2
 
 
