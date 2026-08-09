@@ -171,12 +171,30 @@ _RECONSTRUCTED_PR539_FACTS_SECTION = (
 )
 
 
-def test_strip_quoted_examples_removes_backtick_and_straight_quoted_spans():
+def test_quoted_example_spans_finds_short_backtick_and_straight_quoted_spans():
     text = 'See `_LIMITATION_CUE_RE` and "no access to" for the pattern.'
-    stripped = gate._strip_quoted_examples(text)
-    assert "_LIMITATION_CUE_RE" not in stripped
-    assert "no access to" not in stripped
-    assert "See" in stripped and "for the pattern" in stripped
+    spans = gate._quoted_example_spans(text)
+    assert len(spans) == 2
+    substrings = [text[start:end] for start, end in spans]
+    assert "`_LIMITATION_CUE_RE`" in substrings
+    assert '"no access to"' in substrings
+
+
+def test_quoted_example_spans_recognizes_curly_quotes():
+    text = "See “no access to” for the pattern."
+    spans = gate._quoted_example_spans(text)
+    assert len(spans) == 1
+    start, end = spans[0]
+    assert text[start:end] == "“no access to”"
+
+
+def test_quoted_example_spans_excludes_a_long_quoted_clause():
+    """A quoted span longer than _MAX_QUOTED_EXAMPLE_WORDS does not read as
+    a documented example (issue #978, adversarial-review finding: an
+    earlier draft let an entire offending clause evade detection by
+    quoting the whole sentence)."""
+    text = '"the absence of a registered skill invocation and a generic dispatch tool" is what one reviewer wrote.\n'
+    assert gate._quoted_example_spans(text) == []
 
 
 def test_find_offending_paragraphs_ignores_quoted_vocabulary_listing():
@@ -222,3 +240,46 @@ def test_main_quoted_vocabulary_listing_in_body_passes(tmp_path, capsys):
     exit_code = gate.main(["--body", str(body)])
     assert exit_code == 0
     assert "PASS" in capsys.readouterr().out
+
+
+def test_find_offending_paragraphs_still_flags_fully_quoted_violating_clause():
+    """Adversarial-review finding against issue #978's first draft: wrapping
+    an entire offending clause in one long quoted span must not evade
+    detection -- only a short, bare cue phrase reads as a documented
+    example, not a full live sentence."""
+    text = (
+        'This evaluation notes "the absence of a registered skill '
+        'invocation and a generic dispatch tool" as the reason a prior '
+        "run's judgment could not be reused directly.\n"
+    )
+    assert len(gate.find_offending_paragraphs(text)) == 1
+
+
+def test_find_offending_paragraphs_does_not_bridge_across_an_unrelated_quoted_aside():
+    """Adversarial-review finding against issue #978's first draft: an
+    earlier version *rewrote* the paragraph text (replacing a documented
+    example with a single space), which let a whitespace-tolerant cue
+    alternative (``lacks\\s+access to``) bridge across the removed span and
+    fabricate a match between two words that were never actually adjacent.
+    Filtering match positions instead of rewriting text must not
+    reproduce that bridge."""
+    text = "The audit lacks `some unrelated inline code aside` access to a dispatch tool and a registered skill invocation as context.\n"
+    assert gate.find_offending_paragraphs(text) == []
+
+
+def test_find_offending_paragraphs_recognizes_a_hard_wrapped_quoted_example():
+    """Adversarial-review finding against issue #978's first draft: the
+    quoted-span pattern excluded embedded newlines, so a documented
+    vocabulary example hard-wrapped across two lines of Markdown source
+    (this repository's own docs/skills/evals convention) was not
+    recognized as one span and could still self-trigger the gate."""
+    text = 'Vocabulary: examples include "no access to" and "a registered skill\ninvocation" as documented above.\n'
+    assert gate.find_offending_paragraphs(text) == []
+
+
+def test_quoted_example_spans_finds_a_hard_wrapped_span():
+    text = '"a registered skill\ninvocation"'
+    spans = gate._quoted_example_spans(text)
+    assert len(spans) == 1
+    start, end = spans[0]
+    assert text[start:end] == text
