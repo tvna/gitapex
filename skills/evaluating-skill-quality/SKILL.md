@@ -23,8 +23,7 @@ skill artifact itself is good, not whether a change is correct.
   assume the target lives in a repository that has adopted this metadata
   convention; when the target is a skill vendored from one that has not,
   those checks fail as expected -- not a defect in the reviewed skill --
-  so record them as not-applicable and say so explicitly in the report
-  rather than reporting six failures as findings.
+  so record them explicitly as not-applicable, never as six findings.
 - **Probabilistic maturity** -- nine dimensions of judgment that need a model
   or human, not a script. Full rubric with pass/fail evidence:
   [references/rubric.md](references/rubric.md).
@@ -159,17 +158,19 @@ is still grading from a contaminated context.
   evidence delimiter-safely, never raw-interpolated into the report (see
   [references/adversarial-self-audit.md](references/adversarial-self-audit.md)'s
   structured-output-injection section for how).
-- When the target has Stop boundaries or Mechanism-fit prose, instruct
-  the dispatch explicitly to check each such sentence against *both*
-  Mechanism fit's "is this backed" question and the portability litmus
-  test's "would this exact wording survive being read in an unrelated
-  repository" question (`references/rubric.md`'s Portability level
-  section) -- the dispatch's default nine-dimension walk answers the
-  first by habit and can silently skip the second unless told to ask it
-  separately.
-- The main thread's own job is only step 3 (run the shape checker first,
-  before dispatching) and relaying the dispatch's report -- including the
-  verdict the dispatch already issued in step 6 -- to the human verbatim,
+- When the target has Stop boundaries or Mechanism-fit prose, instruct the
+  dispatch explicitly to check each such sentence against *both* Mechanism
+  fit's "is this backed" question and the portability litmus test's "would
+  this exact wording survive being read in an unrelated repository" question
+  (`references/rubric.md`'s Portability level section) -- its default
+  nine-dimension walk answers the first by habit and can silently skip the
+  second unless told to ask separately.
+- Of the numbered steps the main thread owns only step 3 (run the shape
+  checker first, before dispatching). Its other duties are orchestration,
+  not grading, and are named here so a conforming runner need not choose
+  between skipping a control and breaking this rule: verify isolation above,
+  dispatch, open any second dispatch below, and relay the dispatch's report
+  -- including the verdict it issued in step 6 -- to the human verbatim,
   never independently issuing or revising one. Clarifying questions about
   evidence already returned can be answered directly from that report; a
   challenge that could change a verdict gets a second, independent fresh
@@ -345,10 +346,10 @@ Execution requirements section and the design docs it cites.
 Steps 1-4 are this review's precondition, step 6 its postcondition -- see
 `references/rubric.md`'s Contract discipline section. Steps 1, 2, 4, 5, and 6 execute
 inside the fresh subagent dispatch described in Subagent dispatch above; only step 3
-runs directly in the main thread, before the dispatch; relaying that dispatch's report
-verbatim is the main thread's only other job. The numbers below are identity, not run
-order: step 3 actually runs 1st (main thread), then the dispatch runs 1, 2, 4, 5, 6 in
-that numbered order, annotated per step below. Neither a
+runs directly in the main thread, before the dispatch; the main thread's remaining
+duties are orchestration, not grading, and Subagent dispatch above enumerates them.
+The numbers below are identity, not run order: step 3 actually runs 1st (main thread),
+then the dispatch runs 1, 2, 4, 5, 6 in that order, annotated per step below. Neither a
 step-2 whole-artifact finding nor a step-3 shape FAIL short-circuits: steps 4-6,
 including the full step-5 walk, always still run, since the nine dimensions grade
 prose/structural maturity independently of mechanism-fit and shape -- unlike
