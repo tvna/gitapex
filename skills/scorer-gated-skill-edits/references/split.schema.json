@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/tvna/gitapex/blob/main/skills/scorer-gated-skill-edits/references/split.schema.json",
+  "title": "gitapex eval split.json (train/selection/test fixture assignment)",
+  "description": "Schema for every evals/*/split.json file: the structured train/selection/test fixture assignment `scorer-gated-skill-edits`' own precondition gate requires before an iterative SKILL.md edit can be kept. Re-expresses, as schema constraints, the shape today's evals/*/split.md prose declares and `.github/scripts/gitapex_gate_split_fixture_coverage.py` currently recovers by regex over that prose: Check A's selection-split fixture superset, Check B's precedence train/held-out equivalence-class pairs, Check C's per-fixture expected.exercises declaration, and Check D's declared partition plus its split-arithmetic-exclusions line. This schema covers only shape (types, required keys, closed vocabularies); the set-arithmetic checks (partition figures reconciling against the Assignment listing, an exercises label matching a real SKILL.md ### heading, a fixture file actually existing under evals/<skill>/tasks/) remain a companion script's job, the same layered split this repository's own skill-metadata.schema.json precedent already establishes for its own cross-file checks. No $ref outside this document, so the schema resolves standalone inside this skill's own references/ directory, satisfying the Portability guideline every skill here is expected to follow.",
+  "type": "object",
+  "required": ["assignment"],
+  "additionalProperties": false,
+  "properties": {
+    "assignment": { "$ref": "#/$defs/assignment" },
+    "partition": { "$ref": "#/$defs/partition" },
+    "split_arithmetic_exclusions": { "$ref": "#/$defs/splitArithmeticExclusions" },
+    "equivalence_classes": { "$ref": "#/$defs/equivalenceClasses" }
+  },
+  "if": {
+    "$comment": "partition-requires-exclusions: a declared partition is an arithmetic contract against the Assignment listing (Check D's own job), and that arithmetic is only checkable once the file also states which listed fixtures, if any, are excluded from the count -- even an empty list, so 'no exclusions' is a real declared fact rather than a silently absent field. Mirrors Check D's own real-file behavior: a split.md that declares a partition but carries no 'Split-arithmetic exclusions:' line is already a reported offender today.",
+    "required": ["partition"]
+  },
+  "then": {
+    "required": ["partition", "split_arithmetic_exclusions"]
+  },
+  "$defs": {
+    "assignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Keyed by split name. Every evals/*/split.md file's own '## Assignment' section uses exactly the same three split names today (verified directly against all five: battle-testing-a-skill, scorer-gated-skill-edits, merge-retrospective, explaining-the-work, evaluating-skill-quality) -- additionalProperties is false because a fourth split name has never been observed in this repository and would need a deliberate schema change, not silent acceptance. Not every key need be present: a skill's corpus may legitimately have no test-split fixtures yet.",
+      "properties": {
+        "train": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/fixtureItem" },
+          "description": "Motivates edits; read for evidence, never scored for candidate acceptance."
+        },
+        "selection": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/fixtureItem" },
+          "description": "Gates acceptance; scored before/after a candidate edit under the strict improve-or-reject rule (ties rejected). This is the split Check A's gate-result-table superset check and Check C's exercises-declaration check both key off."
+        },
+        "test": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/fixtureItem" },
+          "description": "Read once, for a final report only; never used to motivate or gate an edit."
+        }
+      }
+    },
+    "fixtureItem": {
+      "description": "One fixture entry inside a split's array. A bare filename string is the common case (no expected.exercises declared for this fixture). The object form is used only when the fixture also declares expected.exercises -- Check C's own contract for closing issue #629's blocker 2 (a missing or vacuous exercises declaration must fail loudly, never be read as 'declares no sections').",
+      "oneOf": [
+        { "$ref": "#/$defs/fixtureFilename" },
+        { "$ref": "#/$defs/fixtureWithExpected" }
+      ]
+    },
+    "fixtureFilename": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._-]+\\.yaml$",
+      "description": "A bare eval fixture filename (e.g. \"normal.yaml\"), matching this repository's own established fixture-name shape -- the same character class and .yaml suffix `.github/scripts/gitapex_gate_split_fixture_coverage.py`'s own _YAML_NAME_RE already assumes for every committed fixture. Resolution against a real evals/<skill>/tasks/<name> file on disk is a cross-file fact this schema cannot verify on its own; that remains the companion gate script's job."
+    },
+    "fixtureWithExpected": {
+      "type": "object",
+      "required": ["fixture", "expected"],
+      "additionalProperties": false,
+      "description": "A fixture entry that also declares its expected.exercises coverage. required includes 'expected' because a fixture with nothing to declare should use the plain fixtureFilename string form instead -- an object with no expected key would just be a more verbose way to say the same thing.",
+      "properties": {
+        "fixture": { "$ref": "#/$defs/fixtureFilename" },
+        "expected": {
+          "type": "object",
+          "required": ["exercises"],
+          "additionalProperties": false,
+          "properties": {
+            "exercises": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "string", "minLength": 1 },
+              "description": "Section labels this fixture's prompt is designed to exercise. Each entry is expected to casefold-match a real current '### <label> -> ...' heading in the sibling skill's SKILL.md (Check C's own contract) -- that match, and the fixture file's own existence, are cross-file facts this schema cannot verify on its own and remain the companion gate script's job. minItems: 1 mirrors Check C's own _is_real_exercises_declaration guard: a non-empty list of non-blank strings, not merely a truthy value."
+            }
+          }
+        }
+      }
+    },
+    "partition": {
+      "type": "string",
+      "pattern": "^[0-9]+:[0-9]+:[0-9]+$",
+      "description": "The declared train:selection:test fixture-count partition (e.g. \"9:6:3\"), mirroring the bare/emphasized/backticked triple Check D's own _DECLARED_PARTITION_RE recognizes in split.md prose today. Reconciling these three figures against the Assignment section's actual unique fixture counts, net of split_arithmetic_exclusions, is Check D's own arithmetic job, not this schema's."
+    },
+    "splitArithmeticExclusions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/fixtureFilename" },
+      "description": "Fixtures listed in the assignment above but deliberately excluded from the partition arithmetic (e.g. a fixture added only for split-listing consistency with another, not as its own declared category addition). An explicit empty array is a real, checkable 'no exclusions' statement, distinct from the key being absent entirely -- required together with `partition` (see the top-level if/then) so a declared partition can never silently skip stating what, if anything, it excludes."
+    },
+    "equivalenceClasses": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/equivalenceClass" },
+      "description": "Train/held-out fixture pairs covering this skill's own precedence or branching rules -- Check B's own contract (every actual trigger branch needs both a positive, train-side fixture and a negative/non-trigger or opposite-route held-out fixture). An explicit empty array is a valid, deliberate 'no precedence rule needs pairing yet' statement for a skill whose SKILL.md documents none."
+    },
+    "equivalenceClass": {
+      "type": "object",
+      "required": ["train_fixture", "held_out_fixture"],
+      "additionalProperties": false,
+      "description": "One precedence/branching equivalence-class pair (Check B). Both members are expected to already appear somewhere in this file's own `assignment` (train_fixture in the train split, held_out_fixture in selection or test) -- that cross-reference, like every other fixture-existence fact in this file, is the companion gate script's job, not this schema's.",
+      "properties": {
+        "train_fixture": { "$ref": "#/$defs/fixtureFilename" },
+        "held_out_fixture": { "$ref": "#/$defs/fixtureFilename" }
+      }
+    }
+  }
+}
