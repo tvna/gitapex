@@ -55,6 +55,10 @@ Fires on any of:
   a store.
 - **(b) A procedure that re-enters.** The skill resumes, monitors across
   turns, survives compaction, or is re-invoked against the same subject.
+  The framing rule's materialization half binds here exactly as it does in
+  (a) and (c): a skill that merely tells its reader to pick up where they
+  left off, persisting nothing, does not fire. Re-entry plus a persisted
+  artifact fires; re-entry alone does not.
 - **(c) Evidence handed across a boundary.** A step produces an evidence
   artifact (test output, diff, API response, screenshot) that a *different*
   agent context must consume as proof. A single terminal dispatch that
@@ -85,14 +89,22 @@ consumes and never reads it back itself, grade the writer's axes -- 1, 2, 4,
 7, 9, 10, 11, and axis 8's recording half (whether the producing command and
 base revision are recorded beside the result). Axes 3, 5, 6, and axis 8's
 consuming half belong to the consumer; saying so is the correct outcome, not
-a gap.
+a gap. Such a target does not satisfy the framing rule's read-back half, so
+it fires on the principle rather than on a clause -- the same footing as
+unstored-but-required state below. The writer's own choices stay gradeable
+even though this procedure never reads its own record back.
 
 **Unstored-but-required state fires** only when the skill's own text names a
 specific carried value -- a count, a limit, an attempt number, a prior verdict
 -- that a later step's control flow branches on, while naming no locus for it.
 The target then fires on the principle and fails axis 1 by construction: the
 absence is the finding. A general expectation that earlier reasoning remains
-available is not this case, and does not fire.
+available is not this case, and does not fire. This paragraph only *extends*
+the trigger to a skill that would not otherwise fire; it never narrows one
+that does. Vague wording buys no exemption in that direction: once a
+procedure re-enters under clause (b) and depends on prior progress at all,
+clause (b) has already fired, and phrasing that dependency loosely ("continue
+from prior progress") instead of naming the value changes nothing.
 
 **When the trigger does not fire**, record it as not-applicable inside
 dimension 6's entry, naming the absent trigger condition. `references/rubric.md`'s
@@ -184,7 +196,13 @@ The pinned source this file otherwise draws on fails here: its workspace
 resolves to one fixed directory per repository, described as the "Single
 source of truth for the workspace location" [sddworkspace], and its ledger is
 read from one fixed path inside it [sdd]. Two plans executed in one working
-tree share one record.
+tree share one record. Note what that does and does not say: because the
+workspace resolves from the repository root, a separate worktree does get a
+separate record, and that source requires a worktree skill as part of its own
+workflow. The isolation-by-construction axis 7 credits therefore narrows this
+finding to the single-working-tree case rather than removing it -- a target
+whose collision resistance comes entirely from a sibling skill's isolation
+should say so, which is the difference between a Pass and this Fail.
 
 **Leads dimension 6's entry** when a collision is silent rather than loud --
 the record is read, parses cleanly, and describes different work.
@@ -379,7 +397,11 @@ compliance.
 **Pass** -- the trust class is stated *and* the procedure's own steps match
 it: a fact taken from the record is re-checked against its source before an
 irreversible or expensive step relies on it, and no step treats a record
-entry as its sole authority for how to act.
+entry as its sole authority for how to act. The re-check must be
+unconditional for the step it guards. A hedge that leaves it to the reader's
+own judgment -- re-verify "if this entry looks stale" -- is discretionary,
+and discretion is what the guarded step cannot afford: the reader who would
+notice the staleness is the reader who did not need the rule.
 
 **Where it sits.** The ignored-versus-committed choice must be stated by the
 target, with the mechanism. Pass: a self-ignoring ignore file at the workspace
@@ -431,11 +453,15 @@ progress in a ledger file, not only in todos" [sdd], which keeps the durable
 store primary and the harness store secondary rather than duplicating
 authority.
 
-**Fail** -- an explicitly cross-session procedure whose only record is a
-harness task list, where that harness documents "No session resumption with
-in-process teammates: `/resume` and `/rewind` do not restore in-process
-teammates" [agentteams]. A harness task list is disqualified as the *sole*
-store for a procedure the skill's own text scopes across sessions.
+**Fail** -- the only record is a harness store and the target states none of
+that store's own documented limits. Those limits are specific, and they are
+not a reason to reject harness stores wholesale: the same harness whose task
+list "persists locally and is never uploaded, so resumed sessions keep their
+tasks" also warns that "teammates sometimes fail to mark tasks as completed,
+which blocks dependent tasks" [agentteams]. The store survives; its status
+field is a claim to re-check. A target that adopts a harness store without
+naming the limits it thereby inherits has not chosen that store, only
+defaulted into it.
 
 **Leads dimension 6's entry** when two stores can hold contradictory answers
 to the same question with no stated precedence, or when the target
@@ -458,11 +484,23 @@ feeds a later aggregate review; the log is written and read back.
 
 **Passing axes.** Axis 1: the log is ranked below ground truth and named as
 externally-editable pull-request text to be re-screened, with every recorded
-commit verified to exist on the branch. Axis 5: a fresh session re-reads the
-log to find the resume point and confirms each completion against the branch
-before re-running anything. Axis 7: waves run in parallel working trees, but
-the log writer is serialized to the main thread. Axis 8: the commit is
-recorded beside each result, so a stale entry is detectable.
+commit verified to exist on the branch. Axis 3: the log is re-read
+immediately before each wave is assigned, not once at start. Axis 5: a fresh
+session re-reads the log to find the resume point and confirms each
+completion against the branch before re-running anything. Axis 7: waves run
+in parallel working trees, but the log writer is serialized to the main
+thread. Axis 8: the commit is recorded beside each result, so a stale entry
+is detectable. Axis 9: both directions are stated -- a line may carry only a
+task number, a commit range, and a review outcome, and the skill's own steps
+re-screen the log's content as external text before acting on it rather than
+reciting a trust class it then ignores. Axis 10: the log lives in the
+pull-request body, which every consumer of this skill has, not at a path
+borrowed from one repository's layout. Axis 11: the pull-request body is
+argued for over a local file (it survives the runner) and over the harness
+task list (it outlives the session), and no second record is kept.
+
+All eleven axes are named. An axis a worked example silently omits reads as
+an axis a reviewer may silently omit.
 
 **Axis 2 FAIL.** No run identifier. A retry or a second execution attempt
 appends into the same log with no boundary, so a reader cannot tell which
@@ -475,10 +513,12 @@ as "nothing was done" and the procedure re-dispatches non-idempotent work --
 axis 6's stated escalation condition, and the documented most-expensive
 failure [sdd].
 
-**Axis 4 PARTIAL.** "Append-only, one line per event" is a convention layered
-over a whole-body rewrite primitive, and that gap is unstated.
+**Axis 4 FAIL.** "Append-only, one line per event" is a convention layered
+over a whole-body rewrite primitive, and that gap is unstated. There is no
+partial-credit outcome: an axis either clears or produces a named gap, and a
+gap that feels small is still a gap this dimension has not cleared.
 
-Dimension 6 does not clear: two named gaps, one leading.
+Dimension 6 does not clear: three named gaps, one leading.
 
 ## Worked example that does not fire
 
@@ -515,7 +555,7 @@ names its owner and what this file adds.
 |---|---|---|
 | Is sensitive handling disclosed? | `references/rubric.md` Confidentiality awareness | Nothing on disclosure. Axis 9 rules separately on an unfiltered accumulation sink, and reports alongside. |
 | What portability level does the target claim? | `references/rubric.md` Portability level | A runtime-written state path, which Dependency file portability does not reach. |
-| Is a condition checked in exactly one place? | `references/rubric.md` Contract discipline | Nothing; this file defers. |
+| Is a condition checked in exactly one place in *this review's* own procedure? | `references/rubric.md` Contract discipline | Nothing; this file defers. Axis 11's single-source-of-truth clause is a different subject -- the *target's* stores, not this review's precondition and postcondition -- and neither answers the other. |
 | Should a step be model reasoning or a bundled script? | `references/rubric.md` Mechanism fit, Skill-step vs. bundled script | Nothing. Axis 11's store-choice question is a different question with no owner there. |
 | Does a bundled script produce a machine-checkable plan file? | `references/rubric.md` dimension 7, Verifiable intermediate outputs | That bullet is gated on the target shipping code; this trigger is not, so a script-less orchestrator is graded here. |
 | Does the target survive hostile input probing? | `battle-testing-a-skill` | Axis 9's inbound half grades the *static design* question -- does the target state a trust class for its own record -- because adversarial probing is a separate lane a one-shot static review does not invoke. |
