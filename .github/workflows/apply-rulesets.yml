@@ -1,0 +1,96 @@
+# Issue #439: the single mutating path to this repository's branch protection.
+#
+# Every property of this workflow is a safety property, not a convenience:
+#
+#   * workflow_dispatch only -- no push, pull_request, or schedule trigger, so
+#     nothing merges its way into a live protection change.
+#   * dry_run defaults to true -- the default dispatch reads the API and prints
+#     the request body it would send, and sends nothing.
+#   * environment: ruleset-apply -- the credential is an Environment secret, so
+#     required reviewers on that Environment (configured in GitHub Settings, not
+#     here) gate the live apply independently of this file.
+#   * RULESETS_PAT, not GITHUB_TOKEN -- the default job token cannot administer
+#     rulesets, and deliberately should not: a dedicated fine-grained PAT scoped
+#     to Administration on this one repository keeps the blast radius of the
+#     credential equal to the blast radius of the job. Issuance, scopes, storage
+#     and rotation are documented in docs/runbooks/rulesets.md.
+#
+# See CLAUDE.md section 4 on irreversible, outward-facing operations.
+name: Apply rulesets
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Plan only (GET + print the request body; no live change)'
+        type: boolean
+        required: true
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: ruleset-apply
+    permissions:
+      contents: read
+    steps:
+      # workflow_dispatch checks out whichever ref the operator selected in the
+      # Actions UI, which defaults to the branch they were last viewing. Without
+      # this guard, a dispatch from a feature branch would apply that branch's
+      # unreviewed ruleset JSON to live GitHub state -- the exact review bypass
+      # the committed-source-of-truth design exists to prevent.
+      # The ref reaches the shell through env rather than a `${{ }}`
+      # interpolation inside `run:`; interpolating a context directly into a
+      # script body is the template-injection shape zizmor flags, and there is
+      # no reason to hand-wave it as safe here when an env var costs nothing.
+      - name: Guard dispatch ref
+        if: github.ref != 'refs/heads/main'
+        env:
+          DISPATCH_REF: ${{ github.ref }}
+        run: |
+          echo "::error::apply-rulesets must be dispatched against main (got ${DISPATCH_REF})."
+          exit 1
+
+      - name: Harden runner + checkout
+        uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
+        with:
+          ref: main
+
+      # Fails before any API call rather than letting the script discover the
+      # empty token mid-run: a half-applied ruleset is worse than an unapplied
+      # one, and this is the cheapest place to find out the handoff is broken.
+      - name: Guard RULESETS_PAT
+        env:
+          GITHUB_TOKEN: ${{ secrets.RULESETS_PAT }}
+        run: |
+          if [ -z "${GITHUB_TOKEN}" ]; then
+            echo "::error::RULESETS_PAT is not set on the ruleset-apply Environment. See docs/runbooks/rulesets.md."
+            exit 1
+          fi
+
+      - name: Validate ruleset JSON syntax
+        run: |
+          set -euo pipefail
+          python3 -c "import json,pathlib,sys; json.loads(pathlib.Path(sys.argv[1]).read_text(encoding='utf-8'))" \
+            .github/rulesets/main.json
+
+      - name: Plan or apply the main ruleset
+        env:
+          GITHUB_TOKEN: ${{ secrets.RULESETS_PAT }}
+          MODE: ${{ inputs.dry_run && 'plan' || 'apply' }}
+          TARGET_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/gitapex_apply_rulesets.py \
+            --repo "$TARGET_REPO" \
+            --sot .github/rulesets/main.json \
+            --mode "$MODE" \
+            --summary-file "$GITHUB_STEP_SUMMARY"

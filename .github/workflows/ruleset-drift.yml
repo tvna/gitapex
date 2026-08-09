@@ -1,0 +1,67 @@
+# Issue #439: scheduled full comparison of the live `main` ruleset against
+# `.github/rulesets/main.json`.
+#
+# Broader than the pull-request-time gate in ruleset-sync-gate.yml, which looks
+# only at required status checks and only in one direction. This run compares
+# the entire projected ruleset -- conditions, bypass actors, and every rule --
+# so a change made directly in the Settings UI, which no pull request would ever
+# show, surfaces within a day instead of at the next time someone happens to
+# read the settings page.
+name: Ruleset drift scan
+
+on:
+  schedule:
+    - cron: "0 9 * * *"  # daily 09:00 UTC, offset from the 07:00 and 08:00 scans
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  ruleset-drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Read-only RULESETS_PAT, same Environment as the pull-request-time gate;
+    # see docs/runbooks/rulesets.md for why the default job token cannot do
+    # this and why the apply workflow uses a different, reviewer-gated
+    # Environment for its read/write token.
+    environment: ruleset-verify
+    permissions:
+      contents: read
+    steps:
+      # Pinned to main explicitly, for the reason retrospective-gate-drift.yml
+      # states for its own pin: workflow_dispatch checks out whichever ref the
+      # operator selected, so without this a manual run from a feature branch
+      # would compare live GitHub state against that branch's unreviewed JSON
+      # while the report text still claims it evaluated main.
+      - name: Harden runner + checkout
+        uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
+        with:
+          ref: main
+
+      # Exit 2 (nothing verified -- no live ruleset yet, or no token) is a
+      # warning, not a failure: it is the documented owner-gated interval before
+      # the first apply, and a scheduled job that is red every day for a
+      # condition no commit can clear trains everyone to ignore it. Exit 1 is
+      # real drift and fails.
+      - name: Compare live ruleset against the committed source of truth
+        env:
+          GITHUB_TOKEN: ${{ secrets.RULESETS_PAT }}
+          TARGET_REPO: ${{ github.repository }}
+        run: |
+          set -uo pipefail
+          set +e
+          python3 .github/scripts/gitapex_scan_ruleset_drift.py \
+            --repo "$TARGET_REPO" --sot .github/rulesets/main.json --scope full \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+          code=${PIPESTATUS[0]}
+          set -e
+          case "$code" in
+            0) exit 0 ;;
+            2) echo "::warning::Ruleset drift unverified; see the job summary and docs/runbooks/rulesets.md."; exit 0 ;;
+            *) echo "::error::The live main ruleset has drifted from .github/rulesets/main.json."; exit 1 ;;
+          esac

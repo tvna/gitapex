@@ -58,6 +58,33 @@ def fetch_json_page(
     array, retrying transient failures. Generic across endpoints (issues,
     pulls, ...) -- the retry/backoff shape has nothing endpoint-specific
     about it."""
+    page: list[dict[str, Any]] = fetch_json_document(url, token, opener, sleeper)
+    return page
+
+
+def fetch_json_document(
+    url: str,
+    token: str,
+    opener: Callable[[urllib.request.Request], Any],
+    sleeper: Callable[[float], None],
+) -> Any:
+    """GET one GitHub REST endpoint that returns *any* JSON document --
+    object or array -- retrying transient failures exactly as
+    :func:`fetch_json_page` does.
+
+    Issue #439 (the ruleset source-of-truth work) needs
+    `GET /repos/{owner}/{repo}/rulesets/{id}`, whose body is a JSON
+    *object*, not the array every prior caller here fetched.
+    `fetch_json_page`'s own `-> list[dict[str, Any]]` annotation is not a
+    runtime check (it is a plain `json.loads` assignment), so calling it
+    for an object endpoint would "work" while lying to mypy and to every
+    reader. Rather than widen that established signature -- three modules
+    plus a hook already depend on the list contract -- the retry/backoff
+    body moved here and `fetch_json_page` became a typed wrapper over it.
+    Behaviour for existing callers is byte-for-byte unchanged; they still
+    get `list[dict[str, Any]]`, still raise `GitHubApiError` on the same
+    conditions.
+    """
     last_code = 0
     last_body = ""
     for attempt in range(1, 4):
@@ -85,7 +112,7 @@ def fetch_json_page(
 
         if 200 <= last_code < 300:
             try:
-                page: list[dict[str, Any]] = json.loads(last_body)
+                document: Any = json.loads(last_body)
             except json.JSONDecodeError as error:
                 # A 200 response is not proof of a parseable body -- a
                 # flaky proxy/CDN in front of api.github.com can return
@@ -94,7 +121,7 @@ def fetch_json_page(
                 # `except GitHubApiError` and crash as a raw traceback
                 # instead of the documented clean error/exit-1 path.
                 raise GitHubApiError(f"GET {url} returned HTTP {last_code} with unparseable JSON: {error}") from error
-            return page
+            return document
         print(f"Attempt {attempt}: HTTP {_format_code(last_code)} for GET {url}", file=sys.stderr)
         if last_code != 0 and last_code < 500:
             break
