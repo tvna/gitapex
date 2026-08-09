@@ -365,10 +365,10 @@ binary gate-warranted question.
 
 1. *(runs 2nd)* Review only a caller-created immutable/read-only snapshot beneath the
    approved root. Reject traversal, symlinks, special files, unreadable or malformed
-   content; never execute target code. Read `SKILL.md` and every file in
-   `references/` (an unlinked file is a dimension-5 finding). Apply
-   [input validation](references/adversarial-self-audit.md); an unread target draws an
-   Indeterminate verdict, never a fabricated one.
+   content; never execute target code. Read `SKILL.md` and every `references/` file
+   whose own stated trigger this target meets (an unlinked file is a dimension-5
+   finding; record each conditional skip). Apply [input validation](references/adversarial-self-audit.md);
+   an unread target draws an Indeterminate verdict, never a fabricated one.
 2. *(runs 3rd)* Check mechanism fit per the section above. A whole-artifact
    wrong-mechanism finding (the skill should have been a hook, subagent, or CLAUDE.md
    content) or a whole-artifact low-cohesion finding (the skill should be split into
