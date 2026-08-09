@@ -155,8 +155,14 @@ evaluation. Name the gap; never fake a score to proceed.
    - `dispatch_mechanism` -- how the run was isolated from the authoring
      context.
    - `scorer` -- what produced the numbers.
-   - `scores` -- the per-model, per-fixture results, one score file per
-     model actually run.
+   - `score_files` -- one entry per model actually run, each naming that
+     model and pointing at its own score file. Named for the pointers it
+     holds, not for the scores themselves, which live one level down in
+     those files under their own `scores` key: two differently-shaped
+     lists sharing one key name is the drift this contract exists to
+     stop. Every attachment a run produces is reachable from here, so a
+     file sitting unreferenced beside a record is an orphan, not a
+     result.
    - `known_gaps` -- the run's disclosed scope limits. State "none known"
      explicitly; never drop the field to mean the same thing.
    - `headline_pattern` -- a one-paragraph statement of the run's main

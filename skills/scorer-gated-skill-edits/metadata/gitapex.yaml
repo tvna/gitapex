@@ -28,6 +28,9 @@ spec:
       anchor: "https://github.com/tvna/gitapex/issues/932"
       summary: "executionRequirements.tools.write gains files, because Procedure step 7 now writes one. The prior empty list was true of a skill that only read and scored; leaving it unchanged while adding a write step would have left the sidecar asserting something its own Procedure contradicts."
     - kind: correction
+      anchor: "https://github.com/tvna/gitapex/pull/944"
+      summary: "The pre-merge independent-review round caught the run record's pointer list being named scores, the same key the per-model score file already uses for a differently-shaped list -- the exact key-name drift this contract exists to stop, reintroduced by the contract itself. Renamed to score_files in both the Procedure and the schema."
+    - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/932"
       summary: "The first draft invoked the declared tool only for --version, leaving the Gate step describing scoring without naming what executes the trials -- close to the false-declaration risk that issue's own acceptance map flagged. Gate now names the run invocation and requires both sides of a comparison to come from the same runner version, model, and fixture set. Found by this branch's own quality-audit round."
     - kind: correction
