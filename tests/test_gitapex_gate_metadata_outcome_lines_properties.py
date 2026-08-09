@@ -58,7 +58,11 @@ resolves Hypothesis' ``function_scoped_fixture`` health check, instead of
 suppressing the health check: a function-scoped fixture is set up once and then
 reused across every generated example, which is exactly what that health check
 exists to warn about. A module-scoped tree is honest about being built once,
-and these properties only ever read it.
+and these properties only ever read it. No health check is suppressed at all:
+an earlier revision of this module suppressed ``HealthCheck.too_slow`` on the
+assumption that ``-n auto`` would trip it, and removing the suppression was
+measured to leave all four properties passing -- so the suppression was
+protecting against nothing and is gone.
 """
 
 from __future__ import annotations
@@ -67,7 +71,7 @@ import pathlib
 
 import gitapex_gate_metadata_outcome_lines as gate
 import pytest
-from hypothesis import HealthCheck, given, settings
+from hypothesis import given, settings
 from hypothesis import strategies as st
 
 # The two real reference files every generated value draws from. Deliberately
@@ -109,10 +113,6 @@ _PROPERTIES = settings(
     derandomize=True,
     max_examples=200,
     deadline=None,
-    # The module-scoped fixture below already resolves the function_scoped_fixture
-    # health check; `too_slow` is suppressed instead because `-n auto` makes
-    # setup wall-clock a measurement of runner load, same reason as deadline=None.
-    suppress_health_check=[HealthCheck.too_slow],
 )
 
 
@@ -281,6 +281,19 @@ def test_traversal_tokens_never_bind_outside_the_skill_directory(
     which is the trap this asserts is closed. ``escape.md`` is a real symlink
     pointing outside the tree -- the one vector the lexical ``..``/absolute
     checks cannot catch, left to the ``resolve().is_relative_to`` check.
+
+    Confirmed to have teeth rather than assumed to: deleting that
+    ``resolve().is_relative_to`` check from ``_resolve_in_skill`` makes this
+    property FAIL, and restoring it makes it pass. Not every token in
+    ``_HOSTILE_TOKENS`` is load-bearing, though, and the honest reading is
+    narrower than the list looks -- ``_PATH_TOKEN_RE`` must start at an
+    alphanumeric, so a leading ``../`` or ``/`` is simply not part of the
+    matched token, and ``/etc/passwd`` carries no dotted extension to match at
+    all. The two tokens that actually exercise a refusal branch are
+    ``references/../../outside-target.md`` (matched whole, refused by the
+    lexical ``..`` check) and ``escape.md`` (matched, resolves, refused by the
+    containment check). The rest are kept as regression cover for the day the
+    token regex widens.
     """
     value = ", ".join(
         _pair_text(token, index, after) for index, (token, after) in enumerate(zip(tokens, afters, strict=False))
