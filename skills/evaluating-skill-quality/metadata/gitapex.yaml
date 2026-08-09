@@ -363,6 +363,22 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/933"
       summary: "Synced references/rubric.md's Contract discipline enumeration in the same change, as its own Keep-this-enumeration-in-sync bullet requires: the Postcondition now names byte-exact verification of every quoted span, and the Invariant names the fabricated-citation Stop boundary as binding at whichever step a quotation was authored. The bundled test_gitapex_contract_precondition_sync.py gate covers steps 1-4 only, so this sync was manual and is disclosed as such."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/pull/936"
+      summary: "An external review caught that 'byte-exact' plus wrap normalization was under-defined: collapsing a whole file's newlines lets a quotation splice across a paragraph, fence, or heading boundary and still match. Added references/adversarial-self-audit.md's Citation fidelity section as the one canonical rule -- reduction per block, never across blocks -- with accepted and rejected examples. SKILL.md step 5, its Stop boundary, and rubric.md's Postcondition all resolve there now."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/pull/936"
+      summary: "Same review, confidentiality: the isolation Verification procedure's positive control asks a dispatch to quote a sentence from the calling repository's CLAUDE.md/AGENTS.md, and nothing stopped that quote reaching a registry entry, report, or PR body. Step 1 now requires the quote be checked where the run happens and never published, with a pinned non-sensitive sentinel as the alternative. Partially answers the issue/537 PROPOSE_CONFIDENTIALITY_SAFEGUARD deferral."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/pull/936"
+      summary: "Same review: the second-dispatch bullet barred the first dispatch's reasoning but left 'the challenge' free-form, a carve-out that could carry a requested outcome past the Stop boundary against caller framing. The challenge is now passed explicitly as an untrusted claim to verify, never a verdict, rationale, or requested outcome."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/pull/936"
+      summary: "Shipped the drift gate for the invariant this change established, per CLAUDE.md section 3, rather than leaving the sync manual: test_gitapex_contract_precondition_sync.py gained postcondition and invariant mirrors alongside its existing precondition one, and now reduces whitespace before matching so a phrase split across a soft wrap still compares. The new mirrors immediately caught a real hyphenation drift between SKILL.md and rubric.md, fixed here."
+      outcome:
+        verdict: gate-shipped
+        found: 1
+        fixed: 1
   skillDependencies:
     requires: []
     relatedTo:

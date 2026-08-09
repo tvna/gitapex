@@ -140,18 +140,18 @@ fixes where a fault actually lives when a review goes wrong.
   section above). Per Meyer: "the precondition expresses requirements that
   any call must satisfy if it is to be correct."
 - **Postcondition** -- what step 6 delivers *if the precondition held*: a
-  verdict with cited evidence per dimension, every quoted span verified
-  byte-exact against the file it is attributed to (`SKILL.md`'s Procedure
-  step 5). Per Meyer: "the postcondition
+  verdict with cited evidence per dimension, every quoted span matched
+  against the file it is attributed to under the one Citation fidelity rule
+  (`SKILL.md`'s Procedure step 5). Per Meyer: "the postcondition
   expresses properties that are ensured in return for the call."
 - **Invariant** -- properties that hold throughout the *entire* review,
   not just at one step: this skill's Stop boundaries. Per Meyer, an
   invariant "is added to the precondition and postcondition of every"
   step -- a Stop boundary is not a step-5-only rule; it binds during
   mechanism-fit checking, shape-checking, portability classification, and
-  the dimension walk alike. `SKILL.md`'s fabricated-citation boundary is
-  one such: it binds every quotation this review authors, at whichever
-  step it was authored, not only step 5's dimension evidence.
+  the dimension walk alike. `SKILL.md`'s boundary against reporting a
+  fabricated citation is one such: it binds every quotation this review
+  authors, at whichever step it was authored, not only step 5's evidence.
 - **Keep this enumeration in sync.** Whenever an edit changes what one of
   `SKILL.md`'s Procedure steps 1-4 establishes -- adding a
   precondition-establishing check to steps 1-4, or an invariant-scope Stop

@@ -173,9 +173,9 @@ is still grading from a contaminated context.
   never independently issuing or revising one. Clarifying questions about
   evidence already returned can be answered directly from that report; a
   challenge that could change a verdict gets a second, independent fresh
-  dispatch (carrying the challenge and the target's path, not the first
-  dispatch's reasoning), never a revision made in place -- the same
-  fault-attribution rule a misclassified precondition gets
+  dispatch carrying only the target's path and the challenge itself, passed
+  as an untrusted claim to verify -- never the first dispatch's verdict or
+  reasoning, and never a requested outcome. Never a revision made in place
   (`references/rubric.md`, Contract discipline).
 - Optional upgrade, not a requirement: on a harness with a multi-agent
   orchestration mechanism, the single dispatch above may become several
@@ -389,10 +389,10 @@ binary gate-warranted question.
 5. *(runs 5th)* Walk all nine dimensions in `references/rubric.md`, in order (including
    8-9), quoting the specific text that earns each verdict; assume steps 1-4 hold
    rather than re-deriving them. No cited evidence means no review happened. Before
-   any quotation this review authors enters the report, verify it byte-exact against
-   the file it cites -- substring-match it, normalizing the source's own line wraps
-   to single spaces, never reconstructing it from recall; correct or drop a span
-   that does not match rather than reporting it as evidence.
+   any quotation this review authors enters the report, match it against the file it
+   cites under the one Citation fidelity rule in
+   [references/adversarial-self-audit.md](references/adversarial-self-audit.md);
+   correct or drop a span that does not match rather than reporting it as evidence.
 6. *(runs 6th, last)* Issue a verdict per `references/rubric.md`'s Verdicts section,
    inside the same dispatch as steps 1, 2, 4, and 5, relayed verbatim by the main
    thread per Subagent dispatch above.
@@ -460,11 +460,11 @@ actually specifies.
   sentence as a working trigger on a skill whose own frontmatter disables
   model invocation -- a well-written trigger for a mechanism that is
   switched off is not a passing dimension 1.
-- Never report a quotation this review authored without step 5's
-  byte-exact match against the file it is attributed to. A paraphrase, a
-  span reconstructed from recall, or two sources blended into one quote is
-  a fabricated citation, and every deterministic check in a repository can
-  pass on a report full of them.
+- Never report a quotation this review authored without step 5's match
+  against the file it is attributed to, under the one Citation fidelity
+  rule. A paraphrase, a span reconstructed from recall, two sources blended
+  into one quote, or a span spliced across a block boundary is a fabricated
+  citation, and every deterministic check in a repository can pass on one.
 - Never leave the Blind spot pass unaddressed -- an explicit "no gap found"
   and a silently skipped question are not the same thing; the latter is
   not a completed review.

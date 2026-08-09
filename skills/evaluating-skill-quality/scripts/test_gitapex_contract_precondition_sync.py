@@ -9,6 +9,14 @@ added a "Keep this enumeration in sync" invariant; per CLAUDE.md section 3
 ("Establishing an invariant ... ship its drift gate in the same change"),
 this test IS that gate rather than leaving the invariant to prose alone.
 
+The same drift class reaches the other two Contract discipline bullets, so
+this gate covers them too: `_POSTCONDITION_PHRASES` mirrors what step 5
+requires of a quotation against the **Postcondition** bullet, and
+`_INVARIANT_PHRASES` mirrors the invariant-scope Stop boundary that names it
+against the **Invariant** bullet. Both were added when the citation-fidelity
+rule landed, since that edit's own sync had to be done by hand -- exactly the
+manual step CLAUDE.md section 3 says to replace with a gate in the same change.
+
 Mechanism, and its one honest limitation: `_CHECKPOINT_PHRASES` is the
 mechanically-shared source of truth for the precondition checkpoints. The
 test asserts each phrase appears in BOTH the Procedure steps-1-4 block and
@@ -50,6 +58,26 @@ _CHECKPOINT_PHRASES = (
 )
 
 
+# What Procedure step 5 requires of every quotation, mirrored against the
+# **Postcondition** bullet. Extend in the same change that alters step 5's
+# own postcondition-bearing requirements.
+_POSTCONDITION_PHRASES = (
+    "Citation fidelity",
+    "cited evidence",
+)
+
+# The invariant-scope Stop boundaries the **Invariant** bullet must name.
+# Extend in the same change that adds an invariant-scope Stop boundary.
+_INVARIANT_PHRASES = ("fabricated citation",)
+
+
+def _reduce(text):
+    """Collapse whitespace runs to one space, so a phrase split across a soft
+    wrap still matches -- the same reduction references/adversarial-self-audit.md's
+    Citation fidelity rule defines, applied to the gate that guards it."""
+    return re.sub(r"\s+", " ", text).strip()
+
+
 def _steps_1_to_4_block(skill_md_text):
     """Return SKILL.md's Procedure steps 1-4 text (item ``1.`` up to ``5.``)."""
     procedure = re.search(r"\n## Procedure\n(.*?)\n## ", skill_md_text, re.S)
@@ -69,10 +97,92 @@ def _precondition_bullet(rubric_text):
     return bullet.group(0)
 
 
+def _step_5_text(skill_md_text):
+    """Return SKILL.md's Procedure step 5 text (item ``5.`` up to ``6.``)."""
+    procedure = re.search(r"\n## Procedure\n(.*?)\n## ", skill_md_text, re.S)
+    assert procedure, "SKILL.md has no '## Procedure' section -- gate cannot run"
+    block = re.search(r"\n5\. .*?(?=\n6\. )", procedure.group(1), re.S)
+    assert block, "SKILL.md Procedure has no item 5 in the expected shape"
+    return block.group(0)
+
+
+def _stop_boundaries_text(skill_md_text):
+    """Return SKILL.md's ``## Stop boundaries`` section text."""
+    section = re.search(r"\n## Stop boundaries\n(.*?)\n## ", skill_md_text, re.S)
+    assert section, "SKILL.md has no '## Stop boundaries' section -- gate cannot run"
+    return section.group(1)
+
+
+def _contract_bullet(rubric_text, name, next_name):
+    """Return the Contract discipline bullet ``name``, up to ``next_name``.
+
+    ``next_name`` is matched without a closing ``**`` so a bullet whose bold
+    run ends in a period (``- **Keep this enumeration in sync.**``) still
+    terminates the span.
+    """
+    section = re.search(r"\n## Contract discipline\n(.*?)\n## ", rubric_text, re.S)
+    assert section, "rubric.md has no '## Contract discipline' section -- gate cannot run"
+    bullet = re.search(rf"- \*\*{name}\*\*.*?(?=\n- \*\*{next_name})", section.group(1), re.S)
+    assert bullet, f"Contract discipline has no **{name}** bullet in the expected shape"
+    return bullet.group(0)
+
+
+@pytest.fixture(scope="module")
+def contract_blocks():
+    skill = _SKILL_MD.read_text(encoding="utf-8")
+    rubric = _RUBRIC_MD.read_text(encoding="utf-8")
+    return {
+        "step_5": _reduce(_step_5_text(skill)),
+        "stop_boundaries": _reduce(_stop_boundaries_text(skill)),
+        "postcondition": _reduce(_contract_bullet(rubric, "Postcondition", "Invariant")),
+        "invariant": _reduce(_contract_bullet(rubric, "Invariant", "Keep this enumeration in sync")),
+    }
+
+
+@pytest.mark.parametrize("phrase", _POSTCONDITION_PHRASES)
+def test_postcondition_mirrors_step_5(phrase, contract_blocks):
+    """Each phrase step 5 requires of a quotation must also appear in the
+    Contract discipline **Postcondition** bullet, and vice versa."""
+    assert phrase in contract_blocks["step_5"], (
+        f"postcondition phrase {phrase!r} is listed in the sync gate but no longer "
+        f"appears in SKILL.md Procedure step 5 -- update _POSTCONDITION_PHRASES "
+        f"or step 5"
+    )
+    assert phrase in contract_blocks["postcondition"], (
+        f"drift: SKILL.md step 5 requires {phrase!r} but the Contract discipline "
+        f"Postcondition bullet in rubric.md does not mention it -- update the "
+        f"Postcondition bullet to match"
+    )
+
+
+@pytest.mark.parametrize("phrase", _INVARIANT_PHRASES)
+def test_invariant_mirrors_stop_boundaries(phrase, contract_blocks):
+    """Each invariant-scope Stop boundary the gate tracks must appear in BOTH
+    SKILL.md's Stop boundaries and the Contract discipline **Invariant**
+    bullet -- the drift the citation-fidelity edit had to close by hand."""
+    assert phrase in contract_blocks["stop_boundaries"], (
+        f"invariant phrase {phrase!r} is listed in the sync gate but no longer "
+        f"appears in SKILL.md's Stop boundaries -- update _INVARIANT_PHRASES "
+        f"or the Stop boundary"
+    )
+    assert phrase in contract_blocks["invariant"], (
+        f"drift: SKILL.md carries an invariant-scope Stop boundary naming "
+        f"{phrase!r} but the Contract discipline Invariant bullet in rubric.md "
+        f"does not name it -- update the Invariant bullet to match"
+    )
+
+
+def test_contract_extraction_is_not_vacuous(contract_blocks):
+    """Guard against a rename silently making the two mirrors above pass on
+    empty blocks, the same way test_extraction_is_not_vacuous does below."""
+    for name, text in contract_blocks.items():
+        assert len(text) > 80, f"{name} block suspiciously short -- extraction may be broken"
+
+
 @pytest.fixture(scope="module")
 def blocks():
-    steps = _steps_1_to_4_block(_SKILL_MD.read_text(encoding="utf-8"))
-    bullet = _precondition_bullet(_RUBRIC_MD.read_text(encoding="utf-8"))
+    steps = _reduce(_steps_1_to_4_block(_SKILL_MD.read_text(encoding="utf-8")))
+    bullet = _reduce(_precondition_bullet(_RUBRIC_MD.read_text(encoding="utf-8")))
     return steps, bullet
 
 

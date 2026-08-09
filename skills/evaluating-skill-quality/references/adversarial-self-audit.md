@@ -13,13 +13,14 @@ Procedure steps 1-6; it is not one more addition to
 3. [Install/vendoring-time provenance](#installvendoring-time-provenance)
 4. [Cross-session, multi-turn, and encoding risk](#cross-session-multi-turn-and-encoding-risk)
 5. [Structured-output injection](#structured-output-injection)
-6. [Isolation verification](#isolation-verification)
+6. [Citation fidelity](#citation-fidelity)
+7. [Isolation verification](#isolation-verification)
    - [Trust class of an entry](#trust-class-of-an-entry)
    - [Verification procedure](#verification-procedure)
    - [Known entries](#known-entries)
    - [Unlisted platform](#unlisted-platform)
-7. [Contaminated-dispatch disclosure](#contaminated-dispatch-disclosure)
-8. [Downstream verdict consumption](#downstream-verdict-consumption)
+8. [Contaminated-dispatch disclosure](#contaminated-dispatch-disclosure)
+9. [Downstream verdict consumption](#downstream-verdict-consumption)
 
 ## Injection resistance and trust boundary
 
@@ -93,6 +94,38 @@ dimension 17 names for any skill that emits structured output built from
 reviewed material -- and it applies identically to that skill's own
 quoting instructions, not only to this one's.
 
+## Citation fidelity
+
+The one rule every quotation this dispatch authors is matched under --
+`SKILL.md`'s Procedure step 5 and its paired Stop boundary both resolve
+here, so there is a single definition rather than three paraphrases of one.
+
+**Canonical forms.** A *block* is a run of source lines with no blank line,
+no fenced-code delimiter, and no heading between them. Reduce both the
+source block and the candidate quotation by collapsing every run of
+whitespace -- including the newline and continuation indent of a soft wrap
+-- to one space, and trimming the ends. The quotation matches only when its
+reduced form is a substring of one reduced block's.
+
+**One block, never two.** The reduction is applied per block, so a span can
+cross a soft wrap and still match, and cannot cross a blank line, a fence,
+or a heading. Collapsing the whole file at once is the wrong reduction: it
+silently splices text across those boundaries into spans that never existed.
+
+- Accepted, crossing a soft wrap: a quotation whose words run past the end
+  of one physical line into the next line of the same paragraph.
+- Rejected, crossing a boundary: a quotation whose words run from the last
+  line of one paragraph into the first line of the next, or out of a fenced
+  block into the prose after it. The two sides are not one span.
+- Rejected, blended: a quotation joining text from two files, two sections,
+  or two non-adjacent points in one block.
+- Rejected, paraphrased: any span reworded, abridged with no marked
+  ellipsis, or reconstructed from recall rather than read from the file.
+
+**Claims about a match are themselves claims.** A line count, a line
+number, or a section name stated beside a quotation is derived from the
+file the same way the quotation is, not asserted alongside it.
+
 ## Isolation verification
 
 Whether a dispatched subagent's context actually excludes the calling
@@ -147,6 +180,16 @@ mechanism, not only the ones already recorded below.
    one distinctive sentence if so. Confirm it actually quotes real content --
    this proves the test itself can detect the file when present, rather than
    reflexively reporting "none" regardless of truth.
+   - **The quote is checked, never published.** Compare it against the file
+     where the run happens and record only the outcome ("positive control
+     passed"). A project-instruction file is not known to be
+     public -- it can carry an internal hostname, a credential, a private
+     process detail -- so its content must not reach a registry entry, a
+     review report, a PR or issue body, a log, or any other sink. When even
+     reading it back into a report is unwanted, pin a fixed non-sensitive
+     sentinel sentence in the file first and confirm that instead; the
+     control's job is to prove detection works, which a sentinel does
+     equally well.
 2. **Negative control.** From (or targeting) a location with no
    `CLAUDE.md`/`AGENTS.md` anywhere in its full directory ancestry, run the
    identical prompt through the identical mechanism. A result of "none
