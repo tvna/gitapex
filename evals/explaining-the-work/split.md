@@ -510,7 +510,7 @@ the two must never be assumed equal.
 
 Classification: **ordinary** (adds a clarifying sentence; not a deletion).
 
-### A new fixture was authored to test the actual failure mode, empirically tied on both model tiers
+### A new fixture was authored to test the actual failure mode
 
 `why-not-issue-and-adr-numbers-stay-distinct.yaml` (new, **test** split):
 gives the model both a concrete issue number (#340) and a concrete,
@@ -518,10 +518,17 @@ different ADR sequence number (0012) in the prompt, and checks the
 written comment preserves both numbers distinctly rather than
 substituting one for the other (`output_not_contains: "adr/0340"` catches
 the specific conflation failure this ambiguity invites -- reusing the
-issue number as the ADR number). One fresh dispatch per side, per tier,
-against only `why-not-issue-and-adr-numbers-stay-distinct.yaml` -- not a
+issue number as the ADR number).
+
+### Transfer check
+
+One fresh dispatch per side, per tier, against only
+`why-not-issue-and-adr-numbers-stay-distinct.yaml` -- not a
 full-corpus selection-split gate table (see the first iteration's "Gate
-result" table above for that):
+result" table above for that), and the same adjacent-tier (Haiku 4.5)
+methodology as every prior iteration's own Transfer check in this file,
+here run alongside the primary-tier dispatch on the same new fixture
+rather than as a separate follow-up pass:
 
 | Fixture | Tier | Before (old text) | After (new text) |
 |---|---|---|---|

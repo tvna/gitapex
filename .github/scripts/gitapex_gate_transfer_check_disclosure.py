@@ -1,64 +1,81 @@
 #!/usr/bin/env python3
-"""Check that every newly-added Kept-edit-log `**Iteration:` entry in a
-diff over `evals/*/split.md` discloses a `Transfer check` line.
+"""Check that every `## Iteration:` entry in every `evals/*/split.md` file
+discloses a non-empty `### Transfer check` subsection -- whole-file, every
+entry, not scoped to a diff.
 
-Issue #517 (refs #487): several split.md files (e.g.
-evals/evaluating-skill-quality/split.md, evals/merge-retrospective/split.md,
-evals/scorer-gated-skill-edits/split.md) document a `## Kept-edit log`
-convention where every KEEP iteration entry carries a bold
-`**Transfer check:**` line, either disclosing a real result or explicitly
-stating the transfer check was not run this iteration -- mirroring
-scorer-gated-skill-edits/SKILL.md's own stop boundary, "Never ship a
-skill that has not passed a transfer check." Nothing enforced that
-disclosure requirement deterministically until now; a KEEP entry could
-previously omit it silently.
+Issue #517 (refs #487) shipped the original version of this gate: a
+diff-scoped check that a *newly-added* Kept-edit-log `**Iteration:`
+bold-paragraph entry discloses a `Transfer check` line somewhere in its
+own span, mirroring `scorer-gated-skill-edits/SKILL.md`'s own stop
+boundary, "Never ship a skill that has not passed a transfer check." That
+version was deliberately scoped to entries under a top-level `##
+Kept-edit log` heading only (a `## Rejected-edit log` entry was out of
+scope, since a rejected candidate was never a ship decision) and only to
+entries whose own header line was new in the current PR's diff -- a
+pre-existing entry, however non-compliant, was never retroactively
+flagged.
 
-Scoped to any `evals/*/split.md`, not literally only
-`evals/scorer-gated-skill-edits/split.md` (which has zero Kept-edit-log
-entries today and would make a literally-scoped check a permanent no-op) --
-the convention this closes is genuinely repo-wide, not specific to one
-skill's split.md.
+Issue #928's split.md/split.json migration (tasks T2-T6) standardizes
+every `evals/*/split.md` file on one heading convention -- `## Iteration:
+<issue>, <title>`, with `### Gate result` / `### Transfer check` / `###
+Rejected-edit log` / `### Verdict` subsections -- superseding both the old
+`**Iteration:` bold-paragraph form and the separate top-level `## Kept-edit
+log` / `## Rejected-edit log` split. That migration's own ACM row widens
+this gate's own scope to match: "every iteration entry in every file is in
+scope for the transfer-check requirement" -- every `## Iteration:` entry,
+KEEP or REJECT alike, not only ones that used to sit under `## Kept-edit
+log`, and every entry currently on disk, not only ones newly added in the
+active diff. This rewrite implements that:
 
-Diff-scoped by design, not a full-file audit: only entries whose own
-`**Iteration:` header line is newly added in the current diff are
-checked (the calling workflow computes this list via `git diff -U0`, the
-same "git access stays in the workflow, this script only grades the
-facts handed to it" split as gitapex_gate_skill_audit_disclosure.py). This means
-the pre-existing entries in evals/evaluating-skill-quality/split.md that
-predate this gate are never retroactively flagged -- only a future new
-entry, anywhere, must comply. Each entry's Transfer-check search always
-reads the *current* on-disk file content (mirrors
-gitapex_gate_skill_rename_lifecycle.py's own `all_renamed_from_values`, which
-reads skills/*/metadata/gitapex.yaml directly from the checked-out
-working tree) rather than the diff hunk itself, so a reworded existing
-entry whose own Transfer check line sits a few lines below, untouched by
-this diff, still correctly passes.
+1. Recognizes only the standardized `## Iteration:` heading form. The old
+   `**Iteration:` bold-paragraph recognition is dropped entirely -- after
+   T2-T6, no `evals/*/split.md` file uses it any more, and continuing to
+   special-case it would just be dead code matching a convention that no
+   longer exists anywhere in this repository.
+2. Scans the whole file, every entry, every time -- not a diff-computed
+   subset. There is no more "newly added" concept: a call to this script
+   is a full-corpus audit of whatever `evals/*/split.md` files it is
+   pointed at (by default, every file the `evals/*/split.md` glob finds),
+   the same "audit the whole tree, not just what one PR touched" shape
+   `gitapex_scan_skill_metadata_schema.py` already uses for schema
+   validation.
+3. No longer scopes to a `## Kept-edit log` heading at all -- there is no
+   such heading left to scope to after the migration, and the widened
+   requirement explicitly covers REJECT entries too (an entry landed
+   "outside the scorer-gate's scope" on non-behavioral grounds, or
+   correctly REJECTed as a tie, still owes a disclosed Transfer check
+   subsection under the new convention, even if that subsection's own
+   content is just "not run this iteration").
 
-Deliberately not merged into gitapex_gate_skill_audit_disclosure.py: that script
-grades PR-body text against workflow-supplied skill/doc lists; this one
-grades repository file content (an evals/*/split.md's own prose) against
-a workflow-supplied list of newly-added entries -- a different task
-shape, kept as its own focused gate script and workflow per this repo's
-existing gitapex_gate_owasp_asi_mapping.py / gitapex_gate_owasp_llm_mapping.py precedent
-of independent, single-purpose gates.
+Known, disclosed consequence of this rewrite's own scope (`.github/scripts/
+gitapex_gate_transfer_check_disclosure.py` and this file's own test suite
+only -- the calling workflow, `.github/workflows/
+transfer-check-disclosure-gate.yml`, is out of scope for this change and
+was not touched): that workflow's own "Determine newly-added Kept-edit-log
+entries" step still greps for `^\\*\\*Iteration:` lines to build the
+`--entries` input this script used to accept. Since no file uses that
+bold-paragraph form any more, that grep now always finds zero lines on
+both sides of the diff, `applicable` is always `false`, and the workflow's
+gate step is permanently skipped -- a real, disclosed gap needing a
+follow-up edit to that workflow file (not made here, per this task's own
+file scope) to stop computing a diff at all and instead invoke this
+script argument-free so it audits the current `evals/*/split.md` glob
+directly, matching this script's own new whole-file contract.
 
-Scoped specifically to the `## Kept-edit log` section, not any `##`
-section a split.md happens to contain: an entry under `## Rejected-edit
-log` was rejected before a transfer check could even be relevant, so this
-gate only requires the line for an entry whose nearest preceding `##`
-heading is `Kept-edit log` (case-insensitive); an entry under any other
-heading, or with no heading above it at all, is out of this gate's scope
-and never reported as a failure.
-
-Line selection is multiplicity-aware: if two entries in the same file
-share byte-identical `**Iteration:` header text (an edge case -- real
-entries cite a unique issue number -- but not impossible), naively
-matching the *first* occurrence in the file would grade a later,
-genuinely new entry against an earlier, unrelated one's span. Each
-workflow-supplied (path, iteration_line) tuple instead consumes one
-not-yet-claimed matching line, preferring the *last* (highest-numbered)
-remaining occurrence first, since new entries are conventionally appended
-to the end of a Kept-edit log.
+Line/entry selection mirrors the multiplicity- and span-handling
+discipline the previous version established
+(`gitapex_gate_skill_rename_lifecycle.py`'s own "read the current on-disk
+working tree, not a diff hunk" precedent): each `## Iteration:` heading's
+own entry span runs from its own line up to, but excluding, the next
+`##`-level heading (any level-2 heading, not only another `## Iteration:`
+one) or EOF. Within that
+span, a `### Transfer check` subsection's own content runs from its own
+heading line up to, but excluding, the next `###`- or `##`-level heading,
+or the entry's own end. An entry is compliant only if that subsection
+heading exists at all *and* its content is non-blank once stripped -- a
+present-but-empty heading (someone added the heading, forgot to fill it
+in) is exactly as non-compliant as a wholly-absent one, and reported the
+same way.
 """
 
 from __future__ import annotations
@@ -68,100 +85,85 @@ import re
 import sys
 from pathlib import Path
 
-_ITERATION_PREFIX = "**Iteration:"
-_HEADING_RE = re.compile(r"^##[ \t]+(\S.*)$")
-_KEPT_EDIT_LOG_HEADING_RE = re.compile(r"^kept-edit log$", re.IGNORECASE)
-_TRANSFER_CHECK_RE = re.compile(r"transfer check", re.IGNORECASE)
+DEFAULT_GLOB = "evals/*/split.md"
+
+_ITERATION_HEADING_RE = re.compile(r"^##[ \t]+Iteration:[ \t]*(\S.*)$", re.IGNORECASE)
+_H2_RE = re.compile(r"^##[ \t]+\S.*$")
+_H3_RE = re.compile(r"^###[ \t]+\S.*$")
+_TRANSFER_CHECK_HEADING_RE = re.compile(r"^###[ \t]+Transfer check[ \t]*$", re.IGNORECASE)
 
 
-def _entry_span(lines, start_index):
-    """Return the lines from start_index (inclusive) up to, but excluding,
-    the next `**Iteration:` line or `##` heading line, or EOF."""
-    end = len(lines)
-    for i in range(start_index + 1, len(lines)):
-        line = lines[i]
-        if line.startswith(_ITERATION_PREFIX) or _HEADING_RE.match(line):
-            end = i
-            break
-    return lines[start_index:end]
+def _iter_iteration_entries(lines):
+    """Yield (start_index, heading_text) for every `## Iteration:` heading
+    line in `lines`, in file order. `heading_text` is the full heading
+    line, right-stripped, used only for human-readable reporting."""
+    for index, line in enumerate(lines):
+        if _ITERATION_HEADING_RE.match(line):
+            yield index, line.rstrip()
 
 
-def _nearest_heading(lines, index):
-    """Return the text of the nearest `##` heading at or before `index`,
-    or None if there is none (index sits before any heading)."""
-    for i in range(index, -1, -1):
-        match = _HEADING_RE.match(lines[i])
-        if match:
-            return match.group(1).strip()
+def _entry_span_end(lines, start_index):
+    """Index of the first `##`-level heading strictly after `start_index`
+    (any level-2 heading, not only another `## Iteration:` one -- an
+    entry's own span ends at the next section boundary regardless of what
+    that next section is), or `len(lines)` if there is none."""
+    for index in range(start_index + 1, len(lines)):
+        if _H2_RE.match(lines[index]):
+            return index
+    return len(lines)
+
+
+def _transfer_check_content(lines, entry_start, entry_end):
+    """Return the stripped text of the entry's own `### Transfer check`
+    subsection (the span from its own heading line, exclusive, up to the
+    next `###`- or `##`-level heading, or the entry's own end), or `None`
+    if no such subsection heading exists anywhere within
+    `lines[entry_start:entry_end]`. Only the first matching heading in the
+    span is used -- real entries never carry two."""
+    for index in range(entry_start, entry_end):
+        if _TRANSFER_CHECK_HEADING_RE.match(lines[index]):
+            sub_end = entry_end
+            for j in range(index + 1, entry_end):
+                if _H3_RE.match(lines[j]) or _H2_RE.match(lines[j]):
+                    sub_end = j
+                    break
+            return "\n".join(lines[index + 1 : sub_end]).strip()
     return None
 
 
-def _select_unconsumed_line_index(lines, target_line, consumed):
-    """Return the highest-index line in `lines` equal to `target_line`
-    that is not already in `consumed`, or None if every occurrence (or
-    there are none at all) is already claimed. Preferring the last
-    occurrence first matches how new Kept-edit-log entries are
-    conventionally appended."""
-    for i in range(len(lines) - 1, -1, -1):
-        if i not in consumed and lines[i] == target_line:
-            return i
-    return None
-
-
-def find_missing_transfer_checks(entries):
-    """entries: an iterable of (path, iteration_line) pairs -- workflow-
-    computed, newly-added `**Iteration:` lines in this diff. Returns the
-    subset that are in scope (nearest heading is `## Kept-edit log`) and
-    whose entry span (read from the current on-disk file content) has no
-    `Transfer check` mention, or whose (path, iteration_line) could not be
-    located at all (missing file, or the line text no longer matches
-    current content, or every matching occurrence already claimed by an
-    earlier tuple) -- either way treated as a disclosure failure, not
-    silently skipped. An entry located but scoped to a heading other than
-    `## Kept-edit log` (e.g. `## Rejected-edit log`) is out of scope and
-    never added to the returned list.
-    """
+def find_missing_transfer_checks(paths):
+    """paths: an iterable of `evals/*/split.md`-shaped file paths. Returns
+    a list of `(path, iteration_heading_text)` pairs -- one for every `##
+    Iteration:` entry, anywhere in the file (whole-file, every entry, not
+    diff-scoped), whose own span has no `### Transfer check` subsection
+    heading at all, or has one whose own content is empty once stripped --
+    either way a disclosure failure, never silently skipped. A file that
+    cannot be read (missing, or not valid UTF-8) is itself reported as a
+    single `(path, "<file unreadable>")` failure tuple rather than raising
+    or being silently dropped from the scan."""
     missing = []
-    file_lines_cache: dict[str, list[str] | None] = {}
-    consumed_by_path: dict[str, set[int]] = {}
-    for path, iteration_line in entries:
-        if path not in file_lines_cache:
-            try:
-                file_lines_cache[path] = Path(path).read_text(encoding="utf-8").splitlines()
-            except (OSError, UnicodeDecodeError) as exc:
-                print(f"warning: could not read {path}: {exc}", file=sys.stderr)
-                file_lines_cache[path] = None
-        lines = file_lines_cache[path]
-        if lines is None:
-            missing.append((path, iteration_line))
+    for path in paths:
+        try:
+            lines = Path(path).read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeDecodeError) as exc:
+            print(f"warning: could not read {path}: {exc}", file=sys.stderr)
+            missing.append((path, "<file unreadable>"))
             continue
-        consumed = consumed_by_path.setdefault(path, set())
-        idx = _select_unconsumed_line_index(lines, iteration_line, consumed)
-        if idx is None:
-            missing.append((path, iteration_line))
-            continue
-        consumed.add(idx)
-        heading = _nearest_heading(lines, idx)
-        if heading is None or not _KEPT_EDIT_LOG_HEADING_RE.match(heading):
-            continue
-        span_text = "\n".join(_entry_span(lines, idx))
-        if not _TRANSFER_CHECK_RE.search(span_text):
-            missing.append((path, iteration_line))
+        for start, heading in _iter_iteration_entries(lines):
+            end = _entry_span_end(lines, start)
+            content = _transfer_check_content(lines, start, end)
+            if not content:
+                missing.append((path, heading))
     return missing
 
 
-def _parse_entries(text):
-    """Parse `<path>\\t<iteration line text>` pairs, one per line, blank
-    lines ignored."""
-    entries = []
-    for line in text.splitlines():
-        if not line.strip():
-            continue
-        path, sep, iteration_line = line.partition("\t")
-        if not sep:
-            continue
-        entries.append((path, iteration_line))
-    return entries
+def _default_paths():
+    """The whole-file audit's own default scope: every real `evals/*/
+    split.md` file the glob finds in the current working directory (the
+    calling workflow always runs from the repository root), sorted for
+    deterministic output. Never a hardcoded 5-skill list -- a 6th skill
+    gaining a `split.md` later must be picked up automatically."""
+    return sorted(str(path) for path in Path().glob(DEFAULT_GLOB))
 
 
 def _truncate(text, limit=100):
@@ -169,52 +171,43 @@ def _truncate(text, limit=100):
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI: exit 0 iff every newly-added Kept-edit-log entry handed in
-    discloses a Transfer check line, else 1."""
+    """CLI: exit 0 iff every `## Iteration:` entry in every given (or
+    glob-discovered) `evals/*/split.md` file discloses a non-empty
+    `### Transfer check` subsection, else 1."""
     parser = argparse.ArgumentParser(
-        description="Check that every newly-added Kept-edit-log '**Iteration:' "
-        "entry in a diff over evals/*/split.md discloses a Transfer check line."
+        description="Check that every '## Iteration:' entry in every evals/*/split.md "
+        "file (whole-file, every entry, not diff-scoped) discloses a non-empty "
+        "'### Transfer check' subsection."
     )
     parser.add_argument(
-        "--entries",
-        help="Path to a file of '<path><TAB><iteration line text>' pairs, "
-        "one per line (workflow-computed: newly-added '**Iteration:' lines "
-        "in this diff); reads standard input when omitted.",
+        "paths",
+        nargs="*",
+        help=f"split.md file paths to audit; defaults to the '{DEFAULT_GLOB}' glob when omitted.",
     )
     args = parser.parse_args(argv)
-    try:
-        text = (
-            Path(args.entries).read_text(encoding="utf-8") if args.entries else sys.stdin.buffer.read().decode("utf-8")
-        )
-    except FileNotFoundError:
-        print(f"error: entries file not found: {args.entries}", file=sys.stderr)
-        return 1
-    except UnicodeDecodeError as error:
-        source = args.entries if args.entries else "standard input"
-        print(f"error: {source} is not valid UTF-8: {error}", file=sys.stderr)
-        return 1
+    paths = args.paths if args.paths else _default_paths()
 
-    entries = _parse_entries(text)
-    if not entries:
-        print("PASS: no newly-added Kept-edit-log entries in this diff")
+    if not paths:
+        print(f"PASS: no files matched '{DEFAULT_GLOB}'; nothing to check")
         return 0
 
-    missing = find_missing_transfer_checks(entries)
+    missing = find_missing_transfer_checks(paths)
     if not missing:
-        print(f"PASS: Transfer check disclosed for all {len(entries)} newly-added entry(ies)")
+        print(f"PASS: every '## Iteration:' entry in {len(paths)} file(s) discloses a Transfer check")
         return 0
 
     print(
-        "FAIL: the following newly-added Kept-edit-log entries have no disclosed Transfer check line:",
+        "FAIL: the following '## Iteration:' entries have no disclosed, non-empty '### Transfer check' subsection:",
         file=sys.stderr,
     )
-    for path, iteration_line in missing:
-        print(f"  - {path}: {_truncate(iteration_line)}", file=sys.stderr)
+    for path, heading in missing:
+        print(f"  - {path}: {_truncate(heading)}", file=sys.stderr)
     print(
-        "Add a '**Transfer check:** ...' line within the entry's own span "
-        "(disclosing a real result, or that it was not run this iteration), "
-        "per the convention already used in "
-        "evals/evaluating-skill-quality/split.md's Kept-edit log.",
+        "Add a '### Transfer check' subsection within the entry's own span "
+        "(disclosing a real cross-model result, or that it was not run this "
+        "iteration), per the convention already used in "
+        "evals/explaining-the-work/split.md and "
+        "evals/evaluating-skill-quality/split.md.",
         file=sys.stderr,
     )
     return 1
