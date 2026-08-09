@@ -17,9 +17,13 @@ dev = [
     # those pin a *measured finding/threshold baseline* that a version bump
     # would silently redefine. Hypothesis defines no baseline here -- the
     # properties in tests/test_gitapex_gate_metadata_outcome_lines_properties.py
-    # assert the parser's own behavior, and a Hypothesis upgrade that changes
-    # which examples are generated fails loudly as a test failure rather than
-    # quietly changing what is enforced.
+    # assert the parser's own behavior, so a Hypothesis upgrade that changes
+    # which derandomized examples are generated stays correct -- and silent --
+    # against a still-correct parser; it fails loudly only if the new example
+    # set happens to land on a real defect the old set missed. That asymmetry
+    # is accepted, not overlooked: this pin trades a possible silent coverage
+    # drift for staying off the ruff-style measured-baseline treadmill, since
+    # nothing here defines a baseline a bump could silently redefine.
     "hypothesis>=6.100",
     "pyyaml>=6.0",
     "prek>=0.4.12",

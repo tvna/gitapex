@@ -40,14 +40,36 @@ defect classes the example suite also does not reach, and each says in its own
 docstring that it does not detect the motivating defect, so a later reader does
 not mistake one of them for the layer that covers it.
 
+None of the four exercises the ``outcome.commit`` sibling-key anchoring branch
+(``_explicit_rev``'s first-tier resolution, ahead of the inline-SHA fallback):
+every property here drives ``_claims_in_value`` through :func:`_run`, which
+hardcodes ``outcome={}``, so every generated claim is either unanchored or
+inline-SHA-anchored, never commit-key-anchored. That branch is exercised by
+the existing example-based suite
+(``test_outcome_commit_key_is_checked_at_that_commit`` in
+``tests/test_gitapex_gate_metadata_outcome_lines.py``), so the gap is covered
+today, not open -- but it is a real scope boundary of this pilot's own
+fixture, disclosed here rather than left for a reader to discover by tracing
+:func:`_run`.
+
 Reproducibility
 ---------------
 ``derandomize=True`` with an explicit ``max_examples``: this repository runs
-pytest under ``pytest-xdist`` (``-n auto``) and ``pytest-split``, where a
-randomly-seeded generator turns a latent failure into an intermittently red
-suite that reruns green. The trade is disclosed rather than hidden -- a
-derandomized run explores a fixed example set, so a defect outside that set is
-not explored on any run.
+pytest under ``pytest-xdist`` (``-n auto``, wired into ``[tool.pytest.ini_options]
+addopts``), where a randomly-seeded generator turns a latent failure into an
+intermittently red suite that reruns green. (``pytest-split`` is a declared
+dev dependency but not yet wired into any workflow's pytest invocation --
+no ``--splits``/``--group`` flag exists in ``.github/workflows/`` today -- so
+only the xdist half of this reasoning is live in CI as of this pilot; the
+same derandomization argument would apply once splitting lands.) The trade
+is disclosed rather than hidden -- a derandomized run explores a fixed
+example set, so a defect outside that set is not explored on any run, and
+that example set is a function of the resolved Hypothesis version: the
+`>=6.100` dependency bound in ``pyproject.toml`` does not pin it, so a future
+`uv lock` refresh can silently change which examples a derandomized run
+explores. A version bump only fails loudly if the new example set happens to
+expose a real defect; on a still-correct parser, coverage can drift with no
+red test to say so.
 
 ``deadline=None`` for the same reason: Hypothesis' default per-example deadline
 measures wall-clock time, which under ``-n auto`` on a loaded CI runner is a
@@ -130,7 +152,7 @@ def skill_dir(tmp_path_factory: pytest.TempPathFactory) -> pathlib.Path:
     skills = root / "skills"
     directory = skills / _SKILL
     (directory / "references").mkdir(parents=True)
-    (directory / "SKILL.md").write_text("x\n" * 10, encoding="utf-8")
+    (directory / gate._SKILL_MD).write_text("x\n" * 10, encoding="utf-8")
     for name in _FILE_POOL:
         (directory / "references" / name).write_text("y\n" * 5, encoding="utf-8")
 
@@ -263,13 +285,17 @@ def test_arbitrary_text_never_raises_and_is_deterministic(value: str, key: str, 
 # --------------------------------------------------------------------------
 
 
-@_PROPERTIES
-@given(
-    tokens=st.lists(st.sampled_from(_HOSTILE_TOKENS), min_size=1, max_size=4),
-    afters=st.lists(st.integers(min_value=0, max_value=999), min_size=1, max_size=4),
+_HOSTILE_PAIRS = st.lists(
+    st.tuples(st.sampled_from(_HOSTILE_TOKENS), st.integers(min_value=0, max_value=999)),
+    min_size=1,
+    max_size=4,
 )
+
+
+@_PROPERTIES
+@given(pairs=_HOSTILE_PAIRS)
 def test_traversal_tokens_never_bind_outside_the_skill_directory(
-    tokens: list[str], afters: list[int], skill_dir: pathlib.Path
+    pairs: list[tuple[str, int]], skill_dir: pathlib.Path
 ) -> None:
     """A token carrying ``..``, an absolute path, or a symlink out of the tree
     never produces a claim about a file outside the skill directory.
@@ -294,10 +320,18 @@ def test_traversal_tokens_never_bind_outside_the_skill_directory(
     lexical ``..`` check) and ``escape.md`` (matched, resolves, refused by the
     containment check). The rest are kept as regression cover for the day the
     token regex widens.
+
+    ``pairs`` is one paired strategy (:data:`_HOSTILE_PAIRS`), the same shape
+    :data:`_PAIRS` already uses -- not two independently-sized lists zipped
+    together. An earlier revision drew a token list and an integer list
+    separately and combined them with ``zip(..., strict=False)``, which
+    silently truncates to the shorter list whenever Hypothesis draws the two
+    at different lengths: measured at ~74% of examples under this file's own
+    settings, so most generated examples exercised fewer hostile tokens than
+    ``max_size=4`` implied. Pairing them up front removes the possibility by
+    construction.
     """
-    value = ", ".join(
-        _pair_text(token, index, after) for index, (token, after) in enumerate(zip(tokens, afters, strict=False))
-    )
+    value = ", ".join(_pair_text(token, index, after) for index, (token, after) in enumerate(pairs))
     claims, _, findings = _run(value, skill_dir)
 
     assert findings == []
