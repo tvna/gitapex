@@ -331,6 +331,94 @@ spec:
         verdict: FAIL
         found: 12
         fixed: 12
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/933"
+      summary: "Supersedes the issue/818 decision entry above (append-only, not deleted). That entry answered what the bundled checker does internally; the field declares what the skill needs granted. Corrected to write: [files] (references/adversarial-self-audit.md's registry step appends an entry) and shell: [python3] (SKILL.md's Procedure step 3 executes gitapex_check_skill_shape.py). A consumer honouring the old declaration would under-grant and fail at the first mandatory step."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/933"
+      summary: "Added a Trust class subsection to the isolation registry: Reviewed entries (present at run start, gate-passed) versus Same-run entries (appended mid-run, gate-passed nothing). A later step in the same run relies on the control outcomes it observed, not on the line it just wrote. The instruction-only limit is stated in the file rather than implied, since nothing deterministic separates the two once both sit in one working tree."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/933"
+      summary: "Added a byte-exact citation requirement to Procedure step 5 plus a paired Stop boundary: every quotation the review authors is substring-matched against its cited file (source line wraps normalized to single spaces) before entering the report. Grounded in this repository's own history -- a draft reference once shipped roughly ten fabricated quotations of fourteen, and every deterministic check passed on it."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/933"
+      summary: "Paid for the new step against the 500-line body ceiling in-file rather than by moving content to references/: ten trims in SKILL.md, of which the filesystem-only-check and main-thread-relay restatements are true duplications. The mandatory common-case read set stays at three files, so dimension 5's tracked reading burden does not deepen. Body length as shipped is recorded in the paired audit entry below, not here, so later commits cannot strand a stale number in this one."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/933"
+      summary: "Pre-merge dogfood, evaluating-skill-quality self-review, diff-scoped, under isolation the caller established live (claude -p from the snapshot cwd with an isolated HOME; both controls re-run at CLI 2.1.226, which the registry's existing entry already covers, so no new registry entry was written). WELL-FORMED-NOT-MATURE. Two gaps found, both fixed in this PR: dimension 4's undisclosed Contract-discipline sync, and dimension 8's missing audit-pairing entry (this entry and the next close it)."
+      outcome:
+        verdict: WELL-FORMED-NOT-MATURE
+        found: 2
+        fixed: 2
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/933"
+      summary: "Pre-merge dogfood, battle-testing-a-skill, same diff and isolation. FAIL on dimension 18: the worked example's own byte-exact demonstration claimed a quoted span crossed a four-line wrap when it crosses three -- an unverified ancillary claim beside a correctly verified quotation, in the paragraph added to demonstrate the new rule. Re-derived from the files and corrected. Its dimension-14 INDETERMINATE was a snapshot artifact: the isolated copy carried skills/ only, no evals/."
+      outcome:
+        verdict: FAIL
+        found: 1
+        fixed: 1
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/933"
+      summary: "The battle-test finding is the strongest available evidence for the rule this PR adds: the first real application of a byte-exact citation step still shipped a wrong claim about its own citation, caught only by an independent adversarial pass. Recorded here rather than narrated in the worked example, per the issue/489 precedent for keeping change-history out of worked-example prose. Post-fix re-audit of the corrected paragraph is disclosed in the PR body as not run."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/933"
+      summary: "Synced references/rubric.md's Contract discipline enumeration in the same change, as its own Keep-this-enumeration-in-sync bullet requires: the Postcondition now names byte-exact verification of every quoted span, and the Invariant names the fabricated-citation Stop boundary as binding at whichever step a quotation was authored. The bundled test_gitapex_contract_precondition_sync.py gate covers steps 1-4 only, so this sync was manual and is disclosed as such."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/pull/936"
+      summary: "An external review caught that 'byte-exact' plus wrap normalization was under-defined: collapsing a whole file's newlines lets a quotation splice across a paragraph, fence, or heading boundary and still match. Added references/adversarial-self-audit.md's Citation fidelity section as the one canonical rule -- reduction per block, never across blocks -- with accepted and rejected examples. SKILL.md step 5, its Stop boundary, and rubric.md's Postcondition all resolve there now."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/pull/936"
+      summary: "Same review, confidentiality: the isolation Verification procedure's positive control asks a dispatch to quote a sentence from the calling repository's CLAUDE.md/AGENTS.md, and nothing stopped that quote reaching a registry entry, report, or PR body. Step 1 now requires the quote be checked where the run happens and never published, with a pinned non-sensitive sentinel as the alternative. Partially answers the issue/537 PROPOSE_CONFIDENTIALITY_SAFEGUARD deferral."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/pull/936"
+      summary: "Same review: the second-dispatch bullet barred the first dispatch's reasoning but left 'the challenge' free-form, a carve-out that could carry a requested outcome past the Stop boundary against caller framing. The challenge is now passed explicitly as an untrusted claim to verify, never a verdict, rationale, or requested outcome."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/pull/936"
+      summary: "Shipped the drift gate for the invariant this change established, per CLAUDE.md section 3, rather than leaving the sync manual: test_gitapex_contract_precondition_sync.py gained postcondition and invariant mirrors alongside its existing precondition one, and now reduces whitespace before matching so a phrase split across a soft wrap still compares. The new mirrors immediately caught a real hyphenation drift between SKILL.md and rubric.md, fixed here."
+      outcome:
+        verdict: gate-shipped
+        found: 1
+        fixed: 1
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/pull/936"
+      summary: "Post-fix round, checker-script adversarial review of the extended test_gitapex_contract_precondition_sync.py, isolated. FAIL, one confirmed defect reproduced locally before fixing: _contract_bullet located a bullet by naming its successor, so reordering the Contract discipline bullets with zero content drift broke extraction and failed CI with a misleading message. Now terminated by the next '- **' generically; reordering re-tested and extraction is identical. Two disclosure gaps also closed."
+      outcome:
+        verdict: FAIL
+        found: 3
+        fixed: 3
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/pull/936"
+      summary: "Post-fix round, evaluating-skill-quality self-review, isolated. WELL-FORMED-NOT-MATURE. Two findings inside this change fixed: _reduce's docstring claimed equivalence to the Citation fidelity rule while omitting that rule's per-block scoping, and this sidecar carried a body-line count later commits had stranded. Dimension 6 stays uncleared on the registry's axes 2 and 3, unchanged and out of scope. Body as shipped: 499 lines, 62/62 shape checks."
+      outcome:
+        verdict: WELL-FORMED-NOT-MATURE
+        found: 2
+        fixed: 2
+        body_lines: 499
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/pull/936"
+      summary: "Post-fix round, battle-testing-a-skill, isolated. FAIL, four findings. Finding 1 (a quotation splicing two adjacent bullets of a tight list, which carries no blank line to break the block) was tested directly and did NOT reproduce: the '- ' marker survives the reduction. The block rule now breaks at list items and table rows anyway, so the protection is by design rather than by that accident, and the refutation is recorded rather than the finding silently dropped."
+      outcome:
+        verdict: FAIL
+        found: 4
+        refuted: 1
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/pull/936"
+      summary: "Battle-test finding 4, not fixed here by the parent issue's own instruction: the citation match is prose the dispatch performs, with no bundled callable checker, which its dimension 19 calls a deterministic-computation gap. Issue 933 names the CI citation-verification gate as an explicit non-goal with its own issue, covering the procedural half only. Building it here would take the non-goal, not the goal."
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/pull/936"
+      summary: "Battle-test findings 2 and 3, disclosed not fixed. Finding 2: executionRequirements tool tags are free-form with no path scoping in the schema, so write: [files] cannot express the narrow real need (append one line to one bundled file); inventing a scoped tag would be false precision, and the scope limit is a schema question. Finding 3: no evals/ fixture exercises the new citation, trust-class, or confidentiality rules; the deterministic branch-coverage gate passes at 70 fixtures."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/pull/936"
+      summary: "External review round 2. The Citation fidelity reduction collapsed whitespace in every block, so a quotation from fenced YAML/JSON/diff/shell content matched despite different indentation -- in that content indentation is a different value, not a different wrap. Split the rule: prose blocks reduce, fenced and whitespace-significant blocks match byte for byte. This PR's own four quotations re-verified as prose matches under the split rule."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/pull/936"
+      summary: "Same round, confidentiality escalated correctly: the earlier check-but-never-publish rule applied too late, since asking a dispatch to quote the real CLAUDE.md already sends it to the mechanism's endpoint and transcript. The positive control now defaults to a synthetic sentinel in a throwaway directory outside any repository -- it proves the mechanism can see such a file at all, which is its actual job. The real-file variant survives as a disclosed, justified exception."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/pull/936"
+      summary: "Partially accepted the request that the sync gate reject unregistered requirements. Added mutation coverage proving all three mirrors actually fail when a tracked phrase is removed from either side -- the gate bites rather than merely passing. Declined the other half with a stated reason: deciding which prose sentence is a requirement is not computable here, so a phrase nobody registers stays unguarded. That limit is recorded beside the tests, not implied."
+      outcome:
+        verdict: partially-accepted
+        tests_added: 9
   skillDependencies:
     requires: []
     relatedTo:
@@ -341,5 +429,7 @@ spec:
     tools:
       read:
         - files
-      write: []
-      shell: []
+      write:
+        - files
+      shell:
+        - python3

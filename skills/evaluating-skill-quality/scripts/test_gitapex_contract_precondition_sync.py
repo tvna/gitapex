@@ -9,6 +9,14 @@ added a "Keep this enumeration in sync" invariant; per CLAUDE.md section 3
 ("Establishing an invariant ... ship its drift gate in the same change"),
 this test IS that gate rather than leaving the invariant to prose alone.
 
+The same drift class reaches the other two Contract discipline bullets, so
+this gate covers them too: `_POSTCONDITION_PHRASES` mirrors what step 5
+requires of a quotation against the **Postcondition** bullet, and
+`_INVARIANT_PHRASES` mirrors the invariant-scope Stop boundary that names it
+against the **Invariant** bullet. Both were added when the citation-fidelity
+rule landed, since that edit's own sync had to be done by hand -- exactly the
+manual step CLAUDE.md section 3 says to replace with a gate in the same change.
+
 Mechanism, and its one honest limitation: `_CHECKPOINT_PHRASES` is the
 mechanically-shared source of truth for the precondition checkpoints. The
 test asserts each phrase appears in BOTH the Procedure steps-1-4 block and
@@ -50,6 +58,38 @@ _CHECKPOINT_PHRASES = (
 )
 
 
+# What Procedure step 5 requires of every quotation, mirrored against the
+# **Postcondition** bullet. Extend in the same change that alters step 5's
+# own postcondition-bearing requirements. The honest limitation the module
+# docstring records for _CHECKPOINT_PHRASES applies to this tuple and to
+# _INVARIANT_PHRASES below too: both track a few short anchor substrings, not
+# the whole synced prose, so a driftless reword in both files still needs its
+# tuple updated by hand, and a phrase nobody adds here is not guarded at all.
+_POSTCONDITION_PHRASES = (
+    "Citation fidelity",
+    "cited evidence",
+)
+
+# The invariant-scope Stop boundaries the **Invariant** bullet must name.
+# Extend in the same change that adds an invariant-scope Stop boundary.
+_INVARIANT_PHRASES = ("fabricated citation",)
+
+
+def _reduce(text):
+    """Collapse whitespace runs to one space, so a phrase split across a soft
+    wrap still matches.
+
+    This is the *whitespace* half of the reduction
+    references/adversarial-self-audit.md's Citation fidelity rule defines, and
+    deliberately not the whole of it: that rule also scopes matching to a single
+    block, while this runs over a whole extracted bullet or step. The difference
+    is safe here because every phrase tracked below is a short span inside one
+    bullet, never a quotation a reader could splice -- but the two are not
+    equivalent, and an earlier version of this docstring claimed they were.
+    """
+    return re.sub(r"\s+", " ", text).strip()
+
+
 def _steps_1_to_4_block(skill_md_text):
     """Return SKILL.md's Procedure steps 1-4 text (item ``1.`` up to ``5.``)."""
     procedure = re.search(r"\n## Procedure\n(.*?)\n## ", skill_md_text, re.S)
@@ -69,10 +109,96 @@ def _precondition_bullet(rubric_text):
     return bullet.group(0)
 
 
+def _step_5_text(skill_md_text):
+    """Return SKILL.md's Procedure step 5 text (item ``5.`` up to ``6.``)."""
+    procedure = re.search(r"\n## Procedure\n(.*?)\n## ", skill_md_text, re.S)
+    assert procedure, "SKILL.md has no '## Procedure' section -- gate cannot run"
+    block = re.search(r"\n5\. .*?(?=\n6\. )", procedure.group(1), re.S)
+    assert block, "SKILL.md Procedure has no item 5 in the expected shape"
+    return block.group(0)
+
+
+def _stop_boundaries_text(skill_md_text):
+    """Return SKILL.md's ``## Stop boundaries`` section text."""
+    section = re.search(r"\n## Stop boundaries\n(.*?)\n## ", skill_md_text, re.S)
+    assert section, "SKILL.md has no '## Stop boundaries' section -- gate cannot run"
+    return section.group(1)
+
+
+def _contract_bullet(rubric_text, name):
+    """Return the Contract discipline bullet ``name``, up to the next bullet.
+
+    Terminated by the next ``- **`` bullet or the end of the section, never by
+    a named successor: an adversarial review of this gate confirmed that
+    naming the successor made extraction order-dependent, so reordering the
+    bullets with zero content drift failed CI with a misleading "bullet not
+    found" message on a harmless edit. The generic terminator also drops the
+    closing-``**`` special case a bold run ending in a period needed
+    (``- **Keep this enumeration in sync.**``).
+    """
+    section = re.search(r"\n## Contract discipline\n(.*?)\n## ", rubric_text, re.S)
+    assert section, "rubric.md has no '## Contract discipline' section -- gate cannot run"
+    bullet = re.search(rf"- \*\*{name}\*\*.*?(?=\n- \*\*|\Z)", section.group(1), re.S)
+    assert bullet, f"Contract discipline has no **{name}** bullet in the expected shape"
+    return bullet.group(0)
+
+
+@pytest.fixture(scope="module")
+def contract_blocks():
+    skill = _SKILL_MD.read_text(encoding="utf-8")
+    rubric = _RUBRIC_MD.read_text(encoding="utf-8")
+    return {
+        "step_5": _reduce(_step_5_text(skill)),
+        "stop_boundaries": _reduce(_stop_boundaries_text(skill)),
+        "postcondition": _reduce(_contract_bullet(rubric, "Postcondition")),
+        "invariant": _reduce(_contract_bullet(rubric, "Invariant")),
+    }
+
+
+@pytest.mark.parametrize("phrase", _POSTCONDITION_PHRASES)
+def test_postcondition_mirrors_step_5(phrase, contract_blocks):
+    """Each phrase step 5 requires of a quotation must also appear in the
+    Contract discipline **Postcondition** bullet, and vice versa."""
+    assert phrase in contract_blocks["step_5"], (
+        f"postcondition phrase {phrase!r} is listed in the sync gate but no longer "
+        f"appears in SKILL.md Procedure step 5 -- update _POSTCONDITION_PHRASES "
+        f"or step 5"
+    )
+    assert phrase in contract_blocks["postcondition"], (
+        f"drift: SKILL.md step 5 requires {phrase!r} but the Contract discipline "
+        f"Postcondition bullet in rubric.md does not mention it -- update the "
+        f"Postcondition bullet to match"
+    )
+
+
+@pytest.mark.parametrize("phrase", _INVARIANT_PHRASES)
+def test_invariant_mirrors_stop_boundaries(phrase, contract_blocks):
+    """Each invariant-scope Stop boundary the gate tracks must appear in BOTH
+    SKILL.md's Stop boundaries and the Contract discipline **Invariant**
+    bullet -- the drift the citation-fidelity edit had to close by hand."""
+    assert phrase in contract_blocks["stop_boundaries"], (
+        f"invariant phrase {phrase!r} is listed in the sync gate but no longer "
+        f"appears in SKILL.md's Stop boundaries -- update _INVARIANT_PHRASES "
+        f"or the Stop boundary"
+    )
+    assert phrase in contract_blocks["invariant"], (
+        f"drift: SKILL.md carries an invariant-scope Stop boundary naming "
+        f"{phrase!r} but the Contract discipline Invariant bullet in rubric.md "
+        f"does not name it -- update the Invariant bullet to match"
+    )
+
+
+def test_contract_extraction_is_not_vacuous(contract_blocks):
+    """Guard against a rename silently making the two mirrors above pass on
+    empty blocks, the same way test_extraction_is_not_vacuous does below."""
+    for name, text in contract_blocks.items():
+        assert len(text) > 80, f"{name} block suspiciously short -- extraction may be broken"
+
+
 @pytest.fixture(scope="module")
 def blocks():
-    steps = _steps_1_to_4_block(_SKILL_MD.read_text(encoding="utf-8"))
-    bullet = _precondition_bullet(_RUBRIC_MD.read_text(encoding="utf-8"))
+    steps = _reduce(_steps_1_to_4_block(_SKILL_MD.read_text(encoding="utf-8")))
+    bullet = _reduce(_precondition_bullet(_RUBRIC_MD.read_text(encoding="utf-8")))
     return steps, bullet
 
 
@@ -100,3 +226,54 @@ def test_extraction_is_not_vacuous(blocks):
     steps, bullet = blocks
     assert len(steps) > 200, "steps-1-4 block suspiciously short -- extraction may be broken"
     assert len(bullet) > 100, "Precondition bullet suspiciously short -- extraction may be broken"
+
+
+# --- Mutation coverage -------------------------------------------------------
+#
+# An adversarial review of this gate asked for proof that it actually bites,
+# not merely that it passes today. These tests remove a tracked phrase from one
+# side of each mirror and assert the corresponding check fails. They exercise
+# the same predicate the parametrized tests above use, against mutated copies
+# of the extracted text, so they cannot pass vacuously if that predicate is
+# ever weakened.
+#
+# What they deliberately do NOT prove: that a *new* requirement nobody added to
+# a phrase tuple is caught. It is not -- deciding which prose sentence is "a
+# requirement" is not a thing this gate can compute, which is the honest limit
+# already recorded in the module docstring and beside each tuple. Closing that
+# needs a different mechanism, not a stricter regex here.
+
+
+def _mirrors(phrase, left, right):
+    """The predicate both parametrized mirror tests apply."""
+    return phrase in left and phrase in right
+
+
+@pytest.mark.parametrize("phrase", _POSTCONDITION_PHRASES)
+def test_postcondition_mirror_fails_when_either_side_drifts(phrase, contract_blocks):
+    """Removing a tracked phrase from step 5, or from the Postcondition
+    bullet, must break the mirror -- otherwise the gate is decorative."""
+    step_5 = contract_blocks["step_5"]
+    postcondition = contract_blocks["postcondition"]
+    assert _mirrors(phrase, step_5, postcondition), "baseline should hold before mutating"
+    assert not _mirrors(phrase, step_5.replace(phrase, ""), postcondition)
+    assert not _mirrors(phrase, step_5, postcondition.replace(phrase, ""))
+
+
+@pytest.mark.parametrize("phrase", _INVARIANT_PHRASES)
+def test_invariant_mirror_fails_when_either_side_drifts(phrase, contract_blocks):
+    """Same mutation proof for the Stop-boundary/Invariant mirror."""
+    stop_boundaries = contract_blocks["stop_boundaries"]
+    invariant = contract_blocks["invariant"]
+    assert _mirrors(phrase, stop_boundaries, invariant), "baseline should hold before mutating"
+    assert not _mirrors(phrase, stop_boundaries.replace(phrase, ""), invariant)
+    assert not _mirrors(phrase, stop_boundaries, invariant.replace(phrase, ""))
+
+
+@pytest.mark.parametrize("phrase", _CHECKPOINT_PHRASES)
+def test_precondition_mirror_fails_when_either_side_drifts(phrase, blocks):
+    """The original mirror gets the same proof, so all three are covered."""
+    steps, bullet = blocks
+    assert _mirrors(phrase, steps, bullet), "baseline should hold before mutating"
+    assert not _mirrors(phrase, steps.replace(phrase, ""), bullet)
+    assert not _mirrors(phrase, steps, bullet.replace(phrase, ""))
