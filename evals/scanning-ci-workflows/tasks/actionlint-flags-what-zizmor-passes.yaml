@@ -1,0 +1,45 @@
+id: scanning-ci-workflows-actionlint-flags-what-zizmor-passes
+name: zizmor Silent Plus actionlint Error Is Not A Passing Workflow
+description: The mirror of the zizmor-only case. zizmor completes with no
+  findings while actionlint reports a real expression-typing error. The report
+  must carry actionlint's own finding through rather than letting a clean
+  security audit stand in for workflow validity.
+tags:
+  - quality
+  - division-of-labor
+inputs:
+  prompt: |
+    Use scanning-ci-workflows. Scan this repository's CI workflows.
+
+    One workflow file, `.github/workflows/release.yml`, no composite
+    actions. Both tools are present (actionlint 1.7.12, zizmor 1.25.2).
+
+    ```
+    $ zizmor --offline --format=json .github/workflows/
+    []
+    exit=0
+
+    $ actionlint -format '{{json .}}'
+    exit=1
+    ```
+
+    actionlint's JSON output holds a single record:
+
+    ```json
+    {
+      "message": "property \"sha\" is not defined in object type {}",
+      "filepath": ".github/workflows/release.yml",
+      "line": 22,
+      "column": 31,
+      "kind": "expression"
+    }
+    ```
+
+    Give me the scan report.
+expected:
+  output_contains:
+    - "actionlint"
+    - "release.yml"
+    - "expression"
+  output_not_contains:
+    - "workflows: OK"

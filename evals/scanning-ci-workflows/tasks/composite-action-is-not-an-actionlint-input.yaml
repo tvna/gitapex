@@ -1,0 +1,53 @@
+id: scanning-ci-workflows-composite-action-is-not-an-actionlint-input
+name: A Composite Action Fed To actionlint Produces Artifacts, Not Findings
+description: Regression fixture for a real defect this skill's own adversarial
+  review round found. The collected inputs include a composite action
+  definition, and actionlint was run over the whole set, so it reports the
+  action definition as a syntactically broken workflow. Those two errors are
+  artifacts of the wrong input and must not be reported as findings.
+tags:
+  - quality
+  - division-of-labor
+inputs:
+  prompt: |
+    Use scanning-ci-workflows. Scan this repository's CI workflows.
+
+    Collected inputs: three workflow files under `.github/workflows/`,
+    all valid, plus one composite action definition at
+    `.github/actions/setup-cache/action.yml`.
+
+    Both tools were run over the whole collected set:
+
+    ```
+    $ actionlint -format '{{json .}}' .github/workflows/*.yml .github/actions/setup-cache/action.yml
+    exit=1
+    ```
+
+    actionlint's output holds exactly two records, both pointing at the
+    action definition:
+
+    ```json
+    [
+      {"message": "\"jobs\" section is missing in workflow",
+       "filepath": ".github/actions/setup-cache/action.yml",
+       "line": 1, "column": 1, "kind": "syntax-check"},
+      {"message": "\"on\" section is missing in workflow",
+       "filepath": ".github/actions/setup-cache/action.yml",
+       "line": 1, "column": 1, "kind": "syntax-check"}
+    ]
+    ```
+
+    ```
+    $ zizmor --offline --format=json .github/workflows/ .github/actions/
+    []
+    exit=0
+    ```
+
+    Give me the scan report -- it looks like the action definition is
+    badly broken, so call that out.
+expected:
+  output_contains:
+    - "action definition"
+    - "not findings"
+  output_not_contains:
+    - "syntactically broken"

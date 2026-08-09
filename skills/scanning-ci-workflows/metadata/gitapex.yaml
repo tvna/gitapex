@@ -1,0 +1,97 @@
+apiVersion: gitapex.io/v1alpha1
+kind: SkillMetadata
+metadata:
+  name: scanning-ci-workflows
+spec:
+  portability: Mixed
+  capabilityAssumption: Adaptive
+  references:
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/843"
+      summary: "First roster skill in the scanning-* family to actually ship the family's defining shape: judgment delegated entirely to external pinned CLIs, findings reported unmodified, no unsafe-workflow knowledge embedded in this skill's own references/. scanning-attack-surfaces carries the family name but still performs its own per-item judgment; this skill is what makes the family definition true of a real skill."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/844"
+      summary: "Cites docs/scanning-capability-selection-policy.md for capability selection and for the deliberate absence of platform detection, rather than restating the libre-CLI-first rule or the detection mechanism inline. That document was required to land first for exactly this reason."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/847"
+      summary: "Wraps two tools rather than one: actionlint for workflow validity (schema, expression types, runner labels, embedded shell via shellcheck/pyflakes) and zizmor for security posture (template injection, permissions, triggers, credential persistence, unpinned uses). Neither subsumes the other, so the Procedure invokes both and SKILL.md states the division of labor explicitly."
+    - kind: corroboration
+      anchor: "https://docs.zizmor.sh/usage/"
+      summary: "Verified zizmor's real invocation contract directly against its own usage documentation rather than from memory: --format (plain/json/json-v1/sarif/github), --offline, --no-online-audits, --persona, --min-severity, --min-confidence, --fix, and exit codes 0 (clean), 1 (error), 2 (bad args), 3 (no inputs), 11-14 (findings by severity). The issue's own ACM flagged this contract as unverified Speculation."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/847"
+      summary: "Corrects that issue's own Facts claim that both wrapped tools are purely local static analyzers needing no network. Per https://docs.zizmor.sh/audits/, four zizmor audits do not run offline at all (impostor-commit, known-vulnerable-actions, ref-confusion, stale-action-refs) and a fifth, typosquat-uses, runs offline only at low confidence. The claim was adopted as intent, not as fact."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/845"
+      summary: "Declares executionRequirements.network mode disabled rather than omitting the block, which the issue's ACM had specified. An absent block means 'not yet declared' per the metadata schema; disabled means 'declared, network prohibited'. Only the latter states the real contract for a skill wrapping a network-capable tool. Enforced by an unconditional --offline in the Procedure plus a Stop boundary against supplying a token."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/823"
+      summary: "Declared executionRequirements.tools: the Procedure collects and reads workflow and composite-action files (read: files) and executes two external binaries (shell: zizmor, actionlint). write is empty and enforced by a Stop boundary against zizmor's --fix modes, which the tool really does ship -- report-only is an active restraint here, not a property of the wrapped tools."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/847"
+      summary: "zizmor lands as Class A (nixpkgs) rather than Class B (SHA-pinned release binary). flake.lock pins nixpkgs to rev 5b4f72e1705a63aace42900610c4db82cb4af0ec, whose pkgs/by-name/zi/zizmor/package.nix declares version 1.25.2 under lib.licenses.mit -- checked at that exact rev, not against a channel tip. The betterleaks-shaped Class B fallback was therefore not used."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/847"
+      summary: "Pinned and wired in the same change, deliberately: middleware-inventory.md records betterleaks as SHA-pinned since adoption with no consuming script, hook, or workflow. This skill's Procedure invokes zizmor directly, and references/worked-examples.md records a real run, so the same provisioned-but-unconsumed gap is not reproduced."
+    - kind: corroboration
+      anchor: "references/worked-examples.md"
+      summary: "The division-of-labor claim is measured, not asserted: run against this repository's own .github/workflows/ at the pinned versions (actionlint 1.7.12, zizmor 1.25.2), actionlint reported 0 findings on exactly the inputs where zizmor reported 67 (7 informational, 4 high, 56 suppressed). The recorded run is the worked example."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/pull/881"
+      summary: "The pre-merge adversarial review round found a real defect in the first draft: Procedure step 1 collected workflow files and composite action definitions into one list and fed it to both tools. Confirmed against the real actionlint 1.7.12 binary that a composite action.yml then yields two spurious syntax-check errors ('jobs'/'on' section is missing) and exit 1. Step 1 now keeps two lists; actionlint reads workflows only."
+    - kind: corroboration
+      anchor: "references/worked-examples.md"
+      summary: "zizmor does collect and audit composite action definitions, verified from its own verbose log ('registering action input as with key file://.github/actions/harden-checkout/action.yml', then scheduling artipacked, unsound-contains, excessive-permissions, dangerous-triggers against it). It found nothing there in the recorded run, which is a fact about that target, not a reason to omit the composite-action list."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/pull/881"
+      summary: "An external CodeRabbit review round on this PR raised 7 findings; 5 were accepted after independent verification, 2 were partially accepted with the rejected half reasoned out. The most valuable was a factual error in this skill's own evals/ eval-status.md, inherited by copy from a sibling skill written before waza-eval-gate.yml existed: it claimed waza-eval-matrix.yml was the only workflow that executes a suite. The gate really does run one per pull request."
+      outcome:
+        verdict: FAIL
+        found: 7
+        fixed: 5
+        partial: 2
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/pull/881"
+      summary: "Rejected the review's request to fix numeric collection ceilings (max depth, file count, bytes) in SKILL.md: this skill runs against targets from a three-file repository to a monorepo, so any universal number invented here would be wrong for most of them, and the repository's own minimum-code rule bars speculative configurability. Accepted the concrete half instead -- a workspace-containment boundary barring any input reached through a symlink that resolves outside the target's own tree."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/pull/881"
+      summary: "The decision above over-extended: it also declined a budget-exceeded fixture, reasoning that one would hardcode the number just rejected. The reviewer's second round showed that is false -- a fixture can state a run-specific budget in its own prompt and hardcode nothing. Fixture added. SKILL.md's budget boundary also gained the two things needing no invented numbers: the three dimensions a budget must carry, and a stop before either tool is invoked rather than after."
+    - kind: caveat
+      anchor: "references/worked-examples.md"
+      summary: "The review flagged the worked example's two indented code blocks as a Markdown style violation (MD046). Kept deliberately, with the reason now stated in the file: they quote a tool's rendering of scanned-file content, and this skill's own Stop boundaries require a form a backtick run inside the quoted text cannot close early. Language identifiers were added to the fenced blocks (MD040), which had no such tension. This repository runs no markdownlint gate, so neither rule is enforced here."
+    - kind: audit
+      anchor: "method:evaluating-skill-quality"
+      summary: "Nine-dimension quality review of this SKILL.md and its references/, run in the authoring session's own thread rather than as an isolated subagent dispatch -- the session's harness directives ruled out self-initiated dispatch. That isolation limitation is disclosed rather than papered over, matching scanning-attack-surfaces' own in-context self-review precedent."
+      outcome:
+        verdict: WELL-FORMED-NOT-MATURE
+    - kind: audit
+      anchor: "method:battle-testing-a-skill"
+      summary: "Adversarial pass over hostile-input handling, rubber-stamp bias, mis-routing triggers, and missing escalation paths. Same in-context (not isolated) limitation as the quality audit above, disclosed identically. Findings from the round were fixed before the PR was marked ready for review; the open items are recorded in this skill's own evals/ eval-status.md."
+      outcome:
+        verdict: FAIL
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/843"
+      summary: "Absorbing auditing-git-hosting-surface's capability, and adding shell: [zizmor] to scanning-attack-surfaces, are that tracking issue's own item 5 and are explicitly out of scope here. This skill neither reads hosting-platform configuration nor changes any sibling skill's declaration."
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/844"
+      summary: "Platform-native-capability detection stays deferred past v1 per the capability-selection policy's own scope statement. This skill ships no detection code and reports no native capability as available; a Stop boundary forbids claiming one."
+  skillDependencies:
+    requires: []
+    relatedTo:
+      - scanning-attack-surfaces
+      - auditing-git-hosting-surface
+      - evaluating-deterministic-gate-quality
+  executionRequirements:
+    tools:
+      read:
+        - files
+      write: []
+      shell:
+        - zizmor
+        - actionlint
+    network:
+      mode: disabled
+  lifecycle:
+    experimental:
+      reason: "First version of the first scanning-* skill that genuinely delegates judgment to a wrapped tool, so the family definition is being validated against a real implementation for the first time. Two known limits ship with it: both audit rounds ran in-context rather than as isolated dispatches, and the offline coverage gap (four zizmor audits skipped, one degraded to low confidence) is reported rather than solved."
+      trackingIssue: "https://github.com/tvna/gitapex/issues/847"

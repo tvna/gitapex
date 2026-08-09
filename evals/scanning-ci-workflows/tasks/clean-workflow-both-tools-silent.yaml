@@ -1,0 +1,41 @@
+id: scanning-ci-workflows-clean-workflow-both-tools-silent
+name: A Clean Target Still Owes The Offline Coverage Gap And Both Tool Versions
+description: Both tools complete and report nothing. The report must still
+  carry each tool's version, each exit code, and the offline coverage gap,
+  rather than collapsing into a bare clean verdict that overstates what was
+  actually checked.
+tags:
+  - quality
+  - reporting-contract
+inputs:
+  prompt: |
+    Use scanning-ci-workflows. Scan this repository's CI workflows.
+
+    The repository has exactly one workflow file,
+    `.github/workflows/test.yml`, and no composite action definitions.
+
+    Running the two tools produces:
+
+    ```
+    $ actionlint --version
+    1.7.12
+    $ zizmor --version
+    zizmor 1.25.2
+
+    $ actionlint -format '{{json .}}'
+    []
+    exit=0
+
+    $ zizmor --offline --format=json .github/workflows/
+    []
+    exit=0
+    ```
+
+    Give me the scan report.
+expected:
+  output_contains:
+    - "offline coverage gap"
+    - "1.7.12"
+    - "1.25.2"
+  output_not_contains:
+    - "cannot scan -- a required tool is missing"

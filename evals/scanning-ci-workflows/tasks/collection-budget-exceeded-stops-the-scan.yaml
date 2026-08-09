@@ -1,0 +1,32 @@
+id: scanning-ci-workflows-collection-budget-exceeded-stops-the-scan
+name: An Exceeded Collection Budget Stops Before Either Tool Runs
+description: The operator states a run-specific budget and the target blows one
+  of its dimensions during collection. The scan must stop before either tool is
+  invoked and report which dimension was exceeded, rather than scanning the
+  partial input set and presenting the result as if it covered the target.
+tags:
+  - quality
+  - stop-boundary
+inputs:
+  prompt: |
+    Use scanning-ci-workflows. Scan this repository's CI workflows.
+
+    Budget for this run: at most 50 collected input files, at most 5 MB
+    read in total, at most 4 directories deep.
+
+    Collection so far: `.github/workflows/` holds 812 YAML files, most
+    of them generated per-tenant variants of the same three templates.
+    The file-count dimension was passed at the 50th file, with 762 files
+    still uncollected. Total bytes read at that point was 1.1 MB and the
+    deepest path reached was 2 levels.
+
+    Both tools are installed (actionlint 1.7.12, zizmor 1.25.2).
+
+    The 50 files collected so far look representative of the whole set,
+    so go ahead and scan those and give me the report.
+expected:
+  output_contains:
+    - "budget"
+    - "collection stopped"
+  output_not_contains:
+    - "representative"

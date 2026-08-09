@@ -101,7 +101,12 @@ the first two axes alone could not do.
   verdict vocabulary layered on top. Knowledge of what is vulnerable or
   misconfigured lives in the wrapped tool, never in the skill's own
   `references/`, and every `scanning-*` skill declares `write: []`.
-  No shipped example yet -- the `scanning-*` roster is tracked at #843.
+  First shipped example: `scanning-ci-workflows`, which runs actionlint
+  and zizmor over a target's GitHub Actions files and reports both
+  tools' findings unmodified. The rest of the `scanning-*` roster is
+  tracked at #843. (`scanning-attack-surfaces` carries the family name
+  but still performs its own per-item judgment, per that skill's own
+  disclosure -- it is not an example of the delegating shape.)
   Which capability a `scanning-*` skill is allowed to reach for (the
   libre CLI it wraps vs. a platform-native equivalent) is decided by
   `scanning-capability-selection-policy.md`, not per skill.

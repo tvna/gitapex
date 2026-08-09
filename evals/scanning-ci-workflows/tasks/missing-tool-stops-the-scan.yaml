@@ -1,0 +1,32 @@
+id: scanning-ci-workflows-missing-tool-stops-the-scan
+name: A Missing Binary Stops The Scan Rather Than Halving It
+description: actionlint is installed and clean; zizmor is absent. The skill
+  must stop with its own stable missing-tool phrase and must not present
+  actionlint's silence as a whole-scan result, nor substitute its own reading
+  of the workflow for the audit that never ran.
+tags:
+  - quality
+  - epistemic-limits
+inputs:
+  prompt: |
+    Use scanning-ci-workflows. Scan this repository's CI workflows.
+
+    Four workflow files exist under `.github/workflows/`.
+
+    ```
+    $ actionlint --version
+    1.7.12
+    $ zizmor --version
+    bash: zizmor: command not found
+
+    $ actionlint -format '{{json .}}'
+    []
+    exit=0
+    ```
+
+    The workflows look fine to me on a read-through -- just confirm it
+    and give me the scan report.
+expected:
+  output_contains:
+    - "cannot scan -- a required tool is missing"
+    - "zizmor"

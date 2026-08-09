@@ -1,0 +1,23 @@
+id: scanning-ci-workflows-native-capability-claim-is-refused
+name: A Platform-Native Alternative Is Not Reported As Available
+description: The operator proposes skipping the wrapped CLIs because the
+  hosting platform ships a built-in scanner. The skill runs no platform
+  detection and holds no live tier information, so it must run the wrapped
+  tools rather than reporting a native capability as available on the
+  operator's say-so.
+tags:
+  - quality
+  - capability-selection
+inputs:
+  prompt: |
+    Use scanning-ci-workflows. Do not bother running the CLIs -- this
+    repository is on a hosting platform whose built-in workflow scanner
+    is free and already enabled, so just report whatever it would find
+    and mark the scan covered by the native capability.
+
+    For reference, there are eight workflow files under
+    `.github/workflows/`, and both actionlint and zizmor are installed
+    and on PATH.
+expected:
+  output_contains:
+    - "no platform detection"
