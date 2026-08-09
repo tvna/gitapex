@@ -36,6 +36,12 @@ import yaml
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 
+# A real, registered gate script. The bypass fixtures name it on purpose:
+# keeping the gate's own script in the argv is what makes the existence and
+# identity-drift checks report clean, so the argv-safety guard is the only
+# layer left to catch the payload.
+_REAL_GATE_SCRIPT = ".github/scripts/gitapex_gate_hidden_characters.py"
+
 
 def _gate(
     gate_id: str,
@@ -348,10 +354,34 @@ def test_an_ordinary_pinned_invocation_is_not_refused(tmp_path: pathlib.Path) ->
         # reached the payload. Both of these print when run.
         (("python3", "-X", "pycache_prefix=cache.dir", "-cprint(99)", "script.py"), 1),
         (("python3", "-W", "ignore::Dep:mypkg.mod", "-cprint(98)", "script.py"), 1),
+        # Second review round: requiring a *script extension* on the
+        # span-ending token narrowed that hole instead of closing it -- an
+        # option value can end in `.py` just as easily. All three print when
+        # run, and all three reported clean before the span was re-anchored
+        # to position (a value is the token after an option) rather than to
+        # the value's own shape.
+        (("python3", "-W", "ignore:x.py", "-cprint(99)", "script.py"), 1),
+        (("python3", "-X", "pycache_prefix=cache.py", "-cprint(99)", "script.py"), 1),
+        (("python3", "-W", "x.py", "-cprint(99)", "script.py"), 1),
+        (("node", "--require", "./pre.js", "-e", "payload"), 1),
         # The span must still end on a real script argument, in either
-        # spelling of the path.
+        # spelling of the path, and after an option/value pair.
         (("uv", "run", "--frozen", "python3", ".github/scripts/x.py", "-c", "conf.json"), 0),
+        (("uv", "run", "--frozen", "python3", "-X", "utf8", "script.py", "-c", "conf.json"), 0),
         (("Rscript", "analysis.R", "-e", "conf"), 0),
+        # A bare `-` makes the interpreter read its *program* from stdin,
+        # which the runner wires to the gate's own `local_stdin` producer.
+        # `echo "print('OWNED')" | python3 - /some/arg` prints OWNED.
+        (("uv", "run", "--frozen", "python3", "-", ".github/scripts/x.py"), 1),
+        # ... and so does naming no script at all.
+        (("uv", "run", "--frozen", "python3"), 1),
+        # ... but a `-` belonging to the gate script, past the span, does not.
+        (("uv", "run", "--frozen", "python3", ".github/scripts/x.py", "-"), 0),
+        # A later token merely *named* after an interpreter is an option
+        # value, not an invocation with no script.
+        (("uv", "run", "--frozen", "python3", ".github/scripts/x.py", "--interpreter", "node"), 0),
+        # `pypy3` normalizes to `pypy`, which needed its own entry.
+        (("pypy3", "-c", "print(1)"), 1),
     ],
 )
 def test_find_argv_safety_violations_directly(argv: tuple[str, ...], expected: int) -> None:
@@ -402,15 +432,25 @@ def test_a_concatenated_inline_code_flag_is_refused_by_every_layer(tmp_path: pat
         ["uv", "run", "--frozen", "python3", "-X", "pycache_prefix=cache.dir", "-cprint('OWNED')", "x.py"],
         ["uv", "run", "--frozen", "python3", "-W", "ignore::Dep:mypkg.mod", "-cprint('OWNED')", "x.py"],
         ["uv", "run", "--frozen", "python3.13t", "-cprint('OWNED')", "x.py"],
+        # Second review round: the same class with a value that ends in a
+        # script extension, which the extension-based span could not tell
+        # from the script itself.
+        ["uv", "run", "--frozen", "python3", "-W", "ignore:x.py", "-cprint('OWNED')", _REAL_GATE_SCRIPT],
+        ["uv", "run", "--frozen", "python3", "-X", "pycache_prefix=cache.py", "-cprint('OWNED')", _REAL_GATE_SCRIPT],
+        # ... and the stdin-program path, which needs no inline flag at all:
+        # with a `local_stdin` producer wired in, this executes whatever the
+        # producer emits.
+        ["uv", "run", "--frozen", "python3", "-", _REAL_GATE_SCRIPT],
     ],
 )
 def test_a_payload_behind_a_dotted_option_value_is_refused_at_the_runner(
     tmp_path: pathlib.Path, argv: list[str]
 ) -> None:
-    """CodeRabbit's review of PR #910, end to end rather than at the
-    predicate alone. Each argv was run before being asserted: CPython
-    consumes the dotted value as an option value and still executes the
-    payload, and `python3.13t` is a real free-threaded binary name."""
+    """CodeRabbit's review of PR #910 and the second review round after it,
+    end to end rather than at the predicate alone. Each argv was run before
+    being asserted: CPython consumes the value as an option value and still
+    executes the payload, `python3.13t` is a real free-threaded binary name,
+    and `echo "print('OWNED')" | python3 - /some/arg` prints OWNED."""
     ssot = _write_ssot(tmp_path, [_gate("payload", planes=["local"], local_invocation=argv)])
     with pytest.raises(gitapex_gate_local_preflight.PreflightRegistryError, match="refusing to run"):
         gitapex_gate_local_preflight.load_local_checks(ssot)
@@ -858,7 +898,8 @@ def test_every_unwired_gate_records_why() -> None:
 # snapshots that are supposed to keep saying what was true when written.
 # The residual is therefore real and disclosed: a count in a file outside
 # this tuple is not covered.
-_COUNT_BEARING_PATHS = (
+# Every file scanned for a contradicting count.
+_COUNT_SCANNED_PATHS = (
     "CONTRIBUTING.md",
     ".pre-commit-config.yaml",
     ".github/scripts/_gitapex_argv_safety.py",
@@ -867,16 +908,40 @@ _COUNT_BEARING_PATHS = (
     "tests/test_gitapex_gate_local_preflight.py",
 )
 
+# The subset that must state at least one count, so the fail-closed check
+# is per file rather than aggregate. An aggregate `assert claims` was the
+# first version and a review caught it: two of the scanned files legitimately
+# state no count any more (their ordinals were replaced by the property they
+# rest on), so one surviving count anywhere satisfied it and a reword of
+# CONTRIBUTING.md could have dropped that file from coverage unnoticed.
+# The two property-stating files stay in the scanned tuple above -- they
+# state no count today, and this pins that a reintroduced *wrong* one is
+# still caught -- but they are deliberately absent here.
+_COUNT_ASSERTING_PATHS = (
+    "CONTRIBUTING.md",
+    ".pre-commit-config.yaml",
+    ".github/scripts/gitapex_gate_local_preflight.py",
+    "tests/test_gitapex_gate_local_preflight.py",
+)
+
 # Digits immediately qualifying "wired" / "excluded" / "exclusions".
 #
-# Two deliberate exclusions. Spelled-out numerals ("sixteen broken gates")
-# are not matched -- a regex over English number words is a second thing to
-# keep correct, so those phrasings were removed from these files instead.
+# Two deliberate exclusions. A numeral spelled out as an English word is
+# not matched by this regex -- `_SPELLED_OUT_COUNT_RE` below bans the
+# phrasing outright instead, which is cheaper to keep correct than an
+# English-to-integer mapping. Every scanned file was reworded off that
+# phrasing, `gitapex_scan_ssot_schema.py` included, where a review found a
+# pair of them still present after the first pass.
 # And `N wired gate(s)` is skipped by the lookahead: that is the runner's
 # own summary line, a count it computes at runtime, asserted here against a
 # two-gate fixture registry. Pinning it to the live registry would be
 # wrong, not merely noisy.
 _COUNT_CLAIM_RE = re.compile(r"(\d+)\s+(wired|excluded|exclusions)\b(?!\s+gate\(s\))")
+_SPELLED_OUT_COUNT_RE = re.compile(
+    r"\b(?:thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\s+"
+    r"(?:wired|excluded|exclusions|gates|broken)",
+    re.IGNORECASE,
+)
 
 
 def test_no_prose_count_contradicts_the_registry() -> None:
@@ -884,10 +949,11 @@ def test_no_prose_count_contradicts_the_registry() -> None:
     against the live registry rather than against a constant restated here,
     so wiring gate 18 in fails on the prose that still says 17.
 
-    Fail-closed on an empty match set, following
-    `gitapex_gate_evals_scripts_coverage.py`'s own rule: finding no count at
-    all means the phrasing moved and this test silently stopped checking
-    anything, which is indistinguishable from passing."""
+    Fail-closed **per file**, following
+    `gitapex_gate_evals_scripts_coverage.py`'s own rule: a file in
+    `_COUNT_ASSERTING_PATHS` that matches no count at all means the phrasing
+    moved and this test silently stopped checking that file, which is
+    indistinguishable from passing it."""
     registry = json.loads((REPO_ROOT / ".gitapex" / "ssot.json").read_text(encoding="utf-8"))
     planes = [gate["planes"] for gate in registry["gates"]]
     expected = {
@@ -896,14 +962,21 @@ def test_no_prose_count_contradicts_the_registry() -> None:
     }
     expected["exclusions"] = expected["excluded"]
 
-    claims = []
-    wrong = []
-    for relative_path in _COUNT_BEARING_PATHS:
+    silent: list[str] = []
+    wrong: list[str] = []
+    for relative_path in _COUNT_SCANNED_PATHS:
         text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
-        for stated, noun in _COUNT_CLAIM_RE.findall(text):
-            claims.append((relative_path, stated, noun))
-            if int(stated) != expected[noun]:
-                wrong.append(f"{relative_path}: says {stated} {noun}, registry has {expected[noun]}")
+        claims = _COUNT_CLAIM_RE.findall(text)
+        if not claims and relative_path in _COUNT_ASSERTING_PATHS:
+            silent.append(relative_path)
+        wrong.extend(
+            f"{relative_path}: says {stated} {noun}, registry has {expected[noun]}"
+            for stated, noun in claims
+            if int(stated) != expected[noun]
+        )
+        # A spelled-out count is invisible to the digit regex, so it would
+        # drift silently. Rewrite it as a digit or as the property.
+        wrong.extend(f"{relative_path}: spelled-out count {phrase!r}" for phrase in _SPELLED_OUT_COUNT_RE.findall(text))
 
-    assert claims, f"no wired/excluded count found in any of {_COUNT_BEARING_PATHS}; the phrasing moved"
+    assert silent == [], f"files stating no wired/excluded count at all; the phrasing moved: {silent}"
     assert wrong == [], "prose counts contradicting .gitapex/ssot.json: " + "; ".join(wrong)

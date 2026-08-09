@@ -401,8 +401,10 @@ def find_local_invocation_identity_drift(registry: SsotRegistry | None) -> list[
     a workflow file the local runner cannot execute. They are exempted by a
     property of their own registry entry, checked here, not by an id
     allowlist that would silently grow. Measured at the commit that added
-    this check: exactly those two of the sixteen wired gates take the
-    exemption, and the other fourteen satisfy the rule unmodified. A gate
+    this check, and re-checked since: those two wired gates are the only
+    ones taking the exemption, and every other wired gate satisfies the
+    rule unmodified. Stated as the property rather than as a pair of
+    counts, for the reason issue #904's third finding gives. A gate
     with a mixed ``.yml``-and-script list (``mypy-type-check``,
     ``exception-handler-gap``) is *not* exempt and must name its script."""
     if registry is None:

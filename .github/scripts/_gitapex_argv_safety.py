@@ -86,6 +86,9 @@ SHELL_COMMANDS = frozenset({"sh", "bash", "dash", "zsh", "ksh", "csh", "tcsh", "
 # either, while a missing one is a bypass.
 INLINE_CODE_FLAGS: dict[str, frozenset[str]] = {
     "python": frozenset({"-c"}),
+    # `pypy3` normalizes to `pypy`, so it needs its own entry: it takes `-c`
+    # identically, and `uv run --python pypy3.10` is a supported invocation.
+    "pypy": frozenset({"-c"}),
     "perl": frozenset({"-e", "-E"}),
     "ruby": frozenset({"-e"}),
     "node": frozenset({"-e", "--eval", "-p", "--print"}),
@@ -171,55 +174,68 @@ def _matches_inline_flag(element: str, flags: frozenset[str]) -> bool:
     return any(flag[1] in letters for flag in flags if len(flag) == 2 and not flag.startswith("--"))
 
 
-# File extensions that make a token the *script* an interpreter runs, rather
-# than one of that interpreter's own option values. See
-# `_interpreter_option_span` for why the span ends on this and not on "the
-# first token that looks like a path".
-SCRIPT_SUFFIXES = (".py", ".pyw", ".js", ".mjs", ".cjs", ".ts", ".rb", ".pl", ".pm", ".php", ".r")
+# A bare `-` is not an option: every interpreter here reads its *program*
+# from standard input when handed one, and the runner pipes a gate's
+# `local_stdin` producer straight into that stdin. `["python3", "-",
+# "<the gate's real script>"]` with `local_stdin: ["git", "log", "-1",
+# "--format=%B"]` therefore executes the commit message as Python, on every
+# push, while naming a real script and passing every other check. Verified,
+# not argued: `echo "print('OWNED')" | python3 - /some/arg` prints OWNED.
+STDIN_PROGRAM_ARG = "-"
 
 
 def _interpreter_option_span(argv: tuple[str, ...] | list[str], interpreter_index: int) -> range:
-    """Indices of the tokens ``argv[interpreter_index]`` consumes as its own
-    options: everything up to the script it is being asked to run.
+    """Indices of the tokens ``argv[interpreter_index]`` consumes itself:
+    everything up to the script it is being asked to run.
 
-    The span ends at the interpreter's script argument, and a token is that
-    argument only when it is not an option *and* carries a script file
-    extension. Both halves matter, and the second one is narrower than it
-    first looks:
+    The rule is one line and is worth stating precisely, because two weaker
+    versions of it shipped in this PR and both were bypassable. A token ends
+    the span when it is **not an option and is not the value of the option
+    before it** -- that is, it does not start with ``-`` *and* neither does
+    its predecessor. Everything before it is the interpreter's own.
 
-    - Not simply "the first token not starting with ``-``". ``python3 -X
-      utf8 -cprint(1)`` really does execute its payload, and stopping at
-      ``utf8`` would walk straight past the flag that does it.
-    - Not "the first token that looks like a path" either -- that was this
-      function's first revision, and CodeRabbit's review of PR #910 found
-      it bypassable. An option *value* can carry a dot: ``python3 -X
-      pycache_prefix=cache.dir -cprint(99)`` and ``python3 -W
-      ignore::Dep:mypkg.mod -cprint(98)`` both print, verified by running
-      them, while a dot-or-slash heuristic ended the span on the value and
-      never saw the ``-c``. Requiring a script extension keeps those values
-      inside the span. It also generalizes past the single ``-X`` case the
-      review named, without this module having to enumerate which options
-      of which interpreter take a separate value.
+    Why not the two weaker rules:
 
-    Anchoring the span here is what keeps the mirror-image false positive
-    out: in ``uv run --frozen python3 script.py -c conf.json`` the ``-c``
-    belongs to ``script.py``, sits past the span, and is not this
-    interpreter's flag at all. ``git -c core.quotePath=false`` -- a real
-    ``local_stdin`` value in this registry -- never enters a span, since
+    - "The first token not starting with ``-``" misses ``python3 -X utf8
+      -cprint(1)``, which really does execute its payload: it stops on
+      ``utf8``, the *value* of ``-X``.
+    - "The first token that looks like a path", then "the first token
+      carrying a script extension", both narrowed that hole without closing
+      it, because an option value can look like either. All three of
+      ``python3 -X pycache_prefix=cache.dir -cprint(99)``, ``python3 -X
+      pycache_prefix=cache.py -cprint(99)`` and ``python3 -W ignore:x.py
+      -cprint(99)`` print their payload, and each defeated one of those
+      spellings. Chasing the *shape of the value* is the wrong axis; its
+      *position* -- one token after an option -- is what actually makes it a
+      value, and needs no enumeration of which options of which interpreter
+      take one.
+
+    The mirror-image false positive stays closed, which is what the span
+    exists for: in ``uv run --frozen python3 script.py -c conf.json`` the
+    token after the interpreter is not an option and its predecessor is the
+    interpreter itself, so the span is empty and the ``-c`` -- which belongs
+    to ``script.py`` -- is never this interpreter's flag. ``python3 -X utf8
+    script.py -c conf.json`` also lands correctly: ``utf8`` is a value,
+    ``script.py`` follows a non-option, so the span is exactly ``-X utf8``.
+    ``git -c core.quotePath=false`` never enters a span at all, since
     ``git`` is not an interpreter.
 
-    The residual, stated rather than left to be discovered: an argv that
-    names no extension-bearing script at all keeps the span open to the
-    end, so ``python3 -m pytest -c pytest.ini`` would be refused even
-    though its ``-c`` is pytest's, as would an extensionless executable
-    script. Every wired argv names a ``.github/scripts/*.py`` path, and the
-    failure is a loud refusal naming the argv, not a silent pass.
+    The residual, stated rather than left to be discovered: a *valueless*
+    option immediately before the script argument makes that argument look
+    like a value, so ``python3 -B script.py -c conf.json`` keeps the span
+    open and refuses on the script's own ``-c``. No wired argv puts an
+    option between the interpreter and its script -- every one of them is
+    ``uv run --frozen python3 <path>`` -- and the failure is a loud refusal
+    naming the argv, never a silent pass. That direction is the one to err
+    in here.
     """
     start = interpreter_index + 1
     for index in range(start, len(argv)):
-        token = argv[index]
-        if not token.startswith("-") and token.lower().endswith(SCRIPT_SUFFIXES):
-            return range(start, index)
+        if argv[index].startswith("-"):
+            continue
+        if index > start and argv[index - 1].startswith("-"):
+            continue  # consumed as the preceding option's value, not the script
+        return range(start, index)
     return range(start, len(argv))
 
 
@@ -250,17 +266,36 @@ def find_argv_safety_violations(argv: tuple[str, ...] | list[str]) -> list[str]:
     # Every interpreter occurrence, not just the first: an argv naming one
     # interpreter with a real script and a second one with a payload would
     # otherwise report clean on the strength of the first.
+    first_interpreter = next((index for index, base in enumerate(basenames) if _inline_code_flags(base)), None)
     for index, base in enumerate(basenames):
         flags = _inline_code_flags(base)
         if flags is None:
             continue
-        inline = sorted(
-            {
-                argv[offset]
-                for offset in _interpreter_option_span(argv, index)
-                if _matches_inline_flag(argv[offset], flags)
-            }
-        )
+        span = _interpreter_option_span(argv, index)
+        inline = sorted({argv[offset] for offset in span if _matches_inline_flag(argv[offset], flags)})
         if inline:
             violations.append(f"passes inline code to {argv[index]!r} via {', '.join(repr(flag) for flag in inline)}")
+        elif any(argv[offset] == STDIN_PROGRAM_ARG for offset in span):
+            violations.append(f"feeds {argv[index]!r} its program on standard input via '-'")
+        elif (
+            index == first_interpreter
+            and span.stop == len(argv)
+            and all(argv[offset].startswith("-") for offset in span)
+        ):
+            # Nothing after the interpreter that could be a script at all:
+            # it falls back to reading its program from stdin, the same
+            # execution path as `-`. Both conditions are load-bearing and
+            # each was wrong on its own in an earlier draft. `span.stop ==
+            # len(argv)` alone is not "no script": an empty span means the
+            # script was found *immediately*, which is what every wired argv
+            # looks like. And "the span reached the end" alone fired on any
+            # argv with an option before its script, because the span rule
+            # cannot tell an attached-value option (`-Wignore::Dep x.py`,
+            # where `x.py` *is* the script) from a valueless one. Together
+            # they mean: no script-shaped token exists anywhere after the
+            # interpreter. Restricted to the *first* interpreter, so a later
+            # token merely named after one -- an option value like
+            # `--interpreter node` -- is not read as a script-less
+            # invocation.
+            violations.append(f"gives {argv[index]!r} no script, so it reads its program from standard input")
     return violations
