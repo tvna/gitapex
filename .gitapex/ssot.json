@@ -47,6 +47,12 @@
       "path": ".gitapex/waza-eval.schema.json",
       "format": "json",
       "authority": "waza's own eval/task JSON Schemas (draft-07, as upstream declares them), vendored verbatim at the release tag flake.nix pins -- authoritative shape for every committed evals/ suite, read by eval-suite-schema-drift. One entry stands in for the pair: .gitapex/waza-task.schema.json is vendored from the same tag by the same gate and carries the same authority"
+    },
+    {
+      "id": "main-branch-ruleset",
+      "path": ".github/rulesets/main.json",
+      "format": "json",
+      "authority": "The GitHub Repository Ruleset this repository intends to enforce on its default branch -- name/target/enforcement/conditions/bypass_actors/rules, i.e. exactly the key set GitHub's own ruleset POST/PUT body accepts. Authoritative for what protection main is supposed to carry (read by both scopes of the ruleset-verify workflow, written to GitHub only by the human-dispatched apply-rulesets workflow, which stays a separate file so the write-capable Environment binding is greppable rather than expression-derived); it is NOT proof that GitHub enforces it, which is why both reading gates exist"
     }
   ],
   "gates": [
@@ -638,6 +644,48 @@
       "policy_refs": [],
       "cluster": "test-integrity",
       "tracking_issue": 925,
+      "status": "active",
+      "supersedes": null
+    },
+    {
+      "id": "main-ruleset-required-checks",
+      "kind": "script",
+      "script": ".github/scripts/gitapex_gate_ruleset_required_checks.py",
+      "rule": "The committed .github/rulesets/main.json must validate against a pydantic model of GitHub's own ruleset request body -- extra=forbid at every level, a type-discriminated rule union, and every pull_request parameter required rather than defaulted, so a misspelled parameter, a wrong-typed count or an unknown rule type is a finding here instead of a silently-ignored field or a 422 discovered after a live dispatch. On top of that schema it must target ~DEFAULT_BRANCH with enforcement active, grant no bypass actors, block deletion and non-fast-forward, require pull requests with code-owner review and thread resolution, and allow only the merge methods this repository uses. Every context it names as a required status check must resolve to a job that actually reports under that exact name on every pull request targeting the default branch: the workflow's pull_request trigger may carry no paths/paths-ignore filter, its branches/branches-ignore filter must admit the default branch, its types filter must include opened and synchronize, and the backing job may be neither a matrix job (which reports as 'job (value)') nor a reusable-workflow call (which reports as 'caller / inner'). A context no job can ever report stays Pending forever, blocking the merge with no in-repository fix.",
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_ruleset_required_checks.py"],
+      "trigger": "tests/test_gitapex_gate_ruleset_required_checks.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": ["main-branch-ruleset"],
+      "cluster": "self-governance",
+      "tracking_issue": 439,
+      "status": "active",
+      "supersedes": null
+    },
+    {
+      "id": "ruleset-sync-gate",
+      "kind": "script",
+      "script": ".github/scripts/gitapex_scan_ruleset_drift.py",
+      "rule": "Every status-check context named in .github/rulesets/main.json as it exists on the pull request's BASE ref must also be required by the live main ruleset. One-directional by design: a context live but absent from the file is the shape of an in-flight removal and is left to the scheduled full scan. Exit 2 (no live ruleset yet, or no readable token) is surfaced as a warning, not a failure, because neither precondition is one a pull request can satisfy.",
+      "planes": ["ci"],
+      "local_exclusion": "Reads the live GitHub Rulesets API with an Administration-scoped token and needs the pull request's own base SHA; neither exists on a working tree.",
+      "trigger": ".github/workflows/ruleset-verify.yml, the ruleset-scan job on pull_request (which resolves --scope required-checks from github.event_name)",
+      "policy_refs": ["main-branch-ruleset"],
+      "cluster": "self-governance",
+      "tracking_issue": 439,
+      "status": "active",
+      "supersedes": null
+    },
+    {
+      "id": "ruleset-drift-scan",
+      "kind": "script",
+      "script": ".github/scripts/gitapex_scan_ruleset_drift.py",
+      "rule": "The live main ruleset's projection (name/target/enforcement/conditions/bypass_actors/rules) must equal .github/rulesets/main.json's. Catches a change made directly in the Settings UI, which no pull request would ever show. Exit 2 (no live ruleset yet, or no readable token) is surfaced as a warning, not a failure, for the same reason as ruleset-sync-gate.",
+      "planes": ["ci"],
+      "local_exclusion": "Reads the live GitHub Rulesets API with an Administration-scoped token; there is no offline equivalent of what GitHub currently enforces.",
+      "trigger": ".github/workflows/ruleset-verify.yml, the same ruleset-scan job on daily cron 09:00 UTC + workflow_dispatch (which resolves --scope full from github.event_name)",
+      "policy_refs": ["main-branch-ruleset"],
+      "cluster": "self-governance",
+      "tracking_issue": 439,
       "status": "active",
       "supersedes": null
     }
