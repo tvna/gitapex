@@ -661,15 +661,27 @@ def test_missing_scores_schema_raises_rather_than_silently_passing(tmp_path: pat
         scanner.find_drift(evals_dir, scores_schema_path=tmp_path / "absent.json", min_expected_run_dirs=1)
 
 
-# ---- layer 1: checker-report-declared ----
+# ---- layer 1: checker-report-declared / nonstandard-score-file-declared ----
 
 # `dispatch-trace-check.json`'s own real committed shape: a checker report,
-# not a per-model score file -- no `n_fixtures`/`mean_score`/`scores`, so it
-# does not validate against `eval-scores.schema.json`.
+# not a per-model score file -- no `n_fixtures`/`mean_score`/`scores`, and no
+# per-item `score` either, so it does not validate against
+# `eval-scores.schema.json` and does not trip `_contains_score_field`.
 _CHECKER_SHAPED_PAYLOAD: dict[str, Any] = {
     "model_id": "claude-sonnet-5",
     "n_runs": 2,
     "runs": [{"control": "positive", "dispatch_count": 1}],
+}
+
+# Issue #537's own real committed shape: scorer output, not a checker's --
+# `scores[]` carries a per-item `score` on the same [0,1] scale
+# `eval-scores.schema.json` uses, just inside a `condition`/`commit` record
+# that schema's own `scores[]` item shape does not have, so it neither
+# validates against that schema nor reads as a checker report.
+_NONSTANDARD_SCORE_PAYLOAD: dict[str, Any] = {
+    "model_id": "claude-sonnet-5",
+    "n_runs": 2,
+    "scores": [{"iteration": "axis-addition", "condition": "before", "commit": "e8c387c", "score": 0.666667}],
 }
 
 
@@ -682,6 +694,19 @@ def test_undeclared_non_score_root_json_is_flagged(tmp_path: pathlib.Path) -> No
     assert any("checker-report-declared" in f and "does not validate as a per-model score file" in f for f in findings)
 
 
+def test_undeclared_nonstandard_score_file_is_flagged(tmp_path: pathlib.Path) -> None:
+    # Same "does not validate, and not declared" gap as the checker-report
+    # case, but the payload carries a per-item score -- must route to the
+    # nonstandard-score-file class, never to checker-report-declared.
+    manifest = _copy(_VALID_PRE_CONTRACT)
+    manifest["artifacts"] = ["claude-sonnet-5.json"]
+    findings = _findings_for(
+        tmp_path, manifest, extra_files={"claude-sonnet-5.json": json.dumps(_NONSTANDARD_SCORE_PAYLOAD)}
+    )
+    assert any("nonstandard-score-file-declared" in f and "carries a per-item score" in f for f in findings)
+    assert not any("checker-report-declared" in f for f in findings)
+
+
 def test_declared_checker_report_is_accepted(tmp_path: pathlib.Path) -> None:
     manifest = _copy(_VALID_PRE_CONTRACT)
     manifest["artifacts"] = ["dispatch-trace-check.json"]
@@ -689,18 +714,44 @@ def test_declared_checker_report_is_accepted(tmp_path: pathlib.Path) -> None:
     findings = _findings_for(
         tmp_path, manifest, extra_files={"dispatch-trace-check.json": json.dumps(_CHECKER_SHAPED_PAYLOAD)}
     )
-    assert not any("checker-report-declared" in f for f in findings)
+    assert not any("checker-report-declared" in f or "nonstandard-score-file-declared" in f for f in findings)
+
+
+def test_declared_nonstandard_score_file_is_accepted(tmp_path: pathlib.Path) -> None:
+    manifest = _copy(_VALID_PRE_CONTRACT)
+    manifest["artifacts"] = ["claude-sonnet-5.json"]
+    manifest["nonstandard_score_files"] = [
+        {"file": "claude-sonnet-5.json", "deviation": "before/after series, not a flat fixture_id/score map."}
+    ]
+    findings = _findings_for(
+        tmp_path, manifest, extra_files={"claude-sonnet-5.json": json.dumps(_NONSTANDARD_SCORE_PAYLOAD)}
+    )
+    assert not any("checker-report-declared" in f or "nonstandard-score-file-declared" in f for f in findings)
+
+
+def test_checker_report_that_actually_carries_a_score_is_flagged(tmp_path: pathlib.Path) -> None:
+    # Closes the escape hatch a CodeRabbit review round found: declaring a
+    # file in checker_reports[] must not exempt real scorer output from
+    # classification just because the manifest author called it a checker
+    # report.
+    manifest = _copy(_VALID_PRE_CONTRACT)
+    manifest["artifacts"] = ["claude-sonnet-5.json"]
+    manifest["checker_reports"] = ["claude-sonnet-5.json"]
+    findings = _findings_for(
+        tmp_path, manifest, extra_files={"claude-sonnet-5.json": json.dumps(_NONSTANDARD_SCORE_PAYLOAD)}
+    )
+    assert any("checker-report-declared" in f and "belongs in nonstandard_score_files[] instead" in f for f in findings)
 
 
 def test_undeclared_valid_score_file_needs_no_declaration(tmp_path: pathlib.Path) -> None:
     # A root .json file that validates against eval-scores.schema.json on its
     # own content is implicitly a legitimate score file -- declaring every
-    # one of these in checker_reports[] would defeat the point of checking
-    # content instead of name.
+    # one of these would defeat the point of checking content instead of
+    # name.
     manifest = _copy(_VALID_PRE_CONTRACT)
     manifest["artifacts"] = ["claude-sonnet-5.json"]
     findings = _findings_for(tmp_path, manifest, extra_files={"claude-sonnet-5.json": json.dumps(_VALID_SCORE_FILE)})
-    assert not any("checker-report-declared" in f for f in findings)
+    assert not any("checker-report-declared" in f or "nonstandard-score-file-declared" in f for f in findings)
 
 
 def test_checker_reports_not_a_list_is_flagged(tmp_path: pathlib.Path) -> None:
@@ -735,11 +786,81 @@ def test_dangling_checker_report_reference_is_flagged(tmp_path: pathlib.Path) ->
     assert any("checker-report-declared" in f and "does not exist" in f for f in findings)
 
 
+def test_nonstandard_score_files_not_a_list_is_flagged(tmp_path: pathlib.Path) -> None:
+    manifest = _copy(_VALID_PRE_CONTRACT)
+    manifest["nonstandard_score_files"] = "claude-sonnet-5.json"
+    findings = _findings_for(tmp_path, manifest)
+    assert any("nonstandard-score-file-declared" in f and "must be an array" in f for f in findings)
+
+
+def test_nonstandard_score_files_entry_missing_deviation_is_flagged(tmp_path: pathlib.Path) -> None:
+    manifest = _copy(_VALID_PRE_CONTRACT)
+    manifest["nonstandard_score_files"] = [{"file": "claude-sonnet-5.json"}]
+    findings = _findings_for(tmp_path, manifest)
+    assert any("nonstandard-score-file-declared" in f and "is invalid" in f for f in findings)
+
+
+def test_nonstandard_score_files_entry_with_empty_deviation_is_flagged(tmp_path: pathlib.Path) -> None:
+    manifest = _copy(_VALID_PRE_CONTRACT)
+    manifest["nonstandard_score_files"] = [{"file": "claude-sonnet-5.json", "deviation": ""}]
+    findings = _findings_for(tmp_path, manifest)
+    assert any("nonstandard-score-file-declared" in f and "is invalid" in f for f in findings)
+
+
+def test_nonstandard_score_files_entry_with_unknown_key_is_flagged(tmp_path: pathlib.Path) -> None:
+    # extra="forbid" -- a bare filename cannot smuggle unreviewed keys past
+    # this model the way it could past the old single-field checker_reports.
+    manifest = _copy(_VALID_PRE_CONTRACT)
+    manifest["nonstandard_score_files"] = [
+        {"file": "claude-sonnet-5.json", "deviation": "before/after series.", "extra": "not allowed"}
+    ]
+    findings = _findings_for(tmp_path, manifest)
+    assert any("nonstandard-score-file-declared" in f and "is invalid" in f for f in findings)
+
+
+def test_nonstandard_score_files_entry_not_an_object_is_flagged(tmp_path: pathlib.Path) -> None:
+    manifest = _copy(_VALID_PRE_CONTRACT)
+    manifest["nonstandard_score_files"] = ["claude-sonnet-5.json"]
+    findings = _findings_for(tmp_path, manifest)
+    assert any("nonstandard-score-file-declared" in f and "is invalid" in f for f in findings)
+
+
+@pytest.mark.parametrize("entry", ["artifacts/claude-sonnet-5.json", "../claude-sonnet-5.json"])
+def test_nonstandard_score_files_entry_with_a_path_separator_is_flagged(tmp_path: pathlib.Path, entry: str) -> None:
+    manifest = _copy(_VALID_PRE_CONTRACT)
+    manifest["nonstandard_score_files"] = [{"file": entry, "deviation": "before/after series."}]
+    findings = _findings_for(tmp_path, manifest)
+    assert any("nonstandard-score-file-declared" in f and "bare filename" in f for f in findings)
+
+
+def test_dangling_nonstandard_score_file_reference_is_flagged(tmp_path: pathlib.Path) -> None:
+    manifest = _copy(_VALID_PRE_CONTRACT)
+    manifest["nonstandard_score_files"] = [{"file": "never-written.json", "deviation": "before/after series."}]
+    findings = _findings_for(tmp_path, manifest)
+    assert any("nonstandard-score-file-declared" in f and "does not exist" in f for f in findings)
+
+
+def test_file_declared_in_both_classes_is_flagged(tmp_path: pathlib.Path) -> None:
+    manifest = _copy(_VALID_PRE_CONTRACT)
+    manifest["artifacts"] = ["claude-sonnet-5.json"]
+    manifest["checker_reports"] = ["claude-sonnet-5.json"]
+    manifest["nonstandard_score_files"] = [{"file": "claude-sonnet-5.json", "deviation": "before/after series."}]
+    findings = _findings_for(
+        tmp_path, manifest, extra_files={"claude-sonnet-5.json": json.dumps(_CHECKER_SHAPED_PAYLOAD)}
+    )
+    assert any(
+        "non-score-root-json-declared" in f and "declared in both checker_reports[] and nonstandard_score_files[]" in f
+        for f in findings
+    )
+
+
 def test_real_repository_checker_reports_are_all_declared() -> None:
-    # Pins the three real records this rule found undeclared: two dispatch-
-    # trace-check.json instances and #537's own non-standard before/after
-    # score file. A future regression (the declaration silently dropped from
-    # a manifest) fails the real-tree gate test above; this test names which
+    # Pins the two real records this rule found undeclared: dispatch-trace-
+    # check.json's own two committed instances. #537's own non-standard
+    # before/after score file moved to nonstandard_score_files -- see the
+    # test right below -- after a CodeRabbit review round found it mislabeled
+    # here. A future regression (the declaration silently dropped from a
+    # manifest) fails the real-tree gate test above; this test names which
     # records the rule is actually protecting.
     declaring = {
         f"{p.parent.parent.name}/{p.name}"
@@ -752,8 +873,20 @@ def test_real_repository_checker_reports_are_all_declared() -> None:
     assert declaring == {
         "battle-testing-a-skill/2026-07-30-issue-584-dispatch-trace",
         "evaluating-skill-quality/2026-07-30-issue-584-dispatch-trace",
-        "evaluating-skill-quality/2026-07-29-issue-537-confidentiality-gates",
     }
+
+
+def test_real_repository_nonstandard_score_files_are_all_declared() -> None:
+    declaring = {
+        f"{p.parent.parent.name}/{p.name}"
+        for p in scanner.discover_run_dirs()
+        if isinstance(
+            (m := json.loads((p / scanner.MANIFEST_NAME).read_text(encoding="utf-8"))).get("nonstandard_score_files"),
+            list,
+        )
+        and m["nonstandard_score_files"]
+    }
+    assert declaring == {"evaluating-skill-quality/2026-07-29-issue-537-confidentiality-gates"}
 
 
 # ---- layer 1: no-symlinks ----

@@ -77,6 +77,44 @@ is therefore pinned to `LEGACY_PRE_CONTRACT_RUNS`, the frozen set of run
 directories that predate the contract. A run directory outside that set
 declaring `pre-contract` is a finding, so the set can only shrink.
 
+A non-score root JSON file is one of two classes, decided by content
+--------------------------------------------------------------------
+
+`results/README.md` names a "checker report" -- a deterministic checker's
+own verdict output, `dispatch-trace-check.json` being the one committed
+instance -- as a root JSON file that is legitimately not a per-model score
+file. The first version of this rule gave every such file one field,
+`checker_reports[]`, to declare itself through. A CodeRabbit review round
+found that conflation live: issue #537's own `claude-sonnet-5.json` is
+scorer output in a nonstandard shape (it carries a real per-iteration
+`score`, just inside a `condition`/`iteration` record `eval-scores.schema.
+json`'s own `scores[]` item shape does not have), not a checker's verdict,
+and the one field gave its author no way to say so -- and, worse, a bare
+declared filename proved nothing about what actually produced it, which
+is how a real score file could have been routed through the same field as
+an unvalidated escape hatch.
+
+Both halves are fixed together, by content rather than by trusting the
+declaration. `_contains_score_field` decides which class an undeclared
+root JSON file belongs to: a real per-item `score` anywhere in it means
+`nonstandard_score_files[]`, never `checker_reports[]` -- a checker's own
+verdict is a pass/fail (`dispatch-trace-check.json`'s `runs[]` reports
+`dispatch_trace_verdict`/`checker_exit_code`, never a `[0,1]` score).
+`checker_reports[]` stays a bare-filename array, since a checker's
+findings have no shape either schema could usefully pin (the module
+docstring already states this). `nonstandard_score_files[]` is validated
+with a pydantic model (`NonstandardScoreFileEntry`, `extra="forbid"`)
+instead, because it is a genuinely new structural requirement -- a
+mandatory, non-empty `deviation` disclosure -- that has no jsonschema
+equivalent to defer to: neither skill-owned schema mentions this key, so
+there is nothing for pydantic to sit *behind* here the way it sits behind
+`jsonschema` in this repository's other pydantic use
+(`gitapex_scan_ssot_schema.py`, where a pydantic parse failure silently
+returns `None` because `jsonschema` already reported the real problem).
+Layer 2's own gate-run validation (`find_gate_run_schema_drift`) is
+untouched by any of this: it is exactly the case pydantic does not need
+to cover, since `jsonschema` already validates that shape in full.
+
 What this scanner does NOT check, disclosed rather than solved
 -------------------------------------------------------------
 
@@ -93,9 +131,13 @@ What this scanner does NOT check, disclosed rather than solved
   `<full-model-id>` naming convention `results/README.md` states, because
   this scanner owns no notion of a valid model id. An arbitrarily named
   `.json` file in a run root passes as a score file as long as its own
-  content validates against `eval-scores.schema.json` -- `find_checker_report_drift`
-  only steps in for a root `.json` file that does *not* validate as a score
-  file, requiring it to be declared in `checker_reports[]` instead.
+  content validates against `eval-scores.schema.json` --
+  `find_non_score_root_json_drift` only steps in for a root `.json` file
+  that does *not* validate as a score file, requiring it to be declared in
+  `checker_reports[]` (a deterministic checker's own verdict output, no
+  per-item `score`) or `nonstandard_score_files[]` (scorer output that
+  does carry a per-item `score`, just not in `eval-scores.schema.json`'s
+  own shape, with a mandatory `deviation` disclosure) instead.
 - `commit` is checked for hex shape, not for resolving on any remote. It
   deliberately does not shell out to git: a shallow clone (this
   repository's own CI checkout) cannot resolve a historical object name,
@@ -123,6 +165,7 @@ from typing import Any
 
 import _gitapex_schema_validation
 import jsonschema
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 EVALS_DIR = REPO_ROOT / "evals"
@@ -427,43 +470,101 @@ def find_root_content_drift(run_dir: pathlib.Path) -> list[str]:
     return findings
 
 
-def find_checker_report_drift(
+class NonstandardScoreFileEntry(BaseModel):
+    """One `nonstandard_score_files[]` entry: a root JSON file that is
+    scorer output, just not in `eval-scores.schema.json`'s own shape --
+    issue #537's own `claude-sonnet-5.json` (per-iteration `condition`/
+    `commit` records rather than `eval-scores.schema.json`'s flat
+    `{fixture_id, score}`) is the one committed instance.
+
+    Neither skill-owned schema mentions this key, so pydantic is the sole
+    validator for its shape here -- not a secondary typed pass behind an
+    already-`jsonschema`-checked instance the way this repository's other
+    pydantic use (`gitapex_scan_ssot_schema.py`) works. `extra="forbid"`
+    plus a required, non-empty `deviation` is what actually closes the
+    escape hatch a CodeRabbit review round found in this rule's first
+    version: a bare declared filename proved nothing about what produced
+    it, which is how #537's real scorer output ended up mislabeled as a
+    checker's. An object with a mandatory disclosure field cannot be
+    produced by accident the way a bare string can."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    file: str = Field(min_length=1)
+    deviation: str = Field(min_length=1)
+
+
+def _contains_score_field(payload: Any) -> bool:
+    """Whether `payload` holds a numeric, non-boolean `score` key anywhere
+    in a nested dict or list, however the file names its own top-level
+    records.
+
+    This is the content test that decides which of the two non-score
+    classes an undeclared root JSON file belongs to. A genuine checker
+    report never carries one: `dispatch-trace-check.json`'s own `runs[]`
+    reports a pass/fail verdict (`dispatch_trace_verdict`,
+    `checker_exit_code`), never a `[0,1]` score. Scorer output does, even
+    when reshaped -- issue #537's `claude-sonnet-5.json` scores every
+    iteration on the same scale `eval-scores.schema.json` uses, just inside
+    a record shape that schema's own `scores[]` item does not have. `bool`
+    is excluded because it is a `int` subclass in Python, and a stray
+    `"score": true`/`"score": false` is not a score."""
+    if isinstance(payload, dict):
+        score = payload.get("score")
+        if isinstance(score, (int, float)) and not isinstance(score, bool):
+            return True
+        return any(_contains_score_field(v) for v in payload.values())
+    if isinstance(payload, list):
+        return any(_contains_score_field(v) for v in payload)
+    return False
+
+
+def find_non_score_root_json_drift(
     instance: Any,
     run_dir: pathlib.Path,
     scores_validator: jsonschema.Draft202012Validator,
 ) -> list[str]:
-    """`checker-report-declared`: a root `*.json` file that does not validate
-    as a per-model score file must be explicitly declared in
-    `checker_reports[]`.
+    """`checker-report-declared` / `nonstandard-score-file-declared`: a root
+    `*.json` file that does not validate as a per-model score file must be
+    explicitly declared as one of two distinct classes -- `checker_reports[]`
+    (a deterministic checker's own verdict output) or
+    `nonstandard_score_files[]` (scorer output in a nonstandard shape, with a
+    mandatory `deviation` disclosure) -- and content, not the declaration
+    itself, decides which class a file actually belongs to (see
+    `_contains_score_field`).
 
-    `results/README.md` names a "checker report" as a third permitted
-    root-level class (`dispatch-trace-check.json` is the one committed
-    instance) alongside per-model score files, but until this rule existed
-    that classification was documentation only: the scanner accepted *any*
-    root `.json` file once `artifacts[]` listed it, whatever its content --
-    an adversarial review round on this file found the gap. This closes it by
-    content, not by requiring every legitimate score file to also be
-    re-declared: a root JSON file that already validates against
-    `eval-scores.schema.json` needs no further declaration (that is what a
-    per-model score file's own committed shape already proves); a root JSON
-    file that does not -- `dispatch-trace-check.json`'s own `{model_id,
-    n_runs, runs}` shape does not carry `n_fixtures`/`mean_score`/`scores` --
-    must appear in `checker_reports[]` or the finding fires.
+    `results/README.md` names "checker report" as a third permitted
+    root-level class alongside per-model score files, but until this rule
+    existed that classification was documentation only: the scanner accepted
+    *any* root `.json` file once `artifacts[]` listed it, whatever its
+    content -- an adversarial review round on this file found that gap, and a
+    later CodeRabbit round found that the fix's own single field
+    (`checker_reports[]`) reopened a narrower version of it, since a bare
+    declared filename proved nothing about what produced the file and #537's
+    own scorer output was mislabeled through exactly that gap. Both are
+    closed together here: a root JSON file that already validates against
+    `eval-scores.schema.json` needs no declaration at all (that is what a
+    per-model score file's own committed shape already proves); one that
+    does not and carries a per-item `score` must be declared in
+    `nonstandard_score_files[]`, never `checker_reports[]`; one that does not
+    and carries no `score` at all must be declared in `checker_reports[]`.
+    A filename declared in both is a finding -- a root JSON file is exactly
+    one class, not both.
 
-    `checker_reports` is a layer-1-only key -- neither schema mentions it,
-    since a checker report is by definition not scored and has no shape
-    either schema could usefully pin. It is optional: most records have no
-    checker report and need not declare an empty list."""
+    Both keys are layer-1-only and optional: most records have neither and
+    need not declare an empty list."""
     if not isinstance(instance, dict):
         return []
-    declared_raw = instance.get("checker_reports")
-    if declared_raw is None:
-        declared_raw = []
     findings: list[str] = []
-    if not isinstance(declared_raw, list):
-        return ["checker-report-declared: checker_reports must be an array of paths relative to this manifest"]
-    declared: set[str] = set()
-    for entry in declared_raw:
+
+    checker_raw = instance.get("checker_reports")
+    if checker_raw is None:
+        checker_raw = []
+    checker_declared: set[str] = set()
+    if not isinstance(checker_raw, list):
+        findings.append("checker-report-declared: checker_reports must be an array of bare filenames")
+        checker_raw = []
+    for entry in checker_raw:
         if not isinstance(entry, str) or not entry:
             findings.append(f"checker-report-declared: checker_reports entry is not a non-empty string: {entry!r}")
             continue
@@ -472,16 +573,72 @@ def find_checker_report_drift(
                 f"checker-report-declared: checker_reports entry {entry!r} must be a bare filename in the run root"
             )
             continue
-        declared.add(entry)
-        if not (run_dir / entry).is_file():
+        checker_declared.add(entry)
+        target = run_dir / entry
+        if not target.is_file():
             findings.append(f"checker-report-declared: checker_reports lists {entry!r}, which does not exist")
+            continue
+        if _contains_score_field(_load_json(target)):
+            findings.append(
+                f"checker-report-declared: {entry!r} is declared in checker_reports[] but its own content "
+                "carries a per-item score -- that is scorer output, not a checker's verdict, and belongs in "
+                "nonstandard_score_files[] instead"
+            )
+
+    nonstandard_raw = instance.get("nonstandard_score_files")
+    if nonstandard_raw is None:
+        nonstandard_raw = []
+    nonstandard_declared: set[str] = set()
+    if not isinstance(nonstandard_raw, list):
+        findings.append(
+            "nonstandard-score-file-declared: nonstandard_score_files must be an array of {file, deviation} objects"
+        )
+        nonstandard_raw = []
+    for entry in nonstandard_raw:
+        try:
+            parsed = NonstandardScoreFileEntry.model_validate(entry)
+        except ValidationError as error:
+            first = error.errors()[0]["msg"] if error.errors() else str(error)
+            findings.append(
+                f"nonstandard-score-file-declared: nonstandard_score_files entry {entry!r} is invalid: {first}"
+            )
+            continue
+        if _escapes_run_dir(parsed.file) or "/" in parsed.file:
+            findings.append(
+                f"nonstandard-score-file-declared: nonstandard_score_files entry {parsed.file!r} must be a bare "
+                "filename in the run root"
+            )
+            continue
+        nonstandard_declared.add(parsed.file)
+        if not (run_dir / parsed.file).is_file():
+            findings.append(
+                f"nonstandard-score-file-declared: nonstandard_score_files lists {parsed.file!r}, which does not exist"
+            )
+
+    for both in sorted(checker_declared & nonstandard_declared):
+        findings.append(
+            f"non-score-root-json-declared: {both!r} is declared in both checker_reports[] and "
+            "nonstandard_score_files[] -- a root JSON file is exactly one class, not both"
+        )
+
+    declared = checker_declared | nonstandard_declared
     for path in sorted(run_dir.glob("*.json")):
         if path.name == MANIFEST_NAME or path.name in declared:
             continue
-        if not scores_validator.is_valid(_load_json(path)):
+        payload = _load_json(path)
+        if scores_validator.is_valid(payload):
+            continue
+        if _contains_score_field(payload):
             findings.append(
-                f"checker-report-declared: {path.name!r} does not validate as a per-model score file "
-                "and is not declared in checker_reports[] -- a non-score root JSON file must be one or the other"
+                f"nonstandard-score-file-declared: {path.name!r} carries a per-item score but does not validate "
+                "as a per-model score file and is not declared in nonstandard_score_files[] -- scorer output in "
+                "a nonstandard shape must be declared with a deviation disclosure"
+            )
+        else:
+            findings.append(
+                f"checker-report-declared: {path.name!r} does not validate as a per-model score file, carries no "
+                "per-item score, and is not declared in checker_reports[] -- a non-score root JSON file must be "
+                "declared in one of the two classes"
             )
     return findings
 
@@ -796,7 +953,7 @@ def find_drift(
             f"{prefix}: {f}" for f in find_record_contract_drift(instance, prefix, legacy_pre_contract_runs)
         )
         findings.extend(f"{prefix}: {f}" for f in find_artifact_drift(instance, run_dir))
-        findings.extend(f"{prefix}: {f}" for f in find_checker_report_drift(instance, run_dir, scores_validator))
+        findings.extend(f"{prefix}: {f}" for f in find_non_score_root_json_drift(instance, run_dir, scores_validator))
         findings.extend(
             f"{prefix}: {f}" for f in find_gate_run_schema_drift(instance, run_dir, run_validator, scores_validator)
         )

@@ -56,8 +56,11 @@
   "artifacts": [
     "claude-sonnet-5.json"
   ],
-  "checker_reports": [
-    "claude-sonnet-5.json"
+  "nonstandard_score_files": [
+    {
+      "file": "claude-sonnet-5.json",
+      "deviation": "Scored by skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py, the same scorer a standard record uses, but before/after per-iteration (condition, before_commit/after_commit) rather than eval-scores.schema.json's flat one-score-per-fixture_id shape -- this run_shape's own before/after design, not a checker's output. Was previously mislabeled in checker_reports[] (issue #926's own first pass); reclassified here after a CodeRabbit review round found that checker_reports[] gave no way to distinguish scorer output in a nonstandard shape from a deterministic checker's verdict."
+    }
   ],
   "known_gaps": [
     "trials_per_fixture=1 for every iteration -- no repeat-run variance data; a single sample generalizing correctly is not proof a weaker tier or a different sample would.",

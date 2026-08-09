@@ -46,19 +46,38 @@ results/
   the machine-readable surface. Before issue #926, 13 `.md` files sat in run
   roots instead, outside this declared layout and referenced by no manifest.
 - A root `*.json` is normally a per-model score file named by full model ID.
-  It may also be a **checker report** -- the output of a deterministic
-  checker rather than of a scorer, named for the check
-  (`dispatch-trace-check.json` is the one committed instance, from
-  `evals/scripts/gitapex_check_dispatch_trace.py`). A checker report is not a
-  score file, is not validated against `eval-scores.schema.json`, and must
-  not be pointed at by `score_files[]`. Declare it in the manifest's own
-  `checker_reports` array (a bare filename, e.g. `["dispatch-trace-check.json"]`)
-  in addition to listing it in `artifacts[]` like every other file.
-  Enforced by content, not by name: the scanner validates every
-  undeclared root `.json` file against `eval-scores.schema.json`, and a file
-  that does not pass that -- `dispatch-trace-check.json`'s own `{model_id,
-  n_runs, runs}` shape does not -- must be in `checker_reports` or the scan
-  fails. A real per-model score file needs no such declaration.
+  It may instead be one of two other declared classes, each not validated
+  against `eval-scores.schema.json` and each not to be pointed at by
+  `score_files[]`:
+  - A **checker report** -- the output of a deterministic checker rather
+    than of a scorer, named for the check (`dispatch-trace-check.json` is
+    the one committed instance, from
+    `evals/scripts/gitapex_check_dispatch_trace.py`). A checker's own
+    verdict is pass/fail (`dispatch_trace_verdict`, `checker_exit_code`),
+    never a `[0,1]` score. Declare it in the manifest's own
+    `checker_reports` array (a bare filename, e.g.
+    `["dispatch-trace-check.json"]`) in addition to listing it in
+    `artifacts[]` like every other file.
+  - A **nonstandard score file** -- scorer output that does carry a real
+    per-item score, just not in `eval-scores.schema.json`'s own shape (the
+    `2026-07-29-issue-537-confidentiality-gates` run's `claude-sonnet-5.json`
+    is the one committed instance: a before/after series keyed by
+    `condition`/`commit`, not that schema's flat `{fixture_id, score}`).
+    Declare it in the manifest's own `nonstandard_score_files` array as an
+    object naming both the file and why it deviates, e.g.
+    `[{"file": "claude-sonnet-5.json", "deviation": "..."}]` -- the
+    `deviation` string is mandatory and non-empty, checked by a pydantic
+    model rather than either skill-owned schema, since neither mentions
+    this key.
+
+  Which of the two classes a file belongs to is decided by content, not by
+  the declaration itself: the scanner validates every undeclared root
+  `.json` file against `eval-scores.schema.json` first, and a file that does
+  not pass that must be declared -- in `nonstandard_score_files` if it
+  carries a per-item `score` anywhere, in `checker_reports` if it does not
+  -- or the scan fails. A real per-model score file needs no declaration at
+  all, and a file declared in both arrays is itself a failure: a root JSON
+  file is exactly one class.
 
 ## `manifest.json` is authoritative for every machine-readable fact
 
