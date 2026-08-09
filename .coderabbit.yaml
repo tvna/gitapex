@@ -57,6 +57,11 @@ reviews:
       mode: warning
     docstrings:
       mode: warning
+      # threshold lowered from the 80% schema default (issue #968): the
+      # warning was firing often enough to be noise even though it was
+      # already non-blocking. 30% still catches undocumented modules
+      # without flagging every partially-documented file.
+      threshold: 30
 
   # Finishing Touches let CodeRabbit push commits to the branch -- PR #884
   # offered "Commit on current branch" and "Create stacked PR" checkboxes.
