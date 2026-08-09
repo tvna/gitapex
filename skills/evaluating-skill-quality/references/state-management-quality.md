@@ -194,12 +194,13 @@ axes' burden rather than add to it.
 
 The standard is stated by Toyota, as the first line of its own Just-in-Time
 definition: "Making only what is needed, when it is needed, and in the amount
-needed" [tps]. The trigger above already owns *what* and *when* -- which
-boundaries qualify, and axis 4's same-step recording rule. Nothing in this
-file owned *the amount* before this section.
+needed" [tps]. The trigger above owns *what* and *when* -- which boundaries
+qualify, and axis 4's same-step recording rule. This section owns *the
+amount*.
 
-The lens applies only where the trigger already fires, so it introduces no
-trigger condition and changes no firing set.
+Apply the lens only where the trigger already fires. It is not itself a
+trigger condition: a target that does not fire stays not-applicable, and no
+lens question can make it fire.
 
 **Q1. Re-derivability.** Could the procedure re-derive this value from ground
 truth instead of holding it? A re-derivable value in the record is inventory:
@@ -248,12 +249,10 @@ consumes them turns on that precision.
 *Fail* -- per-step recording where only the per-task outcome is consumed, or a
 timestamp resolution no reader compares at.
 
-No target surveyed in this repository's own corpus exhibits Q3's Fail form, so
-that form is stated in this file's own words rather than quoted. When a target
-names no consumer precise enough to measure its granularity against, record
-Q3 as "cannot assess" rather than guessing at a verdict. That outcome comes up
-more often here than on Q1 or Q2, and saying so is correct rather than a
-skipped question.
+When a target names no consumer precise enough to measure its granularity
+against, record Q3 as "cannot assess" rather than guessing at a verdict. That
+outcome comes up more often here than on Q1 or Q2, and saying so is correct
+rather than a skipped question.
 
 **What a failure does.** A failed lens question is a named dimension-6 gap,
 like a failed axis, reported before the axes whose cost it inflates and naming
@@ -693,7 +692,11 @@ page can be restructured or reworded, so a reader far past that date should
 re-check it rather than treat it as settled. The `[sgse]` and `[ebp]`
 quotations are this repository's own skills, quoted as marked illustration of
 the minimality lens only -- never as a rule this file imports -- and verified
-against the pinned revision the reference definitions below name.
+against the pinned revision the reference definitions below name. The
+minimality lens carries a quoted Pass exemplar for each of its three
+questions and no quoted Fail exemplar for Q3, because none was found; the
+Fail form there is stated in this file's own words, under the rule against
+inventing one that the How to grade section already sets.
 
 Quotations are normalized to ASCII: em dashes in the sources are rendered
 `--` or `-`, and curly quotation marks are rendered straight. No other
