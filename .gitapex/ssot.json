@@ -455,8 +455,11 @@
     {
       "id": "ssot-schema-drift",
       "kind": "script",
-      "script": ".github/scripts/gitapex_scan_ssot_schema.py",
-      "rule": "Validates .gitapex/ssot.json against .gitapex/ssot.schema.json (JSON Schema draft 2020-12); fails if any gates[].script path doesn't exist as a real file, or any policy_refs[] value doesn't resolve to a real policy_sources[].id.",
+      "script": [
+        ".github/scripts/gitapex_scan_ssot_schema.py",
+        ".github/scripts/_gitapex_argv_safety.py"
+      ],
+      "rule": "Validates .gitapex/ssot.json against .gitapex/ssot.schema.json (JSON Schema draft 2020-12); fails if any gates[].script path doesn't exist as a real file, or any policy_refs[] value doesn't resolve to a real policy_sources[].id. The argv-safety predicates this gate applies to local_invocation/local_stdin live in _gitapex_argv_safety.py, registered here (issue #904) so gitapex_detect_changed_gate_scripts.py selects an edit to them as a gate change requiring disclosure.",
       "planes": ["ci", "local"],
       "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_scan_ssot_schema.py"],
       "trigger": "tests/test_gitapex_scan_ssot_schema.py inside the pytest step of .github/workflows/test.yml",
