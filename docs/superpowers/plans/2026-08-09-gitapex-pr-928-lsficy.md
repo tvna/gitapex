@@ -26,19 +26,19 @@ generated.
 
 ## Facts established live, this session
 
-| Fact | How it was established |
+| Fact | How it was established (reproducible) |
 |---|---|
-| 25 skills, 23 `eval.yaml` today (not the issue's 26/24) | `ls -d skills/*/`, `find evals -maxdepth 2 -name eval.yaml`, counted live |
-| Missing `eval.yaml`: `evaluating-context-channel-maturity`, `setup-gitapex-toolchain` | Live diff of `skills/*/` against `evals/*/eval.yaml`; matches the issue's own named gap |
-| `evaluating-context-channel-maturity` already has 13 `tasks/*.yaml`, just no `eval.yaml` | Explore-agent research pass this session |
-| `setup-gitapex-toolchain` has neither `tasks/` nor `eval.yaml` | Same pass |
-| `trials_per_task`: 19 declare `3`, 4 declare `1` (not the issue's 19/5) | Same pass, read every `eval.yaml` |
-| `explaining-the-work` and `evaluating-skill-quality` both carry the identical, wrong H1 `# Held-out split for scorer-gated-skill-edits` in their own `split.md` | Same pass |
-| Human decision: full 1:1 parity achieved *within this PR*, not an allowlist exemption for the two gap skills | `AskUserQuestion` answer, this session |
+| 25 skills, 23 `eval.yaml` today (not the issue's 26/24) | `ls -d skills/*/ \| wc -l`; `find evals -maxdepth 2 -name eval.yaml \| wc -l` |
+| Missing `eval.yaml`: `evaluating-context-channel-maturity`, `setup-gitapex-toolchain` | `for d in skills/*/; do n=$(basename "$d"); [ -f "evals/$n/eval.yaml" ] \|\| echo "$n"; done` |
+| `evaluating-context-channel-maturity` already has 13 `tasks/*.yaml`, just no `eval.yaml` | `ls evals/evaluating-context-channel-maturity/tasks/*.yaml \| wc -l` |
+| `setup-gitapex-toolchain` has neither `tasks/` nor `eval.yaml` | `ls evals/setup-gitapex-toolchain/` |
+| `trials_per_task`: 19 declare `3`, 4 declare `1` (not the issue's 19/5) | `grep -l 'trials_per_task: 3' evals/*/eval.yaml \| wc -l`; `grep -l 'trials_per_task: 1' evals/*/eval.yaml \| wc -l` |
+| `explaining-the-work` and `evaluating-skill-quality` both carry the identical, wrong H1 `# Held-out split for scorer-gated-skill-edits` in their own `split.md` | `head -1 evals/explaining-the-work/split.md evals/evaluating-skill-quality/split.md` |
+| Human decision: full 1:1 parity achieved *within this PR*, not an allowlist exemption for the two gap skills | `AskUserQuestion` answer, this session -- see PR #976's own Execution log for the recorded authorization |
 
 ## Acceptance Criteria Map
 
-(Full table already posted to the user this session, in the
+(Full table lives durably in PR #976's own body -- https://github.com/tvna/gitapex/pull/976 -- not reproduced verbatim here to avoid a second copy drifting out of sync; see also the
 `planning-a-branch-from-an-issue` output. Each task below quotes its own
 row.)
 
@@ -91,15 +91,29 @@ deployment guidelines" — Planned ops: "Author
 - [ ] Draft 2020-12 schema, `additionalProperties: false` throughout,
       `$id: "https://github.com/tvna/gitapex/blob/main/skills/scorer-gated-skill-edits/references/split.schema.json"`
       — same `$id` convention as `skill-metadata.schema.json`.
-- [ ] Required top-level keys: `assignment` (train/selection/test fixture
-      lists), `partition` (a string matching `^\d+:\d+:\d+$`, never a bare
-      YAML-hazard-shaped number — this is JSON so no coercion risk, but keep
-      it a string for consistency with the "not YAML" rationale in the
-      issue), `split_arithmetic_exclusions` (array, may be empty),
-      `equivalence_classes` (array of objects, may be empty).
+- [ ] Required top-level keys: `assignment` only (a fixture-list object
+      keyed by split name, e.g. `train`/`selection`/`test`, each an array
+      of fixture-filename strings; each fixture entry, where a source file
+      declares `expected.exercises`, carries it as an array of strings
+      matching real `###`-level SKILL.md headings — Check C's own
+      cross-file contract, defined here rather than left implicit).
+      Optional top-level keys (per T2's own finding that 2 of 5 skills
+      declare none of this today — do not require what the source data
+      doesn't have): `partition` (a string matching `^\d+:\d+:\d+$`, never
+      a bare YAML-hazard-shaped number — this is JSON so no coercion risk,
+      but keep it a string for consistency with the "not YAML" rationale
+      in the issue), `split_arithmetic_exclusions` (array, may be empty,
+      required together with `partition` when `partition` is present —
+      Check D's own precondition), `equivalence_classes` (array of
+      `{train_fixture, held_out_fixture}`-shaped objects, may be empty —
+      Check B's own precedence-pair contract).
 - [ ] No `$ref` outside the file itself (portability: the schema must
       resolve standalone inside the skill's own directory, per the
       Dependency-file-portability check).
+- [ ] This nested shape is the actual contract Checks A-D (T9) and the
+      schema gate (T11) will read — if a real split.md's current content
+      doesn't cleanly map to it once read, fix the schema to match reality
+      rather than forcing reality into an invented shape.
 
 ---
 
@@ -213,8 +227,11 @@ with `### Gate result` / `### Transfer check` / `### Rejected-edit log` /
 `### Verdict` subsections, preserving each entry's existing prose
 verbatim under the correct subheading — this is the highest-risk file in
 the migration (3,248 lines, 15 entries): do this as a structural,
-content-preserving transform, verify no prose is lost by comparing
-non-whitespace byte counts of each entry before/after."
+content-preserving transform, verify no prose is lost per entry by an
+exact normalized-text comparison (strip only the heading markup itself,
+diff the remaining prose character-for-character — equal counts alone do
+not prove equal content), with a non-whitespace byte count as a secondary
+sanity check, not the primary proof."
 
 - [ ] This is the largest, highest-risk task in the whole plan. Read the
       full file first. Build a mapping of each `**Iteration:` entry's
@@ -223,8 +240,10 @@ non-whitespace byte counts of each entry before/after."
       explicit subheadings — do not summarize or drop any sentence.
   - [ ] Fix H1, rename corpus-size-caveat heading, extract
         `split.json`.
-  - [ ] Convert all 15 entries; run a before/after non-whitespace
-        byte-count diff per entry as a sanity check before finishing.
+  - [ ] Convert all 15 entries; run a before/after exact normalized-text
+        comparison per entry (heading markup stripped, prose diffed
+        verbatim) as the primary proof, plus a non-whitespace byte-count
+        diff as a secondary sanity check, before finishing.
   - [ ] Resolve the "Compatibility-awareness branch coverage" vs "Blind
         spot pass" question per the interpretation above — do not guess
         silently if the file's own content doesn't make it clear; if
@@ -238,8 +257,10 @@ non-whitespace byte counts of each entry before/after."
 
 **Files:** Create `evals/evaluating-context-channel-maturity/eval.yaml`
 
-**ACM row quoted:** "Suite enforcement: 26 skills and 26 eval.yaml (real
-count: 25/25); deleting one fails the new gate" / Planned ops: "create
+**ACM row quoted:** "Suite enforcement: 26 skills and 26 eval.yaml; deleting
+one fails the new gate" (the issue's own text, citation only — the
+operative, verified target for this task list is **25 skills, 25
+eval.yaml**, per this file's own Facts table above) / Planned ops: "create
 `evals/evaluating-context-channel-maturity/eval.yaml` wiring the 13
 already-committed `tasks/*.yaml` files, `trials_per_task: 3` (repo's
 dominant convention), matching the shape of a comparable existing
@@ -333,7 +354,14 @@ layered with any needed cross-file pydantic checks, wired into
 needed, `tests/` already runs there).
 
 - [ ] Mirror `gitapex_scan_skill_metadata_schema.py`'s structure exactly.
-- [ ] Validate all 5 committed `split.json` files clean.
+- [ ] Discover `split.json` files at runtime (glob `evals/*/split.json`),
+      never a hardcoded list of the 5 skills known today — a 6th skill
+      gaining a `split.json` later must be caught by this gate
+      automatically, not silently skipped. Validate whatever the glob
+      finds; today that resolves to 5 files.
+- [ ] Regression test: a malformed extra `split.json` fixture (a 6th file,
+      violating the schema) must fail the gate — not just the 5 real,
+      valid ones passing.
 
 ---
 
@@ -343,11 +371,16 @@ needed, `tests/` already runs there).
 create `tests/test_gitapex_gate_skill_eval_yaml_parity.py`; modify
 `.gitapex/ssot.json` (register `skill-eval-yaml-parity`)
 
-**ACM row quoted:** "Suite enforcement: 26 skills and 26 eval.yaml (real:
-25/25); deleting one fails the new gate" / Planned ops: "assert
-`set(skills/*/) == set(evals/*/eval.yaml parents)`; a test deleting one
-`eval.yaml` (or one skill directory) from a temp fixture must fail the
-gate."
+**ACM row quoted:** "Suite enforcement: 26 skills and 26 eval.yaml; deleting
+one fails the new gate" (the issue's own text, citation only — the
+operative, verified target is **25 skills, 25 eval.yaml**, same note as
+T7/T8) / Planned ops: "normalize both sides to bare skill names before
+comparing (strip the `skills/` root and any trailing slash on one side,
+strip the `evals/` root and the trailing `/eval.yaml` on the other — never
+compare raw paths, which can never be equal to each other) and assert the
+two name sets are equal; tests cover a missing skill, an extra orphaned
+`eval.yaml`, a case-mismatched name, and a trailing-slash input, each
+failing the gate."
 
 - [ ] Depends on T7/T8 landing first (wave 4, after wave 2) so the real
       repo state is genuinely 25/25 when this gate is added — it must
@@ -397,15 +430,27 @@ regenerate and commit `docs/skill-eval-status.md`
 becomes generated from those sources" / Planned ops: "derive trials from
 eval.yaml, fixture counts from tasks/, evaluated models + baseline
 presence from results/*/manifest.json, dimension coverage from
-gitapex_check_dimension_coverage.py; keep only non-derivable judgment
-prose (the existing three narrative sections) hand-authored, regenerate
-only the Index table and any sentence stating a derivable fact (fixing
-the stale 'All 12... trials_per_task: 3' sentence as a side effect of no
-longer hand-writing it)."
+gitapex_check_dimension_coverage.py; the three existing hand-authored
+narrative sections move into their own small checked-in source (not
+parsed back out of the previous generated `docs/skill-eval-status.md`,
+which would make the drift check non-reproducible from a clean checkout
+and silently perpetuate any stale narrative forever) -- a
+`docs/skill-eval-status-narrative.md` (or equivalent reviewed template)
+the generator reads alongside the derived data and renders into the final
+document; regenerate the Index table and any sentence stating a derivable
+fact (fixing the stale 'All 12... trials_per_task: 3' sentence as a side
+effect of no longer hand-writing it)."
 
 - [ ] Depends on the final state of every `eval.yaml`/`eval-status.md`
       (T7, T8, T13) — must run last.
-- [ ] Wire the drift check into the same pytest step other gates use.
+- [ ] Extract the 3 existing narrative sections from the current
+      `docs/skill-eval-status.md` into their own separate source file
+      FIRST (a one-time, reviewed extraction), then point the generator at
+      that file, never at the generator's own prior output.
+- [ ] Wire the drift check into the same pytest step other gates use;
+      confirm it passes starting from a clean checkout (regenerate into a
+      temp path and diff, don't just trust the working tree already
+      matches).
 
 ---
 
