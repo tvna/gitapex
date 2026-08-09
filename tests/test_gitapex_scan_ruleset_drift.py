@@ -160,3 +160,40 @@ def test_default_fetch_delegates_to_the_shared_client(monkeypatch: pytest.Monkey
     monkeypatch.setattr(drift, "fetch_json_document", fake_fetch)
     assert drift.default_fetch("https://api.github.test/x", "tok") == []
     assert seen == {"url": "https://api.github.test/x", "token": "tok"}
+
+
+def test_an_api_read_failure_is_unverified_not_drift(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Exit 1 would make the workflow assert what the live ruleset contains,
+    # which during an outage or with a rejected credential is a claim this scan
+    # has no evidence for. A warning naming the real HTTP failure is honest.
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+
+    def boom(url: str, token: str) -> Any:
+        raise drift.GitHubApiError("GET https://api.github.test/x failed: HTTP 403: Resource not accessible")
+
+    monkeypatch.setattr(drift, "default_fetch", boom)
+    code = drift.main(["--repo", "o/r", "--sot", str(write_sot(tmp_path)), "--scope", "full"])
+    assert code == drift.EXIT_UNVERIFIED
+    out = capsys.readouterr().out
+    # On stdout, because that is the stream both workflows tee into the job
+    # summary -- a stderr-only diagnostic leaves the summary blank exactly when
+    # someone needs to read it.
+    assert "HTTP 403" in out
+    assert "Nothing was verified" in out
+
+
+def test_an_unusable_committed_file_still_fails_the_job(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # RulesetError is not a read failure: the repository's own file is broken,
+    # or two live rulesets share one name. Both are real and actionable.
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    broken = tmp_path / "broken.json"
+    broken.write_text("{", encoding="utf-8")
+    code = drift.main(["--repo", "o/r", "--sot", str(broken), "--scope", "full"])
+    assert code == drift.EXIT_DRIFT
+    captured = capsys.readouterr()
+    assert "::error::" in captured.err
+    assert "not valid JSON" in captured.out

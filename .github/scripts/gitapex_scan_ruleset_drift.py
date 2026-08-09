@@ -30,13 +30,23 @@ into `0` would be exactly the silent default CLAUDE.md section 4 forbids. Both
 workflows surface `2` as a GitHub `::warning::` naming the runbook step that
 clears it, so it is loud without being a merge blocker.
 
-**One asymmetry, deliberate rather than overlooked.** *No* token is exit 2 (the
-documented pre-handoff state), but a token the API *rejects* -- wrong scope,
-expired, revoked -- raises `GitHubApiError` and exits 1, failing the job. The
-two look similar and are not: the first is a handoff that has not started, the
-second is a handoff that is broken and needs someone to fix it. Treating a
-rejected credential as a warning would leave the gate reporting a soft
-"unverified" forever while everyone assumed it was watching.
+**Where the 1/2 line actually falls.** Exit 2 covers every way this scan can
+fail to *read* the live state: no token, a token the API rejects, an outage, a
+truncated response -- all of them surface as `GitHubApiError`. Exit 1 is
+reserved for the two things that are genuinely wrong rather than merely
+unknown: the live ruleset disagrees with the committed file, or the committed
+file itself is unreadable/ambiguous (`RulesetError`, which also covers two live
+rulesets sharing one name).
+
+An earlier revision of this module put a rejected credential on the exit-1
+side, reasoning that a broken handoff should fail loudly rather than warn.
+Corrected after review: exit 1 makes the workflow print "the live main ruleset
+requires fewer status checks than the base ref claims", which during an API
+outage is a statement this scan has no evidence for. Emitting a confident false
+diagnostic is worse than a warning, so the whole read-failure class is exit 2 --
+and to keep that from becoming a silent forever-pass, the specific failure text
+(the HTTP status, the URL) is printed on **stdout**, which is what both
+workflows pipe into the job summary.
 """
 
 from __future__ import annotations
@@ -164,8 +174,18 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_UNVERIFIED
     try:
         report, code = run(args.repo, pathlib.Path(args.sot), args.scope, lambda url: default_fetch(url, token))
-    except (RulesetError, GitHubApiError) as error:
+    except GitHubApiError as error:
+        # The read failed, so nothing was compared. Printed on stdout, not
+        # stderr: both workflows pipe only stdout into $GITHUB_STEP_SUMMARY, so
+        # a stderr-only diagnostic would leave the summary blank on exactly the
+        # runs where someone needs to know what went wrong.
+        print(f"Nothing was verified -- the rulesets API could not be read: {error}")
+        return EXIT_UNVERIFIED
+    except RulesetError as error:
+        # Not a read failure: the committed file is unusable, or two live
+        # rulesets share one name. Both are real, actionable repository state.
         print(f"::error::{error}", file=sys.stderr)
+        print(f"Ruleset drift scan failed: {error}")
         return EXIT_DRIFT
     print(report)
     return code

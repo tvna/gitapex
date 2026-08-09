@@ -223,3 +223,92 @@ def test_main_reports_an_unreadable_ruleset_separately_from_a_finding(
 def test_the_repositorys_own_ruleset_is_the_gates_default_target() -> None:
     assert gate.DEFAULT_RULESET == REPO_ROOT / ".github" / "rulesets" / "main.json"
     assert gate.DEFAULT_WORKFLOW_DIR == REPO_ROOT / ".github" / "workflows"
+
+
+SCALAR_TRIGGER_WORKFLOW = """
+name: Scalar
+on: pull_request
+jobs:
+  always-runs:
+    runs-on: ubuntu-latest
+    steps:
+      - run: 'true'
+"""
+
+SEQUENCE_TRIGGER_WORKFLOW = """
+name: Sequence
+on: [push, pull_request]
+jobs:
+  always-runs:
+    runs-on: ubuntu-latest
+    steps:
+      - run: 'true'
+"""
+
+
+def test_scalar_on_pull_request_syntax_is_recognised(tmp_path: pathlib.Path) -> None:
+    # `on: pull_request` is unfiltered by construction. An earlier revision saw
+    # only the mapping form and would have reported this reachable check as
+    # naming no job -- a false failure blocking a merge.
+    assert (
+        gate.find_violations(write_ruleset(tmp_path, VALID), write_workflows(tmp_path, s=SCALAR_TRIGGER_WORKFLOW)) == []
+    )
+
+
+def test_sequence_on_syntax_is_recognised(tmp_path: pathlib.Path) -> None:
+    assert (
+        gate.find_violations(write_ruleset(tmp_path, VALID), write_workflows(tmp_path, s=SEQUENCE_TRIGGER_WORKFLOW))
+        == []
+    )
+
+
+def test_a_branch_filter_excluding_the_protected_branch_cannot_back_a_required_check(
+    tmp_path: pathlib.Path,
+) -> None:
+    # `branches` filters the BASE branch, so this workflow never runs for a
+    # pull request into main and its check stays Pending forever.
+    workflow = UNFILTERED_WORKFLOW.replace("pull_request: {}", "pull_request:\n    branches: [release]")
+    findings = gate.find_violations(write_ruleset(tmp_path, VALID), write_workflows(tmp_path, b=workflow))
+    assert len(findings) == 1
+    assert "Pending forever" in findings[0]
+
+
+def test_a_branch_filter_including_the_protected_branch_is_accepted(tmp_path: pathlib.Path) -> None:
+    workflow = UNFILTERED_WORKFLOW.replace("pull_request: {}", "pull_request:\n    branches: [main, release]")
+    assert gate.find_violations(write_ruleset(tmp_path, VALID), write_workflows(tmp_path, b=workflow)) == []
+
+
+def test_a_glob_branch_filter_matching_the_protected_branch_is_accepted(tmp_path: pathlib.Path) -> None:
+    workflow = UNFILTERED_WORKFLOW.replace("pull_request: {}", "pull_request:\n    branches: ['mai*']")
+    assert gate.find_violations(write_ruleset(tmp_path, VALID), write_workflows(tmp_path, b=workflow)) == []
+
+
+def test_a_negated_branch_pattern_excluding_the_protected_branch_is_rejected(tmp_path: pathlib.Path) -> None:
+    workflow = UNFILTERED_WORKFLOW.replace("pull_request: {}", "pull_request:\n    branches: ['*', '!main']")
+    assert len(gate.find_violations(write_ruleset(tmp_path, VALID), write_workflows(tmp_path, b=workflow))) == 1
+
+
+def test_branches_ignore_covering_the_protected_branch_is_rejected(tmp_path: pathlib.Path) -> None:
+    workflow = UNFILTERED_WORKFLOW.replace("pull_request: {}", "pull_request:\n    branches-ignore: [main]")
+    assert len(gate.find_violations(write_ruleset(tmp_path, VALID), write_workflows(tmp_path, b=workflow))) == 1
+
+
+def test_an_incomplete_types_list_cannot_back_a_required_check(tmp_path: pathlib.Path) -> None:
+    # `types:` replaces the default set rather than extending it, so a workflow
+    # listening only for `closed` never starts on an open pull request.
+    workflow = UNFILTERED_WORKFLOW.replace("pull_request: {}", "pull_request:\n    types: [closed]")
+    assert len(gate.find_violations(write_ruleset(tmp_path, VALID), write_workflows(tmp_path, t=workflow))) == 1
+
+
+def test_types_missing_synchronize_cannot_back_a_required_check(tmp_path: pathlib.Path) -> None:
+    # Without `synchronize` the check never re-runs on a push to the branch,
+    # so it stays stuck at whatever the first commit produced.
+    workflow = UNFILTERED_WORKFLOW.replace("pull_request: {}", "pull_request:\n    types: [opened, reopened]")
+    assert len(gate.find_violations(write_ruleset(tmp_path, VALID), write_workflows(tmp_path, t=workflow))) == 1
+
+
+def test_the_default_branch_is_configurable(tmp_path: pathlib.Path) -> None:
+    workflow = UNFILTERED_WORKFLOW.replace("pull_request: {}", "pull_request:\n    branches: [release]")
+    workflows = write_workflows(tmp_path, b=workflow)
+    assert gate.find_violations(write_ruleset(tmp_path, VALID), workflows, "release") == []
+    assert len(gate.find_violations(write_ruleset(tmp_path, VALID), workflows, "main")) == 1

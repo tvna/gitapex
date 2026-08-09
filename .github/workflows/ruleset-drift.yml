@@ -56,12 +56,12 @@ jobs:
           set -uo pipefail
           set +e
           python3 .github/scripts/gitapex_scan_ruleset_drift.py \
-            --repo "$TARGET_REPO" --sot .github/rulesets/main.json --scope full \
+            --repo "$TARGET_REPO" --sot .github/rulesets/main.json --scope full 2>&1 \
             | tee -a "$GITHUB_STEP_SUMMARY"
           code=${PIPESTATUS[0]}
           set -e
           case "$code" in
             0) exit 0 ;;
             2) echo "::warning::Ruleset drift unverified; see the job summary and docs/runbooks/rulesets.md."; exit 0 ;;
-            *) echo "::error::The live main ruleset has drifted from .github/rulesets/main.json."; exit 1 ;;
+            *) echo "::error::Ruleset drift scan failed; see the job summary for the diff, or for which committed file is unusable."; exit 1 ;;
           esac

@@ -87,6 +87,18 @@ def send_write(url: str, method: str, body: dict[str, Any]) -> dict[str, Any]:
         raise RulesetError(f"{method} {url} failed: HTTP {error.code}: {detail}") from error
     except OSError as error:
         raise RulesetError(f"{method} {url} failed: {error}") from error
+    except json.JSONDecodeError as error:
+        # A 2xx is not proof of a parseable body -- a proxy or CDN in front of
+        # api.github.com can return HTTP 200 with a truncated body or an HTML
+        # error page. `json.JSONDecodeError` subclasses `ValueError`, not
+        # `OSError`, so neither arm above catches it and it would escape
+        # `main`'s own `except (RulesetError, GitHubApiError)` as a raw
+        # traceback -- the identical failure `_gitapex_github_http.py` already
+        # documents on its own read path. Worse here than there: this is the
+        # write path, so the ruleset may well have been created or replaced
+        # before the crash, leaving the operator with a traceback and no
+        # summary telling them whether it landed.
+        raise RulesetError(f"{method} {url} returned an unparseable body: {error}") from error
     if not isinstance(decoded, dict):
         raise RulesetError(f"{method} {url} returned {type(decoded).__name__}, expected a JSON object")
     return decoded
@@ -177,7 +189,37 @@ def run(
     if mode == "apply":
         response = writer(plan["url"], plan["method"], plan["body"])
         result_id = response.get("id")
+        verify_applied(response, sot)
     return render_summary(plan, mode, diff, result_id)
+
+
+def verify_applied(response: dict[str, Any], sot: dict[str, Any]) -> None:
+    """Confirm GitHub actually stored what was sent, before reporting success.
+
+    Both POST and PUT return the stored ruleset object, so the response is a
+    direct read of the resulting state rather than an echo of the request. A
+    2xx with no error is not proof the state transition matched the policy --
+    `skills/evaluating-deterministic-gate-quality/references/dimensions.md`
+    dimension 10 names exactly this ("a call can execute cleanly and be
+    narrated as successful while the state transition it produced still
+    violates the policy") -- so the response is compared against the committed
+    source of truth on the same projection every other comparison here uses.
+
+    Raising, rather than only reporting, is deliberate. The write has already
+    happened by this point and failing does not roll it back; what failing buys
+    is that the operator finds out while they are still watching the run they
+    dispatched, instead of up to a day later from the scheduled drift scan. If
+    the mismatch turns out to be GitHub normalising a field it accepted, the
+    fix is to update `.github/rulesets/main.json` to match what GitHub actually
+    stores -- which is a source-of-truth correction worth making, not noise to
+    suppress.
+    """
+    drift = render_projection_diff(response, sot)
+    if drift:
+        raise RulesetError(
+            "the write succeeded but GitHub stored something other than the committed source of truth "
+            f"(`live` is what it stored, `sot` is what was sent):\n{drift}"
+        )
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:

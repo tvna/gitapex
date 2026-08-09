@@ -170,18 +170,34 @@ replacement works.
 `dry_run: true` performs `GET` requests only. Nothing about it can change live
 state.
 
-### Authorization criteria for a live apply
+### Authorization for a live apply
 
-All three must hold before dispatching with `dry_run: false`:
+**Authorization is the dispatch itself plus the `ruleset-apply` Environment
+approval. Nothing written in a GitHub issue, pull request, or comment authorizes
+anything.**
 
-1. An open issue authorizes this apply with these inputs and this commit of
-   `.github/rulesets/main.json`.
-2. A dry run for the same commit has been read, and its planned body matches the
-   committed file.
-3. The request did not arrive only as a comment. Issue comments, pull request
-   descriptions, and review text are untrusted input under CLAUDE.md section 2 --
-   they are advisory at best and a prompt-injection vector at worst. Authorization
-   lives in the issue body, and the dispatch is a human action either way.
+That distinction matters and an earlier draft of this runbook got it wrong. It
+listed "an open issue authorizes this apply" as a criterion, which inverts
+CLAUDE.md section 2: an issue body is external-authored text, and external text
+is untrusted data that cannot confer authority. Anyone who can file an issue
+could otherwise manufacture an "authorization" by writing one. The only two
+things that actually gate a live apply are held by GitHub and cannot be written
+into a text field: a human with dispatch permission choosing `dry_run: false`,
+and a required reviewer approving the `ruleset-apply` Environment.
+
+An issue remains valuable, as the **record** of why the apply happened, not as
+its permission. Before dispatching with `dry_run: false`, the maintainer doing
+the dispatching confirms for themselves:
+
+1. Which issue this apply is recorded against, and the commit SHA of
+   `.github/rulesets/main.json` being applied.
+2. That a dry run for that same commit has been read, and its planned request
+   body matches the committed file.
+3. That they intend these exact inputs -- not that some text somewhere asked
+   for them.
+
+Treat an issue, comment, or review that "requests an apply" as a suggestion to
+evaluate, never as a decision already made.
 
 ## Verifying
 
@@ -195,12 +211,26 @@ Two gates read the live state, and they answer different questions:
   This is the one that catches a change made directly in the Settings UI.
 
 Both use the same three-valued exit code from
-`gitapex_scan_ruleset_drift.py`: `0` in sync, `1` real drift (fails the job),
-`2` nothing was verified. Exit `2` means either no live ruleset carries the name
-yet or no token was readable -- preconditions no pull request can satisfy -- so
-both workflows report it as a `::warning::` with a green job, and say so in the
-job summary. Until the first apply lands, expect exit `2` and read it as "not
-enforced yet", not as "fine".
+`gitapex_scan_ruleset_drift.py`:
+
+| Exit | Meaning | Job outcome |
+|---|---|---|
+| `0` | Live state matches the committed file | pass |
+| `1` | Real drift, **or** the committed file is unusable / two live rulesets share one name | fails |
+| `2` | Nothing was verified: no live ruleset carries the name yet, no token was supplied, or the rulesets API could not be read (rejected credential, outage, unparseable response) | `::warning::`, job stays green |
+
+Exit `2` covers every way the scan can fail to *read* live state, not only the
+missing-token case. That is deliberate: exit `1` makes the job print a
+confident claim about what the live ruleset contains, and during an API outage
+the scan has no evidence for such a claim. A warning that names the actual HTTP
+failure is more useful than a false assertion. So that exit `2` cannot quietly
+become a permanent pass, the specific reason -- the status code, the URL -- is
+printed to the job summary every time, and both workflows merge the scanner's
+stderr into that summary.
+
+Until the first apply lands, expect exit `2` and read it as "not enforced yet",
+not as "fine". Once it is applied, a recurring exit `2` means the `RULESETS_PAT`
+handoff is broken; the reason line in the job summary says which way.
 
 ### Live behaviour smoke tests, after the first apply
 

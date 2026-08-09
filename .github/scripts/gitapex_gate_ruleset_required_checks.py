@@ -28,6 +28,7 @@ what GitHub *currently enforces* is the separate concern of
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import pathlib
 import sys
@@ -108,12 +109,90 @@ def required_contexts(ruleset: dict[str, Any]) -> list[str]:
     return [entry["context"] for entry in entries if isinstance(entry, dict) and isinstance(entry.get("context"), str)]
 
 
-def unconditional_pull_request_jobs(workflow_dir: pathlib.Path) -> dict[str, str]:
+#: `pull_request` activity types GitHub fires by default. A workflow that names
+#: `types:` explicitly replaces this set rather than adding to it, so one that
+#: omits `opened` never starts for a newly-opened pull request and one that
+#: omits `synchronize` never re-runs when the branch is pushed to -- either way
+#: the required check sits `Pending` and blocks the merge.
+_REQUIRED_ACTIVITY_TYPES = frozenset({"opened", "synchronize"})
+
+
+# `dict[Any, Any]`, not `dict[str, Any]`: PyYAML resolves the bare token `on`
+# to the boolean True under YAML 1.1, so a parsed workflow genuinely has a
+# non-string key and a str-keyed annotation would be a lie mypy rejects.
+def _pull_request_filters(document: dict[Any, Any]) -> dict[str, Any] | None:
+    """The `pull_request` trigger's own filter mapping, or `None` if absent.
+
+    `on:` accepts three shapes and all three appear in real workflows:
+    `on: pull_request` (scalar), `on: [push, pull_request]` (sequence), and
+    `on: {pull_request: {...}}` (mapping). Only the third carries filters; the
+    first two are unfiltered by construction and yield an empty mapping. An
+    earlier revision of this function recognised the mapping form alone, which
+    made every scalar/sequence workflow invisible to the gate and would have
+    reported a perfectly reachable required check as naming no job.
+
+    `on:` itself is read from the boolean key `True` first: PyYAML resolves the
+    bare token `on` to a boolean under YAML 1.1, so the literal string key is
+    only the fallback.
+    """
+    triggers = document.get(True, document.get("on"))
+    if isinstance(triggers, str):
+        return {} if triggers == "pull_request" else None
+    if isinstance(triggers, list):
+        return {} if "pull_request" in triggers else None
+    if not isinstance(triggers, dict) or "pull_request" not in triggers:
+        return None
+    filters = triggers["pull_request"]
+    return filters if isinstance(filters, dict) else {}
+
+
+def _branch_filter_admits(filters: dict[str, Any], default_branch: str) -> bool:
+    """Whether the trigger still fires for a pull request targeting `default_branch`.
+
+    `pull_request`'s `branches`/`branches-ignore` filter the *base* branch, so a
+    workflow scoped to `branches: [release]` never runs for a pull request into
+    `main` -- and a required check backed by it stays `Pending` forever. This is
+    the fail-open half of the same class as the `paths:` check: the gate used to
+    look only at path filters and would have passed such a workflow.
+
+    Glob semantics are GitHub's own (`fnmatch`, plus a leading `!` negation in
+    `branches`). Deliberately not a full reimplementation of GitHub's filter
+    grammar: `**` and `+` are treated as ordinary `fnmatch` patterns, which is
+    conservative in the direction that matters -- a pattern this function fails
+    to recognise as matching is reported as a finding for a human to read, not
+    silently accepted.
+    """
+    ignore = filters.get("branches-ignore")
+    if isinstance(ignore, list) and any(fnmatch.fnmatch(default_branch, str(p)) for p in ignore):
+        return False
+    include = filters.get("branches")
+    if not isinstance(include, list):
+        return True
+    admitted = False
+    for raw in include:
+        pattern = str(raw)
+        if pattern.startswith("!"):
+            if fnmatch.fnmatch(default_branch, pattern[1:]):
+                return False
+        elif fnmatch.fnmatch(default_branch, pattern):
+            admitted = True
+    return admitted
+
+
+def unconditional_pull_request_jobs(workflow_dir: pathlib.Path, default_branch: str = "main") -> dict[str, str]:
     """Check-run names produced on *every* pull request, mapped to their workflow file.
 
-    A workflow qualifies only when its `pull_request` trigger carries neither
-    `paths` nor `paths-ignore`. `pull_request:` with an empty body and a
-    `types:`-only body both qualify -- neither filters by path.
+    A workflow qualifies only when all four hold:
+
+    * it has a `pull_request` trigger at all (any of the three `on:` shapes);
+    * it carries neither `paths` nor `paths-ignore`;
+    * its branch filter, if any, still admits `default_branch`;
+    * its `types:`, if named explicitly, includes both `opened` and
+      `synchronize`.
+
+    Each is the same failure wearing a different hat: a workflow that does not
+    fire leaves its required check `Pending`, which blocks the merge with no
+    in-repository fix.
 
     The check-run name is the job's own `name:` when it sets one and its job id
     otherwise. That is the string GitHub matches a required status check
@@ -138,13 +217,13 @@ def unconditional_pull_request_jobs(workflow_dir: pathlib.Path) -> dict[str, str
             raise RulesetGateError(f"{path} is not valid YAML: {error}") from error
         if not isinstance(document, dict):
             continue
-        # `on:` is parsed by PyYAML as the boolean True under YAML 1.1's own
-        # truthy-key rules, so the literal string key is only a fallback.
-        triggers = document.get(True, document.get("on"))
-        if not isinstance(triggers, dict) or "pull_request" not in triggers:
+        filters = _pull_request_filters(document)
+        if filters is None or "paths" in filters or "paths-ignore" in filters:
             continue
-        filters = triggers["pull_request"] or {}
-        if not isinstance(filters, dict) or "paths" in filters or "paths-ignore" in filters:
+        if not _branch_filter_admits(filters, default_branch):
+            continue
+        types = filters.get("types")
+        if isinstance(types, list) and not _REQUIRED_ACTIVITY_TYPES.issubset({str(t) for t in types}):
             continue
         for job_id, job in (document.get("jobs") or {}).items():
             name = job.get("name") if isinstance(job, dict) else None
@@ -152,11 +231,13 @@ def unconditional_pull_request_jobs(workflow_dir: pathlib.Path) -> dict[str, str
     return jobs
 
 
-def find_unreachable_contexts(ruleset: dict[str, Any], workflow_dir: pathlib.Path) -> list[str]:
+def find_unreachable_contexts(
+    ruleset: dict[str, Any], workflow_dir: pathlib.Path, default_branch: str = "main"
+) -> list[str]:
     contexts = required_contexts(ruleset)
     if not contexts:
         return ["requires no status checks at all; a pull request rule with nothing to check blocks nothing"]
-    available = unconditional_pull_request_jobs(workflow_dir)
+    available = unconditional_pull_request_jobs(workflow_dir, default_branch)
     return [
         f"required status check {context!r} names no job in any workflow that runs on every pull request; "
         "a path-filtered or absent workflow leaves that check Pending forever and blocks the merge"
@@ -165,22 +246,27 @@ def find_unreachable_contexts(ruleset: dict[str, Any], workflow_dir: pathlib.Pat
     ]
 
 
-def find_violations(ruleset_path: pathlib.Path, workflow_dir: pathlib.Path) -> list[str]:
+def find_violations(ruleset_path: pathlib.Path, workflow_dir: pathlib.Path, default_branch: str = "main") -> list[str]:
     ruleset = load_json(ruleset_path)
-    return find_shape_violations(ruleset) + find_unreachable_contexts(ruleset, workflow_dir)
+    return find_shape_violations(ruleset) + find_unreachable_contexts(ruleset, workflow_dir, default_branch)
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ruleset", default=str(DEFAULT_RULESET), help="path to the committed ruleset JSON")
     parser.add_argument("--workflow-dir", default=str(DEFAULT_WORKFLOW_DIR), help="directory of workflow files")
+    parser.add_argument(
+        "--default-branch",
+        default="main",
+        help="branch the ruleset protects; a workflow whose branch filter excludes it cannot back a required check",
+    )
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
     try:
-        violations = find_violations(pathlib.Path(args.ruleset), pathlib.Path(args.workflow_dir))
+        violations = find_violations(pathlib.Path(args.ruleset), pathlib.Path(args.workflow_dir), args.default_branch)
     except RulesetGateError as error:
         print(f"::error::{error}", file=sys.stderr)
         return 2

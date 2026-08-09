@@ -11,6 +11,7 @@ plan.
 
 from __future__ import annotations
 
+import io
 import json
 import pathlib
 import urllib.error
@@ -88,7 +89,10 @@ def test_existing_live_ruleset_plans_a_replace_onto_its_own_id(tmp_path: pathlib
 
 
 def test_apply_mode_sends_the_planned_request(tmp_path: pathlib.Path) -> None:
-    writer = RecordingWriter({"id": 42})
+    # The response fixture is a full ruleset object, matching what GitHub
+    # actually returns from POST/PUT -- run() now compares it against the
+    # committed file before reporting success.
+    writer = RecordingWriter(dict(SOT, id=42))
     live = dict(SOT, id=42, enforcement="disabled")
     summary = apply_rulesets.run(
         "o/r", write_sot(tmp_path), "apply", fetcher([{"id": 42, "name": SOT["name"]}], live), writer
@@ -146,14 +150,52 @@ def test_send_write_posts_the_body_and_parses_the_response(monkeypatch: pytest.M
 
 
 def test_send_write_surfaces_an_http_error_body(monkeypatch: pytest.MonkeyPatch) -> None:
+    # `fp` is a real BytesIO, not None. With None, HTTPError.read() returns b""
+    # (verified on 3.12 -- it does not raise), so the assertion would pass while
+    # proving nothing about whether the API's own explanation reaches the
+    # operator, which is the entire point of this error path.
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
 
     def fake_urlopen(request: Any, timeout: int = 0) -> Response:
-        raise urllib.error.HTTPError("u", 422, "Unprocessable", {}, None)  # type: ignore[arg-type]
+        body = io.BytesIO(b'{"message":"Invalid request: rules[0].type is not valid"}')
+        raise urllib.error.HTTPError("u", 422, "Unprocessable", {}, body)  # type: ignore[arg-type]
 
     monkeypatch.setattr(apply_rulesets.urllib.request, "urlopen", fake_urlopen)
-    with pytest.raises(apply_rulesets.RulesetError, match="HTTP 422"):
+    with pytest.raises(apply_rulesets.RulesetError, match=r"rules\[0\]\.type is not valid"):
         apply_rulesets.send_write("https://api.github.test/x", "POST", {})
+
+
+def test_send_write_rejects_an_unparseable_success_body(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A 2xx with a truncated body or an HTML error page from a proxy raises
+    # json.JSONDecodeError, which subclasses ValueError, not OSError -- so
+    # without its own handler it escapes main()'s except clause as a raw
+    # traceback, on the write path, possibly after the ruleset already landed.
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    monkeypatch.setattr(
+        apply_rulesets.urllib.request, "urlopen", lambda request, timeout=0: Response("<html>gateway</html>")
+    )
+    with pytest.raises(apply_rulesets.RulesetError, match="unparseable body"):
+        apply_rulesets.send_write("https://api.github.test/x", "POST", {})
+
+
+def test_apply_raises_when_github_stored_something_other_than_the_source_of_truth(tmp_path: pathlib.Path) -> None:
+    # A 2xx is not proof the state transition matched the policy: the response
+    # is the stored object, so it is compared rather than trusted.
+    stored = dict(SOT, id=42, enforcement="evaluate")
+    writer = RecordingWriter(stored)
+    with pytest.raises(apply_rulesets.RulesetError, match="stored something other than"):
+        apply_rulesets.run(
+            "o/r", write_sot(tmp_path), "apply", fetcher([{"id": 42, "name": SOT["name"]}], dict(SOT, id=42)), writer
+        )
+    assert len(writer.calls) == 1, "the write still happened; the raise is about reporting, not rollback"
+
+
+def test_apply_accepts_a_response_carrying_only_api_added_fields(tmp_path: pathlib.Path) -> None:
+    # id/created_at/_links are GitHub's, not the committed file's, so they must
+    # not read as a mismatch -- otherwise every successful apply would raise.
+    stored = dict(SOT, id=42, created_at="2026-08-09", node_id="R_x", _links={})
+    summary = apply_rulesets.run("o/r", write_sot(tmp_path), "apply", fetcher([]), RecordingWriter(stored))
+    assert "| 42 |" in summary
 
 
 def test_send_write_surfaces_a_network_error(monkeypatch: pytest.MonkeyPatch) -> None:
