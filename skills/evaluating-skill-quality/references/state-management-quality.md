@@ -94,6 +94,16 @@ it fires on the principle rather than on a clause -- the same footing as
 unstored-but-required state below. The writer's own choices stay gradeable
 even though this procedure never reads its own record back.
 
+**Consumer-only targets.** The mirror case, and it fires on the principle for
+the mirror reason: the target reads durable state a *different* skill
+materialized and writes none of its own, failing the framing rule's first
+half exactly as a producer-only target fails its second. Grade the reader's
+axes -- 3, 5, 6, axis 8's consuming half, and above all axis 9's **inbound**
+half. That last one is why this case cannot be left uncovered: foreign state
+read back to decide what to do next is the injection path axis 9 exists for,
+and the party that reads it is the only one positioned to screen it. Axes 1,
+2, 4, 7, 10, and 11 belong to whichever skill chose and wrote the store.
+
 **Unstored-but-required state fires** only when the skill's own text names a
 specific carried value -- a count, a limit, an attempt number, a prior verdict
 -- that a later step's control flow branches on, while naming no locus for it.
@@ -265,7 +275,12 @@ resume at the first **unproven** step.
 truth, never as the proof itself*: the resume point derived from the record is
 confirmed against the authoritative source before any non-idempotent step
 re-runs. Verifying that each recorded commit actually exists on the branch is
-the shape.
+half the shape. The reconciliation has to run **both** directions to be worth
+anything. Checking record against ground truth catches a record that
+over-claims; only the reverse sweep -- ground truth scanned for work no record
+line claims -- catches the case the Fail below names, where the worker
+committed and then died before writing its line. A one-directional check is
+that same gap wearing a verification's shape.
 
 **Fail** -- the resume point is selected from the record alone. A rule of the
 form "resume at the first task not marked complete" [sdd], standing alone,
