@@ -29,6 +29,9 @@ spec:
       summary: "executionRequirements.tools.write gains files, because Procedure step 7 now writes one. The prior empty list was true of a skill that only read and scored; leaving it unchanged while adding a write step would have left the sidecar asserting something its own Procedure contradicts."
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/pull/944"
+      summary: "The outer review layer's confirming pass caught the run record requiring the candidate's scores but not the gate outcome: a valid record could hold score files and free text with no verdict, no baseline, and no named split, so a later reader could not tell a kept edit from a rejected one. The Output section had always required those facts of the ephemeral report; the durable artifact had not. Added a required gate object, with both context costs enforced by an if/then when pruning-only."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/pull/944"
       summary: "The outer independent-review layer caught the score-file schema still describing itself as the attachment scores[].file points at, after the rename below moved that pointer list to score_files. The two shipped schemas therefore named incompatible paths for the same attachment -- a key-drift defect introduced by the fix for a key-drift defect, and one the inner layer's own re-read of its patch missed. Corrected to score_files[].file."
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/pull/944"

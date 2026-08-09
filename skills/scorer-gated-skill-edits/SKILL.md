@@ -163,6 +163,14 @@ evaluation. Name the gap; never fake a score to proceed.
      stop. Every attachment a run produces is reachable from here, so a
      file sitting unreferenced beside a record is an orphan, not a
      result.
+   - `gate` -- the verdict this run produced and the comparison that
+     produced it: keep or reject, the candidate's declared class, which
+     split the comparison ran over, and both means at the exact precision
+     the scorer published them at. A pruning-only candidate also records
+     both context costs, since its exception turns on them. Without this
+     the record holds candidate scores and no outcome, and a later reader
+     cannot tell a kept edit from a rejected one -- the same
+     re-derivability step 1 stops a run for lacking.
    - `known_gaps` -- the run's disclosed scope limits. State "none known"
      explicitly; never drop the field to mean the same thing.
    - `headline_pattern` -- a one-paragraph statement of the run's main
