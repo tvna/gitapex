@@ -38,26 +38,40 @@ offline gate can make. RETIRED_MODELS exists purely to turn the most likely
 failure into a specific message instead of a generic "not on the allowlist".
 
 **Declaration is not provenance (issue #925, fourth acceptance row).**
-``config.model`` states *intent*: which model a suite asks to be run against.
+A declared model states *intent*: which model a suite asks to be run against.
 It is demonstrably not a record of what ran -- the substitution cited above
 is the proof. The only trustworthy source for "this skill was evaluated on
-model X" is a run record, ``evals/<skill>/results/*/manifest.json``. No
-consumer may read ``config.model`` as evidence of an executed run, and this
-module -- the one thing issue #925 adds that reads ``config.model`` at all --
-reads it only to grade the declaration against the allowlist, never to
+model X" is a run record, under a suite's own ``results/`` directory. No
+consumer may read a declaration as evidence of an executed run, and this
+module -- the one thing issue #925 adds that reads these fields at all --
+reads them only to grade the declaration against the allowlist, never to
 report what a skill has been evaluated on.
 
-Two surfaces are graded, because both are committed declarations of a model
+Three surfaces are graded, because each is a committed declaration of a model
 id that a dispatch would actually use:
 
-1. Every ``evals/*/eval.yaml``'s ``config.model``.
-2. ``.github/workflows/waza-eval-matrix.yml``'s ``models`` dispatch-input
+1. Every ``evals/*/eval.yaml``, walked recursively for any key named ``model``
+   or ending in ``_model``. Issue #937 found the original revision reading
+   ``config.model`` alone while claiming to grade "every committed model
+   identifier": waza's own vendored schemas also define ``config.judge_model``
+   and a ``model`` override on both ``graderConfig`` and
+   ``promptGraderConfig``, all as plain strings. None is populated in the
+   committed corpus today, which is exactly why a hardcoded field list would
+   have rotted -- the walk grades whichever of them appears first, and any
+   ``*_model`` key waza adds later, with no edit here.
+2. Every ``evals/*/tasks/*.yaml``, walked the same way. The task schema
+   carries its own two model-bearing fields (``inputs.responder.model`` and a
+   ``promptGraderConfig`` ``model``), and four committed task files already
+   declare ``graders``.
+3. ``.github/workflows/waza-eval-matrix.yml``: its ``models`` dispatch-input
    *default* -- the value that runs when an operator dispatches the matrix
-   workflow without typing a list. Its non-default values are not graded and
-   must not be: probing an unapproved id is a legitimate way to discover
-   whether it belongs on the allowlist, and this gate must not stand in the
-   way of the live probe that would let the allowlist be updated with real
-   evidence.
+   workflow without typing a list -- and every ``*_MODEL`` environment value
+   the workflow hardcodes (today, ``HF_GEMMA4_MODEL``). Its non-default
+   dispatch *input* is not graded and must not be: probing an unapproved id is
+   a legitimate way to discover whether it belongs on the allowlist, and this
+   gate must not stand in the way of the live probe that would let the
+   allowlist be updated with real evidence. A hardcoded ``env:`` value is not
+   operator-supplied and gets no such exemption.
 
 Run standalone (exit 1 on any finding) or via the pytest gate in
 tests/test_gitapex_gate_eval_declared_model.py.
@@ -96,6 +110,23 @@ APPROVED_MODELS: dict[str, str] = {
         "the id is real and dispatchable somewhere, not that the executor the "
         "suites name serves it."
     ),
+    "google/gemma-4-31B-it": (
+        "Approved on issue #937, which brought the already-committed "
+        "HF_GEMMA4_MODEL value under this gate rather than leaving it ungraded. "
+        "Evidence at approval time is the one .github/workflows/"
+        "waza-eval-matrix.yml already records in its own header comment for "
+        "the eval-matrix-hf-gemma4 lane (issue #317, sub-task of #310): the "
+        "largest Gemma 4 variant whose published bf16 safetensors weights are "
+        "under 100GB, confirmed 62.6GB across two shards at "
+        "https://huggingface.co/google/gemma-4-31B-it. DISCLOSED LIMIT: that "
+        "is evidence the repository weighed a size/serving tradeoff, not that "
+        "the id is currently servable -- the lane has never run, and its own "
+        "workflow comment already discloses the unverified assumption that "
+        "waza's copilot-sdk executor treats a custom base URL as a generic "
+        "OpenAI/Copilot-compatible endpoint. Approving it here changes nothing "
+        "about that; it only means a future edit to the id passes through a "
+        "reviewed diff instead of rotting silently."
+    ),
 }
 
 # Ids known to be undispatchable, kept so the most likely failure reports its
@@ -115,19 +146,29 @@ RETIRED_MODELS: dict[str, str] = {
 class DeclarationReadError(Exception):
     """A graded file could not be read or has no gradable declaration.
 
-    Raised rather than skipped: a suite whose ``config.model`` this gate
-    cannot find is a suite this gate is not actually grading, and silently
-    passing it would reproduce the exact shape issue #925 reports -- a
-    declaration nobody checked (CLAUDE.md section 4, fail loudly).
+    Raised rather than skipped: a suite whose declaration this gate cannot
+    find is a suite this gate is not actually grading, and silently passing it
+    would reproduce the exact shape issue #925 reports -- a declaration nobody
+    checked (CLAUDE.md section 4, fail loudly).
     """
 
 
-def _describe(model: str) -> str:
-    """One rejection message for ``model``, naming its retirement if known."""
-    retired = RETIRED_MODELS.get(model)
-    reason = f"a known-undispatchable model ({retired})" if retired else "not on the reviewed allowlist"
-    approved = ", ".join(sorted(APPROVED_MODELS)) or "<empty>"
-    return f"{model!r} is {reason}. Approved ids: {approved}. To add one, add a row to APPROVED_MODELS in {pathlib.Path(__file__).name} with the evidence that justifies it."
+def _describe(model: str, approved: dict[str, str], retired: dict[str, str]) -> str:
+    """One rejection message for ``model``, naming its retirement if known.
+
+    Both mappings are parameters, never read from this module's globals:
+    issue #937 found an earlier revision reading the globals here while
+    ``find_findings`` graded against whatever the caller passed, so an
+    override changed the verdict but not the message explaining it -- the
+    override path this module's own docstring documents reported against an
+    allowlist that had not been used.
+    """
+    reason = f"a known-undispatchable model ({retired[model]})" if model in retired else "not on the reviewed allowlist"
+    names = ", ".join(sorted(approved)) or "(none)"
+    return (
+        f"{model!r} is {reason}. Approved ids: {names}. To add one, add a row to "
+        f"APPROVED_MODELS in {pathlib.Path(__file__).name} with the evidence that justifies it."
+    )
 
 
 def find_allowlist_integrity_violations(
@@ -137,25 +178,69 @@ def find_allowlist_integrity_violations(
     """Findings about the allowlist itself, before it grades anything.
 
     An id in both mappings would let a known-retired model pass, which is the
-    one outcome this gate exists to prevent; an empty-evidence row would let a
-    future id be added without the review this gate's whole value rests on.
+    one outcome this gate exists to prevent. A blank justification is checked
+    on *both* mappings, not only APPROVED_MODELS: an approved row with no
+    evidence would let a future id be added without the review this gate's
+    whole value rests on, and a retired row with no reason renders as
+    ``is a known-undispatchable model ().``, defeating the registry rule's own
+    "rejected with that reason named" (issue #937).
     """
     approved = APPROVED_MODELS if approved is None else approved
     retired = RETIRED_MODELS if retired is None else retired
     findings: list[str] = []
     for model in sorted(set(approved) & set(retired)):
         findings.append(f"allowlist integrity: {model!r} is listed in both APPROVED_MODELS and RETIRED_MODELS")
-    for model, evidence in sorted(approved.items()):
-        if not evidence.strip():
-            findings.append(f"allowlist integrity: APPROVED_MODELS[{model!r}] carries no evidence")
+    for label, mapping in (("APPROVED_MODELS", approved), ("RETIRED_MODELS", retired)):
+        for model, justification in sorted(mapping.items()):
+            if not justification.strip():
+                findings.append(f"allowlist integrity: {label}[{model!r}] carries no evidence")
     return findings
+
+
+def _is_model_key(key: object) -> bool:
+    """Whether ``key`` names a model identifier in waza's own vocabulary.
+
+    ``model`` exactly, or any ``*_model`` suffix. Deliberately a shape rule
+    rather than a hardcoded field list: waza's vendored schemas define four
+    such fields today (``config.model``, ``config.judge_model``, and a
+    ``model`` override on each of ``graderConfig`` and ``promptGraderConfig``),
+    none of which the committed corpus populates yet -- so a hardcoded list
+    would have been correct on the day it was written and silently incomplete
+    the day waza added the fifth (issue #937).
+    """
+    return isinstance(key, str) and (key == "model" or key.endswith("_model"))
+
+
+def _walk_model_declarations(node: object, path: str = "") -> list[tuple[str, object]]:
+    """Every ``(dotted-path, value)`` under ``node`` at a model-named key.
+
+    Returns values unvalidated -- the caller decides what a non-string means,
+    because "there is no model here at all" and "the model here is an integer"
+    are different findings.
+    """
+    found: list[tuple[str, object]] = []
+    if isinstance(node, dict):
+        for key, value in node.items():
+            child = f"{path}.{key}" if path else str(key)
+            if _is_model_key(key):
+                found.append((child, value))
+            found.extend(_walk_model_declarations(value, child))
+    elif isinstance(node, list):
+        for index, value in enumerate(node):
+            found.extend(_walk_model_declarations(value, f"{path}[{index}]"))
+    return found
 
 
 def find_suite_violations(
     evals_dir: pathlib.Path | None = None,
     approved: dict[str, str] | None = None,
+    retired: dict[str, str] | None = None,
 ) -> list[str]:
-    """Findings for every ``evals/*/eval.yaml``'s ``config.model``.
+    """Findings for every model-named key in every committed suite and task.
+
+    Both ``evals/*/eval.yaml`` and ``evals/*/tasks/*.yaml`` are walked
+    recursively (issue #937) -- the task schema carries its own model-bearing
+    fields, and four committed task files already declare ``graders``.
 
     Discovering zero suites raises rather than returning no findings. A
     renamed directory, a moved ``evals/`` tree, or a glob that stops matching
@@ -163,9 +248,14 @@ def find_suite_violations(
     -- the fail-open shape ``gitapex_gate_evals_scripts_coverage.py``'s own
     docstring rule already names ("an empty match set is an error, never a
     silent pass") and that PR #651 shipped three times over.
+
+    A task file declaring no model at all is not an error: only ``eval.yaml``
+    is required to pin one, and the task schema's model fields are optional
+    overrides.
     """
     evals_dir = EVALS_DIR if evals_dir is None else evals_dir
     approved = APPROVED_MODELS if approved is None else approved
+    retired = RETIRED_MODELS if retired is None else retired
     eval_paths = sorted(evals_dir.glob("*/eval.yaml"))
     if not eval_paths:
         raise DeclarationReadError(
@@ -174,23 +264,39 @@ def find_suite_violations(
         )
     findings: list[str] = []
     for eval_path in eval_paths:
-        rel = eval_path.relative_to(REPO_ROOT) if eval_path.is_relative_to(REPO_ROOT) else eval_path
-        try:
-            document = yaml.safe_load(eval_path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeDecodeError, yaml.YAMLError) as error:
-            raise DeclarationReadError(f"{rel}: cannot be read as UTF-8 YAML ({error})") from error
-        if not isinstance(document, dict):
-            raise DeclarationReadError(f"{rel}: top level is {type(document).__name__}, expected a mapping")
+        findings.extend(_grade_document(eval_path, approved, retired, require_config_model=True))
+        for task_path in sorted((eval_path.parent / "tasks").glob("*.yaml")):
+            findings.extend(_grade_document(task_path, approved, retired, require_config_model=False))
+    return findings
+
+
+def _grade_document(
+    path: pathlib.Path,
+    approved: dict[str, str],
+    retired: dict[str, str],
+    *,
+    require_config_model: bool,
+) -> list[str]:
+    """Findings for one committed YAML document's model-named keys."""
+    rel = path.relative_to(REPO_ROOT) if path.is_relative_to(REPO_ROOT) else path
+    try:
+        document = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, yaml.YAMLError) as error:
+        raise DeclarationReadError(f"{rel}: cannot be read as UTF-8 YAML ({error})") from error
+    if not isinstance(document, dict):
+        raise DeclarationReadError(f"{rel}: top level is {type(document).__name__}, expected a mapping")
+    if require_config_model:
         config = document.get("config")
         if not isinstance(config, dict):
             raise DeclarationReadError(f"{rel}: has no 'config' mapping, so its declared model cannot be graded")
         if "model" not in config:
             raise DeclarationReadError(f"{rel}: 'config' declares no 'model', so nothing here can be graded")
-        model = config["model"]
-        if not isinstance(model, str):
-            raise DeclarationReadError(f"{rel}: config.model is {type(model).__name__}, expected a string")
-        if model not in approved:
-            findings.append(f"{rel}: config.model {_describe(model)}")
+    findings: list[str] = []
+    for field, value in _walk_model_declarations(document):
+        if not isinstance(value, str):
+            raise DeclarationReadError(f"{rel}: {field} is {type(value).__name__}, expected a string")
+        if value not in approved:
+            findings.append(f"{rel}: {field} {_describe(value, approved, retired)}")
     return findings
 
 
@@ -208,7 +314,15 @@ def _matrix_default_models(workflow_path: pathlib.Path) -> list[str]:
     if not isinstance(document, dict):
         raise DeclarationReadError(f"{workflow_path.name}: top level is not a mapping")
     triggers = document.get("on", document.get(True))
-    inputs = triggers.get("workflow_dispatch", {}).get("inputs", {}) if isinstance(triggers, dict) else {}
+    # Each level is checked for being a mapping before it is indexed. Issue
+    # #937: an earlier revision guarded `triggers` only, so a workflow
+    # declaring `workflow_dispatch:` with no children parsed that key to None
+    # and `.get("inputs", {})` raised an AttributeError -- which is not a
+    # DeclarationReadError, so it escaped main()'s handler and surfaced as a
+    # raw traceback from a gate whose whole contract is a typed, fail-loud
+    # message.
+    dispatch = triggers.get("workflow_dispatch") if isinstance(triggers, dict) else None
+    inputs = dispatch.get("inputs") if isinstance(dispatch, dict) else None
     if not isinstance(inputs, dict) or "models" not in inputs:
         raise DeclarationReadError(f"{workflow_path.name}: has no workflow_dispatch input named 'models'")
     default = inputs["models"].get("default") if isinstance(inputs["models"], dict) else None
@@ -227,23 +341,70 @@ def _matrix_default_models(workflow_path: pathlib.Path) -> list[str]:
     return parsed
 
 
+def _hardcoded_env_models(workflow_path: pathlib.Path) -> list[tuple[str, str]]:
+    """Every ``(NAME, value)`` the workflow hardcodes at a ``*_MODEL`` env key.
+
+    Walks the parsed workflow for any ``env:`` mapping at any depth (workflow,
+    job, or step level) and returns its string-valued ``*_MODEL`` entries. A
+    value containing ``${{`` is skipped: that is an expression resolved at
+    dispatch time from an input or secret, which is operator-supplied and
+    carries the same live-probe exemption the ``models`` input does.
+    """
+    try:
+        document = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, yaml.YAMLError) as error:
+        raise DeclarationReadError(f"{workflow_path.name}: cannot be read as UTF-8 YAML ({error})") from error
+
+    found: list[tuple[str, str]] = []
+
+    def walk(node: object) -> None:
+        if isinstance(node, dict):
+            environment = node.get("env")
+            if isinstance(environment, dict):
+                for name, value in environment.items():
+                    if (
+                        isinstance(name, str)
+                        and name.endswith("_MODEL")
+                        and isinstance(value, str)
+                        and "${{" not in value
+                    ):
+                        found.append((name, value))
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value)
+
+    walk(document)
+    return found
+
+
 def find_matrix_default_violations(
     workflow_path: pathlib.Path | None = None,
     approved: dict[str, str] | None = None,
+    retired: dict[str, str] | None = None,
 ) -> list[str]:
-    """Findings for the matrix workflow's default model list.
+    """Findings for the matrix workflow's own committed model identifiers.
 
-    Only the default is graded -- see this module's docstring for why an
-    operator-supplied list deliberately is not.
+    Two of them: the ``models`` dispatch-input *default*, and every hardcoded
+    ``*_MODEL`` env value (issue #937). An operator-supplied dispatch input is
+    deliberately not graded -- see this module's docstring for why.
     """
     workflow_path = MATRIX_WORKFLOW_PATH if workflow_path is None else workflow_path
     approved = APPROVED_MODELS if approved is None else approved
+    retired = RETIRED_MODELS if retired is None else retired
     rel = workflow_path.relative_to(REPO_ROOT) if workflow_path.is_relative_to(REPO_ROOT) else workflow_path
-    return [
-        f"{rel}: the 'models' dispatch-input default names {_describe(model)}"
+    findings = [
+        f"{rel}: the 'models' dispatch-input default names {_describe(model, approved, retired)}"
         for model in _matrix_default_models(workflow_path)
         if model not in approved
     ]
+    findings.extend(
+        f"{rel}: hardcoded env {name} names {_describe(value, approved, retired)}"
+        for name, value in _hardcoded_env_models(workflow_path)
+        if value not in approved
+    )
+    return findings
 
 
 def find_findings(
@@ -259,21 +420,23 @@ def find_findings(
     globals at *call* time, not bound at definition time, so a caller that
     replaces ``APPROVED_MODELS`` -- a test, or a future consumer importing this
     module -- actually changes what gets graded instead of silently grading the
-    original mapping.
+    original mapping. Both mappings are threaded all the way down to the
+    rejection message too, not only to the verdict (issue #937).
     """
     findings = find_allowlist_integrity_violations(approved, retired)
-    findings.extend(find_suite_violations(evals_dir, approved))
-    findings.extend(find_matrix_default_violations(workflow_path, approved))
+    findings.extend(find_suite_violations(evals_dir, approved, retired))
+    findings.extend(find_matrix_default_violations(workflow_path, approved, retired))
     return findings
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     return argparse.ArgumentParser(
         description=(
-            "Fail when a committed eval suite -- or the cross-model matrix workflow's default "
-            "dispatch input -- declares a model identifier outside this repository's reviewed "
-            "allowlist. Grades declarations only; a skill's evaluated-on provenance comes from "
-            "evals/<skill>/results/*/manifest.json, never from config.model."
+            "Fail when a committed eval suite or task file, or the cross-model matrix "
+            "workflow's default dispatch input or a hardcoded env model, declares a model "
+            "identifier outside this repository's reviewed allowlist. Grades declarations "
+            "only; a skill's evaluated-on provenance comes from a run record under that "
+            "suite's own results/ directory, never from a declared model field."
         )
     ).parse_args(argv)
 

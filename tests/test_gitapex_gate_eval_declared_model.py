@@ -26,6 +26,7 @@ import yaml
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 _APPROVED = {"fixture-model-1": "approved for the fixture"}
+_RETIRED = {"claude-sonnet-4.6": "FIXTURE-RETIREMENT"}
 
 _MINIMAL_CONFIG: dict[str, object] = {
     "trials_per_task": 1,
@@ -103,6 +104,153 @@ def test_real_repository_declares_no_retired_model() -> None:
     offenders = {path: model for path, model in declared.items() if model in gate.RETIRED_MODELS}
     assert offenders == {}, f"retired model identifiers still declared: {offenders}"
     assert set(gate._matrix_default_models(gate.MATRIX_WORKFLOW_PATH)) & set(gate.RETIRED_MODELS) == set()
+    env_models = {value for _, value in gate._hardcoded_env_models(gate.MATRIX_WORKFLOW_PATH)}
+    assert env_models & set(gate.RETIRED_MODELS) == set()
+
+
+# --- issue #937 regressions -------------------------------------------------
+#
+# Each test below fails against dbb0186 (PR #931's merge commit) and passes
+# after the fix. They assert the exception *type* and the message *identity*,
+# not that some exception or some substring occurred -- that weaker shape is
+# what let these five through 100% statement coverage in the first place.
+
+
+def test_null_workflow_dispatch_raises_the_typed_error(tmp_path: pathlib.Path) -> None:
+    """Defect 1. `workflow_dispatch:` with no children parses that key to
+    `None`. Before the fix, `.get("inputs", {})` on it raised `AttributeError`
+    -- not a `DeclarationReadError`, so it escaped `main()`'s handler and
+    surfaced as a raw traceback from a gate whose contract is a typed message.
+    `pytest.raises` is deliberately given the exact class, so an
+    `AttributeError` fails this test rather than satisfying it."""
+    path = _write_workflow(tmp_path, "on:\n  workflow_dispatch:\njobs: {}\n")
+    with pytest.raises(gate.DeclarationReadError):
+        gate._matrix_default_models(path)
+
+
+def test_null_workflow_dispatch_exits_one_through_main(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The same defect at the boundary that actually matters: `main()` must
+    report and return 1, not propagate. Before the fix this raised."""
+    workflow = REPO_ROOT / "tests" / "does-not-exist-null-dispatch.yml"
+    monkeypatch.setattr(gate, "MATRIX_WORKFLOW_PATH", workflow)
+    workflow.write_text("on:\n  workflow_dispatch:\njobs: {}\n", encoding="utf-8")
+    try:
+        assert gate.main([]) == 1
+        assert "declared model allowlist:" in capsys.readouterr().out
+    finally:
+        workflow.unlink()
+
+
+def test_describe_reports_against_the_mappings_it_was_given() -> None:
+    """Defect 2. `_describe` must name the caller's allowlist and the caller's
+    retirement reason, never this module's globals. Asserted by identity: the
+    fixture's own tokens are present and the real ones are absent, so reading
+    a global cannot pass."""
+    message = gate._describe("fixture-retired", {"fixture-approved": "e"}, {"fixture-retired": "FIXTURE-REASON"})
+    assert "FIXTURE-REASON" in message
+    assert "fixture-approved" in message
+    for real_id in (*gate.APPROVED_MODELS, *gate.RETIRED_MODELS):
+        assert real_id not in message
+
+
+def test_describe_names_no_approved_ids_when_the_given_allowlist_is_empty() -> None:
+    """The same defect at its clearest: an empty override must render as an
+    empty approved set, not as the module's real one."""
+    message = gate._describe("anything", {}, {})
+    assert "(none)" in message
+    for real_id in gate.APPROVED_MODELS:
+        assert real_id not in message
+
+
+def test_blank_retirement_reason_is_an_integrity_finding() -> None:
+    """Defect 3. Before the fix only APPROVED_MODELS rows were checked, so a
+    blank retirement reason rendered as `is a known-undispatchable model ().`"""
+    findings = gate.find_allowlist_integrity_violations({"a": "evidence"}, {"b": "   "})
+    assert findings == ["allowlist integrity: RETIRED_MODELS['b'] carries no evidence"]
+
+
+def test_judge_model_and_grader_model_are_graded(tmp_path: pathlib.Path) -> None:
+    """Defect 4, suite half. Neither field is populated in the committed
+    corpus, which is exactly why a hardcoded `config.model` read looked
+    complete. Each must be graded the moment it appears."""
+    evals_dir = _write_suite(tmp_path, "fixture-model-1")
+    document = yaml.safe_load((evals_dir / "fixture-suite" / "eval.yaml").read_text(encoding="utf-8"))
+    document["config"]["judge_model"] = "claude-sonnet-4.6"
+    document["graders"] = [{"type": "prompt", "name": "g", "model": "some-unapproved-grader-model"}]
+    (evals_dir / "fixture-suite" / "eval.yaml").write_text(yaml.safe_dump(document), encoding="utf-8")
+    findings = gate.find_suite_violations(evals_dir, _APPROVED, _RETIRED)
+    fields = sorted(finding.split(": ", 1)[1].split(" ", 1)[0] for finding in findings)
+    assert fields == ["config.judge_model", "graders[0].model"]
+    assert any("FIXTURE-RETIREMENT" in finding for finding in findings)
+
+
+def test_task_files_are_graded_too(tmp_path: pathlib.Path) -> None:
+    """Defect 4, task half. The task schema carries its own model-bearing
+    fields, and four committed task files already declare `graders`."""
+    evals_dir = _write_suite(tmp_path, "fixture-model-1")
+    tasks = evals_dir / "fixture-suite" / "tasks"
+    tasks.mkdir()
+    (tasks / "t.yaml").write_text(
+        yaml.safe_dump(
+            {"id": "t", "name": "T", "inputs": {"prompt": "x", "responder": {"model": "claude-sonnet-4.6"}}}
+        ),
+        encoding="utf-8",
+    )
+    findings = gate.find_suite_violations(evals_dir, _APPROVED, _RETIRED)
+    assert len(findings) == 1
+    assert "tasks/t.yaml" in findings[0]
+    assert "inputs.responder.model" in findings[0]
+    assert "FIXTURE-RETIREMENT" in findings[0]
+
+
+def test_a_task_file_declaring_no_model_is_not_an_error(tmp_path: pathlib.Path) -> None:
+    """Only `eval.yaml` must pin a model; the task-level fields are optional
+    overrides, so their absence must not raise."""
+    evals_dir = _write_suite(tmp_path, "fixture-model-1")
+    tasks = evals_dir / "fixture-suite" / "tasks"
+    tasks.mkdir()
+    (tasks / "t.yaml").write_text(yaml.safe_dump({"id": "t", "name": "T", "inputs": {"prompt": "x"}}), encoding="utf-8")
+    assert gate.find_suite_violations(evals_dir, _APPROVED, _RETIRED) == []
+
+
+def test_hardcoded_env_model_is_graded(tmp_path: pathlib.Path) -> None:
+    """Defect 4, workflow half. A hardcoded `*_MODEL` env value is dispatched
+    and is not operator-supplied, so the live-probe exemption the `models`
+    input carries does not extend to it."""
+    path = _write_workflow(
+        tmp_path,
+        _MINIMAL_WORKFLOW.replace(
+            "jobs: {}", "jobs:\n  j:\n    steps:\n      - env:\n          HF_X_MODEL: claude-sonnet-4.6\n"
+        ),
+    )
+    findings = gate.find_matrix_default_violations(path, _APPROVED, _RETIRED)
+    assert len(findings) == 1
+    assert "hardcoded env HF_X_MODEL" in findings[0]
+    assert "FIXTURE-RETIREMENT" in findings[0]
+
+
+def test_unreadable_workflow_raises_from_the_env_walk_too(tmp_path: pathlib.Path) -> None:
+    """The env walk parses the workflow independently of the default-input
+    parse, so it needs its own read guard -- an unhandled decode error there
+    would escape `main()` exactly the way defect 1 did."""
+    path = tmp_path / "waza-eval-matrix.yml"
+    path.write_bytes(b"on:\n  workflow_dispatch: \xff\xfe\n")
+    with pytest.raises(gate.DeclarationReadError, match="cannot be read as UTF-8 YAML"):
+        gate._hardcoded_env_models(path)
+
+
+def test_expression_valued_env_model_is_not_graded(tmp_path: pathlib.Path) -> None:
+    """An env value resolved from a dispatch input or secret at run time is
+    operator-supplied and carries the same live-probe exemption."""
+    path = _write_workflow(
+        tmp_path,
+        _MINIMAL_WORKFLOW.replace(
+            "jobs: {}", "jobs:\n  j:\n    steps:\n      - env:\n          HF_X_MODEL: ${{ matrix.model }}\n"
+        ),
+    )
+    assert gate._hardcoded_env_models(path) == []
 
 
 # --- suite declarations -----------------------------------------------------
