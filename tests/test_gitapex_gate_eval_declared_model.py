@@ -185,8 +185,43 @@ def test_non_utf8_workflow_raises(tmp_path: pathlib.Path) -> None:
 # --- matrix workflow default ------------------------------------------------
 
 
+def test_non_mapping_suite_raises(tmp_path: pathlib.Path) -> None:
+    """A suite whose top level parses to something other than a mapping (an
+    empty file yields `None`) has no `config` to reach -- it must raise, not
+    be skipped past."""
+    evals_dir = tmp_path / "evals" / "fixture-suite"
+    evals_dir.mkdir(parents=True)
+    (evals_dir / "eval.yaml").write_text("", encoding="utf-8")
+    with pytest.raises(gate.DeclarationReadError, match="top level is NoneType"):
+        gate.find_suite_violations(tmp_path / "evals", _APPROVED)
+
+
 def test_approved_matrix_default_passes(tmp_path: pathlib.Path) -> None:
     assert gate.find_matrix_default_violations(_write_workflow(tmp_path), _APPROVED) == []
+
+
+def test_non_mapping_workflow_raises(tmp_path: pathlib.Path) -> None:
+    path = _write_workflow(tmp_path, "- not\n- a mapping\n")
+    with pytest.raises(gate.DeclarationReadError, match="top level is not a mapping"):
+        gate._matrix_default_models(path)
+
+
+def test_matrix_default_that_is_not_a_string_raises(tmp_path: pathlib.Path) -> None:
+    """`default:` written as a YAML sequence rather than the quoted JSON
+    string `fromJSON()` expects."""
+    path = _write_workflow(
+        tmp_path, _MINIMAL_WORKFLOW.replace("default: '[\"fixture-model-1\"]'", "default:\n          - a")
+    )
+    with pytest.raises(gate.DeclarationReadError, match="declares no string default"):
+        gate._matrix_default_models(path)
+
+
+def test_matrix_default_that_is_valid_json_but_not_a_string_array_raises(tmp_path: pathlib.Path) -> None:
+    """Valid JSON, wrong shape -- `fromJSON()` would hand the matrix a
+    non-string element. Distinct from the unparseable-JSON case above."""
+    path = _write_workflow(tmp_path, _MINIMAL_WORKFLOW.replace("'[\"fixture-model-1\"]'", "'[1, 2]'"))
+    with pytest.raises(gate.DeclarationReadError, match="not a JSON array of strings"):
+        gate._matrix_default_models(path)
 
 
 def test_unapproved_matrix_default_is_reported(tmp_path: pathlib.Path) -> None:
