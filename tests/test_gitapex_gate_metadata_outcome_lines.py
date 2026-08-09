@@ -52,12 +52,22 @@ def _commit(root: pathlib.Path, message: str) -> str:
 
 SHORT_SHA_LEN = 8
 
-# Enough re-rolls that exhausting them is not a thing that happens: each one
-# succeeds with probability 1 - (10/16)**8, so 20 consecutive failures has
-# probability ~1e-33. Bounded anyway rather than `while True`, so a future
-# change that makes the condition unsatisfiable fails loudly instead of
+# Enough re-rolls that exhausting them is not a thing that happens: each
+# candidate is citable with probability 1 - (10/16)**8, so 21 consecutive
+# misses has probability ~1e-33. Bounded anyway rather than `while True`, so a
+# future change that makes the condition unsatisfiable fails loudly instead of
 # hanging the suite.
 _MAX_SHA_REROLLS = 20
+
+
+def _is_citable_short_sha(sha: str) -> bool:
+    """Whether the gate would read `sha[:SHORT_SHA_LEN]` as a commit citation.
+
+    One predicate, called from both the loop and the post-loop check below, so
+    the candidate named in the failure message is necessarily one that was
+    actually evaluated by the same rule.
+    """
+    return bool(gate._SHA_TOKEN_RE.fullmatch(sha[:SHORT_SHA_LEN]))
 
 
 def _commit_with_citable_short_sha(root: pathlib.Path, message: str) -> str:
@@ -80,13 +90,19 @@ def _commit_with_citable_short_sha(root: pathlib.Path, message: str) -> str:
     """
     sha = _commit(root, message)
     for attempt in range(_MAX_SHA_REROLLS):
-        if gate._SHA_TOKEN_RE.fullmatch(sha[:SHORT_SHA_LEN]):
+        if _is_citable_short_sha(sha):
             return sha
         _git(root, "commit", "-q", "--amend", "-m", f"{message} (reroll {attempt})")
         sha = _git(root, "rev-parse", "HEAD")
+    # The final amend's own result still has to be evaluated. Without this the
+    # loop would amend once more than it checks: the SHA named below would be a
+    # candidate no rule ever ran against, and the fixture repository would be
+    # left one rewrite past the last evaluated state.
+    if _is_citable_short_sha(sha):
+        return sha
     raise AssertionError(
-        f"no commit in {_MAX_SHA_REROLLS} re-rolls produced a {SHORT_SHA_LEN}-character short SHA "
-        f"matching the gate's own commit-ish token rule; last was {sha[:SHORT_SHA_LEN]!r}"
+        f"no commit in {_MAX_SHA_REROLLS + 1} candidates produced a {SHORT_SHA_LEN}-character short SHA "
+        f"matching the gate's own commit-ish token rule; last evaluated was {sha[:SHORT_SHA_LEN]!r}"
     )
 
 
@@ -409,6 +425,42 @@ def test_the_commit_helper_rerolls_until_the_short_sha_is_citable(
     assert _git(tmp_path, "rev-parse", f"{sha}^{{commit}}") == sha
 
 
+@pytest.mark.slow
+def test_the_commit_helper_names_an_evaluated_candidate_when_it_gives_up(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Issue #960, review round 1: the give-up message must not name a candidate
+    no rule ever ran against.
+
+    The first version amended once after its final check, so the SHA in the
+    `AssertionError` was the untested result of that trailing amend and the
+    fixture repository was left one rewrite past the last evaluated state --
+    reachable exactly when the rule is stubbed or narrowed so nothing can
+    satisfy it, which is the path the message exists for.
+    """
+    _init_repo(tmp_path)
+    _write_skill(tmp_path, "alpha", skill_lines=4)
+
+    evaluated: list[str] = []
+
+    class _RejectEverything:
+        def fullmatch(self, token: str) -> object | None:
+            evaluated.append(token)
+            return None
+
+    monkeypatch.setattr(gate, "_SHA_TOKEN_RE", _RejectEverything())
+    with pytest.raises(AssertionError) as excinfo:
+        _commit_with_citable_short_sha(tmp_path, "four lines")
+
+    named = str(excinfo.value).split("last evaluated was ")[1].strip().strip("'\"")
+    assert named in evaluated, f"give-up message names {named!r}, which was never evaluated: {evaluated}"
+    assert named == evaluated[-1]
+    assert named == _git(tmp_path, "rev-parse", "HEAD")[:SHORT_SHA_LEN], (
+        "the repository was left past the last evaluated candidate"
+    )
+    assert len(evaluated) == _MAX_SHA_REROLLS + 1
+
+
 def test_an_all_numeric_short_sha_is_not_read_as_a_commit_citation(tmp_path: pathlib.Path) -> None:
     """Issue #960: pins the exclusion `gate._SHA_TOKEN_RE`'s comment documents.
 
@@ -419,7 +471,11 @@ def test_an_all_numeric_short_sha_is_not_read_as_a_commit_citation(tmp_path: pat
     tree, not against any commit. Deliberately built without a git repository:
     that is the point -- nothing here reaches git at all.
 
-    This test asserts what the gate currently does, so that changing it is a
+    Note what the assertion below actually says: the result is a `Finding`, not
+    a note. On a real sidecar this is a blocking false positive against a
+    correct claim, not a citation quietly downgraded to "unverified" -- issue
+    #965 tracks narrowing the rule so a resolvable all-numeric short SHA
+    anchors its claim. This test pins current behavior so that change is a
     deliberate act with a failing test attached, rather than a silent drift.
     """
     _write_skill(
