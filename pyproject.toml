@@ -29,12 +29,20 @@ dev = [
     "types-PyYAML>=6.0.12",
     "types-jsonschema>=4.23",
     # Bounded to one minor series for the reason upstream tvna/claude-md states
-    # for its own cap ("avoid silent rule churn on upgrade"), but at 0.15 rather
-    # than upstream's >=0.7,<0.9: the 133-finding baseline this repository was
-    # cleaned against (issue #678) was measured with ruff 0.15.x, so resolving
+    # for its own cap ("avoid silent rule churn on upgrade"), but at 0.16 rather
+    # than upstream's >=0.7,<0.9: the finding set this repository is proved
+    # clean against was re-measured with ruff 0.16.2 (issue #955), so resolving
     # upstream's range here would enforce a different rule set than the one
     # proved clean. Re-measure the finding set when raising this bound.
-    "ruff>=0.15,<0.16",
+    #
+    # Raised from >=0.15,<0.16 (the 133-finding 0.15.x baseline of issue #678)
+    # by issue #955. That re-measurement found exactly one delta across the
+    # whole tree: ruff 0.16.0 stabilised S310 resolving local string-literal
+    # bindings, so the S310 suppression on the `_GRAPHQL_URL` call in
+    # .github/scripts/gitapex_sync_pr_publish.py became an unused directive
+    # (RUF100) and was removed in the same commit as this bump. It has to be
+    # the same commit: that directive is still required under 0.15.
+    "ruff>=0.16,<0.17",
     # Issue #727: pinned one minor series each, same shape as the ruff pin
     # above -- the cyclomatic-complexity-floor CI gate's thresholds
     # (.github/workflows/test.yml) were measured against exactly these
