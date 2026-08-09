@@ -58,7 +58,7 @@
   ],
   "known_gaps": [
     "trials_per_fixture=1 for every iteration -- no repeat-run variance data; a single sample generalizing correctly is not proof a weaker tier or a different sample would.",
-    "model tier not independently confirmed from the transcripts (see 'model' field above).",
+    "model tier not independently confirmed from the transcripts (see the 'models' field above, spelled 'model' when this run was recorded and migrated by issue #926).",
     "substring-scorer only -- confirms each fixture's expected tokens appear or don't, not a full manual reading of the transcript's reasoning quality beyond what is quoted as evidence in split.md's Kept-edit log.",
     "the 23 pre-existing selection fixtures were confirmed unaffected by direct textual inspection for each iteration (assertion-surface disjointness), not re-dispatched -- consistent with this repository's own established precedent (gitapex#406, gitapex#495) for edits confirmed not to touch what those fixtures assert on.",
     "no weaker-tier (e.g. Haiku) or repeated-trial run has been done for any of the three wording follow-ups; issue #500 Phase 2 (not yet scheduled) is named as the honest next step to actually detect what a single strong-tier trial could not.",

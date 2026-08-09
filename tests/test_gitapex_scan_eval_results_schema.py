@@ -114,8 +114,9 @@ def _build_run(
 # not flagged for claiming an exemption it is not on the real allowlist for.
 # Passed explicitly rather than monkeypatched, the same escape-hatch style
 # `min_expected_run_dirs` already uses -- the production default stays the
-# frozen eight-record set, and `test_the_legacy_allowlist_is_exactly_the_eight_
-# committed_records` pins that.
+# frozen eight-record set, and
+# `test_the_legacy_allowlist_is_exactly_the_committed_pre_contract_records`
+# pins that.
 _FIXTURE_LEGACY = frozenset({"example-skill/2026-08-01-issue-926-example"})
 
 
@@ -846,7 +847,9 @@ _PRE_FIX_SHAPES: dict[str, dict[str, Any]] = {
     "uit/645-behavioral-eval (6 of 9, four unreferenced .md in the root)": {
         "drop": ["fixture_set", "trials_per_fixture", "models"],
         "expect": "minimum-keys",
-        "root_files": {f"untrusted-input-triage-{n}.md": "raw" for n in ("normal", "guardrail", "edge")},
+        "root_files": {
+            f"untrusted-input-triage-{n}.md": "raw" for n in ("normal", "guardrail", "edge", "encoded-payload")
+        },
     },
     "uit/646-behavioral-gate2 (2 of 9, five unreferenced .md in the root)": {
         "drop": [
@@ -861,7 +864,10 @@ _PRE_FIX_SHAPES: dict[str, dict[str, Any]] = {
         # The only pre-fix record that omitted known_gaps entirely, so this
         # is the finding unique to its shape.
         "expect": "minimum-keys: missing 'known_gaps'",
-        "root_files": {f"untrusted-input-triage-{n}.md": "raw" for n in ("normal", "edge")},
+        "root_files": {
+            f"untrusted-input-triage-{n}.md": "raw"
+            for n in ("normal", "edge", "guardrail", "encoded-payload", "multi-turn-escalation")
+        },
     },
     "uit/646-transfer-check (no manifest at all)": {
         "no_manifest": True,
