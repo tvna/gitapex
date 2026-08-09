@@ -743,6 +743,22 @@ def test_checker_report_that_actually_carries_a_score_is_flagged(tmp_path: pathl
     assert any("checker-report-declared" in f and "belongs in nonstandard_score_files[] instead" in f for f in findings)
 
 
+def test_nonstandard_score_file_that_actually_carries_no_score_is_flagged(tmp_path: pathlib.Path) -> None:
+    # The mirror image of the check above, found by a CodeRabbit follow-up
+    # round: declaring a file in nonstandard_score_files[] must not exempt a
+    # genuine checker report from classification just because the manifest
+    # author supplied a non-empty deviation string.
+    manifest = _copy(_VALID_PRE_CONTRACT)
+    manifest["artifacts"] = ["dispatch-trace-check.json"]
+    manifest["nonstandard_score_files"] = [
+        {"file": "dispatch-trace-check.json", "deviation": "not actually a deviation -- this is a checker report"}
+    ]
+    findings = _findings_for(
+        tmp_path, manifest, extra_files={"dispatch-trace-check.json": json.dumps(_CHECKER_SHAPED_PAYLOAD)}
+    )
+    assert any("nonstandard-score-file-declared" in f and "belongs in checker_reports[] instead" in f for f in findings)
+
+
 def test_undeclared_valid_score_file_needs_no_declaration(tmp_path: pathlib.Path) -> None:
     # A root .json file that validates against eval-scores.schema.json on its
     # own content is implicitly a legitimate score file -- declaring every

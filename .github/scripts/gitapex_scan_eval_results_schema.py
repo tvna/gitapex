@@ -610,9 +610,17 @@ def find_non_score_root_json_drift(
             )
             continue
         nonstandard_declared.add(parsed.file)
-        if not (run_dir / parsed.file).is_file():
+        target = run_dir / parsed.file
+        if not target.is_file():
             findings.append(
                 f"nonstandard-score-file-declared: nonstandard_score_files lists {parsed.file!r}, which does not exist"
+            )
+            continue
+        if not _contains_score_field(_load_json(target)):
+            findings.append(
+                f"nonstandard-score-file-declared: {parsed.file!r} is declared in nonstandard_score_files[] but "
+                "its own content carries no per-item score -- that is not scorer output in a nonstandard shape, "
+                "and belongs in checker_reports[] instead"
             )
 
     for both in sorted(checker_declared & nonstandard_declared):
