@@ -308,6 +308,20 @@
       "supersedes": null
     },
     {
+      "id": "split-schema-drift",
+      "kind": "script",
+      "script": ".github/scripts/gitapex_scan_split_schema.py",
+      "rule": "Every evals/*/split.json file, discovered via glob at runtime rather than a hardcoded skill list, must validate against skills/scorer-gated-skill-edits/references/split.schema.json (JSON Schema draft 2020-12).",
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_scan_split_schema.py"],
+      "trigger": "tests/test_gitapex_scan_split_schema.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "skill-lifecycle",
+      "tracking_issue": 928,
+      "status": "active",
+      "supersedes": null
+    },
+    {
       "id": "evals-scripts-coverage-floor",
       "kind": "script",
       "script": ".github/scripts/gitapex_gate_evals_scripts_coverage.py",
