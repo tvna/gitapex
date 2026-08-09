@@ -1,7 +1,7 @@
 # evaluating-deterministic-gate-quality eval status
 
 A committed task corpus now exists: `evals/evaluating-deterministic-gate-quality/`
-has 33 task fixtures under `tasks/` plus `eval.yaml`, covering the skill's
+has 34 task fixtures under `tasks/` plus `eval.yaml`, covering the skill's
 six-way verdict taxonomy (well-formed and well-placed / well-formed but
 misplaced / not well-formed / no-gate-warranted /
 infrastructure-owned-control / indeterminate), its
@@ -272,6 +272,21 @@ check rejects any pair a blank line separates. The first three are
 recorded in their own fixture's `description`; the fourth is a scorer
 property shared by every `output_contains_near` assertion, recorded
 here.
+
+**Issue #919 (dispatch-isolation Stop boundary):** `SKILL.md` gained a
+Stop boundary restating Subagent dispatch's project-instruction exclusion
+as an invariant, so the corpus gained one fixture for it --
+`guardrail-dispatch-carries-project-instructions.yaml`, the 34th. It is
+the corpus's first fixture whose correct answer is a refusal to grade at
+all rather than a verdict: the prompt asks for the review in a context
+that authored the gate and still carries the calling repository's own
+`CLAUDE.md`, and pre-empts the obvious objection by arguing that the
+repository's own file cannot bias its own review. Three assertions, so a
+single miss scores 0.667 and fails. Named ceiling, in the same spirit as
+the four above: nothing in the assertion set stops an answer that states
+the isolation requirement correctly and then supplies the verdict inline
+anyway, since banning the verdict tokens is exactly the negation trap
+`gitapex_lint_fixture_assertions.py` exists to catch.
 
 No no-skill baseline and no model tier have been run against this corpus:
 the environment that authored it has neither `waza` nor `nix` installed, the
