@@ -97,6 +97,10 @@ even though this procedure never reads its own record back.
 **Unstored-but-required state fires** only when the skill's own text names a
 specific carried value -- a count, a limit, an attempt number, a prior verdict
 -- that a later step's control flow branches on, while naming no locus for it.
+The framing rule's boundary half binds here as everywhere: the named value
+must be needed *across* one of the four boundaries. A counter that lives and
+dies inside a single turn -- "stop after three failed attempts" -- is
+ordinary reasoning and does not fire.
 The target then fires on the principle and fails axis 1 by construction: the
 absence is the finding. A general expectation that earlier reasoning remains
 available is not this case, and does not fire. This paragraph only *extends*
@@ -317,8 +321,17 @@ rather than guarding it, such as pinning a pre-edit state with a read-only
 revision query instead of mutating the working tree while another reader may
 still be live.
 
+Each disjunct passes only for the writer class it actually reaches. A
+serialization rule that forbids parallel dispatch *inside* one run says
+nothing about two independent invocations of the same skill against the same
+subject; when that second writer class is live, the target needs a rule that
+covers it too, and satisfying the internal-fan-out disjunct alone is a Fail
+on this axis rather than a Pass.
+
 **Fail** -- two writers named in the same procedure with only a de-duplicating
-read and no ownership or locking rule between them.
+read and no ownership or locking rule between them; or a Pass claimed from a
+disjunct that leaves the Applicability clause's other writer class
+unaddressed.
 
 **Leads dimension 6's entry** when concurrent writes can lose an external
 contributor's content.
