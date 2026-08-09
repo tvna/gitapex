@@ -1,0 +1,66 @@
+id: evaluating-deterministic-gate-quality-contract-role-postcondition-structural-domain
+name: A gate that re-reads what the API actually stored is a postcondition over a correctly closed protocol enum
+description: >-
+  The positive case for the Contract role axis's postcondition
+  branch, paired with the closure direction that is correct rather than
+  defective. The check runs after the guarded operation and grades what that
+  operation really produced -- not what it was asked to produce -- so its
+  contract role is a postcondition and a violation attributes fault to the
+  operation, not its caller. Its input is a protocol enum whose admissible
+  values the hosting platform owns, so closing the domain to exactly those
+  values and treating anything else as malformed is the safe direction here,
+  not a finding. This is one of the two fixtures the axis must not misfire
+  on: a reviewer that reads "closed list" as automatically defective, having
+  learned the threat-classification half first, produces the wrong answer.
+  Same disclosed substring-scorer ceiling as its sibling fixtures.
+tags:
+  - quality
+  - contract-role
+  - input-domain-closure
+inputs:
+  prompt: |
+    Use evaluating-deterministic-gate-quality. Review this gate.
+
+    An agent-harness PostToolUse hook, read directly from its own script. It
+    fires after a pull-request update call succeeds. It does not read the
+    request payload the agent sent. Instead it re-fetches the pull request
+    from the hosting platform's own API and compares the returned
+    mergeable_state field against this set:
+
+        ACCEPTED = {"clean", "has_hooks", "unstable", "behind",
+                    "blocked", "dirty", "draft", "unknown"}
+
+    Any value outside that set is treated as malformed: the hook reports the
+    unrecognized value and escalates rather than passing. The set is quoted
+    in a comment directly from the platform's own published API
+    documentation, with the fetch date recorded beside it.
+
+    Apply the Contract role / input-domain closure axis. BEGIN your reply
+    with exactly these two lines and nothing else on them:
+
+    "Contract role:" followed by exactly one of precondition, postcondition,
+    invariant, mixed, or indeterminate.
+
+    "Input domain:" followed by exactly one of structural-protocol,
+    threat-classification, both-readings, or indeterminate.
+
+    Leave a blank line after those two lines before anything else.
+
+    Then say whether the closure direction this gate chose is right or wrong
+    for that domain kind, and who a violation of this check attributes fault
+    to.
+expected:
+  output_contains_near:
+    - all:
+        - "Contract role"
+        - "postcondition"
+      window: 60
+    - all:
+        - "Input domain"
+        - "structural-protocol"
+      window: 60
+  output_not_contains_near:
+    - all:
+        - "Input domain"
+        - "threat-classification"
+      window: 60

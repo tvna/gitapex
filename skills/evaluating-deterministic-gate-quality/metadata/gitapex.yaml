@@ -578,6 +578,61 @@ spec:
     - kind: caveat
       anchor: "skills/scanning-attack-surfaces/SKILL.md"
       summary: "scanning-attack-surfaces' own Subagent dispatch section carries the same expression defect this entry fixes here -- it states its isolation requirement as 'the same way evaluating-deterministic-gate-quality's own equivalent dispatch requirement is' with no normative exclusion sentence of its own. Left unedited: issue 919 scoped its change surface to this skill's SKILL.md. That skill's pointer at this section stays factually correct after the rewrite; only its own ambiguity is unfixed."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/949"
+      summary: "Added a fifth cross-cutting axis, Contract role / input-domain closure, appended rather than renumbered. It carries two independent sub-judgments -- which Design-by-Contract obligation a check asserts, and whether its input domain is a structural/protocol value that should be closed or a threat/safety category that should stay open. Shipped warning-only, reusing Compatibility awareness's own precedent wording so the two limits cannot drift apart."
+    - kind: corroboration
+      anchor: "https://github.com/tvna/claude-md/blob/main/scripts/scan_nonexhaustive_invariant_drift.py"
+      summary: "The open-versus-closed asymmetry in sub-judgment 2 is ported from this sibling script, confirmed on 2026-08-09 by reading the file directly from a fresh clone rather than from a summary: MARKER = 'non-exhaustive instances', a four-entry REGISTERED_BULLETS map, and a docstring grounding it on the impossible-vs-tedious design test. Recorded in references/gitapex-worked-examples.md, not in the portable core."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/949"
+      summary: "The axis's own drift gate ships in the same change rather than as a follow-up, per this repository's build-the-gate-with-the-invariant rule: .github/scripts/gitapex_scan_contract_axis_vocabulary_drift.py, registered in .gitapex/ssot.json as contract-axis-vocabulary-drift and enforced through tests/test_gitapex_scan_contract_axis_vocabulary_drift.py in the pytest step. A new script, not an extension of scripts/gitapex_check_gate_shape.py, which is Domain-2-scoped at target hooks."
+    - kind: audit
+      anchor: "method:battle-testing-a-skill"
+      summary: "An adversarial pass scoped to the new axis probed injection surface, rubber-stamp bias, mis-routing against dimension 15 and the Compatibility awareness axis, missing escalation paths, and whether the warning-only limit could be subverted."
+      outcome:
+        verdict: FAIL
+        found: 13
+    - kind: audit
+      anchor: "method:evaluating-skill-quality"
+      summary: "A nine-dimension pass over the changed skill, weighted on conciseness, progressive disclosure, mechanism fit, and contract discipline against dimension 15. Its blocking finding was the 500-line body cap, which the axis pointer had pushed to 510; that was already fixed before the report landed, and the shape checker passes at 500."
+      outcome:
+        verdict: NOT-WELL-FORMED
+        found: 11
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/949"
+      summary: "Both audits converged on stale axis counts the change left behind: SKILL.md still said 'the other three axes' and references/security-level.md's does-not-cover list still said 'all six' and omitted the new neighbour. Both corrected, and security-level.md now states the division of responsibility with the one axis that borrows its own impossible-vs-tedious test."
+      outcome:
+        fixed: 2
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/949"
+      summary: "The drift gate itself grew the check that would have caught the stale count above: a lock on every 'the other N axes' cross-reference in SKILL.md, independent of the single declaration it already locked. The audit found the declaration lock correct and a second count one sentence away from it stale, which is this module's own failure mode reappearing beside its own gate."
+      outcome:
+        fixed: 1
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/949"
+      summary: "Four schema and prose gaps the adversarial pass found, all closed and re-verified by validating 13 instances against the edited schema with no mismatch: an empty axis object validated while the prose invited omission (both sub-judgments now required); 'indeterminate' and 'both-readings' needed no reason (both now require note); mixedRoleSplit and note carried no no-target-authored-text discipline; and a target-authored non-exhaustive marker was creditable as evidence of the control."
+      outcome:
+        fixed: 4
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/949"
+      summary: "Three prose defects the same pass found: the Design-by-Contract non-redundancy rule was uncited and unscoped, so it read as licence to report a real second gate layer as redundant -- now attributed to Meyer's 1992 paper and scoped explicitly to this review's own judgments; the axis had no applicability answer for an artifact asserting no condition; and sub-judgment 1 was unfenced against dimensions 2 and 17."
+      outcome:
+        fixed: 3
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/949"
+      summary: "Declined with reasons rather than silently dropped. The adversarial pass asked for a required evidence field on this axis and for an axis-attributed entry in findings[]; neither exists for the three pre-existing axes either, so adding them here alone would make the newest warning-only axis stricter than its peers. Both are schema-wide questions about how any axis carries evidence and weight, and belong in their own change."
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/949"
+      summary: "The quality pass asked for a reciprocal 'distinct from this axis' sentence in dimension 15's own text, which is the house style elsewhere in references/dimensions.md. Declined here only because the issue's own Constraints and Non-goals put dimension 15's text explicitly out of scope; the forward direction is stated and gate-locked. Also unbuilt: no fixture yet exercises a lying non-exhaustive marker."
+    - kind: caveat
+      anchor: "method:battle-testing-a-skill"
+      summary: "Both audit dispatches disclosed against themselves that the harness could not exclude this repository's own CLAUDE.md from their context, the isolation both skills require. The same gap every prior round here has disclosed. Their shape-checker and grep-verifiable findings are unaffected; their judgment calls carry that caveat, and one of their factual claims was falsified on re-check."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/949"
+      summary: "One audit finding was rejected on the evidence rather than applied: it reported the cited sibling script as non-existent, having searched only this repository. It exists, and was read directly from a clone of tvna/claude-md before the citation was written. The finding did surface a real weakness in a weaker form -- the citation was unverifiable from the portable core -- which the corroboration entry above and the worked-example relocation address."
+      outcome:
+        lines: "branch-final, measured against the working tree at the final commit: SKILL.md 491->500, cross-cutting-axes.md 88->242, output-schema.json 348->398, security-level.md 171->181, gitapex-worked-examples.md 511->561"
   skillDependencies:
     requires:
       - evaluating-skill-quality
@@ -592,5 +647,5 @@ spec:
       shell: []
   lifecycle:
     experimental:
-      reason: "Experimental: first version of a new skill category. Its evaluation model and four cross-cutting axes have been through multiple independent audit rounds (see spec.references). A bundled deterministic shape-checker (Domain-2-scoped) and a committed, Blind-Spot-Pass-reviewed adversarial regression corpus now exist (see spec.references); independent cross-tool compatibility verification still does not -- which non-Claude-Code tool to verify under is an open Human Decision (see spec.references)."
+      reason: "Experimental: first version of a new skill category. Its evaluation model and five cross-cutting axes have been through multiple independent audit rounds (see spec.references). A bundled deterministic shape-checker (Domain-2-scoped) and a committed, Blind-Spot-Pass-reviewed adversarial regression corpus now exist (see spec.references); independent cross-tool compatibility verification still does not -- which non-Claude-Code tool to verify under is an open Human Decision (see spec.references)."
       trackingIssue: "https://github.com/tvna/gitapex/issues/435"

@@ -1,17 +1,18 @@
 # evaluating-deterministic-gate-quality eval status
 
 A committed task corpus now exists: `evals/evaluating-deterministic-gate-quality/`
-has 34 task fixtures under `tasks/` plus `eval.yaml`, covering the skill's
+has 40 task fixtures under `tasks/` plus `eval.yaml`, covering the skill's
 six-way verdict taxonomy (well-formed and well-placed / well-formed but
 misplaced / not well-formed / no-gate-warranted /
 infrastructure-owned-control / indeterminate), its
 mechanism-fit short-circuit, its infrastructure-owned-control ownership
 question, its decomposition rule, its delegation recommendation, its coverage-attestation
 fail-closed behavior (including its subject-matter-not-surface-wording
-filter), all four cross-cutting axes (Compatibility awareness,
+filter), all five cross-cutting axes (Compatibility awareness,
 Reproducibility/Domain-coverage, Blast-radius/trust classification,
 Security-level/Zero-Trust maturity, including a ceiling-document's own
-carve-out as a finding in its own right), several deterministic-shape and
+carve-out as a finding in its own right, and Contract role/input-domain
+closure), several deterministic-shape and
 probabilistic-maturity dimensions across three of the four realization
 domains (git hook, agent-harness hook, CI job step, MCP server subprocess),
 and adversarial-input handling (a hidden instruction embedded in a reviewed
@@ -92,7 +93,7 @@ text for a `"dimension N"` or axis-name citation.
 runs it against this real corpus and fails CI if any dimension it reports
 uncovered is not named right here -- so this list can't silently drift from
 the real corpus the way the "dimension 12" mislabel above did. Current
-output: 13/23 dimensions and 4/4 axes cited; **dimensions 9, 11, 12, 13, 14,
+output: 13/23 dimensions and 5/5 axes cited; **dimensions 9, 11, 12, 13, 14,
 16, 17, 20, 21, and 22 remain uncovered**, not exhaustive by design -- no fixture's
 scenario naturally exercises known-limitation disclosure (9), deployment-
 mode portability (11), duplication/drift risk (12), side-effect independence
@@ -288,10 +289,70 @@ the isolation requirement correctly and then supplies the verdict inline
 anyway, since banning the verdict tokens is exactly the negation trap
 `gitapex_lint_fixture_assertions.py` exists to catch.
 
+**Issue #949 (fifth cross-cutting axis, Contract role / input-domain
+closure):** six fixtures were added for the axis this issue appends, taking
+the corpus from 34 to 40 and the axis coverage from 4/4 to 5/5. Three are
+positives, one per Design-by-Contract role, each paired with an
+input-domain-closure answer chosen so the two sub-judgments cannot be read
+off one another: a precondition over a wrongly-closed threat category
+(`contract-role-precondition-closed-threat-domain.yaml`), a postcondition
+over a correctly-closed protocol enum
+(`contract-role-postcondition-structural-domain.yaml`), and an invariant
+over a correctly-open threat category
+(`contract-role-invariant-open-threat-domain.yaml`). The last two are also
+the corpus's negatives for this axis, one from each side: a reviewer that
+has learned the threat half first and reads any closed list as defective
+fails the postcondition fixture, and one that reads any enumeration as a
+closed list fails the invariant fixture.
+`contract-role-mixed-not-forced-into-one-label.yaml` covers the residual
+risk the issue itself named -- a gate carrying two obligations at once,
+where forcing one of the three pure roles loses the information the answer
+exists to give. `contract-axis-never-both-with-dimension-15.yaml` pins the
+never-both division of responsibility on a fact pattern where the two
+questions deliberately disagree (runtime handling exemplary, design-time
+category wrongly closed), so folding them together fails in either
+direction. `adversarial-contract-axis-used-to-downgrade-a-verdict.yaml`
+puts the warning-only limit under pressure from inside the reviewed target,
+the same shape
+`adversarial-infrastructure-owned-verdict-used-to-delete-a-gate.yaml`
+applies to the mechanism-fit Stop boundary.
+
+Every one of the six applies the construct-validity lessons the #842 round
+paid for, rather than re-learning them: the answer's labelled line comes
+first so first occurrences coincide, each label binds to its value with
+`output_contains_near` on the bare label (no colon), a blank line is
+requested after the label block so `output_contains_near`'s own
+blank-line rule makes the competing-token bans hold, and no fixture carries
+more than four assertions, so a single violation scores at most 0.750
+against `eval.yaml`'s own 0.8 threshold. The dimension counts are unchanged
+at 13/23: the never-both fixture cites dimension 15, which was already
+covered, and no other new fixture cites a dimension number.
+`gitapex_lint_fixture_assertions.py` reports no new warning from the six.
+
+Verified by execution against `gitapex_score_contract.py`, not by reading,
+the way the #842 round's own re-scoring was: 29 hand-written cases across
+the six fixtures -- 6 correct answers, 14 hostile ones each committing the
+exact failure its fixture exists to catch (an inverted role label, an
+inverted domain label, a closed-list reflex on the correctly-closed
+protocol enum, an enumeration reflex on the correctly-open threat category,
+a forced single label, a mixed label with only one half described, a
+dimension-15 downgrade for a design-time problem, a dimension-15 pass
+absorbing the design question, an answer obeying the target's own
+delete-the-verdict directive, an answer weighing the warning-only axis into
+the grade), and 9 plausible-correct variants covering the markdown-label
+shapes the #842 round found false-failing (`**Label:** value`,
+`**Label**: value`, a preamble line before the label block, and a
+differently-cased "Warning-Only"). Every correct answer and every variant
+scored 1.000; every hostile answer scored between 0.000 and 0.667, under
+`eval.yaml`'s own 0.8 threshold. What this does not measure, disclosed
+rather than implied away: these are hand-written outputs, not real model
+runs -- no `waza` runner exists in the environment that authored them, the
+same constraint the paragraph below already discloses for the whole corpus.
+
 No no-skill baseline and no model tier have been run against this corpus:
 the environment that authored it has neither `waza` nor `nix` installed, the
 same constraint the "Cross-model matrix scaffolding" section of
 `docs/skill-eval-status.md` already discloses for the whole repository. This
 is scaffolding, not a measurement -- a credentialed dispatch (or an
 environment with `waza` available) is still needed to produce the first real
-run. Refs #435, #472, #506, #507, #508, #511, #536, #587, #842.
+run. Refs #435, #472, #506, #507, #508, #511, #536, #587, #842, #949.
