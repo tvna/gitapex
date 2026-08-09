@@ -551,6 +551,14 @@ def find_non_score_root_json_drift(
     A filename declared in both is a finding -- a root JSON file is exactly
     one class, not both.
 
+    The three-way content check applies to a *declared* `nonstandard_score_files[]`
+    entry too, not only to an undeclared file's classification walk: a
+    CodeRabbit follow-up round found the declared-entry loop checked for a
+    missing `score` but never checked `scores_validator.is_valid`, so a file
+    that already validates in full could be declared `nonstandard` anyway
+    and the mislabeling in the other direction went unflagged. Both declared
+    loops now share the same invariant the undeclared walk enforces.
+
     Both keys are layer-1-only and optional: most records have neither and
     need not declare an empty list."""
     if not isinstance(instance, dict):
@@ -616,7 +624,14 @@ def find_non_score_root_json_drift(
                 f"nonstandard-score-file-declared: nonstandard_score_files lists {parsed.file!r}, which does not exist"
             )
             continue
-        if not _contains_score_field(_load_json(target)):
+        payload = _load_json(target)
+        if scores_validator.is_valid(payload):
+            findings.append(
+                f"nonstandard-score-file-declared: {parsed.file!r} is declared in nonstandard_score_files[] but "
+                "its own content already validates against eval-scores.schema.json -- that is a standard score "
+                "file and needs no declaration at all"
+            )
+        elif not _contains_score_field(payload):
             findings.append(
                 f"nonstandard-score-file-declared: {parsed.file!r} is declared in nonstandard_score_files[] but "
                 "its own content carries no per-item score -- that is not scorer output in a nonstandard shape, "

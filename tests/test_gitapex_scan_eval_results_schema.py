@@ -856,6 +856,21 @@ def test_dangling_nonstandard_score_file_reference_is_flagged(tmp_path: pathlib.
     assert any("nonstandard-score-file-declared" in f and "does not exist" in f for f in findings)
 
 
+def test_conforming_score_file_declared_as_nonstandard_is_flagged(tmp_path: pathlib.Path) -> None:
+    # A CodeRabbit follow-up round found the declared-entry loop checked for
+    # a missing score but never checked scores_validator.is_valid, so a file
+    # that already conforms to eval-scores.schema.json could still be
+    # declared nonstandard and the mislabeling went unflagged in this
+    # direction.
+    manifest = _copy(_VALID_PRE_CONTRACT)
+    manifest["artifacts"] = ["claude-sonnet-5.json"]
+    manifest["nonstandard_score_files"] = [
+        {"file": "claude-sonnet-5.json", "deviation": "claimed nonstandard, but conforms."}
+    ]
+    findings = _findings_for(tmp_path, manifest, extra_files={"claude-sonnet-5.json": json.dumps(_VALID_SCORE_FILE)})
+    assert any("nonstandard-score-file-declared" in f and "needs no declaration at all" in f for f in findings)
+
+
 def test_file_declared_in_both_classes_is_flagged(tmp_path: pathlib.Path) -> None:
     manifest = _copy(_VALID_PRE_CONTRACT)
     manifest["artifacts"] = ["claude-sonnet-5.json"]
