@@ -126,18 +126,17 @@
           "description": "The class the candidate was declared as BEFORE scoring. Recorded because the two classes are graded by different rules, and because a class assigned after seeing the score is the failure the predeclaration requirement exists to prevent."
         },
         "split": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Which split the comparison ran over. A gate verdict computed over anything but the held-out selection split is not this gate's verdict, so the record names the split rather than leaving a reader to assume it."
+          "const": "selection",
+          "description": "Which split the comparison ran over. Constant by construction rather than free text: a verdict computed over train or test is not this gate's verdict at all, and a free-text field would let such a run be recorded as one. Holding the value fixed makes an out-of-contract verdict unrecordable instead of merely visible, at the cost of a field that carries no information when the contract was followed -- the trade this repository's fail-closed default asks for."
         },
         "prior_mean": {
           "type": "string",
-          "pattern": "^[01]\\.[0-9]+$",
-          "description": "The baseline this candidate was compared against, as a string at exactly the precision the scorer published it at. A string, not a number, because JSON number serialization drops trailing zeros and the gate compares at published precision -- a prior at any other precision is ambiguous input the gate fails loudly on rather than rounds."
+          "pattern": "^(?:0\\.[0-9]+|1\\.0+)$",
+          "description": "The baseline this candidate was compared against, as a string at exactly the precision the scorer published it at. A string, not a number, because JSON number serialization drops trailing zeros and the gate compares at published precision -- a prior at any other precision is ambiguous input the gate fails loudly on rather than rounds. The pattern bounds the value to [0,1], the range the Precondition gate requires of any scorer, but deliberately fixes no number of decimals: six is this skill's own bundled scorer's published precision, not every scorer's, and pinning it here would invalidate a record produced by the test-pass or battle-test scorers the Precondition gate equally allows. That the two means share one precision is a rule the Gate step states and no JSON Schema can express across two fields."
         },
         "candidate_mean": {
           "type": "string",
-          "pattern": "^[01]\\.[0-9]+$",
+          "pattern": "^(?:0\\.[0-9]+|1\\.0+)$",
           "description": "The candidate's own mean, at the same published precision as prior_mean and for the same reason."
         },
         "prior_context_cost": {

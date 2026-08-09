@@ -21,6 +21,10 @@ expected:
   output_contains:
     - "Run record"
     - "commit"
+    - "runner"
+    - "trials_per_fixture"
+    - "score_files"
+    - "gate"
     - "known_gaps"
     - "headline_pattern"
   output_not_contains:

@@ -29,6 +29,9 @@ spec:
       summary: "executionRequirements.tools.write gains files, because Procedure step 7 now writes one. The prior empty list was true of a skill that only read and scored; leaving it unchanged while adding a write step would have left the sidecar asserting something its own Procedure contradicts."
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/pull/944"
+      summary: "A third outer-layer round found the gate object's own value ranges too loose: split was free text, so a train- or test-split verdict could be recorded as this gate's, and the mean pattern admitted values above 1.0 (1.25, 1.5). split is now const selection and both means are bounded to [0,1]. The same round's request to pin six decimals was declined -- that is this skill's bundled scorer's published precision, not every allowed scorer's."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/pull/944"
       summary: "The outer review layer's confirming pass caught the run record requiring the candidate's scores but not the gate outcome: a valid record could hold score files and free text with no verdict, no baseline, and no named split, so a later reader could not tell a kept edit from a rejected one. The Output section had always required those facts of the ephemeral report; the durable artifact had not. Added a required gate object, with both context costs enforced by an if/then when pruning-only."
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/pull/944"
