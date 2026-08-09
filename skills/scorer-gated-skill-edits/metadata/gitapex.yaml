@@ -18,6 +18,71 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/858"
       summary: "Reconciled output_contains/output_not_contains case semantics between waza's built-in expected.* grading (case-insensitive, pinned) and gitapex_score_contract.py's own case-sensitive contract (unchanged). Added a SKILL.md bullet stating the convention. Fixed gitapex_lint_fixture_assertions.py's check_case to prefer any exact-case anchor over an earlier differently-cased one, removing 18 false positives it had produced across the corpus."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/932"
+      summary: "This skill becomes the repository's waza-dependent skill: shell gains waza and Procedure step 1 confirms the binary and records the version it reports, stopping rather than proceeding with an unattributable run. Chosen over a separate waza-runner skill because this skill already owns the scorer (scripts/gitapex_score_contract.py), the Precondition gate, and the Gate result; before this, every skill mentioning waza did so in prose only and none invoked it."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/932"
+      summary: "Procedure step 7 gives the run record a stated contract, enumerating the fields a completed gate run must capture. The root cause catalogued in https://github.com/tvna/gitapex/issues/926 was that no procedure anywhere said what a run must record, so a schema alone would have pinned shape while repeating the omission. Both schemas ship in this skill's own references/ so a vendored copy carries the whole contract."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/932"
+      summary: "executionRequirements.tools.write gains files, because Procedure step 7 now writes one. The prior empty list was true of a skill that only read and scored; leaving it unchanged while adding a write step would have left the sidecar asserting something its own Procedure contradicts."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/pull/944"
+      summary: "A third outer-layer round found the gate object's own value ranges too loose: split was free text, so a train- or test-split verdict could be recorded as this gate's, and the mean pattern admitted values above 1.0 (1.25, 1.5). split is now const selection and both means are bounded to [0,1]. The same round's request to pin six decimals was declined -- that is this skill's bundled scorer's published precision, not every allowed scorer's."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/pull/944"
+      summary: "The outer review layer's confirming pass caught the run record requiring the candidate's scores but not the gate outcome: a valid record could hold score files and free text with no verdict, no baseline, and no named split, so a later reader could not tell a kept edit from a rejected one. The Output section had always required those facts of the ephemeral report; the durable artifact had not. Added a required gate object, with both context costs enforced by an if/then when pruning-only."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/pull/944"
+      summary: "The outer independent-review layer caught the score-file schema still describing itself as the attachment scores[].file points at, after the rename below moved that pointer list to score_files. The two shipped schemas therefore named incompatible paths for the same attachment -- a key-drift defect introduced by the fix for a key-drift defect, and one the inner layer's own re-read of its patch missed. Corrected to score_files[].file."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/pull/944"
+      summary: "The pre-merge independent-review round caught the run record's pointer list being named scores, the same key the per-model score file already uses for a differently-shaped list -- the exact key-name drift this contract exists to stop, reintroduced by the contract itself. Renamed to score_files in both the Procedure and the schema."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/932"
+      summary: "The first draft invoked the declared tool only for --version, leaving the Gate step describing scoring without naming what executes the trials -- close to the false-declaration risk that issue's own acceptance map flagged. Gate now names the run invocation and requires both sides of a comparison to come from the same runner version, model, and fixture set. Found by this branch's own quality-audit round."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/932"
+      summary: "The first draft left the frontmatter description unchanged while making the runner a hard precondition, so the discovery surface promised a skill that needs only a scorer and a split. The description now names the runner requirement and the run record, matching scanning-ci-workflows, whose description names the two CLIs it wraps. Found by this branch's own quality-audit round, not by a reviewer."
+    - kind: corroboration
+      anchor: "https://github.com/microsoft/waza"
+      summary: "The version interface Procedure step 1 depends on was verified against the pinned binary itself rather than from memory: waza --version prints a version string, and waza --help lists -v, --version as the version flag. Checked at the version flake.nix pins today."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/932"
+      summary: "Portability stays Portable. An external, publicly available CLI is not origin-repository state, matching scanning-ci-workflows, whose Mixed level comes from two cited repo-owned documents rather than from its declared tools. Two constraints keep it true: step 7 names the target repository's own eval-results location generically instead of this repository's literal layout, and the version pin stays in flake.nix rather than in SKILL.md."
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/926"
+      summary: "Migrating the six committed run manifests onto this contract, and building the results drift gate, stay with that issue. This change supplies the owner and the schemas it was waiting on and deliberately does not retro-validate existing records; the run-record schema therefore permits additional keys rather than failing a record written before the contract existed."
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/932"
+      summary: ".gitapex/waza-eval.schema.json and .gitapex/waza-task.schema.json are not moved. They are upstream bytes vendored verbatim at a pinned release tag, guarded by recorded sha256 digests and a CI-only opt-in byte comparison; relocating third-party bytes into the deployed skill surface would break that provenance story. Same line https://github.com/tvna/gitapex/issues/834 drew for .gitapex/ssot.schema.json."
+    - kind: caveat
+      anchor: "https://github.com/tvna/gitapex/issues/932"
+      summary: "The four fixtures added for the two new branches are declared coverage, not scored coverage: that issue ruled a suite re-run out of scope, so this skill's own improve-or-reject gate was not applied to this edit. Step 1 also becomes an unconditional first action for the eleven pre-existing fixtures, whose prompts predate it. Both limits are recorded in this skill's own evals/ eval-status.md rather than resolved here."
+    - kind: audit
+      anchor: "method:evaluating-skill-quality"
+      summary: "Nine-dimension quality review of this SKILL.md and its references/ after the waza and run-record edits. Run in the authoring session's own thread rather than as an isolated subagent dispatch -- the session's harness directives ruled out self-initiated dispatch -- matching scanning-ci-workflows' own disclosed limitation rather than papering over it. Two findings, both fixed in-branch and recorded as correction entries above."
+      outcome:
+        verdict: WELL-FORMED-NOT-MATURE
+        found: 2
+        fixed: 2
+    - kind: caveat
+      anchor: "method:evaluating-skill-quality"
+      summary: "Why that verdict stops at not-mature: dimension 2 (conciseness) does not clear. The body grew by roughly a third, most of it the run-record field enumeration, which is deliberate for a Broad capability assumption but is still a named gap rather than a clean pass. Dimensions 8 and 9 are named-unmeasured, which the rubric permits for those two specifically and which is not what holds the verdict back."
+    - kind: audit
+      anchor: "method:battle-testing-a-skill"
+      summary: "Adversarial pass over the new runner-confirmation and run-recording surface. Same in-context (not isolated) limitation as the quality audit above, disclosed identically, and with the same consequence for cold enumeration. Three findings, all fixed before the PR was marked ready: a secondhand runner version was accepted as recordable, the new write step was unbounded, and transcript text was interpolated into a structured record with no escaping rule."
+      outcome:
+        verdict: FAIL
+        found: 3
+        fixed: 3
+    - kind: correction
+      anchor: "method:battle-testing-a-skill"
+      summary: "Trust-boundary finding: step 1 required a version but did not say where it must come from, so a requester stating one satisfied it. The step now requires the version be obtained firsthand in the environment the trials run in, and the non-trigger control fixture was rewritten to state a version and ask for the check to be skipped, so it probes that boundary rather than rewarding the shortcut."
+    - kind: correction
+      anchor: "method:battle-testing-a-skill"
+      summary: "Tool-scope and structured-output findings: the new write step named no bound, and free-text fields carried transcript content into a structured record with no escaping rule. Step 7 now records every value as data with transcript text escaped and instruction-shaped text quoted as material, and the Stop boundary names the record and its score files as the only things this skill writes."
   skillDependencies:
     requires: []
     relatedTo:
@@ -27,5 +92,7 @@ spec:
     tools:
       read:
         - files
-      write: []
-      shell: []
+      write:
+        - files
+      shell:
+        - waza

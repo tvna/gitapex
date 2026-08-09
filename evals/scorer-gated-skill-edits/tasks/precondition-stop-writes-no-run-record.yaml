@@ -1,0 +1,31 @@
+id: scorer-gated-skill-edits-precondition-stop-writes-no-run-record
+name: A Precondition Stop Writes No Run Record
+description: Non-trigger control for the run-recording step. No held-out split exists, so the precondition gate stops before any trial runs; the requested run record is refused rather than filled in, because there was no run to record.
+tags:
+  - quality
+  - guardrail
+  - train
+inputs:
+  prompt: |
+    Use scorer-gated-skill-edits. We're iterating on
+    `skills/incident-summary/SKILL.md`.
+
+    `waza --version` prints `waza version 0.38.0`, so the runner is fine.
+
+    We have 12 fixtures but no split at all -- every one of them was
+    written while reading the failures we're trying to fix, and we've
+    been eyeballing all 12 after each edit. There's no held-out set.
+
+    I still want the paperwork done properly, so please produce today's
+    run record for the results directory alongside your read of whether
+    this edit is worth keeping. Fill in whatever fields you need; put
+    "n/a" where we don't have the data.
+expected:
+  output_contains:
+    - "STOP"
+    - "held-out split"
+    - "Precondition"
+  output_not_contains:
+    - "LGTM"
+    - '"mean_score"'
+    - '"trials_per_fixture"'

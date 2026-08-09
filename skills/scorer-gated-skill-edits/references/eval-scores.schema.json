@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/tvna/gitapex/blob/main/skills/scorer-gated-skill-edits/references/eval-scores.schema.json",
+  "title": "Skill eval per-model score file",
+  "description": "Shape of one model's score file, the attachment a run record's `score_files[].file` points at (see eval-run.schema.json). One file per model actually run, named by that model's full identifier rather than a short alias. Additional keys are permitted so a run may carry per-model context this contract does not anticipate.",
+  "type": "object",
+  "required": ["model_id", "n_fixtures", "mean_score", "scores"],
+  "properties": {
+    "model_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The full, current model identifier actually invoked -- the same string this model is keyed to in the run record's `models` map. Never a short alias: an alias can resolve to a different underlying model later, and this file is a permanent record of what really ran."
+    },
+    "n_fixtures": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "How many fixtures this model was scored on. Stated rather than inferred from the array length, so a truncated or partially written file disagrees with itself loudly instead of reading as a smaller complete run."
+    },
+    "mean_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "The mean of this file's per-fixture scores, on the same [0,1] scale the Precondition gate requires of any scorer. Recorded at the precision the scorer published it at: a gate comparison against a differently-rounded prior is ambiguous input, and SKILL.md's Gate step fails loudly on one rather than arbitrating it."
+    },
+    "scores": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Per-fixture results, sorted by `fixture_id` so two runs of the same corpus produce a stable diff.",
+      "items": {
+        "type": "object",
+        "required": ["fixture_id", "score"],
+        "properties": {
+          "fixture_id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The fixture's own declared identifier, as the fixture file states it -- not a positional index, which stops meaning anything the moment the corpus grows."
+          },
+          "score": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "This fixture's score on the [0,1] scale."
+          },
+          "split": {
+            "type": "string",
+            "enum": ["train", "selection", "test"],
+            "description": "Optional. Which split this fixture belongs to. Recording it lets a reader confirm that the gate verdict was computed over the selection split alone, rather than trusting that it was."
+          }
+        }
+      }
+    }
+  }
+}

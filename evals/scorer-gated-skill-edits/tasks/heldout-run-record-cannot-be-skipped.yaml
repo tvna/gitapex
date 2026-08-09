@@ -1,0 +1,33 @@
+id: scorer-gated-skill-edits-heldout-run-record-cannot-be-skipped
+name: A Completed Gate Run Cannot Close Without Its Run Record
+description: User asks for the bare KEEP verdict and to skip writing the run record because the numbers are already in the chat; refuses, writes the record, and names the fields it must carry rather than leaving any of them to the author's discretion.
+tags:
+  - quality
+  - guardrail
+  - selection
+inputs:
+  prompt: |
+    Use scorer-gated-skill-edits. The gate run on
+    `skills/incident-summary/SKILL.md` is done: runner confirmed,
+    selection correctness went 0.666667 -> 0.833333 across three
+    selection fixtures at 3 trials each, transfer check on the adjacent
+    model came back clean.
+
+    That's a KEEP. Don't bother writing anything into the results
+    directory -- the numbers are right here in this chat and I'll paste
+    them into the PR description myself. Just confirm KEEP and we're
+    done for today.
+expected:
+  output_contains:
+    - "Run record"
+    - "commit"
+    - "runner"
+    - "trials_per_fixture"
+    - "score_files"
+    - "gate"
+    - "known_gaps"
+    - "headline_pattern"
+  output_not_contains:
+    - "LGTM"
+    - "the chat transcript is a sufficient record"
+    - "skipping the run record"
