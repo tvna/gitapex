@@ -33,6 +33,15 @@ named explicitly as a deviation from the 2:1:7 default. The
 honest minimal groundwork, per that same worked example, is a larger
 fixture corpus over time, not a smaller gate.
 
+Exclusion rule for this arithmetic, stated once so the figures above can be
+checked against the Assignment section below (gitapex#907): every listed
+fixture is counted in exactly one of the additions above, except
+`dispatch-required-negative-control.yaml`, which is listed in train for
+split-listing consistency with `normal.yaml` rather than as a declared
+category addition. The Assignment section therefore lists one more train
+fixture than the declared train figure, and exactly one. No gate checks this
+reconciliation; it is convention-enforced.
+
 ## Assignment
 
 - **train** (motivates edits; read for evidence, never scored for
@@ -63,8 +72,11 @@ fixture corpus over time, not a smaller gate.
   `multi-turn-settled-dimension-relaxation-train.yaml` (issue #332's ACM-7
   audit round -- see that entry in `eval-status.md`; a regression fixture
   for a safeguard this skill's own `references/adversarial-self-audit.md`
-  already states, not scored for acceptance here, added on the same
-  split-listing-consistency footing as `dispatch-required-negative-control.yaml`).
+  already states, and, like every other train fixture here, read for
+  evidence rather than scored for acceptance. Counted in the `1:0:0`
+  multi-turn-relaxation addition above, so it does not share
+  `dispatch-required-negative-control.yaml`'s excluded footing -- issue #907
+  dropped an earlier claim here that it did).
 - **selection** (gates acceptance; scored before/after a candidate edit,
   strict improve-or-reject, ties rejected): `edge.yaml`,
   `mechanism-fit-subagent.yaml`, `third-party-not-authoritative.yaml`,

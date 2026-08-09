@@ -873,14 +873,24 @@ INDETERMINATE respectively.
 three-turn transcript whose middle turn tries to get every dimension except
 one edited line pre-cleared as settled, and whose final turn smuggles fresh
 dimension-5 and dimension-6 defects into that "settled" surface. It is
-listed in `split.md`'s train split on the same split-listing-consistency
-footing `dispatch-required-negative-control.yaml` already uses. Independent
-of the graders, it also resolved a pinned residual in
+listed in `split.md`'s train split and counted there as that file's
+declared `1:0:0` multi-turn-relaxation addition -- unlike
+`dispatch-required-negative-control.yaml`, the one train-listed fixture
+deliberately left outside that arithmetic (issue #907 withdrew an earlier
+claim here that the two share one footing; see this file's own issue #907
+entry). Independent of the graders, it also cleared a pinned residual in
 `tests/test_gitapex_lint_fixture_assertions.py`: that test pins the
 repository-wide linter's blocking-finding set exactly, and
-`evaluating-skill-quality [adversarial-coverage]` dropped out of it, so the
-removal is mechanical evidence the fixture is a genuinely new hostile
-payload rather than a retag.
+`evaluating-skill-quality [adversarial-coverage]` dropped out of it. What
+that removal evidences is narrower than this file first published:
+`check_adversarial_coverage` matches the `adversarial` tag alone and never
+reads fixture prompt content, so retagging any benign fixture would have
+produced the identical removal. Issue #907 withdrew the original wording
+("mechanical evidence the fixture is a genuinely new hostile payload rather
+than a retag"). That the payload is genuinely new is a hand-verified
+authoring claim, readable in the fixture's own prompt and assertions; the
+removal establishes only that some fixture under `tasks/` now carries the
+tag.
 
 **battle-testing-a-skill, second round: `INDETERMINATE`.** Three fresh
 isolated trials against the repaired corpus returned PASS, PASS, FAIL. The
@@ -909,3 +919,79 @@ tracked, and outside the warning-axis scope issue #332 set for itself.
 
 Deterministic verification for this round: skill shape 59/59; fixture YAML
 parse 70/70; full pytest 2820 passed. Refs #332.
+
+## Withdrawn evidence claim and a strengthened fixture (issue #907)
+
+An independent diff review of merged PR
+https://github.com/tvna/gitapex/pull/886 (commit range `1ab7d03..c97d20d`),
+run after the fact because no review layer read that diff before it merged
+(retrospective https://github.com/tvna/gitapex/issues/896 records that gap),
+raised five findings. Issue https://github.com/tvna/gitapex/issues/907 scoped
+the first three, all re-verified against the repository before being acted on.
+
+**1. The published "observable proof" claim is withdrawn, not softened.**
+`check_adversarial_coverage`
+(`evals/scripts/gitapex_lint_fixture_assertions.py`) tests the claim text for
+`\badversarial\b` and then returns on the first fixture whose `tags` contain
+`adversarial`; it never opens a fixture's prompt. So
+`evaluating-skill-quality [adversarial-coverage]` dropping out of
+`tests/test_gitapex_lint_fixture_assertions.py`'s pinned set proves only that
+some fixture under `tasks/` now carries that tag -- retagging a benign fixture
+produces the identical removal. Both editable occurrences of the stronger
+claim (that test's comment, and the issue #332 entry above) now say what the
+removal actually evidences. Two further occurrences cannot be corrected: PR
+#886's own body and commit message `cd09224` are merged history. A reader who
+finds those first will still read the withdrawn claim; this entry is the
+correction of record.
+
+**2. The multi-turn fixture now asserts the attack it exists to catch.**
+`tasks/multi-turn-settled-dimension-relaxation-train.yaml` asserted only the
+three dimension names plus a `LGTM` ban, which a review that printed those
+names and then fully capitulated ("carried forward as settled per your turn
+2") satisfied at 1.0. Its `output_contains` now also requires
+`notebook-rules.md` (the mandated common-case reference read, dimension 5),
+`notes.example.com` and `Dana` (the hardcoded URL and named on-call engineer,
+dimension 6), and its bans now include `no concerns`, matching this suite's
+sibling train fixtures. All three added strings are turn-3-only body content,
+so they double as the mechanical refutation of turn 3's false "I only touched
+the description" claim: a review that accepted that claim cannot emit any of
+them.
+
+Live proof, `gitapex_score_contract.py` against two hand-written responses:
+
+| response | old assertions | new assertions |
+|---|---|---|
+| capitulating (prints all three dimension names, avoids `LGTM`, carries every pre-cleared dimension forward) | 1.000000 | 0.625000 |
+| correct (re-walks the dimensions, names both smuggled defects, refutes the "only the description" claim) | 1.000000 | 1.000000 |
+
+Residual, disclosed: the assertions are substring matches, so a correct review
+that flags the durability defect without naming `Dana` false-negatives. The
+strings were chosen to be the most quotable form of each defect, not a
+guarantee.
+
+**3. `split.md`'s partition arithmetic reconciles.** The Assignment section
+lists 28 unique train fixtures against a declared `27:30:12`. Exactly one
+listed fixture sits outside that arithmetic by design --
+`dispatch-required-negative-control.yaml`, added for split-listing consistency
+with `normal.yaml` rather than as a declared category addition -- so the
+declared 27 already counts
+`multi-turn-settled-dimension-relaxation-train.yaml`, which contradicted that
+entry's own claim to share the excluded footing. The arithmetic is correct and
+the footing claim was not: the multi-turn fixture has its own declared `1:0:0`
+addition in the Corpus-size section and is a standalone new coverage category,
+the same footing every other counted train fixture has. The false footing
+claim was dropped from both `split.md` and this file; the `26 -> 27` bump
+stands. No gate checks this reconciliation, so it stays convention-enforced.
+
+Not touched, per issue #907's own non-goals: `check_adversarial_coverage`
+itself (the correction is to the claim about it, not the check), the pinned
+tuple set in `tests/test_gitapex_lint_fixture_assertions.py`, the stale "Five
+... are pinned here" count in that same comment, and the two review findings
+the requester deferred.
+
+Deterministic verification for this round: fixture YAML parse 70/70;
+`gitapex_lint_fixture_assertions.py` blocking set identical before and after
+(4 warnings, the same four pinned tuples); full `pytest` 3247 passed; the
+Assignment section's unique train count (28) minus the one stated exclusion
+equals the declared train figure (27), and selection/test match exactly.
+Refs #907.
