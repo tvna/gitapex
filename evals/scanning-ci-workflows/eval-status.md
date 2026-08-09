@@ -144,3 +144,24 @@ committed regression asset, not as a measurement.
   status check, and it currently fails at preflight for want of the two
   endpoint secrets. The gap is narrower than "no mechanism exists",
   which is what this file said before review caught it.
+
+## Issue #848 -- description edit, no corpus change
+
+This skill's frontmatter `description` and its `scanning-attack-surfaces`
+Related-skills bullet were corrected when that sibling absorbed
+`auditing-git-hosting-surface`. Both had asserted that the sibling "wraps
+no tool", which stopped being true once its least-privilege check gained
+zizmor backing for workflow artifacts, and both named a skill that no
+longer exists.
+
+No task fixture changed and none was added, deliberately. This skill's own
+Procedure, tool invocations, exit-code handling, offline coverage gap and
+reporting contract are all untouched -- the edit corrects what this skill
+says about a *neighbour*, which no fixture here asserts on. The corpus
+still covers what it covered before, and the verdicts recorded above stand
+unchanged. What the edit does not do is close the boundary question a
+future fixture could reasonably probe: given a workflow file and a request
+phrased ambiguously between "audit this workflow's permissions" and "scan
+these workflows", does the right skill run? That mis-routing case is
+unfixtured on both sides of the boundary today, named here rather than
+left implicit.

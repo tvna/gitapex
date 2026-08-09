@@ -66,7 +66,7 @@ standing consequences:
 
 When a `scanning-*` skill needs to know which platform hosts the
 repository at all, it reuses the mechanism
-`skills/auditing-git-hosting-surface/SKILL.md` Step 1 already implements,
+`skills/scanning-attack-surfaces/SKILL.md` step B1 already implements,
 by citation. This document deliberately does not restate that procedure's
 steps, so the two cannot drift apart:
 
@@ -97,8 +97,8 @@ recorded in the tracking issue. The three right-hand columns are the
 platform-native capability per domain; the libre CLI column is the
 guaranteed path the policy above mandates.
 
-Verdict vocabulary, borrowed from `auditing-git-hosting-surface`'s own
-checklist references and extended by one level: **Covered**, **Partial**,
+Verdict vocabulary, borrowed from `scanning-attack-surfaces`' own
+platform checklist references and extended by one level: **Covered**, **Partial**,
 **Gap**, and **Unknown**. `Unknown` means the recorded research did not cover that
 domain-platform pair at all -- it is not a quiet `Gap`, and it is never
 rounded up to `Covered` because the platform plausibly ships something.
@@ -133,8 +133,8 @@ This pass is CLI-only by construction. No platform-native-capability
 detection logic is written anywhere in this repository as part of it.
 Native capabilities are represented solely as the documented
 Covered/Partial/Gap/Unknown evidence table above -- the same table shape
-`skills/auditing-git-hosting-surface/references/github-surface-checklist.md`
-and `skills/auditing-git-hosting-surface/references/gitlab-surface-checklist.md`
+`skills/scanning-attack-surfaces/references/github-surface-checklist.md`
+and `skills/scanning-attack-surfaces/references/gitlab-surface-checklist.md`
 already use -- never as executable branching a skill runs.
 
 A future pass may add real detection. When it does, it inherits the

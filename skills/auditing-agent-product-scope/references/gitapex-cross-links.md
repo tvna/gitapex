@@ -2,7 +2,7 @@
 
 Loaded when this copy of the skill's own files lives in the gitapex
 repository -- the same condition, and the same reasoning, as
-`auditing-git-hosting-surface/references/gitapex-cross-links.md`'s own
+`scanning-attack-surfaces/references/gitapex-cross-links.md`'s own
 opening note. A copy vendored into a different repository drops this
 file and instead uses that repository's own equivalent scope doc,
 evidence files, and tracking issues where they exist -- omitting a
@@ -60,7 +60,7 @@ requires confirming one exists before going further. Per axis:
   skill's own `references/middleware-inventory.md`.
 
 (Axis E, git-hosting platform, is not listed here -- it is handed off
-to `auditing-git-hosting-surface` per SKILL.md Step 3, not written to a
+to `scanning-attack-surfaces` per SKILL.md Step 3, not written to a
 file by this skill's own Procedure at all.)
 
 ## Middleware dependency-declaring files
@@ -73,10 +73,12 @@ before researching a candidate that might already be covered there.
 
 ## Platform-axis handoff target
 
-Axis E candidates are handed off to `auditing-git-hosting-surface` --
+Axis E candidates are handed off to `scanning-attack-surfaces` --
 `docs/agent-product-scope.md`'s own Axis E section names its Owning
 skill and tracking issue -- rather than researched here; see that
-skill's own SKILL.md for its checklists and platform-detection logic.
+skill's own SKILL.md Mode B for its checklists and platform-detection
+logic, which it absorbed from the standalone skill that previously
+owned them.
 
 ## Skill-shape-checker command
 

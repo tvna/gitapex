@@ -149,7 +149,7 @@ def graphql_call(
     last_body: dict[str, Any] = {}
 
     for attempt in range(1, 4):
-        request = urllib.request.Request(_GRAPHQL_URL, data=payload.encode("utf-8"), method="POST")  # noqa: S310
+        request = urllib.request.Request(_GRAPHQL_URL, data=payload.encode("utf-8"), method="POST")
         request.add_header("Authorization", f"Bearer {token}")
         request.add_header("Accept", "application/vnd.github+json")
         request.add_header("X-GitHub-Api-Version", _API_VERSION)

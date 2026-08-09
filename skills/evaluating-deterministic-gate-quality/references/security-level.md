@@ -164,8 +164,18 @@ repository itself has cross-domain enforcement infrastructure, required
 CI checks, or branch protection -- that is dimension 23's own job
 (`dimensions.md`), which characterizes the caller rather than the
 control under review and does not roll up into this axis's own
-per-property tier labels. This axis's own, distinct question is narrower
-than all six: given that a gate exists, is correctly placed, and its own
+per-property tier labels. It does not classify which contract obligation
+a check asserts, nor whether the check's input domain should be closed or
+left open -- that is the Contract role / input-domain closure axis's own
+job (`SKILL.md`), the one neighbour here that borrows the same
+impossible-vs-tedious test above rather than merely sitting beside it. The
+borrowing does not merge the two: that axis is warning-only and asks only
+whether the domain's shape is right by design, while this one assigns a
+tier and bears on a verdict. A closed-threat-list observation routed
+through this axis to give it verdict standing, or a real tier overclaim
+routed through that one to bury it, is the misuse both statements exist
+to block. This axis's own, distinct question is narrower
+than all seven: given that a gate exists, is correctly placed, and its own
 mechanics are already graded, where does its actual control strength
 honestly sit on an external maturity ladder, and is that placement
 honestly claimed.

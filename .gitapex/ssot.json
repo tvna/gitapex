@@ -708,6 +708,20 @@
       "tracking_issue": 439,
       "status": "active",
       "supersedes": null
+    },
+    {
+      "id": "contract-axis-vocabulary-drift",
+      "kind": "script",
+      "script": ".github/scripts/gitapex_scan_contract_axis_vocabulary_drift.py",
+      "rule": "evaluating-deterministic-gate-quality's fifth cross-cutting axis (Contract role / input-domain closure) must keep its classification vocabulary: the three Design-by-Contract role labels and both input-domain-kind labels in references/cross-cutting-axes.md's own axis section, the non-exhaustive marker on the open half, the warning-only limit in that section AND in SKILL.md's pointer to it, the never-both rule citing dimension 15, a SKILL.md axis-count declaration matching the real number of '### Axis:' headings, and matching contractRole/inputDomainKind enums in references/output-schema.json. A missing or unreadable file, a duplicated or empty axis section, or malformed schema JSON fails closed rather than passing.",
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_scan_contract_axis_vocabulary_drift.py"],
+      "trigger": "tests/test_gitapex_scan_contract_axis_vocabulary_drift.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "self-governance",
+      "tracking_issue": 949,
+      "status": "active",
+      "supersedes": null
     }
   ],
   "clusters": {

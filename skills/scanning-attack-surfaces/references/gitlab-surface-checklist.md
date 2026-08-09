@@ -1,6 +1,6 @@
 # GitLab hosting-surface checklist (GitLab runs only)
 
-Read this ONLY when Step 1 detected GitLab. Do not open the GitHub
+Read this ONLY when step B1 detected GitLab. Do not open the GitHub
 reference in the same run.
 
 No GitLab MCP server exists in this session at all, so every item below is
@@ -29,9 +29,10 @@ sides, only the coverage level and API differ.
 | 8 | Member/permission drift | **Gap.** No GitLab MCP server in this session. | GitLab's project-members API. |
 
 Every row above cross-links the tracking issue for approved-but-unbuilt
-tooling per SKILL.md Step 3 -- see the Portability note there for whose
-tracking issue that is, and `references/gitapex-cross-links.md` (loaded
-in Step 2, when this is gitapex's own copy) for gitapex's own target and
+tooling per SKILL.md step B3 -- see the "Generalize and substitute" note
+there for whose tracking issue that is, and
+`references/gitapex-cross-links.md` (loaded
+in step B2, when this is gitapex's own copy) for gitapex's own target and
 its exact wording convention ("consumer of an unfiled candidate child
 issue," not "blocked on landing").
 

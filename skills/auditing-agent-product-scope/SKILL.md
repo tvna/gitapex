@@ -1,6 +1,6 @@
 ---
 name: auditing-agent-product-scope
-description: Use when classifying which agent tools, git-hosting platforms, or dependency middleware a repository assumes or targets, and updating that repository's own scope-definition doc to match. Formalizes a research-classify-document procedure -- fetch a candidate's primary documentation directly, classify it against the owning evidence file's existing evidence states, add a finding to the axis's owning evidence file, and update the scope map's cross-references. Distinct from `evaluating-skill-quality` (grades a target skill's own quality) and `auditing-git-hosting-surface` (audits one target repository's hosting-platform configuration surface, not which platforms this repository itself assumes).
+description: Use when classifying which agent tools, git-hosting platforms, or dependency middleware a repository assumes or targets, and updating that repository's own scope-definition doc to match. Formalizes a research-classify-document procedure -- fetch a candidate's primary documentation directly, classify it against the owning evidence file's existing evidence states, add a finding to the axis's owning evidence file, and update the scope map's cross-references. Distinct from `evaluating-skill-quality` (grades a target skill's own quality) and `scanning-attack-surfaces` (audits one target repository's hosting-platform configuration surface, not which platforms this repository itself assumes).
 ---
 
 # Auditing Agent Product Scope
@@ -158,11 +158,12 @@ its own owning issues/files, never gitapex's.
   maintain, its own evidence baseline). This skill is the one that
   actually adds or refreshes rows in that same file, plus maintains
   the cross-axis scope map those rows feed into.
-- **vs. `auditing-git-hosting-surface`:** that skill audits one target
+- **vs. `scanning-attack-surfaces`:** that skill audits one target
   repository's hosting-platform *configuration* surface (branch
-  protection, required checks, and similar). This skill never
-  re-implements that -- the platform axis's candidates are handed off
-  to it (Step 3).
+  protection, required checks, and similar) in its own Mode B, having
+  absorbed the standalone skill that previously owned that capability.
+  This skill never re-implements it -- the platform axis's candidates
+  are handed off to it (Step 3).
 
 ## Notes
 
@@ -171,7 +172,7 @@ procedure above is general; `references/gitapex-cross-links.md`
 isolates every gitapex-specific detail (the scope map's path and axis
 list, sibling evidence-file paths, tracking issue numbers, the
 skill-shape-checker invocation) into one file, mirroring
-`auditing-git-hosting-surface/references/gitapex-cross-links.md`'s own
+`scanning-attack-surfaces/references/gitapex-cross-links.md`'s own
 pattern -- a vendored copy drops that one file rather than hand-editing
 every section.
 

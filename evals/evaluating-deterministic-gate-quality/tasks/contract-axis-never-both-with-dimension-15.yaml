@@ -1,0 +1,79 @@
+id: evaluating-deterministic-gate-quality-contract-axis-never-both-with-dimension-15
+name: A gate that fails closed on malformed input can still draw its threat category wrongly closed -- two judgments, not one
+description: >-
+  Pins the "never both" division of responsibility between the
+  Contract role / input-domain closure axis and dimension 15, the pair
+  easiest to collapse into a single judgment because both touch a gate's
+  input. Dimension 15 asks how the gate behaves when malformed input
+  actually arrives at runtime; this axis asks what the input domain should
+  be by design. The fact pattern makes them disagree on purpose: the gate's
+  runtime handling is exemplary and its dimension-15 answer is a pass, while
+  the safety category it draws from is frozen into a finite list. A reviewer
+  that folds the two together either downgrades dimension 15 for a design
+  problem it does not measure, or lets the dimension-15 pass absorb the
+  design question and reports no axis finding at all. The domain-kind label
+  now carries its closure verdict inline ("wrongly closed"), closing the gap
+  a review round found in this fixture's own earlier version: naming
+  threat-classification was not itself proof the domain's actual closure was
+  judged, since a response could pick the right label and still call the
+  closure fine. Same disclosed substring-scorer ceiling as its sibling
+  fixtures.
+tags:
+  - quality
+  - contract-role
+  - input-domain-closure
+inputs:
+  prompt: |
+    Use evaluating-deterministic-gate-quality. Review this gate.
+
+    An MCP server subprocess check, read directly from its own script. It is
+    called before a tool request is served and decides whether the request
+    reaches an untrusted data source that must be labelled as such.
+
+    Its runtime input handling, confirmed by running it against crafted
+    stdin locally rather than only reading it: unparseable JSON denies with
+    a written reason; a request missing the field it keys on denies rather
+    than defaulting; and when the helper binary it shells out to is absent,
+    it denies instead of skipping the check. There is no path through the
+    script that reaches an allow on incomplete input.
+
+    Its decision, though, keys on this literal list and nothing else:
+
+        UNTRUSTED_SOURCES = ["issue_body", "pr_description", "review_comment"]
+
+    Anything not on that list is served as trusted. No comment beside it
+    says the list is open-ended, and no default-in-scope rule exists for a
+    source that is not listed.
+
+    BEGIN your reply with exactly these two lines and nothing else on them:
+
+    "Dimension 15:" followed by exactly one of PASS, FAIL, or INDETERMINATE.
+
+    "Input domain:" followed by exactly one of structural-protocol,
+    threat-classification, both-readings, or indeterminate, then " -- " and
+    exactly one of "correctly closed", "wrongly closed", "correctly open",
+    "wrongly open", or "indeterminate" naming whether this specific gate's
+    own closure choice is right or wrong for that domain kind.
+
+    Leave a blank line after those two lines. Then state, in your own words,
+    what each of the two questions asks that the other does not.
+expected:
+  output_contains_near:
+    - all:
+        - "Dimension 15"
+        - "PASS"
+      window: 60
+    - all:
+        - "Input domain"
+        - "threat-classification"
+        - "wrongly closed"
+      window: 60
+  output_not_contains_near:
+    - all:
+        - "Dimension 15"
+        - "FAIL"
+      window: 60
+    - all:
+        - "Input domain"
+        - "correctly closed"
+      window: 60

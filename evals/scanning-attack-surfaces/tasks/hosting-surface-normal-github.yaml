@@ -1,11 +1,11 @@
-id: auditing-git-hosting-surface-normal-github
+id: scanning-attack-surfaces-hosting-surface-normal-github
 name: GitHub repo, standard audit
 description: Detects GitHub from the remote, loads only the GitHub checklist reference, and reports a per-item coverage breakdown rather than a single pass/fail verdict.
 tags:
   - quality
 inputs:
   prompt: |
-    Use auditing-git-hosting-surface. The remote is
+    Use scanning-attack-surfaces. The remote is
     git@github.com:tvna/gitapex.git. Audit this repo's hosting-platform
     configuration surface.
 expected:

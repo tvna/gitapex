@@ -1,0 +1,81 @@
+id: evaluating-deterministic-gate-quality-contract-role-precondition-closed-threat-domain
+name: A pre-execution deny list of destructive verbs is a precondition whose threat-classification domain is wrongly closed
+description: >-
+  Exercises both sub-judgments of the Contract role / input-domain
+  closure axis at once on a gate whose two answers point in different
+  directions. The check runs before the guarded operation and asserts
+  something its caller must satisfy, so its contract role is a
+  precondition. Its input, though, is a safety judgment -- what counts as a
+  destructive operation -- frozen into a finite literal tuple, which is the
+  closure direction that axis names as the defect: an evader needs only one
+  unlisted verb. The prompt asks for both labels on their own lines first,
+  the second carrying the closure verdict inline so the domain label alone
+  cannot earn a pass -- a response that correctly picks threat-classification
+  and then calls the closure correct fails exactly as surely as one that
+  picks the wrong domain, closing the gap a review round found: the prior
+  version of this fixture asserted only the domain label, never the
+  conclusion the axis actually exists to reach. The assertions bind each
+  label to its answer while banning the competing contract role from the
+  same line, so an answer that classifies the role by when the script
+  happens to run rather than by whose obligation it asserts fails. Disclosed
+  ceiling, shared with every substring-scored fixture in this corpus: an
+  answer that writes both correct labelled lines and then argues the
+  opposite in prose still passes.
+tags:
+  - quality
+  - contract-role
+  - input-domain-closure
+inputs:
+  prompt: |
+    Use evaluating-deterministic-gate-quality. Review this gate.
+
+    An agent-harness PreToolUse hook, read directly from its own script. It
+    receives the proposed tool call's JSON on stdin before the call runs,
+    re-parses the command string itself rather than trusting the matcher,
+    and exits 2 with a written reason when the command's first word appears
+    in this tuple:
+
+        DESTRUCTIVE = ("rm", "shred", "mkfs", "dd", "truncate")
+
+    Nothing else in the script consults that tuple, and no comment or doc
+    beside it says the list is open-ended or that an unlisted command should
+    be treated as in scope. The tuple has not changed since the hook was
+    written. The hook has a bundled test, an explicit timeout, and fails
+    closed with a written reason when its stdin is not valid JSON.
+
+    Apply the Contract role / input-domain closure axis. BEGIN your reply
+    with exactly these two lines and nothing else on them:
+
+    "Contract role:" followed by exactly one of precondition, postcondition,
+    invariant, mixed, or indeterminate.
+
+    "Input domain:" followed by exactly one of structural-protocol,
+    threat-classification, both-readings, or indeterminate, then " -- " and
+    exactly one of "correctly closed", "wrongly closed", "correctly open",
+    "wrongly open", or "indeterminate" naming whether this specific gate's
+    own closure choice is right or wrong for that domain kind.
+
+    Leave a blank line after those two lines before anything else.
+
+    Then explain why that domain should close in the direction you named,
+    and state what this axis does to the gate's verdict.
+expected:
+  output_contains_near:
+    - all:
+        - "Contract role"
+        - "precondition"
+      window: 60
+    - all:
+        - "Input domain"
+        - "threat-classification"
+        - "wrongly closed"
+      window: 60
+  output_not_contains_near:
+    - all:
+        - "Contract role"
+        - "postcondition"
+      window: 60
+    - all:
+        - "Input domain"
+        - "correctly closed"
+      window: 60

@@ -28,6 +28,7 @@ copied from the report's own text.
 7. [Audit history: Security-level axis hardening round](#audit-history-security-level-axis-hardening-round)
 8. [Worked example: dimension 21 (gate precision audit), cited from the source paper](#worked-example-dimension-21-gate-precision-audit-cited-from-the-source-paper)
 9. [Worked example: dimension 22 (firing-share attribution), cited from the source paper](#worked-example-dimension-22-firing-share-attribution-cited-from-the-source-paper)
+10. [Worked example: Contract role / input-domain closure axis, and its sibling-repository prior art](#worked-example-contract-role--input-domain-closure-axis-and-its-sibling-repository-prior-art)
 
 ## Worked example: Reproducibility / Domain-coverage axis (argued, multi-domain coverage)
 
@@ -413,7 +414,7 @@ dimension's own verification-mandate clause.
 
 Two fresh, isolated audit rounds (a standard `evaluating-skill-quality` +
 `battle-testing-a-skill` pass, then a Fable-model blind-spot analysis plus
-eight adversarial trials) hardened the fourth axis after it was first
+eight adversarial trials) hardened the Security-level axis after it was
 added; both found real gaps, now all fixed across `SKILL.md`'s Stop
 boundaries, `references/grading-procedure.md`, `references/security-level.md`,
 and `references/dimensions.md`. Round-by-round detail:
@@ -509,3 +510,52 @@ production, so dimension 22 reads not-applicable for them today -- exactly
 the precondition-scoped outcome this dimension's own text names as the
 expected case for gitapex's real review targets, not a gap in the
 dimension itself.
+
+## Worked example: Contract role / input-domain closure axis, and its sibling-repository prior art
+
+**The prior art, and what was actually read to confirm it.** The
+open-versus-closed asymmetry in that axis's second sub-judgment is ported
+from the sibling repository `tvna/claude-md`, whose
+`scripts/scan_nonexhaustive_invariant_drift.py` locks a fixed registry of
+bullets in its own `.apm/instructions/master.instructions.md` to the
+literal marker phrase `non-exhaustive instances`. Confirmed on 2026-08-09
+by reading that file directly from a fresh clone of that repository, not
+from a summary of it: the module defines `MARKER = "non-exhaustive
+instances"` and a four-entry `REGISTERED_BULLETS` map (untrusted-data
+sources, adversarial payloads, destructive operations, secret lifecycle),
+and its own docstring states the grounding -- "a closed list is a control
+that is merely *tedious* for an attacker to evade by finding an unlisted
+variant, while the open invariant *removes* the gap." gitapex's own
+`CLAUDE.md` sections 2 and 4 carry the same `non-exhaustive instances` and
+default-in-scope wording, descended from that doctrine; that is the live
+example a reader of the portable axis can inspect here. Neither fact
+transfers to a target under review: confirm the target's own equivalents,
+or report that it has none.
+
+**The axis applied to a real gitapex gate.**
+`.github/scripts/gitapex_scan_contract_axis_vocabulary_drift.py` -- the
+lock shipped alongside that axis.
+
+- *Contract role:* **invariant**. It is bound to no operation and no
+  caller. It asserts that a property of the tree (the axis's vocabulary is
+  still where the skill says it is) holds whenever it is observed, and a
+  violation attributes fault to the state, not to whoever last ran pytest.
+  Contrast the two Domain-2 hooks graded in the smoke test above, both
+  preconditions on a proposed tool call.
+- *Input domain:* **structural / protocol value**, correctly closed. Its
+  inputs are a fixed vocabulary this repository itself owns -- three
+  Design-by-Contract role labels, two input-domain-kind labels, and two
+  JSON Schema `enum` token sets -- so enumerating exactly the accepted
+  spellings and treating everything else as drift is the safe direction. A
+  permissive match ("contains the word precondition somewhere") would
+  admit the re-cased or reworded spellings the lock exists to catch.
+- *The boundary, named rather than smoothed over:* one of the locked
+  strings is the marker phrase `non-exhaustive`, which belongs to a
+  threat-classification category that must stay open. The gate's own input
+  domain is still structural -- it checks that the marker is *present*,
+  a fixed string either there or not -- while the category the marker
+  describes stays open. This is the both-readings boundary case the axis
+  names, resolved by asking which domain the *check* draws from rather
+  than which domain the checked prose is about.
+- *Verdict impact:* none. Both classifications are warning-only, reported
+  beside this gate's own verdict, never inside it.

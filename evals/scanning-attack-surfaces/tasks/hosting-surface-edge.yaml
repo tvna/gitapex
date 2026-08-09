@@ -1,4 +1,4 @@
-id: auditing-git-hosting-surface-edge-directory-fallback
+id: scanning-attack-surfaces-hosting-surface-edge-directory-fallback
 name: No parseable remote, directory-marker fallback
 description: When git remote is absent or unparseable, falls back to generic .github/ vs .gitlab/ directory-marker presence, not issue-template-directory presence specifically, which would misclassify a repo with no issue templates configured.
 tags:
@@ -6,7 +6,7 @@ tags:
   - edge-case
 inputs:
   prompt: |
-    Use auditing-git-hosting-surface. This repo has no `origin` remote
+    Use scanning-attack-surfaces. This repo has no `origin` remote
     configured (it was initialized locally and never pushed). It has a
     `.github/workflows/` directory but no `.github/ISSUE_TEMPLATE/`
     directory at all. Audit its hosting-platform configuration surface.

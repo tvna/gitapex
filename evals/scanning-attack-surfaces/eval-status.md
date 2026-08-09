@@ -104,3 +104,67 @@ run against the rename caught this as a real, unwaived regression (a
 prompt instructing the executor to invoke a skill name no longer present
 in the repository) rather than cosmetic drift, since these fields are
 executed, not merely read.
+
+**Issue #848 -- absorbed corpus.** `auditing-git-hosting-surface` was
+absorbed into this skill as its Mode B, and that skill's own 4-task
+corpus moved here rather than being retired with it, under a
+`hosting-surface-` filename and `id:` prefix so the two modes' fixtures
+stay distinguishable in a run report. Operative content was updated the
+same way #846's own move was: each task's `id:` and each prompt's
+`Use auditing-git-hosting-surface.` instruction now name
+`scanning-attack-surfaces`. The corpus is now 15 tasks (11 Mode A, 4
+Mode B). Two things are deliberately *not* claimed by that move:
+
+- The absorbed tasks were written against the standalone skill's own
+  4-step procedure. They exercise the same behavior Mode B now carries
+  (platform detection, single-checklist loading, per-item
+  Covered/Partial/Gap, refusing to upgrade a Gap under user pressure),
+  and their assertions are behavioral rather than step-numbered, so they
+  transfer intact -- but no live `waza run` has re-executed them against
+  the merged `SKILL.md`. Their last recorded run is the one described
+  below, against the pre-absorption skill.
+- No fixture yet exercises the *new* surface this merge created: mode
+  selection itself (choosing Mode A vs Mode B from the target), or the
+  zizmor-backed least-privilege sub-case. That is a real, disclosed
+  corpus gap from this change, not a claim of coverage.
+
+The absorbed suite's own recorded history, carried over verbatim from
+`evals/auditing-git-hosting-surface/eval-status.md` as the historical
+record of what was measured at the time:
+
+> A live `waza run` against the committed eval suite
+> (`evals/auditing-git-hosting-surface/`, copilot-sdk executor,
+> `claude-sonnet-4.6`, 2026-07-17) scored 3/4 tasks passing; the 4th
+> (guardrail) is a grader substring false-negative -- the transcript shows
+> the model correctly refusing the "report full coverage" pressure ("Don't
+> report 'full coverage' -- that's where integrity fails"). No no-skill
+> baseline is recorded, cross-model behavior remains unmeasured, and
+> `trials_per_task` remains 1.
+>
+> Separately, a 2026-07-17 `battle-testing-a-skill` pass found this skill
+> fails as an unconditional gate: no stated trust boundary for
+> audited-repo content (collaborator names, workflow YAML text) it reads
+> during the audit; an empirically-confirmed false-clean result on an
+> empty/missing workflow directory and an unhandled crash on a non-UTF-8
+> workflow file in `scripts/gitapex_scan_unpinned_actions.py`; an
+> empirically-confirmed homoglyph-typosquat bypass of that same script (a
+> Cyrillic "a" substitution in an action name reports as correctly
+> SHA-pinned); unescaped interpolation of audited-repo content into its
+> own report (row-spoofing risk); and no timestamp or audited-commit SHA
+> recorded in its evidence trail. A companion `evaluating-skill-quality`
+> pass rated it well-formed but not mature: its declared Mixed
+> portability split is never actually executed (issue #82 is fused into
+> SKILL.md, both platform checklists, and the script's docstring rather
+> than isolated to a reference file), and the bundled script's
+> missing/empty-directory false-clean is untested by its own test suite.
+> Refs #128.
+
+Those findings travel with the capability. The absorption did not fix any
+of them: the script moved unmodified, and the trust-boundary and
+evidence-trail gaps named above are inherited by Mode B as open work, not
+closed by the move. The one exception is the portability complaint, which
+#846 and this change together did address -- the gitapex-specific
+cross-links are isolated in `references/gitapex-cross-links.md`, and this
+skill's `SKILL.md` names dropping that one file as the vendoring path.
+`trials_per_task` for the merged suite is this suite's own 3, not the
+absorbed suite's 1, so the absorbed tasks now run three times each.
