@@ -11,6 +11,20 @@ gap, not this repository's own gates, because no gate existed. This
 asserts the exact 1:1 correspondence between `skills/*/` and both eval-
 status artifacts going forward, so a future new skill can't silently
 reintroduce the same gap.
+
+Issue #928: six `eval-status.md` files stated nothing but the same four
+facts (which model(s) were evaluated, that cross-model behavior is
+unmeasured, whether a no-skill baseline is committed, and the declared
+trials-per-task) in six different prose forms -- all derivable from
+`eval.yaml` / `results/*/manifest.json` rather than hand-maintained. Of
+those six, two (`planning-a-branch-from-an-issue`, `drafting-a-pr-to-merge`)
+carried only that derivable content and were deleted; the other four
+carried real non-derivable judgment prose (a qualitative cross-model risk
+assessment tied to the skill's own freedom/over-prescription profile, or a
+dimension-specific interpretation note) and were kept. DERIVABLE_FACTS_
+SKILLS below exempts the two deleted ones from the 1:1 rule so a future
+generator (docs/skill-eval-status.md) doesn't need a matching file or
+index row for them.
 """
 
 from __future__ import annotations
@@ -24,6 +38,17 @@ EVALS_DIR = REPO_ROOT / "evals"
 STATUS_DOC = REPO_ROOT / "docs" / "skill-eval-status.md"
 
 _INDEX_ROW_RE = re.compile(r"^\|\s*`([^`]+)`\s*\|", re.MULTILINE)
+
+# Skills whose eval-status facts are fully derivable from eval.yaml /
+# results/*/manifest.json and therefore intentionally have no
+# evals/<name>/eval-status.md file and no docs/skill-eval-status.md index
+# row (see issue #928's module docstring note above).
+DERIVABLE_FACTS_SKILLS = frozenset(
+    {
+        "planning-a-branch-from-an-issue",
+        "drafting-a-pr-to-merge",
+    }
+)
 
 
 def _skill_names() -> list[str]:
@@ -43,7 +68,11 @@ def _indexed_skill_names() -> set[str]:
 
 
 def test_every_skill_has_an_eval_status_file():
-    missing = [name for name in _skill_names() if not (EVALS_DIR / name / "eval-status.md").is_file()]
+    missing = [
+        name
+        for name in _skill_names()
+        if name not in DERIVABLE_FACTS_SKILLS and not (EVALS_DIR / name / "eval-status.md").is_file()
+    ]
     assert not missing, (
         "the following skills/<name>/ directories have no "
         f"evals/<name>/eval-status.md: {missing} -- add one (see "
@@ -56,7 +85,7 @@ def test_every_skill_has_an_eval_status_file():
 def test_every_skill_has_an_index_row():
     skills = set(_skill_names())
     indexed = _indexed_skill_names()
-    missing = sorted(skills - indexed)
+    missing = sorted(skills - indexed - DERIVABLE_FACTS_SKILLS)
     assert not missing, (
         f"{STATUS_DOC}'s '## Index' table has no row for: {missing} -- "
         "add a '| `<skill>` | [evals/<skill>/eval-status.md]"
