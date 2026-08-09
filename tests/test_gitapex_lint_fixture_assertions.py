@@ -7,7 +7,9 @@ acceptance criterion.
 """
 
 import ast
+import io
 import re
+import tokenize
 from pathlib import Path
 
 import gitapex_lint_fixture_assertions as L
@@ -347,27 +349,63 @@ def test_repository_wide_fixtures_have_no_unreviewed_blocking_findings():
 
 
 _PINNED_RESIDUAL_TEST = "test_repository_wide_fixtures_have_no_unreviewed_blocking_findings"
-_PINNED_COUNT_RE = re.compile(r"^\s*#\s*pinned-residual-count:\s*(\d+)\s*$", re.MULTILINE)
+_PINNED_RESIDUAL_NAME = "blocking"
+_PINNED_COUNT_RE = re.compile(r"^#\s*pinned-residual-count:\s*(\d+)$")
 
 
-def _pinned_tuple_set_size(source: str, func_name: str) -> int:
-    """Count entries in `func_name`'s own pinned tuple-set literal.
+def _pinned_residual_assertion(source: str, func_name: str) -> tuple[ast.FunctionDef, ast.Set]:
+    """Locate `func_name` and the set literal its own residual assertion pins.
 
-    Read from the AST, not by regex: a reformat, a wrapped line, or a comment
-    that happens to look like a tuple cannot change the answer. Scoped to one
-    function by name because the sibling case-sensitivity residual test above
-    has a tuple-set literal of its own.
+    Bound to the `assert <name> == {...}` statement rather than to "the only
+    all-tuple set literal in the function": the looser form would silently
+    start counting some unrelated literal if this assertion were ever removed,
+    which is a gate that passes while measuring the wrong thing.
     """
     tree = ast.parse(source)
     functions = [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == func_name]
     assert len(functions) == 1, f"expected exactly one {func_name}, found {len(functions)}"
-    sets = [
-        n
-        for n in ast.walk(functions[0])
-        if isinstance(n, ast.Set) and n.elts and all(isinstance(e, ast.Tuple) for e in n.elts)
-    ]
-    assert len(sets) == 1, f"expected exactly one pinned tuple-set literal in {func_name}, found {len(sets)}"
-    return len(sets[0].elts)
+    # Collect the pinned set literals directly rather than the enclosing
+    # Assert nodes: narrowing `Assert.test` to `Compare` inside a
+    # comprehension does not survive past it, so gathering the operand here
+    # keeps the type checker's view and the runtime check in agreement.
+    pinned_sets: list[ast.Set] = []
+    for node in ast.walk(functions[0]):
+        if not isinstance(node, ast.Assert):
+            continue
+        test = node.test
+        if not (isinstance(test, ast.Compare) and isinstance(test.left, ast.Name)):
+            continue
+        if test.left.id != _PINNED_RESIDUAL_NAME or len(test.comparators) != 1:
+            continue
+        operand = test.comparators[0]
+        if isinstance(operand, ast.Set):
+            pinned_sets.append(operand)
+    assert len(pinned_sets) == 1, (
+        f"expected exactly one `assert {_PINNED_RESIDUAL_NAME} == {{...}}` in {func_name}, found {len(pinned_sets)}"
+    )
+    pinned = pinned_sets[0]
+    assert pinned.elts and all(isinstance(e, ast.Tuple) for e in pinned.elts), (
+        f"{func_name}'s pinned literal is no longer a non-empty set of tuples"
+    )
+    return functions[0], pinned
+
+
+def _marker_counts_in(source: str, first_line: int, last_line: int) -> list[str]:
+    """Return `pinned-residual-count` values from real comment tokens inside
+    the given line span.
+
+    Tokenized rather than regexed over raw text, and bounded to one function's
+    span, so neither a marker relocated elsewhere in the file nor a
+    marker-shaped line inside a string literal can satisfy the gate.
+    """
+    values = []
+    for token in tokenize.generate_tokens(io.StringIO(source).readline):
+        if token.type != tokenize.COMMENT or not first_line <= token.start[0] <= last_line:
+            continue
+        found = _PINNED_COUNT_RE.match(token.string.strip())
+        if found:
+            values.append(found.group(1))
+    return values
 
 
 def test_disclosed_residual_count_matches_the_pinned_set():
@@ -382,15 +420,20 @@ def test_disclosed_residual_count_matches_the_pinned_set():
     resolution and issue #975, because the only thing holding the two in step
     was prose asking a future reader to update both. This asserts it instead.
 
-    Deliberately compares the marker against the *source* literal rather than
-    the linter's runtime findings, so it still fails on drift even when the
-    corpus scan cannot run.
+    Both halves are bound to the residual test itself -- the marker to that
+    function's comment tokens, the count to its own `assert` statement -- so
+    relocating either one fails rather than quietly satisfying the gate from
+    somewhere else in the file. Compared against the source literal rather
+    than the linter's runtime findings, so drift still fails when the corpus
+    scan cannot run.
     """
     source = Path(__file__).read_text(encoding="utf-8")
-    markers = _PINNED_COUNT_RE.findall(source)
-    assert len(markers) == 1, f"expected exactly one 'pinned-residual-count' marker, found {len(markers)}"
-    stated = int(markers[0])
-    actual = _pinned_tuple_set_size(source, _PINNED_RESIDUAL_TEST)
+    function, pinned = _pinned_residual_assertion(source, _PINNED_RESIDUAL_TEST)
+    markers = _marker_counts_in(source, function.lineno, function.end_lineno or function.lineno)
+    assert len(markers) == 1, (
+        f"expected exactly one 'pinned-residual-count' comment inside {_PINNED_RESIDUAL_TEST}, found {len(markers)}"
+    )
+    stated, actual = int(markers[0]), len(pinned.elts)
     assert stated == actual, (
         f"the disclosed-residual comment states {stated} pinned residual(s) but "
         f"{_PINNED_RESIDUAL_TEST} pins {actual}. Adding or resolving a residual must change the "
