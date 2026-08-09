@@ -7,7 +7,7 @@ config:
   timeout_seconds: 300
   parallel: false
   executor: copilot-sdk
-  model: claude-sonnet-4.6
+  model: claude-sonnet-5
 metrics:
   - name: evaluating_skill_quality_quality
     weight: 1.0

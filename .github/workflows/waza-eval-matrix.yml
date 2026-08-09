@@ -38,12 +38,16 @@ on:
       models:
         description: >-
           JSON array of model ids to fan out over, e.g.
-          ["claude-opus-4.6","claude-sonnet-4.6","claude-haiku-4.6"]. The exact
-          tier ids depend on which models your copilot-sdk endpoint exposes, so
-          they are an input here rather than hardcoded. Default is the one tier
-          the committed suites already pin.
+          ["claude-opus-5","claude-sonnet-5","claude-haiku-4-5-20251001"]. The
+          exact tier ids depend on which models your copilot-sdk endpoint
+          exposes, so they are an input here rather than hardcoded. Default is
+          the one tier the committed suites already pin. A dispatch may name a
+          tier outside .github/scripts/gitapex_gate_eval_declared_model.py's
+          allowlist -- that gate grades committed declarations, and probing an
+          id the allowlist has not yet approved is one legitimate way to find
+          out whether it should be.
         required: false
-        default: '["claude-sonnet-4.6"]'
+        default: '["claude-sonnet-5"]'
       run_hf_gemma4:
         description: >-
           Set to "true" to also run the eval-matrix-hf-gemma4 lane. Defaults

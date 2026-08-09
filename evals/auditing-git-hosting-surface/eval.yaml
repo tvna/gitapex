@@ -7,7 +7,7 @@ config:
   timeout_seconds: 300
   parallel: false
   executor: copilot-sdk
-  model: claude-sonnet-4.6
+  model: claude-sonnet-5
 metrics:
   - name: auditing_git_hosting_surface_quality
     weight: 1.0
