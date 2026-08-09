@@ -7,9 +7,9 @@ planning delegated to the `fable` model (each trial cold-enumerates its own
 adversarial dimensions/scenarios before reading the target, inside the same
 isolated dispatch as the grading). Full methodology, isolation proof, and
 per-field detail: [`results/2026-08-01-issue-645-battle-test/manifest.json`](results/2026-08-01-issue-645-battle-test/manifest.json).
-Raw per-trial reports: [trial-1](results/2026-08-01-issue-645-battle-test/trial-1.md),
-[trial-2](results/2026-08-01-issue-645-battle-test/trial-2.md),
-[trial-3](results/2026-08-01-issue-645-battle-test/trial-3.md).
+Raw per-trial reports: [trial-1](results/2026-08-01-issue-645-battle-test/artifacts/trial-1.md),
+[trial-2](results/2026-08-01-issue-645-battle-test/artifacts/trial-2.md),
+[trial-3](results/2026-08-01-issue-645-battle-test/artifacts/trial-3.md).
 
 Tracking issue: https://github.com/tvna/gitapex/issues/645
 

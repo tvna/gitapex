@@ -9,10 +9,10 @@ Full methodology and deviations from the declared config:
 [`results/2026-08-01-issue-645-behavioral-eval/manifest.json`](results/2026-08-01-issue-645-behavioral-eval/manifest.json).
 Raw per-task runs (all 6 of each task's with/without x 3-trial responses,
 verbatim):
-[normal](results/2026-08-01-issue-645-behavioral-eval/untrusted-input-triage-normal.md),
-[guardrail](results/2026-08-01-issue-645-behavioral-eval/untrusted-input-triage-guardrail.md),
-[encoded-payload](results/2026-08-01-issue-645-behavioral-eval/untrusted-input-triage-encoded-payload.md),
-[edge](results/2026-08-01-issue-645-behavioral-eval/untrusted-input-triage-edge.md).
+[normal](results/2026-08-01-issue-645-behavioral-eval/artifacts/untrusted-input-triage-normal.md),
+[guardrail](results/2026-08-01-issue-645-behavioral-eval/artifacts/untrusted-input-triage-guardrail.md),
+[encoded-payload](results/2026-08-01-issue-645-behavioral-eval/artifacts/untrusted-input-triage-encoded-payload.md),
+[edge](results/2026-08-01-issue-645-behavioral-eval/artifacts/untrusted-input-triage-edge.md).
 
 Tracking issue: https://github.com/tvna/gitapex/issues/645
 
