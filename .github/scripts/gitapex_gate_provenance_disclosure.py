@@ -41,8 +41,8 @@ own "add more patterns as new fingerprint shapes are observed" convention.
 
 Both cue types are quoted above deliberately, in the same paragraph:
 `find_offending_paragraphs` only counts a cue match as *live* prose when
-it falls outside a short, documented-example quoted/backtick span (see
-`_quoted_example_spans`/`_has_live_match` below), so a short backtick- or
+it falls outside a documented-example quoted/backtick span (see
+`_quoted_example_spans`/`_has_live_match` below), so a backtick- or
 quote-delimited example -- like every phrase in this paragraph -- is
 excluded from matching. Issue #549 (repairs 1 and 8) documented this
 gate's own PR body, and separately its own pre-redesign docstring,
@@ -60,16 +60,24 @@ one docstring instance -- matching is done by filtering cue-match
 example can never be mistaken for surrounding whitespace and bridge two
 otherwise-unrelated live words into a fabricated match (a real defect an
 adversarial review round found in this issue's own first draft, which did
-rewrite the text). The word-count cap on what counts as a documented
-example also means a real violation cannot evade detection merely by
-wrapping its *entire* clause in one long quoted span -- only a short,
-bare phrase is excluded (another adversarial-review finding against the
-first draft). The `tool-fingerprint-disclosure: WAIVED: <reason>` marker
+rewrite the text). A span only reads as a documented example when it does
+NOT itself combine both cue types (see `_quoted_example_spans` below) --
+a real violation cannot evade detection by wrapping either an entire
+clause, or even just the minimal cue-bearing phrase, in one quoted span,
+because that span would then carry both cue types itself and stay live
+(two further adversarial-review findings against an earlier draft, which
+instead capped "documented example" by word count -- a short *minimal*
+violating phrase slipped under that cap just as completely as a full
+sentence did). The `tool-fingerprint-disclosure: WAIVED: <reason>` marker
 below remains available as an explicit override for any case this
 heuristic still misses -- known, disclosed, and accepted: a live sentence
-that quotes only *one* of its two cue phrases (not the whole clause) can
+that quotes only *one* of its two cue phrases (not both together) can
 still evade detection, since only the quoted half is excluded from
-matching.
+matching; the same is true, narrowly, of an accidental unmatched backtick
+in hard-wrapped prose that happens to pair across one line break and
+swallow a single cue occurrence (`_QUOTED_SPAN_RE`'s one-newline bound
+keeps this to a short, disclosed reach rather than the rest of the
+paragraph).
 
 Disclosure marker: a `tool-fingerprint-disclosure: WAIVED: <reason>` line
 anywhere in the combined corpus (PR body plus any diff-added doc text
@@ -128,32 +136,24 @@ _WAIVER_RE = re.compile(
     re.IGNORECASE | re.MULTILINE,
 )
 
-# A short cue phrase inside a backtick span or a straight/curly
-# double-quoted span is a documented example (as the module docstring's
-# own Vocabulary paragraph uses), not a live evidence-limitation claim.
-# Bounded quantifier (no unbounded backtracking); deliberately allowed to
-# span an embedded newline (unlike a first draft of this pattern, which
-# excluded "\n" and so missed a hard-wrapped quoted example split across
-# two lines of Markdown source -- this repository's own docs/skills/evals
-# convention -- reproducing the exact #549 self-trigger class this gate
-# exists to fix). Still bounded to one paragraph: `_quoted_example_spans`
-# below is only ever called with one already-paragraph-split string.
+# A cue phrase inside a backtick span or a straight/curly double-quoted
+# span is a documented example (as the module docstring's own Vocabulary
+# paragraph uses), not a live evidence-limitation claim. Bounded
+# quantifier (no unbounded backtracking); allowed to span at most one
+# embedded newline (an earlier, fully newline-tolerant draft of this
+# pattern let an accidental, unmatched backtick in hard-wrapped prose pair
+# with an unrelated closing backtick several lines later and silently
+# swallow real cue content -- an adversarial-review finding against that
+# draft; a single-newline bound still supports this module's own
+# docstring, whose "absence of" quoted example hard-wraps across exactly
+# one line break, while keeping an accidental mispair's reach small).
+# Still bounded to one paragraph: `_quoted_example_spans` below is only
+# ever called with one already-paragraph-split string.
 _QUOTED_SPAN_RE = re.compile(
-    r"`[^`]{1,200}`" r'|"[^"]{1,200}"' r"|“[^”]{1,200}”",
+    r"`[^`\n]{1,200}(?:\n[^`\n]{1,200})?`"
+    r'|"[^"\n]{1,200}(?:\n[^"\n]{1,200})?"'
+    r"|“[^”\n]{1,200}(?:\n[^”\n]{1,200})?”",
 )
-
-# An adversarial review of issue #978's first draft (which treated a
-# quoted span of any length as a documented example) found it let an
-# entire offending clause evade detection by wrapping the whole sentence
-# in one long quoted span -- a materially bigger bypass than the disclosed
-# "quote one cue phrase for emphasis" risk. Capping what counts as a
-# "documented example" at a short word count closes that: every real
-# vocabulary example in this module's own docstring is a handful of words
-# (`"a dispatch tool"`, `"an MCP tool call"`), while a real limitation
-# clause combining both cues needs a full sentence to read naturally,
-# well past this bound. See
-# test_find_offending_paragraphs_still_flags_fully_quoted_violating_clause.
-_MAX_QUOTED_EXAMPLE_WORDS = 6
 
 
 def _paragraphs(text: str) -> list[str]:
@@ -162,13 +162,32 @@ def _paragraphs(text: str) -> list[str]:
 
 
 def _quoted_example_spans(text: str) -> list[tuple[int, int]]:
-    """Return the (start, end) offsets of every short, documented-example
-    quoted/backtick span in `text` (see `_MAX_QUOTED_EXAMPLE_WORDS`)."""
-    return [
-        match.span()
-        for match in _QUOTED_SPAN_RE.finditer(text)
-        if len(match.group(0)[1:-1].split()) <= _MAX_QUOTED_EXAMPLE_WORDS
-    ]
+    """Return the (start, end) offsets of every documented-example
+    quoted/backtick span in `text`.
+
+    A span is a documented example iff it does NOT itself combine both
+    cue types. This module's own vocabulary documentation only ever
+    quotes one bare cue phrase per span (see the module docstring's own
+    Vocabulary paragraph); a span containing both cue types is
+    indistinguishable from an entire violating clause quoted whole to
+    evade detection.
+
+    An earlier draft of this function instead capped what counted as an
+    "example" by word count -- an adversarial review found that let a
+    *minimal* violating phrase (as few as 4-6 words: just enough to carry
+    one instance of each cue, e.g. `"absence of a dispatch tool"`) evade
+    detection just as completely as a full sentence would, since it fit
+    under the cap regardless of what it said. Checking the span's own
+    content against both cue regexes, rather than counting its words,
+    closes that: no length threshold to slip under, because none is used.
+    """
+    spans = []
+    for match in _QUOTED_SPAN_RE.finditer(text):
+        inner = match.group(0)[1:-1]
+        if _LIMITATION_CUE_RE.search(inner) and _TOOL_CUE_RE.search(inner):
+            continue
+        spans.append(match.span())
+    return spans
 
 
 def _has_live_match(cue_re: re.Pattern[str], text: str, example_spans: list[tuple[int, int]]) -> bool:
@@ -194,7 +213,7 @@ def _has_live_match(cue_re: re.Pattern[str], text: str, example_spans: list[tupl
 def find_offending_paragraphs(text: str) -> list[str]:
     """Return every paragraph in `text` that combines a limitation/reason
     cue with a tool-fingerprint cue as live prose -- i.e. outside any
-    short, documented-example quoted/backtick span."""
+    documented-example quoted/backtick span."""
     offending = []
     for paragraph in _paragraphs(text):
         example_spans = _quoted_example_spans(paragraph)

@@ -188,12 +188,21 @@ def test_quoted_example_spans_recognizes_curly_quotes():
     assert text[start:end] == "“no access to”"
 
 
-def test_quoted_example_spans_excludes_a_long_quoted_clause():
-    """A quoted span longer than _MAX_QUOTED_EXAMPLE_WORDS does not read as
-    a documented example (issue #978, adversarial-review finding: an
+def test_quoted_example_spans_excludes_a_span_combining_both_cue_types():
+    """A quoted span combining both cue types does not read as a
+    documented example (issue #978, adversarial-review finding: an
     earlier draft let an entire offending clause evade detection by
     quoting the whole sentence)."""
     text = '"the absence of a registered skill invocation and a generic dispatch tool" is what one reviewer wrote.\n'
+    assert gate._quoted_example_spans(text) == []
+
+
+def test_quoted_example_spans_excludes_a_short_span_combining_both_cue_types():
+    """A second-round adversarial-review finding against the word-count-cap
+    draft: a *minimal* quoted phrase carrying just one instance of each
+    cue (well under any word-count cap) must still be excluded from the
+    documented-example set, the same as a long clause."""
+    text = '"absence of a dispatch tool" is a real problem here.\n'
     assert gate._quoted_example_spans(text) == []
 
 
@@ -245,13 +254,25 @@ def test_main_quoted_vocabulary_listing_in_body_passes(tmp_path, capsys):
 def test_find_offending_paragraphs_still_flags_fully_quoted_violating_clause():
     """Adversarial-review finding against issue #978's first draft: wrapping
     an entire offending clause in one long quoted span must not evade
-    detection -- only a short, bare cue phrase reads as a documented
-    example, not a full live sentence."""
+    detection -- a span reads as a documented example only when it does
+    NOT itself combine both cue types, never merely because it is short."""
     text = (
         'This evaluation notes "the absence of a registered skill '
         'invocation and a generic dispatch tool" as the reason a prior '
         "run's judgment could not be reused directly.\n"
     )
+    assert len(gate.find_offending_paragraphs(text)) == 1
+
+
+def test_find_offending_paragraphs_still_flags_a_minimal_quoted_violating_phrase():
+    """Second-round adversarial-review finding (two independent finder
+    angles, both live-verified): a word-count cap on "documented example"
+    let a *minimal* violating phrase -- just enough words to carry one
+    instance of each cue, well under any plausible cap -- evade detection
+    exactly as completely as a full sentence did. The fix checks the
+    span's own content against both cue regexes instead of its length, so
+    there is no threshold length to slip under."""
+    text = 'The agent noted "missing a mcp tool" during the run.\n'
     assert len(gate.find_offending_paragraphs(text)) == 1
 
 
@@ -283,3 +304,26 @@ def test_quoted_example_spans_finds_a_hard_wrapped_span():
     assert len(spans) == 1
     start, end = spans[0]
     assert text[start:end] == text
+
+
+def test_quoted_span_does_not_pair_across_more_than_one_newline():
+    """Adversarial-review finding: an unbounded newline-tolerant quote span
+    would let an accidental, unmatched backtick in hard-wrapped prose pair
+    with an unrelated closing backtick several lines later, silently
+    swallowing real cue content. Bounding the span to at most one embedded
+    newline keeps an accidental mispair's reach small while still
+    supporting this module's own docstring's single-line-wrapped example."""
+    text = "`stray opening backtick\non one line\nand a real closing backtick` elsewhere\n"
+    assert gate._QUOTED_SPAN_RE.search(text) is None
+
+
+def test_find_offending_paragraphs_still_flags_content_past_an_accidental_backtick_mispair():
+    """The same finding, end to end: a stray backtick more than one line
+    away from its accidental closing partner must not swallow a genuine
+    violation that sits between them."""
+    text = (
+        "This script lacks access to the runtime because `escaped\n"
+        "some filler line\n"
+        "an MCP tool call` is not available here.\n"
+    )
+    assert len(gate.find_offending_paragraphs(text)) == 1
