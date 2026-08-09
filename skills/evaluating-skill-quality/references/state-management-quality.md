@@ -225,12 +225,13 @@ consumer? A field nothing reads is overproduction, and it widens axis 9's
 outbound sink surface for free -- that consequence belongs to axis 9, which
 grades it; this question only asks whether the field earns its place.
 
-The consumer need not be a later numbered step. A human reader is a named
-consumer when the target says so: a one-paragraph finding recorded "for a
-reader who will not open the score files" [sgse] has one. And the producer-only
-rule in the Trigger section binds here: when the target writes state a
-*different* skill consumes, that sibling skill is the named consumer, and
-calling the field unconsumed is a misfire. State which consumer you found.
+*Pass* -- every recorded field has a consumer the target itself names, and the
+review says which consumer it found for each. The consumer need not be a later
+numbered step: a human reader counts when the target says so, as a
+one-paragraph finding recorded "for a reader who will not open the score
+files" [sgse] does. The producer-only rule in the Trigger section binds here
+too -- when the target writes state a *different* skill consumes, that sibling
+skill is the named consumer, and calling the field unconsumed is a misfire.
 
 *Fail* -- a field named in the target's own record contract that no step, no
 declared consumer, and no stated reader ever reads.
@@ -247,12 +248,12 @@ consumes them turns on that precision.
 *Fail* -- per-step recording where only the per-task outcome is consumed, or a
 timestamp resolution no reader compares at.
 
-No target surveyed in this repository's own corpus exhibits the finer-than-
-needed Fail form of Q3, so that form is stated in this file's own words rather
-than quoted. State it as unassessable rather than guessing when a target names
-no consumer precise enough to measure its granularity against; Q3 resolves to
-"cannot assess" more often than Q1 or Q2, and saying so is the correct
-outcome.
+No target surveyed in this repository's own corpus exhibits Q3's Fail form, so
+that form is stated in this file's own words rather than quoted. When a target
+names no consumer precise enough to measure its granularity against, record
+Q3 as "cannot assess" rather than guessing at a verdict. That outcome comes up
+more often here than on Q1 or Q2, and saying so is correct rather than a
+skipped question.
 
 **What a failure does.** A failed lens question is a named dimension-6 gap,
 like a failed axis, reported before the axes whose cost it inflates and naming
