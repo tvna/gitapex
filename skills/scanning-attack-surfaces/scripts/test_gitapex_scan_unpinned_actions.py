@@ -132,6 +132,42 @@ def test_undecodable_workflow_file_fails_closed_even_when_it_is_the_only_file(tm
     assert findings[0][0].endswith("bad.yml")
 
 
+def test_missing_workflow_directory_fails_closed(tmp_path):
+    # Issue #848: an absent directory was never scanned, so it cannot have
+    # been shown clean. Returning [] here reported "no unpinned actions
+    # found" for a target that does not exist -- the empirically-confirmed
+    # false-clean recorded against the pre-absorption skill.
+    findings = sua.find_unpinned_actions(tmp_path / "nope")
+    assert len(findings) == 1
+    assert "cannot verify" in findings[0][2]
+
+
+def test_workflow_directory_that_is_a_file_fails_closed(tmp_path):
+    not_a_dir = tmp_path / "workflows"
+    not_a_dir.write_text("")
+    findings = sua.find_unpinned_actions(not_a_dir)
+    assert len(findings) == 1
+    assert "cannot verify" in findings[0][2]
+
+
+def test_empty_workflow_directory_fails_closed(tmp_path):
+    # A directory that exists but holds no *.yml/*.yaml is the same claim
+    # failure as a missing one: nothing was scanned.
+    (tmp_path / "workflows").mkdir()
+    findings = sua.find_unpinned_actions(tmp_path / "workflows")
+    assert len(findings) == 1
+    assert "no *.yml or *.yaml" in findings[0][2]
+
+
+def test_directory_holding_only_non_workflow_files_fails_closed(tmp_path):
+    workflows_dir = tmp_path / "workflows"
+    workflows_dir.mkdir()
+    (workflows_dir / "README.md").write_text("not a workflow\n")
+    findings = sua.find_unpinned_actions(workflows_dir)
+    assert len(findings) == 1
+    assert "no *.yml or *.yaml" in findings[0][2]
+
+
 def test_repository_workflows_are_pin_clean():
     """The gate: this repo's real workflows must all be SHA-pinned."""
     repo_root = Path(__file__).resolve().parents[3]

@@ -125,6 +125,30 @@ spec:
     - kind: corroboration
       anchor: "method:scanning-attack-surfaces"
       summary: "The zizmor backing is demonstrated, not asserted: a live run against .github/workflows/sync-agent-instructions.yml reported github-app at High confidence ('app token inherits blanket installation permissions', line 91) -- privilege-excess, where a static read of that file's own 'permissions: contents: read' block alone would have said minimal. Transcribed in references/worked-examples.md, which discloses the run used zizmor 1.29.0 from PyPI, not the pinned nixpkgs version."
+    - kind: audit
+      anchor: "method:evaluating-skill-quality"
+      summary: "In-context review against the rubric -- not an isolated dispatch, since this session could not spawn subagents; disclosed rather than claimed. Verdict WELL-FORMED-NOT-MATURE: shape, contract discipline, mechanism fit and progressive disclosure hold, but two findings were opened and fixed here (no headroom against the body/description ceilings; Adaptive is partial, one Mode B checklist being required reading), and dimensions 8/9 stay unmet for reasons already recorded."
+      outcome:
+        verdict: WELL-FORMED-NOT-MATURE
+        found: 2
+        fixed: 2
+    - kind: audit
+      anchor: "method:battle-testing-a-skill"
+      summary: "In-context adversarial pass over the 22 dimensions, scoped to what the absorption changed (same isolation caveat as above). Verdict FAIL: three gaps found and fixed -- the trust boundary named neither Mode B's platform-tool output nor zizmor's finding text as evidence rather than instruction; the report was not required to record zizmor's version; and gitapex_scan_unpinned_actions.py called a missing or empty directory clean. Dimension 14 stays open with a named new sub-gap."
+      outcome:
+        verdict: FAIL
+        found: 4
+        fixed: 3
+        open: 1
+    - kind: correction
+      anchor: "scripts/gitapex_scan_unpinned_actions.py"
+      summary: "Closed the false-clean the pre-absorption skill's own 2026-07-17 battle-test recorded and never fixed: a missing directory, a directory that is a file, and a directory holding no *.yml/*.yaml each returned an empty finding list, printing 'No unpinned third-party actions found.' for a target never scanned. All three now fail closed as 'cannot verify' findings, with four new tests. A behavior change bundled into a relocation, disclosed in the PR body."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/848"
+      summary: "Kept capabilityAssumption Adaptive after the absorption, with the partiality named in SKILL.md's Notes: exactly one Mode B platform checklist is required reading on every Mode B run rather than optional depth, which is not what a clean Adaptive declaration describes. Broad was rejected because the body still fully specifies a correct run on its own; the honest position is Adaptive with one stated exception, not a level change."
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/848"
+      summary: "Ceiling pressure is a disclosed accepted cost, not an oversight: after the absorption the body and description both sit a few lines/characters under gitapex_check_skill_shape.py's limits. What remains in the body is the two modes' procedures and the Stop boundaries; moving either into references/ would leave the body incomplete for a correct run, which Adaptive does not license. The next substantive addition must remove something first."
   skillDependencies:
     requires:
       - evaluating-skill-quality
