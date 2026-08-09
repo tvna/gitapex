@@ -29,6 +29,9 @@ spec:
       summary: "executionRequirements.tools.write gains files, because Procedure step 7 now writes one. The prior empty list was true of a skill that only read and scored; leaving it unchanged while adding a write step would have left the sidecar asserting something its own Procedure contradicts."
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/pull/944"
+      summary: "The outer independent-review layer caught the score-file schema still describing itself as the attachment scores[].file points at, after the rename below moved that pointer list to score_files. The two shipped schemas therefore named incompatible paths for the same attachment -- a key-drift defect introduced by the fix for a key-drift defect, and one the inner layer's own re-read of its patch missed. Corrected to score_files[].file."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/pull/944"
       summary: "The pre-merge independent-review round caught the run record's pointer list being named scores, the same key the per-model score file already uses for a differently-shaped list -- the exact key-name drift this contract exists to stop, reintroduced by the contract itself. Renamed to score_files in both the Procedure and the schema."
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/932"

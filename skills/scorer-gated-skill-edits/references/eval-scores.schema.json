@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/tvna/gitapex/blob/main/skills/scorer-gated-skill-edits/references/eval-scores.schema.json",
   "title": "Skill eval per-model score file",
-  "description": "Shape of one model's score file, the attachment a run record's `scores[].file` points at (see eval-run.schema.json). One file per model actually run, named by that model's full identifier rather than a short alias. Additional keys are permitted so a run may carry per-model context this contract does not anticipate.",
+  "description": "Shape of one model's score file, the attachment a run record's `score_files[].file` points at (see eval-run.schema.json). One file per model actually run, named by that model's full identifier rather than a short alias. Additional keys are permitted so a run may carry per-model context this contract does not anticipate.",
   "type": "object",
   "required": ["model_id", "n_fixtures", "mean_score", "scores"],
   "properties": {
