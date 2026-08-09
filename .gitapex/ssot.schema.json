@@ -112,7 +112,25 @@
         "planes": {
           "type": "array",
           "minItems": 1,
-          "items": { "enum": ["pretooluse", "posttooluse", "ci"] }
+          "items": { "enum": ["pretooluse", "posttooluse", "ci", "local"] },
+          "description": "Where this gate actually runs. 'local' means it has a working-tree-only invocation a contributor can run before pushing -- the discovery signal .github/scripts/gitapex_gate_local_preflight.py selects on (issue #876). A gate carrying 'local' must also carry local_invocation; one that does not must carry local_exclusion saying why, so an unwired gate is a recorded decision rather than an invisible coverage gap."
+        },
+        "local_invocation": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 },
+          "description": "argv list -- never a shell command string -- that runs this gate against the working tree from the repository root, for gitapex_gate_local_preflight.py. The runner executes it in exec form with no shell, but that constrains the invocation mechanism, not this value: an argv naming a shell ('sh', '-c', ...) or handing inline code to an interpreter ('python3', '-c', ...) is rejected separately by gitapex_scan_ssot_schema.py's find_local_shell_argv, so this field stays a reference to a tracked script rather than a carrier of arbitrary commands. It must also name one of this gate's own script paths (find_local_invocation_identity_drift), so a wired gate cannot report PASS without actually running. Only valid when planes contains 'local'."
+        },
+        "local_stdin": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 },
+          "description": "argv list -- never a shell command string, same constraints as local_invocation -- whose standard output is piped into local_invocation's standard input. The one input provider this runner offers, for gates that read a unified diff on stdin. Absent for gates that need no piped input. Known limit, disclosed rather than solved: nothing here can express 'this gate REQUIRES piped input', so deleting this field from a gate that reads stdin leaves a schema-valid entry that reports PASS on an empty diff -- see gitapex_gate_local_preflight.py's own Known-limits section."
+        },
+        "local_exclusion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Why this gate has no working-tree-only invocation (needs a PR/issue body, GitHub API state, a diff-derived argument, or a toolchain outside the local surface). Required exactly when planes does not contain 'local'."
         },
         "trigger": {
           "type": "string",
@@ -157,6 +175,21 @@
             "properties": { "kind": { "const": "native" } }
           },
           "then": { "required": ["native_rule"] }
+        },
+        {
+          "$comment": "planes carries an explicit type: array inside the `if`. Draft 2020-12 ignores `contains` on a non-array instance, so a plain typo (\"planes\": \"ci\") would otherwise satisfy the `if` vacuously and fire the then-branch -- telling the author to add local_invocation and drop local_exclusion, the exact opposite of what a CI-only gate needs. The instance is rejected either way (planes is separately typed as an array), so this is a diagnostics fix, not a fail-open one. No separate local_stdin -> local_invocation clause is needed: the then-branch already requires local_invocation whenever the gate is on the local plane, and the else-branch already forbids local_stdin whenever it is not, so a third clause only duplicated the same error message twice on the one shape it caught.",
+          "if": {
+            "required": ["planes"],
+            "properties": { "planes": { "type": "array", "contains": { "const": "local" } } }
+          },
+          "then": {
+            "required": ["local_invocation"],
+            "not": { "required": ["local_exclusion"] }
+          },
+          "else": {
+            "required": ["local_exclusion"],
+            "not": { "anyOf": [{ "required": ["local_invocation"] }, { "required": ["local_stdin"] }] }
+          }
         }
       ]
     }

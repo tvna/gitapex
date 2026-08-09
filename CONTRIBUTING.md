@@ -106,6 +106,53 @@ Neither hook is a merge gate: `git commit --no-verify` and
 `git push --no-verify` both bypass them, and no CI workflow runs betterleaks
 yet (named as a non-goal in #890).
 
+## Local pre-push preflight
+
+The pre-commit hooks above cover ruff and mypy only. Most of this
+repository's other deterministic gates run as separate CI jobs, so a gap
+used to be discovered one red check at a time on an already-open PR.
+
+The same `uv run prek install -t pre-commit -t pre-push` above also installs
+a **pre-push** hook that runs every gate with a working-tree-only form in
+one pass, before the push leaves your machine. A warm run of all 16 wired
+gates measures 4-6 seconds end to end. Run it by hand any time with:
+
+```console
+python3 .github/scripts/gitapex_gate_local_preflight.py
+```
+
+It prints a pass/fail line per gate, the captured output of each failing
+one, and exits non-zero if any failed. `--list` prints the wired set
+without running it.
+
+If a clone predates this hook, re-run the install command above once to pick
+it up, then confirm both shims with the check in the previous section.
+`git push --no-verify` skips it, as with any pre-push hook.
+
+The runner itself needs no dependencies, but all 16 wired gates run through
+`uv` (the same `uv run` pins CI uses). Without `uv` on PATH every one of
+them reports `FAIL ... failed to run` -- that is one missing tool, not
+sixteen broken gates.
+
+The wired set is not a list inside that script: it is every gate in
+`.gitapex/ssot.json` whose `planes` array contains `"local"`, run with the
+argv its own `local_invocation` field declares. Wiring a new gate in means
+adding those two fields to its registry entry and nothing else.
+
+A gate that has *no* working-tree-only form (it needs a PR body, GitHub API
+state, a diff-derived argument, or a toolchain outside the local surface)
+must instead carry a `local_exclusion` string saying which. The schema makes
+exactly one of the two required, so a new gate cannot land unwired *and*
+undocumented -- read the exclusions in `.gitapex/ssot.json` before assuming
+a gate is missing here by oversight.
+
+An argv that would run a shell, or hand inline code to an interpreter, is
+refused before the runner starts anything -- the registry routes to tracked
+scripts, it is not a place to put commands.
+
+CI remains the authoritative merge gate; this is a fast first pass, the same
+relationship the prek hook has to `lint.yml`.
+
 ## Issue citation convention
 
 If a PR's changes fully satisfy an issue's acceptance criteria, cite it
