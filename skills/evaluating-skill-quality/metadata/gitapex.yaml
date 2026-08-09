@@ -317,6 +317,20 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/913"
       summary: "Added references/state-management-quality.md, a conditional dimension-6 sub-check mirroring script-test-quality.md's dimension-7 pattern. It fires only when the target's procedure materializes state outside the agent context and reads it back across a dispatch, compaction, session, or later invocation, grading eleven quality axes over one precedence spine (ground truth > durable artifact > harness state > context). Non-firing targets are not-applicable in dimension 6, a rule rubric.md owns."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/913"
+      summary: "Pre-merge dogfood, evaluating-skill-quality self-review, round 4 of 4, under verified isolation: this platform's Agent-tool dispatch is recorded as failing isolation, so the registry's verified alternative was used and both controls were re-run first, the CLI version having moved past the one that entry was tested on. Named gaps in dimensions 4, 5 and 6, each a pre-existing mechanism this change surfaced rather than introduced; dimension 5's file count grew by one, fixed here."
+      outcome:
+        verdict: WELL-FORMED-NOT-MATURE
+        found: 3
+        fixed: 1
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/913"
+      summary: "Pre-merge dogfood, battle-testing-a-skill, round 4 of 4, same verified isolation. Across four rounds it found twelve defects inside this change's own content; all twelve were fixed and re-audited. The surviving FAIL rests on three pre-existing mechanisms this change surfaced rather than caused: the isolation registry's circular trust, an executionRequirements declaration the skill's own steps contradict, and no byte-exact check on quoted evidence. Each is follow-up work, not this diff."
+      outcome:
+        verdict: FAIL
+        found: 12
+        fixed: 12
   skillDependencies:
     requires: []
     relatedTo:
