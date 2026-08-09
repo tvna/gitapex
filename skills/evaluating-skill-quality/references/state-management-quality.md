@@ -19,6 +19,7 @@ nine-dimension count is unchanged. Its findings are reported inside dimension
 - [Trigger](#trigger)
 - [The precedence spine](#the-precedence-spine)
 - [How to grade](#how-to-grade)
+- [The state-minimality lens](#the-state-minimality-lens)
 - [Axes](#axes)
 - [Worked example that fires](#worked-example-that-fires)
 - [Worked example that does not fire](#worked-example-that-does-not-fire)
@@ -176,6 +177,101 @@ Not every axis carries a published exemplar, and none is required to. Where a
 primary source states the rule it is quoted and labelled; otherwise the axis
 states the condition in its own words. An axis with no quotable exemplar is
 still gradeable -- inventing one would be worse than having none.
+
+## The state-minimality lens
+
+Ask this before the axes, of every target that already fires the trigger.
+It is a cross-cutting question, not a twelfth axis: the axis count below
+stays eleven. The axes grade how well a carried value is engineered; none of
+them asks whether it should be carried at all.
+
+The reason to ask first is arithmetic. State volume multiplies every axis:
+each recorded field is another thing axis 2 must bind to a run, axis 3 must
+re-read, axis 5 must reconcile, axis 6 must handle when it goes missing, and
+axis 9 must keep secrets out of. A field that buys nothing still costs all
+five. Minimality is the only question here whose answer can *lower* the other
+axes' burden rather than add to it.
+
+The standard is stated by Toyota, as the first line of its own Just-in-Time
+definition: "Making only what is needed, when it is needed, and in the amount
+needed" [tps]. The trigger above owns *what* -- which boundaries qualify.
+Axis 4 owns *when* -- its same-step recording rule. This section owns *the
+amount*.
+
+Apply the lens only where the trigger already fires. It is not itself a
+trigger condition: a target that does not fire stays not-applicable, and no
+lens question can make it fire.
+
+All three questions grade what the target itself records, so they follow the
+Trigger section's own producer/consumer split. A producer-only target is
+graded on all three in full, since it is the one doing the recording -- Q2's
+Pass form below states how a sibling skill counts as its named consumer. A
+consumer-only target records nothing of its own and is not-applicable to the
+whole lens, the same carve-out axes 1, 2, 4, 7, 10, and 11 already receive.
+
+**Q1. Re-derivability.** Could the procedure look this value up fresh from
+ground truth each time, instead of holding a copy? A value ground truth
+already hands back on demand is inventory: it buys nothing the spine does not
+already give, and pays the freshness, reconciliation, loss, and
+confidentiality costs of every axis that touches it. A value that supplies a
+mapping ground truth cannot hand back on its own -- which commit belongs to
+which task, where a prior run stopped -- is not this case, even though axis 5
+still reconciles it against ground truth before trusting it: reconciling a
+pointer is not the same as re-deriving it.
+
+*Pass* -- the value is not re-derivable and the target says why it is not, or
+the target declines to materialize a second record because an existing one
+already answers the question. Both shapes are quotable from this repository's
+own skills: a gate verdict is recorded because "the record holds candidate
+scores and no outcome, and a later reader cannot tell a kept edit from a
+rejected one" without it [sgse]; and a rollback step that needs a manifest
+takes it from the log it already keeps -- "No new artifact is required" [ebp].
+
+*Fail* -- a value ground truth already hands back on demand, with no pointer
+or mapping the record itself supplies -- recording it duplicates a query the
+procedure could run live instead.
+
+**Q2. Unconsumed fields.** Does every field the target records have a named
+consumer? A field nothing reads is overproduction, and it widens axis 9's
+outbound sink surface for free -- that consequence belongs to axis 9, which
+grades it; this question only asks whether the field earns its place.
+
+*Pass* -- every recorded field has a consumer the target itself names, and the
+review says which consumer it found for each. The consumer need not be a later
+numbered step: a human reader counts when the target says so, as a
+one-paragraph finding recorded "for a reader who will not open the score
+files" [sgse] does. The producer-only rule in the Trigger section binds here
+too -- when the target writes state a *different* skill consumes, that sibling
+skill is the named consumer, and calling the field unconsumed is a misfire.
+
+*Fail* -- a field named in the target's own record contract that no step, no
+declared consumer, and no stated reader ever reads.
+
+**Q3. Recording granularity.** Is the granularity the minimum the consumer
+actually requires? Finer-than-needed recording adds identity-binding (axis 2)
+and write-discipline (axis 4) burden with no consumer benefit.
+
+*Pass* -- the granularity is set by the consumer's own requirement and the
+target says which requirement sets it: two numbers recorded "at the exact
+precision the scorer published them at" [sgse], because the comparison that
+consumes them turns on that precision.
+
+*Fail* -- per-step recording where only the per-task outcome is consumed, or a
+timestamp resolution no reader compares at.
+
+When a target names no consumer precise enough to measure its granularity
+against, record Q3 as "cannot assess" rather than guessing at a verdict. That
+outcome comes up more often here than on Q1 or Q2, and saying so is correct
+rather than a skipped question.
+
+**What a failure does.** A failed lens question is a named dimension-6 gap,
+like a failed axis, reported before the axes whose cost it inflates and naming
+them. Unlike an axis it carries no leading condition of its own: minimality is
+a cost multiplier, not a loss mode, so it never leads dimension 6's entry.
+When the same field also fails an axis -- most often axis 9, when the
+unconsumed field is also an unfiltered sink -- that axis's own leading
+condition governs, and the lens finding is reported alongside it rather than
+in place of it.
 
 ## Axes
 
@@ -600,6 +696,21 @@ them, and it is deliberately weaker than the two pinned ones: product
 documentation drifts, and a quotation whose date is far behind the reader's
 own is a claim to re-verify, not a settled fact.
 
+The `[tps]` quotation carries the same caveat as those three: no immutable
+per-revision URL to pin, so live verification -- at the date the reference
+definition below names -- is the strongest citation available, weaker than a
+pinned one. The `[sgse]` and `[ebp]`
+quotations are this repository's own skills, quoted as marked illustration of
+the minimality lens only -- never as a rule this file imports -- and verified
+against the pinned revision the reference definitions below name.
+
+The minimality lens's three Pass exemplars are quoted, as just described.
+None of the three Fail forms is quoted: a real Fail exemplar would require
+grading this repository's own corpus against the lens, a separate exercise
+from stating it. Each Fail form instead states the condition in this file's
+own words, under the same allowance the How to grade section already sets for
+an axis with no quotable exemplar.
+
 Quotations are normalized to ASCII: em dashes in the sources are rendered
 `--` or `-`, and curly quotation marks are rendered straight. No other
 alteration is made inside quotation marks.
@@ -623,6 +734,12 @@ Every inline `[label]` citation above resolves to the source below.
 - **[subagents]** Claude Code documentation, Subagents.
 - **[agentteams]** Claude Code documentation, Agent teams.
 - **[bestpractices]** Claude Code documentation, Best practices.
+- **[tps]** Toyota Motor Corporation, Toyota Production System, Just-in-Time
+  section.
+- **[sgse]** this repository's `scorer-gated-skill-edits` SKILL.md, the
+  run-record step, at the pinned revision linked below.
+- **[ebp]** this repository's `executing-a-branch-plan` domain-events
+  reference, Rollback section, same pinned revision.
 
 <!-- Link reference definitions below power the inline [label] shortcuts; keep in sync with the visible list above. -->
 
@@ -631,3 +748,6 @@ Every inline `[label]` citation above resolves to the source below.
 [subagents]: https://code.claude.com/docs/en/sub-agents "Claude Code: Subagents"
 [agentteams]: https://code.claude.com/docs/en/agent-teams "Claude Code: Agent teams"
 [bestpractices]: https://code.claude.com/docs/en/best-practices "Claude Code: Best practices"
+[tps]: https://global.toyota/en/company/vision-and-philosophy/production-system/ "Toyota Motor Corporation: Toyota Production System, verified live 2026-08-09"
+[sgse]: https://github.com/tvna/gitapex/blob/4c1739157c7fced42501944a61e0c42231d2ed9d/skills/scorer-gated-skill-edits/SKILL.md "gitapex scorer-gated-skill-edits SKILL.md at pinned revision 4c17391"
+[ebp]: https://github.com/tvna/gitapex/blob/4c1739157c7fced42501944a61e0c42231d2ed9d/skills/executing-a-branch-plan/references/domain-events-and-failure-handling.md "gitapex executing-a-branch-plan domain-events reference at pinned revision 4c17391"

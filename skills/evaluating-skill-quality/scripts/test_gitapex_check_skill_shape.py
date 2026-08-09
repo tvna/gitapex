@@ -3081,6 +3081,87 @@ def test_references_grammar_valid_four_field_entry_passes(tmp_path):
     assert css.main([str(d)]) == 0
 
 
+def _write_raw_references_sidecar(tmp_path, item_body):
+    d = _write_skill(tmp_path)
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  references:\n" + item_body,
+        encoding="utf-8",
+    )
+    return d
+
+
+def test_references_outcome_block_closed_by_a_dedent_does_not_reopen(tmp_path):
+    # Once an outcome sub-block is closed by a dedent back to its item's
+    # own 6-space fields, a later 8-space line must NOT be re-absorbed into
+    # it: it is a stray key inside the item, and the item is dropped.
+    #
+    # Both halves matter. The parser's own end-of-item path finalizes an
+    # outcome too, so a fixture whose outcome block simply runs to the end
+    # of the list cannot tell the dedent-finalize apart from that -- it
+    # covers the line without being able to fail on it. Deleting the
+    # dedent-finalize turns this fixture's verdict from "the item was
+    # dropped" into "the item parsed cleanly, with found: 9 absorbed as
+    # outcome content", which is what makes this test bite.
+    #
+    # Synthetic on purpose: this path was previously reached only because
+    # a real sidecar in this repository happened to end its last
+    # references item with an outcome block, so appending one ordinary
+    # entry to that unrelated file silently took the coverage away.
+    d = _write_raw_references_sidecar(
+        tmp_path,
+        "    - kind: audit\n"
+        "      anchor: method:battle-testing-a-skill\n"
+        "      summary: ran adversarial pass\n"
+        "      outcome:\n"
+        "        verdict: PASS\n"
+        "      summary: dedented back to an item field\n"
+        "        found: 9\n",
+    )
+    by = _by_name(css.check_shape(d))
+    assert by["references-well-formed"].passed is False
+    assert by["references-well-formed"].evidence == "1 unknown key: 'found: 9'"
+    assert css.main([str(d)]) == 1
+
+
+def test_references_outcome_block_with_an_unmatched_deep_line_invalidates_the_item(tmp_path):
+    # Fail-closed, same reasoning as every other gated block's own
+    # equivalent branch: a line at outcome's own indent that is neither a
+    # "key: value" pair nor a new item marker invalidates the item outright
+    # rather than being tolerated or misread.
+    #
+    # The assertion is on the exact evidence, not merely on the failure:
+    # letting that line fall through instead reaches the item-level
+    # handler, which invalidates the item too but ALSO records the line as
+    # an unknown key, turning this evidence into
+    # "1 unknown key: 'plain text with no colon'". Asserting only
+    # `passed is False` would pass either way and prove nothing.
+    #
+    # The line deliberately carries no colon and no leading "- ": a "- "
+    # line at this indent is consumed by the list-item marker branch
+    # before the outcome block ever sees it, so it never reaches the
+    # branch under test.
+    d = _write_raw_references_sidecar(
+        tmp_path,
+        "    - kind: audit\n"
+        "      anchor: method:battle-testing-a-skill\n"
+        "      summary: ran adversarial pass\n"
+        "      outcome:\n"
+        "        verdict: PASS\n"
+        "        plain text with no colon\n",
+    )
+    by = _by_name(css.check_shape(d))
+    assert by["references-well-formed"].passed is False
+    assert by["references-well-formed"].evidence == "empty list"
+    assert css.main([str(d)]) == 1
+
+
 def test_references_grammar_unknown_kind_fails(tmp_path):
     d = _write_references(
         tmp_path, {"kind": "changelog", "anchor": "https://github.com/tvna/gitapex/issues/1", "summary": "did a thing"}
