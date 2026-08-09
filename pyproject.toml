@@ -11,6 +11,16 @@ dev = [
     "pytest-cov>=5.0",
     "pytest-xdist>=3.6",
     "pytest-split>=0.10",
+    # Issue #939: the Hypothesis property-based pilot for
+    # .github/scripts/gitapex_gate_metadata_outcome_lines.py's `_claims_in_value`.
+    # Unbounded upper end deliberately, unlike the ruff/radon/xenon pins above:
+    # those pin a *measured finding/threshold baseline* that a version bump
+    # would silently redefine. Hypothesis defines no baseline here -- the
+    # properties in tests/test_gitapex_gate_metadata_outcome_lines_properties.py
+    # assert the parser's own behavior, and a Hypothesis upgrade that changes
+    # which examples are generated fails loudly as a test failure rather than
+    # quietly changing what is enforced.
+    "hypothesis>=6.100",
     "pyyaml>=6.0",
     "prek>=0.4.12",
     "jsonschema>=4.23",
