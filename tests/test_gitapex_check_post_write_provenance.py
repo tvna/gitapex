@@ -432,6 +432,24 @@ def test_the_cli_reports_an_oversized_number_without_a_traceback(tmp_path: Path,
     assert "Traceback" not in captured.err + captured.out
 
 
+def test_the_cli_reports_an_oversized_json_integer_literal_without_a_traceback(tmp_path: Path, capsys: Any) -> None:
+    """The same oversized value as a JSON *integer literal* never reaches
+    _positive_int: json.loads itself raises, and a plain ValueError at that
+    -- json.JSONDecodeError is a ValueError subclass, not the other way
+    round -- so the narrower handler let it escape as a raw traceback that
+    the shell wrapper forwards verbatim as its block reason."""
+    payload_file = tmp_path / "payload.json"
+    payload_file.write_text(
+        '{"tool_name": "mcp__github__issue_write", "tool_input": {"owner": "tvna", "repo": "gitapex", '
+        f'"issue_number": {_OVERSIZED_DIGITS}}}}}',
+        encoding="utf-8",
+    )
+    assert checker.main(["--payload", str(payload_file)]) == 1
+    captured = capsys.readouterr()
+    assert "INDETERMINATE" in captured.err
+    assert "Traceback" not in captured.err + captured.out
+
+
 # --- evaluate() verdicts --------------------------------------------------
 
 
@@ -482,6 +500,65 @@ def test_every_covered_tool_is_scanned(tool_name: str) -> None:
 def test_a_failed_write_skips_rather_than_reporting_unverified(failure_marker: dict[str, Any]) -> None:
     response = {"number": 5, **failure_marker}
     verdict, _ = checker.evaluate(payload(tool_response=response), "tok", fetcher=fetcher_returning(_LEAKED_BODY))
+    assert verdict == "SKIP"
+
+
+@pytest.mark.parametrize(
+    "failure_marker",
+    [{"status": "error"}, {"is_error": True}, {"isError": True}],
+)
+def test_a_failed_write_skips_through_the_observed_bare_list_envelope(failure_marker: dict[str, Any]) -> None:
+    """The marker sits inside the text block on the envelope the harness
+    actually delivers, where _coerce_mapping sees only {}. Before this was
+    fixed the branch was dead there and the call fell through to a scan."""
+    response = [{"type": "text", "text": json.dumps({"number": 5, **failure_marker})}]
+    verdict, _ = checker.evaluate(payload(tool_response=response), "tok", fetcher=fetcher_returning(_LEAKED_BODY))
+    assert verdict == "SKIP"
+
+
+def test_a_failed_create_does_not_report_on_the_url_in_its_error_payload() -> None:
+    """The concrete consequence, reproduced before the fix: the URL fallback
+    resolved a number out of a *failed* create's error payload and reported
+    FLAGGED against a pre-existing, unrelated pull request that this call
+    never wrote -- a block decision about the wrong artifact."""
+    response = [
+        {"type": "text", "text": json.dumps({"status": "error", "url": "https://github.com/tvna/gitapex/pull/884"})}
+    ]
+    verdict, _ = checker.evaluate(payload(tool_response=response), "tok", fetcher=fetcher_returning(_LEAKED_BODY))
+    assert verdict == "SKIP"
+
+
+def test_a_failed_update_does_not_report_on_the_targets_pre_existing_body() -> None:
+    """The same defect on the update path, where the number comes from
+    tool_input: the gate scanned the target's already-stored body and
+    asserted a verdict about a write that never landed."""
+    response = [{"type": "text", "text": json.dumps({"status": "error", "message": "boom"})}]
+    verdict, _ = checker.evaluate(
+        payload(
+            tool_name="mcp__github__update_pull_request",
+            tool_input={"owner": "tvna", "repo": "gitapex", "pullNumber": 884},
+            tool_response=response,
+        ),
+        "tok",
+        fetcher=fetcher_returning(_LEAKED_BODY),
+    )
+    assert verdict == "SKIP"
+
+
+def test_an_mcp_level_error_flag_beside_a_content_list_still_skips() -> None:
+    """The outer envelope's own marker must keep working: response_payload()
+    returns the *inner* object for this shape, so checking only the
+    normalized payload would have dropped a layer this gate already had."""
+    verdict, _ = checker.evaluate(
+        payload(
+            tool_response={
+                "isError": True,
+                "content": [{"type": "text", "text": json.dumps({"number": 5})}],
+            }
+        ),
+        "tok",
+        fetcher=fetcher_returning(_LEAKED_BODY),
+    )
     assert verdict == "SKIP"
 
 

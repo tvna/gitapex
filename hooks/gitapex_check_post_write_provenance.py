@@ -380,6 +380,16 @@ def _positive_int(text: str) -> int | None:
     return number if number > 0 else None
 
 
+def _reports_error(response: dict[str, Any]) -> bool:
+    """True when `response` carries an explicit write-failure marker.
+
+    One definition, applied to both envelope levels by evaluate() -- the
+    outer MCP envelope and the tool's own returned object -- so the two
+    checks cannot drift into recognizing different markers.
+    """
+    return response.get("status") == "error" or response.get("is_error") is True or response.get("isError") is True
+
+
 def _first_number(*sources: dict[str, Any]) -> int | None:
     """Return the first plausible issue/PR number found across `sources`.
 
@@ -525,8 +535,22 @@ def evaluate(
     # unverifiable would be noise on a call that never posted anything.
     # Only an explicit failure marker skips -- an absent or unrecognized
     # status is treated as a successful write and scanned.
-    response = _coerce_mapping(payload.get("tool_response"))
-    if response.get("status") == "error" or response.get("is_error") is True or response.get("isError") is True:
+    #
+    # Both envelope levels are checked, and neither replaces the other. The
+    # outer mapping is where an MCP-level `isError` sits, alongside a
+    # `content` list; the failure marker of the tool's own returned object
+    # is inside that list, and only response_payload() reaches it. Reading
+    # the outer level alone was a real defect, not a theoretical one: on the
+    # bare text-block list the harness actually delivers, _coerce_mapping
+    # returns {} and this branch was dead. Reproduced in-process on both
+    # covered paths -- a failed create whose error payload carried a `url`
+    # resolved that URL and reported FLAGGED against a pre-existing,
+    # unrelated pull request, and a failed update scanned the target's
+    # pre-existing body and reported a verdict about a write that never
+    # landed. Found by review of this change's own second push.
+    if _reports_error(_coerce_mapping(payload.get("tool_response"))) or _reports_error(
+        response_payload(payload.get("tool_response"))
+    ):
         return "SKIP", f"{tool_name} reported an error, so no body was stored"
 
     try:
@@ -613,8 +637,16 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         payload = json.loads(raw) if raw.strip() else {}
-    except json.JSONDecodeError as error:
-        print(f"INDETERMINATE: payload ({payload_source}) is not valid JSON: {error}", file=sys.stderr)
+    # Deliberately ValueError, not json.JSONDecodeError. JSONDecodeError is a
+    # ValueError subclass, but not every ValueError json.loads raises is one:
+    # a numeric literal longer than sys.int_max_str_digits (4300) fails in
+    # int parsing, which raises a plain ValueError. That escaped this handler
+    # and reached the shell wrapper as a raw traceback, which the wrapper
+    # forwards verbatim as its block reason -- the same "never a raw
+    # traceback" contract _positive_int was added to uphold, one layer up
+    # and still open. Reproduced through this CLI before widening.
+    except ValueError as error:
+        print(f"INDETERMINATE: payload ({payload_source}) could not be parsed as JSON: {error}", file=sys.stderr)
         return 1
 
     # `[]`, `"x"`, `1`, and `null` all parse as valid JSON. Without this
