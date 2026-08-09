@@ -194,19 +194,30 @@ axes' burden rather than add to it.
 
 The standard is stated by Toyota, as the first line of its own Just-in-Time
 definition: "Making only what is needed, when it is needed, and in the amount
-needed" [tps]. The trigger above owns *what* and *when* -- which boundaries
-qualify, and axis 4's same-step recording rule. This section owns *the
+needed" [tps]. The trigger above owns *what* -- which boundaries qualify.
+Axis 4 owns *when* -- its same-step recording rule. This section owns *the
 amount*.
 
 Apply the lens only where the trigger already fires. It is not itself a
 trigger condition: a target that does not fire stays not-applicable, and no
 lens question can make it fire.
 
-**Q1. Re-derivability.** Could the procedure re-derive this value from ground
-truth instead of holding it? A re-derivable value in the record is inventory:
-it buys nothing the spine does not already give, and pays the freshness,
-reconciliation, loss, and confidentiality costs of every axis that touches
-it.
+All three questions grade what the target itself records, so they follow the
+Trigger section's own producer/consumer split. A producer-only target is
+graded on all three in full, since it is the one doing the recording -- Q2's
+Pass form below states how a sibling skill counts as its named consumer. A
+consumer-only target records nothing of its own and is not-applicable to the
+whole lens, the same carve-out axes 1, 2, 4, 7, 10, and 11 already receive.
+
+**Q1. Re-derivability.** Could the procedure look this value up fresh from
+ground truth each time, instead of holding a copy? A value ground truth
+already hands back on demand is inventory: it buys nothing the spine does not
+already give, and pays the freshness, reconciliation, loss, and
+confidentiality costs of every axis that touches it. A value that supplies a
+mapping ground truth cannot hand back on its own -- which commit belongs to
+which task, where a prior run stopped -- is not this case, even though axis 5
+still reconciles it against ground truth before trusting it: reconciling a
+pointer is not the same as re-deriving it.
 
 *Pass* -- the value is not re-derivable and the target says why it is not, or
 the target declines to materialize a second record because an existing one
@@ -216,10 +227,9 @@ scores and no outcome, and a later reader cannot tell a kept edit from a
 rejected one" without it [sgse]; and a rollback step that needs a manifest
 takes it from the log it already keeps -- "No new artifact is required" [ebp].
 
-*Fail* -- a field the procedure's own precedence spine says it must re-read
-from ground truth anyway before relying on it. Recording it and re-reading it
-is the record paying axis 3's and axis 5's cost for a value neither will
-trust.
+*Fail* -- a value ground truth already hands back on demand, with no pointer
+or mapping the record itself supplies -- recording it duplicates a query the
+procedure could run live instead.
 
 **Q2. Unconsumed fields.** Does every field the target records have a named
 consumer? A field nothing reads is overproduction, and it widens axis 9's
@@ -692,11 +702,14 @@ page can be restructured or reworded, so a reader far past that date should
 re-check it rather than treat it as settled. The `[sgse]` and `[ebp]`
 quotations are this repository's own skills, quoted as marked illustration of
 the minimality lens only -- never as a rule this file imports -- and verified
-against the pinned revision the reference definitions below name. The
-minimality lens carries a quoted Pass exemplar for each of its three
-questions and no quoted Fail exemplar for Q3, because none was found; the
-Fail form there is stated in this file's own words, under the rule against
-inventing one that the How to grade section already sets.
+against the pinned revision the reference definitions below name.
+
+The minimality lens's three Pass exemplars are quoted, as just described.
+None of the three Fail forms is quoted: a real Fail exemplar would require
+grading this repository's own corpus against the lens, a separate exercise
+from stating it. Each Fail form instead states the condition in this file's
+own words, under the same allowance the How to grade section already sets for
+an axis with no quotable exemplar.
 
 Quotations are normalized to ASCII: em dashes in the sources are rendered
 `--` or `-`, and curly quotation marks are rendered straight. No other
