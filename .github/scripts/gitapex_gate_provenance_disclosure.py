@@ -29,18 +29,34 @@ own same-line corroborating-context approach, scoped to the paragraph
 since prose evidence-limitation notes commonly wrap across lines in
 Markdown.
 
-Vocabulary (split across two paragraphs so this docstring itself never
-combines an example of each cue type in one paragraph -- doing so would
-self-trigger this gate on this very file, same defect the first version of
-this file's docstring shipped with).
+Vocabulary (non-exhaustive by design, per CLAUDE.md section 4's
+"non-exhaustive instances / default-in-scope" invariant): limitation/
+reason cue examples include "no access to", "lacks access to", "absence
+of", "missing a", and their close variants; tool-fingerprint cue examples
+include "a registered skill invocation", "a dispatch tool", "a subagent",
+and "an MCP tool call", and their close variants -- see
+`_LIMITATION_CUE_RE`/`_TOOL_CUE_RE` below for the exact patterns. Extend
+either as new phrasings are observed, matching gitapex_scan_provenance.py's
+own "add more patterns as new fingerprint shapes are observed" convention.
 
-Limitation/reason cue examples: "no access to", "lacks access to",
-"absence of", "missing a", and their close variants -- see
-`_LIMITATION_CUE_RE` below for the exact pattern.
-
-Tool-fingerprint cue examples: a generic internal-tooling concept such as
-a registered skill invocation, a dispatch tool, a subagent, or an MCP tool
-call -- see `_TOOL_CUE_RE` below for the exact pattern.
+Both cue types are quoted above deliberately, in the same paragraph:
+`find_offending_paragraphs` only matches cue text as *live* prose (see
+`_strip_quoted_examples` below), so a backtick- or quote-delimited example
+-- like every phrase in this paragraph -- is excluded from matching.
+Issue #549 (repairs 1 and 8) documented this gate's own PR body, and
+separately its own pre-redesign docstring, self-triggering by combining
+both cue types as unquoted prose in one paragraph; that cycle's fix was a
+narrower workaround (manually keeping the vocabulary split across two
+paragraphs so no single paragraph combined both cue types -- the literal
+original wording was never committed, corrected before either commit
+landed, and #549's own retrospective deliberately avoided reproducing it
+verbatim to avoid re-triggering the gate on itself). Issue #978 replaces
+that workaround with the quoting-aware matching implemented here, which
+covers future documentation of this gate's vocabulary generally rather
+than only this one docstring instance. The `tool-fingerprint-disclosure:
+WAIVED: <reason>` marker below remains available as an explicit override
+for any case this heuristic still misses (e.g. a live sentence that also
+happens to quote one of its own two cue phrases for emphasis).
 
 Disclosure marker: a `tool-fingerprint-disclosure: WAIVED: <reason>` line
 anywhere in the combined corpus (PR body plus any diff-added doc text
@@ -71,6 +87,11 @@ import re
 import sys
 from pathlib import Path
 
+# Non-exhaustive by design (see the module docstring's Vocabulary section
+# and CLAUDE.md section 4's own "non-exhaustive instances / default-in-
+# scope" invariant): these are the observed cue phrases from issue #350's
+# original incidents, not a closed allowlist. Extend as new phrasings are
+# observed.
 _LIMITATION_CUE_RE = re.compile(
     r"\b(?:"
     r"no access to|without access to|lacks?\s+access to|lacking\s+access to|"
@@ -80,6 +101,7 @@ _LIMITATION_CUE_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Non-exhaustive by design, same rationale as _LIMITATION_CUE_RE above.
 _TOOL_CUE_RE = re.compile(
     r"\b(?:"
     r"registered skill|skill invocation|dispatch tool|generic dispatch|"
@@ -93,20 +115,45 @@ _WAIVER_RE = re.compile(
     re.IGNORECASE | re.MULTILINE,
 )
 
+# A cue phrase inside a backtick span or a straight/curly double-quoted
+# span is a documented example (as the module docstring's own Vocabulary
+# paragraph uses), not a live evidence-limitation claim. Bounded quantifier
+# (no unbounded backtracking) matching a single-line span only, since a
+# quote/backtick pair spanning a paragraph break would no longer read as
+# one inline example.
+_QUOTED_SPAN_RE = re.compile(
+    r"`[^`\n]{1,200}`" r'|"[^"\n]{1,200}"' r"|“[^”\n]{1,200}”",
+)
+
 
 def _paragraphs(text: str) -> list[str]:
     normalized = text.replace("\r\n", "\n").replace("\r", "\n")
     return [p for p in re.split(r"\n\s*\n", normalized) if p.strip()]
 
 
+def _strip_quoted_examples(text: str) -> str:
+    """Remove backtick- or double-quote-delimited spans from `text`.
+
+    Issue #978 (fixing issue #549's own narrower, per-instance
+    workaround): a cue phrase quoted or backtick-fenced as a documented
+    example is not a live claim. Stripping it before matching is what
+    lets documentation of this gate's own vocabulary -- including this
+    module's own docstring -- describe both cue types in one paragraph
+    without self-triggering.
+    """
+    return _QUOTED_SPAN_RE.sub(" ", text)
+
+
 def find_offending_paragraphs(text: str) -> list[str]:
     """Return every paragraph in `text` that combines a limitation/reason
-    cue with a tool-fingerprint cue."""
-    return [
-        paragraph
-        for paragraph in _paragraphs(text)
-        if _LIMITATION_CUE_RE.search(paragraph) and _TOOL_CUE_RE.search(paragraph)
-    ]
+    cue with a tool-fingerprint cue as live (unquoted, non-backtick-fenced)
+    prose."""
+    offending = []
+    for paragraph in _paragraphs(text):
+        live_prose = _strip_quoted_examples(paragraph)
+        if _LIMITATION_CUE_RE.search(live_prose) and _TOOL_CUE_RE.search(live_prose):
+            offending.append(paragraph)
+    return offending
 
 
 def has_disclosure_marker(text: str) -> bool:
