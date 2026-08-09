@@ -72,12 +72,13 @@ them; a future skill combining both conventions in an unrelated way would
 need this scoping revisited, the same class of residual heuristic-scope
 risk Check B's own docstring already discloses for its narrower text scan.
 
-Check D (issue #907). A `split.md` that declares a resulting partition in
-prose (``"for a resulting 27:30:12 partition"``) is asserting an arithmetic
-contract against its own `## Assignment` listing, and nothing checked it:
-PR #886 shipped 28 listed train fixtures against a declared `27`, with the
-one over-count masked by an entry that simultaneously claimed to be
-excluded from the arithmetic *and* was counted in it. Reviewers caught the
+Check D (issue #907). A `split.md` that declares a `train:selection:test`
+partition in prose (``"for a resulting 27:30:12 partition"``,
+``"a flatter **9:6:3** partition"``) is asserting an arithmetic contract
+against its own `## Assignment` listing, and nothing checked it: PR #886
+shipped 28 listed train fixtures against a declared `27`, with the one
+over-count masked by an entry that simultaneously claimed to be excluded
+from the arithmetic *and* was counted in it. Reviewers caught the
 contradiction only after the merge. This check requires a file that
 declares a partition to also carry a machine-readable exclusion line
 (``Split-arithmetic exclusions: `name.yaml`, ...`` or
@@ -88,10 +89,73 @@ exclusion is legitimate and must stay visible to a human reader rather
 than being inferred from prose:
 `dispatch-required-negative-control.yaml` is listed in train for
 split-listing consistency with `normal.yaml`, not as a declared category
-addition. A named exclusion that is not actually listed in any split is
-itself an offence, so the line cannot rot into a silent blanket waiver.
-A `split.md` with no partition declaration at all (this repository's
-bookkeeping-only files) is out of scope and passes untouched.
+addition. A named exclusion that is not actually listed in any split's
+own bullet is itself an offence, and so is a malformed exclusion payload
+(empty, or naming fixtures without backticks), so the line cannot rot into
+a silent blanket waiver -- both of those were live-demonstrated bypasses of
+this claim in the first draft, which is why the claim is now backed by two
+checks rather than one. Two files declare a partition today
+(`evals/evaluating-skill-quality/split.md`,
+`evals/merge-retrospective/split.md`); the other three declare none and
+are out of scope. That membership is pinned by
+`tests/test_gitapex_gate_split_fixture_coverage.py::
+test_real_split_md_partition_declarations_are_pinned_exactly` rather than
+asserted here, because a check that silently skips a file looks
+indistinguishable from a check that passes it -- exactly how the
+`resulting`-keyed first draft of this regex missed merge-retrospective's
+own differently-worded declaration.
+
+Everything Check D reads comes from the *header region* (before the
+`## Assignment` heading, fenced code blocks stripped), and the counted
+names come only from a split bullet's own paragraph. Both bounds are
+fail-closed fixes from an adversarial review of this check's first draft,
+each closing a demonstrated defect rather than tidying: an appended
+edit-log entry quoting a historical ratio could otherwise become the
+declaration; a fenced example illustrating this very convention could
+otherwise satisfy the must-carry-a-line requirement while declaring
+nothing; and a trailing explanatory paragraph naming pre-existing fixtures
+(merge-retrospective has exactly one) could otherwise inflate the last
+split's count, or keep a deleted fixture waivable forever with the leak
+and the exclusion cancelling out to a clean-looking pass. Ambiguity is
+rejected rather than arbitrated by position, for the same reason in each
+case: two disagreeing partition declarations, two exclusion lines, or two
+`## Assignment` headings all fail the file instead of silently picking one.
+A declared partition against an Assignment section listing nothing fails
+too, so `0:0:0` cannot reconcile vacuously.
+
+Known limitations, each demonstrated rather than theorized, none silently
+resolved:
+
+- **Scope exit by rewording.** A declaration this regex does not recognize
+  (`"a resulting 2:2 partition"`, `"2:2:1:9 partition"`, `"9:9:9 fixture
+  partition"`) removes its file from Check D entirely, and a removal looks
+  exactly like a pass. Matching every possible phrasing is not achievable
+  by prose regex, so the defence is elsewhere:
+  `tests/test_gitapex_gate_split_fixture_coverage.py::
+  test_real_split_md_partition_declarations_are_pinned_exactly` pins the
+  parsed declaration of every committed `split.md`, so rewording an
+  existing file's declaration turns its entry to ``None`` and fails that
+  test loudly. Residual, disclosed rather than closed: a *newly added*
+  `split.md` whose declaration uses an unrecognized phrasing is out of
+  scope until that pinned dict is next updated.
+- **The itemized additions are not summed.** `evals/evaluating-
+  skill-quality/split.md` asserts a second arithmetic contract of the same
+  class -- a `17:14:9` base plus nine named additions summing to the
+  declared `27:30:12`. Check D verifies declared-vs-listing only, so an
+  addition that does not sum passes. Not built here deliberately: the
+  header region also carries non-addition triples (`"SkillOpt's default
+  split ratio is 2:1:7"`, twice), and no reliable rule separates an
+  addition triple from a cited ratio in free prose. The additions do sum
+  correctly today, hand-checked; this is an uncovered half of the
+  invariant, not a live breakage.
+- **Detection, not prevention, at the merge boundary.** A Check D failure
+  turns this workflow's check red. Whether that blocks a merge depends on
+  branch protection, which no in-repo tooling can read or confirm -- the
+  same open item `docs/superpowers/specs/2026-07-21-skill-audit-merge-gate-
+  design.md` already records for this repository's other gates. Do not
+  read "gate-enforced" anywhere in this repository's own `split.md` or
+  `eval-status.md` prose as a claim that a merge is mechanically
+  prevented.
 
 All four checks are heuristic text parsing over Markdown prose, not a
 formal grammar -- the issue's own Acceptance Criteria Map names this
@@ -150,8 +214,20 @@ _NEXT_HEADING_RE = re.compile(r"^##\s+\S", re.MULTILINE)
 # fixture-assignment convention all four of this repository's split.md
 # files share (verified directly against all four before writing this
 # regex), even though the surrounding prose differs.
+#
+# Terminated by a blank line as well as by the next bullet or the section
+# end (issue #907, adversarial review): every real bullet in this
+# repository's five split.md files is a single paragraph with indented
+# continuation lines, but `## Assignment` sections also carry trailing
+# explanatory paragraphs that name fixtures -- `evals/merge-retrospective/
+# split.md`'s "The five pre-existing fixtures (`normal.yaml`, ...)" note
+# sits directly after the `test` bullet. Without the blank-line boundary
+# the LAST bullet absorbs that prose and reports 8 test fixtures where the
+# bullet itself lists 3. Checks A and C only ever read `selection`, which
+# is never last in this repository, so the over-match was latent until
+# Check D began reading all three splits.
 _SPLIT_BULLET_RE = re.compile(
-    r"-\s+\*\*(train|selection|test)\*\*(.*?)(?=\n-\s+\*\*(?:train|selection|test)\*\*|\Z)",
+    r"-\s+\*\*(train|selection|test)\*\*(.*?)(?=\n-\s+\*\*(?:train|selection|test)\*\*|\n[ \t]*\n|\Z)",
     re.IGNORECASE | re.DOTALL,
 )
 
@@ -181,18 +257,31 @@ _PRECEDENCE_RE = re.compile(r"\btakes?\s+(?:precedence|priority)\s+over\b", re.I
 # full Why`.
 _SECTION_HEADING_RE = re.compile(r"^###[ \t]+(.+?)[ \t]*$", re.MULTILINE)
 
-# Check D (issue #907). The prose form this repository already uses to
-# declare its resulting partition, e.g. "for a resulting 27:30:12
-# partition" in evals/evaluating-skill-quality/split.md's Corpus-size
-# section. Only that file declares one today; the rest are bookkeeping-only
-# and stay out of Check D's scope by construction.
-_DECLARED_PARTITION_RE = re.compile(r"resulting\s+(\d+):(\d+):(\d+)\s+partition", re.IGNORECASE)
+# Check D (issue #907). Any `train:selection:test` triple immediately
+# qualifying the word "partition" -- deliberately NOT keyed to one file's
+# phrasing. An earlier draft required the literal word "resulting", which
+# matched `evals/evaluating-skill-quality/split.md`'s "for a resulting
+# 27:30:12 partition" and silently missed
+# `evals/merge-retrospective/split.md`'s "This split uses a flatter
+# **9:6:3** partition (train:selection:test) instead" -- an equally
+# unambiguous declaration in the same Corpus-size position, fail-open by
+# regex accident (adversarial review of this check). `\*{0,2}` absorbs a
+# bolded triple. A bare ratio not qualifying "partition" (this
+# repository's "SkillOpt's default split ratio is 2:1:7") is correctly not
+# a declaration.
+_DECLARED_PARTITION_RE = re.compile(r"(\d+):(\d+):(\d+)\*{0,2}\s+partition", re.IGNORECASE)
 
 # The machine-readable exclusion line Check D requires alongside a declared
 # partition. Deliberately a fixed prefix rather than another prose scan:
 # the whole point of this check is to stop inferring an arithmetic contract
 # from free-form wording.
-_ARITHMETIC_EXCLUSION_RE = re.compile(r"^Split-arithmetic exclusions:[ \t]*(.+?)[ \t]*$", re.MULTILINE)
+_ARITHMETIC_EXCLUSION_RE = re.compile(r"^Split-arithmetic exclusions:[ \t]*(.*?)[ \t]*$", re.MULTILINE)
+
+# The one payload, other than a backticked fixture list, that an exclusion
+# line may carry. Anything else (an empty payload, an unbackticked name) is
+# a malformed declaration, not a silent "nothing is excluded".
+_EXCLUSION_NONE_RE = re.compile(r"^none\b", re.IGNORECASE)
+
 _SPLIT_NAMES = ("train", "selection", "test")
 
 
@@ -430,59 +519,151 @@ def check_exercises_declaration_coverage(split_md_path: Path, split_text: str, r
     return f"{split_md_path}: selection-split fixture(s) with an exercises-declaration gap -- {'; '.join(problems)}"
 
 
-def parse_declared_partition(text: str) -> tuple[int, int, int] | None:
-    """The `train:selection:test` figures a `split.md` declares in prose, or
-    ``None`` when it declares no partition at all (Check D, issue #907).
+def _declaration_region(text: str) -> str:
+    """The header region a partition/exclusion declaration may live in:
+    everything before the `## Assignment` heading, with fenced code blocks
+    stripped (issue #907, adversarial review).
 
-    The last declaration wins if a file ever carries more than one: a later
-    entry is this repository's own convention for a superseding record (see
-    `find_gate_tables`' own most-recent-table rule), so reading the first
-    would grade against a stale figure.
+    Both bounds are fail-closed fixes, not tidiness. Scoping to the header
+    stops an appended log entry from re-targeting the check -- this
+    repository's `split.md` files carry append-only Kept-edit/Rejected-edit
+    logs that routinely quote historical ratios ("19:20:11", "23:24:12"),
+    and any one of them phrased as a partition would otherwise silently
+    become the declaration under a last-match rule (or shadow the real one
+    under a first-match rule). Stripping fences reuses the reason Check C's
+    own `parse_section_labels` already strips them: this check's own
+    convention is now documented in prose, so a fenced example illustrating
+    it must not read as a live declaration -- which cut both ways, since a
+    fenced `Split-arithmetic exclusions: none` otherwise satisfied the
+    must-carry-a-line requirement while declaring nothing.
     """
-    matches = list(_DECLARED_PARTITION_RE.finditer(text))
-    if not matches:
+    match = _ASSIGNMENT_HEADING_RE.search(text)
+    header = text[: match.start()] if match else text
+    return _strip_fenced_code_blocks(header)
+
+
+def parse_declared_partition(text: str) -> tuple[int, int, int] | None:
+    """The `train:selection:test` figures a `split.md` declares in its
+    header region, or ``None`` when it declares no partition at all.
+
+    Two or more *disagreeing* declarations return ``None`` and are reported
+    by `check_partition_arithmetic` as an ambiguity offence rather than
+    resolved by position: neither first-match nor last-match is defensible
+    when the file contradicts itself, and picking one would grade against a
+    figure the file does not actually commit to. Repeated identical
+    declarations are not a contradiction and are accepted.
+    """
+    found = {(int(a), int(b), int(c)) for a, b, c in _DECLARED_PARTITION_RE.findall(_declaration_region(text))}
+    if len(found) != 1:
         return None
-    train, selection, test = matches[-1].groups()
-    return int(train), int(selection), int(test)
+    return found.pop()
 
 
-def parse_arithmetic_exclusions(text: str) -> set[str] | None:
+def count_declared_partitions(text: str) -> int:
+    """How many *distinct* partition declarations the header region carries.
+    Lets `check_partition_arithmetic` tell "none declared" (out of scope)
+    apart from "several, disagreeing" (an offence)."""
+    return len({(a, b, c) for a, b, c in _DECLARED_PARTITION_RE.findall(_declaration_region(text))})
+
+
+def parse_arithmetic_exclusions(text: str) -> set[str] | str | None:
     """Fixture names the file declares as outside its partition arithmetic.
 
-    ``None`` when no ``Split-arithmetic exclusions:`` line is present at all
-    -- distinct from an empty set, which is what an explicit
-    ``Split-arithmetic exclusions: none`` declares. Check D treats the
-    former as an offence and the latter as a valid "nothing is excluded"
-    claim, so a missing line can never read as a blanket waiver.
+    Three distinct outcomes, none collapsed into another:
+
+    - ``None`` -- no ``Split-arithmetic exclusions:`` line in the header
+      region at all. An offence; absence must never read as a waiver.
+    - a ``str`` -- a malformed line, returned as the reason. An empty or
+      whitespace-only payload, a payload naming fixtures without backticks,
+      or more than one such line (which position alone cannot arbitrate,
+      the same reasoning `parse_declared_partition` applies to a
+      contradictory declaration). Also an offence, rather than being read
+      as an accidental "nothing is excluded".
+    - a ``set`` -- the declared names, empty only for an explicit ``none``.
     """
-    match = _ARITHMETIC_EXCLUSION_RE.search(text)
-    if not match:
+    matches = _ARITHMETIC_EXCLUSION_RE.findall(_declaration_region(text))
+    if not matches:
         return None
-    return set(_YAML_NAME_RE.findall(match.group(1)))
+    if len(matches) > 1:
+        return f'carries {len(matches)} "Split-arithmetic exclusions:" lines; exactly one is allowed'
+    payload = matches[0].strip()
+    if not payload:
+        return 'has an empty "Split-arithmetic exclusions:" payload; name the excluded fixtures or write "none"'
+    if _EXCLUSION_NONE_RE.match(payload):
+        return set()
+    names = set(_YAML_NAME_RE.findall(payload))
+    if not names:
+        return (
+            'has a "Split-arithmetic exclusions:" line naming no backticked '
+            f'`<fixture>.yaml`: {payload!r} -- backtick each name, or write "none"'
+        )
+    return names
 
 
 def check_partition_arithmetic(path: Path, text: str) -> str | None:
     """Check D (issue #907): a declared partition must reconcile with the
     `## Assignment` listing, under the file's own declared exclusions.
 
-    Counts *unique* names per split: this repository's Assignment bullets
-    legitimately mention a fixture more than once (an entry plus a
-    parenthetical cross-reference to another fixture), so a raw count would
-    over-report.
+    Counts *unique* names per split, since a bullet legitimately repeats a
+    name (an entry plus a cross-reference to a fixture in the same split).
+    A name appearing in more than one split's bullet is reported as its own
+    offence rather than silently double-counted: this repository's splits
+    are disjoint by construction, and a cross-split mention is otherwise
+    unfixable -- excluding it to satisfy the referencing split breaks the
+    split that legitimately owns it (adversarial review of this check).
     """
-    declared = parse_declared_partition(text)
-    if declared is None:
+    declared_count = count_declared_partitions(text)
+    if declared_count == 0:
         return None
+    if declared_count > 1:
+        return (
+            f"{path}: header region declares {declared_count} disagreeing train:selection:test "
+            "partitions; state exactly one so the Assignment section can be checked against it"
+        )
+    # `_section` takes the FIRST `## Assignment` heading, so a second,
+    # appended listing would be invisible while the file reads as
+    # superseded (adversarial review of this check). Rejected outright
+    # rather than arbitrated by position: the same reasoning the
+    # disagreeing-declaration branch above applies.
+    assignment_headings = len(_ASSIGNMENT_HEADING_RE.findall(text))
+    if assignment_headings > 1:
+        return (
+            f"{path}: carries {assignment_headings} '## Assignment' headings; exactly one is allowed, "
+            "since only the first is read and a later listing would be silently ignored"
+        )
+    declared = parse_declared_partition(text)
+    assert declared is not None  # noqa: S101 -- declared_count == 1 guarantees this
     exclusions = parse_arithmetic_exclusions(text)
     if exclusions is None:
         return (
             f"{path}: declares a {declared[0]}:{declared[1]}:{declared[2]} partition but carries no "
-            '"Split-arithmetic exclusions:" line -- add one naming every fixture listed but not counted '
-            '(or "Split-arithmetic exclusions: none")'
+            '"Split-arithmetic exclusions:" line in its header region -- add one naming every fixture '
+            'listed but not counted (or "Split-arithmetic exclusions: none")'
         )
+    if isinstance(exclusions, str):
+        return f"{path}: {exclusions}"
     # parse_assignment_fixtures always returns all three keys, so the union
     # below needs no empty-dict guard.
     listed = {name: set(values) for name, values in parse_assignment_fixtures(text).items()}
+    # A file that declares a partition but lists nothing must not pass
+    # vacuously -- `0:0:0` against an absent Assignment section otherwise
+    # reconciles perfectly (adversarial review of this check).
+    if not set().union(*listed.values()):
+        return (
+            f"{path}: declares a {declared[0]}:{declared[1]}:{declared[2]} partition but its "
+            "'## Assignment' section lists no fixture at all; the arithmetic cannot be checked"
+        )
+    overlaps = sorted(
+        f"{name} (in {' and '.join(s for s in _SPLIT_NAMES if name in listed[s])})"
+        for name in set().union(*listed.values())
+        if sum(name in listed[s] for s in _SPLIT_NAMES) > 1
+    )
+    if overlaps:
+        return (
+            f"{path}: Assignment section lists the same fixture in more than one split: "
+            f"{', '.join(overlaps)} -- each fixture belongs to exactly one split, and a "
+            "cross-split mention inside a bullet cannot be reconciled by an exclusion"
+        )
     stale = sorted(exclusions - set().union(*listed.values()))
     if stale:
         return (

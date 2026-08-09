@@ -49,9 +49,28 @@ That line is machine-readable, not decoration:
 `.github/scripts/gitapex_gate_split_fixture_coverage.py`'s Check D parses the
 declared partition and this exclusion list, then asserts each split's unique
 listed count minus its exclusions equals the declared figure. It also rejects
-an exclusion naming a fixture the Assignment section does not list, so the
-waiver cannot rot into a blanket one. This reconciliation is gate-enforced, not
-convention-enforced.
+an exclusion naming a fixture no split's bullet lists, a malformed or duplicated
+exclusion line, two disagreeing partition declarations, two `## Assignment`
+headings, and the same fixture appearing in more than one split.
+
+Precisely what that buys, stated rather than overclaimed: the reconciliation is
+now **machine-detected** on every pull request touching this file, where before
+it rested on a reader noticing. It is not proven to be merge-*blocking* --
+whether a red check blocks the merge button depends on branch-protection
+configuration that no in-repo tooling can read, the same open item
+`docs/superpowers/specs/2026-07-21-skill-audit-merge-gate-design.md` already
+records for this repository's other gates. An earlier draft of this paragraph
+said "gate-enforced, not convention-enforced", which an independent gate review
+correctly called an overclaim.
+
+Both declarations above must sit in this header region, before the
+`## Assignment` heading, and outside any fenced code block -- the gate reads
+nothing else. That is why the illustration below is fenced: it shows the
+convention without being read as a second, conflicting declaration.
+
+```markdown
+Split-arithmetic exclusions: `some-fixture.yaml` -- why it is not counted
+```
 
 ## Assignment
 

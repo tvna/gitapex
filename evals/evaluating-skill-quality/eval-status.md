@@ -994,8 +994,13 @@ the same footing every other counted train fixture has. The false footing
 claim was dropped from both `split.md` and this file; the `26 -> 27` bump
 stands.
 
-The reconciliation is now gate-enforced rather than convention-enforced, which
-is a change from what issue #907's own ACM accepted as a permanent residual. An
+The reconciliation is now machine-detected on every pull request touching the
+file rather than resting on a reader noticing, which is a change from what issue
+#907's own ACM accepted as a permanent residual. Detected, not proven
+merge-blocking: whether a red check blocks the merge button depends on
+branch-protection state no in-repo tooling can read (the open item
+`docs/superpowers/specs/2026-07-21-skill-audit-merge-gate-design.md` already
+records). An
 independent review round on PR #911 pointed at `CLAUDE.md`'s standing rule that
 establishing an invariant ships its drift gate in the same change, not a
 follow-up, and that rule governs over an ACM row that merely recorded the gap.
@@ -1003,12 +1008,24 @@ follow-up, and that rule governs over an ACM row that merely recorded the gap.
 `split.md` declaring a resulting partition must also carry a machine-readable
 `Split-arithmetic exclusions:` line, and each split's unique listed count minus
 its declared exclusions must equal the declared figure. An exclusion naming a
-fixture the Assignment section does not list is itself an offence, so the
-waiver cannot silently widen. Files declaring no partition (this repository's
-bookkeeping-only `split.md` files) stay out of scope. Verified by running the
-real gate against every committed `evals/*/split.md`, and by asserting the
-pre-#907 shape (28 listed train against a declared 27 with no exclusion line)
-fails it.
+fixture no split's bullet lists is itself an offence, so the waiver cannot
+silently widen. Verified by running the real gate against every committed
+`evals/*/split.md`, and by asserting the pre-#907 shape (28 listed train
+against a declared 27 with no exclusion line) fails it.
+
+An adversarial review of that gate's first draft, dispatched fresh per
+`evaluating-deterministic-gate-quality`'s own isolation requirement, then found
+seven real defects in it -- all fixed in the same PR rather than shipped and
+tracked. The two worth recording here because they change what the gate covers:
+the declaration regex had been keyed to the literal word "resulting", which
+silently skipped `evals/merge-retrospective/split.md`'s equally unambiguous
+"a flatter `**9:6:3**` partition", so that file is now in scope and carries its
+own `Split-arithmetic exclusions: none`; and the shared Assignment-bullet parse
+absorbed trailing explanatory prose, which inflated the last split's count and
+let a deleted fixture stay waivable with the leak and the exclusion cancelling
+out to a clean-looking pass. Which files the gate grades is now pinned by a
+test, because a check that silently skips a file is indistinguishable from one
+that passes it -- the exact failure mode the first draft had.
 
 Not touched, per issue #907's own non-goals: `check_adversarial_coverage`
 itself (the correction is to the claim about it, not the check), the pinned
