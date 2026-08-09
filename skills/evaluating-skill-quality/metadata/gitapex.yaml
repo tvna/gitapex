@@ -419,6 +419,9 @@ spec:
       outcome:
         verdict: partially-accepted
         tests_added: 9
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/920"
+      summary: "Added a state-minimality lens to references/state-management-quality.md, ahead of the axes as a cross-cutting question, not a twelfth axis: the axis count stays eleven and the trigger is untouched, so the firing set does not move. It asks whether a recorded value is re-derivable from ground truth, whether every field has a named consumer, and whether granularity is the minimum its consumer requires. Grounded in Toyota's Just-in-Time statement, whose amount clause nothing here owned."
   skillDependencies:
     requires: []
     relatedTo:
