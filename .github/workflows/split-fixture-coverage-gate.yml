@@ -87,4 +87,24 @@ jobs:
           if [ "${#skill_args[@]}" -gt 0 ]; then
             cmd+=(--skill-md "${skill_args[@]}")
           fi
-          "${cmd[@]}"
+          # Issue #907 (gate review, dual-signal deny): the offender list went
+          # only to stderr, so job status was the single channel -- while the
+          # diff step above already emits a ::error:: annotation for its own
+          # failure. Tee the output so the offenders surface as a workflow
+          # annotation and in the step summary too, without swallowing the
+          # exit code (PIPESTATUS, since the pipe's own status is tee's).
+          set +e
+          "${cmd[@]}" 2>&1 | tee gate-output.txt
+          rc="${PIPESTATUS[0]}"
+          set -e
+          if [ "$rc" -ne 0 ]; then
+            {
+              echo "## Split fixture coverage gate"
+              echo ""
+              echo '```'
+              cat gate-output.txt
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            grep -E '^[[:space:]]+- ' gate-output.txt | sed 's/^[[:space:]]*- /::error::/' || true
+          fi
+          exit "$rc"

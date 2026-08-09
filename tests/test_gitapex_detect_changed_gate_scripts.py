@@ -288,6 +288,23 @@ def test_this_repository_registers_more_gates_than_the_convention_matches(regist
     assert len(outside) >= 8, sorted(outside)
 
 
+def test_the_shared_argv_safety_predicates_are_in_scope(registered):
+    """Issue #904's fourth finding. `_gitapex_argv_safety.py` holds the
+    predicates that decide whether a registry argv is allowed to run on
+    every contributor's push, and its `_gitapex_` private-helper name puts
+    it outside rule 1's `gitapex_(gate|scan)_*` convention -- so weakening
+    those predicates needed no `deterministic-gate-quality` disclosure, the
+    exact gap that motivated renaming the runner in #888.
+
+    Closed through rule 2 rather than by renaming the module: it is
+    genuinely one of the cooperating files that enforce `ssot-schema-drift`
+    (the schema's own words for a multi-path `script`), and registering it
+    keeps the `_gitapex_*` convention its own docstring justifies -- the
+    runner cannot import the pydantic-dependent scanner, so the shared
+    predicates have to live in a stdlib-only private helper."""
+    assert detect.is_gate_path(".github/scripts/_gitapex_argv_safety.py", registered)
+
+
 # --- rule 4 and the gate-wiring files (review findings) ---
 
 

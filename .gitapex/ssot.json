@@ -257,7 +257,7 @@
       "id": "split-fixture-coverage",
       "kind": "script",
       "script": ".github/scripts/gitapex_gate_split_fixture_coverage.py",
-      "rule": "A changed split.md's gate-result table Fixture column must be a superset of its own declared selection list; a changed SKILL.md precedence sentence needs a matching fixture-pair row in split.md's Equivalence classes table.",
+      "rule": "A changed split.md's gate-result table Fixture column must be a superset of its own declared selection list; a changed SKILL.md precedence sentence needs a matching fixture-pair row in split.md's Equivalence classes table; every selection-split fixture must declare an expected.exercises list matching a real ###-level section in its sibling SKILL.md; and a split.md declaring a train:selection:test partition must carry a Split-arithmetic exclusions: line whose declared waivers reconcile each split's unique listed fixture count with the declared figure.",
       "planes": ["ci"],
       "local_exclusion": "--split-md/--skill-md take diff-derived paths; needs the same diff-derived argument provider gitignore-pattern-test-coverage names.",
       "trigger": ".github/workflows/split-fixture-coverage-gate.yml on pull_request",
@@ -455,8 +455,11 @@
     {
       "id": "ssot-schema-drift",
       "kind": "script",
-      "script": ".github/scripts/gitapex_scan_ssot_schema.py",
-      "rule": "Validates .gitapex/ssot.json against .gitapex/ssot.schema.json (JSON Schema draft 2020-12); fails if any gates[].script path doesn't exist as a real file, or any policy_refs[] value doesn't resolve to a real policy_sources[].id.",
+      "script": [
+        ".github/scripts/gitapex_scan_ssot_schema.py",
+        ".github/scripts/_gitapex_argv_safety.py"
+      ],
+      "rule": "Validates .gitapex/ssot.json against .gitapex/ssot.schema.json (JSON Schema draft 2020-12); fails if any gates[].script path doesn't exist as a real file, or any policy_refs[] value doesn't resolve to a real policy_sources[].id. The argv-safety predicates this gate applies to local_invocation/local_stdin live in _gitapex_argv_safety.py, registered here (issue #904) so gitapex_detect_changed_gate_scripts.py selects an edit to them as a gate change requiring disclosure.",
       "planes": ["ci", "local"],
       "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_scan_ssot_schema.py"],
       "trigger": "tests/test_gitapex_scan_ssot_schema.py inside the pytest step of .github/workflows/test.yml",
