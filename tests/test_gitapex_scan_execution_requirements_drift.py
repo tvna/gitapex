@@ -314,6 +314,64 @@ def test_find_drift_non_dict_execution_requirements_is_tolerated(tmp_path: pathl
     assert findings == []
 
 
+# ---- defeat tests: adversarially probing the detection logic itself,
+# not just its happy path (evaluating-deterministic-gate-quality dimension
+# 15's own instruction: "independently construct and run a malformed,
+# boundary, or missing-dependency input directly against the gate before
+# crediting this dimension") ----
+
+
+def test_malformed_execution_requirements_still_fail_closed_on_real_usage(tmp_path: pathlib.Path) -> None:
+    """Dimension 15 proof: a garbage (non-mapping) executionRequirements
+    value must NOT silently read as "nothing to check" when the skill's
+    real content actually performs the capability that would have been
+    gated -- it must fall back to the strictest defaults (network
+    'disabled', tools not declared) and still flag the real usage as an
+    error, not silently pass because the declaration itself was malformed."""
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md="# Example\n\n## Steps\n\n1. Creates a new file for the fixture.\n",
+        scripts={"fetch.py": "import urllib.request\n"},
+    )
+    metadata_dir = skill_dir / "metadata"
+    metadata_dir.mkdir()
+    (metadata_dir / "gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        f"metadata:\n  name: {skill_dir.name}\n"
+        "spec:\n"
+        "  executionRequirements: [1, 2, 3]\n",
+        encoding="utf-8",
+    )
+
+    findings = scanner.find_drift(skills_dir=tmp_path, min_expected_skill_dirs=1)
+
+    messages = [f.message for f in findings]
+    assert any("network-mode-vs-script-content" in m for m in messages)
+    assert any("tools-write-vs-skill-md" in m for m in messages)
+    assert all(f.severity == "error" for f in findings)
+
+
+def test_dynamically_constructed_host_evades_allowlist_check(tmp_path: pathlib.Path) -> None:
+    """Attempted evasion of the allowlist out-of-list-host check: a host
+    built at runtime from string concatenation, rather than appearing as a
+    literal https?://host substring, is genuinely invisible to
+    _URL_HOST_PATTERN's regex-only matching. This is NOT a passing
+    detection -- it is the documented false-negative limitation
+    (module docstring: "a network call routed through an unlisted helper,
+    or dynamic/reflective invocation, can still slip through undetected")
+    proven concretely rather than only asserted in prose. If a future
+    change to find_network_drift starts catching this case, this test's
+    own assertion (== []) will fail and must be updated deliberately, not
+    silently -- it is not a regression to fix quietly."""
+    skill_dir = _make_skill(
+        tmp_path,
+        scripts={"fetch.py": ('import requests\nhost = "evil" + ".example.com"\nrequests.get(f"https://{host}/x")\n')},
+    )
+    findings = scanner.find_network_drift({"mode": "allowlist", "domains": ["github.com"]}, skill_dir)
+    assert findings == []
+
+
 # ---- real-repository smoke test ----
 
 
