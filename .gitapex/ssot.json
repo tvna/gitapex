@@ -322,6 +322,20 @@
       "supersedes": null
     },
     {
+      "id": "skill-eval-yaml-parity",
+      "kind": "script",
+      "script": ".github/scripts/gitapex_gate_skill_eval_yaml_parity.py",
+      "rule": "Every skills/*/ directory, discovered via directory listing at runtime rather than a hardcoded skill list, must have a matching evals/*/eval.yaml, and vice versa -- exact-string name comparison, never case-folded.",
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_skill_eval_yaml_parity.py"],
+      "trigger": "tests/test_gitapex_gate_skill_eval_yaml_parity.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "skill-lifecycle",
+      "tracking_issue": 928,
+      "status": "active",
+      "supersedes": null
+    },
+    {
       "id": "evals-scripts-coverage-floor",
       "kind": "script",
       "script": ".github/scripts/gitapex_gate_evals_scripts_coverage.py",
